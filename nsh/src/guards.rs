@@ -106,6 +106,15 @@ fn send_guard_with_health(
         std::env::remove_var("BIR_SFTP_LIVE")
     };
     let relay = relay_target(&listening, &healthy);
+    if let Some(Ok(url)) = &relay {
+        #[cfg(target_os = "android")]
+        bir_core::config::force(bir_core::transport::RELAY_URL_ENV, Some(url));
+        #[cfg(not(target_os = "android"))]
+        // SAFETY: registration precedes worker startup, as above.
+        unsafe {
+            std::env::set_var(bir_core::transport::RELAY_URL_ENV, url)
+        };
+    }
     let mock = mock_target(&listening);
     if !matches!(relay, Some(Ok(_))) && mock.is_none() {
         #[cfg(target_os = "android")]
@@ -168,13 +177,20 @@ fn relay_target(
         }
     };
     let host = host.trim_start_matches('[').trim_end_matches(']');
-    let hosts: &[&str] = if host.eq_ignore_ascii_case("localhost") { &["127.0.0.1", "::1"] } else { &[host] };
-    Some(match port {
-        Some(port) if hosts.iter().any(|host| listening(host, port) && healthy(host, port)) => Ok(url),
-        _ => Err(format!(
+    let localhost = host.eq_ignore_ascii_case("localhost");
+    let hosts: &[&str] = if localhost { &["127.0.0.1", "::1"] } else { &[host] };
+    if let Some(port) = port {
+        if let Some(host) = hosts.iter().find(|host| listening(host, port) && healthy(host, port)) {
+            if localhost {
+                let host = if host.contains(':') { format!("[{host}]") } else { host.to_string() };
+                return Some(Ok(format!("http://{host}:{port}")));
+            }
+            return Some(Ok(url));
+        }
+    }
+    Some(Err(format!(
             "The mock relay at {url} is not listening or /v1/health did not identify a mock; the submission worker was not started."
-        )),
-    })
+        )))
 }
 
 fn mock_health(host: &str, port: u16) -> bool {
@@ -196,7 +212,7 @@ fn mock_health(host: &str, port: u16) -> bool {
             return None;
         }
         let body: serde_json::Value = serde_json::from_slice(&response[end + 4..]).ok()?;
-        Some(body.get("mock").and_then(serde_json::Value::as_bool) == Some(true))
+        Some(bir_core::transport::is_mock_relay_health(&body))
     };
     probe().unwrap_or(false)
 }
@@ -762,7 +778,8 @@ mod tests {
     #[test]
     fn health_probe_requires_successful_mock_json() {
         for (status, body, expected) in [
-            ("200 OK", r#"{"ok":true,"mock":true}"#, true),
+            ("200 OK", r#"{"service":"buwiz-mock-relay","version":1,"ok":true,"mock":true}"#, true),
+            ("200 OK", r#"{"ok":true,"mock":true}"#, false),
             ("200 OK", r#"{"mock":false}"#, false),
             ("200 OK", "invalid", false),
             ("200 OK", "", false),
@@ -797,6 +814,7 @@ mod tests {
             Err(error) => panic!("IPv4 loopback is unavailable: {error}"),
         };
         let url = format!("http://localhost:{}", listener.local_addr().unwrap().port());
+        let pinned = format!("http://{}", listener.local_addr().unwrap());
         let server = std::thread::spawn(move || {
             // The port check connects without sending; the health check sends a request.
             for _ in 0..2 {
@@ -804,13 +822,14 @@ mod tests {
                 stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
                 let mut request = [0; 1024];
                 if stream.read(&mut request).unwrap() > 0 {
-                    let body = r#"{"ok":true,"mock":true}"#;
+                    let body = r#"{"service":"buwiz-mock-relay","version":1,"ok":true,"mock":true}"#;
                     write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
                 }
             }
         });
         sending_env(&[("BIR_RELAY_URL", &url)], || {
-            assert_eq!(relay_target(&port_is_listening, &mock_health), Some(Ok(url.clone())));
+            assert_eq!(send_guard_with(port_is_listening), SendMode::Relay { url: pinned.clone() });
+            assert_eq!(bir_core::transport::relay_url().unwrap().unwrap(), pinned);
         });
         server.join().unwrap();
     }
@@ -832,7 +851,7 @@ mod tests {
                 assert!(matches!(host, "127.0.0.1" | "::1"));
                 host == "::1"
             };
-            assert!(matches!(relay_target(&|_, _| true, &healthy), Some(Ok(_))));
+            assert_eq!(relay_target(&|_, _| true, &healthy), Some(Ok("http://[::1]:8787".into())));
         });
     }
 

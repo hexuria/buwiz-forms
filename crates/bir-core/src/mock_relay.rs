@@ -292,7 +292,15 @@ async fn serve(mut stream: TcpStream, config: &RelayConfig) -> Result<(), String
         Err(error) => return Err(error),
     };
     let (status, body) = match (request.method.as_str(), request.path.as_str()) {
-        ("GET", "/v1/health") => (200, serde_json::json!({ "ok": true, "mock": true })),
+        ("GET", "/v1/health") => (
+            200,
+            serde_json::json!({
+                "service": crate::transport::MOCK_RELAY_SERVICE,
+                "version": 1,
+                "ok": true,
+                "mock": true
+            }),
+        ),
         ("POST", "/v1/submissions") => submit(&request, config).await,
         _ => (
             404,

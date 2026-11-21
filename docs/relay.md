@@ -42,7 +42,11 @@ the receipt body, whose IAF filename contains the taxpayer's TIN and email.
 
 ### `GET /v1/health`
 
-`200 {"ok":true,"mock":true}`.
+`200 {"service":"buwiz-mock-relay","version":1,"ok":true,"mock":true}`.
+Both startup and worker probes require HTTP 200 and all four identity fields.
+For `localhost`, startup probes IPv4 and IPv6 loopback, then replaces the configured
+URL with the numeric address that passed. Worker health checks and uploads use
+that same address, never a fresh resolution of `localhost`.
 
 The app asks it before it claims a queued return: a relay that does not answer
 there leaves the return Queued, unclaimed, and retried after the back-off.
@@ -167,8 +171,9 @@ queue-admission checks still apply.
   instead of SFTP. The source logs as `relay`.
 - `nsh/src/guards.rs`: the send guard answers `SendMode::Relay` (`doorStatus().sending
   === "relay"`) only when the relay URL is loopback, its port answers, and
-  `GET /v1/health` answers HTTP 200 with `{"mock":true}`. For `localhost`, it
-  tries both IPv4 and IPv6 loopback and accepts either. A set
+  `GET /v1/health` identifies `buwiz-mock-relay` version 1 with `ok` and `mock`
+  both true. For `localhost`, it tries both loopback families and pins the
+  configured upload URL to the one that passed. A set
   but bad or silent relay is `Refused`: the worker does not start. `BIR_SFTP_LIVE`
   is still removed and the Dev Mode test server still refuses.
 - The iOS app gets `BIR_RELAY_URL` (and the dev variables) from the launch
@@ -285,7 +290,8 @@ What refuses it today, on purpose:
   upload never starts.
 - `relay_target` in `nsh/src/guards.rs` then requires that loopback port to
   answer and `mock_health` requires HTTP 200 from `/v1/health` with JSON
-  containing `"mock":true`. Otherwise the send mode is `Refused`.
+  containing `"service":"buwiz-mock-relay"`, `"version":1`, `"ok":true` and
+  `"mock":true`. Otherwise the send mode is `Refused`.
 
 To test a real relay (a deliberate, reviewed change), you need:
 

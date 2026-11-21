@@ -940,6 +940,17 @@ pub(crate) async fn open_iaf_session(
     }
 }
 
+/// Service identity for the local development relay.
+pub const MOCK_RELAY_SERVICE: &str = "buwiz-mock-relay";
+
+/// The versioned identity returned by the local mock relay, not just any HTTP listener.
+pub fn is_mock_relay_health(body: &serde_json::Value) -> bool {
+    body["service"] == MOCK_RELAY_SERVICE
+        && body["version"] == 1
+        && body["ok"] == true
+        && body["mock"] == true
+}
+
 /// `GET {url}/v1/health` before a return is claimed: a relay that is down fails here, where the worker can retry
 /// later, instead of after the claim.
 async fn relay_health(url: &str) -> Result<(), TransportError> {
@@ -954,11 +965,23 @@ async fn relay_health(url: &str) -> Result<(), TransportError> {
         .send()
         .await
         .map_err(|error| TransportError::RelayUnavailable(error.to_string()))?;
-    if !response.status().is_success() {
+    if response.status() != reqwest::StatusCode::OK {
         return Err(TransportError::RelayUnavailable(format!(
             "health answered {}",
             response.status()
         )));
+    }
+    let body = response
+        .bytes()
+        .await
+        .map_err(|error| TransportError::RelayUnavailable(error.to_string()))?;
+    let body = serde_json::from_slice(&body).map_err(|_| {
+        TransportError::RelayUnavailable("Invalid mock relay health response".into())
+    })?;
+    if !is_mock_relay_health(&body) {
+        return Err(TransportError::RelayUnavailable(
+            "Health response did not identify the mock relay".into(),
+        ));
     }
     Ok(())
 }
@@ -1257,7 +1280,27 @@ mod tests {
 
     #[tokio::test]
     async fn relay_probe_checks_health() {
-        assert!(http_reply(200, "{}", true).await.is_ok());
+        assert!(
+            http_reply(
+                200,
+                r#"{"service":"buwiz-mock-relay","version":1,"ok":true,"mock":true}"#,
+                true
+            )
+            .await
+            .is_ok()
+        );
+        for body in [
+            "{}",
+            "invalid",
+            "",
+            r#"{"ok":true,"mock":true}"#,
+            r#"{"service":"another-service","version":1,"ok":true,"mock":true}"#,
+        ] {
+            assert!(matches!(
+                http_reply(200, body, true).await,
+                Err(TransportError::RelayUnavailable(_))
+            ));
+        }
         assert!(matches!(
             http_reply(503, "{}", true).await,
             Err(TransportError::RelayUnavailable(_))
