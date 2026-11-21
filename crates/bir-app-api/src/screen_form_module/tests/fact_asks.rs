@@ -1311,7 +1311,7 @@ fn each_fact_box_saves_to_the_tax_profile_through_its_own_route() {
 }
 
 #[test]
-fn the_usual_atc_saves_through_save_to_profile_and_a_malformed_code_is_refused() {
+fn the_usual_atc_saves_through_save_to_profile_and_a_spouse_only_code_is_refused() {
     setup_juana();
     let none = || {
         set_facts(
@@ -1334,7 +1334,7 @@ fn the_usual_atc_saves_through_save_to_profile_and_a_malformed_code_is_refused()
 
     none();
     let mut draft = written["draft"].clone();
-    draft["atc"] = json!("ii012 ");
+    draft["atc"] = json!("Ii011");
     let refused = call(
         "screen_form_save_to_profile",
         vec![
@@ -1345,9 +1345,10 @@ fn the_usual_atc_saves_through_save_to_profile_and_a_malformed_code_is_refused()
             json(json!([key])),
         ],
     );
-    assert!(
-        refused.is_err(),
-        "a code outside Item 8's choices is refused"
+    assert_eq!(
+        refused.unwrap_err().message(),
+        "That answer cannot be saved to the tax profile.",
+        "a spouse-only code outside Item 8's choices is refused"
     );
     assert!(year_facts().atc_codes.is_empty(), "nothing is written");
 }
