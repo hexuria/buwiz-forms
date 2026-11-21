@@ -57,7 +57,8 @@ Remove-Item "$extract\META-INF" -Recurse -Force -ErrorAction SilentlyContinue
 Assert-Native 'llvm-strip failed'
 $unsigned = "$work\unsigned.apk"
 Remove-Item $unsigned -Force -ErrorAction SilentlyContinue
-[IO.Compression.ZipFile]::CreateFromDirectory($extract, $unsigned, [IO.Compression.CompressionLevel]::NoCompression, $false)
+& "$env:JAVA_HOME\bin\jar.exe" --create --no-manifest --file $unsigned --no-compress -C $extract .
+Assert-Native 'APK repacking failed'
 $aligned = "$work\x86_64.apk"
 $buildTools = "$SdkRoot\build-tools\35.0.1"
 & "$buildTools\zipalign.exe" -f -p 4 $unsigned $aligned
@@ -108,9 +109,9 @@ Assert-Native 'adb reverse failed'
 & $adb -s $serial push $aligned /data/local/tmp/buwiz-x86_64.apk
 Assert-Native 'adb push failed'
 $install = & $adb -s $serial shell pm install -r /data/local/tmp/buwiz-x86_64.apk
+Write-Host $install
 Assert-Native 'pm install failed'
 if ($install -notcontains 'Success') { throw "pm install: $install" }
-Write-Host $install
 & $adb -s $serial shell rm /data/local/tmp/buwiz-x86_64.apk
 & $adb -s $serial shell am start -n dev.goldcoders.bir.nsh/com.longbridge.nsh.AppActivity
 Assert-Native 'App launch failed'
