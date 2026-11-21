@@ -1,0 +1,211 @@
+# Devin environment blueprint for buwiz-forms: Linux, macOS and Windows.
+#
+# Paste this whole file into the repository's blueprint on any Devin account
+# (Settings > Environment > the buwiz-forms repo > Blueprint) and save; Devin
+# builds one snapshot per platform block. Each block reads everything it needs
+# from this repository and the public hexuria/nsh repository, so no secrets are
+# required. Delete the blocks for platforms you don't use.
+#
+#   Linux:   GPUI desktop app, NSH app (Ubuntu 24.04 sidecar), Android emulator
+#   macOS:   GPUI desktop app, NSH app on macOS and the iOS Simulator
+#   Windows: GPUI desktop app, NSH app on the Android emulator
+#
+# All platforms: `just mock-account` serves a mock Buwiz account server on
+# 127.0.0.1:3008 for the app's Sign in (Android reaches it through
+# `adb reverse tcp:3008 tcp:3008`). See docs/platforms/devin-environment.md.
+
+# Linux (default platform): GPUI deps natively; NSH toolchain in a 24.04
+# sidecar image because Ubuntu 22.04's GTK 4.6 is below the required 4.14.
+# Android: SDK/NDK/emulator on the host, NSH Android builds in the sidecar.
+initialize: |
+  bash scripts/setup-linux.sh
+  rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+  # The VM's KWin runs without compositing, so GPUI's transparent 20px window
+  # shadow renders as a thick black border; xcompmgr composites it.
+  sudo apt-get install -y xcompmgr unzip openjdk-17-jdk-headless
+  mkdir -p ~/.config/autostart
+  printf '[Desktop Entry]\nType=Application\nName=xcompmgr\nExec=xcompmgr\nX-KDE-autostart-phase=1\n' > ~/.config/autostart/xcompmgr.desktop
+  # Android SDK, NDK 27, emulator and a Pixel 7 API 35 AVD named "buwiz".
+  export ANDROID_HOME="$HOME/Android/Sdk"
+  if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+    mkdir -p "$ANDROID_HOME/cmdline-tools"
+    curl -fsSL -o /tmp/cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+    rm -rf /tmp/cmdline-tools && unzip -q /tmp/cmdline-tools.zip -d /tmp
+    mv /tmp/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+  fi
+  yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+  "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "emulator" "platforms;android-35" "build-tools;35.0.1" "ndk;27.2.12479018" "system-images;android-35;google_apis;x86_64" > /dev/null
+  echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n buwiz -k "system-images;android-35;google_apis;x86_64" -d pixel_7 --force
+  echo "ANDROID_HOME=$HOME/Android/Sdk" >> $ENVRC
+  echo "ANDROID_SDK_ROOT=$HOME/Android/Sdk" >> $ENVRC
+  # NSH at the commit CI pins (NSH_PINNED_REF in .github/workflows/nsh.yml).
+  ref=$(sed -n 's/^ *NSH_PINNED_REF: *//p' .github/workflows/nsh.yml)
+  [ -d ../nsh ] || git clone https://github.com/hexuria/nsh ../nsh
+  (cd ../nsh && git fetch origin "$ref" && git checkout --detach "$ref")
+  REPO="$(pwd)"; NSH="$(cd ../nsh && pwd)"
+  mkdir -p ~/BuwizNsh
+  cat > ~/BuwizNsh/Dockerfile <<'DOCKER_EOF'
+  FROM ubuntu:24.04
+  ENV DEBIAN_FRONTEND=noninteractive
+  RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential pkg-config perl python3 ca-certificates curl git \
+      clang libclang-dev libgtk-4-dev libwebkitgtk-6.0-dev \
+      libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+      gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+      libdbus-1-dev libssl-dev \
+      xvfb xauth at-spi2-core libxtst6 \
+      fonts-noto-core fonts-noto-color-emoji \
+      && rm -rf /var/lib/apt/lists/*
+  # Android builds (javac + d8) for `nsh run --target android`.
+  RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jdk-headless \
+      && rm -rf /var/lib/apt/lists/*
+  DOCKER_EOF
+  docker build -t buwiz-nsh-2404 -f ~/BuwizNsh/Dockerfile ~/BuwizNsh
+  docker run --rm -u "$(id -u):$(id -g)" -e HOME="$HOME" -e PATH="$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" -e CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh" -e CARGO_INCREMENTAL=0 -v "$HOME:$HOME" -w "$NSH" buwiz-nsh-2404 cargo install --locked --path crates/nsh-cli --root "$HOME/BuwizNsh/tools"
+  # NSH's Android runtime (classes.dex + libnsh.so per ABI). xtask reads its own
+  # target/ dir, so no CARGO_TARGET_DIR here; the CLI looks for it next to its bin/.
+  docker run --rm -u "$(id -u):$(id -g)" -e HOME="$HOME" -e PATH="$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" -e CARGO_INCREMENTAL=0 -e ANDROID_HOME="$HOME/Android/Sdk" -e JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 -v "$HOME:$HOME" -w "$NSH" buwiz-nsh-2404 cargo xtask android --dev
+  rm -rf ~/BuwizNsh/tools/android/bin-dev && mkdir -p ~/BuwizNsh/tools/android
+  cp -r ../nsh/target/android/debug-dev ~/BuwizNsh/tools/android/bin-dev
+  # ~/BuwizNsh/nsh2404.sh <cmd>: run a command in the sidecar from nsh/, with the host display.
+  cat > ~/BuwizNsh/nsh2404.sh <<'NSH_EOF'
+  #!/usr/bin/env bash
+  set -euo pipefail
+  cd "@REPO@/nsh"
+  DISPLAY=:0 xhost +SI:localuser:"$(id -un)" >/dev/null 2>&1 || true
+  tty=(); [ -t 0 ] && [ -t 1 ] && tty=(-t)
+  # NSH's CLI sets CC/AR for Android but not RANLIB, which vendored OpenSSL needs.
+  RANLIB="$HOME/Android/Sdk/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib"
+  # Unset, the NSH app's own workspace builds full debuginfo: a 4 GB dev APK.
+  dbg=(); case " $* " in *android*) dbg=(-e CARGO_PROFILE_DEV_DEBUG=0);; esac
+  uid="$(id -u)"
+  exec docker run --rm -i "${tty[@]}" "${dbg[@]}" --network host --security-opt apparmor=unconfined -u "$uid:$(id -g)" \
+    -e HOME="$HOME" \
+    -e PATH="$HOME/BuwizNsh/tools/bin:$HOME/.cargo/bin:$HOME/Android/Sdk/platform-tools:/usr/local/bin:/usr/bin:/bin" \
+    -e CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh" \
+    -e CARGO_INCREMENTAL=0 \
+    -e ANDROID_HOME="$HOME/Android/Sdk" \
+    -e JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 \
+    -e RANLIB_x86_64_linux_android="$RANLIB" -e RANLIB_aarch64_linux_android="$RANLIB" -e RANLIB_armv7_linux_androideabi="$RANLIB" \
+    -e DISPLAY=:0 -e XDG_RUNTIME_DIR="/run/user/$uid" \
+    -e DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+    -e BUWIZ_NO_KEYCHAIN=1 -e EBIR_TEST_ENV=1 -e BIR_AUTH_BYPASS=1 -e BIR_SFTP_DRY_RUN=1 \
+    -v "$HOME:$HOME" \
+    -v /tmp/.X11-unix:/tmp/.X11-unix \
+    -v "/run/user/$uid:/run/user/$uid" \
+    -w "@REPO@/nsh" \
+    buwiz-nsh-2404 "$@"
+  NSH_EOF
+  sed -i "s#@REPO@#$REPO#g" ~/BuwizNsh/nsh2404.sh
+  chmod +x ~/BuwizNsh/nsh2404.sh
+maintenance: |
+  ref=$(sed -n 's/^ *NSH_PINNED_REF: *//p' .github/workflows/nsh.yml)
+  (cd ../nsh && git fetch origin "$ref" && git checkout --detach "$ref")
+  # A new pin needs a new nsh CLI and Android runtime from the sidecar.
+  NSH="$(cd ../nsh && pwd)"
+  if ! ~/BuwizNsh/nsh2404.sh nsh --version 2>/dev/null | grep -q "(${ref:0:7})" || [ ! -d ~/BuwizNsh/tools/android/bin-dev ]; then
+    docker run --rm -u "$(id -u):$(id -g)" -e HOME="$HOME" -e PATH="$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" -e CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh" -e CARGO_INCREMENTAL=0 -v "$HOME:$HOME" -w "$NSH" buwiz-nsh-2404 cargo install --locked --path crates/nsh-cli --root "$HOME/BuwizNsh/tools"
+    docker run --rm -u "$(id -u):$(id -g)" -e HOME="$HOME" -e PATH="$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" -e CARGO_INCREMENTAL=0 -e ANDROID_HOME="$HOME/Android/Sdk" -e JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 -v "$HOME:$HOME" -w "$NSH" buwiz-nsh-2404 cargo xtask android --dev
+    rm -rf ~/BuwizNsh/tools/android/bin-dev && mkdir -p ~/BuwizNsh/tools/android
+    cp -r ../nsh/target/android/debug-dev ~/BuwizNsh/tools/android/bin-dev
+  fi
+knowledge:
+  - name: startup
+    contents: |
+      pgrep xcompmgr || (DISPLAY=:0 xcompmgr &)   # no black border around GPUI windows
+      GPUI app: DISPLAY=:0 VK_ICD_FILENAMES=/dev/null BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 just run   # VK_ICD_FILENAMES avoids stale llvmpipe frames
+      Account sign-in: just mock-account &   # mock Buwiz account server on 127.0.0.1:3008; start before the NSH app
+      NSH app: ~/BuwizNsh/nsh2404.sh nsh run --target linux   # real window on :0
+  - name: android
+    contents: |
+      DISPLAY=:0 ~/Android/Sdk/emulator/emulator -avd buwiz -no-snapshot-save -no-audio -gpu swiftshader_indirect &
+      ~/Android/Sdk/platform-tools/adb wait-for-device shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 2; done'
+      just mock-account & ~/Android/Sdk/platform-tools/adb reverse tcp:3008 tcp:3008   # app's Sign in reaches the host account server
+      ~/BuwizNsh/nsh2404.sh nsh run --target android   # first run builds 3 ABIs (~10 min)
+  - name: test
+    contents: |
+      xvfb-run -a just test && ~/BuwizNsh/nsh2404.sh nsh check   # the sidecar has no just; nsh2404.sh runs from nsh/
+---
+# macOS: GPUI desktop app, NSH app on macOS and the iOS Simulator (no Android).
+runs-on: macos
+initialize: |
+  # Homebrew rustup's proxies must win over pinned toolchain links, or the
+  # NSH checkout's rust-toolchain.toml is ignored.
+  export PATH="/opt/homebrew/opt/rustup/bin:$PATH"
+  brew install just
+  bash scripts/setup-macos.sh
+  rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+  [ -d ../nsh ] || git clone https://github.com/hexuria/nsh ../nsh
+  (cd ../nsh && rustup target add aarch64-apple-ios aarch64-apple-ios-sim)
+  grep -q opt/rustup/bin ~/.zprofile 2>/dev/null || echo 'export PATH="/opt/homebrew/opt/rustup/bin:$HOME/BuwizNsh/tools/bin:$PATH"' >> ~/.zprofile
+maintenance: |
+  export PATH="/opt/homebrew/opt/rustup/bin:$PATH" CARGO_INCREMENTAL=0
+  # NSH at the commit CI pins; the nsh CLI must be built from the same checkout.
+  ref=$(sed -n 's/^ *NSH_PINNED_REF: *//p' .github/workflows/nsh.yml)
+  (cd ../nsh && git fetch origin "$ref" && git checkout --detach "$ref")
+  ~/BuwizNsh/tools/bin/nsh --version 2>/dev/null | grep -q "(${ref:0:7})" || (cd ../nsh && cargo install --locked --path crates/nsh-cli --root ~/BuwizNsh/tools)
+  # Free disk for the GPUI + NSH macOS/iOS-sim builds.
+  rm -rf ~/Library/Developer/DVTDownloads; brew cleanup -s >/dev/null 2>&1 || true; rm -rf "$(brew --cache)"
+knowledge:
+  - name: startup
+    contents: |
+      GPUI desktop app: BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 just run
+      Account sign-in: just mock-account &   # mock Buwiz account server on 127.0.0.1:3008; start before the NSH app
+      NSH app on macOS: just nsh-run
+  - name: ios
+    contents: |
+      just mock-account & just mock-bir & just mock-relay &   # the Simulator shares the host's localhost
+      cd nsh; PATH=~/BuwizNsh/tools/bin:$PATH CARGO_TARGET_DIR=~/BuwizNsh/target-nsh SIMCTL_CHILD_BIR_RELAY_URL=http://127.0.0.1:8787 SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 SIMCTL_CHILD_BIR_AUTH_BYPASS=1 nsh run --target ios
+  - name: test
+    contents: |
+      just nsh-check && just nsh-build && just nsh-test   # CARGO_INCREMENTAL=0 saves disk
+---
+# Windows: GPUI desktop app, Android SDK + emulator, NSH CLI.
+runs-on: windows
+shell: powershell
+initialize:
+  - name: desktop toolchain (VS Build Tools, Rust, OpenSSL, just, Perl, NASM)
+    run: |
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
+      exit $LASTEXITCODE
+  - name: Android SDK, NDK, emulator and AVD
+    run: |
+      $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-android-windows.ps1
+      exit $LASTEXITCODE
+  - name: package and launch Android with the mock account server
+    run: |
+      $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1
+      exit $LASTEXITCODE
+maintenance:
+  - name: NSH checkout and nsh CLI at a new pin
+    run: |
+      $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+      $pin = ((Select-String -Path .github\workflows\nsh.yml -Pattern 'NSH_PINNED_REF:\s*(\S+)').Matches[0].Groups[1].Value)
+      git -C ..\nsh fetch origin $pin
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      git -C ..\nsh checkout --detach $pin
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      $have = & "$HOME\BuwizNsh\tools\bin\nsh.exe" --version 2>$null
+      if ("$have" -notlike "*($($pin.Substring(0,7)))*") {
+        powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-android-windows.ps1
+        exit $LASTEXITCODE
+      }
+knowledge:
+  - name: startup
+    contents: |
+      GPUI desktop (separate process, repository root):
+        $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+        $env:OPENSSL_DIR = [Environment]::GetEnvironmentVariable('OPENSSL_DIR','User')
+        $env:OPENSSL_LIB_DIR = [Environment]::GetEnvironmentVariable('OPENSSL_LIB_DIR','User')
+        $env:BUWIZ_NO_KEYCHAIN=1; $env:EBIR_TEST_ENV=1; $env:BIR_SFTP_DRY_RUN=1; just run
+  - name: android
+    contents: |
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1
+      # Repack/strip/sign x86_64, cold boot with WHPX, wait for sys.boot_completed, start mock-account --auto-approve,
+      # adb reverse tcp:3008 tcp:3008, adb push + pm install, launch and sign in by accessibility label. No authentication bypass.
+      # Setup provisions real development AND release runtimes. See docs/platforms/devin-environment.md.
+  - name: test
+    contents: |
+      cargo test -p bir-core ; $env:Path = "$HOME\BuwizNsh\tools\bin;$env:Path" ; cd nsh ; nsh check -v ; nsh build

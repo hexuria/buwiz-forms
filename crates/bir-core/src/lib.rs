@@ -76,6 +76,10 @@ mod mock_bir_e2e;
 #[cfg(any(test, feature = "mock-relay"))]
 pub mod mock_relay;
 
+/// In-memory development account server. Never enabled in shipping apps.
+#[cfg(any(test, feature = "mock-account"))]
+pub mod mock_account;
+
 // Re-export core types
 pub use bir_rules::{
     BehaviorProfile, CompiledRuleSet, ContextFingerprint, ContextValueSnapshot, EvaluationResult,

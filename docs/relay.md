@@ -197,6 +197,7 @@ queue-admission checks still apply.
 ```sh
 just mock-bir                 # optional: the mock BIR SFTP server, port 2222
 just mock-relay               # the relay, http://127.0.0.1:8787
+just mock-account             # separate terminal: local sign-in, http://localhost:3008
 ```
 
 `just mock-relay` (`crates/bir-core/src/bin/mock_relay.rs`, feature
@@ -220,7 +221,7 @@ emulator needs `adb reverse tcp:8787 tcp:8787` so the same URL works.
 ### Phone run against the mock
 
 ```sh
-just mock-bir & just mock-relay &
+just mock-account & just mock-bir & just mock-relay &
 SIMCTL_CHILD_BIR_RELAY_URL=http://127.0.0.1:8787 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 \
   SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BIR_AUTH_BYPASS=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1 \
   nsh run --target ios   # from nsh/, with PATH and CARGO_TARGET_DIR as the nsh-* recipes set them

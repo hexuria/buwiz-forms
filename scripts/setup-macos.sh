@@ -13,6 +13,13 @@
 #     (github.com/hexuria/gpui-agent), installed at the exact rev Cargo.lock
 #     pins so CLI and host speak the same protocol (v1 CLI can't talk to a
 #     v2 host)
+#   - NSH app (nsh/) on macOS and the iOS Simulator: the Rust iOS targets,
+#     a checkout of hexuria/nsh at the commit CI pins (NSH_PINNED_REF in
+#     .github/workflows/nsh.yml) next to this repo, and the `nsh` command line
+#     built from it into ~/BuwizNsh/tools (where the just nsh-* recipes look).
+#     The iOS Simulator needs Apple Silicon (the pinned NSH builds an arm64
+#     simulator host only) and the full Xcode app with an iOS runtime, not
+#     only the Command Line Tools. Intel Macs get the NSH macOS app only.
 #
 # What it does NOT need (unlike Windows/Linux):
 #   - No system OpenSSL: openssl-src compiles from vendored source with the
@@ -25,19 +32,22 @@
 #   scripts/setup-macos.sh --check      # verify only, install nothing
 #   scripts/setup-macos.sh --extras     # also install cargo-audit/outdated/machete
 #   scripts/setup-macos.sh --no-agent   # skip installing the gpui-agent CLI
+#   scripts/setup-macos.sh --no-nsh     # skip the NSH app (iOS targets, nsh CLI)
 #
 set -euo pipefail
 
 CHECK_ONLY=0
 WITH_EXTRAS=0
 WITH_AGENT=1
+WITH_NSH=1
 for arg in "$@"; do
     case "$arg" in
         --check)    CHECK_ONLY=1 ;;
         --extras)   WITH_EXTRAS=1 ;;
         --no-agent) WITH_AGENT=0 ;;
+        --no-nsh)   WITH_NSH=0 ;;
         -h|--help)
-            sed -n '2,30p' "$0"
+            sed -n '2,36p' "$0"
             exit 0
             ;;
         *) echo "Unknown option: $arg (see --help)" >&2; exit 2 ;;
@@ -46,11 +56,29 @@ done
 
 [ "$(uname)" = "Darwin" ] || { echo "This script is for macOS only." >&2; exit 1; }
 
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 BREW_PREFIX="$(uname -m | grep -q arm64 && echo /opt/homebrew || echo /usr/local)"
+NSH_TOOLS="$HOME/BuwizNsh/tools"
+# nsh/Cargo.toml points at ../../nsh, so the checkout must sit next to this repo.
+NSH_DIR="$(dirname "$REPO_ROOT")/nsh"
+IOS_TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim)
+# The pinned NSH CLI always builds the simulator host for aarch64-apple-ios-sim
+# (Platform::triple in crates/nsh-cli/src/runtime.rs), which an Intel
+# simulator cannot launch. hw.optional.arm64 is 1 even under Rosetta.
+IOS_SIM=0
+[ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ] && IOS_SIM=1
+# Homebrew rustup's proxies honour rust-toolchain.toml (the NSH checkout pins
+# its own toolchain); links made by link_toolchain_bins do not, so the proxy
+# dir goes first whenever it exists.
+if [ -d "$BREW_PREFIX/opt/rustup/bin" ]; then
+    export PATH="$BREW_PREFIX/opt/rustup/bin:$PATH"
+fi
 
 # ---------------------------------------------------------------------------
 # Xcode Command Line Tools — cc, lipo, codesign, PlistBuddy, productbuild all
@@ -143,6 +171,10 @@ install_rust() {
     # ~/.cargo/bin must precede any rustup shim dir in every future shell.
     persist_line 'export PATH="$HOME/.cargo/bin:$PATH"' '.cargo/bin'
     export PATH="$HOME/.cargo/bin:$PATH"
+    if [ -d "$BREW_PREFIX/opt/rustup/bin" ]; then
+        persist_line 'export PATH="'"$BREW_PREFIX"'/opt/rustup/bin:$PATH"' 'opt/rustup/bin'
+        export PATH="$BREW_PREFIX/opt/rustup/bin:$PATH"
+    fi
 
     # `just app`/`_package-mac` lipo aarch64 + x86_64 into a universal binary.
     # On Apple Silicon the second target is missing; on Intel the first is.
@@ -179,6 +211,80 @@ install_gpui_agent() {
     fi
     log "Installing gpui-agent CLI at pinned rev ${rev:0:7}"
     cargo install --git https://github.com/hexuria/gpui-agent --rev "$rev" gpui-agent-cli
+}
+
+# ---------------------------------------------------------------------------
+# NSH app: iOS targets, hexuria/nsh at the CI pin, and the nsh CLI built from
+# that checkout. The CLI and the checkout must match, so a moved pin rebuilds.
+# ---------------------------------------------------------------------------
+NSH_STAMP="$NSH_TOOLS/.buwiz-nsh-ref"
+
+nsh_pinned_ref() {
+    sed -n 's/^ *NSH_PINNED_REF: *\([0-9a-fA-F]\{7,64\}\).*/\1/p' "$REPO_ROOT/.github/workflows/nsh.yml" 2>/dev/null | head -1 || true
+}
+
+# Tracked changes only: they reach the app through its path dependencies.
+nsh_dirty() {
+    ! git -C "$NSH_DIR" diff --quiet 2>/dev/null || ! git -C "$NSH_DIR" diff --cached --quiet 2>/dev/null
+}
+
+# The CLI counts as built from the pin only when this script built it from a
+# clean checkout there (the stamp); its embedded HEAD alone says nothing about
+# local edits.
+nsh_cli_at() {
+    "$NSH_TOOLS/bin/nsh" --version 2>/dev/null | grep -q "(${1:0:7})" \
+        && [ "$(cat "$NSH_STAMP" 2>/dev/null)" = "$1" ]
+}
+
+# The toolchain the NSH checkout pins. Naming it with RUSTUP_TOOLCHAIN keeps
+# rustup from adding the Android targets its rust-toolchain.toml also lists.
+nsh_toolchain() {
+    local channel
+    channel="$(sed -n 's/^ *channel *= *"\([^"]*\)".*/\1/p' "$NSH_DIR/rust-toolchain.toml" 2>/dev/null | head -1 || true)"
+    echo "${channel:-stable}"
+}
+
+install_nsh() {
+    if [ "$IOS_SIM" -eq 0 ]; then
+        warn "Intel Mac: skipping the iOS Simulator (the pinned NSH builds an arm64-only simulator host); the NSH macOS app still works"
+    else
+        if [ "$(xcode-select -p 2>/dev/null)" = "/Library/Developer/CommandLineTools" ]; then
+            warn "Xcode.app is not selected: the iOS Simulator needs it (sudo xcode-select -s /Applications/Xcode.app)"
+        elif ! xcrun simctl list runtimes available 2>/dev/null | grep -q '^iOS'; then
+            warn "no available iOS Simulator runtime: install one with 'xcodebuild -downloadPlatform iOS'"
+        fi
+        log "Adding iOS targets: ${IOS_TARGETS[*]}"
+        rustup target add "${IOS_TARGETS[@]}"
+    fi
+
+    local ref
+    ref="$(nsh_pinned_ref)"
+    [ -n "$ref" ] || die "could not read NSH_PINNED_REF from $REPO_ROOT/.github/workflows/nsh.yml"
+    if [ ! -e "$NSH_DIR/.git" ]; then
+        log "Cloning hexuria/nsh into $NSH_DIR"
+        git clone https://github.com/hexuria/nsh "$NSH_DIR"
+    fi
+    if nsh_dirty; then
+        die "$NSH_DIR has uncommitted changes to tracked files, and the app would build against them.
+Keep them with 'git -C $NSH_DIR stash' (or commit them on a branch), then re-run this script."
+    fi
+    if [ "$(git -C "$NSH_DIR" rev-parse HEAD 2>/dev/null)" != "$ref" ]; then
+        log "Checking out NSH at the CI pin ${ref:0:7}"
+        git -C "$NSH_DIR" fetch origin "$ref"
+        git -C "$NSH_DIR" checkout --detach "$ref"
+    fi
+
+    if nsh_cli_at "$ref"; then
+        log "nsh CLI already built at ${ref:0:7}"
+    else
+        local toolchain
+        toolchain="$(nsh_toolchain)"
+        log "Building the nsh CLI into $NSH_TOOLS with Rust $toolchain (about 10 minutes cold)"
+        rustup toolchain install "$toolchain" --profile minimal
+        rm -f "$NSH_STAMP"
+        (cd "$NSH_DIR" && RUSTUP_TOOLCHAIN="$toolchain" cargo install --locked --path crates/nsh-cli --root "$NSH_TOOLS")
+        printf '%s\n' "$ref" > "$NSH_STAMP"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -273,6 +379,56 @@ check() {
             ok=0
         fi
     fi
+    if [ "$WITH_NSH" -eq 1 ]; then
+        local ref
+        ref="$(nsh_pinned_ref)"
+        if [ -z "$ref" ]; then
+            printf '  %-14s MISSING (no NSH_PINNED_REF in %s/.github/workflows/nsh.yml)\n' "nsh-pin" "$REPO_ROOT"
+            ok=0
+        fi
+        if [ ! -f "$NSH_DIR/crates/nsh-core/Cargo.toml" ]; then
+            printf '  %-14s MISSING (%s, the app'"'"'s path dependencies)\n' "nsh-source" "$NSH_DIR"
+            ok=0
+        elif [ -n "$ref" ] && [ "$(git -C "$NSH_DIR" rev-parse HEAD 2>/dev/null)" != "$ref" ]; then
+            printf '  %-14s %s is not at the CI pin %s\n' "nsh-source" "$NSH_DIR" "${ref:0:7}"
+            ok=0
+        elif nsh_dirty; then
+            printf '  %-14s %s has uncommitted changes to tracked files\n' "nsh-source" "$NSH_DIR"
+            ok=0
+        else
+            printf '  %-14s %s at %s\n' "nsh-source" "$NSH_DIR" "${ref:0:7}"
+        fi
+        if [ ! -x "$NSH_TOOLS/bin/nsh" ]; then
+            printf '  %-14s MISSING (%s/bin/nsh, needed by the just nsh-* recipes)\n' "nsh" "$NSH_TOOLS"
+            ok=0
+        elif [ -n "$ref" ] && ! nsh_cli_at "$ref"; then
+            printf '  %-14s %s is not built by this script from the CI pin %s\n' "nsh" "$NSH_TOOLS/bin/nsh" "${ref:0:7}"
+            ok=0
+        else
+            printf '  %-14s %s\n' "nsh" "$("$NSH_TOOLS/bin/nsh" --version 2>/dev/null | head -1)"
+        fi
+    fi
+    if [ "$WITH_NSH" -eq 1 ] && [ "$IOS_SIM" -eq 0 ]; then
+        printf '  %-14s %s\n' "ios-sim" "skipped: Intel Mac (the pinned NSH builds an arm64-only simulator host)"
+    elif [ "$WITH_NSH" -eq 1 ]; then
+        if command -v rustup >/dev/null 2>&1; then
+            local t missing_ios=""
+            for t in "${IOS_TARGETS[@]}"; do
+                rustup target list --installed 2>/dev/null | grep -qx "$t" || missing_ios="$missing_ios $t"
+            done
+            if [ -n "$missing_ios" ]; then
+                printf '  %-14s MISSING:%s\n' "ios-targets" "$missing_ios"
+                ok=0
+            else
+                printf '  %-14s %s\n' "ios-targets" "${IOS_TARGETS[*]}"
+            fi
+        fi
+        if xcrun simctl list runtimes available 2>/dev/null | grep -q '^iOS'; then
+            printf '  %-14s %s\n' "ios-runtime" "$(xcrun simctl list runtimes available 2>/dev/null | grep '^iOS' | tail -1 | cut -d' ' -f1-2)"
+        else
+            warn "no available iOS Simulator runtime (needs Xcode.app; xcodebuild -downloadPlatform iOS)"
+        fi
+    fi
     [ "$ok" -eq 1 ] && log "All required tooling present" || warn "Missing pieces — run scripts/setup-macos.sh"
     return $((1 - ok))
 }
@@ -290,6 +446,9 @@ main() {
     install_rust
     if [ "$WITH_AGENT" -eq 1 ]; then
         install_gpui_agent
+    fi
+    if [ "$WITH_NSH" -eq 1 ]; then
+        install_nsh
     fi
 
     if [ "$WITH_EXTRAS" -eq 1 ]; then
@@ -310,6 +469,11 @@ Done. Next steps:
     just app      # universal .app + DMG (ad-hoc signed; needs App Store
                   # Connect creds in .env for the build-number lookup)
 
+NSH app (nsh/), with the CLI built at the CI pin:
+
+    just nsh-check && just nsh-build && just nsh-test
+    just nsh-run                       # the NSH app on macOS
+
 Packaging tools already on macOS: lipo, codesign, PlistBuddy, productbuild.
 OpenSSL is vendored — no brew openssl needed; system perl + cc build it.
 
@@ -325,6 +489,18 @@ rev): build the host with the agent feature and launch with env vars —
 Full contract: crates/bir-shell/docs/AGENT.md
 
 EOF
+    if [ "$WITH_NSH" -eq 1 ] && [ "$IOS_SIM" -eq 1 ]; then
+        cat <<'EOF'
+The NSH app on the iOS Simulator (Apple Silicon), from nsh/:
+
+    just mock-bir & just mock-relay &
+    PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh" \
+      SIMCTL_CHILD_BIR_RELAY_URL=http://127.0.0.1:8787 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 \
+      SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BIR_AUTH_BYPASS=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1 \
+      nsh run --target ios
+
+EOF
+    fi
 }
 
 main
