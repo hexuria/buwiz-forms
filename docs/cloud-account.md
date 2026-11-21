@@ -34,7 +34,7 @@ The app uses the server's existing device flow for the public client
 
 1. `POST /auth/device/start` with `{"client_id":"buwiz-desktop"}`.
 2. The system browser opens the account origin at `/login` or `/signup`,
-   with `next` set to `/device?user_code=…`. After the password step the
+   with `next` set to `/device?user_code=…`. After email-code sign-in the
    server continues on `/device`, which the sign-in page accepts as a
    return path. Token requests stay on the API origin.
 3. `POST /auth/device/poll` until the browser approval returns tokens.
@@ -48,6 +48,35 @@ how buwiz-server reads small posts on the current Spin host.
 
 Sign out calls `POST /api/auth/logout` with the access token, then deletes
 the local copy even if the server is unreachable.
+
+## Local mock account server
+
+Run `just mock-account` in a separate terminal before the NSH app. Debug builds
+already use `http://localhost:3008`; no URL override is needed. All accounts,
+device codes and tokens live in memory and disappear when the server stops.
+Use only development emails. This is not the real account server and must
+never be exposed publicly.
+
+Choose Sign in or Create account in the app, continue with the prefilled
+`dev@buwiz.local` in the browser (no password or code), then Approve the device.
+Deny exercises the refusal path. The server logs requests and user codes to
+stdout, not tokens. `just mock-account --auto-approve` skips browser approval
+for headless runs. Refresh tokens rotate and sign-out revokes the grant.
+
+`--bind IP` / `MOCK_ACCOUNT_HOST` and `--port N` / `MOCK_ACCOUNT_PORT` change
+the default `127.0.0.1:3008`. Flags override the environment. `0.0.0.0` is
+allowed only for isolated development networks; it permits unauthenticated
+development sign-in from other machines. Prefer loopback and port forwarding.
+
+- Android: `adb reverse tcp:3008 tcp:3008` before launch (also for the browser).
+- iOS Simulator: shares the host's localhost; no forwarding is needed.
+- Linux NSH Docker sidecar: use `--network host` so localhost reaches the host.
+
+The real `buwiz-com` server uses passwordless **email-code** sign-in and requires
+PostgreSQL, `DATABASE_URL` and `DOCUMENT_KEY`; see its `docs/development.md`.
+It has no in-memory mock mode. The local mock does not implement TIN claims,
+licensing, agent filing pickup or the submission relay; keep using `mock-bir`
+and `mock-relay` for filing tests.
 
 ## Where the tokens live
 

@@ -70,6 +70,10 @@ run-upstream *args="":
 mock-relay *args="":
     cargo run --locked -p bir-core --features mock-relay --bin mock_relay -- {{args}}
 
+# In-memory development accounts on localhost:3008 (docs/cloud-account.md).
+mock-account *args="":
+    cargo run --locked -p bir-core --features mock-account --bin mock_account -- {{args}}
+
 # Options pass through: `just mock-bir --fail fail-after-store`.
 # Local mock of the BIR SFTP endpoint, loopback only (docs/mock-bir.md).
 mock-bir *args="":

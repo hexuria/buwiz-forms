@@ -37,6 +37,12 @@ mock-bir = []
 # The local mock relay (`mock_relay` binary, `just mock-relay`, docs/relay.md).
 # Never on in a build that ships, like `mock-bir`.
 mock-relay = []
+mock-account = []
+
+[[bin]]
+name = "mock_account"
+path = "src/bin/mock_account.rs"
+required-features = ["mock-account"]
 
 [[bin]]
 name = "mock_bir"
