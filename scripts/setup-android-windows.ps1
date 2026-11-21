@@ -46,8 +46,9 @@ function Assert-Native($message) {
 $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Step "Requesting administrator rights (UAC prompt)"
-    $elevated = Start-Process -FilePath 'powershell' -Verb RunAs -Wait -PassThru -ArgumentList `
-        '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`"",'-SdkRoot',"`"$SdkRoot`"", "-Run:$($Run.IsPresent)"
+    $elevationArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`"",'-SdkRoot',"`"$SdkRoot`"")
+    if ($Run) { $elevationArgs += '-Run' }
+    $elevated = Start-Process -FilePath 'powershell' -Verb RunAs -Wait -PassThru -ArgumentList $elevationArgs
     exit $elevated.ExitCode
 }
 
