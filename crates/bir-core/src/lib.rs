@@ -20,6 +20,7 @@ pub mod bir_xml;
 pub mod calendar_ics;
 pub mod calendar_rules;
 pub mod cloud_account;
+pub mod config;
 pub mod crypto;
 pub mod db;
 pub mod dev_mode;
@@ -69,6 +70,11 @@ pub mod validation_summary;
 pub mod mock_bir;
 #[cfg(test)]
 mod mock_bir_e2e;
+
+/// Local mock of the Buwiz relay (docs/relay.md). Tests and the `mock-relay`
+/// feature only; the shipped app never enables it.
+#[cfg(any(test, feature = "mock-relay"))]
+pub mod mock_relay;
 
 // Re-export core types
 pub use bir_rules::{

@@ -29,17 +29,26 @@ static PROCESS: OnceLock<Process> = OnceLock::new();
 
 /// Set up the process, once: the keychain switch, the hooks and the send guard.
 ///
-/// **This is the only place the door changes the process environment** (`BUWIZ_NO_KEYCHAIN`,
-/// `BIR_SFTP_DRY_RUN`, `BIR_SFTP_LIVE`; the database a test run opens is named with
-/// `bir_core::db::set_database_path_override`, not the environment). It runs at the registration of the native
-/// module (`lib.rs`): both generated hosts (`nsh/.nsh/rust/macos-host/main.rs`, `.../test/main.rs`) build the
-/// registry as the first statement of `main`, before NSH starts any thread, and the database, the submission
-/// worker and every reader thread of ours come later still. So no thread of ours can be reading the
-/// environment while it changes (NSH's own startup follows the registry, and it reads nothing named `BIR_*`),
-/// and every later reader sees the finished values. Should the registry ever be built later (or never), the
-/// first host call runs this instead, before it opens anything.
+/// Desktop registration sets the keychain and send-guard environment switches before NSH starts
+/// threads. Android instead installs in-process configuration overrides at its first Door call,
+/// when the injected private data directory is available, before database or worker startup.
+/// Neither Android development settings nor its send guard mutate the process environment.
+/// Test databases are named with `bir_core::db::set_database_path_override` on every platform.
 fn process() -> &'static Process {
     PROCESS.get_or_init(|| set_up(guards::send_guard))
+}
+
+#[cfg(target_os = "android")]
+pub(crate) fn prepare_android(path: Option<PathBuf>) -> Result<(), String> {
+    let path = path.ok_or("The Android engine has no private data directory.")?;
+    bir_core::platform::set_data_dir(path.clone()).map_err(|error| error.to_string())?;
+    if crate::dev_env::ENABLED {
+        static DEV_ENV: OnceLock<Result<(), String>> = OnceLock::new();
+        DEV_ENV
+            .get_or_init(|| crate::dev_env::load(&path.join("dev.env")))
+            .clone()?;
+    }
+    Ok(())
 }
 
 /// The set-up [`process`] runs, with the send guard given (production passes `guards::send_guard`; a test passes one
@@ -47,6 +56,7 @@ fn process() -> &'static Process {
 /// starts (bir-app-api's latch), so no route can start it, whatever host function it comes through. The name check in
 /// [`permitted`] stays, for the clear message.
 fn set_up(send_guard: impl FnOnce() -> SendMode) -> Process {
+    #[cfg(not(target_os = "android"))]
     switch_off_keychain(cfg!(debug_assertions));
     let _ = bir_app_api::install_hooks(NshHooks);
     let send = send_guard();
@@ -57,11 +67,12 @@ fn set_up(send_guard: impl FnOnce() -> SendMode) -> Process {
 }
 
 /// Set up the process now. The native module's registration calls it (see [`process`]).
+#[cfg(not(target_os = "android"))]
 pub(crate) fn prepare_process() {
     process();
 }
 
-/// Whether [`prepare_process`] has run in this process.
+/// Whether [`process`] has run in this process.
 #[cfg(test)]
 pub(crate) fn process_prepared() -> bool {
     PROCESS.get().is_some()
@@ -71,6 +82,7 @@ pub(crate) fn process_prepared() -> bool {
 /// in bir-core runs. So does any build running in a test environment (`EBIR_TEST_ENV`, read as bir-core reads
 /// it): a release build under a test must not reach the keychain either. A release build outside a test
 /// environment leaves the variable to the caller.
+#[cfg(not(target_os = "android"))]
 fn switch_off_keychain(debug_build: bool) {
     if debug_build || test_environment() {
         // SAFETY: called from [`process`], once, before NSH or this crate starts a thread (see there).
@@ -102,6 +114,7 @@ static BOOT: Mutex<()> = Mutex::new(());
 
 thread_local! {
     /// The database this thread asked for with [`use_database`], until it boots.
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static NAMED: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
 }
 
@@ -122,7 +135,10 @@ fn choose_database() -> Result<(), String> {
     if !scratch_database_wanted() {
         return Ok(());
     }
+    #[cfg(not(target_os = "android"))]
     let root = std::env::temp_dir().join("ebirforms-door");
+    #[cfg(target_os = "android")]
+    let root = bir_core::platform::temp_dir().join("ebirforms-door");
     SWEPT.call_once(|| forget_old_scratch(&root, SCRATCH_LIFETIME));
     let folder = fresh_scratch_folder(&root, std::process::id(), SCRATCH_SEQUENCE.fetch_add(1, Ordering::SeqCst))
         .map_err(|error| format!("Cannot make a scratch database folder: {error}"))?;
@@ -252,9 +268,11 @@ struct Booted {
 }
 
 thread_local! {
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static BOOTED: RefCell<Option<Booted>> = const { RefCell::new(None) };
     /// Dropped when the engine thread ends. Touched after the database slot exists, so it is destroyed
     /// before the slot is (thread locals go in reverse order of their first use).
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static ARMED: ShutdownGuard = const { ShutdownGuard };
 }
 
@@ -846,6 +864,7 @@ mod tests {
     /// A debug build switches the keychain off whatever the caller set and whether or not this is a test
     /// run; a release build leaves the caller's variable alone.
     #[test]
+    #[cfg(not(target_os = "android"))]
     fn a_debug_build_always_switches_the_keychain_off_and_a_release_build_leaves_it() {
         for caller in [None, Some(""), Some("0"), Some("false"), Some("1")] {
             temp_env::with_vars(
@@ -1063,6 +1082,7 @@ mod tests {
     /// the keychain off too: before, only a debug build did, so a release-build test run could reach the OS
     /// keychain. Outside a test environment a release build still leaves the caller's variable alone.
     #[test]
+    #[cfg(not(target_os = "android"))]
     fn a_release_build_in_a_test_environment_switches_the_keychain_off() {
         for caller in [None, Some(""), Some("0"), Some("false"), Some("1")] {
             for test_run in ["1", "true", "yes", "on", " YES "] {

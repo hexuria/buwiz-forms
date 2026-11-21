@@ -115,6 +115,31 @@ test("items to fix and the tier warning: Queue says what Check says, shows every
   }
 });
 
+test("a second Queue takes the refusal toast down before its question opens: the toast's Show item must not float over the dialog", async () => {
+  const { said, h } = hooks();
+  const dismissed: string[] = [];
+  h.dismissToast = (id) => dismissed.push(id);
+  const s = await opened(at("1604C", 2022, 0), h, said);
+  const spy = spyQueue();
+  try {
+    s.queue();
+    await until(() => said.toasts.length === 1, "the refusal");
+    expect(dismissed).toEqual([]);
+    s.queue();
+    await until(() => s.overlay()?.kind === "queue-confirm", "the question");
+    expect(dismissed).toEqual(["t1"]);
+    s.confirmQueue();
+    await until(() => said.toasts.length === 2, "the host's refusal");
+    // The host's refusal is the toast now; the next refusal replaces it.
+    s.queue();
+    await until(() => said.toasts.length === 3, "the third toast");
+    expect(dismissed).toEqual(["t1", "t2"]);
+  } finally {
+    spy.restore();
+    s.dispose();
+  }
+});
+
 test("a second Queue with the same list goes to the host, which decides: the page's reading never keeps a return from being queued", async () => {
   const { said, h } = hooks();
   const s = await opened(at("1604C", 2022, 0), h, said);
@@ -138,6 +163,27 @@ test("a second Queue with the same list goes to the host, which decides: the pag
     await until(() => said.toasts.length === 3, "the third toast");
     expect(s.overlay()).toBe(null);
     expect(spy.calls.n).toBe(1);
+  } finally {
+    spy.restore();
+    s.dispose();
+  }
+});
+
+test("a host refusal not listed on the page stays visible even when the page has other items", async () => {
+  const { said, h } = hooks();
+  const s = await opened(at("1604C", 2019, 0), h, said);
+  const message = "tin: The stored taxpayer needs attention.";
+  const spy = spyQueue(message);
+  try {
+    s.queue();
+    await until(() => said.toasts.length === 1, "the page's list");
+    expect(s.todo().length).toBeGreaterThan(0);
+    s.queue();
+    await until(() => s.overlay()?.kind === "queue-confirm", "the question");
+    s.confirmQueue();
+    await until(() => said.toasts.length === 2, "the host's refusal");
+    expect(said.toasts[1]).toBe(message);
+    expect(s.status()).toBe("Draft");
   } finally {
     spy.restore();
     s.dispose();
@@ -193,7 +239,7 @@ test("nothing to fix and no warning: Queue queues straight away, once, even when
   }
 });
 
-test("Check clean and the host still refuses: the question, then the refusal counted as Check counts (the present behaviour)", async () => {
+test("Check clean and the host still refuses: Continue reveals the host message instead of only a count", async () => {
   const { said, h } = hooks();
   bir.set_year_facts(DEMO.tin, 2024, ANSWERED);
   const s = await opened(at("0619E", 2024, 6), h, said);
@@ -204,7 +250,7 @@ test("Check clean and the host still refuses: the question, then the refusal cou
     await until(() => s.overlay()?.kind === "queue-confirm", "the question");
     expect(said.toasts).toEqual([]);
     s.confirmQueue();
-    expect(said.toasts).toEqual(["1 item needs attention."]);
+    expect(said.toasts).toEqual(["agent_category: Please select an option for Item 8."]);
     expect(spy.calls.n).toBe(1);
     expect(s.status()).toBe("Draft");
   } finally {

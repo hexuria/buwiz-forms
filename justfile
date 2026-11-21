@@ -64,6 +64,12 @@ shell-run *args="":
 run-upstream *args="":
     cargo run --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell {{args}}
 
+# Options pass through: `just mock-relay --fail reject`.
+# Local mock of the Buwiz relay, loopback only; hands files on to a running
+# `just mock-bir` (docs/relay.md).
+mock-relay *args="":
+    cargo run --locked -p bir-core --features mock-relay --bin mock_relay -- {{args}}
+
 # Options pass through: `just mock-bir --fail fail-after-store`.
 # Local mock of the BIR SFTP endpoint, loopback only (docs/mock-bir.md).
 mock-bir *args="":

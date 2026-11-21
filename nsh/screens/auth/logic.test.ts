@@ -7,7 +7,7 @@ test("the TIN names the admin, a taxpayer, or says why not", () => {
   expect(signInTarget("00012", "000123453", ["000123453"])).toEqual({ error: "Type all 9 digits of the TIN." });
   expect(signInTarget("000000000", "000000000", ["000123453"])).toEqual({ root: "000000000", admin: true });
   expect(signInTarget("000123453", "000000000", ["000123453"])).toEqual({ root: "000123453", admin: false });
-  expect(signInTarget("000111229", "000000000", ["000123453"])).toEqual({ error: "No taxpayer has that TIN on this computer." });
+  expect(signInTarget("000111229", "000000000", ["000123453"])).toEqual({ error: "No taxpayer has that TIN on this device." });
 });
 
 test("the sign-in line follows the path and the mode", () => {

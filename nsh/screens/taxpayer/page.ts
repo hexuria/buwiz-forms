@@ -25,6 +25,8 @@ export interface SectionEdit {
   yearFields: boolean;
   /** The tax year those fields were read from (null without them): the edit belongs to it, and a save under another year is refused. */
   year: number | null;
+  focusField?: string;
+  fromForm?: boolean;
 }
 
 /** The fact row being edited. */
@@ -78,7 +80,7 @@ export function createPageState() {
 
   // ------------------------------------------------------------ sections
 
-  function startEdit(sec: EditableSection): void {
+  function startEdit(sec: EditableSection, opts: { focusField?: string; fromForm?: boolean } = {}): void {
     const t = app.taxpayer();
     const b = app.branch();
     if (!t || !b) return;
@@ -110,7 +112,7 @@ export function createPageState() {
     }
     batch(() => {
       setSectionOpen(sec, true);
-      edit.set({ sec, values, type: t.taxpayer_type, inherit, touched: [], submitted: false, tinError: null, yearFields, year });
+      edit.set({ sec, values, type: t.taxpayer_type, inherit, touched: [], submitted: false, tinError: null, yearFields, year, ...opts });
     });
   }
 
@@ -256,6 +258,7 @@ export function createPageState() {
       }
       edit.set(null);
       toast("Changes saved");
+      if (e.fromForm && app.canBack()) back();
     } catch (err) {
       edit.set({ ...e, tinError: null });
       toast(errorText(err), "triangle-alert");

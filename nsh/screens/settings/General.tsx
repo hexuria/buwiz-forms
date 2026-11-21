@@ -36,7 +36,7 @@ export function GeneralSection(props: { rows: string[] }) {
       <Labeled label="Appearance">
         <Card testID="settings-appearance">
           <If when={has("theme")}>
-            <SettingRow testID="settings-theme-row" title="Theme" hint="System follows this computer">
+            <SettingRow testID="settings-theme-row" title="Theme" hint="System follows this device">
               <Dropdown
                 testID="settings-theme"
                 label="Theme"

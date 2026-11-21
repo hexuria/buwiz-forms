@@ -431,6 +431,7 @@ export type {
   ScreenFormIndexEntry,
   ScreenFormError,
   ScreenFormStatus,
+  ScreenFormProfilePrerequisite,
   ScreenFormOpened,
   ScreenFormFact,
   ScreenFormAsk,

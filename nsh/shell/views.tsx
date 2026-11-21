@@ -35,7 +35,7 @@ function FormView(props: { target: FormTarget }) {
       snapshotId={props.target.snapshotId}
       onClose={() => app.back()}
       onOpenReturn={(t) => app.retarget(t)}
-      onOpenProfile={() => app.openProfile()}
+      onOpenProfile={(section, year) => app.go("profile", { edit: section, year, fromForm: true })}
       onSaved={(t) => app.bumpRecent({ tin: t.tin, code: t.formCode, year: t.year, period: t.period, returnKey: t.key })}
       toast={(message, o) => app.toast(message, o?.icon, o?.action)}
       dismissToast={dismissToast}

@@ -22,7 +22,7 @@ import { POLL, startPolls } from "../lib/poll";
 import { addRecent, bumpRecent, loadRecent, recentEntry, recentOpenOptions, type RecentEntry, type RecentInput } from "../lib/recent";
 import type { FormTarget } from "../screens/form/FormPage";
 import { BREAK } from "../theme/tokens";
-import { dismissToast, ICONS, toast as kitToast, type IconName } from "../ui";
+import { deviceCopy, dismissToast, ICONS, toast as kitToast, type IconName } from "../ui";
 import { eventToast, takeFresh } from "./events";
 import { isViewName, ROUTES, type Route, type ViewName, type ViewParams } from "./routes";
 import { allowedStart, parseStart, parseStartForm } from "./start";
@@ -83,7 +83,7 @@ const KEYS = {
 export const FRESH_HINT = "Add a taxpayer first, then open a form for them.";
 
 /**
- * First-run setup ("Who will use eBIRForms on this computer?") stands in front of the frame while the database has no access
+ * First-run setup ("Who will use eBIRForms on this device?") stands in front of the frame while the database has no access
  * mode. The shipped app turns it on (App.tsx: Shell's `firstRun`); the test fixtures leave it off, so their fresh databases
  * open straight into the frame as before (screens/auth's fixture turns it on).
  */
@@ -281,7 +281,15 @@ const branch = computed<Branch | null>(() => {
 const isFresh = () => taxpayer() === null;
 const years = computed(() => {
   const b = branch();
-  return b ? store.taxYears(b.tin) : [];
+  if (!b) return [];
+  const listed = store.taxYears(b.tin);
+  const r = route();
+  const requested = r.view === "profile" && r.params.fromForm === true ? r.params.year : undefined;
+  if (typeof requested !== "number" || !Number.isInteger(requested) || listed.includes(requested)) return listed;
+  const bounds = store.yearBounds();
+  if (requested < bounds.min || requested > bounds.max) return listed;
+  // A return can exist before its year is added to the profile's forms list.
+  return [...listed, requested].sort((a, b) => a - b);
 });
 /** The selected year, kept valid: this year if the branch has it, else its latest. */
 const year = computed<number | null>(() => {
@@ -1034,14 +1042,15 @@ function watchUpdate(): void {
 
 /** How often the lists are read again while a return is Queued (instead of the events poll's 30 s). */
 export const QUEUED_POLL_MS = 3000;
-/** How long after the Queued set last changed (or a queue action) the watch keeps its pace; after that the normal 30 s events poll is enough. */
+/** How long after the Queued set last changed (or a queue action) the watch keeps its fast pace. */
 export const QUEUED_FAST_MS = 30_000;
 
-/** The watch's pace: the wait before its first look, between two looks, and how long the fast phase lasts. A test shortens them. */
+/** The watch's pace: first look, tick, fast phase duration and slow re-read interval. A test shortens them. */
 export interface QueuedTiming {
   firstMs: number;
   tickMs: number;
   fastMs: number;
+  slowMs: number;
 }
 
 /** The ids of the Queued returns in the cached filed list (read now when it was dropped), as one sorted text; "" for none. Always "" behind a lock: nothing is read for nobody. */
@@ -1058,37 +1067,42 @@ function queuedKey(): string {
  * One look of the Queued watch. It does nothing until the frame is shown (booted, the account gate open, first-run setup done, no
  * sign-in in front). With a return Queued it reads the worker's lists (WORKER_KEYS) on each look for fastMs after the Queued set last
  * changed or a queue action was made; a return that stays Queued (the worker is off, SFTP is down, the computer is offline) is then
- * left to the 30 s events poll instead of dropping every mounted screen's reads every 3 s for good. A change in the set, a new queue
+ * read every slowMs even when the normal events poll is disabled. A change in the set, a new queue
  * action, or the frame coming back from a lock starts the fast phase again.
  */
-function queuedLook(fastMs: number): () => void {
+function queuedLook(fastMs: number, slowMs: number): () => void {
   let seen = "";
   let changedAt = 0;
+  let lastReadAt = 0;
   return () => {
     if (!chromeVisible()) {
       seen = "";
       return;
     }
     const queued = queuedKey();
+    const now = Date.now();
     if (queued !== seen) {
       seen = queued;
-      changedAt = Date.now();
+      changedAt = now;
     }
     changedAt = Math.max(changedAt, store.lastQueueAction());
-    if (queued !== "" && Date.now() - changedAt < fastMs) pollEvents(WORKER_KEYS);
+    if (queued !== "" && (now - changedAt < fastMs || now - lastReadAt >= slowMs)) {
+      lastReadAt = now;
+      pollEvents(WORKER_KEYS);
+    }
   };
 }
 
 /**
  * The submission worker sends a Queued return within a second or two and tells nobody, so Filings and Home would say Queued until
  * something else moved the cache (the old app relied on its 30 s events poll, and a refused Cancel queue). While any return is Queued
- * the worker's lists are read every 3 s (for about 30 s after the Queued set last changed, then the 30 s events poll alone), in the dev
+ * the worker's lists are read every 3 s (for about 30 s after the Queued set last changed, then every 30 s), in the dev
  * environment too (where the other polls wait for BIR_SHELL_POLL=1). The root starts it and calls the returned function on unmount.
  */
 export function startQueuedWatch(timing: Partial<QueuedTiming> = {}): () => void {
-  const t: QueuedTiming = { firstMs: 1000, tickMs: QUEUED_POLL_MS, fastMs: QUEUED_FAST_MS, ...timing };
+  const t: QueuedTiming = { firstMs: 1000, tickMs: QUEUED_POLL_MS, fastMs: QUEUED_FAST_MS, slowMs: POLL.events, ...timing };
   return startPolls(
-    [{ name: "queued", every: t.tickMs, first: t.firstMs, run: queuedLook(t.fastMs) }],
+    [{ name: "queued", every: t.tickMs, first: t.firstMs, run: queuedLook(t.fastMs, t.slowMs) }],
     (name, error) => store.logScreen("warn", `poll ${name}: ${errorText(error)}`),
   );
 }
@@ -1215,7 +1229,7 @@ function logOut(): void {
 
 /** Computer setup changed (Settings): the admin moved, so the old session ends and nobody keeps their place. */
 function signOutAfterSetupChange(): void {
-  endSession("Computer setup changed. Sign in as the admin with the new owner's PIN or the help desk PIN.");
+  endSession(deviceCopy("Computer setup changed. Sign in as the admin with the new owner's PIN or the help desk PIN."));
   lockedFrom = null;
 }
 

@@ -1333,6 +1333,7 @@ impl Database {
         }
         existing.submission_filename = draft.submission_filename.clone();
         existing.submitted_dry_run = draft.submitted_dry_run;
+        existing.submitted_via_relay = draft.submitted_via_relay;
         existing.submission_attempts = 0;
         existing.next_retry_at = None;
         existing.last_error = None;
@@ -1392,6 +1393,71 @@ impl Database {
             "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
              WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
             params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
+    /// The relay proved it did not take this claimed 2551Q (it refused it, or was unavailable): only the worker holding
+    /// the claim lets it go. Refused: back to Draft with the relay's reason (the same file would be refused again).
+    /// Unavailable: still Queued, retried after the usual back-off (the fifth failure returns it to Draft). `false` when
+    /// the claim is no longer this worker's.
+    pub(crate) fn release_unaccepted_claimed_2551q_submission(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        quarter: u8,
+        claim_token: &str,
+        note: String,
+        refused: bool,
+    ) -> Result<bool, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![tin, i64::from(taxable_year), i64::from(quarter)],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        let mut draft: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        let lifecycle = &draft;
+        if db_status != "Queued"
+            || !matches!(lifecycle.status, FilingStatus::Queued)
+            || lifecycle.submission_claim_token.as_deref() != Some(claim_token)
+            || lifecycle.submission_claimed_at.is_none()
+        {
+            return Ok(false);
+        }
+        if refused {
+            draft.revert_to_draft();
+            draft.last_error = Some(note);
+        } else {
+            draft.record_submission_failure(note);
+        }
+        let status = if matches!(draft.status, FilingStatus::Draft) {
+            "Draft"
+        } else {
+            "Queued"
+        };
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts SET status = ?1, data_json = ?2, updated_at = datetime('now')
+             WHERE id = ?3 AND status = 'Queued' AND data_json = ?4",
+            params![status, json, id, raw_json],
         )?;
         if updated != 1 {
             return Ok(false);
@@ -2475,6 +2541,71 @@ impl Database {
             "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
              WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
             params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
+    /// The relay proved it did not take this claimed 1601C (it refused it, or was unavailable): only the worker holding
+    /// the claim lets it go. Refused: back to Draft with the relay's reason (the same file would be refused again).
+    /// Unavailable: still Queued, retried after the usual back-off (the fifth failure returns it to Draft). `false` when
+    /// the claim is no longer this worker's.
+    pub(crate) fn release_unaccepted_claimed_1601c_submission(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        month: u8,
+        claim_token: &str,
+        note: String,
+        refused: bool,
+    ) -> Result<bool, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![tin, i64::from(taxable_year), i64::from(month)],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        let mut draft: Form1601CDraft = serde_json::from_str(&raw_json)?;
+        let lifecycle = &draft;
+        if db_status != "Queued"
+            || !matches!(lifecycle.status, FilingStatus::Queued)
+            || lifecycle.submission_claim_token.as_deref() != Some(claim_token)
+            || lifecycle.submission_claimed_at.is_none()
+        {
+            return Ok(false);
+        }
+        if refused {
+            draft.revert_to_draft();
+            draft.submission_error = Some(note);
+        } else {
+            draft.record_submission_failure(note);
+        }
+        let status = if matches!(draft.status, FilingStatus::Draft) {
+            "Draft"
+        } else {
+            "Queued"
+        };
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts SET status = ?1, data_json = ?2, updated_at = datetime('now')
+             WHERE id = ?3 AND status = 'Queued' AND data_json = ?4",
+            params![status, json, id, raw_json],
         )?;
         if updated != 1 {
             return Ok(false);

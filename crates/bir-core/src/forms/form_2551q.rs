@@ -304,6 +304,11 @@ pub struct Form2551QDraft {
     /// part of the queued fingerprint.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub submitted_dry_run: bool,
+    /// The worker's send of this return went to the local mock relay
+    /// (docs/relay.md), not to BIR: set with `submitted_dry_run`, cleared with
+    /// it. Absent (false) on every other send.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub submitted_via_relay: bool,
     #[serde(default)]
     pub confirmed_at: Option<String>,
     #[serde(default)]
@@ -388,12 +393,13 @@ pub struct Form2551QDraft {
 
 /// The page's 2551Q profile boxes (their keys) and the draft field each
 /// writes: what `profile_edits` names.
-const PROFILE_BOXES: [(&str, &str); 5] = [
+const PROFILE_BOXES: [(&str, &str); 6] = [
     ("frm2551Qv2018:txtRDOCode", "/rdo_code"),
     ("frm2551Qv2018:registeredName", "/taxpayer_name"),
     ("frm2551Qv2018:registeredAddress", "/registered_address"),
     ("frm2551Qv2018:zipCode", "/zip_code"),
     ("frm2551Qv2018:telNo", "/contact_number"),
+    ("txtEmail#occurrence-1", "/email"),
 ];
 
 impl Form2551QDraft {
@@ -485,6 +491,7 @@ impl Form2551QDraft {
             updated_at: now,
             submitted_at: None,
             submitted_dry_run: false,
+            submitted_via_relay: false,
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
@@ -574,6 +581,42 @@ impl Form2551QDraft {
         Ok(())
     }
 
+    /// Refresh an editable draft's profile context when it is opened: the
+    /// profile's facts (taxpayer type, business start date, EOPT tier,
+    /// annual income-tax election) and an unanswered Item 13 follow the
+    /// profile. The profile boxes and their baseline stay as stored (the
+    /// page's edit-aware profile follow owns them), and so does an Item 13
+    /// answer the draft already holds. A draft whose filing period is
+    /// invalid is left as stored, so it still opens and can be corrected.
+    pub fn refresh_profile_context(&mut self, profile: &TaxpayerProfile) {
+        if !matches!(self.status, FilingStatus::Draft) || self.filing_period_bounds().is_none() {
+            return;
+        }
+        let boxes = (
+            self.rdo_code.clone(),
+            self.taxpayer_name.clone(),
+            self.registered_address.clone(),
+            self.zip_code.clone(),
+            self.contact_number.clone(),
+            self.email.clone(),
+        );
+        let baseline = self.profile_baseline.clone();
+        let answered = self.item_13_election;
+        self.sync_with_profile_snapshot(profile);
+        (
+            self.rdo_code,
+            self.taxpayer_name,
+            self.registered_address,
+            self.zip_code,
+            self.contact_number,
+            self.email,
+        ) = boxes;
+        self.profile_baseline = baseline;
+        if answered != Item13Election::Unanswered && self.filed_q1_item_13().is_none() {
+            self.item_13_election = answered;
+        }
+    }
+
     fn clear_profile_owned_snapshot(&mut self) {
         self.taxpayer_type = None;
         self.business_start_date = None;
@@ -625,6 +668,7 @@ impl Form2551QDraft {
             "/taxpayer_name" => &mut self.taxpayer_name,
             "/registered_address" => &mut self.registered_address,
             "/zip_code" => &mut self.zip_code,
+            "/email" => &mut self.email,
             _ => &mut self.contact_number,
         }
     }
@@ -645,7 +689,7 @@ impl Form2551QDraft {
                 && (self.zip_code == profile.zip_code || self.edited_on_return("/zip_code"))
                 && (self.contact_number == profile.phone
                     || self.edited_on_return("/contact_number"))
-                && self.email == profile.email;
+                && (self.email == profile.email || self.edited_on_return("/email"));
             self.profile_snapshot_stale = !snapshot_matches;
             self.profile_snapshot_stale_reason = (!snapshot_matches).then(|| {
                 "The taxpayer profile changed after this return was reviewed. Revert or amend the return to review refreshed profile values before filing."
@@ -670,6 +714,7 @@ impl Form2551QDraft {
             ("/registered_address", &profile.registered_address),
             ("/zip_code", &profile.zip_code),
             ("/contact_number", &profile.phone),
+            ("/email", &profile.email),
         ] {
             if self.edited_on_return(path) {
                 continue;
@@ -679,7 +724,6 @@ impl Form2551QDraft {
                 *baseline = serde_json::Value::String(value.clone());
             }
         }
-        self.email = profile.email.clone();
         self.item_13_election = match self.item_13_is_applicable() {
             // The filed Q1's answer stands for the rest of its year.
             _ if self.filed_q1_item_13().is_some() => {
@@ -1136,6 +1180,7 @@ impl Form2551QDraft {
             QueueAuthSource::Gui,
         ));
         self.submitted_dry_run = false;
+        self.submitted_via_relay = false;
         self.submission_claim_token = None;
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
@@ -1169,6 +1214,7 @@ impl Form2551QDraft {
         self.submitted_at = Some(now.to_rfc3339());
         self.submission_filename = Some(filename);
         self.submitted_dry_run = dry_run;
+        self.submitted_via_relay = false;
         self.submission_attempts = 0;
         self.next_retry_at = None;
         self.last_error = None;
@@ -1232,6 +1278,7 @@ impl Form2551QDraft {
         self.profile_baseline.clear();
         self.submitted_at = None;
         self.submitted_dry_run = false;
+        self.submitted_via_relay = false;
         self.confirmed_at = None;
         self.receipt_id = None;
         self.submission_filename = None;

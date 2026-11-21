@@ -114,6 +114,23 @@ impl Hooks for NshHooks {
         true
     }
 
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    fn export_profile_download(
+        &self,
+        file_name: &str,
+        write: &mut bir_app_api::hooks::ArchiveWriter<'_>,
+    ) -> Option<bir_app_api::hooks::DownloadExport> {
+        let staged = crate::export_archive::Archive::write(&bir_core::platform::temp_dir(), write);
+        let file_name = file_name.to_owned();
+        Some(Box::pin(async move {
+            let staged = staged?;
+            #[cfg(target_os = "android")]
+            return crate::export_android::save(staged, file_name).await;
+            #[cfg(target_os = "ios")]
+            return crate::export_ios::save(staged, file_name).await;
+        }))
+    }
+
     // Touch ID and the account password (admin recovery): `auth.rs` (false in a test environment).
     fn os_authenticate(&self, reason: &str) -> bool {
         crate::auth::os_authenticate(reason)
@@ -152,6 +169,7 @@ type Panel = (Spawned<()>, Rc<Cell<bool>>);
 
 thread_local! {
     /// The tasks waiting on a panel. A dropped task is cancelled, so each is kept until it has answered.
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static PANELS: RefCell<Vec<Panel>> = const { RefCell::new(Vec::new()) };
 }
 

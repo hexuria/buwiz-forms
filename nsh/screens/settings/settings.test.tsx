@@ -5,16 +5,22 @@ import { expect, test } from "nsh/test";
 import { calls, expectTexts, goSection, openSettings, SIZES, state } from "./testing";
 
 for (const { name, size } of SIZES) {
-  test(`${name}: General has its four rows; the theme, recent returns and compact sections write what the app keeps, the update switch asks the host`, async () => {
+  test(`${name}: General shows the platform's rows and its controls write what the app keeps`, async () => {
     const app = await openSettings(size, { update: true }, "general");
     await app.waitFor("id:settings-appearance");
-    expectTexts(app, ["General", "Appearance", "Theme", "Show recent returns", "Compact form sections", "Download updates automatically"]);
+    expectTexts(app, ["General", "Appearance", "Theme"]);
     expect(state(app)).toContain("theme=system recent=true compact=false");
 
     await app.press("id:settings-theme-trigger");
     await app.waitFor("text:Dark");
     await app.press("text:Dark");
     await app.waitFor("text:/theme=dark/");
+    if (name === "phone") {
+      for (const id of ["settings-recent", "settings-compact-form-nav", "settings-auto-update"]) expect(app.shows(`id:${id}`)).toBe(false);
+      expect(calls(app)).toEqual([]);
+      return;
+    }
+    expectTexts(app, ["Show recent returns", "Compact form sections", "Download updates automatically"]);
     await app.press("id:settings-recent-switch");
     await app.waitFor("text:/recent=false/");
     await app.press("id:settings-compact-form-nav-switch");
@@ -32,7 +38,8 @@ for (const { name, size } of SIZES) {
   test(`${name}: the search keeps the rows whose words match, the section when its name matches, and says when nothing does`, async () => {
     const app = await openSettings(size, {}, undefined);
     await app.waitFor("id:settings-nav-general");
-    expectTexts(app, ["Personal", "General", "Account", "Data", "Import / Export", "Jobs", "System", "Computer"]);
+    expectTexts(app, ["Personal", "General", "Account", "Data", "Import / Export", "Jobs", "System", name === "phone" ? "Device" : "Computer"]);
+    expect(app.shows("id:settings-nav-keyboard")).toBe(name !== "phone");
     await app.type("id:settings-search", "pin");
     await app.waitFor("text:/Account/");
     expect(app.shows("id:settings-nav-account")).toBe(true);
@@ -98,7 +105,38 @@ test("phone: the list comes first, a section is its own page with Back, and the 
   const direct = await openSettings({}, {}, "computer");
   await direct.waitFor("id:settings-files");
   expect(direct.shows("id:settings-back")).toBe(true);
+  expect(direct.texts()).toContain("Device");
+  expect(direct.texts()).toContain("Device setup");
+  expect(direct.shows("id:settings-hotkey-recorder")).toBe(false);
 });
+
+for (const platform of ["ios", "android"] as const) {
+  test(`${platform}: desktop-only settings are absent, while local files and device setup remain`, async () => {
+    const app = await openSettings({ platform });
+    await app.waitFor("id:settings-nav-computer");
+    expect(app.texts()).toContain("Device");
+    expect(app.shows("id:settings-nav-keyboard")).toBe(false);
+    await goSection(app, "general", "id:settings-theme-row");
+    for (const id of ["settings-recent", "settings-compact-form-nav", "settings-auto-update"]) expect(app.shows(`id:${id}`)).toBe(false);
+    await app.press("id:settings-back");
+    await goSection(app, "computer", "id:settings-files");
+    expect(app.shows("id:settings-retention-row")).toBe(true);
+    expect(app.shows("id:settings-setup")).toBe(true);
+    expect(app.shows("id:settings-hotkey-recorder")).toBe(false);
+    expect(app.shows("id:settings-quit-key")).toBe(false);
+    await app.press("id:settings-back");
+    await app.type("id:settings-search", "device");
+    await app.waitFor("id:settings-nav-computer");
+    await goSection(app, "computer", "id:settings-files");
+    expect(app.shows("id:settings-setup")).toBe(true);
+    await app.press("id:settings-back");
+    for (const query of ["keyboard", "hotkey", "sidebar", "compact", "download", "tray", "menu bar", "close window", "launch at login", "file associations"]) {
+      await app.clear("id:settings-search");
+      await app.type("id:settings-search", query);
+      await app.waitFor("id:settings-nav-empty");
+    }
+  }, 60_000);
+}
 
 test("desktop: the section list stays beside the cards, a section opens without leaving the page, and the page returns to the last one", async () => {
   const app = await openSettings({ width: 1440, height: 900, platform: "macos" }, {});

@@ -5,6 +5,7 @@ import { Print } from "ebirforms/native";
 import type { PdfProbe, PrintEvent, SheetImage } from "ebirforms/native";
 
 export { Print };
+export const hasNativePreview = Print.nativePreview();
 export type { PdfProbe, PrintEvent, SheetImage };
 
 /**

@@ -4,7 +4,9 @@
 import type { JSX } from "nsh";
 import { Scroll, View } from "nsh";
 import { Button } from "nsh/base";
-import { Icon, Text, TOUCH, type IconName } from "../../ui";
+import { deviceCopy, Icon, Text, TOUCH, type IconName } from "../../ui";
+
+export { deviceCopy };
 
 /** The 400-wide card centred in the window (the full width less 16 on each side when narrower), scrolling when short. */
 export function AuthCard(props: { testID: string; shadow?: boolean; children?: JSX.Element }) {
@@ -28,8 +30,8 @@ export function Heading(props: { icon: IconName; title: string; line: string; te
       <View class="size-11 items-center justify-center rounded-full bg-hover">
         <Icon name={props.icon} tone="fg2" />
       </View>
-      <Text variant="page" class="text-center" testID={props.testID}>{props.title}</Text>
-      <Text variant="meta" tone="fg2" class="text-center">{props.line}</Text>
+      <Text variant="page" class="text-center" testID={props.testID}>{deviceCopy(props.title)}</Text>
+      <Text variant="meta" tone="fg2" class="text-center">{deviceCopy(props.line)}</Text>
     </View>
   );
 }
@@ -48,7 +50,7 @@ export function Labelled(props: { label: string; children?: JSX.Element }) {
 export function ErrorLine(props: { message: string | null; testID?: string }) {
   return (
     <If when={props.message}>
-      <Text variant="meta" tone="danger" testID={props.testID ?? "auth-error"}>{props.message as string}</Text>
+      <Text variant="meta" tone="danger" testID={props.testID ?? "auth-error"}>{deviceCopy(props.message as string)}</Text>
     </If>
   );
 }

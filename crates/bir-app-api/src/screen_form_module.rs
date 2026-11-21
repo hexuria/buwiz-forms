@@ -48,6 +48,7 @@ mod combs;
 mod conditions;
 pub(crate) mod fact_asks;
 mod penalties;
+mod profile_prerequisites;
 mod rows_1604;
 mod rows_1700;
 mod rows_2550m;
@@ -82,12 +83,19 @@ export interface ScreenFormError {
     dismiss_label?: string;
 }
 export type ScreenFormStatus = "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid";
+export interface ScreenFormProfilePrerequisite {
+    field: "business_start_date" | "income_tax_election";
+    label: string;
+    message: string;
+}
 export interface ScreenFormOpened {
     form_code: string;
     year: number;
     period: number;
     status: ScreenFormStatus;
     editable: boolean;
+    /** Missing profile context, decided by the form's own rules; advisory, not new Queue blocks. */
+    profile_prerequisites?: ScreenFormProfilePrerequisite[];
     /** The period column the draft is stored under: pass it to queue and print. */
     stored_period: number | null;
     draft: object;
@@ -124,6 +132,8 @@ export interface ScreenFormOpened {
     submitted_at: string | null;
     /** The send `submitted_at` names was a dry run: the worker only simulated it and nothing reached BIR. False for a real send and for every return sent before this was recorded. */
     submitted_dry_run: boolean;
+    /** That send went to the local mock relay (docs/relay.md), not to BIR. False for every other send. */
+    submitted_via_relay: boolean;
     confirmed_at: string | null;
     /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
     amends?: ScreenFormStatus;
@@ -211,6 +221,7 @@ export interface ScreenFormPenalties {
 }
 export interface ScreenFormFilled {
     draft: object;
+    profile_prerequisites?: ScreenFormProfilePrerequisite[];
     values: Record<string, string>;
     options: Record<string, ScreenFormOption[]>;
     rejected: Record<string, string>;
@@ -1862,6 +1873,7 @@ pub fn load_draft(
                     None if exact.is_some() => return Err(NO_LONGER_STORED.to_string()),
                     None => form_2551q::Form2551QDraft::new_from_profile(profile, year, quarter),
                 };
+                draft.refresh_profile_context(profile);
                 // A later quarter takes the Item 13 answer of its filed Q1
                 // in this app, and is locked to it (`draft_locks::item_13`).
                 if let Some(db) = store {
@@ -3875,6 +3887,9 @@ fn opened_json(
         "period": period,
         "status": status_name(&status),
         "editable": status == FilingStatus::Draft,
+        "profile_prerequisites": if status == FilingStatus::Draft && sample.is_none() {
+            profile_prerequisites::of(kind, &draft)?
+        } else { json!([]) },
         "stored_period": stored_period,
         "draft": draft,
         "values": values,
@@ -3901,6 +3916,8 @@ fn opened_json(
         "submitted_at": lifecycle_text(&draft, "submitted_at"),
         // The worker's send of this return was a dry run (nothing reached BIR).
         "submitted_dry_run": lifecycle_flag(&draft, "submitted_dry_run"),
+        // ...and it went to the mock relay, as the worker recorded it then (not how this run sends).
+        "submitted_via_relay": lifecycle_flag(&draft, "submitted_via_relay"),
         "confirmed_at": lifecycle_text(&draft, "confirmed_at"),
         "errors": errors,
         "quiet": quiet,
@@ -4770,6 +4787,7 @@ fn screen_form_use_profile(arguments: &HostArguments) -> HostResult {
         "penalties": penalty_groups,
         "pools": pool_texts,
         "asks": asks,
+        "profile_prerequisites": profile_prerequisites::of(kind, &draft).map_err(host_error)?,
     })))
 }
 
@@ -4866,6 +4884,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "relocks": relocks,
         "relock_notes": relock_notes,
         "notes_always": noted,
+        "profile_prerequisites": profile_prerequisites::of(kind, &draft).map_err(host_error)?,
     })))
 }
 
@@ -14283,11 +14302,14 @@ mod tests {
             let mut draft = opened["draft"].clone();
             draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
             draft["submitted_dry_run"] = json!(true);
+            draft["submitted_via_relay"] = json!(true);
             if draft["lifecycle"].is_object() {
                 draft["lifecycle"]["submitted_dry_run"] = json!(true);
+                draft["lifecycle"]["submitted_via_relay"] = json!(true);
             }
             let id = save(code, &draft)["id"].as_i64().unwrap();
             assert!(!raw_row(id).1.contains("submitted_dry_run"), "{code}");
+            assert!(!raw_row(id).1.contains("submitted_via_relay"), "{code}");
             assert_eq!(
                 open_for(TIN, code, 2024, period)["submitted_dry_run"],
                 false,
@@ -14324,6 +14346,35 @@ mod tests {
             assert_eq!(dry["status"], "Submitted", "{code}");
             assert_eq!(dry["submitted_at"], real["submitted_at"], "{code}");
             assert_eq!(dry["submitted_dry_run"], true, "{code}");
+        }
+    }
+
+    /// Whether a return went to the mock relay is the stored fact of its send, not how this run sends.
+    #[test]
+    fn open_says_whether_the_send_went_to_the_mock_relay() {
+        setup();
+        for (code, period) in [("0619E", 6i64), ("1601C", 6), ("2551Q", 2)] {
+            let opened = open_for(TIN, code, 2024, period);
+            let id = store_filed(code, &opened["draft"], "Submitted");
+            assert_eq!(
+                open_for(TIN, code, 2024, period)["submitted_via_relay"],
+                false,
+                "{code}"
+            );
+            let (_, raw) = raw_row(id);
+            let mut sent: Value = serde_json::from_str(&raw).unwrap();
+            if sent["lifecycle"].is_object() {
+                sent["lifecycle"]["submitted_via_relay"] = json!(true);
+            } else {
+                sent["submitted_via_relay"] = json!(true);
+            }
+            raw_exec(
+                &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+                &[&serde_json::to_string(&sent).unwrap()],
+            );
+            let relayed = open_for(TIN, code, 2024, period);
+            assert_eq!(relayed["submitted_via_relay"], true, "{code}");
+            assert_eq!(relayed["submitted_dry_run"], false, "{code}");
         }
     }
 
