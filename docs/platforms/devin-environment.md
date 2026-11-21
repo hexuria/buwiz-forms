@@ -38,6 +38,14 @@ Start the in-memory account mock before launching NSH; debug builds use
 browser approval flow and `--auto-approve` for headless tests. No Postgres or
 secrets are needed. Never expose the mock publicly.
 
+Verification boundary: `bir-core::mock_account` is an in-memory development
+fixture, not the production account service or submission worker. Its pending,
+denied, expired and one-time device grants are checked by the module's Rust
+tests (`cargo test -p bir-core mock_account`), including the real HTTP client
+flow. The system model is unaffected: this fixture does not change production
+poll scheduling, retries, ownership handoff or submission liveness, and is not
+a model of the production account service's concurrency guarantees.
+
 Linux and macOS (separate terminal, or background it):
 
 ```sh
