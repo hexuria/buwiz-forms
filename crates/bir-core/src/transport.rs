@@ -1154,10 +1154,29 @@ mod tests {
     async fn http_reply(status: u16, body: &str, probe: bool) -> Result<(), TransportError> {
         use std::io::{Read, Write};
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
         let url = format!("http://{}", listener.local_addr().unwrap());
         let body = body.to_owned();
         let server = std::thread::spawn(move || {
-            let (mut socket, _) = listener.accept().unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+            let mut socket = loop {
+                match listener.accept() {
+                    Ok((socket, _)) => break socket,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        if std::time::Instant::now() >= deadline {
+                            return false;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                    }
+                    Err(error) => panic!("relay test accept failed: {error}"),
+                }
+            };
+            socket
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
+            socket
+                .set_write_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
             let mut request = [0; 8192];
             let count = socket.read(&mut request).unwrap();
             let request = String::from_utf8_lossy(&request[..count]);
@@ -1172,6 +1191,7 @@ mod tests {
                 body.len()
             )
             .unwrap();
+            true
         });
         let result = if probe {
             probe_sftp_target(
@@ -1193,10 +1213,25 @@ mod tests {
             )
             .await
         };
-        server.join().unwrap();
+        assert_eq!(
+            server.join().unwrap(),
+            cfg!(any(debug_assertions, feature = "mock-relay"))
+        );
         result
     }
 
+    #[cfg(not(any(debug_assertions, feature = "mock-relay")))]
+    #[tokio::test]
+    async fn release_refuses_relay_health_and_upload_without_connecting() {
+        for probe in [true, false] {
+            assert!(matches!(
+                http_reply(200, "{}", probe).await,
+                Err(TransportError::Config(_))
+            ));
+        }
+    }
+
+    #[cfg(any(debug_assertions, feature = "mock-relay"))]
     #[tokio::test]
     async fn relay_response_classification() {
         for status in [408, 429, 503] {
@@ -1220,6 +1255,7 @@ mod tests {
         ));
     }
 
+    #[cfg(any(debug_assertions, feature = "mock-relay"))]
     #[tokio::test]
     async fn relay_logs_form_and_length_without_iaf_names_or_reflected_pii() {
         use std::io::Write;
@@ -1278,6 +1314,7 @@ mod tests {
         }
     }
 
+    #[cfg(any(debug_assertions, feature = "mock-relay"))]
     #[tokio::test]
     async fn relay_probe_checks_health() {
         assert!(
