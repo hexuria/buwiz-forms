@@ -32,8 +32,8 @@ do {
         }
         $systemUiAnr = $ui.SelectSingleNode('//node[@text="System UI isn''t responding"]')
         if ($systemUiAnr) {
-            $close = $ui.SelectSingleNode('//node[@resource-id="android:id/aerr_close"]')
-            if ($close -and $close.bounds -match '^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$') {
+            $wait = $ui.SelectSingleNode('//node[@resource-id="android:id/aerr_wait"]')
+            if ($wait -and $wait.bounds -match '^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$') {
                 & $adb -s $Serial shell input tap ([int](([int]$Matches[1] + [int]$Matches[3]) / 2)) ([int](([int]$Matches[2] + [int]$Matches[4]) / 2))
             }
         } elseif ($state.State -eq 'gate' -and -not $started) {
