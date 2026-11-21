@@ -4,10 +4,11 @@
 // empty and a filled state, and a refusal sentence (1706's buyer TIN after Check). `just nsh-shots fftin`
 // saves ~/BuwizNsh/evidence/fftin/*.png; headless it takes none and still passes.
 import { open, test, type App } from "nsh/test";
-import { warmForms } from "../bir/testing";
 import { shoot } from "./shoot";
 
-warmForms();
+// No warmForms() here: a test file's own imports run in the CLI's runner, which on `--target macos` has none of
+// the app's native modules — `bir/testing` (ebirforms/native) fails the bundle there. The form schemas build
+// lazily inside each real host on the first form call, well inside the tests' timeouts.
 
 const ENTRY = "../FormAnyShot.tsx";
 
