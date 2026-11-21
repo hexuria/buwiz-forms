@@ -133,3 +133,46 @@ for (const look of LOOKS) {
     await shoot(app, `g1-2551q-12-shut-${look.name}`);
   }, 180_000);
 }
+
+// The part heights the gates save, measured on the pictures at the two form widths (420 and 640 pt):
+// 0619E's part 2 gains item 14, 1700's spouse part goes from empty to eight items.
+for (const width of [420, 640]) {
+  const size = { width, height: width < 600 ? 2000 : 1400, platform: "macos" as const, colorScheme: "light" as const };
+
+  test(`g1 heights ${width}: 0619E part 2 closed then open`, async () => {
+    const app = await open(ANY, { ...size, host: { params: { formCode: "0619E", year: 2025, period: 3, mode: "return", openParts: [0, 2] } } });
+    await app.waitFor("id:fp-part-0-toggle", { timeout: 30_000 });
+    await jump(app, 2, false);
+    await app.wait(300);
+    await shoot(app, `g1h-0619e-14-closed-${width}`);
+    await jump(app, 0, false);
+    await reach(app, "id:fp-frm0619E:optWithheld:Y");
+    await app.press("id:fp-frm0619E:optWithheld:Y");
+    await jump(app, 2, false);
+    await reach(app, "id:fp-item-2:0");
+    await app.wait(300);
+    await shoot(app, `g1h-0619e-14-open-${width}`);
+  }, 120_000);
+
+  test(`g1 heights ${width}: 1700 spouse part empty then full`, async () => {
+    const app = await open(ANY, { ...size, host: { params: { formCode: "1700", year: 2025, period: 1, mode: "return" } } });
+    await app.waitFor("id:fp-part-0-toggle", { timeout: 30_000 });
+    await jump(app, 2, false);
+    await app.wait(300);
+    await shoot(app, `g1h-1700-part2-closed-${width}`);
+    await jump(app, 1, false);
+    await reach(app, "id:fp-item-1:12");
+    await app.press("id:fp-frm1700:rdoPg1I15CivilStatusM");
+    await reach(app, "id:fp-item-1:13");
+    await app.press("id:fp-frm1700:rdoPg1I16SpouseHasIncomeY");
+    await reach(app, "id:fp-item-1:14");
+    await app.press("id:fp-frm1700:rdoPg1I17FilingStatusJ");
+    await jump(app, 2, false);
+    await reach(app, "id:fp-item-2:0");
+    await reach(app, "id:fp-item-2:6");
+    await app.press("id:fp-frm1700:rdoPg1I24SpouseForeignTaxCreditsYes");
+    await reach(app, "id:fp-item-2:7");
+    await app.wait(300);
+    await shoot(app, `g1h-1700-part2-full-${width}`);
+  }, 180_000);
+}

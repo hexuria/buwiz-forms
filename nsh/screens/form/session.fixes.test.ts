@@ -288,8 +288,9 @@ test("F3-10: one definition of an empty schedule cell, the host's (blank text, a
 test("B16: a box another answer keeps shut shows its reason, and a write that reaches the host is refused with it", async () => {
   const s = await opened(at("0619E", 2025, 3));
   const k = "frm0619E:txtTax14";
-  // Item 4 "Any Taxes Withheld?" is unanswered: the box is off, faded and
-  // locked, and its own tag says what turns it on.
+  // Item 4 "Any Taxes Withheld?" is unanswered: the box is off and locked —
+  // and while it is blank the page does not draw it at all (G1); its own
+  // tag still says what turns it on.
   expect(s.box(k).off()).toBe("Needs item 4 = Yes");
   expect(s.box(k).locked()).toBe(true);
   // A write that still reaches the host (a stale page, an agent) is

@@ -144,7 +144,8 @@ export interface BoxState {
   /** What a locked BLANK box shows in its place, in the filer's words ("Needs the ATC", "Set by the period"); "" none. */
   hint: Accessor<string>;
   /** Another answer turns this box off: draw it faded (opacity ~0.45). The tag ("Needs item 13 = Yes") is drawn by the
-   *  page under the label, not by the control. "" when on. */
+   *  page under the label, not by the control. "" when on. G1: the page does not render a blank gated box at all —
+   *  this accessor matters only for a shut box that still draws (a kept value, a message, a to-do stop). */
   off: Accessor<string>;
   /** A "sel" box's choices (already "Choose…"-free; the control adds its own empty choice). Empty for other kinds. */
   options: Accessor<ChoiceOption[]>;
