@@ -326,3 +326,16 @@ test("G1 sweep: on a fresh return every blank box with an off reason is hidden, 
   // The spouse chains of 1700/1701 are the known two-level gates; the sweep must find them.
   expect(chains.length).toBeGreaterThan(0);
 }, 300000);
+
+test("G1 is page-only: with item 14's row hidden, the draft is the host's own and it still prints", async () => {
+  const s = await opened(at("0619E", 2025, 4));
+  const id = s.itemIdForKey("frm0619E:txtTax14")!;
+  expect(s.row(id)().hidden).toBe(true);
+  const host = await bir.screen_form_open(DEMO.tin, "0619E", 2025, 4);
+  // Each open stamps its own created_at/updated_at; everything else is the host's draft.
+  const stamped = (d: object) => ({ ...d, created_at: "", updated_at: "" });
+  expect(stamped(s.draft()!)).toEqual(stamped(host.draft));
+  const printed = bir.screen_form_print("0619E", s.draft()!);
+  expect(printed.path).toBeTruthy();
+  s.dispose();
+});
