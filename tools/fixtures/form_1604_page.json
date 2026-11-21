@@ -351,7 +351,14 @@
                   "m": 4
                 }
               ],
-              "cols": null
+              "cols": null,
+              "one_dates": [
+                [
+                  "frm1604c:txtRefMonth",
+                  "frm1604c:txtRefDate",
+                  "frm1604c:txtRefYear"
+                ]
+              ]
             },
             {
               "no": "12",

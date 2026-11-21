@@ -21,7 +21,7 @@ async function opened(target: FormTarget = Q1): Promise<FormSession> {
 
 test("a 2551Q opens: its schema, the profile's locked boxes, a fresh Draft not saved yet", async () => {
   const s = await opened();
-  expect(s.fieldCount()).toBe(86);
+  expect(s.fieldCount()).toBe(85); // PR 3: the Year Ended month+year is one period field
   expect(s.status()).toBe("Draft");
   expect(s.header().editable).toBe(true);
   expect(s.valueOf("frm2551Qv2018:txtTIN1")).toBe("000");
@@ -77,10 +77,13 @@ test("leaving the page within the quiet still saves what was typed", async () =>
 
 test("validation messages bind to their items: by key, then item number, then TIN, then label words", async () => {
   const s = await opened();
-  // Item 13 (keys name its radios) and the EOPT tier (keyed at Item 20).
+  // Item 13 (keys name its radios) stays a row message; the EOPT tier names one box, so its
+  // sentence lives in the box home and binds to the row through the box's key (B3/B4).
   expect(s.itemIdForKey("frm2551Qv2018:taxRate1")).toBe("1:7");
   expect(s.messageOf("1:7")).toContain("Item 13");
-  expect(s.messageOf("2:6")).toContain("EOPT tier");
+  const eoptKey = Object.keys(s.boxMessages()).find((k) => s.boxMessageOf(k).includes("EOPT tier"));
+  expect(eoptKey).toBeTruthy();
+  expect(s.itemIdForKey(eoptKey!)).toBe("2:6");
   const items = s.schema!.parts.flatMap((p, pi) => p.items.map((it: SchemaItem, ii) => ({ id: pi + ":" + ii, it })));
   const none = () => undefined;
   expect(bindError({ field: "x", message: "Item 06 is wrong", keys: [] }, items, none)).toBe("1:0");
@@ -107,7 +110,12 @@ test("touched-only errors: a message shows after its row was left, all of them a
   expect(s.row("2:6")().message).toBe("");
   s.check();
   await s.idle();
-  expect(s.row("2:6")().message).toContain("EOPT tier");
+  // The EOPT tier's sentence sits in the box home; after Check it shows on its box.
+  const eoptKey = Object.keys(s.boxMessages()).find((k) => s.boxMessageOf(k).includes("EOPT tier"))!;
+  expect(s.itemIdForKey(eoptKey)).toBe("2:6");
+  expect(s.box(eoptKey).invalid()).toBe(true);
+  const eoptShown = s.box(eoptKey).message?.() || s.row("2:6")().boxMessages.map((b) => b.sentence).join(" ");
+  expect(eoptShown).toContain("EOPT tier");
   // A part's badge counts its rows with a message, as the old page's partErrors did (F9-1: two messages on one row are one).
   const items = s.schema!.parts.flatMap((p, pi) => p.items.map((it, ii) => ({ id: `${pi}:${ii}`, it })));
   const rows = new Set(s.errors().map((e) => bindError(e, items, (k) => s.itemIdForKey(k))).filter((id) => id?.startsWith("2:")));
@@ -120,8 +128,16 @@ test("the to-do list (lib/todo): required-empty boxes and messages count at once
   const s = await opened();
   const parts = s.schema!.parts as unknown as TodoPart[];
   const valuesOf = () => Object.fromEntries(s.schema!.parts.flatMap((p) => p.items.flatMap((it) => (it.f || []).map((f) => [f.k, s.valueOf(f.k)]))));
-  // Before anything is left or checked, every row with a host message is already to do (F9-1, the old todo()).
-  expect(s.todo().map((r) => r.id)).toEqual(todoRows({ parts, messages: s.messages(), values: valuesOf(), blocked: (k) => s.box(k).locked() }).map((r) => r.id));
+  // Before anything is left or checked, every row with a host message is already to do (F9-1, the old todo());
+  // a box-home sentence counts its row the same way (B3/B4).
+  const boxRowsOf = () =>
+    Object.fromEntries(
+      Object.keys(s.boxMessages())
+        .map((k) => s.itemIdForKey(k))
+        .filter((id): id is string => id !== undefined && !s.messages()[id])
+        .map((id) => [id, " "])
+    );
+  expect(s.todo().map((r) => r.id)).toEqual(todoRows({ parts, messages: { ...s.messages(), ...boxRowsOf() }, values: valuesOf(), blocked: (k) => s.box(k).locked() }).map((r) => r.id));
   expect(s.todo().length).toBeGreaterThan(0);
   // A sample's period boxes are blank and required: they are to do at once, untouched, before any message shows.
   const sample = await opened({ tin: DEMO.tin, formCode: "2551Q", year: 0, period: 0, mode: "sample" });
@@ -134,7 +150,7 @@ test("the to-do list (lib/todo): required-empty boxes and messages count at once
   s.check();
   await s.idle();
   const ids = s.todo().map((r) => r.id);
-  expect(ids).toEqual(todoRows({ parts, messages: s.messages(), values: Object.fromEntries(s.schema!.parts.flatMap((p) => p.items.flatMap((it) => (it.f || []).map((f) => [f.k, s.valueOf(f.k)])))), blocked: (k) => s.box(k).locked() }).map((r) => r.id));
+  expect(ids).toEqual(todoRows({ parts, messages: { ...s.messages(), ...boxRowsOf() }, values: Object.fromEntries(s.schema!.parts.flatMap((p) => p.items.flatMap((it) => (it.f || []).map((f) => [f.k, s.valueOf(f.k)])))), blocked: (k) => s.box(k).locked() }).map((r) => r.id));
   expect(ids).toContain("1:7");
   expect(ids).toContain("2:6");
   // The pill's step goes to the first, and the next.
@@ -224,5 +240,5 @@ test("the three heaviest forms build a session without error", async () => {
     counts[code] = s.fieldCount();
     s.dispose();
   }
-  expect(counts).toEqual({ "1702RT": 365, "1700": 289, "1701": 380 });
+  expect(counts).toEqual({ "1702RT": 364, "1700": 289, "1701": 379 }); // PR 3: each year-end pair is one period field
 });

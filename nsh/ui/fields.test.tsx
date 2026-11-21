@@ -3,6 +3,35 @@ import { expect, open, test } from "nsh/test";
 import { openKit, readout, SIZES } from "./harness";
 
 for (const size of SIZES) {
+  test(`${size.name}: touch date sheet validates Done, discards dismissal and clears`, async () => {
+    const app = await openKit("../BasePreview.tsx", size.options);
+    expect(app.shows("id:kit-one-date")).toBe(true);
+    await app.press("id:kit-one-date");
+    await app.waitFor("id:kit-one-date-sheet-input");
+    await app.type("id:kit-one-date-sheet-input", "08/17/88");
+    await app.press("id:kit-one-date-sheet-done");
+    expect(app.shows("id:kit-one-date-sheet-input")).toBe(true);
+    expect(app.texts()).toContain("Type the four-digit year, for example 08/17/1988.");
+    await app.clear("id:kit-one-date-sheet-input");
+    await app.type("id:kit-one-date-sheet-input", "08171988");
+    await app.press("id:kit-one-date-sheet-done");
+    await app.waitFor("id:kit-one-date-sheet-input", { state: "gone" });
+    expect(app.texts()).toContain("August 17, 1988");
+    await app.press("id:kit-one-date");
+    expect(app.value("id:kit-one-date-sheet-input")).toBe("08/17/1988");
+    await app.clear("id:kit-one-date-sheet-input");
+    await app.type("id:kit-one-date-sheet-input", "01/01/2000");
+    await app.press("role:button[Close]");
+    await app.waitFor("id:kit-one-date-sheet-input", { state: "gone" });
+    expect(app.texts()).toContain("August 17, 1988");
+    await app.press("id:kit-one-date");
+    await app.press("id:kit-one-date-sheet-clear");
+    await app.waitFor("id:kit-one-date-sheet-input", { state: "gone" });
+    expect(app.texts()).not.toContain("August 17, 1988");
+  });
+}
+
+for (const size of SIZES) {
   test(`${size.name}: text field types, TIN groups while typing`, async () => {
     const app = await openKit("../BasePreview.tsx", size.options);
     await app.clear("id:kit-name");
@@ -65,16 +94,42 @@ for (const size of SIZES) {
     await app.type("id:kit-date", "12102020");
     expect(readout(app, "Stored:")).toBe("Stored: 12/10/2020");
     await app.type("id:kit-name", " ");
-    expect(app.value("id:kit-date")).toBe("Dec 10, 2020");
+    expect(app.value("id:kit-date")).toBe("December 10, 2020");
     await app.clear("id:kit-date");
     await app.type("id:kit-date", "13/45");
-    expect(app.texts().some((t) => t.startsWith("Enter a valid date"))).toBe(false);
+    expect(app.texts().some((t) => t.startsWith("Type the date as MM/DD/YYYY"))).toBe(false);
     await app.type("id:kit-name", " ");
-    expect(app.texts().some((t) => t.startsWith("Enter a valid date"))).toBe(true);
+    expect(app.texts().some((t) => t.startsWith("Type the date as MM/DD/YYYY"))).toBe(true);
     await app.type("id:kit-code", "123456");
     expect(readout(app, "PIN digits:")).toBe("PIN digits: 0 | Code complete: 123456");
     await app.type("id:kit-pin", "4321");
     expect(readout(app, "PIN digits:")).toBe("PIN digits: 4 | Code complete: 123456");
+  });
+
+  test(`${size.name}: a date box is MM/DD/YYYY while typed, the full month when left, and its calendar is named for it`, async () => {
+    const app = await openKit("../BasePreview.tsx", size.options);
+    // The calendar trigger is named for the box, not a fixed "Open the calendar"
+    // (the picker's trigger is a combobox to assistive tech).
+    expect(app.shows("role:combobox[Pick Date of birth]")).toBe(true);
+    await app.clear("id:kit-date");
+    // Eight digits rewrite to MM/DD/YYYY while the box has the keys.
+    await app.type("id:kit-date", "12102020");
+    expect(app.value("id:kit-date")).toBe("12/10/2020");
+    expect(readout(app, "Stored:")).toBe("Stored: 12/10/2020");
+    // Other shapes stay as typed while typing and take the long form on blur.
+    await app.clear("id:kit-date");
+    await app.type("id:kit-date", "12-10-2020");
+    expect(app.value("id:kit-date")).toBe("12-10-2020");
+    await app.type("id:kit-name", " ");
+    expect(app.value("id:kit-date")).toBe("December 10, 2020");
+    await app.clear("id:kit-date");
+    await app.type("id:kit-date", "Dec 10 2020");
+    await app.type("id:kit-name", " ");
+    expect(app.value("id:kit-date")).toBe("December 10, 2020");
+    // Focusing the long text shows the numeric date (an empty type takes the keys).
+    await app.type("id:kit-date", "");
+    await app.wait(200);
+    expect(app.value("id:kit-date")).toBe("12/10/2020");
   });
 }
 

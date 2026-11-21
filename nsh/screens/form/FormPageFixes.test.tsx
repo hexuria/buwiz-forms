@@ -20,11 +20,10 @@ test("F3-11 desktop: Cmd+Right inside a text box stays in the box; outside one i
   await app.waitFor("text:BIR Form 2551Q");
   await app.press("id:fp-check");
   await app.waitFor("id:fp-pill-count");
-  // Open and reveal Part II: Expand all need not mount its offscreen, virtualized amount rows.
-  await app.press("id:fp-nav-2");
-  await app.waitFor(box);
-  // Input steps give a text box focus; press() requires a press handler.
-  await app.type(box, "");
+  await app.press("id:fp-parts-toggle");
+  // Check shows every message, so the rows run taller: txt15 is below the first mount window (a list row mounts when scrolled to).
+  for (let i = 0; i < 20 && !app.shows("id:fp-frm2551Qv2018:txt15"); i++) await app.scroll("id:form-scroll", 600).catch(() => {});
+  await app.type("id:fp-frm2551Qv2018:txt15", "5");
   await app.keyboard.press("mod+right");
   await app.wait(300);
   expect(app.texts().some((t) => /^Item \d+ · /.test(t))).toBe(false);

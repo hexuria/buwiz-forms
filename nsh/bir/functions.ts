@@ -248,6 +248,9 @@ export const screen_form_print = (...args: Parameters<typeof Host.screen_form_pr
 export const screen_form_print_sample = (...args: Parameters<typeof Host.screen_form_print_sample>): ReturnType<typeof Host.screen_form_print_sample> =>
   Door.call("screen_form_print_sample", args) as ReturnType<typeof Host.screen_form_print_sample>;
 
+export const screen_form_profile_asked = (...args: Parameters<typeof Host.screen_form_profile_asked>): ReturnType<typeof Host.screen_form_profile_asked> =>
+  Door.call("screen_form_profile_asked", args) as ReturnType<typeof Host.screen_form_profile_asked>;
+
 export const screen_form_queue = (...args: Parameters<typeof Host.screen_form_queue>): ReturnType<typeof Host.screen_form_queue> =>
   Door.call("screen_form_queue", args) as ReturnType<typeof Host.screen_form_queue>;
 
@@ -535,6 +538,7 @@ export const bir = {
   screen_form_preview_sync,
   screen_form_print,
   screen_form_print_sample,
+  screen_form_profile_asked,
   screen_form_queue,
   screen_form_queue_check,
   screen_form_sample,
@@ -663,6 +667,7 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "screen_form_preview_sync", kind: "sync" },
   { name: "screen_form_print", kind: "sync" },
   { name: "screen_form_print_sample", kind: "sync" },
+  { name: "screen_form_profile_asked", kind: "sync" },
   { name: "screen_form_queue", kind: "sync" },
   { name: "screen_form_queue_check", kind: "sync" },
   { name: "screen_form_sample", kind: "async" },

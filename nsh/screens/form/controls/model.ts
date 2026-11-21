@@ -45,20 +45,38 @@ export function selectModel(listed: ChoiceOption[], value: string): { options: C
 /** A list long enough to want a search box. */
 export const SEARCH_FROM = 12;
 
+/** How a one-answer group of `count` choices draws: a segmented bar (2–4), a dropdown (5–12), a search list (more). */
+export function radioKind(count: number): "segmented" | "dropdown" | "search" {
+  return count <= 4 ? "segmented" : count <= SEARCH_FROM ? "dropdown" : "search";
+}
+
 /** A tick box reads as ticked. */
 export const isOn = (value: string): boolean => value === "true" || value === "1" || value === "Y";
+
+/** A box named as part of a TIN: a segment (TIN1, TIN segment 1, tinA), the branch code, or the whole TIN. */
+function tinNamed(f: Pick<SchemaField, "k" | "l">): boolean {
+  const key = String(f.k).split(":").pop() ?? "";
+  return (
+    /(^|[a-z0-9_])(TIN|Tin|tin)(?![a-z])/.test(key) || /(^|[^A-Za-z])TIN(?![a-z])/.test(f.l) || /\bTI nof\b/i.test(f.l) ||
+    /branch ?code/i.test(f.l) || /BranchCode/i.test(key)
+  );
+}
 
 /** What a text box that holds a TIN is: its whole 14 digits ("full"), one of the 3-3-3-5 boxes ("part"), or no TIN at all. */
 export function tinKind(f: Pick<SchemaField, "k" | "l" | "t" | "m">): "full" | "part" | null {
   if (f.t !== "text" && f.t !== "int") return null;
-  const key = String(f.k).split(":").pop() ?? "";
-  const named =
-    /(^|[a-z0-9_])(TIN|Tin|tin)(?![a-z])/.test(key) || /(^|[^A-Za-z])TIN(?![a-z])/.test(f.l) || /\bTI nof\b/i.test(f.l) ||
-    /branch ?code/i.test(f.l) || /BranchCode/i.test(key);
-  if (!named || !f.m) return null;
+  if (!tinNamed(f) || !f.m) return null;
   if (f.t === "text" && f.m >= 14 && f.m <= 17) return "full";
   if (f.m <= 5) return "part";
   return null;
+}
+
+/**
+ * A box of a TIN item that takes digits: a segment, the branch code or the whole TIN, named like tinKind but with no
+ * max length (several forms leave `m` off their TIN boxes). The phone grid's cells take digits only through it.
+ */
+export function tinSegment(f: Pick<SchemaField, "k" | "l" | "t">): boolean {
+  return (f.t === "text" || f.t === "int") && tinNamed(f);
 }
 
 /** A date text as the date box takes it: MM/DD/YYYY once it reads as a date, else as it is. */

@@ -66,7 +66,20 @@ fn binding_of(kind: AgentFormKind, key: &str) -> Option<&'static Binding> {
 
 /// The values tried on a box, in order, to see whether the form keeps one:
 /// the first one the box takes decides. The tests use the same list.
-pub(super) fn probes(kind: AgentFormKind, key: &str, shown: &str) -> Vec<Value> {
+/// A select's probes are its listed codes (B17 refuses an unlisted code
+/// before the binding sees it, so a generic probe would never land).
+pub(super) fn probes(kind: AgentFormKind, draft: &Value, key: &str, shown: &str) -> Vec<Value> {
+    if let Some(list) = super::catalogs::sel_list(kind, key, draft) {
+        let listed: Vec<Value> = list
+            .iter()
+            .filter(|code| code.as_str() != shown && !is_blank(code.as_str()))
+            .take(2)
+            .map(|code| json!(code))
+            .collect();
+        if !listed.is_empty() {
+            return listed;
+        }
+    }
     let grouped = kind
         .definition()
         .box_def(key)
@@ -122,6 +135,38 @@ pub(super) fn cleared(kind: AgentFormKind, draft: &Value, key: &str, shown: &str
     off_alone(kind, draft, key, shown)
 }
 
+/// Whether `key` — a box the corpus gives a condition — is off on `draft`
+/// now, with its tag: the same verdict `off_boxes` reaches for it, for the
+/// one key a write is about (B16). Boxes a module gates keep their own
+/// refusal reasons, so they are left out here as `off_boxes` leaves them
+/// out of the trial.
+pub(super) fn off_now(
+    kind: AgentFormKind,
+    draft: &Value,
+    values: &Value,
+    key: &str,
+) -> Option<String> {
+    let code = kind.form_code();
+    let list = conditions()[code].as_object()?;
+    let condition = list.get(key)?;
+    if super::rows_donor_estate::gated_keys(kind)
+        .iter()
+        .any(|gated| gated == key)
+        || super::rows_withholding::gated(kind, draft, key).is_some()
+        || super::rows_monthly::gated(kind, draft, key).is_some()
+        || super::rows_income_q::gated(kind, draft, key).is_some()
+        || super::rows_annual_individual::gated(kind, draft, key)
+        || super::rows_annual_individual::open_by_gate(kind, draft, key)
+    {
+        return None;
+    }
+    let shown = values[key].as_str().unwrap_or_default();
+    if !is_blank(shown) || !off_alone(kind, draft, key, shown) {
+        return None;
+    }
+    label(code, key, condition).as_str().map(str::to_string)
+}
+
 /// Fill `edits` on a copy of `draft` the way the page does, recompute, and
 /// give each key's shown value, or `None` for a key the copy refused.
 fn trial(
@@ -155,7 +200,7 @@ fn trial(
 
 /// Whether one box is off: the first probe it takes is cleared by the form.
 fn off_alone(kind: AgentFormKind, draft: &Value, key: &str, shown: &str) -> bool {
-    for probe in probes(kind, key, shown) {
+    for probe in probes(kind, draft, key, shown) {
         if let Some(Some(after)) = trial(kind, draft, &[(key.to_string(), probe)]).remove(key) {
             return is_blank(&after);
         }
@@ -233,7 +278,7 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
         .iter()
         .filter(|(key, _, _)| !matches!(binding_of(kind, key), Some(Binding::Choice { .. })))
         .filter_map(|(key, _, shown)| {
-            probes(kind, key, shown)
+            probes(kind, draft, key, shown)
                 .into_iter()
                 .next()
                 .map(|probe| (key.to_string(), probe))
@@ -443,6 +488,37 @@ pub(super) mod tests {
         ("1801", "frm1801v2018:freq_Other", "Item 15D Yes."),
     ];
 
+    /// B16's gates the corpus leaves out: `(form, key, condition, evidence)`.
+    /// - 0619E item 14 (amount of remittance): the tracked runtime inventory
+    ///   (rules/forms/0619e-v2018/fixtures/runtime-control-inventory-v796.json)
+    ///   lists it enabled at load, but the port's own computation
+    ///   (form_0619e_official.rs `official_recompute`) zeroes it unless item 4
+    ///   "any taxes withheld" is Yes, and its validation asks for it only
+    ///   then — the official page's own enable/disable is script-side.
+    /// - 2551Q item 12's specify select: the same inventory records
+    ///   `frm2551Qv2018:txtTaxReliefSpecify` `disabled: true` at load
+    ///   (ordinal 28), and this port's field map
+    ///   (form_2551q_xml.rs) writes it only while `tax_relief` (item 12 Yes).
+    const CORPUS_GAPS_B16: &[(&str, &str, &str, &str)] = &[
+        (
+            "0619E",
+            "frm0619E:txtTax14",
+            "Item 4 Yes.",
+            "rules/forms/0619e-v2018/fixtures/runtime-control-inventory-v796.json \
+             lists txtTax14 enabled at load; form_0619e_official.rs \
+             official_recompute zeroes item_14_amount_of_remittance unless \
+             any_taxes_withheld (item 4 Yes)",
+        ),
+        (
+            "2551Q",
+            "frm2551Qv2018:txtTaxReliefSpecify",
+            "Item 12 Yes.",
+            "rules/forms/2551q-v2018/fixtures/runtime-control-inventory-v796.json \
+             records txtTaxReliefSpecify disabled at load; form_2551q_xml.rs \
+             writes it only while tax_relief (item 12 Yes)",
+        ),
+    ];
+
     /// What `app/forms/conditions.json` should hold, read from the corpus:
     /// every box the page draws whose `enabled_when` names an answer,
     /// computed boxes left out, and the reviewed [`CORPUS_GAPS`],
@@ -496,6 +572,11 @@ pub(super) mod tests {
             // unless the spouse has income; 1701's field map writes Part IV
             // only while `spouse_column_active` and items 17-18 only for a
             // married filer (form_1701_official.rs `to_official_field_map`).
+            for (form, key, condition, _evidence) in CORPUS_GAPS_B16 {
+                if *form == code && shown.contains(*key) {
+                    keys.insert(key.to_string(), json!(condition));
+                }
+            }
             for (form, key, condition) in super::super::rows_annual_individual::corpus_gaps() {
                 if form == code && shown.contains(key) {
                     keys.insert(key.to_string(), json!(condition));

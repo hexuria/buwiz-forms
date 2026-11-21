@@ -8,6 +8,7 @@ import {
   formatLongDate,
   formatMDY,
   isoDate,
+  isTwoDigitDate,
   oneDateText,
   parseTypedDate,
   shortDate,
@@ -20,6 +21,15 @@ const mdy = (text: string) => {
   const parsed = parseTypedDate(text);
   return parsed ? formatMDY(parsed) : null;
 };
+
+test("PR 2: pasted numeric dates accept spaces around separators", () => {
+  expect(mdy(" 08 - 17 - 1988 ")).toBe("08/17/1988");
+});
+
+test("PR 2: two-digit years are detected without guessing a century", () => {
+  for (const text of ["08/17/88", "081788", "8-17-88", " 08 / 17 / 88 "]) expect(isTwoDigitDate(text)).toBe(true);
+  for (const text of ["08/17/1988", "08171988", "08/17/1", "1988-08-17", ""]) expect(isTwoDigitDate(text)).toBe(false);
+});
 
 describe("isoDate", () => {
   test("writes the local day as YYYY-MM-DD, padded", () => {
@@ -134,7 +144,7 @@ describe("month names", () => {
 
 describe("DATE_ERROR", () => {
   test("is the message a date box shows for text that is not a date", () => {
-    expect(DATE_ERROR).toBe("Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)");
+    expect(DATE_ERROR).toBe("Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.");
   });
 });
 
@@ -200,18 +210,19 @@ describe("formatMDY", () => {
 });
 
 describe("formatLongDate", () => {
-  test("Mon D, YYYY with no zero before the day", () => {
-    expect(formatLongDate({ y: 2020, m: 12, d: 10 })).toBe("Dec 10, 2020");
-    expect(formatLongDate({ y: 2020, m: 12, d: 1 })).toBe("Dec 1, 2020");
-    expect(formatLongDate({ y: 2026, m: 1, d: 1 })).toBe("Jan 1, 2026");
+  test("the full month name, Mon D, YYYY with no zero before the day", () => {
+    expect(formatLongDate({ y: 2020, m: 12, d: 10 })).toBe("December 10, 2020");
+    expect(formatLongDate({ y: 2020, m: 12, d: 1 })).toBe("December 1, 2020");
+    expect(formatLongDate({ y: 2026, m: 1, d: 1 })).toBe("January 1, 2026");
+    expect(formatLongDate({ y: 1988, m: 8, d: 17 })).toBe("August 17, 1988");
   });
 });
 
 describe("shownDate", () => {
-  test("a date reads Mon D, YYYY whatever form it was typed in", () => {
-    expect(shownDate("12/10/2020")).toBe("Dec 10, 2020");
-    expect(shownDate("2020-12-10")).toBe("Dec 10, 2020");
-    expect(shownDate("3/31/2026")).toBe("Mar 31, 2026");
+  test("a date reads as the full month name whatever form it was typed in", () => {
+    expect(shownDate("12/10/2020")).toBe("December 10, 2020");
+    expect(shownDate("2020-12-10")).toBe("December 10, 2020");
+    expect(shownDate("3/31/2026")).toBe("March 31, 2026");
   });
   test("empty is empty", () => {
     expect(shownDate("")).toBe("");

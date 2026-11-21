@@ -1490,6 +1490,20 @@ impl Database {
         Ok(())
     }
 
+    /// The `(key, value)` pairs of every setting whose key starts with
+    /// `prefix`, oldest first.
+    pub fn settings_with_prefix(&self, prefix: &str) -> Result<Vec<(String, String)>, DbError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT key, value FROM settings WHERE key LIKE ?1 || '%' ORDER BY key")?;
+        let rows = stmt
+            .query_map(params![prefix], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     /// The stored override entries, each as its own stored text (`None` when
     /// none are stored; `Err` when the setting is not a JSON array).
     fn stored_override_entries(&self) -> Result<Option<Vec<String>>, DbError> {

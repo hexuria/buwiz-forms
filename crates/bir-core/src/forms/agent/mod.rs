@@ -1520,6 +1520,79 @@ fn write_bound_box(
 ) -> Result<(), String> {
     let bound = def.bindings.get(key).expect("a gate-passed key is bound");
     let text = value_text(value);
+    // 0605's split dates write through the typed draft: the generic path
+    // writer cannot create the Option parents a fresh return leaves null
+    // (B1).
+    if kind == AgentFormKind::Queueable(QueueableKind::Form0605) {
+        use crate::forms::form_0605::Form0605DateField as Which;
+        match key {
+            "frm0605:txtDueDateMonth" => {
+                return write_0605_date_part(
+                    kind,
+                    draft,
+                    key,
+                    &text,
+                    Which::DueDate,
+                    DatePart::Month,
+                );
+            }
+            "frm0605:txtDueDateDay" => {
+                return write_0605_date_part(
+                    kind,
+                    draft,
+                    key,
+                    &text,
+                    Which::DueDate,
+                    DatePart::Day,
+                );
+            }
+            "frm0605:txtDueDateYear" => {
+                return write_0605_date_part(
+                    kind,
+                    draft,
+                    key,
+                    &text,
+                    Which::DueDate,
+                    DatePart::Year,
+                );
+            }
+            "frm0605:txtReturnPeriodMonth" => {
+                return write_0605_date_part(
+                    kind,
+                    draft,
+                    key,
+                    &text,
+                    Which::ReturnPeriod,
+                    DatePart::Month,
+                );
+            }
+            "frm0605:txtReturnPeriodDay" => {
+                return write_0605_date_part(
+                    kind,
+                    draft,
+                    key,
+                    &text,
+                    Which::ReturnPeriod,
+                    DatePart::Day,
+                );
+            }
+            "frm0605:txtReturnPeriodYear" => {
+                return write_0605_date_part(
+                    kind,
+                    draft,
+                    key,
+                    &text,
+                    Which::ReturnPeriod,
+                    DatePart::Year,
+                );
+            }
+            // Item 6's ATC and Item 8's tax type are picks from the
+            // official lists, stored as the whole indexed code (B2).
+            "txtATCCode" => return write_0605_pick(kind, draft, |d| d.set_atc(&text)),
+            "txtTaxTypeCode" => return write_0605_pick(kind, draft, |d| d.set_tax_type(&text)),
+            _ => {}
+        }
+    }
     match &bound.binding {
         Binding::Text {
             path,
@@ -1633,6 +1706,66 @@ fn write_bound_box(
     // Typed values must still make a draft (an integer field refuses 1.5).
     with_agent_kind!(kind, F => parse::<F>(kind, draft).map(|_| ()))
         .map_err(|error| format!("`{key}` = `{text}` does not fit this box: {error}"))
+}
+
+/// One 0605 split-date part, through the typed draft's merge-and-settle
+/// (B1): blank clears the part, digits set it, and a complete real date
+/// lands whole while an impossible one is refused untouched.
+fn write_0605_date_part(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    key: &str,
+    text: &str,
+    which: crate::forms::form_0605::Form0605DateField,
+    part: DatePart,
+) -> Result<(), String> {
+    let value = if text.trim().is_empty() {
+        None
+    } else {
+        Some(
+            text.trim()
+                .parse::<u16>()
+                .map_err(|_| format!("`{key}` must be a whole number (got `{text}`)"))?,
+        )
+    };
+    let mut typed = parse::<crate::forms::form_0605::Form0605Draft>(kind, draft)?;
+    guarded("write", || typed.set_date_part(which, part, value))??;
+    *draft = to_json(&typed)?;
+    Ok(())
+}
+
+/// One 0605 official-list pick (B2): the typed setter decides what the
+/// code stores — a listed code's whole indexed entry, a blank's clear, an
+/// unlisted or unoffered code's refusal — and the draft is replaced only
+/// on success.
+fn write_0605_pick(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    set: impl FnOnce(&mut crate::forms::form_0605::Form0605Draft) -> Result<(), String>,
+) -> Result<(), String> {
+    let mut typed = parse::<crate::forms::form_0605::Form0605Draft>(kind, draft)?;
+    guarded("write", || set(&mut typed))??;
+    *draft = to_json(&typed)?;
+    Ok(())
+}
+
+/// The page's batch for one 0605 split date: `[month, day, year]` as the
+/// parts now stand after this batch (the caller merges what the batch did
+/// not send with what the boxes show). All three present must be a real
+/// date or nothing lands; fewer keeps the typed parts (B1).
+pub fn fill_0605_date_parts(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    which: crate::forms::form_0605::Form0605DateField,
+    parts: [Option<u16>; 3],
+) -> Result<(), String> {
+    if kind != AgentFormKind::Queueable(QueueableKind::Form0605) {
+        return Err(format!("{} has no split 0605 dates", kind.form_code()));
+    }
+    let mut typed = parse::<crate::forms::form_0605::Form0605Draft>(kind, draft)?;
+    guarded("write", || typed.set_date_parts(which, parts))??;
+    *draft = to_json(&typed)?;
+    Ok(())
 }
 
 /// The one draft field every option of a choice sets, if they all set

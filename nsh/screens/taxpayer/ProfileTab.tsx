@@ -5,7 +5,7 @@
 import type { JSX } from "nsh";
 import { View } from "nsh";
 import type { BranchFieldName } from "../../bir";
-import { shortDate } from "../../lib/dates";
+import { shownDate } from "../../lib/dates";
 import { joinNames, readerChips, type FactName } from "../../lib/facts";
 import { formatTin } from "../../lib/format";
 import { app, go, store } from "../../shell";
@@ -87,7 +87,7 @@ function TaxpayerRead(props: { s: PageState }) {
       <ReadCell label="TIN" value={formatTin(t()?.tin_root)} />
       <ReadCell label="Taxpayer type" value={t()?.taxpayer_type} />
       <If when={t()?.taxpayer_type === "Individual"}>
-        <ReadCell label="Birth date" value={t()?.birth_date ? shortDate(t()?.birth_date) : null} flag={flag("birth_date")} />
+        <ReadCell label="Birth date" value={t()?.birth_date ? shownDate(t()?.birth_date) : null} flag={flag("birth_date")} />
       </If>
     </FieldGrid>
   );
@@ -107,7 +107,7 @@ function ActivityRead(props: { s: PageState }) {
           <ReadCell full label="Line of business" value={view()?.facts.line_of_business} flag={flag("line_of_business")} />
           <ReadCell
             label={startLabel()}
-            value={view()?.facts.business_start_date ? shortDate(view()?.facts.business_start_date) : null}
+            value={view()?.facts.business_start_date ? shownDate(view()?.facts.business_start_date) : null}
             flag={flag("business_start_date")}
           />
         </If>

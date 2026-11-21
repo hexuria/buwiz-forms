@@ -11,3 +11,6 @@ legacy_import
 legacy_scan_cancel
 # F20: the returns imported from the old program, read back for one branch's TIN (Filings).
 list_legacy_filed_returns
+
+# PR 4: the "Save to profile?" ask-once answer, remembered per TIN + year + field.
+screen_form_profile_asked

@@ -146,7 +146,7 @@ for (const { name, size } of SIZES) {
     await app.press("id:settings-ebir-choose");
     await app.waitFor("text:Reading…");
     expect(app.enabled("id:settings-ebir-choose")).toBe(false);
-    await app.press("id:settings-ebir-choose").catch(() => undefined);
+    expect(String(await app.press("id:settings-ebir-choose").then(() => "pressed", (e) => e))).toContain("is disabled");
     await app.waitFor("id:settings-ebir-review", { timeout: 10000 });
     expect(calls(app)).toEqual(["legacy_scan_folder"]);
   }, 60_000);

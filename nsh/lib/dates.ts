@@ -35,7 +35,13 @@ export const MONTHS_LONG: readonly string[] = [
 ];
 
 /** What a date box says when its text is not a date. */
-export const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
+export const DATE_ERROR = "Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.";
+
+/** Whether the text has a two-digit year, which must not be guessed. */
+export function isTwoDigitDate(text: string | null | undefined): boolean {
+  const value = String(text ?? "").trim();
+  return /^\d{6}$/.test(value) || /^\d{1,2}\s*[\/.\- ]\s*\d{1,2}\s*[\/.\- ]\s*\d{2}$/.test(value);
+}
 
 /** ISO date (YYYY-MM-DD) in local time. */
 export function isoDate(date: Date): string {
@@ -92,7 +98,7 @@ export function parseTypedDate(text: string | null | undefined): YMD | null {
   const MON = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
   const compact = /^(\d{2})(\d{2})(\d{4})$/.exec(v);
   const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v);
-  const slashed = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(v);
+  const slashed = /^(\d{1,2})\s*[\/.\- ]\s*(\d{1,2})\s*[\/.\- ]\s*(\d{4})$/.exec(v);
   const named = /^([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})$/i.exec(v);
   let y = 0;
   let m = 0;
@@ -119,9 +125,14 @@ export function formatMDY({ y, m, d }: YMD): string {
   return `${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}/${y}`;
 }
 
-/** How a date box shows a parsed date: Dec 10, 2020 (rule 4). */
+/** How a date box shows a parsed date: December 10, 2020 (the full month name, everywhere a box stands). */
 export function formatLongDate({ y, m, d }: YMD): string {
-  return `${MONTHS[m - 1]} ${d}, ${y}`;
+  return `${MONTHS_LONG[m - 1]} ${d}, ${y}`;
+}
+
+/** An ISO day, "2020-12-01", as the calendar speaks. */
+export function formatIso({ y, m, d }: YMD): string {
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
 /**

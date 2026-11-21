@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::FormValidator;
 use super::form_0605::{
-    Form0605ApprovalSelection, Form0605Date, Form0605Draft, Form0605FilingBasis,
+    Form0605ApprovalSelection, Form0605Date, Form0605DateParts, Form0605Draft, Form0605FilingBasis,
     Form0605IndexedCode, Form0605MannerOfPayment, Form0605PaymentDetails, Form0605SignatureDetails,
     Form0605TaxpayerClassification, Form0605TypeOfPayment,
 };
@@ -386,6 +386,8 @@ impl Form0605Draft {
             year_end_month: year_end_month.unwrap_or_default(),
             due_date,
             return_period,
+            due_date_typed: Form0605DateParts::default(),
+            return_period_typed: Form0605DateParts::default(),
             number_of_sheets: number_of_sheets.unwrap_or_default(),
             atc: atc_index.map(|index| Form0605IndexedCode::imported_atc(atc_code.clone(), index)),
             tax_type: tax_type_index
