@@ -26,7 +26,7 @@
     # after a reboot, in a NEW PowerShell window:
     #   emulator -avd buwiz_api35
 #>
-param([string]$SdkRoot = 'C:\Android')
+param([string]$SdkRoot = 'C:\Android', [switch]$Run)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -47,7 +47,7 @@ $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIde
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Step "Requesting administrator rights (UAC prompt)"
     $elevated = Start-Process -FilePath 'powershell' -Verb RunAs -Wait -PassThru -ArgumentList `
-        '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`"",'-SdkRoot',"`"$SdkRoot`""
+        '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`"",'-SdkRoot',"`"$SdkRoot`"", "-Run:$($Run.IsPresent)"
     exit $elevated.ExitCode
 }
 
@@ -112,7 +112,7 @@ if (-not (Test-Path 'C:\Program Files\LLVM\bin\libclang.dll')) {
 $rustup = Join-Path $env:USERPROFILE '.cargo\bin\rustup.exe'
 if (-not (Test-Path $rustup)) { [Console]::Error.WriteLine("rustup not found: run scripts\setup-windows.ps1 first"); exit 1 }
 Write-Step "Adding Rust Android targets"
-& $rustup target add --toolchain 1.99.0 x86_64-linux-android aarch64-linux-android
+& $rustup target add --toolchain 1.99.0 x86_64-linux-android aarch64-linux-android armv7-linux-androideabi
 Assert-Native "rustup target add failed"
 
 # 7. Machine env vars and PATH
@@ -125,9 +125,18 @@ $vars = @{
     JAVA_HOME        = $jdk
     LIBCLANG_PATH    = 'C:\Program Files\LLVM\bin'
 }
-foreach ($k in $vars.Keys) { [Environment]::SetEnvironmentVariable($k, $vars[$k], 'Machine') }
+foreach ($k in $vars.Keys) {
+    [Environment]::SetEnvironmentVariable($k, $vars[$k], 'Machine')
+    [Environment]::SetEnvironmentVariable($k, $vars[$k], 'Process')
+}
 # Devin blueprint builds pass variables between steps through $ENVRC.
-if ($env:ENVRC) { foreach ($k in $vars.Keys) { Add-Content -Path $env:ENVRC -Value "$k=$($vars[$k])" } }
+if ($env:ENVRC) {
+    foreach ($k in $vars.Keys) {
+        $value = $vars[$k].Replace('\', '/')
+        if ($value.Contains("'")) { throw 'ENVRC paths cannot contain single quotes' }
+        Add-Content -Path $env:ENVRC -Value "export $k='$value'"
+    }
+}
 $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
 $add = @("$jdk\bin", "$SdkRoot\platform-tools", "$SdkRoot\emulator", "$SdkRoot\cmdline-tools\latest\bin") |
     Where-Object { ($machinePath -split ';') -notcontains $_ }
@@ -142,4 +151,68 @@ if ($feature.State -ne 'Enabled') {
 } else { Write-Host "Already enabled." }
 & (Join-Path $SdkRoot 'emulator\emulator.exe') -accel-check
 
-Write-Step "Done. In a NEW PowerShell window: emulator -avd $Avd"
+Assert-Native 'Emulator acceleration unavailable; enable nested virtualization and reboot'
+
+$repo = Split-Path $PSScriptRoot -Parent
+$checkout = Join-Path (Split-Path $repo -Parent) 'nsh'
+$pin = (Select-String -Path "$repo\.github\workflows\nsh.yml" -Pattern '^\s*NSH_PINNED_REF:\s*([0-9a-f]+)').Matches[0].Groups[1].Value
+if (-not $pin) { throw 'NSH_PINNED_REF not found' }
+if (-not (Test-Path $checkout)) {
+    git clone https://github.com/hexuria/nsh $checkout
+    Assert-Native 'NSH clone failed'
+}
+if (git -C $checkout status --porcelain) { throw 'NSH checkout has local changes' }
+if ((git -C $checkout rev-parse HEAD) -ne $pin) {
+    git -C $checkout fetch origin $pin
+    Assert-Native 'NSH fetch failed'
+    git -C $checkout checkout --detach $pin
+    Assert-Native 'NSH checkout failed'
+}
+$tools = "$env:USERPROFILE\BuwizNsh\tools"
+$env:RUSTUP_TOOLCHAIN = '1.99.0'
+$env:RUST_MIN_STACK = '268435456'
+foreach ($k in 'OPENSSL_DIR', 'OPENSSL_LIB_DIR') {
+    [Environment]::SetEnvironmentVariable($k, [Environment]::GetEnvironmentVariable($k, 'User'), 'Process')
+}
+$env:Path = "$env:USERPROFILE\.cargo\bin;$jdk\bin;$SdkRoot\platform-tools;$env:Path"
+if (-not (Test-Path "$tools\bin\nsh.exe") -or -not (Test-Path "$tools\nsh-ref") -or (Get-Content "$tools\nsh-ref" -Raw).Trim() -ne $pin) {
+    cargo install --locked --path "$checkout\crates\nsh-cli" --root $tools --force
+    Assert-Native 'NSH CLI install failed'
+    Set-Content "$tools\nsh-ref" $pin
+}
+Write-Step 'Installing MSYS2 Perl and make for Android vendored OpenSSL'
+if (-not (Test-Path 'C:\tools\msys64\usr\bin\pacman.exe')) {
+    choco install msys2 -y --no-progress
+    Assert-Native 'MSYS2 install failed'
+}
+& C:\tools\msys64\usr\bin\pacman.exe -S --needed --noconfirm perl make
+Assert-Native 'MSYS2 Perl/make install failed'
+$llvm = "$ndkDir\toolchains\llvm\prebuilt\windows-x86_64\bin"
+$env:Path = "C:\tools\msys64\usr\bin;$llvm;$env:Path"
+$env:PERL = 'C:/tools/msys64/usr/bin/perl.exe'
+Remove-Item Env:PERL5LIB -ErrorAction SilentlyContinue
+$env:GNUMAKEFLAGS = 'CC=clang.exe AR=llvm-ar.exe RANLIB=llvm-ranlib.exe'
+foreach ($triple in 'x86_64-linux-android', 'aarch64-linux-android', 'armv7-linux-androideabi') {
+    [Environment]::SetEnvironmentVariable("RANLIB_$triple", "$llvm\llvm-ranlib.exe", 'Process')
+}
+$env:CARGO_PROFILE_DEV_DEBUG = '0'
+$env:X86_64_PC_WINDOWS_MSVC_OPENSSL_NO_VENDOR = '1'
+Push-Location $checkout
+try {
+    Write-Step 'Building Android development runtime'
+    cargo xtask android --dev
+    Assert-Native 'Android development runtime build failed'
+    Write-Step 'Building Android release runtime'
+    cargo xtask android --release
+    Assert-Native 'Android release runtime build failed'
+} finally { Pop-Location }
+foreach ($variant in @(@('debug-dev', 'bin-dev', 'dev'), @('release', 'bin', 'release'))) {
+    $source = "$checkout\target\android\$($variant[0])"
+    $dest = "$tools\android\$($variant[1])"
+    $runtime = "$tools\runtime\android\$($variant[2])"
+    New-Item -ItemType Directory -Force $dest, $runtime | Out-Null
+    Copy-Item "$source\*" $dest -Recurse -Force
+    Copy-Item "$source\*" $runtime -Recurse -Force
+}
+if ($Run) { & "$PSScriptRoot\run-android-windows.ps1" -SdkRoot $SdkRoot }
+Write-Step 'Done. Use scripts\run-android-windows.ps1 to launch Android against mock-account.'
