@@ -11,6 +11,18 @@ LISTENER = SCRIPT[SCRIPT.index('function Assert-MockAccountListener'):SCRIPT.ind
 
 @unittest.skipUnless(os.name == 'nt' and shutil.which('powershell'), 'Windows PowerShell required')
 class LauncherTests(unittest.TestCase):
+    def test_only_expected_avd_can_be_stopped(self):
+        block = SCRIPT[SCRIPT.index('    $avdName ='):SCRIPT.index('    & $adb -s $serial emu kill')]
+        for avd, expected in (('buwiz_api35', 0), ('unrelated_avd', 1), ('', 1)):
+            result = subprocess.run(
+                ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+                 "$ErrorActionPreference='Stop'; function Fake-Adb { $env:TEST_AVD; 'OK' }; function Assert-Native {} ; $adb='Fake-Adb'; " + block],
+                env={**os.environ, 'TEST_AVD': avd}, text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, expected, result.stderr)
+            if expected:
+                self.assertIn('Refusing to stop', result.stderr)
+
     def test_existing_listener_requires_auto_approving_mock(self):
         for name, command, listener, expected in (
             ('mock_account.exe', 'mock_account.exe --auto-approve', True, 0),
