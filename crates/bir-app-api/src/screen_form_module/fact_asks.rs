@@ -986,7 +986,19 @@ pub(super) fn answer(
         candidates.into_iter().find(|candidate| {
             let mut profile = profile.clone();
             candidate.clone().put(fact, &mut profile);
-            made(&profile).is_some_and(|draft| draft.pointer(path) == Some(here))
+            made(&profile).is_some_and(|draft| {
+                let made = draft.pointer(path);
+                if fact == Fact::AtcCodes {
+                    match (made.and_then(Value::as_str), here.as_str()) {
+                        (Some(made), Some(here)) => {
+                            made.trim().to_uppercase() == here.trim().to_uppercase()
+                        }
+                        _ => false,
+                    }
+                } else {
+                    made == Some(here)
+                }
+            })
         })
     };
     match fact {
