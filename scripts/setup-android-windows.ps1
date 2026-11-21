@@ -151,13 +151,19 @@ if ($add) { [Environment]::SetEnvironmentVariable('Path', (($add -join ';') + ';
 # 8. Emulator acceleration
 Write-Step "Enabling Windows Hypervisor Platform"
 $feature = Get-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform
+$restartNeeded = $false
 if ($feature.State -ne 'Enabled') {
     $r = Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All -NoRestart
+    $restartNeeded = $r.RestartNeeded
     if ($r.RestartNeeded) { Write-Host "Reboot needed before the emulator can start." -ForegroundColor Yellow }
 } else { Write-Host "Already enabled." }
 & (Join-Path $SdkRoot 'emulator\emulator.exe') -accel-check
 
-Assert-Native 'Emulator acceleration unavailable; enable nested virtualization and reboot'
+if ($LASTEXITCODE -ne 0 -and $restartNeeded) {
+    Write-Warning 'Emulator acceleration awaits a reboot; continuing CLI and Android runtime provisioning. Reboot before running Android.'
+} else {
+    Assert-Native 'Emulator acceleration unavailable; enable nested virtualization and reboot'
+}
 
 $repo = Split-Path $PSScriptRoot -Parent
 $checkout = Join-Path (Split-Path $repo -Parent) 'nsh'

@@ -13,6 +13,19 @@ ENVRC_BLOCK = SCRIPT[SCRIPT.index("if ($env:ENVRC) {"):SCRIPT.index("$machinePat
 
 @unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "Windows PowerShell required")
 class AndroidWindowsEnvrcTests(unittest.TestCase):
+    def test_acceleration_failure_only_defers_for_pending_reboot(self):
+        block = SCRIPT[SCRIPT.index('if ($LASTEXITCODE -ne 0 -and $restartNeeded)'):SCRIPT.index('$repo =')]
+        for pending, code, expected in ((True, 1, 0), (False, 1, 1), (False, 0, 0)):
+            result = subprocess.run(
+                ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+                 "$ErrorActionPreference='Stop'; function Assert-Native($message) { if ($LASTEXITCODE -ne 0) { throw $message } }; "
+                 + f'$restartNeeded=${str(pending).lower()}; $LASTEXITCODE={code}; ' + block + '; exit 0'],
+                text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, expected, result.stderr)
+            if pending:
+                self.assertIn('continuing CLI and Android runtime provisioning', result.stdout)
+
     def run_block(self, envrc, value):
         return subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command",
