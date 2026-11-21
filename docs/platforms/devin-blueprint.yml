@@ -106,6 +106,8 @@ maintenance: |
   if ! ~/BuwizNsh/nsh2404.sh nsh --version 2>/dev/null | grep -q "(${ref:0:7})"; then
     docker run --rm -u "$(id -u):$(id -g)" -e HOME="$HOME" -e PATH="$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" -e CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh" -e CARGO_INCREMENTAL=0 -v "$HOME:$HOME" -w "$NSH" buwiz-nsh-2404 cargo install --locked --path crates/nsh-cli --root "$HOME/BuwizNsh/tools"
     docker run --rm -u "$(id -u):$(id -g)" -e HOME="$HOME" -e PATH="$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" -e CARGO_INCREMENTAL=0 -e ANDROID_HOME="$HOME/Android/Sdk" -e JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 -v "$HOME:$HOME" -w "$NSH" buwiz-nsh-2404 cargo xtask android --dev
+    rm -rf ~/BuwizNsh/tools/android/bin-dev && mkdir -p ~/BuwizNsh/tools/android
+    cp -r ../nsh/target/android/debug-dev ~/BuwizNsh/tools/android/bin-dev
   fi
 knowledge:
   - name: startup
