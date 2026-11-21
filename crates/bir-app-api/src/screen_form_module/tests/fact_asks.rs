@@ -1311,49 +1311,45 @@ fn each_fact_box_saves_to_the_tax_profile_through_its_own_route() {
 }
 
 #[test]
-fn a_usual_atc_with_stray_case_and_space_saves_to_the_profile() {
+fn the_usual_atc_saves_through_save_to_profile_and_a_malformed_code_is_refused() {
     setup_juana();
-    let key = "frm1701q:optATC_1";
-    let seeded = fact_to_profile("1701Q", 1, json!({ key: "true" }), &[key]).unwrap();
-    let mut draft = seeded["draft"].clone();
-    draft["atc"] = json!("ii012 ");
-    set_facts(
-        JUANA,
-        YearFactsPatch {
-            atc_codes: Some(vec![]),
-            ..YearFactsPatch::default()
-        },
-    );
-    let kind = kind_of("1701Q").unwrap();
-    let answer = with_database(|db| {
-        let profile = db
-            .get_profile_for_year(JUANA, 2026)
-            .map_err(|error| HostError::new(error.to_string()))?
-            .unwrap();
-        let made = |profile: &bir_core::profile::TaxpayerProfile| {
-            load_draft(db, kind, profile, 2026, 1, true, None).ok()
-        };
-        Ok(super::super::fact_asks::answer(
-            kind,
-            bir_core::tax_profile::Fact::AtcCodes,
-            &draft,
-            &profile,
-            &made,
-        ))
-    })
-    .unwrap()
-    .unwrap_or_else(|| panic!("That answer cannot be saved to the tax profile."));
-    let super::super::fact_asks::Answer::Atc(code) = answer else {
-        panic!("the usual ATC saves as an ATC code");
+    let none = || {
+        set_facts(
+            JUANA,
+            YearFactsPatch {
+                atc_codes: Some(vec![]),
+                ..YearFactsPatch::default()
+            },
+        )
     };
-    set_facts(
-        JUANA,
-        YearFactsPatch {
-            atc_codes: Some(vec![code]),
-            ..YearFactsPatch::default()
-        },
-    );
+    none();
+    let key = "frm1701q:optATC_1";
+    let written = fact_to_profile("1701Q", 1, json!({ key: "true" }), &[key]).unwrap();
+    assert_eq!(written["saved"], json!(["Usual ATC"]));
     assert_eq!(year_facts().atc_codes, vec!["II012".to_string()]);
+    assert_eq!(
+        open_as(JUANA, "1701", 0)["values"]["frm1701:rdoPg1I7ATC_II012"],
+        "true"
+    );
+
+    none();
+    let mut draft = written["draft"].clone();
+    draft["atc"] = json!("ii012 ");
+    let refused = call(
+        "screen_form_save_to_profile",
+        vec![
+            "1701Q".into(),
+            2026i64.into(),
+            1i64.into(),
+            json(draft),
+            json(json!([key])),
+        ],
+    );
+    assert!(
+        refused.is_err(),
+        "a code outside Item 8's choices is refused"
+    );
+    assert!(year_facts().atc_codes.is_empty(), "nothing is written");
 }
 
 /// B9: an answer the profile has no meaning for is refused in plain words
