@@ -33,6 +33,18 @@ class AndroidSignInTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["State"], "ready")
 
+    def test_signed_in_empty_home_is_not_account_gate(self):
+        fixture = Path(__file__).with_name('android_signed_in_home.xml').read_text()
+        result = self.parse(fixture)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["State"], "ready")
+
+    def test_gate_waiting_for_approval_is_not_ready(self):
+        result = self.parse(f'<hierarchy><node package="{PACKAGE}" text="Welcome to eBIRForms" />'
+                            f'<node package="{PACKAGE}" content-desc="Waiting…" enabled="false" /></hierarchy>')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["State"], "blocked")
+
     def test_empty_splash_and_other_apps_are_not_success(self):
         for xml in ('<hierarchy />', f'<hierarchy><node package="{PACKAGE}" text="" content-desc="" /></hierarchy>',
                     '<hierarchy><node package="com.android.chrome" text="Welcome" /></hierarchy>'):
