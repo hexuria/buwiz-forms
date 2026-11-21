@@ -43,6 +43,12 @@ function Assert-Native($message) {
     if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine($message); exit $LASTEXITCODE }
 }
 
+function Test-AndroidRuntime($path, $pin) {
+    if (-not (Test-Path "$path\classes.dex") -or -not (Test-Path "$path\lib\x86_64\libnsh.so") -or -not (Test-Path "$path\nsh-ref")) { return $false }
+    $builtRef = Get-Content "$path\nsh-ref" -Raw
+    $builtRef -and $builtRef.Trim() -eq $pin
+}
+
 $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Step "Requesting administrator rights (UAC prompt)"
@@ -211,22 +217,24 @@ foreach ($triple in 'x86_64-linux-android', 'aarch64-linux-android', 'armv7-linu
 }
 $env:CARGO_PROFILE_DEV_DEBUG = '0'
 $env:X86_64_PC_WINDOWS_MSVC_OPENSSL_NO_VENDOR = '1'
-Push-Location $checkout
-try {
-    Write-Step 'Building Android development runtime'
-    cargo xtask android --dev
-    Assert-Native 'Android development runtime build failed'
-    Write-Step 'Building Android release runtime'
-    cargo xtask android --release
-    Assert-Native 'Android release runtime build failed'
-} finally { Pop-Location }
-foreach ($variant in @(@('debug-dev', 'bin-dev', 'dev'), @('release', 'bin', 'release'))) {
+$variants = @(@('debug-dev', 'bin-dev', 'dev', '--dev'), @('release', 'bin', 'release', '--release'))
+foreach ($variant in $variants) {
     $source = "$checkout\target\android\$($variant[0])"
     $dest = "$tools\android\$($variant[1])"
     $runtime = "$tools\runtime\android\$($variant[2])"
+    if ((Test-AndroidRuntime $dest $pin) -and (Test-AndroidRuntime $runtime $pin)) { continue }
+    Push-Location $checkout
+    try {
+        Write-Step "Building Android $($variant[2]) runtime"
+        cargo xtask android $($variant[3])
+        Assert-Native "Android $($variant[2]) runtime build failed"
+    } finally { Pop-Location }
     New-Item -ItemType Directory -Force $dest, $runtime | Out-Null
-    Copy-Item "$source\*" $dest -Recurse -Force
-    Copy-Item "$source\*" $runtime -Recurse -Force
+    foreach ($install in $dest, $runtime) {
+        Remove-Item "$install\nsh-ref" -Force -ErrorAction SilentlyContinue
+        Copy-Item "$source\*" $install -Recurse -Force
+        Set-Content "$install\nsh-ref" $pin
+    }
 }
 if ($Run) { & "$PSScriptRoot\run-android-windows.ps1" -SdkRoot $SdkRoot }
 Write-Step 'Done. Use scripts\run-android-windows.ps1 to launch Android against mock-account.'
