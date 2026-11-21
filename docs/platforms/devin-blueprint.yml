@@ -115,13 +115,13 @@ knowledge:
     contents: |
       pgrep xcompmgr || (DISPLAY=:0 xcompmgr &)   # no black border around GPUI windows
       GPUI app: DISPLAY=:0 VK_ICD_FILENAMES=/dev/null BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 just run   # VK_ICD_FILENAMES avoids stale llvmpipe frames
-      NSH app: ~/BuwizNsh/nsh2404.sh nsh run --target linux   # real window on :0; sign-in bypassed, no account mock needed
+      NSH app: ~/BuwizNsh/nsh2404.sh nsh run --target linux --port 8791   # separate from Android; sign-in bypassed, no account mock needed
   - name: android
     contents: |
       DISPLAY=:0 ~/Android/Sdk/emulator/emulator -avd buwiz -no-snapshot-save -no-audio -gpu swiftshader_indirect &
       ~/Android/Sdk/platform-tools/adb wait-for-device shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 2; done'
       just mock-account & ~/Android/Sdk/platform-tools/adb reverse tcp:3008 tcp:3008   # app's Sign in reaches the host account server
-      ~/BuwizNsh/nsh2404.sh nsh run --target android   # first run builds 3 ABIs (~10 min)
+      ~/BuwizNsh/nsh2404.sh nsh run --target android --port 8792   # separate from desktop; first run builds 3 ABIs (~10 min)
   - name: test
     contents: |
       xvfb-run -a just test && ~/BuwizNsh/nsh2404.sh nsh check   # the sidecar has no just; nsh2404.sh runs from nsh/
