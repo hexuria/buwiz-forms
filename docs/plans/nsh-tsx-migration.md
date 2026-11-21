@@ -103,14 +103,21 @@ This is the Android print ownership/cancellation model for the anti-drift rule i
 `CONTRIBUTING.md`. The desktop preview contract is unchanged. Implementation:
 `nsh/screens/print/controller.ts`, `nsh/src/print.rs`, `nsh/src/print_android.rs`.
 
-- **Open/loading:** the controller retains the Android key even after the native
-  open promise settles. Rust captures the revocation generation before reading
-  the private snapshot. A single native slot owns the WebView, Activity and,
+- **Open/loading:** the controller retains the Android key and its session/request
+  identity even after the native open promise settles. Rust checks the exact
+  request and captures its revocable token and the Android generation before
+  reading the private snapshot. A single native slot owns the WebView, Activity and,
   after `PrintManager.print`, the returned PrintJob. Loading polls WebView progress;
-  generation checks run on the UI thread, including immediately before `print`.
+  generation and request-liveness checks run on the UI thread, including
+  immediately before `print`.
 - **Revoke:** lock/sign-out reaches `closeAll` through the session-change hook
-  (hidden chrome also closes previews). Synchronous `Print.closed` increments
-  the generation, takes the native slot and forgets the snapshot before returning;
+  (hidden chrome also closes previews). `closeAll` advances the controller's
+  generation and closes known owners by their exact request identity. It also
+  calls `Print.reset`, revoking every Rust preview, including requests whose open
+  events have not arrived. `Print.current` rejects those stale events; late native
+  callbacks cannot close a replacement request with the same form code.
+  Synchronous revocation increments the Android generation, takes the native
+  slot and forgets the snapshots before returning;
   WebView/Activity work is posted asynchronously to the Android UI thread. A queued
   open cannot revive a forgotten snapshot. The slot mutex covers the final print
   call and job retention, so cleanup owns a job that already started opening.
@@ -129,7 +136,8 @@ cover dismissal versus leaving a job alone for replacement/revocation across all
 job states, including missing/unknown states. Cancellation is not a policy action.
 The Android snapshot test awaits cleanup after asserting synchronous revocation
 and snapshot deletion. Controller tests cover closed/hidden requests and
-revocation before and after native opening settles; Android-target compilation
+revocation before and after native opening settles, queued open events after a
+session reset, and late callbacks for replaced same-form requests; Android-target compilation
 checks JNI calls. These do not prove system spooler or Activity behavior. Device
 acceptance must cover lock during loading (no late sheet), lock while previewing
 (sheet closes), and submitting a job followed by either a new preview or lock
