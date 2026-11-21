@@ -345,6 +345,8 @@ interface St {
   profileEdited: Set<string>;
   /** Fields whose "Save to profile?" answer is already remembered (host's `profile_asked`, plus this session's). */
   profileAsked: Set<string>;
+  profileAskUnknown: boolean;
+  guessed: Set<string>;
   /** The shown-value signature last asked per field: a dismissed ask re-asks only on a changed value. */
   profileAskSeen: Record<string, string>;
   /** rowId → the answer's line under the box ("Saved to the tax profile…" / "Kept on this return only…"). */
@@ -408,7 +410,7 @@ function freshState(target: FormTarget): St {
     filedOriginalView: null, profileUpdates: [], profileDiffers: [], profilePrerequisites: [], notes: [], saved: false, quiet: null, kept: {},
     autoStops: [], stopEdits: {}, stopKeys: new Set(), stoppable: new Set(), passed: new Set(), stepAt: null,
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
-    profileSave: {}, profileEdited: new Set(), profileAsked: new Set(), profileAskSeen: {}, profileAskMsg: {},
+    profileSave: {}, profileEdited: new Set(), profileAsked: new Set(), profileAskUnknown: false, guessed: new Set(), profileAskSeen: {}, profileAskMsg: {},
     askDone: new Set(), askDoneRaw: new Map(), profileChanged: [], errors: [], messages: {},
     messageKeys: {}, messageCounts: {}, rejected: {}, unfixable: new Set(), dirtyBatch: null, boxMessages: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
     profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, rangeHeld: {}, chosenFrom: {}, dirty: false,
@@ -510,6 +512,7 @@ export class FormSession {
   private sOptions = new SignalMap<ChoiceOption[]>([], sameJson);
   private sInvalid = new SignalMap<boolean>(false);
   private sBoxMsg = new SignalMap<string>("");
+  private sGuessed = signal(0);
   private sRow = new SignalMap<RowInfo>(null as unknown as RowInfo, sameJson);
   private sPart = new SignalMap<PartInfo>({ errors: 0, todo: 0, items: 0, open: false, fold: null }, sameJson);
   private sHeader = signal<HeaderInfo>(null as unknown as HeaderInfo, { equals: sameJson });
@@ -649,7 +652,15 @@ export class FormSession {
   /** A radio group's ticked key, or null (its own binding over the radios' value signals). */
   radioSelected(keys: string[]): Accessor<string | null> {
     const sigs = keys.map((k) => [k, this.sValue.get(k)] as const);
-    return () => sigs.find(([, s]) => s() === "true")?.[0] ?? null;
+    return () => {
+      this.sGuessed();
+      if (keys.some((k) => this.st.guessed.has(k))) return null;
+      return sigs.find(([, s]) => s() === "true")?.[0] ?? null;
+    };
+  }
+
+  private bumpGuessed() {
+    this.sGuessed.set(this.sGuessed() + 1);
   }
 
   /** Whether the box is one of the return period's own parts: a pick there sets the period, never an untick. */
@@ -759,6 +770,7 @@ export class FormSession {
     this.reopening = keep;
     if (!keep) {
       this.st = freshState(target);
+      this.bumpGuessed();
       if (target.mode === "filed_original") this.st.back = back;
       this.publish();
     }
@@ -868,6 +880,9 @@ export class FormSession {
     s.stoppable = new Set(Array.isArray(r.stoppable) ? r.stoppable : []);
     s.profileSave = r.profile_save && typeof r.profile_save === "object" ? r.profile_save : {};
     s.profileAsked = new Set(Array.isArray(r.profile_asked) ? r.profile_asked : []);
+    s.profileAskUnknown = r.profile_ask_unknown === true;
+    s.guessed = new Set(Array.isArray(r.guessed) ? r.guessed : []);
+    this.bumpGuessed();
     s.profileAskSeen = {};
     s.profileAskMsg = {};
     s.askDone = new Set();
@@ -1386,8 +1401,15 @@ export class FormSession {
     s.touched.add(id!);
     const on = s.values[k] === "true";
     const period = s.periodParts.has(k);
-    if (on && !period && (f.rg || 0) >= 3) return this.choose({ [k]: "false" });
-    if (on && !period && !f.rg) return;
+    const guessed = (it.f || [])
+      .filter((radio) => radio.t === "radio" && (radio.grp || "") === (f.grp || "") && s.guessed.has(radio.k))
+      .map((radio) => radio.k);
+    if (guessed.length) {
+      for (const key of guessed) s.guessed.delete(key);
+      this.bumpGuessed();
+    }
+    if (on && !period && (f.rg || 0) >= 3 && !guessed.length) return this.choose({ [k]: "false" });
+    if (on && !period && !f.rg && !guessed.length) return;
     const edits: Record<string, string> = { [k]: "true" };
     if (f.grp) for (const r of it.f || []) if (r.t === "radio" && r.k !== k && r.grp === f.grp) edits[r.k] = "false";
     this.choose(edits);
@@ -2399,6 +2421,7 @@ export class FormSession {
 
   private maybeProfileAsk(field: string) {
     const s = this.st;
+    if (s.profileAskUnknown) return;
     if (s.profileAsked.has(field)) return;
     if (s.overlay?.kind === "profile-ask") return;
     const keys = this.profileSaveKeys(field);

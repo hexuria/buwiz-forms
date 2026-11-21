@@ -57,3 +57,25 @@ test("phone: the ask is a bottom sheet with stacked buttons; 'Save to profile' s
   await app.waitFor("text:Save withholding category to the tax profile?", { state: "gone", timeout: 10000 });
   await app.waitFor("text:Saved to the tax profile. Later returns use it.", { timeout: 10000 });
 }, 90_000);
+
+test("B8: on 0619E with no profile category, Private shows unpicked; pressing it records the answer and Queue is no longer blocked by the category", async () => {
+  const app = await open(ANY, { host: { params: { formCode: "0619E", year: 2024, period: 7, mode: "return" } } });
+  await app.waitFor("text:BIR Form 0619E", { timeout: 20000 });
+  const privatePick = "id:fp-frm0619E:optCategory:P";
+  const categoryBlock = "Government withholding agent is not in the tax profile, and this return needs it. Pick it at Item 12.";
+  for (const pi of [1, 2, 3]) {
+    if (app.shows(privatePick)) break;
+    const toggle = `id:fp-part-${pi}-toggle`;
+    await app.waitFor(toggle);
+    await app.press(toggle);
+    await app.wait(400);
+  }
+  for (let i = 0; i < 18 && !app.shows(privatePick); i++) await app.scroll("id:form-scroll", 300).catch(() => {});
+  await app.waitFor(privatePick, { timeout: 15000 });
+  await app.press("id:fp-check");
+  await app.waitFor(`text:${categoryBlock}`, { timeout: 10000 });
+
+  await app.press(privatePick);
+  await app.press("id:fp-check");
+  await app.waitFor(`text:${categoryBlock}`, { state: "gone", timeout: 10000 });
+}, 90_000);

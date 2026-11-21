@@ -166,6 +166,10 @@ export interface ScreenFormOpened {
     profile_save?: Record<string, { field: "name" | "rdo_code" | "registered_address" | "zip_code" | "phone" | "email" | "line_of_business" | ScreenFormFact; label: string; note: string; profile?: string }>;
     /** The profile field ids (`profile_save`'s `field`) whose "Save to profile?" answer is already remembered for this return's taxpayer and tax year (Q1·a): the page does not ask them again. */
     profile_asked?: string[];
+    /** The host could not read remembered profile asks; the page does not ask again in this session. */
+    profile_ask_unknown?: boolean;
+    /** Boxes whose opening values are guesses for the filer to confirm (Draft only). */
+    guessed?: string[];
     /** A return past Queued: what the tax profile changed after it was filed ("RDO 039 (profile now 043)", "EOPT tier"). The return keeps what was filed. */
     profile_changed?: string[];
 }
@@ -3512,18 +3516,21 @@ fn open_screen_form(
     // the "Save to profile?" answers already remembered for its taxpayer
     // and year (Q1·a): read apart from the open above, and never in the
     // way of opening.
-    let (facts, profile_asked) = if sample {
-        (None, Vec::new())
+    let (facts, profile_asked, profile_ask_unknown) = if sample {
+        (None, Vec::new(), false)
     } else {
         with_database(|db| {
-            let asked = fact_asks::profile_asked(db, kind, &draft).unwrap_or_else(|error| {
-                tracing::warn!(
-                    "{}: reading the remembered profile asks failed: {error}",
-                    kind.form_code()
-                );
-                Vec::new()
-            });
-            Ok((fact_asks::context_of(db, kind, &draft), asked))
+            let (asked, unknown) = match fact_asks::profile_asked(db, kind, &draft) {
+                Ok(asked) => (asked, false),
+                Err(error) => {
+                    tracing::warn!(
+                        "{}: reading the remembered profile asks failed: {error}",
+                        kind.form_code()
+                    );
+                    (Vec::new(), true)
+                }
+            };
+            Ok((fact_asks::context_of(db, kind, &draft), asked, unknown))
         })
         .unwrap_or_else(|error| {
             tracing::warn!(
@@ -3531,7 +3538,7 @@ fn open_screen_form(
                 kind.form_code(),
                 error.message()
             );
-            (None, Vec::new())
+            (None, Vec::new(), true)
         })
     };
     Ok(async move {
@@ -3592,6 +3599,15 @@ fn open_screen_form(
             Some(_) if opened["status"] == "Draft" => json!(profile_asked),
             _ => json!([]),
         };
+        if profile_ask_unknown {
+            opened["profile_ask_unknown"] = json!(true);
+        }
+        if let Some(facts) = &facts {
+            if opened["status"] == "Draft" {
+                opened["guessed"] =
+                    json!(fact_asks::guessed_keys(kind, facts, &opened["draft"]));
+            }
+        }
         Ok(json(opened))
     })
 }

@@ -42,6 +42,28 @@ test("P1b: a boxed birth date asks 'Save to profile?' once on a new complete val
   s.dispose();
 });
 
+test("Q1·a: when the remembered answers can't be read, no 'Save to profile?' ask opens", async () => {
+  createDemoTaxpayer();
+  const fake = bir as unknown as { screen_form_open: typeof bir.screen_form_open };
+  const real = fake.screen_form_open;
+  const s = new FormSession(at("1701", 2021, 0));
+  try {
+    try {
+      fake.screen_form_open = async (...args) =>
+        ({ ...(await real(...args)), profile_ask_unknown: true }) as Awaited<ReturnType<typeof real>>;
+      expect(await s.open()).toBe(null);
+      await s.idle();
+    } finally {
+      fake.screen_form_open = real;
+    }
+
+    await askBirth(s, "04/05/1976");
+    expect(s.overlay()).toBe(null);
+  } finally {
+    s.dispose();
+  }
+});
+
 test("P1b: 'Only this return' writes nothing, shows the kept line, and is remembered", async () => {
   const s = await opened(at("1701", 2025, 0));
   await askBirth(s, "08/17/1988");

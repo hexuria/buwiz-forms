@@ -1143,6 +1143,34 @@ fn a_category_pick_on_the_return_lifts_the_withholding_block() {
     });
 }
 
+#[test]
+fn a_guessed_private_category_is_listed_until_the_filer_picks() {
+    setup_juana();
+    at((2026, 8, 1), || {
+        let opened = open_as(JUANA, "0619E", 7);
+        assert_eq!(
+            opened["guessed"],
+            json!(["frm0619E:optCategory:P", "frm0619E:optCategory:G"])
+        );
+
+        let filled = fill(
+            "0619E",
+            &opened["draft"],
+            json!({ "frm0619E:optCategory:P": "true" }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        assert!(
+            blocks_on(&queue_check("0619E", &filled["draft"]), "is_government_withholding_entity")
+                .is_none(),
+            "an explicit Private pick answers the category"
+        );
+        save("0619E", &filled["draft"]);
+
+        let reopened = open_as(JUANA, "0619E", 7);
+        assert_eq!(reopened["guessed"], json!([]));
+    });
+}
+
 fn year_facts() -> bir_core::tax_profile::YearFacts {
     with_database(|db| {
         db.effective_year_facts(JUANA, 2026)
@@ -1657,4 +1685,31 @@ fn a_failed_profile_ask_read_is_an_error() {
         Ok(())
     })
     .unwrap();
+}
+
+#[test]
+fn a_failed_profile_ask_read_opens_with_profile_asks_unknown() {
+    setup_juana();
+    with_database(|db| {
+        db.conn_for_tests()
+            .execute_batch("ALTER TABLE settings RENAME TO settings_gone")
+            .expect("rename settings");
+        Ok(())
+    })
+    .unwrap();
+
+    let result = call_async(
+        "screen_form_open",
+        vec![JUANA.into(), "1701".into(), 2026i64.into(), 0i64.into()],
+    );
+    with_database(|db| {
+        db.conn_for_tests()
+            .execute_batch("ALTER TABLE settings_gone RENAME TO settings")
+            .expect("restore settings");
+        Ok(())
+    })
+    .unwrap();
+
+    let opened = result.expect("the form still opens when remembered answers cannot be read");
+    assert_eq!(opened["profile_ask_unknown"], true);
 }

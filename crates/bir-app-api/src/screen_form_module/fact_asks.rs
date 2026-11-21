@@ -357,6 +357,31 @@ pub(super) fn boxed(kind: AgentFormKind, fact: Fact) -> Option<Placed> {
     place(kind, fact).filter(|placed| boxed_placed(kind, placed))
 }
 
+fn category_picked(draft: &Value, placed: &Placed) -> bool {
+    let picked = super::profile_edits(draft);
+    placed.keys.iter().any(|key| picked.contains(key))
+}
+
+/// The placed boxes whose opening values are guesses rather than the filer's
+/// answer to the withholding-category fact.
+pub(super) fn guessed_keys(
+    kind: AgentFormKind,
+    ctx: &FactContext,
+    draft: &Value,
+) -> Vec<String> {
+    if !unset(kind, ctx).contains(&Fact::IsGovernmentWithholdingEntity) {
+        return Vec::new();
+    }
+    let Some(placed) = place(kind, Fact::IsGovernmentWithholdingEntity) else {
+        return Vec::new();
+    };
+    if boxed_placed(kind, &placed) && !category_picked(draft, &placed) {
+        placed.keys
+    } else {
+        Vec::new()
+    }
+}
+
 /// Whether `placed`'s boxes are pick controls (radio, select, checkbox):
 /// its message says "pick it" rather than "type it".
 fn pick_box(kind: AgentFormKind, placed: &Placed) -> bool {
@@ -614,7 +639,6 @@ pub(crate) fn checks(
     values: &Value,
     errors: &BTreeSet<String>,
 ) -> Vec<Check> {
-    let picked = super::profile_edits(draft);
     unset(kind, ctx)
         .into_iter()
         .filter_map(|fact| {
@@ -627,7 +651,7 @@ pub(crate) fn checks(
             let answered = boxed
                 && placed.as_ref().is_some_and(|p| {
                     if fact == Fact::IsGovernmentWithholdingEntity {
-                        p.keys.iter().any(|key| picked.contains(key))
+                        category_picked(draft, p)
                     } else {
                         box_answered(p, values)
                     }
@@ -641,9 +665,7 @@ pub(crate) fn checks(
             let blocks = match fact {
                 Fact::IsGovernmentWithholdingEntity => {
                     fills_required
-                        && !placed
-                            .as_ref()
-                            .is_some_and(|placed| placed.keys.iter().any(|key| picked.contains(key)))
+                        && !placed.as_ref().is_some_and(|placed| category_picked(draft, placed))
                 }
                 Fact::EoptTier if !boxed => {
                     computes_penalties(kind, draft)

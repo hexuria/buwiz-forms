@@ -595,6 +595,10 @@ export interface ScreenFormOpened {
     profile_save?: Record<string, { field: "name" | "rdo_code" | "registered_address" | "zip_code" | "phone" | "email" | "line_of_business" | ScreenFormFact; label: string; note: string; profile?: string }>;
     /** The profile field ids (`profile_save`'s `field`) whose "Save to profile?" answer is already remembered for this return's taxpayer and tax year (Q1·a): the page does not ask them again. */
     profile_asked?: string[];
+    /** The host could not read remembered profile asks; the page does not ask again in this session. */
+    profile_ask_unknown?: boolean;
+    /** Boxes whose opening values are guesses for the filer to confirm (Draft only). */
+    guessed?: string[];
     /** A return past Queued: what the tax profile changed after it was filed ("RDO 039 (profile now 043)", "EOPT tier"). The return keeps what was filed. */
     profile_changed?: string[];
 }
