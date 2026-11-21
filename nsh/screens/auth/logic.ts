@@ -10,7 +10,7 @@ export type SignInTarget = { error: string } | { root: string; admin: boolean };
 export function signInTarget(tin: string, adminRoot: string | null, roots: readonly string[]): SignInTarget {
   if (tin.length !== 9) return { error: "Type all 9 digits of the TIN." };
   if (tin === adminRoot) return { root: tin, admin: true };
-  if (!roots.includes(tin)) return { error: "No taxpayer has that TIN on this computer." };
+  if (!roots.includes(tin)) return { error: "No taxpayer has that TIN on this device." };
   return { root: tin, admin: false };
 }
 

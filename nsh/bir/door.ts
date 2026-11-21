@@ -7,11 +7,17 @@ export type { DoorStatus, HostFunction };
 
 /**
  * How sending stands and which database file is named, without opening it. `sending` is "dry_run" (nothing
- * leaves this computer), "mock" (the local mock BIR server) or "refused" (the submission worker did not start).
+ * leaves this computer), "mock" (the local mock BIR server), "relay" (the local mock relay, docs/relay.md) or "refused"
+ * (the submission worker did not start).
  * `databasePath` is the file this thread has open, or the file the environment names while none is open.
  */
 export function doorStatus(): DoorStatus {
   return Door.status();
+}
+
+/** Reads and deletes one command from the opt-in Android test mailbox; inert elsewhere. */
+export function devCommand(): string | null {
+  return Door.devCommand();
 }
 
 /** Every host function with its kind ("sync" or "async"), sorted by name. */

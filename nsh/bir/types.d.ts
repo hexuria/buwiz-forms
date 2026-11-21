@@ -512,12 +512,19 @@ export interface ScreenFormError {
     dismiss_label?: string;
 }
 export type ScreenFormStatus = "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid";
+export interface ScreenFormProfilePrerequisite {
+    field: "business_start_date" | "income_tax_election";
+    label: string;
+    message: string;
+}
 export interface ScreenFormOpened {
     form_code: string;
     year: number;
     period: number;
     status: ScreenFormStatus;
     editable: boolean;
+    /** Missing profile context, decided by the form's own rules; advisory, not new Queue blocks. */
+    profile_prerequisites?: ScreenFormProfilePrerequisite[];
     /** The period column the draft is stored under: pass it to queue and print. */
     stored_period: number | null;
     draft: object;
@@ -554,6 +561,8 @@ export interface ScreenFormOpened {
     submitted_at: string | null;
     /** The send `submitted_at` names was a dry run: the worker only simulated it and nothing reached BIR. False for a real send and for every return sent before this was recorded. */
     submitted_dry_run: boolean;
+    /** That send went to the local mock relay (docs/relay.md), not to BIR. False for every other send. */
+    submitted_via_relay: boolean;
     confirmed_at: string | null;
     /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
     amends?: ScreenFormStatus;
@@ -641,6 +650,7 @@ export interface ScreenFormPenalties {
 }
 export interface ScreenFormFilled {
     draft: object;
+    profile_prerequisites?: ScreenFormProfilePrerequisite[];
     values: Record<string, string>;
     options: Record<string, ScreenFormOption[]>;
     rejected: Record<string, string>;

@@ -7,7 +7,7 @@ import { frequencyOf, periodLabel, type Frequency } from "../lib/periods";
 import { recentOpenOptions, sameReturn, type RecentEntry } from "../lib/recent";
 import type { FormTarget } from "../screens/form/FormPage";
 import { SIZE } from "../theme/tokens";
-import { Avatar, GroupLabel, Icon, IconButton, Line, Menu, MenuItem, NavRow, TOUCH } from "../ui";
+import { Avatar, deviceCopy, GroupLabel, Icon, IconButton, Line, Menu, MenuItem, NavRow, TOUCH } from "../ui";
 import { app } from "./app";
 import { SearchRow } from "./parts";
 import { ROUTES, type ViewName } from "./routes";
@@ -40,13 +40,13 @@ const account = computed(() => {
   if (app.isAdmin() && app.isHelpdesk()) return { name: "Help desk admin", sub: "TIN 000-000-000", root: "000000000" };
   if (app.isAdmin()) {
     const t = own(app.authState().admin_root);
-    return { name: t?.name ?? "Local account", sub: "Admin · this computer", root: t?.tin_root ?? "account" };
+    return { name: t?.name ?? "Local account", sub: deviceCopy("Admin · this computer"), root: t?.tin_root ?? "account" };
   }
   if (s.kind === "taxpayer") {
     const t = own(s.root);
-    return { name: t?.name ?? "Local account", sub: t ? `TIN ${t.tin_display}` : "This computer", root: s.root };
+    return { name: t?.name ?? "Local account", sub: t ? `TIN ${t.tin_display}` : deviceCopy("This computer"), root: s.root };
   }
-  return { name: "Local account", sub: "This computer", root: "account" };
+  return { name: "Local account", sub: deviceCopy("This computer"), root: "account" };
 });
 
 /** One Recent row. */

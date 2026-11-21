@@ -18,7 +18,9 @@ const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const USERINFO_URL: &str = "https://www.googleapis.com/oauth2/v3/userinfo";
 const CALENDAR_API: &str = "https://www.googleapis.com/calendar/v3";
 const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/userinfo.email";
+#[cfg(not(target_os = "android"))]
 const KEYCHAIN_SERVICE: &str = "dev.goldcoders.ebirforms.google-calendar";
+#[cfg(not(target_os = "android"))]
 const KEYCHAIN_ACCOUNT: &str = "global-oauth";
 const CONNECTED_EMAIL_SETTING: &str = "google_calendar_connected_email";
 pub(crate) const FORM_SELECTION_SETTING_PREFIX: &str = "google_calendar_form_selection:";
@@ -1106,24 +1108,41 @@ fn keychain_delete() -> Result<(), anyhow::Error> {
     .map_err(|error| anyhow::anyhow!("Failed to remove Google Calendar credentials: {error}"))
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
 fn keychain_set(value: &str) -> Result<(), anyhow::Error> {
     keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)?.set_password(value)?;
     Ok(())
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
 fn keychain_get() -> Result<String, anyhow::Error> {
     Ok(keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)?.get_password()?)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
 fn keychain_delete() -> Result<(), anyhow::Error> {
     let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)?;
     match entry.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(error) => Err(error.into()),
     }
+}
+
+#[cfg(target_os = "android")]
+fn keychain_set(_value: &str) -> Result<(), anyhow::Error> {
+    Err(anyhow::anyhow!(
+        "The OS keychain is not available on Android"
+    ))
+}
+
+#[cfg(target_os = "android")]
+fn keychain_get() -> Result<String, anyhow::Error> {
+    Err(anyhow::anyhow!("Google Calendar account is not connected"))
+}
+
+#[cfg(target_os = "android")]
+fn keychain_delete() -> Result<(), anyhow::Error> {
+    Ok(())
 }
 
 #[cfg(test)]

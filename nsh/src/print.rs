@@ -520,6 +520,7 @@ thread_local! {
         std::env::temp_dir().join(format!("ebirforms-print-{}", std::process::id())),
     ));
     /// What ends the last `Print.listen` (to tell it from an older one).
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static NEXT_BACKEND: Cell<u64> = const { Cell::new(1) };
 }
 
@@ -576,7 +577,31 @@ pub(crate) fn request(path: PathBuf, title: String, key: String) {
         tracing::warn!(path = %path.display(), "the print preview has no window host (screens/print/host is not loaded)");
         return;
     };
-    if !device_has_windows() {
+    #[cfg(target_os = "android")]
+    if Print::native_preview() {
+        let result = read.map_err(|error| format!("Could not read the print sheet: {error}"))
+            .and_then(|html| {
+                if !has_sheets(&html) {
+                    return Err("The print sheet is empty or has no pages.".to_owned());
+                }
+                crate::print_android::invalidate();
+                STATE.with(|state| {
+                    let mut state = state.borrow_mut();
+                    state.close_all();
+                    state.request(&key, title.clone(), bir_app_api::static_html::staticize_if_needed(html))
+                })
+            });
+        match result {
+            Ok(events) => events.into_iter().for_each(|event| backend.emit(event)),
+            Err(error) => {
+                let mut said = event(PrintEventKind::Unavailable, &key, &title, "", String::new(), 0, "");
+                said.message = Some(error);
+                backend.emit(said);
+            }
+        }
+        return;
+    }
+    if !device_has_windows() && !previews_natively() {
         let mut said = event(PrintEventKind::Unavailable, &key, &title, "", String::new(), 0, "");
         said.message = Some(UNAVAILABLE.to_owned());
         backend.emit(said);
@@ -602,8 +627,17 @@ fn device_has_windows() -> bool {
     !cfg!(any(target_os = "ios", target_os = "android")) && try_os().is_none_or(|os| os.is_desktop())
 }
 
+/// Whether this device shows the preview in the system's own print sheet instead of a window of the app (iOS:
+/// UIPrintInteractionController). The host then prints the preview at once ([`Print::print`]) instead of opening a window.
+fn previews_natively() -> bool {
+    cfg!(target_os = "ios")
+}
+
 /// `print_preview_has_live`: a window is open for `key` and follows edits.
 pub(crate) fn has_live(key: &str) -> bool {
+    if cfg!(target_os = "android") {
+        return false;
+    }
     STATE.with(|state| {
         let state = state.borrow();
         state.backend.is_some() && state.previews.contains_key(key)
@@ -639,23 +673,23 @@ fn snapshot(key: &str) -> Option<(String, String, PathBuf)> {
 // (`platform_pdf`), so they are allowed to stand unused there instead of warning.
 
 /// CSS pixels per PDF point: WebKit captures one point per CSS pixel, the sheets are laid out at 96 per inch.
-#[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
+#[cfg_attr(not(any(test, target_os = "macos", target_os = "ios")), allow(dead_code))]
 const CSS_PER_PT: f64 = 96.0 / 72.0;
 
 /// The capture rectangle of one sheet in CSS pixels: A4, rounded down to whole pixels as WebKit emits it.
-#[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
+#[cfg_attr(not(any(test, target_os = "macos", target_os = "ios")), allow(dead_code))]
 fn capture_size() -> (f64, f64) {
     ((f64::from(PAPER_WIDTH_PT) * CSS_PER_PT).floor(), (f64::from(PAPER_HEIGHT_PT) * CSS_PER_PT).floor())
 }
 
 /// Pins every sheet to A4 with no screen gaps, so that sheet i starts at i times the paper height and each
 /// capture is exactly one page.
-#[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
+#[cfg_attr(not(any(test, target_os = "macos", target_os = "ios")), allow(dead_code))]
 const CAPTURE_CSS: &str = "<style id=\"pdf-capture\">html,body{width:595.28pt !important;margin:0 !important;padding:0 !important;background:#fff !important}\
 .sheet{margin:0 !important;box-shadow:none !important;height:841.89pt !important}.sheet::after{content:none !important}</style>";
 
 /// The document with the capture style last in its head.
-#[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
+#[cfg_attr(not(any(test, target_os = "macos", target_os = "ios")), allow(dead_code))]
 fn for_capture(html: &str) -> String {
     match html.rfind("</head>") {
         Some(at) => format!("{}{CAPTURE_CSS}{}", &html[..at], &html[at..]),
@@ -664,7 +698,7 @@ fn for_capture(html: &str) -> String {
 }
 
 /// Turns one single-page capture per sheet (WebKit's CSS-pixel pages) into one A4 PDF with a page each.
-#[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
+#[cfg_attr(not(any(test, target_os = "macos", target_os = "ios")), allow(dead_code))]
 pub(crate) fn assemble_pdf(pages: &[Vec<u8>]) -> Result<Vec<u8>, String> {
     let (width, height) = capture_size();
     let expectation = PdfExpectation {
@@ -890,7 +924,7 @@ fn parse_unicode_map(cmap: &str) -> UnicodeMap {
 }
 
 /// The PDF of `html` (the document of a preview), made by the platform's web engine.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 fn platform_pdf(html: &str) -> Result<Vec<u8>, String> {
     mac::make_pdf(html)
 }
@@ -905,7 +939,7 @@ fn platform_pdf(html: &str) -> Result<Vec<u8>, String> {
     linux_print::make_pdf(html)
 }
 
-#[cfg(not(any(target_os = "macos", all(windows, target_env = "msvc"), target_os = "linux")))]
+#[cfg(not(any(target_os = "macos", target_os = "ios", all(windows, target_env = "msvc"), target_os = "linux")))]
 fn platform_pdf(_html: &str) -> Result<Vec<u8>, String> {
     Err("Print and Save as PDF are available on macOS, Windows and Linux only for now.".to_owned())
 }
@@ -916,7 +950,16 @@ fn platform_print(path: &Path) -> Result<(), String> {
     mac::print_pdf(path)
 }
 
-#[cfg(not(any(target_os = "macos", all(windows, target_env = "msvc"), target_os = "linux")))]
+/// The system print sheet (UIPrintInteractionController) for the PDF at `path`, with its page previews: up when this
+/// returns.
+#[cfg(target_os = "ios")]
+fn platform_print(path: &Path) -> Result<(), String> {
+    let pdf = std::fs::read(path).map_err(|error| format!("Could not read the PDF: {error}"))?;
+    let title = path.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
+    ios_print::present(pdf, title)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "ios", all(windows, target_env = "msvc"), target_os = "linux")))]
 fn platform_print(_path: &Path) -> Result<(), String> {
     Err("Print and Save as PDF are available on macOS, Windows and Linux only for now.".to_owned())
 }
@@ -1662,9 +1705,82 @@ mod windows_print {
 
 /// The macOS half: WebKit and PDFKit through objc2, on the main thread (every AppKit call is posted to the main
 /// queue and waited for; callers are worker threads, never the main thread and never the engine's).
-#[cfg(target_os = "macos")]
+/// The iOS print sheet: UIKit's UIPrintInteractionController with the preview's PDF (the PDF the `mac` half's hidden
+/// WKWebView makes, as on macOS) as its printing item, so the system shows its own page previews, printer choice and
+/// copies. UIKit is linked by the NSH host; its classes are looked up at run time.
+#[cfg(target_os = "ios")]
+mod ios_print {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    use block2::RcBlock;
+    use dispatch2::DispatchQueue;
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyClass, AnyObject, Bool};
+    use objc2_foundation::{NSData, NSString};
+
+    /// `UIPrintInfoOutputGeneral`: text and graphics.
+    const OUTPUT_GENERAL: isize = 0;
+
+    /// Presents the print sheet for `pdf` on the main thread; returns once it is up (or could not come up).
+    pub(super) fn present(pdf: Vec<u8>, title: String) -> Result<(), String> {
+        let (tx, rx) = mpsc::channel::<Result<(), String>>();
+        DispatchQueue::main().exec_async(move || {
+            // SAFETY: UIKit's documented API, on the main thread. The completion block runs on the main thread once,
+            // when the sheet is dismissed.
+            let answer = unsafe {
+                (|| {
+                    let class = AnyClass::get(c"UIPrintInteractionController").ok_or("UIKit printing is missing.")?;
+                    let available: Bool = msg_send![class, isPrintingAvailable];
+                    if !available.as_bool() {
+                        return Err("Printing is not available on this device.".to_owned());
+                    }
+                    let controller: Option<Retained<AnyObject>> = msg_send![class, sharedPrintController];
+                    let controller = controller.ok_or("UIKit gave no print controller.")?;
+                    let info_class = AnyClass::get(c"UIPrintInfo").ok_or("UIPrintInfo is missing.")?;
+                    let info: Retained<AnyObject> = msg_send![info_class, printInfo];
+                    let _: () = msg_send![&info, setOutputType: OUTPUT_GENERAL];
+                    let name = NSString::from_str(&title);
+                    let _: () = msg_send![&info, setJobName: &*name];
+                    let _: () = msg_send![&controller, setPrintInfo: &*info];
+                    let data = NSData::with_bytes(&pdf);
+                    let _: () = msg_send![&controller, setPrintingItem: &*data];
+                    let done = RcBlock::new(|_: *mut AnyObject, completed: Bool, error: *mut AnyObject| {
+                        let error = error.as_ref().map(|error| {
+                            let text: Option<Retained<NSString>> = msg_send![error, localizedDescription];
+                            text.map(|text| text.to_string()).unwrap_or_default()
+                        });
+                        tracing::info!(completed = completed.as_bool(), ?error, "print preview: the iOS print sheet closed");
+                    });
+                    let shown: Bool = msg_send![&controller, presentAnimated: true, completionHandler: &*done];
+                    if shown.as_bool() { Ok(()) } else { Err("The print sheet could not open.".to_owned()) }
+                })()
+            };
+            let _ = tx.send(answer);
+        });
+        rx.recv_timeout(Duration::from_secs(20)).map_err(|_| "The print sheet did not open in time.".to_owned())?
+    }
+
+    /// Dismisses the shared print controller's sheet, if it is up; returns at once.
+    pub(super) fn dismiss() {
+        DispatchQueue::main().exec_async(|| {
+            // SAFETY: UIKit's documented API, on the main thread; dismissing a controller that shows nothing does nothing.
+            unsafe {
+                let Some(class) = AnyClass::get(c"UIPrintInteractionController") else { return };
+                let controller: Option<Retained<AnyObject>> = msg_send![class, sharedPrintController];
+                if let Some(controller) = controller {
+                    let _: () = msg_send![&controller, dismissAnimated: true];
+                }
+            }
+        });
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod mac {
     use std::cell::RefCell;
+    #[cfg(target_os = "macos")]
     use std::path::Path;
     use std::sync::{Mutex, mpsc};
     use std::time::{Duration, Instant};
@@ -1674,12 +1790,17 @@ mod mac {
     use objc2::msg_send;
     use objc2::rc::Retained;
     use objc2::runtime::{AnyClass, AnyObject, Bool};
-    use objc2_foundation::{NSData, NSPoint, NSRect, NSSize, NSString, NSURL};
+    #[cfg(target_os = "ios")]
+    use objc2_core_foundation::{CGPoint as NSPoint, CGRect as NSRect, CGSize as NSSize};
+    use objc2_foundation::{NSData, NSString, NSURL};
+    #[cfg(target_os = "macos")]
+    use objc2_foundation::{NSPoint, NSRect, NSSize};
 
     use super::{CSS_PER_PT, PAPER_HEIGHT_PT, PAPER_WIDTH_PT, assemble_pdf, capture_size, for_capture};
 
     #[link(name = "WebKit", kind = "framework")]
     unsafe extern "C" {}
+    #[cfg(target_os = "macos")]
     #[link(name = "PDFKit", kind = "framework")]
     unsafe extern "C" {}
 
@@ -1832,6 +1953,7 @@ mod mac {
 
     /// The print operation for the PDF at `path`: PDFKit's, A4 (595.28 x 841.89 pt), no margins, no scaling, with the
     /// print panel. Main-thread work (AppKit objects), so it is built and run in the one block of `print_pdf`.
+    #[cfg(target_os = "macos")]
     pub(super) fn print_operation(path: &str) -> Result<Retained<AnyObject>, String> {
         // SAFETY: AppKit's and PDFKit's documented API.
         unsafe {
@@ -1863,6 +1985,7 @@ mod mac {
 
     /// The system print panel for the PDF at `path`: A4, no scaling, as a sheet of the key window (a panel of
     /// its own when no window is key). Returns once the panel is up.
+    #[cfg(target_os = "macos")]
     pub(super) fn print_pdf(path: &Path) -> Result<(), String> {
         let path = path.display().to_string();
         let (tx, rx) = mpsc::channel();
@@ -1902,6 +2025,7 @@ mod mac {
     }
 
     /// The text of the PDF at `path` as PDFKit reads it; empty when it cannot.
+    #[cfg(target_os = "macos")]
     pub(super) fn pdf_text(path: &Path) -> String {
         // SAFETY: PDFKit's documented API; reading a document's text is not main-thread work.
         unsafe {
@@ -1954,17 +2078,64 @@ pub struct Print;
 impl Print {
     /// Hears every preview event until the returned function is called: a sheet to open (or to focus), a newer
     /// document for an open one, a device that has no window for it. One host listens at a time; the latest wins.
-    pub fn listen(#[args(event)] listener: Callback<PrintEvent>) -> Stop {
+    pub fn listen(#[args(event)] listener: Callback<PrintEvent>, _system: nsh_core::prelude::System) -> Stop {
+        #[cfg(target_os = "android")]
+        STATE.with(|state| {
+            state.borrow_mut().root = _system.data_dir
+                .expect("Android print needs the app's private data directory")
+                .join("tmp").join(format!("ebirforms-print-{}", std::process::id()));
+        });
         // Where a process cannot be asked (neither unix nor Windows), nothing is swept: see process_alive.
-        #[cfg(any(unix, all(windows, target_env = "msvc")))]
+        #[cfg(target_os = "android")]
+        STATE.with(|state| {
+            if let Some(root) = state.borrow().root.parent() {
+                sweep_stale(root, process_alive);
+            }
+        });
+        #[cfg(all(not(target_os = "android"), any(unix, all(windows, target_env = "msvc"))))]
         sweep_stale(&std::env::temp_dir(), process_alive);
         let id = install(Rc::new(HostBackend { listener }));
         Stop::new(move || uninstall(id))
     }
 
     /// The window of the form code `key` closed (or could not open): forgets its preview and deletes its files.
-    pub fn closed(key: String) {
+    pub fn closed(key: String, _cx: nsh_core::prelude::CallCx<'_>) {
+        #[cfg(target_os = "android")]
+        _cx.start(crate::print_android::close());
         forget(&key);
+    }
+
+    /// Whether this device previews in the system's print sheet (iOS) instead of a preview window: the host calls
+    /// [`Print::print`] when a preview opens, then [`Print::closed`].
+    pub fn previews_natively() -> bool {
+        previews_natively()
+    }
+
+    /// Android uses a native system preview instead of a desktop window.
+    pub fn native_preview() -> bool {
+        cfg!(target_os = "android")
+    }
+
+    /// Opens Android's system print preview for the retained sheet snapshot.
+    pub async fn open_native(key: String, title: String) -> Result<(), String> {
+        #[cfg(target_os = "android")]
+        {
+            let generation = crate::print_android::generation();
+            let (_, _, dir) = snapshot(&key).ok_or("The print preview is no longer available.")?;
+            crate::print_android::preview(url_for(&dir.join(SHEET)), title, generation).await
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let _ = (key, title);
+            Err("Native system preview is available on Android only.".to_owned())
+        }
+    }
+
+    /// Takes down the system print sheet if one is up (iOS; elsewhere nothing): a lock or sign-out must not leave a
+    /// taxpayer's return on screen.
+    pub fn dismiss_native() {
+        #[cfg(target_os = "ios")]
+        ios_print::dismiss();
     }
 
     /// Whether this system draws the preview's sheets itself, as pictures (Windows and Linux: on the CPU, see
@@ -1991,7 +2162,8 @@ impl Print {
     /// Prints the preview of `key`. macOS: makes the PDF of its document, then shows the system print panel (A4, no
     /// scaling) as a sheet of the front window, and resolves once the panel is up. Windows: shows the system print
     /// dialog, then prints the document by the PDF's page rule, and resolves once the job is with the printer (or the
-    /// dialog was cancelled). Rejects with a sentence.
+    /// dialog was cancelled). iOS: makes the same PDF, then shows the system print sheet with its page previews, and
+    /// resolves once the sheet is up. Rejects with a sentence.
     pub async fn print(key: String) -> Result<(), String> {
         #[cfg(all(windows, target_env = "msvc"))]
         {
@@ -2006,6 +2178,11 @@ impl Print {
         #[cfg(not(any(all(windows, target_env = "msvc"), target_os = "linux")))]
         {
             let (pdf, title, dir) = pdf_of(&key).await?;
+            // The PDF takes a moment: a lock (or leaving the return) in that time forgets the preview, and then no sheet
+            // may show the taxpayer's return over the sign-in screen.
+            if snapshot(&key).is_none() {
+                return Err("The preview is closed.".to_owned());
+            }
             let path = write_pdf(&dir, &title, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
             blocking(move || platform_print(&path)).await.map_err(|error| error.to_string())?
         }
@@ -2054,6 +2231,8 @@ fn forget(key: &str) {
 /// The app quits: every preview of this engine thread is forgotten and its folder (`ebirforms-print-<pid>`) deleted. The door's
 /// `shutdown` calls it; a quit that skips it leaves the folder to the next start's sweep.
 pub(crate) fn remove_all() {
+    #[cfg(target_os = "android")]
+    crate::print_android::invalidate();
     #[cfg(any(windows, target_os = "linux"))]
     crate::sheets::forget_all();
     let _ = STATE.try_with(|state| state.borrow_mut().close_all());
@@ -2480,6 +2659,7 @@ mod tests {
         path
     }
 
+    #[cfg(not(target_os = "android"))]
     #[test]
     fn the_hooks_open_one_preview_and_follow_edits() {
         let folder = tempfile::tempdir().unwrap();
@@ -2543,7 +2723,7 @@ mod tests {
         // A host that stops listening (the Stop) takes the preview's liveness with it.
         let recorder = host(folder.path());
         request(sheet_file(folder.path(), &["a"]), "t".to_owned(), key.clone());
-        assert!(has_live(&key));
+        assert_eq!(has_live(&key), !cfg!(target_os = "android"));
         let id = STATE.with(|state| state.borrow().backend.as_ref().unwrap().0);
         uninstall(id);
         assert!(!has_live(&key));
@@ -2561,6 +2741,7 @@ mod tests {
         assert!(backend().is_some());
     }
 
+    #[cfg(not(target_os = "android"))]
     #[test]
     fn the_hooks_of_the_app_reach_this_module() {
         use bir_app_api::hooks::Hooks;
@@ -2578,6 +2759,42 @@ mod tests {
     }
 
     // Saving ------------------------------------------------------------------------------------------------------
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn android_keeps_a_snapshot_until_closed_the_next_request_or_shutdown() {
+        let folder = tempfile::tempdir().unwrap();
+        let recorder = host(&folder.path().join("previews"));
+        let first = key();
+        request(sheet_file(folder.path(), &["a"]), "First".into(), first.clone());
+        let first_path = STATE.with(|state| state.borrow().sheet_path(&first));
+        assert!(first_path.exists());
+        assert!(!has_live(&first));
+        let generation = crate::print_android::generation();
+        let cleanup = crate::print_android::close();
+        forget(&first);
+        assert_ne!(crate::print_android::generation(), generation, "revoked before Java cleanup runs");
+        assert!(!first_path.exists());
+        assert!(futures::executor::block_on(Print::open_native(first, "Closed".into())).is_err());
+        futures::executor::block_on(cleanup);
+
+        let second = key();
+        request(sheet_file(folder.path(), &["b"]), "Second".into(), second.clone());
+        assert!(!first_path.exists());
+        let second_path = STATE.with(|state| state.borrow().sheet_path(&second));
+        assert!(second_path.exists());
+        assert_eq!(kinds(&recorder), vec![PrintEventKind::Open, PrintEventKind::Open]);
+
+        let empty = folder.path().join("empty.html");
+        std::fs::write(&empty, "").unwrap();
+        request(empty, "Empty".into(), key());
+        assert_eq!(recorder.events.borrow().last().unwrap().kind, PrintEventKind::Unavailable);
+        request(folder.path().join("missing.html"), "Missing".into(), key());
+        assert_eq!(recorder.events.borrow().last().unwrap().kind, PrintEventKind::Unavailable);
+        assert!(futures::executor::block_on(Print::open_native(key(), "Missing".into())).is_err());
+        remove_all();
+        assert!(!second_path.exists());
+    }
 
     #[test]
     fn a_save_path_is_only_honoured_in_a_test_environment() {

@@ -13,6 +13,7 @@ import { SIZE } from "../theme/tokens";
 import { AppButton, Text, Toaster } from "../ui";
 import { app, boot, startPolling, startQueuedWatch, warmLibrary } from "./app";
 import { DevPages } from "./DevPages";
+import { startDevCommandMailbox } from "./devCommand";
 import { NarrowBar, PanelSheets, TabBar } from "./Narrow";
 import { NewReturn } from "./NewReturn";
 import { Palette } from "./Palette";
@@ -279,6 +280,7 @@ export function Shell(props: ShellProps) {
   // The agent remote control (Rust feature `agent`, GPUI_AGENT=1): its commands are applied here, polled only while it listens.
   // Not tied to `polling`: the dev environment runs with the polls off, and an agent run is a dev run.
   if (props.agent === true) cleanup(startAgentBridge());
+  cleanup(startDevCommandMailbox());
   // Under 860 points the sidebar and the panel float and start closed; back above it the sidebar docks open again.
   effect(() => {
     const overlays = app.layout.overlayMode();

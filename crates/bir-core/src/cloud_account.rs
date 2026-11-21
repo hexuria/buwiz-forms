@@ -794,6 +794,7 @@ fn write_secret_file(raw: &str) -> Result<(), CloudError> {
     Ok(())
 }
 
+#[cfg(not(target_os = "android"))]
 fn keyring_entry() -> Result<keyring::Entry, keyring::Error> {
     keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
 }
@@ -802,6 +803,7 @@ fn keyring_entry() -> Result<keyring::Entry, keyring::Error> {
 // nothing (the private file, if any, still answers), a write reports failure
 // (the private file is still written), a delete has nothing to delete.
 
+#[cfg(not(target_os = "android"))]
 fn keyring_load() -> Option<String> {
     if crate::platform::keychain_disabled() {
         return None;
@@ -813,6 +815,7 @@ fn keyring_load() -> Option<String> {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 fn keyring_save(raw: &str) -> bool {
     if crate::platform::keychain_disabled() {
         return false;
@@ -822,6 +825,7 @@ fn keyring_save(raw: &str) -> bool {
         .is_ok()
 }
 
+#[cfg(not(target_os = "android"))]
 fn keyring_delete() {
     if crate::platform::keychain_disabled() {
         return;
@@ -833,6 +837,19 @@ fn keyring_delete() {
         }
     }
 }
+
+#[cfg(target_os = "android")]
+fn keyring_load() -> Option<String> {
+    None
+}
+
+#[cfg(target_os = "android")]
+fn keyring_save(_raw: &str) -> bool {
+    false
+}
+
+#[cfg(target_os = "android")]
+fn keyring_delete() {}
 
 pub struct BlockingHttp {
     client: reqwest::blocking::Client,

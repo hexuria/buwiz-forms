@@ -6,7 +6,7 @@ import { cleanup, platform, View } from "nsh";
 import { errorText } from "../../lib/errors";
 import { comboToKeystroke, hotkeyProblem, hotkeyRegistrable, keystrokeToCombo, modifierWords } from "../../lib/settings_model";
 import { holdHotkey, hotkeyStatus, store, toast } from "../../shell";
-import { Card, Dropdown, SettingRow, ShortcutRecorder, Text } from "../../ui";
+import { Card, Dropdown, SettingRow, ShortcutRecorder, Text, TOUCH } from "../../ui";
 import { retentionChoices } from "./logic";
 import { Labeled, NoteRow } from "./parts";
 import { SetupCard } from "./SetupCard";
@@ -88,7 +88,7 @@ export function ComputerSection(props: { rows: string[] }) {
         </Labeled>
       </If>
       <If when={has("setup")}>
-        <Labeled label="Computer setup">
+        <Labeled label={TOUCH ? "Device setup" : "Computer setup"}>
           <SetupCard />
         </Labeled>
       </If>

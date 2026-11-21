@@ -462,6 +462,7 @@ pub enum DbError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error("Keychain error: {0}")]
+    #[cfg(not(target_os = "android"))]
     Keychain(#[from] keyring::Error),
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
@@ -630,7 +631,7 @@ impl DatabasePathOverride {
 /// decides on a dry run (a test checks that the two agree), so a host that asks
 /// gets the answer bir-core acts on.
 pub fn test_environment() -> bool {
-    std::env::var("EBIR_TEST_ENV").is_ok_and(|value| {
+    crate::config::var("EBIR_TEST_ENV").is_ok_and(|value| {
         matches!(
             value.trim().to_ascii_lowercase().as_str(),
             "1" | "true" | "yes" | "on"
@@ -1055,8 +1056,12 @@ impl Database {
             #[cfg(target_os = "macos")]
             return Self::get_or_create_master_key_macos();
 
-            #[cfg(not(target_os = "macos"))]
+            #[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
             return Self::get_or_create_master_key_keyring();
+            #[cfg(target_os = "android")]
+            return Err(DbError::KeychainCli(
+                "The OS keychain is not available on Android".into(),
+            ));
         }
     }
 
@@ -1074,8 +1079,12 @@ impl Database {
             #[cfg(target_os = "macos")]
             return Self::get_existing_master_key_macos();
 
-            #[cfg(not(target_os = "macos"))]
+            #[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
             return Self::get_existing_master_key_keyring();
+            #[cfg(target_os = "android")]
+            return Err(DbError::KeychainCli(
+                "The OS keychain is not available on Android".into(),
+            ));
         }
     }
 
@@ -1092,7 +1101,12 @@ impl Database {
         .map_err(DbError::KeychainCli)
     }
 
-    #[cfg(all(feature = "sqlcipher", not(target_os = "macos"), not(test)))]
+    #[cfg(all(
+        feature = "sqlcipher",
+        not(target_os = "macos"),
+        not(target_os = "android"),
+        not(test)
+    ))]
     fn get_existing_master_key_keyring() -> Result<String, DbError> {
         let keyring_error = match keyring::Entry::new("com.ebir.rust", "sqlcipher_master_key") {
             Ok(entry) => match entry.get_password() {
@@ -1154,7 +1168,11 @@ impl Database {
     /// database was encrypted with. On a headless Linux box with no Secret
     /// Service on D-Bus, `get_password` fails with `PlatformFailure`, which
     /// routes to the file fallback instead of refusing to start.
-    #[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
+    #[cfg(all(
+        feature = "sqlcipher",
+        not(target_os = "macos"),
+        not(target_os = "android")
+    ))]
     fn get_or_create_master_key_keyring() -> Result<String, DbError> {
         use keyring::Entry;
         use tracing::info;
@@ -1473,11 +1491,12 @@ impl Database {
     }
 
     /// The `(key, value)` pairs of every setting whose key starts with
-    /// `prefix`, oldest first.
+    /// `prefix` (compared as text: `_` and `%` are not wildcards), in key
+    /// order.
     pub fn settings_with_prefix(&self, prefix: &str) -> Result<Vec<(String, String)>, DbError> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT key, value FROM settings WHERE key LIKE ?1 || '%' ORDER BY key")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT key, value FROM settings WHERE substr(key, 1, length(?1)) = ?1 ORDER BY key",
+        )?;
         let rows = stmt
             .query_map(params![prefix], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -1825,7 +1844,11 @@ mod keychain_miss_tests {
 }
 
 /// Outcome of reading the SQLCipher master key from the OS credential store.
-#[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
+#[cfg(all(
+    feature = "sqlcipher",
+    not(target_os = "macos"),
+    not(target_os = "android")
+))]
 #[derive(Debug, PartialEq, Eq)]
 enum KeyringRead {
     Found(String),
@@ -1834,7 +1857,11 @@ enum KeyringRead {
     Refuse(String),
 }
 
-#[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
+#[cfg(all(
+    feature = "sqlcipher",
+    not(target_os = "macos"),
+    not(target_os = "android")
+))]
 fn classify_keyring_read(result: Result<String, keyring::Error>) -> KeyringRead {
     match result {
         Ok(hex_key) => KeyringRead::Found(hex_key),
@@ -1858,7 +1885,11 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
+    #[cfg(all(
+        feature = "sqlcipher",
+        not(target_os = "macos"),
+        not(target_os = "android")
+    ))]
     #[test]
     fn keyring_read_falls_back_only_when_store_is_unreachable() {
         use super::{KeyringRead, classify_keyring_read};
@@ -3090,5 +3121,26 @@ mod tests {
                 assert!(!path.to_string_lossy().contains("group.dev.goldcoders.bir"));
             },
         );
+    }
+
+    /// Review F3: a prefix is matched as text, so `_` and `%` in it are not
+    /// wildcards.
+    #[test]
+    fn settings_with_prefix_matches_the_prefix_exactly() {
+        let db = super::Database::open_in_memory_for_tests().expect("database");
+        db.set_setting("profile_ask:1_3:2026:rdo_code", "save")
+            .unwrap();
+        db.set_setting("profile_ask:123:2026:line_of_business", "only")
+            .unwrap();
+        db.set_setting("profile_ask:1%3x:2026:rdo_code", "only")
+            .unwrap();
+        assert_eq!(
+            db.settings_with_prefix("profile_ask:1_3:").unwrap(),
+            vec![(
+                "profile_ask:1_3:2026:rdo_code".to_string(),
+                "save".to_string()
+            )]
+        );
+        assert_eq!(db.settings_with_prefix("profile_ask:1%").unwrap().len(), 1);
     }
 }

@@ -1142,19 +1142,22 @@ pub(crate) fn profile_save(kind: AgentFormKind, edit_keys: &Value, ctx: &FactCon
 /// The "Save to profile?" answers remembered for this return's taxpayer
 /// and year (Q1·a): the field ids of the `profile_ask:<tin>:<year>:*`
 /// settings, so the page asks each field once. A field of a later tax
-/// year asks again.
-pub(crate) fn profile_asked(db: &Database, kind: AgentFormKind, draft: &Value) -> Vec<String> {
+/// year asks again. A return with no identity yet has asked nothing; a
+/// failed settings read is the caller's error to report.
+pub(crate) fn profile_asked(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &Value,
+) -> Result<Vec<String>, bir_core::db::DbError> {
     let Ok(identity) = agent::identity(kind, draft) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let prefix = format!("profile_ask:{}:{}:", identity.tin, identity.taxable_year);
-    db.settings_with_prefix(&prefix)
-        .map(|rows| {
-            rows.into_iter()
-                .filter_map(|(key, _)| key.strip_prefix(&prefix).map(str::to_string))
-                .collect()
-        })
-        .unwrap_or_default()
+    Ok(db
+        .settings_with_prefix(&prefix)?
+        .into_iter()
+        .filter_map(|(key, _)| key.strip_prefix(&prefix).map(str::to_string))
+        .collect())
 }
 
 /// Remember the "Save to profile?" answer for this return's taxpayer,

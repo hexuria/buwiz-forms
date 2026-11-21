@@ -7,7 +7,7 @@
 // Under them, "Filed in BIR eBIRForms" (LegacyGroup): what the import brought in from the old program, for the taxpayer in view.
 // A Home tile arrives with params { statuses, updatedMonth } (the old FilingsPreset's names): they replace every filter, once.
 import type { JSX } from "nsh";
-import { computed, Scroll, signal, untracked, View } from "nsh";
+import { computed, signal, untracked, View } from "nsh";
 import type { ReturnRow } from "../../bir";
 import { app, cancelQueue, openReturn, store } from "../../shell";
 import { BREAK } from "../../theme/tokens";
@@ -171,10 +171,8 @@ export function Filings(): JSX.Element {
           </If>
         </If>
         <If when={!wide()}>
-          {/* Five tabs with counts are wider than a phone: the strip scrolls sideways, edge to edge, so a cut tab shows there is more. */}
-          <Scroll horizontal scrollbar={false} style={{ marginHorizontal: -pad() }} contentClass="flex-row" contentStyle={{ paddingHorizontal: pad() }}>
-            <Tabs testID="filings-tabs" tabs={tabs()} value={filters.tab()} onChange={filters.setTab} />
-          </Scroll>
+          {/* Five tabs with counts side by side are wider than a phone: each count goes under its label, so all five fit. */}
+          <Tabs testID="filings-tabs" fill tabs={tabs()} value={filters.tab()} onChange={filters.setTab} />
           <View class="mb-3 w-full flex-row items-center justify-between">
             <View testID="filings-count">
               <Text variant="meta" tone="fg2">{plural(shownCount(), "return")}</Text>

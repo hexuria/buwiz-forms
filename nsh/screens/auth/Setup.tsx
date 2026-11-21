@@ -5,7 +5,7 @@
 import { effect, Scroll, untracked, View, windowSize } from "nsh";
 import { app, store } from "../../shell";
 import { BREAK, SIZE } from "../../theme/tokens";
-import { AppButton, Code, PinCells, Text } from "../../ui";
+import { AppButton, Code, PinCells, Text, TOUCH } from "../../ui";
 import { NewTaxpayerPage } from "../taxpayer";
 import { Actions, AuthCard, ChoiceTile, ErrorLine, Heading, Labelled } from "./parts";
 import { auth } from "./state";
@@ -30,7 +30,7 @@ export function Setup() {
 function Choose() {
   return (
     <AuthCard testID="setup-card">
-      <Heading icon="users" title="Who will use eBIRForms on this computer?" line="This decides who the admin is. Nobody can lock the others out." />
+      <Heading icon="users" title="Who will use eBIRForms on this device?" line="This decides who the admin is. Nobody can lock the others out." />
       <ChoiceTile
         testID="setup-solo"
         icon="user"
@@ -80,7 +80,9 @@ function RecoveryKey() {
       <View class="items-center py-2">
         <Code testID="setup-key">{auth.setupKey() ?? ""}</Code>
       </View>
-      <Text variant="meta" tone="fg2" class="text-center">Lost both? Whoever can log in to this Mac can still reset the admin PIN.</Text>
+      <If when={!TOUCH}>
+        <Text variant="meta" tone="fg2" class="text-center">Lost both? Whoever can log in to this Mac can still reset the admin PIN.</Text>
+      </If>
       <Actions right={<AppButton testID="setup-key-done" label="I wrote it down" variant="primary" onPress={auth.finishHelpdeskSetup} />} />
     </AuthCard>
   );

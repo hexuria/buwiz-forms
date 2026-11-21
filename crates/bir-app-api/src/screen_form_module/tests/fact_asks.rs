@@ -71,6 +71,134 @@ fn open_as(tin: &str, code: &str, period: i64) -> Value {
     .unwrap_or_else(|error| panic!("{code} opens: {}", error.message()))
 }
 
+#[test]
+fn later_2551q_profile_prerequisites_are_host_derived_and_disappear_after_profile_updates() {
+    setup_juana();
+    for quarter in 2..=4 {
+        let opened = open_as(JUANA, "2551Q", quarter);
+        let missing = &opened["profile_prerequisites"];
+        assert_eq!(missing[0]["field"], "business_start_date");
+        assert_eq!(missing[1]["field"], "income_tax_election");
+        assert!(missing[1]["message"].as_str().unwrap().contains("2026"));
+    }
+    assert_eq!(
+        open_as(JUANA, "2551Q", 1)["profile_prerequisites"],
+        json!([])
+    );
+    assert_eq!(
+        open_as(JUANA, "1601C", 3)["profile_prerequisites"],
+        json!([])
+    );
+    set_facts(
+        JUANA,
+        YearFactsPatch {
+            tax_classification: Some(Some(bir_core::profile::TaxClassification::SelfEmployed)),
+            business_start_date: Some(Some("2020-01-01".parse().unwrap())),
+            income_tax_election: Some(Some(
+                bir_core::profile::IncomeTaxElection::GraduatedUnspecified,
+            )),
+            ..YearFactsPatch::default()
+        },
+    );
+    assert_eq!(
+        open_as(JUANA, "2551Q", 3)["profile_prerequisites"],
+        json!([])
+    );
+}
+
+#[test]
+fn a_stored_2551q_refreshes_profile_prerequisites_on_return_to_the_form() {
+    setup_juana();
+    let opened = open_as(JUANA, "2551Q", 3);
+    let saved = save("2551Q", &opened["draft"]);
+    assert_eq!(saved["draft"]["annual_income_tax_election"], "unrecorded");
+    set_facts(
+        JUANA,
+        YearFactsPatch {
+            tax_classification: Some(Some(bir_core::profile::TaxClassification::SelfEmployed)),
+            business_start_date: Some(Some("2026-01-01".parse().unwrap())),
+            income_tax_election: Some(Some(
+                bir_core::profile::IncomeTaxElection::GraduatedUnspecified,
+            )),
+            ..YearFactsPatch::default()
+        },
+    );
+    let reopened = open_as(JUANA, "2551Q", 3);
+    assert_eq!(reopened["draft"]["id"], saved["draft"]["id"]);
+    assert_eq!(reopened["draft"]["business_start_date"], "2026-01-01");
+    assert_eq!(reopened["draft"]["annual_income_tax_election"], "graduated");
+    assert_eq!(reopened["profile_prerequisites"], json!([]));
+    let filled = fill_unlocked("2551Q", &reopened["draft"], json!({}), &[]);
+    assert_eq!(filled["profile_prerequisites"], json!([]));
+}
+
+#[test]
+fn a_2551q_keeps_its_return_only_email_when_reopened() {
+    setup_juana();
+    let key = "txtEmail#occurrence-1";
+    let opened = open_as(JUANA, "2551Q", 3);
+    let from_profile = opened["draft"]["email"].clone();
+    assert_ne!(from_profile, json!("books@example.com"));
+    let filled = fill_unlocked(
+        "2551Q",
+        &opened["draft"],
+        json!({ key: "books@example.com" }),
+        &[key],
+    );
+    let saved = save("2551Q", &filled["draft"]);
+    assert_eq!(saved["draft"]["email"], "books@example.com");
+    assert!(profile_edits(&saved["draft"]).contains(key));
+    // Reopening reconciles the profile context but keeps the edited box,
+    // and the next save does not write the profile's email over it.
+    let reopened = open_as(JUANA, "2551Q", 3);
+    assert_eq!(reopened["draft"]["email"], "books@example.com");
+    let refilled = fill_unlocked("2551Q", &reopened["draft"], json!({}), &[]);
+    let resaved = save("2551Q", &refilled["draft"]);
+    assert_eq!(resaved["draft"]["email"], "books@example.com");
+    assert_eq!(
+        open_as(JUANA, "2551Q", 3)["draft"]["email"],
+        "books@example.com"
+    );
+}
+
+#[test]
+fn a_calendar_2551q_saved_with_another_year_end_month_reopens_to_be_corrected() {
+    setup_juana();
+    let opened = open_as(JUANA, "2551Q", 3);
+    let mut draft = opened["draft"].clone();
+    draft["year_end_month"] = json!(6);
+    let saved = save("2551Q", &draft);
+    assert_eq!(saved["draft"]["year_end_month"], 6);
+    let reopened = open_as(JUANA, "2551Q", 3);
+    assert_eq!(reopened["draft"]["id"], saved["draft"]["id"]);
+    assert_eq!(reopened["draft"]["year_end_month"], 6);
+    let mut fixed = reopened["draft"].clone();
+    fixed["year_end_month"] = json!(12);
+    let resaved = save("2551Q", &fixed);
+    assert_eq!(resaved["draft"]["year_end_month"], 12);
+    assert_eq!(open_as(JUANA, "2551Q", 3)["draft"]["year_end_month"], 12);
+}
+
+#[test]
+fn profile_prerequisites_respect_commencement_pt010_and_taxpayer_applicability() {
+    setup_juana();
+    let kind = kind_of("2551Q").unwrap();
+    let draft = open_as(JUANA, "2551Q", 3)["draft"].clone();
+    for (field, value) in [
+        ("taxpayer_type", json!("Corporation")),
+        ("schedule_1", json!([])),
+        ("business_start_date", json!("2026-08-15")),
+    ] {
+        let mut changed = draft.clone();
+        changed[field] = value;
+        assert_eq!(
+            profile_prerequisites::of(kind, &changed).unwrap(),
+            json!([])
+        );
+    }
+    assert!(profile_prerequisites::of(kind, &json!({})).is_err());
+}
+
 fn at(day: (i32, u32, u32), run: impl FnOnce()) {
     bir_core::forms::penalty_items::with_clock(
         chrono::NaiveDate::from_ymd_opt(day.0, day.1, day.2).unwrap(),
@@ -1438,4 +1566,49 @@ fn a_card_facts_queue_sentence_names_the_item() {
         );
         assert!(!message.contains("in the card"), "{message}");
     });
+}
+
+/// Review F4: the remembered answer's TIN must be a TIN (12-14 digits, no
+/// dashes or letters), so a bad one never forms a settings key.
+#[test]
+fn a_profile_ask_for_a_malformed_tin_is_refused() {
+    setup_juana();
+    for tin in [
+        "12AB",
+        "",
+        "000-123-453-00000",
+        "0001234530000:",
+        "123456789",
+    ] {
+        let answered = call(
+            "screen_form_profile_asked",
+            vec![tin.into(), 2026i64.into(), "rdo_code".into(), "save".into()],
+        );
+        assert!(answered.is_err(), "{tin:?} is refused");
+    }
+    let opened = open_as(JUANA, "0605", 1);
+    assert_eq!(opened["profile_asked"], json!([]), "nothing was remembered");
+}
+
+/// Review F2: a failed read of the remembered answers is an error, not
+/// "nothing asked" (which would repeat every ask on every open); opening
+/// still works and logs it.
+#[test]
+fn a_failed_profile_ask_read_is_an_error() {
+    setup_juana();
+    let draft = open_as(JUANA, "0605", 1)["draft"].clone();
+    let Ok(kind) = kind_of("0605") else {
+        panic!("0605 kind")
+    };
+    with_database(|db| {
+        db.conn_for_tests()
+            .execute_batch("ALTER TABLE settings RENAME TO settings_gone")
+            .expect("rename settings");
+        assert!(crate::screen_form_module::fact_asks::profile_asked(db, kind, &draft).is_err());
+        db.conn_for_tests()
+            .execute_batch("ALTER TABLE settings_gone RENAME TO settings")
+            .expect("restore settings");
+        Ok(())
+    })
+    .unwrap();
 }

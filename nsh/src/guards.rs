@@ -2,7 +2,7 @@
 //!
 //! * The **send guard** ([`send_guard`]) runs once, before the first database open and before the
 //!   submission worker starts. It forces a dry run, drops the live acknowledgement, and decides whether the
-//!   worker may start at all. The one way out of a dry run is the mock BIR server on loopback.
+//!   worker may start at all. A loopback mock BIR server or health-checked mock relay can send.
 //! * The **database guard** ([`database_refusal`]) refuses to open a database inside the owner's data
 //!   folders, by name and by device and inode. It is checked before every host call, so a lazy open can
 //!   never get around it. The folders hang off the home folder of the account's real uid, not `$HOME`. In a
@@ -20,10 +20,10 @@
 //! not change. Where neither exists, the guard opens a database only when the caller names it with
 //! `BIR_DATABASE_PATH` ([`unverified_refusal`]).
 //!
-//! **Environment.** The send guard is the only code here that changes the process environment (two
-//! variables). It runs once, from the door's process setup, which the native module's registration calls
-//! (see `door::process`); nothing else in this crate sets or removes a variable.
+//! **Environment.** The send guard removes the live acknowledgement and forces dry-run unless a mock
+//! is selected. Android debug launch configuration is loaded before this guard (see `door::process`).
 
+use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
@@ -35,9 +35,11 @@ use bir_core::dev_mode::SubmissionMode;
 pub enum SendMode {
     /// `BIR_SFTP_DRY_RUN=1`: a queued return is "sent" to a folder on this computer, nothing leaves it.
     DryRun,
-    /// The mock BIR server (`just mock-bir`) is listening on loopback and the transport sends there, and
-    /// nowhere else: its host is `127.0.0.1` or `::1`.
+    /// The mock BIR server is listening on literal `127.0.0.1` or `::1`.
     Mock { host: String, port: u16 },
+    /// The local mock relay (`just mock-relay`, docs/relay.md) is listening at `url`, a loopback `http://` origin,
+    /// and the transport sends there, and nowhere else. The relay may hand the file on to the mock BIR server.
+    Relay { url: String },
     /// Sending is not a dry run and not the mock: the submission worker does not start. Why.
     Refused(String),
 }
@@ -53,6 +55,7 @@ impl SendMode {
         match self {
             SendMode::DryRun => "dry_run",
             SendMode::Mock { .. } => "mock",
+            SendMode::Relay { .. } => "relay",
             SendMode::Refused(_) => "refused",
         }
     }
@@ -62,7 +65,10 @@ impl SendMode {
         match self {
             SendMode::DryRun => None,
             SendMode::Mock { host, port } => Some(format!(
-                "Sending to the mock BIR server at {host}:{port}. Nothing reaches the BIR."
+                "Sending to the local mock endpoint at {host}:{port}. Nothing reaches the BIR."
+            )),
+            SendMode::Relay { url } => Some(format!(
+                "Sending through the mock relay at {url}. Nothing reaches the BIR."
             )),
             SendMode::Refused(reason) => Some(reason.clone()),
         }
@@ -74,29 +80,122 @@ const LISTEN_TIMEOUT: Duration = Duration::from_millis(400);
 
 /// Set `BIR_SFTP_DRY_RUN=1`, remove `BIR_SFTP_LIVE`, then check that the transport really is a dry run and
 /// that the Dev Mode panel does not point at the test server. Mock mode is the only exception: a listening
-/// loopback `BIR_SFTP_HOST` leaves the environment as the `mock-bir-app` recipe made it.
+/// loopback `BIR_SFTP_HOST` leaves the environment as the `mock-bir-app` recipe made it. An explicit
+/// `BIR_RELAY_URL` must instead pass the loopback/health guard and never falls back to SFTP.
 ///
-/// Call it once, before the database opens (the process boot does).
+/// Android enforces these switches through in-process configuration; desktop registration
+/// changes the environment. Call it once, before the database opens (the process boot does).
 pub fn send_guard() -> SendMode {
     send_guard_with(port_is_listening)
 }
 
 /// [`send_guard`] with the "is anything listening there" probe given, for tests.
 pub(crate) fn send_guard_with(listening: impl Fn(&str, u16) -> bool) -> SendMode {
-    // SAFETY: the guard runs once, from `door::process` (called when the native module registers, before any
-    // thread of ours or of NSH's app exists; see there), before the database and the worker exist; the
-    // environment is only read by the transport afterwards. A test calls it directly under `temp_env`.
-    unsafe { std::env::remove_var("BIR_SFTP_LIVE") };
+    send_guard_with_health(listening, mock_health)
+}
+
+fn send_guard_with_health(
+    listening: impl Fn(&str, u16) -> bool,
+    healthy: impl Fn(&str, u16) -> bool,
+) -> SendMode {
+    #[cfg(target_os = "android")]
+    bir_core::config::force("BIR_SFTP_LIVE", None);
+    #[cfg(not(target_os = "android"))]
+    // SAFETY: desktop registration runs before NSH threads, database and worker startup.
+    unsafe {
+        std::env::remove_var("BIR_SFTP_LIVE")
+    };
+    let relay = relay_target(&listening, &healthy);
     let mock = mock_target(&listening);
-    if mock.is_none() {
+    if !matches!(relay, Some(Ok(_))) && mock.is_none() {
+        #[cfg(target_os = "android")]
+        bir_core::config::force("BIR_SFTP_DRY_RUN", Some("1"));
+        #[cfg(not(target_os = "android"))]
         // SAFETY: as above.
-        unsafe { std::env::set_var("BIR_SFTP_DRY_RUN", "1") };
+        unsafe {
+            std::env::set_var("BIR_SFTP_DRY_RUN", "1")
+        };
     }
-    verdict(
-        mock,
-        bir_core::transport::is_sftp_dry_run(),
-        bir_core::dev_mode::panel_submission_mode(),
-    )
+    let panel = bir_core::dev_mode::panel_submission_mode();
+    relay_verdict(relay, panel)
+        .unwrap_or_else(|| verdict(mock, bir_core::transport::is_sftp_dry_run(), panel))
+}
+
+/// The decision when `BIR_RELAY_URL` is set (`relay`: its origin when it is a listening loopback one, else why
+/// not): the transport sends there before anything else, so it is the relay or nothing. `None` when it is unset.
+/// Pure, so every branch is tested.
+pub(crate) fn relay_verdict(
+    relay: Option<Result<String, String>>,
+    panel: Option<SubmissionMode>,
+) -> Option<SendMode> {
+    let relay = relay?;
+    if panel == Some(SubmissionMode::TestServer) {
+        return Some(verdict(None, false, panel));
+    }
+    Some(match relay {
+        Ok(url) => SendMode::Relay { url },
+        Err(why) => SendMode::Refused(why),
+    })
+}
+
+/// `BIR_RELAY_URL` when it is a loopback `http://` origin whose port answers; the refusal when it is set otherwise.
+fn relay_target(
+    listening: &impl Fn(&str, u16) -> bool,
+    healthy: &impl Fn(&str, u16) -> bool,
+) -> Option<Result<String, String>> {
+    let url = match bir_core::transport::relay_url().or_else(|| {
+        match bir_core::config::var(bir_core::transport::RELAY_URL_ENV) {
+            Err(std::env::VarError::NotPresent) => None,
+            _ => Some(Err(bir_core::transport::TransportError::Config(
+                "Empty or invalid BIR_RELAY_URL".into(),
+            ))),
+        }
+    })? {
+        Ok(url) => url,
+        Err(error) => return Some(Err(error.to_string())),
+    };
+    let authority = url.trim_start_matches("http://");
+    let (host, port) = if let Some(ipv6) = authority.strip_prefix('[') {
+        let (host, suffix) = ipv6.split_once(']')?;
+        (host, if suffix.is_empty() { Some(80) } else { suffix.strip_prefix(':')?.parse::<u16>().ok() })
+    } else {
+        match authority.rsplit_once(':') {
+            Some((host, port)) => (host, port.parse::<u16>().ok()),
+            None => (authority, Some(80)),
+        }
+    };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    let host = if host.eq_ignore_ascii_case("localhost") { "127.0.0.1" } else { host };
+    Some(match port {
+        Some(port) if listening(host, port) && healthy(host, port) => Ok(url),
+        _ => Err(format!(
+            "The mock relay at {url} is not listening or /v1/health did not identify a mock; the submission worker was not started."
+        )),
+    })
+}
+
+fn mock_health(host: &str, port: u16) -> bool {
+    let probe = || -> Option<bool> {
+        let ip = host.parse::<IpAddr>().ok()?;
+        let mut stream = TcpStream::connect_timeout(&SocketAddr::new(ip, port), LISTEN_TIMEOUT).ok()?;
+        stream.set_read_timeout(Some(LISTEN_TIMEOUT)).ok()?;
+        stream.set_write_timeout(Some(LISTEN_TIMEOUT)).ok()?;
+        let request = format!("GET /v1/health HTTP/1.0\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n");
+        stream.write_all(request.as_bytes()).ok()?;
+        let mut response = Vec::new();
+        stream.take(8193).read_to_end(&mut response).ok()?;
+        if response.len() > 8192 {
+            return None;
+        }
+        let end = response.windows(4).position(|part| part == b"\r\n\r\n")?;
+        let head = std::str::from_utf8(&response[..end]).ok()?;
+        if head.lines().next()?.split_whitespace().nth(1) != Some("200") {
+            return None;
+        }
+        let body: serde_json::Value = serde_json::from_slice(&response[end + 4..]).ok()?;
+        Some(body.get("mock").and_then(serde_json::Value::as_bool) == Some(true))
+    };
+    probe().unwrap_or(false)
 }
 
 /// The decision, from what was observed. Pure, so every branch is tested.
@@ -124,7 +223,7 @@ pub(crate) fn verdict(
 
 /// `BIR_SFTP_HOST` when it is `127.0.0.1` or `::1` and its port (`BIR_SFTP_PORT`, 22 when unset) answers.
 fn mock_target(listening: &impl Fn(&str, u16) -> bool) -> Option<(String, u16)> {
-    let host = std::env::var("BIR_SFTP_HOST").ok()?;
+    let host = bir_core::config::var("BIR_SFTP_HOST").ok()?;
     let host = host.trim();
     if host != "127.0.0.1" && host != "::1" {
         return None;
@@ -158,7 +257,13 @@ pub fn protected_folders(home: &Path) -> [PathBuf; 3] {
 /// Windows itself (`GetUserProfileDirectoryW`), never from `USERPROFILE`: a process started with
 /// `USERPROFILE=C:\x` still protects the owner's real folders.
 pub fn account_home() -> Option<PathBuf> {
-    #[cfg(unix)]
+    // iOS: an app has no account entry of its own (the simulator's password database may not know the uid either);
+    // its home is the sandbox container the system sets as HOME at launch, where every folder it can name lives.
+    #[cfg(target_os = "ios")]
+    {
+        std::env::var_os("HOME").map(PathBuf::from).filter(|home| home.is_absolute())
+    }
+    #[cfg(all(unix, not(target_os = "ios")))]
     {
         use std::ffi::{CStr, OsStr};
         use std::os::unix::ffi::OsStrExt;
@@ -194,11 +299,11 @@ pub fn account_home() -> Option<PathBuf> {
 }
 
 /// Where the NSH app keeps its own data (bir-core's `platform::data_dir` of the plain build): the default under
-/// `home` (macOS `Library/Application Support`, Windows `AppData\Local`, elsewhere `.local/share`), and where the
+/// `home` (macOS and iOS `Library/Application Support`, Windows `AppData\Local`, elsewhere `.local/share`), and where the
 /// variable the app reads (`LOCALAPPDATA` on Windows, an absolute `XDG_DATA_HOME` elsewhere off macOS) moves it.
 pub fn app_data_folders(home: &Path) -> Vec<PathBuf> {
     let id = bir_core::platform::NSH_APP_ID;
-    let (default, moved) = if cfg!(target_os = "macos") {
+    let (default, moved) = if cfg!(any(target_os = "macos", target_os = "ios")) {
         (home.join("Library/Application Support"), None)
     } else if cfg!(windows) {
         (home.join("AppData/Local"), std::env::var_os("LOCALAPPDATA"))
@@ -236,6 +341,7 @@ fn protected_folders_here() -> Option<Vec<PathBuf>> {
 thread_local! {
     /// Test seam: the protected folders of this thread, in place of the real account's (a test never
     /// reads the owner's real folders).
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static TEST_PROTECTED: std::cell::RefCell<Option<Vec<PathBuf>>> = const { std::cell::RefCell::new(None) };
 }
 
@@ -584,6 +690,7 @@ mod tests {
             "BIR_SFTP_LIVE",
             "BIR_SFTP_HOST",
             "BIR_SFTP_PORT",
+            "BIR_RELAY_URL",
             "EBIR_TEST_ENV",
         ];
         let vars: Vec<(&str, Option<&str>)> = names
@@ -606,6 +713,71 @@ mod tests {
 
     fn dry_run() -> Option<String> {
         std::env::var("BIR_SFTP_DRY_RUN").ok()
+    }
+
+    #[test]
+    fn non_loopback_or_invalid_relay_refuses_even_when_dry_run_is_set() {
+        for url in ["http://10.0.2.2:8787", "https://127.0.0.1:8787", "", "http://127.0.0.1:8787@evil.test"] {
+            sending_env(&[("BIR_RELAY_URL", url), ("BIR_SFTP_DRY_RUN", "1"), ("BIR_SFTP_LIVE", "1")], || {
+                assert!(matches!(send_guard_with(|_, _| panic!("invalid relay must not connect")), SendMode::Refused(_)));
+                assert_eq!(live(), None);
+            });
+        }
+    }
+
+    #[test]
+    fn relay_requires_both_a_listener_and_mock_health() {
+        sending_env(&[("BIR_RELAY_URL", "http://127.0.0.1:8787")], || {
+            assert!(matches!(send_guard_with_health(|_, _| false, |_, _| panic!("closed port")), SendMode::Refused(_)));
+            assert!(matches!(send_guard_with_health(|_, _| true, |_, _| false), SendMode::Refused(_)));
+            let mode = send_guard_with_health(|host, port| host == "127.0.0.1" && port == 8787, |_, _| true);
+            assert_eq!(mode.label(), "relay");
+            assert!(mode.worker_may_start());
+        });
+    }
+
+    #[test]
+    fn relay_guard_accepts_ipv6_and_localhost_origins() {
+        for (url, host, port) in [
+            ("http://[::1]", "::1", 80),
+            ("http://[::1]:8787", "::1", 8787),
+            ("http://localhost:8787", "127.0.0.1", 8787),
+        ] {
+            sending_env(&[("BIR_RELAY_URL", url)], || {
+                assert!(matches!(
+                    send_guard_with_health(|h, p| h == host && p == port, |_, _| true),
+                    SendMode::Relay { .. }
+                ));
+            });
+        }
+    }
+
+    #[test]
+    fn health_probe_requires_successful_mock_json() {
+        for (status, body, expected) in [
+            ("200 OK", r#"{"ok":true,"mock":true}"#, true),
+            ("200 OK", r#"{"mock":false}"#, false),
+            ("200 OK", "invalid", false),
+            ("200 OK", "", false),
+            ("503 Unavailable", r#"{"mock":true}"#, false),
+        ] {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                let mut request = Vec::new();
+                while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+                    let mut chunk = [0; 1024];
+                    let read = stream.read(&mut chunk).unwrap();
+                    assert!(read > 0, "connection closed before the request headers ended");
+                    request.extend_from_slice(&chunk[..read]);
+                }
+                write!(stream, "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            });
+            assert_eq!(mock_health("127.0.0.1", port), expected);
+            server.join().unwrap();
+        }
     }
 
     #[test]
@@ -712,6 +884,38 @@ mod tests {
                 assert_eq!(dry_run(), None);
             },
         );
+    }
+
+    #[test]
+    fn a_relay_url_decides_alone_and_only_a_listening_loopback_one_sends() {
+        assert_eq!(relay_verdict(None, None), None);
+        assert_eq!(
+            relay_verdict(Some(Ok("http://127.0.0.1:8787".into())), None),
+            Some(SendMode::Relay { url: "http://127.0.0.1:8787".into() })
+        );
+        assert!(matches!(relay_verdict(Some(Err("no".into())), None), Some(SendMode::Refused(_))));
+        assert!(matches!(
+            relay_verdict(Some(Ok("http://127.0.0.1:8787".into())), Some(SubmissionMode::TestServer)),
+            Some(SendMode::Refused(_))
+        ));
+    }
+
+    #[test]
+    fn a_listening_loopback_relay_is_the_relay_and_anything_else_refuses() {
+        sending_env(&[("BIR_RELAY_URL", "http://127.0.0.1:8787")], || {
+            assert_eq!(
+                send_guard_with_health(|host, port| host == "127.0.0.1" && port == 8787, |_, _| true),
+                SendMode::Relay { url: "http://127.0.0.1:8787".into() }
+            );
+            assert_eq!(dry_run(), None);
+        });
+        sending_env(&[("BIR_RELAY_URL", "http://127.0.0.1:8787")], || {
+            assert!(matches!(send_guard_with(|_, _| false), SendMode::Refused(_)));
+            assert_eq!(dry_run().as_deref(), Some("1"));
+        });
+        sending_env(&[("BIR_RELAY_URL", "https://relay.buwiz.com")], || {
+            assert!(matches!(send_guard_with(|_, _| true), SendMode::Refused(_)));
+        });
     }
 
     #[test]
