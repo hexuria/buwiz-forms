@@ -24,6 +24,7 @@ use russh_sftp::protocol::OpenFlags;
 use serde::Deserialize;
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
@@ -944,7 +945,10 @@ pub(crate) async fn open_iaf_session(
 pub const MOCK_RELAY_SERVICE: &str = "buwiz-mock-relay";
 
 /// Checks the versioned mock relay identity, with upgrade guidance for legacy relays.
-pub fn check_mock_relay_health(body: &serde_json::Value) -> Result<(), &'static str> {
+pub fn check_mock_relay_health(
+    body: &serde_json::Value,
+    address: SocketAddr,
+) -> Result<(), String> {
     if body["service"] == MOCK_RELAY_SERVICE
         && body["version"] == 1
         && body["ok"] == true
@@ -955,11 +959,13 @@ pub fn check_mock_relay_health(body: &serde_json::Value) -> Result<(), &'static 
         && body["ok"] == true
         && body["mock"] == true
     {
-        Err(
-            "The mock relay is out of date. Restart it with `just mock-relay`, then restart the app.",
-        )
+        Err(format!(
+            "The mock relay is out of date. Restart it with `just mock-relay --bind {} --port {}`, then restart the app.",
+            address.ip(),
+            address.port()
+        ))
     } else {
-        Err("Health response did not identify the mock relay")
+        Err("Health response did not identify the mock relay".into())
     }
 }
 
@@ -983,6 +989,9 @@ async fn relay_health(url: &str) -> Result<(), TransportError> {
             response.status()
         )));
     }
+    let address = response.remote_addr().ok_or_else(|| {
+        TransportError::RelayUnavailable("The relay connection address is unavailable".into())
+    })?;
     let body = response
         .bytes()
         .await
@@ -990,7 +999,7 @@ async fn relay_health(url: &str) -> Result<(), TransportError> {
     let body = serde_json::from_slice(&body).map_err(|_| {
         TransportError::RelayUnavailable("Invalid mock relay health response".into())
     })?;
-    check_mock_relay_health(&body).map_err(|why| TransportError::RelayUnavailable(why.into()))?;
+    check_mock_relay_health(&body, address).map_err(TransportError::RelayUnavailable)?;
     Ok(())
 }
 
@@ -1160,8 +1169,17 @@ mod tests {
     }
 
     async fn http_reply(status: u16, body: &str, probe: bool) -> Result<(), TransportError> {
-        use std::io::{Read, Write};
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        http_reply_from(listener, status, body, probe).await
+    }
+
+    async fn http_reply_from(
+        listener: std::net::TcpListener,
+        status: u16,
+        body: &str,
+        probe: bool,
+    ) -> Result<(), TransportError> {
+        use std::io::{Read, Write};
         listener.set_nonblocking(true).unwrap();
         let url = format!("http://{}", listener.local_addr().unwrap());
         let body = body.to_owned();
@@ -1339,7 +1357,6 @@ mod tests {
             "{}",
             "invalid",
             "",
-            r#"{"ok":true,"mock":true}"#,
             r#"{"ok":true,"mock":true,"version":0}"#,
             r#"{"ok":"true","mock":true}"#,
             r#"{"service":"another-service","version":1,"ok":true,"mock":true}"#,
@@ -1348,14 +1365,7 @@ mod tests {
             else {
                 panic!("invalid health must be unavailable");
             };
-            if body == r#"{"ok":true,"mock":true}"# {
-                assert_eq!(
-                    why,
-                    "The mock relay is out of date. Restart it with `just mock-relay`, then restart the app."
-                );
-            } else {
-                assert!(!why.contains("out of date"), "{why}");
-            }
+            assert!(!why.contains("out of date"), "{why}");
         }
         assert!(matches!(
             http_reply(503, "{}", true).await,
@@ -1375,6 +1385,35 @@ mod tests {
             .await,
             Err(TransportError::RelayUnavailable(_))
         ));
+    }
+
+    #[cfg(any(debug_assertions, feature = "mock-relay"))]
+    #[tokio::test]
+    async fn legacy_relay_advice_preserves_the_checked_bind_and_port() {
+        for host in ["127.0.0.1", "::1"] {
+            let listener = match std::net::TcpListener::bind((host, 0)) {
+                Ok(listener) => listener,
+                Err(error) if host == "::1" => {
+                    eprintln!("IPv6 loopback is unavailable: {error}");
+                    continue;
+                }
+                Err(error) => panic!("IPv4 loopback is unavailable: {error}"),
+            };
+            let address = listener.local_addr().unwrap();
+            let Err(TransportError::RelayUnavailable(why)) =
+                http_reply_from(listener, 200, r#"{"ok":true,"mock":true}"#, true).await
+            else {
+                panic!("legacy health must be unavailable");
+            };
+            assert_eq!(
+                why,
+                format!(
+                    "The mock relay is out of date. Restart it with `just mock-relay --bind {} --port {}`, then restart the app.",
+                    address.ip(),
+                    address.port()
+                )
+            );
+        }
     }
 
     #[test]

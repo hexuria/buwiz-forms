@@ -49,8 +49,12 @@ URL with the numeric address that passed. Worker health checks and uploads use
 that same address, never a fresh resolution of `localhost`.
 
 **Upgrading:** a relay still returning `{"ok":true,"mock":true}` is out of date
-and is refused. Stop it and run `just mock-relay` to rebuild and restart it, then
-restart the app so its startup guard can enable the submission worker.
+and is refused. Stop it and use the restart command in the refusal, which preserves
+the checked bind address and port. For `BIR_RELAY_URL=http://[::1]:9000`, run
+`just mock-relay --bind ::1 --port 9000` to rebuild and restart it, then restart the
+app so its startup guard can enable the submission worker. The recipe forwards
+these arguments to the relay binary; for `localhost`, the advice uses the numeric
+loopback address that answered the health check.
 
 The app asks it before it claims a queued return: a relay that does not answer
 there leaves the return Queued, unclaimed, and retried after the back-off.

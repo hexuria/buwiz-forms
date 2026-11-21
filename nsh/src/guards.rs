@@ -96,7 +96,7 @@ pub(crate) fn send_guard_with(listening: impl Fn(&str, u16) -> bool) -> SendMode
 
 fn send_guard_with_health(
     listening: impl Fn(&str, u16) -> bool,
-    healthy: impl Fn(&str, u16) -> Result<bool, &'static str>,
+    healthy: impl Fn(&str, u16) -> Result<bool, String>,
 ) -> SendMode {
     #[cfg(target_os = "android")]
     bir_core::config::force("BIR_SFTP_LIVE", None);
@@ -145,7 +145,7 @@ pub(crate) fn relay_verdict(relay: Option<Result<String, String>>) -> Option<Sen
 /// `BIR_RELAY_URL` when it is a loopback `http://` origin whose port answers; the refusal when it is set otherwise.
 fn relay_target(
     listening: &impl Fn(&str, u16) -> bool,
-    healthy: &impl Fn(&str, u16) -> Result<bool, &'static str>,
+    healthy: &impl Fn(&str, u16) -> Result<bool, String>,
 ) -> Option<Result<String, String>> {
     let url = match bir_core::transport::relay_url().or_else(|| {
         match bir_core::config::var(bir_core::transport::RELAY_URL_ENV) {
@@ -199,10 +199,11 @@ fn relay_target(
         )))
 }
 
-fn mock_health(host: &str, port: u16) -> Result<bool, &'static str> {
-    let probe = || -> Option<Result<bool, &'static str>> {
+fn mock_health(host: &str, port: u16) -> Result<bool, String> {
+    let probe = || -> Option<Result<bool, String>> {
         let ip = host.parse::<IpAddr>().ok()?;
-        let mut stream = TcpStream::connect_timeout(&SocketAddr::new(ip, port), LISTEN_TIMEOUT).ok()?;
+        let address = SocketAddr::new(ip, port);
+        let mut stream = TcpStream::connect_timeout(&address, LISTEN_TIMEOUT).ok()?;
         stream.set_read_timeout(Some(LISTEN_TIMEOUT)).ok()?;
         stream.set_write_timeout(Some(LISTEN_TIMEOUT)).ok()?;
         let request = format!("GET /v1/health HTTP/1.0\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n");
@@ -218,7 +219,7 @@ fn mock_health(host: &str, port: u16) -> Result<bool, &'static str> {
             return None;
         }
         let body: serde_json::Value = serde_json::from_slice(&response[end + 4..]).ok()?;
-        Some(bir_core::transport::check_mock_relay_health(&body).map(|()| true))
+        Some(bir_core::transport::check_mock_relay_health(&body, address).map(|()| true))
     };
     probe().unwrap_or(Ok(false))
 }
@@ -812,7 +813,7 @@ mod tests {
                 if body == r#"{"ok":true,"mock":true}"# {
                     let SendMode::Refused(why) = mode else { panic!("legacy relay must refuse") };
                     assert!(why.contains("out of date"), "{why}");
-                    assert!(why.contains("`just mock-relay`, then restart the app"), "{why}");
+                    assert!(why.contains(&format!("`just mock-relay --bind 127.0.0.1 --port {port}`, then restart the app")), "{why}");
                 }
             });
             server.join().unwrap();
@@ -862,10 +863,10 @@ mod tests {
     #[test]
     fn localhost_checks_both_loopback_families_when_the_first_is_not_a_mock() {
         sending_env(&[("BIR_RELAY_URL", "http://localhost:8787")], || {
-            let healthy = |host: &str, _: u16| {
+            let healthy = |host: &str, port: u16| {
                 assert!(matches!(host, "127.0.0.1" | "::1"));
                 if host == "::1" { Ok(true) } else {
-                    bir_core::transport::check_mock_relay_health(&serde_json::json!({"ok":true,"mock":true})).map(|()| true)
+                    bir_core::transport::check_mock_relay_health(&serde_json::json!({"ok":true,"mock":true}), SocketAddr::new(host.parse().unwrap(), port)).map(|()| true)
                 }
             };
             assert_eq!(relay_target(&|_, _| true, &healthy), Some(Ok("http://[::1]:8787".into())));
@@ -874,20 +875,24 @@ mod tests {
 
     #[test]
     fn a_legacy_relay_refusal_is_not_hidden_by_another_loopback_listener() {
-        for legacy_host in ["127.0.0.1", "::1"] {
-            sending_env(&[("BIR_RELAY_URL", "http://localhost:8787")], || {
-                let healthy = |host: &str, _: u16| {
+        for (url, legacy_host) in [
+            ("http://localhost:9000", "127.0.0.1"),
+            ("http://localhost:9000", "::1"),
+            ("http://[::1]:9000", "::1"),
+        ] {
+            sending_env(&[("BIR_RELAY_URL", url)], || {
+                let healthy = |host: &str, port: u16| {
                     let body = if host == legacy_host {
                         serde_json::json!({"ok":true,"mock":true})
                     } else {
                         serde_json::json!({})
                     };
-                    bir_core::transport::check_mock_relay_health(&body).map(|()| true)
+                    bir_core::transport::check_mock_relay_health(&body, SocketAddr::new(host.parse().unwrap(), port)).map(|()| true)
                 };
                 let mode = send_guard_with_health(|_, _| true, healthy);
                 let SendMode::Refused(why) = mode else { panic!("legacy relay must refuse") };
                 assert!(why.contains("out of date"), "{why}");
-                assert!(why.contains("`just mock-relay`, then restart the app"), "{why}");
+                assert!(why.contains(&format!("`just mock-relay --bind {legacy_host} --port 9000`, then restart the app")), "{why}");
             });
         }
     }
