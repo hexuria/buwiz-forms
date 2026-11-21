@@ -84,7 +84,9 @@ $deadline = (Get-Date).AddMinutes(20)
 do {
     if ((Get-Date) -gt $deadline) { throw "Emulator boot timed out; see $work\emulator.log" }
     Start-Sleep 5
-    $boot = & $adb -s $serial shell getprop sys.boot_completed 2>$null
+    $ErrorActionPreference = 'Continue'
+    try { $boot = & $adb -s $serial shell getprop sys.boot_completed 2>$null }
+    finally { $ErrorActionPreference = 'Stop' }
 } until ($boot -and $boot.Trim() -eq '1')
 Write-Host 'sys.boot_completed=1'
 if (-not (Get-NetTCPConnection -LocalPort 3008 -State Listen -ErrorAction SilentlyContinue)) {
