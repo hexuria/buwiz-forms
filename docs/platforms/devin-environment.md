@@ -5,6 +5,23 @@ Android emulator and the iOS simulator. Each platform is one block of a Devin bl
 the repository's blueprint (Settings > Environment, or ask Devin to "update the blueprint with
 docs/platforms/devin-environment.md").
 
+## On another Devin account
+
+[`devin-blueprint.yml`](devin-blueprint.yml) is the whole blueprint (Linux, macOS and Windows blocks) and is all you
+need to pass on. On the other account:
+
+1. Connect GitHub and give Devin access to the buwiz-forms repository (for example `hexuria/buwiz-forms`).
+   `hexuria/nsh` is public, so it needs no access.
+2. Settings > Environment > buwiz-forms > Blueprint: paste `devin-blueprint.yml`, delete the blocks for platforms you
+   don't use, and save. Each block builds its own snapshot; the Windows Android build and the Linux NSH sidecar take
+   the longest.
+3. Start sessions on the platform you want (Linux is the default; pick macOS or Windows for the others). The
+   blueprint's `knowledge` entries tell each session how to start the apps, the emulator or Simulator, and
+   `just mock-account` for Sign in.
+
+No secrets are needed. The blueprint reads `scripts/setup-*.sh`/`.ps1`, `just mock-account` and `NSH_PINNED_REF`
+from the checked-out branch, so that branch must include them.
+
 | Platform | Desktop app | Android emulator | iOS simulator |
 | --- | --- | --- | --- |
 | Windows | `scripts/setup-windows.ps1` | `scripts/setup-android-windows.ps1` | not available |
