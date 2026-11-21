@@ -5,6 +5,14 @@
 param([string]$SdkRoot = 'C:\Android', [switch]$SkipIfRebootPending)
 $ErrorActionPreference = 'Stop'
 function Assert-Native($message) { if ($LASTEXITCODE -ne 0) { throw "$message (exit $LASTEXITCODE)" } }
+function Test-HardwareVirtualization {
+    try {
+        $processors = @(Get-CimInstance Win32_Processor -ErrorAction Stop)
+        $processors.Count -gt 0 -and @($processors | Where-Object {
+            -not $_.VirtualizationFirmwareEnabled -or -not $_.VMMonitorModeExtensions
+        }).Count -eq 0
+    } catch { return $false }
+}
 function Test-WHPXRebootPending {
     $marker = "$env:USERPROFILE\BuwizNsh\android-windows\whpx-reboot-boot-time"
     if (Test-Path $marker) {
@@ -31,6 +39,9 @@ New-Item -ItemType Directory -Force $work | Out-Null
 & "$SdkRoot\emulator\emulator.exe" -accel-check
 if ($LASTEXITCODE -ne 0) {
     if (Test-WHPXRebootPending) {
+        if (-not (Test-HardwareVirtualization)) {
+            throw 'Nested virtualization/VT-x is unavailable to this machine; a reboot will not fix it. Enable hardware virtualization on the host before rerunning the launcher.'
+        }
         $message = 'WHPX was enabled during setup and Windows must restart first (Restart-Computer), then rerun scripts\run-android-windows.ps1.'
         if ($SkipIfRebootPending) { Write-Warning $message; exit 0 }
         throw $message
