@@ -62,16 +62,19 @@ for (const look of LOOKS) {
     await untilShown(c, "id:fp-itemQuarter_1");
     await c.wait(300);
     await shoot(c, `0605-item3-quarter-${look.name}`);
-    // Item 17 sits in Part I (index 1): jump there, then to the Others box under the dropdown.
-    await jumpUntil(c, "id:fp-frm0605:txtOthersName", 3);
+    // Item 17 sits in Part I (index 1): jump to its dropdown; G1 keeps the specify box hidden until Others is picked.
+    await jumpUntil(c, "id:fp-radio-1:8-trigger", 3);
     await c.wait(300);
     await shoot(c, `0605-item17-dropdown-${look.name}`);
-    // Open the dropdown (the AFTER look; BEFORE's checkboxes have no trigger, the press is skipped).
+    // Open the dropdown and pick Others (Specify): its box appears under the group (the AFTER look; BEFORE's
+    // checkboxes have no trigger, the presses are skipped or land on the old labels harmlessly).
     await c.press("id:fp-radio-1:8-trigger").catch(() => {});
     await c.wait(400);
     await shoot(c, `0605-item17-open-${look.name}`);
-    await c.press("id:fp-radio-1:8-trigger").catch(() => {});
+    await c.press("text:/Others \\(Specify\\)/i").catch(() => {});
+    await c.waitFor("id:fp-frm0605:txtOthersName", { timeout: 20_000 }).catch(() => {});
     await c.wait(300);
+    await shoot(c, `0605-item17-others-${look.name}`);
 
     // 1701Q Item 16 Tax Rate: two long labels — the bar stacks full-width.
     const q = await open(ENTRY, options(look, "1701Q", 2024, 1));
