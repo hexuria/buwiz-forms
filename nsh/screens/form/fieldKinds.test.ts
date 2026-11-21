@@ -476,6 +476,35 @@ test("PR3 R1: a reversed range is refused on the To end only, and clears when th
   s.dispose();
 });
 
+test("PR3 R1: a reversed To keeps the staged From — fixed and saved, both ends are stored on reopen", async () => {
+  const target = at("1702EX", 2024, 0);
+  const s = await opened(target);
+  // An earlier test saved this return Fiscal (year-end August); the host's effectivity rule wants
+  // dates inside the taxable year, so put it back on Calendar (December) first. A saved Fiscal month
+  // would be cleared by the switch, so the host asks first (the removal guard): Continue it.
+  s.pickRadio("frm1702EX:rdoPg1I1Calendar");
+  await s.idle();
+  if (s.overlay()?.kind === "removal") {
+    s.confirmRemoval();
+    await s.idle();
+  }
+  const from = "frm1702EX:txtPg1Pt1I17EffectivityFrom";
+  const to = "frm1702EX:txtPg1Pt1I17EffectivityTo";
+  s.edit(from, "11/01/2024");
+  s.edit(to, "10/15/2024");
+  expect(s.boxMessageOf(to)).toContain("the end date is before the start date");
+  s.edit(to, "12/15/2024");
+  expect(s.boxMessageOf(to)).toBe("");
+  s.saveNow();
+  await s.idle();
+  s.dispose();
+
+  const again = await opened(target);
+  expect(again.valueOf(from)).toBe("11/01/2024");
+  expect(again.valueOf(to)).toBe("12/15/2024");
+  again.dispose();
+});
+
 test("PR3 R1: a locked range refuses edits on either end", async () => {
   const s = await opened(at("2550Q", 2025, 4));
   const from = "frm2550qv2024:RtnPeriodFromNo4";

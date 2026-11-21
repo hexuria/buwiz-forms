@@ -1136,11 +1136,11 @@ export class FormSession {
         s.rejected[key] = "end before start";
         s.boxMessages[key] = this.refusalText(key, "end before start");
         s.touched.add(row);
-        // The reversed ends never reach the host: their staged writes are dropped, so the page's
-        // own sentence is the one that shows (the host would refuse the batch whole and say less).
-        for (const end of [range.from, range.to]) {
-          for (const pk of this.rangeEndPendingKeys(end)) delete s.pending[pk];
-        }
+        // The refused end never reaches the host: prefer dropping To's staged writes, or From's
+        // when To came from the stored draft, so the page's sentence shows instead of a batch refusal.
+        const toPending = this.rangeEndPendingKeys(range.to);
+        const rejectedEnd = toPending.some((pk) => pk in s.pending) ? range.to : range.from;
+        for (const pk of this.rangeEndPendingKeys(rejectedEnd)) delete s.pending[pk];
         changed = true;
       } else if (!reversed && held) {
         delete s.rejected[key];
