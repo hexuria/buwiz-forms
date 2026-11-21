@@ -1292,4 +1292,44 @@ mod tests {
         assert_eq!(relayed(3), false, "a real send keeps BIR's wording");
         assert_eq!(relayed(1), false, "a draft was never sent");
     }
+
+    #[test]
+    fn malformed_imported_provenance_does_not_hide_filed_returns() {
+        setup();
+        with_database(|db| {
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            for (month, data) in [
+                (2u8, "{broken"),
+                (3, r#"{"submitted_via_relay":"true"}"#),
+                (4, r#"{"submitted_via_relay":1}"#),
+                (5, r#"{"lifecycle":{"submitted_via_relay":true}}"#),
+                (
+                    6,
+                    r#"{"submitted_via_relay":null,"lifecycle":{"submitted_via_relay":true}}"#,
+                ),
+                (7, r#"{"lifecycle":{"submitted_via_relay":"true"}}"#),
+                (8, "{}"),
+            ] {
+                let draft =
+                    bir_core::forms::Form1601CDraft::new_from_profile(&profile, 2026, month);
+                let id = db.save_1601c_draft(&draft).unwrap();
+                db.conn_for_tests()
+                    .execute(
+                        "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+                        (data, id),
+                    )
+                    .unwrap();
+            }
+            assert!(!db.draft_submitted_via_relay(i64::MAX).unwrap());
+            Ok(())
+        })
+        .unwrap();
+        let result = to_json(&list_returns(&args(&["filed"])).unwrap());
+        let rows = result.as_array().unwrap();
+        assert_eq!(rows.len(), 7);
+        for row in rows {
+            let month = row["period"].as_u64().unwrap();
+            assert_eq!(row["submitted_via_relay"], matches!(month, 5 | 6));
+        }
+    }
 }
