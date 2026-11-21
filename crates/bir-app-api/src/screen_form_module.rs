@@ -162,8 +162,14 @@ export interface ScreenFormOpened {
     fact_errors?: ScreenFormError[];
     /** A Draft's cards: one per fact its form reads that the tax profile has not set for its year. */
     asks?: ScreenFormAsk[];
-    /** The filled profile boxes Edit may open that "Save to profile too" can write back, with the field and a note for the row. */
-    profile_save?: Record<string, { field: "name" | "rdo_code" | "registered_address" | "zip_code" | "phone" | "email" | "line_of_business"; label: string; note: string }>;
+    /** The filled profile boxes Edit may open, and the boxes that answer a fact with a writable box of its own (Q1 P1b), that "Save to profile" can write back, with the field, a note for the row, and `profile`: the value the profile makes for the box (the page asks only when the answer differs). */
+    profile_save?: Record<string, { field: "name" | "rdo_code" | "registered_address" | "zip_code" | "phone" | "email" | "line_of_business" | ScreenFormFact; label: string; note: string; profile?: string }>;
+    /** The profile field ids (`profile_save`'s `field`) whose "Save to profile?" answer is already remembered for this return's taxpayer and tax year (Q1·a): the page does not ask them again. */
+    profile_asked?: string[];
+    /** The host could not read remembered profile asks; the page does not ask again in this session. */
+    profile_ask_unknown?: boolean;
+    /** Boxes whose opening values are guesses for the filer to confirm (Draft only). */
+    guessed?: string[];
     /** A return past Queued: what the tax profile changed after it was filed ("RDO 039 (profile now 043)", "EOPT tier"). The return keeps what was filed. */
     profile_changed?: string[];
 }
@@ -175,8 +181,8 @@ export interface ScreenFormAsk {
     key: string | null;
     label: string;
     control: "date" | "choice" | "text";
-    /** A choice card's answers: `value` is what `set_year_facts` takes. */
-    choices: { value: unknown; label: string }[] | null;
+    /** A choice card's answers: `value` is what `set_year_facts` takes, `short` its chip label (F2). */
+    choices: { value: unknown; label: string; short?: string }[] | null;
     /** The card's sentence: what is asked, and that the answer goes to the tax profile for every later return. */
     note: string;
 }
@@ -280,7 +286,7 @@ export function screen_form_filed_original(form_code: string, snapshot_id: numbe
 export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
 /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
 export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
-/** "Use profile values" on a draft that differs from the tax profile (`profile_differs`), and "Update from tax profile": every profile box the filer did not edit takes the profile's value, and they follow later profile changes. `facts`: facts just answered from the return's cards; the boxes they fill take the answer. Nothing is saved; save the draft. `asks`: the cards still asked. */
+/** "Use profile values" on a draft that differs from the tax profile (`profile_differs`), and "Update from tax profile": every profile box the filer did not edit takes the profile's value, and they follow later profile changes. `facts`: facts just answered from the return's cards; then only the boxes they fill move, and one the filer typed or picked on this return keeps its value. Nothing is saved; save the draft. `asks`: the cards still asked. */
 export function screen_form_use_profile(form_code: string, year: number, period: number, draft: object, facts?: ScreenFormFact[]): ScreenFormFilled & { asks: ScreenFormAsk[] };
 export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
 /** Save a draft. A Form library sample saves only once its period is set, never over a stored return of that period (answering the offer instead); an entry-numbered form takes its next free entry. */
@@ -293,8 +299,10 @@ export function screen_form_print_sample(form_code: string, draft: object, edits
 export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): boolean;
 /** What Queue does with the tax facts this return reads that are not set: `blocks` stop it (validation messages on the row of the fact's card), `warns` are said once in the Queue confirmation. Queue itself refuses while anything blocks. */
 export function screen_form_queue_check(form_code: string, draft: object): { blocks: ScreenFormError[]; warns: string[] };
-/** "Save to profile too": the profile boxes `keys` (`ScreenFormOpened.profile_save`) of a saved Draft go to the tax profile through the function owning each field; the boxes equal the profile again and the return is saved. `saved`: the fields' labels; `notes`: a branch that followed the head office now has its own value. */
+/** "Save to profile too": the boxes `keys` (`ScreenFormOpened.profile_save`) of a saved Draft go to the tax profile through the function owning each field; the profile boxes equal the profile again and the return is saved. A fact box's answer goes as the profile takes it; one with no profile meaning is refused ("That answer cannot be saved to the tax profile.") and nothing is written. `saved`: the fields' labels; `notes`: a branch that followed the head office now has its own value. */
 export function screen_form_save_to_profile(form_code: string, year: number, period: number, draft: object, keys: string[]): { draft: object; values: Record<string, string>; pools: Record<string, string>; saved: string[]; notes: string[] };
+/** Remember the "Save to profile?" answer for a taxpayer, tax year and profile field (`ProfileField::id()`, e.g. "line_of_business", "birth_date", "rdo_code"): `profile_ask:<tin>:<year>:<field>` in the host settings, so the page asks each field once (Q1·a). `answer` is "save" or "only"; the return itself is not changed and a later tax year asks again. */
+export function screen_form_profile_asked(tin: string, year: number, field: string, answer: "save" | "only"): null;
 /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
 export function screen_form_queue(form_code: string, draft: object): number;
 /** Take a queued draft out of the queue; 1601C and 2551Q use cancel_queued. */
@@ -323,6 +331,7 @@ pub fn register(module: HostModule) -> HostModule {
         .function("screen_form_preview_sync", screen_form_preview_sync)
         .function("screen_form_queue_check", screen_form_queue_check)
         .function("screen_form_save_to_profile", screen_form_save_to_profile)
+        .function("screen_form_profile_asked", screen_form_profile_asked)
         .function("screen_form_queue", screen_form_queue)
         .function("screen_form_cancel_queue", screen_form_cancel_queue)
         .function("screen_form_notes_seen", screen_form_notes_seen)
@@ -512,10 +521,12 @@ fn build_form(form: &mut Value, fixes: Option<&Value>) {
     }
     mark_radio_groups(form, code);
     rows_dst_pt_vat::mark_calendar_tables(form, code);
-    rows_income_q::mark_one_date(form, code);
     rows_annual_corporate::mark_whole_pesos(form, code);
     rows_as_needed::mark_calendar_tables(form, code);
     rows_donor_estate::mark_schema(form, code);
+    // PR 3: period pairs and from-to ranges join their boxes on one item
+    // first, so mark_one_date sees 1600WP's two triples together.
+    rows_as_needed::mark_periods(form, code);
     rows_as_needed::mark_one_date(form, code);
     combs::apply_combs(form, code);
     // 1701A's item 9, printed from `derived:` lines (PR 7).
@@ -3501,12 +3512,34 @@ fn open_screen_form(
                 consumed,
             ))
         })?;
-    // The tax facts this return reads that are not set (decision 3): read
-    // apart from the open above, and never in the way of opening.
-    let facts = if sample {
-        None
+    // The tax facts this return reads that are not set (decision 3), and
+    // the "Save to profile?" answers already remembered for its taxpayer
+    // and year (Q1·a): read apart from the open above, and never in the
+    // way of opening.
+    let (facts, profile_asked, profile_ask_unknown) = if sample {
+        (None, Vec::new(), false)
     } else {
-        with_database(|db| Ok(fact_asks::context_of(db, kind, &draft))).unwrap_or(None)
+        with_database(|db| {
+            let (asked, unknown) = match fact_asks::profile_asked(db, kind, &draft) {
+                Ok(asked) => (asked, false),
+                Err(error) => {
+                    tracing::warn!(
+                        "{}: reading the remembered profile asks failed: {error}",
+                        kind.form_code()
+                    );
+                    (Vec::new(), true)
+                }
+            };
+            Ok((fact_asks::context_of(db, kind, &draft), asked, unknown))
+        })
+        .unwrap_or_else(|error| {
+            tracing::warn!(
+                "{}: reading the tax facts and profile asks failed: {}",
+                kind.form_code(),
+                error.message()
+            );
+            (None, Vec::new(), true)
+        })
     };
     Ok(async move {
         let mut opened = on_large_stack(move || {
@@ -3524,24 +3557,56 @@ fn open_screen_form(
         for (field, value) in carried {
             opened[field] = value;
         }
-        // The cards, the blocking messages and the "Save to profile too"
-        // switches of a Draft (decisions 3 and 8).
+        // The cards, the blocking messages and the "Save to profile"
+        // entries of a Draft (decisions 3, 5 and 8; Q1 P1b, Q1a).
         let (asks, fact_errors, profile_save) = match &facts {
             Some(facts) if opened["status"] == "Draft" => {
                 let fields = fact_asks::error_fields(&opened["errors"]);
                 let checks =
                     fact_asks::checks(kind, facts, &opened["draft"], &opened["values"], &fields);
+                // A boxed fact's own sentence replaces the form's for the
+                // same box (B5/B7): one message, not two.
+                fact_asks::covered_errors(&mut opened["errors"], &checks);
+                let mut profile_save =
+                    fact_asks::profile_save(kind, &opened["profile_edit"], facts);
+                // Each entry carries what the profile makes for its box, so
+                // the page asks only when the answer differs (Q1 P1b).
+                if let (Some(entries), Some(values)) = (
+                    profile_save.as_object_mut(),
+                    opened["profile_values"].as_object(),
+                ) {
+                    for (key, entry) in entries.iter_mut() {
+                        if let Some(value) = values.get(key) {
+                            entry["profile"] = value.clone();
+                        }
+                    }
+                }
                 (
                     fact_asks::asks(kind, facts),
                     fact_asks::block_errors(&checks),
-                    fact_asks::profile_save(kind, &opened["profile_edit"], facts),
+                    profile_save,
                 )
             }
             _ => (json!([]), json!([]), json!({})),
         };
+        if let Some(opened) = opened.as_object_mut() {
+            opened.remove("profile_values");
+        }
         opened["asks"] = asks;
         opened["fact_errors"] = fact_errors;
         opened["profile_save"] = profile_save;
+        opened["profile_asked"] = match &facts {
+            Some(_) if opened["status"] == "Draft" => json!(profile_asked),
+            _ => json!([]),
+        };
+        if profile_ask_unknown {
+            opened["profile_ask_unknown"] = json!(true);
+        }
+        if let Some(facts) = &facts
+            && opened["status"] == "Draft"
+        {
+            opened["guessed"] = json!(fact_asks::guessed_keys(kind, facts, &opened["draft"]));
+        }
         Ok(json(opened))
     })
 }
@@ -3715,6 +3780,20 @@ fn opened_json(
     agent::draft_locks(kind, &draft, &mut locks);
     let profile = agent::profile_keys(kind, &from_profile);
     let profile_edit = agent::profile_edit_keys(kind, &from_profile);
+    // The value the profile makes for each box "Save to profile" may ask
+    // about (Q1 P1b): the profile boxes opened with Edit, and the boxes
+    // that answer a fact with a writable box of its own. The page compares
+    // the box's value to it to tell a new answer from the profile's own.
+    let profile_values: Map<String, Value> = profile_edit
+        .iter()
+        .chain(fact_asks::boxed_boxes(kind).iter().map(|(key, _)| key))
+        .filter_map(|key| {
+            from_profile
+                .values
+                .get(key.as_str())
+                .map(|value| (key.clone(), value.clone()))
+        })
+        .collect();
     let parts = if sample.is_some() {
         sample_period_parts(kind)
     } else {
@@ -3846,6 +3925,7 @@ fn opened_json(
         "notes_always": noted,
         "profile": profile,
         "profile_edit": profile_edit,
+        "profile_values": Value::Object(profile_values),
         "sample": sample.is_some(),
         "blank": blank,
         "needs": needs,
@@ -4657,7 +4737,8 @@ fn existing_return(db: &Database, kind: AgentFormKind, stored: &Value) -> Result
 
 /// "Use profile values" (see [`use_profile_values`]): the draft the page
 /// holds with every unedited profile box at the profile's value, answered
-/// like a fill. Nothing is saved: the page saves it. A 2551Q also takes
+/// like a fill. With `facts` (a card's Save), only the fields those facts
+/// fill move ([`fact_asks::take_facts`]). Nothing is saved: the page saves it. A 2551Q also takes
 /// the profile's annual income-tax election for its taxable year
 /// (`Form2551QDraft::sync_with_profile`): the page's Item 13 question calls
 /// this right after `record_income_tax_election` writes it.
@@ -4696,8 +4777,14 @@ fn screen_form_use_profile(arguments: &HostArguments) -> HostResult {
         let facts = fact_asks::context_of(db, kind, &draft);
         Ok((profile, from_profile, facts))
     })?;
-    use_profile_values(kind, &mut draft, &from_profile).map_err(host_error)?;
-    fact_asks::take_facts(&mut draft, &from_profile, &answered);
+    // A card's Save brings only its own fact onto the return (B6); "Use
+    // profile values" brings every profile box the filer did not edit.
+    if answered.is_empty() {
+        use_profile_values(kind, &mut draft, &from_profile).map_err(host_error)?;
+    } else {
+        let kept = edited_profile_paths(kind, &draft);
+        fact_asks::take_facts(kind, &mut draft, &from_profile, &answered, &kept);
+    }
     if kind == AgentFormKind::Form2551Q {
         draft = out_of_line(|| {
             let mut typed: bir_core::forms::form_2551q::Form2551QDraft =
@@ -4911,6 +4998,28 @@ fn apply_screen_edits_here(
     // A one-date box's parts are judged whole, as the page reads a date
     // (PR 9's forms, rows_as_needed.rs).
     let date_refusals = rows_as_needed::refuse_dates(kind, &shown, &edits);
+    for month in date_refusals.values() {
+        rejected.insert(month.clone(), json!(rows_as_needed::DATE_ERROR));
+    }
+    // A period's month+year and a range's two ends are judged whole the
+    // same way (PR 3): the month's box carries the period's sentence, the
+    // To end's the range's.
+    let period_refusals = rows_as_needed::refuse_periods(kind, &shown, &edits);
+    for month in period_refusals.values() {
+        rejected.insert(month.clone(), json!(rows_as_needed::PERIOD_ERROR));
+    }
+    let range_refusals = rows_as_needed::refuse_ranges(kind, &shown, &edits);
+    for to in range_refusals.values() {
+        rejected.insert(to.clone(), json!(rows_as_needed::RANGE_ERROR));
+    }
+    let batch_refusals: std::collections::BTreeMap<String, String> = date_refusals
+        .into_iter()
+        .chain(period_refusals)
+        .chain(range_refusals)
+        .collect();
+    // 0605's split-date groups this batch touches (B1); judged and written
+    // below, before the per-key loop.
+    let split_groups = rows_as_needed::split_date_groups(kind, &shown, &edits);
     let planned = plan_choice_edits(kind, draft, &shown, edits);
     // The draft paths this batch's picks write — a member's pick, a group
     // box's option, a filer-type step. The value a choice box was sent, as
@@ -4932,9 +5041,82 @@ fn apply_screen_edits_here(
             _ => Vec::new(),
         })
         .collect();
+    // 0605's Items 4 and 7: three boxes, one nullable date per group (B1).
+    // A batch touching a group is judged as one date and written whole —
+    // an impossible complete date refuses every part it sent (the month's
+    // box carries the sentence), a partial one lands its parts.
+    let mut split_done: BTreeSet<String> = BTreeSet::new();
+    for group in split_groups {
+        let sent_keys: Vec<String> = group
+            .keys
+            .iter()
+            .zip(group.sent.iter())
+            .filter_map(|(key, sent)| sent.as_ref().map(|_| key.to_string()))
+            .collect();
+        split_done.extend(sent_keys.iter().cloned());
+        if !editable {
+            for key in &sent_keys {
+                rejected.insert(key.clone(), json!("this return is no longer a draft"));
+            }
+            continue;
+        }
+        // Each sent part's own range; a bad part refuses only its box and
+        // the draft's current part stands in for it.
+        let mut parts = group.current;
+        for (index, (key, sent)) in group.keys.iter().zip(group.sent.iter()).enumerate() {
+            let Some(text) = sent else {
+                continue;
+            };
+            if text.trim().is_empty() {
+                parts[index] = None;
+                continue;
+            }
+            match text.trim().parse::<u16>() {
+                Ok(value) => {
+                    let in_range = match index {
+                        0 => (1..=12).contains(&value),
+                        1 => (1..=31).contains(&value),
+                        _ => (1000..=9999).contains(&value),
+                    };
+                    if in_range {
+                        parts[index] = Some(value);
+                    } else {
+                        let what = ["month (01-12)", "day (01-31)", "four-digit year"][index];
+                        rejected.insert(
+                            key.to_string(),
+                            json!(format!(
+                                "`{key}` must be the {what} of a date (got `{text}`)"
+                            )),
+                        );
+                    }
+                }
+                Err(_) => {
+                    rejected.insert(
+                        key.to_string(),
+                        json!(format!("`{key}` must be a whole number (got `{text}`)")),
+                    );
+                }
+            }
+        }
+        match agent::fill_0605_date_parts(kind, draft, group.which, parts) {
+            Ok(()) => {
+                for key in &sent_keys {
+                    mark_trigger_date(kind, draft, key);
+                }
+            }
+            Err(message) => {
+                // The impossible complete date refuses the batch whole,
+                // keyed to the month's box; the other sent parts were
+                // already marked done above.
+                rejected.insert(group.keys[0].to_string(), json!(message));
+            }
+        }
+    }
     for (key, step) in planned {
-        if let Some(why) = date_refusals.get(&key) {
-            rejected.insert(key.clone(), why.clone());
+        if split_done.contains(&key) {
+            continue;
+        }
+        if batch_refusals.contains_key(&key) {
             continue;
         }
         if !editable {
@@ -5011,6 +5193,21 @@ fn apply_screen_edits_here(
             && shown.get(&key).and_then(Value::as_str) == Some("true")
             && !holds_tick(def, draft, &key)
         {
+            continue;
+        }
+        // B16: a non-blank write to a box the corpus condition keeps shut is
+        // refused with the box's own tag, judged on the draft as this batch
+        // has made it so far (an opening answer earlier in the batch counts).
+        // A blank or untick write is a clear and is never refused.
+        if let Some(value) = sent.get(&key)
+            && !value.is_null()
+            && value
+                .as_str()
+                .is_none_or(|text| !agent::carry::is_blank_value(text))
+            && !is_unticked(value)
+            && let Some(tag) = conditions::off_now(kind, draft, &shown, &key)
+        {
+            rejected.insert(key.clone(), json!(tag));
             continue;
         }
         let mut next = draft.clone();
@@ -5102,7 +5299,20 @@ fn apply_screen_edits_here(
                     lift(line)
                 })
             }
-            ChoiceStep::Fill(value) => catalogs::fill(kind, &mut next, &key, &value, lift(&key)),
+            ChoiceStep::Fill(value) => {
+                let numeric_date_clear = value.as_str().is_some_and(|s| s.trim().is_empty())
+                    && rows_as_needed::clear_date_part_as_zero(kind.form_code(), &key)
+                    && def
+                        .bindings
+                        .get(&key)
+                        .is_some_and(|bound| matches!(bound.binding, Binding::Whole { .. }));
+                let value = if numeric_date_clear {
+                    json!("0")
+                } else {
+                    value
+                };
+                catalogs::fill(kind, &mut next, &key, &value, lift(&key))
+            }
             ChoiceStep::Set(sets) => {
                 for (path, value) in sets {
                     set_draft_path(&mut next, &path, value);
@@ -5125,9 +5335,12 @@ fn apply_screen_edits_here(
             Ok(()) => {
                 // A profile box edited here keeps the edit when the profile
                 // changes later (`follow_profile`).
+                // A category pick on 0619E or 0619F is the filer's answer
+                // for this return (B8), recorded the same way.
                 if def
                     .box_def(&key)
                     .is_some_and(|entry| agent::is_profile_box(def, entry))
+                    || fact_asks::answers_on_return(kind, &key)
                 {
                     mark_profile_edit(&mut next, &key);
                 }
@@ -5666,13 +5879,14 @@ fn screen_form_validate(
                 blank_sample(&mark.blank, &mut values, &mut errors);
             }
             // A fact not set that changes what this return files: a message
-            // on the row its card is on (decision 3).
+            // on the row its card or box is on (decision 3); a boxed fact's
+            // own sentence replaces the form's for the same box (B5/B7).
             let fact_errors = match &facts {
                 Some(facts) if status == FilingStatus::Draft => {
                     let fields = fact_asks::error_fields(&errors);
-                    fact_asks::block_errors(&fact_asks::checks(
-                        kind, facts, &draft, &values, &fields,
-                    ))
+                    let checks = fact_asks::checks(kind, facts, &draft, &values, &fields);
+                    fact_asks::covered_errors(&mut errors, &checks);
+                    fact_asks::block_errors(&checks)
                 }
                 _ => json!([]),
             };
@@ -6526,13 +6740,50 @@ fn screen_form_queue_check(arguments: &HostArguments) -> HostResult {
     })))
 }
 
+/// Remember the "Save to profile?" answer for a taxpayer, year and field
+/// (Q1·a): `profile_ask:<tin>:<year>:<field>` in the host settings, so the
+/// page asks each field once. The return itself is not changed; a field
+/// of a later tax year asks again.
+fn screen_form_profile_asked(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    // The key is `profile_ask:<tin>:…`, read back with the return's own
+    // compact TIN: anything else could never be asked again or could
+    // reach another taxpayer's prefix.
+    let is_tin = tin.chars().all(|c| c.is_ascii_digit())
+        && bir_core::naming::Tin::parse_digits(&tin)
+            .is_some_and(|parsed| bir_core::validation::validate_tin(&parsed));
+    if !is_tin {
+        return Err(host_error("tin is not a TIN of 12 to 14 digits"));
+    }
+    let year =
+        u16::try_from(arguments.integer(1)?).map_err(|_| host_error("year is out of range"))?;
+    let field = arguments.string(2)?.to_owned();
+    let answer = arguments.string(3)?;
+    if !matches!(answer, "save" | "only") {
+        return Err(host_error("answer must be \"save\" or \"only\""));
+    }
+    if field.is_empty() || field.contains(':') {
+        return Err(host_error("field is not a profile field id"));
+    }
+    with_database(|db| {
+        fact_asks::remember_profile_asked(db, &tin, year, &field, answer)
+            .map_err(|error| host_error(error.to_string()))
+    })?;
+    Ok(json(Value::Null))
+}
+
 /// "Save to profile too" (decision 8): the profile boxes `keys` of a saved
 /// Draft go to the tax profile through the function that owns each field
 /// (the name: `update_taxpayer`; RDO, address, ZIP, phone, email:
 /// `update_branch`, as this branch's own value; the line of business:
 /// `set_year_facts`). Those boxes then equal the profile again: they are
-/// no longer edited on this return, and the return is saved. A box with no
-/// safe write path is refused, and nothing is written.
+/// no longer edited on this return, and the return is saved. A box that
+/// shows a fact (B9) goes the same way: the birth date through
+/// `update_taxpayer`; the start date, the EOPT tier, the income type, the
+/// withholding category and the usual ATC through `set_year_facts`, each as
+/// the profile takes the box's answer ([`fact_asks::answer`]). A box with
+/// no safe write path, or an answer with no profile meaning, is refused,
+/// and nothing is written.
 fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
     use bir_core::tax_profile::{BranchUpdate, FieldSetting, TaxpayerUpdate, YearFactsPatch};
     use fact_asks::ProfileField;
@@ -6555,6 +6806,14 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
     if draft["id"].is_null() {
         return Err(host_error("Save the return first."));
     }
+    // A fact box is a save path only when the filer can write it (Q1 P1b):
+    // a derived or read-only box that shows the fact is not one.
+    let boxed = fact_asks::boxed_boxes(kind);
+    let boxed_fact_keys: BTreeSet<&str> = boxed
+        .iter()
+        .filter(|(_, field)| matches!(field, ProfileField::Fact(_)))
+        .map(|(key, _)| key.as_str())
+        .collect();
     let mut fields: Vec<(String, ProfileField)> = Vec::new();
     for key in &keys {
         let field = fact_asks::profile_field(kind, key).ok_or_else(|| {
@@ -6562,6 +6821,11 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
                 "{key} cannot be saved to the tax profile from here"
             ))
         })?;
+        if matches!(field, ProfileField::Fact(_)) && !boxed_fact_keys.contains(key.as_str()) {
+            return Err(host_error(format!(
+                "{key} cannot be saved to the tax profile from here"
+            )));
+        }
         if !fields.iter().any(|(_, known)| *known == field) {
             fields.push((key.clone(), field));
         }
@@ -6577,6 +6841,7 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
     let address = ProfileField::Branch(bir_core::tax_profile::BranchField::RegisteredAddress);
     let writes: Vec<(ProfileField, String)> = fields
         .iter()
+        .filter(|(_, field)| !matches!(field, ProfileField::Fact(_)))
         .map(|(_, field)| {
             let first = text(field.path());
             let second = text("/registered_address_2");
@@ -6595,6 +6860,79 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
         let inherited = fact_asks::context(db, &tin, year)
             .map(|facts| facts.inherited)
             .unwrap_or_default();
+        // B9: what the profile takes for each fact box, read before anything
+        // is written, so one refused answer leaves the profile as it was.
+        let facts: Vec<bir_core::tax_profile::Fact> = fields
+            .iter()
+            .filter_map(|(_, field)| match field {
+                ProfileField::Fact(fact) => Some(*fact),
+                _ => None,
+            })
+            .collect();
+        let mut answers = Vec::new();
+        if !facts.is_empty() {
+            let profile = db
+                .get_profile_for_year(&tin, year)
+                .map_err(|error| host_error(error.to_string()))?
+                .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
+            let made = |profile: &TaxpayerProfile| {
+                load_draft(db, kind, profile, year, period, true, None).ok()
+            };
+            for fact in facts {
+                let answer = fact_asks::answer(kind, fact, &draft, &profile, &made)
+                    .ok_or_else(|| host_error("That answer cannot be saved to the tax profile."))?;
+                answers.push((fact, answer, profile.atc_codes.clone()));
+            }
+        }
+        for (fact, answer, atc_codes) in answers {
+            use bir_core::tax_profile::Fact;
+            use fact_asks::Answer;
+            let patch = match (fact, answer) {
+                (Fact::BirthDate, Answer::Date(date)) => {
+                    db.update_taxpayer(
+                        &tin[..tin.len().min(9)],
+                        TaxpayerUpdate {
+                            name: None,
+                            taxpayer_type: None,
+                            birth_date: Some(Some(date)),
+                        },
+                    )
+                    .map_err(|error| host_error(error.to_string()))?;
+                    continue;
+                }
+                (_, Answer::Date(date)) => YearFactsPatch {
+                    business_start_date: Some(Some(date)),
+                    ..YearFactsPatch::default()
+                },
+                (_, Answer::Tier(tier)) => YearFactsPatch {
+                    eopt_tier: Some(Some(tier)),
+                    ..YearFactsPatch::default()
+                },
+                (_, Answer::Classification(class)) => YearFactsPatch {
+                    tax_classification: Some(Some(class)),
+                    ..YearFactsPatch::default()
+                },
+                (_, Answer::Government(yes)) => YearFactsPatch {
+                    is_government_withholding_entity: Some(Some(yes)),
+                    ..YearFactsPatch::default()
+                },
+                // The usual ATC of this form's kind; the profile's other
+                // codes (another tax type's) stay.
+                (_, Answer::Atc(code)) => {
+                    let mut codes: Vec<String> = atc_codes
+                        .into_iter()
+                        .filter(|other| !fact_asks::same_atc_family(other, &code))
+                        .collect();
+                    codes.push(code);
+                    YearFactsPatch {
+                        atc_codes: Some(codes),
+                        ..YearFactsPatch::default()
+                    }
+                }
+            };
+            db.set_year_facts(&tin, year, &patch)
+                .map_err(|error| host_error(error.to_string()))?;
+        }
         for (field, value) in writes {
             match field {
                 ProfileField::Name => {
@@ -6625,6 +6963,8 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
                     db.set_year_facts(&tin, year, &patch)
                         .map_err(|error| host_error(error.to_string()))?;
                 }
+                // Written above, from the box's own answer.
+                ProfileField::Fact(_) => {}
             }
         }
         if !branch.is_empty() {
@@ -6646,7 +6986,13 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
         let from_profile =
             load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
         let def = kind.definition();
-        let mut paths: BTreeSet<&str> = fields.iter().map(|(_, field)| field.path()).collect();
+        // A fact box keeps what the return holds (the profile now makes the
+        // same, or the form derives it its own way: 1701's Item 6).
+        let mut paths: BTreeSet<&str> = fields
+            .iter()
+            .filter(|(_, field)| !matches!(field, ProfileField::Fact(_)))
+            .map(|(_, field)| field.path())
+            .collect();
         if paths.contains("/registered_address") {
             paths.insert("/registered_address_2");
         }
@@ -6665,7 +7011,7 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
         };
         let edits: Vec<String> = profile_edits(&draft)
             .into_iter()
-            .filter(|key| !written(key))
+            .filter(|key| !written(key) && !keys.contains(key))
             .collect();
         let pointer = profile_edits_pointer(&draft);
         set_draft_path(&mut draft, &pointer, json!(edits));
@@ -6815,6 +7161,15 @@ mod tests {
     // Tax facts a return asks for, Queue's rule, "Save to profile too" and
     // a filed return's profile line (decisions 3, 5 and 8).
     mod fact_asks;
+    // Form fields PR 1: 0605's split dates and official code picks on a
+    // new return (bugs B1 and B2).
+    mod fields_0605;
+    // Form fields PR 1 handoff 2: writes to shut boxes are refused with
+    // the box's own tag (bug B16).
+    mod shut_writes;
+    // Form fields PR 1 handoff 2: a code off a select's list is refused
+    // on every form (bug B17).
+    mod sel_lists;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -8291,8 +8646,8 @@ mod tests {
     /// year's EOPT tier is not set (decision 3: the tier sets its penalty
     /// rates), and then while nobody has said whether the taxpayer is a
     /// government withholding agent (the form's category box is required,
-    /// and its "Private" is only the page's guess). Answer both, and Queue
-    /// goes on.
+    /// and its "Private" is only the page's guess until the filer picks it
+    /// or the profile answers). Answer both, and Queue goes on.
     fn set_eopt_tier_for_a_late_queue(draft: &Value) {
         let refused = call(
             "screen_form_queue",
@@ -8325,7 +8680,7 @@ mod tests {
         assert!(
             refused
                 .message()
-                .contains("Government withholding agent is not set"),
+                .contains("Government withholding agent is not in the tax profile"),
             "{}",
             refused.message()
         );
@@ -11469,12 +11824,14 @@ mod tests {
         // a hidden copy of the printed item 5 box) and plus 1 for 1707 (PR 9:
         // its item 5 RDO list, now a box of its printed item), less 3 for
         // 2200C, 2200M and 2200P (PR 11: their second RDO select,
-        // rdoPg1Pt1I6RDO, repeats the item's RDO box and is not drawn):
-        // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3.
+        // rdoPg1Pt1I6RDO, repeats the item's RDO box and is not drawn), and
+        // plus 2 for 0605's Items 6 and 8 (form-fields PR 1, B2: the ATC and
+        // tax type picks from the official lists):
+        // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3 + 2.
         // Table cells are counted apart: the 36 2550M Schedule 1 ATC lists
         // (N03), 1601EQ's 30 and 1601FQ's 41 Part II ATC rows, 1601FQ
         // Schedule 1's ten lists, 2551Q's six, and the other forms' tables.
-        assert_eq!(supplied, 70);
+        assert_eq!(supplied, 72);
         assert_eq!(cells, CATALOG_TABLE_CELLS);
         let atc = catalogs::options(AgentFormKind::Form2551Q, &Value::Null);
         for row in 1..=6 {
@@ -11541,6 +11898,260 @@ mod tests {
                 assert_eq!(form.index[key], built[key], "{:?}: {key}", form.code);
             }
         }
+    }
+
+    /// B13 (pick Q13): on the built page schema — what the page draws after
+    /// `withoutHidden` — a line-of-business row holds only line-of-business
+    /// boxes, a name row is never titled for the line of business, no
+    /// developer caption reaches a drawn row, box or column, a line-of-
+    /// business box sits only under a line-of-business title, and the
+    /// date-of-birth and email rows hold their own boxes. It names every
+    /// broken row at once.
+    #[test]
+    fn every_drawn_row_keeps_its_printed_title() {
+        /// The fields a row draws: the page's `withoutHidden` drops the rest.
+        fn drawn_fields(item: &Value) -> Vec<&Value> {
+            item["f"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|field| field["t"].as_str() != Some("hidden"))
+                .collect()
+        }
+        /// Whether the page draws the item: a table with a drawn column, a
+        /// drawn field, or a printed note that takes no box.
+        fn drawn(item: &Value) -> bool {
+            if item.get("rows").is_some() {
+                return item["cols"]
+                    .as_array()
+                    .is_some_and(|cols| cols.iter().any(|c| c["t"].as_str() != Some("hidden")));
+            }
+            !drawn_fields(item).is_empty() || item.get("note").is_some()
+        }
+        /// A developer caption the overrides were meant to retire
+        /// (/Current UI page|ATC (selector|catalog) slot|Item Schedule \d|^Container$/i).
+        fn dev_caption(label: &str) -> bool {
+            let label = label.trim().to_lowercase();
+            if label == "container"
+                || label.contains("current ui page")
+                || label.contains("atc selector slot")
+                || label.contains("atc catalog slot")
+            {
+                return true;
+            }
+            label.match_indices("item schedule ").any(|(at, _)| {
+                label[at + "item schedule ".len()..]
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_digit())
+            })
+        }
+        /// A box's caption words as a reader sees them: its label and its key's tail.
+        fn words(field: &Value) -> (String, String) {
+            let label = field["l"].as_str().unwrap_or_default().to_lowercase();
+            let key = field["k"].as_str().unwrap_or_default();
+            let tail = key.rsplit(':').next().unwrap_or(key).to_lowercase();
+            (label, tail)
+        }
+        /// A line-of-business box (txtLOB, txtLineBus, "Line of business (profile)").
+        fn lob_field(field: &Value) -> bool {
+            let (label, tail) = words(field);
+            label.contains("line of business")
+                || label.contains("line bus")
+                || tail.contains("lineofbusiness")
+                || tail.contains("linebus")
+                || tail.contains("txtlob")
+                || tail.starts_with("lob")
+        }
+        /// A withholding-agent/taxpayer name box.
+        fn name_field(field: &Value) -> bool {
+            let (label, tail) = words(field);
+            (label.contains("name")
+                && [
+                    "withholding agent",
+                    "taxpayer",
+                    "seller",
+                    "buyer",
+                    "spouse",
+                    "registered",
+                ]
+                .iter()
+                .any(|who| label.contains(who)))
+                || tail.contains("taxpayername")
+                || tail.contains("withholdingagentsname")
+                || tail.contains("registeredname")
+                || tail.contains("sellername")
+                || tail.contains("buyername")
+                || tail.contains("spousename")
+        }
+        /// A date box: a whole-date control or a month/day/year part.
+        fn date_field(field: &Value) -> bool {
+            if field["t"].as_str() == Some("date") {
+                return true;
+            }
+            let (label, tail) = words(field);
+            label.contains("birth")
+                || label.contains("date of birth")
+                || tail.contains("birth")
+                || label
+                    .split(|c: char| !c.is_alphabetic())
+                    .any(|w| matches!(w, "month" | "day" | "year"))
+                || tail.contains("month")
+                || tail.contains("day")
+                || tail.contains("year")
+        }
+        /// An email box.
+        fn email_field(field: &Value) -> bool {
+            let (label, tail) = words(field);
+            field["t"].as_str() == Some("email")
+                || label.contains("email")
+                || label.contains("e-mail")
+                || tail.contains("email")
+        }
+        /// An address box (an "Email Address" caption is not one).
+        fn address_field(field: &Value) -> bool {
+            let (label, tail) = words(field);
+            tail.contains("address")
+                || tail.contains("addr")
+                || (label.contains("address")
+                    && !label.starts_with("email")
+                    && !label.starts_with("e-mail"))
+        }
+        /// Collects every broken row, so one run names them all.
+        macro_rules! flag {
+            ($bad:ident, $ok:expr, $($why:tt)+) => {
+                if !$ok {
+                    $bad.push(format!($($why)+));
+                }
+            };
+        }
+        let mut bad: Vec<String> = Vec::new();
+        let forms = parse_form_schemas();
+        assert_eq!(forms.len(), 43);
+        for form in &forms {
+            let code = form.code.as_deref().unwrap_or("?");
+            for (pi, part) in form.built()["parts"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .enumerate()
+            {
+                for (ii, item) in part["items"].as_array().into_iter().flatten().enumerate() {
+                    if !drawn(item) {
+                        continue;
+                    }
+                    let title = item["l"].as_str().unwrap_or_default();
+                    let title_l = title.to_lowercase();
+                    let at = format!("{code} part {pi} item {ii} \"{title}\"");
+                    flag!(bad, !dev_caption(title), "{at}: developer caption on a row");
+                    let fields = drawn_fields(item);
+                    for field in &fields {
+                        flag!(
+                            bad,
+                            !dev_caption(field["l"].as_str().unwrap_or_default()),
+                            "{at}: developer caption on box {}",
+                            field["k"].as_str().unwrap_or_default()
+                        );
+                    }
+                    // A drawn table's columns are its box captions.
+                    if item.get("rows").is_some() {
+                        for col in item["cols"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter(|c| c["t"].as_str() != Some("hidden"))
+                        {
+                            flag!(
+                                bad,
+                                !dev_caption(col["l"].as_str().unwrap_or_default()),
+                                "{at}: developer caption on a column"
+                            );
+                        }
+                    }
+                    // (1) A line-of-business row holds only line-of-business boxes.
+                    if title_l.contains("line of business") {
+                        for field in &fields {
+                            flag!(
+                                bad,
+                                lob_field(field),
+                                "{at} holds {} \"{}\"",
+                                field["k"].as_str().unwrap_or_default(),
+                                field["l"].as_str().unwrap_or_default()
+                            );
+                        }
+                    }
+                    // A line-of-business box sits only under a line-of-business
+                    // title (tables' cells are schedule values, not rows).
+                    if item.get("rows").is_none() {
+                        for field in &fields {
+                            if lob_field(field) {
+                                flag!(
+                                    bad,
+                                    title_l.contains("line of business"),
+                                    "{at} holds line-of-business box {} \"{}\"",
+                                    field["k"].as_str().unwrap_or_default(),
+                                    field["l"].as_str().unwrap_or_default()
+                                );
+                            }
+                        }
+                    }
+                    // (2) A row holding a name box is not titled for the line of business.
+                    if fields.iter().any(|field| name_field(field)) {
+                        flag!(
+                            bad,
+                            !title_l.contains("line of business"),
+                            "{at} is a name row titled for the line of business"
+                        );
+                    }
+                    // (4) A "Date of Birth" row holds a date box and no address
+                    // box; an "Email" row holds no date box.
+                    let dob = title_l.contains("date of birth")
+                        || title_l
+                            .split(|c: char| !c.is_alphabetic())
+                            .any(|w| w == "dob");
+                    if dob {
+                        flag!(
+                            bad,
+                            fields.iter().any(|field| date_field(field)),
+                            "{at} holds no date box"
+                        );
+                        for field in &fields {
+                            flag!(
+                                bad,
+                                !address_field(field),
+                                "{at} holds address box {} \"{}\"",
+                                field["k"].as_str().unwrap_or_default(),
+                                field["l"].as_str().unwrap_or_default()
+                            );
+                        }
+                    }
+                    if title_l.contains("email") || title_l.contains("e-mail") {
+                        for field in &fields {
+                            flag!(
+                                bad,
+                                !date_field(field),
+                                "{at} holds date box {} \"{}\"",
+                                field["k"].as_str().unwrap_or_default(),
+                                field["l"].as_str().unwrap_or_default()
+                            );
+                        }
+                    }
+                    // A row titled for the email address alone holds only email boxes.
+                    if title_l.starts_with("email") || title_l.starts_with("e-mail") {
+                        for field in &fields {
+                            flag!(
+                                bad,
+                                email_field(field),
+                                "{at} holds {} \"{}\"",
+                                field["k"].as_str().unwrap_or_default(),
+                                field["l"].as_str().unwrap_or_default()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        assert!(bad.is_empty(), "{} rows:\n{}", bad.len(), bad.join("\n"));
     }
 
     /// Opening one form builds that form and no other.
@@ -15578,6 +16189,23 @@ mod tests {
         // refuses on a fresh return (no joint return yet), each by hand.
         let mut gated = Vec::new();
         let mut closed_2552: Vec<String> = Vec::new();
+        // Split month/day/year groups — the plain split items and the
+        // `one_date` items alike — take each part on the blank draft a new
+        // return opens with, judged as the one date they print (B1: 0605's
+        // Items 4 and 7 bind whole numbers into `Option` dates that start
+        // null, which the generic path write cannot create). Most groups
+        // are locked on the blank seed (period- or profile-derived), so
+        // the count is small; every group attempted must land or be a
+        // named exception below.
+        let mut split_typed = 0;
+        let mut split_0605 = 0;
+        let mut split_seen = 0;
+        // Open split groups another answer keeps shut: every refused part
+        // carries its gate's reason (a module gate's sentence or the
+        // corpus condition's "Needs ..." tag, B16), so the group is gated,
+        // not a gap.
+        let mut split_gated = 0;
+        let mut split_refused: Vec<String> = Vec::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let def = kind.definition();
@@ -15637,6 +16265,99 @@ mod tests {
                 }
                 typed += 1;
             }
+            // The part bindings that share a path (Text date parts) or a
+            // parent object (0605's whole-number parts into /due_date,
+            // /return_period): one group per draft date.
+            let mut groups: std::collections::BTreeMap<String, [Option<&str>; 3]> =
+                std::collections::BTreeMap::new();
+            for (key, bound) in &def.bindings {
+                let (group, slot) = match &bound.binding {
+                    Binding::Text {
+                        path,
+                        date: Some(_),
+                        part: Some(part),
+                        ..
+                    } => {
+                        let slot = match part {
+                            bir_core::forms::agent::DatePart::Month => 0,
+                            bir_core::forms::agent::DatePart::Day => 1,
+                            bir_core::forms::agent::DatePart::Year => 2,
+                        };
+                        (path.clone(), slot)
+                    }
+                    Binding::Whole { path, .. } => {
+                        let Some((parent, leaf)) = path.rsplit_once('/') else {
+                            continue;
+                        };
+                        // Only date-ish parents: /due_date, /return_period.
+                        if !(parent.contains("date") || parent.contains("period")) {
+                            continue;
+                        }
+                        let slot = match leaf {
+                            "month" => 0,
+                            "day" => 1,
+                            "year" => 2,
+                            _ => continue,
+                        };
+                        (parent.to_string(), slot)
+                    }
+                    _ => continue,
+                };
+                groups.entry(group).or_default()[slot] = Some(key.as_str());
+            }
+            for (_group, slots) in groups {
+                let (Some(month), Some(day), Some(year)) = (slots[0], slots[1], slots[2]) else {
+                    continue;
+                };
+                let keys = [month, day, year];
+                if keys
+                    .iter()
+                    .any(|key| opened["locks"][*key].as_str().is_some())
+                {
+                    continue;
+                }
+                split_seen += 1;
+                let mut edits = Map::new();
+                for (key, value) in [(month, "07"), (day, "19"), (year, "2031")] {
+                    edits.insert(key.to_string(), json!(value));
+                }
+                let filled = fill(code, &opened["draft"], Value::Object(edits));
+                let is_gate = |reason: &str| {
+                    reason.starts_with("Needs ")
+                        || rows_annual_individual::is_gate_refusal(code, reason)
+                };
+                for key in keys {
+                    if let Some(reason) = filled["rejected"][key].as_str()
+                        && !is_gate(reason)
+                    {
+                        split_refused.push(format!("{code} {key}: {reason}"));
+                    }
+                }
+                let landed = keys.iter().all(|key| {
+                    filled["rejected"][*key].as_str().is_none()
+                        && !filled["values"][*key].as_str().unwrap_or("").is_empty()
+                });
+                // Every refused part gated (and at least one was): the
+                // group is shut by another answer, not broken.
+                let gated = !landed
+                    && keys.iter().any(|key| filled["rejected"][*key].is_string())
+                    && keys
+                        .iter()
+                        .all(|key| filled["rejected"][*key].as_str().is_none_or(is_gate));
+                if landed {
+                    split_typed += 1;
+                    if code == "0605" {
+                        split_0605 += 1;
+                    }
+                } else if gated {
+                    split_gated += 1;
+                } else {
+                    split_refused.push(format!(
+                        "{code} {month}/{day}/{year}: parts did not land: {:?}",
+                        filled["rejected"]
+                    ));
+                }
+            }
         }
         assert!(typed > 90, "{typed} date boxes typed");
         assert!(
@@ -15681,6 +16402,20 @@ mod tests {
                 format!("1701MS frm1701MS:txtTaxpayerNo16b1: {joint_first}"),
                 format!("1701MS frm1701MS:txtTaxpayerNo16b: {joint_first}"),
             ]
+        );
+        assert_eq!(
+            split_typed + split_gated,
+            split_seen,
+            "every open split-date group lands or is gated"
+        );
+        // 0605's two Items are the ones this guards: both must be exercised.
+        assert_eq!(split_0605, 2, "0605 Items 4 and 7 typed part by part");
+        // 1604C's refund date parts are gated on item 11 (B16), not a gap.
+        assert!(split_gated > 0, "a gated split-date group was exercised");
+        assert!(
+            split_refused.is_empty(),
+            "split-date parts refused on the blank seed:\n{}",
+            split_refused.join("\n")
         );
     }
 
@@ -17208,9 +17943,10 @@ mod tests {
                 .into_iter()
                 .filter(|f| f["k"] == key)
                 .flat_map(|f| f["o"].as_array().cloned().unwrap_or_default())
-                .filter_map(|o| {
-                    o.as_str()
-                        .map(|o| json!(o.split(" - ").next().unwrap_or(o)))
+                .filter_map(|o| match &o {
+                    Value::Object(_) => o["value"].as_str().map(|v| json!(v)),
+                    Value::String(text) => Some(json!(text.split(" - ").next().unwrap_or(text))),
+                    _ => None,
                 }),
         );
         probes.retain(|v| !shows_nothing(v) && v != "-");
@@ -17497,6 +18233,8 @@ mod tests {
             BTreeMap::from([
                 // Plus 1 for 0605 (PR 9): item 17's Others (Specify) box.
                 ("0605", 4),
+                // B16: 0619E item 14 waits for item 4 Yes (CORPUS_GAPS_B16).
+                ("0619E", 1),
                 ("0619F", 2),
                 // PR 3: Schedule 1.1's TIN, payee, ATC and amount, ten rows,
                 // wait for item 4 Yes (the host refuses them until then).
@@ -17560,6 +18298,9 @@ mod tests {
                 ("2200P", 3),
                 ("2200S", 94),
                 ("2200T", 3),
+                // B16: 2551Q item 12's specify select waits for Item 12 Yes
+                // (CORPUS_GAPS_B16).
+                ("2551Q", 1),
                 // 10 for 2552 (PR 9): items 12A and 12B and Part IV rows
                 // 2-5's two boxes, which the official runtime keeps shut.
                 ("2552", 10),

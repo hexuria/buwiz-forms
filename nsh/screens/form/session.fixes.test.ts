@@ -129,13 +129,13 @@ test("F3-4: every write through the door is told to the page (the frame drops it
   await s.idle();
   expect(h.said.writes).toContain("screen_form_save");
   const row = s.row("1:7")();
-  const ask = row.asks.find((a) => a.control === "choice");
-  if (ask) {
-    s.pickAsk(ask.fact, ask.choices[0].value);
-    s.saveAsk(ask.fact);
-    await s.idle();
-    expect(h.said.writes).toContain("set_year_facts");
-  }
+  // Juana Santos has no income type for the year, so Item 13's row asks it in a card.
+  const ask = row.asks.find((a) => a.control === "choice")!;
+  expect(ask.fact).toBe("tax_classification");
+  s.pickAsk(ask.fact, ask.choices[0].value);
+  s.saveAsk(ask.fact);
+  await s.idle();
+  expect(h.said.writes).toContain("set_year_facts");
   s.dispose();
 });
 
@@ -161,7 +161,10 @@ test("F3-5: a queue refusal shows every message; a radio pick marks its row touc
     await s.idle();
   }
   expect(s.status()).toBe("Draft");
-  expect(s.row("2:6")().message).not.toBe("");
+  // B3/B4: a one-box message sits on its box now, not in the row's line;
+  // the row still counts it and the box carries the sentence.
+  expect(s.todo().map((r) => r.id)).toContain("2:6");
+  expect(Object.values(s.boxMessages()).some(Boolean)).toBe(true);
   s.dispose();
 });
 
@@ -192,16 +195,33 @@ test("F3-7: a Form library sample keeps what is typed while it reopens as its re
   s.dispose();
 });
 
-test("F3-8: a rejected edit goes back to the host's value and its message stays until that box is edited again", async () => {
-  const s = await opened(at("2551Q", 2025, 1));
+test("B19/F3-8: a rejected edit keeps what was typed, its sentence sits on the box, and it clears on the next edit", async () => {
+  const said: string[] = [];
+  createDemoTaxpayer();
+  const s = new FormSession(at("2551Q", 2025, 1), { toast: (message) => (said.push(message), "t") });
+  expect(await s.open()).toBe(null);
+  await s.idle();
   const id = s.itemIdForKey("txtATCAmt1")!;
   s.edit("txtATCAmt1", "abc");
   await s.idle();
-  expect(s.shownOf("txtATCAmt1")).not.toBe("abc");
-  expect(s.row(id)().message).toContain("must be an amount");
+  // B19: the box keeps what was typed; the draft never took it; the sentence is the box's own.
+  expect(s.shownOf("txtATCAmt1")).toBe("abc");
+  expect(s.valueOf("txtATCAmt1")).not.toBe("abc");
+  expect(s.boxMessageOf("txtATCAmt1")).toContain("type an amount");
+  expect(s.row(id)().message).not.toContain("must be an amount");
+  // The refused edit is still unsaved work: the save line says so and Queue refuses.
+  expect(s.isDirty()).toBe(true);
+  s.saveNow();
+  await s.idle();
+  expect(s.isDirty()).toBe(true);
+  expect(s.saveState().state).toBe("unsaved");
+  s.queue();
+  await s.idle();
+  expect(s.status()).not.toBe("Queued");
+  expect(said.length).toBeGreaterThan(0);
   s.edit("txtATCAmt1", "100");
   await s.idle();
-  expect(s.row(id)().message).not.toContain("must be an amount");
+  expect(s.boxMessageOf("txtATCAmt1")).toBe("");
   expect(s.valueOf("txtATCAmt1")).toBe("100.00");
   s.dispose();
 });
@@ -262,4 +282,57 @@ test("F3-10: one definition of an empty schedule cell, the host's (blank text, a
   expect(emptyCell("false", "chk")).toBe(true);
   expect(emptyCell("true", "chk")).toBe(false);
   expect(emptyCell("RENT", "sel")).toBe(false);
+});
+
+
+test("B16: a box another answer keeps shut shows its reason, and a write that reaches the host is refused with it", async () => {
+  const s = await opened(at("0619E", 2025, 3));
+  const k = "frm0619E:txtTax14";
+  // Item 4 "Any Taxes Withheld?" is unanswered: the box is off and locked —
+  // and while it is blank the page does not draw it at all (G1); its own
+  // tag still says what turns it on.
+  expect(s.box(k).off()).toBe("Needs item 4 = Yes");
+  expect(s.box(k).locked()).toBe(true);
+  // A write that still reaches the host (a stale page, an agent) is
+  // refused, and the box says the same thing in the filer's words.
+  s.edit(k, "100");
+  await s.idle();
+  expect(s.boxMessageOf(k)).toContain("used when Item 4 is Yes");
+  s.dispose();
+});
+
+test("B17: a code off a select's list is refused on the box without a host call", async () => {
+  const s = await opened(at("1701Q", 2025, 1));
+  const rdo = "frm1701q:txtRDOCode";
+  // The RDO box comes from the tax profile; Edit opens it for this return.
+  s.startProfileEdit(s.itemIdForKey(rdo)!);
+  const before = s.valueOf(rdo);
+  s.choose({ [rdo]: "ZZ" });
+  // Refused at once, on the box, with the stored value untouched and
+  // nothing staged: no host call was needed to say so.
+  expect(s.boxMessageOf(rdo)).toBe("Item 6: pick one of the listed choices.");
+  expect(s.valueOf(rdo)).toBe(before);
+  expect(s.isDirty()).toBe(false);
+  s.dispose();
+  const q = await opened(at("1702Q", 2025, 1));
+  const atc = "frm1702q:cbATC_2";
+  const beforeAtc = q.valueOf(atc);
+  q.choose({ [atc]: "ZZ" });
+  expect(q.boxMessageOf(atc)).toBe("Item 5: pick one of the listed choices.");
+  expect(q.valueOf(atc)).toBe(beforeAtc);
+  expect(q.isDirty()).toBe(false);
+  q.dispose();
+});
+
+test("B14: a boxed birth date shows the long month and asks once to save to the profile", async () => {
+  const s = await opened(at("1701", 2025, 0));
+  // Q1 P1b: birth_date has a writable box on 1701, so it is typed in the box (no card). Leaving it with a
+  // new complete value asks "Save to profile?" once; the box still shows the long month.
+  const box = "frm1701:txtPg1I10BirthDate";
+  s.edit(box, "08/17/1988");
+  s.blur(box);
+  await s.idle();
+  expect(s.shownOf(box)).toBe("August 17, 1988");
+  expect(s.overlay()?.kind).toBe("profile-ask");
+  s.dispose();
 });

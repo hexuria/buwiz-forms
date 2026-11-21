@@ -1,6 +1,7 @@
 //! Runtime audit of the on-screen form page against the print preview.
 //!
-//! `audit_all_screen_forms` (ignored; run it on demand) opens every one of
+//! `audit_all_screen_forms` (ignored in a plain test run, since it writes a
+//! report; CI runs it on every pull request) opens every one of
 //! the 43 forms for a fictional taxpayer whose profile has every field
 //! filled, the way `screen_form_open` does, builds the print field map the
 //! way `form_print_html` does (no browser), and compares the two per schema
@@ -1104,6 +1105,22 @@ fn audit_all_screen_forms() {
         "{}",
         serde_json::to_string_pretty(&report["totals"]).unwrap()
     );
+    // What CI gates on (it runs this audit on every pull request): every
+    // form opens, builds its print map, comes back from a fill, a save and
+    // a reopen, and fills its print sheet. The other classes are the
+    // report's findings and do not fail the run.
+    for class in [
+        "open_failed",
+        "print_map_failed",
+        "ii_roundtrip_failed",
+        "print_sheet_fill_failed",
+    ] {
+        assert_eq!(
+            report["totals"][class].as_u64().unwrap_or(0),
+            0,
+            "{class}: see tmp/screen-form-audit/runtime.md"
+        );
+    }
 }
 
 // --------------------------------------------------------------- report
@@ -1815,11 +1832,13 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     // of the printed item 5 box) and plus 1 for 1707 (PR 9: its item 5 RDO
     // list, now a box of its printed item); less 3 for 2200C, 2200M and 2200P
     // (PR 11: their second RDO select, rdoPg1Pt1I6RDO, repeats the item's
-    // RDO box and is not drawn):
-    // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3. Table cells are counted apart (the 36 2550M
+    // RDO box and is not drawn); plus 2 for 0605's Items 6 and 8
+    // (form-fields PR 1, B2: the ATC and tax type picks from the official
+    // lists):
+    // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3 + 2. Table cells are counted apart (the 36 2550M
     // Schedule 1 ATC lists, N03; catalog_lists_have_unique_values_across_the_schema
     // checks every one).
-    assert_eq!(supplied, 70, "catalog lists, dependent ones included");
+    assert_eq!(supplied, 72, "catalog lists, dependent ones included");
     // The six 2551Q Schedule 1 ATC lists left the field count because they
     // are table cells now: each is a census control with no field dropdown,
     // sits in the schema's Schedule 1 table under a dropdown column, and
@@ -2505,6 +2524,25 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
         };
         let locks = opened["locks"].as_object().cloned().unwrap_or_default();
         let kind = AgentFormKind::from_code(code).expect("schema form is an agent form");
+        // A select inside a registered one-date (PR 2's `one_dates`) is not
+        // an ordinary dropdown: the page's date control sends all three
+        // parts and the host judges them as one date, so each listed choice
+        // is sent with a valid day and year beside it.
+        let date_triples: Vec<[String; 3]> = form["parts"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|p| p["items"].as_array().into_iter().flatten())
+            .flat_map(|it| it["one_dates"].as_array().into_iter().flatten())
+            .filter_map(|triple| {
+                let keys: Vec<String> = triple
+                    .as_array()?
+                    .iter()
+                    .filter_map(|k| k.as_str().map(str::to_string))
+                    .collect();
+                <[String; 3]>::try_from(keys).ok()
+            })
+            .collect();
         let fields = form["parts"]
             .as_array()
             .into_iter()
@@ -2538,13 +2576,30 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
                     continue;
                 };
                 sent.insert(format!("{code} {key}"));
+                let edits = match date_triples
+                    .iter()
+                    .find(|triple| triple.iter().any(|part| part == key))
+                {
+                    Some(triple) => {
+                        let mut whole = serde_json::Map::new();
+                        for (at, part) in triple.iter().enumerate() {
+                            let part_value = if part == key {
+                                value.clone()
+                            } else {
+                                // A real date beside the choice: January
+                                // first, year 2023 (positions month, day,
+                                // year as `one_dates` lists them).
+                                ["01", "01", "2023"][at].to_string()
+                            };
+                            whole.insert(part.clone(), json!(part_value));
+                        }
+                        json!(whole)
+                    }
+                    None => json!({ key: value.clone() }),
+                };
                 let filled = call(
                     "screen_form_fill",
-                    vec![
-                        code.into(),
-                        json(opened["draft"].clone()),
-                        json(json!({ key: value })),
-                    ],
+                    vec![code.into(), json(opened["draft"].clone()), json(edits)],
                 )
                 .expect("fill runs");
                 if let Some(reason) = filled["rejected"].get(key) {
@@ -2572,6 +2627,15 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
                         if let Some(reason) = married["rejected"].get(key) {
                             refused.push(format!("{code} {key} {value:?} (Married): {reason}"));
                         }
+                        continue;
+                    }
+                    // B16: a box another answer keeps shut refuses with
+                    // its condition's tag; its choices are taken once the
+                    // gate opens (tests::as_needed sends them then).
+                    if reason
+                        .as_str()
+                        .is_some_and(|reason| reason.starts_with("Needs "))
+                    {
                         continue;
                     }
                     refused.push(format!("{code} {key} {value:?}: {reason}"));
@@ -2655,10 +2719,18 @@ fn p1_1800_day_of_donation_is_a_day_select() {
     assert!(date_errors(&fifth).is_empty(), "{:?}", date_errors(&fifth));
     // A leap day is a date; the same day in a common year is not.
     assert!(date_errors(&date("02", "29", "2024")).is_empty());
+    let opened = open(code, period).unwrap();
+    let refused = call(
+        "screen_form_fill",
+        vec![code.into(), json(opened["draft"].clone()), json(json!({
+            "frm1800v2018:txtMonth": "02", "frm1800v2018:txtDate": "29", "frm1800v2018:txtYear": "2023"
+        }))],
+    ).unwrap();
     assert_eq!(
-        date_errors(&date("02", "29", "2023")),
-        ["Please enter a valid date on Item 1."]
+        refused["rejected"]["frm1800v2018:txtMonth"],
+        super::rows_as_needed::DATE_ERROR
     );
+    assert_eq!(refused["draft"], opened["draft"]);
     // Blank is "not chosen" again.
     let cleared = date("03", "", "2024");
     assert_eq!(cleared["draft"]["donation_day"], 0);

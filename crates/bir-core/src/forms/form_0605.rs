@@ -222,6 +222,33 @@ impl fmt::Display for Form0605Date {
     }
 }
 
+/// The month/day/year parts of a split date while it is incomplete: what
+/// the filer typed into Items 4's and 7's three boxes before the whole
+/// date exists. Serialized only while non-empty, so a stored draft without
+/// them reads exactly as before.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Form0605DateParts {
+    #[serde(default)]
+    pub month: Option<u8>,
+    #[serde(default)]
+    pub day: Option<u8>,
+    #[serde(default)]
+    pub year: Option<u16>,
+}
+
+impl Form0605DateParts {
+    pub fn is_empty(&self) -> bool {
+        self.month.is_none() && self.day.is_none() && self.year.is_none()
+    }
+}
+
+/// Which of the two split dates a part write lands in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Form0605DateField {
+    DueDate,
+    ReturnPeriod,
+}
+
 /// Source-proven ATC choices. Their XML indexes come from the two reviewed
 /// editable saves, not from the visual ordering of the official table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -405,6 +432,13 @@ pub struct Form0605Draft {
     pub due_date: Option<Form0605Date>,
     #[serde(default)]
     pub return_period: Option<Form0605Date>,
+    /// The parts typed into Item 4's boxes while `due_date` is incomplete.
+    #[serde(default, skip_serializing_if = "Form0605DateParts::is_empty")]
+    pub due_date_typed: Form0605DateParts,
+    /// The parts typed into Item 7's boxes while `return_period` is
+    /// incomplete.
+    #[serde(default, skip_serializing_if = "Form0605DateParts::is_empty")]
+    pub return_period_typed: Form0605DateParts,
     #[serde(default)]
     pub number_of_sheets: u16,
     #[serde(default)]
@@ -502,6 +536,8 @@ impl Form0605Draft {
             year_end_month: 12,
             due_date: None,
             return_period: None,
+            due_date_typed: Form0605DateParts::default(),
+            return_period_typed: Form0605DateParts::default(),
             number_of_sheets: 0,
             atc: None,
             tax_type: None,
@@ -542,6 +578,121 @@ impl Form0605Draft {
 
     pub fn select_reviewed_tax_type(&mut self, value: Form0605ReviewedTaxType) {
         self.tax_type = Some(Form0605IndexedCode::reviewed_tax_type(value));
+    }
+
+    /// The parts a split date shows now: the typed parts while the date is
+    /// incomplete, else the real date's own parts.
+    fn typed_parts(&self, which: Form0605DateField) -> Form0605DateParts {
+        let (date, typed) = match which {
+            Form0605DateField::DueDate => (self.due_date, self.due_date_typed),
+            Form0605DateField::ReturnPeriod => (self.return_period, self.return_period_typed),
+        };
+        if !typed.is_empty() {
+            return typed;
+        }
+        match date {
+            Some(date) => Form0605DateParts {
+                month: Some(date.month),
+                day: Some(date.day),
+                year: Some(date.year),
+            },
+            None => Form0605DateParts::default(),
+        }
+    }
+
+    /// Merge `value` into the date's typed parts and settle the result.
+    /// `value` is the part's number, `None` a cleared box; out-of-range
+    /// parts are refused before anything changes.
+    pub fn set_date_part(
+        &mut self,
+        which: Form0605DateField,
+        part: crate::forms::agent::DatePart,
+        value: Option<u16>,
+    ) -> Result<(), String> {
+        use crate::forms::agent::DatePart;
+        if let Some(value) = value {
+            Self::check_date_part(part, value)?;
+        }
+        let mut parts = self.typed_parts(which);
+        match part {
+            DatePart::Month => parts.month = value.map(|v| v as u8),
+            DatePart::Day => parts.day = value.map(|v| v as u8),
+            DatePart::Year => parts.year = value,
+        }
+        self.settle_date_parts(which, parts)
+    }
+
+    /// Set all three parts at once — the page's batch for a picked or
+    /// pasted date. `[month, day, year]`; same range and real-date rules
+    /// as [`Self::set_date_part`], judged as one date.
+    pub fn set_date_parts(
+        &mut self,
+        which: Form0605DateField,
+        parts: [Option<u16>; 3],
+    ) -> Result<(), String> {
+        use crate::forms::agent::DatePart;
+        for (index, value) in parts.iter().enumerate() {
+            let Some(value) = value else {
+                continue;
+            };
+            let part = [DatePart::Month, DatePart::Day, DatePart::Year][index];
+            Self::check_date_part(part, *value)?;
+        }
+        self.settle_date_parts(
+            which,
+            Form0605DateParts {
+                month: parts[0].map(|v| v as u8),
+                day: parts[1].map(|v| v as u8),
+                year: parts[2],
+            },
+        )
+    }
+
+    /// The range rule both split-date writers share: months 1–12, days
+    /// 1–31, four-digit years; `None` (a cleared box) is always fine.
+    fn check_date_part(part: crate::forms::agent::DatePart, value: u16) -> Result<(), String> {
+        use crate::forms::agent::DatePart;
+        let ok = match part {
+            DatePart::Month => (1..=12).contains(&value),
+            DatePart::Day => (1..=31).contains(&value),
+            DatePart::Year => (1000..=9999).contains(&value),
+        };
+        if !ok {
+            return Err(match part {
+                DatePart::Month => "month must be 01-12".to_string(),
+                DatePart::Day => "day must be 01-31".to_string(),
+                DatePart::Year => "year must be a four-digit year".to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Store `parts` as this date's state, deciding before mutating: all
+    /// three present must be a real [`Form0605Date`] or the write is
+    /// refused untouched; anything less keeps the typed parts and clears
+    /// the real date; nothing keeps neither.
+    fn settle_date_parts(
+        &mut self,
+        which: Form0605DateField,
+        parts: Form0605DateParts,
+    ) -> Result<(), String> {
+        let (date_slot, typed_slot) = match which {
+            Form0605DateField::DueDate => (&mut self.due_date, &mut self.due_date_typed),
+            Form0605DateField::ReturnPeriod => {
+                (&mut self.return_period, &mut self.return_period_typed)
+            }
+        };
+        match (parts.month, parts.day, parts.year) {
+            (Some(month), Some(day), Some(year)) => {
+                *date_slot = Some(Form0605Date::new(year, month, day)?);
+                *typed_slot = Form0605DateParts::default();
+            }
+            _ => {
+                *date_slot = None;
+                *typed_slot = parts;
+            }
+        }
+        Ok(())
     }
 
     /// The official compute chain (see `form_0605_official`).

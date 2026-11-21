@@ -101,6 +101,17 @@ function TinSection(props: { log: Reports }) {
     mockField(props.log, f("branch", "Branch code", "text", { m: 5 }), { value: "00000" }, { width: 76 }),
   ];
   const own = mockField(props.log, f("ownTin", "Taxpayer TIN", "text", { m: 3, a: 1 }), { value: "000", locked: true }, { width: 58 });
+  // The phone grid's cells (PR 8): tinCell only under 600 pt, as the form page passes it; centred digits, a locked
+  // cell without a lock of its own.
+  const cell = (k: string, l: string, m: number, value: string, locked = false) =>
+    mockField(props.log, f(k, l, "text", { m, ...(locked ? { a: 1 } : {}) }), { value, locked }, { tinCell: narrowNow() });
+  const grid = [
+    cell("gtin1", "TIN1", 3, "000"),
+    cell("gtin2", "TIN2", 3, "123"),
+    cell("gtin3", "TIN3", 3, "453"),
+    cell("gbranch", "Branch code", 5, "00000"),
+    cell("gtinL", "Taxpayer TIN", 3, "000", true),
+  ];
   return (
     <Section title="TIN" testID="controls-tin">
       <Row log={props.log} field={full.field} hint="One box, 14 digits"><FieldControl {...full} /></Row>
@@ -119,6 +130,18 @@ function TinSection(props: { log: Reports }) {
       <FieldRow label="Locked TIN box" narrow={narrowNow}>
         <View class="flex-row"><FieldControl {...own} /></View>
       </FieldRow>
+      {/* The phone grid exists only under 600 pt (the page passes tinCell then); a desktop window shows the dashed row above. */}
+      <If when={narrowNow()}>
+        <FieldRow label="TIN grid cells" hint="The phone row's grid: equal columns, the branch code's 1.4" narrow={narrowNow}>
+          <View class="flex-row gap-1.5">
+            {grid.map((c, i) => (
+              <View class="min-w-0" style={{ flexGrow: i === 3 ? 1.4 : 1, flexBasis: 0 }}>
+                <FieldControl {...c} />
+              </View>
+            ))}
+          </View>
+        </FieldRow>
+      </If>
     </Section>
   );
 }
@@ -146,6 +169,24 @@ function ChoiceSection(props: { log: Reports }) {
   const regime = mockRadios(props.log, "regime", ["Graduated income tax rate", "8% flat rate", "Mixed income"]);
   const pair = mockRadios(props.log, "amended", ["Yes", "No"], { selected: "amended2" });
   const shut = mockRadios(props.log, "taxType", ["Individual", "Corporation"], { locked: true, hint: "Set by the taxpayer type" });
+  // Five to twelve choices draw as a dropdown, more as a search list, and a bar whose labels cannot hold one line stacks.
+  const payment = mockRadios(props.log, "payment", [
+    "Self-Assessment",
+    "Penalties",
+    "Tax Deposit/Advance Payment",
+    "Income Tax Second Installment",
+    "Preliminary/Final Assessment/Deficiency Tax",
+    "Accounts Receivable/Delinquent Account",
+    "Others (Specify)",
+  ]);
+  const codes = mockRadios(props.log, "codes", Array.from({ length: 13 }, (_, i) => `Code ${i + 1} — a longer descriptive label`));
+  const longrate = mockRadios(props.log, "longrate", [
+    "Graduated Rates per Tax Table",
+    "8% on gross sales/receipts and other non-operating income",
+    "Special/Preferential Rate under a special law or international tax treaty",
+  ]);
+  const taxpayer = mockRadios(props.log, "taxpayer", ["Itemized Deduction", "Optional Standard Deduction (OSD)"]);
+  const spouse = mockRadios(props.log, "spouse", ["Itemized Deduction", "Optional Standard Deduction (OSD)"]);
   return (
     <Section title="Choices" testID="controls-choices">
       <Row log={props.log} field={month.field} hint="A few choices"><FieldControl {...month} /></Row>
@@ -156,7 +197,7 @@ function ChoiceSection(props: { log: Reports }) {
       <Row log={props.log} field={waits.field} hint="Locked and blank"><FieldControl {...waits} /></Row>
       <Row log={props.log} field={chk.field} title="Declaration"><FieldControl {...chk} /></Row>
       <Row log={props.log} field={lockedChk.field} title="Return type" hint="Locked, with its reason"><FieldControl {...lockedChk} /></Row>
-      <FieldRow label="Income tax rate" hint="A group of three: press the ticked one to clear it" narrow={narrowNow}>
+      <FieldRow label="Income tax rate" hint="A group of three: Clear returns it to unanswered" narrow={narrowNow}>
         <RadioGroupControl {...regime} focusRef={(focus) => (focusRegime = focus)} />
         <AppButton testID="gallery-focus-regime" size="sm" label="Focus the rate group" onPress={() => focusRegime?.()} />
         <Text variant="cap" tone="fg3" class="mt-1">{`edit regime: ${picked(props.log, "regime")}`}</Text>
@@ -168,6 +209,31 @@ function ChoiceSection(props: { log: Reports }) {
       <FieldRow label="Taxpayer type" hint="Locked group" narrow={narrowNow}>
         <RadioGroupControl {...shut} />
         <Text variant="cap" tone="fg3" class="mt-1">{`edit taxType: ${picked(props.log, "taxType")}`}</Text>
+      </FieldRow>
+      <FieldRow label="Manner of payment" hint="Seven choices: a dropdown, None clears it" narrow={narrowNow}>
+        <RadioGroupControl {...payment} />
+        <Text variant="cap" tone="fg3" class="mt-1">{`edit payment: ${picked(props.log, "payment")}`}</Text>
+      </FieldRow>
+      <FieldRow label="Tax codes" hint="Thirteen choices: a search list" narrow={narrowNow}>
+        <RadioGroupControl {...codes} />
+        <Text variant="cap" tone="fg3" class="mt-1">{`edit codes: ${picked(props.log, "codes")}`}</Text>
+      </FieldRow>
+      <FieldRow label="Tax rate" hint="Long labels stack one under another" narrow={narrowNow}>
+        <RadioGroupControl {...longrate} />
+        <Text variant="cap" tone="fg3" class="mt-1">{`edit longrate: ${picked(props.log, "longrate")}`}</Text>
+      </FieldRow>
+      <FieldRow label="Method of deduction" hint="Two one-answer groups in one item" narrow={narrowNow}>
+        <View class="flex-row flex-wrap gap-x-6 gap-y-3">
+          <View class="gap-1">
+            <Text variant="meta" tone="fg2">Taxpayer</Text>
+            <RadioGroupControl {...taxpayer} />
+          </View>
+          <View class="gap-1">
+            <Text variant="meta" tone="fg2">Spouse</Text>
+            <RadioGroupControl {...spouse} />
+          </View>
+        </View>
+        <Text variant="cap" tone="fg3" class="mt-1">{`edit taxpayer: ${picked(props.log, "taxpayer")} | spouse: ${picked(props.log, "spouse")}`}</Text>
       </FieldRow>
     </Section>
   );

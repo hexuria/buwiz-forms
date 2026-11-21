@@ -20,13 +20,19 @@ export interface FieldExtras {
   disabled?: Maybe<boolean>;
   /** Text shown in an empty box. */
   placeholder?: string;
+  /** A cell of the phone TIN grid (PR 8): centred tabular digits, and a locked box shows no lock of its own — the row's "From the tax profile" line says it once. Only the TIN row's narrow layout passes it. */
+  tinCell?: boolean;
 }
 
 /** What FieldControl takes: the contract's props and the extras. */
 export type FieldInput = FieldControlProps & FieldExtras;
 
 /** What RadioGroupControl takes. */
-export type RadioInput = RadioGroupProps & { reason?: Maybe<string> };
+export type RadioInput = RadioGroupProps & {
+  reason?: Maybe<string>;
+  /** Choice keys another answer keeps shut (G1): those choices are not drawn. */
+  hidden?: Maybe<readonly string[]>;
+};
 
 /** What ScheduleControl takes. */
 export type ScheduleInput = ScheduleProps & {

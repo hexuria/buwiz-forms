@@ -25,6 +25,8 @@ export interface SearchPickProps {
   width?: number;
   error?: boolean;
   disabled?: boolean;
+  /** The "Clear the choice" row shows for a chosen value (default true); a required group passes false. */
+  clearable?: boolean;
   /** Fires when the list opens. */
   onOpen?: () => void;
   /** Receives the trigger's ref, so a pill step can put the keyboard on it. */
@@ -37,7 +39,7 @@ function PickPanel(props: { p: SearchPickProps; query: Accessor<string>; setQuer
   const real = () => p.options.filter((o) => o.value !== "");
   const found = () => matchWords(real(), props.query(), PICK_LIMIT);
   const total = () => matchWords(real(), props.query()).length;
-  const showClear = () => p.value !== "" && props.query().trim() === "";
+  const showClear = () => p.value !== "" && p.clearable !== false && props.query().trim() === "";
   return (
     <View class="gap-2">
       <TextField
@@ -58,8 +60,12 @@ function PickPanel(props: { p: SearchPickProps; query: Accessor<string>; setQuer
         </If>
         <Each of={found()} key={(o) => o.value}>
           {(o) => (
-            <ListRow testID={`${p.testID}-opt-${o().value}`} accessibilityLabel={o().label} onPress={() => props.choose(o().value)}>
-              <View class="min-w-0 flex-1">
+            <ListRow
+              testID={`${p.testID}-opt-${o().value}`}
+              accessibilityLabel={o().disabled ? `${o().label}, unavailable` : o().label}
+              onPress={o().disabled ? undefined : () => props.choose(o().value)}
+            >
+              <View class={cx("min-w-0 flex-1", o().disabled && "opacity-50")}>
                 <Text variant="control">{splitLabel(o().label)[0]}</Text>
                 <If when={splitLabel(o().label)[1]}>
                   <Text variant="meta" tone="fg2">{splitLabel(o().label)[1]}</Text>

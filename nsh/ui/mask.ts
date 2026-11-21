@@ -463,61 +463,6 @@ export function intMask(max?: number): Mask {
 
 // ---------------------------------------------------------------- dates
 
-/** A calendar day. */
-export interface Ymd {
-  y: number;
-  m: number;
-  d: number;
-}
-
-const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/**
- * A date the filer typed, read as the old app read it (form_page.js parseTypedDate): 12012020, 12/01/2020,
- * 12-01-2020, 2020-12-01 or Dec 01 2020 all mean December 1, 2020. Null when it is not a real day.
- */
-export function parseTypedDate(text: string): Ymd | null {
-  const v = String(text || "").trim();
-  if (!v) return null;
-  const MON = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-  let y: string | number, m: string | number, d: string | number;
-  let hit: RegExpExecArray | null;
-  if ((hit = /^(\d{2})(\d{2})(\d{4})$/.exec(v))) [, m, d, y] = hit;
-  else if ((hit = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v))) [, y, m, d] = hit;
-  else if ((hit = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(v))) [, m, d, y] = hit;
-  else if ((hit = /^([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})$/i.exec(v))) {
-    m = MON.indexOf(hit[1].toLowerCase()) + 1;
-    d = hit[2];
-    y = hit[3];
-  } else return null;
-  const Y = Number(y);
-  const M = Number(m);
-  const D = Number(d);
-  if (Y < 1900 || Y > 2100 || M < 1 || M > 12 || D < 1) return null;
-  if (D > new Date(Date.UTC(Y, M, 0)).getUTCDate()) return null;
-  return { y: Y, m: M, d: D };
-}
-
-/** The form's MM/DD/YYYY text: "12/01/2020". */
-export function formatMDY(date: Ymd): string {
-  return `${String(date.m).padStart(2, "0")}/${String(date.d).padStart(2, "0")}/${date.y}`;
-}
-
-/** How a date box shows a date: "Dec 10, 2020". */
-export function formatLongDate(date: Ymd): string {
-  return `${MONTH_SHORT[date.m - 1]} ${date.d}, ${date.y}`;
-}
-
-/** An ISO day, "2020-12-01", as the calendar speaks. */
-export function formatIso(date: Ymd): string {
-  return `${date.y}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
-}
-
-/** What a date box shows for a stored text: "Dec 10, 2020" when it reads as a date, else the text as it is. */
-export function shownDate(text: string): string {
-  const date = parseTypedDate(text);
-  return date ? formatLongDate(date) : String(text ?? "");
-}
-
-/** The message under a date box that holds no date. */
-export const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
+// The date helpers live in lib/dates.ts (the one source); these names stay so no caller changes.
+export { DATE_ERROR, formatIso, formatLongDate, formatMDY, parseTypedDate, shownDate } from "../lib/dates";
+export type { YMD as Ymd } from "../lib/dates";

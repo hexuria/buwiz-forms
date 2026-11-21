@@ -27,7 +27,8 @@ for (const size of SIZES) {
     await app.waitFor("id:cb-trigger");
     await app.press("id:cb-trigger");
     await app.waitFor("text:20");
-    await app.press("text:30").catch(() => {});
+    // The 30th is drawn and out of range: a press on it is refused as a disabled control's is, for that reason and no other.
+    expect(String(await app.press("text:30").then(() => "pressed", (e) => e))).toContain("is disabled");
     await app.wait(200);
     expect(readout(app, "Calls:")).toBe("Calls: 0");
     expect(readout(app, "Picked:")).toBe("Picked: 2026-11-10");

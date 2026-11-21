@@ -236,6 +236,25 @@ jobs:
         BUWIZ_NO_KEYCHAIN: "1"
       run: cargo test --locked --workspace
 
+    # The page-versus-print audit of all 43 forms is ignored in the run above because it writes a report. It runs here
+    # on every pull request: a form that does not open, build its print map, come back from a fill, a save and a reopen,
+    # or fill its print sheet fails the step; the other classes are the report's findings (the uploaded runtime.md).
+    - name: Page-versus-print audit (all 43 forms)
+      env:
+        EBIR_TEST_ENV: "1"
+        BIR_AUTH_BYPASS: "1"
+        BIR_SFTP_DRY_RUN: "1"
+        BUWIZ_NO_KEYCHAIN: "1"
+      run: cargo test --locked -p bir-app-api --lib -- --ignored audit_all_screen_forms
+
+    - name: Upload the page-versus-print audit
+      if: always() && matrix.os == 'ubuntu-22.04'
+      uses: actions/upload-artifact@v4
+      with:
+        name: screen-form-audit
+        path: tmp/screen-form-audit/runtime.*
+        if-no-files-found: ignore
+
     # The production-filing boundary stays gating on every PR, whatever the
     # validation-rules jobs below decide. It scans all of bir-core/src and
     # bir-shell/src (transport, import, cron, the 2550Q guards), so almost any

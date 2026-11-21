@@ -38,10 +38,13 @@ import { errorText } from "../../lib/errors";
 import { cancelQueueMessage } from "../../lib/queue_message";
 import { effectiveStops, nextRow, stopCall, todoRows, type TodoPart, type TodoRow } from "../../lib/todo";
 import { formatMoney, wholePesosOf } from "../../lib/money";
-import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
+import { DATE_ERROR, formatIso, formatLongDate, formatMDY, isTwoDigitDate, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
+import { dateRange } from "./dateRules";
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
-import { dateParts, isPageNotice, isTinItem, keysOf, listedFields, oneDate, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type OneDate } from "./schema";
+import { choiceLabel, dateParts, dateRanges, isPageNotice, isTinItem, keysOf, listedFields, oneDates, onePeriods, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type DateRange, type OneDate, type OnePeriod } from "./schema";
+import { parsePeriod, periodLong, periodText, PERIOD_ERROR, PERIOD_TWO_DIGIT, periodYear4 } from "./periodRules";
+import { hostSentence, refusalItem, refusalLabel, refusalSentence, unfixableRefusal, type RefusalContext } from "./refusals";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
 const NUMBER_KINDS = new Set(["money", "pct", "int"]);
@@ -135,9 +138,11 @@ export interface AskCard {
   label: string;
   note: string;
   control: ScreenFormAsk["control"];
-  choices: { value: unknown; label: string }[];
+  choices: { value: unknown; label: string; short?: string }[];
   /** The picked choice's value as JSON, or null. */
   pick: string | null;
+  /** Answered on this return already (F2): the chip reads "Saved to profile" and a re-pick saves again. */
+  done: boolean;
 }
 
 export type ElectionCard =
@@ -148,6 +153,12 @@ export type ElectionCard =
 export interface RowInfo {
   /** The message the row shows now ("" until touched or Check). */
   message: string;
+  /** The box-home sentences of this row's split date parts and TIN boxes, in box order (B3/B4). */
+  boxMessages: { key: string; sentence: string }[];
+  /** G1: every drawn box of the row is one another answer keeps shut — the whole row (number and title too) is not drawn. */
+  hidden: boolean;
+  /** G1: the row's drawn box keys that are gated away; the rest draw (a schedule's cells are never listed: its grid stays). */
+  hiddenBoxes: string[];
   /** Why the row's shut blank boxes show blank. */
   notes: string[];
   /** What turns the row's faded boxes on ("Needs item 13 = Yes"). */
@@ -161,15 +172,19 @@ export interface RowInfo {
   isStop: boolean;
   /** The tooltip of the "From tax profile" mark, or "" when the row is not from the profile. */
   fromProfile: string;
+  /** A TIN row whose boxes the profile holds locked draws its own "From the tax profile" line under them (PR 8); the row mark stays away then. */
+  tinLine: boolean;
   /** Edit is offered (profile boxes the filer may open), and they are open now. */
   canEdit: boolean;
   editing: boolean;
-  /** "Save to profile too": offered, on, and its note. */
-  toProfile: { on: boolean; note: string } | null;
+  /** The "Save to profile?" answer's line under the box: saved (ok) or kept on this return only (subtle). */
+  profileAsk: { text: string; ok: boolean } | null;
   /** Edit penalties / Use the computed amounts. */
   penalty: "edit" | "computed" | null;
   /** Folded into its part's "From tax profile" group right now. */
   tucked: boolean;
+  /** The "Additional details" fold is open: the filer opened it, or a shown message, fact card or to-do step points inside (B10). */
+  moreOpen: boolean;
   /** Fact cards on this row. */
   asks: AskCard[];
   askSaved: string;
@@ -187,6 +202,8 @@ export interface PartInfo {
   errors: number;
   /** Rows of the part on the to-do list. */
   todo: number;
+  /** Items drawn now (G1: a row whose every box is gated away is not counted). */
+  items: number;
   open: boolean;
   /** The part's "From tax profile" fold: its first item, its items, its label, how many need attention, open. */
   fold: { first: number; items: number[]; label: string; flagged: number; open: boolean } | null;
@@ -217,11 +234,29 @@ export interface HeaderInfo {
   profilePrerequisites: ScreenFormProfilePrerequisite[];
 }
 
+/** The "Save to profile?" ask for one profile-backed field (Q1 P1b / Q1·a). */
+export interface ProfileAsk {
+  /** The profile field id (`profile_save`'s `field`): what `screen_form_profile_asked` remembers. */
+  field: string;
+  /** The field's label, for the title ("Save {label, lower case} …"). */
+  label: string;
+  /** The value as the box shows it, for the body. */
+  value: string;
+  /** The `profile_save` keys of this field, for `screen_form_save_to_profile`. */
+  keys: string[];
+  /** The taxpayer's name and the return's tax year, for the body. */
+  name: string;
+  year: number;
+  /** The birth date and the name are the taxpayer's, not a year's: the body names no year. */
+  personal: boolean;
+}
+
 export type Overlay =
   | null
   | { kind: "removal"; message: string }
   | { kind: "existing"; existing: ScreenFormExisting }
   | { kind: "queue-confirm"; warns: string[] }
+  | { kind: "profile-ask"; ask: ProfileAsk }
   | { kind: "sample-period"; parts: { key: string; part: ScreenFormPeriodPart["part"]; quarter: number | null; value: string }[]; error: string };
 
 // ---------------------------------------------------------------- internal state (the old page's state object)
@@ -308,7 +343,17 @@ interface St {
   factErrors: ScreenFormError[];
   profileSave: NonNullable<ScreenFormOpened["profile_save"]>;
   profileEdited: Set<string>;
-  toProfile: Set<string>;
+  /** Fields whose "Save to profile?" answer is already remembered (host's `profile_asked`, plus this session's). */
+  profileAsked: Set<string>;
+  profileAskUnknown: boolean;
+  guessed: Set<string>;
+  /** The shown-value signature last asked per field: a dismissed ask re-asks only on a changed value. */
+  profileAskSeen: Record<string, string>;
+  /** rowId → the answer's line under the box ("Saved to the tax profile…" / "Kept on this return only…"). */
+  profileAskMsg: Record<string, { text: string; ok: boolean }>;
+  /** Facts answered on this session's fact cards (F2): their cards stay, marked saved. */
+  askDone: Set<ScreenFormFact>;
+  askDoneRaw: Map<ScreenFormFact, ScreenFormAsk>;
   profileChanged: string[];
   errors: ScreenFormError[];
   messages: Record<string, string>;
@@ -318,6 +363,12 @@ interface St {
   messageCounts: Record<string, number>;
   /** Boxes the host refused at the last fill, with its message (kept until the box is edited again). */
   rejected: Record<string, string>;
+  /** Refused keys whose refusal retyping cannot fix (shut/locked): they restore the stored value and do not hold Save or Queue. */
+  unfixable: Set<string>;
+  /** `dirty` as it was before the pending batch opened, so an all-unfixable batch can give it back. */
+  dirtyBatch: boolean | null;
+  /** The plain sentence under each refused box, keyed by draft key (B3/B4's box home). */
+  boxMessages: Record<string, string>;
   formErrors: string[];
   checkable: Record<string, { token: string; label: string }[]>;
   electionAt: string | null;
@@ -327,6 +378,7 @@ interface St {
   dateErrors: Record<string, string>;
   datesEdited: Set<string>;
   pending: Record<string, string>;
+  rangeHeld: Record<string, string>;
   /** What the boxes showed before a choice, for a removal the filer cancels. */
   chosenFrom: Record<string, string>;
   dirty: boolean;
@@ -358,9 +410,10 @@ function freshState(target: FormTarget): St {
     filedOriginalView: null, profileUpdates: [], profileDiffers: [], profilePrerequisites: [], notes: [], saved: false, quiet: null, kept: {},
     autoStops: [], stopEdits: {}, stopKeys: new Set(), stoppable: new Set(), passed: new Set(), stepAt: null,
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
-    profileSave: {}, profileEdited: new Set(), toProfile: new Set(), profileChanged: [], errors: [], messages: {},
-    messageKeys: {}, messageCounts: {}, rejected: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
-    profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, chosenFrom: {}, dirty: false,
+    profileSave: {}, profileEdited: new Set(), profileAsked: new Set(), profileAskUnknown: false, guessed: new Set(), profileAskSeen: {}, profileAskMsg: {},
+    askDone: new Set(), askDoneRaw: new Map(), profileChanged: [], errors: [], messages: {},
+    messageKeys: {}, messageCounts: {}, rejected: {}, unfixable: new Set(), dirtyBatch: null, boxMessages: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
+    profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, rangeHeld: {}, chosenFrom: {}, dirty: false,
     editSeq: 0, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
     touched: new Set(), showAll: false, previewOpen: false, overlay: null, saveState: { state: "idle" },
     electionReady: undefined, moreOpen: new Set(),
@@ -438,6 +491,18 @@ export class FormSession {
   private rowIds: string[] = [];
   private items = new Map<string, SchemaItem>();
   private oneDates = new Map<string, { date: OneDate; row: string }>();
+  private oneDateParts = new Set<string>();
+  /** Month+year pairs drawn as one MM/YYYY field, keyed "<month key>#period" (PR 3). */
+  private onePeriods = new Map<string, { period: OnePeriod; row: string }>();
+  private periodPartKeys = new Set<string>();
+  /** From/to pairs drawn as one row of two date controls, by each end's edit key (PR 3, R1). */
+  private dateRanges = new Map<string, { range: DateRange; row: string }>();
+  /** Range ends that are text boxes edited as dates (2550Q's From). */
+  private rangeTextKeys = new Set<string>();
+  /** The keys a range's refusal sits on (each end's anchor). */
+  private rangeAnchorKeys = new Set<string>();
+  /** Keys of the split month/day/year boxes (dateParts groups that are not one_date items): a host zero in one shows blank (B15). */
+  private datePartKeys = new Set<string>();
 
   // Published signals.
   private sValue = new SignalMap<string>("");
@@ -446,8 +511,10 @@ export class FormSession {
   private sOff = new SignalMap<string>("");
   private sOptions = new SignalMap<ChoiceOption[]>([], sameJson);
   private sInvalid = new SignalMap<boolean>(false);
+  private sBoxMsg = new SignalMap<string>("");
+  private sGuessed = signal(0);
   private sRow = new SignalMap<RowInfo>(null as unknown as RowInfo, sameJson);
-  private sPart = new SignalMap<PartInfo>({ errors: 0, todo: 0, open: false, fold: null }, sameJson);
+  private sPart = new SignalMap<PartInfo>({ errors: 0, todo: 0, items: 0, open: false, fold: null }, sameJson);
   private sHeader = signal<HeaderInfo>(null as unknown as HeaderInfo, { equals: sameJson });
   private sTodo = signal<TodoRow[]>([], { equals: sameJson });
   private sSave = signal<SaveState>({ state: "idle" }, { equals: sameJson });
@@ -509,8 +576,42 @@ export class FormSession {
           if (f.pool) this.pools.set(f.k, f.pool);
           this.allKeys.push(f.k);
         }
-        const date = oneDate(it);
-        if (date) this.oneDates.set(date.oneKey, { date, row: id });
+        const dates = oneDates(it);
+        const periods = onePeriods(it);
+        const ranges = dateRanges(it);
+        if (dates.length) {
+          for (const date of dates) {
+            this.oneDates.set(date.oneKey, { date, row: id });
+            for (const key of [date.month.k, date.day?.k, date.year.k]) {
+              if (key) {
+                this.datePartKeys.add(key);
+                this.oneDateParts.add(key);
+              }
+            }
+          }
+        } else if (!periods.length && !ranges.length) {
+          // The same groups rows.tsx draws as split date boxes: their zero
+          // parts are the host's blank, never a shown 0/00/0000 (B15).
+          const fs = it.f || [];
+          if (!fs.some((f) => f.t === "date")) {
+            const parts = dateParts(fs);
+            if (parts) {
+              for (const k of [parts.month.k, parts.day?.k, parts.year.k]) if (k) this.datePartKeys.add(k);
+            }
+          }
+        }
+        for (const period of periods) {
+          this.onePeriods.set(period.periodKey, { period, row: id });
+          this.periodPartKeys.add(period.month.k);
+          this.periodPartKeys.add(period.year.k);
+        }
+        for (const range of ranges) {
+          for (const end of [range.from, range.to]) {
+            this.dateRanges.set(end.editKey, { range, row: id });
+            this.rangeAnchorKeys.add(end.anchor);
+            if (end.field && end.field.t !== "date") this.rangeTextKeys.add(end.anchor);
+          }
+        }
       }),
     );
   }
@@ -532,6 +633,7 @@ export class FormSession {
       const off = this.sOff.get(k);
       const options = this.sOptions.get(k);
       const invalid = this.sInvalid.get(k);
+      const boxMsg = this.sBoxMsg.get(k);
       b = {
         value: () => value(),
         locked: () => locked(),
@@ -539,6 +641,7 @@ export class FormSession {
         off: () => off(),
         options: () => options(),
         invalid: () => invalid(),
+        message: () => boxMsg(),
         zeroWhenBlank: this.kindOf.get(k) === "money" && this.computedKeys.has(k),
       };
       this.boxes.set(k, b);
@@ -549,7 +652,20 @@ export class FormSession {
   /** A radio group's ticked key, or null (its own binding over the radios' value signals). */
   radioSelected(keys: string[]): Accessor<string | null> {
     const sigs = keys.map((k) => [k, this.sValue.get(k)] as const);
-    return () => sigs.find(([, s]) => s() === "true")?.[0] ?? null;
+    return () => {
+      this.sGuessed();
+      if (keys.some((k) => this.st.guessed.has(k))) return null;
+      return sigs.find(([, s]) => s() === "true")?.[0] ?? null;
+    };
+  }
+
+  private bumpGuessed() {
+    this.sGuessed.set(this.sGuessed() + 1);
+  }
+
+  /** Whether the box is one of the return period's own parts: a pick there sets the period, never an untick. */
+  isPeriodBox(k: string): boolean {
+    return this.st.periodParts.has(k);
   }
 
   row(id: string): Accessor<RowInfo> {
@@ -584,6 +700,14 @@ export class FormSession {
   messageOf(id: string): string {
     return this.st.messages[id] || "";
   }
+  /** The plain sentence under box k (a refused edit, a one-box validation error), "" none. */
+  boxMessageOf(k: string): string {
+    return this.st.boxMessages[k] || "";
+  }
+  /** Every box's sentence now (tests and the page's grouped lines). */
+  boxMessages(): Readonly<Record<string, string>> {
+    return this.st.boxMessages;
+  }
   messages(): Readonly<Record<string, string>> {
     return this.st.messages;
   }
@@ -610,7 +734,7 @@ export class FormSession {
   }
   /** How many boxes the form binds (every key of the schema, schedule cells included). */
   fieldCount(): number {
-    return this.allKeys.length;
+    return this.allKeys.length - this.oneDates.size * 2 - this.onePeriods.size;
   }
   rowCount(): number {
     return this.rowIds.length;
@@ -646,6 +770,7 @@ export class FormSession {
     this.reopening = keep;
     if (!keep) {
       this.st = freshState(target);
+      this.bumpGuessed();
       if (target.mode === "filed_original") this.st.back = back;
       this.publish();
     }
@@ -754,6 +879,14 @@ export class FormSession {
     s.stopKeys = effectiveStops(s.autoStops, s.stopEdits);
     s.stoppable = new Set(Array.isArray(r.stoppable) ? r.stoppable : []);
     s.profileSave = r.profile_save && typeof r.profile_save === "object" ? r.profile_save : {};
+    s.profileAsked = new Set(Array.isArray(r.profile_asked) ? r.profile_asked : []);
+    s.profileAskUnknown = r.profile_ask_unknown === true;
+    s.guessed = new Set(Array.isArray(r.guessed) ? r.guessed : []);
+    this.bumpGuessed();
+    s.profileAskSeen = {};
+    s.profileAskMsg = {};
+    s.askDone = new Set();
+    s.askDoneRaw = new Map();
     s.profileChanged = Array.isArray(r.profile_changed) ? r.profile_changed : [];
     this.takeAsks(r.asks);
     s.factErrors = Array.isArray(r.fact_errors) ? r.fact_errors : [];
@@ -784,7 +917,11 @@ export class FormSession {
 
   private takeAsks(asks: ScreenFormAsk[] | undefined) {
     const s = this.st;
-    s.asks = !s.sample && s.editable && Array.isArray(asks) ? asks : [];
+    const host = !s.sample && s.editable && Array.isArray(asks) ? asks : [];
+    // F2: a fact answered on this session keeps its card (marked saved) so a wrong pick can be
+    // corrected; the host no longer lists it once set, so it is re-appended from the stored ask.
+    const done = [...s.askDoneRaw.values()].filter((a) => !host.some((h) => h.fact === a.fact));
+    s.asks = [...host, ...done];
     s.askAt = new Map();
     const first = this.schema?.parts[0]?.items.length ? "0:0" : null;
     for (const ask of s.asks) {
@@ -824,29 +961,297 @@ export class FormSession {
     if (!s.editable || !s.draft) return;
     const one = this.oneDates.get(k);
     if (one) return this.editOneDate(one.date, text);
+    const period = this.onePeriods.get(k);
+    if (period) return this.editPeriod(period.period, text);
     const kind = this.kindOf.get(k);
     if (kind === "sel" || kind === "chk" || kind === "radio") return this.choose({ [k]: text });
     this.sValue.get(k).set(text);
     if (s.periodParts.has(k)) return this.setPeriodPart({ [k]: text });
     let value = text;
-    if (kind === "date") {
+    if (kind === "date" || this.rangeTextKeys.has(k)) {
       const date = parseTypedDate(text);
       s.datesEdited.add(k);
       if (date || !text.trim()) this.setDateError(k, "");
       value = date ? formatMDY(date) : text;
     }
     this.stage({ [k]: value });
+    this.checkRangeOrders();
   }
 
   private editOneDate(date: OneDate, text: string) {
+    const s = this.st;
+    const keys = [date.month.k, date.day?.k, date.year.k].filter((key): key is string => Boolean(key));
     this.sValue.get(date.oneKey).set(text);
     const typed = parseTypedDate(text);
-    if (typed || !text.trim()) this.setDateError(date.month.k, "");
-    if (!typed && text.trim()) return;
+    const reject = (reason: string) => {
+      for (const key of keys) {
+        delete s.pending[key];
+        delete s.rejected[key];
+        delete s.boxMessages[key];
+        s.unfixable.delete(key);
+      }
+      s.rejected[date.month.k] = reason;
+      s.boxMessages[date.month.k] = this.refusalText(date.month.k, reason);
+      s.dirty = true;
+      this.cancelAutosave();
+      this.markUnsaved();
+      this.publish();
+    };
+    const problem = this.oneDateRefusal(date, text);
+    if (problem) return reject(problem);
+    this.setDateError(date.month.k, "");
+    for (const key of keys) {
+      delete s.rejected[key];
+      delete s.boxMessages[key];
+      s.unfixable.delete(key);
+    }
     const [m, d, y] = typed ? formatMDY(typed).split("/") : ["", "", ""];
-    const edits: Record<string, string> = { [date.month.k]: m, [date.year.k]: y };
-    if (date.day) edits[date.day.k] = d;
-    this.stage(edits);
+    const edits: Record<string, string> = {};
+    for (const [field, value] of [[date.month, m], [date.day, d], [date.year, y]] as const) {
+      if (!field || this.isShut(field.k)) continue;
+      const listed = field.t === "sel" ? this.listedOptions(field.k) : [];
+      const match = listed.find((option) => option.value === value || option.value === String(Number(value)) || (field === date.year && option.label === String(Number(value))));
+      if (value && listed.length && !match) {
+        reject("not one of the listed choices");
+        return;
+      }
+      edits[field.k] = value && match ? match.value : value;
+    }
+    const periodEdits: Record<string, string> = {};
+    const ordinaryEdits: Record<string, string> = {};
+    for (const [key, value] of Object.entries(edits)) {
+      if (s.periodParts.has(key)) periodEdits[key] = value;
+      else ordinaryEdits[key] = value;
+    }
+    if (Object.keys(periodEdits).length) this.setPeriodPart(periodEdits);
+    if (Object.keys(ordinaryEdits).length) {
+      this.stage(ordinaryEdits);
+      this.checkRangeOrders();
+    }
+    this.publish();
+  }
+
+  /**
+   * A month+year pair typed as one MM/YYYY ("12/2023", "12-2023", "122023", "12 2023"): judged whole like a one-date —
+   * a bad period lands nothing, its sentence sits on the month box, and a blank batch clears both parts. A locked part
+   * is skipped (the calendar-year and listed-choice rules mirror oneDateRefusal/pickDate).
+   */
+  private editPeriod(period: OnePeriod, text: string) {
+    const s = this.st;
+    const keys = [period.month.k, period.year.k];
+    this.sValue.get(period.periodKey).set(text);
+    const typed = parsePeriod(text);
+    const reject = (reason: string) => {
+      for (const key of keys) {
+        delete s.pending[key];
+        delete s.rejected[key];
+        delete s.boxMessages[key];
+        s.unfixable.delete(key);
+      }
+      s.rejected[period.month.k] = reason;
+      s.boxMessages[period.month.k] = this.refusalText(period.month.k, reason);
+      s.dirty = true;
+      this.cancelAutosave();
+      this.markUnsaved();
+      this.publish();
+    };
+    const problem = this.periodRefusal(period, text);
+    if (problem) return reject(problem);
+    this.setDateError(period.month.k, "");
+    for (const key of keys) {
+      delete s.rejected[key];
+      delete s.boxMessages[key];
+      s.unfixable.delete(key);
+    }
+    const edits: Record<string, string> = {};
+    if (!typed) {
+      // A blank period clears both boxes in one batch.
+      for (const field of [period.month, period.year]) if (!this.isShut(field.k)) edits[field.k] = "";
+    } else {
+      const year4 = typed.yDigits <= 2 ? 2000 + typed.y : typed.y;
+      const store = (field: SchemaField, year: boolean): string | null => {
+        if (field.t !== "sel") {
+          if (year) return this.periodTwoDigit(period) ? String(year4 - 2000).padStart(2, "0") : String(year4);
+          return String(typed.m).padStart(2, "0");
+        }
+        const listed = this.listedOptions(field.k);
+        const want = year ? [String(year4), String(year4 - 2000), String(typed.y)] : [String(typed.m), String(typed.m).padStart(2, "0")];
+        const match = listed.find((o) => want.includes(o.value) || want.includes(String(Number(o.value))) || (year && o.label.includes(String(year4))));
+        if (listed.length && !match) return null;
+        return match ? match.value : year ? String(year4) : String(typed.m).padStart(2, "0");
+      };
+      for (const [field, year] of [[period.month, false], [period.year, true]] as const) {
+        if (this.isShut(field.k)) continue;
+        const value = store(field, year);
+        if (value === null) {
+          reject("not one of the listed choices");
+          return;
+        }
+        edits[field.k] = value;
+      }
+    }
+    const periodEdits: Record<string, string> = {};
+    const ordinaryEdits: Record<string, string> = {};
+    for (const [key, value] of Object.entries(edits)) {
+      if (s.periodParts.has(key)) periodEdits[key] = value;
+      else ordinaryEdits[key] = value;
+    }
+    if (Object.keys(periodEdits).length) this.setPeriodPart(periodEdits);
+    if (Object.keys(ordinaryEdits).length) {
+      this.stage(ordinaryEdits);
+      this.checkRangeOrders();
+    }
+    this.publish();
+  }
+
+  /** The period rules a typed text must pass before anything is staged ("" when it may land). */
+  private periodRefusal(period: OnePeriod, text: string): string {
+    const typed = parsePeriod(text);
+    if (!typed) return text.trim() ? PERIOD_ERROR : "";
+    if (typed.m < 1 || typed.m > 12) return "the month is 1 to 12";
+    const year4 = typed.yDigits <= 2 ? 2000 + typed.y : typed.y;
+    if (typed.yDigits <= 2 && !this.periodTwoDigit(period) && !this.isShut(period.year.k)) return PERIOD_TWO_DIGIT;
+    if (this.calendarYearEnd({ month: period.month, day: null, year: period.year }) && typed.m !== 12 && !this.isShut(period.month.k)) {
+      return "calendar year ends in December";
+    }
+    // A locked part keeps what it holds: the typed period must agree with it.
+    for (const [field, number, year] of [[period.month, typed.m, false], [period.year, year4, true]] as const) {
+      if (!this.isShut(field.k)) continue;
+      const raw = String(this.st.values[field.k] ?? "");
+      const held = year ? periodYear4(raw) : Number(String(raw).replace(/\D.*$/, ""));
+      if (Number.isFinite(held) && held !== number) return "date conflicts with a locked part";
+    }
+    return "";
+  }
+
+  /** Whether the period's year box stores two digits (the host's mark first, the box's own shape else). */
+  private periodTwoDigit(period: OnePeriod): boolean {
+    if (period.twoDigit) return true;
+    const f = period.year;
+    if (f.t === "sel") return true;
+    if (f.m !== undefined && f.m <= 2) return true;
+    return /^\d{1,2}$/.test(String(this.st.values[f.k] ?? ""));
+  }
+
+  /** A tentative sheet edit uses the same period rules without changing the draft. */
+  periodProblem(period: OnePeriod, text: string): string {
+    const reason = this.periodRefusal(period, text);
+    return reason ? this.refusalText(period.month.k, reason) : "";
+  }
+
+  /** A month picked on the period's grid (1-12), with the year it belongs to (the held one, or `year`). */
+  pickPeriodMonth(period: OnePeriod, month: number, year?: number) {
+    if (!this.st.editable || !this.st.draft) return;
+    const held = periodYear4(String(this.st.values[period.year.k] ?? ""));
+    const y = Number.isInteger(year) && (year as number) >= 1900 ? (year as number) : held >= 1900 ? held : new Date().getFullYear();
+    this.editPeriod(period, `${month}/${y}`);
+  }
+
+  /** The year the period's month grid stands on: the held one, else this one. */
+  periodYear(period: OnePeriod): number {
+    const y = periodYear4(String(this.st.values[period.year.k] ?? ""));
+    return Number.isInteger(y) && y >= 1900 && y <= 9999 ? y : new Date().getFullYear();
+  }
+
+  /** Judge every registered from/to pair: hold both ends while reversed, then restore them when the range is fixed. */
+  private checkRangeOrders() {
+    const s = this.st;
+    let changed = false;
+    const seen = new Set<DateRange>();
+    for (const { range, row } of this.dateRanges.values()) {
+      if (seen.has(range)) continue;
+      seen.add(range);
+      const from = this.rangeEndDay(range.from);
+      const to = this.rangeEndDay(range.to);
+      const key = range.to.anchor;
+      const reversed = Boolean(from && to && from > to);
+      const keys = [...this.rangeEndPendingKeys(range.from), ...this.rangeEndPendingKeys(range.to)];
+      const refused = s.rejected[key] === "end before start";
+      const hasHeld = keys.some((pk) => pk in s.rangeHeld);
+      if (reversed) {
+        if (!refused) {
+          s.rejected[key] = "end before start";
+          s.boxMessages[key] = this.refusalText(key, "end before start");
+          s.touched.add(row);
+          changed = true;
+        }
+        for (const end of [range.from, range.to]) {
+          for (const pk of this.rangeEndPendingKeys(end)) {
+            if (!(pk in s.pending)) continue;
+            s.rangeHeld[pk] = s.pending[pk];
+            delete s.pending[pk];
+            changed = true;
+          }
+        }
+      } else if (refused || hasHeld) {
+        delete s.rejected[key];
+        delete s.boxMessages[key];
+        s.unfixable.delete(key);
+        const restore: Record<string, string> = {};
+        for (const pk of keys) {
+          if (!(pk in s.rangeHeld)) continue;
+          if (!(pk in s.pending)) restore[pk] = s.rangeHeld[pk];
+          delete s.rangeHeld[pk];
+        }
+        if (Object.keys(restore).length) this.stage(restore);
+        changed = true;
+      }
+    }
+    if (changed) {
+      s.dirty = true;
+      this.cancelAutosave();
+      this.markUnsaved();
+      this.publish();
+    }
+  }
+
+  /** The draft keys a range end's staged edit lives under (a triple's parts, else the box's own). */
+  private rangeEndPendingKeys(end: { anchor: string; date: OneDate | null; field: SchemaField | null }): string[] {
+    if (end.date) {
+      return [end.date.month.k, end.date.day?.k, end.date.year.k].filter((k): k is string => Boolean(k));
+    }
+    return end.field ? [end.field.k] : [end.anchor];
+  }
+
+  /** A range end's day as ISO date ("" while either part is blank or unparseable). Pending and held edits count. */
+  rangeEndDay(end: { anchor: string; date: OneDate | null; field: SchemaField | null }): string {
+    const s = this.st;
+    const value = (k: string) => String(s.pending[k] ?? s.rangeHeld[k] ?? s.values[k] ?? "");
+    if (end.date) {
+      const d = end.date;
+      const m = Number(value(d.month.k));
+      const y = periodYear4(value(d.year.k));
+      const day = d.day ? Number(value(d.day.k)) : 1;
+      if (!(m >= 1 && m <= 12) || !(y >= 1900) || !(day >= 1 && day <= 31)) return "";
+      return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+    if (end.field) {
+      const date = parseTypedDate(value(end.field.k));
+      return date ? formatIso(date) : "";
+    }
+    return "";
+  }
+
+  private oneDateRefusal(date: OneDate, text: string): string {
+    const typed = parseTypedDate(text);
+    if (!typed) return text.trim() ? isTwoDigitDate(text) ? "two-digit date year" : DATE_ERROR : "";
+    if (this.calendarYearEnd(date) && typed.m !== 12 && !this.isShut(date.month.k)) return "calendar year ends in December";
+    const iso = formatIso(typed);
+    const { min, max } = dateRange(this, date);
+    if (min && max && (iso < min || iso > max)) return `date outside allowed span ${min} ${max}`;
+    for (const [field, number] of [[date.month, typed.m], [date.day, typed.d], [date.year, typed.y]] as const) {
+      if (!field || !this.isShut(field.k)) continue;
+      const raw = String(this.st.values[field.k] ?? "");
+      const held = field === date.year && /^\d{1,2}$/.test(raw) ? 2000 + Number(raw) : Number(raw.slice(0, field === date.month ? 2 : undefined));
+      if (held !== number) return "date conflicts with a locked part";
+    }
+    return "";
+  }
+
+  /** A tentative sheet edit uses the same rules without changing the draft. */
+  oneDateProblem(date: OneDate, text: string): string {
+    const reason = this.oneDateRefusal(date, text);
+    return reason ? this.refusalText(date.month.k, reason) : "";
   }
 
   /**
@@ -898,11 +1303,14 @@ export class FormSession {
 
   private stage(edits: Record<string, string>) {
     const s = this.st;
+    if (!Object.keys(s.pending).length) s.dirtyBatch = s.dirty;
     for (const [k, v] of Object.entries(edits)) {
       s.pending[k] = v;
       if (s.opened.has(k) && s.profileSave[k]) s.profileEdited.add(k);
       delete s.kept[k];
       delete s.rejected[k];
+      s.unfixable.delete(k);
+      delete s.boxMessages[k];
     }
     s.dirty = true;
     this.unquiet(Object.keys(edits));
@@ -932,21 +1340,46 @@ export class FormSession {
       edits = Object.fromEntries(Object.entries(edits).filter(([k]) => !(k in period)));
       if (!Object.keys(edits).length) return;
     }
+    // B17: a sel box with a known list takes only a listed code; an
+    // unlisted one is refused on the box without a host call, and the
+    // stored value stays.
+    const offList = new Set<string>();
+    for (const [k, v] of Object.entries(edits)) {
+      // A shut box (locked, computed, off) keeps its own refusal.
+      if (this.kindOf.get(k) !== "sel" || !String(v).trim() || this.isShut(k)) continue;
+      const listed = this.listedOptions(k);
+      if (listed.length > 0 && !listed.some((o) => o.value === String(v))) {
+        s.rejected[k] = "not one of the listed choices";
+        offList.add(k);
+      }
+    }
+    if (offList.size) {
+      edits = Object.fromEntries(Object.entries(edits).filter(([k]) => !offList.has(k)));
+      this.setErrors(s.errors);
+      this.publish();
+      if (!Object.keys(edits).length) return;
+    }
+    if (!Object.keys(s.pending).length) s.dirtyBatch = s.dirty;
     Object.assign(s.pending, edits);
     s.dirty = true;
     this.unquiet(Object.keys(edits));
     for (const k of Object.keys(edits)) {
       delete s.kept[k];
       delete s.rejected[k];
+      s.unfixable.delete(k);
     }
     s.chosenFrom = Object.fromEntries(Object.keys(edits).map((k) => [k, s.values[k] ?? ""]));
     for (const [k, v] of Object.entries(edits)) {
       s.values[k] = String(v);
       this.sValue.get(k).set(this.shownText(k));
     }
+    for (const k of Object.keys(edits)) delete s.boxMessages[k];
+    this.checkRangeOrders();
     this.cancelAutosave();
     this.markUnsaved();
     this.flush();
+    // Q1 P1b: a committed choice on a profile-backed box may raise "Save to profile?".
+    this.maybeProfileAskKeys(Object.keys(edits));
   }
 
   /** The save line says "Unsaved changes" the moment something is staged (an explicit-save return keeps its reason). */
@@ -968,18 +1401,30 @@ export class FormSession {
     s.touched.add(id!);
     const on = s.values[k] === "true";
     const period = s.periodParts.has(k);
-    if (on && !period && (f.rg || 0) >= 3) return this.choose({ [k]: "false" });
-    if (on && !period && !f.rg) return;
+    const guessed = (it.f || [])
+      .filter((radio) => radio.t === "radio" && (radio.grp || "") === (f.grp || "") && s.guessed.has(radio.k))
+      .map((radio) => radio.k);
+    if (guessed.length) {
+      for (const key of guessed) s.guessed.delete(key);
+      this.bumpGuessed();
+    }
+    if (on && !period && (f.rg || 0) >= 3 && !guessed.length) return this.choose({ [k]: "false" });
+    if (on && !period && !f.rg && !guessed.length) return;
     const edits: Record<string, string> = { [k]: "true" };
     if (f.grp) for (const r of it.f || []) if (r.t === "radio" && r.k !== k && r.grp === f.grp) edits[r.k] = "false";
     this.choose(edits);
+  }
+
+  /** The draft key a synthetic control stands for (a one-date's or a period's month box). */
+  private anchorKey(k: string): string {
+    return this.oneDates.get(k)?.date.month.k ?? this.onePeriods.get(k)?.period.month.k ?? k;
   }
 
   /** A box gained focus: an item still open with Edit elsewhere goes back to its profile look. */
   focus(k: string) {
     const s = this.st;
     s.focusKey = k;
-    const here = this.keyIndex.get(this.oneDates.get(k)?.date.month.k ?? k);
+    const here = this.keyIndex.get(this.anchorKey(k));
     if (this.endProfileEdit([...s.editing].filter((key) => this.keyIndex.get(key) !== here))) this.publish();
   }
 
@@ -987,19 +1432,20 @@ export class FormSession {
   blur(k: string) {
     const s = this.st;
     const one = this.oneDates.get(k);
-    const baseKey = one ? one.date.month.k : k;
+    const period = this.onePeriods.get(k);
+    const baseKey = one ? one.date.month.k : period ? period.period.month.k : k;
     const id = this.keyIndex.get(baseKey);
     if (s.focusKey === k) s.focusKey = null;
-    const kind = one ? "date" : this.kindOf.get(k);
+    const kind = one || period ? "date" : this.kindOf.get(k);
     const v = this.sValue.get(k);
     const raw = untracked(() => v());
     if (kind === "money" && !this.isShut(k)) v.set(formatMoney(raw, this.wholeKeys.has(k)));
     else if (kind === "date" && !this.isShut(k)) {
       const date = parseTypedDate(raw);
-      if (date) {
+      if (date && !(baseKey in s.rejected)) {
         v.set(formatLongDate(date));
         this.setDateError(baseKey, "");
-      } else this.setDateError(baseKey, raw.trim() && (one || s.datesEdited.has(k)) ? DATE_ERROR : "");
+      } else if (!one) this.setDateError(baseKey, raw.trim() && s.datesEdited.has(k) ? DATE_ERROR : "");
     }
     if (id) s.touched.add(id);
     const editKeys = this.itemEditKeys(baseKey);
@@ -1014,12 +1460,36 @@ export class FormSession {
     }
     if (Object.keys(s.pending).length) this.flush();
     else this.publish();
+    this.syncHostCase(k);
+    // Q1 P1b: leaving a profile-backed box with a new complete value asks "Save to profile?" once.
+    this.maybeProfileAskKeys([baseKey]);
+  }
+
+  /**
+   * B20: a text box the host answered in another case or outer spaces takes the host's text once it
+   * is left (0605's official map capital()s name, address and line of business, so "Retail" is
+   * "RETAIL" in the draft's shown values). While the box has the keys it keeps what was typed —
+   * no caret jumps — and a refused edit keeps its typed text (B19).
+   */
+  private syncHostCase(k: string) {
+    const s = this.st;
+    if (!s.draft || this.reopening) return;
+    const kind = this.kindOf.get(k);
+    if (kind === "money" || kind === "pct" || kind === "int" || kind === "sel" || kind === "chk" || kind === "radio" || kind === "date") return;
+    if (this.oneDates.has(k) || this.onePeriods.has(k) || this.datePartKeys.has(k) || this.periodPartKeys.has(k) || this.rangeTextKeys.has(k) || this.pools.has(k)) return;
+    if (s.rejected[k] !== undefined || s.unfixable.has(k) || this.isShut(k)) return;
+    const box = this.sValue.get(k);
+    if (!box) return;
+    const shown = untracked(box);
+    const host = String(s.values[k] ?? "");
+    if (shown === host || shown.trim().toLowerCase() !== host.trim().toLowerCase()) return;
+    box.set(this.shownText(k));
   }
 
   /** The part whose box has the keyboard now, or null: the page keeps that part's rows drawn wherever it scrolls. */
   focusedPart(): number | null {
     const k = this.st.focusKey;
-    const id = k ? this.keyIndex.get(this.oneDates.get(k)?.date.month.k ?? k) : undefined;
+    const id = k ? this.keyIndex.get(this.anchorKey(k)) : undefined;
     return id ? Number(id.split(":")[0]) : null;
   }
 
@@ -1126,20 +1596,55 @@ export class FormSession {
         if (note) s.lockNotes[k] = note;
       }
     }
-    this.syncShown(before, edits);
+    this.syncShown(before, edits, r.rejected);
+    this.checkRangeOrders();
     this.livePreview();
     this.sayYearEndPutBack(edits);
-    // A refused box shows what the draft holds again; its message shows (its row is touched) until it is edited again.
-    for (const [k, msg] of Object.entries(r.rejected || {})) {
+    const rej = r.rejected || {};
+    // A batch the host refused whole for shut/locked boxes changed nothing: give `dirty` back (R7).
+    const heldDirty = s.dirtyBatch;
+    s.dirtyBatch = null;
+    const allUnfixable =
+      Object.keys(edits).length > 0 && Object.keys(edits).every((k) => k in rej && unfixableRefusal(rej[k]));
+    // A refused box shows its own sentence under it; its message shows (its row is touched) until it is edited again.
+    for (const [k, msg] of Object.entries(rej)) {
+      const sentence = this.refusalText(k, msg);
+      s.boxMessages[k] = s.boxMessages[k] ? `${s.boxMessages[k]} ${sentence}` : sentence;
       const id = this.keyIndex.get(k);
-      s.messages[id || "form"] = msg;
-      if (!id) continue;
+      if (!id) {
+        s.messages["form"] = s.messages["form"] ? `${s.messages["form"]} ${sentence}` : sentence;
+        continue;
+      }
       s.rejected[k] = msg;
       s.touched.add(id);
-      if (!(k in s.pending)) this.sValue.get(k).set(this.shownText(k));
+      if (unfixableRefusal(msg)) {
+        // R7: retyping cannot fix a shut/locked box: it goes back to the stored value, keeps its
+        // sentence, and does not hold Save at "Unsaved" or block Queue.
+        s.unfixable.add(k);
+        this.sValue.get(k).set(this.shownText(k));
+      }
+      // B19: a fixable refusal keeps what was typed; the draft never took it.
+    }
+    if (allUnfixable && heldDirty !== null) {
+      s.dirty = heldDirty;
+      s.saveState = this.restingSaveState();
+      this.sSave.set(s.saveState);
     }
     // An emptied number box the host holds as zero shows the zero (the box selects it, so the next digit replaces it).
     for (const k of r.cleared || []) if (!(k in s.pending)) this.sValue.get(k).set(this.shownText(k));
+  }
+
+  /** A shut box whose gate opened since its refusal drops the stale sentence (R7). */
+  private liftOpenGates() {
+    const s = this.st;
+    for (const k of [...s.unfixable]) {
+      if (this.isShut(k)) continue;
+      delete s.rejected[k];
+      delete s.boxMessages[k];
+      s.unfixable.delete(k);
+      const id = this.keyIndex.get(k);
+      if (id) s.messageKeys[id] = (s.messageKeys[id] || []).filter((x) => x !== k);
+    }
   }
 
   /**
@@ -1279,6 +1784,7 @@ export class FormSession {
         st.values = this.shown({ ...st.values, ...r.values });
         st.options = (r.options || {}) as Record<string, unknown[]>;
         st.off = r.off || {};
+        this.liftOpenGates();
         if (Array.isArray(r.penalties)) st.penalties = r.penalties;
         if (r.pools) st.poolTexts = r.pools;
         st.factErrors = Array.isArray(r.fact_errors) ? r.fact_errors : [];
@@ -1297,6 +1803,43 @@ export class FormSession {
     );
   }
 
+  /** What a refusal sentence is built from for box k (B3/B4's context). */
+  private refusalCtx(k: string, raw: string): RefusalContext {
+    const s = this.st;
+    const id = this.keyIndex.get(k);
+    const it = id ? this.items.get(id) : undefined;
+    const item = refusalItem(it?.no);
+    const f = this.fieldOf.get(k);
+    const label = refusalLabel(f?.l, it?.l, k);
+    return {
+      raw, key: k, item, label,
+      kind: this.kindOf.get(k) ?? "", form: s.target.formCode,
+      part: this.datePartName(k),
+    };
+  }
+
+  /** "month"/"day"/"year" when k is a split date part, else undefined. */
+  private datePartName(k: string): string | undefined {
+    const id = this.keyIndex.get(k);
+    const it = id ? this.items.get(id) : undefined;
+    const date = it?.f ? dateParts(it.f) : null;
+    if (!date) return undefined;
+    if (date.month.k === k) return "month";
+    if (date.day?.k === k) return "day";
+    if (date.year.k === k) return "year";
+    return undefined;
+  }
+
+  /** A refused fill's plain sentence for box k. */
+  private refusalText(k: string, raw: string): string {
+    return refusalSentence(this.refusalCtx(k, raw));
+  }
+
+  /** A host validation message as the page shows it (0605's four, plus the leak net). */
+  private validationText(k: string | null, raw: string, field?: string): string {
+    return hostSentence(this.refusalCtx(k ?? "", raw), field);
+  }
+
   /** Bind each validation message to an item (bindError). */
   private setErrors(errors: ScreenFormError[] | undefined) {
     const s = this.st;
@@ -1304,24 +1847,42 @@ export class FormSession {
     s.messages = {};
     s.messageKeys = {};
     s.messageCounts = {};
+    s.boxMessages = {};
     s.checkable = {};
     s.electionAt = null;
     const items = this.rowIds.map((id) => ({ id, it: this.items.get(id)! }));
+    // A refused edit's sentence sits on its box; it counts toward the row it belongs to.
+    for (const [k, msg] of Object.entries(s.rejected)) {
+      const sentence = this.refusalText(k, msg);
+      s.boxMessages[k] = s.boxMessages[k] ? `${s.boxMessages[k]} ${sentence}` : sentence;
+      const id = this.keyIndex.get(k);
+      if (id) (s.messageKeys[id] ||= []).push(k);
+    }
     for (const e of s.errors) {
+      const keys = (e.keys || []).filter((k) => this.keyIndex.has(k));
+      // A validation error naming exactly one drawn box is that box's message (B3/B4).
+      if (keys.length === 1) {
+        const k = keys[0];
+        const id = this.keyIndex.get(k)!;
+        const sentence = this.validationText(k, e.message, String(e.field));
+        s.boxMessages[k] = s.boxMessages[k] ? `${s.boxMessages[k]} ${sentence}` : sentence;
+        (s.messageKeys[id] ||= []).push(k);
+        if (e.dismiss) (s.checkable[id] ||= []).push({ token: e.dismiss, label: e.dismiss_label || "Checked" });
+        if (e.field === "annual_income_tax_election" && ELECTION_UNRECORDED.test(e.message)) s.electionAt = id;
+        continue;
+      }
       const id = bindError(e, items, (k) => this.keyIndex.get(k));
       if (!id) continue;
-      s.messages[id] = s.messages[id] ? `${s.messages[id]} · ${e.message}` : e.message;
+      // A split date group's item-level sentence shows only when no part has its own box message.
+      const it = this.items.get(id);
+      const date = it?.f ? dateParts(it.f) : null;
+      if (date && [date.month.k, date.day?.k, date.year.k].some((pk) => pk && s.boxMessages[pk])) continue;
+      const sentence = this.validationText(null, e.message, String(e.field));
+      s.messages[id] = s.messages[id] ? `${s.messages[id]} ${sentence}` : sentence;
       (s.messageKeys[id] ||= []).push(...(e.keys || []));
       s.messageCounts[id] = (s.messageCounts[id] || 0) + 1;
       if (e.dismiss) (s.checkable[id] ||= []).push({ token: e.dismiss, label: e.dismiss_label || "Checked" });
       if (e.field === "annual_income_tax_election" && ELECTION_UNRECORDED.test(e.message)) s.electionAt = id;
-    }
-    for (const [k, msg] of Object.entries(s.rejected)) {
-      const id = this.keyIndex.get(k);
-      if (!id) continue;
-      s.messages[id] = s.messages[id] ? `${msg} · ${s.messages[id]}` : msg;
-      (s.messageKeys[id] ||= []).push(k);
-      s.messageCounts[id] = (s.messageCounts[id] || 0) + 1;
     }
   }
 
@@ -1343,7 +1904,18 @@ export class FormSession {
   private shownText(k: string): string {
     const s = this.st;
     const one = this.oneDates.get(k);
-    if (one) return shownDate(oneDateText(s.values, one.date));
+    if (one) {
+      const parts = [one.date.month, one.date.day, one.date.year].filter((field): field is SchemaField => Boolean(field));
+      if (parts.some((field) => !String(s.values[field.k] ?? "").trim() || /^0+$/.test(String(s.values[field.k]).trim()))) return "";
+      return shownDate(oneDateText(s.values, one.date));
+    }
+    const period = this.onePeriods.get(k);
+    if (period) {
+      const p = period.period;
+      const parts = [p.month, p.year];
+      if (parts.some((field) => !String(s.values[field.k] ?? "").trim() || /^0+$/.test(String(s.values[field.k]).trim()))) return "";
+      return periodText(String(s.values[p.month.k] ?? ""), String(s.values[p.year.k] ?? ""));
+    }
     const pool = this.pools.get(k);
     if (pool) return String(s.poolTexts[pool.keys[0]] ?? "");
     const kind = this.kindOf.get(k);
@@ -1355,14 +1927,23 @@ export class FormSession {
     }
     if (kind === "date") return shownDate(raw);
     if (kind === "sel") return this.selShown(k).value;
+    // A split date part the host holds as zero (its blank, e.g. 0619E's
+    // cleared day) shows blank, never 0/00/0000; the draft keeps the zero.
+    if (this.datePartKeys.has(k) && /^0+$/.test(raw)) return "";
     return raw;
+  }
+
+  /** A select's listed choices, without the shown value appended for display. */
+  private listedOptions(k: string): ChoiceOption[] {
+    const s = this.st;
+    const f = this.fieldOf.get(k);
+    return (s.options[k] || f?.o || []).map(optionOf).filter((o): o is ChoiceOption => Boolean(o));
   }
 
   /** A select's shown value and choices (old selectBox). */
   private selShown(k: string): { value: string; options: ChoiceOption[] } {
     const s = this.st;
-    const f = this.fieldOf.get(k);
-    const listed = (s.options[k] || f?.o || []).map(optionOf).filter((o): o is ChoiceOption => Boolean(o));
+    const listed = this.listedOptions(k);
     const value = String(s.values[k] ?? "");
     const selected = listed.find((o) => o.selected);
     const known = listed.some((o) => o.value === value);
@@ -1379,24 +1960,42 @@ export class FormSession {
       if ([date.month.k, date.day?.k, date.year.k].some((p) => p && p in pending)) continue;
       this.sValue.get(k).set(this.shownText(k));
     }
+    for (const [k, { period }] of this.onePeriods) {
+      if ([period.month.k, period.year.k].some((p) => p in pending)) continue;
+      this.sValue.get(k).set(this.shownText(k));
+    }
   }
 
   /** Shut boxes follow the draft; a box the user can type keeps its text unless the host changed it (old syncChanged). */
-  private syncShown(before: Record<string, string>, edits: Record<string, string>) {
+  private syncShown(before: Record<string, string>, edits: Record<string, string>, rejected?: Record<string, string>) {
     const s = this.st;
     for (const k of this.allKeys) {
       if (k in edits) {
+        // A refused edit keeps what was typed (B19); only an accepted write the host
+        // changed to something other than what was typed shows the host's value.
+        if (rejected && k in rejected) continue;
         // A box the host changed to something other than what was typed (a schedule row moved up into a cleared
         // row) shows the host's value, unless typed again since.
-        if (!(k in s.pending) && !this.pools.has(k) && this.hostChanged(k, edits[k])) this.sValue.get(k).set(this.shownText(k));
+        if (!(k in s.pending) && !this.pools.has(k) && (this.oneDateParts.has(k) || this.hostChanged(k, edits[k]))) this.sValue.get(k).set(this.shownText(k));
         continue;
       }
       if (this.isShut(k) || this.pools.has(k) || (before[k] ?? "") !== (s.values[k] ?? "")) this.sValue.get(k).set(this.shownText(k));
     }
     for (const [k, { date }] of this.oneDates) {
       const parts = [date.month.k, date.day?.k, date.year.k].filter(Boolean) as string[];
-      if (parts.some((p) => p in edits)) continue;
-      if (oneDateText(before, date) !== oneDateText(s.values, date)) this.sValue.get(k).set(this.shownText(k));
+      if (parts.some((p) => p in s.rejected) || s.focusKey === k) continue;
+      const changedByHost = parts.some((p) => p in edits && this.hostChanged(p, edits[p]));
+      if (parts.some((p) => p in edits) && !changedByHost) continue;
+      if (changedByHost || oneDateText(before, date) !== oneDateText(s.values, date)) this.sValue.get(k).set(this.shownText(k));
+    }
+    for (const [k, { period }] of this.onePeriods) {
+      const parts = [period.month.k, period.year.k];
+      if (parts.some((p) => p in s.rejected) || s.focusKey === k) continue;
+      const changedByHost = parts.some((p) => p in edits && this.hostChanged(p, edits[p]));
+      if (parts.some((p) => p in edits) && !changedByHost) continue;
+      const beforeText = periodText(before[parts[0]] ?? "", before[parts[1]] ?? "");
+      const nowText = periodText(s.values[parts[0]] ?? "", s.values[parts[1]] ?? "");
+      if (changedByHost || beforeText !== nowText) this.sValue.get(k).set(this.shownText(k));
     }
   }
 
@@ -1445,6 +2044,11 @@ export class FormSession {
       const parts = [one.date.month, one.date.day, one.date.year].filter(Boolean) as SchemaField[];
       return !this.st.editable || parts.every((f) => f.c || this.isLocked(f.k));
     }
+    const period = this.onePeriods.get(k);
+    if (period) {
+      const parts = [period.period.month, period.period.year];
+      return !this.st.editable || parts.every((f) => f.c || this.isLocked(f.k));
+    }
     return !this.st.editable || this.computedKeys.has(k) || this.isLocked(k);
   }
 
@@ -1453,6 +2057,52 @@ export class FormSession {
     const s = this.st;
     if (s.blank.has(k) && s.needs[k]) return s.needs[k];
     return s.whys[k] || s.waits[k] || "";
+  }
+
+  // ---------------------------------------------------------------- gated boxes (G1)
+
+  /** The host's is_blank on what the draft holds: "", "false", or only 0 . , - (conditions.rs). */
+  private blankShown(k: string): boolean {
+    const v = String(this.st.values[k] ?? "").trim();
+    return v === "" || v === "false" || [...v].every((c) => "0.,-".includes(c));
+  }
+
+  /**
+   * A box another answer keeps shut (s.off) draws nothing — unless it still holds something the filer must see:
+   * a value from an old draft, an import or a pre-B16 write stays drawn faded with its "Needs …" line, and a box
+   * carrying a sentence (its own, a row message's, or a to-do stop) stays too, so no text points at nothing.
+   */
+  private hiddenBox(k: string): boolean {
+    const s = this.st;
+    if (!s.off[k] || !this.blankShown(k) || s.boxMessages[k] || s.stopKeys.has(k)) return false;
+    const id = this.keyIndex.get(k);
+    return !(id && s.messages[id] && (s.messageKeys[id] || []).includes(k));
+  }
+
+  /** The cell keys a schedule draws (its hidden columns' cells are not drawn). */
+  private drawnCells(it: SchemaItem): string[] {
+    const cols = it.cols || [];
+    const out: string[] = [];
+    for (const row of it.keys || []) {
+      row.forEach((k, c) => {
+        const col = cols[c];
+        if (col && col.t !== "hidden") out.push(k);
+      });
+    }
+    return out;
+  }
+
+  /** The keys of the boxes a row draws: a schedule's cells, else its fields (a pooled line's head only). */
+  private drawnKeys(it: SchemaItem): string[] {
+    return it.rows ? this.drawnCells(it) : (it.f || []).map((f) => f.k);
+  }
+
+  /** G1: the whole row is gated away — every drawn box shut, and no message or to-do points at it. */
+  private rowHidden(id: string, it: SchemaItem, todoHere: boolean, said: boolean): boolean {
+    const s = this.st;
+    if (todoHere || said || s.dateErrors[id]) return false;
+    const drawn = this.drawnKeys(it);
+    return drawn.length > 0 && drawn.every((k) => this.hiddenBox(k));
   }
 
   /** Boxes of an edit batch the page has open (screen_form_fill's unlocked). */
@@ -1514,7 +2164,7 @@ export class FormSession {
   // ---------------------------------------------------------------- profile boxes
 
   private itemEditKeys(k: string): string[] {
-    const id = this.keyIndex.get(k);
+    const id = this.keyIndex.get(this.anchorKey(k));
     if (!id) return [k];
     return (this.items.get(id)!.f || []).map((f) => f.k).filter((key) => this.st.profileEdit.has(key));
   }
@@ -1563,53 +2213,6 @@ export class FormSession {
     if (s.profileOpen.has(pi)) s.profileOpen.delete(pi);
     else s.profileOpen.add(pi);
     this.publish();
-  }
-
-  /** "Save to profile too" on a profile item: on, the next save writes its boxes to the profile. */
-  setToProfile(id: string, on: boolean) {
-    const s = this.st;
-    for (const k of this.saveableKeys(id)) {
-      if (on) s.toProfile.add(k);
-      else s.toProfile.delete(k);
-    }
-    if (on) {
-      s.dirty = true;
-      this.scheduleAutosave();
-    }
-    this.publish();
-  }
-
-  private saveableKeys(id: string): string[] {
-    const s = this.st;
-    const it = this.items.get(id);
-    if (!it || !s.editable || s.sample) return [];
-    return (it.f || []).map((f) => f.k).filter((k) => s.profileEdit.has(k) && s.profileSave[k]);
-  }
-
-  /** After a save: the switched-on profile boxes go to the tax profile. What it says, or null. */
-  private saveToProfile(): string | null {
-    const s = this.st;
-    const keys = [...s.toProfile].filter((k) => s.profileEdited.has(k));
-    if (!keys.length) return null;
-    let r;
-    try {
-      r = bir.screen_form_save_to_profile(s.target.formCode, s.target.year, s.target.period, s.draft!, keys);
-      this.wrote("screen_form_save_to_profile");
-    } catch (e) {
-      this.toast(plainRefusal(errorText(e)), "triangle-alert");
-      return null;
-    }
-    s.draft = r.draft;
-    const before = s.values;
-    s.values = this.shown({ ...s.values, ...(r.values || {}) });
-    if (r.pools) s.poolTexts = r.pools;
-    this.syncShown(before, {});
-    for (const k of keys) {
-      s.toProfile.delete(k);
-      s.profileEdited.delete(k);
-    }
-    s.electionReady = undefined;
-    return [`Saved to the tax profile too: ${(r.saved || []).join(", ")}.`, ...(r.notes || [])].join(" ");
   }
 
   /** "Use profile values" on a draft that differs from the profile. */
@@ -1772,9 +2375,259 @@ export class FormSession {
     return s.electionReady;
   }
 
+  // ------------------------------------------------- "Save to profile?" (Q1 P1b / Q1·a)
+
+  /** The `profile_save` keys of one profile field (a fact's box keys, or a profile box's). */
+  private profileSaveKeys(field: string): string[] {
+    const s = this.st;
+    return Object.keys(s.profileSave).filter((k) => s.profileSave[k].field === field);
+  }
+
+  /** A changed profile-backed box may raise the ask only on a return the filer can still change. */
+  private askAllowed(): boolean {
+    const s = this.st;
+    return s.target.mode === "return" && s.editable && !s.sample && s.status === "Draft" && !s.amends && !!s.draft;
+  }
+
+  /** The shown-value signature of a field's boxes: a dismissed ask re-asks only on a changed value. */
+  private askSignature(keys: string[]): string {
+    const s = this.st;
+    return keys.map((k) => String(s.values[k] ?? "")).join("");
+  }
+
+  /** Whether the field's boxes now show a value that differs from the profile's. */
+  private profileDiffers(keys: string[]): boolean {
+    const s = this.st;
+    return keys.some(
+      (k) => this.normProfileVal(s.values[k]) !== this.normProfileVal(s.profileSave[k]?.profile),
+    );
+  }
+
+  private normProfileVal(v: unknown): string {
+    return String(v ?? "").replace(/[,\s₱]/g, "").trim().toLowerCase();
+  }
+
+  /** After a box commit (choose) or a blur that flushed: ask once per field on a changed accepted value. */
+  private maybeProfileAskKeys(keys: string[]) {
+    const s = this.st;
+    if (!this.askAllowed()) return;
+    const fields = new Set<string>();
+    for (const k of keys) {
+      const e = s.profileSave[k];
+      if (e) fields.add(e.field);
+    }
+    for (const field of fields) this.maybeProfileAsk(field);
+  }
+
+  private maybeProfileAsk(field: string) {
+    const s = this.st;
+    if (s.profileAskUnknown) return;
+    if (s.profileAsked.has(field)) return;
+    if (s.overlay?.kind === "profile-ask") return;
+    const keys = this.profileSaveKeys(field);
+    if (!keys.length) return;
+    const ask = this.profileAskFor(field, keys);
+    if (!ask) return;
+    const sig = this.askSignature(ask.keys);
+    if (s.profileAskSeen[field] === sig) return;
+    s.profileAskSeen[field] = sig;
+    s.overlay = { kind: "profile-ask", ask };
+    this.publish();
+  }
+
+  /** The ask for one field, or null when its boxes do not hold a new complete accepted value. */
+  private profileAskFor(field: string, keys: string[]): ProfileAsk | null {
+    const s = this.st;
+    const entry = s.profileSave[keys[0]];
+    if (!entry) return null;
+    const name = this.taxpayerName();
+    const year = this.taxYear();
+    const personal = field === "birth_date" || field === "name";
+    const radio = keys.every((k) => this.kindOf.get(k) === "radio" || this.kindOf.get(k) === "chk");
+    if (radio) return this.profileAskRadio(field, keys, entry.label, name, year, personal);
+    const date = this.profileDateParts(keys);
+    if (date) return this.profileAskDate(field, keys, entry.label, date, name, year, personal);
+    return this.profileAskValue(field, keys, entry.label, name, year, personal);
+  }
+
+  /** A radio/select card's field: the pick the filer made this session, when it differs from the profile's. */
+  private profileAskRadio(
+    field: string,
+    keys: string[],
+    label: string,
+    name: string,
+    year: number,
+    personal: boolean,
+  ): ProfileAsk | null {
+    const s = this.st;
+    const picked = keys.filter((k) => String(s.values[k] ?? "") === "true" && s.typed.has(k));
+    if (!picked.length) return null;
+    const k = picked[picked.length - 1];
+    if (keys.some((x) => s.rejected[x] !== undefined || s.unfixable.has(x))) return null;
+    // The profile already shows this pick: nothing new to save.
+    if (String(s.profileSave[k]?.profile ?? "") === "true") return null;
+    const f = this.fieldOf.get(k);
+    const value = (f && choiceLabel(f)) || k;
+    if (!value.trim()) return null;
+    return { field, label, value, keys, name, year, personal };
+  }
+
+  /** A split or one-date field's month/day/year boxes as a date, when the keys form one. */
+  private profileDateParts(keys: string[]): DateParts | null {
+    const byItem = new Map<string, string[]>();
+    for (const k of keys) {
+      const id = this.keyIndex.get(k);
+      if (!id) continue;
+      const arr = byItem.get(id);
+      if (arr) arr.push(k);
+      else byItem.set(id, [k]);
+    }
+    for (const [id, ks] of byItem) {
+      const it = this.items.get(id);
+      if (!it) continue;
+      const d = dateParts(it.f || []);
+      if (!d) continue;
+      const partKeys = [d.month.k, d.day?.k, d.year.k].filter((x): x is string => Boolean(x));
+      if (partKeys.length > 0 && partKeys.every((pk) => keys.includes(pk))) return d;
+    }
+    return null;
+  }
+
+  /** A date field: every part filled (never half-typed), accepted, and different from the profile. */
+  private profileAskDate(
+    field: string,
+    keys: string[],
+    label: string,
+    date: DateParts,
+    name: string,
+    year: number,
+    personal: boolean,
+  ): ProfileAsk | null {
+    const s = this.st;
+    const partKeys = [date.month.k, date.day?.k, date.year.k].filter((x): x is string => Boolean(x));
+    if (partKeys.some((k) => this.isShut(k))) return null;
+    if (!partKeys.every((k) => String(s.values[k] ?? "").trim())) return null;
+    if (partKeys.some((k) => s.rejected[k] !== undefined || s.unfixable.has(k))) return null;
+    if (!partKeys.some((k) => s.typed.has(k))) return null;
+    if (!this.profileDiffers(partKeys)) return null;
+    const value = shownDate(oneDateText(s.values, date));
+    if (!value.trim()) return null;
+    return { field, label, value, keys, name, year, personal };
+  }
+
+  /** A text/money/select field: a complete accepted non-empty value that differs from the profile. */
+  private profileAskValue(
+    field: string,
+    keys: string[],
+    label: string,
+    name: string,
+    year: number,
+    personal: boolean,
+  ): ProfileAsk | null {
+    const s = this.st;
+    const primary = keys[0];
+    if (keys.some((k) => this.isShut(k))) return null;
+    if (keys.some((k) => s.rejected[k] !== undefined || s.unfixable.has(k))) return null;
+    if (!keys.some((k) => s.typed.has(k))) return null;
+    if (!this.profileDiffers(keys)) return null;
+    const value = keys.map((k) => this.shownText(k)).map((t) => t.trim()).filter(Boolean).join(", ");
+    if (!value || !this.shownText(primary).trim()) return null;
+    return { field, label, value, keys, name, year, personal };
+  }
+
+  /** The row a field's box sits on, for the answer's status line. */
+  private askRowId(keys: string[]): string | null {
+    for (const k of keys) {
+      const id = this.keyIndex.get(k);
+      if (id) return id;
+    }
+    return null;
+  }
+
+  /** The answer's line under the box: saved (ok) or kept on this return only (subtle). */
+  private profileAskResult(ask: ProfileAsk, ok: boolean) {
+    const id = this.askRowId(ask.keys);
+    if (!id) return;
+    this.st.profileAskMsg[id] = ok
+      ? { ok: true, text: "Saved to the tax profile. Later returns use it." }
+      : { ok: false, text: "Kept on this return only." };
+  }
+
+  /** "Only this return": nothing is written; the answer is remembered for this taxpayer and year. */
+  profileAskOnly() {
+    const s = this.st;
+    const o = s.overlay;
+    if (o?.kind !== "profile-ask") return;
+    const ask = o.ask;
+    s.overlay = null;
+    try {
+      bir.screen_form_profile_asked(s.target.tin, this.taxYear(), ask.field, "only");
+      this.wrote("screen_form_profile_asked");
+    } catch (e) {
+      this.toast(plainRefusal(errorText(e)), "triangle-alert");
+    }
+    s.profileAsked.add(ask.field);
+    this.profileAskResult(ask, false);
+    this.publish();
+  }
+
+  /** "Save to profile": the return is stored first (the host needs a saved draft), then the boxes go. */
+  profileAskSave() {
+    const s = this.st;
+    const o = s.overlay;
+    if (o?.kind !== "profile-ask") return;
+    const ask = o.ask;
+    s.overlay = null;
+    // The host writes a stored draft's boxes: save the return first when it is not stored yet.
+    if (s.dirty || Object.keys(s.pending).length || !s.saved) this.saveReturn(false);
+    const draftId = s.draft && (s.draft as { id?: number }).id;
+    if (!s.draft || !draftId) {
+      this.toast("Save the return first, then save to the tax profile.", "triangle-alert");
+      this.publish();
+      return;
+    }
+    try {
+      const r = bir.screen_form_save_to_profile(s.target.formCode, s.target.year, s.target.period, s.draft, ask.keys);
+      this.wrote("screen_form_save_to_profile");
+      s.draft = r.draft;
+      const before = s.values;
+      s.values = this.shown({ ...s.values, ...(r.values || {}) });
+      if (r.pools) s.poolTexts = r.pools;
+      this.syncShown(before, {});
+      for (const k of ask.keys) s.profileEdited.delete(k);
+      try {
+        bir.screen_form_profile_asked(s.target.tin, this.taxYear(), ask.field, "save");
+        this.wrote("screen_form_profile_asked");
+      } catch (_) {
+        // The profile write landed; a lost record only means a later return may ask again.
+      }
+      s.profileAsked.add(ask.field);
+      s.electionReady = undefined;
+      this.profileAskResult(ask, true);
+      const saved = (r.saved || []).join(", ");
+      this.toast(saved ? `Saved to the tax profile: ${saved}.` : "Saved to the tax profile.", "circle-check");
+    } catch (e) {
+      // Nothing was written and nothing remembered: the next changed leave asks again.
+      this.toast(plainRefusal(errorText(e)), "triangle-alert");
+    }
+    this.publish();
+  }
+
+  /** Escape, scrim or swipe-down: no answer — nothing saved, nothing remembered, asks again on a changed leave. */
+  dismissProfileAsk() {
+    const s = this.st;
+    if (s.overlay?.kind !== "profile-ask") return;
+    s.overlay = null;
+    this.publish();
+  }
+
   /** A choice card's answer picked. */
   pickAsk(fact: ScreenFormFact, value: unknown) {
-    this.st.askPick[fact] = value;
+    const s = this.st;
+    s.askPick[fact] = value;
+    const ask = s.asks.find((a) => a.fact === fact);
+    // F2: a choice card has no Save — the pick is the explicit answer and saves at once.
+    if (ask?.control === "choice") return this.saveAsk(fact);
     this.publish();
   }
 
@@ -1822,9 +2675,13 @@ export class FormSession {
       return this.toast(plainRefusal(errorText(e)), "triangle-alert");
     }
     s.electionReady = undefined;
+    // F2: the card stays for the session (a wrong pick can be corrected); the host no longer lists
+    // the fact once set, so its ask is re-appended by takeAsks and marked done for the "Saved" chip.
+    s.askDone.add(fact);
+    s.askDoneRaw.set(fact, ask);
     const r = this.applyUseProfile([fact]);
     this.takeAsks(r && Array.isArray(r.asks) ? r.asks : s.asks.filter((a) => a !== ask));
-    delete s.askPick[fact];
+    if (ask.control !== "choice") delete s.askPick[fact];
     s.factErrors = s.factErrors.filter((e) => e.field !== `tax_profile.${fact}`);
     this.setErrors(s.errors.filter((e) => !String(e.field).startsWith("tax_profile.")));
     if (at) s.askSavedAt.set(at, `${ask.label} saved to the tax profile. Later returns use it.`);
@@ -2049,7 +2906,7 @@ export class FormSession {
     const empty = (f: SchemaField) => (f.t === "radio" || f.t === "chk" ? s.values[f.k] !== "true" : !String(s.values[f.k] ?? "").trim());
     const pick = fs.find((f) => entry?.stops.includes(f.k)) || fs.find((f) => f.r && empty(f)) || fs[0];
     if (!pick) return false;
-    const date = oneDate(it);
+    const date = oneDates(it).find((candidate) => [candidate.month.k, candidate.day?.k, candidate.year.k].includes(pick.k));
     const key = date ? date.oneKey : pick.t === "radio" ? `radio:${row}` : pick.k;
     const focus = this.focusers.get(key);
     if (!focus) return false;
@@ -2068,17 +2925,57 @@ export class FormSession {
     return out;
   }
 
+  /**
+   * Whether the row prints this box's sentence on a line of its own, at the row's width, instead of the box under itself: date
+   * parts, a TIN's segments and the pick kinds (their controls have no message line), a whole-date box (its control is cut to
+   * the box's height), and a box alone in its row (nothing sits beside it, so its sentence need not wrap at the box's width).
+   * Boxes side by side keep their sentences under themselves.
+   */
+  private rowPrints(k: string): boolean {
+    const id = this.keyIndex.get(k);
+    const it = id ? this.items.get(id) : undefined;
+    if (["sel", "chk", "radio", "date"].includes(this.kindOf.get(k) ?? "") || this.datePartKeys.has(k) || this.periodPartKeys.has(k)
+      || this.rangeAnchorKeys.has(k)
+      || (it && oneDates(it).some((date) => [date.month.k, date.day?.k, date.year.k].includes(k)))) return true;
+    return Boolean(it && !it.rows && (isTinItem(it) || (it.f || []).length === 1));
+  }
+
+  /** A box's sentence as it shows: its row's after it was touched, every one after Check (a refusal touches its row as it lands). */
+  private shownBoxMsg(k: string): string {
+    const s = this.st;
+    const sentence = s.boxMessages[k];
+    if (!sentence) return "";
+    const id = this.keyIndex.get(k);
+    return s.showAll || !id || s.touched.has(id) ? sentence : "";
+  }
+
+  /** How many box-home sentences row id carries (each box's message counts once). */
+  private boxCountFor(id: string): number {
+    const it = this.items.get(id);
+    if (!it) return 0;
+    const keys = it.rows ? (it.keys || []).flat() : keysOf(it);
+    return keys.filter((k) => this.st.boxMessages[k]).length;
+  }
+
   /** How many messages each row with a shown message carries (a date's own sentence counts once). */
   private shownCounts(): Record<string, number> {
     const s = this.st;
+    const shown = this.shownMessages();
     const out: Record<string, number> = {};
-    for (const id of Object.keys(this.shownMessages())) out[id] = Math.max(s.dateErrors[id] ? 1 : 0, s.messageCounts[id] || 0, 1);
+    const ids = new Set([...Object.keys(shown), ...this.rowIds.filter((id) => this.boxCountFor(id) > 0)]);
+    for (const id of ids) {
+      const it = this.items.get(id);
+      const dateSaid = it && oneDates(it).some((date) => [date.month.k, date.day?.k, date.year.k].some((key) => key && this.shownBoxMsg(key)));
+      const row = shown[id] && !dateSaid ? Math.max(s.dateErrors[id] ? 1 : 0, s.messageCounts[id] || 0, 1) : 0;
+      const n = row + this.boxCountFor(id);
+      if (n) out[id] = n;
+    }
     return out;
   }
 
   /** How many rows of part pi hold a validation message, shown or not (the old partErrors: the badges, "n parts need attention"). */
   private partErrors(pi: number): number {
-    return Object.keys(this.st.messages).filter((id) => id.startsWith(`${pi}:`)).length;
+    return this.rowIds.filter((id) => id.startsWith(`${pi}:`) && (this.st.messages[id] || this.st.dateErrors[id] || this.boxCountFor(id) > 0)).length;
   }
 
   /** The to-do list (old todo()): every row with a message counts, whether its text shows yet or not. */
@@ -2087,7 +2984,7 @@ export class FormSession {
     if (!this.schema || !s.draft) return [];
     return todoRows({
       parts: this.schema.parts as unknown as TodoPart[],
-      messages: s.messages,
+      messages: { ...s.messages, ...Object.fromEntries(this.rowIds.filter((id) => this.boxCountFor(id) > 0 && !s.messages[id]).map((id) => [id, " "])) },
       values: s.values,
       stops: s.editable ? s.stopKeys : new Set(),
       passed: s.passed,
@@ -2207,11 +3104,12 @@ export class FormSession {
       if (r.status) s.status = r.status;
       s.dirty = false;
       s.saved = true;
-      s.saveState = { state: "saved" };
+      // B19: a refused edit was never in the draft; the return still has it unsaved. An unfixable
+      // one (shut/locked) put the stored value back, so it does not count (R7).
+      if (Object.keys(s.rejected).some((k) => !s.unfixable.has(k))) s.dirty = true;
+      s.saveState = s.dirty ? this.restingSaveState() : { state: "saved" };
       if (changed) this.hooks.onSaved?.(s.target);
-      const profiled = s.toProfile.size ? this.saveToProfile() : null;
-      if (profiled) this.toast(`Draft saved. ${profiled}`, "save");
-      else if (announce) this.toast("Draft saved.", "save");
+      if (announce) this.toast("Draft saved.", "save");
       this.validate();
       return true;
     } catch (e) {
@@ -2314,6 +3212,15 @@ export class FormSession {
   queue() {
     const s = this.st;
     if (s.sample) return this.saveSample(() => this.queue());
+    // B19: a refused edit is still unsaved work; Queue waits for it to be fixed or cleared. An
+    // unfixable one (shut/locked) put the stored value back, so it does not hold Queue (R7).
+    if (Object.keys(s.rejected).some((k) => !s.unfixable.has(k))) {
+      s.showAll = true;
+      this.publish();
+      // R6: Queue refuses like a failed Check — the count of refused boxes and messages, not one sentence.
+      const n = Object.values(this.shownCounts()).reduce((a, b) => a + b, 0);
+      return this.toast(attentionText(n), "triangle-alert");
+    }
     if (!this.ensureSaved()) return this.publish();
     let check: { blocks: ScreenFormError[]; warns: string[] } | null = null;
     try {
@@ -2785,7 +3692,7 @@ export class FormSession {
         formErrors: s.formErrors, periodValues: { ...s.periodValues }, periodAsked: s.periodAsked, periodSet: s.periodSet,
         opens: s.opens, existing: s.existing,
       },
-      shown: Object.fromEntries([...this.allKeys, ...this.oneDates.keys()].map((k) => [k, this.shownOf(k)])),
+      shown: Object.fromEntries([...this.allKeys, ...this.oneDates.keys(), ...this.onePeriods.keys()].map((k) => [k, this.shownOf(k)])),
     };
   }
 
@@ -2860,8 +3767,9 @@ export class FormSession {
     if (this.disposed) return;
     batch(() => {
       this.publishBoxes();
-      this.publishRows();
-      this.publishPage();
+      const todo = this.todoNow();
+      this.publishRows(todo);
+      this.publishPage(todo);
     });
   }
 
@@ -2880,33 +3788,55 @@ export class FormSession {
       const blank = kind === "chk" || kind === "radio" ? !ticked(s.values[k]) : !String(s.values[k] ?? "").trim();
       this.sHint.get(k).set(shut && blank ? this.reasonFor(k) : "");
       if (kind === "sel") this.sOptions.get(k).set(this.selShown(k).options);
-      this.sInvalid.get(k).set(shownMsgKeys.has(k));
+      // A box's sentence follows the same rule as a row's: after its row was left, or after Check (a refused
+      // edit's row is touched when the refusal lands, so its sentence still shows at once).
+      const boxMsg = this.shownBoxMsg(k);
+      this.sInvalid.get(k).set(shownMsgKeys.has(k) || Boolean(boxMsg));
+      // A box whose sentence the row prints draws none of its own.
+      this.sBoxMsg.get(k).set(this.rowPrints(k) ? "" : boxMsg);
     }
     for (const [k, { date, row }] of this.oneDates) {
       const parts = [date.month, date.day, date.year].filter(Boolean) as SchemaField[];
       const shut = this.isShut(k);
       this.sLocked.get(k).set(shut);
-      this.sHint.get(k).set(shut && !oneDateText(s.values, date) ? parts.map((f) => this.reasonFor(f.k)).find(Boolean) || "" : "");
-      this.sInvalid.get(k).set(Boolean((s.showAll || s.touched.has(row)) && (s.dateErrors[row] || parts.some((f) => shownMsgKeys.has(f.k)))));
+      this.sHint.get(k).set(!oneDateText(s.values, date) ? parts.map((f) => this.sHint.get(f.k)()).find(Boolean) || "" : "");
+      const open = s.showAll || s.touched.has(row);
+      const boxMsg = open && parts.some((f) => Boolean(s.boxMessages[f.k]));
+      const rowMsg = open && Boolean(s.dateErrors[row] || parts.some((f) => shownMsgKeys.has(f.k)));
+      this.sInvalid.get(k).set(boxMsg || rowMsg);
+    }
+    for (const [k, { period, row }] of this.onePeriods) {
+      const parts = [period.month, period.year];
+      const shut = this.isShut(k);
+      this.sLocked.get(k).set(shut);
+      this.sHint.get(k).set(!periodText(String(s.values[period.month.k] ?? ""), String(s.values[period.year.k] ?? "")) ? parts.map((f) => this.sHint.get(f.k)()).find(Boolean) || "" : "");
+      const open = s.showAll || s.touched.has(row);
+      const boxMsg = open && parts.some((f) => Boolean(s.boxMessages[f.k]));
+      const rowMsg = open && Boolean(s.dateErrors[row] || parts.some((f) => shownMsgKeys.has(f.k)));
+      this.sInvalid.get(k).set(boxMsg || rowMsg);
     }
   }
 
-  private publishRows() {
+  private publishRows(todo: TodoRow[]) {
     const s = this.st;
     if (!this.schema) return;
     const shown = this.shownMessages();
     const tucked = this.schema.parts.map((_p, pi) => (s.profileOpen.has(pi) ? [] : this.tuckedItems(pi)));
+    // A row on the to-do list is never gated away: the pill and the badges keep pointing at a drawn row.
+    const todoIds = new Set(todo.map((r) => r.id));
     for (const id of this.rowIds) {
       const [pi, ii] = id.split(":").map(Number);
-      this.sRow.get(id).set(this.rowInfo(id, this.items.get(id)!, shown, tucked[pi].includes(ii)));
+      this.sRow.get(id).set(this.rowInfo(id, this.items.get(id)!, shown, tucked[pi].includes(ii), todoIds.has(id)));
     }
   }
 
-  private rowInfo(id: string, it: SchemaItem, shown: Record<string, string>, tucked: boolean): RowInfo {
+  private rowInfo(id: string, it: SchemaItem, shown: Record<string, string>, tucked: boolean, todoHere: boolean): RowInfo {
     const s = this.st;
     const fs = it.f || [];
     const keys = keysOf(it);
     const tin = isTinItem(it);
+    // G1: the drawn box keys another answer keeps shut (a schedule's cells are never hidden on their own).
+    const hiddenBoxes = it.rows ? [] : this.drawnKeys(it).filter((k) => this.hiddenBox(k));
     const editKeys = fs.filter((x) => s.profileEdit.has(x.k)).map((x) => x.k);
     const fromProfile = (tin && !it.typed_tin) || fs.some((x) => s.profile.has(x.k));
     const kept = keys.map((k) => s.kept[k]).filter(Boolean);
@@ -2914,18 +3844,77 @@ export class FormSession {
     const penaltyOpen = Boolean(penalty) && (penalty!.edited || penalty!.keys.some((k) => s.penaltyOpen.has(k)));
     const stopBoxes = this.stopBoxes(it);
     const editingHere = editKeys.some((k) => s.editing.has(k));
-    const saveable = this.saveableKeys(id);
-    const toOn = saveable.some((k) => s.toProfile.has(k));
-    const entry = saveable.length ? s.profileSave[saveable[0]] : null;
     let from = "";
     if (it.from && s.editable && !this.isShut(it.from.to)) {
       const pesos = wholePesosOf(s.values[it.from.k]);
       if (pesos) from = `${it.from.l}: ₱${formatMoney(String(pesos.amount), true)}${pesos.rounded ? " (rounded to whole pesos)" : ""}`;
     }
+    const date = it.f ? dateParts(it.f) : null;
+    // The boxes whose sentences the row prints as lines above its own message (rowPrints).
+    const groupKeys = new Set<string>(keys.filter((k) => this.rowPrints(k)));
+    // A split date's parts are one date: its sentence shows once, on the month box. Box sentences show
+    // under the same rule as the row's own: after the row was left, or after Check.
+    const msgOpen = s.showAll || s.touched.has(id);
+    const dateMsgs =
+      msgOpen && date
+        ? [date.month.k, date.day?.k, date.year.k].filter((pk): pk is string => pk !== undefined && Boolean(s.boxMessages[pk]))
+        : [];
+    // R5: a split date shows every part's sentence in box order, dropping exact duplicates.
+    const seenDate = new Set<string>();
+    const dateShown = dateMsgs.filter((k) => {
+      const sentence = s.boxMessages[k];
+      if (seenDate.has(sentence)) return false;
+      seenDate.add(sentence);
+      return true;
+    });
+    const registered = oneDates(it);
+    const grouped = new Set(registered.flatMap((d) => [d.month.k, d.day?.k, d.year.k].filter((k): k is string => Boolean(k))));
+    const periodRegistered = onePeriods(it);
+    const periodGrouped = new Set(periodRegistered.flatMap((p) => [p.month.k, p.year.k]));
+    const oneDateShown = registered.flatMap((d) => {
+      const seen = new Set<string>();
+      return [d.month.k, d.day?.k, d.year.k].filter((k): k is string => {
+        if (!k || !s.boxMessages[k] || seen.has(s.boxMessages[k])) return false;
+        seen.add(s.boxMessages[k]);
+        return true;
+      });
+    });
+    const periodShown = periodRegistered.flatMap((p) => {
+      const seen = new Set<string>();
+      return [p.month.k, p.year.k].filter((k) => {
+        if (!s.boxMessages[k] || seen.has(s.boxMessages[k])) return false;
+        seen.add(s.boxMessages[k]);
+        return true;
+      });
+    });
+    const shownKeys = !msgOpen ? [] : registered.length || periodRegistered.length
+      ? [...oneDateShown, ...periodShown, ...keys.filter((k) => !grouped.has(k) && !periodGrouped.has(k) && s.boxMessages[k] && groupKeys.has(k))]
+      : date && dateShown.length ? dateShown : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k));
+    const asks =
+      s.editable && !s.sample
+        ? (s.askAt.get(id) || []).map((a) => ({
+            fact: a.fact,
+            label: a.label,
+            note: a.note,
+            control: a.control,
+            choices: a.choices || [],
+            pick: a.fact in s.askPick ? JSON.stringify(s.askPick[a.fact]) : null,
+            done: s.askDone.has(a.fact),
+          }))
+        : [];
+    // B10: an "Additional details" fold stays open while the filer opened it or a shown message,
+    // fact card or to-do step points inside; it folds back when nothing does.
+    const pointed =
+      it.l === "Additional details" &&
+      (Boolean(shown[id]) || keys.some((k) => Boolean(this.shownBoxMsg(k))) || asks.length > 0 || s.stepAt === id);
     return {
-      message: shown[id] || "",
+      message: oneDateShown.length || periodShown.length ? "" : shown[id] || "",
+      boxMessages: shownKeys.map((k) => ({ key: k, sentence: s.boxMessages[k] })),
+      hidden: this.rowHidden(id, it, todoHere, Boolean(shown[id])),
+      hiddenBoxes,
       notes: this.lockNotesFor(it),
-      needs: [...new Set(keys.map((k) => s.off[k]).filter(Boolean))],
+      // A gated-away box's "Needs …" line is not drawn either; a schedule keeps every cell's (its grid stays).
+      needs: [...new Set(keys.filter((k) => it.rows || !this.hiddenBox(k)).map((k) => s.off[k]).filter(Boolean))],
       kept: kept.includes("template") ? "template" : kept.includes("last") ? "last" : "",
       stepHere: s.stepAt === id,
       stoppable: s.editable && stopBoxes.length > 0,
@@ -2937,25 +3926,17 @@ export class FormSession {
             ? "From tax profile. Change it in the tax profile."
             : "From tax profile. It repeats a box above; use Edit there."
         : "",
+      // The line under a TIN's boxes (PR 8): a TIN with every box locked — the profile's, not a typed party's
+      // (typed_tin) and not one still open for Edit (an open Edit box is not locked). s.profile lists only the
+      // profile boxes Edit may open, so the locked state itself is the test, not profile membership.
+      tinLine: tin && !it.typed_tin && fs.length > 0 && fs.every((x) => this.isLocked(x.k)),
       canEdit: editKeys.length > 0 && s.editable,
       editing: editingHere,
-      toProfile:
-        saveable.length && (editingHere || saveable.some((k) => s.profileEdited.has(k)))
-          ? { on: toOn, note: toOn ? `Your next save writes it to the tax profile too. ${entry?.note || ""}`.trim() : "Off: the change stays on this return." }
-          : null,
+      profileAsk: s.profileAskMsg[id] ?? null,
       penalty: penalty ? (penaltyOpen ? "computed" : "edit") : null,
       tucked,
-      asks:
-        s.editable && !s.sample
-          ? (s.askAt.get(id) || []).map((a) => ({
-              fact: a.fact,
-              label: a.label,
-              note: a.note,
-              control: a.control,
-              choices: a.choices || [],
-              pick: a.fact in s.askPick ? JSON.stringify(s.askPick[a.fact]) : null,
-            }))
-          : [],
+      moreOpen: s.moreOpen.has(id) || pointed,
+      asks,
       askSaved: s.askSavedAt.get(id) || "",
       election: s.editable && s.electionAt === id ? this.electionCard() : null,
       electionSaved: s.electionSavedAt === id && s.electionAt !== id ? `Saved to the tax profile for ${this.taxYear()}. Later returns reuse it.` : "",
@@ -2964,9 +3945,8 @@ export class FormSession {
     };
   }
 
-  private publishPage() {
+  private publishPage(todo: TodoRow[]) {
     const s = this.st;
-    const todo = this.todoNow();
     this.sTodo.set(todo);
     // The pill's red count (old drawPill): with rows to do, how many hold a message; else how many parts have one.
     const partsNeeding = this.schema ? this.schema.parts.filter((_p, i) => this.partErrors(i) > 0).length : 0;
@@ -2981,13 +3961,14 @@ export class FormSession {
         this.sPart.get(String(pi)).set({
           errors: this.partErrors(pi),
           todo: todo.filter((r) => r.id.startsWith(`${pi}:`)).length,
+          items: p.items.filter((_it, ii) => !this.sRow.get(`${pi}:${ii}`)().hidden).length,
           open: s.openParts.has(pi),
           fold: tucked.length
             ? {
                 first: tucked[0],
                 items: tucked,
                 label: `From tax profile · ${filled} filled box${filled === 1 ? "" : "es"}`,
-                flagged: tucked.filter((ii) => s.messages[`${pi}:${ii}`] || s.dateErrors[`${pi}:${ii}`]).length,
+                flagged: tucked.filter((ii) => s.messages[`${pi}:${ii}`] || s.dateErrors[`${pi}:${ii}`] || this.boxCountFor(`${pi}:${ii}`) > 0).length,
                 open: s.profileOpen.has(pi),
               }
             : null,

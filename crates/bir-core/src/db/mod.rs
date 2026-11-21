@@ -1490,6 +1490,21 @@ impl Database {
         Ok(())
     }
 
+    /// The `(key, value)` pairs of every setting whose key starts with
+    /// `prefix` (compared as text: `_` and `%` are not wildcards), in key
+    /// order.
+    pub fn settings_with_prefix(&self, prefix: &str) -> Result<Vec<(String, String)>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT key, value FROM settings WHERE substr(key, 1, length(?1)) = ?1 ORDER BY key",
+        )?;
+        let rows = stmt
+            .query_map(params![prefix], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     /// The stored override entries, each as its own stored text (`None` when
     /// none are stored; `Err` when the setting is not a JSON array).
     fn stored_override_entries(&self) -> Result<Option<Vec<String>>, DbError> {
@@ -3106,5 +3121,26 @@ mod tests {
                 assert!(!path.to_string_lossy().contains("group.dev.goldcoders.bir"));
             },
         );
+    }
+
+    /// Review F3: a prefix is matched as text, so `_` and `%` in it are not
+    /// wildcards.
+    #[test]
+    fn settings_with_prefix_matches_the_prefix_exactly() {
+        let db = super::Database::open_in_memory_for_tests().expect("database");
+        db.set_setting("profile_ask:1_3:2026:rdo_code", "save")
+            .unwrap();
+        db.set_setting("profile_ask:123:2026:line_of_business", "only")
+            .unwrap();
+        db.set_setting("profile_ask:1%3x:2026:rdo_code", "only")
+            .unwrap();
+        assert_eq!(
+            db.settings_with_prefix("profile_ask:1_3:").unwrap(),
+            vec![(
+                "profile_ask:1_3:2026:rdo_code".to_string(),
+                "save".to_string()
+            )]
+        );
+        assert_eq!(db.settings_with_prefix("profile_ask:1%").unwrap().len(), 1);
     }
 }

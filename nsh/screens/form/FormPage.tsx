@@ -329,7 +329,7 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
         <View class="mt-2 flex-row flex-wrap items-center gap-2">
           <Chip label={f.freq} />
           <Chip label={`${f.pages} page${f.pages > 1 ? "s" : ""}`} />
-          <Chip label={`${f.n} fields`} />
+          <Chip label={`${s.fieldCount()} fields`} />
           {f.q < 0.8 ? <Chip label="Draft layout" tone="warning" icon="triangle-alert" /> : null}
           <If when={h().status !== "Draft"}>
             <Chip testID="fp-status" label={statusLabel()} tone={h().status === "Queued" ? "accent" : "success"} />
@@ -540,7 +540,7 @@ function PartCard(props: PartCardProps) {
     if (!r) made.set(key, (r = { key, fold, ii }));
     return r;
   };
-  // The part's rows: the fold before its first profile item, then every item not folded into it.
+  // The part's rows: the fold before its first profile item, then every item not folded into it and not gated away (G1).
   const rows = computed<PartRow[]>(
     () => {
       const fold = info().fold;
@@ -548,7 +548,9 @@ function PartCard(props: PartCardProps) {
       const out: PartRow[] = [];
       p.items.forEach((_it, ii) => {
         if (fold?.first === ii) out.push(rowOf(true, ii));
-        if (!hidden?.has(ii)) out.push(rowOf(false, ii));
+        // A gated-away row is not a row of the list: it is not drawn and not counted.
+        if (hidden?.has(ii) || s.row(`${pi}:${ii}`)().hidden) return;
+        out.push(rowOf(false, ii));
       });
       return out;
     },
@@ -565,7 +567,7 @@ function PartCard(props: PartCardProps) {
         <ListRow testID={`fp-part-${pi}-toggle`} accessibilityLabel={partName(p, pi)} onPress={() => s.togglePart(pi)}>
           <Icon name={info().open ? "chevron-down" : "chevron-right"} tone="fg3" />
           <Text variant="control" class="min-w-0 flex-1 font-semibold">{partName(p, pi)}</Text>
-          <Text variant="meta" tone="fg3">{`${p.items.length} item${p.items.length > 1 ? "s" : ""}`}</Text>
+          <Text variant="meta" tone="fg3">{`${info().items} item${info().items === 1 ? "" : "s"}`}</Text>
         </ListRow>
       </View>
       <If when={info().open}>
@@ -668,7 +670,7 @@ function Navigator(props: { s: FormSession; edge: number }) {
               <If when={infos[i]().errors > 0}>
                 <Badge text={String(infos[i]().errors)} danger />
               </If>
-              <Badge text={String(p.items.length)} />
+              <Badge text={String(infos[i]().items)} />
             </View>
           </PressCell>
         ))}
@@ -721,7 +723,7 @@ function SectionsList(props: { s: FormSession; onPick: () => void; maxHeight: nu
                 <Text variant="meta" tone="fg2" lines={1}>{names.tag}</Text>
               </View>
               <Text variant="metaStrong" tone={info().errors > 0 ? "danger" : "fg2"}>
-                {info().errors > 0 ? `Fix · ${info().errors}` : info().todo > 0 ? `${info().todo} to do` : `${p.items.length} item${p.items.length > 1 ? "s" : ""}`}
+                {info().errors > 0 ? `Fix · ${info().errors}` : info().todo > 0 ? `${info().todo} to do` : `${info().items} item${info().items === 1 ? "" : "s"}`}
               </Text>
             </ListRow>
           );
@@ -869,6 +871,22 @@ function Dialogs(props: { s: FormSession }) {
     const v = o();
     return v?.kind === "sample-period" ? v : null;
   };
+  const profileAsk = () => {
+    const v = o();
+    return v?.kind === "profile-ask" ? v.ask : null;
+  };
+  // Under 600 points the ask is a bottom sheet; from there up, a dialog (Q1 P1b).
+  const phone = () => windowSize().width < BREAK.phone;
+  const askTitle = () => {
+    const a = profileAsk();
+    return a ? `Save ${a.label.toLowerCase()} to the tax profile?` : "";
+  };
+  const askBody = () => {
+    const a = profileAsk();
+    if (!a) return "";
+    const who = a.personal ? a.name : `${a.name} for ${a.year}`;
+    return `“${a.value}” is saved for ${who}. Later returns use it. You can change it later under Profile.`;
+  };
   const fast = signal(false);
   // The period dialog's boxes and quarter, filled when it opens.
   const parts = signal<Record<string, string>>({});
@@ -981,6 +999,40 @@ function Dialogs(props: { s: FormSession }) {
           )}
         </If>
       </Dialog>
+      {/* Q1 P1b: "Save to profile?" — a dialog from 600 points up, a bottom sheet under it. Escape, the
+          scrim and a swipe-down are no answer: nothing saved, nothing remembered (asks again on a changed leave). */}
+      <Dialog testID="profile-ask" width={420} open={kind("profile-ask") && !phone()} onOpenChange={(open) => !open && s.dismissProfileAsk()}>
+        <If when={profileAsk()}>
+          {() => (
+            <View class="gap-3 p-5">
+              <View class="gap-0.5">
+                <Text variant="title">{askTitle()}</Text>
+                <Text variant="meta" tone="fg2">{askBody()}</Text>
+              </View>
+              <View class="flex-row justify-end gap-2">
+                <AppButton testID="profile-ask-only" label="Only this return" onPress={() => s.profileAskOnly()} />
+                <AppButton testID="profile-ask-save" variant="primary" label="Save to profile" onPress={() => s.profileAskSave()} />
+              </View>
+            </View>
+          )}
+        </If>
+      </Dialog>
+      <Sheet testID="profile-ask-sheet" open={kind("profile-ask") && phone()} onOpenChange={(open) => !open && s.dismissProfileAsk()}>
+        <If when={profileAsk()}>
+          {() => (
+            <View class="gap-3">
+              <View class="gap-0.5">
+                <Text variant="title">{askTitle()}</Text>
+                <Text variant="meta" tone="fg2">{askBody()}</Text>
+              </View>
+              <View class="gap-2">
+                <AppButton testID="profile-ask-save" variant="primary" block label="Save to profile" onPress={() => s.profileAskSave()} />
+                <AppButton testID="profile-ask-only" block label="Only this return" onPress={() => s.profileAskOnly()} />
+              </View>
+            </View>
+          )}
+        </If>
+      </Sheet>
     </>
   );
 }
