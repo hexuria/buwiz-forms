@@ -65,8 +65,8 @@ initialize: |
   # NSH's Android runtime (classes.dex + libnsh.so per ABI). xtask reads its own
   # target/ dir, so no CARGO_TARGET_DIR here; the CLI looks for it next to its bin/.
   docker run --rm -u "$(id -u):$(id -g)" -e HOME="$HOME" -e PATH="$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" -e CARGO_INCREMENTAL=0 -e ANDROID_HOME="$HOME/Android/Sdk" -e JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 -v "$HOME:$HOME" -w "$NSH" buwiz-nsh-2404 cargo xtask android --dev
-  rm -rf ~/BuwizNsh/tools/android/bin-dev && mkdir -p ~/BuwizNsh/tools/android
-  cp -r ../nsh/target/android/debug-dev ~/BuwizNsh/tools/android/bin-dev
+  rm -rf ~/BuwizNsh/tools/runtime/android/dev && mkdir -p ~/BuwizNsh/tools/runtime/android
+  cp -r ../nsh/target/android/debug-dev ~/BuwizNsh/tools/runtime/android/dev
   # ~/BuwizNsh/nsh2404.sh <cmd>: run a command in the sidecar from nsh/, with the host display.
   cat > ~/BuwizNsh/nsh2404.sh <<'NSH_EOF'
   #!/usr/bin/env bash
@@ -103,11 +103,11 @@ maintenance: |
   (cd ../nsh && git fetch origin "$ref" && git checkout --detach "$ref")
   # A new pin needs a new nsh CLI and Android runtime from the sidecar.
   NSH="$(cd ../nsh && pwd)"
-  if ! ~/BuwizNsh/nsh2404.sh nsh --version 2>/dev/null | grep -q "(${ref:0:7})" || [ ! -d ~/BuwizNsh/tools/android/bin-dev ]; then
+  if ! ~/BuwizNsh/nsh2404.sh nsh --version 2>/dev/null | grep -q "(${ref:0:7})" || [ ! -d ~/BuwizNsh/tools/runtime/android/dev ]; then
     docker run --rm -u "$(id -u):$(id -g)" -e HOME="$HOME" -e PATH="$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" -e CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh" -e CARGO_INCREMENTAL=0 -v "$HOME:$HOME" -w "$NSH" buwiz-nsh-2404 cargo install --locked --path crates/nsh-cli --root "$HOME/BuwizNsh/tools"
     docker run --rm -u "$(id -u):$(id -g)" -e HOME="$HOME" -e PATH="$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" -e CARGO_INCREMENTAL=0 -e ANDROID_HOME="$HOME/Android/Sdk" -e JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 -v "$HOME:$HOME" -w "$NSH" buwiz-nsh-2404 cargo xtask android --dev
-    rm -rf ~/BuwizNsh/tools/android/bin-dev && mkdir -p ~/BuwizNsh/tools/android
-    cp -r ../nsh/target/android/debug-dev ~/BuwizNsh/tools/android/bin-dev
+    rm -rf ~/BuwizNsh/tools/runtime/android/dev && mkdir -p ~/BuwizNsh/tools/runtime/android
+    cp -r ../nsh/target/android/debug-dev ~/BuwizNsh/tools/runtime/android/dev
   fi
 knowledge:
   - name: startup
