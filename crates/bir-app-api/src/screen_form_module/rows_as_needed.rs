@@ -125,6 +125,10 @@ pub(super) struct OneDate {
     writer: DateWriter,
     /// A zero month or day hides all three shown parts, retaining the draft.
     hide_zero_parts: bool,
+    /// The draft keeps each part as a plain whole number, so a typed "0" is
+    /// how the page clears a part (1606, 1707); elsewhere "0" is not a date
+    /// part and is refused with the date sentence.
+    zero_blank: bool,
 }
 
 impl OneDate {
@@ -135,6 +139,7 @@ impl OneDate {
             old_shell: false,
             writer: DateWriter::Ordinary,
             hide_zero_parts: false,
+            zero_blank: false,
         }
     }
     const fn old_shell(mut self) -> Self {
@@ -147,6 +152,10 @@ impl OneDate {
     }
     const fn hide_zero_parts(mut self) -> Self {
         self.hide_zero_parts = true;
+        self
+    }
+    const fn zero_blank(mut self) -> Self {
+        self.zero_blank = true;
         self
     }
 }
@@ -335,7 +344,8 @@ pub(super) const ONE_DATES: &[OneDate] = &[
             "frm1606:txtDateDay",
             "frm1606:txtDateYear",
         ],
-    ),
+    )
+    .zero_blank(),
     OneDate::new(
         "1701Q",
         [
@@ -374,7 +384,8 @@ pub(super) const ONE_DATES: &[OneDate] = &[
     )
     .old_shell()
     .writer(DateWriter::WholeParts)
-    .hide_zero_parts(),
+    .hide_zero_parts()
+    .zero_blank(),
     OneDate::new(
         "2552",
         [
@@ -749,11 +760,15 @@ pub(super) fn refuse_dates(
         if !edits.iter().any(|(key, _)| keys.contains(&key.as_str())) {
             continue;
         }
-        // A typed part is missing only when empty; a shown one also when it
+        // A typed part is missing only when empty (or a whole-number "0"
+        // where the draft spells blank as zero); a shown one also when it
         // is the official zero blank ("00", 1707's "0").
+        let zero_blank = date.zero_blank;
         let part = |key: &str| -> Option<String> {
             match edits.iter().find(|(k, _)| k == key) {
-                Some((_, v)) => Some(text(v)).filter(|v| !v.is_empty() && v != "0"),
+                Some((_, v)) => {
+                    Some(text(v)).filter(|v| !v.is_empty() && !(zero_blank && v == "0"))
+                }
                 None => Some(shown[key].as_str().unwrap_or_default().trim().to_string())
                     .filter(|v| !v.chars().all(|c| c == '0')),
             }
@@ -852,9 +867,12 @@ fn range_end_date(
         .iter()
         .find(|date| date.form == code && date.keys[0] == anchor)
     {
+        let zero_blank = date.zero_blank;
         let part = |key: &str| -> Option<String> {
             match edits.iter().find(|(k, _)| k == key) {
-                Some((_, v)) => Some(text(v)).filter(|v| !v.is_empty() && v != "0"),
+                Some((_, v)) => {
+                    Some(text(v)).filter(|v| !v.is_empty() && !(zero_blank && v == "0"))
+                }
                 None => Some(shown[key].as_str().unwrap_or_default().trim().to_string())
                     .filter(|v| !v.chars().all(|c| c == '0')),
             }
