@@ -2507,8 +2507,8 @@ export class FormSession {
     try {
       bir.screen_form_profile_asked(s.target.tin, this.taxYear(), ask.field, "only");
       this.wrote("screen_form_profile_asked");
-    } catch (_) {
-      // A refused record still keeps it off this session's asks.
+    } catch (e) {
+      this.toast(plainRefusal(errorText(e)), "triangle-alert");
     }
     s.profileAsked.add(ask.field);
     this.profileAskResult(ask, false);

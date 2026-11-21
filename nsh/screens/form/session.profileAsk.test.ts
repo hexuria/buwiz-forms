@@ -58,6 +58,31 @@ test("P1b: 'Only this return' writes nothing, shows the kept line, and is rememb
   s.dispose();
 });
 
+test("P1b: a refused 'Only this return' record shows the host's refusal in a toast", async () => {
+  createDemoTaxpayer();
+  const toasts: string[] = [];
+  const s = new FormSession(at("1701", 2022, 0), {
+    toast: (text) => (toasts.push(text), `t${toasts.length}`),
+    dismissToast: () => {},
+    afterWrite: () => {},
+  });
+  expect(await s.open()).toBe(null);
+  await s.idle();
+  await askBirth(s, "02/03/1977");
+  expect(s.overlay()?.kind).toBe("profile-ask");
+  (s as any).st.target.tin = "12AB";
+
+  s.profileAskOnly();
+  await s.idle();
+
+  expect(toasts).toEqual(["tin is not a TIN of 12 to 14 digits"]);
+  expect(s.overlay()).toBe(null);
+  const row = s.row(s.itemIdForKey(BIRTH)!)();
+  expect(row.profileAsk?.ok).toBe(false);
+  expect(row.profileAsk?.text).toContain("Kept on this return only");
+  s.dispose();
+});
+
 test("P1b: 'Save to profile' writes the profile, shows the saved line, and is remembered", async () => {
   const s = await opened(at("1701", 2026, 0));
   await askBirth(s, "08/17/1988");
