@@ -2458,19 +2458,23 @@ fn export_profile(
             .map(|_| ())
             .map_err(|error| error.to_string())
     }) {
-        return Ok(Box::pin(async move {
-            let path = download.await.map_err(HostError::new)?;
-            Ok(HostObject::new()
-                .field("kind", "exported")
-                .field("path", path)
-                .into())
-        }));
+        return Ok(Box::pin(downloaded_export(download)));
     }
     let directory = std::env::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
     after_path_prompt(
         move |answer| crate::hooks::hooks().prompt_for_save_path(&directory, &file_name, answer),
         move |path: std::path::PathBuf| export_profile_to(&tin, pin.as_deref(), &path),
     )
+}
+
+async fn downloaded_export(download: crate::hooks::DownloadExport) -> HostResult {
+    Ok(match download.await.map_err(HostError::new)? {
+        Some(path) => HostObject::new()
+            .field("kind", "exported")
+            .field("path", path)
+            .into(),
+        None => HostObject::new().field("kind", "cancelled").into(),
+    })
 }
 
 /// Write `tin`'s profile archive to `path`; not a verb. The PIN gate is
@@ -5061,6 +5065,29 @@ mod tests {
     }
 
     // ---------- export_profile ----------
+
+    #[tokio::test]
+    async fn downloaded_profile_export_uses_the_save_panels_result_shape() {
+        let result = downloaded_export(Box::pin(async { Ok(None) }))
+            .await
+            .unwrap();
+        assert_eq!(to_json(&result), serde_json::json!({ "kind": "cancelled" }));
+        let result = downloaded_export(Box::pin(async { Ok(Some("Files: profile.zip".into())) }))
+            .await
+            .unwrap();
+        assert_eq!(
+            to_json(&result),
+            serde_json::json!({ "kind": "exported", "path": "Files: profile.zip" })
+        );
+        let result = downloaded_export(Box::pin(async {
+            Err("The export sheet could not open.".into())
+        }))
+        .await;
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "The export sheet could not open."
+        );
+    }
 
     /// `export_profile_to` writes `TIN`'s archive under the bir-core gate:
     /// a PIN'd taxpayer refuses — no PIN, wrong PIN — before the file

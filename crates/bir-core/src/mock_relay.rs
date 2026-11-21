@@ -292,17 +292,22 @@ async fn serve(mut stream: TcpStream, config: &RelayConfig) -> Result<(), String
         Err(error) => return Err(error),
     };
     let (status, body) = match (request.method.as_str(), request.path.as_str()) {
-        ("GET", "/v1/health") => (200, serde_json::json!({ "ok": true, "mock": true })),
+        ("GET", "/v1/health") => (
+            200,
+            serde_json::json!({
+                "service": crate::transport::MOCK_RELAY_SERVICE,
+                "version": 1,
+                "ok": true,
+                "mock": true
+            }),
+        ),
         ("POST", "/v1/submissions") => submit(&request, config).await,
         _ => (
             404,
             serde_json::json!({ "status": "rejected", "error": "no such route" }),
         ),
     };
-    println!(
-        "[mock-relay] {} {} -> {status} {body}",
-        request.method, request.path
-    );
+    println!("[mock-relay] HTTP {status} ({} bytes)", request.body.len());
     respond(&mut stream, status, body).await
 }
 
@@ -394,8 +399,10 @@ async fn submit(request: &Request, config: &RelayConfig) -> (u16, serde_json::Va
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(any(debug_assertions, feature = "mock-relay"))]
     use crate::transport::{TransportError, submit_sftp_target};
 
+    #[cfg(any(debug_assertions, feature = "mock-relay"))]
     async fn relay(failure: RelayFailure) -> (MockRelay, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         let config = RelayConfig {
@@ -411,6 +418,7 @@ mod tests {
         )
     }
 
+    #[cfg(any(debug_assertions, feature = "mock-relay"))]
     fn target(relay: &MockRelay) -> ResolvedSftpTarget {
         ResolvedSftpTarget::Relay {
             url: relay.url(),
@@ -418,6 +426,7 @@ mod tests {
         }
     }
 
+    #[cfg(any(debug_assertions, feature = "mock-relay"))]
     #[tokio::test]
     async fn an_accepted_file_is_kept_byte_for_byte_with_a_receipt() {
         let (relay, dir) = relay(RelayFailure::None).await;
@@ -440,6 +449,7 @@ mod tests {
         );
     }
 
+    #[cfg(any(debug_assertions, feature = "mock-relay"))]
     #[tokio::test]
     async fn a_rejecting_relay_is_a_refusal_and_an_unavailable_or_absent_one_is_unavailable() {
         let (relay, _dir) = relay(RelayFailure::Reject).await;
@@ -479,6 +489,7 @@ mod tests {
         );
     }
 
+    #[cfg(any(debug_assertions, feature = "mock-relay"))]
     async fn relay_unavailable() -> (MockRelay, tempfile::TempDir) {
         relay(RelayFailure::Unavailable).await
     }

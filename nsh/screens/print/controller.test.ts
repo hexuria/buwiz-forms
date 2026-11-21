@@ -37,7 +37,7 @@ class FakeWindow implements WindowLike {
   }
 }
 
-function world(nativePreview?: (key: string, title: string) => Promise<void>) {
+function world(nativePreview?: (key: string, title: string, requestId: string) => Promise<void>) {
   const windows = new Map<string, FakeWindow>();
   const opened: FakeWindow[] = [];
   const closedKeys: string[] = [];
@@ -71,7 +71,7 @@ function world(nativePreview?: (key: string, title: string) => Promise<void>) {
     errorText: (error) => String((error as Error).message ?? error),
   });
   const event = (kind: "open" | "update", key: string, revision: number): PrintEvent =>
-    ({ kind, key, title: `BIR Form ${key} — Juana Santos`, url: "file:///preview/sheet.html", script: kind === "update" ? "patch" : "", revision, pages: 2, paper: "A4", sheet: "Folio", zoom: 0.88, message: null }) as PrintEvent;
+    ({ kind, key, requestId: `${key}-${revision}`, title: `BIR Form ${key} — Juana Santos`, url: "file:///preview/sheet.html", script: kind === "update" ? "patch" : "", revision, pages: 2, paper: "A4", sheet: "Folio", zoom: 0.88, message: null }) as PrintEvent;
   return { host, windows, opened, closedKeys, toasts, previews, state, event };
 }
 
@@ -134,6 +134,24 @@ test("Android system preview reports a native failure without deleting its sheet
   w.state.chrome = false;
   w.host.closeAll();
   expect(w.closedKeys).toEqual(["2551Q"]);
+});
+
+test("Android: session changes preserve the new same-form owner and pass distinct native request identities", async () => {
+  const pending: { requestId: string; reject(error: Error): void }[] = [];
+  const w = world((_key, _title, requestId) => new Promise<void>((_resolve, reject) => pending.push({ requestId, reject })));
+  w.host.hear(w.event("open", "2551Q", 1));
+  w.host.closeAll();
+  w.host.hear(w.event("open", "2551Q", 2));
+  expect(pending[0].requestId === pending[1].requestId).toBe(false);
+  pending[0].reject(new Error("Old session's print failed"));
+  await Promise.resolve();
+  expect(w.toasts).toEqual([]);
+  expect(w.closedKeys).toEqual(["2551Q"]);
+  pending[1].reject(new Error("New print failed"));
+  await Promise.resolve();
+  expect(w.toasts).toEqual(["Print preview could not open: New print failed"]);
+  w.host.closeAll();
+  expect(w.closedKeys).toEqual(["2551Q", "2551Q"]);
 });
 
 test("the window belongs to the return it was asked on, and asking again for that return focuses it", () => {
@@ -265,24 +283,33 @@ test("a window that cannot open says so and leaves nothing behind; a device with
   expect(w.closedKeys[w.closedKeys.length - 1]).toBe("1601C");
 });
 
-/** A phone: no second window; the system print sheet shows the PDF once `show` settles. */
+/** A phone: no second window; the system print sheet settles when dismissed or finished. */
 function phone() {
   const closedKeys: string[] = [];
+  const current = new Map<string, string>();
+  let sequence = 0;
   const toasts: string[] = [];
   const state = { chrome: true, dismissed: 0, sheetUp: false };
   let settle: { resolve: () => void; reject: (error: Error) => void } | null = null;
   const host = createPreviewHost({
     available: false,
     windows: { get: () => null, open: () => { throw new Error("no window on a phone"); } },
-    nativePreview: () =>
+    nativePreview: (key, requestId) =>
       new Promise<void>((resolve, reject) => {
-        settle = { resolve: () => { state.sheetUp = true; resolve(); }, reject };
+        settle = { resolve: () => { if (current.get(key) === requestId) state.sheetUp = false; resolve(); }, reject };
       }),
     dismissNative: () => {
       state.dismissed++;
       state.sheetUp = false;
     },
-    print: { closed: (key) => void closedKeys.push(key) },
+    print: {
+      closed: (key, requestId) => {
+        closedKeys.push(key);
+        if (current.get(key) === requestId) current.delete(key);
+      },
+      current: (key, requestId) => current.get(key) === requestId,
+      reset: () => current.clear(),
+    },
     previews: { apply: () => {}, get: () => undefined, remove: () => {} },
     route: () => returnOf(3),
     period: () => null,
@@ -290,19 +317,27 @@ function phone() {
     toast: (message) => void toasts.push(message),
     errorText: (error) => String((error as Error).message ?? error),
   });
-  const open = (key: string) =>
-    host.hear({ kind: "open", key, title: `BIR Form ${key}`, url: "", script: "", revision: 1, pages: 2, paper: "A4", sheet: "Folio", zoom: 1, message: null } as PrintEvent);
+  const open = (key: string) => {
+    const requestId = `session-request-${++sequence}`;
+    current.set(key, requestId);
+    const event = { kind: "open", key, requestId, title: `BIR Form ${key}`, url: "", script: "", revision: 1, pages: 2, paper: "A4", sheet: "Folio", zoom: 1, message: null } as PrintEvent;
+    host.hear(event);
+    return event;
+  };
   const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
   return { host, closedKeys, toasts, state, open, settle: () => settle!, tick };
 }
 
-test("phone: the system print sheet shows the PDF, then the Rust side forgets the preview", async () => {
+test("phone: a finished or dismissed sheet is forgotten and later locks leave it alone", async () => {
   const p = phone();
   p.open("1601C");
   expect(p.toasts).toEqual(["Preparing the print preview..."]);
   p.settle().resolve();
   await p.tick();
-  expect(p.state.sheetUp).toBe(true);
+  expect(p.state.sheetUp).toBe(false);
+  expect(p.state.dismissed).toBe(0);
+  expect(p.closedKeys).toEqual(["1601C"]);
+  p.host.closeAll();
   expect(p.state.dismissed).toBe(0);
   expect(p.closedKeys).toEqual(["1601C"]);
 });
@@ -331,15 +366,71 @@ test("phone: the refusal after a lock is quiet; a lock with the sheet up takes i
 
   p.state.chrome = true;
   p.open("2551Q");
-  p.settle().resolve();
-  await p.tick();
+  p.state.sheetUp = true;
   expect(p.state.sheetUp).toBe(true);
   p.state.chrome = false;
   p.host.closeAll();
   expect(p.state.sheetUp).toBe(false);
+  p.settle().resolve();
+  await p.tick();
 
   const before = p.toasts.length;
   p.open("0619E");
   expect(p.toasts.length).toBe(before);
   expect(p.closedKeys.at(-1)).toBe("0619E");
+});
+
+test("phone: no sheet or a failed sheet leaves nothing for a later lock to close", async () => {
+  const p = phone();
+  p.host.closeAll();
+  expect(p.state.dismissed).toBe(0);
+  p.open("1601C");
+  p.settle().reject(new Error("Printer unavailable"));
+  await p.tick();
+  expect(p.toasts.at(-1)).toBe("Print preview could not open: Printer unavailable");
+  p.host.closeAll();
+  expect(p.state.dismissed).toBe(0);
+  expect(p.closedKeys).toEqual(["1601C"]);
+});
+
+for (const sessionChange of [false, true]) {
+  for (const reject of [false, true]) {
+    test(`phone: an old same-form request cannot close a replacement (session change: ${sessionChange}, failure: ${reject})`, async () => {
+      const p = phone();
+      const oldEvent = p.open("2551Q");
+      const old = p.settle();
+      if (sessionChange) p.host.closeAll();
+      p.open("2551Q");
+      const replacement = p.settle();
+      p.state.sheetUp = true;
+      const dismissed = p.state.dismissed;
+      const closed = p.closedKeys.length;
+      if (reject) old.reject(new Error("Old taxpayer's PDF failed"));
+      else old.resolve();
+      await p.tick();
+      expect(p.state.sheetUp).toBe(true);
+      expect(p.state.dismissed).toBe(dismissed);
+      expect(p.closedKeys.length).toBe(closed);
+      expect(p.toasts.some((text) => text.includes("failed"))).toBe(false);
+      p.host.hear(oldEvent);
+      expect(p.settle()).toBe(replacement);
+      replacement.resolve();
+      await p.tick();
+      expect(p.closedKeys.length).toBe(closed + 1);
+    });
+  }
+}
+
+test("phone: an open event queued before the session ended cannot reopen a sheet", async () => {
+  const p = phone();
+  const event = p.open("2551Q");
+  const pending = p.settle();
+  p.host.closeAll();
+  const before = p.toasts.length;
+  p.host.hear(event);
+  expect(p.toasts.length).toBe(before);
+  expect(p.settle()).toBe(pending);
+  pending.resolve();
+  await p.tick();
+  expect(p.state.sheetUp).toBe(false);
 });

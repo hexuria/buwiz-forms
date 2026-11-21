@@ -7,7 +7,7 @@
 //   no window on this device  -> iOS: the system print sheet shows the PDF (Print.previewsNatively); elsewhere a toast says so
 //
 // A preview belongs to the return it was opened on: leaving that form, or opening another return, closes the window, and so does closing
-// the main window. So do a lock, a log out and a sign-out (the session changes), and whatever else takes the frame away (the Buwiz gate, the
+// the main window. So do a lock, a log out, a sign-out (the session changes), a switch to another taxpayer, and whatever else takes the frame away (the Buwiz gate, the
 // sign-in screen): a preview shows a taxpayer's TIN and amounts, and Print and Save as PDF still work in it. The user closing the window
 // tells the Rust side, which forgets the preview.
 import { effect, untracked } from "nsh";
@@ -41,7 +41,7 @@ function startSize(): { width: number; height: number } {
 
 const host = createPreviewHost({
   available: isAvailable,
-  ...(hasNativePreview ? { androidPreview: (key: string, title: string) => Print.openNative(key, title) } : {}),
+  ...(hasNativePreview ? { androidPreview: (key: string, title: string, requestId: string) => Print.openNative(key, title, requestId) } : {}),
   windows: {
     get: (id) => Window.get(id),
     open: (id, title, key) =>
@@ -57,9 +57,13 @@ const host = createPreviewHost({
     onFirstOpen: () => void Window.get("main")?.on("close", () => host.closeAll()),
   },
   ...(Print.previewsNatively()
-    ? { nativePreview: (key: string) => Print.print(key), dismissNative: () => Print.dismissNative() }
+    ? { nativePreview: (key: string, requestId: string) => Print.printRequest(key, requestId), dismissNative: () => Print.dismissNative() }
     : {}),
-  print: { closed: (key) => Print.closed(key) },
+  print: {
+    closed: (key, requestId) => requestId ? Print.closedRequest(key, requestId) : Print.closed(key),
+    current: (key, requestId) => Print.current(key, requestId),
+    reset: () => Print.reset(),
+  },
   previews,
   route: () => untracked(() => app.route()),
   period: periodNow,
@@ -82,3 +86,15 @@ effect(() => {
   if (!app.chromeVisible()) untracked(() => host.closeAll());
 });
 app.onSessionChange(() => host.closeAll());
+
+// A preview shows one taxpayer's TIN and amounts, so switching the frame to another taxpayer ends every preview, the one being prepared too
+// (help desk: the return on screen can stay while the frame is on someone else).
+let shownRoot = untracked(() => app.taxpayer()?.tin_root ?? null);
+effect(() => {
+  const root = app.taxpayer()?.tin_root ?? null;
+  untracked(() => {
+    if (root === shownRoot) return;
+    shownRoot = root;
+    host.closeAll();
+  });
+});

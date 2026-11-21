@@ -723,7 +723,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
     };
 
     let session_source = transport.session_source(&session);
-    let skip_email_poll = session_source.is_dry_run();
+    let skip_email_poll = session_source.is_dry_run() || session_source.is_relay();
     let put_marked = {
         let db_guard = match lock_timing::lock(&db) {
             Ok(guard) => guard,
@@ -1122,7 +1122,7 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
     };
 
     let session_source = transport.session_source(&session);
-    let skip_email_poll = session_source.is_dry_run();
+    let skip_email_poll = session_source.is_dry_run() || session_source.is_relay();
     let put_marked = lock_timing::lock(&db)
         .ok()
         .and_then(|db_guard| {
@@ -1533,6 +1533,7 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
     };
 
     let session_source = transport.session_source(&session);
+    let skip_email_poll = session_source.is_dry_run() || session_source.is_relay();
     let put_marked = {
         let db_guard = match lock_timing::lock(&db_clone) {
             Ok(guard) => guard,
@@ -1559,7 +1560,7 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
         .await
     {
         Ok(_) => {
-            if session_source.is_dry_run() {
+            if skip_email_poll {
                 info!(
                     "Cron: dry run: simulated submission of queued form {} (nothing sent to BIR)",
                     filename
@@ -1573,7 +1574,7 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
                 "2551Q",
                 &period_label,
                 &chrono::Local::now(),
-                session_source.is_dry_run(),
+                skip_email_poll,
             );
             crate::notification::send_notification(&notice_title, &notice_body);
             // Keep the exact bytes that were encrypted for PUT.
@@ -1592,7 +1593,7 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
                             &notice_title,
                             &notice_body,
                         );
-                        if session_source.is_dry_run() {
+                        if skip_email_poll {
                             info!(
                                 "Cron: 2551Q dry-run PUT succeeded; skipping IMAP poll (source=dry-run)"
                             );
@@ -3549,6 +3550,31 @@ mod tests {
         (db, queued, summary)
     }
 
+    fn assert_mock_submission_notice_and_no_poll(db: &Arc<Mutex<Database>>) {
+        let db = db.lock().unwrap();
+        assert!(
+            db.list_jobs()
+                .unwrap()
+                .iter()
+                .all(|job| !is_email_poll_job(job))
+        );
+        let alerts = db.list_active_alerts(None).unwrap();
+        let notice = alerts
+            .iter()
+            .find(|alert| alert.kind.starts_with("form_submitted:"))
+            .unwrap();
+        assert!(
+            notice.title.contains(DRY_RUN_NOTICE_SUFFIX),
+            "{}",
+            notice.title
+        );
+        assert!(
+            notice.detail.contains(DRY_RUN_NOTICE_SUFFIX.trim_start()),
+            "{}",
+            notice.detail
+        );
+    }
+
     /// A 503 from the relay after the claim: it kept nothing, so the claim goes, the return stays Queued with a
     /// back-off, and once the relay is back it is sent and remembered as sent through the relay.
     #[tokio::test]
@@ -3588,6 +3614,7 @@ mod tests {
         assert_eq!(sent.status, FilingStatus::Submitted);
         assert!(sent.submitted_via_relay);
         assert!(!sent.submitted_dry_run);
+        assert_mock_submission_notice_and_no_poll(&db);
     }
 
     /// A 4xx from the relay: the same file would be refused again, so the return goes back to Draft with the reason.
@@ -3665,6 +3692,7 @@ mod tests {
         let sent = stored();
         assert_eq!(sent.status, FilingStatus::Submitted);
         assert!(sent.submitted_via_relay);
+        assert_mock_submission_notice_and_no_poll(&db);
     }
 
     #[tokio::test]
@@ -3723,6 +3751,7 @@ mod tests {
         let sent = stored_test_form(&db, &queued);
         assert_eq!(sent.lifecycle.status, FilingStatus::Submitted);
         assert!(sent.lifecycle.submitted_via_relay);
+        assert_mock_submission_notice_and_no_poll(&db);
 
         let db = test_db();
         let (queued, summary) = queued_test_form(&db);

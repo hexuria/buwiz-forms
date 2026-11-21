@@ -266,6 +266,8 @@ test("desktop: filing events become notifications: an unread dot, the list, Mark
   expect(app.texts()).toContain("BIR confirmed 1601C for March 2025");
   expect(app.texts()).toContain("Waiting for BIR's confirmation email · Juana Santos");
   expect(app.texts()).toContain("Confirmation email received · Juana Santos");
+  // A mock-relay send never reaches BIR, so it does not wait for BIR's email.
+  expect(app.texts()).toContain("Sent to the mock relay, not to BIR: no BIR email will come · Juana Santos");
   expect(app.shows("id:notif-unread-return:9001:submitted")).toBe(true);
   expect(app.shows("id:notif-unread-return:9002:confirmed")).toBe(true);
   expect(app.enabled("id:notif-mark-all")).toBe(true);

@@ -1,4 +1,5 @@
 // The rules of the sign-in, setup and account-gate screens (old app/main.js auth section, app/shell/auth.js, gate.js): pure.
+import { deviceCopy } from "../../ui/look";
 
 /** The account gate's line before anything happened. */
 export const GATE_DEFAULT = "Sign in with your Buwiz account to file from this computer.";
@@ -10,7 +11,7 @@ export type SignInTarget = { error: string } | { root: string; admin: boolean };
 export function signInTarget(tin: string, adminRoot: string | null, roots: readonly string[]): SignInTarget {
   if (tin.length !== 9) return { error: "Type all 9 digits of the TIN." };
   if (tin === adminRoot) return { root: tin, admin: true };
-  if (!roots.includes(tin)) return { error: "No taxpayer has that TIN on this device." };
+  if (!roots.includes(tin)) return { error: deviceCopy("No taxpayer has that TIN on this computer.") };
   return { root: tin, admin: false };
 }
 
@@ -38,5 +39,5 @@ export function waitingDetail(started: { user_code?: string | null; browser_open
   const code = started.user_code ? ` Code ${started.user_code}.` : "";
   return started.browser_opened
     ? `Finish in the browser, then return here.${code}`
-    : `Open ${started.verification_uri_complete} and approve this computer.${code}`;
+    : deviceCopy(`Open ${started.verification_uri_complete} and approve this computer.${code}`);
 }

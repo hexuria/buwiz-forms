@@ -12,6 +12,8 @@ One origin, `BIR_RELAY_URL`. The app accepts only `http://` on `127.0.0.1`,
 `::1` or `localhost`, with no path, query, credentials or fragment
 (`bir_core::transport::loopback_relay_url`). Anything else is refused before a
 byte is sent, and the app's send guard does not start the submission worker.
+Relay use requires a debug build or the explicit `mock-relay` feature; a release
+build without that feature refuses `BIR_RELAY_URL` before connecting.
 
 ### `POST /v1/submissions`
 
@@ -29,16 +31,30 @@ Answers (JSON):
 | Status | Body | The app |
 | --- | --- | --- |
 | `202` | `{"status":"accepted","receipt_id":"relay-…","sha256":"…","forwarded":"mock-bir"\|"none",…}` | the return is **Submitted** |
-| `4xx` | `{"status":"rejected","error":"…"}` | refused, nothing kept (`TransportError::RelayRefused`): the claim is let go and the return goes back to **Draft** with the reason |
-| `503` | `{"status":"failed","error":"…"}` | unavailable, nothing kept (`TransportError::RelayUnavailable`): the claim is let go, the return stays **Queued** and is retried after 1, 2, 4, 8 minutes (the fifth failure returns it to Draft) |
+| `4xx` except `408`/`429` | `{"status":"rejected","error":"…"}` | refused, nothing kept (`TransportError::RelayRefused`): the claim is let go and the return goes back to **Draft** with the reason |
+| `408`, `429`, `503` | `{"status":"failed","error":"…"}` | unavailable, nothing kept (`TransportError::RelayUnavailable`): the claim is let go, the return stays **Queued** and is retried after 1, 2, 4, 8 minutes (the fifth failure returns it to Draft) |
 | other `5xx` (`502` = the mock BIR hand-off failed) | `{"status":"failed","error":"…"}` | outcome unknown (`TransportError::Http`): the file may have gone on, so the return keeps its claim and is never sent again without a person |
 
-`202` means the relay holds the file. Confirmation from the BIR (the email
-receipt) stays outside this contract, as on the desktop.
+`202` means the mock relay holds the file, not that it reached the BIR. The app
+uses dry-run notices and alerts and does not poll for a BIR email receipt.
+Client logs record only the form code and byte length; the mock's console omits
+the receipt body, whose IAF filename contains the taxpayer's TIN and email.
 
 ### `GET /v1/health`
 
-`200 {"ok":true,"mock":true}`.
+`200 {"service":"buwiz-mock-relay","version":1,"ok":true,"mock":true}`.
+Both startup and worker probes require HTTP 200 and all four identity fields.
+For `localhost`, startup probes IPv4 and IPv6 loopback, then replaces the configured
+URL with the numeric address that passed. Worker health checks and uploads use
+that same address, never a fresh resolution of `localhost`.
+
+**Upgrading:** a relay still returning `{"ok":true,"mock":true}` is out of date
+and is refused. Stop it and use the restart command in the refusal, which preserves
+the checked bind address and port. For `BIR_RELAY_URL=http://[::1]:9000`, run
+`just mock-relay --bind ::1 --port 9000` to rebuild and restart it, then restart the
+app so its startup guard can enable the submission worker. The recipe forwards
+these arguments to the relay binary; for `localhost`, the advice uses the numeric
+loopback address that answered the health check.
 
 The app asks it before it claims a queued return: a relay that does not answer
 there leaves the return Queued, unclaimed, and retried after the back-off.
@@ -163,7 +179,9 @@ queue-admission checks still apply.
   instead of SFTP. The source logs as `relay`.
 - `nsh/src/guards.rs`: the send guard answers `SendMode::Relay` (`doorStatus().sending
   === "relay"`) only when the relay URL is loopback, its port answers, and
-  `GET /v1/health` answers HTTP 200 with `{"mock":true}`. A set
+  `GET /v1/health` identifies `buwiz-mock-relay` version 1 with `ok` and `mock`
+  both true. For `localhost`, it tries both loopback families and pins the
+  configured upload URL to the one that passed. A set
   but bad or silent relay is `Refused`: the worker does not start. `BIR_SFTP_LIVE`
   is still removed and the Dev Mode test server still refuses.
 - The iOS app gets `BIR_RELAY_URL` (and the dev variables) from the launch
@@ -280,7 +298,8 @@ What refuses it today, on purpose:
   upload never starts.
 - `relay_target` in `nsh/src/guards.rs` then requires that loopback port to
   answer and `mock_health` requires HTTP 200 from `/v1/health` with JSON
-  containing `"mock":true`. Otherwise the send mode is `Refused`.
+  containing `"service":"buwiz-mock-relay"`, `"version":1`, `"ok":true` and
+  `"mock":true`. Otherwise the send mode is `Refused`.
 
 To test a real relay (a deliberate, reviewed change), you need:
 

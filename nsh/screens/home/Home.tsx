@@ -8,7 +8,7 @@ import { loadDashboard, pickedDeadlines, tileSpecs, type HomeView, type TileSpec
 import { MONTHS_LONG } from "../../lib/dates";
 import { app, contentColumn, go, store, today } from "../../shell";
 import { SAVED_RETURNS_KEY } from "../../shell/store";
-import { AppButton, EmptyRow, Icon, type IconName, ListGroup, ListRow, NameCell, PageHeader, SectionTitle, StepCircle, Text } from "../../ui";
+import { AppButton, deviceCopy, EmptyRow, Icon, type IconName, ListGroup, ListRow, NameCell, PageHeader, SectionTitle, StepCircle, Text } from "../../ui";
 import { AsNeededHead, AsNeededUndated, DeadlineStrip, DueRow, FiledRow, StatTile, TaxpayerRow } from "./parts";
 import { homePick } from "./pick";
 import { FILED_STATUSES, openFilings } from "./preset";
@@ -52,7 +52,7 @@ function Welcome() {
     <View testID="home-welcome" class="w-full">
       <PageHeader
         title="Welcome to eBIRForms"
-        lede="Prepare, print and track BIR returns for every taxpayer you handle. Everything stays on this device."
+        lede={deviceCopy("Prepare, print and track BIR returns for every taxpayer you handle. Everything stays on this computer.")}
       />
       <View class="mt-7">
         <ListGroup testID="welcome-steps">

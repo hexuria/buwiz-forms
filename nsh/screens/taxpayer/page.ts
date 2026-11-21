@@ -225,6 +225,8 @@ export function createPageState() {
         }
         edit.set(null);
         toast(text);
+        // A moved TIN leaves the return's route behind, so only an unmoved one goes back to it.
+        if (e.fromForm && digits === t.tin_root && app.canBack()) back();
         return;
       }
       if (e.sec === "branch") {

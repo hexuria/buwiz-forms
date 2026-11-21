@@ -96,7 +96,7 @@ pub(crate) fn send_guard_with(listening: impl Fn(&str, u16) -> bool) -> SendMode
 
 fn send_guard_with_health(
     listening: impl Fn(&str, u16) -> bool,
-    healthy: impl Fn(&str, u16) -> bool,
+    healthy: impl Fn(&str, u16) -> Result<bool, String>,
 ) -> SendMode {
     #[cfg(target_os = "android")]
     bir_core::config::force("BIR_SFTP_LIVE", None);
@@ -106,6 +106,15 @@ fn send_guard_with_health(
         std::env::remove_var("BIR_SFTP_LIVE")
     };
     let relay = relay_target(&listening, &healthy);
+    if let Some(Ok(url)) = &relay {
+        #[cfg(target_os = "android")]
+        bir_core::config::force(bir_core::transport::RELAY_URL_ENV, Some(url));
+        #[cfg(not(target_os = "android"))]
+        // SAFETY: registration precedes worker startup, as above.
+        unsafe {
+            std::env::set_var(bir_core::transport::RELAY_URL_ENV, url)
+        };
+    }
     let mock = mock_target(&listening);
     if !matches!(relay, Some(Ok(_))) && mock.is_none() {
         #[cfg(target_os = "android")]
@@ -117,21 +126,16 @@ fn send_guard_with_health(
         };
     }
     let panel = bir_core::dev_mode::panel_submission_mode();
-    relay_verdict(relay, panel)
+    relay_verdict(relay)
         .unwrap_or_else(|| verdict(mock, bir_core::transport::is_sftp_dry_run(), panel))
 }
 
 /// The decision when `BIR_RELAY_URL` is set (`relay`: its origin when it is a listening loopback one, else why
 /// not): the transport sends there before anything else, so it is the relay or nothing. `None` when it is unset.
 /// Pure, so every branch is tested.
-pub(crate) fn relay_verdict(
-    relay: Option<Result<String, String>>,
-    panel: Option<SubmissionMode>,
-) -> Option<SendMode> {
+pub(crate) fn relay_verdict(relay: Option<Result<String, String>>) -> Option<SendMode> {
+    // The relay environment overrides the panel, including a saved dry run.
     let relay = relay?;
-    if panel == Some(SubmissionMode::TestServer) {
-        return Some(verdict(None, false, panel));
-    }
     Some(match relay {
         Ok(url) => SendMode::Relay { url },
         Err(why) => SendMode::Refused(why),
@@ -141,7 +145,7 @@ pub(crate) fn relay_verdict(
 /// `BIR_RELAY_URL` when it is a loopback `http://` origin whose port answers; the refusal when it is set otherwise.
 fn relay_target(
     listening: &impl Fn(&str, u16) -> bool,
-    healthy: &impl Fn(&str, u16) -> bool,
+    healthy: &impl Fn(&str, u16) -> Result<bool, String>,
 ) -> Option<Result<String, String>> {
     let url = match bir_core::transport::relay_url().or_else(|| {
         match bir_core::config::var(bir_core::transport::RELAY_URL_ENV) {
@@ -165,19 +169,41 @@ fn relay_target(
         }
     };
     let host = host.trim_start_matches('[').trim_end_matches(']');
-    let host = if host.eq_ignore_ascii_case("localhost") { "127.0.0.1" } else { host };
-    Some(match port {
-        Some(port) if listening(host, port) && healthy(host, port) => Ok(url),
-        _ => Err(format!(
+    let localhost = host.eq_ignore_ascii_case("localhost");
+    let hosts: &[&str] = if localhost { &["127.0.0.1", "::1"] } else { &[host] };
+    let mut health_errors = Vec::new();
+    if let Some(port) = port {
+        for host in hosts.iter().filter(|host| listening(host, port)) {
+            match healthy(host, port) {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(why) => {
+                    if !health_errors.contains(&why) {
+                        health_errors.push(why);
+                    }
+                    continue;
+                }
+            }
+            if localhost {
+                let host = if host.contains(':') { format!("[{host}]") } else { host.to_string() };
+                return Some(Ok(format!("http://{host}:{port}")));
+            }
+            return Some(Ok(url));
+        }
+    }
+    if !health_errors.is_empty() {
+        return Some(Err(format!("{} The submission worker was not started.", health_errors.join(" "))));
+    }
+    Some(Err(format!(
             "The mock relay at {url} is not listening or /v1/health did not identify a mock; the submission worker was not started."
-        )),
-    })
+        )))
 }
 
-fn mock_health(host: &str, port: u16) -> bool {
-    let probe = || -> Option<bool> {
+fn mock_health(host: &str, port: u16) -> Result<bool, String> {
+    let probe = || -> Option<Result<bool, String>> {
         let ip = host.parse::<IpAddr>().ok()?;
-        let mut stream = TcpStream::connect_timeout(&SocketAddr::new(ip, port), LISTEN_TIMEOUT).ok()?;
+        let address = SocketAddr::new(ip, port);
+        let mut stream = TcpStream::connect_timeout(&address, LISTEN_TIMEOUT).ok()?;
         stream.set_read_timeout(Some(LISTEN_TIMEOUT)).ok()?;
         stream.set_write_timeout(Some(LISTEN_TIMEOUT)).ok()?;
         let request = format!("GET /v1/health HTTP/1.0\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n");
@@ -193,9 +219,9 @@ fn mock_health(host: &str, port: u16) -> bool {
             return None;
         }
         let body: serde_json::Value = serde_json::from_slice(&response[end + 4..]).ok()?;
-        Some(body.get("mock").and_then(serde_json::Value::as_bool) == Some(true))
+        Some(bir_core::transport::check_mock_relay_health(&body, address).map(|()| true))
     };
-    probe().unwrap_or(false)
+    probe().unwrap_or(Ok(false))
 }
 
 /// The decision, from what was observed. Pure, so every branch is tested.
@@ -263,7 +289,11 @@ pub fn account_home() -> Option<PathBuf> {
     {
         std::env::var_os("HOME").map(PathBuf::from).filter(|home| home.is_absolute())
     }
-    #[cfg(all(unix, not(target_os = "ios")))]
+    #[cfg(target_os = "android")]
+    {
+        Some(bir_core::platform::data_dir())
+    }
+    #[cfg(all(unix, not(any(target_os = "ios", target_os = "android"))))]
     {
         use std::ffi::{CStr, OsStr};
         use std::os::unix::ffi::OsStrExt;
@@ -729,8 +759,8 @@ mod tests {
     fn relay_requires_both_a_listener_and_mock_health() {
         sending_env(&[("BIR_RELAY_URL", "http://127.0.0.1:8787")], || {
             assert!(matches!(send_guard_with_health(|_, _| false, |_, _| panic!("closed port")), SendMode::Refused(_)));
-            assert!(matches!(send_guard_with_health(|_, _| true, |_, _| false), SendMode::Refused(_)));
-            let mode = send_guard_with_health(|host, port| host == "127.0.0.1" && port == 8787, |_, _| true);
+            assert!(matches!(send_guard_with_health(|_, _| true, |_, _| Ok(false)), SendMode::Refused(_)));
+            let mode = send_guard_with_health(|host, port| host == "127.0.0.1" && port == 8787, |_, _| Ok(true));
             assert_eq!(mode.label(), "relay");
             assert!(mode.worker_may_start());
         });
@@ -745,7 +775,7 @@ mod tests {
         ] {
             sending_env(&[("BIR_RELAY_URL", url)], || {
                 assert!(matches!(
-                    send_guard_with_health(|h, p| h == host && p == port, |_, _| true),
+                    send_guard_with_health(|h, p| h == host && p == port, |_, _| Ok(true)),
                     SendMode::Relay { .. }
                 ));
             });
@@ -755,7 +785,8 @@ mod tests {
     #[test]
     fn health_probe_requires_successful_mock_json() {
         for (status, body, expected) in [
-            ("200 OK", r#"{"ok":true,"mock":true}"#, true),
+            ("200 OK", r#"{"service":"buwiz-mock-relay","version":1,"ok":true,"mock":true}"#, true),
+            ("200 OK", r#"{"ok":true,"mock":true}"#, false),
             ("200 OK", r#"{"mock":false}"#, false),
             ("200 OK", "invalid", false),
             ("200 OK", "", false),
@@ -775,8 +806,94 @@ mod tests {
                 }
                 write!(stream, "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
             });
-            assert_eq!(mock_health("127.0.0.1", port), expected);
+            let url = format!("http://127.0.0.1:{port}");
+            sending_env(&[("BIR_RELAY_URL", &url)], || {
+                let mode = send_guard_with_health(|_, _| true, mock_health);
+                assert_eq!(mode.worker_may_start(), expected);
+                if body == r#"{"ok":true,"mock":true}"# {
+                    let SendMode::Refused(why) = mode else { panic!("legacy relay must refuse") };
+                    assert!(why.contains("out of date"), "{why}");
+                    assert!(why.contains(&format!("`just mock-relay --bind 127.0.0.1 --port {port}`, then restart the app")), "{why}");
+                }
+            });
             server.join().unwrap();
+        }
+    }
+
+    fn localhost_listener(host: &str) {
+        let listener = match std::net::TcpListener::bind((host, 0)) {
+            Ok(listener) => listener,
+            Err(error) if host == "::1" => {
+                eprintln!("IPv6 loopback is unavailable: {error}");
+                return;
+            }
+            Err(error) => panic!("IPv4 loopback is unavailable: {error}"),
+        };
+        let url = format!("http://localhost:{}", listener.local_addr().unwrap().port());
+        let pinned = format!("http://{}", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            // The port check connects without sending; the health check sends a request.
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                let mut request = [0; 1024];
+                if stream.read(&mut request).unwrap() > 0 {
+                    let body = r#"{"service":"buwiz-mock-relay","version":1,"ok":true,"mock":true}"#;
+                    write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+                }
+            }
+        });
+        sending_env(&[("BIR_RELAY_URL", &url)], || {
+            assert_eq!(send_guard_with(port_is_listening), SendMode::Relay { url: pinned.clone() });
+            assert_eq!(bir_core::transport::relay_url().unwrap().unwrap(), pinned);
+        });
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn localhost_accepts_an_ipv4_only_relay() {
+        localhost_listener("127.0.0.1");
+    }
+
+    #[test]
+    fn localhost_accepts_an_ipv6_only_relay() {
+        localhost_listener("::1");
+    }
+
+    #[test]
+    fn localhost_checks_both_loopback_families_when_the_first_is_not_a_mock() {
+        sending_env(&[("BIR_RELAY_URL", "http://localhost:8787")], || {
+            let healthy = |host: &str, port: u16| {
+                assert!(matches!(host, "127.0.0.1" | "::1"));
+                if host == "::1" { Ok(true) } else {
+                    bir_core::transport::check_mock_relay_health(&serde_json::json!({"ok":true,"mock":true}), SocketAddr::new(host.parse().unwrap(), port)).map(|()| true)
+                }
+            };
+            assert_eq!(relay_target(&|_, _| true, &healthy), Some(Ok("http://[::1]:8787".into())));
+        });
+    }
+
+    #[test]
+    fn a_legacy_relay_refusal_is_not_hidden_by_another_loopback_listener() {
+        for (url, legacy_host) in [
+            ("http://localhost:9000", "127.0.0.1"),
+            ("http://localhost:9000", "::1"),
+            ("http://[::1]:9000", "::1"),
+        ] {
+            sending_env(&[("BIR_RELAY_URL", url)], || {
+                let healthy = |host: &str, port: u16| {
+                    let body = if host == legacy_host {
+                        serde_json::json!({"ok":true,"mock":true})
+                    } else {
+                        serde_json::json!({})
+                    };
+                    bir_core::transport::check_mock_relay_health(&body, SocketAddr::new(host.parse().unwrap(), port)).map(|()| true)
+                };
+                let mode = send_guard_with_health(|_, _| true, healthy);
+                let SendMode::Refused(why) = mode else { panic!("legacy relay must refuse") };
+                assert!(why.contains("out of date"), "{why}");
+                assert!(why.contains(&format!("`just mock-relay --bind {legacy_host} --port 9000`, then restart the app")), "{why}");
+            });
         }
     }
 
@@ -888,23 +1005,19 @@ mod tests {
 
     #[test]
     fn a_relay_url_decides_alone_and_only_a_listening_loopback_one_sends() {
-        assert_eq!(relay_verdict(None, None), None);
+        assert_eq!(relay_verdict(None), None);
         assert_eq!(
-            relay_verdict(Some(Ok("http://127.0.0.1:8787".into())), None),
+            relay_verdict(Some(Ok("http://127.0.0.1:8787".into()))),
             Some(SendMode::Relay { url: "http://127.0.0.1:8787".into() })
         );
-        assert!(matches!(relay_verdict(Some(Err("no".into())), None), Some(SendMode::Refused(_))));
-        assert!(matches!(
-            relay_verdict(Some(Ok("http://127.0.0.1:8787".into())), Some(SubmissionMode::TestServer)),
-            Some(SendMode::Refused(_))
-        ));
+        assert!(matches!(relay_verdict(Some(Err("no".into()))), Some(SendMode::Refused(_))));
     }
 
     #[test]
     fn a_listening_loopback_relay_is_the_relay_and_anything_else_refuses() {
         sending_env(&[("BIR_RELAY_URL", "http://127.0.0.1:8787")], || {
             assert_eq!(
-                send_guard_with_health(|host, port| host == "127.0.0.1" && port == 8787, |_, _| true),
+                send_guard_with_health(|host, port| host == "127.0.0.1" && port == 8787, |_, _| Ok(true)),
                 SendMode::Relay { url: "http://127.0.0.1:8787".into() }
             );
             assert_eq!(dry_run(), None);

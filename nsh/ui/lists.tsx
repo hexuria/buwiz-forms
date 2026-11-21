@@ -154,7 +154,7 @@ export function Tabs(props: { tabs: TabItem[]; value: string; onChange: (value: 
               props.fill ? "h-12" : TOUCH ? "h-11" : "h-9",
             )}
           >
-            <Text variant="control" tone="fg2" lines={1} class="group-selected:text-foreground">{t().label}</Text>
+            <Text variant="control" tone="fg2" lines={props.fill ? 1 : undefined} class="group-selected:text-foreground">{t().label}</Text>
             <If when={t().count !== undefined && t().count !== null && t().count !== ""}>
               <View class="rounded-full bg-hover px-1.5">
                 <Text variant="cap" tone="fg2" class="tabular-nums">{String(t().count)}</Text>

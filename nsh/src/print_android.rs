@@ -233,10 +233,11 @@ pub(crate) fn close() -> impl Future<Output = ()> {
 }
 
 /// Loads a static snapshot, then opens Android's A4 system print preview.
-pub(crate) async fn preview(url: String, title: String, generation: u64) -> Result<()> {
+pub(crate) async fn preview(url: String, title: String, generation: u64, request: crate::print::PreviewRequest) -> Result<()> {
+    let loading = request.clone();
     let view = ui(move |env| {
         let mut kept = PREVIEW.lock().map_err(|_| "Android print state is poisoned.")?;
-        if GENERATION.load(Ordering::SeqCst) != generation {
+        if GENERATION.load(Ordering::SeqCst) != generation || !loading.is_live() {
             return Err("Android print preview was superseded or closed.".into());
         }
         if let Some(old) = kept.take() {
@@ -281,12 +282,13 @@ pub(crate) async fn preview(url: String, title: String, generation: u64) -> Resu
         blocking(|| std::thread::sleep(Duration::from_millis(100)))
             .await
             .map_err(|e| e.to_string())?;
-        if GENERATION.load(Ordering::SeqCst) != generation {
+        if GENERATION.load(Ordering::SeqCst) != generation || !request.is_live() {
             return Err("Android print preview was superseded or closed.".into());
         }
         let current = view.clone();
+        let loading = request.clone();
         let progress = ui(move |env| {
-            if GENERATION.load(Ordering::SeqCst) != generation {
+            if GENERATION.load(Ordering::SeqCst) != generation || !loading.is_live() {
                 return Err("Android print preview was superseded or closed.".into());
             }
             java(env.call_method(current.as_obj(), "getProgress", "()I", &[]))?
@@ -306,7 +308,7 @@ pub(crate) async fn preview(url: String, title: String, generation: u64) -> Resu
     ui(move |env| {
         // A job already starting must be retained before close() can take it.
         let mut kept = PREVIEW.lock().map_err(|_| "Android print state is poisoned.")?;
-        if GENERATION.load(Ordering::SeqCst) != generation {
+        if GENERATION.load(Ordering::SeqCst) != generation || !request.is_live() {
             return Err("Android print preview was superseded or closed.".into());
         }
         let kept = kept.as_mut().ok_or("Android print WebView is no longer available.")?;
@@ -318,7 +320,7 @@ pub(crate) async fn preview(url: String, title: String, generation: u64) -> Resu
         let a4 = java(env.get_static_field("android/print/PrintAttributes$MediaSize", "ISO_A4", "Landroid/print/PrintAttributes$MediaSize;"))?.l().map_err(|e| e.to_string())?;
         java(env.call_method(&builder, "setMediaSize", "(Landroid/print/PrintAttributes$MediaSize;)Landroid/print/PrintAttributes$Builder;", &[JValue::Object(&a4)]))?;
         let attributes = java(env.call_method(builder, "build", "()Landroid/print/PrintAttributes;", &[]))?.l().map_err(|e| e.to_string())?;
-        if GENERATION.load(Ordering::SeqCst) != generation {
+        if GENERATION.load(Ordering::SeqCst) != generation || !request.is_live() {
             return Err("Android print preview was superseded or closed.".into());
         }
         let job = java(env.call_method(manager, "print", "(Ljava/lang/String;Landroid/print/PrintDocumentAdapter;Landroid/print/PrintAttributes;)Landroid/print/PrintJob;", &[JValue::Object(&title), JValue::Object(&adapter), JValue::Object(&attributes)]))?.l().map_err(|e| e.to_string())?;

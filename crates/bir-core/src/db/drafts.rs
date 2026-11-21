@@ -3137,6 +3137,26 @@ impl Database {
             .flatten())
     }
 
+    /// Whether the submission worker sent the return `draft_id` to the local mock relay (the lifecycle's
+    /// `submitted_via_relay`, top level or under `lifecycle`); false for missing or malformed data or flags.
+    pub fn draft_submitted_via_relay(&self, draft_id: i64) -> Result<bool, DbError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT CASE WHEN json_valid(data_json) THEN
+                    COALESCE(NULLIF(json_type(data_json, '$.submitted_via_relay'), 'null'),
+                             json_type(data_json, '$.lifecycle.submitted_via_relay'), 'false') = 'true'
+                 ELSE 0 END
+                 FROM form_drafts WHERE id = ?1",
+                params![draft_id],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .optional()?
+            .flatten()
+            .unwrap_or(0)
+            != 0)
+    }
+
     /// The trigger date the saved as-needed return `draft_id` holds and its
     /// due-date rule (see [`crate::forms::event_trigger::event_trigger_from_json`]).
     /// `None` when the row is gone, the form is not as needed, or the return

@@ -37,6 +37,8 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
 use bir_app_api::hooks::PreviewProducer;
@@ -69,6 +71,8 @@ pub struct PrintEvent {
     pub kind: PrintEventKind,
     /// The form code the preview belongs to; one window per key.
     pub key: String,
+    /// The session generation and request that own this document, never reused for a replacement.
+    pub request_id: String,
     /// The window title the host function chose ("BIR Form 2551Q - Juana Santos").
     pub title: String,
     /// The file URL of the sheet: what the window's web view loads.
@@ -382,6 +386,7 @@ fn write_pdf(dir: &Path, title: &str, pdf: &[u8]) -> std::io::Result<PathBuf> {
 
 /// One open preview.
 struct Preview {
+    request: PreviewRequest,
     dir: PathBuf,
     title: String,
     /// The document the window shows now (the file holds the same).
@@ -391,12 +396,39 @@ struct Preview {
     revision: u32,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct PreviewRequest {
+    id: String,
+    live: Arc<AtomicBool>,
+}
+
+impl PreviewRequest {
+    pub(crate) fn is_live(&self) -> bool {
+        self.live.load(Ordering::SeqCst)
+    }
+
+    fn check(&self) -> Result<(), String> {
+        if self.is_live() { Ok(()) } else { Err("The preview is closed or was replaced.".to_owned()) }
+    }
+
+    fn revoke(&self) {
+        self.live.store(false, Ordering::SeqCst);
+    }
+}
+
+fn next_generation() -> u64 {
+    static GENERATION: AtomicU64 = AtomicU64::new(1);
+    GENERATION.fetch_add(1, Ordering::Relaxed)
+}
+
 /// Where events go: the TSX listener in the app, a recorder in tests.
 trait Backend {
     fn emit(&self, event: PrintEvent);
 }
 
 struct State {
+    generation: u64,
+    sequence: u64,
     root: PathBuf,
     backend: Option<(u64, Rc<dyn Backend>)>,
     previews: HashMap<String, Preview>,
@@ -407,6 +439,7 @@ fn event(kind: PrintEventKind, key: &str, title: &str, url: &str, script: String
     PrintEvent {
         kind,
         key: key.to_owned(),
+        request_id: String::new(),
         title: title.to_owned(),
         url: url.to_owned(),
         script,
@@ -421,7 +454,7 @@ fn event(kind: PrintEventKind, key: &str, title: &str, url: &str, script: String
 
 impl State {
     fn new(root: PathBuf) -> Self {
-        State { root, backend: None, previews: HashMap::new() }
+        State { generation: next_generation(), sequence: 0, root, backend: None, previews: HashMap::new() }
     }
 
     fn sheet_path(&self, key: &str) -> PathBuf {
@@ -435,6 +468,11 @@ impl State {
         write_atomic(&path, &html).map_err(|error| format!("Could not write the preview: {error}"))?;
         let url = url_for(&path);
         let doc = parse_doc(&html);
+        self.sequence += 1;
+        let request = PreviewRequest {
+            id: format!("{}-{}", self.generation, self.sequence),
+            live: Arc::new(AtomicBool::new(true)),
+        };
         let mut events = Vec::new();
         match self.previews.get_mut(key) {
             None => {
@@ -443,6 +481,7 @@ impl State {
                 self.previews.insert(
                     key.to_owned(),
                     Preview {
+                        request: request.clone(),
                         dir,
                         title,
                         html,
@@ -453,6 +492,8 @@ impl State {
                 );
             }
             Some(open) => {
+                open.request.revoke();
+                open.request = request.clone();
                 open.revision += 1;
                 let script = if open.shape == doc.shape && open.texts.len() == doc.texts.len() {
                     patch_script(&doc.texts, open.revision)
@@ -466,6 +507,9 @@ impl State {
                 open.texts = doc.texts;
                 open.shape = doc.shape;
             }
+        }
+        for event in &mut events {
+            event.request_id = request.id.clone();
         }
         Ok(events)
     }
@@ -490,7 +534,8 @@ impl State {
         } else {
             body_script(&doc.body, open.revision)
         };
-        let update = event(PrintEventKind::Update, key, &open.title, &url_for(&path), script, open.revision, &html);
+        let mut update = event(PrintEventKind::Update, key, &open.title, &url_for(&path), script, open.revision, &html);
+        update.request_id = open.request.id.clone();
         open.html = html;
         open.texts = doc.texts;
         open.shape = doc.shape;
@@ -500,6 +545,7 @@ impl State {
     /// The window closed: forget the preview and delete its files.
     fn close(&mut self, key: &str) {
         if let Some(open) = self.previews.remove(key) {
+            open.request.revoke();
             let _ = std::fs::remove_dir_all(&open.dir);
         }
         if self.previews.is_empty() {
@@ -509,8 +555,18 @@ impl State {
 
     /// Every preview is over (the app quits): forget them all and delete the whole folder.
     fn close_all(&mut self) {
+        self.generation = next_generation();
+        for open in self.previews.values() {
+            open.request.revoke();
+        }
         self.previews.clear();
         let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+impl Drop for Preview {
+    fn drop(&mut self) {
+        self.request.revoke();
     }
 }
 
@@ -946,21 +1002,20 @@ fn platform_pdf(_html: &str) -> Result<Vec<u8>, String> {
 
 /// The system print panel for the PDF at `path`: up when this returns.
 #[cfg(target_os = "macos")]
-fn platform_print(path: &Path) -> Result<(), String> {
-    mac::print_pdf(path)
+fn platform_print(path: &Path, request: PreviewRequest) -> Result<(), String> {
+    mac::print_pdf(path, request)
 }
 
-/// The system print sheet (UIPrintInteractionController) for the PDF at `path`, with its page previews: up when this
-/// returns.
+/// The system print sheet (UIPrintInteractionController) for the PDF at `path`, until it is dismissed or finished.
 #[cfg(target_os = "ios")]
-fn platform_print(path: &Path) -> Result<(), String> {
+fn platform_print(path: &Path, request: PreviewRequest) -> Result<(), String> {
     let pdf = std::fs::read(path).map_err(|error| format!("Could not read the PDF: {error}"))?;
     let title = path.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
-    ios_print::present(pdf, title)
+    ios_print::present(pdf, title, request)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "ios", all(windows, target_env = "msvc"), target_os = "linux")))]
-fn platform_print(_path: &Path) -> Result<(), String> {
+fn platform_print(_path: &Path, _request: PreviewRequest) -> Result<(), String> {
     Err("Print and Save as PDF are available on macOS, Windows and Linux only for now.".to_owned())
 }
 
@@ -1703,15 +1758,12 @@ mod windows_print {
 }
 
 
-/// The macOS half: WebKit and PDFKit through objc2, on the main thread (every AppKit call is posted to the main
-/// queue and waited for; callers are worker threads, never the main thread and never the engine's).
 /// The iOS print sheet: UIKit's UIPrintInteractionController with the preview's PDF (the PDF the `mac` half's hidden
 /// WKWebView makes, as on macOS) as its printing item, so the system shows its own page previews, printer choice and
 /// copies. UIKit is linked by the NSH host; its classes are looked up at run time.
 #[cfg(target_os = "ios")]
 mod ios_print {
     use std::sync::mpsc;
-    use std::time::Duration;
 
     use block2::RcBlock;
     use dispatch2::DispatchQueue;
@@ -1723,14 +1775,15 @@ mod ios_print {
     /// `UIPrintInfoOutputGeneral`: text and graphics.
     const OUTPUT_GENERAL: isize = 0;
 
-    /// Presents the print sheet for `pdf` on the main thread; returns once it is up (or could not come up).
-    pub(super) fn present(pdf: Vec<u8>, title: String) -> Result<(), String> {
+    /// Presents the print sheet for `pdf` on the main thread; returns once it closes (or could not come up).
+    pub(super) fn present(pdf: Vec<u8>, title: String, request: super::PreviewRequest) -> Result<(), String> {
         let (tx, rx) = mpsc::channel::<Result<(), String>>();
         DispatchQueue::main().exec_async(move || {
             // SAFETY: UIKit's documented API, on the main thread. The completion block runs on the main thread once,
             // when the sheet is dismissed.
             let answer = unsafe {
                 (|| {
+                    request.check()?;
                     let class = AnyClass::get(c"UIPrintInteractionController").ok_or("UIKit printing is missing.")?;
                     let available: Bool = msg_send![class, isPrintingAvailable];
                     if !available.as_bool() {
@@ -1746,20 +1799,25 @@ mod ios_print {
                     let _: () = msg_send![&controller, setPrintInfo: &*info];
                     let data = NSData::with_bytes(&pdf);
                     let _: () = msg_send![&controller, setPrintingItem: &*data];
-                    let done = RcBlock::new(|_: *mut AnyObject, completed: Bool, error: *mut AnyObject| {
+                    let finished = tx.clone();
+                    let done = RcBlock::new(move |_: *mut AnyObject, completed: Bool, error: *mut AnyObject| {
                         let error = error.as_ref().map(|error| {
                             let text: Option<Retained<NSString>> = msg_send![error, localizedDescription];
                             text.map(|text| text.to_string()).unwrap_or_default()
                         });
                         tracing::info!(completed = completed.as_bool(), ?error, "print preview: the iOS print sheet closed");
+                        let _ = finished.send(error.map_or(Ok(()), Err));
                     });
+                    request.check()?;
                     let shown: Bool = msg_send![&controller, presentAnimated: true, completionHandler: &*done];
                     if shown.as_bool() { Ok(()) } else { Err("The print sheet could not open.".to_owned()) }
                 })()
             };
-            let _ = tx.send(answer);
+            if let Err(error) = answer {
+                let _ = tx.send(Err(error));
+            }
         });
-        rx.recv_timeout(Duration::from_secs(20)).map_err(|_| "The print sheet did not open in time.".to_owned())?
+        rx.recv().map_err(|_| "The print sheet closed without a result.".to_owned())?
     }
 
     /// Dismisses the shared print controller's sheet, if it is up; returns at once.
@@ -1777,6 +1835,8 @@ mod ios_print {
     }
 }
 
+/// The macOS half: WebKit and PDFKit through objc2, on the main thread (every AppKit call is posted to the main
+/// queue and waited for; callers are worker threads, never the main thread and never the engine's).
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod mac {
     use std::cell::RefCell;
@@ -1986,13 +2046,14 @@ mod mac {
     /// The system print panel for the PDF at `path`: A4, no scaling, as a sheet of the key window (a panel of
     /// its own when no window is key). Returns once the panel is up.
     #[cfg(target_os = "macos")]
-    pub(super) fn print_pdf(path: &Path) -> Result<(), String> {
+    pub(super) fn print_pdf(path: &Path, request: super::PreviewRequest) -> Result<(), String> {
         let path = path.display().to_string();
         let (tx, rx) = mpsc::channel();
         DispatchQueue::main().exec_async(move || {
             // SAFETY: AppKit's documented API, on the main thread.
             let answer = unsafe {
                 (|| -> Result<(), String> {
+                    request.check()?;
                     let operation = print_operation(&path)?;
                     let app_class = AnyClass::get(c"NSApplication").ok_or("AppKit has no NSApplication.")?;
                     let app: Retained<AnyObject> = msg_send![app_class, sharedApplication];
@@ -2001,6 +2062,7 @@ mod mac {
                         Some(window) => Some(window),
                         None => msg_send![&app, mainWindow],
                     };
+                    request.check()?;
                     match window {
                         Some(window) => {
                             let none: *const AnyObject = std::ptr::null();
@@ -2063,10 +2125,24 @@ fn with_pdf_extension(path: PathBuf) -> PathBuf {
 
 /// The PDF of the document `key` shows now, its title and its folder (the document is the one the window has: edits
 /// are applied as they come, in order).
-async fn pdf_of(key: &str) -> Result<(Vec<u8>, String, PathBuf), String> {
-    let (html, title, dir) = snapshot(key).ok_or("The preview is closed.")?;
-    let pdf = blocking(move || platform_pdf(&html)).await.map_err(|error| error.to_string())??;
-    Ok((pdf, title, dir))
+async fn pdf_with<F: Future<Output = Result<Vec<u8>, String>>>(
+    key: &str,
+    render: impl FnOnce(String) -> F,
+) -> Result<(Vec<u8>, String, PathBuf, PreviewRequest), String> {
+    let (html, title, dir, request) = STATE.with(|state| {
+        let state = state.borrow();
+        let open = state.previews.get(key)?;
+        Some((open.html.clone(), open.title.clone(), open.dir.clone(), open.request.clone()))
+    }).ok_or("The preview is closed.")?;
+    let pdf = render(html).await?;
+    request.check()?;
+    Ok((pdf, title, dir, request))
+}
+
+async fn pdf_of(key: &str) -> Result<(Vec<u8>, String, PathBuf, PreviewRequest), String> {
+    pdf_with(key, |html| async move {
+        blocking(move || platform_pdf(&html)).await.map_err(|error| error.to_string())?
+    }).await
 }
 
 /// The print preview's door to the desktop: what the preview window (`screens/print`) and its host call.
@@ -2105,6 +2181,33 @@ impl Print {
         forget(&key);
     }
 
+    /// Whether this exact document still belongs to the current session.
+    pub fn current(key: String, request_id: String) -> bool {
+        STATE.with(|state| state.borrow().previews.get(&key).is_some_and(|open| open.request.id == request_id && open.request.is_live()))
+    }
+
+    /// Ends only this request; a late callback must not close its replacement.
+    pub fn closed_request(key: String, request_id: String, cx: nsh_core::prelude::CallCx<'_>) {
+        if Self::current(key.clone(), request_id) {
+            Self::closed(key, cx);
+        }
+    }
+
+    /// Revokes the session, including requests whose open events have not reached the host yet.
+    pub fn reset(_cx: nsh_core::prelude::CallCx<'_>) {
+        remove_all();
+        #[cfg(target_os = "android")]
+        _cx.start(crate::print_android::close());
+    }
+
+    /// Prints this exact native-preview request, refusing a late event from a previous session.
+    pub async fn print_request(key: String, request_id: String) -> Result<(), String> {
+        if !Self::current(key.clone(), request_id) {
+            return Err("The preview is closed or was replaced.".to_owned());
+        }
+        Self::print(key).await
+    }
+
     /// Whether this device previews in the system's print sheet (iOS) instead of a preview window: the host calls
     /// [`Print::print`] when a preview opens, then [`Print::closed`].
     pub fn previews_natively() -> bool {
@@ -2117,12 +2220,16 @@ impl Print {
     }
 
     /// Opens Android's system print preview for the retained sheet snapshot.
-    pub async fn open_native(key: String, title: String) -> Result<(), String> {
+    pub async fn open_native(key: String, title: String, request_id: String) -> Result<(), String> {
+        if !Self::current(key.clone(), request_id) {
+            return Err("The preview is closed or was replaced.".to_owned());
+        }
         #[cfg(target_os = "android")]
         {
             let generation = crate::print_android::generation();
             let (_, _, dir) = snapshot(&key).ok_or("The print preview is no longer available.")?;
-            crate::print_android::preview(url_for(&dir.join(SHEET)), title, generation).await
+            let request = STATE.with(|state| state.borrow().previews[&key].request.clone());
+            crate::print_android::preview(url_for(&dir.join(SHEET)), title, generation, request).await
         }
         #[cfg(not(target_os = "android"))]
         {
@@ -2163,7 +2270,7 @@ impl Print {
     /// scaling) as a sheet of the front window, and resolves once the panel is up. Windows: shows the system print
     /// dialog, then prints the document by the PDF's page rule, and resolves once the job is with the printer (or the
     /// dialog was cancelled). iOS: makes the same PDF, then shows the system print sheet with its page previews, and
-    /// resolves once the sheet is up. Rejects with a sentence.
+    /// resolves once the sheet is dismissed or finished. Rejects with a sentence.
     pub async fn print(key: String) -> Result<(), String> {
         #[cfg(all(windows, target_env = "msvc"))]
         {
@@ -2177,14 +2284,9 @@ impl Print {
         }
         #[cfg(not(any(all(windows, target_env = "msvc"), target_os = "linux")))]
         {
-            let (pdf, title, dir) = pdf_of(&key).await?;
-            // The PDF takes a moment: a lock (or leaving the return) in that time forgets the preview, and then no sheet
-            // may show the taxpayer's return over the sign-in screen.
-            if snapshot(&key).is_none() {
-                return Err("The preview is closed.".to_owned());
-            }
+            let (pdf, title, dir, request) = pdf_of(&key).await?;
             let path = write_pdf(&dir, &title, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
-            blocking(move || platform_print(&path)).await.map_err(|error| error.to_string())?
+            blocking(move || platform_print(&path, request)).await.map_err(|error| error.to_string())?
         }
     }
 
@@ -2192,7 +2294,7 @@ impl Print {
     /// wrote, or null when the person cancelled. A path given stands in for the panel in a test environment
     /// (EBIR_TEST_ENV) and is ignored anywhere else.
     pub async fn save_pdf(key: String, test_path: Option<String>) -> Result<Option<String>, String> {
-        let (pdf, title, _) = pdf_of(&key).await?;
+        let (pdf, title, _, request) = pdf_of(&key).await?;
         let target = match save_target(crate::door::test_environment(), test_path.as_deref()) {
             Some(path) => path,
             None => {
@@ -2211,6 +2313,7 @@ impl Print {
                 }
             }
         };
+        request.check()?;
         std::fs::write(&target, &pdf).map_err(|error| format!("Could not save the PDF: {error}"))?;
         Ok(Some(target.display().to_string()))
     }
@@ -2575,6 +2678,54 @@ mod tests {
     // The previews ------------------------------------------------------------------------------------------------
 
     #[test]
+    fn a_pdf_in_flight_never_survives_a_session_change_or_same_form_replacement() {
+        for session_change in [false, true] {
+            let folder = tempfile::tempdir().unwrap();
+            STATE.with(|state| {
+                *state.borrow_mut() = State::new(folder.path().to_path_buf());
+                state.borrow_mut().request("2551Q", "Old taxpayer".into(), sheet_doc(&["old"])).unwrap();
+            });
+            futures::executor::block_on(async {
+                let (send, receive) = futures::channel::oneshot::channel();
+                let mut pending = Box::pin(pdf_with("2551Q", |html| async move {
+                    assert!(html.contains("old"));
+                    receive.await.unwrap();
+                    Ok(vec![1, 2, 3])
+                }));
+                assert!(futures::poll!(pending.as_mut()).is_pending());
+                let old = STATE.with(|state| state.borrow().previews["2551Q"].request.clone());
+                STATE.with(|state| {
+                    let mut state = state.borrow_mut();
+                    if session_change { state.close_all(); }
+                    state.request("2551Q", "New taxpayer".into(), sheet_doc(&["new"])).unwrap();
+                    assert_ne!(old.id, state.previews["2551Q"].request.id);
+                });
+                send.send(()).unwrap();
+                assert!(pending.await.unwrap_err().contains("closed or was replaced"));
+                assert!(!old.is_live(), "a queued main-thread presentation also refuses the old request");
+                let (pdf, title, _, current) = pdf_with("2551Q", |_| async { Ok(vec![4]) }).await.unwrap();
+                assert_eq!(pdf, vec![4]);
+                assert_eq!(title, "New taxpayer");
+                assert!(current.is_live());
+                STATE.with(|state| state.borrow_mut().close_all());
+                assert!(current.check().is_err(), "revocation after PDF completion still prevents presentation");
+            });
+        }
+    }
+
+    #[test]
+    fn missing_previews_and_failed_pdf_generation_do_not_produce_a_document() {
+        let folder = tempfile::tempdir().unwrap();
+        STATE.with(|state| *state.borrow_mut() = State::new(folder.path().to_path_buf()));
+        futures::executor::block_on(async {
+            assert!(pdf_with("2551Q", |_| async { panic!("a missing preview must not be rendered") }).await.is_err());
+            STATE.with(|state| { state.borrow_mut().request("2551Q", "t".into(), sheet_doc(&["x"])).unwrap(); });
+            assert_eq!(pdf_with("2551Q", |_| async { Err("PDF failed".into()) }).await.unwrap_err(), "PDF failed");
+            STATE.with(|state| state.borrow_mut().close_all());
+        });
+    }
+
+    #[test]
     fn a_request_writes_the_sheet_and_opens_the_window_once() {
         let folder = tempfile::tempdir().unwrap();
         let mut state = State::new(folder.path().to_path_buf());
@@ -2775,7 +2926,7 @@ mod tests {
         forget(&first);
         assert_ne!(crate::print_android::generation(), generation, "revoked before Java cleanup runs");
         assert!(!first_path.exists());
-        assert!(futures::executor::block_on(Print::open_native(first, "Closed".into())).is_err());
+        assert!(futures::executor::block_on(Print::open_native(first, "Closed".into(), "closed-request".into())).is_err());
         futures::executor::block_on(cleanup);
 
         let second = key();
@@ -2791,7 +2942,7 @@ mod tests {
         assert_eq!(recorder.events.borrow().last().unwrap().kind, PrintEventKind::Unavailable);
         request(folder.path().join("missing.html"), "Missing".into(), key());
         assert_eq!(recorder.events.borrow().last().unwrap().kind, PrintEventKind::Unavailable);
-        assert!(futures::executor::block_on(Print::open_native(key(), "Missing".into())).is_err());
+        assert!(futures::executor::block_on(Print::open_native(key(), "Missing".into(), "missing-request".into())).is_err());
         remove_all();
         assert!(!second_path.exists());
     }

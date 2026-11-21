@@ -89,6 +89,8 @@ export interface ReturnRow {
     updated_at: string;
     /** The return's stored key (`screen_form_open`'s `key`): opens exactly this return. */
     return_key: number | null;
+    /** The worker sent it to the local mock relay, not to BIR (stored at submission; false for drafts and real sends). */
+    submitted_via_relay: boolean;
 }
 export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
 "#;
@@ -486,6 +488,10 @@ fn return_rows(db: &Database, which: &str) -> Result<Vec<Value>, HostError> {
         row.insert(
             "return_key".into(),
             json!(db.draft_period_column(summary.id).map_err(error)?),
+        );
+        row.insert(
+            "submitted_via_relay".into(),
+            json!(db.draft_submitted_via_relay(summary.id).map_err(error)?),
         );
         rows.push(Value::Object(row));
     }
@@ -1244,5 +1250,86 @@ mod tests {
         let all = to_json(&list_returns(&args(&["all"])).unwrap());
         assert_eq!(all.as_array().unwrap().len(), 1);
         assert!(list_returns(&args(&["everything"])).is_err());
+    }
+
+    #[test]
+    fn list_returns_says_which_filed_returns_went_to_the_mock_relay() {
+        setup();
+        with_database(|db| {
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            for (month, via_relay) in [(2u8, true), (3, false)] {
+                let draft = bir_core::forms::Form1601CDraft::new_from_profile(&profile, 2026, month);
+                let id = db.save_1601c_draft(&draft).unwrap();
+                // The worker's transition, as stored: Submitted with the send's source in the lifecycle.
+                db.conn_for_tests()
+                    .execute(
+                        &format!(
+                            "UPDATE form_drafts SET status = 'Submitted',
+                                    data_json = json_set(data_json, '$.submitted_via_relay', json('{via_relay}'))
+                             WHERE id = ?1"
+                        ),
+                        [id],
+                    )
+                    .unwrap();
+            }
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&list_returns(&args(&["all"])).unwrap());
+        let relayed = |month: u64| {
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["period"] == month)
+                .unwrap()["submitted_via_relay"]
+                .clone()
+        };
+        assert_eq!(
+            relayed(2),
+            true,
+            "stored at submission, so it survives a restart"
+        );
+        assert_eq!(relayed(3), false, "a real send keeps BIR's wording");
+        assert_eq!(relayed(1), false, "a draft was never sent");
+    }
+
+    #[test]
+    fn malformed_imported_provenance_does_not_hide_filed_returns() {
+        setup();
+        with_database(|db| {
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            for (month, data) in [
+                (2u8, "{broken"),
+                (3, r#"{"submitted_via_relay":"true"}"#),
+                (4, r#"{"submitted_via_relay":1}"#),
+                (5, r#"{"lifecycle":{"submitted_via_relay":true}}"#),
+                (
+                    6,
+                    r#"{"submitted_via_relay":null,"lifecycle":{"submitted_via_relay":true}}"#,
+                ),
+                (7, r#"{"lifecycle":{"submitted_via_relay":"true"}}"#),
+                (8, "{}"),
+            ] {
+                let draft =
+                    bir_core::forms::Form1601CDraft::new_from_profile(&profile, 2026, month);
+                let id = db.save_1601c_draft(&draft).unwrap();
+                db.conn_for_tests()
+                    .execute(
+                        "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+                        (data, id),
+                    )
+                    .unwrap();
+            }
+            assert!(!db.draft_submitted_via_relay(i64::MAX).unwrap());
+            Ok(())
+        })
+        .unwrap();
+        let result = to_json(&list_returns(&args(&["filed"])).unwrap());
+        let rows = result.as_array().unwrap();
+        assert_eq!(rows.len(), 7);
+        for row in rows {
+            let month = row["period"].as_u64().unwrap();
+            assert_eq!(row["submitted_via_relay"], matches!(month, 5 | 6));
+        }
     }
 }

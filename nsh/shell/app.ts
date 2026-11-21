@@ -971,7 +971,11 @@ const notifications = computed<Notification[]>(() => {
     items.push({
       id,
       title: confirmed ? `BIR confirmed ${r.form_code} for ${r.period_label}` : `${r.form_code} for ${r.period_label} was submitted`,
-      sub: confirmed ? `Confirmation email received · ${who}` : `Waiting for BIR's confirmation email · ${who}`,
+      sub: confirmed
+        ? `Confirmation email received · ${who}`
+        : r.submitted_via_relay
+          ? `Sent to the mock relay, not to BIR: no BIR email will come · ${who}`
+          : `Waiting for BIR's confirmation email · ${who}`,
       icon: confirmed ? "circle-check" : "send",
       tone: confirmed ? "success" : "neutral",
       when: r.updated_at,

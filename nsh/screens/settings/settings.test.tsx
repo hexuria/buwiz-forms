@@ -9,6 +9,7 @@ for (const { name, size } of SIZES) {
     const app = await openSettings(size, { update: true }, "general");
     await app.waitFor("id:settings-appearance");
     expectTexts(app, ["General", "Appearance", "Theme"]);
+    expectTexts(app, [`System follows this ${name === "phone" ? "device" : "computer"}`]);
     expect(state(app)).toContain("theme=system recent=true compact=false");
 
     await app.press("id:settings-theme-trigger");
