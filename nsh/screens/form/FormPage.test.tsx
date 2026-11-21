@@ -3,6 +3,22 @@ import { expect, open, test } from "nsh/test";
 
 const ENTRY = "./FormPagePreview.tsx";
 
+for (const platform of ["ios", "android", "macos"] as const) {
+  test(`${platform}: sample guidance mentions keyboard shortcuts only on desktop`, async () => {
+    const app = await open("./FormPageAny.tsx", {
+      platform,
+      ...(platform === "macos" ? { width: 1440, height: 900 } : {}),
+      host: { params: { formCode: "0619E", year: 0, period: 0, mode: "sample" } },
+    });
+    await app.waitFor("id:fp-sample-note");
+    const note = app.texts().find((text) => text.startsWith("A sample from the Form library.")) ?? "";
+    expect(note).toContain(platform === "macos"
+      ? "New return (the + button or Cmd/Ctrl+N) starts a blank one."
+      : "New return (the + button) starts a blank one.");
+    expect(app.count("id:fp-pager-clearance")).toBe(platform === "macos" ? 0 : 1);
+  });
+}
+
 test("phone: open, Check shows the to-dos on the pill, step to one, type, autosave", async () => {
   const app = await open(ENTRY); // 390 x 844
   await app.waitFor("text:BIR Form 2551Q");

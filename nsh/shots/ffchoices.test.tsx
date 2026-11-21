@@ -62,8 +62,9 @@ for (const look of LOOKS) {
     await untilShown(c, "id:fp-itemQuarter_1");
     await c.wait(300);
     await shoot(c, `0605-item3-quarter-${look.name}`);
-    // Item 17 sits in Part I (index 1): jump there, then to the Others box under the dropdown.
-    await jumpUntil(c, "id:fp-frm0605:txtOthersName", 3);
+    // Item 17 sits in Part I (index 1): jump there, then to its row. Its Others box is not drawn until
+    // Others is picked (G1), so the row itself is the landmark.
+    await jumpUntil(c, "id:fp-item-1:8", 3);
     await c.wait(300);
     await shoot(c, `0605-item17-dropdown-${look.name}`);
     // Open the dropdown (the AFTER look; BEFORE's checkboxes have no trigger, the press is skipped).

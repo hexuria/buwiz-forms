@@ -9,7 +9,7 @@ const WIDE = { width: 1440, height: 900, platform: "macos" as const };
 test("phone: Just me types the first taxpayer with no chrome; Cancel goes back; Create opens the app", async () => {
   const app = await open(ENTRY, { host: { params: { readout: true } } });
   await app.waitFor("id:setup-card");
-  expect(app.texts()).toContain("Who will use eBIRForms on this computer?");
+  expect(app.texts()).toContain("Who will use eBIRForms on this device?");
   // Nothing of the frame: no tab bar, no header, no sidebar.
   expect(app.shows("id:frame")).toBe(false);
   await app.press("id:setup-solo");

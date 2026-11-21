@@ -3138,3 +3138,24 @@ fn pr9_error_key_order_reads_off_sheet_tables() {
     rows_as_needed::order_keys_in(&form, &mut keys);
     assert_eq!(keys, ["h", "a"]);
 }
+
+/// Review F1: a day typed "0" on a one-date box is not a blank part. 0619E's
+/// due date refuses it with the date sentence at the month box and keeps the
+/// draft; only 1707's whole-number parts read "0" as blank.
+#[test]
+fn f1_0619e_a_zero_day_is_refused_with_the_date_sentence() {
+    setup();
+    let opened = open("0619E", 3);
+    let before = &opened["draft"];
+    let month = "frm0619E:txtDueMonth";
+    let day = "frm0619E:txtDueDay";
+    let bad = fill("0619E", before, json!({ day: "0" }));
+    assert_eq!(
+        bad["rejected"][month],
+        rows_as_needed::DATE_ERROR,
+        "{}",
+        bad["rejected"]
+    );
+    assert_eq!(&bad["draft"], before);
+    assert_eq!(bad["values"][day], opened["values"][day]);
+}

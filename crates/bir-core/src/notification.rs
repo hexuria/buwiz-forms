@@ -26,13 +26,19 @@ pub fn send_notification(title: &str, body: &str) {
             display_via_osascript(title, body);
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
     {
         let _ = notify_rust::Notification::new()
             .summary(title)
             .body(body)
             .show();
     }
+    #[cfg(target_os = "android")]
+    tracing::debug!(
+        title,
+        body,
+        "desktop notifications are not available on Android"
+    );
 }
 
 use std::sync::atomic::{AtomicBool, Ordering};

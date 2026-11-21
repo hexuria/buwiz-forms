@@ -45,6 +45,25 @@ test("F5-3 desktop: after Expand all a step opens nothing new and folds nothing;
   await app.waitFor("text:/^Item 20 · /");
 });
 
+test("phone: previous and next to-do reopen the collapsed part containing their row", async () => {
+  const app = await open(ENTRY, { host: { params: Q3 } });
+  await app.waitFor("text:BIR Form 2551Q");
+  await app.press("id:fp-check");
+  await app.waitFor("id:fp-pill-count");
+  await app.press("id:fp-pill-next");
+  await app.waitFor("id:fp-item-1:7");
+  await app.press("id:fp-part-1-toggle");
+  await app.waitFor("id:fp-item-1:7", { state: "gone" });
+  await app.press("id:fp-pill-next");
+  await app.waitFor("id:fp-item-2:6");
+  await app.press("id:fp-part-2-toggle");
+  await app.waitFor("id:fp-item-2:6", { state: "gone" });
+  await app.press("id:fp-pill-prev");
+  await app.waitFor("id:fp-item-1:7");
+  await app.press("id:fp-pill-next");
+  await app.waitFor("id:fp-item-2:6");
+});
+
 test("F5-4 desktop: the pill names the part at the top of the viewport while the page scrolls", async () => {
   const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "2551Q", year: 2025, period: 1 } } });
   await app.waitFor("text:BIR Form 2551Q");

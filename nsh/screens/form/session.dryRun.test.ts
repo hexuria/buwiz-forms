@@ -40,6 +40,8 @@ async function line(target: FormTarget): Promise<string> {
 test("the words: a real send and a dry run", () => {
   expect(sentWords("2026-11-18T01:02:03+00:00", false)).toBe("Sent to BIR Nov 18, 2026");
   expect(sentWords("2026-11-18T01:02:03+00:00", true)).toBe("Dry run Nov 18, 2026, not sent to BIR");
+  expect(sentWords("2026-11-18T01:02:03+00:00", false, true)).toBe("Sent to the mock relay Nov 18, 2026, not to BIR");
+  expect(sentWords("2026-11-18T01:02:03+00:00", true, true)).toBe("Dry run Nov 18, 2026, not sent to BIR");
 });
 
 test("a return the dry-run worker sent says Dry run, not sent to BIR", async () => {

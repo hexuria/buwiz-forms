@@ -9,6 +9,15 @@ import { platform } from "nsh";
  */
 export const TOUCH = !platform.desktop;
 
+/** Copy that names "this computer" (or "Computer setup"), said as "this device" on a touch platform. */
+export function deviceCopy(text: string): string {
+  if (!TOUCH) return text;
+  return text
+    .replace(/\bthis computer\b/g, "this device")
+    .replace(/\bThis computer\b/g, "This device")
+    .replace(/\bComputer setup\b/g, "Device setup");
+}
+
 /** A text or icon tone, by the old app's palette keys. */
 export type Tone = "fg" | "fg2" | "fg3" | "primaryFg" | "accent" | "success" | "warning" | "danger";
 

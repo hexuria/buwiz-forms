@@ -1,10 +1,15 @@
-// Settings > Computer at phone size and at desktop size: the local files, log retention and the global hotkey (a shortcut recorder: the box is
+// Settings > Computer at narrow and wide desktop sizes: the local files, log retention and the global hotkey (a shortcut recorder: the box is
 // pressed, then the keys; stored through the real host), how closing behaves, the version, and the "who uses this computer" change (an owner
 // or a help desk) with its recovery key and the sign-out that follows. Against a scratch database with the demo taxpayer (SettingsDemo.tsx).
 import { keymap } from "nsh";
 import { expect, test } from "nsh/test";
 import { totpCode } from "../auth/testTotp";
-import { calls, expectTexts, goneText, openSettings, SIZES, state } from "./testing";
+import { calls, expectTexts, goneText, openSettings, SIZES as VIEWPORTS, state } from "./testing";
+
+const SIZES = VIEWPORTS.map(({ name, size }) => ({
+  name: name === "phone" ? "narrow desktop" : name,
+  size: { ...size, platform: "macos" as const },
+}));
 
 const BOX = "id:settings-hotkey-recorder";
 const CLEAR = "id:settings-hotkey-recorder-clear";
@@ -265,7 +270,7 @@ for (const { name, size } of SIZES) {
     await app.type("id:setup-change-pin-cells", "1234");
     await app.press("id:setup-change-confirm-btn");
     await app.waitFor("id:setup-change-done", { timeout: 15000 });
-    await app.press(name === "phone" ? "id:tab-home" : "id:nav-home");
+    await app.press(name === "narrow desktop" ? "id:tab-home" : "id:nav-home");
     await app.waitFor("text:/locked=true/");
     expect(state(app)).toContain("admin=000111229");
   }, 90_000);

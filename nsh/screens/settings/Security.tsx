@@ -1,7 +1,7 @@
 // Settings > Account > Security (old SecurityCard): My PIN (four cells, Set PIN or Change, Remove), My authenticator (Add, the key
 // and six cells with Confirm and Cancel, Remove) and, for the admin, the Recovery key. One place for every lock; the Tax profile
 // page has none. The lock screens that use these codes are D2's.
-import { AppButton, Card, Code, PinCells, SettingRow } from "../../ui";
+import { AppButton, Card, Code, deviceCopy, PinCells, SettingRow } from "../../ui";
 import { app } from "../../shell";
 import { StackRow } from "./parts";
 import { cancelTotp, clearPin, clearTotp, confirmTotp, newRecoveryKey, security, securityTarget, setPin, startTotp } from "./securityState";
@@ -12,7 +12,7 @@ export function SecurityCard() {
   const pinLabel = () => (helpdeskAdmin() ? "Admin PIN" : "My PIN");
   const totpLabel = () => (helpdeskAdmin() ? "Admin authenticator" : "My authenticator");
   const pinHint = () => {
-    if (!t().has_pin) return "Not set. Anyone at this computer can open this account";
+    if (!t().has_pin) return deviceCopy("Not set. Anyone using this computer can open this account");
     if (helpdeskAdmin()) return "Signs in TIN 000-000-000; opens locked-out taxpayers";
     return t().admin ? "Signs you in; opens locked-out taxpayers" : "Asked when you sign in with your TIN";
   };

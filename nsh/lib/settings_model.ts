@@ -11,6 +11,7 @@ export interface SettingsSection {
   group: string;
   adminOnly: boolean;
   search: string;
+  desktopOnly?: boolean;
 }
 
 /** A row of a section: its id, its search words, and whether only an admin sees it. */
@@ -18,6 +19,7 @@ export interface SettingsRow {
   id: string;
   search: string;
   adminOnly?: boolean;
+  desktopOnly?: boolean;
 }
 
 /** A section as the search shows it: its rows (ids) that the search keeps. */
@@ -46,16 +48,16 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: "account", label: "Account", icon: "user", group: "Personal", adminOnly: false, search: "account personal profile" },
   { id: "transfer", label: "Import / Export", icon: "archive", group: "Data", adminOnly: false, search: "import export data transfer" },
   { id: "jobs", label: "Jobs", icon: "list", group: "Data", adminOnly: true, search: "jobs data background tasks" },
-  { id: "keyboard", label: "Keyboard", icon: "keyboard", group: "System", adminOnly: false, search: "keyboard keys shortcuts" },
+  { id: "keyboard", label: "Keyboard", icon: "keyboard", group: "System", adminOnly: false, search: "keyboard keys shortcuts", desktopOnly: true },
   { id: "computer", label: "Computer", icon: "laptop", group: "System", adminOnly: true, search: "computer system this computer" },
 ];
 
 export const SETTINGS_ROWS: Readonly<Record<string, readonly SettingsRow[]>> = {
   general: [
     { id: "theme", search: "theme appearance light dark system" },
-    { id: "recent", search: "recent returns sidebar" },
-    { id: "compact", search: "compact form sections" },
-    { id: "updates", search: "download updates automatically release install" },
+    { id: "recent", search: "recent returns sidebar", desktopOnly: true },
+    { id: "compact", search: "compact form sections", desktopOnly: true },
+    { id: "updates", search: "download updates automatically release install", desktopOnly: true },
   ],
   account: [
     { id: "buwiz", search: "buwiz server cloud sign in sign out device" },
@@ -76,7 +78,7 @@ export const SETTINGS_ROWS: Readonly<Record<string, readonly SettingsRow[]>> = {
   computer: [
     { id: "data", search: "database data location path local files" },
     { id: "logs", search: "logs folder retention log files" },
-    { id: "hotkey", search: "hotkey shortcut global show keyboard" },
+    { id: "hotkey", search: "hotkey shortcut global show keyboard", desktopOnly: true },
     { id: "setup", search: "setup owner help desk who this computer is for" },
     { id: "version", search: "version about ebirforms" },
   ],
@@ -114,16 +116,19 @@ function visibleRows(query: string | null | undefined, sectionSearch: string, ro
 /**
  * The sections and rows the search keeps for this role. isAdmin is the signed-in admin (or an unlocked computer with no PIN).
  */
-export function settingsView(query: string | null | undefined, isAdmin: boolean): SettingsViewSection[] {
+export function settingsView(query: string | null | undefined, isAdmin: boolean, touch = false): SettingsViewSection[] {
   const out: SettingsViewSection[] = [];
   for (const section of SETTINGS_SECTIONS) {
     if (section.adminOnly && !isAdmin) continue;
-    const rows = (SETTINGS_ROWS[section.id] || []).filter((row) => isAdmin || !row.adminOnly);
-    const shown = visibleRows(query, section.search, rows);
+    if (touch && section.desktopOnly) continue;
+    const rows = (SETTINGS_ROWS[section.id] || []).filter((row) => (isAdmin || !row.adminOnly) && (!touch || !row.desktopOnly));
+    const label = touch && section.id === "computer" ? "Device" : section.label;
+    const search = touch && section.id === "computer" ? section.search.replaceAll("computer", "device") : section.search;
+    const shown = visibleRows(query, search, rows);
     if (shown.length) {
       out.push({
         id: section.id,
-        label: section.label,
+        label,
         icon: section.icon,
         group: section.group,
         rows: shown.map((row) => row.id),

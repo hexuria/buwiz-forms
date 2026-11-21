@@ -10,7 +10,7 @@ The NSH (TSX) app in `nsh/`, as of 2026-11-15. Plan and hard rules: [docs/plans/
 | macOS | Built and tested on the owner's Mac (Apple silicon, Darwin 25.5, NSH 0.5.1): type check, build, headless tests, real-window screenshots. |
 | Windows | Never built into an app, never linked, never run. The Rust crate type-checks for `x86_64-pc-windows-msvc` (below). Some parts are stubs. |
 | Linux | The same, for `x86_64-unknown-linux-gnu`. |
-| iOS | Not started. |
+| iOS | Builds and runs in the iOS Simulator (`nsh run --target ios` from `nsh/`, iPhone 17, Xcode 26.6). Print preview is the system print sheet (UIPrintInteractionController over the same WKWebView PDF as macOS). Sending goes through the local mock relay (`docs/relay.md`). Open UI defects: see the iOS PR. |
 | Android | Not started. |
 
 No Windows or Linux machine was available, so nothing below was run there. "Written" means the code exists and compiles; it does not mean it works.
@@ -79,4 +79,4 @@ CI: `.github/workflows/nsh.yml` runs the macOS steps above and `just core-plain-
 
 - Windows: the real-window tests, and a person trying Print at a printer.
 - Linux: the same PDF work, an OS sign-in prompt, running any of it.
-- iOS and Android: everything. Screens are already built wide and narrow with a test at 390x844; the Rust side (guards, print, desktop glue) has no phone paths yet.
+- iOS: a real relay (only the loopback mock exists), device signing and packaging, the keychain on a device, and the open UI defects. Android: everything (its own PR). Screens are built wide and narrow with a test at 390x844.

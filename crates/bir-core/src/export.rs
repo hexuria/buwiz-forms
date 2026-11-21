@@ -546,6 +546,70 @@ mod tests {
         assert!(empty(&temp), "nothing left after the read-only exports");
     }
 
+    #[cfg(unix)]
+    fn check_android_backup_staging(fail_zip: bool) {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let data_dir = directory.path().join("app-private-data");
+        // Android platform::temp_dir() is the injected data_dir joined with tmp.
+        let temp = data_dir.join("tmp");
+        fs::create_dir_all(&temp).unwrap();
+        let db = Database::open(data_dir.join("live.db")).expect("private database");
+        db.set_setting("export_probe", "private Android backup")
+            .unwrap();
+        let archive = if fail_zip {
+            directory.path().join("missing").join("backup.zip")
+        } else {
+            directory.path().join("backup.zip")
+        };
+
+        crate::private_temp::with_root(&temp, || {
+            let mut staged = None;
+            let result = with_plaintext_copy(
+                "bir_unencrypted",
+                |copy| write_plaintext_copy(&db, copy),
+                |copy| {
+                    let folder = copy.parent().unwrap();
+                    assert_eq!(folder.parent(), Some(temp.as_path()));
+                    assert!(copy.starts_with(&data_dir));
+                    assert_ne!(folder.parent(), Some(std::env::temp_dir().as_path()));
+                    assert_eq!(mode_of(folder), 0o700);
+                    assert_eq!(mode_of(copy), 0o600);
+                    assert!(fs::metadata(copy).unwrap().len() > 0);
+                    staged = Some((folder.to_path_buf(), copy.to_path_buf()));
+                    zip_plaintext_database(copy, &archive)
+                },
+            );
+            assert_eq!(result.is_err(), fail_zip);
+            let (folder, copy) = staged.expect("the ZIP step saw a populated private stage");
+            assert!(!copy.exists(), "plaintext copy survived the export");
+            assert!(
+                !folder.exists(),
+                "private staging folder survived the export"
+            );
+            assert!(fs::read_dir(&temp).unwrap().next().is_none());
+
+            let result = export_database_zip(&db, &archive);
+            assert_eq!(result.is_err(), fail_zip);
+            assert_eq!(archive.exists(), !fail_zip);
+            assert!(
+                fs::read_dir(&temp).unwrap().next().is_none(),
+                "the public database backup left private staging behind"
+            );
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn android_database_backup_staging_is_private_and_removed_after_success() {
+        check_android_backup_staging(false);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn android_database_backup_staging_is_private_and_removed_after_failure() {
+        check_android_backup_staging(true);
+    }
+
     /// A failed `sqlcipher_export` (here: its target is read-only) still
     /// detaches "plaintext" from the live connection, so the next export
     /// works. (Before, it stayed attached and every later export failed on the

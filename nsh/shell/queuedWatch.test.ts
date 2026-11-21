@@ -1,6 +1,6 @@
 // The Queued watch's pace and what it drops. A return that stays Queued (the worker is off, SFTP is down, the computer is offline) used to
 // make the watch drop the returns, deadlines, forms and jobs reads every 3 s for good, so every mounted screen read again each time.
-// Now it looks every 3 s for about 30 s after the Queued set last changed (or a queue action), then leaves it to the 30 s events poll;
+// Now it looks every 3 s for about 30 s after the Queued set last changed (or a queue action), then every 30 s even without the events poll;
 // a change of the set or a new queue action starts the fast phase again. The pace is shortened here (50 ms looks, a 500 ms fast phase).
 // The watch drops WORKER_KEYS (the drafts count and the as-needed forms too); the plain 30 s poll keeps its narrower POLL_KEYS, so the
 // drafts count stays held past it (Home draws at once). The re-reads of a queue action end with the session (log out, sign out of the account).
@@ -70,7 +70,7 @@ test("the key sets: the watch and the queue actions drop WORKER_KEYS, the plain 
   }
 });
 
-test("the watch looks every tick for fastMs after the Queued set changed, then goes quiet; a changed set or a queue action starts it again", async () => {
+test("the watch looks every tick for fastMs, then waits between slow looks; a changed set or a queue action starts it again", async () => {
   createDemoTaxpayer();
   filed = [ROW];
   store.bump();
@@ -83,7 +83,7 @@ test("the watch looks every tick for fastMs after the Queued set changed, then g
   let skew = 0;
   Date.now = () => realNow() + skew;
   const pastFastPhase = () => void (skew += fastMs + 1);
-  const stop = startQueuedWatch({ ...TIMING, fastMs });
+  const stop = startQueuedWatch({ ...TIMING, fastMs, slowMs: 10 * fastMs });
   try {
     const start = reads;
     await until(() => reads - start >= 3, "a read per look in the fast phase"); // fast phase: a read per look
@@ -113,6 +113,39 @@ test("the watch looks every tick for fastMs after the Queued set changed, then g
     Date.now = realNow;
     stop();
     store.cancelRereads();
+  }
+}, 30_000);
+
+test("a worker submission after the fast phase refreshes the cached filings without the normal events poll", async () => {
+  filed = [ROW];
+  store.bump();
+  peek();
+  const realNow = Date.now;
+  let skew = Math.max(0, store.lastQueueAction() - realNow());
+  Date.now = () => realNow() + skew;
+  const fastMs = 60_000;
+  const slowMs = 120_000;
+  const stop = startQueuedWatch({ ...TIMING, fastMs, slowMs });
+  try {
+    const start = reads;
+    await until(() => reads - start >= 3, "the fast watch reads the queued return");
+    skew += fastMs + 1;
+    const settled = reads;
+    filed = [{ ...ROW, status: "Submitted" }];
+    await pause(250);
+    expect(reads).toBe(settled);
+    expect(peek().filter((r) => r.status === "Queued").length).toBe(1);
+
+    skew += slowMs;
+    await until(() => peek()[0]?.status === "Submitted", "the slow watch refreshes the cached filing");
+    expect(peek().filter((r) => r.status === "Queued").length).toBe(0);
+    expect(peek().filter((r) => r.status === "Submitted").length).toBe(1);
+    const submitted = reads;
+    await pause(250);
+    expect(reads).toBe(submitted);
+  } finally {
+    Date.now = realNow;
+    stop();
   }
 }, 30_000);
 

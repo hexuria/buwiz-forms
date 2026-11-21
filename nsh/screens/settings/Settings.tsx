@@ -5,7 +5,7 @@
 import { cleanup, Scroll, signal, View } from "nsh";
 import { sectionById, settingsView, shownSection } from "../../lib/settings_model";
 import { app } from "../../shell";
-import { AppButton, GroupLabel, Icon, NavRow, PageTitle, Text, TextField, type IconName } from "../../ui";
+import { AppButton, GroupLabel, Icon, NavRow, PageTitle, Text, TextField, TOUCH, type IconName } from "../../ui";
 import { AccountSection } from "./AccountSection";
 import { ComputerSection } from "./Computer";
 import { GeneralSection } from "./General";
@@ -27,7 +27,10 @@ const RAIL = 220;
 /** The change of who this computer is for has made its recovery key: only the key shows, as the old screen did. */
 const keyOnly = (): boolean => setupChange.step() === "key";
 /** The sections and rows the search keeps for this person. */
-const view = () => (keyOnly() ? [] : settingsView(nav.query(), app.isAdmin()));
+const view = () => {
+  if (keyOnly()) return [];
+  return settingsView(nav.query(), app.isAdmin(), TOUCH);
+};
 const shownId = () => (keyOnly() ? null : shownSection(nav.section(), view()));
 const shown = () => {
   const id = shownId();
@@ -110,7 +113,7 @@ function Pane(props: { narrow: boolean; back?: () => void }) {
           </View>
         </If>
         <View testID="settings-title">
-          <PageTitle>{keyOnly() ? "Computer" : (shown()?.label ?? "Settings")}</PageTitle>
+          <PageTitle>{keyOnly() ? (TOUCH ? "Device" : "Computer") : (shown()?.label ?? "Settings")}</PageTitle>
         </View>
         <If
           when={keyOnly()}
@@ -120,7 +123,7 @@ function Pane(props: { narrow: boolean; back?: () => void }) {
             </If>
           }
         >
-          <Labeled label="Computer setup">
+          <Labeled label={TOUCH ? "Device setup" : "Computer setup"}>
             <SetupCard />
           </Labeled>
         </If>

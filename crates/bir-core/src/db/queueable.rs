@@ -850,6 +850,58 @@ impl Database {
         Ok(true)
     }
 
+    /// The relay proved it did not take this claimed queued return (it refused it, or was unavailable): only the worker holding
+    /// the claim lets it go. Refused: back to Draft with the relay's reason (the same file would be refused again).
+    /// Unavailable: still Queued, retried after the usual back-off (the fifth failure returns it to Draft). `false` when
+    /// the claim is no longer this worker's.
+    pub(crate) fn release_unaccepted_claimed_queueable<F: QueueableForm>(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        period: i64,
+        claim_token: &str,
+        note: String,
+        refused: bool,
+    ) -> Result<bool, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) =
+            select_row(&tx, F::FORM_CODE, tin, taxable_year, period)?
+        else {
+            return Ok(false);
+        };
+        let mut draft: F = serde_json::from_str(&raw_json)?;
+        let lifecycle = draft.lifecycle();
+        if db_status != "Queued"
+            || !matches!(lifecycle.status, FilingStatus::Queued)
+            || lifecycle.submission_claim_token.as_deref() != Some(claim_token)
+            || lifecycle.submission_claimed_at.is_none()
+        {
+            return Ok(false);
+        }
+        if refused {
+            draft.lifecycle_mut().revert_to_draft();
+            draft.lifecycle_mut().submission_error = Some(note);
+        } else {
+            draft.lifecycle_mut().record_submission_failure(note);
+        }
+        let status = if matches!(draft.lifecycle().status, FilingStatus::Draft) {
+            "Draft"
+        } else {
+            "Queued"
+        };
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts SET status = ?1, data_json = ?2, updated_at = datetime('now')
+             WHERE id = ?3 AND status = 'Queued' AND data_json = ?4",
+            params![status, json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
     /// Recover a claim whose lease expired before PUT started.
     pub fn recover_expired_unstarted_queueable_claim<F: QueueableForm>(
         &self,

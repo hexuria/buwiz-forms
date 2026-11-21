@@ -4,11 +4,11 @@ import { View } from "nsh";
 import { app } from "../../shell";
 import { AppButton, Text } from "../../ui";
 import { GATE_DEFAULT } from "./logic";
-import { AuthCard } from "./parts";
+import { AuthCard, deviceCopy } from "./parts";
 import { auth } from "./state";
 
 export function AccountGate() {
-  const detail = () => app.gateError() || auth.gateDetail() || GATE_DEFAULT;
+  const detail = () => deviceCopy(app.gateError() || auth.gateDetail() || GATE_DEFAULT);
   return (
     <View testID="gate-root" class="min-h-0 flex-1">
       <AuthCard testID="gate-card" shadow={false}>

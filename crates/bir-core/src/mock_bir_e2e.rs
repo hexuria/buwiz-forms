@@ -198,7 +198,7 @@ async fn run_worker(
                 let ip: std::net::IpAddr = endpoint.host.parse().unwrap();
                 assert!(ip.is_loopback(), "{ip}");
             }
-            ResolvedSftpTarget::DryRun { .. } => panic!("expected the mock, got a dry run"),
+            other => panic!("expected the mock, got {other:?}"),
         }
         run_queue_tick(db.clone()).await;
         let deadline = std::time::Instant::now() + Duration::from_secs(60);

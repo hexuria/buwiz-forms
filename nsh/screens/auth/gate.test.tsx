@@ -10,7 +10,7 @@ test("phone: Sign in reaches the host; its refusal shows on the card and the but
   const app = await open(ENTRY, { host: { params: { gate: true, begin: "refuse", readout: true } } });
   await app.waitFor("id:gate-card");
   expect(app.texts()).toContain("Welcome to eBIRForms");
-  expect(app.texts()).toContain("Sign in with your Buwiz account to file from this computer.");
+  expect(app.texts()).toContain("Sign in with your Buwiz account to file from this device.");
   expect(app.shows("id:frame")).toBe(false);
   expect(app.shows("id:setup-card")).toBe(false);
   await app.press("id:gate-sign-in");
