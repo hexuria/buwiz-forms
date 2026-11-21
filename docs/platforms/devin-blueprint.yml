@@ -187,8 +187,11 @@ maintenance:
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       git -C ..\nsh checkout --detach $pin
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      $have = & "$HOME\BuwizNsh\tools\bin\nsh.exe" --version 2>$null
-      if ("$have" -notlike "*($($pin.Substring(0,7)))*") {
+      $have = if (Test-Path "$HOME\BuwizNsh\tools\bin\nsh.exe") { & "$HOME\BuwizNsh\tools\bin\nsh.exe" --version }
+      $runtimeMissing = @('android\bin-dev', 'android\bin', 'runtime\android\dev', 'runtime\android\release') | Where-Object {
+        -not (Test-Path "$HOME\BuwizNsh\tools\$_\classes.dex") -or -not (Test-Path "$HOME\BuwizNsh\tools\$_\lib\x86_64\libnsh.so")
+      }
+      if ("$have" -notlike "*($($pin.Substring(0,7)))*" -or $runtimeMissing) {
         powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-android-windows.ps1
         exit $LASTEXITCODE
       }
