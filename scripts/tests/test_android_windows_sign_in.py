@@ -13,6 +13,20 @@ PACKAGE = "dev.goldcoders.bir.nsh"
 
 @unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "Windows PowerShell required")
 class AndroidSignInTests(unittest.TestCase):
+    def test_system_ui_anr_waits_instead_of_closing_shell(self):
+        block = SCRIPT[SCRIPT.index('        $systemUiAnr ='):SCRIPT.index("        } elseif ($state.State")]+ '        }'
+        for button, bounds, tapped in (('aerr_wait', '[100,200][300,400]', True),
+                                       ('aerr_close', '[100,200][300,400]', False),
+                                       ('aerr_wait', 'invalid', False), ('', '', False)):
+            xml = '<hierarchy><node text="System UI isn\'t responding" />' + f'<node resource-id="android:id/{button}" bounds="{bounds}" /></hierarchy>'
+            result = subprocess.run(
+                ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+                 "$ErrorActionPreference='Stop'; function Fake-Adb { $args -join ' ' }; $adb='Fake-Adb'; $Serial='emulator-5554'; [xml]$ui=$env:TEST_UI; " + block],
+                env={**os.environ, 'TEST_UI': xml}, text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual('shell input tap 200 300' in result.stdout, tapped)
+
     def parse(self, xml):
         return subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command",
