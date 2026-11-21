@@ -1,0 +1,998 @@
+<title>Form Field Picks</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: one reading column of questions; each question = real BEFORE screenshot beside AFTER mockups drawn with the app's own tokens. */
+:root{
+  /* page chrome */
+  --bg:#eef0f3; --ink:#15171c; --ink2:#4d525c; --ink3:#6a6f7a; --line:#d9dce2; --panel:#ffffff; --tint:#e4e9f6;
+  --pick:#2557d6; --pick-soft:#2557d614; --good:#157a3c; --bad:#c0262d; --warn:#a5520a;
+  --f-ui:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; --f-head:"Space Grotesk",Inter,ui-sans-serif,system-ui,sans-serif;
+  /* the app (nsh/theme/theme.json, light) */
+  --a-bg:#f4f4f6; --a-fg:#18181b; --a-card:#ffffff; --a-hover:#ebebee; --a-sel:#e2e2e7; --a-fg2:#54545d; --a-fg3:#64646d;
+  --a-primary:#18181b; --a-primary-fg:#ffffff; --a-border:#e2e2e6; --a-strong:#cdcdd3; --a-blue:#2557d6; --a-blue-soft:#2557d61a;
+  --a-success:#157a3c; --a-success-soft:#157a3c1a; --a-warning:#a5520a; --a-warning-soft:#c46e0a21; --a-danger:#c0262d; --a-danger-soft:#c0262d1a; --a-scrim:#18181b4d;
+  --mw:390px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1013; --ink:#eef0f4; --ink2:#b4b8c2; --ink3:#9298a4; --line:#2a2d34; --panel:#17191d; --tint:#1d2333;
+  --pick:#7ea2ff; --pick-soft:#7ea2ff1c; --good:#5bd68a; --bad:#ff7b7b; --warn:#f3b44a;
+  --a-bg:#0e0e10; --a-fg:#f3f3f5; --a-card:#161619; --a-hover:#1f1f23; --a-sel:#29292f; --a-fg2:#a7a7b1; --a-fg3:#91919b;
+  --a-primary:#f3f3f5; --a-primary-fg:#111113; --a-border:#25252a; --a-strong:#38383f; --a-blue:#7ea2ff; --a-blue-soft:#7ea2ff24;
+  --a-success:#5bd68a; --a-success-soft:#5bd68a1f; --a-warning:#f3b44a; --a-warning-soft:#f3b44a21; --a-danger:#ff7b7b; --a-danger-soft:#ff7b7b1f; --a-scrim:#0000008c;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1013; --ink:#eef0f4; --ink2:#b4b8c2; --ink3:#9298a4; --line:#2a2d34; --panel:#17191d; --tint:#1d2333;
+  --pick:#7ea2ff; --pick-soft:#7ea2ff1c; --good:#5bd68a; --bad:#ff7b7b; --warn:#f3b44a;
+  --a-bg:#0e0e10; --a-fg:#f3f3f5; --a-card:#161619; --a-hover:#1f1f23; --a-sel:#29292f; --a-fg2:#a7a7b1; --a-fg3:#91919b;
+  --a-primary:#f3f3f5; --a-primary-fg:#111113; --a-border:#25252a; --a-strong:#38383f; --a-blue:#7ea2ff; --a-blue-soft:#7ea2ff24;
+  --a-success:#5bd68a; --a-success-soft:#5bd68a1f; --a-warning:#f3b44a; --a-warning-soft:#f3b44a21; --a-danger:#ff7b7b; --a-danger-soft:#ff7b7b1f; --a-scrim:#0000008c;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 120px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+.wrap{max-width:1120px;margin:0 auto}
+h1,h2,h3{font-family:var(--f-head);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(28px,4.4vw,44px);line-height:1.08}
+h2{font-size:24px;line-height:1.2}
+h3{font-size:17px}
+p{margin:0}
+.lede{color:var(--ink2);max-width:66ch;font-size:16px}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--pick);outline-offset:2px}
+/* sticky bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--panel);border-bottom:1px solid var(--line);margin:0 calc(-1 * max(16px,env(safe-area-inset-left,0px)));padding:10px max(16px,env(safe-area-inset-left,0px))}
+.bar-in{max-width:1120px;margin:0 auto;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.bar-title{font-family:var(--f-head);font-weight:600;font-size:16px;flex:1 1 auto;min-width:0}
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;padding:5px 12px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;color:var(--ink2)}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px #0000001f}
+.status{font-size:13px;color:var(--ink3);white-space:nowrap}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+/* hero */
+.hero{padding:40px 0 24px;display:grid;gap:14px}
+.found{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-top:8px}
+.found .f{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:8px;align-content:start}
+.found .big{font-family:var(--f-head);font-size:20px;font-weight:600;line-height:1.2}
+.found .why{color:var(--ink2);font-size:14px}
+.found code{font-size:12.5px;background:var(--bg);border-radius:5px;padding:1px 5px}
+.pipe{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;font-weight:600;margin-top:2px}
+.pipe span{background:var(--bg);border-radius:6px;padding:3px 8px}
+.pipe span.x{background:var(--a-danger-soft);color:var(--bad)}
+.pipe i{font-style:normal;color:var(--ink3)}
+/* question */
+.q{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;margin-top:22px;display:grid;gap:16px}
+.q[hidden]{display:none!important}
+.qhead{display:flex;gap:14px;align-items:flex-start}
+.qn{font-family:var(--f-head);font-weight:700;font-size:15px;background:var(--ink);color:var(--panel);border-radius:9px;min-width:40px;height:30px;display:grid;place-items:center;padding:0 8px;flex:none}
+.qhead .t{display:grid;gap:4px;min-width:0}
+.qhead .s{color:var(--ink2);font-size:14.5px;max-width:72ch}
+.sub{border-left:3px solid var(--pick);padding-left:16px;margin-left:4px}
+.sub .qn{background:var(--pick);color:var(--panel)}
+.ba{display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.ba{grid-template-columns:minmax(0,1fr)}}
+.before{display:grid;gap:8px;justify-items:start}
+.tag{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:6px;padding:2px 8px;display:inline-block}
+.tag.b{background:var(--a-danger-soft);color:var(--bad)}
+.tag.a{background:var(--a-success-soft);color:var(--good)}
+.shot{border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:520px;background:var(--a-bg);max-width:100%}
+.shot img{display:block;width:420px;max-width:none;height:auto}
+.shot.wide img{width:640px}
+.cap{font-size:12.5px;color:var(--ink3);max-width:420px}
+.variants{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(min(100%,calc(var(--mw) + 30px)),1fr))}
+.v{border:1.5px solid var(--line);border-radius:14px;padding:12px;display:grid;gap:10px;align-content:start;cursor:pointer;background:var(--panel);min-width:0;position:relative}
+.v:hover{border-color:var(--ink3)}
+.v.on{border-color:var(--pick);background:var(--pick-soft);box-shadow:0 0 0 3px var(--pick-soft)}
+.vtop{display:flex;gap:10px;align-items:flex-start}
+.vtop input{margin-top:4px;accent-color:var(--pick);width:18px;height:18px;flex:none}
+.vname{font-weight:650;font-size:15px;line-height:1.3}
+.vid{font-size:11px;font-weight:700;color:var(--ink3);letter-spacing:.06em}
+.vdesc{font-size:13.5px;color:var(--ink2)}
+.rec{font-size:11px;font-weight:700;color:var(--good);background:var(--a-success-soft);border-radius:5px;padding:1px 6px;margin-left:6px;letter-spacing:.03em;white-space:nowrap}
+.pc{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12.5px}
+.pc div{background:var(--bg);border-radius:8px;padding:6px 8px;color:var(--ink2)}
+.pc b{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.stage{overflow-x:auto;border-radius:12px;cursor:auto}
+.note{display:grid;gap:6px}
+.note label{font-size:13px;font-weight:600;color:var(--ink2)}
+.note textarea{width:100%;min-height:62px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;background:var(--bg);color:var(--ink);resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1.5px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 14px;font-size:14px;font-weight:500;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+.chip.on{border-color:var(--pick);background:var(--pick-soft);color:var(--ink)}
+.chip input{accent-color:var(--pick)}
+.bugs{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr))}
+.bug{display:flex;gap:10px;align-items:flex-start;background:var(--bg);border-radius:10px;padding:10px 12px;font-size:14px;cursor:pointer}
+.bug input{margin-top:3px;accent-color:var(--pick);flex:none;width:17px;height:17px}
+.sev{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;margin-right:6px;letter-spacing:.04em}
+.sev.c,.sev.h{background:var(--a-danger-soft);color:var(--bad)}
+.sev.m{background:var(--a-warning-soft);color:var(--warn)}
+.sev.l{background:var(--a-hover);color:var(--ink3)}
+.out{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;margin-top:22px;display:grid;gap:12px}
+.out pre{white-space:pre-wrap;font-size:12.5px;background:var(--bg);border-radius:10px;padding:12px;max-height:280px;overflow:auto;margin:0}
+.section-h{margin-top:44px;display:grid;gap:6px}
+
+/* ---------- the app, drawn from its tokens (rows.tsx ItemRow, ui/fields.tsx) ---------- */
+.m{width:var(--mw);font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:14px;color:var(--a-fg);background:var(--a-bg);border-radius:12px;padding:8px;position:relative;overflow:hidden;line-height:1.35;-webkit-font-smoothing:antialiased}
+.m *{box-sizing:border-box}
+.m-part{background:var(--a-card);border:1px solid var(--a-border);border-radius:12px;overflow:hidden}
+.m-ph{height:44px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--a-border);font-weight:600}
+.m-ph .n{margin-left:auto;font-weight:400;color:var(--a-fg2);font-size:13px}
+.m-row{display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:var(--gap,10px);padding:14px 12px 10px;border-bottom:1px solid var(--a-border)}
+.m-row:last-child{border-bottom:0}
+.m[data-w="desk"]{--gap:26px}
+.m-num{height:22px;border-radius:6px;background:var(--a-hover);color:var(--a-fg2);font-size:12px;font-weight:600;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+.m-body{display:grid;gap:8px;min-width:0}
+.m-lr{display:flex;align-items:center;gap:8px;min-height:22px;flex-wrap:wrap}
+.m-label{font-weight:500;font-size:14px}
+.m-in{height:32px;width:100%;border:1px solid var(--a-strong);border-radius:6px;background:var(--a-card);color:var(--a-fg);padding:0 10px;font:inherit;font-size:14px;outline:none}
+.m[data-w="desk"] .m-in.w{width:320px}
+.m-in:focus{border-color:var(--a-blue);box-shadow:0 0 0 3px var(--a-blue-soft)}
+.m-in.err{border-color:var(--a-danger)}
+.m-in.err:focus{box-shadow:0 0 0 3px var(--a-danger-soft)}
+.m-in::placeholder{color:var(--a-fg3)}
+.m-in.ro{background:var(--a-hover);color:var(--a-fg2);border-color:transparent}
+.m-msg{color:var(--a-danger);font-size:13px;line-height:18px}
+.m-meta{color:var(--a-fg2);font-size:12.5px;line-height:17px}
+.m-meta3{color:var(--a-fg3);font-size:12.5px;line-height:17px}
+.m-ok{color:var(--a-success);font-size:12.5px;display:flex;gap:6px;align-items:center}
+.m-chip{font-size:11.5px;font-weight:600;border-radius:999px;padding:1px 8px;line-height:18px;white-space:nowrap}
+.m-chip.warn{background:var(--a-warning-soft);color:var(--a-warning)}
+.m-chip.blue{background:var(--a-blue-soft);color:var(--a-blue)}
+.m-chip.ok{background:var(--a-success-soft);color:var(--a-success)}
+.m-chip.bad{background:var(--a-danger-soft);color:var(--a-danger)}
+.m-sw{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--a-fg2)}
+.m-sw .tr{width:30px;height:18px;border-radius:9px;background:var(--a-strong);position:relative;flex:none;transition:background .15s}
+.m-sw .tr::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px #0003}
+.m-sw.on .tr{background:var(--a-blue)}
+.m-sw.on .tr::after{left:14px}
+.m-btn{height:32px;border-radius:6px;border:1px solid var(--a-strong);background:var(--a-card);color:var(--a-fg);font:inherit;font-size:13px;font-weight:500;padding:0 12px;cursor:pointer}
+.m-btn.pri{background:var(--a-primary);color:var(--a-primary-fg);border-color:var(--a-primary)}
+.m-btn.ghost{border-color:transparent;background:transparent}
+.m-btn.sm{height:26px;font-size:12.5px;padding:0 8px}
+.m-cb{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;min-height:22px}
+.m-cb .bx{width:16px;height:16px;border:1px solid var(--a-strong);border-radius:4px;background:var(--a-card);display:grid;place-items:center;flex:none}
+.m-cb.on .bx{background:var(--a-primary);border-color:var(--a-primary)}
+.m-cb.on .bx::after{content:"";width:8px;height:4px;border-left:2px solid var(--a-primary-fg);border-bottom:2px solid var(--a-primary-fg);transform:rotate(-45deg) translate(1px,-1px)}
+.m-cbs{display:flex;flex-wrap:wrap;gap:8px 22px}
+.m-cbs.col{flex-direction:column;gap:8px}
+.m-seg{display:inline-flex;background:var(--a-hover);border-radius:8px;padding:2px;gap:2px;max-width:100%;flex-wrap:wrap}
+.m-seg button{border:0;background:transparent;height:28px;padding:0 12px;border-radius:6px;font:inherit;font-size:13px;font-weight:500;color:var(--a-fg2);cursor:pointer}
+.m-seg button.on{background:var(--a-card);color:var(--a-fg);box-shadow:0 1px 2px #0000002a}
+.m-sel{height:32px;width:100%;border:1px solid var(--a-strong);border-radius:6px;background:var(--a-card);color:var(--a-fg);padding:0 10px;font:inherit;font-size:14px}
+.m[data-w="desk"] .m-sel.w{width:320px}
+.m-field{position:relative;width:100%}
+.m[data-w="desk"] .m-field.d{width:200px}
+.m-field .m-in{padding-right:34px}
+.m-ic{position:absolute;right:4px;top:4px;width:24px;height:24px;border:0;background:transparent;border-radius:5px;color:var(--a-fg2);display:grid;place-items:center;cursor:pointer}
+.m-ic:hover{background:var(--a-hover)}
+.m-ic svg,.m-icn svg,.m-btn svg{width:15px;height:15px}
+.keys{display:flex;gap:6px;flex-wrap:wrap;font-size:11.5px;font-family:ui-monospace,monospace}
+.keys span{background:var(--tint);color:var(--ink2);border-radius:5px;padding:1px 6px}
+.keys .lbl{background:transparent;padding:0;color:var(--ink3);font-family:var(--f-ui)}
+.m-pop{position:absolute;z-index:5;background:var(--a-card);border:1px solid var(--a-border);border-radius:10px;box-shadow:0 10px 30px #0000002e;padding:10px;width:258px}
+.m-cal-h{display:flex;align-items:center;justify-content:space-between;font-weight:600;font-size:13.5px;margin-bottom:6px}
+.m-cal-h button{border:0;background:transparent;width:26px;height:26px;border-radius:6px;cursor:pointer;color:var(--a-fg2);font-size:15px}
+.m-cal-h button:hover{background:var(--a-hover)}
+.m-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:12.5px}
+.m-grid .dw{color:var(--a-fg3);font-size:11px;padding:3px 0}
+.m-grid button{border:0;background:transparent;height:30px;border-radius:6px;font:inherit;font-size:12.5px;color:var(--a-fg);cursor:pointer;font-variant-numeric:tabular-nums}
+.m-grid button.o{color:var(--a-fg3)}
+.m-grid button:hover{background:var(--a-hover)}
+.m-grid button.s{background:var(--a-primary);color:var(--a-primary-fg)}
+.m-mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.m-mgrid button{border:0;background:var(--a-hover);height:34px;border-radius:6px;font:inherit;font-size:13px;cursor:pointer;color:var(--a-fg)}
+.m-mgrid button.s{background:var(--a-primary);color:var(--a-primary-fg)}
+.m-scrim{position:absolute;inset:0;background:var(--a-scrim);z-index:6;display:grid}
+.m-dialog{background:var(--a-card);border-radius:14px;padding:18px;margin:auto;width:min(360px,90%);display:grid;gap:10px;box-shadow:0 20px 50px #0004}
+.m-sheet{background:var(--a-card);border-radius:14px 14px 0 0;padding:14px 14px 18px;align-self:end;display:grid;gap:12px;box-shadow:0 -10px 30px #0003}
+.m-grab{width:36px;height:4px;border-radius:2px;background:var(--a-strong);margin:0 auto}
+.m-touch{height:44px;border:1px solid var(--a-strong);border-radius:8px;background:var(--a-card);display:flex;align-items:center;padding:0 12px;gap:8px;cursor:pointer;color:var(--a-fg3);font-size:14px}
+.m-touch.v{color:var(--a-fg)}
+.m-touch .m-icn{margin-left:auto;color:var(--a-fg2);display:grid}
+.m-cells{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--a-strong);border-radius:6px;height:32px;padding:0 8px;background:var(--a-card)}
+.m-cells.err{border-color:var(--a-danger)}
+.m-cells input{width:13px;border:0;outline:none;background:transparent;font:inherit;font-size:14px;text-align:center;color:var(--a-fg);padding:0;font-variant-numeric:tabular-nums}
+.m-cells input:focus{background:var(--a-blue-soft);border-radius:3px}
+.m-cells .sl{color:var(--a-fg3);padding:0 2px}
+.m-cells .grp{display:inline-flex;gap:1px}
+.m-amt{display:grid;grid-template-columns:minmax(0,1fr) 150px;align-items:center;gap:10px;min-height:40px;border-bottom:1px solid var(--a-border);padding:4px 0}
+.m-amt:last-child{border-bottom:0}
+.m-amt .l{font-size:13.5px;min-width:0}
+.m-amt .l small{color:var(--a-fg3);font-size:12px;margin-right:6px;font-variant-numeric:tabular-nums}
+.m-money{height:32px;border:1px solid var(--a-strong);border-radius:6px;background:var(--a-card);display:flex;align-items:center;padding:0 10px;gap:6px;font-variant-numeric:tabular-nums}
+.m-money.ro{background:var(--a-hover);border-color:transparent;font-weight:600}
+.m-money span{color:var(--a-fg3);font-size:13px}
+.m-money input{border:0;outline:none;background:transparent;width:100%;text-align:right;font:inherit;font-size:14px;color:var(--a-fg);font-variant-numeric:tabular-nums}
+.m-tbl{border:1px solid var(--a-border);border-radius:8px;overflow:hidden}
+.m-tbl .h,.m-tbl .r{display:grid;grid-template-columns:44px minmax(0,1fr) 128px;gap:8px;align-items:center;padding:0 10px;min-height:38px}
+.m-tbl .h{background:var(--a-hover);font-size:11.5px;font-weight:600;color:var(--a-fg2);min-height:28px;text-transform:uppercase;letter-spacing:.05em}
+.m-tbl .r+.r{border-top:1px solid var(--a-border)}
+.m-tbl .r.t{background:var(--a-hover);font-weight:600}
+.m-tbl .m-money{height:28px}
+.m-pill{margin:10px auto 2px;width:92%;border-radius:999px;background:var(--a-card);border:1px solid var(--a-border);box-shadow:0 6px 20px #0000001f;display:flex;align-items:center;gap:10px;padding:8px 14px}
+.m-pill .t{display:grid;line-height:1.2}
+.m-pill .t small{color:var(--a-fg2);font-size:11.5px}
+.m-pill .t b{font-size:14px}
+.m-badge{margin-left:auto;min-width:24px;height:24px;border-radius:12px;background:var(--a-danger);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;padding:0 6px}
+.m-badge.n{background:var(--a-hover);color:var(--a-fg2)}
+.m-tin{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
+.m-tin .m-in{text-align:center;padding:0 4px;font-variant-numeric:tabular-nums}
+.m-info{width:18px;height:18px;border-radius:50%;border:1px solid var(--a-strong);color:var(--a-fg2);font-size:11px;font-weight:700;display:inline-grid;place-items:center;cursor:help;position:relative}
+.m-tip{position:absolute;left:24px;top:-4px;background:var(--a-primary);color:var(--a-primary-fg);font-size:12px;font-weight:500;border-radius:6px;padding:5px 8px;white-space:nowrap;z-index:4}
+.m-gate{border:1px dashed var(--a-strong);border-radius:6px;padding:6px 10px;color:var(--a-fg3);font-size:12.5px;display:flex;align-items:center;gap:6px}
+.m-fade{opacity:.55}
+.m-toast{position:absolute;left:50%;transform:translateX(-50%);bottom:12px;background:var(--a-primary);color:var(--a-primary-fg);border-radius:10px;padding:8px 12px;font-size:12.5px;white-space:nowrap;z-index:7}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="bar"><div class="bar-in">
+  <div class="bar-title">Form Field Picks · Form 0605 and every form page</div>
+  <div class="seg" role="group" aria-label="Mockup width">
+    <button id="w-phone" aria-pressed="true">Phone 390</button>
+    <button id="w-desk" aria-pressed="false">Desktop 640</button>
+  </div>
+  <span class="status" id="save-status">Loading picks…</span>
+  <button class="btn primary" id="jump-out">Done picking</button>
+</div></div>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">eBIRForms NSH app · form page redesign · picks before any build</div>
+  <h1>One box per answer. One line per problem.</h1>
+  <p class="lede">Every <b>BEFORE</b> picture is a real screenshot of the app as it is today (Form 0605, a made-up corporation with no line of business in its 2023 profile). Every <b>AFTER</b> picture is drawn with the app's own colors, font and sizes, and most of them work: type into them. Pick one per question, add a note when you want something changed. Picks save as you go.</p>
+  <div class="found">
+    <div class="f"><div class="eyebrow">Why your typing disappears</div>
+      <div class="big">The app writes your digits into a box that does not exist yet, gets told no, and puts the old empty value back.</div>
+      <div class="pipe"><span>you type 08</span><i>→</i><span>wait 0.3 s</span><i>→</i><span class="x">draft has no due_date</span><i>→</i><span>box reset to empty</span></div>
+      <p class="why">A new 0605 starts with no due date at all, and the writer can only fill a date that already exists. Same thing hits Item 6 ATC, Item 7 Return Period and Item 8 Tax Type. The calendar pick fails the same way on a new return.</p></div>
+    <div class="f"><div class="eyebrow">Why three boxes share one error</div>
+      <div class="big">Each refused box adds its own message to the item's one message line, then the form adds "Invalid date entry on item 4."</div>
+      <p class="why">They are not three checks. It is one line per item, with every refusal glued on with a dot, in reverse order, using internal names like <code>/due_date/year</code>.</p></div>
+    <div class="f"><div class="eyebrow">Why line of business is asked 4 times</div>
+      <div class="big">The box, the form's own rule, a profile check, and a card with a second box and Save all point at the same answer.</div>
+      <p class="why">Typing in the box fills the return but never the profile, and the card stays until you reopen the return. 41 of 43 forms can show such cards.</p></div>
+    <div class="f"><div class="eyebrow">Why tests stayed green</div>
+      <div class="big">No test ever typed into a split date or a 0605 field.</div>
+      <p class="why">The Rust "every date box" test skips split boxes; samples always start with a date filled; 19 of 43 forms are only opened, never typed into; 7 of 8 select tests return early headless.</p></div>
+  </div>
+</header>
+
+<div id="questions"></div>
+
+<section class="out" id="out">
+  <h2>Your picks</h2>
+  <p class="lede" style="font-size:14.5px">They save to this page as you pick, and I read them back from here. If saving is off for you (the status at the top says so), copy this and paste it in the chat.</p>
+  <pre id="summary">Nothing picked yet.</pre>
+  <div><button class="btn primary" id="copy">Copy picks as text</button> <span class="status" id="copied"></span></div>
+</section>
+</div>
+
+<script>
+(function(){
+"use strict";
+var IC={
+  cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+  check:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  user:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+  lock:'<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  chev:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>'
+};
+var CORP="Sample Trading Corporation";
+var MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function pad(n){return (n<10?"0":"")+n;}
+function h(html){var t=document.createElement("template");t.innerHTML=html.trim();return t.content.firstElementChild;}
+
+/* ---------- date rules shown in the mockups (mirrors nsh/lib/dates.ts parseTypedDate, plus the picks below) ---------- */
+var PICKS={};
+function twoDigitYear(yy){
+  var rule=PICKS["year2"]||"pivot";
+  if(rule==="refuse") return null;
+  return yy<=26?2000+yy:1900+yy;
+}
+function valid(y,m,d){if(m<1||m>12||y<1900||y>2100) return false;var dim=new Date(y,m,0).getDate();return d>=1&&d<=dim;}
+function parseDate(raw){
+  var s=String(raw).trim(); if(!s) return {blank:true};
+  var m,y,mo,d,mn;
+  if((m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s))){y=+m[1];mo=+m[2];d=+m[3];}
+  else if((m=/^(\d{1,2})[\/\-. ](\d{1,2})[\/\-. ](\d{2}|\d{4})$/.exec(s))){mo=+m[1];d=+m[2];y=m[3].length===2?twoDigitYear(+m[3]):+m[3];}
+  else if((m=/^(\d{8})$/.exec(s))){mo=+s.slice(0,2);d=+s.slice(2,4);y=+s.slice(4);}
+  else if((m=/^(\d{6})$/.exec(s))){mo=+s.slice(0,2);d=+s.slice(2,4);y=twoDigitYear(+s.slice(4));}
+  else if((m=/^([A-Za-z]{3,9})\.? (\d{1,2}),? (\d{4})$/.exec(s))){mn=MONTHS.findIndex(function(x){return x.toLowerCase().indexOf(m[1].toLowerCase())===0;});mo=mn+1;d=+m[2];y=+m[3];}
+  if(y==null) return {bad:true,twoDigit:/^\d{1,2}[\/\-. ]\d{1,2}[\/\-. ]\d{2}$|^\d{6}$/.test(s)};
+  if(!valid(y,mo,d)) return {bad:true};
+  return {y:y,m:mo,d:d};
+}
+function shortD(p){return pad(p.m)+"/"+pad(p.d)+"/"+p.y;}
+function longD(p){return MONTHS[p.m-1]+" "+p.d+", "+p.y;}
+function badText(r){return r&&r.twoDigit&&PICKS["year2"]==="refuse"?"Type the four-digit year, for example 08/17/1988.":"Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.";}
+
+/* calendar popover; opens on the value's month, else on the return's period (Dec 2023) */
+function calendar(host,anchorTop,value,onPick,mode){
+  var old=host.querySelector(".m-pop"); if(old){old.remove();return;}
+  var cur=value?{y:value.y,m:value.m}:{y:2023,m:12};
+  var pop=h('<div class="m-pop" role="dialog" aria-label="Pick a date"></div>');
+  pop.style.top=anchorTop+"px"; pop.style.left="44px";
+  function draw(){
+    if(mode==="month"){
+      pop.innerHTML='<div class="m-cal-h"><button data-a="-12" aria-label="Previous year">‹</button><span>'+cur.y+'</span><button data-a="12" aria-label="Next year">›</button></div><div class="m-mgrid">'+MONTHS.map(function(n,i){return '<button data-m="'+(i+1)+'" class="'+(value&&value.y===cur.y&&value.m===i+1?"s":"")+'">'+n.slice(0,3)+'</button>';}).join("")+'</div>';
+    } else {
+      var first=new Date(cur.y,cur.m-1,1).getDay(), dim=new Date(cur.y,cur.m,0).getDate(), prev=new Date(cur.y,cur.m-1,0).getDate();
+      var cells=["Su","Mo","Tu","We","Th","Fr","Sa"].map(function(x){return '<div class="dw">'+x+'</div>';}).join("");
+      for(var i=0;i<first;i++) cells+='<button class="o" tabindex="-1" disabled>'+(prev-first+1+i)+'</button>';
+      for(var dd=1;dd<=dim;dd++){var s=value&&value.y===cur.y&&value.m===cur.m&&value.d===dd;cells+='<button data-d="'+dd+'" class="'+(s?"s":"")+'">'+dd+'</button>';}
+      pop.innerHTML='<div class="m-cal-h"><button data-a="-1" aria-label="Previous month">‹</button><span>'+MONTHS[cur.m-1].slice(0,3)+' '+cur.y+'</span><button data-a="1" aria-label="Next month">›</button></div><div class="m-grid">'+cells+'</div>';
+    }
+  }
+  pop.addEventListener("click",function(e){
+    e.stopPropagation();
+    var b=e.target.closest("button"); if(!b) return;
+    if(b.dataset.a){var t=cur.y*12+(cur.m-1)+(+b.dataset.a);cur={y:Math.floor(t/12),m:t%12+1};draw();return;}
+    if(b.dataset.d){onPick({y:cur.y,m:cur.m,d:+b.dataset.d});pop.remove();}
+    if(b.dataset.m){onPick({y:cur.y,m:+b.dataset.m});pop.remove();}
+  });
+  draw(); host.appendChild(pop);
+}
+function relTop(el,host){var a=el.getBoundingClientRect(),b=host.getBoundingClientRect();return a.bottom-b.top+4;}
+
+/* ---------- mock shell ---------- */
+function shell(part,count,rows,extra){
+  return '<div class="m"><div class="m-part"><div class="m-ph"><span style="color:var(--a-fg2);display:grid">'+IC.chev+'</span>'+part+'<span class="n">'+count+' items</span></div>'+rows+'</div>'+(extra||"")+'</div>';
+}
+function row(num,label,body,labelExtra){
+  return '<div class="m-row"><div class="m-num">'+num+'</div><div class="m-body"><div class="m-lr"><span class="m-label">'+label+'</span>'+(labelExtra||"")+'</div>'+body+'</div></div>';
+}
+function keysLine(p,names){
+  names=names||["month","day","year"];
+  var v=p&&!p.blank&&!p.bad?[pad(p.m),pad(p.d),String(p.y)]:["(blank)","(blank)","(blank)"];
+  return '<div class="keys"><span class="lbl">Saves to the form as</span><span>'+names[0]+' '+v[0]+'</span><span>'+names[1]+' '+v[1]+'</span><span>'+names[2]+' '+v[2]+'</span></div>';
+}
+
+/* ---------- interactive mockups ---------- */
+var MOCKS={};
+
+/* P1: tax-profile gap */
+MOCKS.P1a=function(el){
+  var st={v:"",sw:null,saved:false};
+  function swOn(){return st.sw===null?(PICKS["lob-default"]||"on")==="on":st.sw;}
+  function draw(){
+    var on=swOn(), err=!st.v.trim();
+    var after=st.saved&&on;
+    var extra=after?'<span style="color:var(--a-fg2);display:grid" title="From tax profile">'+IC.user+'</span><button class="m-btn ghost sm" style="margin-left:auto">Edit</button>':"";
+    var body='<input class="m-in w '+(err?"err":"")+'" placeholder="Type the line of business" value="'+esc(st.v)+'" aria-label="Line of Business/Occupation">'+
+      (err?'<div class="m-msg">Line of business is not in the tax profile, and this return needs it. Type it here.</div>':"")+
+      (after?'<div class="m-ok">'+IC.check+'Saved to the tax profile. Later returns use it.</div>':
+      '<div class="m-sw '+(on?"on":"")+'" role="switch" aria-checked="'+on+'" tabindex="0"><span class="tr"></span>Also save to tax profile</div>'+
+      '<div class="m-meta3">'+(on?"Saved for every later "+CORP+" return for 2023. Only a finished answer is saved, never half-typed text.":"Off: the answer stays on this return.")+'</div>');
+    el.innerHTML=shell("Part I · Background Information",10,row(12,"Line of Business/Occupation *",body,extra));
+    var i=el.querySelector("input");
+    i.addEventListener("input",function(){st.v=i.value;st.saved=false;var p=i.selectionStart;draw();var j=el.querySelector("input");j.focus();j.setSelectionRange(p,p);});
+    i.addEventListener("blur",function(){if(st.v.trim()){st.saved=true;draw();}});
+    var sw=el.querySelector(".m-sw"); if(sw){var t=function(){st.sw=!swOn();draw();};sw.addEventListener("click",t);sw.addEventListener("keydown",function(e){if(e.key===" "||e.key==="Enter"){e.preventDefault();t();}});}
+    var ed=el.querySelector(".m-btn.ghost"); if(ed) ed.addEventListener("click",function(){st.saved=false;draw();});
+  }
+  draw(); el._redraw=draw;
+};
+MOCKS.P1b=function(el){
+  var st={v:"",asked:false,ans:null,dialog:false};
+  function draw(){
+    var err=!st.v.trim();
+    var body='<input class="m-in w '+(err?"err":"")+'" placeholder="Type the line of business" value="'+esc(st.v)+'" aria-label="Line of Business/Occupation">'+
+      (err?'<div class="m-msg">Line of business is not in the tax profile, and this return needs it. Type it here.</div>':"")+
+      (st.ans==="save"?'<div class="m-ok">'+IC.check+'Saved to the tax profile. Later returns use it.</div>':"")+
+      (st.ans==="only"?'<div class="m-meta3">Kept on this return only. Not asked again for '+CORP+' 2023.</div>':"");
+    var dlg="";
+    if(st.dialog){
+      var phone=el.closest("[data-w]")&&document.documentElement.dataset.mw==="phone";
+      dlg='<div class="m-scrim"><div class="'+(phone?"m-sheet":"m-dialog")+'">'+(phone?'<div class="m-grab"></div>':"")+
+        '<div style="font-weight:600;font-size:15px">Save line of business to the tax profile?</div>'+
+        '<div class="m-meta">"'+esc(st.v)+'" is saved for '+CORP+' for 2023. Later returns use it. You can change it later under Profile.</div>'+
+        '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;'+(phone?"flex-direction:column-reverse":"")+'"><button class="m-btn ghost" data-a="only">Only this return</button><button class="m-btn pri" data-a="save">Save to profile</button></div></div></div>';
+    }
+    el.innerHTML=shell("Part I · Background Information",10,row(12,"Line of Business/Occupation *",body),dlg);
+    var i=el.querySelector("input");
+    i.addEventListener("input",function(){st.v=i.value;var p=i.selectionStart;draw();var j=el.querySelector("input");j.focus();j.setSelectionRange(p,p);});
+    i.addEventListener("blur",function(){if(st.v.trim()&&!st.asked){st.asked=true;st.dialog=true;draw();}});
+    el.querySelectorAll("[data-a]").forEach(function(b){b.addEventListener("click",function(){st.ans=b.dataset.a;st.dialog=false;draw();});});
+  }
+  draw();
+};
+MOCKS.P1c=function(el){
+  var st={v:"",saved:false};
+  function draw(){
+    var err=!st.v.trim();
+    var chip=st.saved?'<span class="m-chip ok">From tax profile</span>':err?'<span class="m-chip warn">Missing in tax profile</span>':'<span class="m-chip blue">Not in profile yet</span>';
+    var words=st.saved?'<div class="m-ok">'+IC.check+'Saved to the tax profile. Later returns use it.</div>':err?'<div class="m-meta">Type it here. It is saved to the tax profile for later returns.</div>':'<div class="m-meta">Saves to the tax profile when you leave the box.</div>';
+    var body='<input class="m-in w '+(err?"err":"")+'" placeholder="Type the line of business" value="'+esc(st.v)+'" aria-label="Line of Business/Occupation">'+words+(err?'<div class="m-msg">This return needs it to queue.</div>':"");
+    el.innerHTML=shell("Part I · Background Information",10,row(12,"Line of Business/Occupation *",body,chip));
+    var i=el.querySelector("input");
+    i.addEventListener("input",function(){st.v=i.value;st.saved=false;var p=i.selectionStart;draw();var j=el.querySelector("input");j.focus();j.setSelectionRange(p,p);});
+    i.addEventListener("blur",function(){if(st.v.trim()){st.saved=true;draw();}});
+  }
+  draw();
+};
+/* facts with no box on the page (EOPT tier on most forms) */
+MOCKS.F1=function(el){
+  var st={open:false,tier:null};
+  function draw(){
+    var strip='<div style="margin:0 0 8px;background:var(--a-warning-soft);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--a-warning);font-weight:600;font-size:13px">'+(st.tier?"Tax profile complete":"1 tax-profile answer missing")+'</span><span class="m-meta" style="flex:1 1 140px">'+(st.tier?"EOPT tier: "+st.tier:"EOPT tier, used for penalties")+'</span><button class="m-btn sm" data-a="open">'+(st.tier?"Change":"Answer")+'</button></div>';
+    var rows=row(19,"Basic Tax / Deposit / Advance Payment *",'<div class="m-money"><span>₱</span><input value="0.00" aria-label="Basic tax"></div>');
+    var sheet=st.open?'<div class="m-scrim"><div class="m-sheet"><div class="m-grab"></div><div style="font-weight:600">EOPT tier for 2023</div><div class="m-meta">Saved to the tax profile. Every 2023 return uses it.</div><div class="m-seg" style="align-self:start">'+["Micro","Small","Medium","Large"].map(function(t){return '<button data-t="'+t+'" class="'+(st.tier===t?"on":"")+'">'+t+'</button>';}).join("")+'</div><button class="m-btn pri" data-a="done">Done</button></div></div>':"";
+    el.innerHTML='<div class="m">'+strip+'<div class="m-part"><div class="m-ph">Part II · Computation of Tax<span class="n">6 items</span></div>'+rows+'</div>'+sheet+'</div>';
+    el.querySelectorAll("[data-a]").forEach(function(b){b.addEventListener("click",function(){st.open=b.dataset.a==="open";draw();});});
+    el.querySelectorAll("[data-t]").forEach(function(b){b.addEventListener("click",function(){st.tier=b.dataset.t;draw();});});
+  }
+  draw();
+};
+MOCKS.F2=function(el){
+  var st={tier:null};
+  function draw(){
+    var card='<div style="border:1px solid var(--a-strong);border-radius:8px;padding:10px 12px;display:grid;gap:8px"><div style="display:flex;gap:8px;align-items:center"><span style="font-weight:600;font-size:13.5px">EOPT tier</span>'+(st.tier?'<span class="m-chip ok">Saved to profile</span>':'<span class="m-chip warn">Missing in tax profile</span>')+'</div><div class="m-seg">'+["Micro","Small","Medium","Large"].map(function(t){return '<button data-t="'+t+'" class="'+(st.tier===t?"on":"")+'">'+t+'</button>';}).join("")+'</div></div>';
+    var rows=row(19,"Basic Tax / Deposit / Advance Payment *",'<div class="m-money"><span>₱</span><input value="0.00" aria-label="Basic tax"></div>')+
+      row("20","Add: Penalties",card);
+    el.innerHTML=shell("Part II · Computation of Tax",6,rows);
+    el.querySelectorAll("[data-t]").forEach(function(b){b.addEventListener("click",function(){st.tier=b.dataset.t;draw();});});
+  }
+  draw();
+};
+
+/* P2: dates */
+function dateRow(el,opts){
+  var st={raw:"",p:null,focus:false,shown:false};
+  function draw(){
+    var r=parseDate(st.raw), ok=r&&!r.blank&&!r.bad;
+    var text=st.focus?st.raw:(ok?longD(r):st.raw);
+    var err=(!st.focus&&st.shown&&(r.bad||r.blank));
+    var msg=err?(r.blank?"Item 4 needs a due date.":badText(r)):"";
+    var body='<div class="m-field d"><input class="m-in '+(err?"err":"")+'" inputmode="numeric" autocomplete="off" placeholder="MM/DD/YYYY" value="'+esc(text)+'" aria-label="Due Date"><button class="m-ic" aria-label="Pick Due Date">'+IC.cal+'</button></div>'+
+      (msg?'<div class="m-msg">'+msg+'</div>':"")+keysLine(ok?r:null);
+    el.innerHTML=shell("Return details",8,row(4,"Due Date *",body));
+    var i=el.querySelector("input"), host=el.querySelector(".m");
+    i.addEventListener("focus",function(){if(!st.focus){st.focus=true;var r2=parseDate(st.raw);if(r2&&!r2.blank&&!r2.bad) st.raw=shortD(r2);draw();var j=el.querySelector("input");j.focus();j.setSelectionRange(j.value.length,j.value.length);}});
+    i.addEventListener("input",function(){
+      st.raw=i.value; var r2=parseDate(st.raw);
+      if(/^\d{8}$/.test(st.raw)&&r2&&!r2.bad){st.raw=shortD(r2);i.value=st.raw;}
+      var k=el.querySelector(".keys");k.outerHTML=keysLine(r2&&!r2.blank&&!r2.bad?r2:null);
+    });
+    i.addEventListener("blur",function(e){if(e.relatedTarget&&e.relatedTarget.closest&&e.relatedTarget.closest(".m-pop")) return;st.focus=false;st.shown=true;draw();});
+    el.querySelector(".m-ic").addEventListener("mousedown",function(e){e.preventDefault();});
+    el.querySelector(".m-ic").addEventListener("click",function(e){e.stopPropagation();var r2=parseDate(st.raw);calendar(host,relTop(i,host),r2&&!r2.bad&&!r2.blank?r2:null,function(p){st.raw=shortD(p);st.focus=false;st.shown=true;draw();});});
+  }
+  draw();
+}
+MOCKS.P2a=function(el){dateRow(el);};
+MOCKS.P2b=function(el){
+  var phone=document.documentElement.dataset.mw!=="desk";
+  if(!phone){dateRow(el);el.insertAdjacentHTML("beforeend",'<div class="m-meta3" style="margin-top:6px">On a desktop this is the same as A. Switch to Phone 390 at the top to see the sheet.</div>');return;}
+  var st={p:null,open:false,raw:"",cur:null};
+  function draw(){
+    var body='<div class="m-touch '+(st.p?"v":"")+'" role="button" tabindex="0">'+(st.p?longD(st.p):"MM/DD/YYYY")+'<span class="m-icn">'+IC.cal+'</span></div>'+keysLine(st.p);
+    var sheet="";
+    if(st.open){
+      sheet='<div class="m-scrim"><div class="m-sheet"><div class="m-grab"></div><div style="font-weight:600">Due Date</div><input class="m-in" inputmode="numeric" placeholder="MM/DD/YYYY" value="'+esc(st.raw)+'"><div class="cal-in" style="position:relative;height:250px"></div><div style="display:flex;gap:8px"><button class="m-btn ghost" data-a="clear">Clear</button><button class="m-btn pri" style="flex:1" data-a="done">Done</button></div></div></div>';
+    }
+    el.innerHTML=shell("Return details",8,row(4,"Due Date *",body),sheet);
+    el.querySelector(".m-touch").addEventListener("click",function(){st.open=true;st.raw=st.p?shortD(st.p):"";draw();});
+    if(st.open){
+      var ci=el.querySelector(".cal-in"),inp=el.querySelector(".m-sheet input");
+      var pick=function(p){st.raw=shortD(p);inp.value=st.raw;ci.innerHTML="";calendar(ci,0,p,pick);fix();};
+      var fix=function(){var pp=ci.querySelector(".m-pop");if(pp){pp.style.position="static";pp.style.width="100%";pp.style.boxShadow="none";pp.style.border="0";pp.style.padding="0";}};
+      var r0=parseDate(st.raw);calendar(ci,0,r0&&!r0.bad&&!r0.blank?r0:null,pick);fix();
+      inp.addEventListener("input",function(){st.raw=inp.value;});
+      el.querySelector('[data-a="done"]').addEventListener("click",function(){var r=parseDate(st.raw);if(r.blank){st.p=null;}else if(r.bad){inp.classList.add("err");return;}else st.p=r;st.open=false;draw();});
+      el.querySelector('[data-a="clear"]').addEventListener("click",function(){st.raw="";st.p=null;st.open=false;draw();});
+    }
+  }
+  draw();
+};
+MOCKS.P2c=function(el){
+  var st={d:["","","","","","","",""],shown:false};
+  function val(){var s=st.d.join("");if(!s) return {blank:true};if(s.length<8) return {partial:true};return parseDate(s);}
+  function draw(focusIdx){
+    var r=val(), ok=r&&r.y, err=st.shown&&!ok&&!r.partial&&!r.blank;
+    function cells(a,b){var o="";for(var k=a;k<b;k++) o+='<input data-i="'+k+'" maxlength="1" inputmode="numeric" value="'+st.d[k]+'" aria-label="digit '+(k+1)+'" placeholder="'+("MMDDYYYY"[k])+'">';return '<span class="grp">'+o+'</span>';}
+    var body='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div class="m-cells '+(err?"err":"")+'">'+cells(0,2)+'<span class="sl">/</span>'+cells(2,4)+'<span class="sl">/</span>'+cells(4,8)+'</div><button class="m-btn ghost" style="width:32px;padding:0;display:grid;place-items:center" aria-label="Pick Due Date">'+IC.cal+'</button></div>'+
+      (ok?'<div class="m-meta">'+longD(r)+'</div>':"")+(err?'<div class="m-msg">'+badText(r)+'</div>':"")+keysLine(ok?r:null);
+    el.innerHTML=shell("Return details",8,row(4,"Due Date *",body));
+    var host=el.querySelector(".m");
+    var ins=el.querySelectorAll(".m-cells input");
+    ins.forEach(function(inp){
+      var k=+inp.dataset.i;
+      inp.addEventListener("input",function(){var c=inp.value.replace(/\D/g,"").slice(-1);st.d[k]=c;if(c&&k<7){draw(k+1);}else{st.shown=k===7;draw(k);}});
+      inp.addEventListener("keydown",function(e){if(e.key==="Backspace"&&!inp.value&&k>0){e.preventDefault();st.d[k-1]="";draw(k-1);}});
+      inp.addEventListener("paste",function(e){e.preventDefault();var t=(e.clipboardData.getData("text")||"").replace(/\D/g,"").slice(0,8);for(var q=0;q<8;q++) st.d[q]=t[q]||"";st.shown=true;draw(Math.min(t.length,7));});
+      inp.addEventListener("blur",function(){setTimeout(function(){if(!el.contains(document.activeElement)){st.shown=true;var r2=val();if(!r2.partial&&!r2.blank) draw();}},0);});
+    });
+    el.querySelector(".m-btn.ghost").addEventListener("click",function(e){e.stopPropagation();var r2=val();calendar(host,relTop(el.querySelector(".m-cells"),host),r2&&r2.y?r2:null,function(p){var s=pad(p.m)+pad(p.d)+p.y;st.d=s.split("");st.shown=true;draw();});});
+    if(focusIdx!=null){var f=el.querySelector('[data-i="'+focusIdx+'"]');if(f){f.focus();f.select();}}
+  }
+  draw();
+};
+
+/* P3: month and year */
+MOCKS.P3a=function(el){
+  var st={raw:"12/2023",focus:false,shown:true};
+  function parse(s){s=s.trim();var m;if(!s) return {blank:true};if((m=/^(\d{1,2})[\/\-. ]?(\d{4})$/.exec(s))&&+m[1]>=1&&+m[1]<=12) return {m:+m[1],y:+m[2]};return {bad:true};}
+  function draw(){
+    var r=parse(st.raw), ok=r.y;
+    var text=st.focus?st.raw:(ok?MONTHS[r.m-1]+" "+r.y:st.raw);
+    var err=!st.focus&&!ok;
+    var body='<div class="m-field d"><input class="m-in '+(err?"err":"")+'" inputmode="numeric" placeholder="MM/YYYY" value="'+esc(text)+'" aria-label="Year Ended"><button class="m-ic" aria-label="Pick month">'+IC.cal+'</button></div>'+
+      (err?'<div class="m-msg">'+(r.blank?"Item 2 needs the month the year ends.":"Type the month and year as MM/YYYY, for example 12/2023.")+'</div>':"")+
+      '<div class="keys"><span class="lbl">Saves to the form as</span><span>month '+(ok?pad(r.m):"(blank)")+'</span><span>year '+(ok?r.y:"(blank)")+'</span></div>';
+    el.innerHTML=shell("Return details",8,row(2,"Year Ended *",body));
+    var i=el.querySelector("input"),host=el.querySelector(".m");
+    i.addEventListener("focus",function(){if(!st.focus){st.focus=true;var r2=parse(st.raw);if(r2.y) st.raw=pad(r2.m)+"/"+r2.y;draw();var j=el.querySelector("input");j.focus();j.setSelectionRange(j.value.length,j.value.length);}});
+    i.addEventListener("input",function(){st.raw=i.value;});
+    i.addEventListener("blur",function(){st.focus=false;draw();});
+    el.querySelector(".m-ic").addEventListener("mousedown",function(e){e.preventDefault();});
+    el.querySelector(".m-ic").addEventListener("click",function(e){e.stopPropagation();var r2=parse(st.raw);calendar(host,relTop(i,host),r2.y?{y:r2.y,m:r2.m}:null,function(p){st.raw=pad(p.m)+"/"+p.y;st.focus=false;draw();},"month");});
+  }
+  draw();
+};
+MOCKS.P3b=function(el){
+  var body='<div style="display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:8px;max-width:420px"><select class="m-sel" aria-label="Month">'+MONTHS.map(function(n,i){return '<option '+(i===11?"selected":"")+'>'+pad(i+1)+' - '+n+'</option>';}).join("")+'</select><input class="m-in ro" value="2023" readonly aria-label="Year"></div><div class="m-meta3">The year comes from the return. One message line for both boxes.</div>';
+  el.innerHTML=shell("Return details",8,row(2,"Year Ended (MM/YYYY) *",body));
+};
+
+/* ranges */
+MOCKS.R1=function(el){
+  var st={a:"10/01/2023",b:"12/31/2023"};
+  function draw(){
+    var A=parseDate(st.a),B=parseDate(st.b);
+    var order=A.y&&B.y&&new Date(B.y,B.m-1,B.d)<new Date(A.y,A.m-1,A.d);
+    function f(id,v){var p=parseDate(v);return '<div class="m-field" style="flex:1 1 140px"><input data-k="'+id+'" class="m-in '+(order&&id==="b"?"err":"")+'" placeholder="MM/DD/YYYY" value="'+esc(p.y?longD(p):v)+'"><button class="m-ic" tabindex="-1" aria-label="Pick">'+IC.cal+'</button></div>';}
+    var body='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+f("a",st.a)+'<span style="color:var(--a-fg3)">to</span>'+f("b",st.b)+'</div>'+(order?'<div class="m-msg">The end date is before the start date.</div>':"");
+    el.innerHTML=shell("Part I",6,row(4,"Period Covered *",body));
+    el.querySelectorAll("input").forEach(function(i){
+      i.addEventListener("focus",function(){var p=parseDate(st[i.dataset.k]);if(p.y) i.value=shortD(p);});
+      i.addEventListener("blur",function(){st[i.dataset.k]=i.value;draw();});
+    });
+  }
+  draw();
+};
+MOCKS.R2=function(el){
+  var body='<div class="m-field d" style="width:100%"><input class="m-in" value="Oct 1 – Dec 31, 2023" aria-label="Period"><button class="m-ic" aria-label="Pick range">'+IC.cal+'</button></div><div class="m-meta3">Type "10/01/2023 - 12/31/2023", or drag across days in a two-month calendar.</div>';
+  el.innerHTML=shell("Part I",6,row(4,"Period Covered *",body));
+};
+
+/* P4: choices */
+function tickGroup(opts,sel,col,clear){
+  return '<div class="m-cbs '+(col?"col":"")+'">'+opts.map(function(o,i){return '<div class="m-cb '+(sel===i?"on":"")+'" data-i="'+i+'" role="radio" aria-checked="'+(sel===i)+'" tabindex="0"><span class="bx"></span>'+o+'</div>';}).join("")+'</div>'+(clear&&sel!=null?'<button class="m-btn ghost sm" data-clear style="justify-self:start">Clear</button>':"");
+}
+function segGroup(opts,sel){return '<div class="m-seg" role="radiogroup">'+opts.map(function(o,i){return '<button data-i="'+i+'" class="'+(sel===i?"on":"")+'" role="radio" aria-checked="'+(sel===i)+'">'+o+'</button>';}).join("")+'</div>';}
+var MANNER=["Self-Assessment","Penalties","Tax Deposit/Advance Payment","Income Tax Second Installment","Others (Specify)","Preliminary/Final Assessment/Deficiency Tax","Accounts Receivable/Delinquent Account"];
+function choiceMock(el,small,big){
+  var st={cal:0,q:3,man:null,spec:""};
+  function draw(){
+    var g1=small==="seg"?segGroup(["Calendar","Fiscal"],st.cal):tickGroup(["Calendar","Fiscal"],st.cal);
+    var g2=small==="seg"?segGroup(["1st","2nd","3rd","4th"],st.q):tickGroup(["1st","2nd","3rd","4th"],st.q,false,true);
+    var g3;
+    if(big==="drop"){
+      g3='<select class="m-sel w" data-man aria-label="Manner of Payment"><option value="">Choose…</option>'+MANNER.map(function(o,i){return '<option value="'+i+'" '+(st.man===i?"selected":"")+'>'+o+'</option>';}).join("")+'</select>';
+    } else g3=tickGroup(MANNER,st.man,true,true);
+    if(st.man===4) g3+='<input class="m-in w" placeholder="Specify the other manner" value="'+esc(st.spec)+'" aria-label="Specify">';
+    el.innerHTML=shell("Return details",8,row(1,"For the *",'<div data-g="cal">'+g1+'</div>')+row(3,"Quarter",'<div data-g="q" style="display:grid;gap:6px">'+g2+'</div>')+row(17,"Manner of Payment",'<div data-g="man" style="display:grid;gap:8px">'+g3+'</div>'));
+    el.querySelectorAll("[data-g]").forEach(function(g){
+      var key=g.dataset.g;
+      g.querySelectorAll("[data-i]").forEach(function(b){b.addEventListener("click",function(){st[key]=+b.dataset.i;draw();});});
+      var c=g.querySelector("[data-clear]");if(c) c.addEventListener("click",function(){st[key]=null;draw();});
+    });
+    var s=el.querySelector("[data-man]");if(s) s.addEventListener("change",function(){st.man=s.value===""?null:+s.value;draw();});
+  }
+  draw();
+}
+MOCKS.C2a=function(el){choiceMock(el,"tick","tick");};
+MOCKS.C2b=function(el){choiceMock(el,"seg","tick");};
+MOCKS.C5a=function(el){choiceMock(el,"tick","tick");};
+MOCKS.C5b=function(el){choiceMock(el,"tick","drop");};
+
+/* P5: row clutter */
+function clutter(el,mode){
+  var needs=mode==="info"?' <span class="m-info" tabindex="0" aria-label="Needs item 17 = Others">i</span>':"";
+  var needLine=mode==="info"?"":'<div class="m-meta">Needs item 17 = Others</div>';
+  var chip=mode==="chip"?'<span class="m-chip bad">Needed</span>':"";
+  var reserve=mode==="before"?'<div style="height:18px"></div>':"";
+  var rows=row(5,"No. of Sheets Attached",'<input class="m-in w" value="0" aria-label="Sheets">'+reserve)+
+    row(6,"ATC"+(mode==="chip"?"":" *"),'<input class="m-in w err" aria-label="ATC">'+'<div class="m-msg">Item 6 needs an ATC.</div>',chip)+
+    row(17,"Manner of Payment"+needs,needLine+'<div class="m-gate">Specify · pick "Others" above to type here</div>'+reserve);
+  el.innerHTML=shell("Return details",8,rows);
+  var inf=el.querySelector(".m-info");
+  if(inf){inf.addEventListener("mouseenter",function(){if(!inf.querySelector(".m-tip"))inf.insertAdjacentHTML("beforeend",'<span class="m-tip">Needs item 17 = Others</span>');});inf.addEventListener("mouseleave",function(){var t=inf.querySelector(".m-tip");if(t)t.remove();});inf.addEventListener("focus",function(){inf.dispatchEvent(new Event("mouseenter"));});inf.addEventListener("blur",function(){inf.dispatchEvent(new Event("mouseleave"));});}
+}
+MOCKS.P5a=function(el){clutter(el,"lean");};
+MOCKS.P5b=function(el){clutter(el,"info");};
+MOCKS.P5c=function(el){clutter(el,"chip");};
+
+/* P6: error words */
+function errs(el,mode){
+  var st={checked:mode!=="quiet"};
+  function draw(){
+    var show=st.checked;
+    var d4=show?(mode==="under"?'<div class="m-msg">Item 4 needs a due date.</div>':""):"";
+    var rows=row(4,"Due Date *",'<div class="m-field d"><input class="m-in '+(show?"err":"")+'" placeholder="MM/DD/YYYY" aria-label="Due date"><button class="m-ic" aria-label="Pick">'+IC.cal+'</button></div>'+d4)+
+      row(6,"ATC *",'<input class="m-in w '+(show?"err":"")+'" aria-label="ATC">'+(show&&mode==="under"?'<div class="m-msg">Pick the ATC, for example FP010.</div>':""))+
+      row(8,"Tax Type Code *",'<input class="m-in w '+(show?"err":"")+'" aria-label="Tax type">'+(show&&mode==="under"?'<div class="m-msg">Pick the tax type code.</div>':""));
+    var top="";
+    if(mode==="line"&&show) top='<div style="margin:0 0 8px;color:var(--a-danger);font-size:13px;background:var(--a-danger-soft);border-radius:8px;padding:8px 10px">Item 4 needs a due date; Item 6 needs an ATC; Item 8 needs a tax type code.</div>';
+    var pill=mode==="quiet"?'<div class="m-pill"><div class="t"><small>'+(show?"3 to fix":"Nothing checked yet")+' · Page 1</small><b>Return details</b></div><span class="m-badge '+(show?"":"n")+'">'+(show?3:"–")+'</span>'+(show?"":'<button class="m-btn sm" data-a="check">Check</button>')+'</div>':"";
+    el.innerHTML='<div class="m">'+top+'<div class="m-part"><div class="m-ph">Return details<span class="n">8 items</span></div>'+rows+'</div>'+pill+'</div>';
+    var c=el.querySelector('[data-a="check"]');if(c) c.addEventListener("click",function(){st.checked=true;draw();});
+  }
+  draw();
+}
+MOCKS.P6a=function(el){errs(el,"under");};
+MOCKS.P6b=function(el){errs(el,"line");};
+MOCKS.P6c=function(el){errs(el,"quiet");};
+
+/* P7: amounts */
+function money(n){return n.toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function amounts(el,mode){
+  var st={a19:25000,a:0,b:1250,c:0};
+  function num(s){var n=parseFloat(String(s).replace(/[^\d.]/g,""));return isFinite(n)?n:0;}
+  function draw(){
+    var d=st.a+st.b+st.c, tot=st.a19+d;
+    function inp(k,v){return '<div class="m-money"><span>₱</span><input data-k="'+k+'" inputmode="decimal" value="'+money(v)+'"></div>';}
+    function ro(v){return '<div class="m-money ro"><span>₱</span><input readonly value="'+money(v)+'"></div>';}
+    var body;
+    if(mode==="lines"){
+      body='<div>'+[["19","Basic tax / deposit / advance payment",inp("a19",st.a19)],["20A","Surcharge",inp("a",st.a)],["20B","Interest",inp("b",st.b)],["20C","Compromise",inp("c",st.c)],["20D","Total penalties",ro(d)],["21","Total amount payable",ro(tot)]].map(function(r){return '<div class="m-amt"><div class="l"><small>'+r[0]+'</small>'+r[1]+'</div>'+r[2]+'</div>';}).join("")+'</div>';
+    } else {
+      body='<div class="m-tbl"><div class="h"><span>Item</span><span>Amount</span><span style="text-align:right">₱</span></div>'+[["19","Basic tax",inp("a19",st.a19),""],["20A","Surcharge",inp("a",st.a),""],["20B","Interest",inp("b",st.b),""],["20C","Compromise",inp("c",st.c),""],["20D","Penalties total",ro(d),"t"],["21","Amount payable",ro(tot),"t"]].map(function(r){return '<div class="r '+r[3]+'"><span style="font-size:12px;color:var(--a-fg3)">'+r[0]+'</span><span style="font-size:13.5px">'+r[1]+'</span>'+r[2]+'</div>';}).join("")+'</div>';
+    }
+    el.innerHTML='<div class="m"><div class="m-part"><div class="m-ph">Part II · Computation of Tax<span class="n">6 items</span></div><div style="padding:8px 12px">'+body+'</div></div></div>';
+    el.querySelectorAll("input[data-k]").forEach(function(i){
+      i.addEventListener("focus",function(){i.value=String(st[i.dataset.k]||"");i.select();});
+      i.addEventListener("blur",function(){st[i.dataset.k]=num(i.value);draw();});
+      i.addEventListener("keydown",function(e){if(e.key==="Enter") i.blur();});
+    });
+  }
+  draw();
+}
+MOCKS.P7a=function(el){amounts(el,"lines");};
+MOCKS.P7b=function(el){amounts(el,"table");};
+
+/* P8: TIN */
+MOCKS.P8a=function(el){
+  var body='<div class="m-tin" style="display:grid;grid-template-columns:1fr 1fr 1fr 1.4fr;gap:6px">'+["000","123","461","00000"].map(function(v){return '<input class="m-in ro" readonly value="'+v+'">';}).join("")+'</div><div class="m-meta3" style="display:flex;gap:6px;align-items:center">'+IC.lock+' From the tax profile</div>';
+  el.innerHTML=shell("Part I · Background Information",10,row(9,"Taxpayer Identification No. *",body));
+};
+MOCKS.P8b=function(el){
+  var st={v:"000-123-461-00000"};
+  function fmt(d){d=d.replace(/\D/g,"").slice(0,14);var p=[d.slice(0,3),d.slice(3,6),d.slice(6,9),d.slice(9)].filter(Boolean);return p.join("-");}
+  var body='<input class="m-in w" inputmode="numeric" value="'+st.v+'" aria-label="TIN" style="font-variant-numeric:tabular-nums;letter-spacing:.03em"><div class="m-meta3">Type the 9 or 14 digits; the dashes come by themselves. Paste works with or without dashes.</div>';
+  el.innerHTML=shell("Part I · Background Information",10,row(9,"Taxpayer Identification No. *",body));
+  var i=el.querySelector("input");i.addEventListener("input",function(){var v=fmt(i.value);i.value=v;});
+};
+MOCKS.P8c=function(el){
+  var widths=[3,3,3,5];
+  var body='<div class="m-tin">'+widths.map(function(w,k){return (k?'<span style="color:var(--a-fg3)">-</span>':"")+'<input class="m-in" data-k="'+k+'" maxlength="'+w+'" inputmode="numeric" style="width:'+(w*11+18)+'px" placeholder="'+"0".repeat(w)+'">';}).join("")+'</div><div class="m-meta3">Moves to the next box by itself; Backspace goes back.</div>';
+  el.innerHTML=shell("Part I · Background Information",10,row(9,"Taxpayer Identification No. *",body));
+  var ins=el.querySelectorAll(".m-tin input");
+  ins.forEach(function(i,k){
+    i.addEventListener("input",function(){i.value=i.value.replace(/\D/g,"");if(i.value.length>=widths[k]&&ins[k+1]) ins[k+1].focus();});
+    i.addEventListener("keydown",function(e){if(e.key==="Backspace"&&!i.value&&ins[k-1]){e.preventDefault();ins[k-1].focus();}});
+    i.addEventListener("paste",function(e){e.preventDefault();var t=(e.clipboardData.getData("text")||"").replace(/\D/g,"");var o=0;ins.forEach(function(x,q){x.value=t.slice(o,o+widths[q]);o+=widths[q];});});
+  });
+};
+
+/* P9: gated */
+function gated(el,mode){
+  var st={man:null,spec:""};
+  function draw(){
+    var others=st.man===4;
+    var spec;
+    if(mode==="hide") spec=others?'<input class="m-in w" placeholder="Specify the other manner" value="'+esc(st.spec)+'" aria-label="Specify">':"";
+    else if(mode==="fade") spec=others?'<input class="m-in w" placeholder="Specify the other manner" value="'+esc(st.spec)+'">':'<div class="m-gate">'+IC.lock+' Specify · pick "Others (Specify)" above to type here</div>';
+    else spec='<input class="m-in w '+(others?"":"m-fade")+'" placeholder="Specify the other manner" value="'+esc(st.spec)+'">'+(!others&&st.spec?'<div class="m-meta3">Kept, but not on the form until you pick "Others (Specify)".</div>':"");
+    el.innerHTML=shell("Part I · Background Information",10,row(17,"Manner of Payment",tickGroup(MANNER,st.man,true,true)+spec));
+    el.querySelectorAll("[data-i]").forEach(function(b){b.addEventListener("click",function(){st.man=+b.dataset.i;draw();});});
+    var c=el.querySelector("[data-clear]");if(c) c.addEventListener("click",function(){st.man=null;draw();});
+    var i=el.querySelectorAll("input.m-in");i.forEach(function(x){x.addEventListener("input",function(){st.spec=x.value;});x.addEventListener("blur",function(){draw();});});
+  }
+  draw();
+}
+MOCKS.G1=function(el){gated(el,"hide");};
+MOCKS.G2=function(el){gated(el,"fade");};
+MOCKS.G3=function(el){gated(el,"keep");};
+
+/* P10: to-do count */
+function todo(el,mode){
+  var st={touched:false};
+  function draw(){
+    var n=mode==="keep"||st.touched?8:0;
+    var pill='<div class="m-pill"><div class="t"><small>'+(n?n+" to do":"Nothing typed yet")+' · Page 1</small><b>Return details</b></div><span class="m-badge '+(n?"":"n")+'">'+(n||"–")+'</span></div>';
+    var rows=row(4,"Due Date *",'<div class="m-field d"><input class="m-in '+(n?"err":"")+'" placeholder="MM/DD/YYYY" aria-label="Due date"><button class="m-ic" aria-label="Pick">'+IC.cal+'</button></div>'+(n?'<div class="m-msg">Item 4 needs a due date.</div>':""));
+    el.innerHTML='<div class="m"><div class="m-part"><div class="m-ph">Return details<span class="n">8 items</span></div>'+rows+'</div>'+pill+(mode==="after"&&!st.touched?'<div style="text-align:center;margin-top:6px"><button class="m-btn sm" data-a>Type in a box or press Check</button></div>':"")+'</div>';
+    var b=el.querySelector("[data-a]");if(b) b.addEventListener("click",function(){st.touched=true;draw();});
+    var i=el.querySelector("input");i.addEventListener("input",function(){if(!st.touched){st.touched=true;draw();}});
+  }
+  draw();
+}
+MOCKS.T1=function(el){todo(el,"keep");};
+MOCKS.T2=function(el){todo(el,"after");};
+
+/* ---------- questions ---------- */
+var Q=[
+ {id:"q1",n:"Q1",title:"A tax-profile answer is missing (Line of business)",say:"Today one missing answer shows a red box, two sentences, and a card with a second box and its own Save. Pick how the one box should work.",
+  before:[{img:"img/p-lob.jpg",y:250,cap:"Phone width, today: Item 12 after Check."},{img:"img/w-lob.jpg",y:260,wide:true,cap:"Desktop, today."}],
+  type:"one",opts:[
+   {id:"P1a",name:"One box with an “Also save to tax profile” switch",rec:true,desc:"Type in the box; the switch under it decides if the answer also goes to the profile. No card. Type something and leave the box.",pro:"Nothing to read, one place to type; same switch the app already has for filled boxes.",con:"A switch under every missing-profile box (only while it is missing)."},
+   {id:"P1b",name:"One box, then ask once",desc:"Type, leave the box, and a one-time question asks whether to save it to the profile. Phone gets a bottom sheet.",pro:"No extra controls on the page.",con:"A popup interrupts the first time per taxpayer and year."},
+   {id:"P1c",name:"One box with a status chip",desc:"A chip says Missing → Not in profile yet → From tax profile. Saving to the profile is automatic when you leave the box.",pro:"Smallest; always saves to the profile.",con:"No way to keep the answer on this return only."}
+  ]},
+ {id:"lob-default",n:"Q1·a",sub:true,showIf:function(p){return p.q1==="P1a";},title:"Should the switch start ON or OFF while the profile is blank?",say:"ON writes the answer into the 2023 profile for every later 2023 return, once you leave the box with a finished answer. OFF keeps it on this return until you flip it.",
+  type:"chips",opts:[{id:"on",name:"Start ON (recommended)"},{id:"off",name:"Start OFF"}]},
+ {id:"remember",n:"Q1·a",sub:true,showIf:function(p){return p.q1==="P1b";},title:"“Ask once”: once per what?",say:"The profile keeps line of business per tax year.",
+  type:"chips",opts:[{id:"year",name:"Once per taxpayer and year"},{id:"taxpayer",name:"Once per taxpayer, all years"}]},
+ {id:"q1b",n:"Q1·b",title:"Profile answers with no box on the form (EOPT tier on 39 forms, birth date, income type…)",say:"Some answers the form needs are not a box on the paper form, so they cannot be “one box”. Today each gets its own card. Pick a home for them.",
+  type:"one",opts:[
+   {id:"F1",name:"One strip at the top of the form",rec:true,desc:"“1 tax-profile answer missing · Answer” opens a short sheet. Try it.",pro:"All of them in one place; rows stay clean.",con:"The answer is away from the item it affects."},
+   {id:"F2",name:"A small card at the item it affects",desc:"Choices right in the card (no second text box), with one status chip.",pro:"Next to what it changes (penalties).",con:"Still a card in the row."}
+  ]},
+ {id:"q2",n:"Q2",title:"Dates: one field instead of month, day and year boxes",say:"Type 08/17/1988, 08-17-1988 or 08171988, then leave the field: it reads “August 17, 1988”. Click back in: it becomes 08/17/1988 again. The grey line shows the three form keys it fills.",
+  before:[{img:"img/p-dates.jpg",y:0,cap:"Phone width, today: Item 4 after Check, three stacked boxes, one shared error line."},{img:"img/w-typed.jpg",y:0,wide:true,cap:"Desktop, today: typed 08 into the month box; it was thrown away."},{img:"img/n-calendar.jpg",y:280,wide:true,cap:"Today's calendar opens on this month (Nov 2026), not the return's."}],
+  type:"one",opts:[
+   {id:"P2a",name:"One typed field with a calendar inside it",rec:true,desc:"Type any of the three ways or pick from the calendar. The calendar opens on the return's month.",pro:"Fastest for typing and pasting; the kit already has most of it.",con:"On a phone the calendar is a popup over the page."},
+   {id:"P2b",name:"Phone: tap opens a sheet (desktop = A)",desc:"On a phone the row is a big tap target; the sheet holds the typed field and the month grid. Switch to Phone 390.",pro:"Thumb-friendly, nothing small to hit.",con:"One more tap on a phone to type."},
+   {id:"P2c",name:"Eight digit cells MM / DD / YYYY",desc:"Each digit has a cell; it jumps ahead as you type; paste fills all of them; Backspace goes back.",pro:"Can't type a wrong shape.",con:"Fiddly to fix one digit; slower to read."}
+  ]},
+ {id:"year2",n:"Q2·a",sub:true,title:"Two-digit years like 08/17/88",say:"Try it in the field above after picking.",type:"chips",
+  opts:[{id:"pivot",name:"Accept: 00–26 → 20xx, 27–99 → 19xx"},{id:"refuse",name:"Refuse: “Type the four-digit year”"}]},
+ {id:"halfdate",n:"Q2·b",sub:true,title:"If you leave the field half-typed (08/17/19)",say:"Today the old date silently stays saved while the box shows the half-typed text.",type:"chips",
+  opts:[{id:"block",name:"Keep the text red, and Queue refuses until fixed (recommended)"},{id:"revert",name:"Put the last good date back"},{id:"clear",name:"Clear the date"}]},
+ {id:"longscope",n:"Q2·c",sub:true,title:"“August 17, 1988” everywhere, or only on forms?",say:"Today every date box in the app shows “Aug 17, 1988”. Changing it changes the profile and dialogs too.",type:"chips",
+  opts:[{id:"all",name:"Everywhere in the app"},{id:"forms",name:"Only on form pages"}]},
+ {id:"q3",n:"Q3",title:"Month and year (Year Ended, For the month of)",say:"About 20 items are a month and a year. Type 12/2023, leave the field: “December 2023”.",
+  before:[{img:"img/p-top.jpg",y:120,cap:"Phone width, today: Item 2, a month list and a locked year box with a calendar button."}],
+  type:"one",opts:[
+   {id:"P3a",name:"One MM/YYYY field with a month picker",rec:true,desc:"Typed or picked from a 12-month grid. Locked parts (a year fixed by the return) show as plain text.",pro:"Same feel as Q2's date.",con:"New picker to build (the kit's calendar is a day grid)."},
+   {id:"P3b",name:"Keep the two boxes, one row, one message",desc:"Month list and year side by side; only the error text and spacing change.",pro:"Smallest change; matches the paper.",con:"Still two controls for one answer."}
+  ]},
+ {id:"q3b",n:"Q3·a",sub:true,title:"From–to ranges (2550Q item 4, 1600WP item 1, 1702EX item 17, 1701MS item 16)",say:"Today these are up to six boxes. No screenshot taken: these forms are not in the 0605 fixture.",
+  type:"one",opts:[
+   {id:"R1",name:"Two date fields: From … to …",rec:true,desc:"Each like Q2. Each calendar stops at the other date; a wrong order gets one sentence. Try typing an end date before the start.",pro:"Clear; reuses Q2.",con:"Two fields."},
+   {id:"R2",name:"One range field",desc:"“Oct 1 – Dec 31, 2023”, with a two-month calendar to drag across.",pro:"Very compact.",con:"New control; harder to fix one end."}
+  ]},
+ {id:"q4",n:"Q4",title:"One-of-a-few answers (Calendar/Fiscal, Quarter, Yes/No)",say:"Today every one-answer question is square tick boxes. 226 items, 177 of them two choices. Click around: the Quarter group can be cleared.",
+  before:[{img:"img/p-top.jpg",y:0,cap:"Phone width, today: Items 1 and 3."},{img:"img/w-2551q.jpg",y:0,wide:true,cap:"Desktop, today: 2551Q Page 1."}],
+  type:"one",opts:[
+   {id:"C2a",name:"Keep the paper's tick boxes (+ Clear for 3+)",desc:"Looks like the printed form.",pro:"Matches the paper 1:1.",con:"Square boxes read as “pick many”."},
+   {id:"C2b",name:"Segmented control for 2 to 4 choices",rec:true,desc:"One rounded bar; tap a part. Labels come from the form (not always Yes/No).",pro:"Obviously “pick one”; one line high.",con:"Looks less like the paper."}
+  ]},
+ {id:"q4b",n:"Q4·a",sub:true,title:"Five or more choices (Manner of Payment: 7 to 9 choices)",say:"Pick “Others (Specify)” in either one: the Specify box shows up right under it.",
+  before:[{img:"img/p-choices.jpg",y:0,cap:"Phone width, today: Items 17 and 18."}],
+  type:"one",opts:[
+   {id:"C5a",name:"Keep the list of tick boxes",desc:"All choices visible.",pro:"Nothing hidden.",con:"Seven-plus lines tall."},
+   {id:"C5b",name:"Dropdown (search box above 12 choices)",rec:true,desc:"One line until opened.",pro:"Saves the most space.",con:"Choices hidden until opened."}
+  ]},
+ {id:"q5",n:"Q5",title:"Row clutter: empty message space, “Needs” lines, required marks",say:"Today every row keeps an empty 22 pt line for a message even when there is none, and shows “Needs item 17 = Others” as its own line. Pick any that apply.",
+  before:[{img:"img/p-choices.jpg",y:0,cap:"Phone width, today."}],
+  type:"many",opts:[
+   {id:"P5a",name:"Message space only when there is a message",rec:true,desc:"Rows shrink by one line when all is well.",pro:"About 22 pt shorter per row.",con:"Rows grow a line when an error appears."},
+   {id:"P5b",name:"“Needs …” and notes behind an (i)",desc:"Hover or tap the (i) by the label.",pro:"Cleaner rows.",con:"The rule is hidden until you look."},
+   {id:"P5c",name:"“Needed” chip instead of * for blocking items",desc:"A red chip only on what stops Queue.",pro:"Shows what really blocks.",con:"A second kind of required mark."}
+  ]},
+ {id:"q6",n:"Q6",title:"Error words",say:"Today messages show internal names (draft has no `/atc/code`, `frm0605:txtNoOfSheets` must be…) and pile up with dots.",
+  before:[{img:"img/p-dates.jpg",y:230,cap:"Phone width, today: Items 6, 7 and 8 after Check."}],
+  type:"one",opts:[
+   {id:"P6a",name:"One plain sentence under the box that is wrong",rec:true,desc:"Item number + what to do. Never a code name. Cleared as soon as it is fixed.",pro:"You see the problem where you fix it.",con:"Every refusal needs written words (one table)."},
+   {id:"P6b",name:"One summary line for the part",desc:"Sentences joined with semicolons above the rows.",pro:"All in one place.",con:"Far from the box."},
+   {id:"P6c",name:"Quiet until you press Check",desc:"Red only after Check; a count in the pill before that. Press Check in the pill.",pro:"Calm while filling.",con:"Mistakes found later."}
+  ]},
+ {id:"q7",n:"Q7",title:"Money rows (Part II amounts)",say:"Today each amount is its own row with a full-width box. Type numbers: the totals follow.",
+  before:[{img:"img/p-amounts.jpg",y:0,cap:"Phone width, today: Items 19 to 21."}],
+  type:"one",opts:[
+   {id:"P7a",name:"Label left, amount right, one line each",rec:true,desc:"Like a receipt. Item number stays in front.",pro:"Half the height; amounts line up.",con:"Long labels wrap to two lines on a phone."},
+   {id:"P7b",name:"A small table with a total row",desc:"Header, rows, totals shaded.",pro:"Reads like the paper's grid.",con:"Tighter on a phone."},
+   {id:"P7k",name:"Keep as is",desc:"No change to money rows this round.",pro:"Nothing to relearn.",con:"Stays long."}
+  ]},
+ {id:"q8",n:"Q8",title:"TIN boxes",say:"On 0605 the TIN comes from the profile (locked). On forms where you type a TIN, pick how typing works.",
+  before:[{img:"img/p-lob.jpg",y:0,cap:"Phone width, today: Item 9."}],
+  type:"one",opts:[
+   {id:"P8a",name:"Four boxes that fill the row (locked ones)",desc:"Same four parts, sized to fit a phone.",pro:"Matches the paper.",con:"Four boxes to type into."},
+   {id:"P8b",name:"One TIN box; dashes appear by themselves",rec:true,desc:"Type or paste 9 or 14 digits.",pro:"Paste just works.",con:"Different from the paper's boxes."},
+   {id:"P8c",name:"Four boxes that jump ahead",desc:"Typing moves to the next box; Backspace goes back.",pro:"Paper look, faster typing.",con:"Paste needs care."}
+  ]},
+ {id:"q9",n:"Q9",title:"Boxes that wait for another answer (Specify, No. of installments)",say:"Today they are grey locked boxes with “Needs item 17 = Others” on top, and some swallow what you type with no message. Click the choices.",
+  before:[{img:"img/p-choices.jpg",y:180,cap:"Phone width, today: a locked Specify box under Item 17."}],
+  type:"one",opts:[
+   {id:"G1",name:"Hidden until the answer that opens it",rec:true,desc:"Pick “Others (Specify)” and the box appears right under it.",pro:"No dead boxes on screen.",con:"The page changes as you answer."},
+   {id:"G2",name:"A dashed hint that says what opens it",desc:"“Pick Others (Specify) above to type here.”",pro:"You always see it exists.",con:"Takes a line."},
+   {id:"G3",name:"Box stays, typing is kept in grey",desc:"Your text is kept but left off the form until the answer allows it.",pro:"Nothing typed is lost.",con:"Grey text can confuse."}
+  ]},
+ {id:"q10",n:"Q10",title:"To-do count when you open a new return",say:"Today a fresh return says “8 to do” and shows red before you have typed anything.",
+  before:[{img:"img/p-top.jpg",y:0,cap:"Phone width, today: the pill at the bottom."}],
+  type:"one",opts:[
+   {id:"T1",name:"Keep: count and red from the start",desc:"",pro:"You see the work up front.",con:"A wall of red on a blank form."},
+   {id:"T2",name:"Count after you type or press Check",rec:true,desc:"The pill says “Nothing typed yet”; the * stays. Type in the box or press the button.",pro:"Calm start.",con:"You learn what's missing a bit later."}
+  ]},
+ {id:"bugs",n:"Q11",title:"Bugs found: fix these no matter what you pick",say:"All ticked. Untick anything you don't want in this round.",type:"bugs"},
+ {id:"privacy",n:"Q12",title:"Saved eBIR Online username and secret inside a return",say:"Form 0605, 2550Q and 1701Q drafts carry ebirOnlineUsername, ebirOnlineSecret and ebirOnlineConfirmUsername as hidden fields of the return itself.",
+  type:"chips",opts:[{id:"remove",name:"Take them out of returns"},{id:"look",name:"Look into it first, then ask me"},{id:"keep",name:"Leave them"}]},
+ {id:"labels",n:"Q13",title:"Wrong row titles over boxes (1601C item 8, 0619E item 19, 0619F item 8, 1600PT, 1600VT, 1601FQ, 1700)",say:"Overrides put “Line of Business” over rows that also hold a name, an amount or an address.",
+  type:"chips",opts:[{id:"split",name:"Give the box its own row with the paper's title"},{id:"two",name:"Keep one row, show both titles"}]},
+ {id:"next",n:"Q14",title:"Field kinds not designed in this round",say:"The probes found these need their own look next: pick what goes in the next picks page.",type:"chipsmany",
+  opts:[{id:"schedule",name:"Schedule tables (19 forms)"},{id:"int",name:"Whole numbers (sheets, counts)"},{id:"pct",name:"Percentages"},{id:"contact",name:"Email and phone"},{id:"select",name:"Lists with codes (ATC, tax type)"}]},
+ {id:"ship",n:"Q15",title:"How the work ships",say:"Agents build while you are away; every step runs the full test gate first.",type:"chips",
+  opts:[{id:"bugs-first",name:"Bug-fix PR first, then one PR per question (recommended)"},{id:"one",name:"One PR for everything"},{id:"per-q",name:"One PR per question, bugs inside each"}]},
+ {id:"auto",n:"Q16",title:"While you are away, may agents…",say:"Nothing is ever sent to the BIR; tests use the dry-run setting.",type:"chipsmany",
+  opts:[{id:"push",name:"Push branches"},{id:"pr",name:"Open PRs"},{id:"shots",name:"Run real-window screenshot tests"},{id:"ci",name:"Re-run CI on runner timeouts"}]}
+];
+var BUGS=[
+ ["B1","c","Typing a due date or return period on a new 0605 is thrown away; the calendar pick too"],
+ ["B2","h","0605 ATC and Tax Type typing is thrown away the same way"],
+ ["B3","h","Three date boxes share one glued-together message"],
+ ["B4","h","Messages show internal names like /due_date/year and frm0605:txtNoOfSheets"],
+ ["B5","h","Line of business asked by box + two messages + a card"],
+ ["B6","h","Card Save also rewrites other profile boxes on the return"],
+ ["B7","h","Typing the answer never fills the profile or removes the card"],
+ ["B8","h","0619E/0619F: ticking Private/Government doesn't clear the block"],
+ ["B9","h","Only 7 text fields can be saved to the profile from a form"],
+ ["B10","h","Boxes hidden in a closed “Additional details” fold while their message shows (16 forms)"],
+ ["B11","m","“Save to profile too” never offered for a blank box; starts off"],
+ ["B12","m","1701 income-type card doesn't set Item 6"],
+ ["B13","m","Wrong row titles over some boxes (see Q13)"],
+ ["B14","m","Date field doesn't switch to 08/17/1988 on focus; shows “Aug”"],
+ ["B15","m","A cleared date part is stored and shown as 00"],
+ ["B16","m","Some waiting boxes swallow typing with no message"],
+ ["B17","m","An unlisted code is accepted on one form, refused on another"],
+ ["B18","m","Tests that never type: add typing, paste, clear, blur and save-and-reopen tests for every field kind, and run the all-forms print round-trip in CI"],
+ ["B19","l","Shows “Saved” while an edit was refused"],
+ ["B20","l","Box shows “Retail”, the return stores “RETAIL”"],
+ ["B21","l","Header “55 fields” counts hidden fields"]
+];
+
+/* ---------- render ---------- */
+var root=document.getElementById("questions");
+function renderQ(q){
+  var s=h('<section class="q '+(q.sub?"sub":"")+'" id="'+q.id+'"><div class="qhead"><div class="qn">'+q.n+'</div><div class="t"><h3>'+q.title+'</h3><p class="s">'+q.say+'</p></div></div></section>');
+  if(q.type==="one"||q.type==="many"){
+    var ba=h('<div class="'+(q.before?"ba":"")+'"></div>');
+    if(q.before){
+      var b=h('<div class="before"><span class="tag b">Before · real screenshot</span></div>');
+      q.before.forEach(function(x){
+        var sh=h('<div class="shot '+(x.wide?"wide":"")+'" data-wide="'+(x.wide?1:0)+'"><img loading="lazy" src="'+x.img+'" alt="'+esc(x.cap)+'"></div>');
+        sh.dataset.y=x.y;
+        b.appendChild(sh); b.appendChild(h('<div class="cap">'+x.cap+'</div>'));
+      });
+      ba.appendChild(b);
+    }
+    var a=h('<div style="display:grid;gap:10px;min-width:0"><span class="tag a" style="justify-self:start">After · '+(q.type==="many"?"pick any":"pick one")+'</span><div class="variants"></div></div>');
+    var vs=a.querySelector(".variants");
+    q.opts.forEach(function(o){
+      var v=h('<div class="v" data-q="'+q.id+'" data-o="'+o.id+'"><label class="vtop"><input type="'+(q.type==="many"?"checkbox":"radio")+'" name="'+q.id+'" value="'+o.id+'" id="'+q.id+'-'+o.id+'"><span><span class="vid">'+o.id+'</span><br><span class="vname">'+o.name+'</span>'+(o.rec?'<span class="rec">Recommended</span>':"")+'</span></label>'+(o.desc?'<p class="vdesc">'+o.desc+'</p>':"")+'<div class="stage"><div class="mock" data-mock="'+o.id+'"></div></div><div class="pc"><div><b>Good</b>'+o.pro+'</div><div><b>Cost</b>'+o.con+'</div></div></div>');
+      v.addEventListener("click",function(e){
+        if(e.target.closest(".stage")) return;
+        var inp=v.querySelector(".vtop input");
+        if(e.target!==inp&&!e.target.closest("label")) inp.click();
+      });
+      v.querySelector(".vtop input").addEventListener("change",function(){collect(q.id);});
+      vs.appendChild(v);
+    });
+    ba.appendChild(a); s.appendChild(ba);
+  } else if(q.type==="chips"||q.type==="chipsmany"){
+    var c=h('<div class="chips"></div>');
+    q.opts.forEach(function(o){
+      var ch=h('<label class="chip"><input type="'+(q.type==="chipsmany"?"checkbox":"radio")+'" name="'+q.id+'" value="'+o.id+'" id="'+q.id+'-'+o.id+'">'+o.name+'</label>');
+      ch.querySelector("input").addEventListener("change",function(){collect(q.id);});
+      c.appendChild(ch);
+    });
+    s.appendChild(c);
+  } else if(q.type==="bugs"){
+    var g=h('<div class="bugs"></div>');
+    BUGS.forEach(function(b){
+      var el=h('<label class="bug"><input type="checkbox" name="bugs" value="'+b[0]+'" id="bug-'+b[0]+'" checked><span><span class="sev '+b[1]+'">'+b[0]+'</span>'+b[2]+'</span></label>');
+      el.querySelector("input").addEventListener("change",function(){collect("bugs");});
+      g.appendChild(el);
+    });
+    s.appendChild(g);
+  }
+  var n=h('<div class="note"><label for="note-'+q.id+'">Note (add, remove or change anything)</label><textarea id="note-'+q.id+'" placeholder="Optional"></textarea></div>');
+  n.querySelector("textarea").addEventListener("input",function(){collect(q.id,true);});
+  s.appendChild(n);
+  return s;
+}
+Q.forEach(function(q){root.appendChild(renderQ(q));});
+
+function mountMocks(){
+  document.querySelectorAll("[data-mock]").forEach(function(el){var f=MOCKS[el.dataset.mock];if(f) f(el);el.querySelectorAll(".m").forEach(function(m){m.dataset.w=document.documentElement.dataset.mw;});});
+  var mo=new MutationObserver(function(){document.querySelectorAll(".m:not([data-w])").forEach(function(m){m.dataset.w=document.documentElement.dataset.mw;});});
+  mo.observe(root,{childList:true,subtree:true});
+}
+function setWidth(w){
+  document.documentElement.dataset.mw=w;
+  document.documentElement.style.setProperty("--mw",w==="desk"?"640px":"390px");
+  document.getElementById("w-phone").setAttribute("aria-pressed",String(w!=="desk"));
+  document.getElementById("w-desk").setAttribute("aria-pressed",String(w==="desk"));
+  mountMocks();
+  try{localStorage.setItem("mw",w);}catch(e){}
+}
+var startW="phone";try{startW=localStorage.getItem("mw")||"phone";}catch(e){}
+document.getElementById("w-phone").addEventListener("click",function(){setWidth("phone");});
+document.getElementById("w-desk").addEventListener("click",function(){setWidth("desk");});
+setWidth(startW);
+document.addEventListener("click",function(e){if(!e.target.closest(".m-pop")&&!e.target.closest(".m-ic")) document.querySelectorAll(".m-pop").forEach(function(p){if(!p.parentElement.classList.contains("cal-in")) p.remove();});});
+function scrollShots(){document.querySelectorAll(".shot").forEach(function(s){var img=s.querySelector("img");var go=function(){s.scrollTop=+s.dataset.y||0;};if(img.complete) go(); else img.addEventListener("load",go,{once:true});});}
+scrollShots();
+
+/* ---------- picks state, saved to the artifact database ---------- */
+var db=null, timers={}, chains={};
+function readQ(id){
+  var q=Q.find(function(x){return x.id===id;});
+  var ins=[].slice.call(document.querySelectorAll('input[name="'+id+'"]'));
+  var val;
+  if(q.type==="many"||q.type==="chipsmany"||q.type==="bugs") val=ins.filter(function(i){return i.checked;}).map(function(i){return i.value;});
+  else {var c=ins.find(function(i){return i.checked;});val=c?c.value:null;}
+  var note=(document.getElementById("note-"+id)||{}).value||"";
+  return {value:val,note:note};
+}
+function applyQ(id,data){
+  if(!data) return;
+  var ins=document.querySelectorAll('input[name="'+id+'"]');
+  ins.forEach(function(i){i.checked=Array.isArray(data.value)?data.value.indexOf(i.value)>=0:data.value===i.value;});
+  var t=document.getElementById("note-"+id);if(t&&document.activeElement!==t) t.value=data.note||"";
+  PICKS[id]=data.value;
+}
+function refreshUI(){
+  Q.forEach(function(q){
+    var r=readQ(q.id);PICKS[q.id]=r.value;
+    document.querySelectorAll('[data-q="'+q.id+'"]').forEach(function(v){var on=Array.isArray(r.value)?r.value.indexOf(v.dataset.o)>=0:r.value===v.dataset.o;v.classList.toggle("on",on);});
+    document.querySelectorAll('input[name="'+q.id+'"]').forEach(function(i){var l=i.closest(".chip");if(l) l.classList.toggle("on",i.checked);});
+  });
+  Q.forEach(function(q){if(q.showIf){var el=document.getElementById(q.id);el.hidden=!q.showIf(PICKS);}});
+  summary();
+}
+function collect(id,typing){
+  refreshUI();
+  if(id==="lob-default"||id==="year2"){document.querySelectorAll('[data-mock="P1a"],[data-mock^="P2"]').forEach(function(el){MOCKS[el.dataset.mock](el);});}
+  if(!db) return;
+  clearTimeout(timers[id]);
+  timers[id]=setTimeout(function(){
+    var r=readQ(id);
+    setStatus("Saving…");
+    chains[id]=(chains[id]||Promise.resolve()).then(function(){
+      return db.doc("picks/"+id).set({value:r.value,note:r.note,at:new Date().toISOString()});
+    }).then(function(){setStatus("Saved");},function(){setStatus("Not saved: copy the text at the end");});
+  },typing?700:150);
+}
+function setStatus(t){document.getElementById("save-status").textContent=t;}
+function summary(){
+  var lines=[];
+  Q.forEach(function(q){
+    var el=document.getElementById(q.id); if(el.hidden) return;
+    var r=readQ(q.id);
+    var v=Array.isArray(r.value)?(r.value.length?r.value.join(", "):"none"):(r.value||"—");
+    if(q.type==="bugs") v=r.value.length===BUGS.length?"all":(r.value.join(", ")||"none");
+    lines.push(q.n+" "+q.title.replace(/<[^>]+>/g,"")+": "+v+(r.note?"\n   note: "+r.note:""));
+  });
+  document.getElementById("summary").textContent=lines.join("\n");
+}
+document.getElementById("copy").addEventListener("click",function(){
+  var t=document.getElementById("summary").textContent;
+  var done=function(){document.getElementById("copied").textContent="Copied";};
+  try{navigator.clipboard.writeText(t).then(done,function(){selectPre();});}catch(e){selectPre();}
+});
+function selectPre(){var r=document.createRange();r.selectNodeContents(document.getElementById("summary"));var s=getSelection();s.removeAllRanges();s.addRange(r);document.getElementById("copied").textContent="Selected: press Cmd/Ctrl+C";}
+document.getElementById("jump-out").addEventListener("click",function(){document.getElementById("out").scrollIntoView({behavior:"smooth"});});
+refreshUI();
+
+var loadTimer=setTimeout(function(){setStatus("Saving is off: copy the text at the end");},10000);
+if(window.claude&&window.claude.use){
+  window.claude.use("db").then(function(d){
+    if(!d){clearTimeout(loadTimer);setStatus("Saving is off: copy the text at the end");return;}
+    db=d;
+    db.collection("picks").onSnapshot(function(snap){
+      clearTimeout(loadTimer);
+      var docs=snap.docs||snap;
+      (docs.forEach?docs:[]).forEach(function(doc){var id=doc.id||(doc.ref&&doc.ref.id);var data=doc.data?doc.data():doc;applyQ(id,data);});
+      refreshUI();
+      setStatus("Picks save as you go");
+    },function(){clearTimeout(loadTimer);setStatus("Saving is off: copy the text at the end");});
+  },function(){clearTimeout(loadTimer);setStatus("Saving is off: copy the text at the end");});
+} else {clearTimeout(loadTimer);setStatus("Saving is off: copy the text at the end");}
+})();
+</script>

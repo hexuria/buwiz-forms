@@ -1,0 +1,23 @@
+Q1 A tax-profile answer is missing (Line of business): P1b
+Q1·a “Ask once”: once per what?: year
+Q1·b Profile answers with no box on the form (EOPT tier on 39 forms, birth date, income type…): F2
+Q2 Dates: one field instead of month, day and year boxes: P2b
+Q2·a Two-digit years like 08/17/88: refuse
+Q2·b If you leave the field half-typed (08/17/19): block
+Q2·c “August 17, 1988” everywhere, or only on forms?: all
+Q3 Month and year (Year Ended, For the month of): P3a
+Q3·a From–to ranges (2550Q item 4, 1600WP item 1, 1702EX item 17, 1701MS item 16): R1
+Q4 One-of-a-few answers (Calendar/Fiscal, Quarter, Yes/No): C2b
+Q4·a Five or more choices (Manner of Payment: 7 to 9 choices): C5b
+Q5 Row clutter: empty message space, “Needs” lines, required marks: P5a
+Q6 Error words: P6a
+Q7 Money rows (Part II amounts): P7k
+Q8 TIN boxes: P8a
+Q9 Boxes that wait for another answer (Specify, No. of installments): G1
+Q10 To-do count when you open a new return: T1
+Q11 Bugs found: fix these no matter what you pick: all
+Q12 Saved eBIR Online username and secret inside a return: look
+Q13 Wrong row titles over boxes (1601C item 8, 0619E item 19, 0619F item 8, 1600PT, 1600VT, 1601FQ, 1700): split
+Q14 Field kinds not designed in this round: schedule, int, pct, contact, select
+Q15 How the work ships: bugs-first
+Q16 While you are away, may agents…: push, pr, shots, ci
