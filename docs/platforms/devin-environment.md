@@ -57,7 +57,7 @@ knowledge:
         nsh package --target android --abi x86_64 --run
   - name: test
     contents: |
-      cargo test -p bir-core ; $env:Path = "$HOME\BuwizNsh	oolsin;$env:Path" ; cd nsh ; nsh check -v ; nsh build
+      cargo test -p bir-core ; $env:Path = "$HOME\BuwizNsh\tools\bin;$env:Path" ; cd nsh ; nsh check -v ; nsh build
 ```
 
 The Android app does not read the shell's safety variables at runtime: they are baked into the APK through
