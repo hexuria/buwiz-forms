@@ -61,7 +61,8 @@ die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 BREW_PREFIX="$(uname -m | grep -q arm64 && echo /opt/homebrew || echo /usr/local)"
 NSH_TOOLS="$HOME/BuwizNsh/tools"
-NSH_DIR="${NSH_DIR:-$(cd "$(dirname "$0")/../.." && pwd)/nsh}"
+# nsh/Cargo.toml points at ../../nsh, so the checkout must sit next to this repo.
+NSH_DIR="$(cd "$(dirname "$0")/../.." && pwd)/nsh"
 IOS_TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim)
 # Homebrew rustup's proxies honour rust-toolchain.toml (the NSH checkout pins
 # its own toolchain); links made by link_toolchain_bins do not, so the proxy
@@ -223,7 +224,7 @@ install_nsh() {
     local ref
     ref="$(nsh_pinned_ref)"
     [ -n "$ref" ] || die "could not read NSH_PINNED_REF from .github/workflows/nsh.yml — run from the repo root"
-    if [ ! -d "$NSH_DIR/.git" ]; then
+    if [ ! -e "$NSH_DIR/.git" ]; then
         log "Cloning hexuria/nsh into $NSH_DIR"
         git clone https://github.com/hexuria/nsh "$NSH_DIR"
     fi
