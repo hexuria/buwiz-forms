@@ -376,6 +376,7 @@ interface St {
   dateErrors: Record<string, string>;
   datesEdited: Set<string>;
   pending: Record<string, string>;
+  rangeHeld: Record<string, string>;
   /** What the boxes showed before a choice, for a removal the filer cancels. */
   chosenFrom: Record<string, string>;
   dirty: boolean;
@@ -410,7 +411,7 @@ function freshState(target: FormTarget): St {
     profileSave: {}, profileEdited: new Set(), profileAsked: new Set(), profileAskSeen: {}, profileAskMsg: {},
     askDone: new Set(), askDoneRaw: new Map(), profileChanged: [], errors: [], messages: {},
     messageKeys: {}, messageCounts: {}, rejected: {}, unfixable: new Set(), dirtyBatch: null, boxMessages: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
-    profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, chosenFrom: {}, dirty: false,
+    profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, rangeHeld: {}, chosenFrom: {}, dirty: false,
     editSeq: 0, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
     touched: new Set(), showAll: false, previewOpen: false, overlay: null, saveState: { state: "idle" },
     electionReady: undefined, moreOpen: new Set(),
@@ -1119,7 +1120,7 @@ export class FormSession {
     return Number.isInteger(y) && y >= 1900 && y <= 9999 ? y : new Date().getFullYear();
   }
 
-  /** Judge every registered from/to pair: a reversed range is refused on its To end only, cleared when either end is fixed. */
+  /** Judge every registered from/to pair: hold both ends while reversed, then restore them when the range is fixed. */
   private checkRangeOrders() {
     const s = this.st;
     let changed = false;
@@ -1131,21 +1132,34 @@ export class FormSession {
       const to = this.rangeEndDay(range.to);
       const key = range.to.anchor;
       const reversed = Boolean(from && to && from > to);
-      const held = s.rejected[key] === "end before start";
-      if (reversed && !held) {
-        s.rejected[key] = "end before start";
-        s.boxMessages[key] = this.refusalText(key, "end before start");
-        s.touched.add(row);
-        // The refused end never reaches the host: prefer dropping To's staged writes, or From's
-        // when To came from the stored draft, so the page's sentence shows instead of a batch refusal.
-        const toPending = this.rangeEndPendingKeys(range.to);
-        const rejectedEnd = toPending.some((pk) => pk in s.pending) ? range.to : range.from;
-        for (const pk of this.rangeEndPendingKeys(rejectedEnd)) delete s.pending[pk];
-        changed = true;
-      } else if (!reversed && held) {
+      const keys = [...this.rangeEndPendingKeys(range.from), ...this.rangeEndPendingKeys(range.to)];
+      const held = s.rejected[key] === "end before start" || keys.some((pk) => pk in s.rangeHeld);
+      if (reversed) {
+        if (!held) {
+          s.rejected[key] = "end before start";
+          s.boxMessages[key] = this.refusalText(key, "end before start");
+          s.touched.add(row);
+          changed = true;
+        }
+        for (const end of [range.from, range.to]) {
+          for (const pk of this.rangeEndPendingKeys(end)) {
+            if (!(pk in s.pending)) continue;
+            s.rangeHeld[pk] = s.pending[pk];
+            delete s.pending[pk];
+            changed = true;
+          }
+        }
+      } else if (held) {
         delete s.rejected[key];
         delete s.boxMessages[key];
         s.unfixable.delete(key);
+        const restore: Record<string, string> = {};
+        for (const pk of keys) {
+          if (!(pk in s.rangeHeld)) continue;
+          if (!(pk in s.pending)) restore[pk] = s.rangeHeld[pk];
+          delete s.rangeHeld[pk];
+        }
+        if (Object.keys(restore).length) this.stage(restore);
         changed = true;
       }
     }
@@ -1165,10 +1179,10 @@ export class FormSession {
     return end.field ? [end.field.k] : [end.anchor];
   }
 
-  /** A range end's day as an ISO date ("" while either part is blank or unparseable). Staged edits count. */
+  /** A range end's day as ISO date ("" while either part is blank or unparseable). Pending and held edits count. */
   rangeEndDay(end: { anchor: string; date: OneDate | null; field: SchemaField | null }): string {
     const s = this.st;
-    const value = (k: string) => String(s.pending[k] ?? s.values[k] ?? "");
+    const value = (k: string) => String(s.pending[k] ?? s.rangeHeld[k] ?? s.values[k] ?? "");
     if (end.date) {
       const d = end.date;
       const m = Number(value(d.month.k));
