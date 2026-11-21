@@ -98,7 +98,14 @@ export function MonthPicker(props: MonthPickerProps) {
   const year = signal(props.year >= 1900 && props.year <= 9999 ? props.year : new Date().getFullYear());
   const grid = (
     <MonthGrid
-      {...props}
+      month={props.month}
+      minYear={props.minYear}
+      maxYear={props.maxYear}
+      allowed={props.allowed}
+      label={props.label}
+      disabled={props.disabled}
+      testID={props.testID}
+      onPick={(m, y) => props.onPick(m, y)}
       year={() => year()}
       setYear={(y) => {
         if (props.minYear !== undefined && y < props.minYear) return;

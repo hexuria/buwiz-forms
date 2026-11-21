@@ -438,6 +438,7 @@ function EntrySection() {
   const touchDate = signal("");
   const periodMonth = signal(12);
   const periodYear = signal(2023);
+  const periodMaxYear = signal(2030);
   const pin = signal("");
   const code = signal("");
   const done = signal("");
@@ -497,12 +498,13 @@ function EntrySection() {
               month={periodMonth()}
               year={periodYear()}
               minYear={2020}
-              maxYear={2030}
+              maxYear={periodMaxYear()}
               label="Pick the return period"
               testID="kit-month"
               onPick={(m, y) => {
                 periodMonth.set(m);
                 periodYear.set(y);
+                periodMaxYear.set(y);
               }}
             />
             <Text variant="body" class="tabular-nums">{`${String(periodMonth()).padStart(2, "0")}/${periodYear()}`}</Text>

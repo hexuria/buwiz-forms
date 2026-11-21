@@ -28,5 +28,11 @@ for (const size of SIZES) {
       await app.waitFor("id:kit-month-sheet", { state: "gone" });
     }
     expect(app.texts()).toContain("06/2024");
+
+    if (app.shows("id:kit-month-next")) await app.press("id:kit-month");
+    await app.press("id:kit-month");
+    await app.waitFor("id:kit-month-next");
+    expect(app.viewStyle("id:kit-month-m6")?.backgroundColor).not.toBe(app.viewStyle("id:kit-month-m12")?.backgroundColor);
+    expect(app.enabled("id:kit-month-next")).toBe(false);
   });
 }
