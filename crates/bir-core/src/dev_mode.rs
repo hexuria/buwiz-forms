@@ -878,6 +878,19 @@ mod tests {
     }
 
     #[test]
+    fn relay_environment_overrides_every_saved_panel_mode() {
+        let relay = crate::transport::RELAY_URL_ENV;
+        let override_name = submission_env_override_from(|name| {
+            (name == relay).then(|| "http://127.0.0.1:8787".into())
+        });
+        for saved in [None, Some("dry_run"), Some("test_server")] {
+            let resolved = resolve_submission(true, true, override_name, saved);
+            assert_eq!(resolved.value, SubmissionControl::Environment);
+            assert_eq!(resolved.source, Source::Env(relay));
+        }
+    }
+
+    #[test]
     fn auto_confirm_never_for_live_or_release() {
         assert!(auto_confirm_allowed(
             true,

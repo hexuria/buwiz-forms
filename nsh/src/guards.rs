@@ -126,24 +126,16 @@ fn send_guard_with_health(
         };
     }
     let panel = bir_core::dev_mode::panel_submission_mode();
-    relay_verdict(relay, panel)
+    relay_verdict(relay)
         .unwrap_or_else(|| verdict(mock, bir_core::transport::is_sftp_dry_run(), panel))
 }
 
 /// The decision when `BIR_RELAY_URL` is set (`relay`: its origin when it is a listening loopback one, else why
 /// not): the transport sends there before anything else, so it is the relay or nothing. `None` when it is unset.
 /// Pure, so every branch is tested.
-pub(crate) fn relay_verdict(
-    relay: Option<Result<String, String>>,
-    panel: Option<SubmissionMode>,
-) -> Option<SendMode> {
+pub(crate) fn relay_verdict(relay: Option<Result<String, String>>) -> Option<SendMode> {
+    // The relay environment overrides the panel, including a saved dry run.
     let relay = relay?;
-    if panel == Some(SubmissionMode::DryRun) {
-        return Some(SendMode::DryRun);
-    }
-    if panel == Some(SubmissionMode::TestServer) {
-        return Some(verdict(None, false, panel));
-    }
     Some(match relay {
         Ok(url) => SendMode::Relay { url },
         Err(why) => SendMode::Refused(why),
@@ -963,19 +955,12 @@ mod tests {
 
     #[test]
     fn a_relay_url_decides_alone_and_only_a_listening_loopback_one_sends() {
-        assert_eq!(relay_verdict(None, None), None);
-        for relay in [Ok("http://127.0.0.1:8787".into()), Err("not listening".into())] {
-            assert_eq!(relay_verdict(Some(relay), Some(SubmissionMode::DryRun)), Some(SendMode::DryRun));
-        }
+        assert_eq!(relay_verdict(None), None);
         assert_eq!(
-            relay_verdict(Some(Ok("http://127.0.0.1:8787".into())), None),
+            relay_verdict(Some(Ok("http://127.0.0.1:8787".into()))),
             Some(SendMode::Relay { url: "http://127.0.0.1:8787".into() })
         );
-        assert!(matches!(relay_verdict(Some(Err("no".into())), None), Some(SendMode::Refused(_))));
-        assert!(matches!(
-            relay_verdict(Some(Ok("http://127.0.0.1:8787".into())), Some(SubmissionMode::TestServer)),
-            Some(SendMode::Refused(_))
-        ));
+        assert!(matches!(relay_verdict(Some(Err("no".into()))), Some(SendMode::Refused(_))));
     }
 
     #[test]
