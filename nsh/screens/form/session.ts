@@ -1051,6 +1051,7 @@ export class FormSession {
       }
       s.rejected[period.month.k] = reason;
       s.boxMessages[period.month.k] = this.refusalText(period.month.k, reason);
+      s.periodHeld = null; // the box no longer says the held period: blur or Save must not commit it
       s.dirty = true;
       this.cancelAutosave();
       this.markUnsaved();
@@ -1102,6 +1103,9 @@ export class FormSession {
       if (s.sample && typed && typed.yDigits <= 2) {
         // A year still being typed on a sample: "12/20" is not December 2020 yet. Hold it until the year is whole or the box is left.
         s.periodHeld = { ...s.periodHeld, ...periodEdits };
+      } else if (s.sample && typed && typed.yDigits === 3) {
+        // A third year digit is still mid-typing: nothing held may commit, and a year like 202 is never sent.
+        s.periodHeld = null;
       } else {
         s.periodHeld = null;
         this.setPeriodPart(periodEdits);

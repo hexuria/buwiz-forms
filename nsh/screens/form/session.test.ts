@@ -281,6 +281,66 @@ test("Sample: an unfinished 1702EX year holds its period edits; a complete year 
   blurred.dispose();
 });
 
+test("Sample: retyping over a held 1702EX period year drops the hold; blur commits nothing stale", async () => {
+  createDemoTaxpayer();
+  const target = { tin: DEMO.tin, formCode: "1702EX", year: 0, period: 0, mode: "sample" } as FormTarget;
+  const yearKey = "frm1702EX:txtPg1I2YearEnd";
+  const fresh = async () => {
+    const s = await opened(target);
+    const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.year.k === yearKey)!;
+    s.edit(period.periodKey, "12/20"); // held, not looked up
+    return { s, period };
+  };
+
+  // "12/20" held, then backspaced to "12/2" (a period text that refuses): blur must not commit December 2020.
+  {
+    const { s, period } = await fresh();
+    const before = bir.list_returns("saved").filter((r) => r.form_code === "1702EX").length;
+    s.edit(period.periodKey, "12/2");
+    s.blur(period.periodKey);
+    await s.idle();
+    expect(s.valueOf(yearKey)).toBe("");
+    expect(s.overlay()).toBe(null);
+    expect(s.saveState()).toEqual({ state: "manual", message: "Sample · set its period to save" });
+    s.saveNow();
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("sample-period");
+    expect(bir.list_returns("saved").filter((r) => r.form_code === "1702EX").length).toBe(before);
+    s.dispose();
+  }
+
+  // Same for an out-of-range month: "13/20" refuses, so the held "12/20" is gone before blur.
+  {
+    const { s, period } = await fresh();
+    const before = bir.list_returns("saved").filter((r) => r.form_code === "1702EX").length;
+    s.edit(period.periodKey, "13/20");
+    s.blur(period.periodKey);
+    await s.idle();
+    expect(s.valueOf(yearKey)).toBe("");
+    expect(s.saveState()).toEqual({ state: "manual", message: "Sample · set its period to save" });
+    s.saveNow();
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("sample-period");
+    expect(bir.list_returns("saved").filter((r) => r.form_code === "1702EX").length).toBe(before);
+    s.dispose();
+  }
+
+  // And a three-digit year is still mid-typing: nothing commits on blur, and a finished year still works after it.
+  {
+    const { s, period } = await fresh();
+    s.edit(period.periodKey, "12/202");
+    s.blur(period.periodKey);
+    await s.idle();
+    expect(s.valueOf(yearKey)).toBe("");
+    expect(s.saveState()).toEqual({ state: "manual", message: "Sample · set its period to save" });
+    s.edit(period.periodKey, "12/2025");
+    await s.idle();
+    s.saveNow();
+    expect(s.overlay()?.kind).not.toBe("sample-period");
+    s.dispose();
+  }
+});
+
 test("Sample: 1600PT and 1600VT take a four-digit year for their period, typed or picked on the month grid", async () => {
   createDemoTaxpayer();
   for (const [code, yearKey] of [
