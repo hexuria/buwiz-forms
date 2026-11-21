@@ -132,10 +132,15 @@ foreach ($k in $vars.Keys) {
 }
 # Devin blueprint builds pass variables between steps through $ENVRC.
 if ($env:ENVRC) {
+    $envrcPath = $env:ENVRC
+    if ($envrcPath -match '^/([a-zA-Z])/') {
+        $envrcPath = $envrcPath -replace '^/([a-zA-Z])/', '$1:\'
+        $envrcPath = $envrcPath.Replace('/', '\')
+    }
     foreach ($k in $vars.Keys) {
         $value = $vars[$k].Replace('\', '/')
         if ($value.Contains("'")) { throw 'ENVRC paths cannot contain single quotes' }
-        Add-Content -Path $env:ENVRC -Value "export $k='$value'"
+        Add-Content -Path $envrcPath -Value "export $k='$value'"
     }
 }
 $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
@@ -176,7 +181,9 @@ foreach ($k in 'OPENSSL_DIR', 'OPENSSL_LIB_DIR') {
     [Environment]::SetEnvironmentVariable($k, [Environment]::GetEnvironmentVariable($k, 'User'), 'Process')
 }
 $env:Path = "$env:USERPROFILE\.cargo\bin;$jdk\bin;$SdkRoot\platform-tools;$env:Path"
-if (-not (Test-Path "$tools\bin\nsh.exe") -or -not (Test-Path "$tools\nsh-ref") -or (Get-Content "$tools\nsh-ref" -Raw).Trim() -ne $pin) {
+$env:X86_64_PC_WINDOWS_MSVC_OPENSSL_NO_VENDOR = '1'
+$have = if (Test-Path "$tools\bin\nsh.exe") { & "$tools\bin\nsh.exe" --version }
+if ("$have" -notlike "*($($pin.Substring(0,7)))*" -or -not (Test-Path "$tools\nsh-ref") -or (Get-Content "$tools\nsh-ref" -Raw).Trim() -ne $pin) {
     cargo install --locked --path "$checkout\crates\nsh-cli" --root $tools --force
     Assert-Native 'NSH CLI install failed'
     Set-Content "$tools\nsh-ref" $pin

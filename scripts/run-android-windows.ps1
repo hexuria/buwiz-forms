@@ -84,9 +84,7 @@ $deadline = (Get-Date).AddMinutes(20)
 do {
     if ((Get-Date) -gt $deadline) { throw "Emulator boot timed out; see $work\emulator.log" }
     Start-Sleep 5
-    $ErrorActionPreference = 'Continue'
-    try { $boot = & $adb -s $serial shell getprop sys.boot_completed 2>$null }
-    finally { $ErrorActionPreference = 'Stop' }
+    $boot = & $env:ComSpec /d /c "`"$adb`" -s $serial shell getprop sys.boot_completed 2>nul"
 } until ($boot -and $boot.Trim() -eq '1')
 Write-Host 'sys.boot_completed=1'
 if (-not (Get-NetTCPConnection -LocalPort 3008 -State Listen -ErrorAction SilentlyContinue)) {
@@ -112,6 +110,7 @@ Assert-Native 'adb push failed'
 $install = & $adb -s $serial shell pm install -r /data/local/tmp/buwiz-x86_64.apk
 Assert-Native 'pm install failed'
 if ($install -notcontains 'Success') { throw "pm install: $install" }
+Write-Host $install
 & $adb -s $serial shell rm /data/local/tmp/buwiz-x86_64.apk
 & $adb -s $serial shell am start -n dev.goldcoders.bir.nsh/com.longbridge.nsh.AppActivity
 Assert-Native 'App launch failed'

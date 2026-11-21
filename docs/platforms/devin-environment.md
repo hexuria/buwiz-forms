@@ -122,7 +122,8 @@ set `PERL=C:/tools/msys64/usr/bin/perl.exe`, unset `PERL5LIB`, set
 limits debug artifacts. Strawberry/Git Perl do not work for Android OpenSSL builds.
 Host-side dependencies use `X86_64_PC_WINDOWS_MSVC_OPENSSL_NO_VENDOR=1` and the user-scope
 OpenSSL directories. New Windows shells must reload both directories, not only PATH.
-The ENVRC generator writes quoted exports with forward-slash paths because Devin's envrc
+The ENVRC generator converts Devin's Git Bash `/c/...` filename to a native Windows path
+before writing quoted exports with forward-slash values because Devin's envrc
 is sourced by Git Bash; bare Windows paths containing spaces or backslashes are not shell-safe.
 
 `setup-android-windows.ps1 -Run` chains setup and launch. The run helper removes non-x86_64

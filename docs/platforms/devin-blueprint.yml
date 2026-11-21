@@ -173,16 +173,10 @@ initialize:
       $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
       powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-android-windows.ps1
       exit $LASTEXITCODE
-  - name: NSH checkout at the pinned commit and the nsh CLI
+  - name: package and launch Android with the mock account server
     run: |
       $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
-      $pin = ((Select-String -Path .github\workflows\nsh.yml -Pattern 'NSH_PINNED_REF:\s*(\S+)').Matches[0].Groups[1].Value)
-      if (-not (Test-Path ..\nsh)) { git clone https://github.com/hexuria/nsh ..\nsh }
-      git -C ..\nsh fetch origin $pin
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      git -C ..\nsh checkout --detach $pin
-      $env:RUSTUP_TOOLCHAIN = '1.99.0'; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin'; $env:RUST_MIN_STACK = '268435456'
-      cargo install --locked --path ..\nsh\crates\nsh-cli --root "$HOME\BuwizNsh\tools"
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1
       exit $LASTEXITCODE
 maintenance:
   - name: NSH checkout and nsh CLI at a new pin
@@ -192,22 +186,26 @@ maintenance:
       git -C ..\nsh fetch origin $pin
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       git -C ..\nsh checkout --detach $pin
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       $have = & "$HOME\BuwizNsh\tools\bin\nsh.exe" --version 2>$null
       if ("$have" -notlike "*($($pin.Substring(0,7)))*") {
-        $env:RUSTUP_TOOLCHAIN = '1.99.0'; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin'; $env:RUST_MIN_STACK = '268435456'
-        cargo install --locked --path ..\nsh\crates\nsh-cli --root "$HOME\BuwizNsh\tools"
+        powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-android-windows.ps1
         exit $LASTEXITCODE
       }
 knowledge:
   - name: startup
     contents: |
-      GPUI app: $env:BUWIZ_NO_KEYCHAIN=1; $env:EBIR_TEST_ENV=1; $env:BIR_AUTH_BYPASS=1; $env:BIR_SFTP_DRY_RUN=1; just run
-      Account sign-in: Start-Process just mock-account   # mock Buwiz account server on 127.0.0.1:3008; start before the app
+      GPUI desktop (separate process, repository root):
+        $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+        $env:OPENSSL_DIR = [Environment]::GetEnvironmentVariable('OPENSSL_DIR','User')
+        $env:OPENSSL_LIB_DIR = [Environment]::GetEnvironmentVariable('OPENSSL_LIB_DIR','User')
+        $env:BUWIZ_NO_KEYCHAIN=1; $env:EBIR_TEST_ENV=1; $env:BIR_SFTP_DRY_RUN=1; just run
   - name: android
     contents: |
-      Emulator (cold boot is the reliable one, ~8 min): Start-Process emulator '-avd buwiz_api35 -accel on -feature WindowsHypervisorPlatform -gpu swiftshader_indirect -cores 4 -memory 4096 -no-snapshot -no-boot-anim'; adb wait-for-device
-      adb reverse tcp:3008 tcp:3008; adb reverse tcp:8787 tcp:8787   # account mock and relay on the host
-      Build and install the app: docs/platforms/devin-environment.md, "Windows (Android)".
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1
+      # Repack/strip/sign x86_64, cold boot with WHPX, wait for sys.boot_completed, start mock-account --auto-approve,
+      # adb reverse tcp:3008 tcp:3008, adb push + pm install, launch. No authentication bypass.
+      # Setup provisions real development AND release runtimes. See docs/platforms/devin-environment.md.
   - name: test
     contents: |
       cargo test -p bir-core ; $env:Path = "$HOME\BuwizNsh\tools\bin;$env:Path" ; cd nsh ; nsh check -v ; nsh build
