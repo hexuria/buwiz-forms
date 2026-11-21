@@ -53,11 +53,11 @@ knowledge:
         $env:Path = "$HOME\BuwizNsh\tools\bin;$env:Path"; $env:RUSTUP_TOOLCHAIN = '1.99.0'; $env:RUST_MIN_STACK = '268435456'
         $env:CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS = 'true'; $env:BUWIZ_ANDROID_DEV = '1'
         $env:BUWIZ_ANDROID_DEV_ENV = 'EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;BIR_RELAY_URL=http://127.0.0.1:8787'
+        adb reverse tcp:8787 tcp:8787   # before launch, so the app reaches the host relay
         nsh package --target android --abi x86_64 --run
-        adb reverse tcp:8787 tcp:8787   # only when the mock relay runs
   - name: test
     contents: |
-      cargo test -p bir-core ; cd nsh ; nsh check -v ; nsh build
+      cargo test -p bir-core ; $env:Path = "$HOME\BuwizNsh	oolsin;$env:Path" ; cd nsh ; nsh check -v ; nsh build
 ```
 
 The Android app does not read the shell's safety variables at runtime: they are baked into the APK through
