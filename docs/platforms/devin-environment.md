@@ -26,7 +26,7 @@ from the checked-out branch, so that branch must include them.
 | --- | --- | --- | --- |
 | Windows | `scripts/setup-windows.ps1` | `scripts/setup-android-windows.ps1` | not available |
 | macOS | `scripts/setup-macos.sh` + NSH CLI | not covered here yet | Xcode + iOS Rust targets |
-| Linux | `scripts/setup-linux.sh` + NSH sidecar | not covered here yet | not available |
+| Linux | `scripts/setup-linux.sh` + NSH sidecar | Blueprint SDK/emulator + NSH sidecar (port 8792; see below) | not available |
 
 The NSH checkout is a sibling of this repository (`../nsh`), at `NSH_PINNED_REF` from `.github/workflows/nsh.yml`.
 It is read-only: never edit it.
@@ -93,6 +93,13 @@ installed, launch each in its own terminal:
 ```
 
 With the Android emulator running:
+
+The blueprint provisions the SDK/emulator and installs the pinned NSH Android
+development runtime under `~/BuwizNsh/tools/runtime/android/dev`. The sidecar
+bakes `BUWIZ_ANDROID_DEV_ENV='EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1'`
+into the Android app so it uses a scratch database, disables the keychain, and
+does not send live filings. Android uses NSH port 8792, distinct from desktop's
+8791.
 
 ```sh
 just mock-account &
