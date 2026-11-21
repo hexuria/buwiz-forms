@@ -3602,10 +3602,10 @@ fn open_screen_form(
         if profile_ask_unknown {
             opened["profile_ask_unknown"] = json!(true);
         }
-        if let Some(facts) = &facts {
-            if opened["status"] == "Draft" {
-                opened["guessed"] = json!(fact_asks::guessed_keys(kind, facts, &opened["draft"]));
-            }
+        if let Some(facts) = &facts
+            && opened["status"] == "Draft"
+        {
+            opened["guessed"] = json!(fact_asks::guessed_keys(kind, facts, &opened["draft"]));
         }
         Ok(json(opened))
     })

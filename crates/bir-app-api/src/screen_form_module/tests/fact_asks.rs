@@ -1606,10 +1606,9 @@ fn the_profile_ask_answer_is_remembered_per_tin_year_and_field() {
         "screen_form_open",
         vec![BRANCH.into(), "0605".into(), 2026i64.into(), 1i64.into()],
     );
-    match branch {
-        Ok(opened) => assert_eq!(opened["profile_asked"], json!([]), "another TIN"),
-        // A branch with no profile of its own opens nothing to compare.
-        Err(_) => {}
+    // A branch with no profile of its own opens nothing to compare.
+    if let Ok(opened) = branch {
+        assert_eq!(opened["profile_asked"], json!([]), "another TIN");
     }
     // A bad answer is refused.
     assert!(
