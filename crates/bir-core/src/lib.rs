@@ -77,7 +77,7 @@ mod mock_bir_e2e;
 pub mod mock_relay;
 
 /// In-memory development account server. Never enabled in shipping apps.
-#[cfg(feature = "mock-account")]
+#[cfg(any(test, feature = "mock-account"))]
 pub mod mock_account;
 
 // Re-export core types
