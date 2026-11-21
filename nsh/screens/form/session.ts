@@ -1002,8 +1002,17 @@ export class FormSession {
       }
       edits[field.k] = value && match ? match.value : value;
     }
-    this.stage(edits);
-    this.checkRangeOrders();
+    const periodEdits: Record<string, string> = {};
+    const ordinaryEdits: Record<string, string> = {};
+    for (const [key, value] of Object.entries(edits)) {
+      if (s.periodParts.has(key)) periodEdits[key] = value;
+      else ordinaryEdits[key] = value;
+    }
+    if (Object.keys(periodEdits).length) this.setPeriodPart(periodEdits);
+    if (Object.keys(ordinaryEdits).length) {
+      this.stage(ordinaryEdits);
+      this.checkRangeOrders();
+    }
     this.publish();
   }
 
@@ -1066,8 +1075,17 @@ export class FormSession {
         edits[field.k] = value;
       }
     }
-    this.stage(edits);
-    this.checkRangeOrders();
+    const periodEdits: Record<string, string> = {};
+    const ordinaryEdits: Record<string, string> = {};
+    for (const [key, value] of Object.entries(edits)) {
+      if (s.periodParts.has(key)) periodEdits[key] = value;
+      else ordinaryEdits[key] = value;
+    }
+    if (Object.keys(periodEdits).length) this.setPeriodPart(periodEdits);
+    if (Object.keys(ordinaryEdits).length) {
+      this.stage(ordinaryEdits);
+      this.checkRangeOrders();
+    }
     this.publish();
   }
 

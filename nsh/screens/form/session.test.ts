@@ -1,9 +1,11 @@
 // The form session through the real door, against an empty scratch database and the demo taxpayer (Juana Santos).
 // Tests in this file share one database, in order.
 import { expect, test } from "nsh/test";
+import { bir } from "../../bir";
 import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
 import { todoRows, type TodoPart } from "../../lib/todo";
 import type { SchemaItem } from "./contract";
+import { onePeriods } from "./schema";
 import { FormSession, bindError, type FormTarget } from "./session";
 
 // The first form call of a process builds every form's schema; a test's JS call has 2 s on the headless runner, a file's load 10 s.
@@ -226,6 +228,22 @@ test("a Form library sample is not autosaved until its period is set; Save as re
   expect(s.overlay()?.kind).toBe("sample-period");
   s.closeSamplePeriod();
   expect(s.overlay()).toBe(null);
+  s.dispose();
+});
+
+test("Sample: typing 06/2025 in 1601C's filing-period box looks up that period and offers the existing return", async () => {
+  createDemoTaxpayer();
+  const saved = await bir.screen_form_open(DEMO.tin, "1601C", 2025, 6);
+  bir.screen_form_save("1601C", saved.draft);
+
+  const s = await opened({ tin: DEMO.tin, formCode: "1601C", year: 0, period: 0, mode: "sample" });
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.month.k === "frm1601c:txtMonth")!;
+  s.edit(period.periodKey, "06/2025");
+  await s.idle();
+  expect(s.overlay()?.kind).toBe("existing");
+
+  s.saveNow();
+  expect(s.overlay()?.kind).not.toBe("sample-period");
   s.dispose();
 });
 
