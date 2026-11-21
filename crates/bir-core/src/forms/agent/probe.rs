@@ -3028,8 +3028,6 @@ fn choice_binding(
         .collect();
     Ok(Some(options))
 }
-// >>> paste at the end of crates/bir-core/src/forms/agent/probe.rs <<<
-
 #[cfg(test)]
 mod blank_seed_tests {
     //! Every bound, user-writable box on Form 0605 takes a write on the
