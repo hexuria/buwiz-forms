@@ -234,7 +234,12 @@ fn form(text: &str) -> HashMap<String, String> {
         .collect()
 }
 fn safe_next(s: &str) -> &str {
-    if s.starts_with('/') && !s.starts_with("//") && !s.contains(['\r', '\n', '\\']) {
+    let local = |path: &str| {
+        path.starts_with('/')
+            && !path.starts_with("//")
+            && !path.chars().any(|c| c.is_control() || c == '\\')
+    };
+    if local(s) && urlencoding::decode(s).is_ok_and(|decoded| local(&decoded)) {
         s
     } else {
         "/device"
@@ -687,6 +692,32 @@ mod tests {
         })
         .await
         .unwrap();
+    }
+
+    #[test]
+    fn return_paths_stay_local() {
+        for path in [
+            "",
+            "https://evil.com",
+            "//evil.com",
+            "/\\evil.com",
+            "/%2F/evil",
+            "/%5cevil.com",
+            "/\t/evil.com",
+            "/\n/evil.com",
+            "/%09/evil.com",
+            "/%0d%0aLocation:evil",
+        ] {
+            assert_eq!(safe_next(path), "/device", "{path:?}");
+        }
+        for path in [
+            "/",
+            "/device",
+            "/device?user_code=ABCD-EFGH",
+            "/device?name=Jane%20Doe",
+        ] {
+            assert_eq!(safe_next(path), path);
+        }
     }
 
     #[test]
