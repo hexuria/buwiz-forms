@@ -5,8 +5,6 @@
 // surface inset 8 px with radius 12, and a 320 px right panel that is either
 // the tax profile or notifications. Screens live in shell/*.js and build from
 // the wrappers in shell/ui.js; reads go through the cached Store.
-//
-// Migration plan + tracking: docs/plans/gpui-shell-migration.md, issue #135.
 
 import { View, div } from "gpui-kit";
 import process from "process";

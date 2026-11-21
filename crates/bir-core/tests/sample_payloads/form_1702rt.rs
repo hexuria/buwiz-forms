@@ -219,6 +219,44 @@ fn form_1702rt_more_rows_sample_payload_is_current() {
     );
 }
 
+/// Itemized deductions of 150 over a gross income of 29, with nothing else
+/// on the return.
+fn sample_1702rt_small_loss() -> Form1702RTDraft {
+    let mut draft =
+        Form1702RTDraft::new_from_profile(&dummy_profile("1702RTv2018C", "Corporation"), 2025, 12);
+    draft.deduction_method = Form1702RTDeductionMethod::Itemized;
+    draft.president_signatory_title = "President".to_string();
+    draft.president_signatory_tin = "123456788000".to_string();
+    draft.part_iv.item_40_income_tax_rate_percent = 25;
+    draft.part_iv.item_27_sales = WholePeso(100);
+    draft.part_iv.item_30_cost_of_sales_or_services = WholePeso(71);
+    draft.schedule_1.rental = WholePeso(150);
+    draft.keep_entered_penalties();
+    draft.recompute();
+    draft.schedule_5.item_1_net_income_or_loss_per_books =
+        draft.part_iv.item_39_net_taxable_income_or_loss;
+    draft.recompute();
+    draft
+}
+
+/// Both totals are under 1,000, so the official page compares them as text,
+/// reads "150" as not above "29" and files Schedule III with no loss, leaving
+/// the deductions total as Item 4's unapplied balance. Plaintext only: this
+/// sample has no `Encrypt.exe` pin.
+#[test]
+fn form_1702rt_small_loss_is_dropped_as_the_official_page_drops_it() {
+    let payload = sample_1702rt_small_loss()
+        .to_official_xml_payload()
+        .unwrap_or_else(|errors| panic!("dummy 1702RT must validate: {errors:?}"));
+    let stem = "1702RT-122025-small-loss";
+    let official =
+        std::fs::read_to_string(samples_dir().join(format!("{stem}.official.xml"))).unwrap();
+    assert_eq!(
+        payload, official,
+        "{stem}: differs from the official saveXMLsubmit() output"
+    );
+}
+
 /// The sample before its payment is recorded: Part III must equal Item 21,
 /// which moves with the computed penalties.
 fn sample_1702rt_unpaid() -> Form1702RTDraft {

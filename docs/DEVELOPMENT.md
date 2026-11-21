@@ -266,8 +266,7 @@ rather than any prose description of them.
   `inventory_form.py` pins an exact revision, `prepare_official_reference.py`
   renders a pinned official PDF into calibration-only rasters, and
   `verify_form_conversion.py` audits a conversion at the `preview` and
-  `release` stages. Reference hashes are pinned in Rust; regenerate the
-  manifest with `npm run references:generate`.
+  `release` stages. Reference hashes are pinned in Rust.
 - `rules/agent-boundaries/` — the fail-closed boundary record for the 2550Q
   candidate rule set. `cargo run -p bir-rules-codegen -- status` asserts on its
   contents, so it is a safety contract rather than documentation.

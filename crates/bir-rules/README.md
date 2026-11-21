@@ -107,8 +107,3 @@ envelope bytes, codecs and outer-container binding before Final Copy or queue
 wiring can open. None of this changes form capability or release status.
 
 The crate does not claim that the prose-oriented v1 corpus is executable.
-
-See
-[`../../docs/validation-rules/architecture.md`](../../docs/validation-rules/architecture.md)
-and
-[`../../docs/validation-rules/implementation-plan.md`](../../docs/validation-rules/implementation-plan.md).
