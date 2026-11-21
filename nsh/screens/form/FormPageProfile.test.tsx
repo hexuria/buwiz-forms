@@ -1,20 +1,39 @@
 // Q1 P1b on the page: the "Save to profile?" ask is a Dialog from 600 points up and a bottom
 // Sheet under it; both buttons are found by label and "Only this return" shows the kept line.
-import { expect, open, test } from "nsh/test";
+import { expect, open, test, type App } from "nsh/test";
 
 const ANY = "./FormPageAny.tsx";
 const BIRTH = "id:fp-frm1701:txtPg1I10BirthDate";
 
-async function toBirth(app: Awaited<ReturnType<typeof open>>) {
+/** Parts are collapsed cards (only part 0 opens with the form). Open them one by one until `want`
+ *  draws: a folded card holds only its toggle's two texts; pressing the toggle mounts its rows and
+ *  makes it "current" (session.togglePart sets current), which the pill then names. So a new text
+ *  under the card — or anywhere, from the pill — is the part having opened. Condition, never delay. */
+async function expandPartsUntil(app: App, want: string) {
+  for (const pi of [1, 2, 3]) {
+    if (app.shows(want)) return;
+    const toggle = `id:fp-part-${pi}-toggle`;
+    await app.waitFor(toggle);
+    const before = app.texts();
+    await app.press(toggle);
+    await app.waitUntil(
+      () => app.count(`id:fp-part-${pi} >> text:/\\S/`) > 2 || app.texts().some((t) => !before.includes(t)),
+      { timeout: 10000 },
+    );
+  }
+}
+
+async function toBirth(app: App) {
   await app.waitFor("text:BIR Form 1701", { timeout: 20000 });
   await app.press("id:fp-pill-open");
   await app.waitFor("id:fp-section-1", { timeout: 15000 });
   await app.press("id:fp-section-1");
-  await app.wait(600);
-  if (app.shows("id:fp-profile-1")) {
-    await app.press("id:fp-profile-1");
-    await app.wait(400);
-  }
+  // The pick jumps to part 1; its profile-fold button mounting is the part having opened — 1701's
+  // first part always starts with the "From tax profile" fold for the demo taxpayer.
+  await app.waitFor("id:fp-profile-1", { timeout: 15000 });
+  await app.press("id:fp-profile-1");
+  // The fold's accessibility label ends ", shown" once the folded rows are out.
+  await app.waitFor("id:fp-part-1 >> label:/, shown$/", { timeout: 15000 });
   for (let i = 0; i < 16 && !app.shows(BIRTH); i++) await app.scroll("id:form-scroll", 300).catch(() => {});
   await app.waitFor(BIRTH, { timeout: 15000 });
 }
@@ -39,13 +58,7 @@ test("phone: the ask is a bottom sheet with stacked buttons; 'Save to profile' s
   await app.waitFor("text:BIR Form 0619E", { timeout: 20000 });
   const gov = "id:fp-frm0619E:optCategory:G";
   // The category sits in a collapsed part: open the parts until the radio is drawn.
-  for (const pi of [1, 2, 3]) {
-    if (app.shows(gov)) break;
-    const toggle = `id:fp-part-${pi}-toggle`;
-    await app.waitFor(toggle);
-    await app.press(toggle);
-    await app.wait(400);
-  }
+  await expandPartsUntil(app, gov);
   for (let i = 0; i < 18 && !app.shows(gov); i++) await app.scroll("id:form-scroll", 300).catch(() => {});
   await app.waitFor(gov, { timeout: 15000 });
   await app.press(gov);
@@ -63,13 +76,7 @@ test("B8: on 0619E with no profile category, Private shows unpicked; pressing it
   await app.waitFor("text:BIR Form 0619E", { timeout: 20000 });
   const privatePick = "id:fp-frm0619E:optCategory:P";
   const categoryBlock = "Government withholding agent is not in the tax profile, and this return needs it. Pick it at Item 12.";
-  for (const pi of [1, 2, 3]) {
-    if (app.shows(privatePick)) break;
-    const toggle = `id:fp-part-${pi}-toggle`;
-    await app.waitFor(toggle);
-    await app.press(toggle);
-    await app.wait(400);
-  }
+  await expandPartsUntil(app, privatePick);
   for (let i = 0; i < 18 && !app.shows(privatePick); i++) await app.scroll("id:form-scroll", 300).catch(() => {});
   await app.waitFor(privatePick, { timeout: 15000 });
   await app.press("id:fp-check");
