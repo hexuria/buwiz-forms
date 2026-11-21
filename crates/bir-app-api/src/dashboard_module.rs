@@ -1277,9 +1277,18 @@ mod tests {
         .unwrap();
         let rows = to_json(&list_returns(&args(&["all"])).unwrap());
         let relayed = |month: u64| {
-            rows.as_array().unwrap().iter().find(|r| r["period"] == month).unwrap()["submitted_via_relay"].clone()
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["period"] == month)
+                .unwrap()["submitted_via_relay"]
+                .clone()
         };
-        assert_eq!(relayed(2), true, "stored at submission, so it survives a restart");
+        assert_eq!(
+            relayed(2),
+            true,
+            "stored at submission, so it survives a restart"
+        );
         assert_eq!(relayed(3), false, "a real send keeps BIR's wording");
         assert_eq!(relayed(1), false, "a draft was never sent");
     }
