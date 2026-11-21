@@ -13,6 +13,12 @@
 #     (github.com/hexuria/gpui-agent), installed at the exact rev Cargo.lock
 #     pins so CLI and host speak the same protocol (v1 CLI can't talk to a
 #     v2 host)
+#   - NSH app (nsh/) on macOS and the iOS Simulator: the Rust iOS targets,
+#     a checkout of hexuria/nsh at the commit CI pins (NSH_PINNED_REF in
+#     .github/workflows/nsh.yml) next to this repo, and the `nsh` command line
+#     built from it into ~/BuwizNsh/tools (where the just nsh-* recipes look).
+#     The iOS Simulator needs the full Xcode app with an iOS runtime, not only
+#     the Command Line Tools.
 #
 # What it does NOT need (unlike Windows/Linux):
 #   - No system OpenSSL: openssl-src compiles from vendored source with the
@@ -25,19 +31,22 @@
 #   scripts/setup-macos.sh --check      # verify only, install nothing
 #   scripts/setup-macos.sh --extras     # also install cargo-audit/outdated/machete
 #   scripts/setup-macos.sh --no-agent   # skip installing the gpui-agent CLI
+#   scripts/setup-macos.sh --no-nsh     # skip the NSH app (iOS targets, nsh CLI)
 #
 set -euo pipefail
 
 CHECK_ONLY=0
 WITH_EXTRAS=0
 WITH_AGENT=1
+WITH_NSH=1
 for arg in "$@"; do
     case "$arg" in
         --check)    CHECK_ONLY=1 ;;
         --extras)   WITH_EXTRAS=1 ;;
         --no-agent) WITH_AGENT=0 ;;
+        --no-nsh)   WITH_NSH=0 ;;
         -h|--help)
-            sed -n '2,30p' "$0"
+            sed -n '2,37p' "$0"
             exit 0
             ;;
         *) echo "Unknown option: $arg (see --help)" >&2; exit 2 ;;
@@ -51,6 +60,16 @@ warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 BREW_PREFIX="$(uname -m | grep -q arm64 && echo /opt/homebrew || echo /usr/local)"
+NSH_TOOLS="$HOME/BuwizNsh/tools"
+# nsh/Cargo.toml points at ../../nsh, so the checkout must sit next to this repo.
+NSH_DIR="$(cd "$(dirname "$0")/../.." && pwd)/nsh"
+IOS_TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim)
+# Homebrew rustup's proxies honour rust-toolchain.toml (the NSH checkout pins
+# its own toolchain); links made by link_toolchain_bins do not, so the proxy
+# dir goes first whenever it exists.
+if [ -d "$BREW_PREFIX/opt/rustup/bin" ]; then
+    export PATH="$BREW_PREFIX/opt/rustup/bin:$PATH"
+fi
 
 # ---------------------------------------------------------------------------
 # Xcode Command Line Tools — cc, lipo, codesign, PlistBuddy, productbuild all
@@ -143,6 +162,10 @@ install_rust() {
     # ~/.cargo/bin must precede any rustup shim dir in every future shell.
     persist_line 'export PATH="$HOME/.cargo/bin:$PATH"' '.cargo/bin'
     export PATH="$HOME/.cargo/bin:$PATH"
+    if [ -d "$BREW_PREFIX/opt/rustup/bin" ]; then
+        persist_line 'export PATH="'"$BREW_PREFIX"'/opt/rustup/bin:$PATH"' 'opt/rustup/bin'
+        export PATH="$BREW_PREFIX/opt/rustup/bin:$PATH"
+    fi
 
     # `just app`/`_package-mac` lipo aarch64 + x86_64 into a universal binary.
     # On Apple Silicon the second target is missing; on Intel the first is.
@@ -179,6 +202,45 @@ install_gpui_agent() {
     fi
     log "Installing gpui-agent CLI at pinned rev ${rev:0:7}"
     cargo install --git https://github.com/hexuria/gpui-agent --rev "$rev" gpui-agent-cli
+}
+
+# ---------------------------------------------------------------------------
+# NSH app: iOS targets, hexuria/nsh at the CI pin, and the nsh CLI built from
+# that checkout. The CLI and the checkout must match, so a moved pin rebuilds.
+# ---------------------------------------------------------------------------
+nsh_pinned_ref() {
+    sed -n 's/^ *NSH_PINNED_REF: *\([0-9a-fA-F]\{7,64\}\).*/\1/p' .github/workflows/nsh.yml 2>/dev/null | head -1
+}
+
+install_nsh() {
+    if [ "$(xcode-select -p 2>/dev/null)" = "/Library/Developer/CommandLineTools" ]; then
+        warn "Xcode.app is not selected: the iOS Simulator needs it (sudo xcode-select -s /Applications/Xcode.app)"
+    elif ! xcrun simctl list runtimes 2>/dev/null | grep -q '^iOS'; then
+        warn "no iOS Simulator runtime: install one with 'xcodebuild -downloadPlatform iOS'"
+    fi
+    log "Adding iOS targets: ${IOS_TARGETS[*]}"
+    rustup target add "${IOS_TARGETS[@]}"
+
+    local ref
+    ref="$(nsh_pinned_ref)"
+    [ -n "$ref" ] || die "could not read NSH_PINNED_REF from .github/workflows/nsh.yml — run from the repo root"
+    if [ ! -e "$NSH_DIR/.git" ]; then
+        log "Cloning hexuria/nsh into $NSH_DIR"
+        git clone https://github.com/hexuria/nsh "$NSH_DIR"
+    fi
+    if [ "$(git -C "$NSH_DIR" rev-parse HEAD 2>/dev/null)" != "$ref" ]; then
+        log "Checking out NSH at the CI pin ${ref:0:7}"
+        git -C "$NSH_DIR" fetch origin "$ref"
+        git -C "$NSH_DIR" checkout --detach "$ref"
+    fi
+    (cd "$NSH_DIR" && rustup target add "${IOS_TARGETS[@]}")
+
+    if "$NSH_TOOLS/bin/nsh" --version 2>/dev/null | grep -q "(${ref:0:7})"; then
+        log "nsh CLI already built at ${ref:0:7}"
+    else
+        log "Building the nsh CLI into $NSH_TOOLS (about 10 minutes cold)"
+        (cd "$NSH_DIR" && cargo install --locked --path crates/nsh-cli --root "$NSH_TOOLS")
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -273,6 +335,35 @@ check() {
             ok=0
         fi
     fi
+    if [ "$WITH_NSH" -eq 1 ]; then
+        if [ -x "$NSH_TOOLS/bin/nsh" ]; then
+            printf '  %-14s %s\n' "nsh" "$("$NSH_TOOLS/bin/nsh" --version 2>/dev/null | head -1)"
+            local ref
+            ref="$(nsh_pinned_ref)"
+            [ -z "$ref" ] || "$NSH_TOOLS/bin/nsh" --version 2>/dev/null | grep -q "(${ref:0:7})" \
+                || warn "nsh CLI is not built from the CI pin ${ref:0:7} — re-run scripts/setup-macos.sh"
+        else
+            printf '  %-14s MISSING (%s/bin/nsh, needed by the just nsh-* recipes)\n' "nsh" "$NSH_TOOLS"
+            ok=0
+        fi
+        if command -v rustup >/dev/null 2>&1; then
+            local t missing_ios=""
+            for t in "${IOS_TARGETS[@]}"; do
+                rustup target list --installed 2>/dev/null | grep -qx "$t" || missing_ios="$missing_ios $t"
+            done
+            if [ -n "$missing_ios" ]; then
+                printf '  %-14s MISSING:%s\n' "ios-targets" "$missing_ios"
+                ok=0
+            else
+                printf '  %-14s %s\n' "ios-targets" "${IOS_TARGETS[*]}"
+            fi
+        fi
+        if xcrun simctl list runtimes 2>/dev/null | grep -q '^iOS'; then
+            printf '  %-14s %s\n' "ios-runtime" "$(xcrun simctl list runtimes 2>/dev/null | grep '^iOS' | tail -1 | cut -d' ' -f1-2)"
+        else
+            warn "no iOS Simulator runtime (needs Xcode.app; xcodebuild -downloadPlatform iOS)"
+        fi
+    fi
     [ "$ok" -eq 1 ] && log "All required tooling present" || warn "Missing pieces — run scripts/setup-macos.sh"
     return $((1 - ok))
 }
@@ -290,6 +381,9 @@ main() {
     install_rust
     if [ "$WITH_AGENT" -eq 1 ]; then
         install_gpui_agent
+    fi
+    if [ "$WITH_NSH" -eq 1 ]; then
+        install_nsh
     fi
 
     if [ "$WITH_EXTRAS" -eq 1 ]; then
@@ -309,6 +403,16 @@ Done. Next steps:
     just test     # workspace tests
     just app      # universal .app + DMG (ad-hoc signed; needs App Store
                   # Connect creds in .env for the build-number lookup)
+
+NSH app (nsh/), with the CLI built at the CI pin:
+
+    just nsh-check && just nsh-build && just nsh-test
+    just nsh-run                       # the NSH app on macOS
+    just mock-bir & just mock-relay &  # then the iOS Simulator, from nsh/:
+    PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh" \
+      SIMCTL_CHILD_BIR_RELAY_URL=http://127.0.0.1:8787 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 \
+      SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BIR_AUTH_BYPASS=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1 \
+      nsh run --target ios
 
 Packaging tools already on macOS: lipo, codesign, PlistBuddy, productbuild.
 OpenSSL is vendored — no brew openssl needed; system perl + cc build it.
