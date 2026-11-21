@@ -133,8 +133,12 @@ It cold-boots with `-accel on -feature WindowsHypervisorPlatform -gpu swiftshade
 -cores 4 -memory 4096 -no-snapshot -no-boot-anim` and waits for `sys.boot_completed=1`
 (about eight minutes; twenty-minute timeout). `emulator -accel-check` must pass first.
 It starts `just mock-account --auto-approve` on loopback port 3008 and sets up
-`adb reverse tcp:3008 tcp:3008` before launch. Choose Sign in: the synthetic mock account
-is automatically approved; authentication bypass is deliberately not baked in.
+`adb reverse tcp:3008 tcp:3008` before launch. The sign-in helper locates the native
+Sign in control by its accessibility label, presses it, and waits for the account gate
+to clear. The synthetic mock account is automatically approved; authentication bypass
+is deliberately not baked in. Already signed-in installs keep their session. The emulator
+screen timeout is extended to thirty minutes for recording. Local taxpayer onboarding
+remains a user choice after cloud account sign-in.
 Never use real credentials with the mock. Logs and APKs persist under
 `~/BuwizNsh/android-windows`. Both emulator and mock server remain running.
 
