@@ -65,29 +65,20 @@ initialize:
       $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
       powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-android-windows.ps1
       exit $LASTEXITCODE
-  - name: NSH checkout at the pinned commit and the nsh CLI
+  - name: package and launch Android with the mock account server
     run: |
       $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
-      $pin = ((Select-String -Path .github\workflows\nsh.yml -Pattern 'NSH_PINNED_REF:\s*(\S+)').Matches[0].Groups[1].Value)
-      if (-not (Test-Path ..\nsh)) { git clone https://github.com/hexuria/nsh ..\nsh }
-      git -C ..\nsh fetch origin $pin
-      git -C ..\nsh checkout --detach $pin
-      $env:RUSTUP_TOOLCHAIN = '1.99.0'; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin'; $env:RUST_MIN_STACK = '268435456'
-      cargo install --locked --path ..\nsh\crates\nsh-cli --root "$HOME\BuwizNsh\tools"
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1
       exit $LASTEXITCODE
 knowledge:
   - name: startup
     contents: |
-      GPUI app: $env:BUWIZ_NO_KEYCHAIN=1; $env:EBIR_TEST_ENV=1; $env:BIR_AUTH_BYPASS=1; $env:BIR_SFTP_DRY_RUN=1; just run
-      Android (from nsh/, see docs/relay.md "Android development APK"):
-        # Start `just mock-account` in another terminal first.
-        Start-Process emulator '-avd buwiz_api35'; adb wait-for-device
-        $env:Path = "$HOME\BuwizNsh\tools\bin;$env:Path"; $env:RUSTUP_TOOLCHAIN = '1.99.0'; $env:RUST_MIN_STACK = '268435456'
-        $env:CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS = 'true'; $env:BUWIZ_ANDROID_DEV = '1'
-        $env:BUWIZ_ANDROID_DEV_ENV = 'EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;BIR_RELAY_URL=http://127.0.0.1:8787'
-        adb reverse tcp:8787 tcp:8787   # before launch, so the app reaches the host relay
-        adb reverse tcp:3008 tcp:3008   # app and browser reach the host account mock
-        nsh package --target android --abi x86_64 --run
+      Android: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1
+      GPUI desktop (separate process, repository root):
+        $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+        $env:OPENSSL_DIR = [Environment]::GetEnvironmentVariable('OPENSSL_DIR','User')
+        $env:OPENSSL_LIB_DIR = [Environment]::GetEnvironmentVariable('OPENSSL_LIB_DIR','User')
+        $env:BUWIZ_NO_KEYCHAIN=1; $env:EBIR_TEST_ENV=1; $env:BIR_SFTP_DRY_RUN=1; just run
   - name: test
     contents: |
       cargo test -p bir-core ; $env:Path = "$HOME\BuwizNsh\tools\bin;$env:Path" ; cd nsh ; nsh check -v ; nsh build
@@ -98,6 +89,36 @@ The Android app does not read the shell's safety variables at runtime: they are 
 
 Each step is a new process, so steps after the first reload `Path` from the registry to see what the earlier steps
 installed. The scripts self-elevate only when not already elevated; Devin builds run as Administrator.
+
+Setup checks out `NSH_PINNED_REF`, rebuilds the CLI when the pin changes, installs all three
+Android Rust targets on toolchain 1.99.0, and runs `cargo xtask android --dev` and
+`cargo xtask android --release` in `../nsh`. The outputs are copied into
+`~/BuwizNsh/tools/android/bin-dev` and `android/bin`, respectively, and the CLI's
+`NSH_RUNTIME/android/dev` and `NSH_RUNTIME/android/release` layout under `tools/runtime`.
+Packaging requires the real release runtime, not a renamed development runtime.
+
+MSYS2 (`choco install msys2`, `pacman -S --needed --noconfirm perl make`) lives at
+`C:\tools\msys64`. Android builds put its `usr\bin` and NDK LLVM bin first on PATH,
+set `PERL=C:/tools/msys64/usr/bin/perl.exe`, unset `PERL5LIB`, set
+`GNUMAKEFLAGS='CC=clang.exe AR=llvm-ar.exe RANLIB=llvm-ranlib.exe'`, and set
+`RANLIB_<triple>` to NDK llvm-ranlib for each ABI. `CARGO_PROFILE_DEV_DEBUG=0`
+limits debug artifacts. Strawberry/Git Perl do not work for Android OpenSSL builds.
+Host-side dependencies use `X86_64_PC_WINDOWS_MSVC_OPENSSL_NO_VENDOR=1` and the user-scope
+OpenSSL directories. New Windows shells must reload both directories, not only PATH.
+The ENVRC generator writes quoted exports with forward-slash paths because Devin's envrc
+is sourced by Git Bash; bare Windows paths containing spaces or backslashes are not shell-safe.
+
+`setup-android-windows.ps1 -Run` chains setup and launch. The run helper removes non-x86_64
+libraries, strips libnsh.so, zipaligns, signs with the standard debug key, then uses
+`adb push` and `pm install` instead of streaming the oversized multi-ABI APK.
+It cold-boots with `-accel on -feature WindowsHypervisorPlatform -gpu swiftshader_indirect
+-cores 4 -memory 4096 -no-snapshot -no-boot-anim` and waits for `sys.boot_completed=1`
+(about eight minutes; twenty-minute timeout). `emulator -accel-check` must pass first.
+It starts `just mock-account --auto-approve` on loopback port 3008 and sets up
+`adb reverse tcp:3008 tcp:3008` before launch. Choose Sign in: the synthetic mock account
+is automatically approved; authentication bypass is deliberately not baked in.
+Never use real credentials with the mock. Logs and APKs persist under
+`~/BuwizNsh/android-windows`. Both emulator and mock server remain running.
 
 ## Without Devin
 
