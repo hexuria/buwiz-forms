@@ -115,7 +115,8 @@ knowledge:
     contents: |
       pgrep xcompmgr || (DISPLAY=:0 xcompmgr &)   # no black border around GPUI windows
       GPUI app: DISPLAY=:0 VK_ICD_FILENAMES=/dev/null BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 just run   # VK_ICD_FILENAMES avoids stale llvmpipe frames
-      NSH app: ~/BuwizNsh/nsh2404.sh nsh run --target linux --port 8791   # separate from Android; sign-in bypassed, no account mock needed
+      # Cairo avoids stale pixels in the Linux NSH GTK window.
+      NSH app: ~/BuwizNsh/nsh2404.sh env GSK_RENDERER=cairo nsh run --target linux --port 8791   # separate from Android; sign-in bypassed, no account mock needed
   - name: android
     contents: |
       DISPLAY=:0 ~/Android/Sdk/emulator/emulator -avd buwiz -no-snapshot-save -no-audio -gpu swiftshader_indirect &

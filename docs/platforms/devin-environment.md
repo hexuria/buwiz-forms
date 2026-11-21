@@ -38,7 +38,7 @@ the account gate deliberately and do not start the account mock. To exercise
 first-launch sign-in instead, start the mock below and launch without
 `BIR_AUTH_BYPASS` (or `SIMCTL_CHILD_BIR_AUTH_BYPASS` on iOS). On macOS use
 `nsh run --target macos` directly instead of `just nsh-run`; on Linux use
-`~/BuwizNsh/nsh2404.sh env BIR_AUTH_BYPASS=0 nsh run --target linux --port 8791`.
+`~/BuwizNsh/nsh2404.sh env GSK_RENDERER=cairo BIR_AUTH_BYPASS=0 nsh run --target linux --port 8791`.
 Android's baked development settings do not bypass sign-in and need the mock.
 
 Start the in-memory account mock before launching NSH; debug builds use
@@ -85,7 +85,8 @@ the desktop's remembered NSH development session. With the blueprint's sidecar
 installed, launch each in its own terminal:
 
 ```sh
-~/BuwizNsh/nsh2404.sh nsh run --target linux --port 8791
+# Cairo avoids stale pixels in the NSH GTK window.
+~/BuwizNsh/nsh2404.sh env GSK_RENDERER=cairo nsh run --target linux --port 8791
 ```
 
 With the Android emulator running:
