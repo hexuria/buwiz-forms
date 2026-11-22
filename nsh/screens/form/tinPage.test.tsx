@@ -40,6 +40,10 @@ for (const width of [320, 390, 1440]) {
     expect(app.count(`id:fp-tin-from-${TIN_ROW}`)).toBe(1);
     expect(app.texts()).toContain("From the tax profile");
     expect(app.count(`id:fp-mark-user-${TIN_ROW}`)).toBe(0);
+    // Under 600 pt the item number sits in the label's line, not in a column of its own, so the boxes start at
+    // the number's left edge and have the row's whole width; at 1440 the number keeps its column.
+    expect(app.count(`id:fp-no-${TIN_ROW}`)).toBe(1);
+    expect(app.count(`id:fp-head-${TIN_ROW} >> id:fp-no-${TIN_ROW}`)).toBe(narrow ? 1 : 0);
   });
 }
 

@@ -586,18 +586,23 @@ export function ItemRow(props: RowProps) {
         "rounded-b-(--radius-card)": Boolean(props.last?.()),
         "bg-background": allCalc && !info().stepHere,
         "bg-accent-blue-soft": info().stepHere,
-        "pl-2 gap-2 pr-3": props.narrow(),
+        "pr-3": props.narrow(),
       }}
     >
-      <View class="shrink-0" style={{ width: props.narrow() ? 32 : 44 }}>
-        {it.no ? (
-          <View class="h-5.5 min-w-7.5 items-center justify-center self-start rounded-(--radius-ctl) bg-hover px-1.5">
-            <Code tone="fg2">{it.no}</Code>
-          </View>
-        ) : null}
-      </View>
+      {/* Under 600 pt the number sits in the label's line instead of a column of its own, so the boxes below start
+          at the number's left edge and take the row's whole width (a phone has none to spare for an indent). */}
+      <If when={!props.narrow()}>
+        <View class="shrink-0" style={{ width: 44 }}>
+          {it.no ? <ItemNo no={it.no} id={id} /> : null}
+        </View>
+      </If>
       <View class="min-w-0 flex-1">
-        <View class="mb-2.5 min-h-5.5 flex-row flex-wrap items-start gap-2">
+        <View testID={`fp-head-${id}`} class="mb-2.5 min-h-5.5 flex-row flex-wrap items-start gap-2">
+          {it.no ? (
+            <If when={props.narrow()}>
+              <ItemNo no={it.no} id={id} />
+            </If>
+          ) : null}
           <Text variant="control" class="min-w-0 flex-1" testID={`fp-label-${id}`}>{label}</Text>
           {it.rows ? <Text variant="meta" tone="fg3" class="pt-0.5">{`${it.rows} rows`}</Text> : null}
           {/* A profile TIN's own line under its boxes says it once; the row mark stays for every other profile row. */}
@@ -684,6 +689,15 @@ export function ItemRow(props: RowProps) {
       </View>
     </View>
     </If>
+  );
+}
+
+/** An item's number in its small box. */
+function ItemNo(props: { no: string; id: string }): JSX.Element {
+  return (
+    <View testID={`fp-no-${props.id}`} class="h-5.5 min-w-7.5 items-center justify-center self-start rounded-(--radius-ctl) bg-hover px-1.5">
+      <Code tone="fg2">{props.no}</Code>
+    </View>
   );
 }
 
