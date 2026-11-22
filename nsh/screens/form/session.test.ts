@@ -395,11 +395,14 @@ test("Sample: restoring a refused period with no other edit creates no return", 
 
   s.edit(period.periodKey, "11/2025");
   await s.idle();
+  const before = s.saveState();
   s.edit(period.periodKey, "13/2025");
   await s.idle();
   expect(s.boxMessageOf(period.month.k)).toBeTruthy();
   s.edit(period.periodKey, "11/2025");
   await s.idle();
+  // The save line is back to what it said before the refusal, not "set its period to save".
+  expect(s.saveState()).toEqual(before);
   s.dispose();
   expect(saved()).toEqual([]);
 });

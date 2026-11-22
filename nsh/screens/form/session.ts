@@ -1117,7 +1117,14 @@ export class FormSession {
         s.periodHeld = null;
         const samePeriod = JSON.stringify({ ...s.periodValues, ...periodEdits }) === s.periodAsked;
         this.setPeriodPart(periodEdits);
-        if (wasIncomplete && !s.periodIncomplete && samePeriod && Object.keys(s.typedEdits).length) this.scheduleAutosave();
+        if (wasIncomplete && !s.periodIncomplete && samePeriod) {
+          if (Object.keys(s.typedEdits).length) this.scheduleAutosave();
+          else if (!Object.keys(s.pending).length) {
+            // Only typed edits make a sample worth saving: with none, the refusal left nothing unsaved.
+            s.dirty = false;
+            s.saveState = this.restingSaveState();
+          }
+        }
       }
     }
     if (Object.keys(ordinaryEdits).length) {

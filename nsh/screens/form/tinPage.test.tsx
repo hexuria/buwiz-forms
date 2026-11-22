@@ -181,7 +181,9 @@ test("1700 Schedule 1: ticking Taxpayer in BETA's drawer (4_2) changes BETA only
   const betaRow = `${rowId}-1`;
   const acmeRow = `${rowId}-2`;
   // The fixture's setup writes one step per host fill; the slowest runner needs well over the default 5 s.
-  await app.waitFor("label:/Spouse · ACME · 1,?000/", { timeout: 25000 });
+  // Both amounts landed: compensation, then withholding, the whole summary.
+  const acmeSummary = /^Spouse · ACME · 10,?000(\.00)? · 1,?000(\.00)?$/;
+  await app.waitUntil(() => app.texts().some((t) => acmeSummary.test(t)), { timeout: 25000 });
   await app.waitFor("label:/BETA.*Spouse|Spouse.*BETA/");
   await app.waitFor("label:/ACME.*Spouse|Spouse.*ACME/");
 
