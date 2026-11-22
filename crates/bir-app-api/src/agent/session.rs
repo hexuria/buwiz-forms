@@ -1271,8 +1271,9 @@ impl Session {
         Ok(DispatchResult::json(outcome))
     }
 
-    /// With `discard: true`, closes without writing the agent's copy of the
-    /// return; an open window still saves what the filer typed there as it leaves.
+    /// With `discard: true`, closes without writing the agent's copy. The NSH
+    /// window saves the filer's typing on leave; classic GPUI `enterView`
+    /// switches views without saving unsaved typing.
     fn form_dismiss(&mut self, args: &Value) -> Result<DispatchResult, String> {
         let discard = args.get("discard").and_then(Value::as_bool) == Some(true);
         if !discard && self.open.as_ref().is_some_and(|open| open.dirty) {

@@ -49,8 +49,10 @@ must not be used for remote binds.
 
 `form.dismiss` refuses to close a form with unsaved edits by default. To
 close without writing the agent's copy of the return, invoke `form.dismiss`
-with `{"discard": true}`. An open window still saves what the filer typed
-there as it leaves; the result includes `"discarded": true`.
+with `{"discard": true}`; the result includes `"discarded": true`. The NSH
+window saves what the filer typed as it leaves. In the classic GPUI shell,
+`enterView` switches views without saving, so unsaved typing there is not
+stored.
 
 `form.fields` lists boxes the agent can fill. Pass `{"locked": true}` to
 include locked boxes as read-only, marked with their lock name; this does not

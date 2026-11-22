@@ -331,7 +331,7 @@
     {
       "name": "form.dismiss",
       "kind": "invoke",
-      "description": "Close the open form. With discard=true, close without writing the agent's copy of the return; an open window still saves what the filer typed there.",
+      "description": "Close the open form without writing the agent's copy when discard=true. The NSH window saves what the filer typed as it leaves; the classic GPUI shell's enterView switches views without saving, so its unsaved typing is not stored.",
       "effects": [
         "write"
       ],
