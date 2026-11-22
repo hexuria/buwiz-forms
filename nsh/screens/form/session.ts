@@ -1096,7 +1096,8 @@ export class FormSession {
     const ordinaryEdits: Record<string, string> = {};
     for (const [key, value] of Object.entries(edits)) {
       // The period lookup needs the absolute year even on a two-digit box: a select year stores "25" the host cannot read.
-      if (s.periodParts.has(key)) periodEdits[key] = key === period.year.k && typed ? String(year4) : value;
+      // All four digits go: "0025" is year 25, which the host refuses, never the two-digit "25" it reads as 2025.
+      if (s.periodParts.has(key)) periodEdits[key] = key === period.year.k && typed ? String(year4).padStart(4, "0") : value;
       else ordinaryEdits[key] = value;
     }
     if (Object.keys(periodEdits).length) {

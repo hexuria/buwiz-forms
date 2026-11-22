@@ -371,11 +371,35 @@ test("Sample: 1600PT and 1600VT take a four-digit year for their period, typed o
     s.edit(period.periodKey, "07/2025");
     await s.idle();
     expect(s.overlay()).toBe(null);
+    const stored = () => bir.list_returns("saved").filter((r) => r.form_code === code && r.taxable_year === 2025 && r.period === 7);
+    expect(stored()).toEqual([]);
     s.saveNow();
     await s.idle();
     expect(s.overlay()?.kind).not.toBe("sample-period");
+    // The save itself went through: a failed write only shows in the save state, so check the state and the stored return.
+    expect(s.saveState().state).toBe("saved");
+    expect(stored().length).toBe(1);
     s.dispose();
   }
+});
+
+test("Sample: a four-digit year below 1900 (12/0025) on 1702EX is not read as 2025", async () => {
+  createDemoTaxpayer();
+  const s = await opened({ tin: DEMO.tin, formCode: "1702EX", year: 0, period: 0, mode: "sample" });
+  const yearKey = "frm1702EX:txtPg1I2YearEnd";
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.year.k === yearKey)!;
+  const before = bir.list_returns("saved").filter((r) => r.form_code === "1702EX").length;
+  s.edit(period.periodKey, "12/0025");
+  await s.idle();
+  // The host gets all four digits and refuses year 25: the two-digit box never holds "25" (which would mean 2025).
+  expect(s.valueOf(yearKey)).not.toBe("25");
+  expect(s.overlay()).toBe(null);
+  expect(s.saveState()).toEqual({ state: "manual", message: "Sample · set its period to save" });
+  s.saveNow();
+  await s.idle();
+  expect(s.overlay()?.kind).toBe("sample-period");
+  expect(bir.list_returns("saved").filter((r) => r.form_code === "1702EX").length).toBe(before);
+  s.dispose();
 });
 
 test("the three heaviest forms build a session without error", async () => {
