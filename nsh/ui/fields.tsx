@@ -96,7 +96,10 @@ export function TextField(props: TextFieldProps) {
           props.bare
             ? TOUCH ? "min-h-11" : "h-8"
             : cx(
-                "rounded-(--radius-row) border px-2.5",
+                "rounded-(--radius-row) border",
+                // A centred box is a cell of the phone TIN grid: 47 pt wide on a 320 pt phone, where 10 pt sides cut
+                // the third digit. It keeps 4 pt, like the locked cell (controls/model.ts readBoxPad).
+                props.align === "center" ? "px-1" : "px-2.5",
                 TOUCH ? "min-h-11" : sm() ? "h-7" : "h-8",
                 flat() ? "border-border bg-hover" : "bg-card",
                 props.error ? "border-danger" : !flat() && "border-border-strong focus-within:border-accent-blue",
