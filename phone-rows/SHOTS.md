@@ -1,0 +1,369 @@
+# Phone rows: number box in the label's line, fields full width (under 600 pt)
+
+- Before: `feat/form-fields-all` at `94940009` -> `before-94940009/`
+- After: `devin/1795324811-phone-row-full-width` at `a04e8f20` -> `after-a04e8f20/`
+- Real macOS windows via `just nsh-shots`, 1x pixels (non-Retina display). Demo taxpayer, dry-run env.
+- `tin-*`: the committed `nsh/shots/fftin.test.tsx` (row-height shots and all but one 1280 picture left out).
+- `rows-*` and `tinsweep-*`: local scratch shots files, not committed anywhere. Before has light only; after has light and dark; the TIN sweep is after-only, light.
+- File name: `<area>-<before|after>-<scene>-<step>-<WxH>-<light|dark>.png`.
+
+## What the after pictures show
+
+Alignment: in every numbered row the field's left border is at the number box's left edge (measured on `rows-after-0605-items11-18-1-320x700-light.png`: number boxes 9/11/12/17/18 and the TIN boxes, segmented choice, text box and dropdown all start at x=29). Fields are 36 pt wider than before. Rows without a number start at the same edge and look the same as before.
+
+Better than before:
+- `rows-before-longlabel-1701ms-8-12-1-320x700-light.png` and `rows-before-editmark-1702ex-part1-1-320x700-light.png`: the locked TIN's last box reads "000…"; after it reads 00000.
+- Long item numbers (15A/15B on 1801, `tin-*-1801-*`) were cut to "…" in the old 32 pt column; after they show in full.
+- Choice lists with long options show about 36 pt more text.
+
+Worse than before:
+- `rows-after-editmark-1702ex-part1-2-320x700-{light,dark}.png`: item 15 label "Investment Promotion Agency (IPA)/Government Agency (specify) *" now drops the "*" alone onto a third line (two lines before). The label column is 2 px narrower because the number box is 2 px further right.
+
+Unchanged problems (same in before and after):
+- Long choice options are cut at the right edge, no ellipsis: 1701A items 69 and 75 (`rows-after-choices-1701a-atc-69-*`, 75 also at 390), 1702EX item 13 (`rows-after-editmark-1702ex-part1-*`, also at 390), 1702RT item 21 at 320 (`rows-after-editbtn-1702rt-part2-*`), 2000OT item 12 (`tinsweep-after-2000OT-11B-other-party-*`).
+- A label next to "Edit penalties" or the person mark + "Edit" is squeezed: 1702RT item 17 and 1701MS item 28A "Add: / Penalties: / Surcharge" on three lines at 320; 1701MS item 8 name label on nine short lines at 320 (`rows-after-longlabel-1701ms-8-12-1-320x700-*`). At 390 these are two and six lines.
+- 1702EX item 17 date range at 320: "From [date] to" on one line and "To [date]" on the next (`rows-after-editmark-1702ex-part1-3-320x700-*`). Fits one line at 390.
+- `tin-after-1706-refusal-390x844-light.png`: the "items need attention" toast and the pill cover the row under the buyer TIN.
+- All 320 pictures: window buttons sit on the sticky part title.
+- 1280 no-change check: `tin-*-0605-locked… 1280x900-light` is pixel-identical before and after.
+
+## TIN dashes / wrapped 5-digit box (after, under 600 pt)
+
+None found: no phone TIN row draws [3]-[3]-[3]-[5] with dashes, and no 5-digit box wraps to a second line. Every four-box TIN is one row of four boxes, no separators.
+
+Checked (320x700 and 390x844): 0605 item 9; 1600VT and 1600WP payee tables; 1601C 6; 1601EQ 6; 1604E 4; 1606 7A buyer and 8A seller; 1700 18 spouse and Schedule 1 employer rows; 1701 Part IV 1 spouse and employer rows; 1701A 66 spouse; 1701MS 6A and 6B spouse; 1701Q 17 spouse; 1702EX 6; 1702RT 6 and signatory TIN; 1706 6A seller and 7A buyer; 1707 old-layout TIN and items 6 and 7 tables; 1800 5 and 12 donee; 1801 5 and 11 executor; 2000 4 and 12; 2000OT 11B; 2550Q 7; 2551Q 6. A schema sweep of all forms found 53 TIN rows, all drawn by the grid on a phone. No 2307 or 1601 payee-TIN form row exists apart from these.
+
+Where dashes or stacking do still appear:
+- One-box TINs show dashes inside the single box (the mask 000-000-000-00000): 2000 item 12, 2000OT item 11B, 1800 item 12 Donee TIN A-E, 1702RT signatory TIN.
+- Table-row drawers on 1700 Schedule 1 and 1701 employer rows stack the TIN as four full-width boxes on four lines, "TIN (1-3)", "TIN (4-6)", "TIN (7-9)", "Branch code" (`tinsweep-after-1700-sched1-employer-table-row-*`, `tinsweep-after-1701-employer-table-row-*`). The same drawers start with two unlabelled boxes reading "false".
+- Desktop (600 pt and up) keeps the dashes by design.
+
+Sweep side notes:
+- My scripted values on gated spouse/buyer TIN rows print the refusal sentence three to four times (1606 7A, 1700 18, 1701 Part IV 1, 1701A 66, 1701MS 6B, 1701Q 17). The values come from the shot's `edits` param, so the repetition may be an artefact of the recipe.
+- `tinsweep-after-1606-7A-buyer-*`: a "From tax profile" tooltip from the real pointer covers part of the label.
+
+## Files
+
+### before-94940009 (89 PNGs)
+- `rows-before-0605-items11-18-1-320x700-light.png`
+- `rows-before-0605-items11-18-1-390x844-light.png`
+- `rows-before-0605-items11-18-2-320x700-light.png`
+- `rows-before-0605-items11-18-2-390x844-light.png`
+- `rows-before-choices-1701a-atc-69-1-320x700-light.png`
+- `rows-before-choices-1701a-atc-69-1-390x844-light.png`
+- `rows-before-choices-1701a-atc-69-2-320x700-light.png`
+- `rows-before-choices-1701a-atc-69-2-390x844-light.png`
+- `rows-before-date-1700-birth-1-320x700-light.png`
+- `rows-before-date-1700-birth-1-390x844-light.png`
+- `rows-before-date-1700-birth-2-320x700-light.png`
+- `rows-before-date-1700-birth-2-390x844-light.png`
+- `rows-before-date-1801-payments-1-320x700-light.png`
+- `rows-before-date-1801-payments-1-390x844-light.png`
+- `rows-before-date-1801-payments-2-320x700-light.png`
+- `rows-before-date-1801-payments-2-390x844-light.png`
+- `rows-before-editbtn-1702rt-part2-1-320x700-light.png`
+- `rows-before-editbtn-1702rt-part2-1-390x844-light.png`
+- `rows-before-editbtn-1702rt-part2-2-320x700-light.png`
+- `rows-before-editbtn-1702rt-part2-2-390x844-light.png`
+- `rows-before-editbtn-1702rt-part2-3-320x700-light.png`
+- `rows-before-editbtn-1702rt-part2-3-390x844-light.png`
+- `rows-before-editmark-1702ex-part1-1-320x700-light.png`
+- `rows-before-editmark-1702ex-part1-1-390x844-light.png`
+- `rows-before-editmark-1702ex-part1-2-320x700-light.png`
+- `rows-before-editmark-1702ex-part1-2-390x844-light.png`
+- `rows-before-editmark-1702ex-part1-3-320x700-light.png`
+- `rows-before-editmark-1702ex-part1-3-390x844-light.png`
+- `rows-before-longlabel-1701ms-31-32-1-320x700-light.png`
+- `rows-before-longlabel-1701ms-31-32-1-390x844-light.png`
+- `rows-before-longlabel-1701ms-31-32-2-320x700-light.png`
+- `rows-before-longlabel-1701ms-31-32-2-390x844-light.png`
+- `rows-before-longlabel-1701ms-31-32-3-320x700-light.png`
+- `rows-before-longlabel-1701ms-31-32-3-390x844-light.png`
+- `rows-before-longlabel-1701ms-31-32-4-320x700-light.png`
+- `rows-before-longlabel-1701ms-31-32-4-390x844-light.png`
+- `rows-before-longlabel-1701ms-32-1-320x700-light.png`
+- `rows-before-longlabel-1701ms-32-1-390x844-light.png`
+- `rows-before-longlabel-1701ms-32-2-320x700-light.png`
+- `rows-before-longlabel-1701ms-32-2-390x844-light.png`
+- `rows-before-longlabel-1701ms-8-12-1-320x700-light.png`
+- `rows-before-longlabel-1701ms-8-12-1-390x844-light.png`
+- `rows-before-longlabel-1701ms-8-12-2-320x700-light.png`
+- `rows-before-longlabel-1701ms-8-12-2-390x844-light.png`
+- `rows-before-longlabel-1701ms-8-12-3-320x700-light.png`
+- `rows-before-longlabel-1701ms-8-12-3-390x844-light.png`
+- `rows-before-money-0605-part2-1-320x700-light.png`
+- `rows-before-money-0605-part2-1-390x844-light.png`
+- `rows-before-money-0605-part2-2-320x700-light.png`
+- `rows-before-money-0605-part2-2-390x844-light.png`
+- `rows-before-money-nonumber-1801-sched5-1-320x700-light.png`
+- `rows-before-money-nonumber-1801-sched5-1-390x844-light.png`
+- `rows-before-money-nonumber-1801-sched5-2-320x700-light.png`
+- `rows-before-money-nonumber-1801-sched5-2-390x844-light.png`
+- `rows-before-nonumber-1706-part3-1-320x700-light.png`
+- `rows-before-nonumber-1706-part3-1-390x844-light.png`
+- `rows-before-nonumber-1706-part3-2-320x700-light.png`
+- `rows-before-nonumber-1706-part3-2-390x844-light.png`
+- `rows-before-table-1601eq-addrow-1-320x700-light.png`
+- `rows-before-table-1601eq-addrow-1-390x844-light.png`
+- `rows-before-table-1601eq-addrow-2-320x700-light.png`
+- `rows-before-table-1601eq-addrow-2-390x844-light.png`
+- `rows-before-table-1601eq-atc-1-320x700-light.png`
+- `rows-before-table-1601eq-atc-1-390x844-light.png`
+- `rows-before-table-1601eq-atc-2-320x700-light.png`
+- `rows-before-table-1601eq-atc-2-390x844-light.png`
+- `rows-before-table-nonumber-1600wp-1-320x700-light.png`
+- `rows-before-table-nonumber-1600wp-1-390x844-light.png`
+- `rows-before-table-nonumber-1600wp-2-320x700-light.png`
+- `rows-before-table-nonumber-1600wp-2-390x844-light.png`
+- `rows-before-tin-1800-donee-1-320x700-light.png`
+- `rows-before-tin-1800-donee-1-390x844-light.png`
+- `rows-before-tin-1800-donee-2-320x700-light.png`
+- `rows-before-tin-1800-donee-2-390x844-light.png`
+- `rows-before-tin-1800-donee-3-320x700-light.png`
+- `rows-before-tin-1800-donee-3-390x844-light.png`
+- `tin-before-0605-1280x900-light.png`
+- `tin-before-0605-320x700-dark.png`
+- `tin-before-0605-320x700-light.png`
+- `tin-before-0605-420x900-dark.png`
+- `tin-before-0605-420x900-light.png`
+- `tin-before-1706-refusal-390x844-light.png`
+- `tin-before-1801-empty-320x700-dark.png`
+- `tin-before-1801-empty-320x700-light.png`
+- `tin-before-1801-empty-390x844-light.png`
+- `tin-before-1801-filled-320x700-dark.png`
+- `tin-before-1801-filled-320x700-light.png`
+- `tin-before-1801-filled-390x844-light.png`
+- `tin-before-2000-onebox-390x844-light.png`
+
+### after-a04e8f20 (231 PNGs)
+- `rows-after-0605-items11-18-1-320x700-dark.png`
+- `rows-after-0605-items11-18-1-320x700-light.png`
+- `rows-after-0605-items11-18-1-390x844-dark.png`
+- `rows-after-0605-items11-18-1-390x844-light.png`
+- `rows-after-0605-items11-18-2-320x700-dark.png`
+- `rows-after-0605-items11-18-2-320x700-light.png`
+- `rows-after-0605-items11-18-2-390x844-dark.png`
+- `rows-after-0605-items11-18-2-390x844-light.png`
+- `rows-after-choices-1701a-atc-69-1-320x700-dark.png`
+- `rows-after-choices-1701a-atc-69-1-320x700-light.png`
+- `rows-after-choices-1701a-atc-69-1-390x844-dark.png`
+- `rows-after-choices-1701a-atc-69-1-390x844-light.png`
+- `rows-after-choices-1701a-atc-69-2-320x700-dark.png`
+- `rows-after-choices-1701a-atc-69-2-320x700-light.png`
+- `rows-after-choices-1701a-atc-69-2-390x844-dark.png`
+- `rows-after-choices-1701a-atc-69-2-390x844-light.png`
+- `rows-after-date-1700-birth-1-320x700-dark.png`
+- `rows-after-date-1700-birth-1-320x700-light.png`
+- `rows-after-date-1700-birth-1-390x844-dark.png`
+- `rows-after-date-1700-birth-1-390x844-light.png`
+- `rows-after-date-1700-birth-2-320x700-dark.png`
+- `rows-after-date-1700-birth-2-320x700-light.png`
+- `rows-after-date-1700-birth-2-390x844-dark.png`
+- `rows-after-date-1700-birth-2-390x844-light.png`
+- `rows-after-date-1801-payments-1-320x700-dark.png`
+- `rows-after-date-1801-payments-1-320x700-light.png`
+- `rows-after-date-1801-payments-1-390x844-dark.png`
+- `rows-after-date-1801-payments-1-390x844-light.png`
+- `rows-after-date-1801-payments-2-320x700-dark.png`
+- `rows-after-date-1801-payments-2-320x700-light.png`
+- `rows-after-date-1801-payments-2-390x844-dark.png`
+- `rows-after-date-1801-payments-2-390x844-light.png`
+- `rows-after-editbtn-1702rt-part2-1-320x700-dark.png`
+- `rows-after-editbtn-1702rt-part2-1-320x700-light.png`
+- `rows-after-editbtn-1702rt-part2-1-390x844-dark.png`
+- `rows-after-editbtn-1702rt-part2-1-390x844-light.png`
+- `rows-after-editbtn-1702rt-part2-2-320x700-dark.png`
+- `rows-after-editbtn-1702rt-part2-2-320x700-light.png`
+- `rows-after-editbtn-1702rt-part2-2-390x844-dark.png`
+- `rows-after-editbtn-1702rt-part2-2-390x844-light.png`
+- `rows-after-editbtn-1702rt-part2-3-320x700-dark.png`
+- `rows-after-editbtn-1702rt-part2-3-320x700-light.png`
+- `rows-after-editbtn-1702rt-part2-3-390x844-dark.png`
+- `rows-after-editbtn-1702rt-part2-3-390x844-light.png`
+- `rows-after-editmark-1702ex-part1-1-320x700-dark.png`
+- `rows-after-editmark-1702ex-part1-1-320x700-light.png`
+- `rows-after-editmark-1702ex-part1-1-390x844-dark.png`
+- `rows-after-editmark-1702ex-part1-1-390x844-light.png`
+- `rows-after-editmark-1702ex-part1-2-320x700-dark.png`
+- `rows-after-editmark-1702ex-part1-2-320x700-light.png`
+- `rows-after-editmark-1702ex-part1-2-390x844-dark.png`
+- `rows-after-editmark-1702ex-part1-2-390x844-light.png`
+- `rows-after-editmark-1702ex-part1-3-320x700-dark.png`
+- `rows-after-editmark-1702ex-part1-3-320x700-light.png`
+- `rows-after-editmark-1702ex-part1-3-390x844-dark.png`
+- `rows-after-editmark-1702ex-part1-3-390x844-light.png`
+- `rows-after-longlabel-1701ms-31-32-1-320x700-dark.png`
+- `rows-after-longlabel-1701ms-31-32-1-320x700-light.png`
+- `rows-after-longlabel-1701ms-31-32-1-390x844-dark.png`
+- `rows-after-longlabel-1701ms-31-32-1-390x844-light.png`
+- `rows-after-longlabel-1701ms-31-32-2-320x700-dark.png`
+- `rows-after-longlabel-1701ms-31-32-2-320x700-light.png`
+- `rows-after-longlabel-1701ms-31-32-2-390x844-dark.png`
+- `rows-after-longlabel-1701ms-31-32-2-390x844-light.png`
+- `rows-after-longlabel-1701ms-31-32-3-320x700-dark.png`
+- `rows-after-longlabel-1701ms-31-32-3-320x700-light.png`
+- `rows-after-longlabel-1701ms-31-32-3-390x844-dark.png`
+- `rows-after-longlabel-1701ms-31-32-3-390x844-light.png`
+- `rows-after-longlabel-1701ms-31-32-4-320x700-dark.png`
+- `rows-after-longlabel-1701ms-31-32-4-320x700-light.png`
+- `rows-after-longlabel-1701ms-31-32-4-390x844-dark.png`
+- `rows-after-longlabel-1701ms-31-32-4-390x844-light.png`
+- `rows-after-longlabel-1701ms-32-1-320x700-dark.png`
+- `rows-after-longlabel-1701ms-32-1-320x700-light.png`
+- `rows-after-longlabel-1701ms-32-1-390x844-dark.png`
+- `rows-after-longlabel-1701ms-32-1-390x844-light.png`
+- `rows-after-longlabel-1701ms-32-2-320x700-dark.png`
+- `rows-after-longlabel-1701ms-32-2-320x700-light.png`
+- `rows-after-longlabel-1701ms-32-2-390x844-dark.png`
+- `rows-after-longlabel-1701ms-32-2-390x844-light.png`
+- `rows-after-longlabel-1701ms-8-12-1-320x700-dark.png`
+- `rows-after-longlabel-1701ms-8-12-1-320x700-light.png`
+- `rows-after-longlabel-1701ms-8-12-1-390x844-dark.png`
+- `rows-after-longlabel-1701ms-8-12-1-390x844-light.png`
+- `rows-after-longlabel-1701ms-8-12-2-320x700-dark.png`
+- `rows-after-longlabel-1701ms-8-12-2-320x700-light.png`
+- `rows-after-longlabel-1701ms-8-12-2-390x844-dark.png`
+- `rows-after-longlabel-1701ms-8-12-2-390x844-light.png`
+- `rows-after-longlabel-1701ms-8-12-3-320x700-dark.png`
+- `rows-after-longlabel-1701ms-8-12-3-320x700-light.png`
+- `rows-after-longlabel-1701ms-8-12-3-390x844-dark.png`
+- `rows-after-longlabel-1701ms-8-12-3-390x844-light.png`
+- `rows-after-money-0605-part2-1-320x700-dark.png`
+- `rows-after-money-0605-part2-1-320x700-light.png`
+- `rows-after-money-0605-part2-1-390x844-dark.png`
+- `rows-after-money-0605-part2-1-390x844-light.png`
+- `rows-after-money-0605-part2-2-320x700-dark.png`
+- `rows-after-money-0605-part2-2-320x700-light.png`
+- `rows-after-money-0605-part2-2-390x844-dark.png`
+- `rows-after-money-0605-part2-2-390x844-light.png`
+- `rows-after-money-nonumber-1801-sched5-1-320x700-dark.png`
+- `rows-after-money-nonumber-1801-sched5-1-320x700-light.png`
+- `rows-after-money-nonumber-1801-sched5-1-390x844-dark.png`
+- `rows-after-money-nonumber-1801-sched5-1-390x844-light.png`
+- `rows-after-money-nonumber-1801-sched5-2-320x700-dark.png`
+- `rows-after-money-nonumber-1801-sched5-2-320x700-light.png`
+- `rows-after-money-nonumber-1801-sched5-2-390x844-dark.png`
+- `rows-after-money-nonumber-1801-sched5-2-390x844-light.png`
+- `rows-after-nonumber-1706-part3-1-320x700-dark.png`
+- `rows-after-nonumber-1706-part3-1-320x700-light.png`
+- `rows-after-nonumber-1706-part3-1-390x844-dark.png`
+- `rows-after-nonumber-1706-part3-1-390x844-light.png`
+- `rows-after-nonumber-1706-part3-2-320x700-dark.png`
+- `rows-after-nonumber-1706-part3-2-320x700-light.png`
+- `rows-after-nonumber-1706-part3-2-390x844-dark.png`
+- `rows-after-nonumber-1706-part3-2-390x844-light.png`
+- `rows-after-table-1601eq-addrow-1-320x700-dark.png`
+- `rows-after-table-1601eq-addrow-1-320x700-light.png`
+- `rows-after-table-1601eq-addrow-1-390x844-dark.png`
+- `rows-after-table-1601eq-addrow-1-390x844-light.png`
+- `rows-after-table-1601eq-addrow-2-320x700-dark.png`
+- `rows-after-table-1601eq-addrow-2-320x700-light.png`
+- `rows-after-table-1601eq-addrow-2-390x844-dark.png`
+- `rows-after-table-1601eq-addrow-2-390x844-light.png`
+- `rows-after-table-1601eq-atc-1-320x700-dark.png`
+- `rows-after-table-1601eq-atc-1-320x700-light.png`
+- `rows-after-table-1601eq-atc-1-390x844-dark.png`
+- `rows-after-table-1601eq-atc-1-390x844-light.png`
+- `rows-after-table-1601eq-atc-2-320x700-dark.png`
+- `rows-after-table-1601eq-atc-2-320x700-light.png`
+- `rows-after-table-1601eq-atc-2-390x844-dark.png`
+- `rows-after-table-1601eq-atc-2-390x844-light.png`
+- `rows-after-table-nonumber-1600wp-1-320x700-dark.png`
+- `rows-after-table-nonumber-1600wp-1-320x700-light.png`
+- `rows-after-table-nonumber-1600wp-1-390x844-dark.png`
+- `rows-after-table-nonumber-1600wp-1-390x844-light.png`
+- `rows-after-table-nonumber-1600wp-2-320x700-dark.png`
+- `rows-after-table-nonumber-1600wp-2-320x700-light.png`
+- `rows-after-table-nonumber-1600wp-2-390x844-dark.png`
+- `rows-after-table-nonumber-1600wp-2-390x844-light.png`
+- `rows-after-tin-1800-donee-1-320x700-dark.png`
+- `rows-after-tin-1800-donee-1-320x700-light.png`
+- `rows-after-tin-1800-donee-1-390x844-dark.png`
+- `rows-after-tin-1800-donee-1-390x844-light.png`
+- `rows-after-tin-1800-donee-2-320x700-dark.png`
+- `rows-after-tin-1800-donee-2-320x700-light.png`
+- `rows-after-tin-1800-donee-2-390x844-dark.png`
+- `rows-after-tin-1800-donee-2-390x844-light.png`
+- `rows-after-tin-1800-donee-3-320x700-dark.png`
+- `rows-after-tin-1800-donee-3-320x700-light.png`
+- `rows-after-tin-1800-donee-3-390x844-dark.png`
+- `rows-after-tin-1800-donee-3-390x844-light.png`
+- `tin-after-0605-1280x900-light.png`
+- `tin-after-0605-320x700-dark.png`
+- `tin-after-0605-320x700-light.png`
+- `tin-after-0605-420x900-dark.png`
+- `tin-after-0605-420x900-light.png`
+- `tin-after-1706-refusal-390x844-light.png`
+- `tin-after-1801-empty-320x700-dark.png`
+- `tin-after-1801-empty-320x700-light.png`
+- `tin-after-1801-empty-390x844-light.png`
+- `tin-after-1801-filled-320x700-dark.png`
+- `tin-after-1801-filled-320x700-light.png`
+- `tin-after-1801-filled-390x844-light.png`
+- `tin-after-2000-onebox-390x844-light.png`
+- `tinsweep-after-1600VT-payee-table-320x700-light.png`
+- `tinsweep-after-1600VT-payee-table-390x844-light.png`
+- `tinsweep-after-1600VT-payee-table-row-320x700-light.png`
+- `tinsweep-after-1600VT-payee-table-row-390x844-light.png`
+- `tinsweep-after-1600WP-payee-table-320x700-light.png`
+- `tinsweep-after-1600WP-payee-table-390x844-light.png`
+- `tinsweep-after-1600WP-payee-table-row-320x700-light.png`
+- `tinsweep-after-1600WP-payee-table-row-390x844-light.png`
+- `tinsweep-after-1601C-6-own-320x700-light.png`
+- `tinsweep-after-1601C-6-own-390x844-light.png`
+- `tinsweep-after-1601EQ-6-own-320x700-light.png`
+- `tinsweep-after-1601EQ-6-own-390x844-light.png`
+- `tinsweep-after-1604E-4-own-320x700-light.png`
+- `tinsweep-after-1604E-4-own-390x844-light.png`
+- `tinsweep-after-1606-7A-buyer-320x700-light.png`
+- `tinsweep-after-1606-7A-buyer-390x844-light.png`
+- `tinsweep-after-1606-8A-seller-320x700-light.png`
+- `tinsweep-after-1606-8A-seller-390x844-light.png`
+- `tinsweep-after-1700-18-spouse-320x700-light.png`
+- `tinsweep-after-1700-18-spouse-390x844-light.png`
+- `tinsweep-after-1700-sched1-employer-table-320x700-light.png`
+- `tinsweep-after-1700-sched1-employer-table-390x844-light.png`
+- `tinsweep-after-1700-sched1-employer-table-row-320x700-light.png`
+- `tinsweep-after-1700-sched1-employer-table-row-390x844-light.png`
+- `tinsweep-after-1701-employer-table-320x700-light.png`
+- `tinsweep-after-1701-employer-table-390x844-light.png`
+- `tinsweep-after-1701-employer-table-row-320x700-light.png`
+- `tinsweep-after-1701-employer-table-row-390x844-light.png`
+- `tinsweep-after-1701-p2-1-spouse-320x700-light.png`
+- `tinsweep-after-1701-p2-1-spouse-390x844-light.png`
+- `tinsweep-after-1701A-66-spouse-320x700-light.png`
+- `tinsweep-after-1701A-66-spouse-390x844-light.png`
+- `tinsweep-after-1701MS-6B-spouse-320x700-light.png`
+- `tinsweep-after-1701MS-6B-spouse-390x844-light.png`
+- `tinsweep-after-1701Q-17-spouse-320x700-light.png`
+- `tinsweep-after-1701Q-17-spouse-390x844-light.png`
+- `tinsweep-after-1702EX-6-own-320x700-light.png`
+- `tinsweep-after-1702EX-6-own-390x844-light.png`
+- `tinsweep-after-1702RT-6-own-320x700-light.png`
+- `tinsweep-after-1702RT-6-own-390x844-light.png`
+- `tinsweep-after-1702RT-signatory-320x700-light.png`
+- `tinsweep-after-1702RT-signatory-390x844-light.png`
+- `tinsweep-after-1706-7A-buyer-320x700-light.png`
+- `tinsweep-after-1706-7A-buyer-390x844-light.png`
+- `tinsweep-after-1707-6-seller-table-320x700-light.png`
+- `tinsweep-after-1707-6-seller-table-390x844-light.png`
+- `tinsweep-after-1707-6-seller-table-row-320x700-light.png`
+- `tinsweep-after-1707-6-seller-table-row-390x844-light.png`
+- `tinsweep-after-1707-7-buyer-table-320x700-light.png`
+- `tinsweep-after-1707-7-buyer-table-390x844-light.png`
+- `tinsweep-after-1707-7-buyer-table-row-320x700-light.png`
+- `tinsweep-after-1707-7-buyer-table-row-390x844-light.png`
+- `tinsweep-after-1707-own-oldlayout-320x700-light.png`
+- `tinsweep-after-1707-own-oldlayout-390x844-light.png`
+- `tinsweep-after-1800-12-donee-320x700-light.png`
+- `tinsweep-after-1800-12-donee-390x844-light.png`
+- `tinsweep-after-1801-11-executor-320x700-light.png`
+- `tinsweep-after-1801-11-executor-390x844-light.png`
+- `tinsweep-after-2000-12-other-party-320x700-light.png`
+- `tinsweep-after-2000-12-other-party-390x844-light.png`
+- `tinsweep-after-2000OT-11B-other-party-320x700-light.png`
+- `tinsweep-after-2000OT-11B-other-party-390x844-light.png`
+- `tinsweep-after-2550Q-7-own-320x700-light.png`
+- `tinsweep-after-2550Q-7-own-390x844-light.png`
+- `tinsweep-after-2551Q-6-own-320x700-light.png`
+- `tinsweep-after-2551Q-6-own-390x844-light.png`
