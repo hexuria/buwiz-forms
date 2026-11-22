@@ -311,19 +311,20 @@ impl Session {
         let existing = db.get_taxpayer(&root).map_err(|error| error.to_string())?;
         let created = existing.is_none();
         let saved_name = if let Some(existing) = existing {
-            let saved_name = if let Some(name) = name.clone() {
+            if name.is_some() || birth.is_some() {
                 db.update_taxpayer(
                     &root,
                     TaxpayerUpdate {
-                        name: Some(name.clone()),
+                        name: name.clone(),
+                        birth_date: birth.map(Some),
                         ..TaxpayerUpdate::default()
                     },
                 )
                 .map_err(|error| error.to_string())?;
-                name
-            } else {
-                existing.taxpayer.name.clone()
-            };
+            }
+            let saved_name = name
+                .clone()
+                .unwrap_or_else(|| existing.taxpayer.name.clone());
             if facts_present(args) {
                 let mut fields = BTreeMap::new();
                 if args.get("rdo_code").is_some() {
@@ -2079,6 +2080,33 @@ mod tests {
         }
         assert!(saw_refresh, "profile.set refreshes the selected taxpayer");
         assert!(saw_home, "dashboard navigates to home");
+    }
+
+    /// `profile.save` on a taxpayer that already exists stores `birth_date`
+    /// and leaves the name alone when none is given.
+    #[test]
+    fn profile_save_stores_birth_date_on_an_existing_taxpayer() {
+        let mut session = session();
+        save_scratch(&mut session);
+        let saved = call(
+            &mut session,
+            "profile.save",
+            json!({"tin": TIN, "birth_date": "1975-10-10"}),
+        )
+        .unwrap();
+        assert_eq!(saved["created"], false);
+        assert_eq!(saved["name"], "TEST");
+        let stored = session
+            .lock_db()
+            .unwrap()
+            .get_taxpayer(ROOT)
+            .unwrap()
+            .expect("taxpayer");
+        assert_eq!(
+            stored.taxpayer.birth_date,
+            chrono::NaiveDate::from_ymd_opt(1975, 10, 10)
+        );
+        assert_eq!(stored.taxpayer.name, "TEST");
     }
 
     #[test]
