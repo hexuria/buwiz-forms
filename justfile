@@ -1329,9 +1329,8 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
             [Console]::Error.WriteLine('nsh-run-agent: Android SDK not found: install it and set ANDROID_HOME')
             exit 1
         }
-        $adb = @("$env:PATHEXT" -split ';' | Where-Object { $_ }) + '.exe' | ForEach-Object { Join-Path $sdkRoot "platform-tools\adb$_" } |
-            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-        if (-not $adb) {
+        $adb = Join-Path $sdkRoot 'platform-tools\adb.exe'
+        if (-not (Test-Path -LiteralPath $adb -PathType Leaf)) {
             [Console]::Error.WriteLine("nsh-run-agent: no adb in $sdkRoot\platform-tools: install it with ``sdkmanager platform-tools``")
             exit 1
         }

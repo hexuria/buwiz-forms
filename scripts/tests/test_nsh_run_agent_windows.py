@@ -16,6 +16,18 @@ TOKEN = 'synthetic-token-0123456789abcdef'
 HOST = 'com.longbridge.nsh.host'
 TOKEN_PATH = 'files/nsh/dev.goldcoders.bir.nsh/agent-token'
 
+# The SDK's `adb.exe` is a native program, as the real one is: the token writer starts it directly, with no command
+# interpreter between them, and writes the token to its standard input. This one hands its arguments and that same
+# standard input to FAKE_ADB.
+ADB_EXE = r'''
+use std::{env, process::{exit, Command}};
+fn main() {
+    let script = env::current_exe().unwrap().with_extension("py");
+    let ran = Command::new(env::var_os("FAKE_PYTHON").unwrap()).arg(script).args(env::args_os().skip(1)).status().unwrap();
+    exit(ran.code().unwrap_or(1));
+}
+'''
+
 # `adb`: answers `devices` from FAKE_DEVICES and keeps each device's "private files" in FAKE_STATE. Like the real
 # one, it refuses a command that names no device when several are online.
 FAKE_ADB = r'''
@@ -85,8 +97,18 @@ token.unlink()
 TWO_DEVICES = 'emulator-5554\toffline\nemulator-5556\tdevice\nR58M123ABC\tdevice'
 
 
-@unittest.skipUnless(os.name == 'nt' and shutil.which('pwsh') and shutil.which('just'), 'Windows, pwsh and just required')
+@unittest.skipUnless(os.name == 'nt' and shutil.which('pwsh') and shutil.which('just') and shutil.which('rustc'),
+                     'Windows, pwsh, just and rustc required')
 class NshRunAgentWindowsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        built = Path(tempfile.mkdtemp(prefix='nsh-run-agent-adb-'))
+        cls.addClassCleanup(shutil.rmtree, built, ignore_errors=True)
+        (built / 'adb.rs').write_text(ADB_EXE)
+        subprocess.run(['rustc', '--edition', '2021', '-o', str(built / 'adb.exe'), str(built / 'adb.rs')],
+                       check=True, capture_output=True, text=True)
+        cls.adb_exe = built / 'adb.exe'
+
     def setUp(self):
         self.root = Path(tempfile.mkdtemp(prefix='nsh-run-agent-'))
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
@@ -98,10 +120,12 @@ class NshRunAgentWindowsTests(unittest.TestCase):
             folder.mkdir(parents=True)
         self.fake(self.home / 'BuwizNsh/tools/bin', 'nsh', FAKE_NSH)
         self.sdk = self.root / 'sdk'
-        self.fake(self.sdk / 'platform-tools', 'adb', FAKE_ADB)
+        tools = self.sdk / 'platform-tools'
+        tools.mkdir(parents=True)
+        (tools / 'adb.py').write_text(FAKE_ADB)
+        shutil.copy(self.adb_exe, tools / 'adb.exe')
 
     def fake(self, folder, name, source):
-        folder.mkdir(parents=True, exist_ok=True)
         (folder / f'{name}.py').write_text(source)
         (folder / f'{name}.cmd').write_text(f'@"{sys.executable}" "%~dp0{name}.py" %*\r\n')
 
@@ -115,7 +139,7 @@ class NshRunAgentWindowsTests(unittest.TestCase):
         env.update(PATH=path, USERPROFILE=str(self.home), HOMEDRIVE=self.home.drive, HOMEPATH=str(self.home)[2:],
                    TEMP=str(self.temp), TMP=str(self.temp), LOCALAPPDATA=str(self.local),
                    GPUI_AGENT_TOKEN=TOKEN, FAKE_STATE=str(self.state), FAKE_DEVICES=devices, FAKE_NSH=mode,
-                   FAKE_HOST=HOST, PATHEXT='.COM;.EXE;.BAT;.CMD')
+                   FAKE_HOST=HOST, FAKE_PYTHON=sys.executable)
         if sdk:
             env['ANDROID_HOME'] = str(self.sdk)
         env.update(extra)
