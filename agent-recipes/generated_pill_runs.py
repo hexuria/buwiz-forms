@@ -65,16 +65,24 @@ for n in map(int, rows_arg.split(",")):
         if not opened.get("ok"):
             why.append(f"5-verify form.open: {opened.get('error', opened)}")
         else:
-            v = run("--addr", D, "invoke", "form.fields")
-            fields = v.get("result", v)
-            key = "frm1701q:txt36A" if bad == "item_36_taxpayer" else "txtEmail"
-            expected = f"{float(have['sales_fixed']):,.2f}" if bad == "item_36_taxpayer" else "fixed@example.com"
-            box = next((box for box in fields.get("boxes", []) if box.get("key") == key), None)
-            actual = box.get("value") if box else None
-            if not v.get("ok") or actual != expected:
-                why.append(f"5-verify {key}: expected {expected!r}, got {actual!r}")
-            else:
-                verified_ok = True
+            try:
+                v = run("--addr", D, "invoke", "form.fields")
+                fields = v.get("result", v)
+                key = "frm1701q:txt36A" if bad == "item_36_taxpayer" else "txtEmail"
+                expected = f"{float(have['sales_fixed']):,.2f}" if bad == "item_36_taxpayer" else "fixed@example.com"
+                box = next((box for box in fields.get("boxes", []) if box.get("key") == key), None)
+                actual = box.get("value") if box else None
+                if not v.get("ok") or actual != expected:
+                    why.append(f"5-verify {key}: expected {expected!r}, got {actual!r}")
+                else:
+                    verified_ok = True
+            finally:
+                try:
+                    cleanup = run("--addr", D, "invoke", "form.dismiss", "--arg", "discard=true")
+                    if not cleanup.get("ok"):
+                        why.append(f"5-verify form.dismiss: {cleanup.get('error', cleanup)}")
+                except Exception as error:
+                    why.append(f"5-verify form.dismiss: {error}")
     nshots = sum(len([s for s in r.get("screenshots", []) if s.get("ok")]) for r in (o, p))
     per = " + ".join(f"{s['id']} {s['elapsed_ms']}" for s in g.get("steps", []))
     allok &= not why
