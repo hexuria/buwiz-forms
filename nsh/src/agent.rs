@@ -314,7 +314,9 @@ mod live {
                 Ok(file) => {
                     let mut token = String::new();
                     let read = file.take(4097).read_to_string(&mut token);
-                    // An empty file is the launcher's `cat >` between creating it and writing it.
+                    // Not the launchers': both write `agent-token.new` and rename it into place, so theirs is never
+                    // seen half-written. An empty file is some other writer (a hand-made `cat >`) between creating it
+                    // and writing it, and is waited for like a missing one.
                     if matches!(read, Ok(0)) && std::time::Instant::now() < until {
                         std::thread::sleep(std::time::Duration::from_millis(50));
                         continue;
