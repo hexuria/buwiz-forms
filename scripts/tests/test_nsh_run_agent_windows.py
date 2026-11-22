@@ -115,7 +115,7 @@ class NshRunAgentWindowsTests(unittest.TestCase):
         env.update(PATH=path, USERPROFILE=str(self.home), HOMEDRIVE=self.home.drive, HOMEPATH=str(self.home)[2:],
                    TEMP=str(self.temp), TMP=str(self.temp), LOCALAPPDATA=str(self.local),
                    GPUI_AGENT_TOKEN=TOKEN, FAKE_STATE=str(self.state), FAKE_DEVICES=devices, FAKE_NSH=mode,
-                   FAKE_HOST=HOST)
+                   FAKE_HOST=HOST, PATHEXT='.COM;.EXE;.BAT;.CMD')
         if sdk:
             env['ANDROID_HOME'] = str(self.sdk)
         env.update(extra)

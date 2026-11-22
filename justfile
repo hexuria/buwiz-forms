@@ -1326,22 +1326,45 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         $port = [int](($env:GPUI_AGENT_ADDR -split ':')[-1])
         $env:BUWIZ_ANDROID_DEV = '1'
         $env:BUWIZ_ANDROID_DEV_ENV = "EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$($port + 1)"
-        $adb = 'adb'
-        if (-not (Get-Command adb -ErrorAction SilentlyContinue)) {
-            $sdkRoot = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { $env:ANDROID_SDK_ROOT }
-            $adb = Join-Path $sdkRoot 'platform-tools\adb.exe'
+        # adb is the one nsh itself runs: in the SDK it finds (ANDROID_HOME, ANDROID_SDK_ROOT, then Android Studio's
+        # default place), not whichever is on PATH. Checked here, before anything is built or launched.
+        $sdkRoot = @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT) | Where-Object { $_ } | Select-Object -First 1
+        if (-not $sdkRoot -and $env:LOCALAPPDATA) { $sdkRoot = Join-Path $env:LOCALAPPDATA 'Android\Sdk' }
+        if (-not $sdkRoot -or -not (Test-Path -LiteralPath $sdkRoot -PathType Container)) {
+            [Console]::Error.WriteLine('nsh-run-agent: Android SDK not found: install it and set ANDROID_HOME')
+            exit 1
+        }
+        $adb = @("$env:PATHEXT" -split ';' | Where-Object { $_ }) + '.exe' | ForEach-Object { Join-Path $sdkRoot "platform-tools\adb$_" } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+        if (-not $adb) {
+            [Console]::Error.WriteLine("nsh-run-agent: no adb in $sdkRoot\platform-tools: install it with ``sdkmanager platform-tools``")
+            exit 1
+        }
+        # nsh launches the first device `adb devices` lists as online and names it to every adb command (`-s`); it does not
+        # read ANDROID_SERIAL. The token goes to that same device, by name: with two devices online an unnamed
+        # `adb shell` is refused as ambiguous, and one named by ANDROID_SERIAL could be another than the one launched.
+        $listed = & $adb devices
+        if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("nsh-run-agent: ``$adb devices`` failed"); exit 1 }
+        $serial = $listed | Select-Object -Skip 1 | ForEach-Object {
+            $serialAndState = $_ -split "`t", 2
+            if ($serialAndState.Count -eq 2 -and $serialAndState[1] -eq 'device') { $serialAndState[0] }
+        } | Select-Object -First 1
+        if (-not $serial) { [Console]::Error.WriteLine('nsh-run-agent: no Android device or emulator connected (see `adb devices`)'); exit 1 }
+        if ($env:ANDROID_SERIAL -and $env:ANDROID_SERIAL -ne $serial) {
+            [Console]::Error.WriteLine("nsh-run-agent: ANDROID_SERIAL is $($env:ANDROID_SERIAL), but nsh launches the first online device, $serial. Disconnect the other devices, or unset ANDROID_SERIAL to use $serial.")
+            exit 1
         }
         $null = Start-Job -ScriptBlock {
-            param($adb, $token)
+            param($adb, $serial, $token)
             $pkg = 'com.longbridge.nsh.host'
             $dir = 'files/nsh/dev.goldcoders.bir.nsh'
             $tmp = Join-Path $env:TEMP ('agent-token-' + [guid]::NewGuid().ToString('N'))
             [IO.File]::WriteAllText($tmp, $token)
             try {
                 for ($i = 0; $i -lt 1800; $i++) {
-                    & $adb shell run-as $pkg true 2>$null
+                    & $adb -s $serial shell run-as $pkg true 2>$null
                     if ($LASTEXITCODE -eq 0) {
-                        $cmd = 'type "{0}" | "{1}" shell -T "run-as {2} sh -c ''umask 077 && mkdir -p {3} && cat > {3}/agent-token.new && mv {3}/agent-token.new {3}/agent-token''"' -f $tmp, $adb, $pkg, $dir
+                        $cmd = 'type "{0}" | "{1}" -s "{4}" shell -T "run-as {2} sh -c ''umask 077 && mkdir -p {3} && cat > {3}/agent-token.new && mv {3}/agent-token.new {3}/agent-token''"' -f $tmp, $adb, $pkg, $dir, $serial
                         & $env:ComSpec /d /c $cmd | Out-Null
                         return
                     }
@@ -1349,8 +1372,8 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
                 }
                 [Console]::Error.WriteLine("nsh-run-agent: the data plane's token was not stored (is the host installed?)")
             } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
-        } -ArgumentList $adb, $env:GPUI_AGENT_TOKEN
-        "nsh-run-agent: window plane on 127.0.0.1:$port, data plane on 127.0.0.1:$($port + 1); run: adb forward tcp:$port tcp:$port && adb forward tcp:$($port + 1) tcp:$($port + 1)"
+        } -ArgumentList $adb, $serial, $env:GPUI_AGENT_TOKEN
+        "nsh-run-agent: window plane on 127.0.0.1:$port, data plane on 127.0.0.1:$($port + 1) on $serial; run: adb -s $serial forward tcp:$port tcp:$port && adb -s $serial forward tcp:$($port + 1) tcp:$($port + 1)"
     }
     $env:CARGO = "$root\nsh\agent\cargo-with-agent.cmd"
     Set-Location nsh
