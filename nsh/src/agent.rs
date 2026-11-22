@@ -179,7 +179,7 @@ fn drain() -> bool {
 }
 
 #[cfg(feature = "agent")]
-pub use live::{Listener, TOKEN_FILE, listen, settings_config, take_token};
+pub use live::{LaunchToken, Listener, TOKEN_FILE, listen, settings_config, take_token};
 
 #[cfg(feature = "agent")]
 fn status() -> AgentStatus {
@@ -277,7 +277,7 @@ mod live {
 
     /// The opt-in on Android, where the app process has no launch environment: the switch and the address are read from
     /// the development settings (`dev_env`: baked by `just nsh-run-agent android`, or the private `dev.env`), the token
-    /// is handed in (never a setting, so never compiled into the app: [`take_token`]). Only a build with those settings
+    /// is handed in (never a setting, so never compiled into the app: [`LaunchToken`]). Only a build with those settings
     /// on (`enabled`) can opt in; a token is required. Without `GPUI_AGENT_ADDR` it is the port after NSH's default,
     /// which the window's control plane holds. `var` reads one setting; `token` is asked only once the switch is on.
     pub fn settings_config(
@@ -332,12 +332,41 @@ mod live {
         }
     }
 
+    /// The token of one authorized development launch, kept in the process and outside the engine thread, which a full
+    /// reload replaces: the launcher writes the file once and [`take_token`] deletes it, so the replacement listener is
+    /// authorized with the token this launch already read. A process holds one, so it ends with the launch; a token
+    /// file that arrives later (the launcher ran again against the live process) replaces it.
+    #[derive(Debug, Default)]
+    pub struct LaunchToken(std::sync::Mutex<Option<String>>);
+
+    impl LaunchToken {
+        /// A launch that has read no token yet.
+        pub const fn new() -> Self {
+            Self(std::sync::Mutex::new(None))
+        }
+
+        /// The token: the one in [`TOKEN_FILE`] in `dir`, read and deleted as [`take_token`] does and waited for up to
+        /// `wait` only while the launch holds none; otherwise the one held.
+        pub fn take(&self, dir: &std::path::Path, wait: std::time::Duration) -> Option<String> {
+            let mut held = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let wait = if held.is_some() { std::time::Duration::ZERO } else { wait };
+            if let Some(token) = take_token(dir, wait) {
+                *held = Some(token);
+            }
+            held.clone()
+        }
+    }
+
+    /// This process's launch.
+    #[cfg(target_os = "android")]
+    static LAUNCH: LaunchToken = LaunchToken::new();
+
     /// The data plane's token on a phone host. NSH hands the window plane's token to its iOS and Android hosts as a
     /// private file that the window plane reads and deletes before the app starts, and keeps `GPUI_AGENT_TOKEN` out of
     /// the app's environment, so this listener would be refused for want of one. `just nsh-run-agent` passes the same
     /// token as `BIR_AGENT_TOKEN` there. Read only where the environment has no `GPUI_AGENT_TOKEN`; never on a desktop.
     /// Android reads its opt-in from the development settings and its token from a private file instead
-    /// ([`settings_config`], [`take_token`]).
+    /// ([`settings_config`], [`LaunchToken`]).
     #[cfg(not(target_os = "android"))]
     fn phone_token() -> Option<String> {
         if cfg!(target_os = "ios") {
@@ -357,7 +386,7 @@ mod live {
         let started = match settings_config(
             crate::dev_env::ENABLED,
             |name| bir_core::config::var(name).ok(),
-            || take_token(&bir_core::platform::data_dir(), std::time::Duration::from_secs(10)),
+            || LAUNCH.take(&bir_core::platform::data_dir(), std::time::Duration::from_secs(10)),
         )? {
             Some(config) => bir_app_api::agent::try_start_config(config, choose)?,
             None => None,
