@@ -174,6 +174,49 @@ consumption, no replay, disabled reads, invalid commands and I/O failure.
 session-handler effects, including sign-out after lock. These do not prove
 Android background timer execution or system-preview dismissal on a device.
 
+## Android agent token hand-off
+
+This is the ownership/cancellation model of the development launcher's token
+writer, for the anti-drift rule in `CONTRIBUTING.md`. Implementation: the
+`nsh-run-agent` recipes in the `justfile`, `nsh/agent/android-handoff.sh` (Unix)
+and `take_token`/`LaunchToken` in `nsh/src/agent.rs`. It exists only in agent
+builds (cargo feature `agent`) started by that recipe.
+
+- **Owner:** the launcher (the recipe's shell, which becomes `nsh run` on Unix)
+  owns the writer. The writer is started only after the SDK's `adb` and the one
+  device nsh launches on are resolved, and names that serial in every `adb` call.
+  A launch refused there (no SDK, no `adb`, no online device, a different
+  `ANDROID_SERIAL`) starts no writer and contacts no device.
+- **Running:** the writer polls `run-as` until the host is installed, then writes
+  the token once over standard input to `agent-token.new` and renames it to
+  `agent-token`. It then ends. It is bounded (1800 tries).
+- **Launch failure or cancellation:** before each poll the writer checks that its
+  launcher is still the same live process (Unix: the PID; Windows: the PID and its
+  start time, so a reused PID does not count) and ends without writing when it is
+  not. Windows also stops the job in the recipe's `finally`, which runs for a
+  failed build, a failed install and Ctrl+C, and removes `agent-token` and
+  `agent-token.new` from the host's files. On Unix a token already written when
+  the launch fails stays in the host's private files until the next start of the
+  app reads and deletes it; it is the token of that developer's own launch.
+- **Reader:** the app reads the file once and deletes it (`take_token`); the
+  launch keeps the token in memory for a replacement listener after a full
+  reload (`LaunchToken`). A file that arrives late is waited for (10 s).
+
+**Verification boundary:** `nsh/agent/android-handoff.test.sh` (fake `adb`, run
+by `just nsh-agent-check`) covers the Unix writer: the serial in every call, the
+token in no argument, a launcher gone before the first poll, a launcher that
+dies while the writer waits, and the bounded wait.
+`scripts/tests/test_nsh_run_agent_windows.py` runs the Windows recipe against a
+native `adb.exe` and a fake `nsh`: `test_a_failed_launch_stops_the_token_writer`,
+`test_a_launch_that_fails_after_the_token_was_stored_removes_it` and
+`test_a_cancelled_launch_stops_the_token_writer`. It needs Windows, `pwsh`,
+`just` and `rustc`, and is skipped elsewhere; the `scripts` CI job runs on Linux,
+so it is run by hand on Windows. `nsh/tests/agent.rs` covers the reader (late
+arrival, deletion, the kept token). None of these runs a real device: `run-as`,
+`adb shell -T` standard input and the app's restart on a device are not proved
+here. No separate formal model exists; the two launchers are small enough that
+these tests are the model.
+
 ## Worker-driven filing refresh
 
 Filings, Home and the form page share the cached `store.returns` lists. Worker
