@@ -4,6 +4,7 @@
 # the pill's back button is disabled, so it is pressed once the return is clean).
 wait_until fp-pill-count name="1 item needs attention" --timeout-ms 5000
 click fp-check
+wait_until fp-check name="Check" --timeout-ms 10000
 wait_until fp-pill-count name="1 item needs attention" --timeout-ms 10000
 click fp-nav-0
 wait_until fp-pill-small name="1 to do · Page 1" --timeout-ms 5000
@@ -20,6 +21,7 @@ click fp-section-4
 wait_until fp-frm1701q:txt36A --timeout-ms 5000
 set_value fp-frm1701q:txt36A $sales_fixed
 click fp-check
+wait_until fp-check name="Check" --timeout-ms 10000
 wait_until fp-pill-count --absent --timeout-ms 10000
 assert fp-save-state name="✓ Saved" --screenshot
 click fp-nav-0

@@ -10,6 +10,7 @@ wait_until fp-section-0 --absent --timeout-ms 5000
 wait_until fp-pill-small name="1 to do · Page 1" --timeout-ms 5000
 wait_until fp-check --timeout-ms 5000
 click fp-check
+wait_until fp-check name="Check" --timeout-ms 10000
 wait_until fp-pill-count name="1 item needs attention" --timeout-ms 10000
 click fp-pill-next
 wait_until fp-pill-small name="1 of 1 to do · Part V" --timeout-ms 5000
@@ -31,6 +32,7 @@ click fp-section-0
 wait_until fp-section-0 --absent --timeout-ms 5000
 wait_until fp-check --timeout-ms 5000
 click fp-check
+wait_until fp-check name="Check" --timeout-ms 10000
 wait_until fp-pill-count --absent --timeout-ms 10000
 assert fp-save-state name="✓ Saved" --screenshot
 click fp-pill-open

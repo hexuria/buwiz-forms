@@ -1,5 +1,5 @@
 # Phone layout (Android), after fill-1701q-visible.json on the row with no email: after the pill counts one attention
-# item, open Page 1 to press Check before stepping to the email error; fp-msg-1:8 carries the message. The pill's list
+# item, open Page 1 to press Check before stepping to the email error; fp-boxmsg-txtEmail carries the message. The pill's list
 # of sections (fp-section-N; the phone has no fp-nav side list) reaches the same part; set $fix_email, check again and
 # the count is gone. Then step forward and back.
 wait_until fp-pill-count name="1 item needs attention" --timeout-ms 5000
@@ -10,10 +10,11 @@ wait_until fp-section-0 --absent --timeout-ms 5000
 wait_until fp-pill-small name="1 to do · Page 1" --timeout-ms 5000
 wait_until fp-check --timeout-ms 5000
 click fp-check
+wait_until fp-check name="Check" --timeout-ms 10000
 wait_until fp-pill-count name="1 item needs attention" --timeout-ms 10000
 click fp-pill-next
 wait_until fp-pill-small name="1 of 1 to do · Part I" --timeout-ms 5000
-wait_until fp-msg-1:8 name="Enter the email address BIR sends the filing confirmation to." --timeout-ms 10000 --screenshot
+wait_until fp-boxmsg-txtEmail name="Enter the email address BIR sends the filing confirmation to." --timeout-ms 10000 --screenshot
 click fp-pill-open
 wait_until fp-section-0 --timeout-ms 5000
 click fp-section-0
@@ -32,6 +33,7 @@ click fp-section-0
 wait_until fp-section-0 --absent --timeout-ms 5000
 wait_until fp-check --timeout-ms 5000
 click fp-check
+wait_until fp-check name="Check" --timeout-ms 10000
 wait_until fp-pill-count --absent --timeout-ms 10000
 assert fp-save-state name="✓ Saved" --screenshot
 click fp-pill-open
