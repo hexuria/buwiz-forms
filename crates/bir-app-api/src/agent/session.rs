@@ -721,19 +721,13 @@ impl Session {
             self.commands.push(choose);
         }
         if let Some(asks) = asks {
-            return Ok(DispatchResult::json(json!({
-                "form": kind.form_code(),
-                "source": source,
-                "applied": [],
-                "filled": [],
-                "kept_user_boxes": kept,
-                "awaiting_approval": {
-                    "message": asks.get("message").cloned().unwrap_or(Value::Null),
-                    "boxes": filled,
-                    "cleared": forgot,
-                    "note": "Nothing was stored: the window asks the filer first. Continue stores the fill, Cancel or leaving drops it; read the return again (form.fields) for the outcome.",
-                },
-            })));
+            let message = asks
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("The answer removes information the filer entered.");
+            return Err(format!(
+                "approval required: {message} Nothing was stored; the window asks the filer. Continue stores the fill, Cancel keeps the return. Read the return again with form.fields."
+            ));
         }
         let mut result = json!({
             "form": kind.form_code(),
@@ -2702,6 +2696,26 @@ mod tests {
         assert_eq!(done["save"]["saved"], true, "{}", done["save"]);
     }
 
+    #[test]
+    fn generated_recipe_waits_for_approval_before_saving_a_rate_change() {
+        let mut session = session();
+        save_complete(&mut session);
+        store_1701q(&mut session, 1, &graduated_1701q());
+        let made = call(
+            &mut session,
+            "recipe.generate",
+            json!({"code": "1701Q", "tin": TIN, "check": "strict"}),
+        )
+        .unwrap();
+
+        let stopped =
+            run_recipe(&mut session, &made, 1, &asked(&made, &EIGHT_PERCENT_SET)).unwrap_err();
+        assert!(stopped.starts_with("fill: approval required:"), "{stopped}");
+        assert!(!stopped.contains("save:"), "{stopped}");
+        assert!(session.open.is_some(), "{stopped}");
+        assert_eq!(stored_income(&session, 1), "250,000.00");
+    }
+
     /// A spouse who filed under graduated rates may elect 8% later: Item
     /// 25A is then not asked for, and the recipe runs without it.
     #[test]
@@ -2888,7 +2902,8 @@ mod tests {
     }
 
     /// A stop on Item 16A asks again where the item applies: the method a
-    /// stored draft holds is not reused. Under the 8% rate nothing is asked.
+    /// stored draft holds is not reused. Under 8%, changing a typed draft
+    /// needs approval before the recipe can continue.
     #[test]
     fn explicit_stop_on_the_deduction_method_is_asked_again() {
         let mut session = session();
@@ -2932,9 +2947,12 @@ mod tests {
         );
         // An 8% return runs with Item 16A left out, on a prefilled draft too.
         store_1701q(&mut session, 3, &graduated_1701q());
-        let done = run_recipe(&mut session, &made, 3, &asked(&made, &EIGHT_PERCENT_SET)).unwrap();
-        assert_eq!(done["check"]["ok"], true, "{}", done["check"]);
-        assert_eq!(done["save"]["saved"], true, "{}", done["save"]);
+        let stopped =
+            run_recipe(&mut session, &made, 3, &asked(&made, &EIGHT_PERCENT_SET)).unwrap_err();
+        assert!(stopped.starts_with("fill: approval required:"), "{stopped}");
+        assert!(!stopped.contains("save:"), "{stopped}");
+        assert!(session.open.as_ref().unwrap().awaiting, "{stopped}");
+        assert_eq!(stored_income(&session, 3), "250,000.00");
     }
 
     /// A strict recipe that moves a stored graduated spouse to 8%: the rate
@@ -3019,13 +3037,10 @@ mod tests {
         .unwrap();
         while session.commands.pop().is_some() {}
         let ask = json!(["frm1701q:optATC", "frm1701q:optTaxRate"]);
-        let filled = call(&mut session, "form.fill", json!({"fields": {}, "ask": ask})).unwrap();
-        assert_eq!(filled["applied"], json!([]), "{filled}");
-        assert_eq!(filled["awaiting_approval"]["cleared"], ask, "{filled}");
-        assert!(
-            filled["awaiting_approval"]["message"].is_string(),
-            "{filled}"
-        );
+        let error = call(&mut session, "form.fill", json!({"fields": {}, "ask": ask})).unwrap_err();
+        assert!(error.starts_with("approval required:"), "{error}");
+        assert!(error.contains("Nothing was stored;"), "{error}");
+        assert!(session.open.as_ref().unwrap().awaiting);
         // The window is asked, with the same answers to drop.
         let choose = session.commands.pop().expect("the window is told");
         assert_eq!(choose["clear"], ask, "{choose}");
