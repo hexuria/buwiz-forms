@@ -1,13 +1,14 @@
-# After ui-fill-1701q-dataset.wants on the row with no email: the pill's red count reads one item; its next button lands
-# on the email box, the side list's attention button and the pill's section list reach the same part; type $fix_email,
-# check again and the count is gone. Then step forward and back (with one to-do the
-# pill's back button is disabled, so it is pressed once the return is clean).
+# After ui-fill-1701q-dataset.wants on the row with no email: the pill's red count reads one item; click Check before
+# stepping to the email error. The side list's attention button and the pill's section list reach the same part; type
+# $fix_email, check again and the count is gone. Then step forward and back (with one to-do the pill's back button is
+# disabled, so it is pressed once the return is clean).
 wait_until fp-pill-count name="1 item needs attention" --timeout-ms 5000
+click fp-check
+wait_until fp-pill-count name="1 item needs attention" --timeout-ms 10000
 click fp-nav-0
 wait_until fp-pill-small name="1 to do · Page 1" --timeout-ms 5000
 click fp-pill-next
-wait_until fp-pill-big name="Item 12 · Email Address" --timeout-ms 5000
-click fp-check
+wait_until fp-pill-small name="1 of 1 to do · Part I" --timeout-ms 5000
 wait_until fp-msg-1:8 name="Enter the email address BIR sends the filing confirmation to." --timeout-ms 10000 --screenshot
 click fp-nav-0
 wait_until fp-pill-small name="1 to do · Page 1" --timeout-ms 5000
