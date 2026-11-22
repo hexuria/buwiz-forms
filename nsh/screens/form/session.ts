@@ -1042,6 +1042,7 @@ export class FormSession {
    */
   private editPeriod(period: OnePeriod, text: string) {
     const s = this.st;
+    const wasIncomplete = s.periodIncomplete;
     const keys = [period.month.k, period.year.k];
     this.sValue.get(period.periodKey).set(text);
     const typed = parsePeriod(text);
@@ -1055,7 +1056,7 @@ export class FormSession {
       s.rejected[period.month.k] = reason;
       s.boxMessages[period.month.k] = this.refusalText(period.month.k, reason);
       s.periodHeld = null; // the box no longer says the held period: blur or Save must not commit it
-      s.periodIncomplete = Boolean(text.trim());
+      s.periodIncomplete = s.sample && Boolean(text.trim());
       s.dirty = true;
       this.cancelAutosave();
       this.markUnsaved();
@@ -1063,7 +1064,7 @@ export class FormSession {
     };
     const problem = this.periodRefusal(period, text);
     if (problem) return reject(problem);
-    s.periodIncomplete = Boolean(text.trim() && (!typed || typed.yDigits === 3));
+    s.periodIncomplete = s.sample && Boolean(text.trim() && (!typed || typed.yDigits === 3));
     this.setDateError(period.month.k, "");
     for (const key of keys) {
       delete s.rejected[key];
@@ -1114,7 +1115,9 @@ export class FormSession {
         s.periodHeld = null;
       } else {
         s.periodHeld = null;
+        const samePeriod = JSON.stringify({ ...s.periodValues, ...periodEdits }) === s.periodAsked;
         this.setPeriodPart(periodEdits);
+        if (wasIncomplete && !s.periodIncomplete && samePeriod && s.dirty) this.scheduleAutosave();
       }
     }
     if (Object.keys(ordinaryEdits).length) {

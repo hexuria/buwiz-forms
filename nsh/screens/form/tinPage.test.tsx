@@ -3,6 +3,7 @@
 // at 600 pt and wider it is the old fixed 58/58/58/76 boxes with the dashes. A profile TIN says "From the tax
 // profile" once under the boxes on both widths; a typed TIN (1801's executor) has no such line and takes typing.
 import { expect, open, test, type App } from "nsh/test";
+import { bir } from "../../bir";
 import { warmForms } from "../../bir/testing";
 
 warmForms();
@@ -126,3 +127,88 @@ test("P8 390: 1700 Schedule 1's row drawer draws the employer TIN as one grid li
   await app.press(`id:${table}-done`);
   await app.waitFor("text:Row 1", { state: "gone" });
 });
+
+test("1700 Schedule 1: ticking Taxpayer in BETA's drawer (4_2) changes BETA only; ACME in 4_3 stays Spouse with its amounts", async () => {
+  const schema = bir.screen_form_schema("1700") as {
+    parts: {
+      items: {
+        no?: string;
+        f?: { k: string; l: string; t: string }[];
+        rows?: number;
+        cols?: { t: string }[];
+        keys?: string[][];
+      }[];
+    }[];
+  };
+  const items = schema.parts.flatMap((part, partIndex) =>
+    part.items.map((item, itemIndex) => ({ item, partIndex, itemIndex })),
+  );
+  const choice = (no: string, label: RegExp) =>
+    schema.parts[1].items.find((item) => item.no === no)!.f!.find((field) => field.t === "radio" && label.test(field.l))!.k;
+  const schedules = items.filter(({ item }) =>
+    item.rows && (item.cols || []).filter((column) => column.t === "radio").length === 2,
+  );
+  const page = schedules.find(({ item }) => item.rows === 4)!.item;
+  const more = schedules.find(({ item }) => item.rows === 12)!;
+  const setup: ({ pick: string } | { edits: Record<string, string> })[] = [
+    { pick: choice("15", /married/i) },
+    { pick: choice("16", /^yes$/i) },
+    { pick: choice("17", /joint filing/i) },
+  ];
+  for (let row = 0; row < 4; row++) {
+    const keys = page.keys![row];
+    setup.push({
+      edits: {
+        [keys[2]]: `Employer ${row + 1}`,
+        [keys[8]]: String(1000 + row),
+        [keys[10]]: String(100 + row),
+        [keys[0]]: "true",
+      },
+    });
+  }
+  const betaKeys = more.item.keys![1];
+  const acmeKeys = more.item.keys![2];
+  setup.push({ edits: { [betaKeys[2]]: "BETA", [betaKeys[8]]: "500", [betaKeys[10]]: "50", [betaKeys[1]]: "true" } });
+  setup.push({ edits: { [acmeKeys[2]]: "ACME", [acmeKeys[8]]: "10000", [acmeKeys[10]]: "1000", [acmeKeys[1]]: "true" } });
+
+  const app = await open(ENTRY, {
+    width: 1440, height: 900, platform: "macos",
+    host: { params: { formCode: "1700", year: 2025, period: 1, mode: "return", setup } },
+  });
+  const row = `${more.partIndex}:${more.itemIndex}`;
+  await showRow(app, more.partIndex, row);
+  const table = `id:fp-table-${more.item.keys![0][0]}`;
+  const rowId = table.replace(/^id:fp-table-/, "id:fp-row-");
+  const betaRow = `${rowId}-1`;
+  const acmeRow = `${rowId}-2`;
+  // The fixture's setup writes one step per host fill; the slowest runner needs well over the default 5 s.
+  await app.waitFor("label:/ACME.*Spouse|Spouse.*ACME/", { timeout: 25000 });
+  await app.waitFor("label:/BETA.*Spouse|Spouse.*BETA/");
+  await app.waitFor("label:/ACME.*Spouse|Spouse.*ACME/");
+
+  const compensation = `id:fp-${acmeKeys[8]}`;
+  const withholding = `id:fp-${acmeKeys[10]}`;
+  await app.press(acmeRow);
+  await app.waitFor(compensation);
+  const compensationBefore = app.value(compensation);
+  const withholdingBefore = app.value(withholding);
+  expect(compensationBefore).toBeTruthy();
+  expect(withholdingBefore).toBeTruthy();
+  await app.press(`${table}-done`);
+  await app.waitFor(compensation, { state: "gone" });
+
+  // The drawer's visible Taxpayer tick writes BETA's own row.
+  const taxpayer = `id:fp-${betaKeys[0]}`;
+  await app.press(betaRow);
+  await app.waitFor(taxpayer);
+  await app.press(taxpayer);
+  await app.press(`${table}-done`);
+  await app.waitFor(taxpayer, { state: "gone" });
+  await app.waitFor("label:/BETA.*Taxpayer|Taxpayer.*BETA/");
+  await app.waitFor("label:/ACME.*Spouse|Spouse.*ACME/");
+
+  await app.press(acmeRow);
+  await app.waitFor(compensation);
+  expect(app.value(compensation)).toBe(compensationBefore);
+  expect(app.value(withholding)).toBe(withholdingBefore);
+}, 60000);

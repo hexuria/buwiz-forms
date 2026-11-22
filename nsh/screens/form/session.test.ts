@@ -77,6 +77,28 @@ test("leaving the page within the quiet still saves what was typed", async () =>
   again.dispose();
 });
 
+test("2551Q: a refused calendar Year Ended month stays visible while ATC edits autosave", async () => {
+  // Q3: the touched-only test below needs Q4 never saved.
+  const target = { ...Q1, period: 3 };
+  const s = await opened(target);
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.month.k === "frm2551Qv2018:rtnMonth")!;
+  const calendarMonthRefusal = () => s.boxMessageOf(period.month.k);
+  s.pickRadio("frm2551Qv2018:forThe_1");
+  await s.idle();
+  s.edit(period.periodKey, "06/2025");
+  await s.idle();
+  expect(calendarMonthRefusal()).toContain("December");
+
+  s.edit("txtATCAmt2", "2500");
+  await s.idle();
+  expect(calendarMonthRefusal()).toContain("December");
+  const again = await opened(target);
+  const savedAmount = again.valueOf("txtATCAmt2");
+  again.dispose();
+  s.dispose();
+  expect(savedAmount).toBe("2,500.00");
+});
+
 test("validation messages bind to their items: by key, then item number, then TIN, then label words", async () => {
   const s = await opened();
   // Item 13 (keys name its radios) stays a row message; the EOPT tier names one box, so its
@@ -362,6 +384,29 @@ test("Sample: retyping over a held 1702EX period year drops the hold; blur commi
     expect(s.overlay()?.kind).not.toBe("sample-period");
     s.dispose();
   }
+});
+
+test("Sample: correcting 09/202 to 09/2025 autosaves the statutory minimum wage", async () => {
+  const target: FormTarget = { tin: DEMO.tin, formCode: "1601C", year: 0, period: 0, mode: "sample" };
+  const s = await opened(target);
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.month.k === "frm1601c:txtMonth")!;
+  const saved = () => bir.list_returns("saved").filter((r) => r.form_code === "1601C" && r.taxable_year === 2025 && r.period === 9);
+  expect(saved()).toEqual([]);
+
+  s.edit(period.periodKey, "09/2025");
+  await s.idle();
+  s.edit(period.periodKey, "09/202");
+  await s.idle();
+  s.edit("frm1601c:txtTax15", "1234");
+  await s.idle();
+  s.edit(period.periodKey, "09/2025");
+  await s.idle();
+  s.dispose();
+
+  const again = await opened({ ...target, year: 2025, period: 9, mode: "return" });
+  expect(again.valueOf("frm1601c:txtTax15")).toBe("1,234.00");
+  expect(saved()).toHaveLength(1);
+  again.dispose();
 });
 
 test("Sample: an incomplete 1601C year cannot save under the previous resolved period", async () => {

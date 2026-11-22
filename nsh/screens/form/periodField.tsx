@@ -272,8 +272,8 @@ export function RangeField(props: RangeFieldProps) {
         end={e}
         label={`${props.label} ${which}`}
         narrow={props.narrow}
-        min={which === "To" ? fromDay() || undefined : undefined}
-        max={which === "From" ? toDay() || undefined : undefined}
+        min={which === "To" && !range.derived ? fromDay() || undefined : undefined}
+        max={which === "From" && !range.derived ? toDay() || undefined : undefined}
         start={(which === "To" ? toDay() : fromDay()) || (which === "To" ? fromDay() : toDay()) || isoDate(new Date())}
       />
     </View>

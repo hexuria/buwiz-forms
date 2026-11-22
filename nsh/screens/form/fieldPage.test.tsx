@@ -178,3 +178,31 @@ test("PR 3: a 1601C sample month picker follows the typed filing-period year", a
   // The pick keeps the typed year: July 2025, never July of the year the grid first mounted on.
   await app.waitUntil(() => /^0?7\/2025$|^July 2025$/.test(String(app.value(input))));
 });
+
+test("1600WP: the From calendar can move past the copied To date", async () => {
+  const fromMonth = "frm1600WP:DateWithholdingMonth";
+  const from = `id:fp-${fromMonth}#date`;
+  const to = "id:fp-frm1600WP:DateWithholdingToMonth#date";
+  const schema = bir.screen_form_schema("1600WP") as { parts: { items: { f?: { k: string }[] }[] }[] };
+  const row = schema.parts.flatMap((part, pi) => part.items.map((item, ii) => ({ pi, ii, fields: item.f || [] })))
+    .find((item) => item.fields.some((field) => field.k === fromMonth))!;
+
+  const app = await open(ENTRY, {
+    width: 1440, height: 900, platform: "macos",
+    host: {
+      params: {
+        formCode: "1600WP", year: 2025, period: 5, mode: "return", stepRow: `${row.pi}:${row.ii}`,
+        setup: [{ edits: { [`${fromMonth}#date`]: "05/10/2025" } }],
+      },
+    },
+  });
+  await app.waitFor(from);
+  const showsDay = (input: string, day: number) =>
+    [`05/${String(day).padStart(2, "0")}/2025`, `May ${day}, 2025`].includes(String(app.value(input)));
+  await app.waitUntil(() => showsDay(from, 10) && showsDay(to, 10));
+
+  await app.press(`id:${from.slice(3)}-calendar`);
+  await app.waitFor("text:15");
+  await app.press("text:15");
+  await app.waitUntil(() => showsDay(from, 15) && showsDay(to, 15));
+});
