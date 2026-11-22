@@ -1295,6 +1295,18 @@ pub fn fill(
     fill_box(kind, draft, key, value, &[], from_profile, false)
 }
 
+/// The option of choice box `key` that a fill of `value` selects, spelled as
+/// the binding spells it: the same matching of labels, aliases and radio
+/// keys the write uses. `None` when `key` is not a choice or nothing matches.
+pub fn chosen_option(kind: AgentFormKind, key: &str, value: &Value) -> Option<String> {
+    let def = kind.definition();
+    let Some(Binding::Choice { options }) = def.bindings.get(key).map(|bound| &bound.binding)
+    else {
+        return None;
+    };
+    choose(def, key, options, &value_text(value)).map(|option| option.value.clone())
+}
+
 /// Drop the answer of choice box `key`, so the form asks for it again where
 /// it applies: a stopped box's stored answer is not reused. A box that is
 /// not one choice over one draft field is left as it is.

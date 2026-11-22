@@ -13,7 +13,7 @@ export type AgentCommand =
   /** The return is prepared for the person: say so, and lead with Queue. The person queues it, not the agent. */
   | { op: "review"; message: string }
   /** Boxes the agent filled, to show on the open form: committed as a choice, in the order the agent wrote them. */
-  | { op: "choose"; edits: Record<string, string> }
+  | { op: "choose"; edits: Record<string, string>; clear?: string[] }
   /** The agent asked the app to shut down. */
   | { op: "quit" };
 
@@ -42,7 +42,8 @@ export interface FrameDeps {
   /** Resolves true once the page of this return is open and loaded. */
   whenReady(ref: ReturnRef): Promise<boolean>;
   /** Commit edits on the open page; false when no page can take them. */
-  choose(edits: Record<string, string>): boolean;
+  /** `clear`: choice boxes whose answer the fill dropped; the page drops it from its own draft before it saves. */
+  choose(edits: Record<string, string>, clear?: string[]): boolean;
   /** The app's quit path (leave hooks first). */
   quit(): Promise<void>;
 }
@@ -84,7 +85,8 @@ export function parseCommand(raw: unknown): AgentCommand | null {
       if (!cmd.edits || typeof cmd.edits !== "object") return null;
       const edits: Record<string, string> = {};
       for (const [key, v] of Object.entries(cmd.edits as Record<string, unknown>)) edits[key] = text(v);
-      return { op: "choose", edits };
+      const clear = Array.isArray(cmd.clear) ? cmd.clear.filter((key): key is string => typeof key === "string") : [];
+      return clear.length ? { op: "choose", edits, clear } : { op: "choose", edits };
     }
     case "quit":
       return { op: "quit" };
@@ -120,7 +122,7 @@ export async function applyCommand(cmd: AgentCommand, deps: FrameDeps, state: Ag
       });
       return;
     case "choose":
-      await onOpenForm(deps, state, () => void deps.choose(cmd.edits));
+      await onOpenForm(deps, state, () => void deps.choose(cmd.edits, cmd.clear));
       return;
     case "quit":
       await deps.quit();

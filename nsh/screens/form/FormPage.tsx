@@ -150,7 +150,7 @@ export function FormPage(props: FormPageProps) {
       // What an agent's commands ask (shell/agent): which return this is, when it has loaded, a fill committed as a choice.
       target: () => ({ tin: props.tin, formCode: props.formCode, year: props.year, period: props.period }),
       ready: () => s.ready(),
-      choose: (edits) => s.choose(edits),
+      choose: (edits, clear) => s.choose(edits, clear),
     }),
   );
 

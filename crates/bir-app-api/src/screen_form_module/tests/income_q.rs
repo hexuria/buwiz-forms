@@ -154,6 +154,37 @@ fn married(opened: &Value) -> Value {
     filled["draft"].clone()
 }
 
+/// An agent's fill that left Item 16A unanswered (its `ask`) tells the page,
+/// and the page's own draft drops the answer with the edit: saved whole, it
+/// no longer holds the method of deduction the page had loaded.
+#[test]
+fn form_1701q_fill_forgets_the_answers_an_agent_fill_dropped() {
+    setup();
+    let draft = married(&open(Q, 1));
+    assert_eq!(draft["deduction_method"], "Osd", "{draft}");
+    let filled = call(
+        "screen_form_fill",
+        vec![
+            Q.into(),
+            json(draft.clone()),
+            json(json!({"frm1701q:txtSheets": "3"})),
+            json(json!([])),
+            json(json!(["frm1701q:optMethodOfDeduction"])),
+        ],
+    )
+    .unwrap();
+    assert_eq!(filled["rejected"], json!({}), "{}", filled["rejected"]);
+    assert_eq!(filled["draft"]["deduction_method"], Value::Null);
+    assert_eq!(
+        filled["values"]["frm1701q:optMethodOfDeduction:_2"],
+        "false"
+    );
+    assert_eq!(filled["values"]["frm1701q:txtSheets"], "3");
+    // Without it the page's draft keeps the answer.
+    let kept = fill(Q, &draft, json!({"frm1701q:txtSheets": "3"}));
+    assert_eq!(kept["draft"]["deduction_method"], "Osd");
+}
+
 // ------------------------------------------------------------ 1701Q layout
 
 /// R3.0, manual-0, manual-1, manual-2, and lesson 4: every numbered item

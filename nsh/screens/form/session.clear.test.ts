@@ -166,3 +166,36 @@ test("F7-1: a box the host refuses for another reason still goes back to the dra
   expect(s.messageOf(s.itemIdForKey(K)!)).toContain("must be an amount");
   s.dispose();
 });
+
+test("an agent's fill that dropped a choice: the page drops it from its own draft, and its save does not store it again", async () => {
+  const METHOD = "frm1701q:optMethodOfDeduction";
+  const target = at("1701Q", 2025, 3);
+  const s = await opened(target);
+  s.choose({ "frm1701q:optType_1": "true", "frm1701q:optATC_1": "true", [METHOD + ":_2"]: "true" });
+  await s.idle();
+  s.saveNow();
+  await s.idle();
+  expect(s.valueOf(METHOD + ":_2")).toBe("true");
+  // The agent's `choose`: one edit, and the answer its fill left unanswered.
+  s.choose({ "frm1701q:txtSheets": "3" }, [METHOD]);
+  await s.idle();
+  expect(s.valueOf(METHOD + ":_2")).toBe("false");
+  s.saveNow();
+  await s.idle();
+  s.dispose();
+  const again = await opened(target);
+  expect(again.valueOf("frm1701q:txtSheets")).toBe("3");
+  expect(again.valueOf(METHOD + ":_1")).toBe("false");
+  expect(again.valueOf(METHOD + ":_2")).toBe("false");
+  // A clear alone is saved too.
+  again.choose({ [METHOD + ":_2"]: "true" });
+  await again.idle();
+  again.choose({}, [METHOD]);
+  await again.idle();
+  again.saveNow();
+  await again.idle();
+  again.dispose();
+  const last = await opened(target);
+  expect(last.valueOf(METHOD + ":_2")).toBe("false");
+  last.dispose();
+});

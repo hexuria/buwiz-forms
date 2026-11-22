@@ -707,8 +707,8 @@ export function screen_form_amend(tin: string, form_code: string, year: number, 
 /** An amended return's filed version from its history, read-only. */
 export function screen_form_filed_original(form_code: string, snapshot_id: number): Promise<ScreenFormOpened>;
 export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
-/** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
-export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
+/** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. `forget`: choice boxes whose answer is dropped before the edits apply, so the form asks again (the agent's fill left them unanswered). */
+export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[], forget?: string[]): ScreenFormFilled;
 /** "Use profile values" on a draft that differs from the tax profile (`profile_differs`), and "Update from tax profile": every profile box the filer did not edit takes the profile's value, and they follow later profile changes. `facts`: facts just answered from the return's cards; the boxes they fill take the answer. Nothing is saved; save the draft. `asks`: the cards still asked. */
 export function screen_form_use_profile(form_code: string, year: number, period: number, draft: object, facts?: ScreenFormFact[]): ScreenFormFilled & { asks: ScreenFormAsk[] };
 export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;

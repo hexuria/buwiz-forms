@@ -632,14 +632,14 @@ impl Session {
                 refused.insert(key.clone(), Value::String(why));
                 continue;
             }
-            note_choice(kind, def, &draft, key, &mut chosen)?;
+            note_choice(kind, def, key, value, &mut chosen);
             filled.push(key.clone());
         }
         agent::compute(kind, &mut draft)?;
         let map = agent::field_map(kind, &draft)?;
         let not_shown = not_shown(def, &fields, &filled, &chosen, &map);
         let mut edits = Map::new();
-        if !filled.is_empty() || forgot {
+        if !filled.is_empty() || !forgot.is_empty() {
             agent::save_draft(kind, &db, &mut draft)?;
             for key in &filled {
                 if not_shown.iter().any(|hidden| hidden == key) {
@@ -651,13 +651,20 @@ impl Session {
         drop(db);
         if let Some(open) = self.open.as_mut() {
             open.draft = draft;
-            open.dirty |= !filled.is_empty() || forgot;
+            open.dirty |= !filled.is_empty() || !forgot.is_empty();
             for key in &filled {
                 open.sources.insert(key.clone(), source.clone());
             }
         }
-        if !edits.is_empty() {
-            self.commands.push(json!({"op": "choose", "edits": edits}));
+        // The window holds its own copy of the return and saves all of it: the
+        // answers dropped go to it with the edits, or its next save would
+        // store them again.
+        if !edits.is_empty() || !forgot.is_empty() {
+            let mut choose = json!({"op": "choose", "edits": edits});
+            if !forgot.is_empty() {
+                choose["clear"] = json!(forgot);
+            }
+            self.commands.push(choose);
         }
         let mut result = json!({
             "form": kind.form_code(),
@@ -793,7 +800,7 @@ impl Session {
         for (key, value) in &fields {
             match agent::fill(kind, &mut draft, key, value, Some(&from_profile)) {
                 Ok(()) => {
-                    note_choice(kind, def, &draft, key, &mut chosen)?;
+                    note_choice(kind, def, key, value, &mut chosen);
                     applied.push(key.clone());
                 }
                 Err(why) => {
@@ -1499,7 +1506,12 @@ fn collect_fill_fields(args: &Value) -> Result<Map<String, Value>, String> {
             }
         }
     }
-    if fields.is_empty() {
+    // A request that only drops stored answers (`ask`) fills nothing.
+    let asks = args
+        .get("ask")
+        .and_then(Value::as_array)
+        .is_some_and(|keys| !keys.is_empty());
+    if fields.is_empty() && !asks {
         return Err(
             "form.fill requires args.fields as an object, or fillable KEY=VALUE args".into(),
         );
@@ -1564,19 +1576,19 @@ fn field_errors(errors: &[(String, String)]) -> Vec<Value> {
 }
 
 /// Drop the stored answer of every `args.ask` box that `fields` leaves
-/// unanswered. True when an answer was dropped.
+/// unanswered. The boxes whose answer was dropped.
 fn forget_unanswered(
     kind: AgentFormKind,
     draft: &mut Value,
     args: &Value,
     fields: &Map<String, Value>,
-) -> Result<bool, String> {
+) -> Result<Vec<String>, String> {
     let ask = match args.get("ask") {
-        None | Some(Value::Null) => return Ok(false),
+        None | Some(Value::Null) => return Ok(Vec::new()),
         Some(Value::Array(keys)) => keys,
         Some(_) => return Err("args.ask must be a list of box keys".into()),
     };
-    let before = draft.clone();
+    let mut forgotten = Vec::new();
     for key in ask.iter().filter_map(Value::as_str) {
         let answered = match fields.get(key) {
             None | Some(Value::Null) => false,
@@ -1584,28 +1596,32 @@ fn forget_unanswered(
             Some(_) => true,
         };
         if !answered {
+            let before = draft.clone();
             agent::forget(kind, draft, key)?;
+            if *draft != before {
+                forgotten.push(key.to_string());
+            }
         }
     }
-    Ok(*draft != before)
+    Ok(forgotten)
 }
 
-/// After a radio item is filled: the option that fill chose, by its own
-/// matching of labels and aliases, before the form recomputes.
+/// After a radio item is filled: the option that fill chose, by the write's
+/// own matching of labels and aliases ([`agent::chosen_option`]). Not read
+/// back from the draft: a box whose answer the form derives (the spouse's
+/// rate, from the ATC) shows the old answer until the form recomputes.
 fn note_choice(
     kind: AgentFormKind,
     def: &agent::AgentFormDef,
-    draft: &Value,
     key: &str,
+    value: &Value,
     chosen: &mut BTreeMap<String, String>,
-) -> Result<(), String> {
-    if def.box_def(key).is_some_and(|entry| entry.radio_group) {
-        let option = def.box_value(key, &agent::field_map(kind, draft)?);
-        if !option.is_empty() {
-            chosen.insert(key.to_string(), option);
-        }
+) {
+    if def.box_def(key).is_some_and(|entry| entry.radio_group)
+        && let Some(option) = agent::chosen_option(kind, key, value)
+    {
+        chosen.insert(key.to_string(), option);
     }
-    Ok(())
 }
 
 /// The filled boxes the return does not show as filled. `chosen` holds the
@@ -2845,6 +2861,99 @@ mod tests {
         let done = run_recipe(&mut session, &made, 3, &asked(&made, &EIGHT_PERCENT_SET)).unwrap();
         assert_eq!(done["check"]["ok"], true, "{}", done["check"]);
         assert_eq!(done["save"]["saved"], true, "{}", done["save"]);
+    }
+
+    /// A strict recipe that moves a stored graduated spouse to 8%: the rate
+    /// box writes the ATC and the form derives the rate afterwards, so the
+    /// answer is kept, not discarded.
+    #[test]
+    fn strict_check_accepts_a_spouse_rate_that_replaces_a_stored_one() {
+        let mut session = session();
+        save_complete(&mut session);
+        let mut stored = graduated_1701q();
+        for (key, value) in SPOUSE_GRADUATED {
+            stored[key] = json!(value);
+        }
+        stored["frm1701q:optSpouseTaxRate"] = json!("Graduated");
+        store_1701q_as(&mut session, 1, &stored, true);
+        store_1701q_as(&mut session, 2, &stored, true);
+        let made = call(
+            &mut session,
+            "recipe.generate",
+            json!({"code": "1701Q", "tin": TIN, "check": "strict"}),
+        )
+        .unwrap();
+        let filer = with(
+            &asked(&made, &GRADUATED_SET),
+            &[("frm1701q:optMethodOfDeduction", "O")],
+        );
+        let spouse: Vec<(&str, &str)> = [
+            ("frm1701q:optSpouseType", "Professional"),
+            ("frm1701q:optSpouseATC", "II015"),
+            ("frm1701q:optSpouseTaxRate", "Percentage"),
+        ]
+        .into_iter()
+        .filter(|(key, _)| made_asks(&made, key))
+        .collect();
+        assert!(
+            spouse
+                .iter()
+                .any(|(key, _)| *key == "frm1701q:optSpouseTaxRate"),
+            "{made}"
+        );
+        let done = run_recipe(&mut session, &made, 2, &with(&filer, &spouse)).unwrap();
+        assert_eq!(done["check"]["ok"], true, "{}", done["check"]);
+        assert_eq!(done["check"]["discarded"], json!([]), "{}", done["check"]);
+        assert_eq!(
+            read(&done["readback"], "frm1701q:optSpouseTaxRate"),
+            "Percentage"
+        );
+    }
+
+    /// A fill that only leaves a stored choice unanswered (`fields` empty,
+    /// the box in `ask`) is taken, and the window is told which answer was
+    /// dropped: it saves its own copy of the return whole.
+    #[test]
+    fn a_fill_that_only_drops_an_answer_tells_the_window() {
+        let mut session = session();
+        save_complete(&mut session);
+        store_1701q(&mut session, 1, &graduated_1701q());
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        while session.commands.pop().is_some() {}
+        let ask = json!(["frm1701q:optMethodOfDeduction"]);
+        let filled = call(&mut session, "form.fill", json!({"fields": {}, "ask": ask})).unwrap();
+        assert_eq!(filled["applied"], json!([]), "{filled}");
+        let choose = session.commands.pop().expect("the window is told");
+        assert_eq!(choose["op"], "choose", "{choose}");
+        assert_eq!(choose["clear"], ask, "{choose}");
+        assert_eq!(choose["edits"], json!({}), "{choose}");
+        let fields = call(&mut session, "form.fields", json!({})).unwrap();
+        assert_eq!(read(&fields, "frm1701q:optMethodOfDeduction"), "");
+        // With an edit beside it, one message carries both.
+        call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm1701q:optMethodOfDeduction": "O"}}),
+        )
+        .unwrap();
+        while session.commands.pop().is_some() {}
+        call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm1701q:txtSheets": "3"}, "ask": ask}),
+        )
+        .unwrap();
+        let choose = session.commands.pop().expect("the window is told");
+        assert_eq!(choose["clear"], ask, "{choose}");
+        assert_eq!(choose["edits"]["frm1701q:txtSheets"], "3", "{choose}");
+        // Nothing to fill and nothing to drop is still refused.
+        assert!(call(&mut session, "form.fill", json!({"fields": {}})).is_err());
+        assert!(call(&mut session, "form.fill", json!({"fields": {}, "ask": []})).is_err());
     }
 
     #[test]

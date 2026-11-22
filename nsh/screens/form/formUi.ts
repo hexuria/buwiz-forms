@@ -23,7 +23,7 @@ export interface FormUiHandle {
   /** Resolves once the page finished opening the return (or failed to). */
   ready?(): Promise<void>;
   /** Commit these edits now, as a choice: what a pick commits (the agent's fill, applied as the old app's `choose`). */
-  choose?(edits: Record<string, string>): void;
+  choose?(edits: Record<string, string>, clear?: string[]): void;
 }
 
 const open = signal<FormUiHandle | null>(null);
@@ -75,10 +75,10 @@ export const formUi = {
     return false;
   },
   /** Commits `edits` on the open page as a choice; false when no page that can is open. */
-  choose(edits: Record<string, string>): boolean {
+  choose(edits: Record<string, string>, clear?: string[]): boolean {
     const ui = untracked(open);
     if (!ui?.choose) return false;
-    ui.choose(edits);
+    ui.choose(edits, clear);
     return true;
   },
 };

@@ -43,7 +43,7 @@ export function frameDeps(): FrameDeps {
     toast: (message) => void toast(message),
     review: (message) => formUi.review(message),
     whenReady: (ref) => formUi.whenReady(ref),
-    choose: (edits) => formUi.choose(edits),
+    choose: (edits, clear) => formUi.choose(edits, clear),
     // The door's quit path included: app.quit() hooks, then shutdown, then the run ends.
     quit: () => app.quit(),
   };

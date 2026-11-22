@@ -28,8 +28,8 @@ function recorder(overrides: Partial<FrameDeps> = {}) {
       said.push(`ready? ${ref.formCode} ${ref.year}/${ref.period}`);
       return true;
     },
-    choose: (edits) => {
-      said.push(`choose ${JSON.stringify(edits)}`);
+    choose: (edits, clear) => {
+      said.push(`choose ${JSON.stringify(edits)}${clear?.length ? ` clear ${clear.join(",")}` : ""}`);
       return true;
     },
     quit: async () => void said.push("quit"),
@@ -191,4 +191,15 @@ test("the host refusing to start is a quiet no-op", async () => {
   await sleep(40);
   stop();
   expect(takes).toBe(0);
+});
+
+test("a fill's dropped answers reach the page with its edits", async () => {
+  expect(parseCommand('{"op":"choose","edits":{"a":"1"},"clear":["k", 3]}')).toEqual({ op: "choose", edits: { a: "1" }, clear: ["k"] });
+  expect(parseCommand('{"op":"choose","edits":{},"clear":["k"]}')).toEqual({ op: "choose", edits: {}, clear: ["k"] });
+  expect(parseCommand('{"op":"choose","edits":{"a":"1"},"clear":[]}')).toEqual({ op: "choose", edits: { a: "1" } });
+  const { deps, said } = recorder();
+  const state: AgentState = { form: null };
+  await applyCommand({ op: "open", tin: "00012345300000", code: "1701Q", year: 2025, period: 1 }, deps, state);
+  await applyCommand({ op: "choose", edits: { "frm1701q:txtSheets": "3" }, clear: ["frm1701q:optMethodOfDeduction"] }, deps, state);
+  expect(said.slice(2)).toEqual(['choose {"frm1701q:txtSheets":"3"} clear frm1701q:optMethodOfDeduction']);
 });

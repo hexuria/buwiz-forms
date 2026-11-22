@@ -926,9 +926,21 @@ export class FormSession {
   }
 
   /** A choice (sel, chk, a radio pick, a cleared row): committed at once. */
-  choose(edits: Record<string, string>) {
+  choose(edits: Record<string, string>, clear: string[] = []) {
     const s = this.st;
     if (!s.editable || !s.draft) return;
+    // Answers an agent's fill dropped: dropped from this page's draft too, at once, so the save that follows (the whole
+    // draft) does not store them again. The staged edits are applied on that draft.
+    if (clear.length) {
+      this.applyFill(bir.screen_form_fill(s.target.formCode, s.draft, {}, [], clear), {});
+      s.dirty = true;
+      if (!Object.keys(edits).length) {
+        this.markUnsaved();
+        this.validate();
+        this.scheduleAutosave();
+        return;
+      }
+    }
     const period = Object.fromEntries(Object.entries(edits).filter(([k]) => s.periodParts.has(k)));
     if (Object.keys(period).length) {
       this.setPeriodPart(period);
