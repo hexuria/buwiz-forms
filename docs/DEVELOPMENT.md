@@ -66,12 +66,12 @@ reach it unless you compile `--features agent` (Mac release bundle:
 until `GPUI_AGENT=1`. There is no `scripts/bir-agent` wrapper: launch the
 host with env vars, then talk to it with `gpui-agent`.
 
-The `gpui-agent` CLI comes from [hexuria/gpui-agent](https://github.com/hexuria/gpui-agent)
+The `gpui-agent` CLI comes from [fullstackcrabs/gpui-agent](https://github.com/fullstackcrabs/gpui-agent)
 and is installed automatically by every setup script — `setup-windows.ps1`,
 `setup-linux.sh`, and `setup-macos.sh` all resolve the rev the app pins
 (`Cargo.toml` / `Cargo.lock`) so driver and host can never
 drift on protocol version. Manually:
-`cargo install --git https://github.com/hexuria/gpui-agent --rev <pinned-rev> gpui-agent-cli`.
+`cargo install --git https://github.com/fullstackcrabs/gpui-agent --rev <pinned-rev> gpui-agent-cli`.
 
 **Windows note:** the HMAC token handshake works at the current pinned
 revision. Set `GPUI_AGENT_TOKEN` for secure driving. For local-only driving,

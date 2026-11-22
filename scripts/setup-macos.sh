@@ -10,7 +10,7 @@
 #     targets — `just app` / `just _package-mac` build aarch64 + x86_64 and
 #     lipo them into a universal binary
 #   - gpui-agent CLI — the control-plane client that drives the app
-#     (github.com/hexuria/gpui-agent), installed at the exact rev Cargo.lock
+#     (github.com/fullstackcrabs/gpui-agent), installed at the exact rev Cargo.lock
 #     pins so CLI and host speak the same protocol (v1 CLI can't talk to a
 #     v2 host)
 #   - NSH app (nsh/) on macOS and the iOS Simulator: the Rust iOS targets,
@@ -190,7 +190,7 @@ install_rust() {
 # ---------------------------------------------------------------------------
 gpui_agent_rev() {
     # Cargo.lock line looks like:
-    #   source = "git+https://github.com/hexuria/gpui-agent?rev=<sha>#<sha>"
+    #   source = "git+https://github.com/fullstackcrabs/gpui-agent?rev=<sha>#<sha>"
     sed -n 's/.*gpui-agent?rev=\([0-9a-fA-F]\{7,64\}\)#.*/\1/p' Cargo.lock 2>/dev/null | head -1
 }
 
