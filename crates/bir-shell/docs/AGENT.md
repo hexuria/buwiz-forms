@@ -52,6 +52,10 @@ close without writing the agent's copy of the return, invoke `form.dismiss`
 with `{"discard": true}`. An open window still saves what the filer typed
 there as it leaves; the result includes `"discarded": true`.
 
+`form.fields` lists boxes the agent can fill. Pass `{"locked": true}` to
+include locked boxes as read-only, marked with their lock name; this does not
+make them fillable, and `form.fill` still refuses locked boxes.
+
 An invoke error beginning with `approval required:` means the window is
 holding the change for the filer. It is not an ordinary failure to retry;
 after the filer answers, read the return again with `form.fields`.

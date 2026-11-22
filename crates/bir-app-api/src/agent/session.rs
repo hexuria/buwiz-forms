@@ -157,7 +157,7 @@ impl Session {
             "profile.forms_set" | "profile.forms_set.set" => self.profile_forms_set(args),
             "dues.list" => self.dues_list(args),
             "filing.start" | "form.open" => self.form_open(args),
-            "form.fields" => self.form_fields(),
+            "form.fields" => self.form_fields(args),
             "form.fill" => self.form_fill(args),
             "form.needs_you" => self.form_needs_you(),
             "filing.validate" | "form.validate" => self.form_validate(),
@@ -579,14 +579,14 @@ impl Session {
         })))
     }
 
-    fn form_fields(&self) -> Result<DispatchResult, String> {
+    fn form_fields(&self, args: &Value) -> Result<DispatchResult, String> {
         let open = self
             .open
             .as_ref()
             .ok_or("open a form first (bir_form_open)")?;
         let def = open.kind.definition();
         let map = agent::field_map(open.kind, &open.draft)?;
-        let boxes: Vec<Value> = def
+        let mut boxes: Vec<Value> = def
             .fillable()
             .map(|entry| {
                 card_json(
@@ -595,6 +595,17 @@ impl Session {
                 )
             })
             .collect();
+        if args.get("locked").and_then(Value::as_bool) == Some(true) {
+            for entry in def.boxes.iter().filter(|entry| entry.is_question()) {
+                let Some(lock) = def.bindings.get(&entry.key).and_then(|bound| bound.lock) else {
+                    continue;
+                };
+                let card = CardBox::new(def, entry, &map);
+                let mut value = card_json(&card, None);
+                value["locked"] = json!(lock);
+                boxes.push(value);
+            }
+        }
         let questions = def.boxes.iter().filter(|entry| entry.is_question()).count();
         let status = agent::identity(open.kind, &open.draft)?.status;
         Ok(DispatchResult::json(json!({
@@ -2132,6 +2143,54 @@ mod tests {
         let saved = call(&mut session, "form.save_draft", json!({})).unwrap();
         assert_eq!(saved["saved"], true);
         assert_eq!(saved["form"], "1701Q");
+    }
+
+    #[test]
+    fn form_fields_can_read_locked_profile_email_without_making_it_fillable() {
+        let mut session = session();
+        save_complete(&mut session);
+        store_1701q(&mut session, 1, &graduated_1701q());
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+
+        let fields = call(&mut session, "form.fields", json!({})).unwrap();
+        assert!(
+            !fields["boxes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|box_| box_["key"] == "txtEmail"),
+            "{fields}"
+        );
+
+        let fields = call(&mut session, "form.fields", json!({"locked": true})).unwrap();
+        let email = fields["boxes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|box_| box_["key"] == "txtEmail")
+            .expect("locked profile email is readable");
+        assert_eq!(email["value"], "test@example.com", "{email}");
+        assert_eq!(email["locked"], "profile", "{email}");
+
+        let fill = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"txtEmail": "changed@example.com"}}),
+        )
+        .unwrap();
+        assert!(fill["filled"].as_array().unwrap().is_empty(), "{fill}");
+        assert!(
+            fill["refused"]["txtEmail"]
+                .as_str()
+                .unwrap()
+                .contains("taxpayer profile"),
+            "{fill}"
+        );
     }
 
     #[test]

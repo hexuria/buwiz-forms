@@ -66,7 +66,7 @@ for n in map(int, rows_arg.split(",")):
             why.append(f"5-verify form.open: {opened.get('error', opened)}")
         else:
             try:
-                v = run("--addr", D, "invoke", "form.fields")
+                v = run("--addr", D, "invoke", "form.fields", "--arg", "locked=true")
                 fields = v.get("result", v)
                 key = "frm1701q:txt36A" if bad == "item_36_taxpayer" else "txtEmail"
                 expected = f"{float(have['sales_fixed']):,.2f}" if bad == "item_36_taxpayer" else "fixed@example.com"

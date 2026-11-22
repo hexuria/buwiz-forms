@@ -220,14 +220,19 @@
     {
       "name": "form.fields",
       "kind": "invoke",
-      "description": "List the open form's boxes.",
+      "description": "List the open form's fillable boxes. With locked=true, also list locked boxes read-only with their lock name.",
       "effects": [
         "read"
       ],
       "idempotent": true,
       "verified": true,
       "required": [],
-      "args": {},
+      "args": {
+        "locked": {
+          "type": "boolean",
+          "required": false
+        }
+      },
       "keywords": [
         "fields",
         "boxes"
