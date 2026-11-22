@@ -157,3 +157,24 @@ test("PR 3: phone period field opens its month sheet and a pick lands", async ()
   await app.press(`id:${cal}-m12`);
   await app.waitFor(`id:${cal}-sheet`, { state: "gone" });
 });
+
+test("PR 3: a 1601C sample month picker follows the typed filing-period year", async () => {
+  const app = await open(ENTRY, { host: { params: { formCode: "1601C", year: 0, period: 0, mode: "sample" } } });
+  const period = "frm1601c:txtMonth#period";
+  const input = `id:fp-${period}`;
+  const calendar = `${period}-calendar`;
+  const yearLabel = `id:${calendar}-year`;
+  await app.waitFor(input);
+  await app.type(input, "06/2025");
+  await app.waitUntil(() => app.value(input) === "06/2025");
+  await app.press(`id:${calendar}`);
+  await app.waitFor(yearLabel);
+  // The grid opens on the typed year, not the year it first mounted on.
+  expect(app.texts()).toContain("2025");
+  expect(app.texts()).not.toContain(String(new Date().getFullYear()));
+  await app.waitFor(`id:${calendar}-m7`);
+  await app.press(`id:${calendar}-m7`);
+  await app.waitFor(`id:${calendar}-sheet`, { state: "gone" });
+  // The pick keeps the typed year: July 2025, never July of the year the grid first mounted on.
+  await app.waitUntil(() => /^0?7\/2025$|^July 2025$/.test(String(app.value(input))));
+});

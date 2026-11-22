@@ -89,6 +89,8 @@ export interface SchemaItem {
   one_period_two_digit?: string[];
   /** Registered from/to anchors: a whole-date box's key, or a one-date's month key (its triple is the end). */
   date_ranges?: [string, string][];
+  /** To anchors copied from From by the form, not independent range ends. */
+  derived_to?: string[];
   /** A hint offering another item's amount for this item's box ("Use it"). */
   from?: { k: string; to: string; l: string };
   /** A schedule's preprinted row captions. */

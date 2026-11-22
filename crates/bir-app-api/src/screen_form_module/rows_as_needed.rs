@@ -247,6 +247,8 @@ pub(super) struct DateRange {
     pub(super) form: &'static str,
     /// [from, to] anchors.
     pub(super) ends: [&'static str; 2],
+    /// The To end is copied from From by the form, so it is never an independent end.
+    pub(super) derived_to: bool,
 }
 
 /// Every enumerated range (briefs/pr3-enumeration.md, R1).
@@ -257,6 +259,7 @@ pub(super) const DATE_RANGES: &[DateRange] = &[
             "frm1600WP:DateWithholdingMonth",
             "frm1600WP:DateWithholdingToMonth",
         ],
+        derived_to: true,
     },
     DateRange {
         form: "2550Q",
@@ -264,6 +267,7 @@ pub(super) const DATE_RANGES: &[DateRange] = &[
             "frm2550qv2024:RtnPeriodFromNo4",
             "frm2550qv2024:RtnPeriodToNo4",
         ],
+        derived_to: false,
     },
     DateRange {
         form: "1702EX",
@@ -271,18 +275,22 @@ pub(super) const DATE_RANGES: &[DateRange] = &[
             "frm1702EX:txtPg1Pt1I17EffectivityFrom",
             "frm1702EX:txtPg1Pt1I17EffectivityTo",
         ],
+        derived_to: false,
     },
     DateRange {
         form: "1701MS",
         ends: ["frm1701MS:txtTaxpayerNo16a", "frm1701MS:txtTaxpayerNo16a1"],
+        derived_to: false,
     },
     DateRange {
         form: "1701MS",
         ends: ["frm1701MS:txtTaxpayerNo16b", "frm1701MS:txtTaxpayerNo16b1"],
+        derived_to: false,
     },
     DateRange {
         form: "2551Q",
         ends: ["txtDateIssue", "txtDateExpiry"],
+        derived_to: false,
     },
 ];
 
@@ -675,6 +683,16 @@ pub(super) fn mark_periods(form: &mut Value, code: &str) {
             })
             .map(|p| p.keys[1])
             .collect();
+        let derived_to: Vec<&str> = DATE_RANGES
+            .iter()
+            .filter(|range| {
+                range.form == code
+                    && range.derived_to
+                    && keys.contains(&range.ends[0])
+                    && keys.contains(&range.ends[1])
+            })
+            .map(|range| range.ends[1])
+            .collect();
         // All reads of `f` are done; write the marks now.
         drop(fields);
         drop(keys);
@@ -686,6 +704,9 @@ pub(super) fn mark_periods(form: &mut Value, code: &str) {
         }
         if !ranges.is_empty() {
             item["date_ranges"] = serde_json::json!(ranges);
+        }
+        if !derived_to.is_empty() {
+            item["derived_to"] = serde_json::json!(derived_to);
         }
     }
 }
@@ -925,7 +946,7 @@ pub(super) fn refuse_ranges(
     let mut out = std::collections::BTreeMap::new();
     for range in DATE_RANGES
         .iter()
-        .filter(|range| range.form == kind.form_code())
+        .filter(|range| range.form == kind.form_code() && !range.derived_to)
     {
         let ends: Vec<Vec<&str>> = range
             .ends

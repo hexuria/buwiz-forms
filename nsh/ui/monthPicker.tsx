@@ -50,7 +50,7 @@ function MonthGrid(props: Omit<MonthPickerProps, "year"> & { year: () => number;
           disabled={!can(-1)}
           onPress={() => props.setYear(props.year() - 1)}
         />
-        <Text variant="control" class="font-semibold tabular-nums">{String(props.year())}</Text>
+        <Text variant="control" class="font-semibold tabular-nums" testID={props.testID ? `${props.testID}-year` : undefined}>{String(props.year())}</Text>
         <IconButton
           icon="chevron-right"
           tooltip="Next year"
@@ -95,7 +95,9 @@ function MonthGrid(props: Omit<MonthPickerProps, "year"> & { year: () => number;
  */
 export function MonthPicker(props: MonthPickerProps) {
   const open = signal(false);
-  const year = signal(props.year >= 1900 && props.year <= 9999 ? props.year : new Date().getFullYear());
+  const validatedYear = (value: number) => value >= 1900 && value <= 9999 ? value : new Date().getFullYear();
+  const year = signal(validatedYear(props.year));
+  const resetYear = () => year.set(validatedYear(props.year));
   const grid = (
     <MonthGrid
       month={props.month}
@@ -122,14 +124,14 @@ export function MonthPicker(props: MonthPickerProps) {
       testID={props.testID}
       disabled={props.disabled}
       pressed={open()}
-      onPress={TOUCH ? () => open.set(true) : undefined}
+      onPress={TOUCH ? () => { resetYear(); open.set(true); } : undefined}
     />
   );
   return (
     <If
       when={TOUCH}
       else={
-        <Popover trigger={trigger} open={open()} onOpenChange={(o) => open.set(o)} placement="bottom" align="end" testID={props.testID ? `${props.testID}-pop` : undefined}>
+        <Popover trigger={trigger} open={open()} onOpenChange={(o) => { if (o) resetYear(); open.set(o); }} placement="bottom" align="end" testID={props.testID ? `${props.testID}-pop` : undefined}>
           {grid}
         </Popover>
       }

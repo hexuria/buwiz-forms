@@ -61,11 +61,18 @@ export function PeriodField(props: PeriodFieldProps) {
     const y = periodYear4(String(yearBox.value() || ""));
     return Number.isInteger(y) && y >= 1900 ? String(y) : String(yearBox.value() || "");
   };
+  const pickerYear = () => {
+    const typed = parsePeriod(box.value());
+    const typedYear = typed ? periodYear4(String(typed.y)) : Number.NaN;
+    if (Number.isInteger(typedYear) && typedYear >= 1900 && typedYear <= 9999) return typedYear;
+    const storedYear = periodYear4(String(yearBox.value() || ""));
+    return Number.isInteger(storedYear) && storedYear >= 1900 && storedYear <= 9999 ? storedYear : new Date().getFullYear();
+  };
   const calendarOnly = () => s.calendarYearEnd({ month: period.month, day: null, year: period.year });
   const picker = (id: string) => (
     <MonthPicker
       month={monthNum()}
-      year={s.periodYear(period)}
+      year={pickerYear()}
       // A locked year leaves the stepper nothing to reach; a calendar year leaves the grid December only.
       minYear={yearLocked() ? s.periodYear(period) : undefined}
       maxYear={yearLocked() ? s.periodYear(period) : undefined}

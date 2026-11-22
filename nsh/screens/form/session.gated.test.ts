@@ -379,3 +379,58 @@ test("1700 Schedule 1: a row's Taxpayer and Spouse columns are tick boxes, and n
   expect(table.summary(0)()).toBe("Taxpayer · ACME CORP");
   s.dispose();
 });
+
+test("1700 Schedule 1: switching row 4_2 to Taxpayer keeps row 4_3 ACME as Spouse with its amounts", async () => {
+  const s = await opened(at("1700", 2025, 1));
+  const atNo = (no: string) => itemNo(s, 1, no)!;
+  const married = radioLabeled(atNo("15").it, /married/i)!;
+  s.pickRadio(married.k);
+  await s.idle();
+  const spouseIncome = radioLabeled(atNo("16").it, /^yes$/i)!;
+  s.pickRadio(spouseIncome.k);
+  await s.idle();
+  const joint = radioLabeled(atNo("17").it, /joint filing/i)!;
+  s.pickRadio(joint.k);
+  await s.idle();
+
+  const schedules = s.schema!.parts.flatMap((p) => p.items).filter((i) => i.rows && (i.cols ?? []).filter((c) => c.t === "radio").length === 2);
+  const pageItem = schedules.find((i) => i.rows === 4)!;
+  const popupItem = schedules.find((i) => i.rows === 12)!;
+  const page = scheduleProps(s, s.itemIdForKey(pageItem.keys![0][0])!, pageItem, () => true);
+  const popup = scheduleProps(s, s.itemIdForKey(popupItem.keys![0][0])!, popupItem, () => true);
+
+  for (let row = 0; row < 4; row++) {
+    page.cell(row, 2).onEdit(`Employer ${row + 1}`);
+    await s.idle();
+    page.cell(row, 8).onEdit(String(1000 + row));
+    page.cell(row, 10).onEdit(String(100 + row));
+    await s.idle();
+    page.cell(row, 0).onEdit("true");
+    await s.idle();
+  }
+
+  popup.cell(1, 1).onEdit("true");
+  await s.idle();
+  popup.cell(2, 2).onEdit("ACME");
+  await s.idle();
+  popup.cell(2, 8).onEdit("10000");
+  popup.cell(2, 10).onEdit("1000");
+  await s.idle();
+  popup.cell(2, 1).onEdit("true");
+  await s.idle();
+
+  const acmeBefore = popupItem.keys!.find((row) => s.valueOf(row[2]) === "ACME")!;
+  expect(s.valueOf(acmeBefore[1])).toBe("true");
+  const compensation = s.valueOf(acmeBefore[8]);
+  const withholding = s.valueOf(acmeBefore[10]);
+
+  popup.cell(1, 0).onEdit("true");
+  await s.idle();
+
+  const acmeAfter = popupItem.keys!.find((row) => s.valueOf(row[2]) === "ACME")!;
+  expect(acmeAfter).toBeTruthy();
+  expect(s.valueOf(acmeAfter[1])).toBe("true");
+  expect(s.valueOf(acmeAfter[8])).toBe(compensation);
+  expect(s.valueOf(acmeAfter[10])).toBe(withholding);
+  s.dispose();
+});

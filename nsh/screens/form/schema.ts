@@ -156,6 +156,7 @@ export interface RangeEnd {
 export interface DateRange {
   from: RangeEnd;
   to: RangeEnd;
+  derived: boolean;
 }
 
 export function dateRanges(it: SchemaItem): DateRange[] {
@@ -170,7 +171,7 @@ export function dateRanges(it: SchemaItem): DateRange[] {
   return (it.date_ranges || []).flatMap(([f, t]) => {
     const from = end(f);
     const to = end(t);
-    return from && to ? [{ from, to }] : [];
+    return from && to ? [{ from, to, derived: (it.derived_to ?? []).includes(t) }] : [];
   });
 }
 

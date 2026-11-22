@@ -5,7 +5,7 @@ import { bir } from "../../bir";
 import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
 import { todoRows, type TodoPart } from "../../lib/todo";
 import type { SchemaItem } from "./contract";
-import { onePeriods } from "./schema";
+import { dateRanges, onePeriods } from "./schema";
 import { FormSession, bindError, type FormTarget } from "./session";
 
 // The first form call of a process builds every form's schema; a test's JS call has 2 s on the headless runner, a file's load 10 s.
@@ -247,6 +247,29 @@ test("Sample: typing 06/2025 in 1601C's filing-period box looks up that period a
   s.dispose();
 });
 
+test("1600WP: changing the From date from May 10 to May 15 updates both ends without a box message", async () => {
+  const s = await opened({ tin: DEMO.tin, formCode: "1600WP", year: 2025, period: 5, mode: "return" });
+  const fromMonth = "frm1600WP:DateWithholdingMonth";
+  const fromDay = "frm1600WP:DateWithholdingDay";
+  const toDay = "frm1600WP:DateWithholdingToDay";
+  const item = s.schema!.parts.flatMap((part) => part.items).find((it) =>
+    dateRanges(it).some((range) => range.from.anchor === fromMonth),
+  )!;
+  expect(item).toBeDefined();
+
+  s.edit(`${fromMonth}#date`, "05/10/2025");
+  await s.idle();
+  expect(s.valueOf(fromDay)).toBe("10");
+  expect(s.valueOf(toDay)).toBe("10");
+
+  s.edit(`${fromMonth}#date`, "05/15/2025");
+  await s.idle();
+  expect(s.valueOf(fromDay)).toBe("15");
+  expect(s.valueOf(toDay)).toBe("15");
+  expect(s.row(s.itemIdForKey(fromMonth)!)().boxMessages).toEqual([]);
+  s.dispose();
+});
+
 test("Sample: an unfinished 1702EX year holds its period edits; a complete year commits, and blur commits too", async () => {
   createDemoTaxpayer();
   const target = { tin: DEMO.tin, formCode: "1702EX", year: 0, period: 0, mode: "sample" } as FormTarget;
@@ -339,6 +362,34 @@ test("Sample: retyping over a held 1702EX period year drops the hold; blur commi
     expect(s.overlay()?.kind).not.toBe("sample-period");
     s.dispose();
   }
+});
+
+test("Sample: an incomplete 1601C year cannot save under the previous resolved period", async () => {
+  createDemoTaxpayer();
+  const target: FormTarget = { tin: DEMO.tin, formCode: "1601C", year: 0, period: 0, mode: "sample" };
+  const s = await opened(target);
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.month.k === "frm1601c:txtMonth")!;
+  const saved = () => bir.list_returns("saved").filter((r) => r.form_code === "1601C" && r.taxable_year === 2025 && r.period === 8);
+  expect(saved()).toEqual([]);
+
+  s.edit(period.periodKey, "08/2025");
+  await s.idle();
+  expect(saved()).toEqual([]);
+  s.edit(period.periodKey, "08/202");
+  await s.idle();
+  s.saveNow();
+  await s.idle();
+  expect(s.overlay()?.kind).toBe("sample-period");
+  expect(saved()).toEqual([]);
+
+  s.closeSamplePeriod();
+  s.edit(period.periodKey, "08/2025");
+  await s.idle();
+  s.saveNow();
+  await s.idle();
+  expect(s.overlay()?.kind).not.toBe("sample-period");
+  expect(saved()).toHaveLength(1);
+  s.dispose();
 });
 
 test("Sample: 1600PT and 1600VT take a four-digit year for their period, typed or picked on the month grid", async () => {

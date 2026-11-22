@@ -2586,6 +2586,11 @@ fn pr3_ranges_are_registered_pairs_on_one_item() {
                 range.form
             );
         }
+        if range.derived_to {
+            assert_eq!(item["derived_to"], json!([range.ends[1]]));
+        } else {
+            assert!(item.get("derived_to").is_none());
+        }
         // A one-date end's whole triple is drawn there too (1600WP).
         if range.form == "1600WP" {
             for key in [
@@ -2779,6 +2784,35 @@ fn pr3_reversed_ranges_are_refused_on_the_to_end() {
         "1701MS A reversed: {}",
         both["rejected"]
     );
+}
+
+#[test]
+fn pr3_1600wp_from_day_can_advance_when_to_is_derived() {
+    setup();
+    let from_month = "frm1600WP:DateWithholdingMonth";
+    let from_day = "frm1600WP:DateWithholdingDay";
+    let from_year = "frm1600WP:DateWithholdingYear";
+    let to_day = "frm1600WP:DateWithholdingToDay";
+    let opened = open("1600WP", 5);
+    let dated = fill(
+        "1600WP",
+        &opened["draft"],
+        json!({ from_month: "05", from_day: "10", from_year: "2026" }),
+    );
+    assert_eq!(dated["values"][from_day], "10");
+    assert_eq!(dated["values"][to_day], "10");
+
+    let advanced = fill("1600WP", &dated["draft"], json!({ from_day: "15" }));
+    assert!(
+        !advanced["rejected"]
+            .as_object()
+            .unwrap()
+            .contains_key(from_day),
+        "advancing the From day is not refused: {}",
+        advanced["rejected"]
+    );
+    assert_eq!(advanced["values"][from_day], "15");
+    assert_eq!(advanced["values"][to_day], "15");
 }
 
 /// Decision 6 (2552): its item 1 date is the return's identity — every write

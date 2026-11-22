@@ -37,16 +37,20 @@ function DrawerCell(props: { p: ScheduleInput; row: number; column: ScheduleInpu
 
 /** A run of TIN digit columns of the open row: one title, then the boxes as one grid line (1 : 1 : 1 : 1.4, no dashes). */
 function DrawerTin(props: { p: ScheduleInput; row: number; columns: ScheduleInput["columns"] }) {
-  const shape = drawerTin(props.columns.map((c) => c.col.l));
+  const shape = () => drawerTin(props.columns.map((c) => c.col.l));
+  const weightOf = (column: ScheduleInput["columns"][number]) =>
+    shape().weights[props.columns.findIndex((c) => c.index === column.index)] ?? 1;
   return (
     <View class="gap-1" testID={`${props.p.testID}-tin-${props.columns[0].index}`}>
-      <Text variant="meta" tone="fg2">{shape.title}</Text>
+      <Text variant="meta" tone="fg2">{shape().title}</Text>
       <View class="flex-row gap-1.5">
-        {props.columns.map((c, j) => (
-          <View class="min-w-0" style={{ flexGrow: shape.weights[j], flexBasis: 0 }} testID={`${props.p.testID}-cell-${c.index}`}>
-            <FieldControl {...props.p.cell(props.row, c.index)} narrow={() => true} disabled={props.p.locked} tinCell />
-          </View>
-        ))}
+        <Each of={props.columns} key={(c) => c.index}>
+          {(c) => (
+            <View class="min-w-0" style={{ flexGrow: weightOf(c()), flexBasis: 0 }} testID={`${props.p.testID}-cell-${c().index}`}>
+              <FieldControl {...props.p.cell(props.row, c().index)} narrow={() => true} disabled={props.p.locked} tinCell />
+            </View>
+          )}
+        </Each>
       </View>
     </View>
   );
@@ -54,12 +58,14 @@ function DrawerTin(props: { p: ScheduleInput; row: number; columns: ScheduleInpu
 
 /** The open row's boxes, stacked; its TIN digit boxes share one line. */
 function DrawerBody(props: { p: ScheduleInput; row: number }) {
-  const groups = drawerGroups(props.p.columns, (c) => props.p.item.keys?.[props.row]?.[c.index] ?? "");
+  const groups = () => drawerGroups(props.p.columns, (c) => props.p.item.keys?.[props.row]?.[c.index] ?? "");
   return (
     <View class="gap-4">
-      {groups.map((g) =>
-        g.length > 1 ? <DrawerTin p={props.p} row={props.row} columns={g} /> : <DrawerCell p={props.p} row={props.row} column={g[0]} />,
-      )}
+      <Each of={groups()} key={(g) => g[0].index}>
+        {(g) => g().length > 1
+          ? <DrawerTin p={props.p} row={props.row} columns={g()} />
+          : <DrawerCell p={props.p} row={props.row} column={g()[0]} />}
+      </Each>
     </View>
   );
 }

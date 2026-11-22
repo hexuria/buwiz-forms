@@ -304,6 +304,7 @@ interface St {
   periodSet: boolean;
   periodValues: Record<string, string>;
   periodHeld: Record<string, string> | null;
+  periodIncomplete: boolean;
   periodAsked: string | null;
   periodAnswered: string | null;
   periodComplete: boolean;
@@ -405,7 +406,7 @@ function freshState(target: FormTarget): St {
     values: {}, options: {}, locks: {}, lockNotes: {}, notesAlways: new Set(), profile: new Set(), profileEdit: new Set(),
     editing: new Set(), opened: new Set(), focusKey: null, profileOpen: new Set(), sample: target.mode === "sample",
     blank: new Set(), needs: {}, whys: {}, waits: {}, off: {}, penalties: [], penaltyOpen: new Set(), poolTexts: {},
-    typed: new Set(), typedEdits: {}, periodParts: new Map(), periodSet: false, periodValues: {}, periodHeld: null, periodAsked: null,
+    typed: new Set(), typedEdits: {}, periodParts: new Map(), periodSet: false, periodValues: {}, periodHeld: null, periodIncomplete: false, periodAsked: null,
     periodAnswered: null, periodComplete: false, periodSeq: 0, periodToken: 0, periodInFlight: null, opens: null,
     existing: null, saveAfterAnswer: null, submittedAt: null, submittedDryRun: false, submittedViaRelay: false, confirmedAt: null, amends: null, filedOriginal: null,
     filedOriginalView: null, profileUpdates: [], profileDiffers: [], profilePrerequisites: [], notes: [], saved: false, quiet: null, kept: {},
@@ -835,6 +836,8 @@ export class FormSession {
   /** Take what the host opened (a return, a sample, or a sample rebuilt for its period). */
   private takeOpened(r: ScreenFormOpened) {
     const s = this.st;
+    s.periodHeld = null;
+    s.periodIncomplete = false;
     s.draft = r.draft;
     s.status = r.status;
     s.editable = r.editable;
@@ -900,7 +903,7 @@ export class FormSession {
   private restingSaveState(): SaveState {
     const s = this.st;
     if (!s.editable || !s.draft) return { state: "idle" };
-    if (s.sample && !s.periodSet) return { state: "manual", message: "Sample · set its period to save" };
+    if (s.sample && (s.periodIncomplete || !s.periodSet)) return { state: "manual", message: "Sample · set its period to save" };
     if (s.amends && !s.saved) return { state: "manual", message: "Amendment · not saved yet" };
     if (s.dirty) return { state: "unsaved" };
     return s.saved ? { state: "saved" } : { state: "idle" };
@@ -1052,6 +1055,7 @@ export class FormSession {
       s.rejected[period.month.k] = reason;
       s.boxMessages[period.month.k] = this.refusalText(period.month.k, reason);
       s.periodHeld = null; // the box no longer says the held period: blur or Save must not commit it
+      s.periodIncomplete = Boolean(text.trim());
       s.dirty = true;
       this.cancelAutosave();
       this.markUnsaved();
@@ -1059,6 +1063,7 @@ export class FormSession {
     };
     const problem = this.periodRefusal(period, text);
     if (problem) return reject(problem);
+    s.periodIncomplete = Boolean(text.trim() && (!typed || typed.yDigits === 3));
     this.setDateError(period.month.k, "");
     for (const key of keys) {
       delete s.rejected[key];
@@ -1115,6 +1120,10 @@ export class FormSession {
     if (Object.keys(ordinaryEdits).length) {
       this.stage(ordinaryEdits);
       this.checkRangeOrders();
+    }
+    if (s.periodIncomplete) {
+      this.cancelAutosave();
+      s.saveState = this.restingSaveState();
     }
     this.publish();
   }
@@ -1185,6 +1194,7 @@ export class FormSession {
     for (const { range, row } of this.dateRanges.values()) {
       if (seen.has(range)) continue;
       seen.add(range);
+      if (range.derived) continue;
       const from = this.rangeEndDay(range.from);
       const to = this.rangeEndDay(range.to);
       const key = range.to.anchor;
@@ -1409,6 +1419,11 @@ export class FormSession {
   /** The save line says "Unsaved changes" the moment something is staged (an explicit-save return keeps its reason). */
   private markUnsaved() {
     const s = this.st;
+    if (s.sample && s.periodIncomplete) {
+      s.saveState = this.restingSaveState();
+      this.sSave.set(s.saveState);
+      return;
+    }
     if (s.saveState.state === "manual") return;
     s.saveState = { state: "unsaved" };
     this.sSave.set(s.saveState);
@@ -3052,7 +3067,7 @@ export class FormSession {
   /** After a successful fill: AUTOSAVE_DELAY of quiet saves (when this return may be autosaved). */
   private scheduleAutosave() {
     this.cancelAutosave();
-    if (!this.canAutosave() || this.removalUndo) {
+    if (!this.canAutosave() || this.st.periodIncomplete || this.removalUndo) {
       if (this.st.saveState.state !== "failed") this.st.saveState = this.restingSaveState();
       this.publish();
       return;
@@ -3068,13 +3083,19 @@ export class FormSession {
   /** Save at once (a fact, the election, Use profile values): the autosave path without the quiet. */
   private saveSoon() {
     this.cancelAutosave();
-    if (!this.canAutosave()) return this.publish();
+    if (!this.canAutosave() || this.st.periodIncomplete) return this.publish();
     this.autosave();
   }
 
   private autosave() {
     const s = this.st;
-    if (!this.canAutosave()) return;
+    if (!this.canAutosave() || s.periodIncomplete) {
+      if (s.periodIncomplete) {
+        s.saveState = this.restingSaveState();
+        this.publish();
+      }
+      return;
+    }
     // Typing came in meanwhile: its flush schedules the next save.
     if (Object.keys(s.pending).length) return;
     if (!s.dirty && s.saved) return;
@@ -3155,6 +3176,10 @@ export class FormSession {
   private saveSample(then: (() => void) | null) {
     const s = this.st;
     this.commitHeldPeriod();
+    if (s.periodIncomplete) {
+      s.saveState = this.restingSaveState();
+      return this.askSamplePeriod("", then);
+    }
     if (s.periodAsked && s.periodAnswered !== s.periodAsked && Object.keys(s.periodValues).length) {
       s.saveAfterAnswer = { then };
       if (s.periodInFlight !== s.periodAsked) {
@@ -3737,6 +3762,7 @@ export class FormSession {
   private keepForm() {
     const s = this.st;
     s.periodValues = {};
+    s.periodIncomplete = false;
     s.periodAsked = JSON.stringify({});
     s.periodAnswered = null;
     s.periodComplete = false;
@@ -3779,6 +3805,7 @@ export class FormSession {
     const s = this.st;
     const then = this.periodThen;
     s.periodHeld = null;
+    s.periodIncomplete = false;
     this.closeSamplePeriod();
     this.setPeriodPart(parts);
     if (s.periodAnswered === s.periodAsked) return this.afterPeriodForSave(then);

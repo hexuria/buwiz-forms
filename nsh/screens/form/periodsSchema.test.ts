@@ -28,8 +28,8 @@ const PAIRS: { code: string; month: string; year: string; twoDigit: boolean }[] 
   { code: "1702RT", month: "frm1702RT:ddlPg1I2Month", year: "frm1702RT:txtPg1I2Year", twoDigit: true },
 ];
 
-const RANGES: { code: string; from: string; to: string }[] = [
-  { code: "1600WP", from: "frm1600WP:DateWithholdingMonth", to: "frm1600WP:DateWithholdingToMonth" },
+const RANGES: { code: string; from: string; to: string; derivedTo?: string }[] = [
+  { code: "1600WP", from: "frm1600WP:DateWithholdingMonth", to: "frm1600WP:DateWithholdingToMonth", derivedTo: "frm1600WP:DateWithholdingToMonth" },
   { code: "2550Q", from: "frm2550qv2024:RtnPeriodFromNo4", to: "frm2550qv2024:RtnPeriodToNo4" },
   { code: "1702EX", from: "frm1702EX:txtPg1Pt1I17EffectivityFrom", to: "frm1702EX:txtPg1Pt1I17EffectivityTo" },
   { code: "1701MS", from: "frm1701MS:txtTaxpayerNo16a", to: "frm1701MS:txtTaxpayerNo16a1" },
@@ -56,9 +56,14 @@ test("PR3: all eighteen month+year pairs are marked one_periods on one item, wit
 test("PR3: all six from-to pairs are marked date_ranges on one item; 2551Q's bare keys are whole-date boxes", () => {
   createDemoTaxpayer();
   for (const range of RANGES) {
-    const found = items(range.code).flatMap(dateRanges);
+    const formItems = items(range.code);
+    const found = formItems.flatMap(dateRanges);
     const hit = found.find((r) => r.from.anchor === range.from && r.to.anchor === range.to);
     expect(`${range.code}: ${hit ? "marked" : "missing"}`).toBe(`${range.code}: marked`);
+    expect(hit!.derived).toBe(Boolean(range.derivedTo));
+    const item = formItems.find((it) => (it.date_ranges || []).some(([from, to]) => from === range.from && to === range.to))!;
+    if (range.derivedTo) expect(item.derived_to).toEqual([range.derivedTo]);
+    else expect(item.derived_to).toBeUndefined();
   }
   const issue = items("2551Q").flatMap(dateRanges)[0];
   expect(issue.from.field?.t).toBe("date");
