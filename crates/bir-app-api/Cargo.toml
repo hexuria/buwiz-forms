@@ -51,3 +51,5 @@ temp-env = "0.3"
 # Host tests stage filed returns and failing writes with raw SQL.
 bir-core = { path = "../bir-core", default-features = false, features = ["test-support"] }
 tempfile = "3"
+# Agent tests run a generated recipe with the runner's own parameter binding.
+gpui-agent-recipe = { workspace = true }

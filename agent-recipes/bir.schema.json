@@ -253,6 +253,10 @@
         "source": {
           "type": "string",
           "required": false
+        },
+        "ask": {
+          "type": "array",
+          "required": false
         }
       },
       "keywords": [
@@ -362,7 +366,7 @@
     {
       "name": "form.check",
       "kind": "invoke",
-      "description": "Dry run: fill and validate a fresh in-memory return. Saves and opens nothing.",
+      "description": "Dry run: fill and validate a fresh in-memory return. Saves and opens nothing. With `stored: true` the check runs on the return saved for the period instead, which must still be a Draft: once that return has left Draft the check is refused. `ask` lists boxes whose saved answer is dropped when `fields` leaves them unanswered.",
       "effects": [
         "read"
       ],
@@ -399,6 +403,10 @@
         },
         "stored": {
           "type": "bool",
+          "required": false
+        },
+        "ask": {
+          "type": "array",
           "required": false
         }
       },

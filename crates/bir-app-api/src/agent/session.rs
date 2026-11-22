@@ -617,6 +617,8 @@ impl Session {
         let def = kind.definition();
         let (mut filled, mut kept) = (Vec::new(), Vec::new());
         let mut refused = Map::new();
+        let forgot = forget_unanswered(kind, &mut draft, args, &fields)?;
+        let mut chosen = BTreeMap::new();
         for (key, value) in &fields {
             if sources
                 .get(key)
@@ -630,13 +632,14 @@ impl Session {
                 refused.insert(key.clone(), Value::String(why));
                 continue;
             }
+            note_choice(kind, def, &draft, key, &mut chosen)?;
             filled.push(key.clone());
         }
         agent::compute(kind, &mut draft)?;
         let map = agent::field_map(kind, &draft)?;
-        let not_shown = not_shown(def, &fields, &filled, &map);
+        let not_shown = not_shown(def, &fields, &filled, &chosen, &map);
         let mut edits = Map::new();
-        if !filled.is_empty() {
+        if !filled.is_empty() || forgot {
             agent::save_draft(kind, &db, &mut draft)?;
             for key in &filled {
                 if not_shown.iter().any(|hidden| hidden == key) {
@@ -648,7 +651,7 @@ impl Session {
         drop(db);
         if let Some(open) = self.open.as_mut() {
             open.draft = draft;
-            open.dirty |= !filled.is_empty();
+            open.dirty |= !filled.is_empty() || forgot;
             for key in &filled {
                 open.sources.insert(key.clone(), source.clone());
             }
@@ -743,6 +746,8 @@ impl Session {
     /// saved, opened or shown. On a fresh in-memory return, or with
     /// `args.stored` on the return `form.open` would open for the period
     /// (the stored draft when there is one), which must still be a draft.
+    /// `args.ask` lists choice boxes whose stored answer is dropped unless
+    /// `fields` answers them (a stopped box is asked again where it applies).
     /// `discarded` lists the inputs the computed return does not hold.
     fn form_check(&self, args: &Value) -> Result<DispatchResult, String> {
         let kind = form_kind(args, "form.check")?;
@@ -782,9 +787,15 @@ impl Session {
         }
         let mut applied = Vec::new();
         let mut refused = Map::new();
+        forget_unanswered(kind, &mut draft, args, &fields)?;
+        let def = kind.definition();
+        let mut chosen = BTreeMap::new();
         for (key, value) in &fields {
             match agent::fill(kind, &mut draft, key, value, Some(&from_profile)) {
-                Ok(()) => applied.push(key.clone()),
+                Ok(()) => {
+                    note_choice(kind, def, &draft, key, &mut chosen)?;
+                    applied.push(key.clone());
+                }
                 Err(why) => {
                     refused.insert(key.clone(), Value::String(why));
                 }
@@ -793,7 +804,6 @@ impl Session {
         agent::compute(kind, &mut draft)?;
         let errors = agent::validate(kind, &mut draft)?;
         let map = agent::field_map(kind, &draft)?;
-        let def = kind.definition();
         let computed: Map<String, Value> = def
             .boxes
             .iter()
@@ -803,7 +813,7 @@ impl Session {
                 (!agent::carry::is_blank_value(&value)).then(|| (entry.key.clone(), json!(value)))
             })
             .collect();
-        let discarded = discarded(def, &fields, &applied, &map);
+        let discarded = discarded(def, &fields, &applied, &chosen, &map);
         let ok = errors.is_empty() && refused.is_empty() && discarded.is_empty();
         if strict && !ok {
             let mut problems: Vec<String> = refused
@@ -1484,7 +1494,7 @@ fn collect_fill_fields(args: &Value) -> Result<Map<String, Value>, String> {
     }
     if let Some(object) = args.as_object() {
         for (key, value) in object {
-            if !matches!(key.as_str(), "fields" | "source" | "from_card") {
+            if !matches!(key.as_str(), "fields" | "source" | "from_card" | "ask") {
                 fields.insert(key.clone(), value.clone());
             }
         }
@@ -1553,10 +1563,59 @@ fn field_errors(errors: &[(String, String)]) -> Vec<Value> {
         .collect()
 }
 
+/// Drop the stored answer of every `args.ask` box that `fields` leaves
+/// unanswered. True when an answer was dropped.
+fn forget_unanswered(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    args: &Value,
+    fields: &Map<String, Value>,
+) -> Result<bool, String> {
+    let ask = match args.get("ask") {
+        None | Some(Value::Null) => return Ok(false),
+        Some(Value::Array(keys)) => keys,
+        Some(_) => return Err("args.ask must be a list of box keys".into()),
+    };
+    let before = draft.clone();
+    for key in ask.iter().filter_map(Value::as_str) {
+        let answered = match fields.get(key) {
+            None | Some(Value::Null) => false,
+            Some(Value::String(text)) => !text.trim().is_empty(),
+            Some(_) => true,
+        };
+        if !answered {
+            agent::forget(kind, draft, key)?;
+        }
+    }
+    Ok(*draft != before)
+}
+
+/// After a radio item is filled: the option that fill chose, by its own
+/// matching of labels and aliases, before the form recomputes.
+fn note_choice(
+    kind: AgentFormKind,
+    def: &agent::AgentFormDef,
+    draft: &Value,
+    key: &str,
+    chosen: &mut BTreeMap<String, String>,
+) -> Result<(), String> {
+    if def.box_def(key).is_some_and(|entry| entry.radio_group) {
+        let option = def.box_value(key, &agent::field_map(kind, draft)?);
+        if !option.is_empty() {
+            chosen.insert(key.to_string(), option);
+        }
+    }
+    Ok(())
+}
+
+/// The filled boxes the return does not show as filled. `chosen` holds the
+/// option each filled radio item selected ([`note_choice`]): an item whose
+/// selection the computation replaced is not shown.
 fn not_shown(
     def: &agent::AgentFormDef,
     fields: &Map<String, Value>,
     filled: &[String],
+    chosen: &BTreeMap<String, String>,
     map: &BTreeMap<String, String>,
 ) -> Vec<String> {
     let text = |value: &Value| match value {
@@ -1575,7 +1634,7 @@ fn not_shown(
                 return true;
             }
             if def.box_def(key).is_some_and(|entry| entry.radio_group) {
-                return shown.is_empty();
+                return shown.is_empty() || chosen.get(*key).is_some_and(|option| *option != shown);
             }
             match def.bindings.get(*key).map(|bound| &bound.binding) {
                 Some(Binding::Amount { .. }) => {
@@ -1607,9 +1666,10 @@ fn discarded(
     def: &agent::AgentFormDef,
     fields: &Map<String, Value>,
     applied: &[String],
+    chosen: &BTreeMap<String, String>,
     map: &BTreeMap<String, String>,
 ) -> Vec<String> {
-    not_shown(def, fields, applied, map)
+    not_shown(def, fields, applied, chosen, map)
         .into_iter()
         .filter(|key| {
             let wanted = match fields.get(key) {
@@ -1776,6 +1836,8 @@ mod tests {
 
     const TIN: &str = "12345678800000";
     const ROOT: &str = "123456788";
+    /// A spouse TIN with a valid check digit.
+    const SPOUSE_TIN: &str = "12345678800000";
 
     fn session() -> Session {
         let db = Arc::new(Mutex::new(
@@ -2380,6 +2442,409 @@ mod tests {
                 .iter()
                 .any(|field| field == "deduction_method")
         );
+    }
+
+    /// A valid first-quarter 1701Q under graduated rates.
+    fn graduated_1701q() -> Value {
+        json!({
+            "frm1701q:txtCitizenship": "FILIPINO",
+            "frm1701q:optType": "Professional",
+            "frm1701q:optATC": "II012",
+            "frm1701q:optTaxRate": "Graduated",
+            "frm1701q:optMethodOfDeduction": "O",
+            "frm1701q:txt36A": "250000.00",
+        })
+    }
+
+    /// A scratch profile complete enough for a return to validate.
+    fn save_complete(session: &mut Session) {
+        call(
+            session,
+            "profile.save",
+            json!({"tin": TIN, "name": "TEST", "rdo_code": "040", "birth_date": "1990-01-15",
+                   "address": "1 TEST STREET", "zip": "1100", "email": "test@example.com"}),
+        )
+        .unwrap();
+    }
+
+    /// Store `fields` as the period's draft, the history a recipe reads.
+    fn store_1701q(session: &mut Session, period: u32, fields: &Value) {
+        store_1701q_as(session, period, fields, false);
+    }
+
+    /// [`store_1701q`]; `married` turns the spouse's part on first, as the
+    /// page's Civil Status does (no agent box does).
+    fn store_1701q_as(session: &mut Session, period: u32, fields: &Value, married: bool) {
+        call(
+            session,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": period, "tin": TIN}),
+        )
+        .unwrap();
+        if married {
+            let draft = &mut session.open.as_mut().unwrap().draft;
+            draft["has_spouse"] = json!(true);
+            draft["spouse_tin"] = json!(SPOUSE_TIN);
+            draft["spouse_name"] = json!("TEST, SPOUSE");
+            draft["spouse_rdo_code"] = json!("040");
+        }
+        let filled = call(session, "form.fill", json!({"fields": fields})).unwrap();
+        assert!(filled.get("refused").is_none(), "{filled}");
+        call(session, "form.save_draft", json!({})).unwrap();
+        call(session, "form.dismiss", json!({})).unwrap();
+    }
+
+    /// The generated recipe's parameter for box `key`.
+    fn param_of(made: &Value, key: &str) -> String {
+        made["input_schema"]["properties"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .find(|(_, property)| property["x-box"] == key)
+            .map(|(name, _)| name.clone())
+            .unwrap_or_else(|| panic!("no parameter for {key}: {made}"))
+    }
+
+    fn is_required(made: &Value, key: &str) -> bool {
+        made["input_schema"]["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!(param_of(made, key)))
+    }
+
+    /// Run a generated recipe the way `gpui-agent recipe run` does: bind
+    /// `set` (box key, value) with the runner's own rules, an optional
+    /// parameter left out dropping its argument, then invoke each step in
+    /// order. The error names the step that stopped the run.
+    fn run_recipe(
+        session: &mut Session,
+        made: &Value,
+        period: u32,
+        set: &[(&str, &str)],
+    ) -> Result<BTreeMap<String, Value>, String> {
+        use gpui_agent::protocol::Op;
+        let recipe = gpui_agent_recipe::Recipe::from_value(&made["recipe"])
+            .map_err(|error| format!("recipe: {error}"))?;
+        let mut bound: BTreeMap<String, String> = set
+            .iter()
+            .map(|(key, value)| (param_of(made, key), (*value).to_string()))
+            .collect();
+        bound.insert("year".into(), "2026".into());
+        bound.insert("period".into(), period.to_string());
+        let recipe = gpui_agent_recipe::apply_params(&recipe, &bound)
+            .map_err(|error| format!("params: {error}"))?;
+        let mut done = BTreeMap::new();
+        for step in &recipe.steps {
+            let Op::Invoke { name, args } = &step.op else {
+                panic!("step {} is not an invoke", step.id);
+            };
+            let value =
+                call(session, name, args.clone()).map_err(|why| format!("{}: {why}", step.id))?;
+            done.insert(step.id.clone(), value);
+        }
+        Ok(done)
+    }
+
+    /// Answers for a 1701Q under graduated rates, Item 16A left out.
+    const GRADUATED_SET: [(&str, &str); 8] = [
+        ("frm1701q:txtCitizenship", "FILIPINO"),
+        ("frm1701q:optType", "Professional"),
+        ("frm1701q:optATC", "II012"),
+        ("frm1701q:txtBirthMonth", "01"),
+        ("frm1701q:txtBirthDay", "15"),
+        ("frm1701q:txtBirthYear", "1990"),
+        ("frm1701q:optTaxRate", "Graduated"),
+        ("frm1701q:txt36A", "250000.00"),
+    ];
+
+    /// The same return under the 8% rate.
+    const EIGHT_PERCENT_SET: [(&str, &str); 7] = [
+        ("frm1701q:txtCitizenship", "FILIPINO"),
+        ("frm1701q:optType", "Professional"),
+        ("frm1701q:optATC", "II015"),
+        ("frm1701q:txtBirthMonth", "01"),
+        ("frm1701q:txtBirthDay", "15"),
+        ("frm1701q:txtBirthYear", "1990"),
+        ("frm1701q:optTaxRate", "Percentage"),
+    ];
+
+    /// The answers of `set` the recipe has a parameter for.
+    fn asked<'a>(made: &Value, set: &[(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
+        set.iter()
+            .copied()
+            .filter(|(key, _)| made_asks(made, key))
+            .collect()
+    }
+
+    fn with<'a>(
+        base: &[(&'a str, &'a str)],
+        more: &[(&'a str, &'a str)],
+    ) -> Vec<(&'a str, &'a str)> {
+        base.iter().chain(more).copied().collect()
+    }
+
+    /// The generated recipe itself runs an 8% return with Item 16A left
+    /// out: the runner drops the argument from both the check and the fill.
+    #[test]
+    fn generated_recipe_runs_an_eight_percent_return_without_the_deduction_method() {
+        let mut session = session();
+        save_complete(&mut session);
+        let made = call(
+            &mut session,
+            "recipe.generate",
+            json!({"code": "1701Q", "tin": TIN, "check": "strict"}),
+        )
+        .unwrap();
+        let done = run_recipe(&mut session, &made, 1, &asked(&made, &EIGHT_PERCENT_SET)).unwrap();
+        assert_eq!(done["check"]["ok"], true, "{}", done["check"]);
+        assert_eq!(done["validate"]["ok"], true, "{}", done["validate"]);
+        assert_eq!(done["save"]["saved"], true, "{}", done["save"]);
+        // Graduated rates still ask for it, and name it before any write.
+        let stopped =
+            run_recipe(&mut session, &made, 2, &asked(&made, &GRADUATED_SET)).unwrap_err();
+        assert!(stopped.starts_with("check: "), "{stopped}");
+        assert!(stopped.contains("Item 16A"), "{stopped}");
+        let answered = with(
+            &asked(&made, &GRADUATED_SET),
+            &[("frm1701q:optMethodOfDeduction", "O")],
+        );
+        let done = run_recipe(&mut session, &made, 2, &answered).unwrap();
+        assert_eq!(done["save"]["saved"], true, "{}", done["save"]);
+    }
+
+    /// A spouse who filed under graduated rates may elect 8% later: Item
+    /// 25A is then not asked for, and the recipe runs without it.
+    #[test]
+    fn spouse_eight_percent_recipe_does_not_require_the_spouse_deduction_method() {
+        let mut session = session();
+        save_complete(&mut session);
+        let mut history = graduated_1701q();
+        for (key, value) in SPOUSE_GRADUATED {
+            history[key] = json!(value);
+        }
+        store_1701q_as(&mut session, 1, &history, true);
+        // The period's draft is the married filer's, its elections unmade.
+        store_1701q_as(
+            &mut session,
+            2,
+            &json!({"frm1701q:txtCitizenship": "FILIPINO"}),
+            true,
+        );
+        let made = call(
+            &mut session,
+            "recipe.generate",
+            json!({"code": "1701Q", "tin": TIN, "check": "strict"}),
+        )
+        .unwrap();
+        assert!(!is_required(&made, "frm1701q:optSpouseMethod"), "{made}");
+        let filer = with(
+            &asked(&made, &GRADUATED_SET),
+            &[("frm1701q:optMethodOfDeduction", "O")],
+        );
+        let spouse: Vec<(&str, &str)> = SPOUSE_GRADUATED
+            .iter()
+            // Neither Item 25A nor graduated sales (Item 36B) is on an 8% column.
+            .filter(|(key, _)| !matches!(*key, "frm1701q:optSpouseMethod" | "frm1701q:txt36B"))
+            .map(|(key, value)| match *key {
+                "frm1701q:optSpouseATC" => (*key, "II015"),
+                _ => (*key, *value),
+            })
+            .chain([("frm1701q:optSpouseTaxRate", "Percentage")])
+            .filter(|(key, _)| made_asks(&made, key))
+            .collect();
+        let done = run_recipe(&mut session, &made, 2, &with(&filer, &spouse)).unwrap();
+        assert_eq!(done["check"]["ok"], true, "{}", done["check"]);
+        assert_eq!(done["check"]["discarded"], json!([]), "{}", done["check"]);
+        assert_eq!(done["save"]["saved"], true, "{}", done["save"]);
+        // The 8% spouse return holds no method of deduction.
+        assert_eq!(
+            read(&done["readback"], "frm1701q:optSpouseTaxRate"),
+            "Percentage"
+        );
+        assert_eq!(read(&done["readback"], "frm1701q:optSpouseMethod"), "");
+    }
+
+    /// A graduated spouse return.
+    const SPOUSE_GRADUATED: [(&str, &str); 4] = [
+        ("frm1701q:optSpouseType", "Professional"),
+        ("frm1701q:optSpouseATC", "II012"),
+        ("frm1701q:optSpouseMethod", "O"),
+        ("frm1701q:txt36B", "100000.00"),
+    ];
+
+    /// The value `form.fields` read back for box `key`.
+    fn read(readback: &Value, key: &str) -> String {
+        readback["boxes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["key"] == key)
+            .unwrap_or_else(|| panic!("no box {key}"))["value"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string()
+    }
+
+    fn made_asks(made: &Value, key: &str) -> bool {
+        made["input_schema"]["properties"]
+            .as_object()
+            .unwrap()
+            .values()
+            .any(|property| property["x-box"] == key)
+    }
+
+    /// A tax rate the ATC replaces is a discarded input: strict preflight
+    /// stops the recipe before the form opens.
+    #[test]
+    fn strict_check_refuses_a_tax_rate_the_atc_replaces() {
+        let mut session = session();
+        save_complete(&mut session);
+        let check = |session: &mut Session, fields: &Value, strict: bool| {
+            call(
+                session,
+                "form.check",
+                json!({"code": "1701Q", "year": 2026, "period": 1, "tin": TIN,
+                       "fields": fields, "strict": strict}),
+            )
+        };
+        let mut conflict = graduated_1701q();
+        conflict["frm1701q:optATC"] = json!("II015");
+        let checked = check(&mut session, &conflict, false).unwrap();
+        let discarded = checked["discarded"].as_array().unwrap();
+        assert!(
+            discarded.contains(&json!("frm1701q:optTaxRate")),
+            "{checked}"
+        );
+        assert_eq!(checked["ok"], false, "{checked}");
+        let refused = check(&mut session, &conflict, true).unwrap_err();
+        assert!(refused.contains("frm1701q:optTaxRate"), "{refused}");
+        // A label or alias fill accepts for the option the return keeps is
+        // not a discard.
+        for rate in ["Graduated", "graduated", "Graduated Rates"] {
+            let mut same = graduated_1701q();
+            same["frm1701q:optTaxRate"] = json!(rate);
+            let Ok(checked) = check(&mut session, &same, false) else {
+                continue;
+            };
+            if checked["refused"].get("frm1701q:optTaxRate").is_some() {
+                continue;
+            }
+            assert_eq!(checked["discarded"], json!([]), "{rate}: {checked}");
+        }
+        let checked = check(&mut session, &graduated_1701q(), true).unwrap();
+        assert_eq!(checked["ok"], true, "{checked}");
+
+        // The generated recipe stops at its check, with the form unopened.
+        let made = call(
+            &mut session,
+            "recipe.generate",
+            json!({"code": "1701Q", "tin": TIN, "check": "strict"}),
+        )
+        .unwrap();
+        let set: Vec<_> = asked(&made, &EIGHT_PERCENT_SET)
+            .into_iter()
+            .map(|(key, value)| match key {
+                "frm1701q:optTaxRate" => (key, "Graduated"),
+                _ => (key, value),
+            })
+            .chain([("frm1701q:optMethodOfDeduction", "O")])
+            .collect();
+        let stopped = run_recipe(&mut session, &made, 1, &set).unwrap_err();
+        assert!(stopped.starts_with("check: "), "{stopped}");
+        assert!(stopped.contains("frm1701q:optTaxRate"), "{stopped}");
+        assert!(call(&mut session, "form.fields", json!({})).is_err());
+    }
+
+    /// The generated recipe refuses an amount the return discards, before
+    /// it opens the form, and runs with a zero in the inactive box.
+    #[test]
+    fn generated_recipe_stops_on_a_discarded_amount() {
+        let mut session = session();
+        save_complete(&mut session);
+        // An itemized return with cost of sales, so the recipe asks for it.
+        let mut itemized = graduated_1701q();
+        itemized["frm1701q:optMethodOfDeduction"] = json!("I");
+        itemized["frm1701q:txt37A"] = json!("40000.00");
+        store_1701q(&mut session, 1, &itemized);
+        let made = call(
+            &mut session,
+            "recipe.generate",
+            json!({"code": "1701Q", "tin": TIN, "check": "strict"}),
+        )
+        .unwrap();
+        let set = with(
+            &asked(&made, &GRADUATED_SET),
+            &[("frm1701q:optMethodOfDeduction", "O")],
+        );
+        let stopped = run_recipe(
+            &mut session,
+            &made,
+            2,
+            &with(&set, &[("frm1701q:txt37A", "40000.00")]),
+        )
+        .unwrap_err();
+        assert!(stopped.starts_with("check: "), "{stopped}");
+        assert!(stopped.contains("frm1701q:txt37A"), "{stopped}");
+        assert!(call(&mut session, "form.fields", json!({})).is_err());
+        let done = run_recipe(
+            &mut session,
+            &made,
+            2,
+            &with(&set, &[("frm1701q:txt37A", "0.00")]),
+        )
+        .unwrap();
+        assert_eq!(done["check"]["discarded"], json!([]), "{}", done["check"]);
+        assert_eq!(done["save"]["saved"], true, "{}", done["save"]);
+    }
+
+    /// A stop on Item 16A asks again where the item applies: the method a
+    /// stored draft holds is not reused. Under the 8% rate nothing is asked.
+    #[test]
+    fn explicit_stop_on_the_deduction_method_is_asked_again() {
+        let mut session = session();
+        save_complete(&mut session);
+        store_1701q(&mut session, 1, &graduated_1701q());
+        session
+            .lock_db()
+            .unwrap()
+            .snapshot_template_from_latest_return(TIN, "1701Q")
+            .unwrap();
+        session
+            .lock_db()
+            .unwrap()
+            .set_template_stop(TIN, "1701Q", "frm1701q:optMethodOfDeduction", Some(true))
+            .unwrap();
+        let made = call(
+            &mut session,
+            "recipe.generate",
+            json!({"code": "1701Q", "tin": TIN, "check": "strict"}),
+        )
+        .unwrap();
+        assert!(made_asks(&made, "frm1701q:optMethodOfDeduction"), "{made}");
+        assert!(
+            !is_required(&made, "frm1701q:optMethodOfDeduction"),
+            "{made}"
+        );
+        // The period's draft already holds a method of deduction.
+        store_1701q(&mut session, 2, &graduated_1701q());
+        let stopped =
+            run_recipe(&mut session, &made, 2, &asked(&made, &GRADUATED_SET)).unwrap_err();
+        assert!(stopped.starts_with("check: "), "{stopped}");
+        assert!(stopped.contains("Item 16A"), "{stopped}");
+        let answered = with(
+            &asked(&made, &GRADUATED_SET),
+            &[("frm1701q:optMethodOfDeduction", "I")],
+        );
+        let done = run_recipe(&mut session, &made, 2, &answered).unwrap();
+        assert_eq!(
+            read(&done["readback"], "frm1701q:optMethodOfDeduction"),
+            "I"
+        );
+        // An 8% return runs with Item 16A left out, on a prefilled draft too.
+        store_1701q(&mut session, 3, &graduated_1701q());
+        let done = run_recipe(&mut session, &made, 3, &asked(&made, &EIGHT_PERCENT_SET)).unwrap();
+        assert_eq!(done["check"]["ok"], true, "{}", done["check"]);
+        assert_eq!(done["save"]["saved"], true, "{}", done["save"]);
     }
 
     #[test]

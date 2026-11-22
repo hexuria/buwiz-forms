@@ -1295,6 +1295,26 @@ pub fn fill(
     fill_box(kind, draft, key, value, &[], from_profile, false)
 }
 
+/// Drop the answer of choice box `key`, so the form asks for it again where
+/// it applies: a stopped box's stored answer is not reused. A box that is
+/// not one choice over one draft field is left as it is.
+pub fn forget(kind: AgentFormKind, draft: &mut Value, key: &str) -> Result<(), String> {
+    let def = kind.definition();
+    let Some(Binding::Choice { options }) = def.bindings.get(key).map(|bound| &bound.binding)
+    else {
+        return Ok(());
+    };
+    let Some(path) = single_choice_path(options) else {
+        return Ok(());
+    };
+    if draft.pointer(path).is_none_or(Value::is_null) {
+        return Ok(());
+    }
+    set_path(draft, path, Value::Null, &def.rows)?;
+    with_agent_kind!(kind, F => parse::<F>(kind, draft).map(|_| ()))
+        .map_err(|error| format!("`{key}` cannot be left unanswered: {error}"))
+}
+
 /// [`fill`] for the user's own form page. Two differences: an income-tax
 /// election ([`Lock::Election`]) is the user's to answer, and a bound box
 /// the host writes through its own editors writes — the page's edit

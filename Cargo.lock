@@ -420,6 +420,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "gpui-agent",
+ "gpui-agent-recipe",
  "libc",
  "reqwest",
  "serde",
@@ -1804,6 +1805,18 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "thiserror",
+]
+
+[[package]]
+name = "gpui-agent-recipe"
+version = "0.4.0"
+source = "git+https://github.com/fullstackcrabs/gpui-agent?rev=81151a3c95c9aecff7ecd092cf1cbc9581bdb59b#81151a3c95c9aecff7ecd092cf1cbc9581bdb59b"
+dependencies = [
+ "gpui-agent",
+ "regex-lite",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 
@@ -3694,6 +3707,12 @@ dependencies = [
  "memchr",
  "regex-syntax",
 ]
+
+[[package]]
+name = "regex-lite"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
 
 [[package]]
 name = "regex-syntax"

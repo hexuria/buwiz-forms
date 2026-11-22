@@ -351,13 +351,17 @@ pub fn form_schema(kind: AgentFormKind) -> Value {
     })
 }
 
-/// Boxes whose metadata reads "required" though the form's own validation
-/// asks for them only under another answer: 1701Q Item 16A (method of
-/// deduction) applies under graduated rates only, not under the 8% rate.
+/// Boxes the form's own validation asks for only under another answer,
+/// whatever their metadata or the history says: 1701Q Items 16A and 25A
+/// (the filer's and the spouse's method of deduction) apply under graduated
+/// rates only, and the form clears them under the 8% rate.
 fn depends_on_another_answer(kind: AgentFormKind, key: &str) -> bool {
     matches!(
         (kind.form_code(), key),
-        ("1701Q", "frm1701q:optMethodOfDeduction")
+        (
+            "1701Q",
+            "frm1701q:optMethodOfDeduction" | "frm1701q:optSpouseMethod"
+        )
     )
 }
 
@@ -400,6 +404,9 @@ pub fn generate(inputs: &Inputs<'_>) -> Result<Generated, String> {
     let mut constants = BTreeMap::new();
     let mut names = BTreeMap::new();
     let mut left_out = BTreeMap::new();
+    // Stopped boxes the form asks for only under another answer: their
+    // stored answer is dropped, so the form asks again when they apply.
+    let mut ask = Vec::new();
 
     for entry in def.boxes.iter().filter(|entry| entry.is_question()) {
         let key = &entry.key;
@@ -417,6 +424,9 @@ pub fn generate(inputs: &Inputs<'_>) -> Result<Generated, String> {
         }
         let shape = Shape::of(def, entry);
         let stop = stops.get(key).copied();
+        if stop == Some(true) && depends_on_another_answer(kind, key) {
+            ask.push(key.clone());
+        }
         if stop != Some(true)
             && let Some(value) = pinned.get(key)
             && !carry::is_blank_value(value)
@@ -495,6 +505,7 @@ pub fn generate(inputs: &Inputs<'_>) -> Result<Generated, String> {
                 // for the period, not a fresh one.
                 "stored": true,
                 "strict": inputs.options.check == CheckMode::Strict,
+                "ask": ask,
             },
             "needs": ["template"],
         }));
@@ -507,7 +518,7 @@ pub fn generate(inputs: &Inputs<'_>) -> Result<Generated, String> {
     }));
     steps.push(json!({
         "id": "fill", "op": "invoke", "name": "form.fill",
-        "args": {"fields": fields, "source": "document"},
+        "args": {"fields": fields, "source": "document", "ask": ask},
         "needs": ["open"],
     }));
     steps.push(json!({"id": "readback", "op": "invoke", "name": "form.fields", "needs": ["fill"]}));
