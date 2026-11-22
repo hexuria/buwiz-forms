@@ -1303,11 +1303,19 @@ export class FormPageActions {
     this.applyFill(held.r, held.edits);
     s.dirty = true;
     this.refreshRows();
-    if (held.agentChoice) return this.save(cx);
+    if (held.agentChoice) {
+      this.save(cx);
+      if (!s.dirty) this.offerRemovalUndo(held, s, cx);
+      return;
+    }
     this.validate(cx);
+    this.offerRemovalUndo(held, s, cx);
+  }
+
+  offerRemovalUndo(held, s, cx) {
     // Undo belongs to this return's page as it is now: another return, or
     // any later edit here, retires it (it would bring back a stale draft).
-    const undo = (ucx) => this.undoRemoval(held.draft, s, undo, ucx);
+    const undo = (ucx) => this.undoRemoval(held.draft, s, undo, ucx, held.agentChoice);
     this.removalUndo = { state: s, undo };
     this.offerUndo(held.r.removes.done, undo, cx);
     cx.notify();
@@ -1372,7 +1380,7 @@ export class FormPageActions {
   }
 
   /** Undo a removal: the draft from before the answer comes back, on the same page only. */
-  undoRemoval(draft, state, undo, cx) {
+  undoRemoval(draft, state, undo, cx, save = false) {
     const s = this.state;
     if (!s || s !== state || this.removalUndo?.undo !== undo) return;
     this.removalUndo = null;
@@ -1384,6 +1392,7 @@ export class FormPageActions {
     }
     s.dirty = true;
     this.refreshRows();
+    if (save) return this.save(cx);
     this.validate(cx);
     cx.notify();
   }

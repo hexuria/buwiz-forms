@@ -298,6 +298,7 @@ console.log("PASS 2552 item 11: the kept group's untick and grp-scoped pick emit
   const graduated = { [atc]: "II012", [rate]: "Graduated", [income]: "250000.00" };
 
   await openWith("1701Q", graduated);
+  ui.state.draft = { id: 7, values: { ...graduated } };
   storedValues = { ...graduated };
   nextRemoval = { done: [income], cleared: [income] };
   ui.choose({}, cx, [atc, rate], true);
@@ -308,6 +309,12 @@ console.log("PASS 2552 item 11: the kept group's untick and grp-scoped pick emit
   assert.equal(storedValues[atc], "", "Continue saves the cleared ATC");
   assert.equal(storedValues[rate], "", "Continue saves the cleared rate");
   assert.equal(storedValues[income], "", "Continue saves the approved removal");
+  const undo = app.toastState?.action?.run;
+  assert.equal(typeof undo, "function", "a successful Continue offers Undo");
+  undo(cx);
+  await settle();
+  assert.deepEqual(storedValues, graduated, "Undo restores and saves the original ATC, rate, and income");
+  assert.equal(ui.removalUndo, null, "the Undo offer is consumed");
 
   await openWith("1701Q", graduated);
   storedValues = { ...graduated };
