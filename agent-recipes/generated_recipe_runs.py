@@ -12,7 +12,7 @@ or, for a row that expects validation errors, when the recipe stops at `check` b
 names every field in the row's `expect_error_fields`. With --tin nothing is filed first unless --history is given.
 Writes OUT/recipe.json, OUT/input_schema.json, OUT/results.md.
 """
-import argparse, csv, json, os, subprocess, sys, time
+import argparse, csv, json, os, shlex, subprocess, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Data-set column -> official box.
@@ -22,6 +22,10 @@ BOXES = {"sheets": "frm1701q:txtSheets", "filer_type": "frm1701q:optType", "atc"
          "cost_of_sales": "frm1701q:txt37A", "deductions": "frm1701q:txt39A", "prior_income": "frm1701q:txt42A",
          "non_op_desc": "frm1701q:txt43Desc", "non_op_income": "frm1701q:txt43A", "prior_credits": "frm1701q:txt55A",
          "prior_payments": "frm1701q:txt56A", "withheld_2307": "frm1701q:txt58A"}
+
+def run_shot_cmd(shot_cmd, path):
+    argv = [part.format(out=path) for part in shlex.split(shot_cmd)]
+    return subprocess.run(argv)
 
 
 def main():
@@ -41,7 +45,8 @@ def main():
     ap.add_argument("--recipe-from", metavar="DIR",
                     help="run the recipe an earlier call wrote to DIR instead of generating one")
     ap.add_argument("--expect-stop", metavar="STEP", help="every run must stop at this step (a stale recipe: template)")
-    ap.add_argument("--shot-cmd", metavar="CMD", help="shell command run after each row; {out} is the PNG to write")
+    ap.add_argument("--shot-cmd", metavar="CMD",
+                    help="command split shell-style and run without a shell; {out} is the PNG to write")
     ap.add_argument("--pause-ms", type=int, default=0, help="pause after each row, outside the timed run")
     a = ap.parse_args()
     schema = ["--schema", os.path.join(HERE, "bir.schema.json")]
@@ -143,7 +148,8 @@ def main():
         if unmapped:
             note += f" not in recipe: {unmapped}"
         if a.shot_cmd:
-            subprocess.run(a.shot_cmd.format(out=os.path.join(a.out, f"{n:02d}-{row['case']}.png")), shell=True)
+            path = os.path.join(a.out, f"{n:02d}-{row['case']}.png")
+            run_shot_cmd(a.shot_cmd, path)
         time.sleep(a.pause_ms / 1000)
         lines.append(f"| {n} | {row['case']} | {'yes' if good else 'NO'} | {stopped} | {receipt.get('elapsed_ms')} | {wall} | {note.strip()[:240]} |")
     print("\n".join(lines))
@@ -151,4 +157,5 @@ def main():
     sys.exit(0 if ok_all else 1)
 
 
-main()
+if __name__ == "__main__":
+    main()
