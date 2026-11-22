@@ -326,7 +326,7 @@
     {
       "name": "form.dismiss",
       "kind": "invoke",
-      "description": "Close the open form; discard=true abandons unsaved edits.",
+      "description": "Close the open form. With discard=true, close without writing the agent's copy of the return; an open window still saves what the filer typed there.",
       "effects": [
         "write"
       ],

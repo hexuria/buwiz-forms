@@ -48,9 +48,13 @@ as the shell UI. `GPUI_AGENT_INSECURE_NO_TOKEN=1` is only for local demos and
 must not be used for remote binds.
 
 `form.dismiss` refuses to close a form with unsaved edits by default. To
-abandon the session's cached draft without saving it, invoke
-`form.dismiss` with `{"discard": true}`; the result includes
-`"discarded": true`.
+close without writing the agent's copy of the return, invoke `form.dismiss`
+with `{"discard": true}`. An open window still saves what the filer typed
+there as it leaves; the result includes `"discarded": true`.
+
+An invoke error beginning with `approval required:` means the window is
+holding the change for the filer. It is not an ordinary failure to retry;
+after the filer answers, read the return again with `form.fields`.
 
 ## Where the code lives
 
