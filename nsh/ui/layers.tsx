@@ -376,18 +376,29 @@ function ToastCard(props: { entry: ToastEntry }) {
 /**
  * Where toasts show: mount it once (the frame), over everything. `bottom` lifts them off the window edge (default 20): a
  * screen with a bar along the bottom (the form page's pill: 56 + 16 + 12 = 84, the frame uses 96) passes the bar's height
- * plus a gap. The layer takes no presses of its own (`pointerEvents: "box-none"`, style-reference.md): outside a toast's
+ * plus a gap. `top` puts them at the top instead, that far under the window's edge (a phone's form page: toastPlace).
+ * The layer takes no presses of its own (`pointerEvents: "box-none"`, style-reference.md): outside a toast's
  * card a press reaches what is under it, so the bar stays pressable; the card and its Undo button take theirs.
  */
-export function Toaster(props: { bottom?: number }) {
+export function Toaster(props: { bottom?: number; top?: number }) {
   cleanup(() => {
     if (ticking !== undefined) clearInterval(ticking);
     ticking = undefined;
   });
+  const atTop = () => props.top !== undefined;
   return (
-    <Overlay class="inset-x-0 bottom-0 items-center px-4" style={{ pointerEvents: "box-none", paddingBottom: (props.bottom ?? 20) + safeArea().bottom }}>
+    <Overlay
+      testID="toaster"
+      class="inset-x-0 items-center px-4"
+      classList={{ "top-0": atTop(), "bottom-0": !atTop() }}
+      style={{
+        pointerEvents: "box-none",
+        paddingTop: atTop() ? (props.top ?? 0) + safeArea().top : 0,
+        paddingBottom: atTop() ? 0 : (props.bottom ?? 20) + safeArea().bottom,
+      }}
+    >
       <ToastStack
-        placement="bottomCenter"
+        placement={atTop() ? "topCenter" : "bottomCenter"}
         class="w-full"
         style={{ maxWidth: 440 }}
         onExpandedChange={(e) => expanded.set(e.expanded)}

@@ -1,6 +1,6 @@
 // Which rows the chrome has (chrome_layout.ts): per OS, desktop (KDE's Global Menu or not) and width. A plain test.
 import { expect, test } from "nsh/test";
-import { chromeLayout, MENU_ROW, menuKey, menuPlace, TOOLBAR, type ChromeInput } from "./chrome_layout";
+import { chromeLayout, MENU_ROW, menuKey, menuPlace, toastPlace, TOOLBAR, type ChromeInput } from "./chrome_layout";
 
 const at = (os: string, width: number, over: Partial<ChromeInput> = {}) => chromeLayout({ os, desktop: true, globalMenu: false, width, ...over });
 
@@ -88,4 +88,14 @@ test("Alt+letter: each title its first free letter, eBIRForms takes B", () => {
     return k;
   });
   expect(keys).toEqual(["b", "f", "e", "v", "w", "h", "p"]);
+});
+
+test("toastPlace: on a phone's form page toasts sit at the top, under the header, so none lies over a row's boxes or the pill", () => {
+  // The header is 52 pt on touch, 40 pt in a narrow desktop window; the toast starts 8 pt under it.
+  expect(toastPlace("form", true, true)).toEqual({ edge: "top", offset: 60 });
+  expect(toastPlace("form", true, false)).toEqual({ edge: "top", offset: 48 });
+  // A wide form page keeps them above the pill; every other screen at the bottom, above the phone's tab bar.
+  expect(toastPlace("form", false, false)).toEqual({ edge: "bottom", offset: 96 });
+  expect(toastPlace("home", true, true)).toEqual({ edge: "bottom", offset: 76 });
+  expect(toastPlace("home", false, false)).toEqual({ edge: "bottom", offset: 20 });
 });

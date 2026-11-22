@@ -10,7 +10,7 @@ import { BackHandler, isAvailable as mobileAvailable } from "nsh/mobile";
 import { errorText } from "../lib/errors";
 import { LockedScreen } from "../screens/auth/Locked";
 import { SIZE } from "../theme/tokens";
-import { AppButton, Text, Toaster } from "../ui";
+import { AppButton, Text, Toaster, TOUCH } from "../ui";
 import { app, boot, startPolling, startQueuedWatch, warmLibrary } from "./app";
 import { DevPages } from "./DevPages";
 import { startDevCommandMailbox } from "./devCommand";
@@ -24,6 +24,7 @@ import { Sidebar } from "./Sidebar";
 import { store } from "./store";
 import { TitleBar } from "./TitleBar";
 import { chromeHeight, chromeNow } from "./chrome";
+import { toastPlace } from "./chrome_layout";
 import { bindMenuKeys, MenuListButton, MenuRow } from "./MenuRow";
 import { UpdateSlot } from "./UpdateSlot";
 import { renderView } from "./views";
@@ -254,6 +255,8 @@ function LockedFrame() {
 const isDevPage = () => app.view() === "kit" || app.view() === "theme";
 
 /** The app root. */
+const toastSpot = () => toastPlace(app.view(), app.layout.narrow(), TOUCH);
+
 export function Shell(props: ShellProps) {
   void boot(props.start, { firstRun: props.firstRun === true });
   // The app draws its own 40-point title bar where the platform has windows (the traffic lights and caption buttons stay).
@@ -301,7 +304,10 @@ export function Shell(props: ShellProps) {
       </If>
       {/* The kit's gallery brings a Toaster of its own: two would show every toast twice. */}
       <If when={!isDevPage()}>
-        <Toaster bottom={(app.view() === "form" ? 96 : 20) + (app.layout.narrow() ? 56 : 0)} />
+        <Toaster
+          top={toastSpot().edge === "top" ? toastSpot().offset : undefined}
+          bottom={toastSpot().edge === "bottom" ? toastSpot().offset : undefined}
+        />
       </If>
     </View>
   );
