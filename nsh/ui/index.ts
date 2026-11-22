@@ -12,6 +12,8 @@ export {
   type TextFieldProps, TinInput, type TinInputProps,
 } from "./fields";
 export { type IconName, ICONS } from "./icons";
+export { DateTouchField, type DateTouchFieldProps } from "./dateSheet";
+export { MonthPicker, type MonthPickerProps } from "./monthPicker";
 export { PressCard, type PressCardProps, PressCell, type PressCellProps } from "./press";
 export { ShortcutRecorder, type ShortcutRecorderProps } from "./shortcut";
 export {

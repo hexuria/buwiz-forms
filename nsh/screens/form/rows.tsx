@@ -1,13 +1,17 @@
 // The form page's rows: one item (number chip, label and marks, its controls from ./controls, the reserved 18-point
 // message line, fact cards, Item 13's card), and a part's "From tax profile" fold. Each row reads its own RowInfo
 // signal and its boxes' signals only, so an edit re-runs the rows it changed and nothing else.
-import type { Accessor, JSX, ViewRef } from "nsh";
+import type { Accessor, JSX, Signal, ViewRef } from "nsh";
 import { signal, untracked, View } from "nsh";
-import { AppButton, CalendarButton, Code, Icon, type IconName, ListRow, Switch, Text, TextField, Tooltip } from "../../ui";
+import { AppButton, CalendarButton, Chip, Code, DateField, DateTouchField, Dropdown, Icon, type IconName, ListRow, Segmented, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
-import { choiceLabel, controlWidth, dateParts, type DateParts, emptyCell, isTinItem, needsText, oneDate } from "./schema";
-import type { AskCard, ElectionCard, FormSession } from "./session";
+import { choiceLabel, controlWidth, dateParts, dateRanges, emptyCell, isTinItem, needsText, oneDates, onePeriods, radioGroups, tinWeights, type DateRange, type OneDate } from "./schema";
+import { rowHead, tinSegment } from "./controls/model";
+import { PeriodField, RangeField } from "./periodField";
+import type { AskCard, ElectionCard, FormSession, RowInfo } from "./session";
+import { dateRange, periodDay, splitDay } from "./dateRules";
+export { dateRange, splitDay } from "./dateRules";
 
 export interface RowProps {
   s: FormSession;
@@ -37,10 +41,16 @@ export function fieldProps(s: FormSession, f: SchemaField, narrow: Accessor<bool
   };
 }
 
-/** The props of an item's radio group (exported for tests). */
-export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: SchemaField[], narrow: Accessor<boolean>): RadioGroupProps {
+/** The props of one radio group — `radios` is one host one-answer group of the item (see radioGroups), `id` its row id
+ *  (exported for tests). `room` is the row's width in points, for the segmented bar's one-line fit; `hidden` names the
+ *  choice keys G1 keeps shut. */
+export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: SchemaField[], narrow: Accessor<boolean>, room?: Accessor<number>, hidden?: () => readonly string[]): RadioGroupProps {
   const keys = radios.map((f) => f.k);
   const boxes = keys.map((k) => s.box(k));
+  // The way back to unanswered is the session's untick: a re-pick clears a group of three or more (rg >= 3) that is not the
+  // period's own part. Only an optional group (no member required) shows it.
+  const untickable = radios.some((f) => (f.rg || 0) >= 3) && !radios.some((f) => s.isPeriodBox(f.k));
+  const optional = !radios.some((f) => f.r);
   return {
     label: it.l,
     testID: `fp-radio-${id}`,
@@ -50,14 +60,28 @@ export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: S
     locked: () => boxes.every((b) => b.locked()),
     choiceLocked: (k) => s.box(k).locked(),
     hint: () => (boxes.every((b) => b.locked()) && !boxes.some((b) => b.value() === "true") ? boxes.map((b) => b.hint()).find(Boolean) || "" : ""),
-    off: () => boxes.map((b) => b.off()).find(Boolean) || "",
+    // A shut choice draws nothing, so its reason must not fade the choices that do draw.
+    off: () => boxes.filter((_, i) => !(hidden?.() ?? []).includes(keys[i])).map((b) => b.off()).find(Boolean) || "",
     narrow,
+    room,
+    clearable: () => untickable && optional,
     onPick: (k) => s.pickRadio(k),
     focusRef: (focus) => s.registerFocus(`radio:${id}`, focus),
   };
 }
 
-function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Accessor<boolean>): ScheduleProps {
+/** A group's caption when an item draws several one-answer groups: the short marker its choices share ("A.", "B."), else
+ *  none — the choice labels carry it already. */
+function groupCaption(fields: SchemaField[]): string {
+  const labels = fields.map((f) => choiceLabel(f));
+  const dot = (labels[0] ?? "").indexOf(".");
+  if (dot < 0) return "";
+  const prefix = (labels[0] as string).slice(0, dot + 1).trim();
+  return prefix.length > 0 && prefix.length <= 4 && labels.every((l) => l.startsWith(prefix)) ? prefix : "";
+}
+
+/** The props of a schedule table (exported for tests). */
+export function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Accessor<boolean>): ScheduleProps {
   const keys = it.keys || [];
   const cols = it.cols || [];
   const columns = cols.map((col, index) => ({ index, col })).filter((c) => c.col.t !== "hidden");
@@ -97,8 +121,20 @@ function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Acces
     cell: (r, c) => {
       const col = cols[c];
       const k = keys[r][c];
-      const f: SchemaField = { k, l: col.l, t: col.t === "hidden" ? "text" : col.t, c: col.c, w: col.w, o: col.o };
-      return fieldProps(s, f, narrow, `${col.l}, row ${rowName(r)}`, controlWidth(f, 320));
+      // A table's radio column (1700 Schedule 1's Taxpayer / Spouse) is a tick box in the row's drawer; ticking one
+      // unticks the row's other radio columns, as a radio does.
+      const radio = col.t === "radio";
+      const f: SchemaField = { k, l: col.l, t: col.t === "hidden" ? "text" : radio ? "chk" : col.t, c: col.c, w: col.w, o: col.o };
+      const base = fieldProps(s, f, narrow, `${col.l}, row ${rowName(r)}`, controlWidth(f, 320));
+      if (!radio) return base;
+      return {
+        ...base,
+        onEdit: (text) => {
+          const edits: Record<string, string> = { [k]: text };
+          if (text === "true") cols.forEach((other, j) => other.t === "radio" && j !== c && (edits[keys[r][j]] = "false"));
+          s.choose(edits);
+        },
+      };
     },
     openRow: () => openRow(),
     onOpenRow: (r) => {
@@ -113,84 +149,223 @@ function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Acces
   };
 }
 
-/** The year a split date's year box holds: one printed as 20YY (1702Q Year Ended) holds its last two digits, read as 20YY. 0 when it holds none. */
-function boxYear(s: FormSession, split: DateParts): number {
-  const typed = String(s.box(split.year.k).value() || "");
-  return /^\d{1,2}$/.test(typed) ? 2000 + Number(typed) : Number(typed || "");
-}
-
-/** What the boxes of a split date hold, as the calendar's own day ("" until the month and the year read as one): the month the calendar opens on. */
-export function splitDay(s: FormSession, split: DateParts): string {
-  const m = Number(String(s.box(split.month.k).value() || "").slice(0, 2));
-  const y = boxYear(s, split);
-  const d = split.day ? Number(s.box(split.day.k).value() || "") : 1;
-  if (!(m >= 1 && m <= 12 && y > 1900)) return "";
-  return `${y}-${String(m).padStart(2, "0")}-${String(d >= 1 && d <= 31 ? d : 1).padStart(2, "0")}`;
-}
-
-/**
- * The days the calendar beside a split date may offer, given the parts that are shut (locked or computed): a shut year limits it to that
- * year (a 2551Q's year is locked at the return's), a shut year and month to that month. session.pickDate skips a shut part, so a day
- * from another year would fill the open parts and leave the shut one: half a date. A month the form fixes (a calendar year's December,
- * session.calendarYearEnd) limits it like a shut month. Reads the boxes (reactive). A shut month alone limits nothing (min and max cannot
- * say "June of any year"), nor does a year that is not a plain number.
- */
-export function dateRange(s: FormSession, split: DateParts): { min?: string; max?: string } {
-  const shut = (f: SchemaField) => f.c || s.box(f.k).locked();
-  const year = boxYear(s, split);
-  if (!shut(split.year) || !Number.isInteger(year) || year < 1900 || year > 9999) return {};
-  // A month the form fixes counts as shut: a calendar year ends in December, whatever the month box shows (the form puts it back).
-  const month = s.calendarYearEnd(split) ? 12 : shut(split.month) ? Number(String(s.box(split.month.k).value() || "").slice(0, 2)) : 0;
-  if (month >= 1 && month <= 12) {
-    const mm = String(month).padStart(2, "0");
-    return { min: `${year}-${mm}-01`, max: `${year}-${mm}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}` };
-  }
-  return { min: `${year}-01-01`, max: `${year}-12-31` };
-}
-
 /** What a row draws for its boxes: a schedule, a note, a fold of extra fields, one date, a TIN, or its boxes. */
-function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: Accessor<boolean> }) {
+function OneDateBox(props: { s: FormSession; date: OneDate; label: string; narrow: Accessor<boolean>; describedBy: Accessor<ViewRef | null>; errorDescription: Accessor<string> }) {
+  const s = props.s;
+  const date = props.date;
+  const key = date.oneKey;
+  const box = s.box(key);
+  const label = props.label.replace(/\s*\(MM\/DD\/YYYY\)\s*$/i, "").trim();
+  const range = () => dateRange(s, date);
+  const start = () => {
+    const base = splitDay(s, date) || periodDay(s);
+    return range().min && base < range().min! ? range().min! : range().max && base > range().max! ? range().max! : base;
+  };
+  const field = { k: key, l: label, t: "date" as const };
+  return (
+    <If
+      when={!box.locked()}
+      else={<FieldControl {...fieldProps(s, field, props.narrow, label, 200)} />}
+    >
+      <View class="gap-1">
+        <If
+          when={props.narrow()}
+          else={
+            <View class="h-8 min-w-0 overflow-hidden" style={{ width: 200 }}>
+              <DateField
+                testID={`fp-${key}`}
+                accessibilityLabel={label}
+                accessibilityDescribedBy={props.describedBy()}
+                value={box.value()}
+                error={box.invalid()}
+                calendarStart={start()}
+                min={range().min}
+                max={range().max}
+                onChange={(text) => s.edit(key, text)}
+                onFocus={() => s.focus(key)}
+                onBlur={() => s.blur(key)}
+                onPick={(iso) => { s.edit(key, iso); s.blur(key); }}
+                inputRef={(ref) => s.registerFocus(key, () => ref.focus())}
+              />
+            </View>
+          }
+        >
+          <DateTouchField
+            testID={`fp-${key}`}
+            label={label}
+            errorDescription={props.errorDescription()}
+            value={box.value()}
+            error={box.invalid()}
+            start={start()}
+            min={range().min}
+            max={range().max}
+            validate={(value) => s.oneDateProblem(date, value)}
+            onChange={(text) => s.edit(key, text)}
+            onFocus={() => s.focus(key)}
+            onBlur={() => s.blur(key)}
+          />
+        </If>
+        <If when={box.hint()}>
+          <Text testID={`fp-${key}-hint`} variant="meta" tone="fg3">{box.hint()}</Text>
+        </If>
+      </View>
+    </If>
+  );
+}
+
+function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: Accessor<boolean>; info: Accessor<RowInfo>; describedBy: (date: OneDate) => ViewRef | null; errorDescription: (date: OneDate) => string }) {
   const s = props.s;
   const it = props.it;
   const fs = it.f || [];
+  // G1: a box another answer keeps shut is not drawn (RowInfo.hiddenBoxes); a schedule's cells always draw.
+  const hid = () => props.info().hiddenBoxes;
+  const shut = (keys: string[]) => keys.length > 0 && keys.every((k) => hid().includes(k));
+  // A range's drawn keys: each end's anchor plus its date parts.
+  const endKeys = (e: DateRange["from"]): string[] =>
+    e.date ? [e.date.month.k, e.date.day?.k, e.date.year.k].filter((k): k is string => Boolean(k)) : [e.anchor];
+  const rangeKeys = (r: DateRange): string[] => [...endKeys(r.from), ...endKeys(r.to)];
   if (it.rows) return <ScheduleControl {...scheduleProps(s, props.id, it, props.narrow)} />;
   if (!fs.length && it.note) return <Text variant="meta" tone="fg3" testID={`fp-note-${props.id}`}>{it.note}</Text>;
-  const date = oneDate(it);
-  if (date) return <FieldControl {...fieldProps(s, { k: date.oneKey, l: it.l, t: "date" }, props.narrow, it.l, controlWidth({ t: "date" }, 320))} />;
+  const dates = oneDates(it);
+  const periods = onePeriods(it);
+  const ranges = dateRanges(it);
+  // The keys a period or a range draws itself: its boxes never render on their own.
+  const grouped = new Set<string>([
+    ...periods.flatMap((p) => [p.month.k, p.year.k]),
+    ...ranges.flatMap((r) => [
+      r.from.anchor, r.to.anchor,
+      ...(r.from.date ? [r.from.date.month.k, r.from.date.day?.k, r.from.date.year.k] : []),
+      ...(r.to.date ? [r.to.date.month.k, r.to.date.day?.k, r.to.date.year.k] : []),
+    ]),
+  ] as string[]);
   if (isTinItem(it)) {
+    const weights = tinWeights(fs);
     return (
-      <View class="flex-row flex-wrap items-center gap-1.5">
-        {fs.map((f, j) => (
-          <View class="flex-row items-center gap-1.5">
-            {j ? <Text tone="fg3">-</Text> : null}
-            <FieldControl {...fieldProps(s, f, () => false, f.l, j === 3 ? 76 : 58)} />
+      <View class="gap-1.5">
+        <If
+          when={props.narrow()}
+          else={
+            <View class="flex-row flex-wrap items-center gap-1.5">
+              {fs.map((f, j) => (
+                <If when={!hid().includes(f.k)}>
+                  <View class="flex-row items-center gap-1.5">
+                    {j ? <Text testID={`fp-tin-sep-${props.id}-${j}`} tone="fg3">-</Text> : null}
+                    {/* The 76 pt box is the 5-digit branch code's (the grid's 1.4 weight); a lone whole-TIN box keeps
+                        its own width (14 digits do not fit 58 pt); every other box is 58. */}
+                    <FieldControl {...fieldProps(s, f, () => false, f.l, weights[j] > 1 ? 76 : fs.length === 1 ? controlWidth(f, 320) : 58)} />
+                  </View>
+                </If>
+              ))}
+            </View>
+          }
+        >
+          {/* Under 600 pt the boxes are one grid that fills the row: equal columns, the last 1.4 only for the
+              5-digit branch code, 6 pt gaps, no dashes (PR 8). */}
+          <View testID={`fp-tin-grid-${props.id}`} class="flex-row gap-1.5">
+            {fs.map((f, j) => (
+              <If when={!hid().includes(f.k)}>
+                <View class="min-w-0" style={{ flexGrow: weights[j], flexBasis: 0 }}>
+                  <FieldControl {...fieldProps(s, f, props.narrow, f.l)} tinCell={tinSegment(f)} />
+                </View>
+              </If>
+            ))}
           </View>
-        ))}
+        </If>
+        {/* A TIN the tax profile fills says so once, under the boxes, on both widths (RowInfo.tinLine: every box
+            locked); a typed TIN or one open for Edit gets no line, and the row's profile mark stays for those. */}
+        <If when={props.info().tinLine}>
+          <View testID={`fp-tin-from-${props.id}`} class="flex-row items-center gap-1.5">
+            <Icon name="lock" size={14} tone="fg3" />
+            <Text variant="meta" tone="fg3">From the tax profile</Text>
+          </View>
+        </If>
       </View>
     );
   }
   const radios = fs.filter((f) => f.t === "radio");
   const boxes = fs.filter((f) => f.t !== "radio");
+  const groups = radioGroups(radios);
   const multi = fs.length > 1;
+  // The row's width in points, for a segmented bar's one-line fit (a stacked bar when its labels cannot hold it).
+  const rowW = signal(0);
+  // An "Others (Specify)" box — the item's one plain box beside an Others choice — sits full width under the group.
+  const othersPick = radios.some((f) => /others|specify/i.test(choiceLabel(f)));
+  const standalone = boxes.filter(
+    (f) => !grouped.has(f.k) && !dates.some((d) => [d.month.k, d.day?.k, d.year.k].includes(f.k)) && f.t !== "chk" && f.t !== "date",
+  );
+  const depBox = othersPick && standalone.length === 1 && (standalone[0].t === "text" || standalone[0].t === "int") ? standalone[0] : null;
+  const depSub = multi && depBox !== null && depBox.l && depBox.l !== it.l && !/^\d+[A-Z]?$/.test(depBox.l);
   // A date printed in split boxes (Year Ended MM and YYYY) gets a calendar button beside them, as the old page: a day picked
   // fills the parts that are open. Not when the item has a date box of its own (that box carries its calendar).
-  const split = fs.some((f) => f.t === "date") ? null : dateParts(fs);
+  const split = dates.length || periods.length || ranges.length || fs.some((f) => f.t === "date") ? null : dateParts(fs);
   const splitParts = split ? [split.month, split.day, split.year].filter((f): f is SchemaField => f !== null) : [];
-  const splitOpen = () => split !== null && s.header().editable && !splitParts.every((f) => f.c || s.box(f.k).locked());
+  const splitOpen = () => split !== null && s.header().editable && !splitParts.every((f) => f.c || s.box(f.k).locked()) && !splitParts.every((f) => hid().includes(f.k));
   // What the boxes hold now, as the calendar's own day: the popup opens on its month.
   const splitIso = () => (split ? splitDay(s, split) : "");
   // What the calendar may offer: nothing outside the year (and month) that is locked.
   const splitRange = () => (split ? dateRange(s, split) : {});
   const body = (
-    <View class="flex-row flex-wrap items-end gap-x-4 gap-y-3">
-      {radios.length ? <RadioGroupControl {...radioProps(s, props.id, it, radios, props.narrow)} /> : null}
+    <View class="flex-row flex-wrap items-end gap-x-4 gap-y-3" onLayout={(e) => rowW.set(e.bounds.size.width)}>
+      {groups.map((g, i) => {
+        // The first group keeps the item's own ids ("fp-radio-<id>", "radio:<id>"); further groups of a multi-group item
+        // take a "-g<i>" suffix, with a caption when their choices share a marker ("A.", "B.").
+        const gid = groups.length > 1 && i > 0 ? `${props.id}-g${i}` : props.id;
+        const cap = groups.length > 1 ? groupCaption(g) : "";
+        // G1: a group whose every choice is shut draws nothing (its caption too).
+        return (
+          <If when={g.some((f) => !hid().includes(f.k))}>
+            <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }}>
+              {cap ? <Text variant="meta" tone="fg2">{cap}</Text> : null}
+              <RadioGroupControl {...radioProps(s, gid, it, g, props.narrow, () => rowW(), () => hid())} hidden={() => hid()} />
+            </View>
+          </If>
+        );
+      })}
+      {depBox ? (
+        <If when={!hid().includes(depBox.k)}>
+          <View class="min-w-0 gap-1" style={{ width: "100%" }}>
+            {depSub ? <Text variant="meta" tone="fg2">{depBox.l}</Text> : null}
+            <FieldControl {...fieldProps(s, depBox, props.narrow, depBox.l, depBox.t === "text" ? 480 : controlWidth(depBox, 480))} />
+          </View>
+        </If>
+      ) : null}
+      {periods.map((p) => {
+        const message = props.info().boxMessages.find((entry) => entry.key === p.month.k || entry.key === p.year.k)?.sentence || "";
+        return (
+          <If when={!shut([p.month.k, p.year.k])}>
+            <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
+              <PeriodField s={s} period={p} label={it.l} narrow={props.narrow} message={message} invalid={s.box(p.periodKey).invalid()} />
+            </View>
+          </If>
+        );
+      })}
+      {ranges.map((r) => (
+        <If when={!shut(rangeKeys(r))}>
+          <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
+            <RangeField s={s} range={r} label={it.l} narrow={props.narrow} />
+          </View>
+        </If>
+      ))}
       {boxes.map((f) => {
+        if (depBox !== null && f.k === depBox.k) return null;
+        if (grouped.has(f.k)) return null;
+        const date = dates.find((candidate) => [candidate.month.k, candidate.day?.k, candidate.year.k].includes(f.k));
+        if (date && date.month.k !== f.k) return null;
+        if (date) return (
+          <If when={!shut([date.month.k, date.day?.k, date.year.k].filter((k): k is string => Boolean(k)))}>
+            <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
+              <OneDateBox s={s} date={date} label={it.l} narrow={props.narrow} describedBy={() => props.describedBy(date)} errorDescription={() => props.errorDescription(date)} />
+            </View>
+          </If>
+        );
         const sub = multi && f.l && f.l !== it.l && !/^\d+[A-Z]?$/.test(f.l);
         return (
-          <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }}>
-            {sub && f.t !== "chk" ? <Text variant="meta" tone="fg2">{f.l}</Text> : null}
-            <FieldControl {...fieldProps(s, f, props.narrow, f.t === "chk" ? f.l || it.l : f.l)} />
-          </View>
+          <If when={!hid().includes(f.k)}>
+            <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }}>
+              {sub && f.t !== "chk" ? <Text variant="meta" tone="fg2">{f.l}</Text> : null}
+              <FieldControl {...fieldProps(s, f, props.narrow, f.t === "chk" ? f.l || it.l : f.l)} />
+            </View>
+          </If>
         );
       })}
       <If when={splitOpen()}>
@@ -199,7 +374,9 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
     </View>
   );
   if (it.l !== "Additional details") return body;
-  const open = signal(s.moreOpen(props.id));
+  // B10: the row's own moreOpen is the open state — the filer's flag or a shown message, fact card
+  // or to-do step pointing inside — read live, so attention opens the fold and clears it again.
+  const open = () => props.info().moreOpen;
   return (
     <View class="gap-2.5">
       <AppButton
@@ -208,10 +385,7 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
         icon={open() ? "chevron-down" : "chevron-right"}
         label={`${fs.length} more field${fs.length > 1 ? "s" : ""} not yet placed on the paper layout`}
         testID={`fp-more-${props.id}`}
-        onPress={() => {
-          s.toggleMore(props.id);
-          open.set(!open());
-        }}
+        onPress={() => s.toggleMore(props.id)}
       />
       <If when={open()}>{body}</If>
     </View>
@@ -226,88 +400,94 @@ function Mark(props: { icon: IconName; tip: string; id: string }) {
   );
 }
 
-/**
- * A fact card's choice. Wide: the kit's button. Narrow: a full-width pressable row whose label wraps, so a long choice
- * ("Mixed income (compensation and business)") stays inside the card at 390 points (the kit's button keeps one line).
- */
-function AskChoice(props: { testID: string; label: string; chosen: boolean; narrow: boolean; onPress: () => void }) {
-  return (
-    <If
-      when={props.narrow}
-      else={
-        <AppButton
-          testID={props.testID}
-          label={props.label}
-          selected={props.chosen}
-          accessibilityLabel={props.chosen ? `${props.label}, chosen` : props.label}
-          onPress={props.onPress}
-        />
-      }
-    >
-      <View
-        class="w-full overflow-hidden rounded-(--radius-ctl) border"
-        classList={{ "border-accent-blue bg-selected": props.chosen, "border-border-strong bg-card": !props.chosen }}
-      >
-        <ListRow testID={props.testID} accessibilityLabel={props.chosen ? `${props.label}, chosen` : props.label} onPress={props.onPress}>
-          <Text variant="control" class="min-w-0 flex-1">{props.label}</Text>
-          <If when={props.chosen}>
-            <Icon name="check" size={14} tone="fg" />
-          </If>
-        </ListRow>
-      </View>
-    </If>
-  );
-}
-
-/** A tax fact the profile has not set, asked where the form uses it. */
+/** A tax fact the profile has not set, asked where the form uses it (F2: inline choices, one status chip). */
 function FactCard(props: { s: FormSession; ask: Accessor<AskCard>; narrow: Accessor<boolean> }) {
   // Drawn again when its row comes back into view (the rows are recycled): it starts from what was typed.
   const text = signal(untracked(() => props.s.askTextOf(props.ask().fact)));
   const fact = () => props.ask().fact;
+  // A choice's value is opaque (a string, a number, a boolean): the pick is its JSON text.
+  const pickOf = (v: string) => props.ask().choices.find((c) => JSON.stringify(c.value) === v)?.value;
+  const commit = (v: string) => {
+    const c = pickOf(v);
+    if (c !== undefined) props.s.pickAsk(fact(), c);
+  };
+  const segments = () => props.ask().choices.map((c) => ({ value: JSON.stringify(c.value), label: c.short || c.label }));
   return (
     <View testID={`fp-ask-${fact()}`} class="mt-2 gap-1 rounded-(--radius-row) border border-border-strong bg-card px-3 py-2.5 shadow-xs">
-      <Text variant="control" class="font-semibold">{props.ask().label}</Text>
-      <Text variant="meta" tone="fg2">{props.ask().note}</Text>
-      <View class="mt-2 flex-row flex-wrap gap-2">
+      <View class="flex-row items-center justify-between gap-2">
+        <Text variant="control" class="min-w-0 flex-1 font-semibold">{props.ask().label}</Text>
+        <Chip
+          testID={`fp-ask-${fact()}-chip`}
+          label={props.ask().done ? "Saved to profile" : "Missing in tax profile"}
+          tone={props.ask().done ? "success" : "warning"}
+        />
+      </View>
+      <If when={props.ask().control !== "choice" || props.ask().pick === null}>
+        <Text variant="meta" tone="fg2">{props.ask().note}</Text>
+      </If>
+      <View class="mt-2">
         <If
           when={props.ask().control === "choice"}
           else={
-            <TextField
-              testID={`fp-ask-${fact()}-input`}
-              accessibilityLabel={props.ask().label}
-              value={text()}
-              width={props.narrow() ? undefined : props.ask().control === "date" ? 140 : 320}
-              placeholder={props.ask().control === "date" ? "MM/DD/YYYY" : undefined}
-              onChange={(v) => {
-                text.set(v);
-                props.s.typeAsk(fact(), v);
-              }}
-            />
+            <View class="flex-row flex-wrap items-end gap-2">
+              <If when={props.ask().control === "date"} else={
+                <TextField
+                  testID={`fp-ask-${fact()}-input`}
+                  accessibilityLabel={props.ask().label}
+                  value={text()}
+                  width={props.narrow() ? undefined : 320}
+                  onChange={(v) => {
+                    text.set(v);
+                    props.s.typeAsk(fact(), v);
+                  }}
+                />
+              }>
+                <DateField
+                  testID={`fp-ask-${fact()}-input`}
+                  accessibilityLabel={props.ask().label}
+                  value={text()}
+                  width={props.narrow() ? undefined : controlWidth({ t: "date" }, 320)}
+                  onChange={(v) => {
+                    text.set(v);
+                    props.s.typeAsk(fact(), v);
+                  }}
+                />
+              </If>
+            </View>
           }
         >
-          <Each of={props.ask().choices}>
-            {(choice, n) => (
-              <AskChoice
-                testID={`fp-ask-${fact()}-${n()}`}
-                label={choice().label}
-                chosen={props.ask().pick === JSON.stringify(choice().value)}
-                narrow={props.narrow()}
-                onPress={() => props.s.pickAsk(fact(), choice().value)}
-              />
-            )}
-          </Each>
+          <If when={props.ask().choices.length > 4} else={
+            <Segmented
+              testID={`fp-ask-${fact()}-choices`}
+              label={props.ask().label}
+              options={segments()}
+              value={props.ask().pick ?? ""}
+              wrap={props.narrow()}
+              onChange={commit}
+            />
+          }>
+            <Dropdown
+              testID={`fp-ask-${fact()}-choices`}
+              label={props.ask().label}
+              options={props.ask().choices.map((c) => ({ value: JSON.stringify(c.value), label: c.label }))}
+              value={props.ask().pick}
+              width={props.narrow() ? undefined : 320}
+              onChange={commit}
+            />
+          </If>
         </If>
       </View>
-      <View class="mt-3 flex-row justify-end">
-        <AppButton
-          testID={`fp-ask-${fact()}-save`}
-          variant="primary"
-          size="sm"
-          label="Save"
-          disabled={props.ask().control === "choice" && props.ask().pick === null}
-          onPress={() => props.s.saveAsk(fact())}
-        />
-      </View>
+      <If when={props.ask().control !== "choice"}>
+        <View class="mt-3 flex-row justify-end">
+          <AppButton
+            testID={`fp-ask-${fact()}-save`}
+            variant="primary"
+            size="sm"
+            label="Save"
+            onPress={() => props.s.saveAsk(fact())}
+          />
+        </View>
+      </If>
     </View>
   );
 }
@@ -391,7 +571,25 @@ export function ItemRow(props: RowProps) {
   const allCalc = !it.rows && fs.length > 0 && fs.every((x) => x.c);
   const req = fs.some((x) => x.r);
   const label = req ? `${it.l} *` : it.l;
+  const messageRefs = new Map<string, Signal<ViewRef | null>>();
+  for (const date of oneDates(it)) {
+    for (const field of [date.month, date.day, date.year]) {
+      if (field) messageRefs.set(field.k, signal<ViewRef | null>(null));
+    }
+  }
+  const rowMessageRef = signal<ViewRef | null>(null);
+  const boxMessage = (date: OneDate) => {
+    const keys = [date.month.k, date.day?.k, date.year.k];
+    return info().boxMessages.find((entry) => keys.includes(entry.key));
+  };
+  const describedBy = (date: OneDate) => {
+    const message = boxMessage(date);
+    return message ? messageRefs.get(message.key)?.() ?? null : info().message ? rowMessageRef() : null;
+  };
+  const errorDescription = (date: OneDate) => boxMessage(date)?.sentence || info().message;
+  // G1: a row whose every drawn box another answer keeps shut is not drawn at all (its number and title too).
   return (
+    <If when={!info().hidden}>
     <View
       ref={(r: ViewRef) => props.onRef(id, r)}
       testID={`fp-item-${id}`}
@@ -401,21 +599,30 @@ export function ItemRow(props: RowProps) {
         "rounded-b-(--radius-card)": Boolean(props.last?.()),
         "bg-background": allCalc && !info().stepHere,
         "bg-accent-blue-soft": info().stepHere,
-        "pl-2 gap-2 pr-3": props.narrow(),
+        "pr-3": props.narrow(),
       }}
     >
-      <View class="shrink-0" style={{ width: props.narrow() ? 32 : 44 }}>
-        {it.no ? (
-          <View class="h-5.5 min-w-7.5 items-center justify-center self-start rounded-(--radius-ctl) bg-hover px-1.5">
-            <Code tone="fg2">{it.no}</Code>
-          </View>
-        ) : null}
-      </View>
+      {/* Under 600 pt the number sits in the label's line instead of a column of its own, so the boxes below start
+          at the number's left edge and take the row's whole width (a phone has none to spare for an indent). */}
+      <If when={!props.narrow()}>
+        <View class="shrink-0" style={{ width: 44 }}>
+          {it.no ? <ItemNo no={it.no} id={id} /> : null}
+        </View>
+      </If>
       <View class="min-w-0 flex-1">
-        <View class="mb-2.5 min-h-5.5 flex-row flex-wrap items-start gap-2">
-          <Text variant="control" class="min-w-0 flex-1" testID={`fp-label-${id}`}>{label}</Text>
+        <View testID={`fp-head-${id}`} class="mb-2.5 min-h-5.5 flex-row flex-wrap items-start" style={{ gap: rowHead(props.narrow()).gap }}>
+          {it.no ? (
+            <If when={props.narrow()}>
+              <ItemNo no={it.no} id={id} />
+            </If>
+          ) : null}
+          {/* On a phone the label keeps at least 160 pt: a button that would leave it less wraps under it (rowHead). */}
+          <View class="flex-1" style={{ minWidth: rowHead(props.narrow()).labelMin ?? 0 }}>
+            <Text variant="control" testID={`fp-label-${id}`}>{label}</Text>
+          </View>
           {it.rows ? <Text variant="meta" tone="fg3" class="pt-0.5">{`${it.rows} rows`}</Text> : null}
-          <If when={info().fromProfile}>
+          {/* A profile TIN's own line under its boxes says it once; the row mark stays for every other profile row. */}
+          <If when={info().fromProfile && !info().tinLine}>
             <Mark icon="user" id={id} tip={info().fromProfile} />
           </If>
           {allCalc ? <Mark icon="lock" id={id} tip="Computed from other items" /> : null}
@@ -451,15 +658,12 @@ export function ItemRow(props: RowProps) {
             </View>
           )}
         </Each>
-        <Controls s={s} id={id} it={it} narrow={props.narrow} />
-        <If when={info().toProfile}>
-          {(tp) => (
-            <View testID={`fp-to-profile-${id}`} class="mt-2 gap-0.5">
-              <Switch testID={`fp-to-profile-switch-${id}`} label="Save to profile too" checked={tp().on} onChange={(on) => s.setToProfile(id, on)}>
-                <Text variant="meta" tone="fg2">Save to profile too</Text>
-              </Switch>
-              <Text variant="meta" tone="fg3">{tp().note}</Text>
-            </View>
+        <Controls s={s} id={id} it={it} narrow={props.narrow} info={info} describedBy={describedBy} errorDescription={errorDescription} />
+        <If when={info().profileAsk}>
+          {(pa) => (
+            <If when={pa().ok} else={<Text variant="meta" tone="fg3" testID={`fp-profile-ask-${id}`}>{pa().text}</Text>}>
+              <Saved testID={`fp-profile-ask-${id}`} text={pa().text} />
+            </If>
           )}
         </If>
         <If when={info().from}>
@@ -469,9 +673,18 @@ export function ItemRow(props: RowProps) {
           </View>
         </If>
         <Each of={info().notes}>{(note) => <Text variant="meta" tone="fg3" class="mt-1">{note()}</Text>}</Each>
-        <View class="mt-1 min-h-4.5">
-          <Text variant="meta" tone="danger" testID={`fp-msg-${id}`}>{info().message}</Text>
-        </View>
+        <Each of={info().boxMessages} key={(b: { key: string; sentence: string }) => b.key}>
+          {(b) => (
+            <View ref={(ref: ViewRef) => messageRefs.get(b().key)?.set(ref)}>
+              <Text variant="meta" tone="danger" testID={`fp-boxmsg-${b().key}`}>{b().sentence}</Text>
+            </View>
+          )}
+        </Each>
+        <If when={info().message}>
+          <View ref={(ref: ViewRef) => { if (messageRefs.size) rowMessageRef.set(ref); }} class="mt-1">
+            <Text variant="meta" tone="danger" testID={`fp-msg-${id}`}>{info().message}</Text>
+          </View>
+        </If>
         <Each of={info().asks} key={(a: AskCard) => a.fact}>
           {(ask) => <FactCard s={s} ask={ask} narrow={props.narrow} />}
         </Each>
@@ -490,6 +703,16 @@ export function ItemRow(props: RowProps) {
           )}
         </Each>
       </View>
+    </View>
+    </If>
+  );
+}
+
+/** An item's number in its small box. */
+function ItemNo(props: { no: string; id: string }): JSX.Element {
+  return (
+    <View testID={`fp-no-${props.id}`} class="h-5.5 min-w-7.5 items-center justify-center self-start rounded-(--radius-ctl) bg-hover px-1.5">
+      <Code tone="fg2">{props.no}</Code>
     </View>
   );
 }

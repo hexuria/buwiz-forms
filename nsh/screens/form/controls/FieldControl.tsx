@@ -11,7 +11,7 @@ import {
   CheckboxLabel, DateField, Dropdown, Icon, IntInput, Line, MoneyInput, moneyPlain, PercentInput, Text, TextField, TinInput, Tooltip, TOUCH,
 } from "../../../ui";
 import { SearchPick } from "./Pick";
-import { cx, isOn, listedOptions, mdy, readText, SEARCH_FROM, selectModel, tinKind } from "./model";
+import { cx, isOn, listedOptions, mdy, readBoxPad, readText, SEARCH_FROM, selectModel, tinKind, tinSegment } from "./model";
 import { type FieldInput, read } from "./types";
 
 const OFF_OPACITY = 0.45;
@@ -38,6 +38,11 @@ function widthOf(p: FieldInput): number | undefined {
   return p.narrow() ? undefined : p.width;
 }
 
+/** A cell of the phone TIN grid: centred tabular digits, and a locked one carries no lock of its own (the row's "From the tax profile" line says it once). */
+function cellOf(p: FieldInput): boolean {
+  return !!p.tinCell;
+}
+
 /** A box that takes no typing, as a read-only box: computed (flat, in the ink of a result), locked (a lock, fainter), disabled (dimmed). */
 function ReadBox(props: { p: FieldInput }) {
   const p = props.p;
@@ -46,20 +51,21 @@ function ReadBox(props: { p: FieldInput }) {
   const text = () => readText(p);
   const hint = () => (text() ? "" : p.box.hint());
   const right = () => !hint() && (p.field.t === "money" || p.field.t === "pct");
-  const figures = () => p.field.t === "money" || p.field.t === "pct" || p.field.t === "int" || p.field.t === "date";
+  const figures = () => p.field.t === "money" || p.field.t === "pct" || p.field.t === "int" || p.field.t === "date" || cellOf(p);
   const why = () => reasonOf(p);
-  // The narrow boxes of a TIN (58, 76 wide) have no room for a lock: they read as the old page's locked boxes did, centred.
-  const small = () => !p.narrow() && p.width < 100;
+  // The narrow boxes of a TIN (58, 76 wide) have no room for a lock, and neither has a phone grid's cell: they read centred.
+  const small = () => (!p.narrow() && p.width < 100) || cellOf(p);
   // A hint is never cut mid-word (F9-4: "Shows once the period is set" in an 88-wide year box read "Shows o…"): while it
-  // shows, the box is at least its own width and grows to the hint, up to the row's width, where the hint wraps.
-  const grows = () => Boolean(hint()) && !p.narrow();
+  // shows, the box grows to the hint, up to the row's width, where the hint wraps.
+  const grows = () => Boolean(hint());
   return (
     <View
       testID={p.testID}
       accessibilityLabel={`${nameOf(p)}: ${text() || hint() || "empty"}${why() ? ", " + why().toLowerCase() : ""}`}
       tooltip={why() ? <Tooltip label={why()} /> : undefined}
       class={cx(
-        "min-w-0 flex-row items-center gap-1.5 rounded-(--radius-row) border px-2.5",
+        "min-w-0 flex-row items-center gap-1.5 rounded-(--radius-row) border",
+        readBoxPad(cellOf(p)) === 4 ? "px-1" : "px-2.5",
         TOUCH ? "min-h-11" : grows() ? "min-h-8 py-1" : "h-8",
         grows() && "max-w-full",
         computed() ? "border-transparent bg-hover" : "border-border bg-hover",
@@ -139,7 +145,7 @@ function Choice(props: { p: FieldInput }) {
             value={model().shown || null}
             placeholder="Choose…"
             width={widthOf(p)}
-            error={p.box.invalid()}
+            error={p.box.invalid() || Boolean(p.box.message?.())}
             focusRef={(ref) => giveFocus(p, ref)}
             onChange={pick}
           />
@@ -155,7 +161,7 @@ function Choice(props: { p: FieldInput }) {
           options={model().options}
           value={model().shown}
           width={widthOf(p)}
-          error={p.box.invalid()}
+          error={p.box.invalid() || Boolean(p.box.message?.())}
           focusRef={(ref) => giveFocus(p, ref)}
           onPick={pick}
         />
@@ -175,7 +181,7 @@ function DateBox(props: { p: FieldInput }) {
         testID={p.testID}
         accessibilityLabel={nameOf(p)}
         value={mdy(p.box.value())}
-        error={p.box.invalid()}
+        error={p.box.message?.() || p.box.invalid()}
         placeholder={p.placeholder}
         onChange={(text) => p.onEdit(text)}
         onFocus={() => p.onFocus()}
@@ -204,7 +210,7 @@ function TypedBox(props: { p: FieldInput }) {
           when={kind() === "pct"}
           else={
             <If
-              when={kind() === "int" || tin() === "part"}
+              when={kind() === "int" || tin() === "part" || (cellOf(p) && tin() === null && tinSegment(p.field))}
               else={
                 <If
                   when={tin() === "full"}
@@ -217,7 +223,7 @@ function TypedBox(props: { p: FieldInput }) {
                       onFocus={() => p.onFocus()}
                       onBlur={() => p.onBlur()}
                       width={widthOf(p)}
-                      error={p.box.invalid()}
+                      error={p.box.message?.() || p.box.invalid()}
                       maxLength={p.field.m}
                       placeholder={p.placeholder}
                       keyboardType={kind() === "email" ? "email-address" : kind() === "phone" ? "phone-pad" : undefined}
@@ -234,7 +240,8 @@ function TypedBox(props: { p: FieldInput }) {
                     onFocus={() => p.onFocus()}
                     onBlur={() => p.onBlur()}
                     width={widthOf(p)}
-                    error={p.box.invalid()}
+                    align={cellOf(p) ? "center" : undefined}
+                    error={p.box.message?.() || p.box.invalid()}
                     inputRef={(ref) => giveFocus(p, ref)}
                   />
                 </If>
@@ -248,7 +255,8 @@ function TypedBox(props: { p: FieldInput }) {
                 onFocus={() => p.onFocus()}
                 onBlur={() => p.onBlur()}
                 width={widthOf(p)}
-                error={p.box.invalid()}
+                align={cellOf(p) ? "center" : undefined}
+                error={p.box.message?.() || p.box.invalid()}
                 maxDigits={p.field.m}
                 placeholder={p.placeholder}
                 inputRef={(ref) => giveFocus(p, ref)}
@@ -264,7 +272,7 @@ function TypedBox(props: { p: FieldInput }) {
             onFocus={() => p.onFocus()}
             onBlur={() => p.onBlur()}
             width={widthOf(p)}
-            error={p.box.invalid()}
+            error={p.box.message?.() || p.box.invalid()}
             placeholder={p.placeholder}
             inputRef={(ref) => giveFocus(p, ref)}
           />
@@ -279,7 +287,7 @@ function TypedBox(props: { p: FieldInput }) {
         onFocus={() => p.onFocus()}
         onBlur={() => p.onBlur()}
         width={widthOf(p)}
-        error={p.box.invalid()}
+        error={p.box.message?.() || p.box.invalid()}
         whole={!!p.field.w}
         negative
         placeholder={p.placeholder}

@@ -5,9 +5,9 @@ import type { JSX } from "nsh";
 import { colorScheme, platform, Scroll, signal, View, windowSize } from "nsh";
 import { SIZE } from "../../theme/tokens";
 import {
-  AppButton, Avatar, Banner, Card, Checkbox, CheckboxLabel, Chip, Code, ComboField, ContextPill, DateField, Dialog, Disclosure,
+  AppButton, Avatar, Banner, Card, Checkbox, CheckboxLabel, Chip, Code, ComboField, ContextPill, DateField, DateTouchField, Dialog, Disclosure,
   DisclosureGroup, Dropdown, EmptyRow, Field, FieldCell, FieldGrid, FormActions, GroupLabel, Hairline, Icon, IconButton, type IconName,
-  ICONS, IntInput, Kbd, Line, ListGroup, ListRow, Menu, MenuItem, MenuSeparator, MetaLine, MoneyInput, MultiCombo, NameCell, NavRow,
+  ICONS, IntInput, Kbd, Line, ListGroup, ListRow, Menu, MenuItem, MenuSeparator, MetaLine, MoneyInput, MonthPicker, MultiCombo, NameCell, NavRow,
   PageHeader, PageTitle, PercentInput, PinCells, Popover, PressCard, PressCell, RadioGroup, SectionTitle, Segmented, SettingRow, Sheet, ShortcutRecorder, SidePanel, Spinner,
   StatusChip, StepCircle, Switch, Tabs, Text, TextField, TinInput, toast, Toaster, undoToast,
 } from "../../ui";
@@ -435,6 +435,10 @@ function EntrySection() {
   const pct = signal("12");
   const qty = signal("4");
   const date = signal("12/01/2020");
+  const touchDate = signal("");
+  const periodMonth = signal(12);
+  const periodYear = signal(2023);
+  const periodMaxYear = signal(2030);
   const pin = signal("");
   const code = signal("");
   const done = signal("");
@@ -482,6 +486,29 @@ function EntrySection() {
         <FieldCell>
           <DateField label="Date of birth" value={date()} onChange={(v) => date.set(v)} width={200} testID="kit-date" />
           <Text variant="meta" tone="fg3" class="mt-1 tabular-nums">{`Stored: ${date() || "empty"}`}</Text>
+        </FieldCell>
+        <FieldCell>
+          <Text variant="meta" tone="fg2">Touch date</Text>
+          <DateTouchField label="Due date" value={touchDate()} onChange={(v) => touchDate.set(v)} start="2023-12-01" testID="kit-one-date" />
+        </FieldCell>
+        <FieldCell>
+          <Text variant="meta" tone="fg2">Month and year</Text>
+          <View class="flex-row items-center gap-2">
+            <MonthPicker
+              month={periodMonth()}
+              year={periodYear()}
+              minYear={2020}
+              maxYear={periodMaxYear()}
+              label="Pick the return period"
+              testID="kit-month"
+              onPick={(m, y) => {
+                periodMonth.set(m);
+                periodYear.set(y);
+                periodMaxYear.set(y);
+              }}
+            />
+            <Text variant="body" class="tabular-nums">{`${String(periodMonth()).padStart(2, "0")}/${periodYear()}`}</Text>
+          </View>
         </FieldCell>
         <FieldCell>
           <MoneyInput label="Tax due (computed)" value="18480.5" onChange={() => {}} locked />

@@ -2082,7 +2082,7 @@ fn pr9_1707_schedule_1_date_is_a_date() {
 // ------------------------------------------------------- one-date boxes
 
 /// The one-date boxes (PR 5's page box): `(form, item, [month, day, year])`.
-const ONE_DATE_BOXES: [(&str, &str, [&str; 3]); 3] = [
+const ONE_DATE_BOXES: &[(&str, &str, [&str; 3])] = &[
     (
         "1706",
         "7",
@@ -2123,7 +2123,7 @@ const ONE_DATE_BOXES: [(&str, &str, [&str; 3]); 3] = [
 #[test]
 fn pr9_dates_over_three_boxes_are_one_date_box() {
     setup();
-    for (code, no, keys) in ONE_DATE_BOXES {
+    for &(code, no, keys) in ONE_DATE_BOXES {
         let items = items_numbered(code, no);
         let item = items
             .iter()
@@ -2163,14 +2163,19 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
         );
     }
     let opened = open("2552", 1);
-    for key in ONE_DATE_BOXES[2].2 {
+    for key in ONE_DATE_BOXES
+        .iter()
+        .find(|(code, _, _)| *code == "2552")
+        .unwrap()
+        .2
+    {
         assert_eq!(opened["waits"][key], rows_as_needed::DATE_FROM_NEW_RETURN);
         assert!(opened["locks"][key].is_string());
     }
     // Review item 7: the host writes 1706's and 1707's date parts itself
     // (rows_as_needed.rs fill), so no "cannot be filled here" lock applies;
     // 2552's item 1 keeps its identity lock.
-    for (code, _, keys) in ONE_DATE_BOXES {
+    for &(code, _, keys) in ONE_DATE_BOXES {
         let kind = kind_of(code).unwrap();
         for key in keys {
             assert_eq!(
@@ -2181,7 +2186,7 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
         }
     }
     // Lesson 13 on 1706's and 1707's boxes, as the page sends them.
-    for (code, _, keys) in &ONE_DATE_BOXES[..2] {
+    for (code, _, keys) in ONE_DATE_BOXES.iter().filter(|(code, _, _)| *code != "2552") {
         let opened = open(code, 1);
         let date = fill(
             code,
@@ -2205,16 +2210,12 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
         );
         // Each part alone, then the whole date the way the page's
         // parseTypedDate reads it: a real calendar day of 1900-2100, with
-        // the page's own message (form_page.js DATE_ERROR).
-        let page = std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../app/shell/form_page.js"
-        ))
-        .unwrap();
-        assert!(page.contains(&format!(
-            "const DATE_ERROR = \"{}\";",
-            rows_as_needed::DATE_ERROR
-        )));
+        // the page's own message (the NSH page's DATE_ERROR; the old app's
+        // form_page.js is frozen with its earlier wording).
+        assert_eq!(
+            rows_as_needed::DATE_ERROR,
+            "Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023."
+        );
         for bad in [
             json!({ keys[0]: "13" }),
             json!({ keys[1]: "32" }),
@@ -2228,13 +2229,16 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
             json!({ keys[2]: "2101" }),
         ] {
             let refused = fill(code, &date["draft"], bad.clone());
-            for key in bad.as_object().unwrap().keys() {
-                assert_eq!(
-                    refused["rejected"][key],
-                    rows_as_needed::DATE_ERROR,
-                    "{code} {bad}"
-                );
-            }
+            let rejected = refused["rejected"].as_object().unwrap();
+            assert!(
+                rejected.get(keys[0]).or_else(|| bad
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .find_map(|key| rejected.get(key)))
+                    == Some(&json!(rows_as_needed::DATE_ERROR)),
+                "{code} {bad}: {rejected:?}"
+            );
             assert_eq!(
                 printed(code, &refused["draft"]),
                 printed(code, &date["draft"]),
@@ -2268,6 +2272,574 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
             "{code}: {}",
             cleared["values"]
         );
+    }
+}
+
+#[test]
+fn pr2_0605_dates_are_independent_registered_triples() {
+    for (number, keys) in [
+        (
+            "4",
+            [
+                "frm0605:txtDueDateMonth",
+                "frm0605:txtDueDateDay",
+                "frm0605:txtDueDateYear",
+            ],
+        ),
+        (
+            "7",
+            [
+                "frm0605:txtReturnPeriodMonth",
+                "frm0605:txtReturnPeriodDay",
+                "frm0605:txtReturnPeriodYear",
+            ],
+        ),
+    ] {
+        let items = items_numbered("0605", number);
+        assert!(
+            items.iter().any(|item| item["one_dates"] == json!([keys])),
+            "0605 item {number}: expected registered month/day/year triple"
+        );
+    }
+}
+
+#[test]
+fn pr2_old_shell_one_date_marks_remain_unchanged() {
+    for (code, number, old_mark) in [
+        ("0605", "4", false),
+        ("0605", "7", false),
+        ("0619E", "2", false),
+        ("1604C", "11A", false),
+        ("1606", "1", false),
+        ("1706", "1", false),
+        ("1706", "7", true),
+        ("1707", "1", true),
+        ("2552", "1", true),
+        ("1701Q", "11", true),
+        ("1801", "1", true),
+    ] {
+        let items = items_numbered(code, number);
+        let item = items
+            .iter()
+            .find(|item| {
+                item["one_dates"]
+                    .as_array()
+                    .is_some_and(|dates| !dates.is_empty())
+            })
+            .unwrap_or_else(|| panic!("{code} item {number} has no registered date"));
+        assert_eq!(item["one_date"] == true, old_mark, "{code} item {number}");
+    }
+    let expected = [
+        ("1701Q", "11"),
+        ("1706", "7"),
+        ("1707", "1"),
+        ("1801", "1"),
+        ("2552", "1"),
+    ];
+    let mut actual = Vec::new();
+    for form in parse_form_schemas() {
+        let code = form.code.expect("form code");
+        let built = schema_entry(&code).unwrap();
+        for item in built["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|part| part["items"].as_array().into_iter().flatten())
+        {
+            if item["one_date"] == true {
+                actual.push((code.clone(), item["no"].as_str().unwrap_or("").to_string()));
+            }
+        }
+    }
+    actual.sort();
+    assert_eq!(
+        actual,
+        expected.map(|(code, no)| (code.to_string(), no.to_string()))
+    );
+}
+
+#[test]
+fn pr2_0619e_day_only_is_judged_with_locked_month_and_year() {
+    setup();
+    let opened = open("0619E", 3);
+    let before = &opened["draft"];
+    let month = "frm0619E:txtDueMonth";
+    let day = "frm0619E:txtDueDay";
+    let year = "frm0619E:txtDueYear";
+    assert_eq!(opened["values"][month], "04");
+    assert_eq!(opened["values"][year], YEAR.to_string());
+    let bad = fill("0619E", before, json!({ day: "31" }));
+    assert_eq!(bad["rejected"][month], rows_as_needed::DATE_ERROR);
+    assert_eq!(&bad["draft"], before);
+    let good = fill("0619E", before, json!({ day: "30" }));
+    assert!(
+        good["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        good["rejected"]
+    );
+    assert_eq!(good["values"][day], "30");
+}
+
+#[test]
+fn pr2_1606_single_parts_judge_the_date_when_the_last_part_arrives() {
+    setup();
+    let keys = [
+        "frm1606:txtDateMonth",
+        "frm1606:txtDateDay",
+        "frm1606:txtDateYear",
+    ];
+    let opened = open("1606", 1);
+    let cleared = fill(
+        "1606",
+        &opened["draft"],
+        json!({ keys[0]: "", keys[1]: "", keys[2]: "" }),
+    );
+    assert!(
+        cleared["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        cleared["rejected"]
+    );
+    let month = fill("1606", &cleared["draft"], json!({ keys[0]: "04" }));
+    assert!(
+        month["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        month["rejected"]
+    );
+    for (day, valid) in [("30", true), ("31", false)] {
+        let partial = fill("1606", &month["draft"], json!({ keys[1]: day }));
+        assert!(
+            partial["rejected"].as_object().unwrap().is_empty(),
+            "{}",
+            partial["rejected"]
+        );
+        let complete = fill("1606", &partial["draft"], json!({ keys[2]: "2026" }));
+        if valid {
+            assert!(
+                complete["rejected"].as_object().unwrap().is_empty(),
+                "{}",
+                complete["rejected"]
+            );
+            assert_eq!(complete["values"][keys[0]], "04");
+            assert_eq!(complete["values"][keys[1]], "30");
+            assert_eq!(complete["values"][keys[2]], "2026");
+        } else {
+            assert_eq!(complete["rejected"][keys[0]], rows_as_needed::DATE_ERROR);
+            assert_eq!(complete["draft"], partial["draft"]);
+        }
+    }
+}
+
+#[test]
+fn pr2_1606_rejects_an_impossible_transaction_date_as_one_batch() {
+    setup();
+    let opened = open("1606", 1);
+    let before = opened["draft"].clone();
+    let result = fill(
+        "1606",
+        &before,
+        json!({
+            "frm1606:txtDateMonth": "02",
+            "frm1606:txtDateDay": "30",
+            "frm1606:txtDateYear": "2026",
+        }),
+    );
+    assert!(
+        result["rejected"]["frm1606:txtDateMonth"].is_string(),
+        "1606: impossible date must be refused at the month: {}",
+        result["rejected"]
+    );
+    assert_eq!(result["draft"], before);
+}
+
+#[test]
+fn pr2_registered_date_keys_are_drawn_and_impossible_batches_do_not_land() {
+    setup();
+    for date in rows_as_needed::ONE_DATES {
+        let code = date.form;
+        let keys = date.keys;
+        let form = schema_entry(code).expect("registered form");
+        let items = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|part| part["items"].as_array().into_iter().flatten());
+        assert!(
+            items.into_iter().any(|item| item["one_dates"]
+                .as_array()
+                .is_some_and(|dates| { dates.iter().any(|triple| *triple == json!(keys)) })),
+            "{code}: registered keys must occur together on a drawn item: {keys:?}"
+        );
+        let opened = open(code, page_period_of(code));
+        let edits = json!({ keys[0]: "02", keys[1]: "30", keys[2]: "2026" });
+        let filled = fill(code, &opened["draft"], edits);
+        let reason = filled["rejected"][keys[0]].as_str().unwrap_or("");
+        if code == "2552" {
+            assert!(
+                reason.contains("picks which return this is"),
+                "{code}: {reason}"
+            );
+        } else {
+            assert!(
+                !reason.is_empty(),
+                "{code} {keys:?}: impossible date not refused"
+            );
+        }
+        for key in keys {
+            assert_eq!(filled["values"][key], opened["values"][key], "{code} {key}");
+        }
+    }
+}
+
+/// PR 3 (P3a): every enumerated month+year pair is marked `one_periods` on
+/// the one item holding both boxes — 1701's month moved out of the hidden
+/// part, 2000's year out of Additional details, 1701MS's second To and
+/// 1600WP's To triple brought over — and drawn nowhere else.
+#[test]
+fn pr3_periods_are_registered_pairs_on_one_item() {
+    for period in rows_as_needed::ONE_PERIODS {
+        let [month, year] = period.keys;
+        let form = schema_entry(period.form).expect("registered form");
+        let items: Vec<&Value> = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|part| part["items"].as_array().into_iter().flatten())
+            .collect();
+        let marked = items
+            .iter()
+            .filter(|item| {
+                item["one_periods"]
+                    .as_array()
+                    .is_some_and(|marks| marks.iter().any(|mark| *mark == json!([month, year])))
+            })
+            .count();
+        assert_eq!(marked, 1, "{}: one_periods [{month}, {year}]", period.form);
+        let item = items
+            .iter()
+            .find(|item| {
+                item["one_periods"]
+                    .as_array()
+                    .is_some_and(|marks| marks.iter().any(|mark| *mark == json!([month, year])))
+            })
+            .unwrap();
+        let keys: Vec<&str> = item["f"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|f| f["k"].as_str())
+            .collect();
+        assert!(
+            keys.contains(&month) && keys.contains(&year),
+            "{}: the pair's boxes are not together: {keys:?}",
+            period.form
+        );
+        // The pair's two boxes are drawn on that item only.
+        for key in [month, year] {
+            let drawn = items
+                .iter()
+                .filter(|item| {
+                    item["f"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .any(|f| f["k"] == key)
+                })
+                .count();
+            assert_eq!(drawn, 1, "{} {key} drawn {drawn} times", period.form);
+        }
+    }
+}
+
+/// PR 3 (R1): every enumerated from-to pair is marked `date_ranges` on the
+/// one item holding both ends — 1701MS's second To and 1600WP's To triple
+/// moved over.
+#[test]
+fn pr3_ranges_are_registered_pairs_on_one_item() {
+    for range in rows_as_needed::DATE_RANGES {
+        let form = schema_entry(range.form).expect("registered form");
+        let items: Vec<&Value> = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|part| part["items"].as_array().into_iter().flatten())
+            .collect();
+        let item = items
+            .iter()
+            .find(|item| {
+                item["date_ranges"]
+                    .as_array()
+                    .is_some_and(|marks| marks.iter().any(|mark| *mark == json!(range.ends)))
+            })
+            .unwrap_or_else(|| {
+                panic!("{}: no item marks date_ranges {:?}", range.form, range.ends)
+            });
+        let keys: Vec<&str> = item["f"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|f| f["k"].as_str())
+            .collect();
+        for anchor in range.ends {
+            assert!(
+                keys.contains(&anchor),
+                "{}: range end {anchor} not on the marked item: {keys:?}",
+                range.form
+            );
+        }
+        if range.derived_to {
+            assert_eq!(item["derived_to"], json!([range.ends[1]]));
+        } else {
+            assert!(item.get("derived_to").is_none());
+        }
+        // A one-date end's whole triple is drawn there too (1600WP).
+        if range.form == "1600WP" {
+            for key in [
+                "frm1600WP:DateWithholdingDay",
+                "frm1600WP:DateWithholdingYear",
+                "frm1600WP:DateWithholdingToMonth",
+                "frm1600WP:DateWithholdingToDay",
+                "frm1600WP:DateWithholdingToYear",
+            ] {
+                assert!(keys.contains(&key), "1600WP: {key} not on the range item");
+            }
+        }
+    }
+}
+
+/// The draft a refused batch leaves: `updated_at` moves on every fill
+/// (prepare_for_writes), so it is set aside; everything else is compared.
+fn draft_same(a: &Value, b: &Value) -> bool {
+    let mut a = a.clone();
+    let mut b = b.clone();
+    for draft in [&mut a, &mut b] {
+        if let Some(map) = draft.as_object_mut() {
+            map.remove("updated_at");
+        }
+    }
+    a == b
+}
+
+/// PR 3 (P3a): a period batch is judged whole — a month outside 01-12 or a
+/// year the box cannot hold refuses every part sent on the month's box,
+/// and nothing lands.
+#[test]
+fn pr3_period_batches_are_judged_whole() {
+    setup();
+    for period in rows_as_needed::ONE_PERIODS {
+        let [month, year] = period.keys;
+        let opened = open(period.form, page_period_of(period.form));
+        let bad = fill(
+            period.form,
+            &opened["draft"],
+            json!({ month: "13", year: "2026" }),
+        );
+        assert_eq!(
+            bad["rejected"][month],
+            json!(rows_as_needed::PERIOD_ERROR),
+            "{}: a month of 13 is not a period",
+            period.form
+        );
+        assert!(
+            draft_same(&bad["draft"], &opened["draft"]),
+            "{}: a refused period changed the draft",
+            period.form
+        );
+        // A year the box cannot spell (three digits) refuses the same way.
+        let bad_year = fill(
+            period.form,
+            &opened["draft"],
+            json!({ month: "06", year: "226" }),
+        );
+        assert_eq!(
+            bad_year["rejected"][month],
+            json!(rows_as_needed::PERIOD_ERROR),
+            "{}: a three-digit year is not a period",
+            period.form
+        );
+        // Where the parts are open a good pair lands.
+        let good = fill(
+            period.form,
+            &opened["draft"],
+            json!({ month: "06", year: "2026" }),
+        );
+        assert_ne!(
+            good["rejected"][month],
+            json!(rows_as_needed::PERIOD_ERROR),
+            "{}: a good period refused: {}",
+            period.form,
+            good["rejected"]
+        );
+    }
+}
+
+/// PR 3 (P3a): a two-digit year is the 20YY box's own form only where the
+/// box keeps it (1702Q's Year Ended prints MM/20YY); a four-digit-year box
+/// refuses it.
+#[test]
+fn pr3_period_year_forms() {
+    setup();
+    // 1702Q keeps 20YY: both spellings judge the same year.
+    let opened = open("1702Q", 3);
+    let month = "frm1702q:rbYrEndMonth";
+    let year = "frm1702q:txtYrEndYear";
+    for y in ["2025", "25"] {
+        let filled = fill("1702Q", &opened["draft"], json!({ month: "06", year: y }));
+        assert_ne!(
+            filled["rejected"][month],
+            json!(rows_as_needed::PERIOD_ERROR),
+            "1702Q year {y}: {}",
+            filled["rejected"]
+        );
+    }
+    // 0619E's year is a four-digit box: "25" is refused whole.
+    let opened = open("0619E", 1);
+    let month = "frm0619E:txtMonth";
+    let year = "frm0619E:txtYear";
+    let refused = fill(
+        "0619E",
+        &opened["draft"],
+        json!({ month: "06", year: "25" }),
+    );
+    assert_eq!(
+        refused["rejected"][month],
+        json!(rows_as_needed::PERIOD_ERROR),
+        "0619E two-digit year: {}",
+        refused["rejected"]
+    );
+    assert!(draft_same(&refused["draft"], &opened["draft"]));
+}
+
+/// PR 3 (R1): a from-to pair whose end precedes its start is refused on the
+/// To end's key with the page's sentence, the draft unchanged — whether
+/// both ends arrive in one batch or the far end is already stored.
+#[test]
+fn pr3_reversed_ranges_are_refused_on_the_to_end() {
+    setup();
+    // 1702EX item 17: two open date boxes.
+    let opened = open("1702EX", 0);
+    let from = "frm1702EX:txtPg1Pt1I17EffectivityFrom";
+    let to = "frm1702EX:txtPg1Pt1I17EffectivityTo";
+    let both = fill(
+        "1702EX",
+        &opened["draft"],
+        json!({ from: "06/01/2026", to: "05/01/2026" }),
+    );
+    assert_eq!(
+        both["rejected"][to],
+        json!(rows_as_needed::RANGE_ERROR),
+        "1702EX reversed in one batch: {}",
+        both["rejected"]
+    );
+    assert!(draft_same(&both["draft"], &opened["draft"]));
+    // The stored far end counts too: a good From, then a To before it.
+    let good_from = fill("1702EX", &opened["draft"], json!({ from: "06/01/2026" }));
+    assert_ne!(
+        good_from["rejected"][from],
+        json!(rows_as_needed::RANGE_ERROR),
+        "1702EX from alone: {}",
+        good_from["rejected"]
+    );
+    let late_to = fill("1702EX", &good_from["draft"], json!({ to: "05/01/2026" }));
+    assert_eq!(
+        late_to["rejected"][to],
+        json!(rows_as_needed::RANGE_ERROR),
+        "1702EX reversed against the stored end: {}",
+        late_to["rejected"]
+    );
+    // And a To after the stored From lands.
+    let good_to = fill("1702EX", &good_from["draft"], json!({ to: "07/01/2026" }));
+    assert_ne!(
+        good_to["rejected"][to],
+        json!(rows_as_needed::RANGE_ERROR),
+        "1702EX good order: {}",
+        good_to["rejected"]
+    );
+    // 2550Q item 4: the From box is a text box holding the same date.
+    let opened = open("2550Q", 1);
+    let from = "frm2550qv2024:RtnPeriodFromNo4";
+    let to = "frm2550qv2024:RtnPeriodToNo4";
+    let both = fill(
+        "2550Q",
+        &opened["draft"],
+        json!({ from: "06/01/2026", to: "05/01/2026" }),
+    );
+    assert_eq!(
+        both["rejected"][to],
+        json!(rows_as_needed::RANGE_ERROR),
+        "2550Q reversed in one batch: {}",
+        both["rejected"]
+    );
+    // 1701MS item 16: two ranges in the one item; A reversed refuses on A To.
+    let opened = open("1701MS", 0);
+    let a_from = "frm1701MS:txtTaxpayerNo16a";
+    let a_to = "frm1701MS:txtTaxpayerNo16a1";
+    let both = fill(
+        "1701MS",
+        &opened["draft"],
+        json!({ a_from: "06/01/2026", a_to: "05/01/2026" }),
+    );
+    assert_eq!(
+        both["rejected"][a_to],
+        json!(rows_as_needed::RANGE_ERROR),
+        "1701MS A reversed: {}",
+        both["rejected"]
+    );
+}
+
+#[test]
+fn pr3_1600wp_from_day_can_advance_when_to_is_derived() {
+    setup();
+    let from_month = "frm1600WP:DateWithholdingMonth";
+    let from_day = "frm1600WP:DateWithholdingDay";
+    let from_year = "frm1600WP:DateWithholdingYear";
+    let to_day = "frm1600WP:DateWithholdingToDay";
+    let opened = open("1600WP", 5);
+    let dated = fill(
+        "1600WP",
+        &opened["draft"],
+        json!({ from_month: "05", from_day: "10", from_year: "2026" }),
+    );
+    assert_eq!(dated["values"][from_day], "10");
+    assert_eq!(dated["values"][to_day], "10");
+
+    let advanced = fill("1600WP", &dated["draft"], json!({ from_day: "15" }));
+    assert!(
+        !advanced["rejected"]
+            .as_object()
+            .unwrap()
+            .contains_key(from_day),
+        "advancing the From day is not refused: {}",
+        advanced["rejected"]
+    );
+    assert_eq!(advanced["values"][from_day], "15");
+    assert_eq!(advanced["values"][to_day], "15");
+}
+
+/// Decision 6 (2552): its item 1 date is the return's identity — every write
+/// is refused by the identity lock, so refuse_dates skips it: an impossible
+/// date gets the lock's reason, never a date sentence that would pre-empt it.
+#[test]
+fn pr9_2552_item_1_date_is_the_identity_lock_not_a_date_check() {
+    setup();
+    let opened = open("2552", 1);
+    let keys = ONE_DATE_BOXES
+        .iter()
+        .find(|(code, _, _)| *code == "2552")
+        .unwrap()
+        .2;
+    for bad in [
+        json!({ keys[0]: "02", keys[1]: "30", keys[2]: "2026" }),
+        json!({ keys[0]: "03", keys[1]: "15", keys[2]: "2026" }),
+    ] {
+        let refused = fill("2552", &opened["draft"], bad);
+        for key in keys {
+            let reason = refused["rejected"][key].as_str().unwrap_or("");
+            assert!(
+                reason.contains("picks which return this is"),
+                "2552 {key}: {reason}"
+            );
+            assert_ne!(reason, rows_as_needed::DATE_ERROR);
+        }
     }
 }
 
@@ -2599,4 +3171,25 @@ fn pr9_error_key_order_reads_off_sheet_tables() {
     let mut keys = ["h", "a"].map(String::from);
     rows_as_needed::order_keys_in(&form, &mut keys);
     assert_eq!(keys, ["h", "a"]);
+}
+
+/// Review F1: a day typed "0" on a one-date box is not a blank part. 0619E's
+/// due date refuses it with the date sentence at the month box and keeps the
+/// draft; only 1707's whole-number parts read "0" as blank.
+#[test]
+fn f1_0619e_a_zero_day_is_refused_with_the_date_sentence() {
+    setup();
+    let opened = open("0619E", 3);
+    let before = &opened["draft"];
+    let month = "frm0619E:txtDueMonth";
+    let day = "frm0619E:txtDueDay";
+    let bad = fill("0619E", before, json!({ day: "0" }));
+    assert_eq!(
+        bad["rejected"][month],
+        rows_as_needed::DATE_ERROR,
+        "{}",
+        bad["rejected"]
+    );
+    assert_eq!(&bad["draft"], before);
+    assert_eq!(bad["values"][day], opened["values"][day]);
 }

@@ -1,46 +1,114 @@
-// A one-answer group drawn as the paper form's tick boxes (the old page's radioGroup): square boxes with a check, so a
-// ticked one can be pressed again. Every press is reported as a pick of that key; the session applies the group's rules
-// (the ticked box of a group of three or more unticks, a pair keeps one answer, siblings of the same host group untick).
-import type { ViewRef } from "nsh";
+// A one-answer group, drawn by how many choices it has: two to four as the kit's segmented bar (full-width segments in a
+// column when the labels cannot hold one line in the room the row gives), five to twelve as a dropdown, more as a search
+// pick. Every pick is reported as onPick(key); the session applies the group's rules (the ticked choice of a group of
+// three or more unticks, a pair keeps one answer, siblings of the same host group untick). Clearing back to unanswered is
+// offered only where the session unticks — an optional group of three or more: a Clear under the bar, a "None" entry in
+// the dropdown, the search list's clear row.
 import { View } from "nsh";
-import { CheckboxLabel, Icon, Text, TOUCH } from "../../../ui";
-import { cx } from "./model";
+import { AppButton, Dropdown, Icon, Segmented, Text } from "../../../ui";
+import { radioKind } from "./model";
+import { SearchPick } from "./Pick";
 import { read, type RadioInput } from "./types";
 
-/** Labels longer than this stack the choices one under another, shorter ones sit side by side (the old rule). */
-const STACK_FROM = 24;
+/** Points per character of a segment's label at the meta size: the one-line fit's estimate (no text measure exists). */
+const CHAR_W = 7;
+/** A segment's side padding and air, and the bar's own padding and gaps, in points. */
+const SEG_AIR = 30;
+const BAR_AIR = 14;
+/** The room guessed when the page gave none (the gallery, a test): a phone's content, else a wide form column. */
+const ROOM_NARROW = 320;
+const ROOM_WIDE = 720;
+/** The width of a dropdown or search trigger on a wide layout. */
+const LIST_WIDTH = 320;
 
-/** One group of tick boxes: wrapped in a row when its labels are short, a column when long or narrow. */
+/** The width the one-line bar would need, estimated from its labels' lengths (the documented character rule). */
+function barWidth(labels: string[]): number {
+  return BAR_AIR + labels.reduce((w, l) => w + Math.max(1, l.length) * CHAR_W + SEG_AIR, 0);
+}
+
+/** One group of one-answer choices, by its size. */
 export function RadioGroupControl(props: RadioInput) {
-  const stacked = () => props.narrow() || props.choices.some((c) => c.label.length > STACK_FROM);
+  // G1: a choice another answer keeps shut draws nothing (its key sits in `hidden`).
+  const shut = () => read(props.hidden, [] as readonly string[]);
+  const visible = () => props.choices.filter((c) => !shut().includes(c.key));
+  const count = () => visible().length;
+  const kind = () => radioKind(count());
+  const locked = () => props.locked();
   const why = () => read(props.reason, "");
-  // A pill step puts the keys in the ticked box, else the first one that takes a pick.
-  const boxes = new Map<string, ViewRef>();
-  props.focusRef?.(() => {
-    const free = props.choices.find((c) => !props.locked() && !props.choiceLocked(c.key));
-    (boxes.get(props.selected() ?? "") ?? (free ? boxes.get(free.key) : undefined))?.focus();
-  });
+  const room = () => {
+    const r = props.room?.() ?? 0;
+    return r > 0 ? r : props.narrow() ? ROOM_NARROW : ROOM_WIDE;
+  };
+  // The bar stacks (full-width segments, one under another) when its labels cannot hold one line in its room.
+  const stacked = () => kind() === "segmented" && barWidth(visible().map((c) => c.label)) > room();
+  const clearable = () => props.clearable?.() ?? false;
+  const value = () => props.selected() ?? "";
+  const pick = (key: string) => props.onPick(key);
+  // Unticking is the session's: re-picking the ticked choice of a group of three or more clears it.
+  const clear = () => {
+    const k = props.selected();
+    if (k) props.onPick(k);
+  };
+  const showClear = () => kind() === "segmented" && clearable() && props.selected() !== null;
+  const choiceOff = (key: string) => locked() || props.choiceLocked(key);
+  const width = () => (props.narrow() ? undefined : LIST_WIDTH);
   return (
-    <View
-      testID={props.testID}
-      accessibilityLabel={props.label}
-      class="min-w-0 gap-1"
-      style={{ opacity: props.off() ? 0.45 : 1 }}
-    >
-      <View class={cx(stacked() ? "gap-y-1" : "flex-row flex-wrap gap-x-6 gap-y-2", TOUCH && "gap-y-0")}>
-        <Each of={props.choices} key={(c) => c.key}>
-          {(c) => (
-            <CheckboxLabel
-              testID={c().testID}
-              label={c().label}
-              focusRef={(ref) => boxes.set(c().key, ref)}
-              checked={props.checked ? props.checked(c().key) : props.selected() === c().key}
-              disabled={props.locked() || props.choiceLocked(c().key)}
-              onChange={() => props.onPick(c().key)}
-            />
-          )}
-        </Each>
-      </View>
+    <View class="min-w-0 gap-1" style={{ opacity: props.off() ? 0.45 : 1 }}>
+      <If when={kind() === "segmented"}>
+        <View testID={stacked() ? `${props.testID}-stacked` : undefined} class="min-w-0">
+          <Segmented
+            testID={props.testID}
+            label={props.label}
+            options={visible().map((c) => ({
+              value: c.key,
+              label: c.label,
+              testID: c.testID,
+              disabled: () => choiceOff(c.key),
+            }))}
+            value={value()}
+            onChange={pick}
+            stacked={stacked()}
+            wrap={!props.narrow()}
+            focusRef={(r) => props.focusRef?.(() => r.focus())}
+          />
+        </View>
+        <If when={showClear()}>
+          <AppButton variant="ghost" size="sm" label="Clear" testID={`${props.testID}-clear`} onPress={clear} />
+        </If>
+      </If>
+      <If when={kind() === "dropdown"}>
+        <View class="min-w-0" style={{ width: width() }}>
+          <Dropdown
+            testID={props.testID}
+            label={props.label}
+            options={[
+              ...(clearable() ? [{ value: "", label: "None" }] : []),
+              ...visible().map((c) => ({ value: c.key, label: c.label, disabled: props.choiceLocked(c.key) })),
+            ]}
+            value={props.selected()}
+            placeholder="Choose…"
+            width={width()}
+            disabled={locked()}
+            focusRef={(r) => props.focusRef?.(() => r.focus())}
+            onChange={(v) => (v === "" ? clear() : pick(v))}
+          />
+        </View>
+      </If>
+      <If when={kind() === "search"}>
+        <View class="min-w-0" style={{ width: width() }}>
+          <SearchPick
+            testID={props.testID}
+            label={props.label}
+            options={visible().map((c) => ({ value: c.key, label: c.label, disabled: props.choiceLocked(c.key) }))}
+            value={value()}
+            width={width()}
+            disabled={locked()}
+            clearable={clearable()}
+            focusRef={(r) => props.focusRef?.(() => r.focus())}
+            onPick={(v) => (v === "" ? clear() : pick(v))}
+          />
+        </View>
+      </If>
       <If when={props.hint() || why()}>
         <View class="flex-row items-center gap-1.5">
           <Icon name="lock" size={12} tone="fg3" />

@@ -1,7 +1,7 @@
 // The controls' pure rules (model.ts): options, the shown choice, the TIN tell, word search, dates, row titles.
 import { expect, test } from "nsh/test";
 import type { ChoiceOption } from "../contract";
-import { isOn, listedOptions, matchWords, mdy, optionOf, readText, rowTitleOf, selectModel, splitLabel, tinKind } from "./model";
+import { drawerGroups, drawerTin, headFits, isOn, listedOptions, matchWords, mdy, optionOf, readText, rowHead, rowTitleOf, selectModel, splitLabel, tinKind } from "./model";
 
 const box = (value: string, options: ChoiceOption[] = [], zeroWhenBlank = false) =>
   ({ value: () => value, options: () => options, zeroWhenBlank }) as never;
@@ -68,7 +68,7 @@ test("readText: a read-only box shows an amount grouped (0.00 when blank and com
   expect(readText({ field: money, box: box("", [], true) })).toBe("0.00");
   expect(readText({ field: money, box: box("") })).toBe("");
   expect(readText({ field: { t: "money", w: 1, k: "a", l: "A" } as never, box: box("48000") })).toBe("48,000");
-  expect(readText({ field: { t: "date", k: "d", l: "D" } as never, box: box("12/01/2020") })).toBe("Dec 1, 2020");
+  expect(readText({ field: { t: "date", k: "d", l: "D" } as never, box: box("12/01/2020") })).toBe("December 1, 2020");
   const sel = { t: "sel", k: "s", l: "S", o: ["01 - January"] } as never;
   expect(readText({ field: sel, box: box("01") })).toBe("01 - January");
   expect(readText({ field: sel, box: box("") })).toBe("");
@@ -95,4 +95,30 @@ test("rowTitleOf: the row's printed number, with its caption after a dot", () =>
   expect(rowTitleOf({}, 0)).toBe("Row 1");
   expect(rowTitleOf({ start: 5 }, 2)).toBe("Row 7");
   expect(rowTitleOf({ row_labels: { caption: "Recipient", rows: ["Rent", "Fees"] } }, 1)).toBe("Row 2 · Fees");
+});
+
+test("rowHead: on a phone the label keeps 160 pt, so Edit penalties wraps under it and a lone mark stays beside it", () => {
+  // A 320 pt phone's row head is 262 pt wide; the number box is 30.
+  expect(headFits(262, 30, 20)).toBe(true); // a mark
+  expect(headFits(262, 30, 120)).toBe(false); // "Edit penalties"
+  expect(headFits(262, 30, 20 + 6 + 62)).toBe(false); // a mark and "Edit"
+  // The label's share beside the number is no narrower than the old 32 pt column + 8 pt gap left it.
+  expect(30 + rowHead(true).gap).toBeLessThanOrEqual(40);
+  expect(rowHead(false)).toEqual({ gap: 8, labelMin: undefined });
+});
+
+test("drawerGroups: a run of TIN digit columns is one group; a whole-TIN column and everything else stay single", () => {
+  const cols = [
+    { col: { l: "Taxpayer", t: "radio" }, k: "f:rdoT" },
+    { col: { l: "a. Name of Employer", t: "text" }, k: "f:txtName" },
+    { col: { l: "b. TIN (1-3)", t: "text" }, k: "f:txtEmployerTIN1" },
+    { col: { l: "TIN (4-6)", t: "text" }, k: "f:txtEmployerTIN2" },
+    { col: { l: "TIN (7-9)", t: "text" }, k: "f:txtEmployerTIN3" },
+    { col: { l: "Branch code", t: "text" }, k: "f:txtEmployerBranchCode" },
+    { col: { l: "e. Tax Withheld", t: "money" }, k: "f:txtTW" },
+  ];
+  expect(drawerGroups(cols, (c) => c.k).map((g) => g.length)).toEqual([1, 1, 4, 1]);
+  const whole = [{ col: { l: "TIN (Including Branch Code)", t: "text" }, k: "f:txtTin1" }, { col: { l: "ATC", t: "text" }, k: "f:atc" }];
+  expect(drawerGroups(whole, (c) => c.k).map((g) => g.length)).toEqual([1, 1]);
+  expect(drawerTin(["b. TIN (1-3)", "TIN (4-6)", "TIN (7-9)", "Branch code"])).toEqual({ weights: [1, 1, 1, 1.4], title: "b. TIN" });
 });

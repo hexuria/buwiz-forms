@@ -1,9 +1,11 @@
 // The form session through the real door, against an empty scratch database and the demo taxpayer (Juana Santos).
 // Tests in this file share one database, in order.
 import { expect, test } from "nsh/test";
+import { bir } from "../../bir";
 import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
 import { todoRows, type TodoPart } from "../../lib/todo";
 import type { SchemaItem } from "./contract";
+import { dateRanges, onePeriods } from "./schema";
 import { FormSession, bindError, type FormTarget } from "./session";
 
 // The first form call of a process builds every form's schema; a test's JS call has 2 s on the headless runner, a file's load 10 s.
@@ -21,7 +23,7 @@ async function opened(target: FormTarget = Q1): Promise<FormSession> {
 
 test("a 2551Q opens: its schema, the profile's locked boxes, a fresh Draft not saved yet", async () => {
   const s = await opened();
-  expect(s.fieldCount()).toBe(86);
+  expect(s.fieldCount()).toBe(85); // PR 3: the Year Ended month+year is one period field
   expect(s.status()).toBe("Draft");
   expect(s.header().editable).toBe(true);
   expect(s.valueOf("frm2551Qv2018:txtTIN1")).toBe("000");
@@ -75,12 +77,37 @@ test("leaving the page within the quiet still saves what was typed", async () =>
   again.dispose();
 });
 
+test("2551Q: a refused calendar Year Ended month stays visible while ATC edits autosave", async () => {
+  // Q3: the touched-only test below needs Q4 never saved.
+  const target = { ...Q1, period: 3 };
+  const s = await opened(target);
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.month.k === "frm2551Qv2018:rtnMonth")!;
+  const calendarMonthRefusal = () => s.boxMessageOf(period.month.k);
+  s.pickRadio("frm2551Qv2018:forThe_1");
+  await s.idle();
+  s.edit(period.periodKey, "06/2025");
+  await s.idle();
+  expect(calendarMonthRefusal()).toContain("December");
+
+  s.edit("txtATCAmt2", "2500");
+  await s.idle();
+  expect(calendarMonthRefusal()).toContain("December");
+  const again = await opened(target);
+  const savedAmount = again.valueOf("txtATCAmt2");
+  again.dispose();
+  s.dispose();
+  expect(savedAmount).toBe("2,500.00");
+});
+
 test("validation messages bind to their items: by key, then item number, then TIN, then label words", async () => {
   const s = await opened();
-  // Item 13 (keys name its radios) and the EOPT tier (keyed at Item 20).
+  // Item 13 (keys name its radios) stays a row message; the EOPT tier names one box, so its
+  // sentence lives in the box home and binds to the row through the box's key (B3/B4).
   expect(s.itemIdForKey("frm2551Qv2018:taxRate1")).toBe("1:7");
   expect(s.messageOf("1:7")).toContain("Item 13");
-  expect(s.messageOf("2:6")).toContain("EOPT tier");
+  const eoptKey = Object.keys(s.boxMessages()).find((k) => s.boxMessageOf(k).includes("EOPT tier"));
+  expect(eoptKey).toBeTruthy();
+  expect(s.itemIdForKey(eoptKey!)).toBe("2:6");
   const items = s.schema!.parts.flatMap((p, pi) => p.items.map((it: SchemaItem, ii) => ({ id: pi + ":" + ii, it })));
   const none = () => undefined;
   expect(bindError({ field: "x", message: "Item 06 is wrong", keys: [] }, items, none)).toBe("1:0");
@@ -107,7 +134,12 @@ test("touched-only errors: a message shows after its row was left, all of them a
   expect(s.row("2:6")().message).toBe("");
   s.check();
   await s.idle();
-  expect(s.row("2:6")().message).toContain("EOPT tier");
+  // The EOPT tier's sentence sits in the box home; after Check it shows on its box.
+  const eoptKey = Object.keys(s.boxMessages()).find((k) => s.boxMessageOf(k).includes("EOPT tier"))!;
+  expect(s.itemIdForKey(eoptKey)).toBe("2:6");
+  expect(s.box(eoptKey).invalid()).toBe(true);
+  const eoptShown = s.box(eoptKey).message?.() || s.row("2:6")().boxMessages.map((b) => b.sentence).join(" ");
+  expect(eoptShown).toContain("EOPT tier");
   // A part's badge counts its rows with a message, as the old page's partErrors did (F9-1: two messages on one row are one).
   const items = s.schema!.parts.flatMap((p, pi) => p.items.map((it, ii) => ({ id: `${pi}:${ii}`, it })));
   const rows = new Set(s.errors().map((e) => bindError(e, items, (k) => s.itemIdForKey(k))).filter((id) => id?.startsWith("2:")));
@@ -120,8 +152,16 @@ test("the to-do list (lib/todo): required-empty boxes and messages count at once
   const s = await opened();
   const parts = s.schema!.parts as unknown as TodoPart[];
   const valuesOf = () => Object.fromEntries(s.schema!.parts.flatMap((p) => p.items.flatMap((it) => (it.f || []).map((f) => [f.k, s.valueOf(f.k)]))));
-  // Before anything is left or checked, every row with a host message is already to do (F9-1, the old todo()).
-  expect(s.todo().map((r) => r.id)).toEqual(todoRows({ parts, messages: s.messages(), values: valuesOf(), blocked: (k) => s.box(k).locked() }).map((r) => r.id));
+  // Before anything is left or checked, every row with a host message is already to do (F9-1, the old todo());
+  // a box-home sentence counts its row the same way (B3/B4).
+  const boxRowsOf = () =>
+    Object.fromEntries(
+      Object.keys(s.boxMessages())
+        .map((k) => s.itemIdForKey(k))
+        .filter((id): id is string => id !== undefined && !s.messages()[id])
+        .map((id) => [id, " "])
+    );
+  expect(s.todo().map((r) => r.id)).toEqual(todoRows({ parts, messages: { ...s.messages(), ...boxRowsOf() }, values: valuesOf(), blocked: (k) => s.box(k).locked() }).map((r) => r.id));
   expect(s.todo().length).toBeGreaterThan(0);
   // A sample's period boxes are blank and required: they are to do at once, untouched, before any message shows.
   const sample = await opened({ tin: DEMO.tin, formCode: "2551Q", year: 0, period: 0, mode: "sample" });
@@ -134,7 +174,7 @@ test("the to-do list (lib/todo): required-empty boxes and messages count at once
   s.check();
   await s.idle();
   const ids = s.todo().map((r) => r.id);
-  expect(ids).toEqual(todoRows({ parts, messages: s.messages(), values: Object.fromEntries(s.schema!.parts.flatMap((p) => p.items.flatMap((it) => (it.f || []).map((f) => [f.k, s.valueOf(f.k)])))), blocked: (k) => s.box(k).locked() }).map((r) => r.id));
+  expect(ids).toEqual(todoRows({ parts, messages: { ...s.messages(), ...boxRowsOf() }, values: Object.fromEntries(s.schema!.parts.flatMap((p) => p.items.flatMap((it) => (it.f || []).map((f) => [f.k, s.valueOf(f.k)])))), blocked: (k) => s.box(k).locked() }).map((r) => r.id));
   expect(ids).toContain("1:7");
   expect(ids).toContain("2:6");
   // The pill's step goes to the first, and the next.
@@ -213,6 +253,272 @@ test("a Form library sample is not autosaved until its period is set; Save as re
   s.dispose();
 });
 
+test("Sample: typing 06/2025 in 1601C's filing-period box looks up that period and offers the existing return", async () => {
+  createDemoTaxpayer();
+  const saved = await bir.screen_form_open(DEMO.tin, "1601C", 2025, 6);
+  bir.screen_form_save("1601C", saved.draft);
+
+  const s = await opened({ tin: DEMO.tin, formCode: "1601C", year: 0, period: 0, mode: "sample" });
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.month.k === "frm1601c:txtMonth")!;
+  s.edit(period.periodKey, "06/2025");
+  await s.idle();
+  expect(s.overlay()?.kind).toBe("existing");
+
+  s.saveNow();
+  expect(s.overlay()?.kind).not.toBe("sample-period");
+  s.dispose();
+});
+
+test("1600WP: changing the From date from May 10 to May 15 updates both ends without a box message", async () => {
+  const s = await opened({ tin: DEMO.tin, formCode: "1600WP", year: 2025, period: 5, mode: "return" });
+  const fromMonth = "frm1600WP:DateWithholdingMonth";
+  const fromDay = "frm1600WP:DateWithholdingDay";
+  const toDay = "frm1600WP:DateWithholdingToDay";
+  const item = s.schema!.parts.flatMap((part) => part.items).find((it) =>
+    dateRanges(it).some((range) => range.from.anchor === fromMonth),
+  )!;
+  expect(item).toBeDefined();
+
+  s.edit(`${fromMonth}#date`, "05/10/2025");
+  await s.idle();
+  expect(s.valueOf(fromDay)).toBe("10");
+  expect(s.valueOf(toDay)).toBe("10");
+
+  s.edit(`${fromMonth}#date`, "05/15/2025");
+  await s.idle();
+  expect(s.valueOf(fromDay)).toBe("15");
+  expect(s.valueOf(toDay)).toBe("15");
+  expect(s.row(s.itemIdForKey(fromMonth)!)().boxMessages).toEqual([]);
+  s.dispose();
+});
+
+test("Sample: an unfinished 1702EX year holds its period edits; a complete year commits, and blur commits too", async () => {
+  createDemoTaxpayer();
+  const target = { tin: DEMO.tin, formCode: "1702EX", year: 0, period: 0, mode: "sample" } as FormTarget;
+
+  // Mid-typing "12/20" must not be read as December 2020: no lookup, no rebuilt or saved 2020 return, no autosave.
+  const s = await opened(target);
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.year.k === "frm1702EX:txtPg1I2YearEnd")!;
+  s.edit(period.periodKey, "12/20");
+  await s.idle();
+  expect(s.box(period.periodKey).value()).toBe("12/20"); // the box keeps what was typed
+  expect(s.valueOf(period.year.k)).toBe("");
+  expect(s.overlay()).toBe(null);
+  expect(s.saveState()).toEqual({ state: "manual", message: "Sample · set its period to save" });
+  expect(bir.list_returns("saved").filter((r) => r.form_code === "1702EX" && r.taxable_year === 2020)).toEqual([]);
+
+  // A finished four-digit year commits at once: December 2025 is looked up (the two-digit box then holds "25").
+  s.edit(period.periodKey, "12/2025");
+  await s.idle();
+  expect(s.valueOf(period.year.k)).toBe("25");
+  s.saveNow();
+  expect(s.overlay()?.kind).not.toBe("sample-period");
+  s.dispose();
+
+  // Held edits also land when the box is left: "12/20" commits as December 2020 on blur.
+  const blurred = await opened(target);
+  blurred.edit(period.periodKey, "12/20");
+  blurred.blur(period.periodKey);
+  await blurred.idle();
+  expect(blurred.valueOf(period.year.k)).toBe("20");
+  blurred.saveNow();
+  expect(blurred.overlay()?.kind).not.toBe("sample-period");
+  blurred.dispose();
+});
+
+test("Sample: retyping over a held 1702EX period year drops the hold; blur commits nothing stale", async () => {
+  createDemoTaxpayer();
+  const target = { tin: DEMO.tin, formCode: "1702EX", year: 0, period: 0, mode: "sample" } as FormTarget;
+  const yearKey = "frm1702EX:txtPg1I2YearEnd";
+  const fresh = async () => {
+    const s = await opened(target);
+    const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.year.k === yearKey)!;
+    s.edit(period.periodKey, "12/20"); // held, not looked up
+    return { s, period };
+  };
+
+  // "12/20" held, then backspaced to "12/2" (a period text that refuses): blur must not commit December 2020.
+  {
+    const { s, period } = await fresh();
+    const before = bir.list_returns("saved").filter((r) => r.form_code === "1702EX").length;
+    s.edit(period.periodKey, "12/2");
+    s.blur(period.periodKey);
+    await s.idle();
+    expect(s.valueOf(yearKey)).toBe("");
+    expect(s.overlay()).toBe(null);
+    expect(s.saveState()).toEqual({ state: "manual", message: "Sample · set its period to save" });
+    s.saveNow();
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("sample-period");
+    expect(bir.list_returns("saved").filter((r) => r.form_code === "1702EX").length).toBe(before);
+    s.dispose();
+  }
+
+  // Same for an out-of-range month: "13/20" refuses, so the held "12/20" is gone before blur.
+  {
+    const { s, period } = await fresh();
+    const before = bir.list_returns("saved").filter((r) => r.form_code === "1702EX").length;
+    s.edit(period.periodKey, "13/20");
+    s.blur(period.periodKey);
+    await s.idle();
+    expect(s.valueOf(yearKey)).toBe("");
+    expect(s.saveState()).toEqual({ state: "manual", message: "Sample · set its period to save" });
+    s.saveNow();
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("sample-period");
+    expect(bir.list_returns("saved").filter((r) => r.form_code === "1702EX").length).toBe(before);
+    s.dispose();
+  }
+
+  // And a three-digit year is still mid-typing: nothing commits on blur, and a finished year still works after it.
+  {
+    const { s, period } = await fresh();
+    s.edit(period.periodKey, "12/202");
+    s.blur(period.periodKey);
+    await s.idle();
+    expect(s.valueOf(yearKey)).toBe("");
+    expect(s.saveState()).toEqual({ state: "manual", message: "Sample · set its period to save" });
+    s.edit(period.periodKey, "12/2025");
+    await s.idle();
+    s.saveNow();
+    expect(s.overlay()?.kind).not.toBe("sample-period");
+    s.dispose();
+  }
+});
+
+test("Sample: restoring a refused period with no other edit creates no return", async () => {
+  const target: FormTarget = { tin: DEMO.tin, formCode: "1601C", year: 0, period: 0, mode: "sample" };
+  const s = await opened(target);
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.month.k === "frm1601c:txtMonth")!;
+  const saved = () => bir.list_returns("saved").filter((r) => r.form_code === "1601C" && r.taxable_year === 2025 && r.period === 11);
+  expect(saved()).toEqual([]);
+
+  s.edit(period.periodKey, "11/2025");
+  await s.idle();
+  const before = s.saveState();
+  s.edit(period.periodKey, "13/2025");
+  await s.idle();
+  expect(s.boxMessageOf(period.month.k)).toBeTruthy();
+  s.edit(period.periodKey, "11/2025");
+  await s.idle();
+  // The save line is back to what it said before the refusal, not "set its period to save".
+  expect(s.saveState()).toEqual(before);
+  s.dispose();
+  expect(saved()).toEqual([]);
+});
+
+test("Sample: correcting 09/202 to 09/2025 autosaves the statutory minimum wage", async () => {
+  const target: FormTarget = { tin: DEMO.tin, formCode: "1601C", year: 0, period: 0, mode: "sample" };
+  const s = await opened(target);
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.month.k === "frm1601c:txtMonth")!;
+  const saved = () => bir.list_returns("saved").filter((r) => r.form_code === "1601C" && r.taxable_year === 2025 && r.period === 9);
+  expect(saved()).toEqual([]);
+
+  s.edit(period.periodKey, "09/2025");
+  await s.idle();
+  s.edit(period.periodKey, "09/202");
+  await s.idle();
+  s.edit("frm1601c:txtTax15", "1234");
+  await s.idle();
+  s.edit(period.periodKey, "09/2025");
+  await s.idle();
+  s.dispose();
+
+  const again = await opened({ ...target, year: 2025, period: 9, mode: "return" });
+  expect(again.valueOf("frm1601c:txtTax15")).toBe("1,234.00");
+  expect(saved()).toHaveLength(1);
+  again.dispose();
+});
+
+test("Sample: an incomplete 1601C year cannot save under the previous resolved period", async () => {
+  createDemoTaxpayer();
+  const target: FormTarget = { tin: DEMO.tin, formCode: "1601C", year: 0, period: 0, mode: "sample" };
+  const s = await opened(target);
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.month.k === "frm1601c:txtMonth")!;
+  const saved = () => bir.list_returns("saved").filter((r) => r.form_code === "1601C" && r.taxable_year === 2025 && r.period === 8);
+  expect(saved()).toEqual([]);
+
+  s.edit(period.periodKey, "08/2025");
+  await s.idle();
+  expect(saved()).toEqual([]);
+  s.edit(period.periodKey, "08/202");
+  await s.idle();
+  s.saveNow();
+  await s.idle();
+  expect(s.overlay()?.kind).toBe("sample-period");
+  expect(saved()).toEqual([]);
+
+  s.closeSamplePeriod();
+  s.edit(period.periodKey, "08/2025");
+  await s.idle();
+  s.saveNow();
+  await s.idle();
+  expect(s.overlay()?.kind).not.toBe("sample-period");
+  expect(saved()).toHaveLength(1);
+  s.dispose();
+});
+
+test("Sample: 1600PT and 1600VT take a four-digit year for their period, typed or picked on the month grid", async () => {
+  createDemoTaxpayer();
+  for (const [code, yearKey] of [
+    ["1600PT", "frm1600PT:txtPg1I1Year"],
+    ["1600VT", "frm1600VT:txtPg1I1Year"],
+  ] as const) {
+    const target: FormTarget = { tin: DEMO.tin, formCode: code, year: 0, period: 0, mode: "sample" };
+    const saved = await bir.screen_form_open(DEMO.tin, code, 2025, 6);
+    bir.screen_form_save(code, saved.draft);
+
+    // Typed: the stored 2025-06 return is offered.
+    let s = await opened(target);
+    const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.year.k === yearKey)!;
+    s.edit(period.periodKey, "06/2025");
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("existing");
+    s.dispose();
+
+    // The month-grid pick offers it too.
+    s = await opened(target);
+    s.pickPeriodMonth(period, 6, 2025);
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("existing");
+    s.dispose();
+
+    // A period with no stored return prepares a fresh sample: Save goes on without the period dialog.
+    s = await opened(target);
+    s.edit(period.periodKey, "07/2025");
+    await s.idle();
+    expect(s.overlay()).toBe(null);
+    const stored = () => bir.list_returns("saved").filter((r) => r.form_code === code && r.taxable_year === 2025 && r.period === 7);
+    expect(stored()).toEqual([]);
+    s.saveNow();
+    await s.idle();
+    expect(s.overlay()?.kind).not.toBe("sample-period");
+    // The save itself went through: a failed write only shows in the save state, so check the state and the stored return.
+    expect(s.saveState().state).toBe("saved");
+    expect(stored().length).toBe(1);
+    s.dispose();
+  }
+});
+
+test("Sample: a four-digit year below 1900 (12/0025) on 1702EX is not read as 2025", async () => {
+  createDemoTaxpayer();
+  const s = await opened({ tin: DEMO.tin, formCode: "1702EX", year: 0, period: 0, mode: "sample" });
+  const yearKey = "frm1702EX:txtPg1I2YearEnd";
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.year.k === yearKey)!;
+  const before = bir.list_returns("saved").filter((r) => r.form_code === "1702EX").length;
+  s.edit(period.periodKey, "12/0025");
+  await s.idle();
+  // The host gets all four digits and refuses year 25: the two-digit box never holds "25" (which would mean 2025).
+  expect(s.valueOf(yearKey)).not.toBe("25");
+  expect(s.overlay()).toBe(null);
+  expect(s.saveState()).toEqual({ state: "manual", message: "Sample · set its period to save" });
+  s.saveNow();
+  await s.idle();
+  expect(s.overlay()?.kind).toBe("sample-period");
+  expect(bir.list_returns("saved").filter((r) => r.form_code === "1702EX").length).toBe(before);
+  s.dispose();
+});
+
 test("the three heaviest forms build a session without error", async () => {
   createDemoTaxpayer();
   const counts: Record<string, number> = {};
@@ -224,5 +530,5 @@ test("the three heaviest forms build a session without error", async () => {
     counts[code] = s.fieldCount();
     s.dispose();
   }
-  expect(counts).toEqual({ "1702RT": 365, "1700": 289, "1701": 380 });
+  expect(counts).toEqual({ "1702RT": 364, "1700": 289, "1701": 379 }); // PR 3: each year-end pair is one period field
 });

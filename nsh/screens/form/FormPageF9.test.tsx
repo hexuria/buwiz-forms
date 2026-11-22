@@ -23,74 +23,69 @@ test("F9-2 desktop: Compact form sections on: one shortened line per part (old c
   expect(app.count(`id:fp-nav-4 >> text:${LONG}`)).toBe(0);
 });
 
-test("F9-3 desktop: a date in split boxes has a calendar button beside them (2551Q Year Ended), a date box has only its own", async () => {
+test("F9-3 desktop: the Year Ended pair is one period field; its month grid opens on the held year with the stepper still (2551Q)", async () => {
   const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "2551Q", year: 2025, period: 1 } } });
   await app.waitFor("id:fp-parts-toggle");
-  await app.waitFor("id:fp-date-0:1");
-  expect(app.count("id:fp-date-0:0")).toBe(0);
-  await app.press("id:fp-date-0:1");
-  // The popup opens on the month the boxes hold.
-  await app.waitFor("text:Su");
-  expect(app.shows("text:Dec")).toBe(true);
+  await app.waitFor("id:fp-frm2551Qv2018:rtnMonth#period");
+  // The pair's own boxes never draw on their own.
+  expect(app.shows("id:fp-frm2551Qv2018:rtnMonth")).toBe(false);
+  expect(app.shows("id:fp-frm2551Qv2018:txtYear")).toBe(false);
+  const cal = "frm2551Qv2018:rtnMonth#period-calendar";
+  await app.press(`id:${cal}`);
+  await app.waitFor(`id:${cal}-m12`);
+  // The grid stands on the held year 2025; the year is the return's, so the stepper has nowhere to go.
+  expect(app.texts()).toContain("2025");
+  expect(app.enabled(`id:${cal}-prev`)).toBe(false);
+  expect(app.enabled(`id:${cal}-next`)).toBe(false);
 });
 
-test("F9-3 desktop: the calendar beside a split date with a locked year (2551Q 2025, Fiscal) offers no day outside that year", async () => {
+test("F9-3 desktop: Fiscal frees every month of the held year for the period's month box (2551Q)", async () => {
   const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "2551Q", year: 2025, period: 1 } } });
   await app.waitFor("id:fp-parts-toggle");
-  await app.waitFor("id:fp-date-0:1");
+  await app.waitFor("id:fp-frm2551Qv2018:rtnMonth#period");
   // A calendar year ends in December and has only that month to pick (the next test): Fiscal, so the whole year is the filer's.
   await app.press("text:Fiscal");
-  expect(app.texts()).toContain("12 - December");
-  await app.press("id:fp-date-0:1");
-  await app.waitFor("text:Su");
-  // The popup opens on December 2025. A day of November 2025 is inside the year: the month box takes it ...
-  await app.press("label:Previous month");
-  await app.press("text:15");
-  await app.waitFor("text:11 - November");
-  // ... but a day past the end of the year is out of reach: go on to February 2026 and a press on its 15th does nothing (it used to
-  // fill the month list with February and leave the locked year, half a date).
-  await app.press("id:fp-date-0:1");
-  await app.waitFor("text:Su");
-  for (let i = 0; i < 3; i++) await app.press("label:Next month");
-  await app.press("text:15").catch(() => {});
-  await app.wait(300);
-  expect(app.texts()).toContain("11 - November");
-  expect(app.texts()).not.toContain("02 - February");
+  const cal = "frm2551Qv2018:rtnMonth#period-calendar";
+  await app.press(`id:${cal}`);
+  await app.waitFor(`id:${cal}-m11`);
+  expect(app.enabled(`id:${cal}-m11`)).toBe(true);
+  expect(app.enabled(`id:${cal}-m1`)).toBe(true);
+  await app.press(`id:${cal}-m11`);
+  // The month box takes the pick; the locked year stays the return's.
+  expect(await app.value("id:fp-frm2551Qv2018:rtnMonth#period")).toBe("11");
+  expect(app.texts()).toContain("2025");
 });
 
-test("F9-4 desktop: a locked box's hint is shown whole, in a box that grows to it (0619E Due Date MM and YYYY)", async () => {
+test("F9-4 desktop: a partially locked date shows its period hint whole (0619E Due Date)", async () => {
   const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "0619E", year: 0, period: 0, mode: "sample" } } });
   await app.waitFor("id:fp-parts-toggle");
-  // The hint is its own text (not a one-line cut), and the page says it in full.
-  expect(app.shows("id:fp-frm0619E:txtDueMonth-hint")).toBe(true);
-  expect(app.shows("id:fp-frm0619E:txtDueYear-hint")).toBe(true);
-  expect(app.texts().filter((t) => t === "Shows once the period is set").length).toBe(2);
+  expect(app.shows("id:fp-frm0619E:txtDueMonth#date")).toBe(true);
+  expect(app.shows("id:fp-frm0619E:txtDueMonth#date-hint")).toBe(true);
+  expect(app.texts().filter((t) => t === "Shows once the period is set").length).toBe(1);
 });
 
-test("F14 desktop: a calendar year (Calendar ticked, the default) has only December to pick: the days of another month are out of reach", async () => {
+test("F14 desktop: a calendar year offers only December in the period's month grid (2551Q)", async () => {
   const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "2551Q", year: 2025, period: 1 } } });
   await app.waitFor("id:fp-parts-toggle");
-  await app.waitFor("id:fp-date-0:1");
-  await app.press("id:fp-date-0:1");
-  await app.waitFor("text:Su");
-  // December 2025 is open and its days are there to pick.
-  expect(app.texts()).toContain("Dec");
-  expect(app.enabled("text:15")).toBe(true);
-  // November 2025 is inside the locked year, but not the calendar year's last month: no day of it can be picked.
-  await app.press("label:Previous month");
-  await app.waitFor("text:Nov");
-  expect(app.enabled("text:15")).toBe(false);
-  expect(app.texts()).toContain("12 - December");
+  await app.waitFor("id:fp-frm2551Qv2018:rtnMonth#period");
+  const cal = "frm2551Qv2018:rtnMonth#period-calendar";
+  await app.press(`id:${cal}`);
+  await app.waitFor(`id:${cal}-m12`);
+  // December 2025 is open; every other month of the calendar year is out of reach.
+  expect(app.enabled(`id:${cal}-m12`)).toBe(true);
+  expect(app.enabled(`id:${cal}-m11`)).toBe(false);
+  expect(app.enabled(`id:${cal}-m1`)).toBe(false);
 });
 
-test("F14 desktop: the calendar beside a Year Ended printed MM/20YY (1702Q) opens on the month and year the boxes hold, not on today's", async () => {
+test("F14 desktop: the month grid beside a Year Ended printed MM/20YY (1702Q) opens on the held year, December the only pick", async () => {
   const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "1702Q", year: 2024, period: 1 } } });
   await app.waitFor("id:fp-parts-toggle");
-  await app.waitFor("id:fp-date-0:1");
-  expect(app.texts()).toContain("12 - December");
-  expect(app.texts()).toContain("24");
-  await app.press("id:fp-date-0:1");
-  await app.waitFor("text:Su");
-  expect(app.texts()).toContain("Dec");
+  await app.waitFor("id:fp-frm1702q:rbYrEndMonth#period");
+  const cal = "frm1702q:rbYrEndMonth#period-calendar";
+  await app.press(`id:${cal}`);
+  await app.waitFor(`id:${cal}-m12`);
+  // The grid stands on the year the boxes hold ("24" is 2024), not today's.
   expect(app.texts()).toContain("2024");
+  expect(app.enabled(`id:${cal}-m12`)).toBe(true);
+  expect(app.enabled(`id:${cal}-m11`)).toBe(false);
 });

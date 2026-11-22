@@ -590,10 +590,8 @@ pub(super) fn mark_schema(form: &mut Value, code: &str) {
         .flat_map(|part| part["items"].as_array_mut().into_iter().flatten());
     for item in items {
         let first = item["f"][0]["k"].as_str().unwrap_or_default().to_string();
-        match first.as_str() {
-            "frm1801v2018:txtDateMonth" => item["one_date"] = Value::Bool(true),
-            "frm1801v2018:txtTINE1" => item["typed_tin"] = Value::Bool(true),
-            _ => {}
+        if first == "frm1801v2018:txtTINE1" {
+            item["typed_tin"] = Value::Bool(true);
         }
     }
 }

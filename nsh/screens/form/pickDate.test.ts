@@ -5,7 +5,7 @@ import { bir } from "../../bir";
 import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
 import { dateRange, splitDay } from "./rows";
 import type { FormSchema } from "./contract";
-import { dateParts } from "./schema";
+import { dateParts, oneDate } from "./schema";
 import { FormSession, type FormTarget, type SessionHooks } from "./session";
 
 // The first form call of a process builds every form's schema (the host does it lazily, once per process); a test's JS call has 2 s on the
@@ -25,6 +25,51 @@ async function tick(s: FormSession, key: string): Promise<void> {
   s.pickRadio(key);
   await s.idle();
 }
+
+test("0605 registered date uses the same unrestricted calendar as its parts", async () => {
+  const s = await opened({ tin: DEMO.tin, formCode: "0605", year: 2023, period: 8, mode: "return" });
+  try {
+    const item = s.item(s.itemIdForKey("frm0605:txtDueDateMonth")!)!;
+    const date = oneDate(item)!;
+    expect(dateRange(s, date)).toEqual({});
+    s.edit(date.oneKey, "2023-08-17");
+    s.blur(date.oneKey);
+    await s.idle();
+    expect(s.shownOf(date.oneKey)).toBe("August 17, 2023");
+    expect([s.valueOf(date.month.k), s.valueOf(date.day!.k), s.valueOf(date.year.k)]).toEqual(["08", "17", "2023"]);
+    s.edit(date.oneKey, "1900-02-28");
+    s.blur(date.oneKey);
+    await s.idle();
+    expect([s.valueOf(date.month.k), s.valueOf(date.day!.k), s.valueOf(date.year.k), s.boxMessageOf(date.month.k)])
+      .toEqual(["02", "28", "1900", ""]);
+    expect(splitDay(s, date)).toBe("1900-02-28");
+  } finally {
+    s.dispose();
+  }
+});
+
+test("1707A one-date rejects a typed non-December calendar year end", async () => {
+  const s = await opened({ tin: DEMO.tin, formCode: "1707A", year: 2025, period: 0, mode: "return" });
+  try {
+    const month = "frm1707Av2021:txtI1YearEndMonth";
+    const date = oneDate(s.item(s.itemIdForKey(month)!)!)!;
+    await tick(s, "frm1707Av2021:rdoI1Calendar");
+    expect(s.calendarYearEnd(date)).toBe(true);
+    const before = [s.valueOf(month), s.valueOf(date.day!.k), s.valueOf(date.year.k)];
+    s.edit(date.oneKey, "06/15/2025");
+    s.blur(date.oneKey);
+    await s.idle();
+    expect(s.boxMessageOf(month)).toMatch(/December/);
+    expect([s.valueOf(month), s.valueOf(date.day!.k), s.valueOf(date.year.k)]).toEqual(before);
+    s.edit(date.oneKey, "12/15/2025");
+    s.blur(date.oneKey);
+    await s.idle();
+    expect([s.valueOf(month), s.valueOf(date.day!.k), s.valueOf(date.year.k)].map(Number)).toEqual([12, 31, 2025]);
+    expect(s.shownOf(date.oneKey)).toBe("December 31, 2025");
+  } finally {
+    s.dispose();
+  }
+});
 
 test("1706 item 1 (month, day and year boxes): a picked day fills all three", async () => {
   const s = await opened({ tin: DEMO.tin, formCode: "1706", year: 2025, period: 0, mode: "return" });

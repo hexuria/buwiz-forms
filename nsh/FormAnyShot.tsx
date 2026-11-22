@@ -14,6 +14,10 @@ interface Params {
   year?: number;
   period?: number;
   mode?: FormTarget["mode"];
+  /** Parts to open once the page opened; "all" opens every part (the rest stay folded, as a fresh return leaves them). */
+  openParts?: number[] | "all";
+  /** Edits applied once the page opened (a refused write on a gated box keeps it drawn with its sentence). */
+  edits?: Record<string, string>;
 }
 
 function Preview() {
@@ -27,6 +31,13 @@ function Preview() {
         year={p.year ?? 2025}
         period={p.period ?? 1}
         mode={p.mode ?? "return"}
+        onSession={(s) =>
+          void s.ready().then(() => {
+            const openAll = p.openParts === "all" ? s.schema!.parts.map((_x, i) => i) : p.openParts || [];
+            for (const pi of openAll) if (!s.part(pi)().open) s.togglePart(pi);
+            for (const [k, v] of Object.entries(p.edits || {})) s.edit(k, v);
+          })
+        }
       />
       <Toaster bottom={96} />
     </View>

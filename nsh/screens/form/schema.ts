@@ -1,7 +1,9 @@
 // Pure helpers over the form schema, ported from app/shell/form_page.js (no door, no signals).
 import type { ChoiceOption, FieldType, FormSchema, SchemaField, SchemaItem, SchemaPart } from "./contract";
+import { tinSegment } from "./controls/model";
 import { shortIsoDate } from "../../lib/dates";
 import type { ScreenFormExisting } from "../../bir";
+import { stripOtherError } from "./refusals";
 
 /**
  * A listed dropdown option as { value, label }. The schema writes many as "CODE - Label" strings ("03 - March"): the
@@ -16,11 +18,25 @@ export function optionOf(o: unknown): ChoiceOption | null {
   return m ? { value: m[1], label: text } : { value: text, label: text };
 }
 
-/** Items whose three to five text boxes are the TIN (3-3-3-5). */
+/**
+ * Items whose one to five boxes are all the TIN: the 3-3-3-5 four-box shape, a three-box shape, or a single
+ * whole-TIN box (PR 8). Every field must be TIN-named (tinSegment) — an item that merely mentions a TIN beside a
+ * name, a count or a phone number is not a TIN row and keeps the ordinary layout. The row draws them as the TIN
+ * grid — one cell per box — so the profile line and the phone proportions apply to every shape the schemas build.
+ */
 export function isTinItem(it: SchemaItem): boolean {
   const fs = it.f || [];
   const named = /\bTIN\b|Identification/i.test(it.l) || fs.some((x) => /\bTIN\d?\b|txtTIN/i.test(`${x.l} ${x.k}`));
-  return named && fs.length >= 3 && fs.length <= 5 && fs.every((x) => x.t === "text" || x.t === "int");
+  return named && fs.length >= 1 && fs.length <= 5 && fs.every(tinSegment);
+}
+
+/**
+ * The phone TIN grid's column weights (PR 8): every box an equal share of the row, but the last one 1.4 when it is the
+ * 5-digit branch code — the 3-3-3-5 TIN's 1 : 1 : 1 : 1.4. A shape with no 5-digit last box (three boxes, a whole-TIN
+ * box, a branch code of another length) gets equal columns.
+ */
+export function tinWeights(fs: readonly SchemaField[]): number[] {
+  return fs.map((f, i) => (i === fs.length - 1 && f.m === 5 ? 1.4 : 1));
 }
 
 /** Drops hidden fields, tables whose every column is hidden, and items left with no field (unless they carry a note). */
@@ -92,10 +108,71 @@ export interface OneDate extends DateParts {
   oneKey: string;
 }
 
+export function oneDates(it: SchemaItem): OneDate[] {
+  const fields = it.f || [];
+  return (it.one_dates || []).flatMap(([m, d, y]) => {
+    const month = fields.find((field) => field.k === m);
+    const day = fields.find((field) => field.k === d);
+    const year = fields.find((field) => field.k === y);
+    return month && day && year ? [{ month, day, year, oneKey: `${month.k}#date` }] : [];
+  });
+}
+
 export function oneDate(it: SchemaItem): OneDate | null {
-  if (!it.one_date) return null;
-  const date = dateParts(it.f || []);
-  return date ? { ...date, oneKey: `${date.month.k}#date` } : null;
+  return oneDates(it)[0] || null;
+}
+
+/** An item the host marks one_periods: its month and year boxes are one MM/YYYY field, keyed "<month key>#period". */
+export interface OnePeriod {
+  month: SchemaField;
+  year: SchemaField;
+  periodKey: string;
+  /** The host's registry says the year box stores two digits (20YY or a two-digit select). */
+  twoDigit: boolean;
+}
+
+export function onePeriods(it: SchemaItem): OnePeriod[] {
+  const fields = it.f || [];
+  const twoDigit = new Set(it.one_period_two_digit || []);
+  return (it.one_periods || []).flatMap(([m, y]) => {
+    const month = fields.find((field) => field.k === m);
+    const year = fields.find((field) => field.k === y);
+    return month && year ? [{ month, year, periodKey: `${month.k}#period`, twoDigit: twoDigit.has(y) }] : [];
+  });
+}
+
+/** One end of a date_ranges pair: a one-date's triple (1600WP) or a single date/text box. */
+export interface RangeEnd {
+  /** The key the range mark names (a one-date's month key, or the box's own). */
+  anchor: string;
+  /** A one-date end, or null for a whole-date box. */
+  date: OneDate | null;
+  /** The single box of a whole-date end. */
+  field: SchemaField | null;
+  /** The key edits go through ("<month key>#date" for a triple, the box's key else). */
+  editKey: string;
+}
+
+export interface DateRange {
+  from: RangeEnd;
+  to: RangeEnd;
+  derived: boolean;
+}
+
+export function dateRanges(it: SchemaItem): DateRange[] {
+  const fields = it.f || [];
+  const dates = oneDates(it);
+  const end = (anchor: string): RangeEnd | null => {
+    const date = dates.find((d) => d.month.k === anchor);
+    if (date) return { anchor, date, field: null, editKey: date.oneKey };
+    const field = fields.find((f) => f.k === anchor);
+    return field ? { anchor, date: null, field, editKey: anchor } : null;
+  };
+  return (it.date_ranges || []).flatMap(([f, t]) => {
+    const from = end(f);
+    const to = end(t);
+    return from && to ? [{ from, to, derived: (it.derived_to ?? []).includes(t) }] : [];
+  });
 }
 
 /** BIR's own words for the income-tax ATCs the forms list as bare codes. */
@@ -120,7 +197,9 @@ export function choiceLabel(f: SchemaField): string {
 export function controlWidth(f: { t: FieldType | "hidden"; m?: number }, available: number): number {
   if (f.t === "money") return Math.min(230, available);
   if (f.t === "pct") return 88;
-  if (f.t === "date") return 140;
+  // "September 30, 1988" is the widest long date: 126 pt of text plus the box's padding, gap and
+  // calendar button needs about 174, so the smallest multiple of 4 that holds it is 176 (B14).
+  if (f.t === "date") return 176;
   if (f.t === "int") return f.m && f.m <= 4 ? 88 : 140;
   if (f.t === "sel") return Math.min(260, available);
   if (f.t === "text" && f.m && f.m <= 4) return 88;
@@ -208,7 +287,7 @@ export function existingOfferFor(existing: ScreenFormExisting): { title: string;
 
 /** A host refusal in plain words: bir-core's "Other error: " prefix is not for the filer. */
 export function plainRefusal(text: string): string {
-  return String(text).replace(/^Other error:\s*/, "");
+  return stripOtherError(text);
 }
 
 /**
@@ -253,4 +332,20 @@ export function emptyCell(value: string, type: string): boolean {
   if (type === "money" || type === "pct" || type === "int") return /^[-+]?0*\.?0*$/.test(v.replace(/[,₱%\s]/g, ""));
   if (type === "chk" || type === "radio") return !(v === "true" || v === "1" || v === "Y");
   return false;
+}
+
+/** An item's radios as the host's one-answer groups: the same `grp` together, in the order they first appear; radios the
+ *  host left ungrouped form the item's own group (the period's Quarter picks, a lone choice). */
+export function radioGroups(radios: SchemaField[]): SchemaField[][] {
+  const order: string[] = [];
+  const byKey = new Map<string, SchemaField[]>();
+  for (const f of radios) {
+    const key = f.grp || "";
+    if (!byKey.has(key)) {
+      byKey.set(key, []);
+      order.push(key);
+    }
+    (byKey.get(key) as SchemaField[]).push(f);
+  }
+  return order.map((key) => byKey.get(key) as SchemaField[]);
 }

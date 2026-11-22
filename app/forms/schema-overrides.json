@@ -32,7 +32,12 @@
     },
     "txtATCCode": {
       "label": "ATC",
-      "evidence": "agent box label: 'ATC'; writer-cells printed caption: 'ATC'"
+      "kind": "sel",
+      "evidence": "agent box label: 'ATC'; writer-cells printed caption: 'ATC' | B2 (form-fields PR 1): the official popup list (FORM_0605_ATCS, filtered by the held tax type) fills the options; catalogs.rs"
+    },
+    "txtTaxTypeCode": {
+      "kind": "sel",
+      "evidence": "B2 (form-fields PR 1): the official popup list (FORM_0605_TAX_TYPES) fills the options; catalogs.rs"
     },
     "frm0605:txtReturnPeriodMonth": {
       "kind": "int",
@@ -21722,6 +21727,22 @@
           ]
         }
       ]
+    },
+    "move:frm1701q:txtTelno": {
+      "to": "1:new:",
+      "item": {
+        "l": "Contact Number",
+        "order": 1
+      },
+      "evidence": "B13: the extractor grouped the contact number under item 12 'Email Address' (forms-schema.json part 1 item 8), so the row left for 'Not on the printed sheet' read 'Email Address' over a contact-number box. The January 2018 sheet prints no contact number (html-frozen/1701q-2018/writer-cells.json not_joined frm1701q:txtTelno); the box keeps its own row, titled for what it holds."
+    },
+    "move:frm1701q:txtLOB": {
+      "to": "9:new:",
+      "item": {
+        "l": "Line of Business",
+        "order": 1
+      },
+      "evidence": "B13: the extractor grouped the line of business with the official page's counters and sign-in fields under 'Current UI page' (forms-schema.json part 9 item 5); those are hidden, so the page drew the line-of-business box under that caption. The January 2018 sheet prints no line of business (manual-0); the box gets its own row and the hidden fields stay where they were, untouched."
     }
   },
   "1702EX": {
@@ -31529,7 +31550,7 @@
     },
     "frm1707:txtLOB": {
       "label": "Line of Business",
-      "evidence": "painted view (retired) form_1707_view.rs (local:lob via binding /line_of_business): 'Line of business (profile)' | PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined"
+      "evidence": "painted view (retired) form_1707_view.rs (local:lob via binding /line_of_business): 'Line of business (profile)' | PR 9 (R3.0, R3.1): the filer's profile copy the official page keeps (loadBGData); html-frozen/1707-2021/writer-cells.json not_joined | B13: its own row 'Line of Business' in Not on the printed sheet, after the profile copy's name, address, ZIP code, contact number and email."
     },
     "frm1707:txtPg1P2I17Surcharge": {
       "label": "Surcharge",
@@ -32341,7 +32362,13 @@
                 "frm1707:ProfileAddress2",
                 "frm1707:ProfileZipCode",
                 "frm1707:ProfileContactNum",
-                "frm1707:ProfileEmailAddr",
+                "frm1707:ProfileEmailAddr"
+              ]
+            },
+            {
+              "no": "",
+              "l": "Line of Business",
+              "k": [
                 "frm1707:txtLOB"
               ]
             },

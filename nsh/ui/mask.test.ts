@@ -143,9 +143,9 @@ test("dates: typed forms, real days only", () => {
   expect(parseTypedDate("")).toBeNull();
   expect(parseTypedDate("12/01")).toBeNull();
   expect(formatMDY(dec1)).toBe("12/01/2020");
-  expect(formatLongDate(dec1)).toBe("Dec 1, 2020");
+  expect(formatLongDate(dec1)).toBe("December 1, 2020");
   expect(formatIso(dec1)).toBe("2020-12-01");
-  expect(shownDate("12/01/2020")).toBe("Dec 1, 2020");
+  expect(shownDate("12/01/2020")).toBe("December 1, 2020");
   expect(shownDate("12/0")).toBe("12/0");
   expect(DATE_ERROR).toContain("MM/DD/YYYY");
 });

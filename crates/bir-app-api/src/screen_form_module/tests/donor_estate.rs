@@ -804,11 +804,7 @@ fn pr10_1801_item_1_is_one_date_kept_as_three_boxes() {
         .map(|(_, it)| it["f"][0]["k"].as_str().unwrap().to_string())
         .collect();
     assert_eq!(marked, [month]);
-    assert!(
-        items("1800")
-            .iter()
-            .all(|(_, it)| it.get("one_date").is_none())
-    );
+    assert_eq!(one["one_dates"], json!([[month, day, year]]));
     let opened = open("1801", 1);
     for key in [month, day, year] {
         assert_eq!(opened["values"][key], "", "{key}");
@@ -853,7 +849,9 @@ fn pr10_1801_item_1_is_one_date_kept_as_three_boxes() {
         (year, "abcd"),
     ] {
         let refused = fill("1801", &typed["draft"], json!({ key: bad }));
-        assert!(rejected(&refused, key).is_some(), "{key} {bad}");
+        // A bad part refuses the whole date, and the one sentence lands on
+        // the month's box (the one-date control's key), not the part sent.
+        assert!(rejected(&refused, month).is_some(), "{key} {bad}");
         assert_eq!(refused["draft"], typed["draft"]);
     }
 }

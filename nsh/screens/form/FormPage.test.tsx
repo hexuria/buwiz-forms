@@ -42,8 +42,13 @@ test("phone: open, Check shows the to-dos on the pill, step to one, type, autosa
   const n = Number(/of (\d+)/.exec(before)![1]);
   await app.press("text:Graduated income tax rate");
   await app.waitUntil(() => !app.texts().some((t) => new RegExp("of " + n + " to do").test(t)));
-  // Type an amount in Part II and see it saved.
-  await app.press("id:fp-part-2-toggle");
+  // Type an amount in Part II and see it saved. The pill's sections list opens Part II
+  // (index 2: "Return details" is 0, "Part I" is 1) and scrolls it into view — surer than
+  // pressing the part's own toggle, whose sticky header the floating pill can cover.
+  await app.press("id:fp-pill-open");
+  await app.waitFor("id:fp-section-2", { timeout: 15_000 });
+  await app.press("id:fp-section-2");
+  await app.wait(800);
   await app.type("id:fp-frm2551Qv2018:txt15", "100");
   await app.waitFor("text:✓ Saved", { timeout: 5000 });
 });

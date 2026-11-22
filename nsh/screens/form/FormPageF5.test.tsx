@@ -79,11 +79,13 @@ test("F5-4 desktop: the pill names the part at the top of the viewport while the
   await app.waitFor(first);
 });
 
-test("F5-5 phone: a fact card's long choice is a full-width row that takes the press", async () => {
+test("F5-5 phone: a fact card's Segmented choice takes the press and saves", async () => {
   const app = await open(ENTRY, { host: { params: Q3 } }); // 390 x 844
   await app.waitFor("text:BIR Form 2551Q");
   await app.press("id:fp-part-1-toggle");
-  for (let i = 0; i < 12 && !app.shows("text:Mixed income (compensation and business)"); i++) await app.scroll("id:form-scroll", 400).catch(() => {});
-  await app.press("label:Mixed income (compensation and business)");
-  await app.waitFor("label:Mixed income (compensation and business), chosen");
+  // F2: income type's choices are a Segmented of short labels ("Mixed income"), not the long card text.
+  for (let i = 0; i < 12 && !app.shows("label:Mixed income"); i++) await app.scroll("id:form-scroll", 400).catch(() => {});
+  await app.press("label:Mixed income");
+  // A pick is the explicit answer and saves at once: the card's note turns to the saved words.
+  await app.waitFor("text:/saved to the tax profile/");
 });

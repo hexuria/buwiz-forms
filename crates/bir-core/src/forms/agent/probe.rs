@@ -3028,3 +3028,169 @@ fn choice_binding(
         .collect();
     Ok(Some(options))
 }
+#[cfg(test)]
+mod blank_seed_tests {
+    //! Every bound, user-writable box on Form 0605 takes a write on the
+    //! draft a new return opens with. The agent's generic writer sends each
+    //! bound box through `set_path`, which cannot create the `Option` parent
+    //! objects a fresh 0605 draft leaves null (`/due_date`, `/return_period`,
+    //! `/atc`, `/tax_type`): the write returned Ok and changed nothing, and
+    //! no probe noticed. This test writes through the same entry points the
+    //! page and the assistant use and requires the draft to change.
+    use super::*;
+    use crate::forms::agent::{
+        Binding, BoundBox, DateFormat, DatePart, Gate, Lock, fill_as_user,
+        fill_profile_box_as_user, gate,
+    };
+    use crate::profile::TaxpayerProfile;
+    use serde_json::json;
+
+    /// The profile the blank 0605 seed is built from.
+    fn profile() -> TaxpayerProfile {
+        serde_json::from_value(json!({
+            "id": null,
+            "full_name": "Probe Person",
+            "tin": {"segment1": "000", "segment2": "123", "segment3": "453", "branch": "00000"},
+            "rdo_code": "039",
+            "line_of_business": "Retail",
+            "registered_address": "1 Probe Street",
+            "zip_code": "1100",
+            "phone": "0280000000",
+            "email": "probe@example.test",
+            "default_form_type": "0605",
+            "taxpayer_type": "Individual",
+            "business_start_date": "2010-01-04",
+        }))
+        .expect("the probe profile deserializes")
+    }
+
+    /// The draft a new 0605 return opens with.
+    fn blank_seed(profile: &TaxpayerProfile) -> Value {
+        serde_json::to_value(crate::forms::form_0605::Form0605Draft::new_from_profile(
+            profile, 2026, 1,
+        ))
+        .expect("the blank 0605 draft serializes")
+    }
+
+    /// A value the binding can hold: a listed code for the catalog picks
+    /// (B2's lists), a real date part for the split boxes, a recognisable
+    /// probe for everything else.
+    fn probe_value(key: &str, bound: &BoundBox) -> Option<Value> {
+        match key {
+            "txtATCCode" => return Some(json!("FP010")),
+            "txtTaxTypeCode" => return Some(json!("DO")),
+            // 0605's date parts are whole-number bindings, but a year box
+            // wants a four-digit year, not the whole-number probe.
+            "frm0605:txtDueDateMonth" | "frm0605:txtReturnPeriodMonth" => return Some(json!("07")),
+            "frm0605:txtDueDateDay" | "frm0605:txtReturnPeriodDay" => return Some(json!("19")),
+            "frm0605:txtDueDateYear" | "frm0605:txtReturnPeriodYear" => return Some(json!("2031")),
+            _ => {}
+        }
+        match &bound.binding {
+            Binding::Text {
+                date: Some(DateFormat::Iso),
+                ..
+            } => Some(json!("2031-07-19")),
+            Binding::Text {
+                date: Some(DateFormat::Mdy),
+                ..
+            } => Some(json!("07/19/2031")),
+            Binding::Text {
+                date: Some(DateFormat::MonthYear),
+                ..
+            } => Some(json!("07/2031")),
+            Binding::Text {
+                part: Some(DatePart::Month),
+                ..
+            } => Some(json!("07")),
+            Binding::Text {
+                part: Some(DatePart::Day),
+                ..
+            } => Some(json!("19")),
+            Binding::Text {
+                part: Some(DatePart::Year),
+                ..
+            } => Some(json!("2031")),
+            Binding::Text { .. } => Some(json!("QZ7X")),
+            Binding::Amount { .. } => Some(json!(AMOUNT_PROBE)),
+            Binding::Whole { .. } => Some(json!(WHOLE_PROBES[0])),
+            Binding::Choice { options } => options
+                .iter()
+                .find(|option| !option.value.is_empty())
+                .map(|option| json!(option.value.clone())),
+        }
+    }
+
+    /// Refusals that are by design on a blank seed — a box another answer
+    /// must open first, or a radio whose probe value is the answer the
+    /// seed already holds. Each entry says why; the test fails on anything
+    /// not listed.
+    const ALLOWED: &[(&str, &str)] = &[
+        // (key, reason)
+        (
+            "frm0605:itemFiscalStartMonth",
+            "the blank seed already files Calendar; the probe's pick is the held answer",
+        ),
+        (
+            "frm0605:itemFiscalStartMonth:_2",
+            "Fiscal is not the held answer; writing it changes nothing on this seed",
+        ),
+        (
+            "frm0605:txtClassification",
+            "the blank seed already classifies the Individual profile; the probe's pick is held",
+        ),
+        (
+            "frm0605:txtClassification:_2",
+            "Non-Individual is not the held answer; writing it changes nothing on this seed",
+        ),
+    ];
+
+    #[test]
+    fn every_bound_user_box_takes_a_write_on_the_blank_seed() {
+        let kind = AgentFormKind::from_code("0605").expect("0605 is an agent form");
+        let def = kind.definition();
+        let profile = profile();
+        let mut refused: Vec<String> = Vec::new();
+        for (key, bound) in &def.bindings {
+            let verdict = gate(def, key, None);
+            let profile_box = matches!(verdict, Some(Gate::Lock(Lock::Profile)));
+            let writable = matches!(
+                verdict,
+                None | Some(Gate::HostWritten)
+                    | Some(Gate::Lock(Lock::Election))
+                    | Some(Gate::Lock(Lock::Profile))
+            );
+            if !writable {
+                continue;
+            }
+            let Some(value) = probe_value(key, bound) else {
+                continue;
+            };
+            let mut draft = blank_seed(&profile);
+            let before = draft.clone();
+            let result = if profile_box {
+                fill_profile_box_as_user(kind, &mut draft, key, &value)
+            } else {
+                fill_as_user(kind, &mut draft, key, &value)
+            };
+            let failed = match result {
+                Err(reason) => Some(reason),
+                // A write that returns Ok but leaves the draft as it was is
+                // the same dead end as a refusal.
+                Ok(()) if draft == before => Some("the write left the draft unchanged".to_string()),
+                Ok(()) => None,
+            };
+            if let Some(reason) = failed {
+                let allowed = ALLOWED.iter().any(|(k, _)| k == key);
+                if !allowed {
+                    refused.push(format!("{key}: {reason}"));
+                }
+            }
+        }
+        assert!(
+            refused.is_empty(),
+            "bound user-writable 0605 boxes that refuse a write on the new-return seed:\n{}",
+            refused.join("\n")
+        );
+    }
+}

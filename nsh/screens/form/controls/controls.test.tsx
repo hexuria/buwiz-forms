@@ -163,15 +163,33 @@ for (const size of SIZES) {
     expect(edit(app, "tin2")).toBe("987");
   });
 
+  test(`${size.name}: a TIN grid cell takes digits only, at most its box's max (PR 8)`, async () => {
+    if (size.name !== "phone") return; // the grid is the under-600 pt layout; the gallery draws it only there
+    const app = await gallery(size.options);
+    // The phone grid's cells: same digit rules as the TIN boxes, centred (the look is in the shots).
+    expect(app.count("id:fp-gtin1")).toBe(1);
+    expect(app.value("id:fp-gtin1")).toBe("000");
+    await app.clear("id:fp-gtin1");
+    await app.type("id:fp-gtin1", "12a45");
+    expect(app.value("id:fp-gtin1")).toBe("124");
+    await app.clear("id:fp-gbranch");
+    await app.type("id:fp-gbranch", "0000-1x");
+    expect(app.value("id:fp-gbranch")).toBe("00001");
+    // A locked cell draws read-only (a ReadBox, not an input): it keeps its label and its value as text.
+    expect(app.count("id:fp-gtinL")).toBe(1);
+    expect(app.value("id:fp-gtinL")).toBe(null);
+    expect(app.count("label:/Taxpayer TIN/")).toBeGreaterThan(0);
+  });
+
   test(`${size.name}: a date takes typed text in any old format and reports MM/DD/YYYY`, async () => {
     const app = await gallery(size.options);
-    expect(app.value("id:fp-date")).toBe("Dec 10, 2020");
+    expect(app.value("id:fp-date")).toBe("December 10, 2020");
     await app.clear("id:fp-date");
     await app.type("id:fp-date", "12012020");
     expect(edit(app, "date")).toBe("12/01/2020");
     await app.type("id:fp-name", " ");
     expect(blurs(app, "date")).toBe(1);
-    expect(app.value("id:fp-date")).toBe("Dec 1, 2020");
+    expect(app.value("id:fp-date")).toBe("December 1, 2020");
     await app.clear("id:fp-date");
     await app.type("id:fp-date", "Mar 5 2021");
     expect(edit(app, "date")).toBe("03/05/2021");
@@ -228,22 +246,20 @@ for (const size of SIZES) {
     expect(edit(app, "lockedChk")).toBe("");
   });
 
-  test(`${size.name}: a radio group picks, a group of three unticks, a locked group takes nothing`, async () => {
+  test(`${size.name}: a radio group picks, a group of three clears, a locked group takes nothing`, async () => {
     const app = await gallery(size.options);
+    // A group of three is a segmented bar: a segment picks, Clear returns it to unanswered.
     await app.press("id:fp-regime2");
     expect(edit(app, "regime")).toBe("regime2=true");
-    // Pressing the ticked one again is reported as a pick of that key: the session decides (a group of three unticks).
-    await app.press("id:fp-regime2");
+    await app.press("id:fp-radio-regime-clear");
     expect(edit(app, "regime")).toBe("regime2=false");
     await app.press("id:fp-regime1");
     expect(edit(app, "regime")).toBe("regime2=false regime1=true");
-    // A pair keeps its answer: pressing "No" again reports a pick, never an untick.
-    await app.press("id:fp-amended2");
-    expect(edit(app, "amended")).toBe("amended2=true");
-    // Pressing "Yes" on the pair reports that pick.
+    // A pair keeps its answer: no Clear, and a checked segment takes no second press.
     await app.press("id:fp-amended1");
-    expect(edit(app, "amended")).toBe("amended2=true amended1=true");
-    // A locked group: disabled boxes and the reason it is shut.
+    expect(edit(app, "amended")).toBe("amended1=true");
+    expect(app.shows("id:fp-radio-amended-clear")).toBe(false);
+    // A locked group: disabled segments and the reason it is shut.
     expect(app.enabled("id:fp-taxType1")).toBe(false);
     expect(app.texts()).toContain("Set by the taxpayer type");
   });

@@ -3,9 +3,9 @@
 // mask.ts (pure, tested); here they meet the input: the text is controlled, the caret is put back after a reformat, and
 // the selection the input reported before each edit goes to the mask so the edit is read exactly (NSH: onKeyPress comes
 // before the text changes, onSelectionChange has the selection; nsh/.nsh/types/nsh/types.d.ts InputHostProps).
-import type { InputRef, JSX } from "nsh";
+import type { InputRef, JSX, ViewRef } from "nsh";
 import { effect, signal, Text as NText, untracked, View } from "nsh";
-import { type CalendarEntry, DatePicker, Input, OtpInput, type OtpInputRef } from "nsh/base";
+import { Calendar, type CalendarEntry, DatePicker, Input, OtpInput, type OtpInputRef } from "nsh/base";
 import { AppButton } from "./buttons";
 import type { IconName } from "./icons";
 import { cx, TOUCH } from "./look";
@@ -29,6 +29,7 @@ export interface TextFieldProps {
   label?: string;
   /** What screen readers call it when there is no visible label. */
   accessibilityLabel?: string;
+  accessibilityDescribedBy?: ViewRef | null;
   /** A line under the box, 12 fg3. */
   hint?: string;
   /** An error: true for the danger border alone, a string for the message under the box too. */
@@ -46,8 +47,8 @@ export interface TextFieldProps {
    * in a row of its own (the command palette's, whose icon and Esc key are beside it); the row draws the frame.
    */
   bare?: boolean;
-  /** Right-aligned text (amounts, percents). */
-  align?: "left" | "right";
+  /** Right-aligned text (amounts, percents), centred (the phone TIN grid's digits). */
+  align?: "left" | "right" | "center";
   /** Tabular figures (TINs, amounts, dates). */
   tabular?: boolean;
   /** A leading icon. */
@@ -83,6 +84,7 @@ export function TextField(props: TextFieldProps) {
   const sm = () => props.size === "sm";
   const message = () => (typeof props.error === "string" && props.error ? props.error : "");
   const flat = () => !!props.locked || !!props.disabled;
+  const messageRef = signal<ViewRef | null>(null);
   return (
     <View class="min-w-0 gap-1" style={{ width: props.width }}>
       <If when={props.label}>
@@ -94,7 +96,10 @@ export function TextField(props: TextFieldProps) {
           props.bare
             ? TOUCH ? "min-h-11" : "h-8"
             : cx(
-                "rounded-(--radius-row) border px-2.5",
+                "rounded-(--radius-row) border",
+                // A centred box is a cell of the phone TIN grid: 47 pt wide on a 320 pt phone, where 10 pt sides cut
+                // the third digit. It keeps 4 pt, like the locked cell (controls/model.ts readBoxPad).
+                props.align === "center" ? "px-1" : "px-2.5",
                 TOUCH ? "min-h-11" : sm() ? "h-7" : "h-8",
                 flat() ? "border-border bg-hover" : "bg-card",
                 props.error ? "border-danger" : !flat() && "border-border-strong focus-within:border-accent-blue",
@@ -125,6 +130,7 @@ export function TextField(props: TextFieldProps) {
           autoFocus={props.autoFocus}
           returnKeyType={props.returnKeyType}
           accessibilityLabel={props.label ?? props.accessibilityLabel}
+          accessibilityDescribedBy={props.accessibilityDescribedBy ?? (message() ? messageRef() : null)}
           onFocus={() => props.onFocus?.()}
           onBlur={() => props.onBlur?.()}
           onSubmit={() => props.onSubmit?.()}
@@ -135,6 +141,7 @@ export function TextField(props: TextFieldProps) {
             props.bare ? "text-emph font-normal" : "text-body",
             flat() ? "text-muted-foreground" : "text-foreground",
             props.align === "right" && "text-right",
+            props.align === "center" && "text-center",
             props.tabular && "tabular-nums",
           )}
         />
@@ -147,7 +154,9 @@ export function TextField(props: TextFieldProps) {
         {props.trailing}
       </View>
       <If when={message()}>
-        <Text variant="meta" tone="danger">{message()}</Text>
+        <View ref={(ref: ViewRef) => messageRef.set(ref)}>
+          <Text variant="meta" tone="danger">{message()}</Text>
+        </View>
       </If>
       <If when={!message() && props.hint}>
         <Text variant="meta" tone="fg3">{props.hint}</Text>
@@ -185,7 +194,7 @@ interface MaskedProps {
   placeholder?: string;
   prefix?: string;
   suffix?: string;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
 }
 
 /**
@@ -485,6 +494,8 @@ function CalendarItem(props: { item: CalendarEntry }) {
 interface CalendarPickerProps {
   /** The picked day as an ISO date (yyyy-mm-dd), or null. */
   value: string | null;
+  /** The initial month when there is no selected date. */
+  start?: string;
   /** Controlled open state; unset, the picker keeps its own. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -499,11 +510,34 @@ interface CalendarPickerProps {
   max?: string;
 }
 
+/** An inline calendar for a date sheet. */
+export function CalendarGrid(props: { value: string | null; start: string; min?: string; max?: string; onPick: (iso: string) => void }) {
+  return (
+    <Calendar
+      value={props.value || props.start}
+      disabledMatcher={props.min || props.max ? { before: props.min ?? null, after: props.max ?? null } : null}
+      previousAccessibilityLabel="Previous month"
+      nextAccessibilityLabel="Next month"
+      headerClass="mb-2 flex-row items-center justify-between gap-1"
+      rowClass="flex-row justify-between"
+      itemClass={cx(
+        "h-11 min-w-11 items-center justify-center rounded-(--radius-ctl) px-1 text-foreground hover:bg-hover focus:bg-hover data-outside:text-subtle-foreground disabled:opacity-40",
+        props.value && "selected:bg-primary selected:hover:bg-primary selected:focus:bg-primary selected:text-primary-foreground",
+      )}
+      renderItem={(item: CalendarEntry) => <CalendarItem item={item} />}
+      onChange={(event) => {
+        const date = typeof event.value === "string" ? parseTypedDate(event.value.slice(0, 10)) : null;
+        if (date) props.onPick(formatIso(date));
+      }}
+    />
+  );
+}
+
 /** The calendar's icon button and its popup (a sheet on touch): the one DatePicker the kit draws, with its look. */
 function CalendarPicker(props: CalendarPickerProps) {
   return (
     <DatePicker
-      value={props.value}
+      value={props.value || props.start || null}
       open={props.open}
       onOpenChange={(e) => props.onOpenChange?.(e.open)}
       onChange={(e) => {
@@ -523,14 +557,15 @@ function CalendarPicker(props: CalendarPickerProps) {
       renderItem={(item: CalendarEntry) => <CalendarItem item={item} />}
       rowClass="flex-row justify-between"
       itemClass={cx(
-        "items-center justify-center rounded-(--radius-ctl) px-1 text-foreground hover:bg-hover focus:bg-hover selected:bg-primary selected:hover:bg-primary selected:focus:bg-primary selected:text-primary-foreground data-outside:text-subtle-foreground disabled:opacity-40",
+        "items-center justify-center rounded-(--radius-ctl) px-1 text-foreground hover:bg-hover focus:bg-hover data-outside:text-subtle-foreground disabled:opacity-40",
+        props.value && "selected:bg-primary selected:hover:bg-primary selected:focus:bg-primary selected:text-primary-foreground",
         TOUCH ? "h-11 min-w-11" : "h-8 min-w-8",
       )}
       trigger={
         <View
           testID={props.triggerID}
           role="button"
-          accessibilityLabel="Open the calendar"
+          accessibilityLabel={props.label}
           class={cx("items-center justify-center rounded-(--radius-ctl) hover:bg-hover active:bg-selected", TOUCH ? "-mr-2 size-11" : "-mr-1.5 size-6")}
         >
           <Icon name="calendar" size={14} tone="fg3" />
@@ -582,6 +617,12 @@ export interface DateFieldProps extends MaskedFieldProps {
   value: string;
   /** MM/DD/YYYY as soon as the text reads as a date (12102020, 12-10-2020 and 12/10/2020 alike), else the text. */
   onChange: (value: string) => void;
+  min?: string;
+  max?: string;
+  calendarStart?: string;
+  hideCalendar?: boolean;
+  numericDisplay?: boolean;
+  onPick?: (iso: string) => void;
 }
 
 /**
@@ -592,9 +633,10 @@ export function DateField(props: DateFieldProps) {
   const focused = signal(false);
   const edited = signal(false);
   const open = signal(false);
+  let box: InputRef | undefined;
   const long = (v: string) => {
     const d = parseTypedDate(v);
-    return d ? formatLongDate(d) : v;
+    return d ? props.numericDisplay ? formatMDY(d) : formatLongDate(d) : v;
   };
   const text = signal(long(props.value ?? ""));
   effect(() => {
@@ -612,6 +654,7 @@ export function DateField(props: DateFieldProps) {
     <TextField
       label={props.label}
       accessibilityLabel={props.accessibilityLabel}
+      accessibilityDescribedBy={props.accessibilityDescribedBy}
       hint={props.hint}
       placeholder={props.placeholder ?? "MM/DD/YYYY"}
       disabled={props.disabled}
@@ -622,19 +665,32 @@ export function DateField(props: DateFieldProps) {
       autoFocus={props.autoFocus}
       returnKeyType={props.returnKeyType}
       onSubmit={props.onSubmit}
-      inputRef={(r) => props.inputRef?.(r)}
+      inputRef={(r) => {
+        box = r;
+        props.inputRef?.(r);
+      }}
       tabular
       value={text()}
-      error={bad() ? DATE_ERROR : props.error}
+      error={props.error || (bad() ? DATE_ERROR : false)}
       keyboardType="numbers-and-punctuation"
       onChange={(raw) => {
-        text.set(raw);
         edited.set(true);
+        text.set(raw);
         const d = parseTypedDate(raw);
-        props.onChange(d ? formatMDY(d) : raw);
+        const answer = d ? formatMDY(d) : raw;
+        // Eight digits (08171988) rewrite to MM/DD/YYYY at once, the caret at the end (pitfall 23:
+        // the signal takes the raw text and then the answer in the same handler).
+        if (d && /^\d{8}$/.test(raw.trim())) {
+          text.set(answer);
+          box?.setSelection(answer.length, answer.length);
+        }
+        props.onChange(answer);
       }}
       onFocus={() => {
         focused.set(true);
+        // The long form becomes the numeric date while the box has the keys.
+        const d = parseTypedDate(text());
+        if (d) text.set(formatMDY(d));
         props.onFocus?.();
       }}
       onBlur={() => {
@@ -643,21 +699,25 @@ export function DateField(props: DateFieldProps) {
         props.onBlur?.();
       }}
       trailing={
-        <If when={!props.locked && !props.disabled}>
+        <If when={!props.hideCalendar && !props.locked && !props.disabled}>
           <CalendarPicker
             value={iso()}
+            start={props.calendarStart}
             open={open()}
             onOpenChange={(o) => open.set(o)}
             label={`Pick ${props.label ?? props.accessibilityLabel ?? "a date"}`}
             triggerID={props.testID ? `${props.testID}-calendar` : undefined}
+            min={props.min}
+            max={props.max}
             onPick={(iso) => {
               const v = parseTypedDate(iso);
               if (!v) return;
-              text.set(formatLongDate(v));
+              text.set(focused() || props.numericDisplay ? formatMDY(v) : formatLongDate(v));
               edited.set(true);
-              props.onChange(formatMDY(v));
+              if (props.onPick) props.onPick(iso);
+              else props.onChange(formatMDY(v));
             }}
-                    />
+          />
         </If>
       }
     />

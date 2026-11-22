@@ -1,4 +1,4 @@
-// The entry the selection tests open (fields.select.test.tsx): one of each number box with a readout of what it reports, a plain box
+// The entry the selection tests open (ui/fields.select.test.tsx headless; shots/select.test.tsx in a real window): one of each number box with a readout of what it reports, a plain box
 // to Tab from, and buttons that put the keyboard in a box the way a form page's pill step does (the box's own focus()). The
 // amounts start at zero or at 1,250.00 so a test can tell a click that replaced the text from one that kept its caret. Tests only.
 import type { InputRef } from "nsh";

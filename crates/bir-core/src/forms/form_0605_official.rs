@@ -17,7 +17,7 @@ use super::penalty_items::PenaltyItems;
 use std::collections::BTreeMap;
 
 use super::form_0605::{
-    Form0605ApprovalSelection, Form0605Date, Form0605Draft, Form0605FilingBasis,
+    Form0605ApprovalSelection, Form0605Date, Form0605DateParts, Form0605Draft, Form0605FilingBasis,
     Form0605IndexedCode, Form0605MannerOfPayment, Form0605TaxpayerClassification,
     Form0605TypeOfPayment,
 };
@@ -514,6 +514,50 @@ fn official_pair(selection: &Form0605IndexedCode, table: &[(&str, &str)]) -> boo
 }
 
 impl Form0605Draft {
+    /// Item 6's ATC pick (B2): a code the official list offers under the
+    /// held tax type stores its whole indexed code, a blank clears it, and
+    /// anything else — unlisted, or listed but not offered for this tax
+    /// type — is refused with the page's sentence.
+    pub fn set_atc(&mut self, code: &str) -> Result<(), String> {
+        let code = code.trim();
+        if code.is_empty() {
+            self.atc = None;
+            return Ok(());
+        }
+        let tax_type = self.tax_type.as_ref().map_or("", |t| t.code());
+        match form_0605_atc(code).filter(|_| form_0605_atc_offered_for(code, tax_type)) {
+            Some(indexed) => {
+                self.atc = Some(indexed);
+                Ok(())
+            }
+            None => Err("Pick an ATC from the list.".to_string()),
+        }
+    }
+
+    /// Item 8's tax type pick (B2): same contract as [`Self::set_atc`].
+    /// The ATC list follows the tax type, so a held ATC the new answer no
+    /// longer offers is cleared (`ATCList()`'s rule).
+    pub fn set_tax_type(&mut self, code: &str) -> Result<(), String> {
+        let code = code.trim();
+        if code.is_empty() {
+            self.tax_type = None;
+        } else {
+            match form_0605_tax_type(code) {
+                Some(indexed) => self.tax_type = Some(indexed),
+                None => return Err("Pick a tax type from the list.".to_string()),
+            }
+        }
+        let tax_type = self.tax_type.as_ref().map_or("", |t| t.code());
+        if self
+            .atc
+            .as_ref()
+            .is_some_and(|atc| !form_0605_atc_offered_for(atc.code(), tax_type))
+        {
+            self.atc = None;
+        }
+        Ok(())
+    }
+
     /// `computePenalties` / `computeOfTax`, on the values `round(this,2)`
     /// leaves in the fields.
     pub(super) fn official_recompute(&mut self) {
@@ -818,13 +862,22 @@ impl Form0605Draft {
             fields.insert(key.to_string(), value);
         };
         let flag = |on: bool| on.to_string();
-        let date_parts = |date: Option<Form0605Date>| match date {
-            Some(d) => (
-                format!("{:02}", d.month),
-                format!("{:02}", d.day),
-                format!("{:04}", d.year),
-            ),
-            None => Default::default(),
+        // A split date shows its real date's parts, or the parts the filer
+        // typed so far while the date is still incomplete (B1).
+        let date_parts = |date: Option<Form0605Date>, typed: &Form0605DateParts| {
+            if let Some(d) = date {
+                (
+                    format!("{:02}", d.month),
+                    format!("{:02}", d.day),
+                    format!("{:04}", d.year),
+                )
+            } else {
+                (
+                    typed.month.map(|m| format!("{m:02}")).unwrap_or_default(),
+                    typed.day.map(|d| format!("{d:02}")).unwrap_or_default(),
+                    typed.year.map(|y| format!("{y:04}")).unwrap_or_default(),
+                )
+            }
         };
 
         let calendar = self.filing_basis == Form0605FilingBasis::Calendar;
@@ -836,7 +889,7 @@ impl Form0605Draft {
                 flag(self.quarter == quarter),
             );
         }
-        let (m, d, y) = date_parts(self.due_date);
+        let (m, d, y) = date_parts(self.due_date, &self.due_date_typed);
         put("frm0605:txtDueDateMonth", m);
         put("frm0605:txtDueDateDay", d);
         put("frm0605:txtDueDateYear", y);
@@ -853,7 +906,7 @@ impl Form0605Draft {
             format!("{:02}", self.year_end_month),
         );
         put("frm0605:txtYearEnded", self.taxable_year.to_string());
-        let (m, d, y) = date_parts(self.return_period);
+        let (m, d, y) = date_parts(self.return_period, &self.return_period_typed);
         put("frm0605:txtReturnPeriodMonth", m);
         put("frm0605:txtReturnPeriodDay", d);
         put("frm0605:txtReturnPeriodYear", y);
@@ -1448,5 +1501,39 @@ mod tests {
                 .any(|(field, _)| field == "item_20a_surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+
+    /// The field map shows what the three boxes hold: a complete date as
+    /// zero-padded parts, an empty date as three blanks, and typed parts of
+    /// an unfinished date as the entered parts with the rest blank (B1).
+    #[test]
+    fn the_date_boxes_show_complete_empty_and_partial_dates() {
+        // Complete: the official padding.
+        let mut draft = sample();
+        draft.due_date = Form0605Date::new(2023, 8, 7).ok();
+        draft.return_period = None;
+        let fields = draft.to_official_field_map();
+        assert_eq!(fields["frm0605:txtDueDateMonth"], "08");
+        assert_eq!(fields["frm0605:txtDueDateDay"], "07");
+        assert_eq!(fields["frm0605:txtDueDateYear"], "2023");
+        for key in [
+            "frm0605:txtReturnPeriodMonth",
+            "frm0605:txtReturnPeriodDay",
+            "frm0605:txtReturnPeriodYear",
+        ] {
+            assert_eq!(fields[key], "", "{key} blank on an empty date");
+        }
+
+        // Partial: only the month typed — it shows, the rest stay blank.
+        // The typed parts ride the draft's serde shape, so the state is
+        // built as stored JSON and read back as the typed draft.
+        let mut partial = serde_json::to_value(sample()).unwrap();
+        partial["due_date"] = serde_json::Value::Null;
+        partial["due_date_typed"] = serde_json::json!({"month": 8});
+        let draft: Form0605Draft = serde_json::from_value(partial).unwrap();
+        let fields = draft.to_official_field_map();
+        assert_eq!(fields["frm0605:txtDueDateMonth"], "08");
+        assert_eq!(fields["frm0605:txtDueDateDay"], "");
+        assert_eq!(fields["frm0605:txtDueDateYear"], "");
     }
 }

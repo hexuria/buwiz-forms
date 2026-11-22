@@ -4,6 +4,9 @@
 import { expect, test } from "nsh/test";
 import { bir } from "../../bir";
 import { createDemoTaxpayer, DEMO } from "../../bir/testing";
+import type { FormSchema } from "./contract";
+import { radioKind } from "./controls/model";
+import { choiceLabel, radioGroups, withoutHidden } from "./schema";
 import { FormSession } from "./session";
 
 const FORMS = bir.screen_forms_index();
@@ -35,4 +38,31 @@ FORMS.forEach((form, i) => {
       s.dispose();
     }
   }, 60_000);
+});
+
+// PR 5: every one-answer group of the 43 forms draws by its size — a segmented bar (2–4), a dropdown (5–12), a search
+// list (more) — and every choice keeps its key and its label. No production group reaches the search branch (the largest
+// is eight); the branch is covered by the controls gallery's fixture.
+test("PR5: every radio group draws by its size and every choice is reachable", () => {
+  const seen = { segmented: 0, dropdown: 0, search: 0 };
+  let groups = 0;
+  for (const form of FORMS) {
+    const schema = withoutHidden(bir.screen_form_schema(form.c) as FormSchema);
+    for (const part of schema.parts) {
+      for (const it of part.items) {
+        const radios = (it.f ?? []).filter((f) => f.t === "radio");
+        for (const g of radioGroups(radios)) {
+          groups += 1;
+          seen[radioKind(g.length)] += 1;
+          expect(new Set(g.map((f) => f.k)).size).toBe(g.length);
+          for (const f of g) {
+            expect(f.k.length).toBeGreaterThan(0);
+            expect(choiceLabel(f).length).toBeGreaterThan(0);
+          }
+        }
+      }
+    }
+  }
+  expect(groups).toBeGreaterThan(150);
+  console.log(`PR5 radio groups=${groups} segmented=${seen.segmented} dropdown=${seen.dropdown} search=${seen.search}`);
 });

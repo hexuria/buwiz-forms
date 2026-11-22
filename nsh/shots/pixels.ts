@@ -19,8 +19,12 @@ export interface Raster {
   width: number;
   /** How many rows were decoded. */
   rows: number;
+  /** Bytes per pixel of `line` (3 or 4). */
+  channels: number;
   /** The colour of pixel (x, y) as [r, g, b]. */
   at(x: number, y: number): [number, number, number];
+  /** The raw bytes of row `y` (channels per pixel) — for scans that read many pixels at once. */
+  line(y: number): Uint8Array;
 }
 
 function u32(b: Uint8Array, at: number): number {
@@ -82,12 +86,45 @@ export function decodePng(png: Uint8Array, rows?: number): Raster {
   return {
     width,
     rows: count,
+    channels,
+    line: (y) => lines[y],
     at: (x, y) => {
       const line = lines[y];
       const i = x * channels;
       return [line[i], line[i + 1], line[i + 2]];
     },
   };
+}
+
+/** The y positions (points) of a picture's full-width divider lines — shots/rowheights.py's rule: a pixel row
+ *  whose sampled red channel is a uniform mid grey (215–245), not white. `points` is the window width in
+ *  points (the picture is 2x on Retina); the card's content column clears the side nav on a wide window. */
+export function dividerYs(raster: Raster, points: number): number[] {
+  const scale = raster.width / points;
+  const x0 = points < 760 ? Math.floor(raster.width * 0.08) : Math.floor(raster.width * 0.36);
+  const x1 = points < 760 ? Math.floor(raster.width * 0.9) : Math.floor(raster.width * 0.88);
+  const c = raster.channels;
+  const ys: number[] = [];
+  let lastY = -Infinity;
+  for (let y = 0; y < raster.rows; y++) {
+    const line = raster.line(y);
+    const i0 = x0 * c;
+    const fr = line[i0];
+    if (fr === 255 && line[i0 + 1] === 255 && line[i0 + 2] === 255) continue;
+    if (!(fr > 215 && fr < 245)) continue;
+    let uniform = true;
+    for (let x = x0 + 4; x < x1; x += 4) {
+      if (Math.abs(line[x * c] - fr) >= 4) {
+        uniform = false;
+        break;
+      }
+    }
+    if (uniform && y - lastY > 2) {
+      ys.push(y / scale);
+      lastY = y;
+    }
+  }
+  return ys;
 }
 
 /** The longest run of pixels in row `y`, between x0 and x1, that `test` accepts. */

@@ -91,3 +91,14 @@ export function menuKey(title: string, taken: readonly string[]): string | null 
   for (const c of letters) if (/[a-z]/.test(c) && !taken.includes(c)) return c;
   return null;
 }
+
+/**
+ * Where toasts show. A form page under 600 pt has no free strip at its bottom (the pill, the tab bar, then rows of boxes
+ * right above them), so there they sit at the top, 8 pt under the narrow header (52 pt on touch, the title bar's 40
+ * otherwise), over the part's sticky title and never over a row's boxes. Everywhere else: the bottom, 20 pt off the
+ * edge, above the form page's pill (96) and the phone's tab bar (56).
+ */
+export function toastPlace(view: string, narrow: boolean, touch: boolean): { edge: "top" | "bottom"; offset: number } {
+  if (view === "form" && narrow) return { edge: "top", offset: (touch ? 52 : SIZE.titleBar) + 8 };
+  return { edge: "bottom", offset: (view === "form" ? 96 : 20) + (narrow ? 56 : 0) };
+}

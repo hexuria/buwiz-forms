@@ -81,6 +81,16 @@ export interface SchemaItem {
   note?: string;
   /** Month, day and year boxes shown as one date box. */
   one_date?: boolean | 1;
+  /** Registered month/day/year keys, in screen order. */
+  one_dates?: [string, string, string][];
+  /** Registered month/year keys, in screen order: the pair is one MM/YYYY field ("<month key>#period"). */
+  one_periods?: [string, string][];
+  /** The year keys of one_periods pairs whose box stores two digits (20YY, a two-digit select). */
+  one_period_two_digit?: string[];
+  /** Registered from/to anchors: a whole-date box's key, or a one-date's month key (its triple is the end). */
+  date_ranges?: [string, string][];
+  /** To anchors copied from From by the form, not independent range ends. */
+  derived_to?: string[];
   /** A hint offering another item's amount for this item's box ("Use it"). */
   from?: { k: string; to: string; l: string };
   /** A schedule's preprinted row captions. */
@@ -121,6 +131,8 @@ export interface ChoiceOption {
   value: string;
   label: string;
   selected?: boolean;
+  /** The choice takes no pick (a locked box); it still shows, dimmed and unpressable. */
+  disabled?: boolean;
 }
 
 /** One box's live state. Every accessor is its own signal: reading one subscribes to that box only. */
@@ -134,12 +146,15 @@ export interface BoxState {
   /** What a locked BLANK box shows in its place, in the filer's words ("Needs the ATC", "Set by the period"); "" none. */
   hint: Accessor<string>;
   /** Another answer turns this box off: draw it faded (opacity ~0.45). The tag ("Needs item 13 = Yes") is drawn by the
-   *  page under the label, not by the control. "" when on. */
+   *  page under the label, not by the control. "" when on. G1: the page does not render a blank gated box at all —
+   *  this accessor matters only for a shut box that still draws (a kept value, a message, a to-do stop). */
   off: Accessor<string>;
   /** A "sel" box's choices (already "Choose…"-free; the control adds its own empty choice). Empty for other kinds. */
   options: Accessor<ChoiceOption[]>;
   /** The box holds an error the user should see now (touched-only rule applied): a red border. */
   invalid: Accessor<boolean>;
+  /** The box's own sentence (a refused edit or a one-box validation error), "" none (B3/B4). */
+  message?: Accessor<string>;
   /** A computed or penalty amount: a locked blank money box shows "0.00", never an empty box. */
   zeroWhenBlank: boolean;
 }
@@ -194,6 +209,12 @@ export interface RadioGroupProps {
   hint: Accessor<string>;
   off: Accessor<string>;
   narrow: Accessor<boolean>;
+  /** The width the group may use, in points, for the one-line fit of a segmented bar (a stacked bar when the labels
+   *  cannot hold it). Unset: the control guesses from `narrow`. */
+  room?: Accessor<number>;
+  /** The group may be cleared back to unanswered (optional and the session unticks it): a segmented bar of three or
+   *  more shows a Clear, a dropdown a "None" entry, a search list its clear row. */
+  clearable?: Accessor<boolean>;
   /** A pick. The session applies the group rules (untick in groups of 3+, pairs keep one answer, grp siblings). */
   onPick(key: string): void;
   focusRef?(focus: () => void): void;
