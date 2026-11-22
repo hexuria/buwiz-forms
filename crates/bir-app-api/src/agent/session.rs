@@ -81,8 +81,9 @@ struct OpenForm {
     sources: BTreeMap<String, String>,
     dirty: bool,
     /// A fill is held in the window for the filer's approval (it removes
-    /// what they typed): nothing of it is stored, and the next form call
-    /// reads the return again, as the filer's answer left it.
+    /// what they typed): nothing of it is stored, and every call reads the
+    /// return again, as the filer's answer left it, until a fill is stored
+    /// (the filer may answer at any time).
     awaiting: bool,
 }
 
@@ -608,7 +609,8 @@ impl Session {
 
     /// After a fill held for the filer's approval, the stored return is the
     /// outcome (Continue stored the fill, Cancel or leaving did not): read it
-    /// again before anything else is done with the open form.
+    /// again before anything is done with the open form, on every call, since
+    /// the answer can come between any two.
     fn settle(&mut self) -> Result<(), String> {
         let Some(open) = self.open.as_ref().filter(|open| open.awaiting) else {
             return Ok(());
@@ -621,7 +623,6 @@ impl Session {
         drop(db);
         if let Some(open) = self.open.as_mut() {
             open.draft = draft;
-            open.awaiting = false;
         }
         Ok(())
     }
@@ -701,6 +702,7 @@ impl Session {
             if asks.is_some() {
                 open.awaiting = true;
             } else {
+                open.awaiting = false;
                 open.draft = draft;
                 open.dirty |= !filled.is_empty() || !forgot.is_empty();
                 for key in &filled {
@@ -3028,6 +3030,33 @@ mod tests {
         let fields = call(&mut session, "form.fields", json!({})).unwrap();
         assert_eq!(read(&fields, "frm1701q:txt36A"), "250,000.00");
         assert_eq!(read(&fields, "frm1701q:optATC"), "II012");
+        // The filer's Continue can come after any call: the window stores the
+        // fill (here, another writer does), and the next read shows it.
+        call(&mut session, "form.save_draft", json!({})).unwrap();
+        assert_eq!(stored_income(&session, 1), "250,000.00");
+        let mut window = Session::new(UiQueue::discarding());
+        window.db = session.db.clone();
+        call(
+            &mut window,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        call(
+            &mut window,
+            "form.fill",
+            json!({"fields": {"frm1701q:txt36A": "300000"}}),
+        )
+        .unwrap();
+        let fields = call(&mut session, "form.fields", json!({})).unwrap();
+        assert_eq!(read(&fields, "frm1701q:txt36A"), "300,000.00");
+        call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm1701q:txt36A": "250000"}}),
+        )
+        .unwrap();
+        call(&mut session, "form.save_draft", json!({})).unwrap();
         call(&mut session, "form.dismiss", json!({})).unwrap();
         assert_eq!(stored_income(&session, 1), "250,000.00");
         // Without a window nobody can be asked: the fill is the answer.
