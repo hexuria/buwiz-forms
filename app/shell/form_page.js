@@ -1305,18 +1305,18 @@ export class FormPageActions {
     this.refreshRows();
     if (held.agentChoice) {
       this.save(cx);
-      if (!s.dirty) this.offerRemovalUndo(held, s, cx);
+      if (!s.dirty) this.offerRemovalUndo(held, s, cx, s.draft);
       return;
     }
     this.validate(cx);
     this.offerRemovalUndo(held, s, cx);
   }
 
-  offerRemovalUndo(held, s, cx) {
+  offerRemovalUndo(held, s, cx, savedDraft) {
     // Undo belongs to this return's page as it is now: another return, or
     // any later edit here, retires it (it would bring back a stale draft).
-    const undo = (ucx) => this.undoRemoval(held.draft, s, undo, ucx, held.agentChoice);
-    this.removalUndo = { state: s, undo };
+    const undo = (ucx) => this.undoRemoval(held.draft, s, undo, ucx, held.agentChoice, savedDraft);
+    this.removalUndo = { state: s, undo, savedDraft };
     this.offerUndo(held.r.removes.done, undo, cx);
     cx.notify();
   }
@@ -1380,10 +1380,29 @@ export class FormPageActions {
   }
 
   /** Undo a removal: the draft from before the answer comes back, on the same page only. */
-  undoRemoval(draft, state, undo, cx, save = false) {
+  undoRemoval(draft, state, undo, cx, save = false, savedDraft) {
     const s = this.state;
     if (!s || s !== state || this.removalUndo?.undo !== undo) return;
     this.removalUndo = null;
+    const beforeUndo = save ? {
+      draft: s.draft,
+      values: s.values,
+      options: s.options,
+      penalties: s.penalties,
+      poolTexts: s.poolTexts,
+      notesAlways: s.notesAlways,
+      locks: { ...s.locks },
+      lockNotes: { ...s.lockNotes },
+      messages: { ...s.messages },
+      blank: s.blank,
+      dirty: s.dirty,
+      saved: s.saved,
+      status: s.status,
+      pending: s.pending,
+      forget: s.forget,
+      agentChoice: s.agentChoice,
+      quiet: s.quiet,
+    } : null;
     try {
       const r = this.app.store.call("screen_form_fill", s.code, draft, {}, []);
       this.applyFill(r, {});
@@ -1392,7 +1411,21 @@ export class FormPageActions {
     }
     s.dirty = true;
     this.refreshRows();
-    if (save) return this.save(cx);
+    if (save) return this.save(cx, savedDraft, (error) => {
+      if (!error.startsWith("changed since Continue:")) return;
+      const attemptedValues = s.values;
+      Object.assign(s, beforeUndo);
+      this.syncComputed();
+      this.syncChanged(attemptedValues, {});
+      this.livePreview();
+      this.refreshRows();
+      if (this.app.toastState?.action?.run === undo) {
+        this.app.toastState = null;
+        this.app.invalidate?.();
+      }
+      this.app.toast("The return changed after Continue, so Undo is no longer available", cx, "triangle-alert");
+      cx.notify();
+    });
     this.validate(cx);
     cx.notify();
   }
@@ -2492,7 +2525,7 @@ export class FormPageActions {
     });
   }
 
-  save(cx) {
+  save(cx, expected, onConflict) {
     const s = this.state;
     if (!s || !s.draft) return;
     if (s.sample) return this.saveSample(cx);
@@ -2519,7 +2552,9 @@ export class FormPageActions {
         if (Array.isArray(f.penalties)) s.penalties = f.penalties;
         edits = {};
       }
-      const r = this.app.store.write("screen_form_save", s.code, s.draft);
+      const r = expected === undefined
+        ? this.app.store.write("screen_form_save", s.code, s.draft)
+        : this.app.store.write("screen_form_save", s.code, s.draft, expected);
       // Saved, the return has a new state: a removal's Undo offered before
       // would bring back a draft older than what is saved, so it goes (a
       // save that failed leaves it).
@@ -2539,7 +2574,9 @@ export class FormPageActions {
       // Edits the draft never took stay staged for the next try.
       s.pending = { ...edits, ...s.pending };
       s.agentChoice ||= agentChoice;
-      this.app.toast(message(e), cx, "triangle-alert");
+      const error = message(e);
+      if (onConflict && error.startsWith("changed since Continue:")) return onConflict(error);
+      this.app.toast(error, cx, "triangle-alert");
     }
   }
 

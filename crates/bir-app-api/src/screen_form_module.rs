@@ -284,7 +284,7 @@ export function screen_form_fill(form_code: string, draft: object, edits: Record
 export function screen_form_use_profile(form_code: string, year: number, period: number, draft: object, facts?: ScreenFormFact[]): ScreenFormFilled & { asks: ScreenFormAsk[] };
 export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
 /** Save a draft. A Form library sample saves only once its period is set, never over a stored return of that period (answering the offer instead); an entry-numbered form takes its next free entry. */
-export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
+export function screen_form_save(form_code: string, draft: object, expected?: object | null): ScreenFormSaved;
 /** Print preview of a saved draft (opens the filled official sheet in the in-app preview window). */
 export function screen_form_print(form_code: string, draft: object): { path: string };
 /** Print preview of a Form library sample as the page holds it, staged edits included and its held boxes blank. Nothing is saved and no period is needed; the preview then follows `screen_form_preview_sync`. */
@@ -5734,8 +5734,29 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
     if let Some(mark) = take_sample_mark(&mut draft) {
         return save_sample(kind, draft, &mark);
     }
+    let expected = match arguments.get(2).map(to_json) {
+        None | Some(Value::Null) => None,
+        Some(expected) if expected.is_object() => Some(expected),
+        Some(_) => return Err(host_error("expected must be a draft or null")),
+    };
     let amendment = take_amendment_mark(&mut draft);
     let id = with_database(|db| {
+        if amendment.is_none()
+            && let Some(expected) = expected.as_ref()
+        {
+            let Some(stored) = stored_return(db, kind, &draft).map_err(host_error)? else {
+                return Err(host_error(
+                    "changed since Continue: the return is no longer stored",
+                ));
+            };
+            let stored_values = values_json(kind, &stored).map_err(host_error)?;
+            let expected_values = values_json(kind, expected).map_err(host_error)?;
+            if stored_values != expected_values {
+                return Err(host_error(
+                    "changed since Continue: stored field values differ",
+                ));
+            }
+        }
         // 1600PT/1600VT: a Part I key the stored return lacks stays out while
         // blank, whatever the page sent (P2-4; the fill does the same,
         // rows_monthly::keep_absent_blank). An amendment's stored return is
@@ -12012,6 +12033,71 @@ mod tests {
         let mut queued = saved["draft"].clone();
         queued["status"] = json!("Queued");
         assert!(call("screen_form_save", vec!["1601C".into(), json(queued)]).is_err());
+    }
+
+    #[test]
+    fn screen_form_save_expected_guards_against_newer_values() {
+        setup();
+        let opened = open("1601C", 2);
+        let filled = fill(
+            "1601C",
+            &opened["draft"],
+            json!({"frm1601c:txtTax14": "1000"}),
+        );
+        let saved = save("1601C", &filled["draft"]);
+        let matching = call(
+            "screen_form_save",
+            vec![
+                "1601C".into(),
+                json(saved["draft"].clone()),
+                json(saved["draft"].clone()),
+            ],
+        )
+        .expect("a save with matching expected values succeeds");
+        let newer_fill = fill(
+            "1601C",
+            &matching["draft"],
+            json!({"frm1601c:txtTax14": "2000"}),
+        );
+        let newer = save("1601C", &newer_fill["draft"]);
+
+        let error = call(
+            "screen_form_save",
+            vec![
+                "1601C".into(),
+                json(saved["draft"].clone()),
+                json(matching["draft"].clone()),
+            ],
+        )
+        .expect_err("a save with stale expected values is refused");
+        assert!(
+            error.message().starts_with("changed since Continue:"),
+            "{error}"
+        );
+        let stored = with_database(|db| {
+            stored_return(db, AgentFormKind::Form1601C, &newer["draft"]).map_err(HostError::new)
+        })
+        .expect("the stored return can be read")
+        .expect("the newer return remains stored");
+        let stored_values = values_json(AgentFormKind::Form1601C, &stored).unwrap();
+        let newer_values = values_json(AgentFormKind::Form1601C, &newer["draft"]).unwrap();
+        assert_eq!(
+            stored_values["frm1601c:txtTax14"],
+            newer_values["frm1601c:txtTax14"]
+        );
+
+        let legacy = save("1601C", &saved["draft"]);
+        let legacy_values = values_json(AgentFormKind::Form1601C, &legacy["draft"]).unwrap();
+        let stored = with_database(|db| {
+            stored_return(db, AgentFormKind::Form1601C, &legacy["draft"]).map_err(HostError::new)
+        })
+        .expect("the stored return can be read")
+        .expect("the legacy save remains stored");
+        let stored_values = values_json(AgentFormKind::Form1601C, &stored).unwrap();
+        assert_eq!(
+            stored_values["frm1601c:txtTax14"],
+            legacy_values["frm1601c:txtTax14"]
+        );
     }
 
     #[test]

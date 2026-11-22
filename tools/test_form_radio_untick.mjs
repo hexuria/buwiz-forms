@@ -100,6 +100,11 @@ let hostValues = {};
 let hostOpen = {};
 let storedValues = {};
 let nextRemoval = null;
+const toasts = [];
+const sameValues = (a, b) => {
+  const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
+  return [...keys].every((key) => a?.[key] === b?.[key]);
+};
 const opened = () => ({
   draft: { id: 7 }, status: "Draft", editable: true, values: { ...hostValues }, options: {}, locks: {},
   waits: {}, profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: {}, penalties: [], pools: {}, errors: [],
@@ -107,13 +112,16 @@ const opened = () => ({
 });
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
-  invalidate() {}, toast() {}, startNewReturn() {}, toastState: null,
+  invalidate() {}, toast(text, _cx, icon) { toasts.push({ text, icon }); }, startNewReturn() {}, bumpRecent() {}, toastState: null,
   toastUndo(what, run) { this.toastState = { text: what, action: { run } }; },
   store: {
     templates: () => [],
     write(name, ...args) {
       calls.push([name, ...args]);
       if (name === "screen_form_save") {
+        if (args[2] != null && !sameValues(storedValues, args[2].values || {})) {
+          throw new Error("changed since Continue: stored field values differ");
+        }
         storedValues = { ...(args[1].values || {}) };
         hostValues = { ...storedValues };
       }
@@ -296,6 +304,7 @@ console.log("PASS 2552 item 11: the kept group's untick and grp-scoped pick emit
   const rate = "frm1701q:optTaxRate";
   const income = "frm1701q:txt36A";
   const graduated = { [atc]: "II012", [rate]: "Graduated", [income]: "250000.00" };
+  const errorToastsBefore = toasts.filter((toast) => toast.icon === "triangle-alert").length;
 
   await openWith("1701Q", graduated);
   ui.state.draft = { id: 7, values: { ...graduated } };
@@ -315,6 +324,7 @@ console.log("PASS 2552 item 11: the kept group's untick and grp-scoped pick emit
   await settle();
   assert.deepEqual(storedValues, graduated, "Undo restores and saves the original ATC, rate, and income");
   assert.equal(ui.removalUndo, null, "the Undo offer is consumed");
+  assert.equal(toasts.filter((toast) => toast.icon === "triangle-alert").length, errorToastsBefore, "Continue and Undo show no error toast");
 
   await openWith("1701Q", graduated);
   storedValues = { ...graduated };
@@ -327,4 +337,46 @@ console.log("PASS 2552 item 11: the kept group's untick and grp-scoped pick emit
   assert.deepEqual(storedValues, graduated, "Cancel leaves the stored draft unchanged");
   assert.equal(calls.filter((call) => call[0] === "screen_form_save").length, savesBeforeCancel, "Cancel does not save");
   console.log("PASS 1701Q agent clear approval: Continue saves and Cancel preserves the stored draft.");
+}
+
+// ---- A newer agent write prevents agent-origin Undo from overwriting it.
+{
+  const atc = "frm1701q:optATC";
+  const rate = "frm1701q:optTaxRate";
+  const income = "frm1701q:txt36A";
+  const sheets = "frm1701q:txtSheets";
+  const graduated = { [atc]: "II012", [rate]: "Graduated", [income]: "250000.00" };
+  const errorToastsBefore = toasts.filter((toast) => toast.icon === "triangle-alert").length;
+  await openWith("1701Q", graduated);
+  ui.state.draft = { id: 7, values: { ...graduated } };
+  storedValues = { ...graduated };
+  nextRemoval = { done: [income], cleared: [income] };
+  ui.choose({}, cx, [atc, rate], true);
+  ui.confirmRemoval(cx);
+  await settle();
+  assert.equal(toasts.filter((toast) => toast.icon === "triangle-alert").length, errorToastsBefore, "Continue shows no error toast");
+
+  const undo = app.toastState?.action?.run;
+  assert.equal(typeof undo, "function", "Continue offers Undo before the newer write");
+  const agentDraft = { ...ui.state.draft, values: { ...storedValues, [sheets]: "2" } };
+  app.store.write("screen_form_save", "1701Q", agentDraft);
+  const toastStart = toasts.length;
+  undo(cx);
+  await settle();
+
+  assert.equal(storedValues[sheets], "2", "the newer agent sheet value remains stored");
+  assert.equal(storedValues[atc], "", "the cleared ATC remains stored");
+  assert.equal(storedValues[rate], "", "the cleared rate remains stored");
+  assert.equal(storedValues[income], "", "the cleared income remains stored");
+  assert.equal(ui.state.values[atc], "", "the page still shows the cleared ATC");
+  assert.equal(ui.state.values[rate], "", "the page still shows the cleared rate");
+  assert.equal(ui.state.values[income], "", "the page still shows the cleared income");
+  assert.equal(ui.removalUndo, null, "the stale Undo offer is retired");
+  assert.equal(app.toastState, null, "the stale Undo toast action is retired");
+  assert.deepEqual(
+    toasts.slice(toastStart).filter((toast) => toast.icon === "triangle-alert").map((toast) => toast.text),
+    ["The return changed after Continue, so Undo is no longer available"],
+    "the conflict shows only the expected toast",
+  );
+  console.log("PASS 1701Q agent Undo conflict: newer stored edits are preserved.");
 }
