@@ -207,9 +207,17 @@ builds (cargo feature `agent`) started by that recipe.
 token in no argument, a launcher gone before the first poll, a launcher that
 dies while the writer waits, and the bounded wait.
 `scripts/tests/test_nsh_run_agent_windows.py` runs the Windows recipe against a
-native `adb.exe` and a fake `nsh`: `test_a_failed_launch_stops_the_token_writer`,
-`test_a_launch_that_fails_after_the_token_was_stored_removes_it` and
-`test_a_cancelled_launch_stops_the_token_writer`. It needs Windows, `pwsh`,
+native `adb.exe` and a fake `nsh`. `test_a_failed_launch_stops_the_token_writer`
+and `test_a_launch_that_fails_after_the_token_was_stored_removes_it` cover a
+launch that returns an error. `test_a_cancelled_launch_stops_the_token_writer`
+ends the recipe's PowerShell with `taskkill` while the writer polls: no `finally`
+runs, and the writer ends by its own launcher check, before any token is stored.
+`test_ctrl_c_after_the_token_was_stored_removes_it_and_stops_the_writer` covers
+Ctrl+C: the recipe runs in a console of its own, the fake `nsh` holds the stored
+token unread, a console Ctrl+C event (`GenerateConsoleCtrlEvent`) is sent to
+that console, and the `finally` must remove `agent-token` and `agent-token.new`
+with `-s <serial>` and leave no writer polling. Closing the console window
+(`CTRL_CLOSE_EVENT`) and Ctrl+Break are not tested. The file needs Windows, `pwsh`,
 `just` and `rustc`, and is skipped elsewhere; the `scripts` CI job runs on Linux,
 so it is run by hand on Windows. `nsh/tests/agent.rs` covers the reader (late
 arrival, deletion, the kept token). None of these runs a real device: `run-as`,
