@@ -327,6 +327,8 @@ interface St {
   dateErrors: Record<string, string>;
   datesEdited: Set<string>;
   pending: Record<string, string>;
+  /** Choice boxes whose answer an agent's fill dropped: the next fill drops them from the draft, before its edits (`screen_form_fill`'s `forget`). */
+  forget: string[];
   /** What the boxes showed before a choice, for a removal the filer cancels. */
   chosenFrom: Record<string, string>;
   dirty: boolean;
@@ -360,7 +362,7 @@ function freshState(target: FormTarget): St {
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
     profileSave: {}, profileEdited: new Set(), toProfile: new Set(), profileChanged: [], errors: [], messages: {},
     messageKeys: {}, messageCounts: {}, rejected: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
-    profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, chosenFrom: {}, dirty: false,
+    profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, forget: [], chosenFrom: {}, dirty: false,
     editSeq: 0, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
     touched: new Set(), showAll: false, previewOpen: false, overlay: null, saveState: { state: "idle" },
     electionReady: undefined, moreOpen: new Set(),
@@ -694,6 +696,7 @@ export class FormSession {
     const old = this.st;
     const s = freshState(target);
     s.pending = { ...old.pending };
+    s.forget = [...old.forget];
     s.openParts = old.openParts;
     s.current = old.current;
     s.touched = old.touched;
@@ -929,15 +932,17 @@ export class FormSession {
   choose(edits: Record<string, string>, clear: string[] = []) {
     const s = this.st;
     if (!s.editable || !s.draft) return;
-    // Answers an agent's fill dropped: dropped from this page's draft too, at once, so the save that follows (the whole
-    // draft) does not store them again. The staged edits are applied on that draft.
+    // Answers an agent's fill dropped: staged with the edits and dropped in the same fill, before them, so the return is
+    // computed once, as the agent computed it (dropped alone, an ATC and a rate would zero the graduated income before the
+    // edit that brings the rate back). The save that follows then does not store them again.
     if (clear.length) {
-      this.applyFill(bir.screen_form_fill(s.target.formCode, s.draft, {}, [], clear), {});
+      s.forget = [...new Set([...s.forget, ...clear])];
       s.dirty = true;
       if (!Object.keys(edits).length) {
+        s.chosenFrom = {};
+        this.cancelAutosave();
         this.markUnsaved();
-        this.validate();
-        this.scheduleAutosave();
+        this.flush();
         return;
       }
     }
@@ -1074,7 +1079,7 @@ export class FormSession {
     const edits = s.pending;
     s.pending = {};
     let filled = false;
-    if (Object.keys(edits).length) {
+    if (Object.keys(edits).length || s.forget.length) {
       this.retireRemovalUndo();
       try {
         const r = this.fill(s.draft, edits);
@@ -1101,7 +1106,11 @@ export class FormSession {
    */
   private fill(draft: object, edits: Record<string, string>): Filled {
     const code = this.st.target.formCode;
-    const r: Filled = bir.screen_form_fill(code, draft, edits, this.unlockedFor(edits));
+    const forget = this.st.forget;
+    const r: Filled = bir.screen_form_fill(code, draft, edits, this.unlockedFor(edits), forget);
+    // Dropped once the host took them (a throw keeps them for the next fill): `r.draft` no longer holds the answers, also
+    // when the fill is held for a removal the filer must confirm.
+    if (forget.length) this.st.forget = [];
     if (r.removes) return r;
     const refused = Object.keys(r.rejected || {}).filter((k) => k in edits && String(edits[k]).trim() === "" && NUMBER_KINDS.has(this.kindOf.get(k) ?? ""));
     if (!refused.length) return r;

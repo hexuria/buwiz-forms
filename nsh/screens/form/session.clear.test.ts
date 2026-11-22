@@ -199,3 +199,28 @@ test("an agent's fill that dropped a choice: the page drops it from its own draf
   expect(last.valueOf(METHOD + ":_2")).toBe("false");
   last.dispose();
 });
+
+test("an agent's fill that dropped the ATC and the rate beside a pick of Estate: one fill, and the graduated income stays", async () => {
+  const INCOME = "frm1701q:txt36A";
+  const target = at("1701Q", 2025, 1);
+  const s = await opened(target);
+  s.choose({ "frm1701q:optType_2": "true", "frm1701q:optATC_1": "true", "frm1701q:optTaxRate_1": "true", "frm1701q:optMethodOfDeduction:_2": "true" });
+  await s.idle();
+  s.edit(INCOME, "250000");
+  await s.idle();
+  s.saveNow();
+  await s.idle();
+  expect(s.valueOf(INCOME)).toBe("250,000.00");
+  // Estate brings the graduated rate back; dropped in a fill of their own, the ATC and the rate would zero the income first.
+  s.choose({ "frm1701q:optType_3": "true" }, ["frm1701q:optATC", "frm1701q:optTaxRate"]);
+  await s.idle();
+  expect(s.valueOf("frm1701q:optType_3")).toBe("true");
+  expect(s.valueOf(INCOME)).toBe("250,000.00");
+  s.saveNow();
+  await s.idle();
+  s.dispose();
+  const again = await opened(target);
+  expect(again.valueOf("frm1701q:optType_3")).toBe("true");
+  expect(again.valueOf(INCOME)).toBe("250,000.00");
+  again.dispose();
+});

@@ -185,6 +185,60 @@ fn form_1701q_fill_forgets_the_answers_an_agent_fill_dropped() {
     assert_eq!(kept["draft"]["deduction_method"], "Osd");
 }
 
+/// The dropped answers and the edits are one fill, computed once: an ATC and
+/// a rate dropped beside the pick of Estate (which brings the graduated rate
+/// back) keep the graduated income. Dropped in a fill of their own, the
+/// return computes with neither and the income is zeroed.
+#[test]
+fn form_1701q_fill_drops_answers_and_applies_edits_in_one_computation() {
+    setup();
+    let opened = open(Q, 2);
+    let filled = fill(
+        Q,
+        &opened["draft"],
+        json!({
+            "frm1701q:optType_2": "true",
+            "frm1701q:optATC_1": "true",
+            "frm1701q:optTaxRate_1": "true",
+            "frm1701q:optMethodOfDeduction:_2": "true",
+            "frm1701q:txt36A": "250000",
+        }),
+    );
+    assert_eq!(filled["rejected"], json!({}), "{}", filled["rejected"]);
+    let draft = filled["draft"].clone();
+    assert_eq!(filled["values"]["frm1701q:txt36A"], "250,000.00");
+    let forget = json!(["frm1701q:optATC", "frm1701q:optTaxRate"]);
+    let both = call(
+        "screen_form_fill",
+        vec![
+            Q.into(),
+            json(draft.clone()),
+            json(json!({"frm1701q:optType_3": "true"})),
+            json(json!([])),
+            json(forget.clone()),
+        ],
+    )
+    .unwrap();
+    assert_eq!(both["rejected"], json!({}), "{}", both["rejected"]);
+    assert_eq!(both["values"]["frm1701q:optType_3"], "true");
+    assert_eq!(both["values"]["frm1701q:optTaxRate_1"], "true");
+    assert_eq!(both["values"]["frm1701q:txt36A"], "250,000.00");
+    // The two-step order the page must not use.
+    let alone = call(
+        "screen_form_fill",
+        vec![
+            Q.into(),
+            json(draft),
+            json(json!({})),
+            json(json!([])),
+            json(forget),
+        ],
+    )
+    .unwrap();
+    let then = fill(Q, &alone["draft"], json!({"frm1701q:optType_3": "true"}));
+    assert_eq!(then["values"]["frm1701q:txt36A"], "0.00");
+}
+
 // ------------------------------------------------------------ 1701Q layout
 
 /// R3.0, manual-0, manual-1, manual-2, and lesson 4: every numbered item
