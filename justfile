@@ -1315,6 +1315,7 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     Remove-Item Env:BIR_SFTP_LIVE -ErrorAction SilentlyContinue
     $env:GPUI_AGENT = '1'
     if (-not $env:GPUI_AGENT_ADDR) { $env:GPUI_AGENT_ADDR = '127.0.0.1:17421' }
+    $writer = $null
     # The parameter arrives as an environment variable (PowerShell cannot read just's quoting of an apostrophe); a relative
     # path is the one the guard checked, from here, not from nsh/.
     $db = $env:db
@@ -1354,31 +1355,55 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
             [Console]::Error.WriteLine("nsh-run-agent: ANDROID_SERIAL is $($env:ANDROID_SERIAL), but nsh launches the first online device, $serial. Disconnect the other devices, or unset ANDROID_SERIAL to use $serial.")
             exit 1
         }
-        $null = Start-Job -ScriptBlock {
-            param($adb, $serial, $token)
-            $pkg = 'com.longbridge.nsh.host'
-            $dir = 'files/nsh/dev.goldcoders.bir.nsh'
-            $tmp = Join-Path $env:TEMP ('agent-token-' + [guid]::NewGuid().ToString('N'))
-            [IO.File]::WriteAllText($tmp, $token)
-            try {
-                for ($i = 0; $i -lt 1800; $i++) {
-                    & $adb -s $serial shell run-as $pkg true 2>$null
-                    if ($LASTEXITCODE -eq 0) {
-                        $cmd = 'type "{0}" | "{1}" -s "{4}" shell -T "run-as {2} sh -c ''umask 077 && mkdir -p {3} && cat > {3}/agent-token.new && mv {3}/agent-token.new {3}/agent-token''"' -f $tmp, $adb, $pkg, $dir, $serial
-                        & $env:ComSpec /d /c $cmd | Out-Null
-                        return
+        # The writer lives no longer than the launch: it is stopped when `nsh run` returns or is interrupted (below), and
+        # stops itself when this shell is gone (a closed window, a killed process). It keeps the token in memory and
+        # writes it to adb's standard input itself, so no file on this machine holds it.
+        $agentHost = 'com.longbridge.nsh.host'
+        $tokenDir = 'files/nsh/dev.goldcoders.bir.nsh'
+        $writer = Start-Job -ScriptBlock {
+            param($adb, $serial, $token, $pkg, $dir, $launcher, $launcherStarted)
+            for ($i = 0; $i -lt 1800; $i++) {
+                $alive = Get-Process -Id $launcher -ErrorAction SilentlyContinue
+                if (-not $alive -or $alive.StartTime.Ticks -ne $launcherStarted) { return }
+                & $adb -s $serial shell run-as $pkg true 2>$null | Out-Null
+                if ($LASTEXITCODE -eq 0) {
+                    $start = [Diagnostics.ProcessStartInfo]::new($adb)
+                    foreach ($argument in '-s', $serial, 'shell', '-T', "run-as $pkg sh -c 'umask 077 && mkdir -p $dir && cat > $dir/agent-token.new && mv $dir/agent-token.new $dir/agent-token'") {
+                        $start.ArgumentList.Add($argument)
                     }
-                    Start-Sleep -Milliseconds 500
+                    $start.UseShellExecute = $false
+                    $start.RedirectStandardInput = $true
+                    $start.StandardInputEncoding = [Text.UTF8Encoding]::new($false)
+                    $write = [Diagnostics.Process]::Start($start)
+                    $write.StandardInput.Write($token)
+                    $write.StandardInput.Close()
+                    $write.WaitForExit()
+                    if ($write.ExitCode -eq 0) { return }
                 }
-                [Console]::Error.WriteLine("nsh-run-agent: the data plane's token was not stored (is the host installed?)")
-            } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
-        } -ArgumentList $adb, $serial, $env:GPUI_AGENT_TOKEN
+                Start-Sleep -Milliseconds 500
+            }
+            "nsh-run-agent: the data plane's token was not stored (is the host installed?)"
+        } -ArgumentList $adb, $serial, $env:GPUI_AGENT_TOKEN, $agentHost, $tokenDir, $PID, (Get-Process -Id $PID).StartTime.Ticks
         "nsh-run-agent: window plane on 127.0.0.1:$port, data plane on 127.0.0.1:$($port + 1) on $serial; run: adb -s $serial forward tcp:$port tcp:$port && adb -s $serial forward tcp:$($port + 1) tcp:$($port + 1)"
     }
     $env:CARGO = "$root\nsh\agent\cargo-with-agent.cmd"
     Set-Location nsh
-    nsh run --target {{target}} {{args}}
-    exit $LASTEXITCODE
+    $code = 1
+    try {
+        nsh run --target {{target}} {{args}}
+        $code = $LASTEXITCODE
+    } finally {
+        if ($writer) {
+            # The launch is over, however it ended (a failed build, a failed install, Ctrl+C): the writer must not go on
+            # polling the device, and a token the app never read must not stay in the host's files (nsh removes the
+            # window plane's the same way).
+            Stop-Job $writer
+            Receive-Job $writer | ForEach-Object { [Console]::Error.WriteLine($_) }
+            Remove-Job $writer -Force
+            & $adb -s $serial shell "run-as $agentHost rm -f $tokenDir/agent-token $tokenDir/agent-token.new" 2>$null | Out-Null
+        }
+    }
+    exit $code
 
 # Opens real macOS windows for a minute or so. BIR_DATABASE_PATH, if set in the environment, is passed on (and guarded).
 

@@ -232,6 +232,9 @@ class NshRunAgentWindowsTests(unittest.TestCase):
         self.wait_for('nsh was not launched', lambda: (self.state / 'nsh.pid').exists()
                       and (self.state / 'nsh.pid').read_text())
         self.wait_for('the token writer never polled', lambda: len(self.adb_calls()) > 2)
+        # While it waits for the host, the writer keeps the token in memory only: a file would outlive a writer that is
+        # ended with the launch.
+        self.assert_no_token_left_on_this_machine()
         # nsh.cmd's parent is the recipe's PowerShell (the fake records its own parent, the cmd.exe running nsh.cmd).
         shell = subprocess.run(
             ['pwsh', '-NoProfile', '-Command',
@@ -239,7 +242,10 @@ class NshRunAgentWindowsTests(unittest.TestCase):
             text=True, capture_output=True).stdout.strip()
         self.assertTrue(shell.isdigit(), shell)
         subprocess.run(['taskkill', '/F', '/PID', shell], capture_output=True, check=True)
+        # The fake nsh outlives its shell here (it is what would be the real, interrupted one): end it too.
+        subprocess.run(['taskkill', '/T', '/F', '/PID', (self.state / 'nsh.pid').read_text()], capture_output=True)
         process.wait(timeout=60)
+        process.stdout.close()
         time.sleep(2)
         self.assert_the_writer_has_stopped()
 
