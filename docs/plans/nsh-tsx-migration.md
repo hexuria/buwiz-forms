@@ -202,8 +202,8 @@ builds (cargo feature `agent`) started by that recipe.
   launch keeps the token in memory for a replacement listener after a full
   reload (`LaunchToken`). A file that arrives late is waited for (10 s).
 
-**Verification boundary:** `nsh/agent/android-handoff.test.sh` (fake `adb`, run
-by `just nsh-agent-check`) covers the Unix writer: the serial in every call, the
+**Verification boundary:** `nsh/agent/android-handoff.test.sh` (fake `adb`,
+`just nsh-agent-handoff-test`) covers the Unix writer: the serial in every call, the
 token in no argument, a launcher gone before the first poll, a launcher that
 dies while the writer waits, and the bounded wait.
 `scripts/tests/test_nsh_run_agent_windows.py` runs the Windows recipe against a
