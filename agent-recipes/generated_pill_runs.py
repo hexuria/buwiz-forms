@@ -47,6 +47,12 @@ for n in map(int, rows_arg.split(",")):
         if not r.get("ok"): why.append(f"{name} {f['id'] + ': ' + str(f.get('error')) if f else r.get('error')}")
         return r
     run("--addr", D, "invoke", "profile.save", "--arg", f'tin="{T}"', "--arg", f'email="{row["email"]}"')
+    # The fill writes the date of birth. The window reads the profile when the return opens; with the same date
+    # already there it has nothing to ask ("Save date of birth to the tax profile?" would cover the page).
+    born = [row[k] for k in ("birth_year", "birth_month", "birth_day")]
+    if all(born):
+        seeded = run("--addr", D, "invoke", "profile.save", "--arg", f'tin="{T}"', "--arg", f'birth_date="{"-".join(born)}"')
+        if not seeded.get("ok"): why.append(f"0-seed profile.save birth_date: {seeded.get('error', seeded)}")
     o = stage("1-open", W, f"{A}/ui/ui-start-1701q-template{phone}.wants", "--set", f"year={row['year']}", "--set", f"period={row['period']}", "--set", f"sheets={row['sheets']}", shots=True)
     g = p = c = {}
     if not why:
