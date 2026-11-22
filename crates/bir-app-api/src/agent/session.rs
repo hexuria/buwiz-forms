@@ -141,7 +141,11 @@ impl Session {
     }
 
     fn invoke(&mut self, name: &str, args: &Value) -> Result<DispatchResult, String> {
-        self.settle()?;
+        // Dismissing reads nothing of the return: a held return that can no
+        // longer be read again must still be closable.
+        if name != "form.dismiss" {
+            self.settle()?;
+        }
         match name {
             "nav.go" => {
                 let page = args
@@ -980,11 +984,19 @@ impl Session {
     fn recipe_generate(&self, args: &Value) -> Result<DispatchResult, String> {
         let kind = form_kind(args, "recipe.generate")?;
         let tin = self.taxpayer(args, "recipe.generate")?;
-        let year = optional_year(args).unwrap_or(u16::MAX);
-        let period = args
-            .get("period")
-            .and_then(json_u64)
-            .map_or(u32::MAX, |period| period as u32);
+        // Left out, the newest return of any period is the history's start.
+        // Given, each must be usable: the newest return is not what a caller
+        // who named a period asked for.
+        let year = match args.get("year") {
+            None | Some(Value::Null) => u16::MAX,
+            Some(_) => require_year(args, "recipe.generate")?,
+        };
+        let period = match args.get("period") {
+            None | Some(Value::Null) => u32::MAX,
+            Some(given) => json_u64(given)
+                .and_then(|period| u32::try_from(period).ok())
+                .ok_or("recipe.generate requires args.period as a JSON number")?,
+        };
         let options = agent::recipe::Options {
             check: agent::recipe::CheckMode::parse(args.get("check").and_then(Value::as_str))?,
             include_unused: args.get("include_unused").and_then(Value::as_bool) == Some(true),
@@ -3223,6 +3235,66 @@ mod tests {
         // Nothing to fill and nothing to drop is still refused.
         assert!(call(&mut session, "form.fill", json!({"fields": {}})).is_err());
         assert!(call(&mut session, "form.fill", json!({"fields": {}, "ask": []})).is_err());
+    }
+
+    /// A held return that can no longer be read again (here its taxpayer is
+    /// gone) is still dismissed: no other call can close it.
+    #[test]
+    fn a_held_return_that_cannot_be_reloaded_is_still_dismissed() {
+        let mut session = session();
+        save_complete(&mut session);
+        store_1701q(&mut session, 1, &graduated_1701q());
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let ask = json!(["frm1701q:optATC", "frm1701q:optTaxRate"]);
+        call(&mut session, "form.fill", json!({"fields": {}, "ask": ask})).unwrap_err();
+        assert!(session.open.as_ref().unwrap().awaiting);
+        session
+            .lock_db()
+            .unwrap()
+            .delete_profile(TIN)
+            .expect("the profile is deleted");
+        let error = call(&mut session, "form.fields", json!({})).unwrap_err();
+        assert!(error.contains("no taxpayer profile"), "{error}");
+        let dismissed = call(&mut session, "form.dismiss", json!({"discard": true})).unwrap();
+        assert_eq!(dismissed["dismissed"], true, "{dismissed}");
+        assert!(session.open.is_none());
+    }
+
+    /// A year or period that is given and cannot be read is refused, never
+    /// taken as "the newest return".
+    #[test]
+    fn recipe_generate_refuses_a_year_or_period_it_cannot_read() {
+        let mut session = session();
+        save_scratch(&mut session);
+        store_1701q(&mut session, 2, &graduated_1701q());
+        for (args, named) in [
+            (json!({"code": "1701Q", "year": 70000}), "args.year"),
+            (json!({"code": "1701Q", "year": "next"}), "args.year"),
+            (
+                json!({"code": "1701Q", "year": 2026, "period": "Q1"}),
+                "args.period",
+            ),
+            (
+                json!({"code": "1701Q", "year": 2026, "period": 4_294_967_298_u64}),
+                "args.period",
+            ),
+        ] {
+            let error = call(&mut session, "recipe.generate", args.clone()).unwrap_err();
+            assert!(error.contains(named), "{args}: {error}");
+        }
+        for args in [
+            json!({"code": "1701Q"}),
+            json!({"code": "1701Q", "year": null, "period": null}),
+            json!({"code": "1701Q", "year": 2026, "period": 3}),
+        ] {
+            call(&mut session, "recipe.generate", args.clone())
+                .unwrap_or_else(|error| panic!("{args}: {error}"));
+        }
     }
 
     #[test]

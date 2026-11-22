@@ -1309,7 +1309,9 @@ pub fn chosen_option(kind: AgentFormKind, key: &str, value: &Value) -> Option<St
 
 /// Drop the answer of choice box `key`, so the form asks for it again where
 /// it applies: a stopped box's stored answer is not reused. A box that is
-/// not one choice over one draft field is left as it is.
+/// not one choice over one draft field is left as it is. So is a refused
+/// one (a choice the return cannot hold unanswered): `draft` is unchanged
+/// and the caller may go on with it.
 pub fn forget(kind: AgentFormKind, draft: &mut Value, key: &str) -> Result<(), String> {
     let def = kind.definition();
     let Some(Binding::Choice { options }) = def.bindings.get(key).map(|bound| &bound.binding)
@@ -1322,9 +1324,12 @@ pub fn forget(kind: AgentFormKind, draft: &mut Value, key: &str) -> Result<(), S
     if draft.pointer(path).is_none_or(Value::is_null) {
         return Ok(());
     }
-    set_path(draft, path, Value::Null, &def.rows)?;
-    with_agent_kind!(kind, F => parse::<F>(kind, draft).map(|_| ()))
-        .map_err(|error| format!("`{key}` cannot be left unanswered: {error}"))
+    let mut dropped = draft.clone();
+    set_path(&mut dropped, path, Value::Null, &def.rows)?;
+    with_agent_kind!(kind, F => parse::<F>(kind, &dropped).map(|_| ()))
+        .map_err(|error| format!("`{key}` cannot be left unanswered: {error}"))?;
+    *draft = dropped;
+    Ok(())
 }
 
 /// [`fill`] for the user's own form page. Two differences: an income-tax
@@ -2399,6 +2404,33 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A choice the return cannot hold unanswered is refused, and the
+    /// refusal leaves the draft as it was: the page goes on with that draft.
+    #[test]
+    fn a_refused_forget_leaves_the_draft_as_it_was() {
+        let kind = AgentFormKind::Form2551Q;
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Example Store",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Example Street",
+            "zip_code": "1600",
+            "phone": "0280000000",
+            "email": "store@example.test",
+            "default_form_type": "2551Qv2018"
+        }))
+        .unwrap();
+        let mut draft =
+            serde_json::to_value(Form2551QDraft::new_from_profile(&profile, 2026, 3)).unwrap();
+        let before = draft.clone();
+        let refused = forget(kind, &mut draft, "frm2551Qv2018:amendedRtn").unwrap_err();
+        assert!(refused.contains("cannot be left unanswered"), "{refused}");
+        assert_eq!(draft, before);
+        compute(kind, &mut draft).expect("the draft still computes");
     }
 
     /// 2551Q's annual-election message names a field no box binds; it is

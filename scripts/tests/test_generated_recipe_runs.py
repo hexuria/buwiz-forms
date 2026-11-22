@@ -26,6 +26,27 @@ class GeneratedRecipeRunsTests(unittest.TestCase):
 
             self.assertFalse(pwned.exists())
 
+    def test_shot_command_keeps_its_own_braces(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "shot.png"
+            script = "import sys; open(sys.argv[2], 'w').write(sys.argv[1])"
+            command = " ".join(
+                shlex.quote(part)
+                for part in (sys.executable, "-c", script, '{"x":1} {} {0}', "{out}")
+            )
+
+            ran = GENERATED_RECIPE_RUNS.run_shot_cmd(command, str(output))
+
+            self.assertEqual(ran.returncode, 0)
+            self.assertEqual(output.read_text(), '{"x":1} {} {0}')
+
+    def test_shot_command_reports_its_exit_code(self):
+        command = f"{shlex.quote(sys.executable)} -c 'raise SystemExit(3)' {{out}}"
+
+        ran = GENERATED_RECIPE_RUNS.run_shot_cmd(command, "unused.png")
+
+        self.assertEqual(ran.returncode, 3)
+
 
 if __name__ == "__main__":
     unittest.main()
