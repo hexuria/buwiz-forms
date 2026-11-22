@@ -582,7 +582,7 @@ class BirApp extends View {
           ui.notify(cx);
         };
         paint();
-        ui.choose(edits, cx, clear);
+        ui.choose(edits, cx, clear, true);
         paint(true);
       });
     }

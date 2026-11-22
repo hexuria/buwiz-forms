@@ -99,6 +99,7 @@ const { FormPageActions, renderFormPage } = mod.namespace;
 let hostValues = {};
 let hostOpen = {};
 let storedValues = {};
+let nextRemoval = null;
 const opened = () => ({
   draft: { id: 7 }, status: "Draft", editable: true, values: { ...hostValues }, options: {}, locks: {},
   waits: {}, profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: {}, penalties: [], pools: {}, errors: [],
@@ -112,7 +113,10 @@ const app = {
     templates: () => [],
     write(name, ...args) {
       calls.push([name, ...args]);
-      if (name === "screen_form_save") storedValues = { ...(args[1].values || {}) };
+      if (name === "screen_form_save") {
+        storedValues = { ...(args[1].values || {}) };
+        hostValues = { ...storedValues };
+      }
       return { id: 7, status: "Draft", draft: args[1] };
     },
     call(name, ...args) {
@@ -120,11 +124,14 @@ const app = {
       if (name === "screen_form_schema") return schemaOf(code);
       if (name === "screen_form_open") return Promise.resolve(opened());
       if (name === "screen_form_fill") {
+        const removal = nextRemoval;
+        nextRemoval = null;
         const values = { ...(args[1].values || hostValues) };
         for (const key of args[4] || []) values[key] = "";
+        for (const key of removal?.cleared || []) values[key] = "";
         Object.assign(values, args[2]);
-        hostValues = values;
-        return { draft: { id: 7, values }, values: { ...values }, options: {}, rejected: {}, penalties: [], pools: {}, removes: null };
+        if (!removal) hostValues = values;
+        return { draft: { id: 7, values }, values: { ...values }, options: {}, rejected: {}, penalties: [], pools: {}, removes: removal ? { done: removal.done } : null };
       }
       if (name === "screen_form_sample_period") return Promise.resolve({ complete: false, existing: null });
       if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...(args[1].values || hostValues) }, options: {}, errors: [], off: {}, penalties: [], pools: {} });
@@ -281,4 +288,36 @@ console.log("PASS 2552 item 11: the kept group's untick and grp-scoped pick emit
   assert.equal(saved[2].values[method], "", "page Save writes the cleared deduction method");
   assert.equal(storedValues[method], "", "the saved draft stores the cleared deduction method");
   console.log("PASS 1701Q clear-only choice: page Save keeps the deduction method blank.");
+}
+
+// ---- An approved agent clear is saved immediately; Cancel saves nothing.
+{
+  const atc = "frm1701q:optATC";
+  const rate = "frm1701q:optTaxRate";
+  const income = "frm1701q:txt36A";
+  const graduated = { [atc]: "II012", [rate]: "Graduated", [income]: "250000.00" };
+
+  await openWith("1701Q", graduated);
+  storedValues = { ...graduated };
+  nextRemoval = { done: [income], cleared: [income] };
+  ui.choose({}, cx, [atc, rate], true);
+  assert.equal(app.overlay, "removal", "the host's removal is held for approval");
+  assert.deepEqual(storedValues, graduated, "the held clear has not reached storage");
+  ui.confirmRemoval(cx);
+  await settle();
+  assert.equal(storedValues[atc], "", "Continue saves the cleared ATC");
+  assert.equal(storedValues[rate], "", "Continue saves the cleared rate");
+  assert.equal(storedValues[income], "", "Continue saves the approved removal");
+
+  await openWith("1701Q", graduated);
+  storedValues = { ...graduated };
+  const savesBeforeCancel = calls.filter((call) => call[0] === "screen_form_save").length;
+  nextRemoval = { done: [income], cleared: [income] };
+  ui.choose({}, cx, [atc, rate], true);
+  assert.equal(app.overlay, "removal");
+  ui.cancelRemoval(cx);
+  await settle();
+  assert.deepEqual(storedValues, graduated, "Cancel leaves the stored draft unchanged");
+  assert.equal(calls.filter((call) => call[0] === "screen_form_save").length, savesBeforeCancel, "Cancel does not save");
+  console.log("PASS 1701Q agent clear approval: Continue saves and Cancel preserves the stored draft.");
 }

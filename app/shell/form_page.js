@@ -375,6 +375,7 @@ export class FormPageActions {
       rowViews: new Map(),
       pending: {},
       forget: [],
+      agentChoice: false,
       dirty: false,
       saved: false,
       openSelect: null,
@@ -1214,7 +1215,7 @@ export class FormPageActions {
   }
 
   /** Choice controls commit at once. */
-  choose(edits, cx, clear = []) {
+  choose(edits, cx, clear = [], fromAgent = false) {
     const s = this.state;
     if (!s || !s.editable) return;
     const clears = [...new Set((Array.isArray(clear) ? clear : []).filter((k) => typeof k === "string" && k.length))];
@@ -1226,6 +1227,7 @@ export class FormPageActions {
       edits = Object.fromEntries(Object.entries(edits).filter(([k]) => !(k in period)));
       if (!Object.keys(edits).length && !s.forget.length) return;
     }
+    if (fromAgent) s.agentChoice = true;
     Object.assign(s.pending, edits);
     s.dirty = true;
     this.unquiet(Object.keys(edits));
@@ -1279,13 +1281,13 @@ export class FormPageActions {
    * asked first: the page keeps its draft and shows the old answer until
    * Continue (`confirmRemoval`); Cancel (`cancelRemoval`) leaves both.
    */
-  holdRemoval(r, edits, cx) {
+  holdRemoval(r, edits, cx, agentChoice = false) {
     const s = this.state;
     const chosen = s.chosenFrom || {};
     for (const k of Object.keys(edits)) if (k in chosen) s.values[k] = chosen[k] ?? "";
     // What was typed in the same batch is not the answer: Cancel keeps it.
     const typed = Object.fromEntries(Object.entries(edits).filter(([k]) => !(k in chosen)));
-    s.removal = { r, edits, typed, draft: s.draft };
+    s.removal = { r, edits, typed, draft: s.draft, agentChoice };
     this.app.overlay = "removal";
     this.refreshRows();
     cx.notify();
@@ -1301,6 +1303,7 @@ export class FormPageActions {
     this.applyFill(held.r, held.edits);
     s.dirty = true;
     this.refreshRows();
+    if (held.agentChoice) return this.save(cx);
     this.validate(cx);
     // Undo belongs to this return's page as it is now: another return, or
     // any later edit here, retires it (it would bring back a stale draft).
@@ -1391,13 +1394,15 @@ export class FormPageActions {
     if (!s || !s.draft) return;
     const edits = s.pending;
     const forget = s.forget;
+    const agentChoice = s.agentChoice;
     s.pending = {};
     if (Object.keys(edits).length || forget.length) {
       this.retireRemovalUndo();
       try {
         const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits), forget);
         s.forget = [];
-        if (r.removes) return this.holdRemoval(r, edits, cx);
+        s.agentChoice = false;
+        if (r.removes) return this.holdRemoval(r, edits, cx, agentChoice);
         this.applyFill(r, edits);
       } catch (e) {
         // The draft never took these edits: keep them staged (under anything
@@ -2486,6 +2491,7 @@ export class FormPageActions {
     // Take whatever is staged before saving, without waiting for the debounce.
     let edits = s.pending;
     const forget = s.forget;
+    const agentChoice = s.agentChoice;
     s.pending = {};
     const changed = s.dirty || Object.keys(edits).length > 0 || forget.length > 0;
     try {
@@ -2493,9 +2499,10 @@ export class FormPageActions {
         this.retireRemovalUndo();
         const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits), forget);
         s.forget = [];
+        s.agentChoice = false;
         // Rows this would remove are never saved without the question:
         // ask, and save nothing until the filer answers.
-        if (f.removes) return this.holdRemoval(f, edits, cx);
+        if (f.removes) return this.holdRemoval(f, edits, cx, agentChoice);
         this.accepted(edits, f.rejected);
         s.draft = f.draft;
         s.values = this.shown(f.values);
@@ -2522,6 +2529,7 @@ export class FormPageActions {
     } catch (e) {
       // Edits the draft never took stay staged for the next try.
       s.pending = { ...edits, ...s.pending };
+      s.agentChoice ||= agentChoice;
       this.app.toast(message(e), cx, "triangle-alert");
     }
   }
