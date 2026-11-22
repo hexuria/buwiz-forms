@@ -151,25 +151,24 @@ test("1700 Schedule 1: ticking Taxpayer in BETA's drawer (4_2) changes BETA only
   const page = schedules.find(({ item }) => item.rows === 4)!.item;
   const more = schedules.find(({ item }) => item.rows === 12)!;
   const setup: ({ pick: string } | { edits: Record<string, string> })[] = [
+    // Schedule 1 column c (regular rates) stays closed at 0.00 until a filer is an employee.
+    { pick: "frm1700:rdoPg1I6TaxpayerTypeE" },
     { pick: choice("15", /married/i) },
     { pick: choice("16", /^yes$/i) },
     { pick: choice("17", /joint filing/i) },
   ];
   for (let row = 0; row < 4; row++) {
     const keys = page.keys![row];
-    setup.push({
-      edits: {
-        [keys[2]]: `Employer ${row + 1}`,
-        [keys[8]]: String(1000 + row),
-        [keys[10]]: String(100 + row),
-        [keys[0]]: "true",
-      },
-    });
+    // The official order: the owner tick and name first, then the amounts.
+    setup.push({ edits: { [keys[0]]: "true", [keys[2]]: `Employer ${row + 1}` } });
+    setup.push({ edits: { [keys[8]]: String(1000 + row), [keys[10]]: String(100 + row) } });
   }
   const betaKeys = more.item.keys![1];
   const acmeKeys = more.item.keys![2];
-  setup.push({ edits: { [betaKeys[2]]: "BETA", [betaKeys[8]]: "500", [betaKeys[10]]: "50", [betaKeys[1]]: "true" } });
-  setup.push({ edits: { [acmeKeys[2]]: "ACME", [acmeKeys[8]]: "10000", [acmeKeys[10]]: "1000", [acmeKeys[1]]: "true" } });
+  setup.push({ edits: { [betaKeys[1]]: "true", [betaKeys[2]]: "BETA" } });
+  setup.push({ edits: { [betaKeys[8]]: "500", [betaKeys[10]]: "50" } });
+  setup.push({ edits: { [acmeKeys[1]]: "true", [acmeKeys[2]]: "ACME" } });
+  setup.push({ edits: { [acmeKeys[8]]: "10000", [acmeKeys[10]]: "1000" } });
 
   const app = await open(ENTRY, {
     width: 1440, height: 900, platform: "macos",
@@ -182,7 +181,7 @@ test("1700 Schedule 1: ticking Taxpayer in BETA's drawer (4_2) changes BETA only
   const betaRow = `${rowId}-1`;
   const acmeRow = `${rowId}-2`;
   // The fixture's setup writes one step per host fill; the slowest runner needs well over the default 5 s.
-  await app.waitFor("label:/ACME.*Spouse|Spouse.*ACME/", { timeout: 25000 });
+  await app.waitFor("label:/Spouse · ACME · 1,?000/", { timeout: 25000 });
   await app.waitFor("label:/BETA.*Spouse|Spouse.*BETA/");
   await app.waitFor("label:/ACME.*Spouse|Spouse.*ACME/");
 
@@ -192,8 +191,8 @@ test("1700 Schedule 1: ticking Taxpayer in BETA's drawer (4_2) changes BETA only
   await app.waitFor(compensation);
   const compensationBefore = app.value(compensation);
   const withholdingBefore = app.value(withholding);
-  expect(compensationBefore).toBeTruthy();
-  expect(withholdingBefore).toBeTruthy();
+  expect(compensationBefore).toBe("10,000.00");
+  expect(withholdingBefore).toBe("1,000.00");
   await app.press(`${table}-done`);
   await app.waitFor(compensation, { state: "gone" });
 

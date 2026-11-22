@@ -386,6 +386,24 @@ test("Sample: retyping over a held 1702EX period year drops the hold; blur commi
   }
 });
 
+test("Sample: restoring a refused period with no other edit creates no return", async () => {
+  const target: FormTarget = { tin: DEMO.tin, formCode: "1601C", year: 0, period: 0, mode: "sample" };
+  const s = await opened(target);
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.month.k === "frm1601c:txtMonth")!;
+  const saved = () => bir.list_returns("saved").filter((r) => r.form_code === "1601C" && r.taxable_year === 2025 && r.period === 11);
+  expect(saved()).toEqual([]);
+
+  s.edit(period.periodKey, "11/2025");
+  await s.idle();
+  s.edit(period.periodKey, "13/2025");
+  await s.idle();
+  expect(s.boxMessageOf(period.month.k)).toBeTruthy();
+  s.edit(period.periodKey, "11/2025");
+  await s.idle();
+  s.dispose();
+  expect(saved()).toEqual([]);
+});
+
 test("Sample: correcting 09/202 to 09/2025 autosaves the statutory minimum wage", async () => {
   const target: FormTarget = { tin: DEMO.tin, formCode: "1601C", year: 0, period: 0, mode: "sample" };
   const s = await opened(target);

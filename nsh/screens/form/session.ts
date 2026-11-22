@@ -1117,7 +1117,7 @@ export class FormSession {
         s.periodHeld = null;
         const samePeriod = JSON.stringify({ ...s.periodValues, ...periodEdits }) === s.periodAsked;
         this.setPeriodPart(periodEdits);
-        if (wasIncomplete && !s.periodIncomplete && samePeriod && s.dirty) this.scheduleAutosave();
+        if (wasIncomplete && !s.periodIncomplete && samePeriod && Object.keys(s.typedEdits).length) this.scheduleAutosave();
       }
     }
     if (Object.keys(ordinaryEdits).length) {
