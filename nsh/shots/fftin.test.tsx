@@ -34,6 +34,7 @@ async function openForm(code: string, width: number, height: number, scheme: "li
 // The locked profile TIN (0605 Item 9) at the three widths the brief names, light and dark.
 for (const look of [
   { name: "320-light", width: 320, height: 700, scheme: "light" as const },
+  { name: "320-dark", width: 320, height: 700, scheme: "dark" as const },
   { name: "420-light", width: 420, height: 900, scheme: "light" as const },
   { name: "420-dark", width: 420, height: 900, scheme: "dark" as const },
   { name: "1280-light", width: 1280, height: 900, scheme: "light" as const },
@@ -62,8 +63,11 @@ for (const width of [420, 640]) {
   }, 120_000);
 }
 
-// 1801's typed executor TIN: empty, then filled — the digits-only boxes with no profile line.
+// 1801's typed executor TIN: empty, then filled — the digits-only boxes with no profile line. 320 pt is the
+// narrowest phone: its 47 pt three-digit column is where a typed box once cut its last digit.
 for (const look of [
+  { name: "320-light", width: 320, height: 700, scheme: "light" as const },
+  { name: "320-dark", width: 320, height: 700, scheme: "dark" as const },
   { name: "390-light", width: 390, height: 844, scheme: "light" as const },
   { name: "1280-light", width: 1280, height: 900, scheme: "light" as const },
 ]) {
