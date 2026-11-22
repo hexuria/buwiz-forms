@@ -144,3 +144,48 @@ export function rowTitleOf(item: Pick<SchemaItem, "start" | "row_labels">, row: 
   const { n, caption } = rowParts(item, row);
   return caption ? `Row ${n} · ${caption}` : `Row ${n}`;
 }
+
+/**
+ * The phone row's head (under 600 pt): 6 pt between the number, the label and what follows, and a label that keeps at
+ * least 160 pt of the line — a button beside it ("Edit", "Edit penalties") that leaves it less goes to the next line
+ * instead of squeezing the label into a column of single words. Wide rows keep 8 pt and no minimum.
+ */
+export function rowHead(narrow: boolean): { gap: number; labelMin: number | undefined } {
+  return narrow ? { gap: 6, labelMin: 160 } : { gap: 8, labelMin: undefined };
+}
+
+/** Whether a head of `width` points still has room beside the number (`no` wide) and the label's minimum for `extra`. */
+export function headFits(width: number, no: number, extra: number, narrow = true): boolean {
+  const head = rowHead(narrow);
+  return no + head.gap + (head.labelMin ?? 0) + head.gap + extra <= width;
+}
+
+/** A schedule row's columns as the drawer stacks them: a run of two to five TIN digit boxes is one group (one grid line). */
+export function drawerGroups<C extends { col: { l: string; t: string } }>(columns: readonly C[], keyOf: (c: C) => string): C[][] {
+  const out: C[][] = [];
+  let run: C[] = [];
+  const close = () => {
+    if (run.length >= 2 && run.length <= 5) out.push(run);
+    else for (const c of run) out.push([c]);
+    run = [];
+  };
+  for (const c of columns) {
+    const digits = (c.col.t === "text" || c.col.t === "int") && tinSegment({ k: keyOf(c), l: c.col.l, t: c.col.t });
+    // A whole-TIN column ("TIN (Including Branch Code)") is one box of its own, never a cell of a grid.
+    if (digits && !/including/i.test(c.col.l)) run.push(c);
+    else {
+      close();
+      out.push([c]);
+    }
+  }
+  close();
+  return out;
+}
+
+/** A drawer TIN group's weights and title: the branch code's cell is 1.4, the title is the first column's words without "(1-3)". */
+export function drawerTin(labels: readonly string[]): { weights: number[]; title: string } {
+  return {
+    weights: labels.map((l, i) => (i === labels.length - 1 && /branch/i.test(l) ? 1.4 : 1)),
+    title: (labels[0] ?? "").replace(/\s*\(\d-\d\)\s*$/, ""),
+  };
+}

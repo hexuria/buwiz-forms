@@ -102,3 +102,27 @@ test("P8: a TIN that is not four boxes keeps the same rules with its own column 
   expect(app.count("id:fp-tin-grid-1:0")).toBe(1);
   expect(app.count("id:fp-tin-sep-1:0-1")).toBe(0);
 });
+
+test("P8 390: 1700 Schedule 1's row drawer draws the employer TIN as one grid line and Taxpayer / Spouse as tick boxes", async () => {
+  const app = await open(ENTRY, {
+    width: 390, height: 844, platform: "ios",
+    host: { params: { formCode: "1700", year: 2025, period: 1, mode: "return" } },
+  });
+  const table = "fp-table-frm1700:rdoPg2I1PartVIEmployeeT";
+  // Part VI (index 5) is a collapsed card: open it and bring the schedule's "Add row" into view.
+  await app.press("id:fp-part-5-toggle");
+  for (let i = 0; i < 40 && !app.shows(`id:${table}-add`); i++) await app.scroll("id:form-scroll", 600).catch(() => {});
+  await app.press(`id:${table}-add`);
+  await app.waitFor("text:Row 1");
+  // Columns 4 to 7 (TIN 1-3, 4-6, 7-9, branch code) are one group with one title; no box of its own line.
+  expect(app.count(`id:${table}-tin-4`)).toBe(1);
+  for (const c of [4, 5, 6, 7]) expect(app.count(`id:${table}-tin-4 >> id:${table}-cell-${c}`)).toBe(1);
+  expect(app.texts()).toContain("b. TIN");
+  expect(app.texts()).not.toContain("TIN (4-6)");
+  // The radio columns are tick boxes with their words, not typing boxes that read "false".
+  expect(app.texts()).toContain("Taxpayer");
+  expect(app.texts()).toContain("Spouse");
+  expect(app.texts()).not.toContain("false");
+  await app.press(`id:${table}-done`);
+  await app.waitFor("text:Row 1", { state: "gone" });
+});

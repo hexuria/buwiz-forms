@@ -5,6 +5,7 @@
 import { expect, test } from "nsh/test";
 import { bir } from "../../bir";
 import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
+import { scheduleProps } from "./rows";
 import { FormSession, type FormTarget } from "./session";
 import type { SchemaItem } from "./contract";
 
@@ -337,5 +338,44 @@ test("G1 is page-only: with item 14's row hidden, the draft is the host's own an
   expect(stamped(s.draft()!)).toEqual(stamped(host.draft));
   const printed = bir.screen_form_print("0619E", s.draft()!);
   expect(printed.path).toBeTruthy();
+  s.dispose();
+});
+
+test("G1 1700 item 18: refused spouse TIN boxes say a shared reason once, not once per box", async () => {
+  const s = await opened(at("1700", 2023, 1));
+  const it = s.schema!.parts[2].items.find((i) => i.no === "18")!;
+  const keys = (it.f ?? []).map((f) => f.k);
+  expect(keys.length).toBe(4);
+  const id = s.itemIdForKey(keys[0])!;
+
+  for (const k of keys) s.edit(k, /branch/i.test(k) ? "00000" : "123");
+  await s.idle();
+  for (const k of keys) expect(s.boxMessageOf(k)).not.toBe("");
+  // Three boxes got the same sentence from the host: the row prints it once.
+  const shown = s.row(id)().boxMessages.map((m) => m.sentence);
+  expect(shown.length).toBe(new Set(shown).size);
+  expect(shown.length).toBeLessThan(keys.length);
+  s.dispose();
+});
+
+test("1700 Schedule 1: a row's Taxpayer and Spouse columns are tick boxes, and never both ticked", async () => {
+  const s = await opened(at("1700", 2022, 1));
+  const it = s.schema!.parts.flatMap((p) => p.items).find((i) => i.rows && (i.cols ?? []).filter((c) => c.t === "radio").length === 2)!;
+  const id = s.itemIdForKey(it.keys![0][0])!;
+  const table = scheduleProps(s, id, it, () => true);
+  const [taxpayer, spouse] = [table.cell(0, 0), table.cell(0, 1)];
+  expect(taxpayer.field.t).toBe("chk");
+  expect(spouse.field.t).toBe("chk");
+  // The host keeps a tick only on a row that holds something.
+  table.cell(0, 2).onEdit("ACME CORP");
+  await s.idle();
+  taxpayer.onEdit("true");
+  await s.idle();
+  expect(s.valueOf(it.keys![0][0])).toBe("true");
+  // Spouse on a return that is not joint: the host refuses it, and Taxpayer stays ticked.
+  spouse.onEdit("true");
+  await s.idle();
+  expect(s.valueOf(it.keys![0][0]) === "true" && s.valueOf(it.keys![0][1]) === "true").toBe(false);
+  expect(table.summary(0)()).toBe("Taxpayer · ACME CORP");
   s.dispose();
 });

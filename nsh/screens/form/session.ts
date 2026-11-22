@@ -3914,9 +3914,12 @@ export class FormSession {
         return true;
       });
     });
+    // Boxes of one row refused for the same reason (a shut part's four TIN boxes) print that sentence once.
+    const said = new Set<string>();
+    const firstSaying = (k: string) => !said.has(s.boxMessages[k]) && Boolean(said.add(s.boxMessages[k]));
     const shownKeys = !msgOpen ? [] : registered.length || periodRegistered.length
       ? [...oneDateShown, ...periodShown, ...keys.filter((k) => !grouped.has(k) && !periodGrouped.has(k) && s.boxMessages[k] && groupKeys.has(k))]
-      : date && dateShown.length ? dateShown : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k));
+      : date && dateShown.length ? dateShown : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k) && firstSaying(k));
     const asks =
       s.editable && !s.sample
         ? (s.askAt.get(id) || []).map((a) => ({

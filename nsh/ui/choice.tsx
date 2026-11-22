@@ -256,14 +256,15 @@ export function Segmented(props: SegmentedProps) {
             onChange={() => props.onChange(o().value)}
             class={cx(
               "group flex-row items-center gap-1.5 rounded-(--radius-ctl) px-2.5 checked:bg-raised checked:shadow-xs disabled:opacity-50",
-              props.stacked ? (TOUCH ? "min-h-11 w-full" : "h-8 w-full") : "h-6",
+              // A stacked segment grows with its words: a long choice wraps inside the bar instead of running off its edge.
+              props.stacked ? cx("w-full py-1", TOUCH ? "min-h-11" : "min-h-8") : "h-6",
               FOCUS_RING,
             )}
           >
             <If when={o().icon}>
               <Icon name={o().icon as IconName} size={14} class="group-checked:tint-foreground" />
             </If>
-            <Text variant="metaStrong" tone="fg2" class="group-hover:text-foreground group-checked:text-foreground">{o().label}</Text>
+            <Text variant="metaStrong" tone="fg2" class={cx("group-hover:text-foreground group-checked:text-foreground", props.stacked && "min-w-0 flex-1")}>{o().label}</Text>
           </Radio>
         )}
       </Each>

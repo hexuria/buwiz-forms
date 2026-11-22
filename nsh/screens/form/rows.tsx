@@ -7,7 +7,7 @@ import { AppButton, CalendarButton, Chip, Code, DateField, DateTouchField, Dropd
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
 import { choiceLabel, controlWidth, dateParts, dateRanges, emptyCell, isTinItem, needsText, oneDates, onePeriods, radioGroups, tinWeights, type DateRange, type OneDate } from "./schema";
-import { tinSegment } from "./controls/model";
+import { rowHead, tinSegment } from "./controls/model";
 import { PeriodField, RangeField } from "./periodField";
 import type { AskCard, ElectionCard, FormSession, RowInfo } from "./session";
 import { dateRange, periodDay, splitDay } from "./dateRules";
@@ -80,7 +80,8 @@ function groupCaption(fields: SchemaField[]): string {
   return prefix.length > 0 && prefix.length <= 4 && labels.every((l) => l.startsWith(prefix)) ? prefix : "";
 }
 
-function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Accessor<boolean>): ScheduleProps {
+/** The props of a schedule table (exported for tests). */
+export function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Accessor<boolean>): ScheduleProps {
   const keys = it.keys || [];
   const cols = it.cols || [];
   const columns = cols.map((col, index) => ({ index, col })).filter((c) => c.col.t !== "hidden");
@@ -120,8 +121,20 @@ function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Acces
     cell: (r, c) => {
       const col = cols[c];
       const k = keys[r][c];
-      const f: SchemaField = { k, l: col.l, t: col.t === "hidden" ? "text" : col.t, c: col.c, w: col.w, o: col.o };
-      return fieldProps(s, f, narrow, `${col.l}, row ${rowName(r)}`, controlWidth(f, 320));
+      // A table's radio column (1700 Schedule 1's Taxpayer / Spouse) is a tick box in the row's drawer; ticking one
+      // unticks the row's other radio columns, as a radio does.
+      const radio = col.t === "radio";
+      const f: SchemaField = { k, l: col.l, t: col.t === "hidden" ? "text" : radio ? "chk" : col.t, c: col.c, w: col.w, o: col.o };
+      const base = fieldProps(s, f, narrow, `${col.l}, row ${rowName(r)}`, controlWidth(f, 320));
+      if (!radio) return base;
+      return {
+        ...base,
+        onEdit: (text) => {
+          const edits: Record<string, string> = { [k]: text };
+          if (text === "true") cols.forEach((other, j) => other.t === "radio" && j !== c && (edits[keys[r][j]] = "false"));
+          s.choose(edits);
+        },
+      };
     },
     openRow: () => openRow(),
     onOpenRow: (r) => {
@@ -597,13 +610,16 @@ export function ItemRow(props: RowProps) {
         </View>
       </If>
       <View class="min-w-0 flex-1">
-        <View testID={`fp-head-${id}`} class="mb-2.5 min-h-5.5 flex-row flex-wrap items-start gap-2">
+        <View testID={`fp-head-${id}`} class="mb-2.5 min-h-5.5 flex-row flex-wrap items-start" style={{ gap: rowHead(props.narrow()).gap }}>
           {it.no ? (
             <If when={props.narrow()}>
               <ItemNo no={it.no} id={id} />
             </If>
           ) : null}
-          <Text variant="control" class="min-w-0 flex-1" testID={`fp-label-${id}`}>{label}</Text>
+          {/* On a phone the label keeps at least 160 pt: a button that would leave it less wraps under it (rowHead). */}
+          <View class="flex-1" style={{ minWidth: rowHead(props.narrow()).labelMin ?? 0 }}>
+            <Text variant="control" testID={`fp-label-${id}`}>{label}</Text>
+          </View>
           {it.rows ? <Text variant="meta" tone="fg3" class="pt-0.5">{`${it.rows} rows`}</Text> : null}
           {/* A profile TIN's own line under its boxes says it once; the row mark stays for every other profile row. */}
           <If when={info().fromProfile && !info().tinLine}>
