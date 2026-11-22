@@ -6,7 +6,7 @@ import { expect, test } from "nsh/test";
 import { bir } from "../../bir";
 import { warmForms } from "../../bir/testing";
 import { isTinItem, tinWeights, withoutHidden } from "./schema";
-import { tinSegment } from "./controls/model";
+import { readBoxPad, tinCellRoom, tinSegment } from "./controls/model";
 import type { FormSchema, SchemaItem } from "./contract";
 
 warmForms();
@@ -62,4 +62,16 @@ test("every isTinItem across the 43 forms is a supported TIN shape", () => {
   expect(count).toBeGreaterThan(30);
   expect(forms.length).toBe(43);
   expect(lost.filter((w) => !allowedLoss.has(w.split(" \"")[0]))).toEqual([]);
+});
+
+test("P8 320: a locked cell of the phone TIN grid has room for its three digits", () => {
+  // On a 320 pt phone the grid is 226 pt wide (the real-window shot), so a three-digit column is 47 pt. With the
+  // read-only box's usual 10 pt sides that left 25 pt, and "000" and "453" drew as "0…" and "4…": three 13 pt
+  // tabular digits of Inter take just over 25 pt. The 5-digit branch code needs five thirds of that.
+  const digit = 26 / 3;
+  const room = tinCellRoom(226, [1, 1, 1, 1.4], readBoxPad(true));
+  expect(room[0]).toBeGreaterThanOrEqual(3 * digit);
+  expect(room[3]).toBeGreaterThanOrEqual(5 * digit);
+  // Every other read-only box keeps its 10 pt sides.
+  expect(readBoxPad(false)).toBe(10);
 });

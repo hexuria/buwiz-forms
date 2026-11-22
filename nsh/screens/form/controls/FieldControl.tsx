@@ -11,7 +11,7 @@ import {
   CheckboxLabel, DateField, Dropdown, Icon, IntInput, Line, MoneyInput, moneyPlain, PercentInput, Text, TextField, TinInput, Tooltip, TOUCH,
 } from "../../../ui";
 import { SearchPick } from "./Pick";
-import { cx, isOn, listedOptions, mdy, readText, SEARCH_FROM, selectModel, tinKind, tinSegment } from "./model";
+import { cx, isOn, listedOptions, mdy, readBoxPad, readText, SEARCH_FROM, selectModel, tinKind, tinSegment } from "./model";
 import { type FieldInput, read } from "./types";
 
 const OFF_OPACITY = 0.45;
@@ -64,7 +64,8 @@ function ReadBox(props: { p: FieldInput }) {
       accessibilityLabel={`${nameOf(p)}: ${text() || hint() || "empty"}${why() ? ", " + why().toLowerCase() : ""}`}
       tooltip={why() ? <Tooltip label={why()} /> : undefined}
       class={cx(
-        "min-w-0 flex-row items-center gap-1.5 rounded-(--radius-row) border px-2.5",
+        "min-w-0 flex-row items-center gap-1.5 rounded-(--radius-row) border",
+        readBoxPad(cellOf(p)) === 4 ? "px-1" : "px-2.5",
         TOUCH ? "min-h-11" : grows() ? "min-h-8 py-1" : "h-8",
         grows() && "max-w-full",
         computed() ? "border-transparent bg-hover" : "border-border bg-hover",

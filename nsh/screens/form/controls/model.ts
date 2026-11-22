@@ -79,6 +79,24 @@ export function tinSegment(f: Pick<SchemaField, "k" | "l" | "t">): boolean {
   return (f.t === "text" || f.t === "int") && tinNamed(f);
 }
 
+/**
+ * A read-only box's side padding in points: 10 (`px-2.5`), but 4 (`px-1`) in a cell of the phone TIN grid, whose
+ * 47 pt column on a 320 pt phone has no room for three digits between 10 pt sides.
+ */
+export function readBoxPad(tinCell: boolean): number {
+  return tinCell ? 4 : 10;
+}
+
+/**
+ * The room for digits in each cell of the phone TIN grid: the grid's width shared by `weights` over 6 pt gaps, less a
+ * 1 pt border and `pad` on each side.
+ */
+export function tinCellRoom(gridWidth: number, weights: readonly number[], pad: number): number[] {
+  const total = weights.reduce((a, b) => a + b, 0);
+  const share = (gridWidth - 6 * (weights.length - 1)) / total;
+  return weights.map((w) => share * w - 2 - 2 * pad);
+}
+
 /** A date text as the date box takes it: MM/DD/YYYY once it reads as a date, else as it is. */
 export function mdy(text: string): string {
   const d = parseTypedDate(text);
