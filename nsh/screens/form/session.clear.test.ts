@@ -224,3 +224,39 @@ test("an agent's fill that dropped the ATC and the rate beside a pick of Estate:
   expect(again.valueOf(INCOME)).toBe("250,000.00");
   again.dispose();
 });
+
+test("an agent's fill that dropped the ATC and the rate alone asks first: Cancel, or leaving with the question open, keeps the income", async () => {
+  const INCOME = "frm1701q:txt36A";
+  const DROPPED = ["frm1701q:optATC", "frm1701q:optTaxRate"];
+  const target = at("1701Q", 2025, 2);
+  const s = await opened(target);
+  s.choose({ "frm1701q:optType_2": "true", "frm1701q:optATC_1": "true", "frm1701q:optTaxRate_1": "true", "frm1701q:optMethodOfDeduction:_2": "true" });
+  await s.idle();
+  s.edit(INCOME, "250000");
+  await s.idle();
+  s.saveNow();
+  await s.idle();
+  // The removal goes through the page's normal question, and nothing is stored while it is open.
+  s.choose({}, DROPPED);
+  expect(s.overlay()?.kind).toBe("removal");
+  expect(s.valueOf(INCOME)).toBe("250,000.00");
+  s.dispose();
+  const left = await opened(target);
+  expect(left.valueOf(INCOME)).toBe("250,000.00");
+  expect(left.valueOf("frm1701q:optATC_1")).toBe("true");
+  left.choose({}, DROPPED);
+  expect(left.overlay()?.kind).toBe("removal");
+  left.cancelRemoval();
+  await left.idle();
+  expect(left.valueOf(INCOME)).toBe("250,000.00");
+  // Cancel dropped the question with its answers: a later edit does not drop them after all.
+  left.choose({ "frm1701q:txtSheets": "2" });
+  await left.idle();
+  expect(left.overlay()).toBe(null);
+  expect(left.valueOf("frm1701q:optATC_1")).toBe("true");
+  left.choose({}, DROPPED);
+  left.confirmRemoval();
+  await left.idle();
+  expect(left.valueOf("frm1701q:optATC_1")).not.toBe("true");
+  left.dispose();
+});

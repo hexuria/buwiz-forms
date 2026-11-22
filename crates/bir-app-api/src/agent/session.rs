@@ -52,6 +52,11 @@ impl UiQueue {
         }
     }
 
+    /// Whether a window takes what is pushed.
+    pub fn shown(&self) -> bool {
+        !self.discard
+    }
+
     pub fn pop(&self) -> Option<Value> {
         if self.discard {
             None
@@ -75,6 +80,10 @@ struct OpenForm {
     draft: Value,
     sources: BTreeMap<String, String>,
     dirty: bool,
+    /// A fill is held in the window for the filer's approval (it removes
+    /// what they typed): nothing of it is stored, and the next form call
+    /// reads the return again, as the filer's answer left it.
+    awaiting: bool,
 }
 
 pub struct Session {
@@ -131,6 +140,7 @@ impl Session {
     }
 
     fn invoke(&mut self, name: &str, args: &Value) -> Result<DispatchResult, String> {
+        self.settle()?;
         match name {
             "nav.go" => {
                 let page = args
@@ -549,6 +559,7 @@ impl Session {
             draft,
             sources: BTreeMap::new(),
             dirty: false,
+            awaiting: false,
         });
         self.commands
             .push(json!({"op": "refresh", "tin_root": root}));
@@ -595,6 +606,26 @@ impl Session {
         })))
     }
 
+    /// After a fill held for the filer's approval, the stored return is the
+    /// outcome (Continue stored the fill, Cancel or leaving did not): read it
+    /// again before anything else is done with the open form.
+    fn settle(&mut self) -> Result<(), String> {
+        let Some(open) = self.open.as_ref().filter(|open| open.awaiting) else {
+            return Ok(());
+        };
+        let (kind, year, period, tin) = (open.kind, open.year, open.period, open.tin.clone());
+        let db = self.lock_db()?;
+        let profile = load_profile(&db, &tin, year)?;
+        let draft =
+            crate::screen_form_module::load_draft(&db, kind, &profile, year, period, false, None)?;
+        drop(db);
+        if let Some(open) = self.open.as_mut() {
+            open.draft = draft;
+            open.awaiting = false;
+        }
+        Ok(())
+    }
+
     fn form_fill(&mut self, args: &Value) -> Result<DispatchResult, String> {
         let open = self
             .open
@@ -604,7 +635,8 @@ impl Session {
         let year = open.year;
         let period = open.period;
         let tin = open.tin.clone();
-        let mut draft = open.draft.clone();
+        let before = open.draft.clone();
+        let mut draft = before.clone();
         let sources = open.sources.clone();
         if agent::identity(kind, &draft)?.status != FilingStatus::Draft {
             return Err("this return is no longer a draft".into());
@@ -639,8 +671,24 @@ impl Session {
         let map = agent::field_map(kind, &draft)?;
         let not_shown = not_shown(def, &fields, &filled, &chosen, &map);
         let mut edits = Map::new();
+        // A fill that removes what the filer typed is the filer's to approve:
+        // the window asks (its own fill of the same edits finds the same
+        // removal) and stores the result on Continue. Nothing is stored here,
+        // so Cancel, or leaving with the question open, keeps the return.
+        // Without a window nobody can be asked, and the fill is the answer.
+        let asks = if self.commands.shown() && (!filled.is_empty() || !forgot.is_empty()) {
+            let made: Map<String, Value> = filled
+                .iter()
+                .filter_map(|key| Some((key.clone(), fields.get(key)?.clone())))
+                .collect();
+            crate::screen_form_module::removes(kind, &before, &draft, &made)
+        } else {
+            None
+        };
         if !filled.is_empty() || !forgot.is_empty() {
-            agent::save_draft(kind, &db, &mut draft)?;
+            if asks.is_none() {
+                agent::save_draft(kind, &db, &mut draft)?;
+            }
             for key in &filled {
                 if not_shown.iter().any(|hidden| hidden == key) {
                     continue;
@@ -650,10 +698,14 @@ impl Session {
         }
         drop(db);
         if let Some(open) = self.open.as_mut() {
-            open.draft = draft;
-            open.dirty |= !filled.is_empty() || !forgot.is_empty();
-            for key in &filled {
-                open.sources.insert(key.clone(), source.clone());
+            if asks.is_some() {
+                open.awaiting = true;
+            } else {
+                open.draft = draft;
+                open.dirty |= !filled.is_empty() || !forgot.is_empty();
+                for key in &filled {
+                    open.sources.insert(key.clone(), source.clone());
+                }
             }
         }
         // The window holds its own copy of the return and saves all of it: the
@@ -665,6 +717,21 @@ impl Session {
                 choose["clear"] = json!(forgot);
             }
             self.commands.push(choose);
+        }
+        if let Some(asks) = asks {
+            return Ok(DispatchResult::json(json!({
+                "form": kind.form_code(),
+                "source": source,
+                "applied": [],
+                "filled": [],
+                "kept_user_boxes": kept,
+                "awaiting_approval": {
+                    "message": asks.get("message").cloned().unwrap_or(Value::Null),
+                    "boxes": filled,
+                    "cleared": forgot,
+                    "note": "Nothing was stored: the window asks the filer first. Continue stores the fill, Cancel or leaving drops it; read the return again (form.fields) for the outcome.",
+                },
+            })));
         }
         let mut result = json!({
             "form": kind.form_code(),
@@ -2868,7 +2935,10 @@ mod tests {
     /// answer is kept, not discarded.
     #[test]
     fn strict_check_accepts_a_spouse_rate_that_replaces_a_stored_one() {
+        // No window: the switch drops the spouse's graduated entries, which a
+        // window would ask the filer about first.
         let mut session = session();
+        session.commands = UiQueue::discarding();
         save_complete(&mut session);
         let mut stored = graduated_1701q();
         for (key, value) in SPOUSE_GRADUATED {
@@ -2913,6 +2983,66 @@ mod tests {
     /// A fill that only leaves a stored choice unanswered (`fields` empty,
     /// the box in `ask`) is taken, and the window is told which answer was
     /// dropped: it saves its own copy of the return whole.
+    /// The income the database holds for the scratch 1701Q, read as another
+    /// session without a window reads it.
+    fn stored_income(session: &Session, period: u32) -> String {
+        let mut other = Session::new(UiQueue::discarding());
+        other.db = session.db.clone();
+        call(
+            &mut other,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": period, "tin": TIN}),
+        )
+        .unwrap();
+        let fields = call(&mut other, "form.fields", json!({})).unwrap();
+        read(&fields, "frm1701q:txt36A")
+    }
+
+    #[test]
+    fn a_fill_that_removes_what_the_filer_typed_waits_for_the_window() {
+        let mut session = session();
+        save_complete(&mut session);
+        store_1701q(&mut session, 1, &graduated_1701q());
+        assert_eq!(stored_income(&session, 1), "250,000.00");
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        while session.commands.pop().is_some() {}
+        let ask = json!(["frm1701q:optATC", "frm1701q:optTaxRate"]);
+        let filled = call(&mut session, "form.fill", json!({"fields": {}, "ask": ask})).unwrap();
+        assert_eq!(filled["applied"], json!([]), "{filled}");
+        assert_eq!(filled["awaiting_approval"]["cleared"], ask, "{filled}");
+        assert!(
+            filled["awaiting_approval"]["message"].is_string(),
+            "{filled}"
+        );
+        // The window is asked, with the same answers to drop.
+        let choose = session.commands.pop().expect("the window is told");
+        assert_eq!(choose["clear"], ask, "{choose}");
+        // Before approval, and after leaving with the question open (the
+        // window stores nothing): the income is as the filer typed it.
+        assert_eq!(stored_income(&session, 1), "250,000.00");
+        let fields = call(&mut session, "form.fields", json!({})).unwrap();
+        assert_eq!(read(&fields, "frm1701q:txt36A"), "250,000.00");
+        assert_eq!(read(&fields, "frm1701q:optATC"), "II012");
+        call(&mut session, "form.dismiss", json!({})).unwrap();
+        assert_eq!(stored_income(&session, 1), "250,000.00");
+        // Without a window nobody can be asked: the fill is the answer.
+        let mut alone = Session::new(UiQueue::discarding());
+        alone.db = session.db.clone();
+        call(
+            &mut alone,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let filled = call(&mut alone, "form.fill", json!({"fields": {}, "ask": ask})).unwrap();
+        assert!(filled.get("awaiting_approval").is_none(), "{filled}");
+    }
+
     #[test]
     fn a_fill_that_only_drops_an_answer_tells_the_window() {
         let mut session = session();

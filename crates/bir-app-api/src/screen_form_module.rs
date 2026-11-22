@@ -4796,14 +4796,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     // 4's, PR 5's, PR 6's, PR 7's, PR 8's, PR 9's, PR 10's and PR 11's forms;
     // the integration merge chains PR 2's and
     // PR 3's below).
-    let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits)
-        .or_else(|| rows_income_q::removes(kind, &before, &draft, &edits))
-        .or_else(|| rows_1604::removes(kind, &before, &draft, &edits))
-        .or_else(|| rows_annual_corporate::removes(kind, &before, &draft, &edits))
-        .or_else(|| rows_annual_individual::removes(kind, &before, &draft, &edits))
-        .or_else(|| rows_as_needed::removes(kind, &before, &draft, &edits))
-        .or_else(|| rows_donor_estate::removes(kind, &before, &draft, &edits))
-        .or_else(|| rows_excise::removes(kind, &before, &draft, &edits));
+    let removes = removes(kind, &before, &draft, &edits);
     // Locks this fill opened or shut (PR 8: a folded 1702RT item, item 42;
     // PR 11: an excise return's penalties kept as entered, then computed),
     // each with its note; `null` opens the box. bir-core's, as the open's.
@@ -4828,14 +4821,33 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "pools": pool_texts,
         "blank": sample.as_ref().map(|mark| mark.blank.clone()),
         // Rows the filer typed that this edit removed: the page asks first.
-        "removes": rows_withholding::removes(kind, &before, &draft, &edits)
-            .or_else(|| rows_monthly::removes(kind, &before, &draft, &edits))
-            .or(removes),
+        "removes": removes,
         "relocks": relocks,
         "relock_notes": relock_notes,
         "notes_always": noted,
         "profile_prerequisites": profile_prerequisites::of(kind, &draft).map_err(host_error)?,
     })))
+}
+
+/// What the filer typed in `before` that `edits` removed from `after`, as the
+/// page asks about before it applies them (`screen_form_fill`'s `removes`).
+/// An agent's fill asks the same way before it stores its result.
+pub(crate) fn removes(
+    kind: AgentFormKind,
+    before: &Value,
+    after: &Value,
+    edits: &Map<String, Value>,
+) -> Option<Value> {
+    rows_withholding::removes(kind, before, after, edits)
+        .or_else(|| rows_monthly::removes(kind, before, after, edits))
+        .or_else(|| rows_dst_pt_vat::removes(kind, before, after, edits))
+        .or_else(|| rows_income_q::removes(kind, before, after, edits))
+        .or_else(|| rows_1604::removes(kind, before, after, edits))
+        .or_else(|| rows_annual_corporate::removes(kind, before, after, edits))
+        .or_else(|| rows_annual_individual::removes(kind, before, after, edits))
+        .or_else(|| rows_as_needed::removes(kind, before, after, edits))
+        .or_else(|| rows_donor_estate::removes(kind, before, after, edits))
+        .or_else(|| rows_excise::removes(kind, before, after, edits))
 }
 
 /// Apply the page's edits to `draft` the one way both the draft fill and the
