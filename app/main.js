@@ -552,7 +552,7 @@ class BirApp extends View {
         this.toast(message, cx);
         cx.notify();
       });
-    } else if (cmd.op === "choose" && cmd.edits) {
+    } else if (cmd.op === "choose") {
       this.afterFormLoads(cx, (cx) => {
         const ui = this.formUi;
         const s = ui && ui.state;
@@ -562,19 +562,28 @@ class BirApp extends View {
         // accepts replaces `s.values`, and a box it leaves unchanged still
         // has to show what the agent wrote.
         const edits = {};
-        for (const [k, v] of Object.entries(cmd.edits)) edits[k] = String(v);
-        const paint = () => {
+        const sourceEdits = cmd.edits && typeof cmd.edits === "object" && !Array.isArray(cmd.edits) ? cmd.edits : {};
+        for (const [k, v] of Object.entries(sourceEdits)) edits[k] = String(v);
+        const clear = Array.isArray(cmd.clear) ? [...new Set(cmd.clear.filter((k) => typeof k === "string"))] : [];
+        const paint = (after = false) => {
           for (const [k, v] of Object.entries(edits)) {
             s.values[k] = v;
             const input = s.inputs && s.inputs.get(k);
             if (input && input.value() !== v) input.set_value(v);
           }
+          if (after) {
+            for (const k of clear) {
+              const value = String(s.values[k] ?? "");
+              const input = s.inputs && s.inputs.get(k);
+              if (input && input.value() !== value) input.set_value(value);
+            }
+          }
           ui.refreshRows();
           ui.notify(cx);
         };
         paint();
-        ui.choose(edits, cx);
-        paint();
+        ui.choose(edits, cx, clear);
+        paint(true);
       });
     }
   }

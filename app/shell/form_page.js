@@ -374,6 +374,7 @@ export class FormPageActions {
       inputs: new Map(),
       rowViews: new Map(),
       pending: {},
+      forget: [],
       dirty: false,
       saved: false,
       openSelect: null,
@@ -1213,14 +1214,17 @@ export class FormPageActions {
   }
 
   /** Choice controls commit at once. */
-  choose(edits, cx) {
+  choose(edits, cx, clear = []) {
     const s = this.state;
     if (!s || !s.editable) return;
+    const clears = [...new Set((Array.isArray(clear) ? clear : []).filter((k) => typeof k === "string" && k.length))];
+    if (!Object.keys(edits).length && !clears.length) return;
+    s.forget = [...new Set([...s.forget, ...clears])];
     const period = Object.fromEntries(Object.entries(edits).filter(([k]) => s.periodParts?.has(k)));
     if (Object.keys(period).length) {
       this.setPeriodPart(period, cx);
       edits = Object.fromEntries(Object.entries(edits).filter(([k]) => !(k in period)));
-      if (!Object.keys(edits).length) return;
+      if (!Object.keys(edits).length && !s.forget.length) return;
     }
     Object.assign(s.pending, edits);
     s.dirty = true;
@@ -1386,11 +1390,13 @@ export class FormPageActions {
     const s = this.state;
     if (!s || !s.draft) return;
     const edits = s.pending;
+    const forget = s.forget;
     s.pending = {};
-    if (Object.keys(edits).length) {
+    if (Object.keys(edits).length || forget.length) {
       this.retireRemovalUndo();
       try {
-        const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
+        const r = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits), forget);
+        s.forget = [];
         if (r.removes) return this.holdRemoval(r, edits, cx);
         this.applyFill(r, edits);
       } catch (e) {
@@ -2479,12 +2485,14 @@ export class FormPageActions {
     this.unquiet();
     // Take whatever is staged before saving, without waiting for the debounce.
     let edits = s.pending;
+    const forget = s.forget;
     s.pending = {};
-    const changed = s.dirty || Object.keys(edits).length > 0;
+    const changed = s.dirty || Object.keys(edits).length > 0 || forget.length > 0;
     try {
-      if (Object.keys(edits).length) {
+      if (Object.keys(edits).length || forget.length) {
         this.retireRemovalUndo();
-        const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
+        const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits), forget);
+        s.forget = [];
         // Rows this would remove are never saved without the question:
         // ask, and save nothing until the filer answers.
         if (f.removes) return this.holdRemoval(f, edits, cx);
@@ -2540,11 +2548,13 @@ export class FormPageActions {
     if (s.existing) return this.offerExisting(s.existing, cx);
     if (!s.periodSet) return this.askSamplePeriod(cx, then);
     let edits = s.pending;
+    const forget = s.forget;
     s.pending = {};
     let r;
     try {
-      if (Object.keys(edits).length) {
-        const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits));
+      if (Object.keys(edits).length || forget.length) {
+        const f = this.app.store.call("screen_form_fill", s.code, s.draft, edits, this.unlockedFor(edits), forget);
+        s.forget = [];
         this.accepted(edits, f.rejected);
         s.draft = f.draft;
         s.values = this.shown(f.values);

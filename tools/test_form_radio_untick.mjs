@@ -19,8 +19,10 @@ import vm from "node:vm";
 const root = new URL("../", import.meta.url);
 
 const served = JSON.parse(fs.readFileSync(new URL("tools/fixtures/form_radio_untick_page.json", root), "utf8"));
+const forms = JSON.parse(fs.readFileSync(new URL("app/forms/forms-schema.json", root), "utf8"));
+const incomeQ = forms.find((form) => form.c === "1701Q");
 let code = "2200S";
-const schemaOf = (form) => ({ c: form, t: form, rev: "2018", freq: "As needed", pages: 1, n: 1, parts: [{ n: "Part", items: served[form].items }] });
+const schemaOf = (form) => form === "1701Q" ? incomeQ : ({ c: form, t: form, rev: "2018", freq: "As needed", pages: 1, n: 1, parts: [{ n: "Part", items: served[form].items }] });
 const field = (form, key) => served[form].items.flatMap((it) => it.f || []).find((f) => f.k === key);
 
 const entities = [], tasks = [], texts = [], timers = [];
@@ -96,6 +98,7 @@ const { FormPageActions, renderFormPage } = mod.namespace;
 
 let hostValues = {};
 let hostOpen = {};
+let storedValues = {};
 const opened = () => ({
   draft: { id: 7 }, status: "Draft", editable: true, values: { ...hostValues }, options: {}, locks: {},
   waits: {}, profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: {}, penalties: [], pools: {}, errors: [],
@@ -107,13 +110,19 @@ const app = {
   toastUndo(what, run) { this.toastState = { text: what, action: { run } }; },
   store: {
     templates: () => [],
-    write(name, ...args) { calls.push([name, ...args]); return { id: 7, status: "Draft", draft: args[1] }; },
+    write(name, ...args) {
+      calls.push([name, ...args]);
+      if (name === "screen_form_save") storedValues = { ...(args[1].values || {}) };
+      return { id: 7, status: "Draft", draft: args[1] };
+    },
     call(name, ...args) {
       calls.push([name, ...args]);
       if (name === "screen_form_schema") return schemaOf(code);
       if (name === "screen_form_open") return Promise.resolve(opened());
       if (name === "screen_form_fill") {
-        const values = { ...(args[1].values || hostValues), ...args[2] };
+        const values = { ...(args[1].values || hostValues) };
+        for (const key of args[4] || []) values[key] = "";
+        Object.assign(values, args[2]);
         hostValues = values;
         return { draft: { id: 7, values }, values: { ...values }, options: {}, rejected: {}, penalties: [], pools: {}, removes: null };
       }
@@ -254,4 +263,22 @@ console.log("PASS 2552 item 11: the kept group's untick and grp-scoped pick emit
   assert.equal(calls.length, before, "re-clicking the quarter asks the host nothing");
   assert.equal(ui.state.periodComplete, true, "the sample's set period stays set");
   console.log("PASS 0605 quarters: re-clicking the ticked quarter is a no-op.");
+}
+
+// ---- A clear-only agent choice clears a loaded 1701Q and Save keeps it blank.
+{
+  const method = "frm1701q:optMethodOfDeduction";
+  assert.ok(incomeQ, "the app's form schema includes 1701Q");
+  await openWith("1701Q", { [method]: "O" });
+  assert.equal(ui.state.values[method], "O");
+  ui.choose({}, cx, [method]);
+  const fill = fills().at(-1);
+  assert.deepEqual(JSON.parse(JSON.stringify(fill[3])), {}, "clear-only choose has no edits");
+  assert.deepEqual(JSON.parse(JSON.stringify(fill[5])), [method], "clear-only choose passes forget in the fifth fill argument");
+  assert.equal(hostValues[method], "", "the loaded draft clears the deduction method");
+  ui.save(cx);
+  const saved = calls.filter((call) => call[0] === "screen_form_save").at(-1);
+  assert.equal(saved[2].values[method], "", "page Save writes the cleared deduction method");
+  assert.equal(storedValues[method], "", "the saved draft stores the cleared deduction method");
+  console.log("PASS 1701Q clear-only choice: page Save keeps the deduction method blank.");
 }
