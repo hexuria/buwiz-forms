@@ -666,7 +666,8 @@ impl Session {
         let def = kind.definition();
         let (mut filled, mut kept) = (Vec::new(), Vec::new());
         let mut refused = Map::new();
-        let forgot = forget_unanswered(kind, &mut draft, args, &fields)?;
+        let (forgot, kept_answers) = forget_unanswered(kind, &mut draft, args, &fields)?;
+        refused.extend(kept_answers);
         let mut chosen = BTreeMap::new();
         for (key, value) in &fields {
             if sources
@@ -873,7 +874,8 @@ impl Session {
         }
         let mut applied = Vec::new();
         let mut refused = Map::new();
-        forget_unanswered(kind, &mut draft, args, &fields)?;
+        let (_, kept_answers) = forget_unanswered(kind, &mut draft, args, &fields)?;
+        refused.extend(kept_answers);
         let def = kind.definition();
         let mut chosen = BTreeMap::new();
         for (key, value) in &fields {
@@ -984,19 +986,28 @@ impl Session {
     fn recipe_generate(&self, args: &Value) -> Result<DispatchResult, String> {
         let kind = form_kind(args, "recipe.generate")?;
         let tin = self.taxpayer(args, "recipe.generate")?;
-        // Left out, the newest return of any period is the history's start.
-        // Given, each must be usable: the newest return is not what a caller
-        // who named a period asked for.
+        // The history ends before the period named. Left out, it ends at the
+        // newest return; a year alone, at that year's last. Given, each must
+        // be usable, and a period needs its year: the newest return is not
+        // what a caller who named a period asked for.
         let year = match args.get("year") {
-            None | Some(Value::Null) => u16::MAX,
-            Some(_) => require_year(args, "recipe.generate")?,
+            None | Some(Value::Null) => None,
+            Some(_) => Some(require_year(args, "recipe.generate")?),
         };
         let period = match args.get("period") {
-            None | Some(Value::Null) => u32::MAX,
-            Some(given) => json_u64(given)
-                .and_then(|period| u32::try_from(period).ok())
-                .ok_or("recipe.generate requires args.period as a JSON number")?,
+            None | Some(Value::Null) => None,
+            Some(given) => Some(
+                json_u64(given)
+                    .and_then(|period| u32::try_from(period).ok())
+                    .ok_or("recipe.generate requires args.period as a JSON number")?,
+            ),
         };
+        if year.is_none() && period.is_some() {
+            return Err(
+                "recipe.generate requires args.year when args.period is given: a period alone names no return"
+                    .into(),
+            );
+        }
         let options = agent::recipe::Options {
             check: agent::recipe::CheckMode::parse(args.get("check").and_then(Value::as_str))?,
             include_unused: args.get("include_unused").and_then(Value::as_bool) == Some(true),
@@ -1007,7 +1018,7 @@ impl Session {
             .get_form_template(&tin, kind.form_code())
             .map_err(|error| error.to_string())?;
         let mut previous = Vec::new();
-        let mut before = (year, period);
+        let mut before = (year.unwrap_or(u16::MAX), period.unwrap_or(u32::MAX));
         while previous.len() < RECIPE_HISTORY {
             let Some(earlier) = db
                 .previous_return(&tin, kind.form_code(), before.0, before.1)
@@ -1671,19 +1682,22 @@ fn field_errors(errors: &[(String, String)]) -> Vec<Value> {
 }
 
 /// Drop the stored answer of every `args.ask` box that `fields` leaves
-/// unanswered. The boxes whose answer was dropped.
+/// unanswered. The boxes whose answer was dropped, then the boxes the return
+/// cannot hold unanswered, each with why: those keep their answer, as the
+/// window's own fill keeps them.
 fn forget_unanswered(
     kind: AgentFormKind,
     draft: &mut Value,
     args: &Value,
     fields: &Map<String, Value>,
-) -> Result<Vec<String>, String> {
+) -> Result<(Vec<String>, Map<String, Value>), String> {
     let ask = match args.get("ask") {
-        None | Some(Value::Null) => return Ok(Vec::new()),
+        None | Some(Value::Null) => return Ok((Vec::new(), Map::new())),
         Some(Value::Array(keys)) => keys,
         Some(_) => return Err("args.ask must be a list of box keys".into()),
     };
     let mut forgotten = Vec::new();
+    let mut refused = Map::new();
     for key in ask.iter().filter_map(Value::as_str) {
         let answered = match fields.get(key) {
             None | Some(Value::Null) => false,
@@ -1692,13 +1706,16 @@ fn forget_unanswered(
         };
         if !answered {
             let before = draft.clone();
-            agent::forget(kind, draft, key)?;
-            if *draft != before {
-                forgotten.push(key.to_string());
+            match agent::forget(kind, draft, key) {
+                Ok(()) if *draft != before => forgotten.push(key.to_string()),
+                Ok(()) => {}
+                Err(why) => {
+                    refused.insert(key.to_string(), Value::String(why));
+                }
             }
         }
     }
-    Ok(forgotten)
+    Ok((forgotten, refused))
 }
 
 /// After a radio item is filled: the option that fill chose, by the write's
@@ -3107,9 +3124,6 @@ mod tests {
         );
     }
 
-    /// A fill that only leaves a stored choice unanswered (`fields` empty,
-    /// the box in `ask`) is taken, and the window is told which answer was
-    /// dropped: it saves its own copy of the return whole.
     /// The income the database holds for the scratch 1701Q, read as another
     /// session without a window reads it.
     fn stored_income(session: &Session, period: u32) -> String {
@@ -3194,6 +3208,9 @@ mod tests {
         assert!(filled.get("awaiting_approval").is_none(), "{filled}");
     }
 
+    /// A fill that only leaves a stored choice unanswered (`fields` empty,
+    /// the box in `ask`) is taken, and the window is told which answer was
+    /// dropped: it saves its own copy of the return whole.
     #[test]
     fn a_fill_that_only_drops_an_answer_tells_the_window() {
         let mut session = session();
@@ -3295,6 +3312,75 @@ mod tests {
             call(&mut session, "recipe.generate", args.clone())
                 .unwrap_or_else(|error| panic!("{args}: {error}"));
         }
+    }
+
+    /// The history a recipe reads ends before the period named. A year
+    /// alone is the end of that year. A period alone names no return and is
+    /// refused, never read as "the newest return".
+    #[test]
+    fn recipe_generate_reads_the_history_before_the_period_named() {
+        let mut session = session();
+        save_scratch(&mut session);
+        store_1701q(&mut session, 1, &graduated_1701q());
+        store_1701q(&mut session, 3, &graduated_1701q());
+        let mut newest = |args: Value| {
+            let made = call(&mut session, "recipe.generate", args.clone())
+                .unwrap_or_else(|error| panic!("{args}: {error}"));
+            made["from"]["previous_returns"][0]["period"].clone()
+        };
+        assert_eq!(newest(json!({"code": "1701Q"})), 3);
+        assert_eq!(newest(json!({"code": "1701Q", "year": 2026})), 3);
+        assert_eq!(
+            newest(json!({"code": "1701Q", "year": 2026, "period": 2})),
+            1
+        );
+        let error = call(
+            &mut session,
+            "recipe.generate",
+            json!({"code": "1701Q", "period": 2}),
+        )
+        .unwrap_err();
+        assert!(error.contains("args.year"), "{error}");
+    }
+
+    /// A box in `ask` the return cannot hold unanswered is refused by name,
+    /// as the window's own fill refuses it: its answer stays, the fill's
+    /// other boxes are taken and the window is not told to drop it.
+    #[test]
+    fn a_fill_refuses_to_drop_a_required_choice_and_keeps_its_fields() {
+        let mut session = session();
+        save_complete(&mut session);
+        store_1701q(&mut session, 1, &graduated_1701q());
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        while session.commands.pop().is_some() {}
+        let key = "frm1701q:AmendedRtn";
+        let filled = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm1701q:txtSheets": "3"}, "ask": [key]}),
+        )
+        .unwrap();
+        assert_eq!(filled["applied"], json!(["frm1701q:txtSheets"]), "{filled}");
+        let why = filled["refused"][key].as_str().unwrap_or_default();
+        assert!(why.contains("cannot be left unanswered"), "{filled}");
+        let choose = session.commands.pop().expect("the window is told");
+        assert_eq!(choose["edits"]["frm1701q:txtSheets"], "3", "{choose}");
+        assert!(choose.get("clear").is_none(), "{choose}");
+        // The dry run names it the same way.
+        let checked = call(
+            &mut session,
+            "form.check",
+            json!({"code": "1701Q", "year": 2026, "period": 2, "tin": TIN, "ask": [key]}),
+        )
+        .unwrap();
+        assert_eq!(checked["ok"], false, "{checked}");
+        let why = checked["refused"][key].as_str().unwrap_or_default();
+        assert!(why.contains("cannot be left unanswered"), "{checked}");
     }
 
     #[test]
