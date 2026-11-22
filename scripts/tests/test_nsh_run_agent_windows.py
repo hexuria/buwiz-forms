@@ -67,7 +67,8 @@ elif 'rm -f' in command:
 
 # `nsh run`: FAKE_NSH says how the launch goes. `ok` installs the host on the device nsh picks (the first online one)
 # and reads and deletes the token as the app does; `fail` stops before installing; `fail-late` installs, waits for
-# the token and fails without reading it; `hang` never installs and never returns.
+# the token and fails without reading it; `hang` never installs and never returns; `hold` installs, waits for the
+# token and keeps running without reading it (an app still starting when the developer presses Ctrl+C).
 FAKE_NSH = r'''
 import os, sys, time
 from pathlib import Path
@@ -90,8 +91,34 @@ else:
     sys.exit('fake nsh: the token never arrived on ' + serial)
 if mode == 'fail-late':
     sys.exit(3)
+if mode == 'hold':
+    (state / 'nsh.holding').write_text('')
+    time.sleep(600)
 (state / 'consumed').write_bytes(token.read_bytes())
 token.unlink()
+'''
+
+# Ctrl+C as the console sends it: to every process attached to the recipe's console (just, its PowerShell, the writer's
+# job, nsh, adb). Run as a process of its own, which leaves its console for that one and ignores the event itself.
+CTRL_C = r'''
+import ctypes, sys
+kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+kernel32.FreeConsole()
+if not kernel32.AttachConsole(int(sys.argv[1])):
+    sys.exit(f'AttachConsole: error {ctypes.get_last_error()}')
+kernel32.SetConsoleCtrlHandler(None, True)
+if not kernel32.GenerateConsoleCtrlEvent(0, 0):
+    sys.exit(f'GenerateConsoleCtrlEvent: error {ctypes.get_last_error()}')
+'''
+
+# Starts the recipe so that Ctrl+C reaches it: a process started by one that ignores Ctrl+C (a test runner in a process
+# group of its own, as CI's is) ignores it too, and so would everything the recipe starts. This one stops ignoring it
+# before it starts the recipe, and only waits for it itself.
+HEEDS_CTRL_C = r'''
+import ctypes, signal, subprocess, sys
+ctypes.WinDLL('kernel32').SetConsoleCtrlHandler(None, False)
+signal.signal(signal.SIGINT, signal.SIG_IGN)
+sys.exit(subprocess.call(sys.argv[1:]))
 '''
 
 TWO_DEVICES = 'emulator-5554\toffline\nemulator-5556\tdevice\nR58M123ABC\tdevice'
@@ -145,9 +172,9 @@ class NshRunAgentWindowsTests(unittest.TestCase):
         env.update(extra)
         return env
 
-    def start(self, env):
-        return subprocess.Popen(['just', '--justfile', str(REPO / 'justfile'), 'nsh-run-agent', 'android'],
-                                cwd=REPO, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    def start(self, env, through=(), **how):
+        return subprocess.Popen([*through, 'just', '--justfile', str(REPO / 'justfile'), 'nsh-run-agent', 'android'],
+                                cwd=REPO, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **how)
 
     def run_recipe(self, env, timeout=120):
         process = self.start(env)
@@ -272,6 +299,33 @@ class NshRunAgentWindowsTests(unittest.TestCase):
         process.stdout.close()
         time.sleep(2)
         self.assert_the_writer_has_stopped()
+
+    def test_ctrl_c_after_the_token_was_stored_removes_it_and_stops_the_writer(self):
+        # nsh is a native program here, as the real one is: a batch file would stop at "Terminate batch job (Y/N)?".
+        tools = self.home / 'BuwizNsh/tools/bin'
+        (tools / 'nsh.cmd').unlink()
+        shutil.copy(self.adb_exe, tools / 'nsh.exe')
+        # A console of its own, so that Ctrl+C reaches the recipe's processes and not this test's.
+        process = self.start(self.env('hold'), through=(sys.executable, '-c', HEEDS_CTRL_C),
+                             creationflags=subprocess.CREATE_NEW_CONSOLE)
+        self.addCleanup(lambda: subprocess.run(['taskkill', '/T', '/F', '/PID', str(process.pid)], capture_output=True))
+        self.wait_for('nsh never saw the token', lambda: (self.state / 'nsh.holding').exists())
+        stored = self.state / 'token-emulator-5556'
+        self.assertEqual(stored.read_bytes(), TOKEN.encode(), 'stored on the launched device, unread')
+        sent = subprocess.run([sys.executable, '-c', CTRL_C, str(process.pid)], capture_output=True, text=True)
+        self.assertEqual(sent.returncode, 0, sent.stderr)
+        try:
+            output, _ = process.communicate(timeout=60)
+        except subprocess.TimeoutExpired:
+            self.fail('the recipe did not end on Ctrl+C')
+        self.assertNotIn(TOKEN, output)
+        self.assertFalse(stored.exists(), 'the unread token is removed from the device: ' + output)
+        removals = [call for call in self.adb_calls() if 'rm -f' in call[-1]]
+        self.assertEqual(removals, [['-s', 'emulator-5556', 'shell',
+                                     f'run-as {HOST} rm -f {TOKEN_PATH} {TOKEN_PATH}.new']])
+        self.assert_no_token_left_on_this_machine()
+        self.assert_the_writer_has_stopped()
+
 
 
 if __name__ == '__main__':
