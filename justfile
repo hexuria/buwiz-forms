@@ -1276,19 +1276,13 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
         port="${GPUI_AGENT_ADDR##*:}"
         export BUWIZ_ANDROID_DEV=1
         export BUWIZ_ANDROID_DEV_ENV="EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$((port + 1))"
-        adb="adb"; command -v adb >/dev/null 2>&1 || adb="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}/platform-tools/adb"
-        host=com.longbridge.nsh.host
-        dir=files/nsh/dev.goldcoders.bir.nsh
-        (
-            for _ in $(seq 1800); do
-                if "$adb" shell run-as "$host" true >/dev/null 2>&1; then
-                    printf %s "$GPUI_AGENT_TOKEN" | "$adb" shell -T "run-as $host sh -c 'umask 077 && mkdir -p $dir && cat > $dir/agent-token.new && mv $dir/agent-token.new $dir/agent-token'" && exit 0
-                fi
-                sleep 0.5
-            done
-            echo "nsh-run-agent: the data plane's token was not stored (is the host installed?)" >&2
-        ) &
-        echo "nsh-run-agent: window plane on 127.0.0.1:$port, data plane on 127.0.0.1:$((port + 1)); run: adb forward tcp:$port tcp:$port && adb forward tcp:$((port + 1)) tcp:$((port + 1))"
+        # One adb and one device for the whole launch: the SDK's adb and the device nsh starts the app on, checked before
+        # anything is built (nsh/agent/android-handoff.sh). The writer ends with this launcher: a failed or cancelled launch
+        # writes no token afterwards.
+        { read -r adb; read -r serial; } < <("$root/nsh/agent/android-handoff.sh" device) || true
+        [ -n "${adb:-}" ] && [ -n "${serial:-}" ] || exit 1
+        "$root/nsh/agent/android-handoff.sh" token "$adb" "$serial" "$$" &
+        echo "nsh-run-agent: device $serial, window plane on 127.0.0.1:$port, data plane on 127.0.0.1:$((port + 1)); run: \"$adb\" -s $serial forward tcp:$port tcp:$port && \"$adb\" -s $serial forward tcp:$((port + 1)) tcp:$((port + 1))"
     fi
     if [ "{{target}}" = ios ]; then
         # simctl gives the app only SIMCTL_CHILD_* variables, and nsh keeps GPUI_AGENT_TOKEN out of them (its window plane reads a
@@ -1326,36 +1320,50 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         $port = [int](($env:GPUI_AGENT_ADDR -split ':')[-1])
         $env:BUWIZ_ANDROID_DEV = '1'
         $env:BUWIZ_ANDROID_DEV_ENV = "EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$($port + 1)"
-        $adb = 'adb'
-        if (-not (Get-Command adb -ErrorAction SilentlyContinue)) {
-            $sdkRoot = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { $env:ANDROID_SDK_ROOT }
-            $adb = Join-Path $sdkRoot 'platform-tools\adb.exe'
-        }
+        # One adb and one device for the whole launch, as the Unix recipe (nsh/agent/android-handoff.sh): the SDK's adb, found
+        # as nsh finds the SDK (ANDROID_HOME, ANDROID_SDK_ROOT, then Android Studio's default place), and the device nsh
+        # starts the app on (the first `adb devices` lists as `device`). Checked before anything is built.
+        $sdkRoot = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } elseif ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT } else { Join-Path $env:LOCALAPPDATA 'Android\Sdk' }
+        if (-not (Test-Path -LiteralPath $sdkRoot -PathType Container)) { [Console]::Error.WriteLine("nsh-run-agent: Android SDK not found at ${sdkRoot}: install it and set ANDROID_HOME"); exit 1 }
+        $adb = Join-Path $sdkRoot 'platform-tools\adb.exe'
+        if (-not (Test-Path -LiteralPath $adb -PathType Leaf)) { [Console]::Error.WriteLine("nsh-run-agent: no adb at ${adb}: install the SDK's platform-tools"); exit 1 }
+        $listed = & $adb devices 2>$null
+        if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("nsh-run-agent: $adb does not run"); exit 1 }
+        $serial = $listed | Select-Object -Skip 1 | ForEach-Object { $cols = $_ -split "`t"; if ($cols.Count -ge 2 -and $cols[1].Trim() -eq 'device') { $cols[0] } } | Select-Object -First 1
+        if (-not $serial) { [Console]::Error.WriteLine('nsh-run-agent: no Android device or emulator connected (see `adb devices`)'); exit 1 }
+        if ($env:ANDROID_SERIAL -and $env:ANDROID_SERIAL -ne $serial) { [Console]::Error.WriteLine("nsh-run-agent: ANDROID_SERIAL is $($env:ANDROID_SERIAL), but nsh launches on $serial (the first device ``adb devices`` lists): disconnect the others"); exit 1 }
+        # The writer ends with this launcher ($PID): a failed or cancelled launch writes no token afterwards.
         $null = Start-Job -ScriptBlock {
-            param($adb, $token)
+            param($adb, $serial, $token, $launcher)
             $pkg = 'com.longbridge.nsh.host'
             $dir = 'files/nsh/dev.goldcoders.bir.nsh'
             $tmp = Join-Path $env:TEMP ('agent-token-' + [guid]::NewGuid().ToString('N'))
             [IO.File]::WriteAllText($tmp, $token)
             try {
                 for ($i = 0; $i -lt 1800; $i++) {
-                    & $adb shell run-as $pkg true 2>$null
+                    if (-not (Get-Process -Id $launcher -ErrorAction SilentlyContinue)) { return }
+                    & $adb -s $serial shell run-as $pkg true 2>$null
                     if ($LASTEXITCODE -eq 0) {
-                        $cmd = 'type "{0}" | "{1}" shell -T "run-as {2} sh -c ''umask 077 && mkdir -p {3} && cat > {3}/agent-token.new && mv {3}/agent-token.new {3}/agent-token''"' -f $tmp, $adb, $pkg, $dir
+                        $cmd = 'type "{0}" | "{1}" -s {4} shell -T "run-as {2} sh -c ''umask 077 && mkdir -p {3} && cat > {3}/agent-token.new && mv {3}/agent-token.new {3}/agent-token''"' -f $tmp, $adb, $pkg, $dir, $serial
                         & $env:ComSpec /d /c $cmd | Out-Null
                         return
                     }
                     Start-Sleep -Milliseconds 500
                 }
-                [Console]::Error.WriteLine("nsh-run-agent: the data plane's token was not stored (is the host installed?)")
+                [Console]::Error.WriteLine("nsh-run-agent: the data plane's token was not stored on $serial (is the host installed?)")
             } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
-        } -ArgumentList $adb, $env:GPUI_AGENT_TOKEN
-        "nsh-run-agent: window plane on 127.0.0.1:$port, data plane on 127.0.0.1:$($port + 1); run: adb forward tcp:$port tcp:$port && adb forward tcp:$($port + 1) tcp:$($port + 1)"
+        } -ArgumentList $adb, $serial, $env:GPUI_AGENT_TOKEN, $PID
+        "nsh-run-agent: device $serial, window plane on 127.0.0.1:$port, data plane on 127.0.0.1:$($port + 1); run: `"$adb`" -s $serial forward tcp:$port tcp:$port && `"$adb`" -s $serial forward tcp:$($port + 1) tcp:$($port + 1)"
     }
     $env:CARGO = "$root\nsh\agent\cargo-with-agent.cmd"
     Set-Location nsh
     nsh run --target {{target}} {{args}}
     exit $LASTEXITCODE
+
+# NSH: the Android device choice and token hand-off of nsh-run-agent, against a stand-in adb (no device needed).
+[unix]
+nsh-agent-handoff-test:
+    bash nsh/agent/android-handoff.test.sh
 
 # Opens real macOS windows for a minute or so. BIR_DATABASE_PATH, if set in the environment, is passed on (and guarded).
 
