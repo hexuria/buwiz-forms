@@ -4,6 +4,13 @@
   "app": "bir-shell",
   "params": [],
   "steps": [
-    { "id": "close", "op": "invoke", "name": "form.dismiss" }
+    {
+      "id": "close",
+      "op": "invoke",
+      "name": "form.dismiss",
+      "args": {
+        "discard": true
+      }
+    }
   ]
 }

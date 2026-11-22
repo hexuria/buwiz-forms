@@ -28,7 +28,7 @@ for mode in ("strict", "report"):
     v = run("recipe", "validate", f"{out}/recipe-{mode}.json", *SCHEMA)
     print(mode, "validate ok" if v.get("ok") else v, "steps", [s["id"] for s in made["recipe"]["steps"]])
     recipes[mode] = made
-lines = ["| run | data set | pass | recipe.generate check | open (window) ms | generated recipe ms (per step) | pill (window) ms | save+close ms | screenshots | notes |", "|---|---|---|---|---|---|---|---|---|---|"]
+lines = ["| run | data set | pass | recipe.generate check | open (window) ms | generated recipe ms (per step) | pill (window) ms | close ms | data-plane verification | screenshots | notes |", "|---|---|---|---|---|---|---|---|---|---|---|"]
 allok = True
 for n in map(int, rows_arg.split(",")):
     row = rows[n - 1]; bad = row["expect_error_fields"]; mode = "report" if bad else "strict"; made = recipes[mode]
@@ -56,10 +56,29 @@ for n in map(int, rows_arg.split(",")):
         pill = f"{A}/ui/ui-1701q-pill-{after}{phone}.wants"; text = open(pill).read()
         have = {"sales_shown": f"{float(row['sales']):,.2f}", "sales_fixed": f"{float(row['sales']):.0f}", "fix_email": "fixed@example.com"}
         p = stage("3-pill", W, pill, *[x for k, v in have.items() if f"${k}" in text for x in ("--set", f"{k}={v}")], shots=True)
-    c = stage("4-close", D, f"{A}/ui/save-close-form.json", *SCHEMA)
+    c = stage("4-close", D, f"{A}/ui/close-form.json", *SCHEMA)
+    v = {}
+    verified_ok = False
+    if not why and bad:
+        opened = run("--addr", D, "invoke", "form.open", "--arg", 'code="1701Q"',
+                     "--arg", f"year={row['year']}", "--arg", f"period={row['period']}", "--arg", f'tin="{T}"')
+        if not opened.get("ok"):
+            why.append(f"5-verify form.open: {opened.get('error', opened)}")
+        else:
+            v = run("--addr", D, "invoke", "form.fields")
+            fields = v.get("result", v)
+            key = "frm1701q:txt36A" if bad == "item_36_taxpayer" else "txtEmail"
+            expected = f"{float(have['sales_fixed']):,.2f}" if bad == "item_36_taxpayer" else "fixed@example.com"
+            box = next((box for box in fields.get("boxes", []) if box.get("key") == key), None)
+            actual = box.get("value") if box else None
+            if not v.get("ok") or actual != expected:
+                why.append(f"5-verify {key}: expected {expected!r}, got {actual!r}")
+            else:
+                verified_ok = True
     nshots = sum(len([s for s in r.get("screenshots", []) if s.get("ok")]) for r in (o, p))
     per = " + ".join(f"{s['id']} {s['elapsed_ms']}" for s in g.get("steps", []))
     allok &= not why
-    lines.append(f"| {n} | {row['case']} | {'yes' if not why else 'NO'} | {mode} | {o.get('elapsed_ms')} | {g.get('elapsed_ms')} ({per}) | {p.get('elapsed_ms')} | {c.get('elapsed_ms')} | {nshots} | {'; '.join(why)[:400]} |")
+    verified = "skipped (clean)" if not bad else ("yes" if verified_ok else "NO")
+    lines.append(f"| {n} | {row['case']} | {'yes' if not why else 'NO'} | {mode} | {o.get('elapsed_ms')} | {g.get('elapsed_ms')} ({per}) | {p.get('elapsed_ms')} | {c.get('elapsed_ms')} | {verified} | {nshots} | {'; '.join(why)[:400]} |")
     time.sleep(1)
 open(f"{out}/results.md", "w").write("\n".join(lines) + "\n"); print("\n".join(lines)); sys.exit(0 if allok else 1)

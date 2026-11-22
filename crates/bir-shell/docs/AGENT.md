@@ -47,6 +47,11 @@ Validation and queue transitions remain guarded by the same core capabilities
 as the shell UI. `GPUI_AGENT_INSECURE_NO_TOKEN=1` is only for local demos and
 must not be used for remote binds.
 
+`form.dismiss` refuses to close a form with unsaved edits by default. To
+abandon the session's cached draft without saving it, invoke
+`form.dismiss` with `{"discard": true}`; the result includes
+`"discarded": true`.
+
 ## Where the code lives
 
 The session (every `invoke`), the UI-command queue, the opt-in rules, the batch drain and the headless daemon with its CLI are UI-free and

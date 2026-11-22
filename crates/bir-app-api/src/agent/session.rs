@@ -170,7 +170,7 @@ impl Session {
             "form.review_in_app" => self.form_review_in_app(),
             "form.send" => self.form_send(),
             "form.save_draft" => self.form_save_draft(),
-            "form.dismiss" => self.form_dismiss(),
+            "form.dismiss" => self.form_dismiss(args),
             "form.file" | "form.submit_external" | "filing.file" => Err(format!(
                 "invoke `{name}` is not allow-listed; queue with form.queue/filing.queue confirm=true, then let cron PUT"
             )),
@@ -1266,18 +1266,23 @@ impl Session {
         Ok(DispatchResult::json(outcome))
     }
 
-    fn form_dismiss(&mut self) -> Result<DispatchResult, String> {
-        if self.open.as_ref().is_some_and(|open| open.dirty) {
+    fn form_dismiss(&mut self, args: &Value) -> Result<DispatchResult, String> {
+        let discard = args.get("discard").and_then(Value::as_bool) == Some(true);
+        if !discard && self.open.as_ref().is_some_and(|open| open.dirty) {
             return Err("the form has unsaved edits; save the draft before dismissing it".into());
         }
         let Some(open) = self.open.take() else {
             return Err("no form is open to dismiss".into());
         };
         self.commands.push(json!({"op": "go", "view": "home"}));
-        Ok(DispatchResult::json(json!({
+        let mut result = json!({
             "dismissed": true,
             "form": open.kind.form_code(),
-        })))
+        });
+        if discard {
+            result["discarded"] = json!(true);
+        }
+        Ok(DispatchResult::json(result))
     }
 
     fn resolve_tin(&self, args: &Value) -> Result<TinQuery, String> {
@@ -3316,6 +3321,47 @@ mod tests {
         .unwrap();
         let error = call(&mut session, "form.dismiss", json!({})).unwrap_err();
         assert!(error.contains("unsaved edits"), "{error}");
+    }
+
+    #[test]
+    fn form_dismiss_discard_keeps_another_sessions_saved_value() {
+        let mut session = session();
+        save_complete(&mut session);
+        store_1701q(&mut session, 1, &graduated_1701q());
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm1701q:txt36A": "300000"}}),
+        )
+        .unwrap();
+        assert_eq!(stored_income(&session, 1), "300,000.00");
+
+        let mut other = Session::new(UiQueue::discarding());
+        other.db = session.db.clone();
+        call(
+            &mut other,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        call(
+            &mut other,
+            "form.fill",
+            json!({"fields": {"frm1701q:txt36A": "400000"}}),
+        )
+        .unwrap();
+        assert_eq!(stored_income(&session, 1), "400,000.00");
+
+        let dismissed = call(&mut session, "form.dismiss", json!({"discard": true})).unwrap();
+        assert_eq!(dismissed["discarded"], true, "{dismissed}");
+        assert_eq!(stored_income(&session, 1), "400,000.00");
+        assert!(call(&mut session, "form.fields", json!({})).is_err());
     }
 
     #[test]
