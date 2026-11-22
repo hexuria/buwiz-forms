@@ -12,6 +12,8 @@ BOXES = {"sheets": "frm1701q:txtSheets", "filer_type": "frm1701q:optType", "atc"
          "non_op_desc": "frm1701q:txt43Desc", "non_op_income": "frm1701q:txt43A", "prior_credits": "frm1701q:txt55A",
          "prior_payments": "frm1701q:txt56A", "withheld_2307": "frm1701q:txt58A"}
 SCHEMA = ["--schema", f"{A}/bir.schema.json"]
+# A row's expect_error_fields -> the pill recipe that fixes it.
+AFTER = {"": "clean", "item_36_taxpayer": "fix-36a", "email": "fix-email"}
 os.makedirs(out, exist_ok=True)
 def run(*args):
     r = subprocess.run([CLI, *args], capture_output=True, text=True)
@@ -31,7 +33,13 @@ for mode in ("strict", "report"):
 lines = ["| run | data set | pass | recipe.generate check | open (window) ms | generated recipe ms (per step) | pill (window) ms | close ms | data-plane verification | screenshots | notes |", "|---|---|---|---|---|---|---|---|---|---|---|"]
 allok = True
 for n in map(int, rows_arg.split(",")):
-    row = rows[n - 1]; bad = row["expect_error_fields"]; mode = "report" if bad else "strict"; made = recipes[mode]
+    row = rows[n - 1]; bad = row["expect_error_fields"]
+    if bad not in AFTER:
+        # No pill recipe covers this value: the row fails before anything is opened, and the other rows still run.
+        allok = False
+        lines.append(f"| {n} | {row['case']} | NO | - | - | - | - | - | - | 0 | expect_error_fields {bad!r} has no pill recipe (known: {', '.join(k for k in AFTER if k)}) |")
+        continue
+    mode = "report" if bad else "strict"; made = recipes[mode]
     by_box = {box: name for name, box in made["params"].items()}
     vals = {"year": row["year"], "period": row["period"]}
     if "frm1701q:optTaxRate" in by_box: vals[by_box["frm1701q:optTaxRate"]] = "Graduated"
@@ -58,7 +66,7 @@ for n in map(int, rows_arg.split(",")):
     if not why:
         g = stage("2-generated", D, f"{out}/recipe-{mode}.json", *SCHEMA, *sets)
     if not why:
-        after = {"": "clean", "item_36_taxpayer": "fix-36a", "email": "fix-email"}[bad]
+        after = AFTER[bad]
         pill = f"{A}/ui/ui-1701q-pill-{after}{phone}.wants"; text = open(pill).read()
         have = {"sales_shown": f"{float(row['sales']):,.2f}", "sales_fixed": f"{float(row['sales']):.0f}", "fix_email": "fixed@example.com"}
         p = stage("3-pill", W, pill, *[x for k, v in have.items() if f"${k}" in text for x in ("--set", f"{k}={v}")], shots=True)

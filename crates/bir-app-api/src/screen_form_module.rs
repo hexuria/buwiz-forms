@@ -12545,6 +12545,35 @@ mod tests {
         );
     }
 
+    /// A choice the return cannot hold unanswered is refused by name; the
+    /// answer stays and the fill's edits are still taken.
+    #[test]
+    fn screen_form_fill_refuses_to_forget_a_required_choice() {
+        setup();
+        let opened = open("1601C", 3);
+        let answered = fill(
+            "1601C",
+            &opened["draft"],
+            json!({"frm1601c:TaxWithheld_1": "true"}),
+        );
+        let key = "frm1601c:TaxWithheld";
+        let filled = call(
+            "screen_form_fill",
+            vec![
+                "1601C".into(),
+                json(answered["draft"].clone()),
+                json(json!({"frm1601c:txtTax14": "50,000.00"})),
+                json(json!([])),
+                json(json!([key])),
+            ],
+        )
+        .unwrap_or_else(|error| panic!("the fill is taken: {error}"));
+        let why = filled["rejected"][key].as_str().unwrap_or_default();
+        assert!(why.contains("cannot be left unanswered"), "{filled}");
+        assert_eq!(filled["values"]["frm1601c:TaxWithheld_1"], "true");
+        assert_eq!(amount(&filled["values"], "frm1601c:txtTax14"), 50_000.0);
+    }
+
     #[test]
     fn screen_form_fill_applies_edits_and_rejects_bad_ones() {
         setup();

@@ -24,7 +24,8 @@ BOXES = {"sheets": "frm1701q:txtSheets", "filer_type": "frm1701q:optType", "atc"
          "prior_payments": "frm1701q:txt56A", "withheld_2307": "frm1701q:txt58A"}
 
 def run_shot_cmd(shot_cmd, path):
-    argv = [part.format(out=path) for part in shlex.split(shot_cmd)]
+    # Only {out} is a placeholder: any other brace in the command is the command's own.
+    argv = [part.replace("{out}", path) for part in shlex.split(shot_cmd)]
     return subprocess.run(argv)
 
 
@@ -149,7 +150,11 @@ def main():
             note += f" not in recipe: {unmapped}"
         if a.shot_cmd:
             path = os.path.join(a.out, f"{n:02d}-{row['case']}.png")
-            run_shot_cmd(a.shot_cmd, path)
+            shot = run_shot_cmd(a.shot_cmd, path)
+            if shot.returncode != 0:
+                # The row's evidence is missing: the run does not pass.
+                good = ok_all = False
+                note += f" screenshot failed (exit {shot.returncode})"
         time.sleep(a.pause_ms / 1000)
         lines.append(f"| {n} | {row['case']} | {'yes' if good else 'NO'} | {stopped} | {receipt.get('elapsed_ms')} | {wall} | {note.strip()[:240]} |")
     print("\n".join(lines))
