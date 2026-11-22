@@ -25,13 +25,13 @@ Unchanged problems (same in before and after):
 - 1702EX item 17 date range at 320: "From [date] to" on one line and "To [date]" on the next (`rows-after-editmark-1702ex-part1-3-320x700-*`). Fits one line at 390.
 - `tin-after-1706-refusal-390x844-light.png`: the "items need attention" toast and the pill cover the row under the buyer TIN.
 - All 320 pictures: window buttons sit on the sticky part title.
-- 1280 no-change check: `tin-*-0605-locked… 1280x900-light` is pixel-identical before and after.
+- 1280 no-change check: `tin-{before,after}-0605-1280x900-light.png` are pixel-identical before and after.
 
 ## TIN dashes / wrapped 5-digit box (after, under 600 pt)
 
 None found: no phone TIN row draws [3]-[3]-[3]-[5] with dashes, and no 5-digit box wraps to a second line. Every four-box TIN is one row of four boxes, no separators.
 
-Checked (320x700 and 390x844): 0605 item 9; 1600VT and 1600WP payee tables; 1601C 6; 1601EQ 6; 1604E 4; 1606 7A buyer and 8A seller; 1700 18 spouse and Schedule 1 employer rows; 1701 Part IV 1 spouse and employer rows; 1701A 66 spouse; 1701MS 6A and 6B spouse; 1701Q 17 spouse; 1702EX 6; 1702RT 6 and signatory TIN; 1706 6A seller and 7A buyer; 1707 old-layout TIN and items 6 and 7 tables; 1800 5 and 12 donee; 1801 5 and 11 executor; 2000 4 and 12; 2000OT 11B; 2550Q 7; 2551Q 6. A schema sweep of all forms found 53 TIN rows, all drawn by the grid on a phone. No 2307 or 1601 payee-TIN form row exists apart from these.
+Checked (320x700 and 390x844): 0605 item 9; 1600VT and 1600WP payee tables; 1601C 6; 1601EQ 6; 1604E 4; 1606 7A buyer and 8A seller; 1700 18 spouse and Schedule 1 employer rows; 1701 Part IV 1 spouse and employer rows; 1701A 66 spouse; 1701MS 6A and 6B spouse; 1701Q 17 spouse; 1702EX 6; 1702RT 6 and signatory TIN; 1706 6A seller and 7A buyer; 1707 old-layout TIN and items 6 and 7 tables; 1800 5 and 12 donee; 1801 5 and 11 executor; 2000 4 and 12; 2000OT 11B; 2550Q 7; 2551Q 6. A schema sweep of all forms found 53 TIN rows, all drawn by the grid on a phone. Payee TINs (1600VT/1600WP alphalists, 1700/1701 employers) only exist as table rows; no separate 2307 form screen was found.
 
 Where dashes or stacking do still appear:
 - One-box TINs show dashes inside the single box (the mask 000-000-000-00000): 2000 item 12, 2000OT item 11B, 1800 item 12 Donee TIN A-E, 1702RT signatory TIN.
