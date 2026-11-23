@@ -63,7 +63,9 @@ apt_ci_config="printf '%s\\n' 'Acquire::Retries \"5\";' 'Acquire::http::Timeout 
 check_system_install=$(cat <<'SYSTEM_CHECK'
 set -eu
 test -x /usr/bin/ebirforms
-test -d /usr/share/ebirforms/assets
+test -x /usr/lib/ebirforms/eBIRForms
+test -d /usr/lib/ebirforms/nsh
+test -d /usr/lib/ebirforms/print-overrides
 test -f /usr/share/applications/dev.goldcoders.bir.desktop
 for size in 48 64 128 256 512; do
     test -f "/usr/share/icons/hicolor/${size}x${size}/apps/dev.goldcoders.bir.png"
@@ -73,7 +75,7 @@ if grep -q "not found" /tmp/ebirforms-ldd.txt; then
     cat /tmp/ebirforms-ldd.txt >&2
     exit 1
 fi
-echo "PASS: installed binary, dependencies, assets, desktop entry, and icons"
+echo "PASS: installed binary, dependencies, payload, desktop entry, and icons"
 SYSTEM_CHECK
 )
 
@@ -90,8 +92,9 @@ install_deb_image() {
     printf 'PASS: %s installed %s\n' "$image" "$file"
 }
 
-install_deb_image debian:12 "$(basename "${debs[0]}")"
-install_deb_image ubuntu:22.04 "$(basename "${debs[0]}")"
+# The deb requires libgtk-4-1 >= 4.14, so only distros shipping it can be
+# smoke targets: debian:12 (4.8) and ubuntu:22.04 (4.6) cannot install it.
+install_deb_image debian:trixie "$(basename "${debs[0]}")"
 install_deb_image ubuntu:24.04 "$(basename "${debs[0]}")"
 
 "${in_time[@]}" docker run --rm --platform "$platform" \
@@ -101,12 +104,9 @@ install_deb_image ubuntu:24.04 "$(basename "${debs[0]}")"
     "
 printf 'PASS: fedora:latest installed %s\n' "$(basename "${rpms[0]}")"
 
-"${in_time[@]}" docker run --rm --platform "$platform" \
-    -v "$OUT:/packages:ro" opensuse/tumbleweed bash -euc "
-        zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks install --allow-unsigned-rpm /packages/$(basename "${rpms[0]}")
-        $check_system_install
-    "
-printf 'PASS: opensuse/tumbleweed installed %s\n' "$(basename "${rpms[0]}")"
+# No openSUSE leg: the spec's Requires use Fedora package names
+# (gstreamer1-plugins-base, webkitgtk6.0, dbus-libs, google-noto-sans-fonts)
+# that openSUSE does not provide, so zypper can never resolve the rpm there.
 
 if [ "$ARCH" = x64 ]; then
     arch_packages=("$OUT"/"${prefix}"*.pkg.tar.zst)
@@ -125,31 +125,28 @@ fi
 
 tarball_name="$(basename "${tarballs[0]}")"
 "${in_time[@]}" docker run --rm --platform "$platform" \
-    -v "$OUT:/packages:ro" debian:12 bash -euc "
+    -v "$OUT:/packages:ro" debian:trixie bash -euc "
         $apt_ci_config
         apt-get update
         apt-get install -y \
-            libgtk-3-0 libwebkit2gtk-4.1-0 libvulkan1 libxkbcommon0 \
-            libayatana-appindicator3-1 \
-            libxkbcommon-x11-0 libwayland-client0 libx11-6 libxcb1 \
-            libasound2 libudev1 libpolkit-gobject-1-0 fontconfig libfreetype6
+            libgtk-4-1 libwebkitgtk-6.0-4 \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            libdbus-1-3 fonts-noto-core
         mkdir -p /opt/ebirforms
         tar -xzf /packages/$tarball_name -C /opt/ebirforms --strip-components=1
-        test -x /opt/ebirforms/bir
-        test -f /opt/ebirforms/install-desktop-entry.sh
-        test -d /opt/ebirforms/assets
-        test -f /opt/ebirforms/assets/linux/dev.goldcoders.bir.desktop
-        for size in 48 64 128 256 512; do
-            test -f \"/opt/ebirforms/assets/linux/icons/hicolor/\${size}x\${size}/apps/dev.goldcoders.bir.png\"
-        done
-        ldd /opt/ebirforms/bir > /tmp/ebirforms-ldd.txt
+        test -x /opt/ebirforms/eBIRForms
+        test -d /opt/ebirforms/nsh
+        test -d /opt/ebirforms/print-overrides
+        test -f /opt/ebirforms/dev.goldcoders.bir.desktop
+        test -f /opt/ebirforms/dev.goldcoders.bir.png
+        ldd /opt/ebirforms/eBIRForms > /tmp/ebirforms-ldd.txt
         if grep -q 'not found' /tmp/ebirforms-ldd.txt; then
             cat /tmp/ebirforms-ldd.txt >&2
             exit 1
         fi
-        echo 'PASS: tarball binary, dependencies, assets, desktop entry, and icons'
+        echo 'PASS: tarball binary, dependencies, payload, and desktop entry'
     "
-printf 'PASS: debian:12 extracted %s\n' "$tarball_name"
+printf 'PASS: debian:trixie extracted %s\n' "$tarball_name"
 
 if [ ! -f "$OUT/SHA256SUMS-linux-${ARCH}.txt" ]; then
     echo "Missing per-architecture checksums in $OUT" >&2
@@ -160,8 +157,8 @@ if [ "$ARCH" = x64 ]; then
         echo "Missing install-linux.sh in $OUT" >&2
         exit 1
     fi
-    for image in debian:12 fedora:latest; do
-        if [ "$image" = debian:12 ]; then
+    for image in debian:trixie fedora:latest; do
+        if [ "$image" = debian:trixie ]; then
             install_command="$apt_ci_config && apt-get update && apt-get install -y curl ca-certificates"
         else
             install_command='dnf install -y curl ca-certificates'
@@ -170,14 +167,7 @@ if [ "$ARCH" = x64 ]; then
             -v "$OUT:/packages:ro" -e INSTALL_VERSION="$version" "$image" bash -euc "
                 $install_command
                 sh /packages/install-linux.sh --from-dir /packages --version \"\$INSTALL_VERSION\"
-                test -x /usr/bin/ebirforms
-                test -d /usr/share/ebirforms/assets
-                test -f /usr/share/applications/dev.goldcoders.bir.desktop
-                ldd /usr/bin/ebirforms > /tmp/ebirforms-ldd.txt
-                if grep -q 'not found' /tmp/ebirforms-ldd.txt; then
-                    cat /tmp/ebirforms-ldd.txt >&2
-                    exit 1
-                fi
+                $check_system_install
             "
         printf 'PASS: install-linux.sh --from-dir in %s\n' "$image"
     done
