@@ -151,8 +151,17 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
     def test_macos_workflow_preflight_and_publish_shape(self) -> None:
         self.assert_preflight_gates(self.macos_workflow)
         self.assertIn("pull_request:", self.macos_workflow)
+        self.assertIn("- .github/workflows/nsh.yml", self.macos_workflow)
         self.assertIn(".github/workflows/release-macos.yml", self.macos_workflow)
         self.assertIn("scripts/package_macos_release.sh", self.macos_workflow)
+        preflight = self.job("preflight", self.macos_workflow)
+        self.assertIn("NSH_VERSION=", preflight)
+        self.assertIn('json.load(open(sys.argv[1], encoding="utf-8"))', preflight)
+        self.assertNotIn('NSH_VERSION="$(awk', preflight)
+        self.assertIn('"$TAG_VERSION" != "$NSH_VERSION"', preflight)
+        self.assertIn("nsh/nsh.json version $NSH_VERSION", preflight)
+        self.assertIn("crates/bir-shell/Cargo.lock nsh/Cargo.lock", preflight)
+        self.assertEqual(self.justfile.count("scripts/set_release_version.py"), 2)
         build_macos = self.job("build-macos", self.macos_workflow)
         self.assertIn("needs: preflight", build_macos)
         self.assertIn(

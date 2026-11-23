@@ -84,12 +84,14 @@ Then copy the database files to a folder outside the app's data folder:
 
 ```sh
 mkdir -p ~/BuwizMock
-cp "$HOME/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db"* ~/BuwizMock/
+cp "$HOME/Library/Application Support/dev.goldcoders.bir/bir_data.db"* ~/BuwizMock/
 ```
 
 The `*` copies `bir_data.db` and, if present, its `-wal` and `-shm` files.
-The copy opens with the same keychain key as the original; no keychain
-change is needed.
+The NSH app's database is plain SQLite, so the copy opens without a
+keychain item. Do not copy the legacy app's database from
+`~/Library/Group Containers/group.dev.goldcoders.bir`: it is
+SQLCipher-encrypted and the NSH app refuses it.
 
 Before the first run, know what the copy holds:
 
@@ -100,8 +102,7 @@ Before the first run, know what the copy holds:
   accounts. The inbox poll only reads, but it is your real mailbox. Turn
   tracking off in the copy if you do not want that (it cannot confirm a mock
   filing anyway, see below).
-- Do not set `EBIR_TEST_ENV`: it forces a dry run (nothing reaches the mock)
-  and swaps the database key, so the copy will not open.
+- Do not set `EBIR_TEST_ENV`: it forces a dry run (nothing reaches the mock).
 
 ### Installed app (recommended)
 
@@ -124,7 +125,7 @@ BIR_DATABASE_PATH=~/BuwizMock/bir_data.db \
 BIR_SFTP_HOST=127.0.0.1 BIR_SFTP_PORT=2222 \
 BIR_SFTP_USERNAME=mock-filer BIR_SFTP_PASSWORD=mock-password-not-a-bir-secret \
 BIR_SFTP_HOST_KEY_SHA256=<fingerprint the mock printed> \
-/Applications/eBIRForms.app/Contents/MacOS/bir
+/Applications/eBIRForms.app/Contents/MacOS/eBIRForms
 ```
 
 Then queue a return as usual. The mock prints the connection, the login and
@@ -134,15 +135,12 @@ usual and it uses the real database and the real BIR path again.
 
 ### Dev run
 
-```sh
-set -a; . target/mock-bir/app.env; set +a
-BIR_DATABASE_PATH=~/BuwizMock/bir_data.db just shell-run
-```
-
-A debug build normally simulates every submission. A set `BIR_SFTP_HOST`
-makes it talk to that host for real, and the Dev Mode panel's submission
-switch steps aside while it is set. Open a new terminal (or `unset` the
-`BIR_SFTP_*` values) to go back.
+There is no `nsh-run` form of this test. `just nsh-run` deliberately exports
+`EBIR_TEST_ENV=1` and `BIR_SFTP_DRY_RUN=1`, and either one forces the
+transport's dry run even when a loopback `BIR_SFTP_HOST` is set. Do not
+substitute `just shell-run` either: the legacy shell rejects the NSH app's
+plain-SQLite database. Use `just mock-bir-app` for an end-to-end mock
+submission with the database copy.
 
 ### Installed app opened from Finder (`LSEnvironment`)
 
@@ -170,7 +168,7 @@ keychain item; allow it. After launching, check the values reached the
 process before queueing anything:
 
 ```sh
-ps -Eww -p "$(pgrep -x bir)" | tr ' ' '\n' | grep -E '^(BIR_SFTP_HOST|BIR_DATABASE_PATH)='
+ps -Eww -p "$(pgrep -x eBIRForms)" | tr ' ' '\n' | grep -E '^(BIR_SFTP_HOST|BIR_DATABASE_PATH)='
 ```
 
 To go back: quit the app, `/usr/libexec/PlistBuddy -c "Delete :LSEnvironment" "$PLIST"`,

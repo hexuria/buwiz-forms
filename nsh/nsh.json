@@ -2,7 +2,7 @@
   "name": "eBIRForms",
   "id": "dev.goldcoders.bir",
   "version": "0.2.0",
-  "build": 1,
+  "build": 27,
   "rust": ".",
   "icon": "../assets/icon.png",
   "singleInstance": true,
