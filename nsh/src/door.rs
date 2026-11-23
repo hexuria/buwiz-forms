@@ -1132,7 +1132,15 @@ mod tests {
         assert!(folder.join("bir_data.db").is_file(), "held by a live run");
 
         drop(lock);
-        forget_old_scratch(root.path(), SCRATCH_LIFETIME);
+        // A test beside this one may be starting a child process right now: until that child execs it shares
+        // our open lock file, so on Unix the lock outlives the drop for an instant. Try again past it.
+        for _ in 0..100 {
+            forget_old_scratch(root.path(), SCRATCH_LIFETIME);
+            if !folder.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
         assert!(!folder.exists(), "nobody holds it any more");
     }
 
