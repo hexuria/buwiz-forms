@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = ROOT / "packaging/linux/install-linux.sh"
 
 
+@unittest.skipUnless(platform.system() == "Linux", "uses Linux installer utilities")
 class LinuxNshInstallerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()

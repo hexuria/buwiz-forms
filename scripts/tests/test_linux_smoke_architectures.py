@@ -4,6 +4,7 @@ import hashlib
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SMOKE = ROOT / "packaging/linux/smoke-test.sh"
 
 
+@unittest.skipUnless(sys.platform == "linux", "uses Linux smoke test utilities")
 class LinuxSmokeArchitectureTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
