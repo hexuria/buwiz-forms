@@ -94,7 +94,11 @@ jobs:
             echo "publish=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # The Rust steps (system libraries, toolchain, cache, "Verify Rust workspace") run for a tag and a manual run
+      # only. On a pull request ci.yml's `check` job runs the same fmt, clippy and tests on this very commit, so
+      # repeating them here cost 15 to 27 minutes of a runner and a 465 MB cache per pull request for nothing.
       - name: Install system dependencies
+        if: github.event_name != 'pull_request'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -120,12 +124,14 @@ jobs:
             mesa-vulkan-drivers
 
       - name: Install Rust toolchain
+        if: github.event_name != 'pull_request'
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0
           components: clippy, rustfmt
 
       - name: Rust cache
+        if: github.event_name != 'pull_request'
         uses: Swatinem/rust-cache@v2
 
       - name: Check out formgen scripts from buwiz-forms-html
@@ -147,6 +153,7 @@ jobs:
       # account-gate bypass (release builds ignore it), the dry-run sender,
       # and no keychain.
       - name: Verify Rust workspace
+        if: github.event_name != 'pull_request'
         env:
           EBIR_TEST_ENV: "1"
           BIR_AUTH_BYPASS: "1"
