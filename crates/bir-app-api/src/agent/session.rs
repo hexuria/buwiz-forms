@@ -146,43 +146,9 @@ impl Session {
         if name != "form.dismiss" {
             self.settle()?;
         }
-        match name {
-            "nav.go" => {
-                let page = args
-                    .get("page")
-                    .and_then(Value::as_str)
-                    .ok_or("nav.go requires args.page")?;
-                self.navigate(page)
-            }
-            "app.info" => self.app_info(),
-            "profile.list" => self.profile_list(),
-            "profile.set" => self.profile_set(args),
-            "profile.save" => self.profile_save(args),
-            "profile.forms_set" | "profile.forms_set.set" => self.profile_forms_set(args),
-            "dues.list" => self.dues_list(args),
-            "filing.start" | "form.open" => self.form_open(args),
-            "form.fields" => self.form_fields(args),
-            "form.fill" => self.form_fill(args),
-            "form.needs_you" => self.form_needs_you(),
-            "filing.validate" | "form.validate" => self.form_validate(),
-            "form.context" => self.form_context(),
-            "form.schema" => self.form_schema(args),
-            "form.check" => self.form_check(args),
-            "template.list" => self.template_list(args),
-            "template.get" => self.template_get(args),
-            "recipe.generate" => self.recipe_generate(args),
-            "form.review_in_app" => self.form_review_in_app(),
-            "form.send" => self.form_send(),
-            "form.save_draft" => self.form_save_draft(),
-            "form.dismiss" => self.form_dismiss(args),
-            "form.file" | "form.submit_external" | "filing.file" => Err(format!(
-                "invoke `{name}` is not allow-listed; queue with form.queue/filing.queue confirm=true, then let cron PUT"
-            )),
-            "profile.ensure" => Err(
-                "profile.ensure is not implemented; the host will not auto-create a taxpayer. Save it explicitly with profile.save (tin, name, rdo_code, ...)"
-                    .into(),
-            ),
-            other => Err(format!("unknown invoke `{other}`")),
+        match INVOKES.iter().find(|invoke| invoke.name == name) {
+            Some(invoke) => (invoke.run)(self, args),
+            None => Err(format!("unknown invoke `{name}`")),
         }
     }
 
@@ -1366,6 +1332,83 @@ impl Session {
     }
 }
 
+/// One invoke the session answers.
+struct Invoke {
+    name: &'static str,
+    run: fn(&mut Session, &Value) -> Result<DispatchResult, String>,
+}
+
+const fn invoke(
+    name: &'static str,
+    run: fn(&mut Session, &Value) -> Result<DispatchResult, String>,
+) -> Invoke {
+    Invoke { name, run }
+}
+
+fn not_allow_listed(name: &str) -> Result<DispatchResult, String> {
+    Err(format!(
+        "invoke `{name}` is not allow-listed; queue with form.queue/filing.queue confirm=true, then let cron PUT"
+    ))
+}
+
+/// Every invoke the session answers: [`Session::invoke`] dispatches from this
+/// list, and a test holds `agent-recipes/bir.schema.json` to it. An invoke
+/// added here is offered to recipes only once that file lists it too; the
+/// test names every invoke and argument the file leaves out, and why.
+const INVOKES: &[Invoke] = &[
+    invoke("nav.go", |session, args| {
+        let page = args
+            .get("page")
+            .and_then(Value::as_str)
+            .ok_or("nav.go requires args.page")?;
+        session.navigate(page)
+    }),
+    invoke("app.info", |session, _| session.app_info()),
+    invoke("profile.list", |session, _| session.profile_list()),
+    invoke("profile.set", |session, args| session.profile_set(args)),
+    invoke("profile.save", |session, args| session.profile_save(args)),
+    invoke("profile.forms_set", |session, args| {
+        session.profile_forms_set(args)
+    }),
+    invoke("profile.forms_set.set", |session, args| {
+        session.profile_forms_set(args)
+    }),
+    invoke("dues.list", |session, args| session.dues_list(args)),
+    invoke("form.open", |session, args| session.form_open(args)),
+    invoke("filing.start", |session, args| session.form_open(args)),
+    invoke("form.fields", |session, args| session.form_fields(args)),
+    invoke("form.fill", |session, args| session.form_fill(args)),
+    invoke("form.needs_you", |session, _| session.form_needs_you()),
+    invoke("form.validate", |session, _| session.form_validate()),
+    invoke("filing.validate", |session, _| session.form_validate()),
+    invoke("form.context", |session, _| session.form_context()),
+    invoke("form.schema", |session, args| session.form_schema(args)),
+    invoke("form.check", |session, args| session.form_check(args)),
+    invoke("template.list", |session, args| session.template_list(args)),
+    invoke("template.get", |session, args| session.template_get(args)),
+    invoke("recipe.generate", |session, args| {
+        session.recipe_generate(args)
+    }),
+    invoke("form.review_in_app", |session, _| {
+        session.form_review_in_app()
+    }),
+    invoke("form.send", |session, _| session.form_send()),
+    invoke("form.save_draft", |session, _| session.form_save_draft()),
+    invoke("form.dismiss", |session, args| session.form_dismiss(args)),
+    // Named so the refusal says why; none of them does anything.
+    invoke("form.file", |_, _| not_allow_listed("form.file")),
+    invoke("form.submit_external", |_, _| {
+        not_allow_listed("form.submit_external")
+    }),
+    invoke("filing.file", |_, _| not_allow_listed("filing.file")),
+    invoke("profile.ensure", |_, _| {
+        Err(
+            "profile.ensure is not implemented; the host will not auto-create a taxpayer. Save it explicitly with profile.save (tin, name, rdo_code, ...)"
+                .into(),
+        )
+    }),
+];
+
 impl AgentHost for Session {
     fn hello(&self) -> HelloInfo {
         HelloInfo {
@@ -1976,10 +2019,239 @@ mod tests {
         session
     }
 
+    /// Every top-level argument each invoke's handler reads. `call` refuses
+    /// an argument that is not here, so this cannot fall behind the handlers
+    /// without a test noticing, and the schema test below compares the file
+    /// with it.
+    const INVOKE_ARGS: &[(&str, &[&str])] = &[
+        ("nav.go", &["page"]),
+        ("app.info", &[]),
+        ("profile.list", &[]),
+        ("profile.set", &["tin", "q", "view"]),
+        ("profile.save", PROFILE_SAVE_ARGS),
+        ("profile.forms_set", FORMS_SET_ARGS),
+        ("profile.forms_set.set", FORMS_SET_ARGS),
+        ("dues.list", &["filter", "scope"]),
+        ("form.open", FORM_OPEN_ARGS),
+        ("filing.start", FORM_OPEN_ARGS),
+        ("form.fields", &["locked"]),
+        ("form.fill", &["fields", "source", "from_card", "ask"]),
+        ("form.needs_you", &[]),
+        ("form.validate", &[]),
+        ("filing.validate", &[]),
+        ("form.context", &[]),
+        ("form.schema", &["code"]),
+        (
+            "form.check",
+            &[
+                "code", "year", "period", "tin", "q", "fields", "stored", "strict", "ask",
+            ],
+        ),
+        ("template.list", &["tin", "q"]),
+        ("template.get", &["code", "tin", "q", "expect_stamp"]),
+        (
+            "recipe.generate",
+            &[
+                "code",
+                "tin",
+                "q",
+                "year",
+                "period",
+                "check",
+                "include_unused",
+                "keep_open",
+            ],
+        ),
+        ("form.review_in_app", &[]),
+        ("form.send", &[]),
+        ("form.save_draft", &[]),
+        ("form.dismiss", &["discard"]),
+        ("form.file", &[]),
+        ("form.submit_external", &[]),
+        ("filing.file", &[]),
+        ("profile.ensure", &[]),
+    ];
+    const PROFILE_SAVE_ARGS: &[&str] = &[
+        "tin",
+        "tin_root",
+        "name",
+        "rdo_code",
+        "taxpayer_type",
+        "birth_date",
+        "address",
+        "registered_address",
+        "zip",
+        "zip_code",
+        "phone",
+        "email",
+    ];
+    const FORMS_SET_ARGS: &[&str] = &["confirm", "year", "tin", "q", "codes", "reason"];
+    const FORM_OPEN_ARGS: &[&str] = &["code", "year", "period", "tin", "q"];
+    /// Invokes whose handler takes any other top-level key too: `form.fill`
+    /// reads them as boxes.
+    const LOOSE: &[&str] = &["form.fill"];
+
+    fn declared_args(name: &str) -> Option<&'static [&'static str]> {
+        INVOKE_ARGS
+            .iter()
+            .find(|(invoke, _)| *invoke == name)
+            .map(|(_, args)| *args)
+    }
+
+    /// Invokes as the wire does. Every argument a test passes must be one
+    /// [`INVOKE_ARGS`] declares for that invoke.
     fn call(session: &mut Session, name: &str, args: Value) -> Result<Value, String> {
+        if let Some(declared) = declared_args(name)
+            && !LOOSE.contains(&name)
+        {
+            for key in args.as_object().into_iter().flatten().map(|(key, _)| key) {
+                assert!(
+                    declared.contains(&key.as_str()),
+                    "`{name}` is passed `{key}`, which INVOKE_ARGS does not declare"
+                );
+            }
+        }
         session
             .invoke(name, &args)
             .map(|result| result.value.unwrap_or(Value::Null))
+    }
+
+    /// Invokes the session answers that `agent-recipes/bir.schema.json`
+    /// leaves out, so a recipe cannot name them, and why.
+    const NOT_IN_THE_RECIPE_SCHEMA: &[(&str, &str)] = &[
+        ("filing.start", "alias of form.open"),
+        ("filing.validate", "alias of form.validate"),
+        ("profile.forms_set.set", "alias of profile.forms_set"),
+        ("form.file", "always refused"),
+        ("form.submit_external", "always refused"),
+        ("filing.file", "always refused"),
+        ("profile.ensure", "always refused: not implemented"),
+        (
+            "form.send",
+            "sends the return; offered through the MCP tool bir_form_send",
+        ),
+        (
+            "form.review_in_app",
+            "hands the return to the person; offered through the MCP tool bir_form_review",
+        ),
+        (
+            "profile.forms_set",
+            "writes only with args.confirm, after a person confirmed",
+        ),
+    ];
+
+    /// Arguments a handler reads that the schema file does not offer to a
+    /// recipe, and why.
+    const ARGS_NOT_IN_THE_RECIPE_SCHEMA: &[(&str, &str, &str)] = &[
+        (
+            "form.open",
+            "q",
+            "a search that can match several taxpayers; a recipe names one by tin",
+        ),
+        ("form.check", "q", "as form.open"),
+        ("template.list", "q", "as form.open"),
+        ("template.get", "q", "as form.open"),
+        ("recipe.generate", "q", "as form.open"),
+        (
+            "form.fill",
+            "from_card",
+            "marks the person's own answers to a form card; an MCP flow",
+        ),
+    ];
+
+    /// The schema file is what `gpui-agent recipe validate` judges a recipe
+    /// by, and it is written by hand. It must list every invoke and argument
+    /// the session answers, or the difference must be named above.
+    #[test]
+    fn the_recipe_schema_file_matches_the_invoke_table() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../agent-recipes/bir.schema.json"
+        );
+        let file: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let rows = file["schemas"].as_array().unwrap();
+        let listed = |name: &str| rows.iter().find(|row| row["name"] == name);
+        let left_out = |name: &str| NOT_IN_THE_RECIPE_SCHEMA.iter().any(|(n, _)| *n == name);
+
+        assert_eq!(
+            INVOKES.iter().map(|invoke| invoke.name).collect::<Vec<_>>(),
+            INVOKE_ARGS
+                .iter()
+                .map(|(name, _)| *name)
+                .collect::<Vec<_>>(),
+            "INVOKE_ARGS has one entry per invoke, in the order of INVOKES"
+        );
+        for invoke in INVOKES {
+            let name = invoke.name;
+            let reads = declared_args(name).unwrap();
+            let Some(row) = listed(name) else {
+                assert!(
+                    left_out(name),
+                    "`{name}` is answered by the session but is not in bir.schema.json; add it there, or to NOT_IN_THE_RECIPE_SCHEMA with the reason"
+                );
+                continue;
+            };
+            assert!(
+                !left_out(name),
+                "`{name}` is in bir.schema.json and in NOT_IN_THE_RECIPE_SCHEMA"
+            );
+            assert_eq!(row["kind"], "invoke", "{name}");
+            let mut offered: Vec<&str> = row["args"]
+                .as_object()
+                .unwrap_or_else(|| panic!("`{name}` lists its args in bir.schema.json"))
+                .keys()
+                .map(String::as_str)
+                .collect();
+            for required in row["required"].as_array().into_iter().flatten() {
+                let required = required.as_str().unwrap();
+                assert!(
+                    offered.contains(&required),
+                    "`{name}` requires `{required}` in bir.schema.json without listing it"
+                );
+            }
+            for arg in &offered {
+                assert!(
+                    reads.contains(arg),
+                    "bir.schema.json offers `{name}` the arg `{arg}`, which its handler does not read"
+                );
+            }
+            let mut withheld: Vec<&str> = ARGS_NOT_IN_THE_RECIPE_SCHEMA
+                .iter()
+                .filter(|(n, _, _)| *n == name)
+                .map(|(_, arg, _)| *arg)
+                .collect();
+            offered.append(&mut withheld);
+            for arg in reads {
+                assert!(
+                    offered.contains(arg),
+                    "`{name}` reads `{arg}`, which is not in bir.schema.json; add it there, or to ARGS_NOT_IN_THE_RECIPE_SCHEMA with the reason"
+                );
+            }
+            assert_eq!(
+                offered.len(),
+                reads.len(),
+                "`{name}`: an arg is both in bir.schema.json and in ARGS_NOT_IN_THE_RECIPE_SCHEMA"
+            );
+        }
+        for row in rows {
+            let name = row["name"].as_str().unwrap();
+            assert!(
+                INVOKES.iter().any(|invoke| invoke.name == name),
+                "bir.schema.json lists `{name}`, which the session does not answer"
+            );
+        }
+        for (name, _) in NOT_IN_THE_RECIPE_SCHEMA {
+            assert!(
+                INVOKES.iter().any(|invoke| invoke.name == *name),
+                "NOT_IN_THE_RECIPE_SCHEMA names `{name}`, which the session does not answer"
+            );
+        }
+        for (name, arg, _) in ARGS_NOT_IN_THE_RECIPE_SCHEMA {
+            assert!(
+                declared_args(name).is_some_and(|reads| reads.contains(arg)),
+                "ARGS_NOT_IN_THE_RECIPE_SCHEMA names `{name}`.`{arg}`, which the handler does not read"
+            );
+        }
     }
 
     fn save_scratch(session: &mut Session) -> Value {
