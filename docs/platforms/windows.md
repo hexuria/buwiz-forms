@@ -37,7 +37,7 @@ there, but nobody has run it on that platform.
 | Google Calendar credentials storage | untested | Credential Manager, through `keyring`. |
 | Keyboard shortcuts | untested | Ctrl based; also F11 and Win+M. |
 | Packaging | untested | `Setup.exe` and `.msi` from CI; MSIX with `just msix`. |
-| Agent control (gpui-agent) | partial | Token-authenticated control works at the current pinned revision; the complete acceptance matrix remains open. |
+| Agent control (gpui-agent) | partial | Token-authenticated control works at the current pinned version; the complete acceptance matrix remains open. |
 | Agent screenshots | ✗ | macOS only. |
 | Dev Mode panel (debug builds only) | untested |  |
 

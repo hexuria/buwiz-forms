@@ -21,7 +21,7 @@
 #   - `just` command runner (distro package when available, else cargo install)
 #   - gpui-agent CLI — drives the app over 127.0.0.1 when the binary is built
 #     `--features agent` and launched with GPUI_AGENT=1. Installed at the same
-#     git rev the workspace pins, so protocol versions never drift apart.
+#     version the workspace pins, so protocol versions never drift apart.
 #
 # Usage:
 #   scripts/setup-linux.sh              # install everything
@@ -227,33 +227,32 @@ install_rust() {
 
 # ---------------------------------------------------------------------------
 # gpui-agent — the client half of the agent control plane. The app embeds the
-# matching host crate pinned by git rev in the repository-root Cargo.toml; the
-# CLI has to speak the same protocol revision, so install that exact rev
-# instead of tracking main. A missing manifest or pin is an error.
+# matching host crate pinned to an exact crates.io version in the
+# repository-root Cargo.toml; the CLI has to speak the same protocol, so
+# install that exact version instead of the newest. A missing manifest or pin
+# is an error.
 # ---------------------------------------------------------------------------
 install_gpui_agent() {
     local manifest="$SCRIPT_DIR/../Cargo.toml"
     [ -f "$manifest" ] || die "repository-root Cargo.toml is required for the gpui-agent pin"
-    local declaration rev installed_rev
+    local declaration version installed_version
     declaration="$(tr '\n' ' ' < "$manifest" | grep -oE \
-        'gpui-agent[[:space:]]*=[[:space:]]*\{[^}]*rev[[:space:]]*=[[:space:]]*"([0-9a-fA-F]{7,64})"' | head -1 || true)"
-    rev="$(printf '%s' "$declaration" | sed -nE 's/.*rev[[:space:]]*=[[:space:]]*"([0-9a-fA-F]{7,64})".*/\1/p')"
-    [ -n "$rev" ] || die "gpui-agent rev pin not found in repository-root Cargo.toml"
-    # The pinned rev lives in the repository the manifest names (it may be a fork).
-    local repo
-    repo="$(printf '%s' "$declaration" | sed -nE 's/.*git[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p')"
-    [ -n "$repo" ] || die "gpui-agent git URL not found in repository-root Cargo.toml"
+        'gpui-agent[[:space:]]*=[[:space:]]*\{[^}]*version[[:space:]]*=[[:space:]]*"=[0-9]+\.[0-9]+\.[0-9]+"' | head -1 || true)"
+    version="$(printf '%s' "$declaration" | sed -nE 's/.*version[[:space:]]*=[[:space:]]*"=([0-9]+\.[0-9]+\.[0-9]+)".*/\1/p')"
+    [ -n "$version" ] || die "gpui-agent version pin not found in repository-root Cargo.toml"
     if command -v gpui-agent >/dev/null 2>&1; then
-        installed_rev="$(cargo install --list 2>/dev/null | sed -n \
-            's/.*gpui-agent?rev=\([0-9a-fA-F]\{7,64\}\)#.*/\1/p' | head -1)"
-        if [ "$installed_rev" = "$rev" ]; then
-            log "gpui-agent already installed at pinned rev ${rev:0:7}"
+        # A crates.io install lists as `gpui-agent-cli v0.4.0:`; one from git
+        # carries its source after the version and never matches.
+        installed_version="$(cargo install --list 2>/dev/null | sed -n \
+            's/^gpui-agent-cli v\([0-9][0-9.]*\):$/\1/p' | head -1)"
+        if [ "$installed_version" = "$version" ]; then
+            log "gpui-agent already installed at pinned version $version"
             return 0
         fi
-        warn "installed gpui-agent revision ${installed_rev:-unknown} does not match ${rev:0:7}; reinstalling"
+        warn "installed gpui-agent version ${installed_version:-unknown} does not match $version; reinstalling"
     fi
-    log "Installing gpui-agent CLI @ $rev (matches the app's pinned host crate)"
-    cargo install --git "$repo" --rev "$rev" gpui-agent-cli
+    log "Installing gpui-agent CLI $version (matches the app's pinned host crate)"
+    cargo install gpui-agent-cli --version "$version"
 }
 
 # ---------------------------------------------------------------------------

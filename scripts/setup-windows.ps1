@@ -161,25 +161,20 @@ $env:Path = (($allPathEntries | Where-Object {
 
 # 6. gpui-agent CLI (client for the agent control plane; the app embeds its
 # own host, so only the CLI is needed -  todo-headless is the demo's daemon).
-# The CLI must match the rev bir-shell pins in the root Cargo.toml: protocol
-# skew fails closed, so installing unpinned HEAD can break the handshake.
+# The CLI must match the exact version bir-shell pins in the root Cargo.toml:
+# protocol skew fails closed, so installing the newest can break the handshake.
 $manifest = Join-Path (Split-Path $PSScriptRoot -Parent) 'Cargo.toml'
 $manifestText = Get-Content -LiteralPath $manifest -Raw
-$gpuiRev = $null
-if ($manifestText -match '(?s)gpui-agent\s*=\s*\{[^}]*?\brev\s*=\s*"([0-9a-f]{7,})"') {
-    $gpuiRev = $matches[1]
+$gpuiVersion = $null
+if ($manifestText -match '(?s)gpui-agent\s*=\s*\{[^}]*?\bversion\s*=\s*"=(\d+\.\d+\.\d+)"') {
+    $gpuiVersion = $matches[1]
 }
-# The pinned rev lives in the repository the manifest names (it may be a fork).
-$gpuiRepo = $null
-if ($manifestText -match '(?s)gpui-agent\s*=\s*\{[^}]*?\bgit\s*=\s*"([^"]+)"') {
-    $gpuiRepo = $matches[1]
-}
-if (-not $gpuiRev -or -not $gpuiRepo) {
-    [Console]::Error.WriteLine("gpui-agent rev pin not found in Cargo.toml")
+if (-not $gpuiVersion) {
+    [Console]::Error.WriteLine("gpui-agent version pin not found in Cargo.toml")
     exit 1
 }
-Write-Step "Installing gpui-agent CLI (pinned rev $gpuiRev, matches Cargo.toml)"
-& "$cargoBin\cargo.exe" install --git $gpuiRepo --rev $gpuiRev gpui-agent-cli
+Write-Step "Installing gpui-agent CLI (pinned version $gpuiVersion, matches Cargo.toml)"
+& "$cargoBin\cargo.exe" install gpui-agent-cli --version $gpuiVersion
 if ($LASTEXITCODE -ne 0) { Exit-Native "gpui-agent install failed" }
 
 Write-Step @"
