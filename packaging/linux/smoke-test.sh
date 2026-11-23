@@ -20,6 +20,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EVIDENCE="${SMOKE_EVIDENCE:-$ROOT/target/linux-smoke}"
 mkdir -p "$EVIDENCE"
 EVIDENCE="$(cd "$EVIDENCE" && pwd)"
+# The Ubuntu containers (deb, tarball, installer) install the same packages. They share one folder of downloaded
+# files, so a slow mirror is paid for once in a run, not once per container.
+APT_ARCHIVES="${SMOKE_APT_ARCHIVES:-$EVIDENCE-apt}"
+mkdir -p "$APT_ARCHIVES"
+APT_ARCHIVES="$(cd "$APT_ARCHIVES" && pwd)"
 CONTAINER_TIMEOUT="${SMOKE_CONTAINER_TIMEOUT:-1200}"
 in_time=(timeout --kill-after=30 "$CONTAINER_TIMEOUT")
 shopt -s nullglob
@@ -36,7 +41,7 @@ for kind in "${kinds[@]}"; do
     esac
     "${in_time[@]}" docker run --rm --platform "$platform" \
         -v "$OUT:/packages:ro" -v "$EVIDENCE:/evidence" \
-        -v "$ROOT/packaging/linux:/smoke:ro" \
+        -v "$ROOT/packaging/linux:/smoke:ro" -v "$APT_ARCHIVES:/apt-archives" \
         -e KIND="$kind" -e BASE="$base" -e VERSION="$version" -e APT_MIRROR="${SMOKE_APT_MIRROR:-}" \
         -e BUWIZ_NO_KEYCHAIN=1 -e EBIR_TEST_ENV=1 -e BIR_AUTH_BYPASS=1 -e BIR_SFTP_DRY_RUN=1 \
         "$image" bash /smoke/smoke-container.sh

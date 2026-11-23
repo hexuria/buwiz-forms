@@ -11,8 +11,13 @@ case "$KIND" in
         if [ -n "${APT_MIRROR:-}" ] && [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
             sed -i "s|http://archive.ubuntu.com/ubuntu|$APT_MIRROR|g" /etc/apt/sources.list.d/ubuntu.sources
         fi
+        # Downloaded packages go to the folder smoke-test.sh shares between its Ubuntu containers, so the second and
+        # third install from files the first one fetched. (Not /var/cache/apt/archives: the image empties that one
+        # after every install.)
+        apt_get=(apt-get)
+        if [ -d /apt-archives ]; then apt_get+=(-o Dir::Cache::Archives=/apt-archives); fi
         apt-get update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        DEBIAN_FRONTEND=noninteractive "${apt_get[@]}" install -y \
             xvfb xauth dbus-x11 xdotool imagemagick libgtk-4-1 libwebkitgtk-6.0-4 \
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good fonts-noto-core
         ;;
@@ -20,7 +25,7 @@ case "$KIND" in
     arch) pacman -Syu --noconfirm xorg-server-xvfb xorg-xauth dbus xdotool imagemagick ;;
 esac
 case "$KIND" in
-    deb) apt-get install -y "/packages/$BASE.deb" ;;
+    deb) "${apt_get[@]}" install -y "/packages/$BASE.deb" ;;
     rpm) dnf install -y "/packages/$BASE.rpm" ;;
     arch) pacman -U --noconfirm "/packages/$BASE.pkg.tar.zst" ;;
     installer) sh /packages/install-linux.sh --from-dir /packages --version "$VERSION" ;;
