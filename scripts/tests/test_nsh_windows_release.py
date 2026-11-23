@@ -1,3 +1,8 @@
+import json
+import os
+import shutil
+import subprocess
+import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -31,6 +36,39 @@ class NshWindowsReleaseTests(unittest.TestCase):
         self.assertIn('CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: "-C target-feature=+crt-static"', workflow)
         self.assertIn('if ($NshPayload -and $runtimeImports.Count -gt 0)', msix)
         self.assertIn('if (-not $NshPayload -and $runtimeImports.Count -eq 0)', msix)
+
+    @unittest.skipUnless(shutil.which('pwsh'), 'requires PowerShell')
+    def test_invalid_version_tag_or_payload_fails_before_packaging(self):
+        cases = (
+            ('0.2.00', 'v0.2.00', '0.2.00', 'demo.id', 'Invalid Windows release version'),
+            ('256.0.0', 'v256.0.0', '256.0.0', 'demo.id', 'exceeds MSI limits'),
+            ('0.2.0', 'v0.2.1', '0.2.0', 'demo.id', 'does not match Windows app version'),
+            ('0.2.0', 'v0.2.0', '0.2.1', 'demo.id', 'payload identity or version does not match'),
+            ('0.2.0', 'v0.2.0', '0.2.0', 'other.id', 'payload identity or version does not match'),
+        )
+        with tempfile.TemporaryDirectory() as scratch:
+            scratch = Path(scratch)
+            script = scratch / 'scripts/package_nsh_windows.ps1'
+            script.parent.mkdir()
+            shutil.copyfile(ROOT / 'scripts/package_nsh_windows.ps1', script)
+            config = scratch / 'nsh/nsh.json'
+            config.parent.mkdir()
+            package = scratch / 'package'
+            app = package / 'eBIRForms/nsh/app.json'
+            app.parent.mkdir(parents=True)
+            out = scratch / 'out'
+            for version, tag, app_version, app_id, error in cases:
+                with self.subTest(version=version, tag=tag, app_version=app_version, app_id=app_id):
+                    config.write_text(json.dumps({'version': version, 'id': 'demo.id'}), encoding='utf-8')
+                    app.write_text(json.dumps({'version': app_version, 'id': app_id}), encoding='utf-8')
+                    result = subprocess.run(
+                        ['pwsh', '-NoProfile', '-File', str(script), '-PackageRoot', str(package), '-OutDir', str(out)],
+                        env={**os.environ, 'GITHUB_REF_TYPE': 'tag', 'GITHUB_REF_NAME': tag, 'NO_COLOR': '1'},
+                        capture_output=True, text=True, timeout=20,
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(error, result.stderr)
+                    self.assertFalse(out.exists())
 
     def test_msi_has_new_per_user_identity_and_distinct_install_directory(self):
         ns = {'w': 'http://schemas.microsoft.com/wix/2006/wi'}

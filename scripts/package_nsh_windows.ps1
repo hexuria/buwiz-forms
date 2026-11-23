@@ -9,9 +9,9 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 $repo = Split-Path -Parent $PSScriptRoot
 $PackageRoot = (Resolve-Path -LiteralPath $PackageRoot).Path
-$config = Get-Content -Raw (Join-Path $repo 'nsh/nsh.json') | ConvertFrom-Json
+$config = Get-Content -Raw -LiteralPath (Join-Path $repo 'nsh/nsh.json') | ConvertFrom-Json
 $version = $config.version
-if ($version -notmatch '\A(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,4})\z') {
+if ($version -isnot [string] -or $version -notmatch '\A(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,4})\z') {
     throw "Invalid Windows release version: $version"
 }
 $major, $minor, $patch = $version -split '\.'
@@ -21,7 +21,7 @@ if ([int]$major -gt 255 -or [int]$minor -gt 255 -or [int]$patch -gt 65535) {
 if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -cne "v$version") {
     throw "Release tag $env:GITHUB_REF_NAME does not match Windows app version $version"
 }
-$packagedApp = Get-Content -Raw (Join-Path $PackageRoot 'eBIRForms/nsh/app.json') | ConvertFrom-Json
+$packagedApp = Get-Content -Raw -LiteralPath (Join-Path $PackageRoot 'eBIRForms/nsh/app.json') | ConvertFrom-Json
 if ($packagedApp.version -cne $version -or $packagedApp.id -cne $config.id) {
     throw "NSH payload identity or version does not match nsh/nsh.json (expected $($config.id) $version)"
 }
