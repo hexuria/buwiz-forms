@@ -26,8 +26,8 @@ tracing = "0.1"
 # Print preview (src/print.rs): the PDF is made from the same sheet as the printer gets; bir-print merges the pages.
 bir-print = { path = "../crates/bir-print", default-features = false }
 lopdf = "0.34"
-# Agent remote control (feature `agent`, off by default): the gpui-agent protocol at the one rev bir-shell and bir-mcp use.
-gpui-agent = { version = "0.4.0", git = "https://github.com/fullstackcrabs/gpui-agent", rev = "81151a3c95c9aecff7ecd092cf1cbc9581bdb59b", optional = true }
+# Agent remote control (feature `agent`, off by default): the gpui-agent protocol at the one version bir-shell and bir-mcp use.
+gpui-agent = { version = "=0.4.0", optional = true }
 
 # The database guard asks the password database (getpwuid_r) for the account's home folder, never $HOME.
 [target.'cfg(unix)'.dependencies]

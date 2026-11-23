@@ -402,14 +402,17 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("just exe", check)
         self.assertIn("scripts/audit_final_setup.ps1", check)
 
-    def test_setup_scripts_keep_the_gpui_agent_revision_pinned(self) -> None:
+    def test_setup_scripts_keep_the_gpui_agent_version_pinned(self) -> None:
         self.assertIn('local manifest="$SCRIPT_DIR/../Cargo.toml"', self.linux_setup)
         self.assertIn(
-            "gpui-agent rev pin not found in repository-root Cargo.toml",
+            "gpui-agent version pin not found in repository-root Cargo.toml",
             self.linux_setup,
         )
         self.assertIn('cargo install --list 2>/dev/null', self.linux_setup)
-        self.assertIn('--rev "$rev" gpui-agent-cli', self.linux_setup)
+        self.assertIn(
+            'cargo install gpui-agent-cli --version "$version"', self.linux_setup
+        )
+        self.assertNotIn("gpui-agent?rev=", self.linux_setup)
         self.assertIn(
             "cargo build --locked --manifest-path crates/bir-shell/Cargo.toml "
             "--features agent --bin bir-headless",
@@ -418,6 +421,9 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("--locked gpui-agent-cli", self.linux_setup)
         self.assertNotIn("installing from main", self.linux_setup)
         self.assertIn("'Cargo.toml'", self.windows_setup)
+        self.assertIn(
+            "install gpui-agent-cli --version $gpuiVersion", self.windows_setup
+        )
         self.assertIn("3010", self.windows_setup)
 
     def test_package_builds_are_deterministic_and_scope_consistent(self) -> None:
