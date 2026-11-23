@@ -37,7 +37,7 @@ for kind in "${kinds[@]}"; do
     "${in_time[@]}" docker run --rm --platform "$platform" \
         -v "$OUT:/packages:ro" -v "$EVIDENCE:/evidence" \
         -v "$ROOT/packaging/linux:/smoke:ro" \
-        -e KIND="$kind" -e BASE="$base" -e VERSION="$version" \
+        -e KIND="$kind" -e BASE="$base" -e VERSION="$version" -e APT_MIRROR="${SMOKE_APT_MIRROR:-}" \
         -e BUWIZ_NO_KEYCHAIN=1 -e EBIR_TEST_ENV=1 -e BIR_AUTH_BYPASS=1 -e BIR_SFTP_DRY_RUN=1 \
         "$image" bash /smoke/smoke-container.sh
 done

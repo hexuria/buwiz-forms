@@ -6,6 +6,11 @@ case "$KIND" in
         # download about 200 MB, and archive.ubuntu.com stalls often enough to use up the container's time limit.
         printf '%s\n' 'Acquire::Retries "5";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' \
             > /etc/apt/apt.conf.d/80ci-network
+        # SMOKE_APT_MIRROR replaces archive.ubuntu.com (the x64 images' mirror; arm64 uses ports.ubuntu.com and is left
+        # alone). The release workflow sets it to the mirror GitHub's own runners use.
+        if [ -n "${APT_MIRROR:-}" ] && [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sed -i "s|http://archive.ubuntu.com/ubuntu|$APT_MIRROR|g" /etc/apt/sources.list.d/ubuntu.sources
+        fi
         apt-get update
         DEBIAN_FRONTEND=noninteractive apt-get install -y \
             xvfb xauth dbus-x11 xdotool imagemagick libgtk-4-1 libwebkitgtk-6.0-4 \

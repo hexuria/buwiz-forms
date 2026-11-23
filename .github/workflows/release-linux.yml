@@ -130,6 +130,9 @@ jobs:
         run: packaging/linux/build-packages.sh --version "${{ steps.version.outputs.version }}" --target "${{ matrix.target }}" --out target/release-artifacts
       - name: Smoke test Linux packages
         timeout-minutes: 30
+        env:
+          # The runners' own mirror: archive.ubuntu.com stalled long enough from them to run out the time limit.
+          SMOKE_APT_MIRROR: http://azure.archive.ubuntu.com/ubuntu
         run: packaging/linux/smoke-test.sh --out target/release-artifacts --arch "${{ matrix.arch }}"
       - name: Upload smoke evidence
         if: always()
