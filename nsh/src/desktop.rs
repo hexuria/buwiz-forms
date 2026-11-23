@@ -1427,7 +1427,14 @@ mod tests {
         fn finish(mut self) -> (bool, Vec<String>) {
             drop(self.child.stdin.take());
             let status = self.child.wait().expect("the other process ends");
-            (status.success(), self.lines.try_iter().collect())
+            // The process has ended, but the thread that reads its output may not have passed the last lines on yet:
+            // read until that thread has seen the end of the output (it then drops its sender), not only what has
+            // arrived so far.
+            let mut said = Vec::new();
+            while let Ok(line) = self.lines.recv_timeout(Duration::from_secs(10)) {
+                said.push(line);
+            }
+            (status.success(), said)
         }
     }
 
