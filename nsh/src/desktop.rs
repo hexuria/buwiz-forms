@@ -1280,7 +1280,13 @@ mod tests {
         // The first copy ends: its lock and its port go, and the next claim is the app again.
         drop(first);
         assert!(!port_path(&database).exists());
-        assert!(matches!(claim(&database), Claim::Primary(_)));
+        // A test beside this one may be starting a child process right now: until that child execs it shares the
+        // first copy's open lock file, so on Unix the lock outlives the drop for an instant. Claim again past it.
+        let started = Instant::now();
+        while !matches!(claim(&database), Claim::Primary(_)) {
+            assert!(started.elapsed() < Duration::from_secs(2), "the next claim is the app again");
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 
     #[test]
