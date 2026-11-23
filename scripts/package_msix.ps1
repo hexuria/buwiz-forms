@@ -120,7 +120,10 @@ try {
             Where-Object { $_ -match '(?i)^(vcruntime140(?:_\d+)?|msvcp140(?:_\w+)?|concrt140)\.dll$' } |
             Sort-Object -Unique
     )
-    if ($runtimeImports.Count -eq 0) {
+    if ($NshPayload -and $runtimeImports.Count -gt 0) {
+        throw "NSH requires a statically linked MSVC CRT for Setup and updater ZIP: $($runtimeImports -join ', ')"
+    }
+    if (-not $NshPayload -and $runtimeImports.Count -eq 0) {
         throw "dumpbin did not report any supported MSVC runtime DLL imports for $exeFullPath"
     }
 

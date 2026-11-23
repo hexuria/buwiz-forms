@@ -386,6 +386,7 @@ Unlike the development host above, all released Windows formats contain the same
 
 ```powershell
 $package = Join-Path $env:TEMP ("ebirforms-nsh-" + [guid]::NewGuid())
+$env:CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS = '-C target-feature=+crt-static'
 Push-Location nsh
 try {
     nsh package --target windows --out $package
@@ -400,10 +401,12 @@ Before migrating, uninstall the old per-machine eBIRForms from **Settings → Ap
 
 | Download | Install and open | Update | Uninstall |
 |---|---|---|---|
-| `eBIRForms-Windows-x64-<v>-Setup.exe` | Run Setup as the signed-in user, then open **eBIRForms**. The default is `%LOCALAPPDATA%\Programs\eBIRForms`. | The app can download and install from the signed NSH feed. For a manual upgrade, close it and run the newer Setup as the same user. | Uninstall **eBIRForms** from Installed apps, or run the generated `unins*.exe` in its install directory. |
+| `eBIRForms-Windows-x64-<v>-Setup.exe` | Run Setup as the signed-in user, then open **eBIRForms**. The default is `%LOCALAPPDATA%\Programs\eBIRForms`; the executable is in its `eBIRForms-app` subfolder. | The app can download and install from the signed NSH feed. It updates only the app subfolder, leaving Inno's uninstall files in the parent. For a manual upgrade, close it and run the newer Setup as the same user. | Uninstall **eBIRForms** from Installed apps, or run the generated `unins*.exe` in the install root. |
 | `eBIRForms-Windows-x64-<v>.msi` | Double-click the MSI (no administrator required), then open **eBIRForms (MSI)**. Its default directory is `%LOCALAPPDATA%\Programs\eBIRForms MSI`. | The update banner links to the release page; close the app and install the newer MSI. | Use Installed apps, or run `msiexec /x "path\to\file.msi"` as the same user. |
 | `eBIRForms-Windows-x64-<v>.msix` | With a trusted signature, run `Add-AppxPackage -Path <file.msix>` in Windows PowerShell and open **eBIRForms** from Start. An unsigned workflow artifact can be inspected but cannot be sideloaded. | The update banner links to the release page; close the app and install the newer signed MSIX from the same publisher. | Use Installed apps, or run `Get-AppxPackage -Name GOLDCODERSCORP.ebirforms \| Remove-AppxPackage` as the same user. |
 
-Keep the §3.5 safety variables set in the PowerShell session that starts the installed executable. Release builds ignore the debug account bypass; start `just mock-account` in a separate terminal and point both `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL` to `http://127.0.0.1:3008` in the app's launch session. Complete the mock sign-in and open a form with the demo taxpayer; never use production credentials or data. The installer audit covers the actual Setup install and uninstall and checks the extracted MSI, MSIX, and updater ZIP; it does not exercise app UI, MSIX registration, or a live update.
+Keep the §3.5 safety variables set in the PowerShell session that starts the installed executable. Release builds ignore the debug account bypass; start `just mock-account` in a separate terminal and point both `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL` to `http://127.0.0.1:3008` in the app's launch session. Complete the mock sign-in and open a form with the demo taxpayer; never use production credentials or data.
+
+The audit installs and uninstalls Setup, verifies that uninstall also removes files added by an update, and checks the extracted MSI, MSIX, and ZIP. The workflow registers a signed MSIX and tests launch; when the output is unsigned, it signs a disposable copy with a test certificate and leaves the downloadable artifact unsigned. Start menu activation is reported as skipped on runners with UAC disabled. This does not test a live update or mock sign-in in the app UI.
 
 The updater ZIP is named `eBIRForms-<v>-windows-x86_64.zip`. It has the same updateable directory layout as Setup; it is not an MSI/MSIX update. The legacy GPUI executable needed a PE main-thread stack reserve for recursive layout. NSH does that work on a dedicated Win32 UI thread with an 8 MiB stack, so CI no longer checks the old executable's PE header.

@@ -30,6 +30,7 @@ $layoutStderrTask = $null
 $layoutStderr = ''
 $layoutExitCode = $null
 $identityName = 'GOLDCODERSCORP.ebirforms'
+$exeName = 'bir.exe'
 $packagePath = $null
 $installLocation = $null
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("ebirforms-msix-smoke-" + [guid]::NewGuid().ToString('N'))
@@ -87,14 +88,14 @@ function Write-FailureDiagnostics {
         Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Level = 2 } -MaxEvents 50 |
             Format-List TimeCreated, Id, LevelDisplayName, ProviderName, Message
     }
-    Add-DiagnosticOutput 'WER entries for bir.exe' {
+    Add-DiagnosticOutput "WER entries for $exeName" {
         $werRoots = @(
             (Join-Path $env:ProgramData 'Microsoft\Windows\WER\ReportArchive'),
             (Join-Path $env:ProgramData 'Microsoft\Windows\WER\ReportQueue')
         )
         Get-ChildItem -Path $werRoots -Filter Report.wer -Recurse -File `
             -ErrorAction SilentlyContinue |
-            Select-String -Pattern 'bir\.exe' |
+            Select-String -SimpleMatch $exeName |
             Select-Object -Last 100
     }
 }
@@ -184,12 +185,25 @@ try {
             if ($identityNode -and $identityNode.GetAttribute('Name')) {
                 $identityName = $identityNode.GetAttribute('Name')
             }
+            $applicationNode = $manifest.SelectSingleNode(
+                '/*[local-name()="Package"]/*[local-name()="Applications"]/*[local-name()="Application"]'
+            )
+            if (-not $applicationNode -or $applicationNode.GetAttribute('Executable') -notin @('bir.exe', 'eBIRForms.exe')) {
+                throw 'The smoke package manifest does not name a supported eBIRForms executable.'
+            }
+            $exeName = $applicationNode.GetAttribute('Executable')
         }
     } finally {
         $archive.Dispose()
     }
     Write-Log "Package: $packagePath"
     Write-Log "Identity: $identityName"
+    $nsh = $exeName -ieq 'eBIRForms.exe'
+    $requiredFiles = if ($nsh) {
+        @('nsh\bundle.nshc', 'nsh\app.json', 'ebirforms-no-self-update', 'print-overrides')
+    } else {
+        @('app\main.js', 'print-overrides')
+    }
 
     $existingPackage = @(Get-AppxPackage -Name $identityName -ErrorAction SilentlyContinue)
     if ($existingPackage.Count -gt 0) {
@@ -226,10 +240,11 @@ try {
         throw "Package registration status is $($installedPackage.Status), expected Ok."
     }
     $installLocation = [IO.Path]::GetFullPath($installedPackage.InstallLocation).TrimEnd('\') + '\'
-    if (-not (Test-Path (Join-Path $installLocation 'bir.exe') -PathType Leaf)) {
-        throw "Registered package does not contain bir.exe in $installLocation"
+    $installedExe = Join-Path $installLocation $exeName
+    if (-not (Test-Path -LiteralPath $installedExe -PathType Leaf)) {
+        throw "Registered package does not contain $exeName in $installLocation"
     }
-    foreach ($shellResource in @('app\main.js', 'print-overrides')) {
+    foreach ($shellResource in $requiredFiles) {
         if (-not (Test-Path (Join-Path $installLocation $shellResource))) {
             throw "Registered package does not contain $shellResource in $installLocation"
         }
@@ -255,19 +270,16 @@ try {
         throw "MakeAppx unpack failed with exit code $unpackExitCode."
     }
 
-    $layoutExe = Join-Path $layoutPath 'bir.exe'
+    $layoutExe = Join-Path $layoutPath $exeName
     if (-not (Test-Path $layoutExe -PathType Leaf)) {
-        throw 'Unpacked MSIX layout does not contain bir.exe.'
-    }
-    if (-not (Test-Path (Join-Path $layoutPath 'app\main.js') -PathType Leaf)) {
-        throw 'Unpacked MSIX layout does not contain app\main.js.'
+        throw "Unpacked MSIX layout does not contain $exeName."
     }
     $runtimeFiles = @(
         Get-ChildItem -Path $layoutPath -File |
             Where-Object { $_.Name -match $runtimePattern } |
             Sort-Object Name
     )
-    if ($runtimeFiles.Count -eq 0) {
+    if (-not $nsh -and $runtimeFiles.Count -eq 0) {
         throw 'Unpacked MSIX layout contains no supported VC runtime DLLs.'
     }
     foreach ($runtimeFile in $runtimeFiles) {
@@ -275,7 +287,7 @@ try {
             throw "Registered package is missing packaged VC runtime $($runtimeFile.Name)."
         }
     }
-    Write-Log "Registration: Status=Ok; bir.exe and $($runtimeFiles.Count) packaged VC runtime DLL(s) are present."
+    Write-Log "Registration: Status=Ok; $exeName and $($runtimeFiles.Count) packaged VC runtime DLL(s) are present."
     $registrationResult = 'passed'
 
     $activeStage = 'layout-run'
@@ -292,11 +304,15 @@ try {
     $startInfo.EnvironmentVariables['LOCALAPPDATA'] = $scratchLocalAppData
     $startInfo.EnvironmentVariables['BIR_DATABASE_PATH'] = $scratchDatabase
     $startInfo.EnvironmentVariables['BIR_SFTP_DRY_RUN'] = '1'
+    if ($nsh) {
+        $startInfo.EnvironmentVariables['BUWIZ_NO_KEYCHAIN'] = '1'
+        $startInfo.EnvironmentVariables['EBIR_TEST_ENV'] = '1'
+    }
 
     $layoutProcess = [System.Diagnostics.Process]::new()
     $layoutProcess.StartInfo = $startInfo
     if (-not $layoutProcess.Start()) {
-        throw 'Could not start bir.exe from the unpacked MSIX layout.'
+        throw "Could not start $exeName from the unpacked MSIX layout."
     }
     $layoutStderrTask = $layoutProcess.StandardError.ReadToEndAsync()
     $layoutDeadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -306,7 +322,7 @@ try {
         if ($layoutProcess.HasExited) {
             $layoutExitCode = [int64]$layoutProcess.ExitCode
             $layoutStderr = $layoutStderrTask.GetAwaiter().GetResult()
-            throw "Unpacked bir.exe exited before showing a window (exit code $(Get-LayoutExitHex))."
+            throw "Unpacked $exeName exited before showing a window (exit code $(Get-LayoutExitHex))."
         }
         $layoutWindow = $layoutProcess.MainWindowHandle
         if ($layoutWindow -ne [IntPtr]::Zero) {
@@ -315,7 +331,7 @@ try {
         Start-Sleep -Seconds 1
     }
     if ($layoutWindow -eq [IntPtr]::Zero) {
-        throw "Unpacked bir.exe did not show a window within $TimeoutSeconds seconds."
+        throw "Unpacked $exeName did not show a window within $TimeoutSeconds seconds."
     }
     $layoutProcessId = $layoutProcess.Id
     Write-Log "Layout window started: PID $layoutProcessId, HWND $layoutWindow"
@@ -323,7 +339,7 @@ try {
     $layoutProcess.Refresh()
     if ($layoutProcess.HasExited) {
         $layoutExitCode = [int64]$layoutProcess.ExitCode
-        throw "Unpacked bir.exe PID $layoutProcessId exited within 10 seconds (exit code $(Get-LayoutExitHex))."
+        throw "Unpacked $exeName PID $layoutProcessId exited within 10 seconds (exit code $(Get-LayoutExitHex))."
     }
     $layoutResult = 'passed'
     $layoutExitCode = Stop-LayoutProcess -Process $layoutProcess
@@ -351,17 +367,15 @@ try {
         $activationProcessId = $null
         $activationWindow = [IntPtr]::Zero
         while ((Get-Date) -lt $activationDeadline) {
-            foreach ($candidate in @(Get-Process -Name bir -ErrorAction SilentlyContinue)) {
+            foreach ($candidate in @(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($exeName)) -ErrorAction SilentlyContinue)) {
                 try {
                     $candidatePath = $candidate.Path
                 } catch {
                     $candidatePath = $null
                 }
-                if ($candidatePath -and $candidatePath.StartsWith(
-                    $installLocation,
-                    [StringComparison]::OrdinalIgnoreCase
-                )) {
+                if ($candidatePath -ieq $installedExe) {
                     $activationProcessId = $candidate.Id
+                    $processId = $candidate.Id
                     $activationWindow = $candidate.MainWindowHandle
                     if ($activationWindow -ne [IntPtr]::Zero) {
                         break

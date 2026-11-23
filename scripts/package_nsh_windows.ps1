@@ -1,15 +1,30 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string] $PackageRoot,
-    [Parameter(Mandatory)] [string] $OutDir
+    [Parameter(Mandatory)] [string] $OutDir,
+    [switch] $SmokeMsix
 )
 
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 $repo = Split-Path -Parent $PSScriptRoot
 $PackageRoot = (Resolve-Path -LiteralPath $PackageRoot).Path
-$version = (Get-Content -Raw (Join-Path $repo 'nsh/nsh.json') | ConvertFrom-Json).version
-if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid Windows release version: $version" }
+$config = Get-Content -Raw (Join-Path $repo 'nsh/nsh.json') | ConvertFrom-Json
+$version = $config.version
+if ($version -notmatch '\A(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,4})\z') {
+    throw "Invalid Windows release version: $version"
+}
+$major, $minor, $patch = $version -split '\.'
+if ([int]$major -gt 255 -or [int]$minor -gt 255 -or [int]$patch -gt 65535) {
+    throw "Windows release version exceeds MSI limits (255.255.65535): $version"
+}
+if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -cne "v$version") {
+    throw "Release tag $env:GITHUB_REF_NAME does not match Windows app version $version"
+}
+$packagedApp = Get-Content -Raw (Join-Path $PackageRoot 'eBIRForms/nsh/app.json') | ConvertFrom-Json
+if ($packagedApp.version -cne $version -or $packagedApp.id -cne $config.id) {
+    throw "NSH payload identity or version does not match nsh/nsh.json (expected $($config.id) $version)"
+}
 $OutDir = (New-Item -ItemType Directory -Force -Path $OutDir).FullName
 $stem = "eBIRForms-Windows-x64-$version"
 $setup = Join-Path $OutDir "$stem-Setup.exe"
@@ -83,11 +98,14 @@ try {
     # including the print overrides. Neither should carry the package-manager marker.
     $iss = Get-Content -LiteralPath (Join-Path $PackageRoot 'eBIRForms.iss') -Raw
     $source = 'Source: "eBIRForms\*"'
-    if (-not $iss.Contains($source) -or $iss -notmatch '(?m)^PrivilegesRequired=lowest\r?$') {
+    if (-not $iss.Contains("$source; DestDir: `"{app}`"") -or $iss -notmatch '(?m)^PrivilegesRequired=lowest\r?$') {
         throw 'The generated NSH Setup no longer uses the expected per-user layout'
     }
     $auditIss = Join-Path $scratch 'eBIRForms.iss'
-    $iss.Replace($source, 'Source: "{#StageDir}\*"') | Set-Content -LiteralPath $auditIss -Encoding utf8
+    # NSH swaps everything beside the executable. Keep Inno's uninstaller one level up.
+    $iss = $iss.Replace($source, 'Source: "{#StageDir}\*"').Replace('{app}', '{app}\eBIRForms-app')
+    $iss += "`n[UninstallDelete]`nType: filesandordirs; Name: `"{app}\eBIRForms-app`"`n"
+    Set-Content -LiteralPath $auditIss -Value $iss -Encoding utf8
     & python (Join-Path $PSScriptRoot 'audit_installer_sources.py') --installer $auditIss --stage-dir $stage
     & $iscc /Q "/DStageDir=$stage" "/O$OutDir" "/F$stem-Setup" $auditIss
     if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip }
@@ -122,7 +140,7 @@ try {
         NshPayload = $stage
         AssetsDir = (Join-Path $repo 'assets')
         Version = $version
-        BuildNumber = [int](($version -split '\.')[2])
+        BuildNumber = [int]$patch
         OutFile = $msix
     }
     if ($publisher) { $msixArgs.Publisher = $publisher }
@@ -143,6 +161,32 @@ try {
     $extractedMsix = Join-Path $scratch 'msix'
     & (Join-Path $sdk.FullName 'makeappx.exe') unpack /p $msix /d $extractedMsix
     Test-Payload $extractedMsix $true
+
+    if ($SmokeMsix) {
+        $smokeScript = Join-Path $PSScriptRoot 'smoke_msix.ps1'
+        $smokeArgs = @('-NoProfile', '-File', $smokeScript, '-Package', $msix)
+        $testCertificate = $null
+        try {
+            if (-not $hasPfx) {
+                # Sign a disposable copy, not the artifact we publish.
+                $testCertificate = New-SelfSignedCertificate -Type CodeSigningCert `
+                    -Subject 'CN=eBIRForms NSH CI Test Signing' -CertStoreLocation 'Cert:\CurrentUser\My'
+                $msixArgs.Publisher = $testCertificate.Subject
+                $msixArgs.OutFile = Join-Path $scratch 'smoke.msix'
+                & (Join-Path $PSScriptRoot 'package_msix.ps1') @msixArgs
+                & (Join-Path $sdk.FullName 'signtool.exe') sign /fd SHA256 /sha1 $testCertificate.Thumbprint $msixArgs.OutFile
+                $testCertificatePath = Join-Path $scratch 'smoke.cer'
+                Export-Certificate -Cert $testCertificate -FilePath $testCertificatePath | Out-Null
+                $smokeArgs = @('-NoProfile', '-File', $smokeScript, '-Package', $msixArgs.OutFile, '-Certificate', $testCertificatePath)
+            }
+            & powershell.exe @smokeArgs
+        } finally {
+            if ($testCertificate) {
+                Remove-Item -LiteralPath "Cert:\CurrentUser\My\$($testCertificate.Thumbprint)" -DeleteKey
+            }
+        }
+    }
+
     $extractedZip = Join-Path $scratch 'zip'
     [IO.Compression.ZipFile]::ExtractToDirectory($zip, $extractedZip)
     Test-Payload (Join-Path $extractedZip 'eBIRForms') $false

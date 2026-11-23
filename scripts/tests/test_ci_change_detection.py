@@ -339,6 +339,25 @@ class CiChangeDetectionTests(unittest.TestCase):
                     changed=(path,),
                 )
 
+    def test_nsh_manifest_change_audits_the_windows_installers(self) -> None:
+        self.assert_decisions(
+            systems=("windows-latest",),
+            check_reason="Windows installer files changed",
+            packaging=("windows",),
+            changed=("nsh/nsh.json",),
+        )
+
+    def test_shared_packaging_input_still_tests_app_code(self) -> None:
+        for path in ("print-overrides/1601C.json", "assets/icon.png", "scripts/audit_no_legacy.py"):
+            with self.subTest(path=path):
+                self.assert_decisions(
+                    systems=self.ALL_SYSTEMS,
+                    check_reason=f"app file changed: {path}",
+                    app="true",
+                    packaging=("windows",),
+                    changed=(path,),
+                )
+
     def test_windows_installer_with_app_code_tests_all_three(self) -> None:
         self.assert_decisions(
             systems=self.ALL_SYSTEMS,

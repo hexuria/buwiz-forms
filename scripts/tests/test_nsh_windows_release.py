@@ -25,6 +25,13 @@ class NshWindowsReleaseTests(unittest.TestCase):
         self.assertIn('artifacts/**/*.msix', release)
         self.assertIn('artifacts/**/*-windows-x86_64.zip', release)
 
+    def test_setup_and_updater_zip_do_not_require_a_vc_redistributable(self):
+        workflow = (ROOT / '.github/workflows/release-windows.yml').read_text()
+        msix = (ROOT / 'scripts/package_msix.ps1').read_text()
+        self.assertIn('CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: "-C target-feature=+crt-static"', workflow)
+        self.assertIn('if ($NshPayload -and $runtimeImports.Count -gt 0)', msix)
+        self.assertIn('if (-not $NshPayload -and $runtimeImports.Count -eq 0)', msix)
+
     def test_msi_has_new_per_user_identity_and_distinct_install_directory(self):
         ns = {'w': 'http://schemas.microsoft.com/wix/2006/wi'}
         product = ET.parse(ROOT / 'packaging/windows/nsh.wxs').find('w:Product', ns)

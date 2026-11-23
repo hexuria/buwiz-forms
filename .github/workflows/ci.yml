@@ -348,6 +348,7 @@ jobs:
         docs_re='^(docs/|[^/]+\.md$|crates/[^/]+/docs/|\.github/[^/]+\.md$)'
         # nsh.yml owns the NSH pin that generates the Windows installer source.
         windows_pkg_re='^(installer\.(iss|wxs)$|assets/windows/|packaging/windows/|scripts/(audit_final_setup|package_msix|package_nsh_windows|smoke_msix)\.ps1$|scripts/audit_installer_sources\.py$|\.github/workflows/(nsh|release-windows)\.yml$)'
+        windows_pkg_inputs_re='^(nsh/nsh\.json$|print-overrides/|assets/icon[^/]*\.png$|scripts/audit_no_legacy\.py$)'
         macos_pkg_re='^(assets/macos/|scripts/(dev_bundle_macos|package_macos_release|setup_macos_release_secrets)\.sh$|[^/]*entitlements[^/]*\.plist$)'
         linux_pkg_re='^packaging/linux/'
         shell_re='^(crates/bir-shell/|app/)'
@@ -371,6 +372,9 @@ jobs:
         else
           while IFS= read -r path; do
             [[ -n "$path" ]] || continue
+            if [[ "$path" =~ $windows_pkg_inputs_re ]]; then
+              windows_pkg=true
+            fi
             if [[ "$path" =~ $docs_re ]]; then
               :
             elif [[ "$path" =~ $windows_pkg_re ]]; then

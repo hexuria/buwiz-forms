@@ -108,6 +108,8 @@ jobs:
       - name: Build the NSH Windows app
         working-directory: buwiz-forms/nsh
         env:
+          # Setup and updater ZIP must run without an installed VC Redistributable.
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: "-C target-feature=+crt-static"
           GOOGLE_CLIENT_ID: ${{ inputs.release && secrets.GOOGLE_CLIENT_ID || '' }}
           GOOGLE_CLIENT_SECRET: ${{ inputs.release && secrets.GOOGLE_CLIENT_SECRET || '' }}
         run: |
@@ -119,7 +121,7 @@ jobs:
           WINDOWS_CERTIFICATE_PFX: ${{ inputs.release && secrets.WINDOWS_CERTIFICATE_PFX || '' }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ inputs.release && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
         run: |
-          ./scripts/package_nsh_windows.ps1 -PackageRoot "$env:RUNNER_TEMP/nsh-windows" -OutDir target/release-artifacts
+          ./scripts/package_nsh_windows.ps1 -PackageRoot "$env:RUNNER_TEMP/nsh-windows" -OutDir target/release-artifacts -SmokeMsix:$${{ !inputs.release }}
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4

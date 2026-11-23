@@ -139,6 +139,9 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
 
     def test_every_publishable_build_depends_on_exact_tag_preflight(self) -> None:
         self.assert_preflight_gates(self.workflow)
+        preflight = self.job("preflight")
+        self.assertIn('"nsh/nsh.json"', preflight)
+        self.assertIn('"$TAG_VERSION" != "$NSH_VERSION"', preflight)
         for job_name in ("build-windows", "build-linux"):
             self.assertIn("needs: preflight", self.job(job_name))
         self.assertIn(

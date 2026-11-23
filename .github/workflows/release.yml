@@ -59,6 +59,11 @@ jobs:
               exit 1
             fi
           fi
+          NSH_VERSION="$(python3 -c 'import json; print(json.load(open("nsh/nsh.json"))["version"])')"
+          if [ "$TAG_VERSION" != "$NSH_VERSION" ]; then
+            echo "Release tag version $TAG_VERSION does not match NSH app version $NSH_VERSION" >&2
+            exit 1
+          fi
 
       - name: Install system dependencies
         run: |
