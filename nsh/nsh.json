@@ -1,9 +1,24 @@
 {
   "name": "eBIRForms",
-  "id": "dev.goldcoders.bir.nsh",
+  "id": "dev.goldcoders.bir",
   "version": "0.2.0",
   "build": 1,
   "rust": ".",
+  "icon": "../assets/icon.png",
+  "singleInstance": true,
+  "macos": {
+    "infoPlist": {
+      "NSLocalNetworkUsageDescription": "eBIRForms needs access to your local network to verify internet connectivity before submitting forms.",
+      "NSScreenCaptureUsageDescription": "eBIRForms captures its own window so an agent can take a screenshot of the painted form (not the rest of the desktop)."
+    },
+    "entitlements": {
+      "com.apple.security.network.client": true
+    }
+  },
+  "updater": {
+    "github": "hexuria/buwiz-forms",
+    "publicKey": "azPTfgyyZg7ggQ6w52Rx/Ma9BLfMVjnTvqOflxfMhsc="
+  },
   "appearance": "system",
   "theme": "theme/theme.json",
   "window": {

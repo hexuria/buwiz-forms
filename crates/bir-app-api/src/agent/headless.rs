@@ -1,11 +1,11 @@
-//! Long-running headless AgentHost (`bir-headless serve`).
+//! Long-running headless AgentHost (`bir serve`).
 //!
 //! Mirrors gpui-agent `apps/todo-headless`: clap `serve` (default) / `status` /
 //! `shutdown` / `logs`, `from_env` + `spawn_mailbox_named`, no GPU window. Opens
 //! [`bir_core::db::default_database_path`] (or `BIR_DATABASE_PATH` in CI), not
 //! `Database::open_ephemeral()`. Starts the same in-process SFTP submission cron as shell GUI.
 //! There is no protocol `Op::Yield`. Exclusivity is TCP bind + live-DB owner
-//! lock. `serve --wait` (also `bir-headless --wait`) polls until both are free.
+//! lock. `serve --wait` (also `bir --wait`) polls until both are free.
 //! `serve --detach` backgrounds the daemon (Docker `-d`); `logs --follow`
 //! attaches to the logfile.
 
@@ -26,6 +26,10 @@ use gpui_agent::security::from_env;
 use gpui_agent::server::spawn_mailbox_named;
 
 use super::APP;
+
+/// The executable the discovery record names. The binary is `bir`, as is the NSH app's record, so the daemon keeps
+/// the old name here: `bir-mcp` reads it as headless mode and `connect_running` finds the daemon by it.
+const RECORD_EXECUTABLE: &str = "bir-headless";
 use super::headless_daemon;
 use super::request_log;
 use super::session::Session;
@@ -34,7 +38,7 @@ use super::session::Session;
 ///
 /// Bind policy comes from `from_env` (`GPUI_AGENT=1`, loopback default).
 #[derive(Parser, Debug)]
-#[command(name = "bir-headless")]
+#[command(name = "bir")]
 struct Cli {
     /// Poll until bind and the live-DB owner lock are free, then serve.
     /// Without this flag, a busy bind or lock exits immediately.
@@ -97,7 +101,7 @@ fn run_cli() -> Result<(), ExitCode> {
     let cli = parse_cli();
     let command = cli.command.unwrap_or(Command::Serve);
     if cli.detach && !matches!(command, Command::Serve) {
-        eprintln!("--detach is only valid with `serve` (example: bir-headless serve --detach)");
+        eprintln!("--detach is only valid with `serve` (example: bir serve --detach)");
         return Err(ExitCode::from(2));
     }
     match command {
@@ -123,7 +127,7 @@ fn format_serve_open_error(error: db::DbError) -> String {
     } else {
         format!(
             "failed to open live database {}: {error} \
-             (bir-headless will not quarantine or recreate this file; \
+             (bir will not quarantine or recreate this file; \
              shell GUI uses open_or_recreate on the same default path)",
             db::app_database_path().display()
         )
@@ -134,9 +138,9 @@ pub fn bind_failure_message(addr: SocketAddr, error: &std::io::Error) -> String 
     if error.kind() == ErrorKind::AddrInUse {
         format!(
             "gpui-agent bind {addr} is in use. Quit shell GUI (in-process mailbox) \
-             or this `bir-headless` instance, or set GPUI_AGENT_ADDR. Two AgentHosts \
+             or this `bir` instance, or set GPUI_AGENT_ADDR. Two AgentHosts \
              must not share a bind (GUI embed vs headless). \
-             `bir-headless serve --wait` polls until the port and live-DB lock are free."
+             `bir serve --wait` polls until the port and live-DB lock are free."
         )
     } else {
         format!("gpui-agent failed to bind {addr}: {error}")
@@ -251,12 +255,12 @@ fn load_serve_config() -> Result<gpui_agent::security::AgentConfig, ExitCode> {
         Ok(Some(config)) => config,
         Ok(None) => {
             eprintln!(
-                "bir-headless serve is an automation host. Start it with GPUI_AGENT=1.\n\
+                "bir serve is an automation host. Start it with GPUI_AGENT=1.\n\
                  Example:\n\
                  export GPUI_AGENT=1\n\
                  export GPUI_AGENT_TOKEN=dev-secret\n\
                  export GPUI_AGENT_ADDR=127.0.0.1:17421\n\
-                 cargo run --locked --bin bir-headless --features agent -- serve\n\
+                 cargo run --locked -p bir-cli -- serve\n\
                  (GPUI_AGENT_INSECURE_NO_TOKEN=1 is demo-only; never against the live DB)"
             );
             return Err(ExitCode::from(2));
@@ -300,14 +304,14 @@ fn detach_serve(wait: bool) -> Result<(), ExitCode> {
     }
 
     let exe = std::env::current_exe().map_err(|error| {
-        eprintln!("failed to resolve bir-headless executable: {error}");
+        eprintln!("failed to resolve the bir executable: {error}");
         ExitCode::from(2)
     })?;
     match headless_daemon::spawn_detached_serve(&exe, wait) {
         Ok(info) => {
             print!("{}", headless_daemon::format_detach_report(&info));
             eprintln!(
-                "detached. follow with: bir-headless logs --follow   (log {})",
+                "detached. follow with: bir logs --follow   (log {})",
                 info.log_path.display()
             );
             Ok(())
@@ -426,7 +430,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
                 continue;
             }
             eprintln!(
-                "gpui-agent bind {addr} accepted no connections. Quit shell GUI                  or the previous headless process and retry.                  `bir-headless serve --wait` polls until a handshake succeeds."
+                "gpui-agent bind {addr} accepted no connections. Quit shell GUI                  or the previous headless process and retry.                  `bir serve --wait` polls until a handshake succeeds."
             );
             return Err(ExitCode::from(2));
         }
@@ -446,7 +450,17 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             eprintln!("pid file: {error}");
         }
         let _pid_guard = ServePidGuard;
-        let _discovery_guard = match gpui_agent::discovery::publish_current(addr, APP) {
+        let identity = gpui_agent::discovery::detect_identity();
+        let record = gpui_agent::discovery::HostRecord {
+            addr: addr.to_string(),
+            pid: std::process::id(),
+            app: APP.to_owned(),
+            executable: RECORD_EXECUTABLE.to_owned(),
+            bundle_id: identity.bundle_id,
+            connect_id: identity.connect_id,
+        };
+        let root = gpui_agent::discovery::runtime_root();
+        let _discovery_guard = match gpui_agent::discovery::publish_record(&root, &record) {
             Ok(published) => Some(published),
             Err(error) => {
                 eprintln!("gpui-agent discovery record not written: {error}");
@@ -454,7 +468,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             }
         };
 
-        eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir-shell)");
+        eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir)");
         eprintln!(
             "log file: {} (override with {})",
             headless_daemon::log_path().display(),
@@ -524,7 +538,7 @@ fn connect_running() -> Result<AgentClient, ExitCode> {
     let addr = std::env::var("GPUI_AGENT_ADDR")
         .unwrap_or_else(|_| {
             let root = gpui_agent::discovery::runtime_root();
-            gpui_agent::discovery::resolve_id(&root, "bir-headless")
+            gpui_agent::discovery::resolve_id(&root, RECORD_EXECUTABLE)
                 .or_else(|_| gpui_agent::discovery::resolve_id(&root, APP))
                 .map(|record| record.addr)
                 .unwrap_or_else(|_| DEFAULT_ADDR_STR.to_owned())
@@ -575,20 +589,17 @@ mod tests {
 
     #[test]
     fn parses_default_serve_and_subcommands() {
-        assert!(Cli::try_parse_from(["bir-headless"]).is_ok());
+        assert!(Cli::try_parse_from(["bir"]).is_ok());
         for command in ["serve", "status", "shutdown", "logs"] {
-            assert!(
-                Cli::try_parse_from(["bir-headless", command]).is_ok(),
-                "{command}"
-            );
+            assert!(Cli::try_parse_from(["bir", command]).is_ok(), "{command}");
         }
     }
 
     #[test]
     fn parses_wait_detach_and_log_options() {
-        assert!(Cli::try_parse_from(["bir-headless", "--wait"]).is_ok());
-        assert!(Cli::try_parse_from(["bir-headless", "serve", "--detach"]).is_ok());
-        assert!(Cli::try_parse_from(["bir-headless", "logs", "--tail", "20"]).is_ok());
+        assert!(Cli::try_parse_from(["bir", "--wait"]).is_ok());
+        assert!(Cli::try_parse_from(["bir", "serve", "--detach"]).is_ok());
+        assert!(Cli::try_parse_from(["bir", "logs", "--tail", "20"]).is_ok());
     }
 }
 

@@ -169,19 +169,17 @@ else
 fi
 
 # ---------------------------------------------------------------- 4
-echo "== 4. end-to-end smoke (bir-headless + bir-mcp over stdio)"
+echo "== 4. end-to-end smoke (bir + bir-mcp over stdio)"
 if [[ ! -f "$MCP_CRATE_DIR/Cargo.toml" ]]; then
   fail "smoke needs $MCP_CRATE_DIR (increment 6 not landed)"
 else
   BUILD_LOG="$WORK/smoke-build.log"
-  if ! cargo build --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --bin bir-headless >"$BUILD_LOG" 2>&1 \
+  if ! cargo build --locked -p bir-cli >"$BUILD_LOG" 2>&1 \
     || ! cargo build --locked -p bir-mcp >>"$BUILD_LOG" 2>&1; then
     tail -n 40 "$BUILD_LOG" >&2
-    fail "smoke: building bir-headless / bir-mcp failed"
+    fail "smoke: building bir / bir-mcp failed"
   else
-    TARGET_DIR="$(cargo metadata --manifest-path crates/bir-shell/Cargo.toml --format-version 1 --no-deps 2>/dev/null \
-      | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
-    HEADLESS_BIN="$TARGET_DIR/debug/bir-headless"
+    HEADLESS_BIN="$ROOT/target/debug/bir"
     MCP_BIN="$ROOT/target/debug/bir-mcp"
     if [[ ! -x "$HEADLESS_BIN" || ! -x "$MCP_BIN" ]]; then
       fail "smoke: binaries not found ($HEADLESS_BIN, $MCP_BIN)"

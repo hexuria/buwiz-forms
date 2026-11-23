@@ -19,8 +19,8 @@ pub fn data_dir() -> PathBuf {
 }
 
 /// Returns the Linux application data directory of the plain-SQLite (NSH)
-/// build: `$XDG_DATA_HOME/dev.goldcoders.bir.nsh`, or
-/// `$HOME/.local/share/dev.goldcoders.bir.nsh` when `XDG_DATA_HOME` is not an
+/// build: `$XDG_DATA_HOME/dev.goldcoders.bir`, or
+/// `$HOME/.local/share/dev.goldcoders.bir` when `XDG_DATA_HOME` is not an
 /// absolute path.
 #[cfg(not(feature = "sqlcipher"))]
 pub fn data_dir() -> PathBuf {

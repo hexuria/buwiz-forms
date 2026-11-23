@@ -94,7 +94,7 @@ key): a baked value can be read out of the built library by anyone given the
 build. `just nsh-run-agent android` bakes only the switches
 (`GPUI_AGENT=1`, `GPUI_AGENT_ADDR`, the dry-run settings) and hands the token
 over at run time: once the development host is installed it writes
-`files/nsh/dev.goldcoders.bir.nsh/agent-token` with `adb shell run-as`, the
+`files/nsh/dev.goldcoders.bir/agent-token` with `adb shell run-as`, the
 token on standard input (not in any process's arguments, not an intent extra).
 The app's data plane waits up to 10 s for that file when `GPUI_AGENT=1`, reads
 it once and deletes it; without it the listener is refused.
@@ -113,7 +113,7 @@ opt-in neither embed the baked configuration nor read the file, even when
 `run-as` is available. Do not distribute opted-in APKs as production builds
 or put secrets in baked configuration.
 With the current NSH host this is normally
-`files/nsh/dev.goldcoders.bir.nsh/dev.env` relative to `run-as`'s working
+`files/nsh/dev.goldcoders.bir/dev.env` relative to `run-as`'s working
 directory (NSH uses `getFilesDir()/nsh/<app id>`). The file must exist before
 the first native Door call. Restart the app after changing it.
 
@@ -128,13 +128,13 @@ No mailbox timer starts on desktop or when either gate is off.
 
 The current host supplies `getFilesDir()/nsh` as `EngineConfig.support_dir`, with
 no explicit `data_dir`; the engine appends the app ID. Thus the mailbox is
-`/data/data/dev.goldcoders.bir.nsh/files/nsh/dev.goldcoders.bir.nsh/dev-command`
+`/data/data/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir/dev-command`
 (`/data/user/0/...` is Android's equivalent path for user 0). On the rooted test
 emulator, atomically publish a complete command with:
 
 ```sh
-adb shell "su 0 sh -c 'cd /data/data/dev.goldcoders.bir.nsh/files/nsh/dev.goldcoders.bir.nsh && printf lock > dev-command.next && mv dev-command.next dev-command'"
-adb shell "su 0 sh -c 'cd /data/data/dev.goldcoders.bir.nsh/files/nsh/dev.goldcoders.bir.nsh && printf logout > dev-command.next && mv dev-command.next dev-command'"
+adb shell "su 0 sh -c 'cd /data/data/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir && printf lock > dev-command.next && mv dev-command.next dev-command'"
+adb shell "su 0 sh -c 'cd /data/data/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir && printf logout > dev-command.next && mv dev-command.next dev-command'"
 ```
 
 The app must already have started so its data directory exists. Receipt logs
@@ -167,9 +167,9 @@ For a debuggable development APK (not a normal `nsh package` APK), the optional
 private-file override can be installed as follows:
 
 ```sh
-adb shell am force-stop dev.goldcoders.bir.nsh
-adb shell run-as dev.goldcoders.bir.nsh mkdir -p files/nsh/dev.goldcoders.bir.nsh
-adb shell run-as dev.goldcoders.bir.nsh sh -c '"cat > files/nsh/dev.goldcoders.bir.nsh/dev.env"' < dev.env
+adb shell am force-stop dev.goldcoders.bir
+adb shell run-as dev.goldcoders.bir mkdir -p files/nsh/dev.goldcoders.bir
+adb shell run-as dev.goldcoders.bir sh -c '"cat > files/nsh/dev.goldcoders.bir/dev.env"' < dev.env
 adb reverse tcp:8787 tcp:8787
 # Start both mocks, then launch the app normally.
 ```
@@ -271,7 +271,7 @@ only boots a simulator, so a device needs a signed package:
    - an **Apple Development** certificate in the login keychain. Check with
      `security find-identity -v -p codesigning`, which prints
      `Apple Development: Name (TEAMID)`;
-   - an App ID for `dev.goldcoders.bir.nsh`, the `id` in `nsh/nsh.json`;
+   - an App ID for `dev.goldcoders.bir`, the `id` in `nsh/nsh.json`;
    - the iPhone registered by its UDID (`xcrun devicectl list devices`);
    - a **development provisioning profile** for that App ID, certificate and
      device (`.mobileprovision`).
@@ -285,7 +285,7 @@ only boots a simulator, so a device needs a signed package:
      --profile ~/Downloads/buwiz_dev.mobileprovision        # writes .nsh/out/<name>.ipa
    xcrun devicectl device install app --device <UDID> .nsh/out/<name>.ipa
    xcrun devicectl device process launch --device <UDID> \
-     -e '{"EBIR_TEST_ENV":"1","BIR_AUTH_BYPASS":"1","BIR_SFTP_DRY_RUN":"1"}' dev.goldcoders.bir.nsh
+     -e '{"EBIR_TEST_ENV":"1","BIR_AUTH_BYPASS":"1","BIR_SFTP_DRY_RUN":"1"}' dev.goldcoders.bir
    ```
 
    Without `--sign` and `--profile` you get an unsigned `.app` that a device

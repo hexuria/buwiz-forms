@@ -1,9 +1,9 @@
 // The updater's state machine (old crates/bir-shell/src/updater.rs, without the feed and the signing: those are nsh/updater's,
-// set in nsh.json "updater", and this build sets none). Pure: the network, the download and the install come in through
+// set in nsh.json "updater"). Pure: the network, the download and the install come in through
 // UpdaterApi, so a plain test plays every phase.
 //
 // Phases, as the page and the banner (shell/UpdateSlot.tsx) know them: idle, checking, downloading, ready, failed, up_to_date,
-// available, installing. With no update source configured the phase is always idle and nothing is ever fetched: the status says so.
+// available, external, installing. With no update source configured the phase is always idle and nothing is ever fetched.
 //
 // The host functions reach it through the commands Rust queued (src/desktop.rs): start, check, install, dismiss, auto-on,
 // auto-off. The menu's "Check for Updates…" is the same "check". Each change is published to Rust, which answers
@@ -12,6 +12,8 @@
 /** What an update check found (nsh/updater's AppUpdate, the part used here). */
 export interface FoundUpdate {
   version: string;
+  /** This installation needs a package manager or a fresh download instead of an in-place update. */
+  external?: boolean;
 }
 
 /** What the driver needs of the world: nsh/updater in the app, a fake in a test. */
@@ -22,12 +24,12 @@ export interface UpdaterApi {
   check(): Promise<FoundUpdate | null>;
   /** Downloads and verifies what the last check found. */
   download(): Promise<void>;
-  /** Flushes unsaved work, then replaces the app and restarts it. Resolves only when that failed; a refusal rejects. */
+  /** Stages the swap, flushes unsaved work and restarts the app; a refusal rejects. */
   install(): Promise<void>;
 }
 
 /** The phases the page knows. */
-export type UpdatePhase = "idle" | "checking" | "downloading" | "ready" | "failed" | "up_to_date" | "available" | "installing";
+export type UpdatePhase = "idle" | "checking" | "downloading" | "ready" | "failed" | "up_to_date" | "available" | "external" | "installing";
 
 /** What the driver publishes to Rust (src/desktop.rs UpdateReport). */
 export interface UpdateReport {
@@ -117,13 +119,14 @@ export function createUpdater(options: UpdaterOptions): Updater {
     busy = true;
     try {
       if (manual) dismissed = null;
-      // A release already waiting for Install now stays on offer while the periodic check asks again.
-      if (!(phase === "ready" && !manual)) set("checking", version);
+      // An update already on offer stays there while the periodic check asks again.
+      const keepOffer = !manual && (phase === "ready" || phase === "external");
+      if (!keepOffer) set("checking", version);
       let found: FoundUpdate | null;
       try {
         found = await api.check();
       } catch (error) {
-        if (phase === "ready" && !manual) return;
+        if (keepOffer) return;
         set(manual ? "failed" : "idle", null, manual ? said(error) : null);
         return;
       }
@@ -135,6 +138,10 @@ export function createUpdater(options: UpdaterOptions): Updater {
       }
       if (!manual && dismissed === found.version) {
         set("idle", found.version, null);
+        return;
+      }
+      if (found.external) {
+        set("external", found.version, "Version " + found.version + " is available.");
         return;
       }
       // Found again: what was downloaded is still the newest, so there is nothing more to fetch.
@@ -185,8 +192,8 @@ export function createUpdater(options: UpdaterOptions): Updater {
   }
 
   function dismiss(): void {
-    if (phase === "ready" || phase === "available") dismissed = version;
-    if (phase === "ready" || phase === "failed" || phase === "up_to_date" || phase === "available") set("idle", version, null);
+    if (phase === "ready" || phase === "available" || phase === "external") dismissed = version;
+    if (phase === "ready" || phase === "failed" || phase === "up_to_date" || phase === "available" || phase === "external") set("idle", version, null);
   }
 
   return {

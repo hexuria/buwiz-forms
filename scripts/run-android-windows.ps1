@@ -157,7 +157,7 @@ Write-Host $install
 Assert-Native 'pm install failed'
 if ($install -notcontains 'Success') { throw "pm install: $install" }
 & $adb -s $serial shell rm /data/local/tmp/buwiz-x86_64.apk
-& $adb -s $serial shell am start -n dev.goldcoders.bir.nsh/com.longbridge.nsh.AppActivity
+& $adb -s $serial shell am start -n dev.goldcoders.bir/com.longbridge.nsh.AppActivity
 Assert-Native 'App launch failed'
 & "$PSScriptRoot\sign-in-android-windows.ps1" -SdkRoot $SdkRoot -Serial $serial
 Write-Host "Emulator and mock-account left running. Logs: $work"

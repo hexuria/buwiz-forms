@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product Id="*" Name="eBIRForms" Language="1033" Version="$(var.Version)" Manufacturer="GoldCoders" UpgradeCode="B35C800D-38D4-46D3-B522-873075A5243B">
+        <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" />
+        <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+        <MediaTemplate EmbedCab="yes" />
+
+        <Feature Id="ProductFeature" Title="eBIRForms" Level="1">
+            <ComponentGroupRef Id="NshPayload" />
+            <ComponentRef Id="ApplicationShortcut" />
+        </Feature>
+
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="LocalAppDataFolder">
+                <Directory Id="UserProgramsFolder" Name="Programs">
+                    <Directory Id="INSTALLDIR" Name="eBIRForms MSI" />
+                </Directory>
+            </Directory>
+            <Directory Id="ProgramMenuFolder">
+                <Component Id="ApplicationShortcut" Guid="A4DB7F4D-DD74-4126-BC79-F2438AF3EE84">
+                    <Shortcut Id="ApplicationStartMenuShortcut" Name="eBIRForms (MSI)" Target="[INSTALLDIR]eBIRForms.exe" WorkingDirectory="INSTALLDIR" />
+                    <RemoveFolder Id="RemoveEmptyUserProgramsFolder" Directory="UserProgramsFolder" On="uninstall" />
+                    <RegistryValue Root="HKCU" Key="Software\GoldCoders\eBIRFormsMSI" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+                </Component>
+            </Directory>
+        </Directory>
+    </Product>
+</Wix>

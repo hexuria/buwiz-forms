@@ -95,7 +95,7 @@ there, but nobody has run it on that platform.
 - The app posts system banners through GPUI's `UNUserNotificationCenter`
   support when it runs from a `.app`. A bare `cargo run` shows only the in-app
   toast.
-- `bir-headless` (the background daemon) posts banners with `osascript`.
+- The headless `bir` daemon posts banners with `osascript`.
 - Database changes made by the daemon reach the window at once through a
   distributed notification. A 5 second poll is the fallback.
 
@@ -118,7 +118,7 @@ there, but nobody has run it on that platform.
 - The gpui-agent build feature is macOS-capable end to end, including
   screenshots (`screencapture -l`). The terminal needs Screen Recording
   permission for that exact binary path. See
-  [AGENT.md](../../crates/bir-shell/docs/AGENT.md).
+  [agent.md](../agent.md).
 
 ## Unverified
 

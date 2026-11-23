@@ -1,33 +1,25 @@
-// The app's updater: the pure driver (updater.ts) over nsh/updater, publishing to Rust (native.ts). In this build nsh.json has no
-// "updater", so shellInfo().version is null: nothing is configured, nothing is checked, nothing touches the network, and the status
-// says so. To turn updates on the owner puts an "updater" source and a signing key in nsh.json (nsh/AGENTS.md, "Updates").
-import { checkForUpdate, downloadUpdate, installAndRestart, shellInfo } from "nsh/updater";
+// The app's updater: the pure driver over nsh/updater, publishing to the Rust mailbox.
+import { Application } from "nsh/desktop";
+import { checkForUpdate, downloadUpdate, installOnQuit, shellInfo } from "nsh/updater";
 import { app } from "../app";
 import { store } from "../store";
-import { autoDownload, publishUpdate } from "./native";
+import { allowsSelfUpdate, autoDownload, masBuild, publishUpdate } from "./native";
 import { createUpdater, NOT_CONFIGURED, type Updater, type UpdateCommand, type UpdaterApi } from "./updater";
 
-/** nsh/updater, as the driver uses it. `restart` is a test's stand-in for the swap and the restart. */
-export function realApi(restart: () => Promise<void> = installAndRestart): UpdaterApi {
+/** nsh/updater, as the driver uses it. */
+export function realApi(stage = installOnQuit, restart = () => Application.restart()): UpdaterApi {
   return {
-    configured: () => (shellInfo().version ?? null) !== null,
+    configured: () => !masBuild() && (shellInfo().version ?? null) !== null,
     async check() {
       const found = await checkForUpdate();
       if (!found) return null;
-      if (!found.canInstall) {
-        throw new Error("Version " + found.version + " is available, but this copy cannot update itself. Get it from " + found.url + ".");
-      }
-      return { version: found.version };
+      return { version: found.version, external: !allowsSelfUpdate() || !found.canInstall };
     },
     download: () => downloadUpdate(),
-    // The frame's quit path first (an open form flushes its unsaved edits), then the door's shutdown (the worker stops, the database
-    // is checkpointed), then the swap and the restart. It settles only on failure.
-    install: () =>
-      new Promise<void>((resolve, reject) => {
-        app
-          .quit(() => app.endRun(() => void restart().then(resolve, reject)))
-          .catch(reject);
-      }),
+    async install() {
+      await stage();
+      await app.quit(() => app.endRun(restart));
+    },
   };
 }
 
@@ -81,7 +73,7 @@ export const updates = {
     if (!d.report().configured) return NOT_CONFIGURED;
     await d.handle("check");
     const r = d.report();
-    if (r.phase === "ready" || r.phase === "failed" || r.phase === "up_to_date") return null;
+    if (r.phase === "ready" || r.phase === "failed" || r.phase === "up_to_date" || r.phase === "external") return null;
     return r.message ?? "Checked for updates.";
   },
   stop(): void {

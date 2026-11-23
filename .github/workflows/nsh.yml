@@ -23,6 +23,7 @@ on:
     branches: [main]
     paths:
       - "nsh/**"
+      - "app/forms/**"
       - "crates/bir-app-api/**"
       - "crates/bir-core/**"
       - "crates/bir-host-shim/**"
@@ -38,6 +39,7 @@ on:
   pull_request:
     paths:
       - "nsh/**"
+      - "app/forms/**"
       - "crates/bir-app-api/**"
       - "crates/bir-core/**"
       - "crates/bir-host-shim/**"

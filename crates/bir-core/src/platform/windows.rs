@@ -31,7 +31,7 @@ pub fn data_dir() -> PathBuf {
 }
 
 /// Returns the Windows application data directory of the plain-SQLite (NSH)
-/// build: `%LOCALAPPDATA%\dev.goldcoders.bir.nsh`.
+/// build: `%LOCALAPPDATA%\dev.goldcoders.bir`.
 #[cfg(not(feature = "sqlcipher"))]
 pub fn data_dir() -> PathBuf {
     if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {

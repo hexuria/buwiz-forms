@@ -89,6 +89,18 @@ test("a manual check that finds a release downloads it (even with the automatic 
   expect(updater.report()).toMatchObject({ configured: true, phase: "ready", version: "0.3.0", message: null });
 });
 
+test("package-managed installs offer the release page and never download or install", async () => {
+  const { api, calls } = fake({ check: async () => ({ version: "0.3.0", external: true }) });
+  const { updater, phases } = driver(api);
+  await updater.handle("check");
+  expect(phases()).toEqual(["checking", "external"]);
+  await updater.handle("install");
+  expect(calls).toEqual([]);
+  expect(updater.report()).toMatchObject({ phase: "external", version: "0.3.0" });
+  await updater.handle("dismiss");
+  expect(updater.report().phase).toBe("idle");
+});
+
 test("a manual check that finds nothing says the app is up to date; Later puts it away", async () => {
   const { api, calls } = fake({ found: null });
   const { updater, phases } = driver(api);
@@ -235,6 +247,9 @@ test("the banner: Install now and Later for a ready release, Later alone for a f
   expect(promptFor(null)).toBeNull();
   expect(promptFor(status("ready", "0.3.0", null))).toEqual({ message: "Version 0.3.0 is ready.", install: true });
   expect(promptFor(status("ready", null, null))).toBeNull();
+  expect(promptFor(status("external", "0.3.0", null))).toEqual({
+    message: "Version 0.3.0 is available.", install: false, releasePage: "https://github.com/hexuria/buwiz-forms/releases/latest",
+  });
   expect(promptFor(status("failed", "0.3.0", "It broke."))).toEqual({ message: "It broke.", install: false });
   expect(promptFor(status("failed", null, null))).toEqual({ message: VERIFY_REJECTED, install: false });
   expect(promptFor(status("up_to_date", null, "eBIRForms 0.2.0 is up to date."))).toEqual({ message: "eBIRForms 0.2.0 is up to date.", install: false });

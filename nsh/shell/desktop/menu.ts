@@ -7,6 +7,7 @@ import { app } from "../app";
 import { perform } from "./actions";
 import { captured, capturing, closePrefs } from "./app_keys";
 import { buildMenu, itemKeys, type MenuAction, type MenuState, type Os } from "./menu_model";
+import { masBuild } from "./native";
 
 /** What decides the menu now (reactive). */
 export function menuStateNow(os: Os): MenuState {
@@ -21,6 +22,7 @@ export function menuStateNow(os: Os): MenuState {
     canSwitchTaxpayer: app.isAdmin(),
     keys: closePrefs().keys,
     capturing: capturing(),
+    masBuild: masBuild(),
   };
 }
 

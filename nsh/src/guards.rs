@@ -1,8 +1,8 @@
 //! The two guards that stand between the TSX screens and the owner's data or the BIR.
 //!
 //! * The **send guard** ([`send_guard`]) runs once, before the first database open and before the
-//!   submission worker starts. It forces a dry run, drops the live acknowledgement, and decides whether the
-//!   worker may start at all. A loopback mock BIR server or health-checked mock relay can send.
+//!   submission worker starts. Desktop releases normally use the shared filing transport. Development,
+//!   test, agent and mobile runs stay dry unless a local mock is selected.
 //! * The **database guard** ([`database_refusal`]) refuses to open a database inside the owner's data
 //!   folders, by name and by device and inode. It is checked before every host call, so a lazy open can
 //!   never get around it. The folders hang off the home folder of the account's real uid, not `$HOME`. In a
@@ -20,8 +20,7 @@
 //! not change. Where neither exists, the guard opens a database only when the caller names it with
 //! `BIR_DATABASE_PATH` ([`unverified_refusal`]).
 //!
-//! **Environment.** The send guard removes the live acknowledgement and forces dry-run unless a mock
-//! is selected. Android debug launch configuration is loaded before this guard (see `door::process`).
+//! **Environment.** Android debug launch configuration is loaded before this guard (see `door::process`).
 
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
@@ -33,6 +32,8 @@ use bir_core::dev_mode::SubmissionMode;
 /// What the send guard decided.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SendMode {
+    /// The desktop release uses the configured filing transport.
+    Live,
     /// `BIR_SFTP_DRY_RUN=1`: a queued return is "sent" to a folder on this computer, nothing leaves it.
     DryRun,
     /// The mock BIR server is listening on literal `127.0.0.1` or `::1`.
@@ -50,9 +51,10 @@ impl SendMode {
         !matches!(self, SendMode::Refused(_))
     }
 
-    /// The word TSX sees: `dry_run`, `mock` or `refused`.
+    /// The word TSX sees: `live`, `dry_run`, `mock`, `relay` or `refused`.
     pub fn label(&self) -> &'static str {
         match self {
+            SendMode::Live => "live",
             SendMode::DryRun => "dry_run",
             SendMode::Mock { .. } => "mock",
             SendMode::Relay { .. } => "relay",
@@ -63,7 +65,7 @@ impl SendMode {
     /// A sentence for the status, when there is something to say.
     pub fn note(&self) -> Option<String> {
         match self {
-            SendMode::DryRun => None,
+            SendMode::Live | SendMode::DryRun => None,
             SendMode::Mock { host, port } => Some(format!(
                 "Sending to the local mock endpoint at {host}:{port}. Nothing reaches the BIR."
             )),
@@ -78,7 +80,7 @@ impl SendMode {
 /// How long the mock's port gets to answer.
 const LISTEN_TIMEOUT: Duration = Duration::from_millis(400);
 
-/// Set `BIR_SFTP_DRY_RUN=1`, remove `BIR_SFTP_LIVE`, then check that the transport really is a dry run and
+/// On guarded launches, set `BIR_SFTP_DRY_RUN=1`, remove `BIR_SFTP_LIVE`, then check that the transport really is a dry run and
 /// that the Dev Mode panel does not point at the test server. Mock mode is the only exception: a listening
 /// loopback `BIR_SFTP_HOST` leaves the environment as the `mock-bir-app` recipe made it. An explicit
 /// `BIR_RELAY_URL` must instead pass the loopback/health guard and never falls back to SFTP.
@@ -86,25 +88,50 @@ const LISTEN_TIMEOUT: Duration = Duration::from_millis(400);
 /// Android enforces these switches through in-process configuration; desktop registration
 /// changes the environment. Call it once, before the database opens (the process boot does).
 pub fn send_guard() -> SendMode {
-    send_guard_with(port_is_listening)
+    send_guard_for(
+        restrict_sending(cfg!(debug_assertions)),
+        port_is_listening,
+        mock_health,
+        bir_core::transport::is_sftp_dry_run,
+    )
+}
+
+fn restrict_sending(debug_build: bool) -> bool {
+    !cfg!(any(target_os = "macos", target_os = "windows", target_os = "linux"))
+        || debug_build
+        || bir_core::db::test_environment()
+        || matches!(bir_core::config::var("GPUI_AGENT").as_deref(), Ok("1" | "true"))
 }
 
 /// [`send_guard`] with the "is anything listening there" probe given, for tests.
+#[cfg(test)]
 pub(crate) fn send_guard_with(listening: impl Fn(&str, u16) -> bool) -> SendMode {
     send_guard_with_health(listening, mock_health)
 }
 
+#[cfg(test)]
 fn send_guard_with_health(
     listening: impl Fn(&str, u16) -> bool,
     healthy: impl Fn(&str, u16) -> Result<bool, String>,
 ) -> SendMode {
-    #[cfg(target_os = "android")]
-    bir_core::config::force("BIR_SFTP_LIVE", None);
-    #[cfg(not(target_os = "android"))]
-    // SAFETY: desktop registration runs before NSH threads, database and worker startup.
-    unsafe {
-        std::env::remove_var("BIR_SFTP_LIVE")
-    };
+    send_guard_for(true, listening, healthy, bir_core::transport::is_sftp_dry_run)
+}
+
+fn send_guard_for(
+    restricted: bool,
+    listening: impl Fn(&str, u16) -> bool,
+    healthy: impl Fn(&str, u16) -> Result<bool, String>,
+    transport_dry_run: impl FnOnce() -> bool,
+) -> SendMode {
+    if restricted {
+        #[cfg(target_os = "android")]
+        bir_core::config::force("BIR_SFTP_LIVE", None);
+        #[cfg(not(target_os = "android"))]
+        // SAFETY: desktop registration runs before NSH threads, database and worker startup.
+        unsafe {
+            std::env::remove_var("BIR_SFTP_LIVE")
+        };
+    }
     let relay = relay_target(&listening, &healthy);
     if let Some(Ok(url)) = &relay {
         #[cfg(target_os = "android")]
@@ -114,6 +141,15 @@ fn send_guard_with_health(
         unsafe {
             std::env::set_var(bir_core::transport::RELAY_URL_ENV, url)
         };
+    }
+    if !restricted {
+        return relay_verdict(relay).unwrap_or_else(|| {
+            if transport_dry_run() {
+                SendMode::DryRun
+            } else {
+                SendMode::Live
+            }
+        });
     }
     let mock = mock_target(&listening);
     if !matches!(relay, Some(Ok(_))) && mock.is_none() {
@@ -127,7 +163,7 @@ fn send_guard_with_health(
     }
     let panel = bir_core::dev_mode::panel_submission_mode();
     relay_verdict(relay)
-        .unwrap_or_else(|| verdict(mock, bir_core::transport::is_sftp_dry_run(), panel))
+        .unwrap_or_else(|| verdict(mock, transport_dry_run(), panel))
 }
 
 /// The decision when `BIR_RELAY_URL` is set (`relay`: its origin when it is a listening loopback one, else why
@@ -722,6 +758,7 @@ mod tests {
             "BIR_SFTP_PORT",
             "BIR_RELAY_URL",
             "EBIR_TEST_ENV",
+            "GPUI_AGENT",
         ];
         let vars: Vec<(&str, Option<&str>)> = names
             .iter()
@@ -743,6 +780,42 @@ mod tests {
 
     fn dry_run() -> Option<String> {
         std::env::var("BIR_SFTP_DRY_RUN").ok()
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    #[test]
+    fn desktop_release_leaves_the_filing_transport_in_control() {
+        for (transport_is_dry, expected) in [(false, SendMode::Live), (true, SendMode::DryRun)] {
+            sending_env(&[], || {
+                let mode = send_guard_for(
+                    restrict_sending(false),
+                    |_, _| panic!("no mock requested"),
+                    |_, _| panic!("no relay requested"),
+                    || transport_is_dry,
+                );
+                assert_eq!(mode, expected);
+                assert!(mode.worker_may_start());
+                assert_eq!(dry_run(), None);
+                assert_eq!(live(), None);
+            });
+        }
+    }
+
+    #[test]
+    fn test_and_agent_launches_cannot_go_live_in_release() {
+        for flag in [("EBIR_TEST_ENV", "1"), ("GPUI_AGENT", "1")] {
+            sending_env(&[flag], || {
+                assert!(restrict_sending(false));
+                let mode = send_guard_for(
+                    restrict_sending(false),
+                    |_, _| panic!("no mock requested"),
+                    |_, _| panic!("no relay requested"),
+                    bir_core::transport::is_sftp_dry_run,
+                );
+                assert_eq!(mode, SendMode::DryRun);
+                assert_eq!(dry_run().as_deref(), Some("1"));
+            });
+        }
     }
 
     #[test]
@@ -900,7 +973,7 @@ mod tests {
     #[test]
     fn a_dry_run_is_forced_and_the_live_acknowledgement_removed() {
         sending_env(&[("BIR_SFTP_LIVE", "1")], || {
-            assert_eq!(send_guard(), SendMode::DryRun);
+            assert_eq!(send_guard_with(port_is_listening), SendMode::DryRun);
             assert_eq!(dry_run().as_deref(), Some("1"));
             assert_eq!(live(), None);
             assert!(bir_core::transport::is_sftp_dry_run());
@@ -934,7 +1007,7 @@ mod tests {
                 ("BIR_SFTP_PORT", port.as_str()),
             ],
             || {
-                let mode = send_guard();
+                let mode = send_guard_with(port_is_listening);
                 assert_eq!(
                     mode,
                     SendMode::Mock {
@@ -985,7 +1058,7 @@ mod tests {
                 ("BIR_SFTP_PORT", free.as_str()),
             ],
             || {
-                assert_eq!(send_guard(), SendMode::DryRun);
+                assert_eq!(send_guard_with(port_is_listening), SendMode::DryRun);
                 assert_eq!(dry_run().as_deref(), Some("1"));
             },
         );
@@ -1149,12 +1222,12 @@ mod tests {
             None
         );
         assert_eq!(
-            home.refusal(&home.path("Library/Group Containers/group.dev.goldcoders.bir.nsh/x.db")),
+            home.refusal(&home.path("Library/Group Containers/group.dev.goldcoders.bir.example/x.db")),
             None
         );
         assert_eq!(
             home.refusal(
-                &home.path("Library/Application Support/dev.goldcoders.bir.nsh/bir_data.db")
+                &home.path("Library/Application Support/dev.goldcoders.bir/bir_data.db")
             ),
             None
         );

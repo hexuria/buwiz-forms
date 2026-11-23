@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/bir-app-api",
+    "crates/bir-cli",
     "crates/bir-core",
     "crates/bir-host-shim",
     "crates/bir-mcp",

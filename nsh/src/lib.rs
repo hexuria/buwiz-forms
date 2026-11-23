@@ -115,21 +115,27 @@ fn dev_command_enabled() -> bool {
     false
 }
 
+fn prepare_door(_system: System) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    door::prepare_android(_system.data_dir)?;
+    #[cfg(not(target_os = "android"))]
+    door::install_logging();
+    Ok(())
+}
+
 #[module]
 impl Door {
     /// Calls the synchronous host function `name` with `args` and answers its value. A host error is thrown
     /// as an Error with the host's message; an async function, or an unknown name, throws too.
     pub fn call(name: String, args: Vec<JsonValue>, _system: System) -> Result<JsonValue, String> {
-        #[cfg(target_os = "android")]
-        door::prepare_android(_system.data_dir)?;
+        prepare_door(_system)?;
         door::call(&name, args)
     }
 
     /// Calls the asynchronous host function `name` with `args`: a promise of its value, rejected with the
     /// host's message on a host error. A sync function, or an unknown name, rejects too.
     pub async fn call_async(name: String, args: Vec<JsonValue>, _system: System) -> Result<JsonValue, String> {
-        #[cfg(target_os = "android")]
-        door::prepare_android(_system.data_dir)?;
+        prepare_door(_system)?;
         door::call_async(name, args).await
     }
 
@@ -145,6 +151,12 @@ impl Door {
                 },
             })
             .collect()
+    }
+
+    /// An opaque database change token; null when changes cannot be determined.
+    pub fn data_change_token(_system: System) -> Result<Option<String>, String> {
+        prepare_door(_system)?;
+        door::data_change_token()
     }
 
     /// How sending stands and which database file is named, without opening it.
@@ -271,7 +283,7 @@ mod tests {
             || {
                 let data = bir_core::platform::data_dir();
                 assert!(
-                    data.ends_with("dev.goldcoders.bir.nsh"),
+                    data.ends_with("dev.goldcoders.bir"),
                     "the data folder is the old app's group container: bir-core was built with sqlcipher ({})",
                     data.display()
                 );

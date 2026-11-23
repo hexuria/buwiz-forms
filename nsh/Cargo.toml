@@ -91,6 +91,7 @@ nsh-platform-macos = { path = "../../nsh/crates/nsh-platform-macos", default-fea
 
 [features]
 default = []
+mas_build = ["bir-app-api/mas_build", "bir-core/mas_build"]
 # Agent remote control, as the old app (`bir-shell --features agent`): the shared gpui-agent session over a loopback listener,
 # and NSH's own window control plane on macOS. Compiled in only here; the listener still needs GPUI_AGENT=1 (see src/agent.rs).
 agent = ["bir-app-api/agent", "dep:gpui-agent", "dep:nsh-platform-macos", "nsh-platform-macos/gpui-agent-server"]

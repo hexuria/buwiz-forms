@@ -1,281 +1,135 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT"
-VERSION=""
-TARGET=""
-OUT=""
-
-usage() {
-    echo "Usage: $0 --version <version> --target <triple> --out <directory>" >&2
-}
-
+VERSION='' TARGET='' OUT=''
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --version)
-            VERSION="${2:?missing value for --version}"
-            shift 2
-            ;;
-        --target)
-            TARGET="${2:?missing value for --target}"
-            shift 2
-            ;;
-        --out)
-            OUT="${2:?missing value for --out}"
-            shift 2
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        *)
-            usage
-            exit 2
-            ;;
+        --version) VERSION="${2:?}"; shift 2 ;;
+        --target) TARGET="${2:?}"; shift 2 ;;
+        --out) OUT="${2:?}"; shift 2 ;;
+        *) echo "Usage: $0 --version VERSION --target TRIPLE --out DIRECTORY" >&2; exit 2 ;;
     esac
 done
-
-if [[ ! "$VERSION" =~ ^[0-9][A-Za-z0-9.+~-]*$ ]]; then
-    echo "Invalid package version: $VERSION" >&2
-    exit 2
-fi
-if [ -z "$OUT" ]; then
-    usage
-    exit 2
-fi
-
+[[ "$VERSION" =~ ^[0-9][A-Za-z0-9.+~-]*$ ]] && [ -n "$OUT" ] || exit 2
 case "$TARGET" in
-    x86_64-unknown-linux-gnu)
-        ARCH=x64
-        DO_ARCH_PACKAGE=1
-        ;;
-    aarch64-unknown-linux-gnu)
-        ARCH=arm64
-        DO_ARCH_PACKAGE=0
-        ;;
-    *)
-        echo "Unsupported Linux target: $TARGET" >&2
-        exit 2
-        ;;
+    x86_64-unknown-linux-gnu) ARCH=x64; DEB_ARCH=amd64; RPM_ARCH=x86_64 ;;
+    aarch64-unknown-linux-gnu) ARCH=arm64; DEB_ARCH=arm64; RPM_ARCH=aarch64 ;;
+    *) echo "Unsupported target: $TARGET" >&2; exit 2 ;;
 esac
-
-OUT="$(mkdir -p "$OUT" && cd "$OUT" && pwd)"
-# The shipped app is the gpui-shell host: crates/bir-shell is a standalone
-# workspace, so its binaries land under crates/bir-shell/target. BIN_DIR may be
-# overridden to package a differently-rooted build (e.g. an alternate build).
-BIN_DIR="${BIN_DIR:-$ROOT/crates/bir-shell/target/$TARGET/release}"
-BIN="$BIN_DIR/bir"
-if [ ! -x "$BIN" ]; then
-    echo "Release binary is missing or not executable: $BIN" >&2
-    exit 1
-fi
-for required in \
-    "$ROOT/app/main.js" \
-    "$ROOT/print-overrides" \
-    "$ROOT/assets/linux/dev.goldcoders.bir.desktop" \
-    "$ROOT/assets/linux/install-desktop-entry.sh" \
-    "$ROOT/assets/linux/icons/hicolor/48x48/apps/dev.goldcoders.bir.png" \
-    "$ROOT/assets/linux/icons/hicolor/64x64/apps/dev.goldcoders.bir.png" \
-    "$ROOT/assets/linux/icons/hicolor/128x128/apps/dev.goldcoders.bir.png" \
-    "$ROOT/assets/linux/icons/hicolor/256x256/apps/dev.goldcoders.bir.png" \
-    "$ROOT/assets/linux/icons/hicolor/512x512/apps/dev.goldcoders.bir.png"; do
-    test -e "$required" || { echo "Required Linux packaging file is missing: $required" >&2; exit 1; }
-done
-
-rpm_version="${VERSION//-/\~}"
-base_name="eBIRForms-Linux-${ARCH}-${VERSION}"
-deb="$OUT/${base_name}.deb"
-rpm="$OUT/${base_name}.rpm"
-tarball="$OUT/${base_name}.tar.gz"
-
-ensure_cargo_tool() {
-    local command_name="$1"
-    local package_name="$2"
-    local wanted_version="$3"
-    local actual_version=""
-    if command -v "$command_name" >/dev/null 2>&1; then
-        actual_version="$("$command_name" --version | awk '{print $NF}')"
-    fi
-    if [ "$actual_version" != "$wanted_version" ]; then
-        cargo install --locked "$package_name" --version "$wanted_version" --force
-    fi
-}
-
-ensure_cargo_tool cargo-deb cargo-deb 3.7.0
-ensure_cargo_tool cargo-generate-rpm cargo-generate-rpm 0.21.0
-
+[ "$(uname -m)" = "$RPM_ARCH" ] || { echo 'Build on the target architecture' >&2; exit 1; }
+mkdir -p "$OUT"
+OUT="$(cd "$OUT" && pwd)"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
-payload="$stage/eBIRForms-Linux-${ARCH}-${VERSION}"
-mkdir -p "$payload"
-install -m 755 "$BIN" "$payload/bir"
-cp -R "$ROOT/assets" "$payload/assets"
-# The shell resolves app/ and print-overrides/ beside the executable (tarball)
-# or under /usr/share/ebirforms (system packages) — see
-# crates/bir-shell/src/packaged.rs.
-cp -R "$ROOT/app" "$payload/app"
-cp -R "$ROOT/print-overrides" "$payload/print-overrides"
-install -m 755 "$ROOT/assets/linux/install-desktop-entry.sh" "$payload/install-desktop-entry.sh"
-check_launcher() {
-    local applications="$1"
-    local icons="$2"
-    test -f "$applications/dev.goldcoders.bir.desktop" || {
-        echo "Missing Linux desktop entry in $applications" >&2
-        return 1
-    }
-    for size in 48 64 128 256 512; do
-        test -f "$icons/${size}x${size}/apps/dev.goldcoders.bir.png" || {
-            echo "Missing ${size}x${size} Linux icon in $icons" >&2
-            return 1
-        }
-    done
-}
-
+cd "$ROOT/nsh"
+nsh package --target linux
+name="$(python3 -c 'import json; print(json.load(open("nsh.json"))["name"])')"
+app_version="$(python3 -c 'import json; print(json.load(open("nsh.json"))["version"])')"
+payload="$stage/$name"
+cp -a ".nsh/out/$name" "$payload"
+test -x "$payload/$name"
+test ! -e "$payload/ebirforms-no-self-update"
+# Print preview reads these beside the executable, not from NSH assets.
+cp -a "$ROOT/print-overrides" "$payload/print-overrides"
 python3 "$ROOT/scripts/audit_no_legacy.py" --package-root "$payload"
-check_launcher "$payload/assets/linux" "$payload/assets/linux/icons/hicolor"
-tarball_root="$stage/tarball-extracted"
-mkdir -p "$tarball_root"
-tar -czf "$tarball" -C "$stage" "$(basename "$payload")"
-tar -xzf "$tarball" -C "$tarball_root"
-python3 "$ROOT/scripts/audit_no_legacy.py" --package-root "$tarball_root"
-check_launcher \
-    "$tarball_root/$(basename "$payload")/assets/linux" \
-    "$tarball_root/$(basename "$payload")/assets/linux/icons/hicolor"
-
-cargo deb --locked --manifest-path crates/bir-shell/Cargo.toml --no-build \
-    --target "$TARGET" --deb-version "$VERSION" -o "$deb"
-deb_root="$stage/deb-extracted"
-mkdir -p "$deb_root"
-dpkg-deb --extract "$deb" "$deb_root"
-python3 "$ROOT/scripts/audit_no_legacy.py" --package-root "$deb_root"
-test -x "$deb_root/usr/bin/ebirforms"
-test -f "$deb_root/usr/share/ebirforms/app/main.js"
-test -d "$deb_root/usr/share/ebirforms/print-overrides"
-test -d "$deb_root/usr/share/ebirforms/assets"
-check_launcher "$deb_root/usr/share/applications" "$deb_root/usr/share/icons/hicolor"
-
-rpm_metadata="$stage/rpm-metadata.toml"
-printf 'version = "%s"\n' "$rpm_version" > "$rpm_metadata"
-cargo generate-rpm -p crates/bir-shell --target "$TARGET" \
-    --metadata-overwrite="$rpm_metadata" -o "$rpm"
-if ! command -v rpm2archive >/dev/null 2>&1; then
-    echo "rpm2archive is required to audit the generated RPM payload" >&2
-    exit 1
-fi
-rpm_root="$stage/rpm-extracted"
-mkdir -p "$rpm_root"
-rpm2archive --nocompression - < "$rpm" | tar -xf - -C "$rpm_root"
-python3 "$ROOT/scripts/audit_no_legacy.py" --package-root "$rpm_root"
-test -x "$rpm_root/usr/bin/ebirforms"
-test -f "$rpm_root/usr/share/ebirforms/app/main.js"
-test -d "$rpm_root/usr/share/ebirforms/print-overrides"
-test -d "$rpm_root/usr/share/ebirforms/assets"
-check_launcher "$rpm_root/usr/share/applications" "$rpm_root/usr/share/icons/hicolor"
-
-produced=("$deb" "$rpm" "$tarball")
-if [ "$DO_ARCH_PACKAGE" -eq 1 ]; then
-    if ! command -v docker >/dev/null 2>&1; then
-        echo "Docker is required to build the Arch Linux package" >&2
-        exit 1
-    fi
-    arch_build="$stage/arch-build"
-    mkdir -p "$arch_build"
-    cp "$tarball" "$arch_build/"
-    aur_pkgver="${VERSION//-/.}"
-    aur_pkgver="${aur_pkgver//+/.}"
-    archive_name="$(basename "$tarball")"
-    archive_sha256="$(sha256sum "$tarball" | awk '{print $1}')"
-    cat > "$arch_build/PKGBUILD" <<PKGBUILD
+base="eBIRForms-Linux-${ARCH}-${VERSION}"
+tar -czf "$OUT/$base.tar.gz" -C "$stage" "$name"
+updater="$name-$app_version-linux-$RPM_ARCH.tar.gz"
+test -f ".nsh/out/$updater"
+# Retain NSH's updater name and root, including the same print resources.
+cp "$OUT/$base.tar.gz" "$OUT/$updater"
+system="$stage/system"
+mkdir -p "$system/usr/lib/ebirforms" "$system/usr/bin" "$system/usr/share/applications"
+cp -a "$payload/." "$system/usr/lib/ebirforms/"
+touch "$system/usr/lib/ebirforms/ebirforms-no-self-update"
+ln -s "/usr/lib/ebirforms/$name" "$system/usr/bin/ebirforms"
+install -m644 "$ROOT/assets/linux/dev.goldcoders.bir.desktop" "$system/usr/share/applications/"
+cp -a "$ROOT/assets/linux/icons" "$system/usr/share/"
+mkdir -p "$system/DEBIAN"
+cat > "$system/DEBIAN/control" <<EOF
+Package: ebirforms
+Version: $VERSION
+Architecture: $DEB_ARCH
+Maintainer: Goldcoders Corp <support@goldcoders.dev>
+Section: office
+Priority: optional
+Depends: libgtk-4-1 (>= 4.14), libwebkitgtk-6.0-4 (>= 2.42), gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, libdbus-1-3, fonts-noto-core
+Description: Philippine BIR tax return filing application
+EOF
+dpkg-deb --root-owner-group --build "$system" "$OUT/$base.deb"
+rm -rf "$system/DEBIAN"
+mkdir -p "$stage/rpm/"{BUILD,RPMS,SOURCES,SPECS,SRPMS,BUILDROOT}
+tar -czf "$stage/rpm/SOURCES/payload.tar.gz" -C "$system" .
+cat > "$stage/rpm/SPECS/ebirforms.spec" <<EOF
+Name: ebirforms
+Version: ${VERSION//-/\~}
+Release: 1
+Summary: Philippine BIR tax return filing application
+License: MIT
+URL: https://github.com/hexuria/buwiz-forms
+BuildArch: $RPM_ARCH
+Source0: payload.tar.gz
+Requires: gtk4 >= 4.14, webkitgtk6.0 >= 2.42, gstreamer1-plugins-base, gstreamer1-plugins-good, dbus-libs, google-noto-sans-fonts
+AutoReqProv: no
+%description
+Prepare, validate and file Philippine BIR tax returns.
+%prep
+%build
+%install
+mkdir -p %{buildroot}
+tar -xzf %{SOURCE0} -C %{buildroot}
+%files
+/usr/lib/ebirforms
+/usr/bin/ebirforms
+/usr/share/applications/dev.goldcoders.bir.desktop
+/usr/share/icons/hicolor/*/apps/dev.goldcoders.bir.png
+EOF
+rpmbuild --define "_topdir $stage/rpm" --define '__os_install_post %{nil}' -bb "$stage/rpm/SPECS/ebirforms.spec"
+cp "$stage/rpm/RPMS/$RPM_ARCH/"*.rpm "$OUT/$base.rpm"
+if [ "$ARCH" = x64 ]; then
+    mkdir -p "$stage/arch"
+    tar -czf "$stage/arch/payload.tar.gz" -C "$system" .
+    cat > "$stage/arch/PKGBUILD" <<EOF
 pkgname=ebirforms
-pkgver=${aur_pkgver}
+pkgver=$(printf '%s' "$VERSION" | tr '+-~' '...')
 pkgrel=1
 pkgdesc='Philippine BIR tax return filing application'
 arch=('x86_64')
 url='https://github.com/hexuria/buwiz-forms'
 license=('MIT')
-depends=('gtk3' 'webkit2gtk-4.1' 'vulkan-icd-loader' 'libxkbcommon' 'libxkbcommon-x11' 'wayland' 'fontconfig' 'freetype2' 'dbus' 'noto-fonts' 'libayatana-appindicator')
+depends=('gtk4>=4.14' 'webkitgtk-6.0' 'gst-plugins-base' 'gst-plugins-good' 'dbus' 'noto-fonts')
 options=('!strip' '!debug')
-source=('${archive_name}')
-sha256sums=('${archive_sha256}')
-
+source=('payload.tar.gz')
+sha256sums=('$(sha256sum "$stage/arch/payload.tar.gz" | awk '{print $1}')')
 package() {
-  local app_root="\$srcdir/eBIRForms-Linux-x64-${VERSION}"
-  install -Dm755 "\$app_root/bir" "\$pkgdir/usr/bin/ebirforms"
-  install -d "\$pkgdir/usr/share/ebirforms/app"
-  cp -a "\$app_root/app/." "\$pkgdir/usr/share/ebirforms/app/"
-  install -d "\$pkgdir/usr/share/ebirforms/print-overrides"
-  cp -a "\$app_root/print-overrides/." "\$pkgdir/usr/share/ebirforms/print-overrides/"
-  install -d "\$pkgdir/usr/share/ebirforms/assets"
-  cp -a "\$app_root/assets/." "\$pkgdir/usr/share/ebirforms/assets/"
-  install -Dm644 "\$app_root/assets/linux/dev.goldcoders.bir.desktop" "\$pkgdir/usr/share/applications/dev.goldcoders.bir.desktop"
-  for size in 48 64 128 256 512; do
-    install -Dm644 "\$app_root/assets/linux/icons/hicolor/\${size}x\${size}/apps/dev.goldcoders.bir.png" "\$pkgdir/usr/share/icons/hicolor/\${size}x\${size}/apps/dev.goldcoders.bir.png"
-  done
+  cp -a "\$srcdir/usr" "\$pkgdir/"
 }
-PKGBUILD
-    aur_url="https://github.com/hexuria/buwiz-forms/releases/download/v${VERSION}/${archive_name}"
-    sed \
-        -e 's/^pkgname=ebirforms$/pkgname=ebirforms-bin/' \
-        -e "s|^source=('${archive_name}')$|source=('${aur_url}')|" \
-        "$arch_build/PKGBUILD" | awk '
-            /^pkgname=ebirforms-bin$/ {
-                print
-                print "provides=(" sprintf("%c", 39) "ebirforms" sprintf("%c", 39) ")"
-                print "conflicts=(" sprintf("%c", 39) "ebirforms" sprintf("%c", 39) ")"
-                next
-            }
-            { print }
-        ' > "$OUT/ebirforms-bin.PKGBUILD"
-    docker run --rm --platform linux/amd64 \
-        -e HOST_UID="$(id -u)" \
-        -e HOST_GID="$(id -g)" \
-        -v "$arch_build:/work" archlinux:base-devel \
-        bash -euc '
-            trap "chown -R $HOST_UID:$HOST_GID /work" EXIT
-            # makepkg --syncdeps runs as builder and sudo has no password here.
-            # Every depends() entry has to be installed as root first, or
-            # pacman stops with "a terminal is required to read the password".
-            pacman -Syu --noconfirm --needed base-devel gtk3 webkit2gtk-4.1 \
-                vulkan-icd-loader libxkbcommon libxkbcommon-x11 wayland \
-                fontconfig freetype2 noto-fonts dbus libayatana-appindicator
-            useradd --create-home --uid 1000 builder
-            chown -R builder:builder /work
-            su builder -c "cd /work && makepkg --syncdeps --noconfirm --clean --cleanbuild"
-        '
-    arch_package=("$arch_build"/ebirforms-*.pkg.tar.zst)
-    if [ "${#arch_package[@]}" -ne 1 ]; then
-        echo "Expected one Arch package in $arch_build" >&2
-        exit 1
-    fi
-    cp "${arch_package[0]}" "$OUT/${base_name}.pkg.tar.zst"
-    arch_root="$stage/arch-extracted"
-    mkdir -p "$arch_root"
-    tar --zstd -xf "$OUT/${base_name}.pkg.tar.zst" -C "$arch_root"
-    python3 "$ROOT/scripts/audit_no_legacy.py" --package-root "$arch_root"
-    test -x "$arch_root/usr/bin/ebirforms"
-    test -f "$arch_root/usr/share/ebirforms/app/main.js"
-    test -d "$arch_root/usr/share/ebirforms/print-overrides"
-    test -d "$arch_root/usr/share/ebirforms/assets"
-    check_launcher "$arch_root/usr/share/applications" "$arch_root/usr/share/icons/hicolor"
-    produced+=("$OUT/${base_name}.pkg.tar.zst" "$OUT/ebirforms-bin.PKGBUILD")
+EOF
+    cp -a "$system/." "$stage/arch/"
+    cat > "$stage/arch/.PKGINFO" <<EOF
+pkgname = ebirforms
+pkgbase = ebirforms
+pkgver = $(printf '%s' "$VERSION" | tr '+-~' '...')-1
+pkgdesc = Philippine BIR tax return filing application
+url = https://github.com/hexuria/buwiz-forms
+builddate = $(date +%s)
+packager = Goldcoders Corp <support@goldcoders.dev>
+size = $(du -sb "$system" | awk '{print $1}')
+arch = x86_64
+license = MIT
+depend = gtk4>=4.14
+depend = webkitgtk-6.0
+depend = gst-plugins-base
+depend = gst-plugins-good
+depend = dbus
+depend = noto-fonts
+EOF
+    tar --zstd --owner=0 --group=0 -cf "$OUT/$base.pkg.tar.zst" -C "$stage/arch" .PKGINFO usr
+    cp "$stage/arch/PKGBUILD" "$OUT/ebirforms-bin.PKGBUILD"
+    sed -i "s|source=(.*|source=('https://github.com/hexuria/buwiz-forms/releases/download/v$VERSION/$base.pkg.tar.zst')|; s|sha256sums=(.*|sha256sums=('$(sha256sum "$OUT/$base.pkg.tar.zst" | awk '{print $1}')')|" "$OUT/ebirforms-bin.PKGBUILD"
+    install -m755 "$ROOT/packaging/linux/install-linux.sh" "$OUT/install-linux.sh"
 fi
-
-if [ "$ARCH" = x64 ]; then
-    install -m 755 "$ROOT/packaging/linux/install-linux.sh" "$OUT/install-linux.sh"
-    produced+=("$OUT/install-linux.sh")
-fi
-(
-    cd "$OUT"
-    names=()
-    for file in "${produced[@]}"; do
-        names+=("$(basename "$file")")
-    done
-    sha256sum "${names[@]}" > "SHA256SUMS-linux-${ARCH}.txt"
-)
-
-printf 'Linux %s packages written to %s:\n' "$ARCH" "$OUT"
-for file in "${produced[@]}"; do
-    printf '  %s (%s bytes)\n' "$(basename "$file")" "$(stat -c '%s' "$file")"
-done
-printf '  SHA256SUMS-linux-%s.txt\n' "$ARCH"
+cd "$OUT"
+files=("$base.deb" "$base.rpm" "$base.tar.gz" "$updater")
+if [ "$ARCH" = x64 ]; then files+=("$base.pkg.tar.zst" ebirforms-bin.PKGBUILD install-linux.sh); fi
+sha256sum "${files[@]}" > "SHA256SUMS-linux-${ARCH}.txt"

@@ -486,7 +486,7 @@ def run(args: argparse.Namespace) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--headless", required=True, help="path to bir-headless")
+    parser.add_argument("--headless", required=True, help="path to the headless bir binary")
     parser.add_argument("--mcp", required=True, help="path to bir-mcp")
     parser.add_argument("--work", required=True, help="scratch directory")
     try:

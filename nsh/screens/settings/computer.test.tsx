@@ -29,8 +29,8 @@ for (const { name, size } of SIZES) {
     // How closing works is Settings > Keyboard's now.
     expect(app.texts()).not.toContain("Close window");
     expect(app.texts().some((t) => t.includes("ebirforms-door") && t.endsWith("bir_data.db"))).toBe(true);
-    // The logs folder inside the app's data folder, with the system's own separator (a backslash on Windows).
-    expect(app.texts().some((t) => t.replace(/\\/g, "/").endsWith("dev.goldcoders.bir.nsh/logs"))).toBe(true);
+    expect(app.texts().some((t) => t.replace(/\\/g, "/").endsWith("dev.goldcoders.bir"))).toBe(true);
+    expect(app.texts().some((t) => /ebirforms-logs-\d+\/logs$/.test(t.replace(/\\/g, "/")))).toBe(true);
 
     // The longest retention loses nothing newer than 90 days of the NSH app's own logs.
     await app.press("id:settings-retention-trigger");

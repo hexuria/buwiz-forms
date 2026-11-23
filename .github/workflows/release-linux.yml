@@ -7,13 +7,18 @@ on:
         description: Release tag; the leading v is optional
         required: true
         type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Optional release tag (otherwise the app version plus -pr)
+        type: string
   pull_request:
     paths:
       - .github/workflows/release-linux.yml
       - packaging/linux/**
-      - crates/bir-shell/Cargo.toml
+      - nsh/**
       - assets/linux/**
-  workflow_dispatch:
+      - print-overrides/**
 
 permissions:
   contents: read
@@ -24,11 +29,16 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # Compiled into the binary through option_env! (bir-core email OAuth and
-  # Google Calendar). release.yml passes them with `secrets: inherit`; the
-  # macOS and Windows release builds already set the same two variables.
+  RUSTUP_TOOLCHAIN: '1.99.0'
+  CARGO_INCREMENTAL: '0'
+  NSH_REPOSITORY: hexuria/nsh
+  NSH_PINNED_REF: 70d8ff26b9e9dccb17a908de97cd4a3f3e381276
   GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
   GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+  BUWIZ_NO_KEYCHAIN: '1'
+  EBIR_TEST_ENV: '1'
+  BIR_AUTH_BYPASS: '1'
+  BIR_SFTP_DRY_RUN: '1'
 
 jobs:
   build-linux:
@@ -36,128 +46,100 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             arch: x64
-          - runner: ubuntu-22.04-arm
+          - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             arch: arm64
     runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: buwiz-forms
     steps:
       - uses: actions/checkout@v4
-
+        with:
+          path: buwiz-forms
+      - name: Check out NSH beside buwiz-forms
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.NSH_REPOSITORY }}
+          ref: ${{ env.NSH_PINNED_REF }}
+          token: ${{ secrets.NSH_REPO_TOKEN || github.token }}
+          path: nsh
+          persist-credentials: false
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config \
-            libx11-dev \
-            libxcb1-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libxkbcommon-dev \
-            libxkbcommon-x11-dev \
-            libwayland-dev \
-            libwayland-client0 \
-            libasound2-dev \
-            libudev-dev \
-            libvulkan-dev \
-            libfontconfig1-dev \
-            libfreetype-dev \
-            libssl-dev \
-            libpolkit-gobject-1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-1 \
-            libwebkit2gtk-4.1-dev \
-            mesa-vulkan-drivers \
-            rpm \
-            zstd
-
-      - name: Report Google OAuth build inputs
-        shell: bash
-        run: |
-          for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
-            if [ -z "${!name}" ]; then
-              echo "::warning::optional secret $name is not set; the build will ship without Google OAuth credentials"
-            fi
-          done
-
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config perl python3 clang libclang-dev \
+            libgtk-4-dev libwebkitgtk-6.0-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            libdbus-1-dev libssl-dev xvfb xauth at-spi2-core libxtst6 rpm zstd
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0
-          targets: ${{ matrix.target }}
-
-      # The shipped binary builds from the standalone bir-shell workspace, so
-      # cache its target dir under the same family shell-check saves on main.
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+      - name: Install huacnlee/cargo
+        uses: ./nsh/.github/actions/cargo
         with:
-          workspaces: crates/bir-shell
-          shared-key: shell-${{ runner.os }}
-
+          cache: buwiz-nsh-release-linux
+          lockfiles: buwiz-forms/nsh/Cargo.lock
+      - name: Cache NSH command line
+        uses: actions/cache@v4
+        id: nsh-cli
+        with:
+          path: ~/BuwizNsh/tools
+          key: nsh-cli-${{ runner.os }}-${{ runner.arch }}-${{ env.NSH_PINNED_REF }}
+      - name: Build NSH command line
+        if: steps.nsh-cli.outputs.cache-hit != 'true'
+        working-directory: nsh
+        run: cargo install --locked --path crates/nsh-cli --root "$HOME/BuwizNsh/tools"
+      - name: Put NSH on PATH
+        run: echo "$HOME/BuwizNsh/tools/bin" >> "$GITHUB_PATH"
       - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-
       - name: Check out formgen scripts from buwiz-forms-html
         uses: actions/checkout@v4
         with:
           repository: hexuria/buwiz-forms-html
-          path: .ci-html
+          path: buwiz-forms/.ci-html
           persist-credentials: false
-
       - name: Verify frozen HTML and write build identity
         run: |
           python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
           python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
           python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
-
-      # The shipped app is the gpui-shell host (crates/bir-shell — a standalone
-      # workspace with its own lockfile and target dir), built with no
-      # features. The retired painted host is not shipped.
-      - name: Build release binary
-        run: cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target ${{ matrix.target }}
-
-      - name: Stage desktop executable name
-        run: python3 scripts/alias_app_bin.py crates/bir-shell/target/${{ matrix.target }}/release bir-shell
-
       - name: Resolve package version
         id: version
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
+          app_version="$(python3 -c 'import json; print(json.load(open("nsh/nsh.json"))["version"])')"
           if [[ -n "$RELEASE_TAG" ]]; then
             version="${RELEASE_TAG#v}"
+            test "$version" = "$app_version"
           else
-            cargo_version="$(awk -F '"' '
-              /^\[workspace\.package\]$/ { in_workspace_package = 1; next }
-              in_workspace_package && /^\[/ { exit }
-              in_workspace_package && /^version[[:space:]]*=/ { print $2; exit }
-            ' Cargo.toml)"
-            version="${cargo_version}-pr"
-          fi
-          if [[ ! "$version" =~ ^[0-9][A-Za-z0-9.+~-]*$ ]]; then
-            echo "Invalid package version: $version" >&2
-            exit 1
+            version="${app_version}-pr"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-
       - name: Build Linux packages
         run: packaging/linux/build-packages.sh --version "${{ steps.version.outputs.version }}" --target "${{ matrix.target }}" --out target/release-artifacts
-
       - name: Smoke test Linux packages
-        # Normally 4 (arm64) to 10 (x64) minutes; each container is also
-        # capped inside the script, so a stall fails here instead of holding
-        # the release for the 6-hour job default.
         timeout-minutes: 30
         run: packaging/linux/smoke-test.sh --out target/release-artifacts --arch "${{ matrix.arch }}"
-
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-smoke-${{ matrix.arch }}
+          path: buwiz-forms/target/linux-smoke/**
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-release-${{ matrix.arch }}
           if-no-files-found: error
-          path: target/release-artifacts/*
+          path: buwiz-forms/target/release-artifacts/*

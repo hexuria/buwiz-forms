@@ -139,7 +139,7 @@ impl Hooks for NshHooks {
     // The global hotkey: this app's listener registers more keys than the old shell's (space, the arrows, punctuation,
     // F13 to F20) and refuses a combo with no Control, Alt or Command. `set_global_hotkey` stores what this accepts.
     fn global_hotkey_registrable(&self, combo: &str) -> bool {
-        crate::desktop::hotkey_shortcut(combo).is_some()
+        !cfg!(feature = "mas_build") && crate::desktop::hotkey_shortcut(combo).is_some()
     }
 }
 

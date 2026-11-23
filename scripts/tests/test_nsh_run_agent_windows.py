@@ -14,7 +14,7 @@ import unittest
 REPO = Path(__file__).resolve().parents[2]
 TOKEN = 'synthetic-token-0123456789abcdef'
 HOST = 'com.longbridge.nsh.host'
-TOKEN_PATH = 'files/nsh/dev.goldcoders.bir.nsh/agent-token'
+TOKEN_PATH = 'files/nsh/dev.goldcoders.bir/agent-token'
 
 # The SDK's `adb.exe` is a native program, as the real one is: the token writer starts it directly, with no command
 # interpreter between them, and writes the token to its standard input. This one hands its arguments and that same

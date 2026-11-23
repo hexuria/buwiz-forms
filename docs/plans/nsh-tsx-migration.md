@@ -29,7 +29,7 @@ Replace the gpui-shell UI (`app/` JavaScript hosted by `crates/bir-shell`) with 
 | Data | Plain SQLite copy of the owner's data (done). Scrubbed of PINs, mail credentials, send grants. |
 | Encryption | Gone for the NSH app: plain SQLite, no DB key, no keychain read for it. The old shell keeps SQLCipher through a cargo feature until it is deleted. |
 | Sign-in and locks | Build all of them (Buwiz account gate, PIN, authenticator, recovery key, Touch ID recovery, first-run setup). Dev builds skip them. |
-| App identity | Name `eBIRForms`, id `dev.goldcoders.bir.nsh`, its own data folder. Runs side by side with 0.2.0. |
+| App identity | Name `eBIRForms`, id `dev.goldcoders.bir`, its own data folder. Replaces the old app without migrating its data. |
 | Stop line | Desktop parity on macOS, all 43 forms. |
 | Phone-ready | Every screen has a wide and a narrow layout and a test at 390x844. |
 | Extras in this round | Print preview and PDF, app menu and shortcuts, tray and hide-to-tray, global hotkey, import/export, jobs and logs, Gmail/inbox connect, help-desk mode, agent remote control, auto-update (code only; signing is parked), Windows and Linux (code paths and CI files; real builds are parked if no machine). |
@@ -70,7 +70,7 @@ crates/bir-app-api/     UI-free. A `Hooks` trait for what needs a UI (menu refre
                         account_gate, auth_limiter, logging) and their tests. Depends on bir-core, bir-print, bir-rules only.
 crates/bir-shell/       Old host. Keeps only gpui glue; adapts bir-app-api's modules to gpui_shell::HostModule.
 crates/bir-core/        Gains cargo feature `sqlcipher` (default on). Off = plain SQLite: no key lookup, data folder for
-                        `dev.goldcoders.bir.nsh`, a wrong-format file is an error and is never renamed.
+                        `dev.goldcoders.bir`, a wrong-format file is an error and is never renamed.
                         bir-print and bir-app-api take bir-core with default-features = false and pass `sqlcipher` through;
                         bir-shell turns it on; `nsh/` leaves it off.
 nsh/                    The new app. Its own cargo workspace (like crates/bir-shell).
@@ -91,7 +91,7 @@ nsh/                    The new app. Its own cargo workspace (like crates/bir-sh
 - `nsh/bir/` gives every used function a typed wrapper. Types come from the TypeScript declaration blocks already in the Rust modules. Skip the 19 functions the JS never calls (listed in the JS inventory).
 - Sync calls run on the engine thread, as they run on the main thread today; the DB slot stays thread-local. Do not move DB work to other threads in this round.
 - Refresh stays poll-based like today (30 s events, 5 s device filings, 1 s update status) behind one small `lib/poll.ts`; a push channel is a later improvement.
-- **Send guard.** Before the first DB open and before the submission worker starts, the door sets `BIR_SFTP_DRY_RUN=1`, removes `BIR_SFTP_LIVE`, then requires `bir_core::transport::is_sftp_dry_run()` to be true and the Dev Mode panel's submission mode not to be the test server. If either fails, the worker does not start. The only exception is mock mode: `BIR_SFTP_HOST` is `127.0.0.1` or `::1` and its port is listening (same check as the `mock-bir-app` just recipe).
+- **Send guard.** Normal desktop releases use bir-core's filing transport, which files live by default and honors explicit dry-run settings. Before the first DB open and worker start in a debug, test, agent or mobile launch, the door removes `BIR_SFTP_LIVE` and forces `BIR_SFTP_DRY_RUN=1` unless a local mock is selected. The worker is refused if the Dev Mode panel points at the test server or sending is neither dry nor directed at a guarded local mock (a listening loopback SFTP endpoint or a health-checked loopback relay).
 - **Database guard.** The door refuses to open a database whose canonical path is inside `~/Library/Group Containers/group.dev.goldcoders.bir`, `~/BuwizNsh/data` or `~/BuwizNsh/migration`.
 - **Keychain off-switch.** `BUWIZ_NO_KEYCHAIN=1` makes every keychain read in bir-core (cloud account, Google Calendar, dev SFTP password, DB key) return "not found" without calling the OS. Dev and agent runs always set it.
 - **Dev run:** `BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 BIR_DATABASE_PATH=~/BuwizNsh/agents/<track>.db`. **Mock run:** unset `EBIR_TEST_ENV` and `BIR_SFTP_DRY_RUN`, then source `target/mock-bir/app.env` (`docs/mock-bir.md`).

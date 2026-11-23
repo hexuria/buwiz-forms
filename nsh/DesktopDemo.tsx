@@ -4,7 +4,7 @@
 //   locked   true: the account gate is in front (the filing menus go)
 //   start    the dev route ("form=1601C/2025/3")
 //   poll     true: run the frame's polls (the update status is read every second)
-//   updater  "found": a fake nsh/updater that finds 0.3.0 | "current": one that finds nothing | absent: the real one (no source configured)
+//   updater  "found", "current", "external" or "unconfigured": fake updater answers; absent: the real updater.
 //   hotkey   a combo stored as the global hotkey before the host starts ("control+alt+shift+9")
 //   system   "fake": GlobalShortcut is a fake that takes every chord (the "r-chords" readout lists what is registered; a test presses one
 //            with host.send("run", { id: "chord:ctrl+alt+shift+9" }) and changes the stored combo with { id: "hotkey:control+alt+B" });
@@ -44,7 +44,7 @@ interface Params {
   locked?: boolean;
   start?: string;
   poll?: boolean;
-  updater?: "found" | "current";
+  updater?: "found" | "current" | "external" | "unconfigured";
   hotkey?: string;
   system?: "fake";
   solo?: boolean;
@@ -79,13 +79,13 @@ const fakeShortcuts = {
     }),
 };
 
-function fakeUpdater(mode: "found" | "current"): UpdaterApi {
+function fakeUpdater(mode: NonNullable<Params["updater"]>): UpdaterApi {
   const note = (what: string) => asked.update((list) => [...list, what]);
   return {
-    configured: () => true,
+    configured: () => mode !== "unconfigured",
     check: async () => {
       note("check");
-      return mode === "found" ? { version: "0.3.0" } : null;
+      return mode === "found" || mode === "external" ? { version: "0.3.0", external: mode === "external" } : null;
     },
     download: async () => note("download"),
     install: async () => note("install"),

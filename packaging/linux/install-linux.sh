@@ -57,9 +57,11 @@ cleanup() {
 trap cleanup 0 HUP INT TERM
 
 if [ "$UNINSTALL" -eq 1 ]; then
+    # shellcheck source=/dev/null
     . /etc/os-release 2>/dev/null || true
     ID=${ID:-unknown}
     ID_LIKE=${ID_LIKE:-}
+    if [ "$USE_TARBALL" -eq 0 ]; then
     case "$ID $ID_LIKE" in
         *debian*|*ubuntu*)
             if [ "$(id -u)" -eq 0 ]; then apt-get remove -y ebirforms; else sudo apt-get remove -y ebirforms; fi
@@ -75,10 +77,10 @@ if [ "$UNINSTALL" -eq 1 ]; then
             if [ "$(id -u)" -eq 0 ]; then pacman -Rns --noconfirm ebirforms; else sudo pacman -Rns --noconfirm ebirforms; fi
             ;;
     esac
-    rm -f "$HOME/.local/bin/ebirforms"
-    if [ -x "$HOME/.local/share/ebirforms/install-desktop-entry.sh" ]; then
-        "$HOME/.local/share/ebirforms/install-desktop-entry.sh" --remove
     fi
+    rm -f "$HOME/.local/bin/ebirforms"
+    rm -f "$HOME/.local/share/applications/dev.goldcoders.bir.desktop"
+    rm -f "$HOME/.local/share/icons/hicolor/512x512/apps/dev.goldcoders.bir.png"
     rm -rf "$HOME/.local/share/ebirforms"
     echo "Removed eBIRForms."
     exit 0
@@ -113,6 +115,7 @@ case "$MACHINE" in
     *) echo "Unsupported Linux architecture: $MACHINE" >&2; exit 1 ;;
 esac
 
+# shellcheck source=/dev/null
 . /etc/os-release 2>/dev/null || true
 ID=${ID:-unknown}
 ID_LIKE=${ID_LIKE:-}
@@ -187,8 +190,13 @@ install_tarball() {
     bin_dir="$HOME/.local/bin"
     mkdir -p "$install_root" "$bin_dir"
     tar -xzf "$TEMP_DIR/$asset" -C "$install_root" --strip-components=1
-    ln -sf "$install_root/bir" "$bin_dir/ebirforms"
-    "$install_root/install-desktop-entry.sh"
+    test -x "$install_root/eBIRForms"
+    test ! -e "$install_root/ebirforms-no-self-update"
+    ln -sf "$install_root/eBIRForms" "$bin_dir/ebirforms"
+    mkdir -p "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/512x512/apps"
+    sed "s|^Exec=.*|Exec=\"$install_root/eBIRForms\"|" \
+        "$install_root/dev.goldcoders.bir.desktop" > "$HOME/.local/share/applications/dev.goldcoders.bir.desktop"
+    cp "$install_root/dev.goldcoders.bir.png" "$HOME/.local/share/icons/hicolor/512x512/apps/dev.goldcoders.bir.png"
     echo "Installed eBIRForms to $install_root"
     echo "Add $bin_dir to PATH if it is not already present."
 }

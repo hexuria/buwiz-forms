@@ -1,0 +1,20 @@
+[package]
+name = "bir-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "The headless `bir` command: the gpui-agent session of the eBIRForms app with no window, on the NSH app's plain SQLite database."
+
+[[bin]]
+name = "bir"
+path = "src/main.rs"
+
+[dependencies]
+# Plain SQLite, as the NSH app: default-features = false keeps SQLCipher out.
+bir-app-api = { path = "../bir-app-api", default-features = false, features = ["agent", "headless"] }
+bir-core = { path = "../bir-core", default-features = false }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

@@ -836,6 +836,11 @@ impl Database {
             .ok()
     }
 
+    /// Rows written through this connection, including writes by the submission worker.
+    pub fn total_changes(&self) -> u64 {
+        self.conn.total_changes()
+    }
+
     /// Opens the database, quarantining an unreadable existing file and
     /// recreating it when the on-disk contents are not a usable SQLCipher DB.
     ///
@@ -1885,6 +1890,24 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn change_counters_stay_idle_for_reads_and_detect_local_and_external_writes() {
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("changes.db");
+        let db = super::Database::open(&path).unwrap();
+        let first = (db.total_changes(), db.data_version());
+        db.get_setting("theme").unwrap();
+        assert_eq!((db.total_changes(), db.data_version()), first);
+        db.set_setting("theme", "Dark").unwrap();
+        assert!(db.total_changes() > first.0);
+        assert_eq!(db.data_version(), first.1);
+        let other = super::Database::open(&path).unwrap();
+        let before_external = (db.total_changes(), db.data_version());
+        other.set_setting("theme", "Light").unwrap();
+        assert_eq!(db.total_changes(), before_external.0);
+        assert_ne!(db.data_version(), before_external.1);
+    }
+
     #[cfg(all(
         feature = "sqlcipher",
         not(target_os = "macos"),
@@ -3114,7 +3137,7 @@ mod tests {
                 let path = default_database_path();
                 assert!(path.starts_with(home.path()), "{}", path.display());
                 assert!(
-                    path.ends_with("dev.goldcoders.bir.nsh/bir_data.db"),
+                    path.ends_with("dev.goldcoders.bir/bir_data.db"),
                     "{}",
                     path.display()
                 );

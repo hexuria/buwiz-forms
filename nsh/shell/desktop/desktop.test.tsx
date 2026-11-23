@@ -358,7 +358,7 @@ test("the global hotkey follows the stored setting: registered, replaced when it
 });
 
 test("no update source: Check for Updates says so, and the banner never shows", async () => {
-  const app = await open(ENTRY, { ...WIDE, ...asking({ poll: true }) });
+  const app = await open(ENTRY, { ...WIDE, ...asking({ poll: true, updater: "unconfigured" }) });
   await app.waitFor("id:sidebar");
   await app.press("id:run:Help > Check for Updates…");
   await app.waitFor("text:Automatic updates are not configured in this build, so nothing is checked.");
@@ -366,6 +366,17 @@ test("no update source: Check for Updates says so, and the banner never shows", 
   await app.wait(2500);
   expect(app.texts()).toContain("update=idle");
   expect(app.shows("id:update-banner")).toBe(false);
+});
+
+test("a managed install offers the release page even on the account gate", async () => {
+  const app = await open(ENTRY, { ...WIDE, ...asking({ locked: true, poll: true, updater: "external" }) });
+  await app.waitFor("id:locked-frame");
+  await app.waitFor("id:update-release", { timeout: 15_000 });
+  expect(app.shows("id:update-install")).toBe(false);
+  expect(app.texts()).toContain("Version 0.3.0 is available.");
+  expect(app.texts()).toContain("asked=check");
+  await app.press("id:update-later");
+  await app.waitFor("id:update-banner", { state: "gone" });
 });
 
 test("the update banner end to end: a check finds a release, the banner offers it, Later puts it away, Install now installs it", async () => {

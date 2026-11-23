@@ -245,9 +245,7 @@ function LockedFrame() {
         <MenuRow />
       </If>
       <LockedScreen />
-      <If when={!app.cloudLocked()}>
-        <UpdateSlot />
-      </If>
+      <UpdateSlot locked />
     </View>
   );
 }

@@ -8,7 +8,7 @@ import unittest
 
 SCRIPT = (Path(__file__).resolve().parents[2] / "scripts/sign-in-android-windows.ps1").read_text()
 FUNCTION = SCRIPT[SCRIPT.index("function Get-AccountUiState"):SCRIPT.index("$adb =")]
-PACKAGE = "dev.goldcoders.bir.nsh"
+PACKAGE = "dev.goldcoders.bir"
 
 
 @unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "Windows PowerShell required")

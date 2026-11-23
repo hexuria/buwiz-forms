@@ -19,6 +19,12 @@ import {
   shownSection,
 } from "./settings_model";
 
+test("Mac App Store Settings does not show the global hotkey or update controls", () => {
+  const view = settingsView("", true, false, true);
+  expect(rowsOf(view, "computer")).not.toContain("hotkey");
+  expect(rowsOf(view, "general")).not.toContain("updates");
+});
+
 // Translated from tools/test_settings_window.mjs (the search, the account card, the hotkey and retention labels).
 const rowsOf = (view: ReturnType<typeof settingsView>, id: string) => view.find((section) => section.id === id)?.rows;
 

@@ -43,11 +43,13 @@ jobs:
             exit 1
           fi
           tag_ver="${GITHUB_REF_NAME#bir-v}"
+          # crates/bir-cli takes `version.workspace = true`: the tag must match [workspace.package] in Cargo.toml.
           cargo_ver="$(awk '
-            /^version[[:space:]]*=/ { gsub(/"/, "", $3); print $3; exit }
-          ' crates/bir-shell/Cargo.toml)"
+            /^\[/ { in_pkg = ($0 == "[workspace.package]") }
+            in_pkg && /^version[[:space:]]*=/ { gsub(/"/, "", $3); print $3; exit }
+          ' Cargo.toml)"
           if [ -z "${cargo_ver}" ] || [ "${tag_ver}" != "${cargo_ver}" ]; then
-            echo "tag ${tag_ver} does not match crates/bir-shell version ${cargo_ver}" >&2
+            echo "tag ${tag_ver} does not match the workspace version ${cargo_ver} (Cargo.toml [workspace.package])" >&2
             exit 1
           fi
 
@@ -87,8 +89,8 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Build bir-headless
-        run: cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --features agent --bin bir-headless --target ${{ matrix.target }}
+      - name: Build bir
+        run: cargo build --locked --release -p bir-cli --bin bir --target ${{ matrix.target }}
 
       - name: Pack cargo-binstall archive
         shell: bash
@@ -96,10 +98,10 @@ jobs:
           set -euo pipefail
           stage="$(mktemp -d)"
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            cp "crates/bir-shell/target/${{ matrix.target }}/release/bir-headless.exe" "${stage}/bir.exe"
+            cp "target/${{ matrix.target }}/release/bir.exe" "${stage}/bir.exe"
             archive_member="bir.exe"
           else
-            cp "crates/bir-shell/target/${{ matrix.target }}/release/bir-headless" "${stage}/bir"
+            cp "target/${{ matrix.target }}/release/bir" "${stage}/bir"
             chmod 755 "${stage}/bir"
             archive_member="bir"
           fi
@@ -151,7 +153,7 @@ jobs:
           body: |
             `bir` headless CLI.
 
-            From a checkout: `cargo install --path crates/bir-shell --features agent --bin bir-headless --locked` (installs `bir-headless`; rename or alias it to `bir`).
+            From a checkout: `cargo install --path crates/bir-cli --locked` (installs `bir`).
 
             The desktop app is the `vMAJOR.MINOR.PATCH` release (dmg/deb/exe).
           files: |

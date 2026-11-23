@@ -1,7 +1,7 @@
 //! Pid file, logfile, and Docker-like `serve --detach` / `logs` helpers.
 //!
 //! Compiled without `--features agent` so path/pid/follow tests run in default
-//! CI. The `bir-headless` CLI (agent feature) is the only production caller.
+//! CI. The `bir` command (crates/bir-cli) is the only production caller.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -72,7 +72,7 @@ fn env_path(name: &str) -> Option<PathBuf> {
 
 pub fn missing_log_message(path: &Path) -> String {
     format!(
-        "no bir-headless log at {}. Start a daemon with `bir-headless serve --detach` \
+        "no bir-headless log at {}. Start a daemon with `bir serve --detach` \
          (or a launchd unit that writes the same path). If the process is already \
          running in the foreground, its output is on that terminal, not this file.",
         path.display()
@@ -81,8 +81,8 @@ pub fn missing_log_message(path: &Path) -> String {
 
 pub fn already_running_message(pid: u32) -> String {
     format!(
-        "bir-headless already running (pid {pid}). Use `bir-headless status`, \
-         `bir-headless logs --follow`, or `bir-headless shutdown`. \
+        "bir already running (pid {pid}). Use `bir status`, \
+         `bir logs --follow`, or `bir shutdown`. \
          Pass `--wait` to start a background waiter that takes over after the \
          current owner releases the bind and live-DB lock."
     )
@@ -356,7 +356,7 @@ pub fn spawn_detached_command(exe: &Path, args: &[String]) -> Result<DetachInfo,
         remove_pid_file_if_pid(&pid_file, pid);
         let detail = fs::read_to_string(&log_path).unwrap_or_default();
         let mut message = format!(
-            "bir-headless failed to stay running (pid {pid}, {status}). See {}",
+            "bir failed to stay running (pid {pid}, {status}). See {}",
             log_path.display()
         );
         let tail = log_tail_text(&detail, 40);

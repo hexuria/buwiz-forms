@@ -2,7 +2,7 @@ param([string]$SdkRoot = 'C:\Android', [string]$Serial = 'emulator-5554')
 $ErrorActionPreference = 'Stop'
 
 function Get-AccountUiState([xml]$ui) {
-    $package = 'dev.goldcoders.bir.nsh'
+    $package = 'dev.goldcoders.bir'
     if (-not $ui.SelectNodes("//*[@package='$package' and (@text!='' or @content-desc!='')]").Count) { return @{ State = 'blocked' } }
     if ($ui.SelectSingleNode("//*[@package='$package' and (@text='Add your first taxpayer' or @content-desc='Add your first taxpayer')]")) { return @{ State = 'ready' } }
     if (-not $ui.SelectSingleNode("//*[@text='Welcome to eBIRForms']")) { return @{ State = 'ready' } }
@@ -21,7 +21,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not disable the development emulator loc
 $deadline = (Get-Date).AddMinutes(5)
 $started = $false
 do {
-    & $adb -s $Serial shell am start -n dev.goldcoders.bir.nsh/com.longbridge.nsh.AppActivity | Out-Null
+    & $adb -s $Serial shell am start -n dev.goldcoders.bir/com.longbridge.nsh.AppActivity | Out-Null
     & $adb -s $Serial shell rm -f /sdcard/buwiz-account-ui.xml
     & $env:ComSpec /d /c "`"$adb`" -s $Serial shell uiautomator dump /sdcard/buwiz-account-ui.xml 2>nul" | Out-Null
     $raw = & $env:ComSpec /d /c "`"$adb`" -s $Serial shell cat /sdcard/buwiz-account-ui.xml 2>nul"

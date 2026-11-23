@@ -242,7 +242,7 @@ export function DesktopHost(props: DesktopHostProps): JSX.Element {
     // The page may read only the theme setting; system_info carries the stored combo (and a store write drops it when Settings changes it).
     // While Settings' shortcut recorder listens (hotkey_state.ts holdHotkey) the combo is empty: the chord goes back to the system, so
     // pressing it to record it reaches the window instead of hiding it, and it is taken again (the new chord, or the old) when the hold ends.
-    const combo = app.chromeVisible() && !hotkeyHeld() ? (store.systemInfo().global_hotkey ?? "") : "";
+    const combo = !native.masBuild() && app.chromeVisible() && !hotkeyHeld() ? (store.systemInfo().global_hotkey ?? "") : "";
     untracked(() => {
       hotkey.sync(combo).catch((error) => store.logScreen("warn", "hotkey: " + errorText(error)));
     });
@@ -286,4 +286,3 @@ export function DesktopHost(props: DesktopHostProps): JSX.Element {
     </>
   );
 }
-

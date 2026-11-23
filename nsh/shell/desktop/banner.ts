@@ -6,7 +6,10 @@ import { VERIFY_REJECTED } from "./updater";
 export interface Prompt {
   message: string;
   install: boolean;
+  releasePage?: string;
 }
+
+const RELEASE_PAGE = "https://github.com/hexuria/buwiz-forms/releases/latest";
 
 /**
  * The banner for a status: a failed update says so (Later), a downloaded release offers Install now and Later, a manual check that
@@ -16,6 +19,11 @@ export function promptFor(status: UpdateStatus | null): Prompt | null {
   if (!status) return null;
   if (status.phase === "failed") return { message: status.message || VERIFY_REJECTED, install: false };
   if (status.phase === "ready" && status.version) return { message: "Version " + status.version + " is ready.", install: true };
+  if (status.phase === "external" && status.version) return {
+    message: status.message || "Version " + status.version + " is available.",
+    install: false,
+    releasePage: RELEASE_PAGE,
+  };
   if (status.phase === "up_to_date" && status.message) return { message: status.message, install: false };
   return null;
 }

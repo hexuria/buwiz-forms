@@ -10,6 +10,7 @@ on:
       - .github/workflows/release-macos.yml
       - scripts/package_macos_release.sh
       - assets/macos/**
+      - nsh/nsh.json
 
 permissions:
   contents: read
@@ -131,7 +132,15 @@ jobs:
       - name: Test Python scripts
         run: python -m unittest discover -s scripts/tests -v
 
+      # The env ci.yml's Test step gives bir-app-api's tests: the debug-only
+      # account-gate bypass (release builds ignore it), the dry-run sender,
+      # and no keychain.
       - name: Verify Rust workspace
+        env:
+          EBIR_TEST_ENV: "1"
+          BIR_AUTH_BYPASS: "1"
+          BIR_SFTP_DRY_RUN: "1"
+          BUWIZ_NO_KEYCHAIN: "1"
         run: |
           cargo fmt --all -- --check
           cargo check --locked --workspace
@@ -146,6 +155,9 @@ jobs:
           python3 scripts/audit_no_legacy.py
 
   # ── macOS Universal ───────────────────────────────────────────────────────
+  # The shipped app is the NSH app (nsh/), packaged universal by
+  # `nsh package --target macos --arch universal` and then signed with the
+  # Developer ID, notarized and stapled by scripts/package_macos_release.sh.
   build-macos:
     needs: preflight
     # Fork PRs receive no secrets and would only fail closed on the missing
@@ -154,12 +166,19 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: macos-15  # M1 runner — can build both arm64 and x86_64
     timeout-minutes: 180
+    # nsh/Cargo.toml names the NSH crates as ../../nsh/crates/..., so the two
+    # checkouts sit side by side: <workspace>/buwiz-forms and <workspace>/nsh.
+    defaults:
+      run:
+        working-directory: buwiz-forms
     env:
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       EXPECTED_SIGNING_IDENTITY: "Developer ID Application: Goldcoders Corp (5KZ8MD34QW)"
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: buwiz-forms
 
       - name: Require macOS signing and notarization inputs
         shell: bash
@@ -182,19 +201,56 @@ jobs:
             fi
           done
 
+      # One pin for every workflow: NSH_PINNED_REF in nsh.yml.
+      - name: Read the NSH pin
+        id: nsh-pin
+        shell: bash
+        run: |
+          ref="$(awk '/^  NSH_PINNED_REF:/ { print $2; exit }' .github/workflows/nsh.yml)"
+          repository="$(awk '/^  NSH_REPOSITORY:/ { print $2; exit }' .github/workflows/nsh.yml)"
+          [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || { echo "NSH_PINNED_REF in nsh.yml is not a commit: $ref" >&2; exit 1; }
+          [ -n "$repository" ] || { echo "NSH_REPOSITORY missing from nsh.yml" >&2; exit 1; }
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "repository=$repository" >> "$GITHUB_OUTPUT"
+
+      - name: Check out NSH (the pinned commit, beside buwiz-forms)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.nsh-pin.outputs.repository }}
+          ref: ${{ steps.nsh-pin.outputs.ref }}
+          token: ${{ secrets.NSH_REPO_TOKEN || github.token }}
+          path: nsh
+          persist-credentials: false
+
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      # The shipped binary builds from the standalone bir-shell workspace, so
-      # cache its target dir under the same family shell-check saves on main.
+      # The same cache key nsh.yml saves, so a pin it already built is reused.
+      - name: Restore the nsh command line
+        id: nsh-cli
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/BuwizNsh/tools
+          key: nsh-cli-${{ runner.os }}-${{ runner.arch }}-${{ steps.nsh-pin.outputs.ref }}
+
+      - name: Build the nsh command line
+        if: steps.nsh-cli.outputs.cache-hit != 'true'
+        working-directory: nsh
+        run: cargo install --locked --path crates/nsh-cli --root "$HOME/BuwizNsh/tools"
+
+      - name: Put the nsh command line on the path
+        run: |
+          echo "$HOME/BuwizNsh/tools/bin" >> "$GITHUB_PATH"
+          "$HOME/BuwizNsh/tools/bin/nsh" -V
+
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/bir-shell
-          shared-key: shell-${{ runner.os }}
+          workspaces: buwiz-forms/nsh
+          shared-key: nsh-release-${{ runner.os }}
 
       - name: Install Python
         uses: actions/setup-python@v5
@@ -205,7 +261,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: hexuria/buwiz-forms-html
-          path: .ci-html
+          path: buwiz-forms/.ci-html
           persist-credentials: false
 
       - name: Verify frozen HTML
@@ -213,16 +269,6 @@ jobs:
           python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
           python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
           python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
-
-      # The shipped app is the gpui-shell host (crates/bir-shell — a standalone
-      # workspace with its own lockfile and target dir), built with no
-      # features: release runs the upstream engine. The retired painted host
-      # stays buildable but is not shipped.
-      - name: Build ARM64
-        run: cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target aarch64-apple-darwin
-
-      - name: Build x86_64
-        run: cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target x86_64-apple-darwin
 
       - name: Import signing certificate into temporary keychain
         shell: bash
@@ -277,17 +323,26 @@ jobs:
           chmod 600 "$RUNNER_TEMP/AuthKey.p8"
           echo "NOTARY_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
 
-      - name: Package signed and notarized DMG
+      - name: Package signed and notarized DMG and update archives
         shell: bash
         env:
           VERSION: ${{ needs.preflight.outputs.version }}
           NOTARY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-          BIN_NAME: bir-shell
-          BIN_TARGET_ROOT: crates/bir-shell/target
-          RESOURCE_DIRS: app print-overrides
         run: |
           REQUIRE_NOTARIZATION=1 bash scripts/package_macos_release.sh
+
+      # The updater installs an update only when this passes
+      # (nsh-updater, macOS install: codesign --verify --deep --strict).
+      - name: Check the update archive passes the updater's signature check
+        shell: bash
+        run: |
+          check_dir="$(mktemp -d)"
+          tar -xzf target/release-artifacts/*-macos-aarch64.tar.gz -C "$check_dir"
+          /usr/bin/codesign --verify --deep --strict --verbose=2 "$check_dir/$APP_NAME.app"
+          spctl --assess --type execute --verbose=2 "$check_dir/$APP_NAME.app"
+          xcrun stapler validate "$check_dir/$APP_NAME.app"
+          rm -rf "$check_dir"
 
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
@@ -295,8 +350,9 @@ jobs:
           name: macos-release
           if-no-files-found: error
           path: |
-            target/release-artifacts/*.dmg
-            target/release-artifacts/*.sha256
+            buwiz-forms/target/release-artifacts/*.dmg
+            buwiz-forms/target/release-artifacts/*.tar.gz
+            buwiz-forms/target/release-artifacts/*.sha256
 
       - name: Clean up signing material
         if: always()
@@ -307,8 +363,12 @@ jobs:
 
   # ── Publish to the tag's GitHub Release ───────────────────────────────────
   # release.yml's softprops job may create the same tag's release concurrently,
-  # so this job creates it only when missing and then uploads the DMG.
+  # so this job creates it only when missing and then uploads the DMG and the
+  # update archives.
   publish:
+    concurrency:
+      group: release-feed-${{ github.ref }}
+      cancel-in-progress: false
     needs: [preflight, build-macos]
     if: github.event_name == 'push' && needs.preflight.outputs.publish == 'true'
     runs-on: ubuntu-latest
@@ -318,6 +378,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       TAG: ${{ github.ref_name }}
+      NSH_UPDATE_KEY: ${{ secrets.NSH_UPDATE_KEY }}
     steps:
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
@@ -335,10 +396,27 @@ jobs:
           gh release view "$TAG" >/dev/null 2>&1 \
             || gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes \
             || gh release view "$TAG" >/dev/null 2>&1
-          gh release upload "$TAG" ./*.dmg ./*.sha256 --clobber
+          gh release upload "$TAG" ./*.dmg ./*.tar.gz ./*.sha256 --clobber
 
       - name: Check out the manifest script
         uses: actions/checkout@v4
+
+      - name: Check out pinned NSH CLI
+        if: env.NSH_UPDATE_KEY != ''
+        uses: actions/checkout@v4
+        with:
+          repository: hexuria/nsh
+          ref: 70d8ff26b9e9dccb17a908de97cd4a3f3e381276
+          path: .ci-nsh
+          persist-credentials: false
+
+      - name: Install NSH CLI toolchain
+        if: env.NSH_UPDATE_KEY != ''
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install pinned NSH CLI
+        if: env.NSH_UPDATE_KEY != ''
+        run: cargo install --locked --path .ci-nsh/crates/nsh-cli
 
       - name: Publish update manifest
         env:

@@ -44,10 +44,22 @@ test("a shutdown that throws still ends the run", async () => {
 
 test("Install now: the hooks, the door's shutdown, then the swap and restart (never the plain end)", async () => {
   const r = record();
-  const api = realApi(async () => void r.order.push("install and restart"));
-  // install settles only on failure: the restart ends the run. Wait for it to have run.
-  void api.install();
-  for (let i = 0; i < 100 && r.order.length < 3; i++) await new Promise<void>((done) => setTimeout(done, 10));
+  const api = realApi(async () => void r.order.push("stage"), () => void r.order.push("install and restart"));
+  await api.install();
   r.restore();
-  expect(r.order).toEqual(["hook done", "door shutdown", "install and restart"]);
+  expect(r.order).toEqual(["stage", "hook done", "door shutdown", "install and restart"]);
+});
+
+test("an update that cannot be staged leaves the door and app running", async () => {
+  const r = record();
+  const api = realApi(async () => { throw new Error("not writable"); }, () => void r.order.push("install and restart"));
+  try {
+    await api.install();
+    throw new Error("installation should have failed");
+  } catch (error) {
+    expect(String(error)).toContain("not writable");
+  } finally {
+    r.restore();
+  }
+  expect(r.order).toEqual([]);
 });

@@ -6,8 +6,6 @@
 //!   hooks write into it (a menu refresh counter, the "chrome is open" flag, the updater commands) and the
 //!   TSX desktop host (`nsh/shell/desktop`) reads it with `Desktop.poll()` and writes back what the updater is
 //!   doing with `Desktop.publishUpdate()`. `update_status` answers the last thing it published.
-//! * **Updates are off until the owner configures them.** Without `configured` in the report the status is
-//!   always "idle" with the sentence [`NOT_CONFIGURED`]: the banner never shows and nothing is ever fetched.
 //! * **One copy running.** A lock file beside the database (`<database>.instance`, an exclusive file lock the
 //!   system drops when the process ends, however it ends) says which process is the app for that database. The
 //!   process that holds it listens on a loopback port written to `<database>.instance.port`; a second launch
@@ -56,7 +54,7 @@ pub const NOT_CONFIGURED: &str =
 const COMMAND_CAP: usize = 32;
 
 /// The phases the page knows (`bir.update_status().phase`).
-const PHASES: [&str; 8] = [
+const PHASES: [&str; 9] = [
     "idle",
     "checking",
     "downloading",
@@ -64,6 +62,7 @@ const PHASES: [&str; 8] = [
     "failed",
     "up_to_date",
     "available",
+    "external",
     "installing",
 ];
 
@@ -72,7 +71,7 @@ const PHASES: [&str; 8] = [
 pub struct UpdateReport {
     /// Whether this build has an update source (nsh.json "updater"). False: the status stays idle and nothing is checked.
     pub configured: bool,
-    /// `idle`, `checking`, `downloading`, `ready`, `failed`, `up_to_date`, `available` or `installing`.
+    /// `idle`, `checking`, `downloading`, `ready`, `failed`, `up_to_date`, `available`, `external` or `installing`.
     pub phase: String,
     /// The release that was found, when there is one.
     pub version: Option<String>,
@@ -202,7 +201,7 @@ impl Mailbox {
     fn dismiss(&mut self) {
         if matches!(
             self.update.phase.as_str(),
-            "ready" | "failed" | "up_to_date" | "available"
+            "ready" | "failed" | "up_to_date" | "available" | "external"
         ) {
             self.update.phase = "idle".to_owned();
             self.update.message = None;
@@ -743,6 +742,20 @@ pub struct Desktop;
 
 #[module]
 impl Desktop {
+    /// Whether this is a Mac App Store build, without a global hotkey or an updater.
+    pub fn mas_build() -> bool {
+        cfg!(feature = "mas_build")
+    }
+
+    /// Package managers opt out of swapping files by placing `ebirforms-no-self-update` beside the executable.
+    pub fn allows_self_update() -> bool {
+        !Self::mas_build()
+            && std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(|dir| dir.join("ebirforms-no-self-update")))
+                .is_some_and(|marker| matches!(marker.try_exists(), Ok(false)))
+    }
+
     /// What changed since the last call: a second launch asking for the window, updater requests, menu refreshes.
     pub fn poll() -> DesktopPoll {
         mailbox(|mailbox| DesktopPoll {
@@ -766,6 +779,9 @@ impl Desktop {
     /// The keystroke `GlobalShortcut.register` takes for a stored combo (`control+alt+E` becomes `ctrl+alt+e`), by the rules
     /// the Settings page uses; `null` when the combo cannot be registered.
     pub fn hotkey_shortcut(combo: String) -> Option<String> {
+        if Self::mas_build() {
+            return None;
+        }
         hotkey_shortcut(&combo)
     }
 
@@ -879,7 +895,7 @@ mod tests {
     #[test]
     fn later_hides_the_prompt_at_once_and_tells_the_driver() {
         let mut mailbox = Mailbox::new();
-        for phase in ["ready", "failed", "up_to_date", "available"] {
+        for phase in ["ready", "failed", "up_to_date", "available", "external"] {
             mailbox.publish(report(phase)).expect("published");
             mailbox.dismiss();
             let status = mailbox.status();

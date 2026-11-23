@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string] $Installer,
-    [string] $Python = 'python'
+    [string] $Python = 'python',
+    [switch] $Nsh
 )
 
 $ErrorActionPreference = 'Stop'
@@ -67,23 +68,41 @@ try {
         '/VERYSILENT',
         '/SUPPRESSMSGBOXES',
         '/NORESTART',
-        '/CURRENTUSER',
         '/NOICONS',
         '/TASKS=""',
         "/DIR=`"$installRoot`""
     )
+    if (-not $Nsh) { $arguments += '/CURRENTUSER' }
     $setup = Start-Process -FilePath $Installer -ArgumentList $arguments -Wait -PassThru
     if ($setup.ExitCode -ne 0) {
         throw "Setup.exe failed with exit code $($setup.ExitCode)"
     }
     $installSucceeded = $true
-    $binary = Join-Path $installRoot 'bir.exe'
-    $assets = Join-Path $installRoot 'assets'
-    if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
-        throw "Installed bir.exe was not found at $binary"
-    }
-    if (-not (Test-Path -LiteralPath $assets -PathType Container)) {
-        throw "Installed assets directory was not found at $assets"
+    if ($Nsh) {
+        foreach ($file in @('eBIRForms.exe', 'nsh/bundle.nshc', 'nsh/app.json')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $installRoot $file) -PathType Leaf)) {
+                throw "Missing installed NSH file: $file"
+            }
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $installRoot 'print-overrides') -PathType Container)) {
+            throw 'NSH Setup is missing print overrides'
+        }
+        if (Test-Path -LiteralPath (Join-Path $installRoot 'ebirforms-no-self-update')) {
+            throw 'Setup must allow self-update'
+        }
+        $registration = Find-EbirFormsUninstallEntry
+        if ($registration -notlike 'CurrentUser/*') {
+            throw "NSH Setup must register its uninstall entry per user, found: $registration"
+        }
+    } else {
+        $binary = Join-Path $installRoot 'bir.exe'
+        $assets = Join-Path $installRoot 'assets'
+        if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
+            throw "Installed bir.exe was not found at $binary"
+        }
+        if (-not (Test-Path -LiteralPath $assets -PathType Container)) {
+            throw "Installed assets directory was not found at $assets"
+        }
     }
     $auditScript = Join-Path $PSScriptRoot 'audit_no_legacy.py'
     & $Python $auditScript --package-root $installRoot

@@ -5,6 +5,16 @@ import type { UpdateReport } from "./updater";
 
 export type { DesktopPoll, InstanceStatus };
 
+/** Store builds have neither a global hotkey nor an updater. */
+export function masBuild(): boolean {
+  return Desktop.masBuild();
+}
+
+/** Whether this install allows NSH to replace its files. */
+export function allowsSelfUpdate(): boolean {
+  return Desktop.allowsSelfUpdate();
+}
+
 /** What changed since the last call: a second launch asking for the window, the updater commands the host functions queued, the menu refresh counter. */
 export function poll(): DesktopPoll {
   return Desktop.poll();

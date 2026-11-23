@@ -5,8 +5,8 @@
 //!   runs on the engine thread, as the old shell's calls ran on its main thread.
 //! * The first call on a thread boots it, in the old host's order: hooks, send guard, database guard, the
 //!   account gate (`cloud_account::prepare_launch`), then the database and the submission worker.
-//! * The guards are the contract's ("The door" in `docs/plans/nsh-tsx-migration.md`): a dry run is forced
-//!   before anything opens, and no database inside the owner's folders is ever opened.
+//! * The guards run before anything opens: development, test, agent and mobile launches do not file live,
+//!   and the database guard still protects the owner's data folders.
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -48,7 +48,33 @@ pub(crate) fn prepare_android(path: Option<PathBuf>) -> Result<(), String> {
             .get_or_init(|| crate::dev_env::load(&path.join("dev.env")))
             .clone()?;
     }
+    install_logging();
     Ok(())
+}
+
+pub(crate) fn install_logging() {
+    static LOGGING: Once = Once::new();
+    LOGGING.call_once(|| {
+        if test_environment() {
+            bir_core::log_files::set_default_log_dir(
+                bir_core::platform::temp_dir()
+                    .join(format!("ebirforms-logs-{}", std::process::id()))
+                    .join("logs"),
+            );
+        }
+        let developer_mode = bir_core::logging::developer_mode_enabled();
+        let default_filter = if developer_mode {
+            "nsh_app_ebirforms=debug,bir_app_api=debug,bir_core=info,bir_print=debug,panic=error"
+        } else {
+            "nsh_app_ebirforms=info,bir_app_api=info,bir_core=info,bir_print=error,panic=error"
+        };
+        if bir_core::logging::install(bir_core::logging::InstallOptions {
+            developer_mode,
+            default_filter,
+        }) {
+            tracing::info!("eBIRForms started");
+        }
+    });
 }
 
 /// The set-up [`process`] runs, with the send guard given (production passes `guards::send_guard`; a test passes one
@@ -331,8 +357,8 @@ fn boot_thread() -> Result<Rc<HostModule>, String> {
             // The send guard refused: the database opens, the worker does not exist.
             let _ = bir_app_api::bir_module::database_handle();
         }
-        bir_app_api::hooks().start_updater();
     }
+    bir_app_api::hooks().start_updater();
     let module = bir_app_api::module();
     module
         .validate()
@@ -444,6 +470,18 @@ pub fn functions() -> Vec<(String, FunctionKind)> {
         .collect()
 }
 
+/// Changes from this connection and from other connections, or unknown when SQLite cannot answer.
+pub fn data_change_token() -> Result<Option<String>, String> {
+    booted()?;
+    let handle =
+        bir_app_api::bir_module::database_handle().map_err(|error| said(error.message()))?;
+    let db =
+        bir_core::lock_timing::lock(&handle).map_err(|_| "database lock poisoned".to_owned())?;
+    Ok(db
+        .data_version()
+        .map(|version| format!("{}:{version}", db.total_changes())))
+}
+
 /// The TypeScript declarations of the `bir` module, as the Rust modules wrote them.
 pub fn declared_types() -> String {
     bir_app_api::module()
@@ -526,6 +564,26 @@ mod tests {
         let folder = tempfile::tempdir().expect("temp folder");
         let database = folder.path().join("data").join("bir_data.db");
         (folder, database)
+    }
+
+    #[test]
+    fn data_change_token_holds_for_reads_and_moves_for_local_and_external_writes() {
+        let (folder, database) = empty();
+        dev_env(Some(&database), Some(folder.path()), || {
+            let first = data_change_token().expect("token").expect("known changes");
+            call("get_setting", vec![json!("theme_preference")]).expect("read");
+            assert_eq!(
+                data_change_token().unwrap().as_deref(),
+                Some(first.as_str())
+            );
+            call("set_setting", vec![json!("theme_preference"), json!("dark")]).expect("write");
+            let second = data_change_token().unwrap().unwrap();
+            assert_ne!(second, first);
+            let other = bir_core::db::Database::open(&database).expect("another connection");
+            let before_external = data_change_token().unwrap().unwrap();
+            other.set_setting("theme_preference", "light").expect("external write");
+            assert_ne!(data_change_token().unwrap().unwrap(), before_external);
+        });
     }
 
     #[test]

@@ -57,26 +57,26 @@ Packaging recipes (`just _package-mac`, `just _package-linux`, `just exe`,
 
 ## Headless command line (`bir`)
 
-The headless agent binary is `bir-headless` in the standalone shell workspace.
-From a checkout:
+The headless agent binary is `bir`, built from `crates/bir-cli` in the root
+workspace. From a checkout:
 
 ```bash
-cargo install --path crates/bir-shell --features agent --bin bir-headless --locked
+cargo install --path crates/bir-cli --locked
 ```
 
-The headless release workflow archives the same executable as `bir`.
+The headless release workflow (`bir-v*` tags) archives the same executable.
 
 `cargo install` makes a release build, and a release build starts automation
 only with `GPUI_AGENT_ALLOW_RELEASE=1`:
 
 ```bash
-GPUI_AGENT=1 GPUI_AGENT_ALLOW_RELEASE=1 GPUI_AGENT_TOKEN=<token> bir-headless serve --detach
-bir-headless status
-bir-headless shutdown
+GPUI_AGENT=1 GPUI_AGENT_ALLOW_RELEASE=1 GPUI_AGENT_TOKEN=<token> bir serve --detach
+bir status
+bir shutdown
 ```
 
 Environment and the full command list are in
-[crates/bir-shell/docs/AGENT.md](crates/bir-shell/docs/AGENT.md).
+[docs/agent.md](docs/agent.md).
 
 This `bir` is a command line tool, not the desktop app. The desktop app comes
 from the dmg, deb or exe on the Releases page. Publish flow and tags are in

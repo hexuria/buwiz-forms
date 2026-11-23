@@ -2,7 +2,8 @@
 // empty states) and the Logs tab (the level filters, the last 200 lines, Refresh, no file, an unreadable file). The job table and the log
 // are the fixture's (SettingsDemo.tsx jobs, log): the scratch database has no jobs, and its log file is the host's.
 import { expect, test } from "nsh/test";
-import { calls, expectTexts, openSettings, SIZES } from "./testing";
+import { shoot } from "../../shots/shoot";
+import { calls, expectTexts, openSettings, SIZES, WIDE } from "./testing";
 
 const JOBS = {
   queued: "id:job-submission-41",
@@ -12,6 +13,15 @@ const JOBS = {
   rebuilt: "id:job-job-4",
 };
 const ALL = Object.values(JOBS);
+
+test("startup writes today's log and Jobs shows its lines", async () => {
+  const app = await openSettings(WIDE, {}, "jobs");
+  await app.press("id:jobs-tabs >> text:Logs");
+  await app.waitFor("text:/eBIRForms started/");
+  const today = new Date().toISOString().slice(0, 10);
+  expect(app.texts().some((text) => text.includes(`ebirforms.${today}.log`))).toBe(true);
+  await shoot(app, "nsh-startup-log");
+});
 
 /** Which of the five rows show. */
 function shown(app: Awaited<ReturnType<typeof openSettings>>): string[] {

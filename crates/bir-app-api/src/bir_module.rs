@@ -115,7 +115,7 @@ pub fn submission_worker_refused() -> bool {
 
 /// Start `bir_core::background_cron` — queued submissions, their retries,
 /// confirmation-inbox polls and scheduled jobs — once per process, on its own
-/// thread and Tokio runtime, exactly as the shell GUI and `bir-headless`
+/// thread and Tokio runtime, exactly as the shell GUI and the `bir` command
 /// do. It shares `db`, the one owner-locked connection, rather than opening
 /// a second. `BIR_SFTP_DRY_RUN` is read by the worker's transport, unchanged.
 fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
@@ -4939,7 +4939,7 @@ mod tests {
 
     /// The shell's launch starts the submission worker on the database it
     /// opens, so a queued return is sent without another GUI process or
-    /// `bir-headless` running. Opening the database reads its key, so this
+    /// `bir` running. Opening the database reads its key, so this
     /// runs in a child test process on a scratch `BIR_DATABASE_PATH` with
     /// `EBIR_TEST_ENV` (key off the keychain) and `BIR_SFTP_DRY_RUN`: never
     /// the live database, never BIR.

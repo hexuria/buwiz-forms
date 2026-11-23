@@ -15,6 +15,11 @@ export function doorStatus(): DoorStatus {
   return Door.status();
 }
 
+/** Equal non-null tokens mean neither this database connection nor another one wrote. */
+export function dataChangeToken(): string | null {
+  return Door.dataChangeToken();
+}
+
 /** Reads and deletes one command from the opt-in Android test mailbox; inert elsewhere. */
 export function devCommand(): string | null {
   return Door.devCommand();

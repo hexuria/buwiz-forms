@@ -26,7 +26,7 @@ pub fn data_dir() -> PathBuf {
 }
 
 /// Returns the macOS application data directory of the plain-SQLite (NSH)
-/// build: `~/Library/Application Support/dev.goldcoders.bir.nsh`. Never the
+/// build: `~/Library/Application Support/dev.goldcoders.bir`. Never the
 /// group container of the old app.
 #[cfg(not(feature = "sqlcipher"))]
 pub fn data_dir() -> PathBuf {
@@ -92,7 +92,7 @@ mod tests {
                 home.path()
                     .join("Library")
                     .join("Application Support")
-                    .join("dev.goldcoders.bir.nsh")
+                    .join("dev.goldcoders.bir")
             );
             assert!(path.is_dir());
             assert!(!path.to_string_lossy().contains("Group Containers"));

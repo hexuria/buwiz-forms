@@ -75,6 +75,8 @@ export interface MenuState {
   /** A Quit or Hide key recorder is listening: the Quit and Hide items carry the platform's own quit and hide keys (CAPTURE_KEYS), which
    * nsh/keymap cannot bind, so the recorder hears them through the menu (menu.ts hands their onSelect to it). */
   capturing?: boolean;
+  /** Mac App Store builds don't check for updates. */
+  masBuild?: boolean;
 }
 
 /** One taxpayer in the Profiles menu. */
@@ -415,7 +417,7 @@ function helpMenu(state: MenuState, run: Run): MenuItem {
   return menu("Help", [
     about,
     about ? SEP : null,
-    item(run, "Check for Updates…", "check-updates"),
+    state.masBuild ? null : item(run, "Check for Updates…", "check-updates"),
     item(run, "Contact Support…", "support"),
     item(run, "Goldcoders Website", "website"),
   ]);

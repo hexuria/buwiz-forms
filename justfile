@@ -1,4 +1,4 @@
-# The `bir-v*` workflow archives bir-headless as `bir`.
+# The `bir-v*` workflow builds the `bir` command from crates/bir-cli.
 # Desktop releases stay `just publish` / `just publish 0.2.0` (tag v*).
 set dotenv-load := true
 
@@ -150,6 +150,7 @@ shell-check: shell-ui-test
     {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; $env:BIR_AUTH_BYPASS='1'; $env:BIR_SFTP_DRY_RUN='1'; cargo test --locked --manifest-path crates/bir-shell/Cargo.toml" } else { "EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 cargo test --locked --manifest-path crates/bir-shell/Cargo.toml" } }}
     cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --lib agent::
     {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; $env:BIR_AUTH_BYPASS='1'; $env:BIR_SFTP_DRY_RUN='1'; $env:BUWIZ_NO_KEYCHAIN='1'; cargo test --locked -p bir-app-api --features headless --lib agent::" } else { "EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 BUWIZ_NO_KEYCHAIN=1 cargo test --locked -p bir-app-api --features headless --lib agent::" } }}
+    {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; $env:BIR_AUTH_BYPASS='1'; $env:BIR_SFTP_DRY_RUN='1'; $env:BUWIZ_NO_KEYCHAIN='1'; cargo test --locked -p bir-cli" } else { "EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 BUWIZ_NO_KEYCHAIN=1 cargo test --locked -p bir-cli" } }}
     cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --test headless_detach
 
 # bir-core and bir-app-api tests in the plain-SQLite build the NSH app ships (no sqlcipher), with the four safety variables:
@@ -723,66 +724,22 @@ clean:
 
 # --- Hidden OS-specific packaging tasks ---
 
-# Packages the shipped gpui-shell app: crates/bir-shell is a standalone
-# workspace built with no features, and the .app stages app/ and
-# print-overrides/ under Contents/Resources where the shell resolves them
-# (crates/bir-shell/src/packaged.rs). The retired painted host stays buildable
-# for development but is not packaged here.
+# Packages the shipped NSH app (nsh/) as the universal release does, with the
+# same script: `nsh package --target macos --arch universal`, then the .app,
+# .dmg, update archives and checksums under target/release-artifacts. Signed
+# ad hoc unless SIGNING_IDENTITY names a Developer ID (and notarized when the
+# NOTARY_* variables are set); see scripts/package_macos_release.sh.
 _package-mac args="": build-frozen-html-identity
     #!/usr/bin/env bash
-    set -e
+    set -euo pipefail
     for arg in {{args}}; do
         case "$arg" in
             --native-evidence|--agent)
-                echo "⚠️  $arg is a bir-shell feature; the shipped shell ignores it" ;;
+                echo "⚠️  $arg is a bir-shell feature; the NSH app ignores it" ;;
         esac
     done
-    echo "Building for ARM64..."
-    cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{MAC_ARM_TARGET}}
-    echo "Building for x86_64..."
-    cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{MAC_X86_TARGET}}
-    {{PYTHON}} scripts/alias_app_bin.py crates/bir-shell/target/{{MAC_ARM_TARGET}}/release bir-shell
-    {{PYTHON}} scripts/alias_app_bin.py crates/bir-shell/target/{{MAC_X86_TARGET}}/release bir-shell
-    mkdir -p {{RELEASE_DIR}}
-    echo "Creating universal binary (lipo)..."
-    lipo -create crates/bir-shell/target/{{MAC_ARM_TARGET}}/release/bir crates/bir-shell/target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
-    echo "Creating .app bundle..."
-    rm -rf "{{MAC_APP}}"
-    mkdir -p "{{MAC_APP}}/Contents/MacOS" "{{MAC_APP}}/Contents/Resources"
-    cp {{RELEASE_DIR}}/bir "{{MAC_APP}}/Contents/MacOS/"
-    cp -R assets "{{MAC_APP}}/Contents/Resources/"
-    rm -rf "{{MAC_APP}}/Contents/Resources/assets/macos"
-    cp assets/AppIcon.icns "{{MAC_APP}}/Contents/Resources/"
-    cp -R app "{{MAC_APP}}/Contents/Resources/"
-    cp -R print-overrides "{{MAC_APP}}/Contents/Resources/"
-
-    cp assets/macos/Info.plist "{{MAC_APP}}/Contents/Info.plist"
-    sed -i '' "s/VERSION_PLACEHOLDER/{{VERSION}}/g" "{{MAC_APP}}/Contents/Info.plist"
-    sed -i '' "s/BUILD_NUMBER_PLACEHOLDER/{{BUILD_NUMBER}}/g" "{{MAC_APP}}/Contents/Info.plist"
-    sed -i '' "s/BUNDLE_ID_PLACEHOLDER/{{BUNDLE_ID}}/g" "{{MAC_APP}}/Contents/Info.plist"
-    sed -i '' "s/APP_NAME_PLACEHOLDER/{{APP_NAME}}/g" "{{MAC_APP}}/Contents/Info.plist"
-    if [ "$DEV_MODE" = "true" ] || [ "$DEVELOPER_MODE" = "true" ]; then
-        echo "Injecting DEVELOPER_MODE into Info.plist..."
-        /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" "{{MAC_APP}}/Contents/Info.plist" || true
-        /usr/libexec/PlistBuddy -c "Add :LSEnvironment:DEVELOPER_MODE string true" "{{MAC_APP}}/Contents/Info.plist" || true
-    fi
-    {{PYTHON}} scripts/audit_no_legacy.py --package-root "{{MAC_APP}}"
-    touch "{{MAC_APP}}"
-    
-    echo "Ad-hoc codesigning application..."
-    codesign --force --options runtime --entitlements entitlements.dev.plist --sign "-" "{{MAC_APP}}"
-    codesign --verify --strict --verbose=2 "{{MAC_APP}}"
-
-    echo "✅ {{MAC_APP}} created and codesigned"
-    
-    if command -v create-dmg >/dev/null 2>&1; then \
-        rm -f "{{RELEASE_DIR}}/{{APP_NAME}}-macOS-{{VERSION}}.dmg"; \
-        create-dmg --volname "{{APP_NAME}}" --window-size 600 400 --icon-size 100 --icon "{{APP_NAME}}.app" 150 190 --app-drop-link 450 190 "{{RELEASE_DIR}}/{{APP_NAME}}-macOS-{{VERSION}}.dmg" "{{MAC_APP}}"; \
-        echo "✅ DMG created"; \
-    else \
-        echo "⚠️ create-dmg not found. Falling back to zip..."; \
-        cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-macOS-{{VERSION}}.zip" "{{APP_NAME}}.app"; \
-    fi
+    NSH="${NSH:-$HOME/BuwizNsh/tools/bin/nsh}" VERSION="{{VERSION}}" OUT_DIR="{{RELEASE_DIR}}" \
+        bash scripts/package_macos_release.sh
 
 # MAS/TestFlight packages the gpui-shell binary. The macOS JIT entitlement
 # combination and App Store build remain unverified until checked on macOS.
@@ -1226,7 +1183,7 @@ _nsh-db-guard $db:
                     if identity(os.path.join(folder, name)) == (info.st_dev, info.st_ino):
                         refuse("it is a hard link to a file in " + folder)
     '@
-    $script | & "{{PYTHON}}" -I - $db "dev.goldcoders.bir.nsh"
+    $script | & "{{PYTHON}}" -I - $db "dev.goldcoders.bir"
     exit $LASTEXITCODE
 
 # The database comes from the caller: just nsh-run ~/BuwizNsh/agents/<track>.db, or BIR_DATABASE_PATH in the environment.
@@ -1352,7 +1309,7 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         # stops itself when this shell is gone (a closed window, a killed process). It keeps the token in memory and
         # writes it to adb's standard input itself, so no file on this machine holds it.
         $agentHost = 'com.longbridge.nsh.host'
-        $tokenDir = 'files/nsh/dev.goldcoders.bir.nsh'
+        $tokenDir = 'files/nsh/dev.goldcoders.bir'
         $writer = Start-Job -ScriptBlock {
             param($adb, $serial, $token, $pkg, $dir, $launcher, $launcherStarted)
             for ($i = 0; $i -lt 1800; $i++) {
@@ -1407,7 +1364,7 @@ nsh-agent-handoff-test:
 
 # Starts the app in a real window with the `agent` feature built into its host (a scratch database, dry run, no keychain; the token is made here and
 # never printed), then runs nsh/tests/window_plane.rs against both control planes: the window's (tree, press, type, screenshot) and the data plane's
-# (app.info, profile.*, form.*). Nothing is sent anywhere. See crates/bir-shell/docs/AGENT.md. nsh's CLI builds its hosts without app features;
+# (app.info, profile.*, form.*). Nothing is sent anywhere. See docs/agent.md. nsh's CLI builds its hosts without app features;
 # nsh/agent/cargo-with-agent.sh, set as $CARGO for that one command, adds the feature to the host build.
 
 # NSH: an external agent against the real app window (cargo feature `agent`, both control planes).

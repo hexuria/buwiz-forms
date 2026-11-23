@@ -1,4 +1,4 @@
-//! Opt-in one-line request log for `bir-headless` (and the painted mailbox drain).
+//! Opt-in one-line request log for the `bir` command (and the painted mailbox drain).
 //!
 //! Switch: `GPUI_AGENT_LOG_REQUESTS=1` (`true`/`yes`/`on`). Off by default.
 //! Not tied to `RUST_LOG` so normal `serve` stays quiet. Never logs the

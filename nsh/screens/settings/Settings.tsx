@@ -5,6 +5,7 @@
 import { cleanup, Scroll, signal, View } from "nsh";
 import { sectionById, settingsView, shownSection } from "../../lib/settings_model";
 import { app } from "../../shell";
+import { masBuild } from "../../shell/desktop/native";
 import { AppButton, GroupLabel, Icon, NavRow, PageTitle, Text, TextField, TOUCH, type IconName } from "../../ui";
 import { AccountSection } from "./AccountSection";
 import { ComputerSection } from "./Computer";
@@ -29,7 +30,7 @@ const keyOnly = (): boolean => setupChange.step() === "key";
 /** The sections and rows the search keeps for this person. */
 const view = () => {
   if (keyOnly()) return [];
-  return settingsView(nav.query(), app.isAdmin(), TOUCH);
+  return settingsView(nav.query(), app.isAdmin(), TOUCH, masBuild());
 };
 const shownId = () => (keyOnly() ? null : shownSection(nav.section(), view()));
 const shown = () => {

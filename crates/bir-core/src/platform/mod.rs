@@ -7,7 +7,7 @@
 /// App id of the NSH app. In the plain-SQLite build (cargo feature `sqlcipher`
 /// off) `data_dir()` is a folder named after it, never the old app's group
 /// container, so the two apps run side by side.
-pub const NSH_APP_ID: &str = "dev.goldcoders.bir.nsh";
+pub const NSH_APP_ID: &str = "dev.goldcoders.bir";
 
 /// Environment switch that turns every OS keychain read and write off.
 pub const NO_KEYCHAIN_ENV: &str = "BUWIZ_NO_KEYCHAIN";

@@ -206,7 +206,7 @@ sudo apt-get install -y \
 ## Notifications
 
 - In-app toasts work. Whether the system banner appears is unverified.
-  `bir-headless` uses `notify-rust`.
+  the headless `bir` uses `notify-rust`.
 
 ## Keyboard shortcuts
 

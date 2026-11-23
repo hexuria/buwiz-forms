@@ -20,7 +20,7 @@ No Windows or Linux machine was available, so nothing below was run there. "Writ
 | Feature | macOS | Windows | Linux |
 |---|---|---|---|
 | Forms, tax profile, filings, send queue (`bir-core`, `bir-app-api`, plain SQLite) | built and tested | written | written |
-| Send guard: a dry run is forced; only the local mock BIR may differ | built and tested | written (plain Rust, its tests run on macOS) | written |
+| Send guard: debug, test and agent runs are dry or use a guarded local mock; normal releases use the filing transport | built and tested | written (plain Rust, its tests run on macOS) | written |
 | Database guard: never opens the owner's data folders | built and tested (home folder from the password database; folders also known by device and inode) | built and tested (profile folder from the process's token, never `USERPROFILE`; folders and files also known by volume and file index) | written (the macOS code); names compared case-sensitively; never run |
 | OS sign-in for admin recovery (Touch ID or password; Windows Hello) | written; no test shows the real prompt (a test environment answers "no" without asking) | written (`robius-authentication`), never run | stub: answers "no" (`this platform has no OS sign-in prompt`). PIN, authenticator and recovery key work as everywhere |
 | Print preview window | built and tested | the TSX side is shared; never opened | the same |

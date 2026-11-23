@@ -7,6 +7,7 @@
 //! which on a busy machine grows by tens of megabytes a year.
 
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use chrono::NaiveDate;
 
@@ -26,6 +27,13 @@ pub const MAX_RETENTION_DAYS: u32 = 365;
 /// Offered in Settings. Any value in range is accepted from the database.
 pub const RETENTION_CHOICES: [u32; 5] = [3, 7, 14, 30, 90];
 
+static DEFAULT_LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Set an embedder's default before logging starts. An explicit `BIR_LOG_DIR` still takes precedence.
+pub fn set_default_log_dir(dir: PathBuf) {
+    let _ = DEFAULT_LOG_DIR.set(dir);
+}
+
 /// `<data_dir>/logs`, the directory both binaries write under.
 ///
 /// On macOS `data_dir` is the App Group container
@@ -38,7 +46,10 @@ pub fn log_dir() -> PathBuf {
     {
         return PathBuf::from(dir);
     }
-    crate::platform::data_dir().join("logs")
+    DEFAULT_LOG_DIR
+        .get()
+        .cloned()
+        .unwrap_or_else(|| crate::platform::data_dir().join("logs"))
 }
 
 /// `ebirforms.2026-09-12.log` — the name `tracing_appender` gives a daily

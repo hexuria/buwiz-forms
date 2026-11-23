@@ -82,6 +82,7 @@ openssl = { version = "0.10", features = ["vendored"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tracing-appender = "0.2.3"
+tracing-log = "0.2"
 dotenvy = { workspace = true }
 rand = "0.10.1"
 hex = "0.4.3"

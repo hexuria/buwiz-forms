@@ -11,6 +11,8 @@ param(
 
     [string]$PrintOverridesDir = "print-overrides",
 
+    [string]$NshPayload,
+
     [Parameter(Mandatory = $true)]
     [string]$Version,
 
@@ -43,8 +45,12 @@ function Get-MsvcVersion {
 
 $exeFullPath = (Resolve-Path $ExePath).Path
 $assetsFullPath = (Resolve-Path $AssetsDir).Path
-$appFullPath = (Resolve-Path $AppDir).Path
-$printOverridesFullPath = (Resolve-Path $PrintOverridesDir).Path
+if ($NshPayload) {
+    $NshPayload = (Resolve-Path -LiteralPath $NshPayload).Path
+} else {
+    $appFullPath = (Resolve-Path $AppDir).Path
+    $printOverridesFullPath = (Resolve-Path $PrintOverridesDir).Path
+}
 $outFullPath = [IO.Path]::GetFullPath($OutFile)
 $outDirectory = Split-Path -Parent $outFullPath
 if (-not (Test-Path $outDirectory)) {
@@ -59,12 +65,24 @@ $stage = Join-Path $outDirectory ("msix-staging-" + [guid]::NewGuid().ToString('
 
 try {
     New-Item -ItemType Directory -Path $stage | Out-Null
-    Copy-Item -LiteralPath $exeFullPath -Destination (Join-Path $stage 'bir.exe')
-    Copy-Item -LiteralPath $assetsFullPath -Destination (Join-Path $stage 'assets') -Recurse
-    Copy-Item -LiteralPath $appFullPath -Destination (Join-Path $stage 'app') -Recurse
-    Copy-Item -LiteralPath $printOverridesFullPath -Destination (Join-Path $stage 'print-overrides') -Recurse
-    if (-not (Test-Path (Join-Path $stage 'app\main.js') -PathType Leaf)) {
-        throw "Shell app entry missing from MSIX payload: $stage\app\main.js"
+    if ($NshPayload) {
+        Copy-Item -Path "$NshPayload\*" -Destination $stage -Recurse
+        foreach ($required in @('eBIRForms.exe', 'nsh\bundle.nshc', 'ebirforms-no-self-update')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $stage $required) -PathType Leaf)) {
+                throw "Required NSH MSIX payload file is missing: $required"
+            }
+        }
+        $artwork = New-Item -ItemType Directory -Path (Join-Path $stage 'assets')
+        Get-ChildItem -LiteralPath $assetsFullPath -Filter 'icon*.png' -File |
+            Copy-Item -Destination $artwork.FullName
+    } else {
+        Copy-Item -LiteralPath $exeFullPath -Destination (Join-Path $stage 'bir.exe')
+        Copy-Item -LiteralPath $assetsFullPath -Destination (Join-Path $stage 'assets') -Recurse
+        Copy-Item -LiteralPath $appFullPath -Destination (Join-Path $stage 'app') -Recurse
+        Copy-Item -LiteralPath $printOverridesFullPath -Destination (Join-Path $stage 'print-overrides') -Recurse
+        if (-not (Test-Path (Join-Path $stage 'app\main.js') -PathType Leaf)) {
+            throw "Shell app entry missing from MSIX payload: $stage\app\main.js"
+        }
     }
 
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
@@ -149,6 +167,9 @@ try {
     $manifestPath = Join-Path $PSScriptRoot '..\assets\windows\AppxManifest.xml'
     $manifest = Get-Content -LiteralPath $manifestPath -Raw
     $manifest = $manifest.Replace('MSIX_VERSION_PLACEHOLDER', $msixVersion)
+    if ($NshPayload) {
+        $manifest = $manifest.Replace('Executable="bir.exe"', 'Executable="eBIRForms.exe"')
+    }
     if (-not [string]::IsNullOrWhiteSpace($Publisher)) {
         $escapedPublisher = [System.Security.SecurityElement]::Escape($Publisher)
         $identityMatch = [regex]::Match($manifest, '<Identity\b[^>]*>')

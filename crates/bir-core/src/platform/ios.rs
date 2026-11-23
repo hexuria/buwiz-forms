@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 /// Returns the app's data directory inside its sandbox:
-/// `$HOME/Library/Application Support/dev.goldcoders.bir.nsh`.
+/// `$HOME/Library/Application Support/dev.goldcoders.bir`.
 pub fn data_dir() -> PathBuf {
     let dir = std::env::var_os("HOME")
         .map(PathBuf::from)

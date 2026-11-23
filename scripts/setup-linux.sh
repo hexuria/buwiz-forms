@@ -394,8 +394,8 @@ present stale frames — force the Gl backend by hiding the Vulkan ICD:
 Drive the app with gpui-agent (build the agent feature in, enable the host
 with GPUI_AGENT=1, then talk to it with the CLI):
 
-    cargo build --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --bin bir-headless
-    GPUI_AGENT=1 GPUI_AGENT_TOKEN=dev-secret ./crates/bir-shell/target/debug/bir-headless &
+    cargo build --locked -p bir-cli
+    GPUI_AGENT=1 GPUI_AGENT_TOKEN=dev-secret ./target/debug/bir serve &
     GPUI_AGENT_TOKEN=dev-secret gpui-agent hello
     GPUI_AGENT_TOKEN=dev-secret gpui-agent snapshot --pretty
 

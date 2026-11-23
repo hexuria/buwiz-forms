@@ -12,7 +12,7 @@
 set -euo pipefail
 
 host=com.longbridge.nsh.host
-dir=files/nsh/dev.goldcoders.bir.nsh
+dir=files/nsh/dev.goldcoders.bir
 
 fail() {
     echo "nsh-run-agent: $*" >&2

@@ -14,7 +14,7 @@ sqlcipher = ["bir-core/sqlcipher", "bir-print/sqlcipher"]
 # Device filings, the agent's send path and the gpui-agent session both hosts share (`agent/`); enabled by
 # `bir-shell/agent` and `nsh-app-ebirforms/agent`.
 agent = ["dep:reqwest", "dep:gpui-agent"]
-# `bir-headless`: the same session in a daemon with no window (clap CLI, pid file, detach). Needs `agent`.
+# The `bir` command (crates/bir-cli): the same session in a daemon with no window (clap CLI, pid file, detach). Needs `agent`.
 headless = ["agent", "dep:clap", "dep:dotenvy", "dep:libc", "dep:socket2"]
 mas_build = ["bir-core/mas_build"]
 # Test helpers (`account_gate::force_locked`) for a host's own tests.

@@ -16,9 +16,9 @@ use std::path::Path;
 use std::sync::{Once, OnceLock};
 
 use regex::Regex;
+use tracing_log::AsLog;
 use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Registry};
 
 use crate::log_files::{self, LOG_FILE_PREFIX, LOG_FILE_SUFFIX};
@@ -91,20 +91,26 @@ pub struct InstallOptions {
 /// and reports whether the first call succeeded.
 pub fn install(options: InstallOptions) -> bool {
     static INSTALLED: OnceLock<bool> = OnceLock::new();
-    *INSTALLED.get_or_init(|| match subscriber(options).try_init() {
-        Ok(()) => {
-            install_panic_hook();
-            tracing::info!(
-                "🔍 Tracing initialized (developer_mode: {})",
-                options.developer_mode
-            );
-            true
-        }
-        Err(error) => {
-            eprintln!("logging subscriber not installed: {error}");
-            false
-        }
-    })
+    *INSTALLED.get_or_init(
+        || match tracing::subscriber::set_global_default(subscriber(options)) {
+            Ok(()) => {
+                // NSH may already own the log facade; its logger must stay in place.
+                let _ = tracing_log::LogTracer::builder()
+                    .with_max_level(tracing::level_filters::LevelFilter::current().as_log())
+                    .init();
+                install_panic_hook();
+                tracing::info!(
+                    "🔍 Tracing initialized (developer_mode: {})",
+                    options.developer_mode
+                );
+                true
+            }
+            Err(error) => {
+                eprintln!("logging subscriber not installed: {error}");
+                false
+            }
+        },
+    )
 }
 
 /// Run `body` on a thread-local subscriber built the same way as [`install`].

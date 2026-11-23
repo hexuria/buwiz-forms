@@ -52,10 +52,15 @@ the local copy even if the server is unreachable.
 ## Local mock account server
 
 Run `just mock-account` in a separate terminal before the NSH app. Debug builds
-already use `http://localhost:3008`; no URL override is needed. All accounts,
-device codes and tokens live in memory and disappear when the server stops.
-Use only development emails. This is not the real account server and must
-never be exposed publicly.
+already use `http://localhost:3008`; no URL override is needed. For an
+installed release build, set both `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL`
+to `http://localhost:3008` in the app's environment before launching it.
+Setting only `BUWIZ_ACCOUNT_URL` points the browser at the mock, but the app
+still creates the device code against the production API.
+
+All accounts, device codes and tokens live in memory and disappear when the
+server stops. Use only development emails. This is not the real account
+server and must never be exposed publicly.
 
 Choose Sign in or Create account in the app, continue with the prefilled
 `dev@buwiz.local` in the browser (no password or code), then Approve the device.

@@ -15,7 +15,7 @@
 import type { Accessor, Signal } from "nsh";
 import { batch, computed, effect, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
 import { Application } from "nsh/desktop";
-import { bir, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
+import { bir, dataChangeToken, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
 import { errorText } from "../lib/errors";
 import { POLL, startPolls } from "../lib/poll";
@@ -1004,6 +1004,8 @@ function openNotification(id: string): void {
 
 // ---------------------------------------------------------------- polls
 
+let eventChangeToken: string | null = null;
+
 /**
  * Re-reads what the submission worker changes behind this app's back (by default POLL_KEYS: returns, their deadlines and yearly form
  * rows, background jobs; the Queued watch passes the wider WORKER_KEYS) and announces events that appeared since the last look.
@@ -1012,7 +1014,16 @@ function pollEvents(keys: RegExp = POLL_KEYS): void {
   // While a lock is up nobody has signed in: another taxpayer's filing events must not toast onto the lock screen (the next person
   // to sign in hears of what is theirs on the next poll: knownEvents is only updated here).
   if (cloudLocked() || appLocked()) return;
-  store.forgetWhere(keys);
+  let refresh = true;
+  if (keys === POLL_KEYS) {
+    let token: string | null = null;
+    try {
+      token = dataChangeToken();
+    } catch {}
+    refresh = token === null || token !== eventChangeToken;
+    eventChangeToken = token;
+  }
+  if (refresh) store.forgetWhere(keys);
   const said = eventToast(takeFresh(knownEvents, notifications()));
   if (said) toast(said.message, said.icon);
 }
@@ -1032,7 +1043,6 @@ function pullDeviceFilings(): void {
 
 /** The host checks for a release on its own thread; polling is how the prompt appears. */
 function watchUpdate(): void {
-  if (cloudLocked()) return;
   let next: UpdateStatus;
   try {
     next = bir.update_status();

@@ -10,7 +10,7 @@
 //! touches a window. `bir-shell` keeps only its gpui glue (the timer and the
 //! tree of its script view); `nsh/src/agent.rs` is the NSH host's.
 //!
-//! `bir-headless` (feature `headless`) runs the same [`Session`] without a
+//! The `bir` command (feature `headless`, crates/bir-cli) runs the same [`Session`] without a
 //! window: its UI commands are discarded and screenshots are unavailable.
 
 pub mod request_log;

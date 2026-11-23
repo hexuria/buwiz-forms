@@ -1,0 +1,156 @@
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory)] [string] $PackageRoot,
+    [Parameter(Mandatory)] [string] $OutDir
+)
+
+$ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $true
+$repo = Split-Path -Parent $PSScriptRoot
+$PackageRoot = (Resolve-Path -LiteralPath $PackageRoot).Path
+$version = (Get-Content -Raw (Join-Path $repo 'nsh/nsh.json') | ConvertFrom-Json).version
+if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid Windows release version: $version" }
+$OutDir = (New-Item -ItemType Directory -Force -Path $OutDir).FullName
+$stem = "eBIRForms-Windows-x64-$version"
+$setup = Join-Path $OutDir "$stem-Setup.exe"
+$msi = Join-Path $OutDir "$stem.msi"
+$msix = Join-Path $OutDir "$stem.msix"
+$zip = Join-Path $OutDir "eBIRForms-$version-windows-x86_64.zip"
+
+$iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+$wix = Get-ChildItem "${env:ProgramFiles(x86)}\WiX Toolset v3.*\bin" -Directory -ErrorAction SilentlyContinue |
+    Where-Object { Test-Path (Join-Path $_.FullName 'heat.exe') } |
+    Sort-Object FullName -Descending | Select-Object -First 1
+$sdk = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.*\x64" -Directory |
+    Where-Object { Test-Path (Join-Path $_.FullName 'makeappx.exe') } |
+    Sort-Object { [version]$_.Parent.Name } -Descending | Select-Object -First 1
+if (-not (Test-Path -LiteralPath $iscc) -or -not $wix -or -not $sdk) {
+    throw 'Inno Setup 6, WiX 3 and the Windows SDK with MakeAppx are required'
+}
+
+$hasPfx = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX)
+$hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)
+if ($hasPfx -xor $hasPassword) {
+    throw 'Configure both WINDOWS_CERTIFICATE_PFX and WINDOWS_CERTIFICATE_PASSWORD, or neither'
+}
+if (-not $hasPfx) {
+    Write-Output '::warning title=Unsigned Windows artifacts::No Windows signing certificate; the MSIX cannot be sideloaded until signed and trusted.'
+}
+$scratch = Join-Path ([IO.Path]::GetTempPath()) ("nsh-release-" + [guid]::NewGuid().ToString('N'))
+$stage = Join-Path $scratch 'eBIRForms'
+$exe = Join-Path $stage 'eBIRForms.exe'
+$marker = 'ebirforms-no-self-update'
+$pfx = Join-Path $scratch 'signing.pfx'
+
+function Sign-WindowsArtifact([string] $Path) {
+    if ($hasPfx) {
+        $signtool = Join-Path $sdk.FullName 'signtool.exe'
+        & $signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $pfx /p $env:WINDOWS_CERTIFICATE_PASSWORD $Path
+        & $signtool verify /pa /all /v $Path
+    }
+}
+
+function Test-Payload([string] $Path, [bool] $Managed) {
+    foreach ($file in @('eBIRForms.exe', 'nsh/bundle.nshc', 'nsh/app.json')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Path $file) -PathType Leaf)) {
+            throw "Missing NSH payload file '$file' in $Path"
+        }
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $Path 'print-overrides') -PathType Container)) {
+        throw "Missing print overrides in $Path"
+    }
+    if ((Test-Path -LiteralPath (Join-Path $Path $marker)) -ne $Managed) {
+        throw "Unexpected updater policy for $Path; expected a package-managed payload: $Managed"
+    }
+    & python (Join-Path $PSScriptRoot 'audit_no_legacy.py') --package-root $Path
+}
+
+try {
+    New-Item -ItemType Directory -Path $scratch | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PackageRoot 'eBIRForms') -Destination $stage -Recurse
+    Copy-Item -LiteralPath (Join-Path $repo 'print-overrides') -Destination $stage -Recurse
+    Test-Payload $stage $false
+
+    $publisher = $null
+    if ($hasPfx) {
+        [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX))
+        $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($pfx, $env:WINDOWS_CERTIFICATE_PASSWORD)
+        try { $publisher = $cert.Subject } finally { $cert.Dispose() }
+        Sign-WindowsArtifact $exe
+    }
+
+    # Recompile NSH's per-user Setup and rebuild its ZIP from the signed payload,
+    # including the print overrides. Neither should carry the package-manager marker.
+    $iss = Get-Content -LiteralPath (Join-Path $PackageRoot 'eBIRForms.iss') -Raw
+    $source = 'Source: "eBIRForms\*"'
+    if (-not $iss.Contains($source) -or $iss -notmatch '(?m)^PrivilegesRequired=lowest\r?$') {
+        throw 'The generated NSH Setup no longer uses the expected per-user layout'
+    }
+    $auditIss = Join-Path $scratch 'eBIRForms.iss'
+    $iss.Replace($source, 'Source: "{#StageDir}\*"') | Set-Content -LiteralPath $auditIss -Encoding utf8
+    & python (Join-Path $PSScriptRoot 'audit_installer_sources.py') --installer $auditIss --stage-dir $stage
+    & $iscc /Q "/DStageDir=$stage" "/O$OutDir" "/F$stem-Setup" $auditIss
+    if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip }
+    [IO.Compression.ZipFile]::CreateFromDirectory($stage, $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
+
+    New-Item -ItemType File -Path (Join-Path $stage $marker) | Out-Null
+    $wixDir = Join-Path $repo 'packaging/windows'
+    $harvest = Join-Path $scratch 'harvest.wxs'
+    $heatArgs = @(
+        'dir', $stage, '-dr', 'INSTALLDIR', '-cg', 'NshPayload', '-ag', '-sfrag', '-srd', '-scom', '-sreg',
+        '-var', 'var.SourceDir', '-t', (Join-Path $wixDir 'per-user-harvest.xsl'), '-out', $harvest
+    )
+    & (Join-Path $wix.FullName 'heat.exe') @heatArgs
+    # WiX does not auto-generate GUIDs for components that have files and
+    # HKCU key paths. Heat's component IDs are stable for the destination paths.
+    [xml]$components = Get-Content -LiteralPath $harvest -Raw
+    $namespace = [Xml.XmlNamespaceManager]::new($components.NameTable)
+    $namespace.AddNamespace('w', 'http://schemas.microsoft.com/wix/2006/wi')
+    foreach ($component in $components.SelectNodes('//w:Component', $namespace)) {
+        $identity = [Text.Encoding]::UTF8.GetBytes("dev.goldcoders.bir.msi/$($component.Id)")
+        $digest = [Security.Cryptography.SHA256]::HashData($identity)
+        $component.SetAttribute('Guid', [guid]::new([byte[]]$digest[0..15]).ToString())
+    }
+    $components.Save($harvest)
+    & (Join-Path $wix.FullName 'candle.exe') (Join-Path $wixDir 'nsh.wxs') $harvest -arch x64 "-dSourceDir=$stage" "-dVersion=$version" -out "$scratch\"
+    # ICE91 warns about files in a user profile if a per-machine install
+    # were requested. This package is per-user only.
+    & (Join-Path $wix.FullName 'light.exe') (Join-Path $scratch 'nsh.wixobj') (Join-Path $scratch 'harvest.wixobj') -out $msi -sice:ICE91
+
+    $msixArgs = @{
+        ExePath = $exe
+        NshPayload = $stage
+        AssetsDir = (Join-Path $repo 'assets')
+        Version = $version
+        BuildNumber = [int](($version -split '\.')[2])
+        OutFile = $msix
+    }
+    if ($publisher) { $msixArgs.Publisher = $publisher }
+    & (Join-Path $PSScriptRoot 'package_msix.ps1') @msixArgs
+
+    foreach ($installer in @($setup, $msi, $msix)) { Sign-WindowsArtifact $installer }
+
+    & (Join-Path $PSScriptRoot 'audit_final_setup.ps1') -Installer $setup -Nsh
+    $extractedMsi = New-Item -ItemType Directory -Path (Join-Path $scratch 'msi')
+    $extraction = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @(
+        '/a', ('"{0}"' -f $msi), '/qn', ('TARGETDIR="{0}"' -f $extractedMsi.FullName)
+    )
+    if ($extraction.ExitCode -ne 0) { throw "MSI extraction failed: $($extraction.ExitCode)" }
+    $msiPayload = @(Get-ChildItem $extractedMsi.FullName -Filter eBIRForms.exe -File -Recurse)
+    if ($msiPayload.Count -ne 1) { throw 'Expected one NSH executable in the extracted MSI' }
+    Test-Payload $msiPayload[0].DirectoryName $true
+
+    $extractedMsix = Join-Path $scratch 'msix'
+    & (Join-Path $sdk.FullName 'makeappx.exe') unpack /p $msix /d $extractedMsix
+    Test-Payload $extractedMsix $true
+    $extractedZip = Join-Path $scratch 'zip'
+    [IO.Compression.ZipFile]::ExtractToDirectory($zip, $extractedZip)
+    Test-Payload (Join-Path $extractedZip 'eBIRForms') $false
+
+    @($setup, $msi, $msix, $zip) | ForEach-Object {
+        $hash = Get-FileHash -LiteralPath $_ -Algorithm SHA256
+        "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $_)"
+    } | Set-Content -LiteralPath (Join-Path $OutDir 'SHA256SUMS-windows-x64.txt') -Encoding ascii
+} finally {
+    if (Test-Path -LiteralPath $scratch) { Remove-Item -LiteralPath $scratch -Recurse -Force }
+}
