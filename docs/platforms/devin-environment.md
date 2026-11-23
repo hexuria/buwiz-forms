@@ -31,6 +31,25 @@ from the checked-out branch, so that branch must include them.
 The NSH checkout is a sibling of this repository (`../nsh`), at `NSH_PINNED_REF` from `.github/workflows/nsh.yml`.
 It is read-only: never edit it.
 
+## Verification tooling (all platforms)
+
+Every setup script (`setup-linux.sh`, `setup-macos.sh`, `setup-windows.ps1`) installs the `impeccable` CLI with
+`cargo install --locked` and downloads the `impeccable-rust` agent skill (`SKILL.md`, `performance.md`) from
+`hexuria/impeccable-rust` into `.agents/skills/impeccable-rust/` at the repository root, where agents look for skills.
+`.agents/` is git-ignored because agent artifacts are never committed, so the skill is downloaded at a pinned commit
+instead; a `.commit` file there records which one. `--check` reports both; `--no-impeccable` (`-NoImpeccable` on
+Windows) skips both. The general scripts do not install the verification tools themselves.
+
+The Linux blueprint block adds them: it installs a prebuilt `cargo-binstall` (the newest release needs a newer Rust
+than this repo pins), `valgrind`, and runs `impeccable setup host --with-kani`. It sets `IMPECCABLE_BACKEND=host` in
+the environment because impeccable's Docker toolbox ships an older Rust than `rust-toolchain.toml`, so toolbox runs
+cannot build this workspace. `impeccable doctor` then shows every tool on the host except TLC, which needs Java and
+the TLA+ tools jar and is not installed.
+
+To move to a new version, edit `scripts/impeccable.pin` (CLI version, skill commit, cargo-binstall version); nothing
+else hard-codes them. Linux maintenance runs `scripts/setup-impeccable.sh` and re-syncs the host tools when the CLI
+version changes; elsewhere re-run the platform's setup script.
+
 ## Local account server (all platforms)
 
 The standard Linux/macOS desktop and iOS Simulator startup recipes bypass

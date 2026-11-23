@@ -13,12 +13,19 @@
       * Rust toolchain via rustup (stable; rust-toolchain.toml adds
         rustfmt + clippy components)
       * gpui-agent CLI (drives the app when built with --features agent)
+      * impeccable CLI (verification tooling) and the impeccable-rust agent
+        skill in .agents\skills\impeccable-rust (git-ignored, so downloaded),
+        both at the versions scripts\impeccable.pin holds
       * User env vars OPENSSL_DIR / OPENSSL_LIB_DIR so cargo finds OpenSSL
+
+.PARAMETER NoImpeccable
+    Skip the impeccable CLI and the impeccable-rust skill.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
     # then, in a NEW PowerShell window:  just run
 #>
+param([switch]$NoImpeccable)
 
 $ErrorActionPreference = 'Stop'
 
@@ -35,8 +42,9 @@ function Exit-Native($message) {
 $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Step "Requesting administrator rights (UAC prompt)"
-    $elevated = Start-Process -FilePath 'powershell' -Verb RunAs -Wait -PassThru -ArgumentList `
-        '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`""
+    $relaunchArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`"")
+    if ($NoImpeccable) { $relaunchArgs += '-NoImpeccable' }
+    $elevated = Start-Process -FilePath 'powershell' -Verb RunAs -Wait -PassThru -ArgumentList $relaunchArgs
     exit $elevated.ExitCode
 }
 
@@ -176,6 +184,58 @@ if (-not $gpuiVersion) {
 Write-Step "Installing gpui-agent CLI (pinned version $gpuiVersion, matches Cargo.toml)"
 & "$cargoBin\cargo.exe" install gpui-agent-cli --version $gpuiVersion
 if ($LASTEXITCODE -ne 0) { Exit-Native "gpui-agent install failed" }
+
+# 7. impeccable CLI and the impeccable-rust agent skill, at scripts\impeccable.pin.
+# The skill goes to .agents\skills\impeccable-rust at the repository root, where
+# agents look for skills; .agents\ is git-ignored, so it is downloaded, not
+# committed. Each file is moved into place only once complete and the .commit
+# marker is written last, so a failed download never passes as done.
+if ($NoImpeccable) {
+    Write-Step "Skipping impeccable CLI and skill (-NoImpeccable)"
+} else {
+    $pin = @{}
+    foreach ($line in Get-Content -LiteralPath (Join-Path $PSScriptRoot 'impeccable.pin')) {
+        if ($line -match '^([A-Z_]+)=(\S+)') { $pin[$matches[1]] = $matches[2] }
+    }
+    $impeccableVersion = $pin['IMPECCABLE_VERSION']
+    $skillCommit = $pin['IMPECCABLE_SKILL_COMMIT']
+    if (-not $impeccableVersion -or -not $skillCommit) {
+        [Console]::Error.WriteLine("IMPECCABLE_VERSION or IMPECCABLE_SKILL_COMMIT not found in scripts\impeccable.pin")
+        exit 1
+    }
+    $haveImpeccable = if (Test-Path "$cargoBin\impeccable.exe") { & "$cargoBin\impeccable.exe" --version | Select-Object -First 1 }
+    if ("$haveImpeccable" -eq "impeccable $impeccableVersion") {
+        Write-Step "impeccable already installed at pinned version $impeccableVersion -  skipping"
+    } else {
+        Write-Step "Installing impeccable CLI $impeccableVersion (pinned in scripts\impeccable.pin)"
+        & "$cargoBin\cargo.exe" install --locked impeccable --version $impeccableVersion
+        if ($LASTEXITCODE -ne 0) { Exit-Native "impeccable install failed" }
+    }
+
+    $skillDir = Join-Path (Split-Path $PSScriptRoot -Parent) '.agents\skills\impeccable-rust'
+    $skillFiles = @('SKILL.md', 'performance.md')
+    $marker = Join-Path $skillDir '.commit'
+    $skillCurrent = (Test-Path $marker) -and ("$(Get-Content -LiteralPath $marker -Raw)".Trim() -eq $skillCommit) -and
+        -not ($skillFiles | Where-Object { -not (Test-Path (Join-Path $skillDir $_)) })
+    if ($skillCurrent) {
+        Write-Step "impeccable-rust skill already at $($skillCommit.Substring(0,7)) -  skipping"
+    } else {
+        Write-Step "Downloading the impeccable-rust skill at $($skillCommit.Substring(0,7)) into .agents\skills\impeccable-rust"
+        New-Item -ItemType Directory -Force -Path $skillDir | Out-Null
+        Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+        foreach ($file in $skillFiles) {
+            $url = "https://raw.githubusercontent.com/hexuria/impeccable-rust/$skillCommit/skill/$file"
+            $tmp = Join-Path $skillDir ".$file.tmp"
+            curl.exe -fsSL -o $tmp $url
+            if ($LASTEXITCODE -ne 0) {
+                Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+                Exit-Native "could not download $url"
+            }
+            Move-Item -LiteralPath $tmp -Destination (Join-Path $skillDir $file) -Force
+        }
+        Set-Content -LiteralPath $marker -Value $skillCommit
+    }
+}
 
 Write-Step @"
 Done. Open a NEW PowerShell window, then:  cd <repo> ; just run

@@ -400,7 +400,7 @@ jobs:
         # SHELL_SOURCE_ROOTS). So do nsh/Cargo.toml and nsh/Cargo.lock, to stay on the safe side.
         nsh_re='^(nsh/|\.github/workflows/nsh\.yml$)'
         nsh_app_re='^nsh/(src/|Cargo\.(toml|lock)$)'
-        scripts_only_re='^(scripts/tests/|scripts/setup-(linux|macos)\.sh$|scripts/setup-windows\.ps1$|\.github/workflows/(release[^/]*|bir|html-candidate-certification)\.yml$)'
+        scripts_only_re='^(scripts/tests/|scripts/setup-(linux|macos|impeccable)\.sh$|scripts/setup-windows\.ps1$|scripts/impeccable\.pin$|\.github/workflows/(release[^/]*|bir|html-candidate-certification)\.yml$)'
 
         app=false; scripts=false; linux_pkg=false; windows_pkg=false; macos_pkg=false; shell=false; nsh=false
         app_reason=""

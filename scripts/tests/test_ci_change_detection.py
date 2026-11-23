@@ -380,6 +380,8 @@ class CiChangeDetectionTests(unittest.TestCase):
                 ".github/workflows/bir.yml",
                 ".github/workflows/html-candidate-certification.yml",
                 "scripts/setup-linux.sh",
+                "scripts/setup-impeccable.sh",
+                "scripts/impeccable.pin",
                 "scripts/setup-windows.ps1",
                 "scripts/tests/test_release_workflow_policy.py",
             ),

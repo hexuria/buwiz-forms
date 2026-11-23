@@ -22,9 +22,19 @@ initialize: |
   rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
   # The VM's KWin runs without compositing, so GPUI's transparent 20px window
   # shadow renders as a thick black border; xcompmgr composites it.
-  sudo apt-get install -y xcompmgr unzip openjdk-17-jdk-headless
+  # valgrind is for impeccable's verification tools below.
+  sudo apt-get install -y xcompmgr unzip openjdk-17-jdk-headless valgrind
   mkdir -p ~/.config/autostart
   printf '[Desktop Entry]\nType=Application\nName=xcompmgr\nExec=xcompmgr\nX-KDE-autostart-phase=1\n' > ~/.config/autostart/xcompmgr.desktop
+  # impeccable's verification tools on the VM (setup-linux.sh installed the CLI and
+  # skill). cargo-binstall comes prebuilt at the scripts/impeccable.pin version: its
+  # newest release needs a newer Rust than this repo pins, so it cannot be built here.
+  # The host backend keeps runs off impeccable's Docker toolbox, whose Rust is older
+  # than this repo's rust-toolchain.toml.
+  binstall=$(sed -n 's/^CARGO_BINSTALL_VERSION=//p' scripts/impeccable.pin)
+  curl -fsSL "https://github.com/cargo-bins/cargo-binstall/releases/download/v$binstall/cargo-binstall-$(uname -m)-unknown-linux-musl.tgz" | tar -xz -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+  IMPECCABLE_BACKEND=host impeccable setup host --with-kani
+  echo "IMPECCABLE_BACKEND=host" >> $ENVRC
   # Android SDK, NDK 27, emulator and a Pixel 7 API 35 AVD named "buwiz".
   export ANDROID_HOME="$HOME/Android/Sdk"
   if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
@@ -110,6 +120,11 @@ maintenance: |
     rm -rf ~/BuwizNsh/tools/runtime/android/dev && mkdir -p ~/BuwizNsh/tools/runtime/android
     cp -r ../nsh/target/android/debug-dev ~/BuwizNsh/tools/runtime/android/dev
   fi
+  # impeccable CLI and skill at scripts/impeccable.pin (a no-op when both match);
+  # a new CLI may pin new verification tool versions, so it re-syncs them.
+  had=$(impeccable --version 2>/dev/null || true)
+  bash scripts/setup-impeccable.sh
+  [ "$(impeccable --version)" = "$had" ] || IMPECCABLE_BACKEND=host impeccable setup host --with-kani
 knowledge:
   - name: startup
     contents: |
@@ -126,6 +141,10 @@ knowledge:
   - name: test
     contents: |
       xvfb-run -a just test && ~/BuwizNsh/nsh2404.sh nsh check   # the sidecar has no just; nsh2404.sh runs from nsh/
+  - name: verify
+    contents: |
+      impeccable doctor   # shows where each verification tool runs (host or toolbox)
+      IMPECCABLE_BACKEND=host is set in the environment: the impeccable Docker toolbox's Rust is older than this repo's rust-toolchain.toml, so toolbox runs cannot build the workspace.
 ---
 # macOS: GPUI desktop app, NSH app on macOS and the iOS Simulator (no Android).
 runs-on: macos
