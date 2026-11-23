@@ -2,6 +2,10 @@
 set -euo pipefail
 case "$KIND" in
     deb|tarball|installer)
+        # Give up on a stalled mirror connection after 30 s and retry, rather than waiting on one socket: these images
+        # download about 200 MB, and archive.ubuntu.com stalls often enough to use up the container's time limit.
+        printf '%s\n' 'Acquire::Retries "5";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' \
+            > /etc/apt/apt.conf.d/80ci-network
         apt-get update
         DEBIAN_FRONTEND=noninteractive apt-get install -y \
             xvfb xauth dbus-x11 xdotool imagemagick libgtk-4-1 libwebkitgtk-6.0-4 \
