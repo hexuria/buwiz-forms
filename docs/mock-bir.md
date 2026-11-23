@@ -137,10 +137,8 @@ usual and it uses the real database and the real BIR path again.
 
 There is no `nsh-run` form of this test. `just nsh-run` deliberately exports
 `EBIR_TEST_ENV=1` and `BIR_SFTP_DRY_RUN=1`, and either one forces the
-transport's dry run even when a loopback `BIR_SFTP_HOST` is set. Do not
-substitute `just shell-run` either: the legacy shell rejects the NSH app's
-plain-SQLite database. Use `just mock-bir-app` for an end-to-end mock
-submission with the database copy.
+transport's dry run even when a loopback `BIR_SFTP_HOST` is set. Use
+`just mock-bir-app` for an end-to-end mock submission with the database copy.
 
 ### Installed app opened from Finder (`LSEnvironment`)
 

@@ -1,4 +1,4 @@
-// The update banner (old app/shell/update.js): a card over the bottom of the page when a downloaded release waits (Install now, Later),
+// The update banner (the old shell's update.js): a card over the bottom of the page when a downloaded release waits (Install now, Later),
 // when an update failed, or when a check you asked for found nothing (Later). The frame mounts it over the page; the polls keep
 // app.updateStatus() current, and what the buttons do goes through the host functions (the desktop host's updater answers them, see
 // shell/desktop). With no update source configured the status is always "idle": nothing shows.

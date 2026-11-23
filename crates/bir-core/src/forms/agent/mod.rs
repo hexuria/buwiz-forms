@@ -860,9 +860,9 @@ impl AgentFormDef {
 // The page-specific parts — which keys the page's host writes through its
 // own editors, which on-screen keys repeat an official control, and the
 // penalty groups the page draws — are pinned data (`data/agent-locks.json`,
-// generated from the page's own classifiers and schema by bir-shell's
+// generated from the page's own classifiers and schema by bir-app-api's
 // `agent_locks` tests; regenerate with
-// `UPDATE_AGENT_LOCKS=1 cargo test --manifest-path crates/bir-shell/Cargo.toml agent_locks_table`).
+// `UPDATE_AGENT_LOCKS=1 cargo test -p bir-app-api agent_locks_table`).
 //
 // Two layers, both here: the base map ([`locks`], PR 15) and the
 // draft-dependent locks over it ([`draft_locks`], PR 17: the row families

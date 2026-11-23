@@ -10,7 +10,7 @@
 //!   (1701MS: item 4 Married and item 5 Jointly). While a part is closed a
 //!   write there is refused in the filer's words ([`closed_refusal`]) and
 //!   rule 6 fades its boxes with what opens them ([`gated`]); the tags are
-//!   app/forms/condition-labels.json's, the conditions the reviewed
+//!   forms/condition-labels.json's, the conditions the reviewed
 //!   [`corpus_gaps`] (the rules corpus records none for these forms).
 //! - The spouse's TIN, and on 1701 the Schedule 1 employers' TINs: one draft
 //!   field shown over four boxes, written box by box the way 1700's item 18
@@ -66,7 +66,7 @@ pub(super) enum Gate {
 }
 
 /// One gated box: `(form, key, gate, condition)`. The condition is the
-/// reviewed text the page's rule 6 reads (app/forms/conditions.json via
+/// reviewed text the page's rule 6 reads (forms/conditions.json via
 /// `conditions::tests::derived`); its tag is in condition-labels.json. A
 /// condition may need more than the gate (a foreign tax number needs its
 /// Yes too): the form's own compute clears the box then, which rule 6 sees
@@ -790,7 +790,7 @@ const GATED: &[GatedBox] = &[
 ];
 
 /// The reviewed conditions of the gated boxes the page draws, for
-/// app/forms/conditions.json: `(form, key, condition)`.
+/// forms/conditions.json: `(form, key, condition)`.
 #[cfg(test)]
 pub(crate) fn corpus_gaps() -> impl Iterator<Item = (&'static str, &'static str, &'static str)> {
     GATED
@@ -1343,7 +1343,7 @@ pub(super) fn values(kind: AgentFormKind, draft: &Value, map: &mut BTreeMap<Stri
 // ------------------------------------------------------------ schema
 
 /// Stacked address lines the sheet prints from `derived:` keys, which
-/// app/forms/print-cells.json (from writer-cells joins of field keys) cannot
+/// forms/print-cells.json (from writer-cells joins of field keys) cannot
 /// see: `(form, first line, later line, slots of each line's comb)`. 1701A
 /// item 9 (R5.2): the print shapes the address over the 40- and 31-slot
 /// combs (html-frozen/1701a-2018/writer-cells.json derived:address_line1

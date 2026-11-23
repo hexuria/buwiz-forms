@@ -1,4 +1,4 @@
-// The Calendar's pure side (old app/shell/calendar_page.js): which deadlines a filter keeps, how the List groups them, the
+// The Calendar's pure side (the old shell's calendar_page.js): which deadlines a filter keeps, how the List groups them, the
 // month grid's days, and the tones a chip or a dot is drawn in. No UI and no host: the screen reads the deadlines through
 // the store and hands them here. The clock is a parameter (the system's by default).
 import type { DeadlineRow } from "../../bir";

@@ -836,10 +836,8 @@ fn pr9_1606_1706_boxes_wait_for_their_answer() {
             "SWAP",
         ),
     ];
-    let tags: Value = serde_json::from_str(include_str!(
-        "../../../../../app/forms/condition-labels.json"
-    ))
-    .unwrap();
+    let tags: Value =
+        serde_json::from_str(include_str!("../../../../../forms/condition-labels.json")).unwrap();
     let corpus = conditions::tests::derived();
     for (code, key, answer, value, shown) in cases {
         let opened = open(code, 1);

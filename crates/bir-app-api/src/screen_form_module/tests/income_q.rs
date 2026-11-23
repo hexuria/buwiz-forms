@@ -767,7 +767,7 @@ fn form_1701q_stored_drafts_open_unchanged() {
 /// R6.1, R6.2, R6.4, R6.8-R6.13: with the spouse part open, each conditional
 /// box of column B follows the spouse's own answers (items 19, 20, 25,
 /// 25A), and items 59A/59B follow Amended Return, each saying what turns it
-/// on (the reviewed tags in app/forms/condition-labels.json, by hand here).
+/// on (the reviewed tags in forms/condition-labels.json, by hand here).
 #[test]
 fn form_1701q_conditional_boxes_say_what_turns_them_on() {
     setup();
@@ -1638,14 +1638,14 @@ fn form_1702q_osd_asks_before_it_replaces_typed_deductions() {
 }
 
 /// Review 3: a 1702Q box that waits for its gate refuses a write, with the
-/// tag rule 6 shows (app/forms/condition-labels.json, for the condition
-/// app/forms/conditions.json gives the box), instead of taking it and
+/// tag rule 6 shows (forms/condition-labels.json, for the condition
+/// forms/conditions.json gives the box), instead of taking it and
 /// losing it to the recompute.
 #[test]
 fn form_1702q_a_gated_box_refuses_a_write_with_what_it_needs() {
     setup();
-    let labels = repo_json("app/forms/condition-labels.json");
-    let conditions = repo_json("app/forms/conditions.json");
+    let labels = repo_json("forms/condition-labels.json");
+    let conditions = repo_json("forms/conditions.json");
     let tag = |key: &str| -> String {
         let condition = conditions[C][key].as_str().unwrap();
         labels["conditions"][C][condition]

@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2024"
 publish = false
 
-# Its own workspace, like crates/bir-shell: the root workspace (and its Cargo.lock) never sees this crate.
+# Its own workspace, as the retired shell's was: the root workspace (and its Cargo.lock) never sees this crate.
 [workspace]
 
 # Every nsh-* crate comes from the one NSH checkout, by path (the hexuria/nsh fork with upstream v0.5.1 merged, NSH 0.5.1).
@@ -26,7 +26,7 @@ tracing = "0.1"
 # Print preview (src/print.rs): the PDF is made from the same sheet as the printer gets; bir-print merges the pages.
 bir-print = { path = "../crates/bir-print", default-features = false }
 lopdf = "0.34"
-# Agent remote control (feature `agent`, off by default): the gpui-agent protocol at the one version bir-shell and bir-mcp use.
+# Agent remote control (feature `agent`, off by default): the gpui-agent protocol at the one version bir-app-api and bir-mcp use.
 gpui-agent = { version = "=0.4.0", optional = true }
 
 # The database guard asks the password database (getpwuid_r) for the account's home folder, never $HOME.
@@ -40,7 +40,7 @@ jni = "0.21"
 # USERPROFILE, and a file or folder known by volume and file index (GetFileInformationByHandle). The version the lock
 # already holds.
 # The print preview's sheets as pictures (src/sheets.rs): Blitz lays the static sheet HTML out and vello_cpu paints it
-# on the CPU, so the preview needs no web view and no GPU. The versions the older app (crates/bir-shell) uses.
+# on the CPU, so the preview needs no web view and no GPU. The versions the retired app used.
 [target.'cfg(any(windows, target_os = "linux"))'.dependencies]
 blitz-dom = "=0.3.0-beta.3"
 blitz-html = "=0.3.0-beta.3"
@@ -66,7 +66,7 @@ webview2-com = "0.39"
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_RemoteDesktop", "Win32_System_Threading", "Win32_UI_Controls_Dialogs", "Win32_UI_WindowsAndMessaging"] }
 
 # Touch ID / the account password and Windows Hello (admin recovery, `mac_login`): the old host's crate and version
-# (crates/bir-shell/Cargo.toml). Used by src/auth.rs.
+# (the retired shell's Cargo.toml). Used by src/auth.rs.
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 robius-authentication = { version = "0.1.1", features = ["async"] }
 
@@ -92,7 +92,7 @@ nsh-platform-macos = { path = "../../nsh/crates/nsh-platform-macos", default-fea
 [features]
 default = []
 mas_build = ["bir-app-api/mas_build", "bir-core/mas_build"]
-# Agent remote control, as the old app (`bir-shell --features agent`): the shared gpui-agent session over a loopback listener,
+# Agent remote control, as the old app (`bir --features agent`): the shared gpui-agent session over a loopback listener,
 # and NSH's own window control plane on macOS. Compiled in only here; the listener still needs GPUI_AGENT=1 (see src/agent.rs).
 agent = ["bir-app-api/agent", "dep:gpui-agent", "dep:nsh-platform-macos", "nsh-platform-macos/gpui-agent-server"]
 

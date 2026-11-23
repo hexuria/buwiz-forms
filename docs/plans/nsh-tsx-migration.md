@@ -5,7 +5,7 @@ This file is the contract for every agent on the job. If it and a brief disagree
 
 ## Goal
 
-Replace the gpui-shell UI (`app/` JavaScript hosted by `crates/bir-shell`) with TSX screens on Native Shell (NSH), mixed mode: TSX screens over the same Rust brain. Tonight's stop line is **all of desktop on macOS**. Every screen is built wide and narrow now, so iPhone and Android need no second rewrite. Phone builds are a later round.
+Replace the gpui-shell UI (`app/` JavaScript hosted by the retired gpui shell crate) with TSX screens on Native Shell (NSH), mixed mode: TSX screens over the same Rust brain. Tonight's stop line is **all of desktop on macOS**. Every screen is built wide and narrow now, so iPhone and Android need no second rewrite. Phone builds are a later round.
 
 ## Hard rules (never break; if one blocks you, park the item and report)
 
@@ -37,9 +37,9 @@ Replace the gpui-shell UI (`app/` JavaScript hosted by `crates/bir-shell`) with 
 
 ### UI decisions
 
-Rebuild every screen to look and behave like today's app (source of truth: `app/main.js`, `app/shell/*.js`), except:
+Rebuild every screen to look and behave like today's app (source of truth: `app/main.js`, the old shell's `*.js`), except:
 
-- **Look:** today's tokens (`app/shell/ui.js` PALETTES, TYPE, SPACE, RADIUS, SIZE, BREAK) with accent blue, compact 32 px controls, today's radii. Typeface **Inter**, bundled and registered. Fix the faint label color so small text meets 4.5:1. TINs and amounts use tabular figures.
+- **Look:** today's tokens (the old shell's `ui.js` PALETTES, TYPE, SPACE, RADIUS, SIZE, BREAK) with accent blue, compact 32 px controls, today's radii. Typeface **Inter**, bundled and registered. Fix the faint label color so small text meets 4.5:1. TINs and amounts use tabular figures.
 - **Frame:** three columns like today (sidebar 248, main, profile/notifications panel 320 from the context pill). Sidebar: Home, Form library, Calendar, Filings, then Recent returns. Settings stays in the account menu and Cmd/Ctrl+comma.
 - **Home:** dashboard like today.
 - **Form page:** keep parts, the side list, and the pill that walks what needs you. Add: autosave (no Save draft button; "Saving…" then "✓ Saved"), TIN and money masks while typing, amounts right-aligned in tabular figures, part titles that stick while scrolling, errors shown only after leaving a box, schedule rows that open in a drawer (a sheet when narrow) instead of a sideways table. Do **not** hide parts that do not apply.
@@ -68,12 +68,12 @@ crates/bir-app-api/     UI-free. A `Hooks` trait for what needs a UI (menu refre
                         agent queue, file pickers, OS sign-in), implemented once by bir-shell and once by the NSH door;
                         the moved modules (bir, tax_profile, dashboard, screen_form + its tree, cloud_account,
                         account_gate, auth_limiter, logging) and their tests. Depends on bir-core, bir-print, bir-rules only.
-crates/bir-shell/       Old host. Keeps only gpui glue; adapts bir-app-api's modules to gpui_shell::HostModule.
+(retired gpui shell)    Old host, since deleted. Kept only gpui glue; adapts bir-app-api's modules to gpui_shell::HostModule.
 crates/bir-core/        Gains cargo feature `sqlcipher` (default on). Off = plain SQLite: no key lookup, data folder for
                         `dev.goldcoders.bir`, a wrong-format file is an error and is never renamed.
                         bir-print and bir-app-api take bir-core with default-features = false and pass `sqlcipher` through;
                         bir-shell turns it on; `nsh/` leaves it off.
-nsh/                    The new app. Its own cargo workspace (like crates/bir-shell).
+nsh/                    The new app. Its own cargo workspace (like the retired gpui shell crate).
   nsh.json  App.tsx  tsconfig.json  Cargo.toml  AGENTS.md  justfile
   src/                  Rust: #[native_module] door over bir-app-api, plus desktop glue we own (print, save dialog, auth).
   bir/                  Typed TS wrapper over the door. Screens import from here, never call the raw module.
@@ -81,7 +81,7 @@ nsh/                    The new app. Its own cargo workspace (like crates/bir-sh
   ui/                   The UI kit: every nsh/base control wrapped once and styled from tokens.
   shell/                Frame: title bar, sidebar, right panel, palette, toasts, overlays, tab bar when narrow.
   screens/<name>/       One folder per screen, with its *.test.tsx.
-  lib/                  Pure helpers ported from app/shell (todo, periods, recent, facts, settings_model, dates, money).
+  lib/                  Pure helpers ported from the old shell (todo, periods, recent, facts, settings_model, dates, money).
   assets/icons/         The 55 Lucide SVGs from app/icons.
 ```
 
@@ -278,9 +278,9 @@ and actual device export/opening of the ZIP are separate native acceptance check
 
 ## Waves
 
-**Parallel work in one worktree.** Agents share this worktree and one cargo build cache, so builds queue on a lock: that is normal, wait for it. A compile error in a file you do not own is probably another agent's edit in flight: wait a few minutes and retry before reporting it. Ownership in wave 1a: A3 alone edits root `Cargo.toml` (except the `members` line), `crates/bir-core/**` and `crates/bir-print/Cargo.toml`. A1 owns `crates/bir-host-shim/**`, `crates/bir-app-api/**`, `crates/bir-shell/**` with its `Cargo.lock`, the root `members` line and the root `Cargo.lock`. A2 owns `nsh/**` and `justfile`, and builds with `CARGO_TARGET_DIR=~/BuwizNsh/target-nsh`.
+**Parallel work in one worktree.** Agents share this worktree and one cargo build cache, so builds queue on a lock: that is normal, wait for it. A compile error in a file you do not own is probably another agent's edit in flight: wait a few minutes and retry before reporting it. Ownership in wave 1a: A3 alone edits root `Cargo.toml` (except the `members` line), `crates/bir-core/**` and `crates/bir-print/Cargo.toml`. A1 owns `crates/bir-host-shim/**`, `crates/bir-app-api/**`, the retired gpui shell's `**` with its `Cargo.lock`, the root `members` line and the root `Cargo.lock`. A2 owns `nsh/**` and `justfile`, and builds with `CARGO_TARGET_DIR=~/BuwizNsh/target-nsh`.
 
-**Fast gate (each agent, for the old shell):** `cargo check --locked --manifest-path crates/bir-shell/Cargo.toml --all-targets`, then `EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --lib`. The full `just shell-check` runs once per wave.
+**Fast gate (each agent, for the old shell):** `cargo check --locked --manifest-path <the retired gpui shell's Cargo.toml> --all-targets`, then `EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 cargo test --locked --manifest-path <the retired gpui shell's Cargo.toml> --lib`. The full `just shell-check` runs once per wave.
 
 Each wave ends with: old shell still green (`just shell-check`), `nsh check && nsh build && nsh test` green, real-window screenshots (light, dark, wide, narrow), a verifier pass, a reviewer pass, then one commit by the orchestrator.
 

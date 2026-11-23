@@ -1,4 +1,4 @@
-// The taxpayer page (old app/shell/taxpayer.js renderTaxpayerPage): the header with Copy TIN and New return, and the
+// The taxpayer page (the old shell's taxpayer.js renderTaxpayerPage): the header with Copy TIN and New return, and the
 // Profile, Forms and Templates tabs. Each tab is its own view (profile, forms, templates); the page is made once per move,
 // with its edits, and watches the branch and year so a switch drops what no longer applies (the old reset and leaveYear).
 import type { JSX } from "nsh";

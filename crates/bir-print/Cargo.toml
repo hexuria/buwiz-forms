@@ -7,7 +7,7 @@ description = "eBIRForms print and frozen-HTML rendering."
 repository = "https://github.com/hexuria/buwiz-forms"
 
 [features]
-default = ["sqlcipher"]
+# No default: the shipped NSH app and bir-cli use plain SQLite.
 sqlcipher = ["bir-core/sqlcipher"]
 
 [[bin]]

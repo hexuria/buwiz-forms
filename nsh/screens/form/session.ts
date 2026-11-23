@@ -1,4 +1,4 @@
-// The form page's session: the old FormPageActions state machine (app/shell/form_page.js), ported to signals.
+// The form page's session: the old FormPageActions state machine (the old shell's form_page.js), ported to signals.
 // Pure logic plus door calls, no JSX. One session per open page; dispose() it when the page goes.
 //
 // Reactivity (docs/ui-performance-rules.md): the session keeps the old page's plain state (st) and PUBLISHES it into

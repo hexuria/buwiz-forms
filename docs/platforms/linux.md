@@ -74,7 +74,7 @@ sudo zypper --no-gpg-checks install --allow-unsigned-rpm ./eBIRForms-Linux-x64-<
 sudo pacman -U ./eBIRForms-Linux-x64-<version>.pkg.tar.zst
 ```
 
-The `.deb` and `.rpm` install `/usr/bin/ebirforms`, the shell's `app/` and
+The `.deb` and `.rpm` install `/usr/bin/ebirforms`, the app's `nsh/` bundle and
 `print-overrides/` under `/usr/share/ebirforms/`, a desktop entry, and five
 hicolor icon sizes. The package metadata declares runtime libraries; RPM
 dependencies are detected from the binary's linked shared libraries.
@@ -83,8 +83,8 @@ dependencies are detected from the binary's linked shared libraries.
 
 Use `--tarball` with the installer or download the `.tar.gz` release asset. To
 install manually, extract it and run `./install-desktop-entry.sh`; launch with
-`./bir`. The tarball contains `bir`, `app/`, `print-overrides/`, `assets/`,
-and the desktop-entry installer at its top level; the shell resolves `app/`
+`./bir`. The tarball contains `bir`, `nsh/`, `print-overrides/`, `assets/`,
+and the desktop-entry installer at its top level; the app resolves `nsh/`
 and `print-overrides/` beside the binary.
 
 ### Runtime requirements
@@ -171,7 +171,7 @@ sudo apt-get install -y \
 ## Single instance
 
 - `platform::enforce_single_instance` is an empty stub on Linux. The guard is
-  the loopback ping in `crates/bir-shell/src/ipc.rs`. The first copy writes
+  the loopback ping in `crates/bir-core/src/ipc.rs`. The first copy writes
   its UDP port to `instance.port`. A second copy sends `SHOW`, and if it gets an
   answer, it exits. A stale file is harmless: the ping times out after 100 ms.
 - Raising the first window uses `xdotool` and GPUI's activate. Whether this

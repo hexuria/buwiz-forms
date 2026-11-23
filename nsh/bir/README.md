@@ -10,6 +10,6 @@ Screens import from here and nowhere else (`import { bir, type Taxpayer } from "
 | `door.ts` | Status, function list and shutdown, over the native module. |
 | `testing.ts` | Tests only: `createDemoTaxpayer()`, `DEMO`, `useDatabase(path)`. |
 | `DoorProbe.tsx`, `*.test.ts(x)` | A mounted component calling the door, and the door's tests (empty scratch database per engine). |
-| `regenerate.sh`, `extra-functions.txt` | `bash nsh/bir/regenerate.sh` rewrites the two generated files. Names come from the old app (`app/main.js`, `app/shell/*.js`) plus the extra list. |
+| `regenerate.sh`, `old-app-functions.txt`, `extra-functions.txt` | `bash nsh/bir/regenerate.sh` rewrites the two generated files. Names come from `old-app-functions.txt` (what the old app called, frozen when its sources were deleted) plus the extra list, where a new screen's function goes. |
 
 The Rust side is `nsh/src` (`door.rs` boot and dispatch, `guards.rs` the send and database guards, `hooks.rs` what the host functions ask of a UI). Details: `nsh/AGENTS.md`, "The door".

@@ -1,4 +1,4 @@
-// The cached reads over nsh/bir (old app/shell/store.js, the Store), made of NSH signals.
+// The cached reads over nsh/bir (the old shell's store.js, the Store), made of NSH signals.
 //
 // A render must not hit the database: every read here is memoised by key until a write drops it. Each key owns one
 // signal (its revision): a read subscribes to it, forget(key) moves it, so a screen re-runs only the reads whose key

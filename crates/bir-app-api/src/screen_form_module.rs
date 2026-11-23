@@ -1,6 +1,6 @@
 //! The redesigned on-screen form page's host functions.
 //!
-//! The page (JavaScript) renders a form from `app/forms/forms-schema.json`
+//! The page (JavaScript) renders a form from `forms/forms-schema.json`
 //! and binds every control by its rules-corpus key `k` (e.g.
 //! `frm1601c:txtMonth`). Everything it needs about a draft goes through
 //! bir-core's agent seam (`bir_core::forms::agent`): `fill` writes one box,
@@ -449,24 +449,24 @@ impl FormSchema {
 }
 
 /// The on-screen form schema as its files hold it: one entry per form of
-/// `app/forms/forms-schema.json`, each with its reviewed corrections from
-/// `app/forms/schema-overrides.json`, none built yet.
-/// 1700's entry is replaced by `app/forms/screen-1700-v2018.json`: the
+/// `forms/forms-schema.json`, each with its reviewed corrections from
+/// `forms/schema-overrides.json`, none built yet.
+/// 1700's entry is replaced by `forms/screen-1700-v2018.json`: the
 /// extracted entry follows the 2013 rule package, while the model, its
 /// upload and the printed sheet are the January 2018 revision.
 fn parse_form_schemas() -> Vec<FormSchema> {
     let mut forms: Vec<Value> =
-        serde_json::from_str(include_str!("../../../app/forms/forms-schema.json"))
-            .expect("app/forms/forms-schema.json is a JSON array of forms");
+        serde_json::from_str(include_str!("../../../forms/forms-schema.json"))
+            .expect("forms/forms-schema.json is a JSON array of forms");
     let form_1700: Value =
-        serde_json::from_str(include_str!("../../../app/forms/screen-1700-v2018.json"))
-            .expect("app/forms/screen-1700-v2018.json is one form");
+        serde_json::from_str(include_str!("../../../forms/screen-1700-v2018.json"))
+            .expect("forms/screen-1700-v2018.json is one form");
     for form in forms.iter_mut().filter(|form| form["c"] == "1700") {
         *form = form_1700.clone();
     }
     let mut overrides: Value =
-        serde_json::from_str(include_str!("../../../app/forms/schema-overrides.json"))
-            .expect("app/forms/schema-overrides.json is a JSON object");
+        serde_json::from_str(include_str!("../../../forms/schema-overrides.json"))
+            .expect("forms/schema-overrides.json is a JSON object");
     forms
         .into_iter()
         .map(|form| {
@@ -5558,14 +5558,14 @@ fn form_1701_type_paths(kind: AgentFormKind, key: &str) -> Option<(&'static str,
 /// The official radio name groups of an agent-form package (`name` ->
 /// control ids), from each form's runtime-control inventory
 /// (rules/forms/<package>/fixtures/runtime-control-inventory-v796.json),
-/// generated into app/forms/radio-name-groups.json. `None` for a form the
+/// generated into forms/radio-name-groups.json. `None` for a form the
 /// rules corpus has no inventory for (1701MS, 1701Q).
 fn official_radio_groups(package: &str) -> Option<&'static BTreeMap<String, Vec<String>>> {
     static GROUPS: OnceLock<BTreeMap<String, BTreeMap<String, Vec<String>>>> = OnceLock::new();
     GROUPS
         .get_or_init(|| {
-            serde_json::from_str(include_str!("../../../app/forms/radio-name-groups.json"))
-                .expect("app/forms/radio-name-groups.json is package -> name -> ids")
+            serde_json::from_str(include_str!("../../../forms/radio-name-groups.json"))
+                .expect("forms/radio-name-groups.json is package -> name -> ids")
         })
         .get(package)
 }
@@ -8586,7 +8586,7 @@ mod tests {
             "Tax relief under Special Law or Treaty?"
         );
         let overrides: Value =
-            serde_json::from_str(include_str!("../../../app/forms/schema-overrides.json")).unwrap();
+            serde_json::from_str(include_str!("../../../forms/schema-overrides.json")).unwrap();
         // Every override names a field, a table cell or an item that exists.
         for (code, fixes) in overrides.as_object().unwrap() {
             if code.starts_with('_') {
@@ -18142,7 +18142,7 @@ mod tests {
         ];
         let corpus = conditions::tests::derived();
         let tags: Value =
-            serde_json::from_str(include_str!("../../../app/forms/condition-labels.json")).unwrap();
+            serde_json::from_str(include_str!("../../../forms/condition-labels.json")).unwrap();
         let mut keys: Vec<(String, String, String)> = corpus[code]
             .as_object()
             .into_iter()
@@ -18318,7 +18318,7 @@ mod tests {
         setup();
         let corpus = conditions::tests::derived();
         let tags: Value =
-            serde_json::from_str(include_str!("../../../app/forms/condition-labels.json")).unwrap();
+            serde_json::from_str(include_str!("../../../forms/condition-labels.json")).unwrap();
         let mut found = BTreeMap::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
@@ -20069,7 +20069,7 @@ mod tests {
     /// any correction.
     fn extracted_keys(code: &str) -> BTreeSet<String> {
         let forms: Vec<Value> =
-            serde_json::from_str(include_str!("../../../app/forms/forms-schema.json")).unwrap();
+            serde_json::from_str(include_str!("../../../forms/forms-schema.json")).unwrap();
         let form = forms.iter().find(|form| form["c"] == code).unwrap();
         let mut keys = BTreeSet::new();
         for part in form["parts"].as_array().unwrap() {

@@ -880,6 +880,7 @@ impl Database {
         ensure_openable_file(path)?;
         // The key first: with no key (keychain switched off, store refused)
         // nothing is created at `path`.
+        #[cfg_attr(not(feature = "sqlcipher"), allow(clippy::let_unit_value))]
         let key_hex = Self::read_key()?;
         let conn = Connection::open(path)?;
 

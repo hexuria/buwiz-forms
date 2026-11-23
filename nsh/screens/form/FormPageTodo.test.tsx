@@ -1,4 +1,4 @@
-// F9-1: the form page says what needs the filer at once, as the old page did (app/shell/form_page.js todo(), partErrors,
+// F9-1: the form page says what needs the filer at once, as the old page did (the old shell's form_page.js todo(), partErrors,
 // drawPill). Same world as the side-by-side pictures (~/BuwizNsh/evidence/parity): the demo taxpayer with tax year 2026
 // (1601C, 2551Q) and four saved drafts (FormPageAny.tsx param seed). The old app shows on the 2551Q Q3 2026 draft:
 // "2 parts need attention · next ↓", red badges 1 on Part I and 1 on Part II, the pill "2 to do · Page 1" with a red 2,

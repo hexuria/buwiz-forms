@@ -1,4 +1,4 @@
-// The application menu as data (old crates/bir-shell/src/app_menu.rs): which menus and items exist, which are enabled, and
+// The application menu as data (the retired gpui shell's src/app_menu.rs): which menus and items exist, which are enabled, and
 // their accelerators, for each state the app can be in. Pure: no nsh runtime import, so a plain test reads every state.
 //
 // The old menu came in two shapes, and so does this one:

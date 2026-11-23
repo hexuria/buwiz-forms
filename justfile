@@ -48,21 +48,9 @@ bump-build:
 help:
     @just --list
 
-# Run the gpui-shell JavaScript app from its standalone workspace.
-run *args="": (shell-run args)
-
-# gpui-shell host — a standalone workspace under crates/bir-shell (its own
-# lockfile carries the LLRT/quickjs pins; see its Cargo.toml). `just check`
-# covers the root workspace only, so the shell gets its own targets.
-# Development runs use GPUI Fast (the `gpui-fast` feature), which drew the
-# Form library's rebuilds at a higher rate than upstream GPUI in a debug
-# build. `run-upstream` runs the upstream engine the app ships on today, to
-# reproduce release behaviour.
-shell-run *args="":
-    cargo run --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell --features gpui-fast {{args}}
-
-run-upstream *args="":
-    cargo run --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell {{args}}
+# `just run` is the NSH app (nsh-run, a macOS dev window); the old gpui-shell host is gone.
+[macos]
+run db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (nsh-run db args)
 
 # Options pass through: `just mock-relay --fail reject`.
 # Local mock of the Buwiz relay, loopback only; hands files on to a running
@@ -113,51 +101,12 @@ mock-bir-app db app="/Applications/eBIRForms.app":
     echo "Running {{app}} on $db against the mock at $BIR_SFTP_HOST:$BIR_SFTP_PORT"
     exec "{{app}}/Contents/MacOS/$executable"
 
-shell-ui-test:
-    node --experimental-vm-modules tools/test_form_row_invalidation.mjs
-    node --experimental-vm-modules tools/test_form_profile_and_sample.mjs
-    node --experimental-vm-modules tools/test_date_field_rows.mjs
-    node --experimental-vm-modules tools/test_form_existing_offer.mjs
-    node --experimental-vm-modules tools/test_form_sample_save.mjs
-    node --experimental-vm-modules tools/test_form_shared_mechanisms.mjs
-    node --experimental-vm-modules tools/test_form_q3_withholding.mjs
-    node --experimental-vm-modules tools/test_form_monthly_withholding.mjs
-    node --experimental-vm-modules tools/test_form_q3_income_tax.mjs
-    node --experimental-vm-modules tools/test_form_annual_1604.mjs
-    node --experimental-vm-modules tools/test_form_donor_estate.mjs
-    node --experimental-vm-modules tools/test_form_as_needed.mjs
-    node tools/test_font_advances.mjs
-    node --experimental-vm-modules tools/test_form_radio_untick.mjs
-    node --experimental-vm-modules tools/test_form_decisions_round_3.mjs
-    node --experimental-vm-modules tools/test_calendar_filings_filters.mjs
-    node --experimental-vm-modules tools/test_form_2551q_election.mjs
-    node --experimental-vm-modules tools/test_form_fact_cards.mjs
-    node --experimental-vm-modules tools/test_form_pill.mjs
-    node tools/test_form_todo.mjs
-    node --experimental-vm-modules tools/test_home_calendar_as_needed.mjs
-    node --experimental-vm-modules tools/test_home_dashboard.mjs
-    node --experimental-vm-modules tools/test_taxpayer_export.mjs
-    node --experimental-vm-modules tools/test_profile_facts.mjs
-    node --experimental-vm-modules tools/test_profile_panel.mjs
-    node --experimental-vm-modules tools/test_settings_window.mjs
-    node --experimental-vm-modules tools/test_shell_chrome.mjs
-    node --experimental-vm-modules tools/test_shell_overlays.mjs
-    node --experimental-vm-modules tools/test_recent_order.mjs
-    node --experimental-vm-modules tools/test_shell_keys.mjs
-
-shell-check: shell-ui-test
-    cargo fmt --manifest-path crates/bir-shell/Cargo.toml -- --check
-    cargo check --locked --manifest-path crates/bir-shell/Cargo.toml
-    cargo check --locked --manifest-path crates/bir-shell/Cargo.toml --features gpui-fast
-    cargo check --locked --manifest-path crates/bir-shell/Cargo.toml --features agent
-    cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --all-targets -- -D warnings
-    cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --all-targets -- -D warnings
-    cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --features mas_build --all-targets -- -D warnings
-    {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; $env:BIR_AUTH_BYPASS='1'; $env:BIR_SFTP_DRY_RUN='1'; cargo test --locked --manifest-path crates/bir-shell/Cargo.toml" } else { "EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 cargo test --locked --manifest-path crates/bir-shell/Cargo.toml" } }}
-    cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --lib agent::
+# bir-app-api's agent tests need the `headless` feature (was the shell-check
+# recipe's last line); the four safety variables keep it off keychain, a real
+# database and the BIR.
+headless-agent-test:
     {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; $env:BIR_AUTH_BYPASS='1'; $env:BIR_SFTP_DRY_RUN='1'; $env:BUWIZ_NO_KEYCHAIN='1'; cargo test --locked -p bir-app-api --features headless --lib agent::" } else { "EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 BUWIZ_NO_KEYCHAIN=1 cargo test --locked -p bir-app-api --features headless --lib agent::" } }}
     {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; $env:BIR_AUTH_BYPASS='1'; $env:BIR_SFTP_DRY_RUN='1'; $env:BUWIZ_NO_KEYCHAIN='1'; cargo test --locked -p bir-cli" } else { "EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 BUWIZ_NO_KEYCHAIN=1 cargo test --locked -p bir-cli" } }}
-    cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --test headless_detach
 
 # bir-core and bir-app-api tests in the plain-SQLite build the NSH app ships (no sqlcipher), with the four safety variables:
 # nothing reaches the keychain, a real database or the BIR.
@@ -319,12 +268,12 @@ install format="":
     if ($format) {
         if (-not $artifacts.Contains($format)) {
             Write-Host "❌ No '$format' artifact found in $DIR." -ForegroundColor Red
-            Write-Host "   Run 'just $format' to build it first."
+            Write-Host "   Build it first: nsh package --target windows, then scripts/package_nsh_windows.ps1 (CONTRIBUTING.md)."
             exit 1
         }
     } elseif ($artifacts.Count -eq 0) {
         Write-Host "❌ No installers found in $DIR." -ForegroundColor Red
-        Write-Host "   Build one first with: just exe  or  just msix"
+        Write-Host "   Build them first: nsh package --target windows, then scripts/package_nsh_windows.ps1 (CONTRIBUTING.md)."
         exit 1
     } elseif ($artifacts.Count -eq 1) {
         $format = $artifacts.Keys | Select-Object -First 1
@@ -346,7 +295,7 @@ install format="":
     switch ($format) {
         "msix" {
             Write-Host "Installing MSIX package: $path" -ForegroundColor Cyan
-            Write-Host "⚠️  MSIX must be signed before sideloading. Run 'just sign-dev' first if you haven't." -ForegroundColor Yellow
+            Write-Host "⚠️  MSIX must be signed before sideloading: a release build is; for a local one use scripts/package_nsh_windows.ps1 -SmokeMsix." -ForegroundColor Yellow
             # PowerShell 7 cannot load Appx on this Server host; use Windows PowerShell 5.1 (#93).
             $env:EBIRFORMS_MSIX_PATH = $path
             powershell.exe -NoProfile -NonInteractive -Command 'Add-AppxPackage -Path $env:EBIRFORMS_MSIX_PATH'
@@ -446,230 +395,6 @@ install format="":
             ;;
     esac
 
-# Build and package the app for Mac App Store submission. Resolve the next
-# counter into the child process environment so the strict renderer source gate
-# runs before any tracked build-number update is needed.
-# Set CODESIGN_IDENTITY env var to override the default ad-hoc signing ("-")
-app *args="":
-    @if [ "{{os()}}" = "macos" ]; then \
-        set -a && source .env && set +a; \
-        if ! NEXT_BUILD_NUMBER="$(uv run scripts/bump_build.py --print-next)"; then \
-            echo "Could not resolve the next App Store build number" >&2; exit 1; \
-        fi; \
-        case "$NEXT_BUILD_NUMBER" in \
-            ''|*[!0-9]*) echo "Invalid App Store build number: $NEXT_BUILD_NUMBER" >&2; exit 1 ;; \
-        esac; \
-        echo "Building App Store package with build $NEXT_BUILD_NUMBER"; \
-        BUILD_NUMBER="$NEXT_BUILD_NUMBER" just _package-mac-appstore "{{args}}"; \
-    else \
-        echo "⚠️ App Store builds are only supported on macOS."; \
-    fi
-
-# Usage: just testflight [--agent]
-# Build the App Store package and upload it to App Store Connect for TestFlight
-[unix]
-testflight *args="": (app args) testflight-upload
-
-# The control plane stays off until launched with GPUI_AGENT=1,
-# GPUI_AGENT_ALLOW_RELEASE=1 and GPUI_AGENT_TOKEN. Internal testing only: never
-# submit an agent build for App Store review.
-# Build with the gpui-agent control plane and upload it for internal TestFlight
-[unix]
-testflight-agent *args="": (testflight "--agent" args)
-
-# Authenticates with APP_STORE_KEY_ID, APP_STORE_ISSUER_ID and APP_STORE_P8_PATH
-# from .env. Set TRANSPORTER to override the iTMSTransporter path.
-# Upload the already-built App Store .pkg to App Store Connect (no rebuild)
-[unix]
-testflight-upload:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ "{{os()}}" != "macos" ]; then
-        echo "⚠️ TestFlight uploads are only supported on macOS." >&2; exit 1
-    fi
-    set -a && source .env && set +a
-    for var in APP_STORE_KEY_ID APP_STORE_ISSUER_ID APP_STORE_P8_PATH; do
-        if [ -z "${!var:-}" ]; then echo "❌ $var is not set in .env" >&2; exit 1; fi
-    done
-    if [ ! -f "$APP_STORE_P8_PATH" ]; then
-        echo "❌ APP_STORE_P8_PATH does not point to a file: $APP_STORE_P8_PATH" >&2; exit 1
-    fi
-    TRANSPORTER="${TRANSPORTER:-/Applications/Transporter.app/Contents/itms/bin/iTMSTransporter}"
-    if [ ! -x "$TRANSPORTER" ]; then
-        echo "❌ iTMSTransporter not found at $TRANSPORTER" >&2
-        echo "   Install Transporter from the Mac App Store, or set TRANSPORTER." >&2
-        exit 1
-    fi
-    PKG_PATH="$(pwd)/{{RELEASE_DIR}}/{{APP_NAME}}-macOS-MAS-{{VERSION}}.pkg"
-    if [ ! -f "$PKG_PATH" ]; then
-        echo "❌ $PKG_PATH not found. Build it first with: just app" >&2; exit 1
-    fi
-    if ! pkgutil --check-signature "$PKG_PATH" >/dev/null 2>&1; then
-        echo "❌ $PKG_PATH is unsigned. Set INSTALLER_IDENTITY in .env and rebuild with: just app" >&2; exit 1
-    fi
-    BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "{{RELEASE_DIR}}/mas/{{APP_NAME}}.app/Contents/Info.plist" 2>/dev/null || echo '?')"
-    # iTMSTransporter only reads the key from a fixed set of private_keys
-    # directories; stage it in a throwaway one instead of touching $HOME.
-    KEY_DIR="$(mktemp -d)"
-    trap 'rm -rf "$KEY_DIR"' EXIT
-    mkdir "$KEY_DIR/private_keys"
-    ln -s "$(cd "$(dirname "$APP_STORE_P8_PATH")" && pwd)/$(basename "$APP_STORE_P8_PATH")" \
-        "$KEY_DIR/private_keys/AuthKey_${APP_STORE_KEY_ID}.p8"
-    echo "Uploading {{APP_NAME}} {{VERSION}} (build $BUILD) to App Store Connect..."
-    (cd "$KEY_DIR" && "$TRANSPORTER" -m upload -assetFile "$PKG_PATH" \
-        -apiKey "$APP_STORE_KEY_ID" -apiIssuer "$APP_STORE_ISSUER_ID" -v informational)
-    echo "✅ Uploaded. Processing takes ~10–30 min; then add the build to a TestFlight group in App Store Connect."
-
-# Build the Inno Setup executable installer (Windows only)
-[private]
-[windows]
-check-exe-prerequisites:
-    #!pwsh -NoProfile
-    $python = "{{PYTHON}}"
-    $iscc = "{{ISCC}}"
-    if (-not (Get-Command $python -ErrorAction SilentlyContinue)) {
-        [Console]::Error.WriteLine("Configured Python executable was not found: $python")
-        exit 1
-    }
-    $versionOutput = & $python --version 2>&1
-    $pythonExitCode = $LASTEXITCODE
-    if ($pythonExitCode -ne 0 -or ($versionOutput -notmatch '^Python \d+\.\d+')) {
-        [Console]::Error.WriteLine("Configured Python is not a usable CPython interpreter: $python")
-        if ($pythonExitCode -ne 0) { exit $pythonExitCode }
-        exit 1
-    }
-    if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
-        [Console]::Error.WriteLine("Inno Setup compiler was not found: $iscc")
-        exit 1
-    }
-
-[windows]
-exe: check-exe-prerequisites build-frozen-html-identity
-    #!pwsh -NoProfile
-    $ErrorActionPreference = 'Stop'
-
-    $ISCC = "{{ISCC}}"
-    
-    # The shipped app is the gpui-shell host (crates/bir-shell, a standalone
-    # workspace) built with no features; the retired painted host is not shipped
-    # buildable for development but is not packaged.
-    cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{WIN_TARGET}}
-    if ($LASTEXITCODE -ne 0) {
-        $cargoExitCode = $LASTEXITCODE
-        [Console]::Error.WriteLine("cargo build failed (exit code $cargoExitCode). Aborting EXE packaging.")
-        exit $cargoExitCode
-    }
-    {{PYTHON}} scripts/alias_app_bin.py "crates/bir-shell/target/{{WIN_TARGET}}/release" bir-shell
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-    $VERSION = "{{VERSION}}"
-
-    $stageDir = "target\installer-stage"
-    if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
-    New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
-    Copy-Item "crates\bir-shell\target\{{WIN_TARGET}}\release\bir.exe" "$stageDir\bir.exe"
-    Copy-Item "assets" "$stageDir\assets" -Recurse
-    Copy-Item "app" "$stageDir\app" -Recurse
-    Copy-Item "print-overrides" "$stageDir\print-overrides" -Recurse
-
-    {{PYTHON}} scripts/audit_no_legacy.py --package-root $stageDir
-    if ($LASTEXITCODE -ne 0) {
-        $auditExitCode = $LASTEXITCODE
-        [Console]::Error.WriteLine("Installer staging tree failed the HTML-only/no-legacy audit.")
-        exit $auditExitCode
-    }
-
-    {{PYTHON}} scripts/audit_installer_sources.py --installer installer.iss --stage-dir $stageDir
-    if ($LASTEXITCODE -ne 0) {
-        $sourceExitCode = $LASTEXITCODE
-        [Console]::Error.WriteLine("Installer [Files] source validation failed.")
-        exit $sourceExitCode
-    }
-
-    Write-Host "Building installer with Inno Setup..."
-    & $ISCC "/DMyAppVersion=$VERSION" "/DStageDir=$stageDir" installer.iss
-    if ($LASTEXITCODE -ne 0) {
-        $isccExitCode = $LASTEXITCODE
-        [Console]::Error.WriteLine("Inno Setup failed (exit code $isccExitCode).")
-        exit $isccExitCode
-    }
-    Write-Host "✅ Setup EXE created: target/release-artifacts/{{APP_NAME}}-Windows-x64-$VERSION-Setup.exe"
-
-# Build a Store-only MSIX candidate (Windows only).
-# This artifact is intentionally excluded from public GitHub releases. Store
-# promotion remains blocked until the manifest artwork dimensions and packaged
-# MSVC runtime behavior pass their separate Windows certification checks.
-msix: build-frozen-html-identity
-    #!pwsh -NoProfile
-    $ErrorActionPreference = 'Stop'
-    Write-Warning "STORE-ONLY MSIX candidate; not a public GitHub release artifact"
-    Write-Warning "BLOCKED: certify manifest artwork and packaged MSVC runtime behavior before Store submission"
-    
-    # The shipped app is the gpui-shell host (crates/bir-shell, a standalone
-    # workspace) built with no features; the retired painted host is not shipped
-    # buildable for development but is not packaged.
-    cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{WIN_TARGET}}
-    if ($LASTEXITCODE -ne 0) {
-        $cargoExitCode = $LASTEXITCODE
-        [Console]::Error.WriteLine("cargo build failed (exit code $cargoExitCode). Aborting MSIX packaging.")
-        exit $cargoExitCode
-    }
-    {{PYTHON}} scripts/alias_app_bin.py "crates/bir-shell/target/{{WIN_TARGET}}/release" bir-shell
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-    $VERSION = "{{VERSION}}"
-    $MSIX_PATH = "target/release-artifacts/{{APP_NAME}}-Windows-$VERSION.msix"
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/package_msix.ps1 `
-        -ExePath "crates/bir-shell/target/{{WIN_TARGET}}/release/bir.exe" `
-        -AssetsDir assets `
-        -AppDir app `
-        -PrintOverridesDir print-overrides `
-        -Version $VERSION `
-        -BuildNumber {{BUILD_NUMBER}} `
-        -OutFile $MSIX_PATH `
-        -Python {{PYTHON}}
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-# Sign the Store-identity MSIX with a local development certificate for
-# sideload testing only. This does not make it a public release artifact.
-sign-dev:
-    #!pwsh -NoProfile
-    $ErrorActionPreference = 'Stop'
-    $VERSION = "{{VERSION}}"
-    $MSIX_PATH = "target/release-artifacts/{{APP_NAME}}-Windows-$VERSION.msix"
-    $CERT_PATH = "target/dev_cert.pfx"
-    $CERT_PASSWORD = "devpassword"
-    # This must perfectly match the Publisher in AppxManifest.xml
-    $PUBLISHER = "CN=04F86D81-D5D3-4477-A363-0CAE79356A84"
-
-    if (-not (Test-Path $MSIX_PATH)) {
-        [Console]::Error.WriteLine("MSIX file not found! Run 'just msix' first.")
-        exit 1
-    }
-
-    if (-not (Test-Path $CERT_PATH)) {
-        Write-Host "Generating new local development certificate..."
-        $cert = New-SelfSignedCertificate -Type Custom -Subject $PUBLISHER -KeyUsage DigitalSignature -FriendlyName "eBIRForms Local Dev" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
-        $pwd = ConvertTo-SecureString -String $CERT_PASSWORD -Force -AsPlainText
-        Export-PfxCertificate -cert $cert -FilePath $CERT_PATH -Password $pwd | Out-Null
-        
-        Write-Host "Prompting for Administrator privileges to trust the local development certificate..."
-        $certPathAbs = (Resolve-Path $CERT_PATH).Path
-        $psCommand = "Import-PfxCertificate -FilePath '$certPathAbs' -Password (ConvertTo-SecureString -String '$CERT_PASSWORD' -Force -AsPlainText) -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople'"
-        Start-Process pwsh -ArgumentList "-Command", $psCommand -Verb RunAs -Wait
-    }
-
-    $SDK_DIR = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*" | Sort-Object Name -Descending | Select-Object -First 1
-    $SIGNTOOL = "$($SDK_DIR.FullName)\x64\signtool.exe"
-
-    if (Test-Path $SIGNTOOL) {
-        Write-Host "Signing the MSIX package..."
-        & $SIGNTOOL sign /fd SHA256 /a /f $CERT_PATH /p $CERT_PASSWORD $MSIX_PATH
-        Write-Host "✅ MSIX package signed! You can now double-click the .msix file to install it locally."
-    } else {
-        Write-Warning "⚠️ signtool.exe not found."
-    }
-
 # Publish a new release (tags and pushes to trigger CI)
 [unix]
 publish version="":
@@ -734,15 +459,81 @@ _package-mac args="": build-frozen-html-identity
     for arg in {{args}}; do
         case "$arg" in
             --native-evidence|--agent)
-                echo "⚠️  $arg is a bir-shell feature; the NSH app ignores it" ;;
+                echo "⚠️  $arg was a gpui-shell feature; the NSH app ignores it" ;;
         esac
     done
     NSH="${NSH:-$HOME/BuwizNsh/tools/bin/nsh}" VERSION="{{VERSION}}" OUT_DIR="{{RELEASE_DIR}}" \
         bash scripts/package_macos_release.sh
 
-# MAS/TestFlight packages the NSH app (nsh/) with `mas_build`, the sandbox entitlements and the provisioning profile.
-# CODESIGN_IDENTITY ("Apple Distribution: ...") and INSTALLER_IDENTITY ("3rd Party Mac Developer Installer: ...") sign it for
-# the store; without them it is ad hoc signed for a local sandbox run. NSH_MAS_ARCH=arm64 builds one architecture.
+# ---------------------------------------------------------------------------
+# NSH (TSX) app in nsh/. Read nsh/AGENTS.md first.
+# The CLI is ~/BuwizNsh/tools/bin/nsh (NSH 0.5.1 built from the NSH checkout that
+# sits beside this repo's checkout, ../nsh); never the obsolete one in ~/.nsh.
+# Every recipe puts that CLI first on PATH and sets CARGO_TARGET_DIR. Extra
+# arguments pass through: `just nsh-test --filter ping`.
+# ---------------------------------------------------------------------------
+
+# NSH: cargo check of nsh/'s crate, then tsc over the TSX against the generated types.
+# MAS/TestFlight packages the NSH app (nsh/) with `mas_build`, the sandbox
+# entitlements and the provisioning profile.
+app *args="":
+    @if [ "{{os()}}" = "macos" ]; then \
+        set -a && source .env && set +a; \
+        if ! NEXT_BUILD_NUMBER="$(uv run scripts/bump_build.py --print-next)"; then \
+            echo "Could not resolve the next App Store build number" >&2; exit 1; \
+        fi; \
+        case "$NEXT_BUILD_NUMBER" in \
+            ''|*[!0-9]*) echo "Invalid App Store build number: $NEXT_BUILD_NUMBER" >&2; exit 1 ;; \
+        esac; \
+        echo "Building App Store package with build $NEXT_BUILD_NUMBER"; \
+        BUILD_NUMBER="$NEXT_BUILD_NUMBER" just _package-mac-appstore "{{args}}"; \
+    else \
+        echo "⚠️ App Store builds are only supported on macOS."; \
+    fi
+
+testflight *args="": (app args) testflight-upload
+
+testflight-agent *args="": (testflight "--agent" args)
+
+testflight-upload:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{os()}}" != "macos" ]; then
+        echo "⚠️ TestFlight uploads are only supported on macOS." >&2; exit 1
+    fi
+    set -a && source .env && set +a
+    for var in APP_STORE_KEY_ID APP_STORE_ISSUER_ID APP_STORE_P8_PATH; do
+        if [ -z "${!var:-}" ]; then echo "❌ $var is not set in .env" >&2; exit 1; fi
+    done
+    if [ ! -f "$APP_STORE_P8_PATH" ]; then
+        echo "❌ APP_STORE_P8_PATH does not point to a file: $APP_STORE_P8_PATH" >&2; exit 1
+    fi
+    TRANSPORTER="${TRANSPORTER:-/Applications/Transporter.app/Contents/itms/bin/iTMSTransporter}"
+    if [ ! -x "$TRANSPORTER" ]; then
+        echo "❌ iTMSTransporter not found at $TRANSPORTER" >&2
+        echo "   Install Transporter from the Mac App Store, or set TRANSPORTER." >&2
+        exit 1
+    fi
+    PKG_PATH="$(pwd)/{{RELEASE_DIR}}/{{APP_NAME}}-macOS-MAS-{{VERSION}}.pkg"
+    if [ ! -f "$PKG_PATH" ]; then
+        echo "❌ $PKG_PATH not found. Build it first with: just app" >&2; exit 1
+    fi
+    if ! pkgutil --check-signature "$PKG_PATH" >/dev/null 2>&1; then
+        echo "❌ $PKG_PATH is unsigned. Set INSTALLER_IDENTITY in .env and rebuild with: just app" >&2; exit 1
+    fi
+    BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "{{RELEASE_DIR}}/mas/{{APP_NAME}}.app/Contents/Info.plist" 2>/dev/null || echo '?')"
+    # iTMSTransporter only reads the key from a fixed set of private_keys
+    # directories; stage it in a throwaway one instead of touching $HOME.
+    KEY_DIR="$(mktemp -d)"
+    trap 'rm -rf "$KEY_DIR"' EXIT
+    mkdir "$KEY_DIR/private_keys"
+    ln -s "$(cd "$(dirname "$APP_STORE_P8_PATH")" && pwd)/$(basename "$APP_STORE_P8_PATH")" \
+        "$KEY_DIR/private_keys/AuthKey_${APP_STORE_KEY_ID}.p8"
+    echo "Uploading {{APP_NAME}} {{VERSION}} (build $BUILD) to App Store Connect..."
+    (cd "$KEY_DIR" && "$TRANSPORTER" -m upload -assetFile "$PKG_PATH" \
+        -apiKey "$APP_STORE_KEY_ID" -apiIssuer "$APP_STORE_ISSUER_ID" -v informational)
+    echo "✅ Uploaded. Processing takes ~10–30 min; then add the build to a TestFlight group in App Store Connect."
+
 _package-mac-appstore args="": build-frozen-html-identity
     #!/usr/bin/env bash
     set -euo pipefail
@@ -824,78 +615,6 @@ _package-mac-appstore args="": build-frozen-html-identity
         echo "⚠️  Note: You must also codesign the .pkg with an 'Apple Distribution' certificate before submitting."
     fi
 
-# NOTE: _package-win was removed — use 'just exe' or 'just msix' instead.
-
-# Fails the Linux package when the app-menu launcher or its icons are missing,
-# so docks can match windows (app id dev.goldcoders.bir) to the installed entry.
-_check-linux-launcher apps_dir icons_dir:
-    #!/usr/bin/env bash
-    set -e
-    ENTRY="{{apps_dir}}/{{BUNDLE_ID}}.desktop"
-    test -f "$ENTRY" || { echo "❌ missing launcher: $ENTRY"; exit 1; }
-    for n in 48 64 128 256 512; do
-        ICON="{{icons_dir}}/${n}x${n}/apps/{{BUNDLE_ID}}.png"
-        test -f "$ICON" || { echo "❌ missing icon: $ICON"; exit 1; }
-    done
-    if command -v desktop-file-validate >/dev/null 2>&1; then desktop-file-validate "$ENTRY"; fi
-    echo "✅ Linux launcher + icons present"
-
-# Packages the shipped gpui-shell app (crates/bir-shell, standalone workspace,
-# no features). deb/rpm metadata lives in crates/bir-shell/Cargo.toml; the
-# tarball fallback stages app/ and print-overrides/ beside the binary.
-_package-linux: build-frozen-html-identity
-    #!/usr/bin/env bash
-    set -e
-    cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{LINUX_TARGET}}
-    {{PYTHON}} scripts/alias_app_bin.py crates/bir-shell/target/{{LINUX_TARGET}}/release bir-shell
-    mkdir -p {{RELEASE_DIR}}
-    if command -v cargo-deb >/dev/null 2>&1; then
-        DEB="{{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.deb"
-        cargo deb --locked --manifest-path crates/bir-shell/Cargo.toml --no-build --target {{LINUX_TARGET}} -o "$DEB"
-        AUDIT_ROOT="$(mktemp -d)"
-        trap 'rm -rf "$AUDIT_ROOT"' EXIT
-        dpkg-deb --extract "$DEB" "$AUDIT_ROOT"
-        {{PYTHON}} scripts/audit_no_legacy.py --package-root "$AUDIT_ROOT"
-        {{just_executable()}} _check-linux-launcher "$AUDIT_ROOT/usr/share/applications" "$AUDIT_ROOT/usr/share/icons/hicolor"
-        rm -rf "$AUDIT_ROOT"
-        trap - EXIT
-        echo "✅ .deb: $DEB"
-    else
-        echo "⚠️ cargo-deb not found. Falling back to tarball..."
-        PKG="{{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}"
-        TARBALL="{{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.tar.gz"
-        mkdir -p "$PKG"
-        cp crates/bir-shell/target/{{LINUX_TARGET}}/release/bir "$PKG/"
-        cp -R assets "$PKG/"
-        cp -R app "$PKG/"
-        cp -R print-overrides "$PKG/"
-        cp assets/linux/install-desktop-entry.sh "$PKG/"
-        {{PYTHON}} scripts/audit_no_legacy.py --package-root "$PKG"
-        if [ "$DEV_MODE" = "true" ] || [ "$DEVELOPER_MODE" = "true" ]; then
-            echo "DEVELOPER_MODE=true" > "$PKG/.env"
-        fi
-        tar czf "$TARBALL" -C "{{RELEASE_DIR}}" "{{APP_NAME}}-Linux-{{VERSION}}"
-        AUDIT_ROOT="$(mktemp -d)"
-        trap 'rm -rf "$AUDIT_ROOT"' EXIT
-        tar xzf "$TARBALL" -C "$AUDIT_ROOT"
-        {{PYTHON}} scripts/audit_no_legacy.py --package-root "$AUDIT_ROOT"
-        PKG_ROOT="$AUDIT_ROOT/{{APP_NAME}}-Linux-{{VERSION}}"
-        test -x "$PKG_ROOT/install-desktop-entry.sh" || { echo "❌ tarball is missing install-desktop-entry.sh"; exit 1; }
-        {{just_executable()}} _check-linux-launcher "$PKG_ROOT/assets/linux" "$PKG_ROOT/assets/linux/icons/hicolor"
-        rm -rf "$AUDIT_ROOT"
-        trap - EXIT
-        echo "✅ Tarball: $TARBALL"
-    fi
-
-# ---------------------------------------------------------------------------
-# NSH (TSX) app in nsh/. Read nsh/AGENTS.md first.
-# The CLI is ~/BuwizNsh/tools/bin/nsh (NSH 0.5.1 built from the NSH checkout that
-# sits beside this repo's checkout, ../nsh); never the obsolete one in ~/.nsh.
-# Every recipe puts that CLI first on PATH and sets CARGO_TARGET_DIR. Extra
-# arguments pass through: `just nsh-test --filter ping`.
-# ---------------------------------------------------------------------------
-
-# NSH: cargo check of nsh/'s crate, then tsc over the TSX against the generated types.
 [unix]
 nsh-check *args="":
     #!/usr/bin/env bash

@@ -1,5 +1,5 @@
 # Host functions the old app never calls but a new screen needs: one name per line, then run nsh/bir/regenerate.sh.
-# (Lines starting with # are ignored. regenerate.sh wraps every host function the old app calls plus these.)
+# (Lines starting with # are ignored. regenerate.sh wraps the names in old-app-functions.txt plus these.)
 save_form_draft
 queue_form_draft
 get_form_draft

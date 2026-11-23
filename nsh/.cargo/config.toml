@@ -1,6 +1,6 @@
 # The print preview draws its sheets on the CPU (src/sheets.rs): CSS, layout, text and painting, in these crates.
 # Unoptimized they take seconds per form, so they are optimized in development builds too, as the older app
-# (crates/bir-shell/Cargo.toml) has them. A config file, not Cargo.toml: the hosts are built in the workspace nsh
+# (the retired shell's Cargo.toml) has them. A config file, not Cargo.toml: the hosts are built in the workspace nsh
 # generates (.nsh/rust), which does not read this crate's profiles but does read this file.
 [profile.dev.package.blitz-dom]
 opt-level = 3

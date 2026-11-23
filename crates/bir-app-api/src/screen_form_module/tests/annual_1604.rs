@@ -942,10 +942,8 @@ fn pr6_a_grid_of_loose_fields_is_unchanged_by_table_cells() {
         before["cols"][0]["t"], "money",
         "the loose field's type, not the cell's"
     );
-    let overrides: Value = serde_json::from_str(include_str!(
-        "../../../../../app/forms/schema-overrides.json"
-    ))
-    .unwrap();
+    let overrides: Value =
+        serde_json::from_str(include_str!("../../../../../forms/schema-overrides.json")).unwrap();
     let with_grid: Vec<&String> = overrides
         .as_object()
         .unwrap()
@@ -1238,12 +1236,12 @@ fn pr6_every_part_ii_date_cell_keeps_a_whole_date() {
 }
 
 /// Review item 12: no cell of an extracted table is lost; every one is drawn
-/// in Part II (the oracle is app/forms/forms-schema.json, the extracted
+/// in Part II (the oracle is forms/forms-schema.json, the extracted
 /// schema before any override).
 #[test]
 fn pr6_every_extracted_table_cell_is_drawn() {
     let raw: Value =
-        serde_json::from_str(include_str!("../../../../../app/forms/forms-schema.json")).unwrap();
+        serde_json::from_str(include_str!("../../../../../forms/forms-schema.json")).unwrap();
     for (code, _) in FORMS {
         let form = raw
             .as_array()

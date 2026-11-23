@@ -6,7 +6,7 @@ param(
     [string]$AssetsDir = "assets",
 
     # The gpui-shell app payload resolves app/ and print-overrides/ beside
-    # bir.exe at runtime — see crates/bir-shell/src/packaged.rs.
+    # bir.exe at runtime — see crates/bir-app-api/src/packaged.rs.
     [string]$AppDir = "app",
 
     [string]$PrintOverridesDir = "print-overrides",

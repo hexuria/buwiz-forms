@@ -1,7 +1,7 @@
 // F7-1: emptying a number box (an amount, a percent, a whole number), through the real door (scratch database, the demo taxpayer).
 // Select-all and Backspace, Cut: the kit's MoneyInput reports "". The host refuses a blank amount or whole number
 // ("must be an amount such as 1234.50 (got ``)") where it holds no blank, and the page used to put the draft's OLD number back
-// in the box 250 ms later and call it saved. The old page (app/shell/form_page.js edit() and flush()) staged the "" too, the host
+// in the box 250 ms later and call it saved. The old page (the old shell's form_page.js edit() and flush()) staged the "" too, the host
 // refused it, syncChanged left the typed (blank) text in the box and the draft kept the old amount: the box and the draft
 // disagreed and a save wrote the old number. Now a refused blank is staged as the host's cleared value, zero.
 // Tests in this file share one database, in order; each uses its own form or period.

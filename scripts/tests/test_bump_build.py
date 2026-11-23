@@ -48,7 +48,7 @@ class BumpBuildTests(unittest.TestCase):
     def test_app_recipe_passes_ephemeral_counter_into_strict_package_recipe(self) -> None:
         justfile = (SCRIPT_PATH.parents[1] / "justfile").read_text(encoding="utf-8")
         app_recipe = justfile.split('app *args="":', 1)[1].split(
-            "# Build the Inno Setup", 1
+            'testflight *args="":', 1
         )[0]
 
         self.assertIn("scripts/bump_build.py --print-next", app_recipe)

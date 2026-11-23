@@ -1,4 +1,4 @@
-// The content column of a page by the old rule (app/main.js layout(), app/shell/ui.js SIZE): the cap of 880 (1120 for the wide
+// The content column of a page by the old rule (app/main.js layout(), the old shell's ui.js SIZE): the cap of 880 (1120 for the wide
 // views, none for Filings) INCLUDES the surface's padding of 32 (16 under 640 points of surface). Pure.
 import { expect, test } from "nsh/test";
 import { contentBox, contentColumn } from "./routes";

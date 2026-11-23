@@ -1,4 +1,4 @@
-// The non-color design tokens, ported from the old app (app/shell/ui.js: TYPE, SPACE, RADIUS, SIZE, BREAK).
+// The non-color design tokens, ported from the old app (the old shell's ui.js: TYPE, SPACE, RADIUS, SIZE, BREAK).
 // Colors are not here: they live in theme.json and screens read them as classes (bg-card, text-muted-foreground)
 // or token("..."). Never write a raw color in a screen.
 //

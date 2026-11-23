@@ -16,17 +16,18 @@ await_holding_lock = "deny"
 await_holding_invalid_type = "deny"
 
 [features]
-# SQLCipher encryption of the local database (default on). Off = plain SQLite:
+# SQLCipher encryption of the local database. Off = plain SQLite:
 # no PRAGMA key, no master-key lookup, and a file that is not plain SQLite is an
-# error that is never renamed. The old shell keeps it on; the NSH app turns it off.
-default = ["sqlcipher"]
+# error that is never renamed. Nothing enables it today: the NSH app and
+# bir-cli both ship plain SQLite (`default-features = false`), so it is no
+# longer the default.
 sqlcipher = ["rusqlite/bundled-sqlcipher"]
-# Mac App Store build, enabled by `bir-shell/mas_build`. Compiles out the
+# Mac App Store build, enabled by `nsh-app-ebirforms/mas_build`. Compiles out the
 # `sh -c` runner for user cron jobs (arbitrary code execution is rejected by
 # App Review 2.5.2 and cannot run under the App Sandbox); such jobs are marked
 # unavailable instead of executed.
 mas_build = []
-# Test fixtures of other crates (bir-shell's host tests): raw SQL on the
+# Test fixtures of other crates (bir-app-api's host tests): raw SQL on the
 # connection, to stage a filed return or force a failing write. Never on in
 # a build that ships.
 test-support = []

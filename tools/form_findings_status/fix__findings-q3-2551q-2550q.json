@@ -61,7 +61,7 @@
       "status": "fixed"
     },
     "manual-1": {
-      "reason": "The app's print fills page 1's TIN from the draft: the field map writes frm2550qv2024:txtTIN1-3 and the sheet's stamped TIN inputs carry those names (screen_form_module::tests::page_one_tin_prints_from_the_draft_on_2551q_and_2550q prints 123/456/788 from a real draft; the 00000 is the sheet's preprinted branch). The blank boxes came from the worst-case render harness (crates/bir-shell/examples/print_render.rs), which filled only writer-cells joins and never the stamped TIN inputs; the harness now fills them too. No print-map change.",
+      "reason": "The app's print fills page 1's TIN from the draft: the field map writes frm2550qv2024:txtTIN1-3 and the sheet's stamped TIN inputs carry those names (screen_form_module::tests::page_one_tin_prints_from_the_draft_on_2551q_and_2550q prints 123/456/788 from a real draft; the 00000 is the sheet's preprinted branch). The blank boxes came from the worst-case render harness (the retired gpui shell's examples/print_render.rs), which filled only writer-cells joins and never the stamped TIN inputs; the harness now fills them too. No print-map change.",
       "reviewer": "Agree (PR 1 review): the page-1 TIN prints from the draft by name (2550Q frozen inputs are named frm2550qv2024:txtTIN1-3, filled by fill_by_name_with_cells); the blank came from the worst-case harness, so no print-map change is needed.",
       "status": "not_a_bug"
     },
@@ -138,7 +138,7 @@
       "status": "fixed"
     },
     "manual-3": {
-      "reason": "The app's print fills page 1's TIN from the draft: the field map writes frm2551Qv2018:txtTIN1-3 and txtBranchCode and the sheet's stamped TIN inputs carry those names (screen_form_module::tests::page_one_tin_prints_from_the_draft_on_2551q_and_2550q prints 123/456/788/00000 from a real draft). The blank boxes came from the worst-case render harness (crates/bir-shell/examples/print_render.rs), which filled only writer-cells joins and never the stamped TIN inputs; the harness now fills them too. No print-map change.",
+      "reason": "The app's print fills page 1's TIN from the draft: the field map writes frm2551Qv2018:txtTIN1-3 and txtBranchCode and the sheet's stamped TIN inputs carry those names (screen_form_module::tests::page_one_tin_prints_from_the_draft_on_2551q_and_2550q prints 123/456/788/00000 from a real draft). The blank boxes came from the worst-case render harness (the retired gpui shell's examples/print_render.rs), which filled only writer-cells joins and never the stamped TIN inputs; the harness now fills them too. No print-map change.",
       "reviewer": "Agree (PR 1 review): the page-1 TIN prints from the draft by name (frm2551Qv2018:txtTIN1-3 and txtBranchCode are the input names in html-frozen/2551q-2018); the blank came from the worst-case harness, so no print-map change is needed.",
       "status": "not_a_bug"
     },

@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          git ls-files --error-unmatch Cargo.lock package-lock.json crates/bir-shell/Cargo.lock
+          git ls-files --error-unmatch Cargo.lock package-lock.json
           NSH_VERSION="$(python3 -c 'import json; print(json.load(open("nsh/nsh.json"))["version"])')"
           test -n "$NSH_VERSION"
           echo "version=$NSH_VERSION" >> "$GITHUB_OUTPUT"

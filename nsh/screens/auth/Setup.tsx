@@ -1,4 +1,4 @@
-// First launch (old app/shell/auth.js renderSetup and main.js renderPendingTaxpayer): who uses this computer decides who
+// First launch (the old shell's auth.js renderSetup and main.js renderPendingTaxpayer): who uses this computer decides who
 // the admin is. "Just me or my business" makes the owner's own taxpayer the admin (typed here first on an empty computer,
 // on the New taxpayer page with no chrome); "I help other taxpayers" makes the reserved TIN 000-000-000 the admin, with a
 // 4-digit PIN and a recovery key shown once.

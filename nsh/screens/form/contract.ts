@@ -25,7 +25,7 @@ export interface ControlsModule {
   ScheduleControl(props: ScheduleProps): JSX.Element;
 }
 
-// ---------------------------------------------------------------- the schema (app/forms/forms-schema.json, via bir.screen_form_schema)
+// ---------------------------------------------------------------- the schema (forms/forms-schema.json, via bir.screen_form_schema)
 
 /** A box's kind. "radio" and "chk" are tick boxes; every other kind takes typing or a pick. */
 export type FieldType = "text" | "money" | "radio" | "chk" | "date" | "sel" | "pct" | "int" | "email" | "phone";

@@ -9,8 +9,7 @@
 //! `runtime.md` at the repository root.
 //!
 //! ```sh
-//! cargo test --locked --manifest-path crates/bir-shell/Cargo.toml \
-//!     audit_all_screen_forms -- --ignored --nocapture
+//! cargo test --locked -p bir-app-api audit_all_screen_forms -- --ignored --nocapture
 //! ```
 //!
 //! Finding classes:
@@ -1087,7 +1086,7 @@ fn audit_all_screen_forms() {
     }
 
     let report = json!({
-        "generated_by": "crates/bir-shell/src/screen_form_audit.rs audit_all_screen_forms",
+        "generated_by": "crates/bir-app-api/src/screen_form_audit.rs audit_all_screen_forms",
         "taxpayer": profile_json(),
         "year": YEAR,
         "totals": totals.per_class,

@@ -101,8 +101,8 @@ there, but nobody has run it on that platform.
 
 ## Packaging
 
-- The release workflow builds `bir-shell` for arm64 and x86_64, joins them
-  with `lipo`, makes the `.app` — `Contents/MacOS/bir` plus `app/`,
+- The release workflow builds the NSH app for arm64 and x86_64, joins them
+  with `lipo`, makes the `.app` — `Contents/MacOS/bir` plus `nsh/`,
   `print-overrides/` and `assets/` under `Contents/Resources` — signs it,
   builds a DMG, notarizes it with `notarytool` and checks it with `spctl`.
   It needs the Apple secrets listed in
@@ -115,8 +115,8 @@ there, but nobody has run it on that platform.
   configuration, embeds `assets/macos/embedded.provisionprofile` (it refuses a
   store build whose profile is missing or expired), signs with `entitlements.plist`
   (sandbox), adds `print-overrides/` under `Contents/Resources` and wraps the
-  app with `productbuild`. The store build inherits the NSH minimum of macOS 14
-  (the `bir-shell` store build declared macOS 13). It needs App Store Connect
+  app with `productbuild`. The store build inherits the NSH minimum of macOS 14.
+  It needs App Store Connect
   credentials for the build number, `CODESIGN_IDENTITY` and
   `INSTALLER_IDENTITY`. Without `CODESIGN_IDENTITY` the app is ad hoc signed
   for a local sandbox run, without the profile and without the application and

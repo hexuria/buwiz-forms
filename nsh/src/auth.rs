@@ -4,7 +4,7 @@
 //!
 //! The host function runs the prompt on its own `mac-login` thread and answers the TSX promise from there
 //! (crates/bir-app-api/src/bir_module.rs `mac_login`), so the engine thread never waits on it; blocking here
-//! is fine. Same crate and version as the old host (robius-authentication 0.1.1, crates/bir-shell/src/bir_host.rs).
+//! is fine. Same crate and version as the old host (robius-authentication 0.1.1, the retired gpui shell's src/bir_host.rs).
 //!
 //! A test environment (`EBIR_TEST_ENV`: every test, shots and dev recipe) answers false without asking the OS,
 //! so a headless run never puts a system prompt on the screen or waits for one.

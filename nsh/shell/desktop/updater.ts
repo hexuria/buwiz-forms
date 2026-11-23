@@ -1,4 +1,4 @@
-// The updater's state machine (old crates/bir-shell/src/updater.rs, without the feed and the signing: those are nsh/updater's,
+// The updater's state machine (the retired gpui shell's src/updater.rs, without the feed and the signing: those are nsh/updater's,
 // set in nsh.json "updater"). Pure: the network, the download and the install come in through
 // UpdaterApi, so a plain test plays every phase.
 //

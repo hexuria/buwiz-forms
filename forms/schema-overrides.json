@@ -21086,7 +21086,7 @@
           ]
         }
       ],
-      "evidence": "Maintainer decision 11 (PR 5): the 1701Q spouse part turns on from Civil status = Married. The January 2018 sheet and its upload have no civil status, so this is a page box (no official key; crates/bir-shell/src/screen_form_module/rows_income_q.rs) whose answer the draft keeps (Form1701QDraft::set_civil_status); the options are the four BIR prints at Form 1701 item 16. Placed by the layout at the head of Part II."
+      "evidence": "Maintainer decision 11 (PR 5): the 1701Q spouse part turns on from Civil status = Married. The January 2018 sheet and its upload have no civil status, so this is a page box (no official key; the retired gpui shell's src/screen_form_module/rows_income_q.rs) whose answer the draft keeps (Form1701QDraft::set_civil_status); the options are the four BIR prints at Form 1701 item 16. Placed by the layout at the head of Part II."
     },
     "layout": {
       "evidence": "PR 5: the printed sheet's parts and items in paper order (html-frozen/1701q-2018/index.html (BIR Form 1701Q January 2018): items 1-4, Part I 5-16A, Part II 17-25A, Part III 26-31, Part IV 32-35, and page 2's Part V with Schedules I-IV, items 36-68; captions from its text). Item 49 'Total Income for the quarter' sits in Schedule II between items 48 and 50, as printed (the extractor had read the centavos note '49 Centavos or Less drop down' as its heading, manual-1). Civil Status heads Part II (decision 11). The contact number is not on this sheet (html-frozen/1701q-2018/writer-cells.json not_joined frm1701q:txtTelno) and goes with Line of Business to Not on the printed sheet (manual-0). Field keys, values, the official XML and the print map are unchanged.",
@@ -34203,7 +34203,7 @@
       "row_keys": {
         "frm1801v2018:sched1Class_{index}": "frm1801v2018:sched1Class_{index}'"
       },
-      "evidence": "D07: Part V Schedule 1 — Real properties as concrete rows instead of the {index} row template; captions from the painted view (retired) crates/bir-shell/src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
+      "evidence": "D07: Part V Schedule 1 — Real properties as concrete rows instead of the {index} row template; captions from the retired gpui shell's painted view src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
     },
     "table:4:sched1A": {
       "no": "",
@@ -34237,7 +34237,7 @@
       "row_keys": {
         "frm1801v2018:sched1AClass_{index}": "frm1801v2018:sched1AClass_{index}'"
       },
-      "evidence": "D07: Part V Schedule 1A — Family home as concrete rows instead of the {index} row template; captions from the painted view (retired) crates/bir-shell/src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
+      "evidence": "D07: Part V Schedule 1A — Family home as concrete rows instead of the {index} row template; captions from the retired gpui shell's painted view src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
     },
     "table:4:sched2": {
       "no": "",
@@ -34264,7 +34264,7 @@
         1,
         7
       ],
-      "evidence": "D07: Part V Schedule 2 — Shares of stock as concrete rows instead of the {index} row template; captions from the painted view (retired) crates/bir-shell/src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
+      "evidence": "D07: Part V Schedule 2 — Shares of stock as concrete rows instead of the {index} row template; captions from the retired gpui shell's painted view src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
     },
     "table:4:sched2A": {
       "no": "",
@@ -34283,7 +34283,7 @@
         1,
         7
       ],
-      "evidence": "D07: Part V Schedule 2A — Other personal properties as concrete rows instead of the {index} row template; captions from the painted view (retired) crates/bir-shell/src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
+      "evidence": "D07: Part V Schedule 2A — Other personal properties as concrete rows instead of the {index} row template; captions from the retired gpui shell's painted view src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
     },
     "table:4:sched3": {
       "no": "",
@@ -34302,7 +34302,7 @@
         1,
         7
       ],
-      "evidence": "D07: Part V Schedule 3 — Taxable transfers as concrete rows instead of the {index} row template; captions from the painted view (retired) crates/bir-shell/src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
+      "evidence": "D07: Part V Schedule 3 — Taxable transfers as concrete rows instead of the {index} row template; captions from the retired gpui shell's painted view src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
     },
     "table:4:sched4": {
       "no": "",
@@ -34325,7 +34325,7 @@
         1,
         7
       ],
-      "evidence": "D07: Part V Schedule 4 — Business interest as concrete rows instead of the {index} row template; captions from the painted view (retired) crates/bir-shell/src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
+      "evidence": "D07: Part V Schedule 4 — Business interest as concrete rows instead of the {index} row template; captions from the retired gpui shell's painted view src/views/form_1801_view.rs; rows are the ones the agent definition binds (writer keys sched*_N, model rows /<schedule>/N-1, verified by the probe)."
     },
     "frm1801v2018:sched1Class_1'": {
       "kind": "sel",

@@ -165,7 +165,6 @@ class CiChangeDetectionTests(unittest.TestCase):
         validation_reason: str = "no validation-rules path changed",
         scripts: str = "false",
         app: str | None = None,
-        shell: str = "false",
         packaging: tuple[str, ...] = (),
         event: str = "pull_request",
         changed: tuple[str, ...] = (),
@@ -190,11 +189,6 @@ class CiChangeDetectionTests(unittest.TestCase):
         )
         matrix = json.loads(outputs.pop("check_matrix"))
         self.assertEqual(tuple(entry["os"] for entry in matrix["include"]), systems)
-        shell_matrix = json.loads(outputs.pop("shell_matrix"))
-        self.assertEqual(
-            tuple(entry["os"] for entry in shell_matrix["include"]),
-            self.ALL_SYSTEMS if shell == "true" else (),
-        )
         if app is None:
             app = "true" if systems == self.ALL_SYSTEMS else "false"
         self.assertEqual(
@@ -204,7 +198,6 @@ class CiChangeDetectionTests(unittest.TestCase):
                 "check": "true" if systems else "false",
                 "app": app,
                 "scripts": scripts,
-                "shell": shell,
                 "linux_pkg": "true" if "linux" in packaging else "false",
                 "windows_pkg": "true" if "windows" in packaging else "false",
                 "macos_pkg": "true" if "macos" in packaging else "false",
@@ -246,22 +239,16 @@ class CiChangeDetectionTests(unittest.TestCase):
             changed=("docs/plans/x.md", "crates/bir-core/src/lib.rs"),
         )
 
-    def test_shell_workspace_change_runs_shell_check_not_check(self) -> None:
-        self.assert_decisions(
-            systems=(),
-            check_reason="shell workspace changed (covered by shell-check)",
-            app="false",
-            shell="true",
-            changed=("crates/bir-shell/src/host.rs", "app/main.js"),
-        )
-
-    def test_shell_and_app_changes_run_both(self) -> None:
-        self.assert_decisions(
-            systems=self.ALL_SYSTEMS,
-            check_reason="app file changed: crates/bir-core/src/lib.rs",
-            shell="true",
-            changed=("crates/bir-core/src/lib.rs", "app/main.js"),
-        )
+    def test_deleted_shell_paths_count_as_app_code(self) -> None:
+        # bir-shell and app/ are gone: a stray reference to their old paths
+        # must not sneak through as a no-test change.
+        for path in ("crates/bir-shell/src/host.rs", "app/main.js", "app/forms/1700.json"):
+            with self.subTest(path=path):
+                self.assert_decisions(
+                    systems=self.ALL_SYSTEMS,
+                    check_reason=f"app file changed: {path}",
+                    changed=(path,),
+                )
 
     def test_nsh_app_only_change_skips_check(self) -> None:
         # nsh/ is a workspace of its own, which the NSH app workflow tests.
@@ -321,8 +308,6 @@ class CiChangeDetectionTests(unittest.TestCase):
 
     def test_windows_installer_change_tests_windows_only(self) -> None:
         for path in (
-            "installer.iss",
-            "installer.wxs",
             "assets/windows/Square44x44Logo.png",
             "packaging/windows/nsh.wxs",
             "scripts/audit_final_setup.ps1",
@@ -364,8 +349,19 @@ class CiChangeDetectionTests(unittest.TestCase):
             check_reason="app file changed: crates/bir-core/src/lib.rs",
             app="true",
             packaging=("windows",),
-            changed=("installer.iss", "crates/bir-core/src/lib.rs"),
+            changed=("packaging/windows/nsh.wxs", "crates/bir-core/src/lib.rs"),
         )
+
+    def test_deleted_installer_scripts_count_as_app_code(self) -> None:
+        # The Inno/WiX installer scripts are gone: their old paths must not
+        # classify as Windows packaging and skip the other two systems.
+        for path in ("installer.iss", "installer.wxs"):
+            with self.subTest(path=path):
+                self.assert_decisions(
+                    systems=self.ALL_SYSTEMS,
+                    check_reason=f"app file changed: {path}",
+                    changed=(path,),
+                )
 
     def test_linux_packaging_runs_only_the_script_tests(self) -> None:
         self.assert_decisions(
@@ -386,14 +382,13 @@ class CiChangeDetectionTests(unittest.TestCase):
                 "entitlements.plist",
                 "daemon.entitlements.plist",
                 "assets/macos/AppIcon.iconset/icon_16x16.png",
-                "scripts/dev_bundle_macos.sh",
                 "scripts/package_macos_release.sh",
                 "scripts/setup_macos_release_secrets.sh",
             ),
         )
 
     def test_linux_desktop_entry_is_app_code(self) -> None:
-        # bir-shell's tests read assets/linux/, so it is not packaging-only.
+        # The app's desktop file is not packaging-only.
         self.assert_decisions(
             systems=self.ALL_SYSTEMS,
             check_reason="app file changed: assets/linux/dev.goldcoders.bir.desktop",
@@ -424,7 +419,7 @@ class CiChangeDetectionTests(unittest.TestCase):
             systems=("windows-latest",),
             check_reason="Windows installer files changed",
             packaging=("linux", "windows"),
-            changed=("packaging/linux/smoke-test.sh", "installer.iss"),
+            changed=("packaging/linux/smoke-test.sh", "packaging/windows/nsh.wxs"),
         )
 
     def test_look_alike_paths_are_app_code(self) -> None:
@@ -450,7 +445,6 @@ class CiChangeDetectionTests(unittest.TestCase):
             check_reason="event schedule tests everything",
             validation="true",
             validation_reason="nightly run",
-            shell="true",
             event="schedule",
         )
 
@@ -459,7 +453,6 @@ class CiChangeDetectionTests(unittest.TestCase):
             systems=self.ALL_SYSTEMS,
             check_reason="event workflow_dispatch tests everything",
             validation_reason="manual run, box not ticked",
-            shell="true",
             event="workflow_dispatch",
         )
 
@@ -469,7 +462,6 @@ class CiChangeDetectionTests(unittest.TestCase):
             check_reason="event workflow_dispatch tests everything",
             validation="true",
             validation_reason="manual run",
-            shell="true",
             event="workflow_dispatch",
             force="true",
         )
@@ -551,7 +543,7 @@ class CiChangeDetectionTests(unittest.TestCase):
         if needs is not None:
             self.assertEqual(
                 [name.strip() for name in needs.group(1).split(",")],
-                ["changes", "check", "windows-setup", "shell-check", "scripts", "validation-rules", "legacy-guard"],
+                ["changes", "check", "windows-setup", "scripts", "validation-rules", "legacy-guard"],
             )
         # A skip caused by a failed `changes` must fail the gate.
         self.assertIn('[[ "$CHANGES" == success ]]', gate)

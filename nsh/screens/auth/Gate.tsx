@@ -1,4 +1,4 @@
-// The Buwiz account gate (old app/shell/gate.js): the whole window until the device flow approves this computer. Nothing
+// The Buwiz account gate (the old shell's gate.js): the whole window until the device flow approves this computer. Nothing
 // that names a taxpayer is drawn here; the host refuses the data verbs on its own, this card is how a person gets past it.
 import { View } from "nsh";
 import { app } from "../../shell";

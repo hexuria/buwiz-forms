@@ -1411,7 +1411,7 @@ fn gate_of(cell: Cell) -> Option<Gate> {
 }
 
 /// What a shut gate says, on the page (`off`) and in a refusal: the
-/// corpus condition's reviewed tag (app/forms/condition-labels.json), or
+/// corpus condition's reviewed tag (forms/condition-labels.json), or
 /// 2552's own.
 fn gate_tag(kind: AgentFormKind, gate: Gate, key: &str) -> String {
     match gate {

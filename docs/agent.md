@@ -1,7 +1,7 @@
 # gpui-agent integration
 
 The BIR agent control plane is the session in `crates/bir-app-api/src/agent/`, hosted by the
-NSH app, the gpui shell (`crates/bir-shell`) and the headless `bir` command (`crates/bir-cli`).
+NSH app and the headless `bir` command (`crates/bir-cli`).
 `bir` runs the same DB-backed `agent::session::Session` without opening a window; UI
 commands are discarded and screenshots are unavailable. Discovery records use
 app `bir-shell` (the name `bir-mcp` and the NSH tests select on); the headless

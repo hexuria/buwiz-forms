@@ -443,7 +443,7 @@ function roundDecimals(int: string, frac: string, places: number): [string, stri
  * up ("1.255" is "1.26", "2.675" is "2.68", "1.005" is "1.01"; a negative rounds away from zero); a negative that rounds
  * to zero is "0.00", never "-0.00". `whole`: whole pesos ("1,234"); a typed fraction stays as typed so the box's own message
  * explains it. `round` false: decimals past the second stay as they are ("1.255" is "1.255", "1.5" is "1.50"): how a box
- * shows a stored value without changing it. The old app's formatMoney (app/shell/form_page.js) did this through Number and
+ * shows a stored value without changing it. The old app's formatMoney (the old shell's form_page.js) did this through Number and
  * toFixed.
  */
 export function formatMoney(text: string, whole = false, round = true): string {

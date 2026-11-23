@@ -1,5 +1,5 @@
 // The controls' pure rules: which options a list has, what a shown value is, how a TIN box is told, how a search matches.
-// No UI here, so it is tested on its own (model.test.ts). The rules are the old page's (app/shell/form_page.js: optionOf,
+// No UI here, so it is tested on its own (model.test.ts). The rules are the old page's (the old shell's form_page.js: optionOf,
 // selectBox, control, radioGroup, scheduleTable) unless a comment says otherwise.
 import type { ChoiceOption, FieldControlProps, SchemaField, SchemaItem } from "../contract";
 import { formatMDY, formatMoney, parseTypedDate, shownDate } from "../../../ui";

@@ -56,10 +56,6 @@ Desktop.ini
 
 *.lock
 !/Cargo.lock
-# bir-shell is a standalone workspace (gpui-kit-assets `links` conflict keeps
-# it out of the root one); its lockfile carries the transitive pins the
-# LLRT/quickjs graph needs, so it is committed like the root one.
-!/crates/bir-shell/Cargo.lock
 
 # AI Agent Artifacts & Scratchpads
 .scratch/
@@ -146,7 +142,7 @@ node_modules/
 .ci-html/
 /assets/form-renderer-build-identity.json
 
-# NSH app (nsh/): its own cargo workspace keeps its lockfile like crates/bir-shell does; generated files stay out.
+# NSH app (nsh/): its own cargo workspace keeps its lockfile; generated files stay out.
 !/nsh/Cargo.lock
 /nsh/.nsh/
 /nsh/target/

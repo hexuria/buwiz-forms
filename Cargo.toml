@@ -53,9 +53,8 @@ rusqlite = { version = "0.32" }
 
 
 
-# gpui-agent control plane, from crates.io. One exact version for bir-shell
-# (`agent` feature) and bir-mcp, so both sides speak one protocol and one
-# discovery format; the setup scripts install the CLI at this same version.
+# gpui-agent control plane, from crates.io. One exact version for bir-mcp;
+# the setup scripts install the CLI at this same version.
 gpui-agent = { version = "=0.4.0" }
 # The recipe runner's own parameter binding, for tests that execute a generated recipe.
 gpui-agent-recipe = { version = "=0.4.0" }

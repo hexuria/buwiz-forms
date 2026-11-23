@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: |
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          git ls-files --error-unmatch Cargo.lock package-lock.json crates/bir-shell/Cargo.lock nsh/Cargo.lock
+          git ls-files --error-unmatch Cargo.lock package-lock.json nsh/Cargo.lock
 
           CARGO_VERSION="$(awk -F '"' '
             /^\[workspace\.package\]$/ { in_workspace_package = 1; next }

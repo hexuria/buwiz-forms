@@ -9,7 +9,7 @@
 //! the lock inputs. Regenerate after a schema, override or binding change
 //! with:
 //!
-//! `UPDATE_AGENT_CARRY=1 cargo test --manifest-path crates/bir-shell/Cargo.toml agent_carry_table`
+//! `UPDATE_AGENT_CARRY=1 cargo test -p bir-app-api agent_carry_table`
 
 use super::*;
 use std::path::PathBuf;

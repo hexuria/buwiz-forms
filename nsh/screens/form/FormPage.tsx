@@ -1,4 +1,4 @@
-// The form page: one renderer for all 43 forms (old app/shell/form_page.js). The session (./session.ts) owns the
+// The form page: one renderer for all 43 forms (the old shell's form_page.js). The session (./session.ts) owns the
 // state; this file draws it from nsh/ui parts and the field controls of ./controls.
 //
 // The page paints no background of its own: it sits on the surface it is mounted on (the frame's card).

@@ -1,4 +1,4 @@
-// Sign-in (old app/shell/auth.js renderSignIn): at launch when the admin has a code, and after Lock app or Log out. One door:
+// Sign-in (the old shell's auth.js renderSignIn): at launch when the admin has a code, and after Lock app or Log out. One door:
 // a TIN and that account's PIN or authenticator code; the admin's TIN signs in as the admin. "Forgot PIN?": a taxpayer is
 // let in with the admin's code; the admin uses the one-time recovery key or, last, the Mac login. With no admin code there
 // is nothing to protect: "Open without signing in".

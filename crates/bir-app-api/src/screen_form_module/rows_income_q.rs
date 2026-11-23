@@ -53,7 +53,7 @@ pub(crate) const MARRIED_FIRST: &str =
 pub(crate) const INDIVIDUAL_FIRST: &str = "An estate or trust reports no spouse: Part II and column B are for a Single Proprietor or Professional (item 7).";
 
 /// What item 43's and item 48's "(specify)" boxes say they need: the tags
-/// of their conditions (app/forms/condition-labels.json).
+/// of their conditions (forms/condition-labels.json).
 pub(crate) const NEEDS_GRADUATED: &str = "Needs the graduated income tax rate";
 pub(crate) const NEEDS_EIGHT: &str = "Needs the 8% income tax rate";
 /// Their refusals.
@@ -83,7 +83,7 @@ pub(super) fn is_gate_refusal(reason: &str) -> bool {
 
 /// What a 1702Q schedule entry waits for. `recompute` (form_1702q.rs)
 /// clears or overwrites the entry while it does not hold, so the host
-/// refuses a write there with the tag (app/forms/condition-labels.json),
+/// refuses a write there with the tag (forms/condition-labels.json),
 /// rather than taking it and losing it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Gate {

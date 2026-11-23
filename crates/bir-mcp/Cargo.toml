@@ -14,12 +14,12 @@ name = "bir-mcp"
 path = "src/main.rs"
 
 [features]
-default = ["sqlcipher"]
+# No default: the shipped NSH app and bir-cli use plain SQLite.
 sqlcipher = ["bir-core/sqlcipher"]
 
 [dependencies]
 serde_json = { workspace = true }
-# Workspace pin shared with bir-shell's `agent` feature.
+# Workspace pin shared with bir-app-api's `agent` feature.
 gpui-agent = { workspace = true }
 # Blocking client for the buwiz-server license check. rustls, no OpenSSL.
 reqwest = { workspace = true }

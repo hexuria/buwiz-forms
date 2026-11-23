@@ -71,12 +71,8 @@ OFFICIAL_REFERENCE_ROOTS = (
 )
 PACKAGING_FILES = {
     PurePosixPath("justfile"),
-    PurePosixPath("installer.iss"),
-    PurePosixPath("installer.wxs"),
     PurePosixPath("entitlements.plist"),
     PurePosixPath("entitlements.dev.plist"),
-    PurePosixPath("daemon.entitlements.plist"),
-    PurePosixPath("crates/bir-shell/Cargo.toml"),
 }
 PACKAGING_PREFIXES = (
     PurePosixPath(".github/workflows"),

@@ -1,7 +1,7 @@
 // Filings: every return, saved or filed, on a board with one column per status group (wide), or as a list under status tabs
 // (narrow, under 720 points of page width). Above it a search box, four multi-select filters (taxpayers, forms, periods,
 // statuses), Clear filters and a count; narrow, the four filters sit in a Filters sheet. A card is its return and opens it;
-// the one button a card keeps is Cancel queue. Ported from app/shell/filings.js; the narrow layout is new (plan, UI decisions).
+// the one button a card keeps is Cancel queue. Ported from the old shell's filings.js; the narrow layout is new (plan, UI decisions).
 //
 // Reads: the two cached lists Home also makes, bir.list_returns("filed") and ("saved"), through the store. Writes: bir.cancel_queued.
 // Under them, "Filed in BIR eBIRForms" (LegacyGroup): what the import brought in from the old program, for the taxpayer in view.

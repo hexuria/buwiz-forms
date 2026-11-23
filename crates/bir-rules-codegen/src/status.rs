@@ -59,15 +59,15 @@ const GENERATED_MANIFEST_PATH: &str = "crates/bir-rules/src/generated/manifest.j
 const PAYLOAD_PATH: &str = "crates/bir-core/src/form_rules/payload.rs";
 const CORE_FORM_2550Q_PATH: &str = "crates/bir-core/src/forms/form_2550q.rs";
 const CORE_CAPABILITIES_PATH: &str = "crates/bir-core/src/forms/support_level.rs";
-// The shell's host modules live in bir-app-api (moved out of bir-shell unedited, so the old shell and the NSH app in
+// The shell's host modules live in bir-app-api (moved out of the old shell unedited, so the old shell and the NSH app in
 // nsh/ serve the same functions). The freeze follows them: same checks, same expected inventories.
 const SHELL_SCREEN_FORM_PATH: &str = "crates/bir-app-api/src/screen_form_module.rs";
 const SHELL_BIR_MODULE_PATH: &str = "crates/bir-app-api/src/bir_module.rs";
 const SHELL_AGENT_SESSION_PATH: &str = "crates/bir-app-api/src/agent/session.rs";
 
-/// Where application code lives outside bir-core: the host modules, the old shell's glue and the NSH app's Rust side.
+/// Where application code lives outside bir-core: the host modules and the NSH app's Rust side.
 /// Every one is read for the freeze, and the "shell" inventories count all of them.
-const SHELL_SOURCE_ROOTS: [&str; 3] = ["crates/bir-app-api/src", "crates/bir-shell/src", "nsh/src"];
+const SHELL_SOURCE_ROOTS: [&str; 2] = ["crates/bir-app-api/src", "nsh/src"];
 const VALIDATION_SUMMARY_PATH: &str = "crates/bir-core/src/validation_summary.rs";
 const V1_VALIDATIONS_PATH: &str = "rules/forms/2550q-v2024/validations.json";
 const SHADOW_PATH: &str = "crates/bir-core/src/form_rules/shadow.rs";
@@ -654,7 +654,7 @@ fn check_all_generated_candidates_test_only(repo_root: &Path, criteria: &mut Vec
 ///
 /// The five direct switches above protect the known 2550Q path. This guard is
 /// intentionally wider: it inventories semantic production call sites across
-/// `bir-core` and `bir-shell`, while ignoring comments, string literals, and
+/// `bir-core` and `bir-app-api`/`nsh`, while ignoring comments, string literals, and
 /// items directly gated by `#[cfg(test)]`. Existing generic scaffolding remains
 /// permitted, but a new provider designation, evaluator caller, serialization
 /// authority, Final Copy caller, or 2550Q queue/release authority breaches a

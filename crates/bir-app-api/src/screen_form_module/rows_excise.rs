@@ -1,5 +1,5 @@
 //! PR 11: the excise returns 2200A, 2200AN, 2200C, 2200M, 2200P, 2200S and
-//! 2200T. Their page layout lives in app/forms/schema-overrides.json; this
+//! 2200T. Their page layout lives in forms/schema-overrides.json; this
 //! module holds what the host does for them alone.
 //!
 //! - **Penalties from the typed date (decision D8, 2026-10-18).** The model

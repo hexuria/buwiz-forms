@@ -1,4 +1,4 @@
-// A form card of the Form library (old app/shell/library.js formCard): the code, the title in two lines, and chips for the
+// A form card of the Form library (the old shell's library.js formCard): the code, the title in two lines, and chips for the
 // frequency, the pages and the fields, plus "Draft layout" where the layout is still a draft (quality under 0.8).
 // The card is the kit's PressCard (hover border and shadow, the keyboard ring).
 import type { Accessor } from "nsh";

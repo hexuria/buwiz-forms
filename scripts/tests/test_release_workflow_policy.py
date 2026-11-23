@@ -18,11 +18,9 @@ WINDOWS_RELEASE_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release-win
 MACOS_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release-macos.yml"
 MACOS_PACKAGE_SCRIPT_PATH = REPOSITORY_ROOT / "scripts/package_macos_release.sh"
 CI_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/ci.yml"
-DESKTOP_MANIFEST_PATH = REPOSITORY_ROOT / "crates/bir-shell/Cargo.toml"
 LINUX_BUILD_SCRIPT_PATH = REPOSITORY_ROOT / "packaging/linux/build-packages.sh"
 LINUX_SMOKE_SCRIPT_PATH = REPOSITORY_ROOT / "packaging/linux/smoke-test.sh"
 LINUX_INSTALL_SCRIPT_PATH = REPOSITORY_ROOT / "packaging/linux/install-linux.sh"
-INSTALLER_WXS_PATH = REPOSITORY_ROOT / "installer.wxs"
 JUSTFILE_PATH = REPOSITORY_ROOT / "justfile"
 LINUX_SETUP_PATH = REPOSITORY_ROOT / "scripts/setup-linux.sh"
 WINDOWS_SETUP_PATH = REPOSITORY_ROOT / "scripts/setup-windows.ps1"
@@ -43,11 +41,9 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
             encoding="utf-8"
         )
         cls.ci_workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
-        cls.desktop_manifest = DESKTOP_MANIFEST_PATH.read_text(encoding="utf-8")
         cls.linux_build_script = LINUX_BUILD_SCRIPT_PATH.read_text(encoding="utf-8")
         cls.linux_smoke_script = LINUX_SMOKE_SCRIPT_PATH.read_text(encoding="utf-8")
         cls.linux_install_script = LINUX_INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")
-        cls.installer_wxs = INSTALLER_WXS_PATH.read_text(encoding="utf-8")
         cls.justfile = JUSTFILE_PATH.read_text(encoding="utf-8")
         cls.linux_setup = LINUX_SETUP_PATH.read_text(encoding="utf-8")
         cls.windows_setup = WINDOWS_SETUP_PATH.read_text(encoding="utf-8")
@@ -107,7 +103,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
             self.assertIn("70d8ff26b9e9dccb17a908de97cd4a3f3e381276", publish)
             self.assertIn("cargo install --locked --path", publish)
         nsh = (REPOSITORY_ROOT / ".github/workflows/nsh.yml").read_text()
-        self.assertEqual(nsh.count('"app/forms/**"'), 2)
+        self.assertEqual(nsh.count('"forms/**"'), 2)
 
     @unittest.skipIf(sys.platform == "win32", "release preflight runs on Ubuntu")
     def test_nsh_version_preflight_accepts_dispatch_and_rejects_bad_tags(self) -> None:
@@ -163,7 +159,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn('NSH_VERSION="$(awk', preflight)
         self.assertIn('"$TAG_VERSION" != "$NSH_VERSION"', preflight)
         self.assertIn("nsh/nsh.json version $NSH_VERSION", preflight)
-        self.assertIn("crates/bir-shell/Cargo.lock nsh/Cargo.lock", preflight)
+        self.assertIn("Cargo.lock package-lock.json nsh/Cargo.lock", preflight)
         self.assertEqual(self.justfile.count("scripts/set_release_version.py"), 2)
         build_macos = self.job("build-macos", self.macos_workflow)
         self.assertIn("needs: preflight", build_macos)
@@ -319,51 +315,6 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("RequireActivation", self.smoke_msix)
         self.assertIn("ebirforms-no-self-update", self.package_msix)
 
-    def test_local_setup_recipe_checks_prerequisites_and_sources_before_iscc(
-        self,
-    ) -> None:
-        exe_recipe = self.justfile.split(
-            "# Build the Inno Setup executable installer (Windows only)", maxsplit=1
-        )[1].split("# Build a Store-only MSIX candidate", maxsplit=1)[0]
-        self.assertIn("check-exe-prerequisites build-frozen-html-identity", exe_recipe)
-        self.assertIn(
-            "Configured Python is not a usable CPython interpreter",
-            exe_recipe,
-        )
-        self.assertIn("Inno Setup compiler was not found", exe_recipe)
-        self.assertIn(
-            'ISCC := "C:\\\\Program Files (x86)\\\\Inno Setup 6\\\\ISCC.exe"',
-            self.justfile,
-        )
-        self.assertIn('$iscc = "{{ISCC}}"', exe_recipe)
-        self.assertIn('$ISCC = "{{ISCC}}"', exe_recipe)
-        source_gate = exe_recipe.index("scripts/audit_installer_sources.py")
-        compile_installer = exe_recipe.index("& $ISCC")
-        self.assertLess(source_gate, compile_installer)
-        self.assertNotIn("7z", exe_recipe.lower())
-        self.assertNotIn("audit_final_setup.ps1", exe_recipe)
-
-    def test_msix_recipe_uses_shared_packaging_script(self) -> None:
-        msix_recipe = self.justfile.split(
-            "# Build a Store-only MSIX candidate", maxsplit=1
-        )[1].split("# Sign the Store-identity MSIX", maxsplit=1)[0]
-        self.assertIn(
-            'Write-Warning "STORE-ONLY MSIX candidate; not a public GitHub release artifact"',
-            msix_recipe,
-        )
-        self.assertIn(
-            'Write-Warning "BLOCKED: certify manifest artwork and packaged MSVC runtime behavior before Store submission"',
-            msix_recipe,
-        )
-        self.assertIn("scripts/package_msix.ps1", msix_recipe)
-
-    def test_exe_recipe_and_prerequisite_are_windows_only(self) -> None:
-        self.assertRegex(self.justfile, r"(?m)^\[windows\]\r?\nexe:")
-        self.assertRegex(
-            self.justfile,
-            r"(?m)^\[private\]\r?\n\[windows\]\r?\ncheck-exe-prerequisites:",
-        )
-
     def test_final_setup_audit_checks_registration_name_and_after_uninstall(
         self,
     ) -> None:
@@ -457,78 +408,6 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         )
         self.assertIn("3010", self.windows_setup)
 
-    def test_package_builds_are_deterministic_and_scope_consistent(self) -> None:
-        windows = self.windows_job("installers")
-        script = self.nsh_windows_package
-        self.assertIn("choco install wixtoolset --version=3.11.2 -y", windows)
-        self.assertIn("'heat.exe'", script)
-        self.assertIn("'-cg', 'NshPayload', '-ag'", script)
-        self.assertNotIn("'-gg'", script)
-        self.assertIn("'-t', (Join-Path $wixDir 'per-user-harvest.xsl')", script)
-        self.assertIn("'candle.exe') (Join-Path $wixDir 'nsh.wxs') $harvest -arch x64", script)
-        self.assertEqual(re.findall(r"-sice:\S+", script), ["-sice:ICE91"])
-        self.assertNotIn("-sval", script)
-
-
-        linux_job = self.job("build-linux")
-        self.assertIn("uses: ./.github/workflows/release-linux.yml", linux_job)
-        self.assertIn("tag: ${{ needs.preflight.outputs.version }}", linux_job)
-        # The Linux build compiles the Google OAuth client in like macOS and
-        # Windows do; a called workflow only sees it through inherited secrets.
-        self.assertIn("secrets: inherit", linux_job)
-        linux = self.linux_release_workflow
-        self.assertIn("GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}", linux)
-        self.assertIn("GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}", linux)
-        self.assertIn('if [[ -n "$RELEASE_TAG" ]]; then', linux)
-        self.assertNotIn('GITHUB_EVENT_NAME" == workflow_call', linux)
-        self.assertIn(
-            "group: release-linux-${{ github.event_name }}-${{ github.ref }}",
-            linux,
-        )
-        self.assertIn("ubuntu-24.04-arm", linux)
-        self.assertIn("runner: ubuntu-24.04", linux)
-        self.assertIn("x86_64-unknown-linux-gnu", linux)
-        self.assertIn("aarch64-unknown-linux-gnu", linux)
-        self.assertIn("NSH_PINNED_REF: 70d8ff26b", linux)
-        self.assertIn("path: buwiz-forms", linux)
-        self.assertIn("path: nsh", linux)
-        self.assertIn('open("nsh/nsh.json")', linux)
-        self.assertNotIn("crates/bir-shell", linux)
-        self.assertIn("build-packages.sh --version", linux)
-        self.assertIn("smoke-test.sh --out", linux)
-        smoke_step = linux.split("- name: Smoke test Linux packages", maxsplit=1)[1].split(
-            "\n      - name:", maxsplit=1
-        )[0]
-        self.assertIn("timeout-minutes:", smoke_step)
-        self.assertIn('in_time=(timeout --kill-after=30 "$CONTAINER_TIMEOUT")', self.linux_smoke_script)
-        self.assertIn("name: linux-release-${{ matrix.arch }}", linux)
-        for command in ("nsh package --target linux", "dpkg-deb --root-owner-group --build", "rpmbuild"):
-            self.assertIn(command, self.linux_build_script)
-        self.assertNotIn("cargo-deb", self.linux_build_script)
-        self.assertNotIn("cargo-generate-rpm", self.linux_build_script)
-        self.assertNotIn("crates/bir-shell", self.linux_build_script)
-        self.assertIn('touch "$system/usr/lib/ebirforms/ebirforms-no-self-update"', self.linux_build_script)
-        self.assertIn("libgtk-4-1 (>= 4.14)", self.linux_build_script)
-        self.assertIn("libwebkitgtk-6.0-4", self.linux_build_script)
-        self.assertIn('cp -a "$ROOT/print-overrides"', self.linux_build_script)
-        self.assertNotIn('$ROOT/app', self.linux_build_script)
-        self.assertIn('updater="$name-$app_version-linux-$RPM_ARCH.tar.gz"', self.linux_build_script)
-        container_script = (REPOSITORY_ROOT / "packaging/linux/smoke-container.sh").read_text()
-        self.assertIn("--from-dir /packages", container_script)
-        self.assertIn("xvfb-run", container_script)
-        self.assertIn('test ! -e "$app"', container_script)
-        self.assertIn("SHA256SUMS-linux-${ARCH}.txt", self.linux_install_script)
-        self.assertIn("ebirforms-bin.PKGBUILD", self.linux_build_script)
-        self.assertIn("https://github.com/hexuria/buwiz-forms/releases/download/v", self.linux_build_script)
-        self.assertIn('dpkg-deb --extract "$DEB" "$AUDIT_ROOT"', self.justfile)
-        self.assertIn('tar xzf "$TARBALL" -C "$AUDIT_ROOT"', self.justfile)
-
-    def test_msix_is_store_only_and_still_blocked_on_certification(self) -> None:
-        self.assertIn("Store-only MSIX candidate", self.justfile)
-        self.assertIn(
-            "BLOCKED: certify manifest artwork and packaged MSVC runtime behavior",
-            self.justfile,
-        )
 
 
 if __name__ == "__main__":

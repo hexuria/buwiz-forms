@@ -747,7 +747,7 @@ def audit(root: Path, form_code: str, revision: str, stage: str) -> dict[str, An
         root / f"crates/bir-core/src/forms/form_{slug}_xml.rs", root, errors, artifacts
     )
     require_file(
-        root / "crates/bir-shell/src/screen_form_module.rs",
+        root / "crates/bir-app-api/src/screen_form_module.rs",
         root,
         errors,
         artifacts,

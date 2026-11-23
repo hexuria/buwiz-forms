@@ -7,12 +7,12 @@ publish = false
 description = "UI-free host functions (the `bir` module) shared by the gpui shell and the NSH app"
 
 [features]
-default = ["sqlcipher"]
 # SQLCipher database encryption, passed through to bir-core and bir-print.
-# bir-shell keeps it on; the NSH app turns it off.
+# Nothing enables it (the NSH app and bir-cli ship plain SQLite), so it is
+# no longer the default.
 sqlcipher = ["bir-core/sqlcipher", "bir-print/sqlcipher"]
 # Device filings, the agent's send path and the gpui-agent session both hosts share (`agent/`); enabled by
-# `bir-shell/agent` and `nsh-app-ebirforms/agent`.
+# `nsh-app-ebirforms/agent`.
 agent = ["dep:reqwest", "dep:gpui-agent"]
 # The `bir` command (crates/bir-cli): the same session in a daemon with no window (clap CLI, pid file, detach). Needs `agent`.
 headless = ["agent", "dep:clap", "dep:dotenvy", "dep:libc", "dep:socket2"]
@@ -29,7 +29,7 @@ bir-print = { path = "../bir-print", default-features = false }
 anyhow = "1"
 chrono = "0.4"
 futures = "0.3"
-# One rev for bir-shell, bir-mcp and the NSH app: they speak one protocol and one discovery format.
+# One rev for bir-mcp and the NSH app: they speak one protocol and one discovery format.
 gpui-agent = { workspace = true, optional = true }
 clap = { version = "4", features = ["derive"], optional = true }
 dotenvy = { workspace = true, optional = true }

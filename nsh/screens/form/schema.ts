@@ -1,4 +1,4 @@
-// Pure helpers over the form schema, ported from app/shell/form_page.js (no door, no signals).
+// Pure helpers over the form schema, ported from the old shell's form_page.js (no door, no signals).
 import type { ChoiceOption, FieldType, FormSchema, SchemaField, SchemaItem, SchemaPart } from "./contract";
 import { tinSegment } from "./controls/model";
 import { shortIsoDate } from "../../lib/dates";

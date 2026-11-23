@@ -1,6 +1,6 @@
 // Filings' pure model: the statuses and board columns, how a return is named and dated, the period and month keys the
 // filters use, and which returns the search and the four filters keep. No signals and no host calls here, so every
-// rule is tested without a window (model.test.ts). Ported from app/shell/filings.js (STATUSES, COLUMNS, periodKey,
+// rule is tested without a window (model.test.ts). Ported from the old shell's filings.js (STATUSES, COLUMNS, periodKey,
 // localMonth, returnTitle, namedBranch, whoLine, dateLine, FilingsFilters.rows and applyPreset).
 import type { ReturnRow } from "../../bir";
 import { MONTHS, shortDate } from "../../lib/dates";

@@ -1,4 +1,4 @@
-// The rules of the sign-in, setup and account-gate screens (old app/main.js auth section, app/shell/auth.js, gate.js): pure.
+// The rules of the sign-in, setup and account-gate screens (old app/main.js auth section, the old shell's auth.js, gate.js): pure.
 import { deviceCopy } from "../../ui/look";
 
 /** The account gate's line before anything happened. */

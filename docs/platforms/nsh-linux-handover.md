@@ -19,7 +19,7 @@ export BIR_DATABASE_PATH="$HOME/ebirforms-package-test/filing.db"
 mkdir -p "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
 ```
 
-Never set `BIR_SFTP_LIVE`. Never launch bir-shell or `just run` for this handover.
+Never set `BIR_SFTP_LIVE`.
 **Release builds deliberately compile out `BIR_AUTH_BYPASS`.** Use the local
 account mock below to sign in to a packaged release without real credentials.
 Do not weaken the gate or claim a form screenshot was checked when only the

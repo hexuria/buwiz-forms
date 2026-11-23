@@ -94,47 +94,47 @@ pub(super) const HOST_ONLY: &[(&str, &str, &str)] = &[
     (
         "1700",
         "frm1700:rdoPg1I12ForeignTaxCredits",
-        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+        "the 1700 page is the 2018 screen (forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
     ),
     (
         "1700",
         "frm1700:rdoPg1I15CivilStatus",
-        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+        "the 1700 page is the 2018 screen (forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
     ),
     (
         "1700",
         "frm1700:rdoPg1I16SpouseHasIncome",
-        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+        "the 1700 page is the 2018 screen (forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
     ),
     (
         "1700",
         "frm1700:rdoPg1I20SpouseTaxpayerType",
-        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+        "the 1700 page is the 2018 screen (forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
     ),
     (
         "1700",
         "frm1700:rdoPg1I24SpouseForeignTaxCredits",
-        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+        "the 1700 page is the 2018 screen (forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
     ),
     (
         "1700",
         "frm1700:rdoPg1I2Amended",
-        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+        "the 1700 page is the 2018 screen (forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
     ),
     (
         "1700",
         "frm1700:rdoPg1I6TaxpayerType",
-        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+        "the 1700 page is the 2018 screen (forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
     ),
     (
         "1700",
         "frm1700:rdoPg2I1PartVIEmployee",
-        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+        "the 1700 page is the 2018 screen (forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
     ),
     (
         "1700",
         "path:/filing_status",
-        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names; item 17's Joint and Separate answer one field (the Schedule 1 row 2 Spouse box, host-written, is not in it)",
+        "the 1700 page is the 2018 screen (forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names; item 17's Joint and Separate answer one field (the Schedule 1 row 2 Spouse box, host-written, is not in it)",
     ),
     (
         "1701",
@@ -842,7 +842,7 @@ pub(super) fn sweep() -> BTreeMap<String, (Value, Case)> {
 /// Writes the sweep's outcomes to `RADIO_UNTICK_DUMP`: how the golden's
 /// `before` (on the base of PR 14) and `after` columns were recorded.
 #[test]
-#[ignore = "writes a file: run only as `cargo test --manifest-path crates/bir-shell/Cargo.toml -- --ignored --exact screen_form_module::tests::radio_untick::pr14_record_radio_untick_outcomes` with RADIO_UNTICK_DUMP=<file>"]
+#[ignore = "writes a file: run only as `cargo test -p bir-app-api -- --ignored --exact screen_form_module::tests::radio_untick::pr14_record_radio_untick_outcomes` with RADIO_UNTICK_DUMP=<file>"]
 fn pr14_record_radio_untick_outcomes() {
     // Without a file to write, return before the sweep runs (a bare
     // `-- --ignored` must not spend it).

@@ -7,7 +7,7 @@
 //! pins the bindings. Regenerate after a classifier, schema or binding
 //! change with:
 //!
-//! `UPDATE_AGENT_LOCKS=1 cargo test --manifest-path crates/bir-shell/Cargo.toml agent_locks_table`
+//! `UPDATE_AGENT_LOCKS=1 cargo test -p bir-app-api agent_locks_table`
 //!
 //! PR 15 round 2: the page and the desktop assistant build the profile
 //! context `agent::profile_blank` reads (`agent::FromProfile`) with two
@@ -202,7 +202,7 @@ fn the_shared_lock_map_is_identical_for_a_sample_draft() {
 /// The profile context the page's open builds for `draft` (`opened_json`:
 /// `values_json` of the profile's own recomputed draft) and the one the
 /// desktop assistant builds for the same draft
-/// (crates/bir-shell/src/agent/host_generic.rs `profile_context`:
+/// (crates/bir-app-api/src/agent/host_generic.rs `profile_context`:
 /// `agent::field_map`, each value a JSON string).
 fn page_and_desktop_contexts(
     kind: AgentFormKind,

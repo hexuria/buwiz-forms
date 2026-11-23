@@ -1,4 +1,4 @@
-// Home (old app/shell/home.js and dashboard.js): the greeting, five status tiles, the next 30 days, the deadlines they pick,
+// Home (the old shell's home.js and dashboard.js): the greeting, five status tiles, the next 30 days, the deadlines they pick,
 // each taxpayer at a glance, the as-needed forms, recently filed; on a fresh install, the welcome with three numbered steps.
 // The numbers come from lib/dashboard.ts over the store's cached reads. Tiles: Overdue and Due in 7 days narrow the list under
 // the strip, Drafts, Waiting to send and Filed this month open Filings with a preset (preset.ts).

@@ -1,8 +1,8 @@
 # UI performance rules (shell form pages)
 
-The shell UI (app/shell/*.js on gpui-kit, GPUI Fast) stays fast only if a
+The shell UI (the old shell's *.js on gpui-kit, GPUI Fast) stays fast only if a
 change redraws what it changed and nothing else. These rules are mandatory
-for every change to app/shell, and reviewers should reject code that breaks them.
+for every change to the old shell, and reviewers should reject code that breaks them.
 
 ## Rules
 

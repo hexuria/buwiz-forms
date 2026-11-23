@@ -47,7 +47,7 @@ export type ViewName = keyof typeof TABLE;
 export const ROUTES: Readonly<Record<ViewName, RouteMeta>> = TABLE;
 
 /**
- * The content column of a page, by the old rule (app/main.js layout(), app/shell/ui.js SIZE): the surface's padding is 32 on each side
+ * The content column of a page, by the old rule (app/main.js layout(), the old shell's ui.js SIZE): the surface's padding is 32 on each side
  * (16 under 640 points of surface), and the column's cap INCLUDES that padding: 880 (1120 for the wide views), so the content is
  * 816 wide in a 1182-point surface, not 880. `full` has no cap. `mainWidth` is app.layout.mainWidth().
  */

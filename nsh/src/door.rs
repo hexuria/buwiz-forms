@@ -337,7 +337,7 @@ fn booted() -> Result<Rc<HostModule>, String> {
     Ok(module)
 }
 
-/// The old host's launch, on this engine thread (`crates/bir-shell/src/host.rs`, `run`).
+/// The old host's launch, on this engine thread (the retired gpui shell's `src/host.rs`, `run`).
 fn boot_thread() -> Result<Rc<HostModule>, String> {
     let process = process();
     let _serial = BOOT.lock().unwrap_or_else(|poisoned| poisoned.into_inner());

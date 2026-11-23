@@ -1,4 +1,4 @@
-// The Form library's rules, ported from app/shell/library.js: the search text, the frequency choices, and which forms a
+// The Form library's rules, ported from the old shell's library.js: the search text, the frequency choices, and which forms a
 // scope, a frequency and a search show. Pure: Library.tsx reads the index and the year's forms, then calls these.
 import type { ScreenFormIndexEntry } from "../../bir";
 

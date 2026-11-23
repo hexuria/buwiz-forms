@@ -6,7 +6,7 @@
 //! (stylo, taffy, parley) and painted by vello_cpu into one picture per `.sheet`, which the window shows as images.
 //! No web view, no GPU. The PDF and the printout still come from the platform's web engine (`print.rs`), so they are
 //! what a browser makes of the sheet; the pictures are for looking at. Ported from the older app's
-//! `crates/bir-shell/src/blitz_render.rs`.
+//! the retired gpui shell's `src/blitz_render.rs`.
 //!
 //! An edit lays the document out again and repaints only the sheets whose HTML changed; the others keep their
 //! pictures.

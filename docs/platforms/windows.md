@@ -36,7 +36,7 @@ there, but nobody has run it on that platform.
 | Add deadlines to a calendar (.ics) | untested | Opens in the default calendar app. |
 | Google Calendar credentials storage | untested | Credential Manager, through `keyring`. |
 | Keyboard shortcuts | untested | Ctrl based; also F11 and Win+M. |
-| Packaging | untested | `Setup.exe` and `.msi` from CI; MSIX with `just msix`. |
+| Packaging | untested | `Setup.exe`, `.msi` and `.msix` from CI, or locally with `scripts\package_nsh_windows.ps1`. |
 | Agent control (gpui-agent) | partial | Token-authenticated control works at the current pinned version; the complete acceptance matrix remains open. |
 | Agent screenshots | ✗ | macOS only. |
 | Dev Mode panel (debug builds only) | untested |  |
@@ -63,11 +63,15 @@ there, but nobody has run it on that platform.
 - To install an unsigned tester package, import its `.cer` into **Local
   Machine → Trusted People** (administrator required), then double-click the
   sideload `.msix`. An MSIX will not start on a machine with UAC disabled.
-- From source: run `scripts\setup-windows.ps1`, then `just run`. Build the
-  installers with `just exe` or `just msix`. The `justfile` uses PowerShell 7
-  (`pwsh`) on Windows.
-- Installing an MSIX needs a signed package. `just sign-dev` signs one for
-  local use.
+- From source: run `scripts\setup-windows.ps1`, then run the app from `nsh\`
+  with `nsh run --target windows`, with the safety variables set as in
+  [the Windows handover](nsh-windows-handover.md) (`just nsh-run` is the macOS
+  form). Build the installers with `nsh package --target windows` and then
+  `scripts\package_nsh_windows.ps1` (see [CONTRIBUTING](../../CONTRIBUTING.md)).
+  The script and the `justfile` use PowerShell 7 (`pwsh`) on Windows.
+- Installing an MSIX needs a signed package. `scripts\package_nsh_windows.ps1
+  -SmokeMsix` signs one with a throwaway certificate for a local check; a
+  release run signs with the real certificate.
 - The executable is `bir.exe`.
 
 ## Data
@@ -142,7 +146,8 @@ there, but nobody has run it on that platform.
 - `windows-release` contains only the Setup program and MSI for public GitHub
   releases. The MSIX packages are CI artifacts for testers and Store upload,
   not public release attachments.
-- `just msix` makes an MSIX from `assets\windows\AppxManifest.xml`. The MSIX
+- `scripts\package_msix.ps1` (called by `scripts\package_nsh_windows.ps1`) makes
+  the MSIX from `assets\windows\AppxManifest.xml`. The MSIX
   version is `Major.Minor.BuildNumber.0`; see
   [Versioning](../DEVELOPMENT.md#versioning--build-numbers).
 - `just bump-build` needs the App Store Connect credentials, so it works on

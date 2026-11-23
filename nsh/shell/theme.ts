@@ -1,4 +1,4 @@
-// The theme preference (old app/shell/theme.js): the same setting key and spelling as the painted app ("System",
+// The theme preference (the old shell's theme.js): the same setting key and spelling as the painted app ("System",
 // "Dark", "Light"), so a person switching binaries keeps the choice. Pure; app.ts applies it with setColorScheme.
 
 /** What the person chose: follow the system, or force one appearance. */

@@ -37,7 +37,7 @@ We follow a "less is better" philosophy. You only need to remember a few core co
 
 - `just run` — Run the app locally with developer diagnostics.
 - `just install [format]` — Install a package you already built (macOS `.app`/`.pkg`/`.dmg`, Windows `msix`/`exe`, Linux `deb`/`tar`). It looks in `target/release-artifacts` and does not build anything.
-- Build the packages with `just exe` and `just msix` (Windows), `just app` (macOS App Store build), `just _package-mac` (macOS direct `.app` and DMG) and `just _package-linux` (Linux `.deb`, or a tarball when `cargo-deb` is missing). The release workflow builds the same packages.
+- Build the packages with `nsh package --target windows` and then `scripts/package_nsh_windows.ps1` (Windows: Setup program, MSI, MSIX and update archive), `just app` (macOS App Store build), `just _package-mac` (macOS direct `.app` and DMG) and `packaging/linux/build-packages.sh` (Linux `.deb`, `.rpm`, tarball, Arch package and install script). The release workflows build the same packages.
 - `just testflight [--agent]` — Build the App Store package and upload it to TestFlight (`just testflight-agent` is the same with the gpui-agent control plane; internal testing only). `just testflight-upload` re-uploads the last build without rebuilding.
 - `just _package-mac --agent` — Mac release `.app` with the gpui-agent control plane compiled in. Still silent until `GPUI_AGENT=1` (release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`).
 - `just publish` — Auto-increment the patch version, tag, and push (triggers the release workflow in GitHub Actions).
@@ -81,7 +81,7 @@ version. Set `GPUI_AGENT_TOKEN` for secure driving. For local-only driving,
 # Build the shell GUI with the control plane. `dev-tools` is not required;
 # add it only for --dev-export-live-database or to open a form that is still
 # being certified from a *release* build.
-cargo build --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell --features agent
+cargo build --locked --manifest-path crates/bir-app-api/Cargo.toml --features headless
 
 export GPUI_AGENT=1
 export GPUI_AGENT_TOKEN=<local-development-token> # required to bind (protocol v2 HMAC)
@@ -89,7 +89,7 @@ export GPUI_AGENT_ADDR=127.0.0.1:17421      # default; use 127.0.0.1:17423 when 
 # Release binaries also need:
 # export GPUI_AGENT_ALLOW_RELEASE=1
 export GPUI_AGENT_SCREENSHOT_DIR=/tmp/bir-shots
-./crates/bir-shell/target/debug/bir-shell
+./target/debug/bir
 ```
 
 Then, from another shell with the same `GPUI_AGENT_TOKEN` / `GPUI_AGENT_ADDR`:
@@ -107,10 +107,10 @@ A bare `gpui-agent` command (no `--addr`, no `--connect`) talks to
 `GPUI_AGENT_ADDR`, else `127.0.0.1:17421`; it never reuses an earlier
 `--connect` choice. Pass `--connect last` to reuse the saved choice, or
 `--connect <app|connect-id|pid>` to pick a host from the discovery list
-(the shell GUI and headless hosts both publish app `bir-shell`).
+(the NSH app and the headless host both publish app `bir-shell`).
 
 Before driving a host, check who owns the port — `lsof -nP -iTCP:17421
--sTCP:LISTEN` (or `17423` when that is `GPUI_AGENT_ADDR`) must show `bir-shell` (`bir` in a packaged install) or
+-sTCP:LISTEN` (or `17423` when that is `GPUI_AGENT_ADDR`) must show the NSH app or
 the headless `bir`. Another process there (an editor forwarding a remote machine,
 say) answers the protocol convincingly; `hello.os` and the chord style
 (`cmd-b` on macOS, `ctrl-b` on Linux) tell the two apart. A `focused`-scope
@@ -183,7 +183,7 @@ the build to its exact curated source revision before the app is assembled.
 just bump-build
 git add justfile && git commit -m "build: bump to $(just --evaluate BUILD_NUMBER)"
 just app   # macOS package; the live API counter is passed through the environment
-just msix  # Windows package; uses the committed default counter
+# Windows: scripts/package_nsh_windows.ps1 builds the MSIX with the committed default counter
 ```
 
 **Releasing a new version** (feature release or hotfix):
@@ -194,7 +194,7 @@ just bump-build
 git add Cargo.toml justfile && git commit -m "release: v0.2.0"
 ```
 
-> **Note:** `just bump-build` only works on macOS — it requires the Apple App Store Connect API credentials (`.p8` key, `APP_STORE_ISSUER_ID`, `APP_STORE_KEY_ID` in `.env`). On Windows, simply `git pull` to get the latest `BUILD_NUMBER` from the justfile, then run `just msix`.
+> **Note:** `just bump-build` only works on macOS — it requires the Apple App Store Connect API credentials (`.p8` key, `APP_STORE_ISSUER_ID`, `APP_STORE_KEY_ID` in `.env`). On Windows, simply `git pull` to get the latest `BUILD_NUMBER` from the justfile, then build the packages with `scripts/package_nsh_windows.ps1`.
 
 ### Version Progression Example
 
@@ -228,7 +228,8 @@ The **macOS** release job codesigns and notarizes the DMG. Configure these Repos
 - `crates/bir-core/`: Contains all domain logic, SQLite database integrations, API communications, IMAP automated email tracking, cryptography, and XML generation logic.
   - `forms/` — Form data models, `FormValidator` trait, ATC tax code tables, and the form registry.
   - `db/` — Decomposed database layer with domain-specific modules (`profiles.rs`, `drafts.rs`, `submissions.rs`, `receipts.rs`, `jobs.rs`, `notices.rs`, `migrations.rs`).
-- `crates/bir-shell/`: The GPUI-based frontend application managing windows, forms, inputs, locking, and theming. Opt-in gpui-agent / headless `bir` runbook: [`docs/agent.md`](agent.md).
+- `crates/bir-app-api/`: The UI-free host functions both hosts share: windows, forms, inputs, locking, and theming. Opt-in gpui-agent / headless `bir` runbook: [`docs/agent.md`](agent.md).
+- `nsh/`: The eBIRForms app on Native Shell — windows, forms, printing and the tray live here.
   - `components/form_engine.rs` — `FormViewTrait` providing shared status pipeline, header, and action infrastructure for all tax forms.
   - `components/form_parts.rs` — Reusable UI primitives: `form_accordion`, `taxpayer_info_section`, `atc_schedule_table`, `computation_row_*`, `penalty_summary_section`, and more.
   - `views/` — Per-form view implementations (e.g., `form_2551q_view.rs`, `form_1701q_view.rs`) that compose the shared components.

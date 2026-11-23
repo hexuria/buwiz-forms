@@ -1,7 +1,7 @@
 // Settings: a page in the main area (plan, UI decisions), opened from the account menu, the palette and Cmd/Ctrl+comma. From 600
 // points: a section list on the left (Personal: General, Account; Data: Import / Export, Jobs; System: Keyboard, Computer) with the search
 // over rows, and the section's cards on the right. Under 600: the section list first, then the section as its own page with Back.
-// Ported from app/shell/settings.js. Params: `section` opens a section (the old cron_tasks view is `section: "jobs"`).
+// Ported from the old shell's settings.js. Params: `section` opens a section (the old cron_tasks view is `section: "jobs"`).
 import { cleanup, Scroll, signal, View } from "nsh";
 import { sectionById, settingsView, shownSection } from "../../lib/settings_model";
 import { app } from "../../shell";
@@ -20,7 +20,7 @@ import { SetupCard } from "./SetupCard";
 import { leaveSetup, resetSetup, setupChange } from "./setup";
 import { TransferSection } from "./Transfer";
 
-/** The cards' column on the right of the list: one width for every section, so the title never moves. The old Jobs column was 680 (JOBS_COLUMN in app/shell/settings.js): Jobs and Logs need it, the rest take it too. */
+/** The cards' column on the right of the list: one width for every section, so the title never moves. The old Jobs column was 680 (JOBS_COLUMN in the old shell's settings.js): Jobs and Logs need it, the rest take it too. */
 const COLUMN = 680;
 /** The section list's width beside the cards. */
 const RAIL = 220;

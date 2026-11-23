@@ -4,11 +4,11 @@
 //!
 //! Which boxes another answer can turn off is the official corpus's
 //! `enabled_when` (`rules/forms/<package>/fields.json`, read only), copied
-//! for the boxes the page shows into `app/forms/conditions.json` by the
+//! for the boxes the page shows into `forms/conditions.json` by the
 //! ignored test `write_conditions`; `conditions_match_the_rules_corpus`
 //! keeps the copy in step. The corpus text is for developers (it records
 //! official defects too), so the page never shows it: each condition has a
-//! short reviewed tag in `app/forms/condition-labels.json` ("Needs item 13 =
+//! short reviewed tag in `forms/condition-labels.json` ("Needs item 13 =
 //! Yes"), which says what the form's own computation needs where that is
 //! more than the corpus says (0619F's items also need taxes withheld).
 //!
@@ -24,22 +24,22 @@ use std::sync::OnceLock;
 use bir_core::forms::agent::{self, AgentFormKind, Binding, DatePart};
 use serde_json::{Map, Value, json};
 
-/// `app/forms/conditions.json`: form code -> key -> the corpus condition.
+/// `forms/conditions.json`: form code -> key -> the corpus condition.
 fn conditions() -> &'static Value {
     static CONDITIONS: OnceLock<Value> = OnceLock::new();
     CONDITIONS.get_or_init(|| {
-        serde_json::from_str(include_str!("../../../../app/forms/conditions.json"))
-            .expect("app/forms/conditions.json is a JSON object")
+        serde_json::from_str(include_str!("../../../../forms/conditions.json"))
+            .expect("forms/conditions.json is a JSON object")
     })
 }
 
-/// `app/forms/condition-labels.json`: form code -> corpus condition -> the
+/// `forms/condition-labels.json`: form code -> corpus condition -> the
 /// tag the page shows.
 fn labels() -> &'static Value {
     static LABELS: OnceLock<Value> = OnceLock::new();
     LABELS.get_or_init(|| {
-        serde_json::from_str(include_str!("../../../../app/forms/condition-labels.json"))
-            .expect("app/forms/condition-labels.json is a JSON object")
+        serde_json::from_str(include_str!("../../../../forms/condition-labels.json"))
+            .expect("forms/condition-labels.json is a JSON object")
     })
 }
 
@@ -519,7 +519,7 @@ pub(super) mod tests {
         ),
     ];
 
-    /// What `app/forms/conditions.json` should hold, read from the corpus:
+    /// What `forms/conditions.json` should hold, read from the corpus:
     /// every box the page draws whose `enabled_when` names an answer,
     /// computed boxes left out, and the reviewed [`CORPUS_GAPS`],
     /// [`CORPUS_GAPS_PR5`] and [`CORPUS_GAPS_PR10`].
@@ -590,12 +590,9 @@ pub(super) mod tests {
     }
 
     #[test]
-    #[ignore = "writes app/forms/conditions.json from the rules corpus"]
+    #[ignore = "writes forms/conditions.json from the rules corpus"]
     fn write_conditions() {
-        let path = format!(
-            "{}/../../app/forms/conditions.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
+        let path = format!("{}/../../forms/conditions.json", env!("CARGO_MANIFEST_DIR"));
         let text = serde_json::to_string(&derived()).expect("json") + "\n";
         std::fs::write(path, text).expect("conditions.json");
     }
@@ -605,7 +602,7 @@ pub(super) mod tests {
         assert_eq!(
             conditions(),
             &derived(),
-            "app/forms/conditions.json is stale: run `cargo test -p bir-shell write_conditions -- --ignored`"
+            "forms/conditions.json is stale: run `cargo test -p bir-app-api write_conditions -- --ignored`"
         );
     }
 

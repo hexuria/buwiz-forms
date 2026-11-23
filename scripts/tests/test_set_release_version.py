@@ -104,13 +104,10 @@ class SetReleaseVersionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.write_tree(root)
-            shell = root / "crates/bir-shell"
-            shell.mkdir()
-            (shell / "Cargo.toml").write_text('[package]\nname = "bir-shell"\n', encoding="utf-8")
             with mock.patch.object(_MODULE.subprocess, "run") as run:
                 run.return_value = subprocess.CompletedProcess([], 0)
                 refresh_lockfiles(root)
-            self.assertEqual(run.call_count, 3)
+            self.assertEqual(run.call_count, 2)
             commands = [call.args[0] for call in run.call_args_list]
             self.assertTrue(all("--offline" in command for command in commands))
             manifests = [
@@ -119,7 +116,7 @@ class SetReleaseVersionTests(unittest.TestCase):
             ]
             self.assertEqual(
                 manifests,
-                ["Cargo.toml", "nsh/Cargo.toml", "crates/bir-shell/Cargo.toml"],
+                ["Cargo.toml", "nsh/Cargo.toml"],
             )
 
     def test_lockfile_refresh_falls_back_online(self):

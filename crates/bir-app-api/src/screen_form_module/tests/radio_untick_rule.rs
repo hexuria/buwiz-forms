@@ -250,7 +250,7 @@ fn pr14_the_hosts_groups_are_the_official_ones() {
     assert_eq!(joined, host_joined, "the host joins the same boxes");
 }
 
-/// app/forms/radio-name-groups.json (what the host reads) is every form's
+/// forms/radio-name-groups.json (what the host reads) is every form's
 /// official radio name groups; regenerate with UPDATE_RADIO_GROUPS=1.
 #[test]
 fn pr14_radio_name_groups_are_the_inventories() {
@@ -261,7 +261,7 @@ fn pr14_radio_name_groups_are_the_inventories() {
         }
     }
     let path = format!(
-        "{}/../../app/forms/radio-name-groups.json",
+        "{}/../../forms/radio-name-groups.json",
         env!("CARGO_MANIFEST_DIR")
     );
     let text = serde_json::to_string_pretty(&Value::Object(all.clone())).unwrap() + "\n";
@@ -272,7 +272,7 @@ fn pr14_radio_name_groups_are_the_inventories() {
     assert_eq!(
         pinned,
         Value::Object(all),
-        "app/forms/radio-name-groups.json is stale; regenerate with UPDATE_RADIO_GROUPS=1"
+        "forms/radio-name-groups.json is stale; regenerate with UPDATE_RADIO_GROUPS=1"
     );
 }
 

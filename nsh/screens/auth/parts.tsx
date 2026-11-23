@@ -1,4 +1,4 @@
-// The pieces every gate and lock screen is made of (old app/shell/auth.js screen, heading, labelled, errorLine, link,
+// The pieces every gate and lock screen is made of (the old shell's auth.js screen, heading, labelled, errorLine, link,
 // actions, choice). The kit has no text link and no pressable tile, so TextLink and ChoiceTile wrap one nsh/base Button
 // here, as screens/filings/PressCard.tsx does; everything else is the kit.
 import type { JSX } from "nsh";

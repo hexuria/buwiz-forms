@@ -6,7 +6,7 @@
 //! The facts come from the print sheets (`html-frozen/<slug>/`: a
 //! writer-cells join puts a key in a comb cell, whose `data-comb-slots` is
 //! its capacity; a date join prints a key over MM, DD and YYYY combs),
-//! copied into `app/forms/print-cells.json` by the ignored test
+//! copied into `forms/print-cells.json` by the ignored test
 //! `write_print_cells`; `print_cells_match_the_print_sheets` keeps the copy
 //! in step. The page reads them from the schema:
 //!
@@ -44,13 +44,13 @@ use std::sync::OnceLock;
 use bir_core::forms::agent::{AgentFormDef, AgentFormKind, Binding};
 use serde_json::{Map, Value, json};
 
-/// `app/forms/print-cells.json` as written from the frozen writer-cells.json
+/// `forms/print-cells.json` as written from the frozen writer-cells.json
 /// files: form code -> key -> `{slots?, date?, printed}`.
 fn file_cells() -> &'static Value {
     static CELLS: OnceLock<Value> = OnceLock::new();
     CELLS.get_or_init(|| {
-        serde_json::from_str(include_str!("../../../../app/forms/print-cells.json"))
-            .expect("app/forms/print-cells.json is a JSON object")
+        serde_json::from_str(include_str!("../../../../forms/print-cells.json"))
+            .expect("forms/print-cells.json is a JSON object")
     })
 }
 
@@ -576,7 +576,7 @@ mod tests {
 
     /// What the print cells should hold, read from the sheets: from the
     /// frozen writer-cells.json files alone (`merged` false: what
-    /// `app/forms/print-cells.json` holds), or with bir-print's Rust-side
+    /// `forms/print-cells.json` holds), or with bir-print's Rust-side
     /// joins merged in (`merged` true: what the page uses).
     fn derived(merged: bool) -> Value {
         let root = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
@@ -630,10 +630,10 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "writes app/forms/print-cells.json from the print sheets"]
+    #[ignore = "writes forms/print-cells.json from the print sheets"]
     fn write_print_cells() {
         let path = format!(
-            "{}/../../app/forms/print-cells.json",
+            "{}/../../forms/print-cells.json",
             env!("CARGO_MANIFEST_DIR")
         );
         let text = serde_json::to_string(&derived(false)).expect("json") + "\n";
@@ -645,7 +645,7 @@ mod tests {
         assert_eq!(
             file_cells(),
             &derived(false),
-            "app/forms/print-cells.json is stale: run `cargo test -p bir-shell write_print_cells -- --ignored`"
+            "forms/print-cells.json is stale: run `cargo test -p bir-app-api write_print_cells -- --ignored`"
         );
         // What the page uses is the sheets with bir-print's Rust-side joins
         // merged (SHEET_JOINS): covered, not passed by omission.

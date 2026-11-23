@@ -1,4 +1,4 @@
-// The Form library (old app/shell/library.js renderLibrary): a search box, the scope ("Filed in <year>" or "All forms"),
+// The Form library (the old shell's library.js renderLibrary): a search box, the scope ("Filed in <year>" or "All forms"),
 // the frequency, the "n of 43" count, and a grid of form cards. A card opens its form as a sample: blank, with no period,
 // and never a recent return (openReturn keeps it out of Recent). The filters are this screen's signals; they live at
 // module level, as the old app kept them on the app object, so they survive a trip to another page.

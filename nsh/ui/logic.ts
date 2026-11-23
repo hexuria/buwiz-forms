@@ -1,5 +1,5 @@
 // The kit's pure helpers (no UI): avatar hues and initials, status chip wording, the filters of the pick lists.
-// Ported from app/shell/ui.js; tested in logic.test.ts.
+// Ported from the old shell's ui.js; tested in logic.test.ts.
 
 /** A stable hue (0-359) from a taxpayer id (TIN root) or a name. */
 export function hueFor(key: string): number {

@@ -17,12 +17,10 @@ INTERNAL_DEPENDENCY_VERSION_RE = re.compile(
 LOCKFILE_MANIFESTS = (
     Path("Cargo.toml"),
     Path("nsh/Cargo.toml"),
-    Path("crates/bir-shell/Cargo.toml"),
 )
 LOCKFILE_PATHS = (
     Path("Cargo.lock"),
     Path("nsh/Cargo.lock"),
-    Path("crates/bir-shell/Cargo.lock"),
 )
 ROLLBACK_PATHS = (
     Path("Cargo.toml"),

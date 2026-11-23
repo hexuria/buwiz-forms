@@ -1,4 +1,4 @@
-// What the update banner says for an update status (old app/shell/update.js promptFor). Pure.
+// What the update banner says for an update status (the old shell's update.js promptFor). Pure.
 import type { UpdateStatus } from "../../bir";
 import { VERIFY_REJECTED } from "./updater";
 

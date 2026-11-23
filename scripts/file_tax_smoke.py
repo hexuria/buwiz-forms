@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """End-to-end smoke for the /file-tax goal (called by check_file_tax_goal.sh).
 
-1. Starts `bir-headless serve` on a temp BIR_DATABASE_PATH + temp
+1. Starts `bir serve` on a temp BIR_DATABASE_PATH + temp
    GPUI_AGENT_RUNTIME_DIR (upstream gpui-agent discovery records), named
    with GPUI_AGENT_CONNECT_ID (EBIR_TEST_ENV=1; never the live database).
 2. Seeds the dummy test taxpayer (TIN 111111114, branch 00000) through the
    gpui-agent protocol, the same way the app's own profile editor does, and
-   checks `bir-headless status` finds the daemon through its record.
+   checks `bir status` finds the daemon through its record.
 3. Starts `bir-mcp` over stdio with no GPUI_AGENT_ADDR and no
    GPUI_AGENT_TOKEN: the app's token comes from a 0600 BIR_MCP_TOKENS file,
    and the app from the discovery records. Drives:
@@ -229,7 +229,7 @@ def wait_ready(addr: str, token: str, proc: subprocess.Popen, log: Path) -> None
     while time.monotonic() < deadline:
         if proc.poll() is not None:
             raise SmokeError(
-                f"bir-headless exited early ({proc.returncode}); log:\n"
+                f"bir exited early ({proc.returncode}); log:\n"
                 + (log.read_text(errors="replace") if log.exists() else "")
             )
         try:
@@ -242,7 +242,7 @@ def wait_ready(addr: str, token: str, proc: subprocess.Popen, log: Path) -> None
         except (OSError, ValueError, SmokeError) as error:
             last_error = str(error)
         time.sleep(0.2)
-    raise SmokeError(f"bir-headless never became ready at {addr}: {last_error}")
+    raise SmokeError(f"bir never became ready at {addr}: {last_error}")
 
 
 def seed_profile(addr: str, token: str) -> None:
@@ -276,7 +276,7 @@ def run(args: argparse.Namespace) -> None:
     runtime = work / "gpui-agent-runtime"
     runtime.mkdir(exist_ok=True)
     db_path = work / "bir_data.db"
-    log = work / "logs" / "bir-headless.log"
+    log = work / "logs" / "bir.log"
     token = secrets.token_hex(16)
     addr = f"127.0.0.1:{free_port()}"
 
@@ -300,7 +300,7 @@ def run(args: argparse.Namespace) -> None:
             "GPUI_AGENT_TOKEN": token,
             "GPUI_AGENT_CONNECT_ID": CONNECT_ID,
             "BIR_HEADLESS_LOG": str(log),
-            "BIR_HEADLESS_PID": str(work / "bir-headless.pid"),
+            "BIR_HEADLESS_PID": str(work / "bir.pid"),
         }
     )
     # bir-mcp gets the token only through a 0600 BIR_MCP_TOKENS file.
@@ -312,9 +312,9 @@ def run(args: argparse.Namespace) -> None:
     mcp_env = dict(base_env)
     mcp_env["BIR_MCP_TOKENS"] = str(tokens_file)
 
-    step(f"bir-headless serve on {addr} (db {db_path}, runtime {runtime})")
+    step(f"bir serve on {addr} (db {db_path}, runtime {runtime})")
     headless = subprocess.Popen(
-        [args.headless, "serve"],
+        [args.bir, "serve"],
         env=headless_env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -324,21 +324,21 @@ def run(args: argparse.Namespace) -> None:
         wait_ready(addr, token, headless, log)
         records = list((runtime / "hosts").glob("*.json"))
         if not records:
-            raise SmokeError(f"bir-headless wrote no discovery record in {runtime}/hosts")
+            raise SmokeError(f"bir wrote no discovery record in {runtime}/hosts")
         if not any(json.loads(r.read_text()).get("connect_id") == CONNECT_ID for r in records):
             raise SmokeError(f"no discovery record carries connect_id {CONNECT_ID}: {records}")
         seed_profile(addr, token)
         step("seeded test taxpayer")
 
-        # `bir-headless status` without GPUI_AGENT_ADDR finds the daemon
+        # `bir status` without GPUI_AGENT_ADDR finds the daemon
         # through its upstream discovery record (by GPUI_AGENT_CONNECT_ID).
         status_env = {k: v for k, v in headless_env.items() if k != "GPUI_AGENT_ADDR"}
         status = subprocess.run(
-            [args.headless, "status"], env=status_env, capture_output=True, text=True, timeout=30
+            [args.bir, "status"], env=status_env, capture_output=True, text=True, timeout=30
         )
         if status.returncode != 0 or '"ok":true' not in status.stdout.replace(" ", ""):
-            raise SmokeError(f"bir-headless status via discovery failed: {status.stdout}{status.stderr}")
-        step("bir-headless status found the daemon through discovery")
+            raise SmokeError(f"bir status via discovery failed: {status.stdout}{status.stderr}")
+        step("bir status found the daemon through discovery")
 
         # No GPUI_AGENT_ADDR, no GPUI_AGENT_TOKEN: bir-mcp finds BIR via the
         # discovery records and its token via BIR_MCP_TOKENS.
@@ -465,7 +465,7 @@ def run(args: argparse.Namespace) -> None:
         if mcp is not None:
             mcp.close()
         shutdown = subprocess.run(
-            [args.headless, "shutdown"],
+            [args.bir, "shutdown"],
             env=headless_env,
             capture_output=True,
             text=True,
@@ -477,16 +477,16 @@ def run(args: argparse.Namespace) -> None:
             headless.kill()
             headless.wait(timeout=5)
             raise SmokeError(
-                f"bir-headless did not exit after shutdown: {shutdown.stdout}{shutdown.stderr}"
+                f"bir did not exit after shutdown: {shutdown.stdout}{shutdown.stderr}"
             )
     if shutdown.returncode != 0:
-        raise SmokeError(f"bir-headless shutdown failed: {shutdown.stdout}{shutdown.stderr}")
+        raise SmokeError(f"bir shutdown failed: {shutdown.stdout}{shutdown.stderr}")
     step("shutdown ok")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--headless", required=True, help="path to the headless bir binary")
+    parser.add_argument("--bir", required=True, help="path to the bir binary")
     parser.add_argument("--mcp", required=True, help="path to bir-mcp")
     parser.add_argument("--work", required=True, help="scratch directory")
     try:

@@ -1,4 +1,4 @@
-// The taxpayer screens' pure rules (old app/shell/taxpayer.js): what a typed value is worth, what each sentence says.
+// The taxpayer screens' pure rules (the old shell's taxpayer.js): what a typed value is worth, what each sentence says.
 // No UI and no host calls; the clock comes in as a parameter where a rule needs today.
 import type { BranchFieldName, FormTemplateSummary, InboxState, SendGrant, SetupApplied, Taxpayer } from "../../bir";
 import { FACT_LABELS, joinNames, type FactName } from "../../lib/facts";

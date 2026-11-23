@@ -47,10 +47,6 @@ class InstallerSourcePolicyTests(unittest.TestCase):
             "Flags: ignoreversion recursesubdirs createallsubdirs"
         )
 
-    def test_real_installer_stage_dir_guard_is_supported(self) -> None:
-        installer = Path(__file__).resolve().parents[2] / "installer.iss"
-        self.assertEqual(validate_installer_sources(installer, self.root), 4)
-
     def test_full_line_comments_and_quoted_stage_macro_are_not_directives(
         self,
     ) -> None:

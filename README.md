@@ -52,8 +52,9 @@ macOS and Linux to verify an existing install), then:
 just run                  # development build with diagnostics
 ```
 
-Packaging recipes (`just _package-mac`, `just _package-linux`, `just exe`,
-`just msix`) are described on the platform pages.
+Packaging is described on the platform pages: `just _package-mac` and `just app`
+on macOS, `packaging/linux/build-packages.sh` on Linux, and on Windows
+`nsh package --target windows` and then `scripts/package_nsh_windows.ps1`.
 
 ## Headless command line (`bir`)
 
