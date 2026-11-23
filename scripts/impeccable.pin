@@ -7,6 +7,6 @@
 # IMPECCABLE_VERSION       crates.io version of the `impeccable` CLI
 # IMPECCABLE_SKILL_COMMIT  hexuria/impeccable-rust commit the skill/ files come from
 # CARGO_BINSTALL_VERSION   prebuilt cargo-binstall the Devin Linux blueprint installs
-IMPECCABLE_VERSION=0.2.0
+IMPECCABLE_VERSION=0.2.1
 IMPECCABLE_SKILL_COMMIT=6c52a01007b260b71183b7599e8afa0bc26799ed
 CARGO_BINSTALL_VERSION=1.24.0
