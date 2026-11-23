@@ -942,10 +942,8 @@ fn pr6_a_grid_of_loose_fields_is_unchanged_by_table_cells() {
         before["cols"][0]["t"], "money",
         "the loose field's type, not the cell's"
     );
-    let overrides: Value = serde_json::from_str(include_str!(
-        "../../../../../forms/schema-overrides.json"
-    ))
-    .unwrap();
+    let overrides: Value =
+        serde_json::from_str(include_str!("../../../../../forms/schema-overrides.json")).unwrap();
     let with_grid: Vec<&String> = overrides
         .as_object()
         .unwrap()

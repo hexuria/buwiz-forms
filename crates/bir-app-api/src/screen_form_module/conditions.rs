@@ -592,10 +592,7 @@ pub(super) mod tests {
     #[test]
     #[ignore = "writes forms/conditions.json from the rules corpus"]
     fn write_conditions() {
-        let path = format!(
-            "{}/../../forms/conditions.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
+        let path = format!("{}/../../forms/conditions.json", env!("CARGO_MANIFEST_DIR"));
         let text = serde_json::to_string(&derived()).expect("json") + "\n";
         std::fs::write(path, text).expect("conditions.json");
     }
