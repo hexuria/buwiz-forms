@@ -192,13 +192,22 @@ jobs:
         working-directory: buwiz-forms/nsh
         run: |
           failed=()
+          flaky=()
           ran=0
           while IFS= read -r file; do
             ran=$((ran + 1))
-            just test "$file" || failed+=("$file")
+            # A file that fails is run once more. The suites wait at most 5 s for the screen, and a runner busy with
+            # other jobs has overrun that in tests that pass everywhere else. A file that fails twice fails the job;
+            # one that passes the second time is named in a warning, so a real intermittent bug stays visible.
+            if ! just test "$file"; then
+              if just test "$file"; then flaky+=("$file"); else failed+=("$file"); fi
+            fi
           done < <(find . -mindepth 1 \( -path ./verify -o -name node_modules -o -name target -o -name '.*' \) -prune -o \( -name '*.test.ts' -o -name '*.test.tsx' \) -print | LC_ALL=C sort | awk -v n="$SHARDS" -v i="$SHARD" '(NR - 1) % n == i')
           echo "shard $SHARD of $SHARDS ran $ran test files"
           [ "$ran" -gt 0 ] || { echo "::error::this shard found no test files"; exit 1; }
+          if [ ${#flaky[@]} -gt 0 ]; then
+            printf '::warning::passed only on the second run: %s\n' "${flaky[@]}"
+          fi
           if [ ${#failed[@]} -gt 0 ]; then
             echo "failed in:"
             printf '  %s\n' "${failed[@]}"
@@ -363,13 +372,22 @@ jobs:
         working-directory: buwiz-forms/nsh
         run: |
           failed=()
+          flaky=()
           ran=0
           while IFS= read -r file; do
             ran=$((ran + 1))
-            just test "$file" || failed+=("$file")
+            # A file that fails is run once more. The suites wait at most 5 s for the screen, and a runner busy with
+            # other jobs has overrun that in tests that pass everywhere else. A file that fails twice fails the job;
+            # one that passes the second time is named in a warning, so a real intermittent bug stays visible.
+            if ! just test "$file"; then
+              if just test "$file"; then flaky+=("$file"); else failed+=("$file"); fi
+            fi
           done < <(find . -mindepth 1 \( -path ./verify -o -name node_modules -o -name target -o -name '.*' \) -prune -o \( -name '*.test.ts' -o -name '*.test.tsx' \) -print | LC_ALL=C sort | awk -v n="$SHARDS" -v i="$SHARD" '(NR - 1) % n == i')
           echo "shard $SHARD of $SHARDS ran $ran test files"
           [ "$ran" -gt 0 ] || { echo "::error::this shard found no test files"; exit 1; }
+          if [ ${#flaky[@]} -gt 0 ]; then
+            printf '::warning::passed only on the second run: %s\n' "${flaky[@]}"
+          fi
           if [ ${#failed[@]} -gt 0 ]; then
             echo "failed in:"
             printf '  %s\n' "${failed[@]}"
@@ -518,15 +536,21 @@ jobs:
           [string[]]$files = git ls-files -- '*.test.ts' '*.test.tsx' | Where-Object { $_ -notlike 'verify/*' }
           [Array]::Sort($files, [StringComparer]::Ordinal)
           $failed = @()
+          $flaky = @()
           $ran = 0
           for ($k = 0; $k -lt $files.Count; $k++) {
             if ($k % [int]$env:SHARDS -ne [int]$env:SHARD) { continue }
             $ran++
             nsh test "./$($files[$k])"
-            if ($LASTEXITCODE -ne 0) { $failed += $files[$k] }
+            if ($LASTEXITCODE -ne 0) {
+              # Run once more, as the macOS job does: twice failed fails the job, passed the second time is a warning.
+              nsh test "./$($files[$k])"
+              if ($LASTEXITCODE -ne 0) { $failed += $files[$k] } else { $flaky += $files[$k] }
+            }
           }
           "shard $env:SHARD of $env:SHARDS ran $ran test files"
           if ($ran -eq 0) { throw "this shard found no test files" }
+          $flaky | ForEach-Object { "::warning::passed only on the second run: $_" }
           if ($failed.Count -gt 0) {
             "failed in:"
             $failed | ForEach-Object { "  $_" }
