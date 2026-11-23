@@ -1,0 +1,19 @@
+Owner's picks, 2026-11-22 (pasted by the owner from the private picks page)
+
+bir-shell removal picks
+1 users = A (Only me and testers)
+2 identity = A (Replaces it)
+3 data = D (Start empty)
+4 formats = Mac .dmg; Windows Setup.exe; Windows .msi; Windows .msix; Linux .deb; Linux .rpm; Linux .tar.gz; Arch package; Linux install script
+4a winscope = A (For the signed-in user)
+5 update = A (It updates itself)
+5a host = A (hexuria/buwiz-forms)
+6 cli = A (Keep it)
+7 store = A (In this round)
+8 oldui = A (Delete them and move the form files)
+9 rox = C (It is finished)
+9a speed = A (Check the new app for the same lag)
+10 when = A (As soon as CI builds every download from the new app)
+11 allow = Push branches and open pull requests; Build packages on this Mac; Create the update signing key; Sign with your Developer ID here; Send a build to Apple to notarize; Run a test release on GitHub
+
+Question 11 was answered for an agent on the owner's own Mac. For a remote agent the same permissions apply through GitHub: see GOAL.md "Allowed / not allowed".
