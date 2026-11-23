@@ -1,0 +1,169 @@
+# Git-managed Devin environment blueprint for buwiz-forms: Linux, macOS and
+# Windows. Devin syncs this file into the repo's environment blueprint
+# (Settings > Environment > the buwiz-forms repo > Blueprint) and builds one
+# snapshot per platform block. Each block reads everything it needs from this
+# repository and the public hexuria/nsh repository, so no secrets are required.
+#
+# docs/platforms/devin-blueprint.yml is the copy other Devin accounts paste in;
+# keep the two in sync.
+#
+#   Linux:   GPUI desktop app, NSH app (Ubuntu 24.04 sidecar), Android emulator
+#   macOS:   GPUI desktop app, NSH app on macOS and the iOS Simulator
+#   Windows: GPUI desktop app, NSH app on the Android emulator
+#
+# All platforms: `just mock-account` serves a mock Buwiz account server on
+# 127.0.0.1:3008 for the app's Sign in (Android reaches it through
+# `adb reverse tcp:3008 tcp:3008`). See docs/platforms/devin-environment.md.
+
+# Linux (default platform): GPUI deps natively; NSH toolchain in a 24.04
+# sidecar image because Ubuntu 22.04's GTK 4.6 is below the required 4.14.
+# Android: SDK/NDK/emulator on the host, NSH Android builds in the sidecar.
+initialize: |
+  # --compositor: the VM's KWin runs without compositing; xcompmgr lets GPUI
+  # keep its own frame (without it the app falls back to the KWin frame).
+  bash scripts/setup-linux.sh --compositor
+  # NSH CLI, Android SDK/NDK/emulator, the "buwiz" AVD, ~/BuwizNsh/nsh2404.sh.
+  bash scripts/setup-linux-nsh.sh
+  # valgrind is for impeccable's verification tools (set up in maintenance).
+  sudo apt-get install -y valgrind
+  echo "ANDROID_HOME=$HOME/Android/Sdk" >> $ENVRC
+  echo "ANDROID_SDK_ROOT=$HOME/Android/Sdk" >> $ENVRC
+maintenance: |
+  # Re-pins ../nsh and rebuilds the nsh CLI and Android runtime only when
+  # NSH_PINNED_REF changed.
+  bash scripts/setup-linux-nsh.sh
+  # impeccable: everything lives here, not in initialize, because an inherited
+  # workspace runs only maintenance and $ENVRC is reset on every build.
+  # cargo-binstall comes prebuilt at the scripts/impeccable.pin version: its newest
+  # release needs a newer Rust than this repo pins, so it cannot be built here.
+  # cargo-binstall and impeccable go in Cargo's install bin directory (the same one
+  # scripts/setup-impeccable.sh uses), which may be off PATH here.
+  cargo_bin="${CARGO_INSTALL_ROOT:-${CARGO_HOME:-$HOME/.cargo}}/bin"
+  mkdir -p "$cargo_bin"
+  export PATH="$cargo_bin:$PATH"
+  binstall=$(sed -n 's/^CARGO_BINSTALL_VERSION=//p' scripts/impeccable.pin)
+  [ "$(cargo-binstall -V 2>/dev/null)" = "$binstall" ] || curl -fsSL "https://github.com/cargo-bins/cargo-binstall/releases/download/v$binstall/cargo-binstall-$(uname -m)-unknown-linux-musl.tgz" | tar -xz -C "$cargo_bin"
+  # The CLI and skill at their pins (a no-op when both match).
+  bash scripts/setup-impeccable.sh
+  # A new CLI or cargo-binstall may pin new verification tool versions, so re-sync
+  # the host tools whenever either differs from the last sync.
+  stamp="${CARGO_HOME:-$HOME/.cargo}/.impeccable-host-setup"
+  want="$(impeccable --version) / cargo-binstall $binstall"
+  if [ "$(cat "$stamp" 2>/dev/null)" != "$want" ]; then
+    IMPECCABLE_BACKEND=host impeccable setup host --with-kani && printf '%s\n' "$want" > "$stamp"
+  fi
+  # The host backend keeps runs off impeccable's Docker toolbox, whose Rust is older
+  # than this repo's rust-toolchain.toml.
+  echo "IMPECCABLE_BACKEND=host" >> $ENVRC
+knowledge:
+  - name: startup
+    contents: |
+      pgrep xcompmgr || (DISPLAY=:0 xcompmgr &)   # GPUI keeps its own frame; without it the app uses the KWin frame
+      GPUI app: DISPLAY=:0 VK_ICD_FILENAMES=/dev/null BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 just run   # VK_ICD_FILENAMES avoids stale llvmpipe frames
+      # Cairo avoids stale pixels in the Linux NSH GTK window.
+      NSH app: ~/BuwizNsh/nsh2404.sh env GSK_RENDERER=cairo nsh run --target linux --port 8791   # separate from Android; sign-in bypassed, no account mock needed
+  - name: android
+    contents: |
+      DISPLAY=:0 ~/Android/Sdk/emulator/emulator -avd buwiz -no-snapshot-save -no-audio -gpu swiftshader_indirect &
+      ~/Android/Sdk/platform-tools/adb wait-for-device shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 2; done'
+      just mock-account & ~/Android/Sdk/platform-tools/adb reverse tcp:3008 tcp:3008   # app's Sign in reaches the host account server
+      ~/BuwizNsh/nsh2404.sh nsh run --target android --port 8792   # separate from desktop; first run builds 3 ABIs (~10 min)
+  - name: test
+    contents: |
+      xvfb-run -a just test && ~/BuwizNsh/nsh2404.sh nsh check   # the sidecar has no just; nsh2404.sh runs from nsh/
+  - name: verify
+    contents: |
+      impeccable doctor   # shows where each verification tool runs (host or toolbox)
+      IMPECCABLE_BACKEND=host is set in the environment: the impeccable Docker toolbox's Rust is older than this repo's rust-toolchain.toml, so toolbox runs cannot build the workspace.
+---
+# macOS: GPUI desktop app, NSH app on macOS and the iOS Simulator (no Android).
+runs-on: macos
+initialize: |
+  # Homebrew rustup's proxies must win over pinned toolchain links, or the
+  # NSH checkout's rust-toolchain.toml is ignored.
+  export PATH="/opt/homebrew/opt/rustup/bin:$PATH"
+  brew install just
+  bash scripts/setup-macos.sh
+  rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+  [ -d ../nsh ] || git clone https://github.com/hexuria/nsh ../nsh
+  (cd ../nsh && rustup target add aarch64-apple-ios aarch64-apple-ios-sim)
+  grep -q opt/rustup/bin ~/.zprofile 2>/dev/null || echo 'export PATH="/opt/homebrew/opt/rustup/bin:$HOME/BuwizNsh/tools/bin:$PATH"' >> ~/.zprofile
+maintenance: |
+  export PATH="/opt/homebrew/opt/rustup/bin:$PATH" CARGO_INCREMENTAL=0
+  # NSH at the commit CI pins; the nsh CLI must be built from the same checkout.
+  ref=$(sed -n 's/^ *NSH_PINNED_REF: *//p' .github/workflows/nsh.yml)
+  (cd ../nsh && git fetch origin "$ref" && git checkout --detach "$ref")
+  ~/BuwizNsh/tools/bin/nsh --version 2>/dev/null | grep -q "(${ref:0:7})" || (cd ../nsh && cargo install --locked --path crates/nsh-cli --root ~/BuwizNsh/tools)
+  # Free disk for the GPUI + NSH macOS/iOS-sim builds.
+  rm -rf ~/Library/Developer/DVTDownloads; brew cleanup -s >/dev/null 2>&1 || true; rm -rf "$(brew --cache)"
+knowledge:
+  - name: startup
+    contents: |
+      GPUI desktop app: BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 just run
+      NSH app on macOS: just nsh-run   # sign-in bypassed, no account mock needed
+  - name: ios
+    contents: |
+      just mock-bir & just mock-relay &   # sign-in bypassed, no account mock needed
+      cd nsh; PATH=~/BuwizNsh/tools/bin:$PATH CARGO_TARGET_DIR=~/BuwizNsh/target-nsh SIMCTL_CHILD_BIR_RELAY_URL=http://127.0.0.1:8787 SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 SIMCTL_CHILD_BIR_AUTH_BYPASS=1 nsh run --target ios
+  - name: test
+    contents: |
+      just nsh-check && just nsh-build && just nsh-test   # CARGO_INCREMENTAL=0 saves disk
+---
+# Windows: GPUI desktop app, Android SDK + emulator, NSH CLI.
+runs-on: windows
+shell: powershell
+initialize:
+  - name: desktop toolchain (VS Build Tools, Rust, OpenSSL, just, Perl, NASM)
+    run: |
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
+      exit $LASTEXITCODE
+  - name: Android SDK, NDK, emulator and AVD
+    run: |
+      $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-android-windows.ps1
+      exit $LASTEXITCODE
+  - name: package and launch Android with the mock account server
+    run: |
+      $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1 -SkipIfRebootPending
+      exit $LASTEXITCODE
+maintenance:
+  - name: NSH checkout and nsh CLI at a new pin
+    run: |
+      $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+      $pin = ((Select-String -Path .github\workflows\nsh.yml -Pattern 'NSH_PINNED_REF:\s*(\S+)').Matches[0].Groups[1].Value)
+      git -C ..\nsh fetch origin $pin
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      git -C ..\nsh checkout --detach $pin
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      $have = if (Test-Path "$HOME\BuwizNsh\tools\bin\nsh.exe") { & "$HOME\BuwizNsh\tools\bin\nsh.exe" --version }
+      $runtimeMissing = @('android\bin-dev', 'android\bin', 'runtime\android\dev', 'runtime\android\release') | Where-Object {
+        $runtimePath = "$HOME\BuwizNsh\tools\$_"
+        if (-not (Test-Path "$runtimePath\classes.dex") -or -not (Test-Path "$runtimePath\lib\x86_64\libnsh.so") -or -not (Test-Path "$runtimePath\nsh-ref")) { $true }
+        else {
+          $builtRef = Get-Content "$runtimePath\nsh-ref" -Raw
+          -not $builtRef -or $builtRef.Trim() -ne $pin
+        }
+      }
+      if ("$have" -notlike "*($($pin.Substring(0,7)))*" -or $runtimeMissing) {
+        powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-android-windows.ps1
+        exit $LASTEXITCODE
+      }
+knowledge:
+  - name: startup
+    contents: |
+      GPUI desktop (separate process, repository root):
+        $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+        $env:OPENSSL_DIR = [Environment]::GetEnvironmentVariable('OPENSSL_DIR','User')
+        $env:OPENSSL_LIB_DIR = [Environment]::GetEnvironmentVariable('OPENSSL_LIB_DIR','User')
+        $env:BUWIZ_NO_KEYCHAIN=1; $env:EBIR_TEST_ENV=1; $env:BIR_SFTP_DRY_RUN=1; just run
+  - name: android
+    contents: |
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1
+      # If setup enabled WHPX during this boot, run Restart-Computer first, then rerun the launcher.
+      # Repack/strip/sign x86_64, cold boot with WHPX, wait for sys.boot_completed, start mock-account --auto-approve,
+      # adb reverse tcp:3008 tcp:3008, adb push + pm install, launch and sign in by accessibility label. No authentication bypass.
+      # Setup provisions real development AND release runtimes. See docs/platforms/devin-environment.md.
+  - name: test
+    contents: |
+      cargo test -p bir-core ; $env:Path = "$HOME\BuwizNsh\tools\bin;$env:Path" ; cd nsh ; nsh check -v ; nsh build

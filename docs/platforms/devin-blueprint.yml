@@ -1,6 +1,8 @@
 # Devin environment blueprint for buwiz-forms: Linux, macOS and Windows.
 #
-# Paste this whole file into the repository's blueprint on any Devin account
+# This repo's own blueprint is git-managed at `.devin/blueprint.yaml`; keep
+# the two in sync. For any other Devin account, paste this whole file into
+# the repository's blueprint
 # (Settings > Environment > the buwiz-forms repo > Blueprint) and save; Devin
 # builds one snapshot per platform block. Each block reads everything it needs
 # from this repository and the public hexuria/nsh repository, so no secrets are
