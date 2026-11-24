@@ -1,0 +1,67 @@
+{
+  "code": "2553",
+  "verdict": "tweak",
+  "summary": "Item 11 Registered Address clips the last letter ('MAKATI CIT') because print-overrides/2553-1999.css forces 7.5px !important. All Part II money amounts (Items 14C-18C, 14E-18E, 19, 20A-20C, 21, 22A-22D, 23) print left-aligned away from the pre-printed decimal dots, and zero/empty boxes print '0.00' instead of blank. Row 18 values entered without picking an ATC combobox option display on screen ('67,890,123.45 · 5') but print '0.00'. Item 17D rate prints '5.00' left-aligned (no '%'), Item 10 phone overflow leaves comb-tick stubs, and screen Row 18 label says '1 rows'.",
+  "defects": [
+    {
+      "id": "2553-print-01",
+      "surface": "print",
+      "where": "Page 1, Part I Item 11 (Registered Address, #p1c29-i)",
+      "what": "Long registered address is clipped at the right edge ('...MAKATI CIT', cutting off the 'Y') because print-overrides/2553-1999.css forces font-size:7.5px !important over bir-print's dynamic shrink-to-fit.",
+      "before": "form-review/2553/before/print-p1.png",
+      "official": "form-review/2553/official/page-1.png",
+      "status": "open"
+    },
+    {
+      "id": "2553-print-02",
+      "surface": "print",
+      "where": "Page 1, Part II Items 14C-18C, 14E-18E, 19, 20A-20C, 21, 22A-22D, and 23 (Computation of Tax)",
+      "what": "Every Part II money amount prints left-aligned instead of right-aligned (leaving the pre-printed decimal dot stranded on the right), and zero/empty boxes (18C, 18E, 20A, 22A-22D) print '0.00' instead of blank.",
+      "before": "form-review/2553/before/print-p1.png",
+      "official": "form-review/2553/official/page-1.png",
+      "status": "open"
+    },
+    {
+      "id": "2553-print-03",
+      "surface": "print",
+      "where": "Page 1, Part II Row 18 (18C, 18D, 18E)",
+      "what": "Row 18 amount (67,890,123.45) and rate (5) entered by hand on screen display in the row summary ('67,890,123.45 · 5') when no ATC is picked from the combobox, but compute no tax due and print '0.00' in 18C/18D/18E.",
+      "before": "form-review/2553/before/print-p1.png",
+      "official": "form-review/2553/official/page-1.png",
+      "status": "open"
+    },
+    {
+      "id": "2553-print-04",
+      "surface": "print",
+      "where": "Page 1, Part II Item 17D and 18D (Tax Rate)",
+      "what": "Item 17D prints '5.00' left-aligned with no '%' sign (unlike centered '5 %' in 14D-16D), and empty 18D prints '0.00'.",
+      "before": "form-review/2553/before/print-p1.png",
+      "official": "form-review/2553/official/page-1.png",
+      "status": "open"
+    },
+    {
+      "id": "2553-print-05",
+      "surface": "print",
+      "where": "Page 1, Part I Item 10 (Telephone Number, 7-slot comb)",
+      "what": "11-digit mobile number '09171234567' overflows the 7-slot comb; the shared white band leaves short vertical comb-tick stubs visible at the bottom of the box.",
+      "before": "form-review/2553/before/print-p1.png",
+      "official": "form-review/2553/official/page-1.png",
+      "status": "open"
+    },
+    {
+      "id": "2553-screen-01",
+      "surface": "screen",
+      "where": "Part II — Row 18 table header",
+      "what": "Row counter displays '1 rows' instead of '1 row'.",
+      "before": "form-review/2553/before/screen-03-part-2.png",
+      "official": "form-review/2553/official/page-1.png",
+      "status": "open"
+    }
+  ],
+  "hand_entry_verified": [
+    "Rows 14-17 added via '+ Add row' drawer on form page (txt14C=248501750.50, txt15C=185420300.75, txt16C=94310500.25, txt17C=120750000.00, txt17D=5)",
+    "Row 18 added via '+ Add row' drawer on form page (txt18C=67890123.45, txt18D=5)"
+  ],
+  "growables": [],
+  "notes": "2553 has no repeatable overflow schedules (fixed 5 rows 14-18; official page 2 is static instructions). Saved in scratch DB audit-3b.db as draft id=2 and reloaded via Filings UI before print."
+}
