@@ -125,9 +125,11 @@ def capture_form(code, mode):
     if isinstance(saved_raw, dict):
         open_args = dict(saved_raw.get("open_args") or {})
         saved = saved_raw.get("passes") or []
+        ui_rows = saved_raw.get("ui_rows") or []
     else:
         open_args = {}
         saved = saved_raw
+        ui_rows = []
     open_args.setdefault("code", code)
     open_args.setdefault("year", 2025)
     open_args.setdefault("tin", DEMO_PROFILE["tin"])
@@ -158,6 +160,63 @@ def capture_form(code, mode):
                 refused2 = res2.get("result", {}).get("refused") or {}
                 print(f"  pass {i} retry: sent={len(retry_fields)} applied={len(applied2)} refused={len(refused2)}")
                 time.sleep(0.3)
+
+    for block in ui_rows:
+        sec_prefix = block["section"]
+        rows_list = block["rows"]
+        snap = run_agent("rev-win", "snapshot", "--refs")
+        # Find the nav sidebar button (listed under `nav`) rather than collapsed section card
+        sec_ref = None
+        in_nav = False
+        for line in snap.splitlines():
+            if " nav" in line:
+                in_nav = True
+            if in_nav and f'button "{sec_prefix}' in line:
+                sec_ref = line.strip().split()[0]
+                break
+        if not sec_ref:
+            for line in snap.splitlines():
+                if f'button "{sec_prefix}' in line:
+                    sec_ref = line.strip().split()[0]
+                    break
+        if sec_ref:
+            run_agent("rev-win", "press", sec_ref, check=False)
+            time.sleep(0.5)
+        added = 0
+        for r_idx, row_vals in enumerate(rows_list, 1):
+            snap = run_agent("rev-win", "snapshot", "--refs")
+            add_ref = None
+            for line in snap.splitlines():
+                if 'button "Add row"' in line:
+                    add_ref = line.strip().split()[0]
+                    break
+            if not add_ref:
+                print(f"  ui_rows {sec_prefix} row {r_idx}: no Add row button")
+                break
+            run_agent("rev-win", "press", add_ref, check=False)
+            time.sleep(0.35)
+            dsnap = run_agent("rev-win", "snapshot", "--refs")
+            in_dlg = False
+            tbs = []
+            done_ref = None
+            for line in dsnap.splitlines():
+                if " dialog" in line:
+                    in_dlg = True
+                if in_dlg:
+                    m = re.match(r'\s*(@e\d+)\s+textbox\s+"([^"]+)"', line)
+                    if m:
+                        tbs.append((m.group(1), m.group(2)))
+                    if 'button "Done"' in line:
+                        done_ref = line.strip().split()[0]
+                        break
+            for (tb_ref, tb_label), val in zip(tbs, row_vals):
+                run_agent("rev-win", "fill", tb_ref, str(val), check=False)
+                time.sleep(0.1)
+            if done_ref:
+                run_agent("rev-win", "press", done_ref, check=False)
+                time.sleep(0.35)
+                added += 1
+        print(f"  ui_rows {sec_prefix}: added {added}/{len(rows_list)} rows")
 
     invoke("form.save_draft")
     time.sleep(0.8)

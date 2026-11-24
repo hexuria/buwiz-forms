@@ -1,0 +1,50 @@
+{
+  "open_args": {
+    "year": 2025,
+    "period": 1
+  },
+  "passes": [
+    {
+      "frm2550m:OptAmendedYN": "1",
+      "frm2550m:txtSheets": "10",
+      "frm2550m:OptSpecialTax": "1",
+      "frm2550m:lstSpecialTax": "1",
+      "AtcCode1": "true",
+      "frm2550m:txtTax13A": "45678901.25",
+      "frm2550m:txtTax14": "23456789.50",
+      "frm2550m:txtTax15": "12345678.00",
+      "frm2550m:txtTax17A": "5432100.75",
+      "frm2550m:txtTax17B": "2345678.50",
+      "frm2550m:txtTax17C": "1234567.25",
+      "frm2550m:txtTax17D": "987654.00",
+      "frm2550m:txtTax17E": "456789.50",
+      "frm2550m:txtTax18E": "34567890.00",
+      "frm2550m:txtTax18G": "12345678.50",
+      "frm2550m:txtTax18I": "8765432.25",
+      "frm2550m:txtTax18K": "4321098.75",
+      "frm2550m:txtTax18M": "2109876.00",
+      "frm2550m:txtTax18N": "1543210.50",
+      "frm2550m:txtTax20D": "876543.25",
+      "frm2550m:txtTax20E": "654321.00",
+      "frm2550m:txtTax23D": "1234567.50",
+      "frm2550m:txtTax23E": "543210.25",
+      "frm2550m:txtTax23F": "321098.75",
+      "txtTaxableSaleSched4": "15000000.00",
+      "txtlessStdTaxSched4": "1050000.00",
+      "txtTotSaleSched5": "85000000.00"
+    }
+  ],
+  "ui_rows": [
+    {
+      "section": "Schedule 2",
+      "rows": [
+        ["INDUSTRIAL CNC MILLING EQUIPMENT UNIT 1 CORP", "150000.00", "18000.00"],
+        ["INDUSTRIAL CNC MILLING EQUIPMENT UNIT 2 CORP", "160000.00", "19200.00"],
+        ["INDUSTRIAL CNC MILLING EQUIPMENT UNIT 3 CORP", "170000.00", "20400.00"],
+        ["INDUSTRIAL CNC MILLING EQUIPMENT UNIT 4 CORP", "180000.00", "21600.00"],
+        ["OVERFLOW ROW 5 HEAVY LATHE MACHINE MODEL X", "140000.00", "16800.00"],
+        ["OVERFLOW ROW 6 HYDRAULIC PRESS UNIT MODEL Z", "130000.00", "15600.00"]
+      ]
+    }
+  ]
+}
