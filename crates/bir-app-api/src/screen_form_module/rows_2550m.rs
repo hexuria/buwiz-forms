@@ -119,12 +119,8 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<(Schedule, usize, u
 pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
     if kind.form_code() == "2550M" {
         match key {
-            "frm2550m:txtTax13A"
-            | "frm2550m:txtTax18E"
-            | "frm2550m:txtTax18G"
-            | "frm2550m:txtTax18I"
-            | "frm2550m:txtTax18K"
-            | "frm2550m:txtTax18N" => return Some(0),
+            "frm2550m:txtTax13A" | "frm2550m:txtTax18E" | "frm2550m:txtTax18G"
+            | "frm2550m:txtTax18I" | "frm2550m:txtTax18K" | "frm2550m:txtTax18N" => return Some(0),
             "frm2550m:txtTax13B"
             | "txtlessStdTaxSched4"
             | "frm2550m:txtTax18F"
