@@ -1,0 +1,59 @@
+{
+  "code": "2200P",
+  "verdict": "tweak",
+  "summary": "2200P prints all 25 preprinted schedule rows and both 'Others' write-in rows correctly, but items 10/11 print raw PSGC codes where the paper wants spelled-out names, the Others-row description renders as unreadable microtext, and the Part IV screen cards leak a developer fixture path.",
+  "defects": [
+    {
+      "id": "P1",
+      "surface": "print",
+      "where": "Page 1, items 10 Place of Production and 11 Place of Removal",
+      "what": "Prints raw excise place codes '130000000 | 137600000 | 137602000' in the Region/Province/City cells; the official cells are free-text name cells and 2200AN/2200M spell the same values out as NCR | NCR SECOND DISTRICT | CITY OF MAKATI. Same family defect as 2200A and 2200C.",
+      "severity": "medium",
+      "picture": "mac/crop-places-codes.png"
+    },
+    {
+      "id": "P2",
+      "surface": "print",
+      "where": "Page 2, Schedule 1, 'Others (specify)' rows 1-2",
+      "what": "The user-entered Description prints as ~4px microtext (unreadable at print size), the Tax Bracket/Unit of Measure prints user text in oversized unstyled caps ('LITERS' vs 'Per Liter'), and Applicable Rate prints a bare number ('24.00') where preprinted rows show formatted 'P10.00'.",
+      "severity": "medium",
+      "picture": "mac/crop-others-rows.png"
+    },
+    {
+      "id": "P3",
+      "surface": "screen",
+      "where": "Form page, Part IV - Details of Payment, items 25-28 cards",
+      "what": "Each card shows developer text leaking a repo fixture path: 'No box: the official program keeps Part IV disabled (rules/forms/2200p-v2020/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it.' Same defect family as 2200C C2 and 2200M M2.",
+      "severity": "medium",
+      "picture": "mac/screen-part4-fixture.png"
+    },
+    {
+      "id": "P4",
+      "surface": "print",
+      "where": "Page 2, Schedule 1",
+      "what": "The runtime accepts 16 'Others' rows (26-41) and form.fill stores values for all of them, but only the 2 paper write-in rows print and the rest are silently dropped. Not reachable by typing in the UI (the Others group offers exactly 2 rows, matching the paper).",
+      "severity": "low",
+      "picture": "mac/print-p2.png"
+    },
+    {
+      "id": "P5",
+      "surface": "print",
+      "where": "Page 2 header, TIN + Taxpayer's Name",
+      "what": "TIN and name run together with no separator or box edge: '00012345300000SANTOS-DELOS REYES-VILLANUEVA...'. Same as 2200C C4.",
+      "severity": "low",
+      "picture": "mac/crop-tin-name.png"
+    },
+    {
+      "id": "P6",
+      "surface": "print",
+      "where": "Page 1, item 19 Payment on Returns Previously Filed",
+      "what": "Prints '0.00' in the comb for an unset amount (lone-zero pattern, same as 2200A A4 / 2200M M5).",
+      "severity": "low",
+      "picture": "mac/print-p1.png"
+    }
+  ],
+  "entered_by_hand": "Part III item 17A typed as 8,888,777.66 and printed correctly; Schedule 1 XP010 row 1 'Place of Removal' typed as 'DEPOT ALPHA 1' and 'Locally Manufactured/Produced' typed as 6,111,222.33 - both printed correctly (no decimal corruption this time).",
+  "open_questions": [],
+  "checked_by_hand": "Re-opened the saved draft, re-opened print preview and Save as PDF, and re-inspected items 10/11, the Others rows and the TIN/name header at zoom after the first pass; P1, P2, P3 and P5 reproduced on the second look.",
+  "notes": "Official sheet has exactly 25 preprinted product rows plus 2 'Others (specify)' write-in rows - the app matches the paper. Item 16 total (239,944,455.32) equals the schedule's printed rows only. Computed penalties 21A-21C print 0.00 because the Dec-2026 period is not yet due; the draft dates itself 12/31/2026 and validation flags the future date. 'Not on the printed sheet' Line of Business card is clean user-facing wording. Item 19 is hidden on screen when the return is not amended."
+}
