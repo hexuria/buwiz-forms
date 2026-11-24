@@ -1,0 +1,32 @@
+{
+  "form": "1701A",
+  "branch": "try/forms-neon-1",
+  "commit": "2f71cd11",
+  "platform": "macOS 26.6.2 arm64 (WKWebView preview + Save-as-PDF)",
+  "verdict": "macOS matches Linux: yes",
+  "fill": {
+    "method": "replayed the Linux agent's fixture form-review/scripts/payloads/payload-1701A.json via form.fill: 112/112 applied, 0 refused; taxpayer_name then patched via sqlite json_set to the Linux persona's long name; draft reopened",
+    "persona": "SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA / TIN 000-123-453-00000 / RDO 008 / ZIP 1003; spouse DELA CRUZ-VILLANUEVA, ROBERTO MIGUEL ANTONIO, RDO 008; joint filing; FTN-998877665544 both"
+  },
+  "pages": 2,
+  "page_size": "A4",
+  "comparison_vs_linux_after": {
+    "layout": "identical: same 2-page A4 folio sheet, bands, combs, page break after Part III, Part V spouse block at p2 bottom",
+    "values": "all printed values identical: item 20 tax due 5,336,078.0 (B col), item 23 installment 7,274,916.7/7,592,829.9, IV.A amounts, IV.C credits 57-63, item 63 'DEMO ENTRY 64 PHILIPPINE ENTERPRISE' with the padded specify fix, spouse name overflow in item 70",
+    "carried_over_linux_defects": [
+      "1701A-P1: long name (item 8) and address (item 9) overflow comb ticks, item 70 spouse name overflows - identical on mac (shared comb fix pending)",
+      "1701A-P2: computed items 21/22/24-30 and IV.A/C totals >8 digits print blank - identical",
+      "1701A-P3 fixed: item 63 specify text has the padding fix on mac too",
+      "IV.B (8% rate section) prints empty on both - by design, ATC II012 graduated selected"
+    ]
+  },
+  "saved_pdf_defects": {
+    "class": "mac-only capture-zoom text-metrics defect fixed on try/print-zoom-fix @e45bd5fa",
+    "seen": []
+  },
+  "notes": [
+    "no zoom-metric overlap or clipped text found in the saved PDF at the name/address runs, receipt/stamp lines, item-63 specify, or ATC check rows - this sheet's small runs fit even at the 0.878 capture zoom",
+    "'Differs from your profile' banner after the name patch; 'Use profile values' NOT clicked"
+  ],
+  "files": ["print-p1.png", "print-p2.png", "pdf-p-1.png", "pdf-p-2.png"]
+}
