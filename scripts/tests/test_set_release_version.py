@@ -178,6 +178,73 @@ class SetReleaseVersionTests(unittest.TestCase):
             for path, content in before.items():
                 self.assertEqual(path.read_bytes(), content, str(path))
 
+    def test_the_rules_manifest_is_regenerated_and_checked_after_the_lockfiles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_tree(root)
+            (root / "crates/bir-rules-codegen").mkdir(parents=True)
+            (root / "crates/bir-rules-codegen/Cargo.toml").write_text("[package]\n", encoding="utf-8")
+            with mock.patch.object(_MODULE.subprocess, "run") as run:
+                run.return_value = subprocess.CompletedProcess([], 0)
+                update_version(root, "1.2.3")
+            commands = [call.args[0] for call in run.call_args_list]
+            self.assertEqual(
+                commands[-2:],
+                [
+                    ["cargo", "run", "--locked", "-p", "bir-rules-codegen", "--", "generate"],
+                    ["cargo", "run", "--locked", "-p", "bir-rules-codegen", "--", "check"],
+                ],
+            )
+            self.assertTrue(all(command[1] == "metadata" for command in commands[:-2]))
+
+    def test_a_tree_without_the_rules_generator_runs_no_generator(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_tree(root)
+            with mock.patch.object(_MODULE.subprocess, "run") as run:
+                run.return_value = subprocess.CompletedProcess([], 0)
+                update_version(root, "1.2.3")
+            self.assertTrue(all(call.args[0][1] == "metadata" for call in run.call_args_list))
+
+    def test_a_failed_rules_check_rolls_everything_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_tree(root)
+            (root / "crates/bir-rules-codegen").mkdir(parents=True)
+            (root / "crates/bir-rules-codegen/Cargo.toml").write_text("[package]\n", encoding="utf-8")
+            manifest = root / "crates/bir-rules/src/generated/manifest.json"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_bytes(b'{"generator":{"version":"0.2.0"}}')
+            tracked = [root / "Cargo.toml", root / "nsh/nsh.json", manifest]
+            before = {path: path.read_bytes() for path in tracked}
+
+            def fail_on_check(command, **_kwargs):
+                if command[:2] == ["cargo", "run"] and command[-1] == "generate":
+                    manifest.write_bytes(b'{"generator":{"version":"1.2.3"}}')
+                if command[:2] == ["cargo", "run"] and command[-1] == "check":
+                    return subprocess.CompletedProcess([], 1, stderr="noise\nrules check failed: digest")
+                return subprocess.CompletedProcess([], 0)
+
+            with mock.patch.object(_MODULE.subprocess, "run") as run:
+                run.side_effect = fail_on_check
+                with self.assertRaises(RuntimeError) as failure:
+                    update_version(root, "1.2.3")
+            self.assertIn("bir-rules-codegen check failed: rules check failed: digest", str(failure.exception))
+            for path, content in before.items():
+                self.assertEqual(path.read_bytes(), content, str(path))
+
+    def test_tests_that_name_the_old_version_are_listed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_tree(root)
+            (root / "nsh/shell").mkdir()
+            (root / "nsh/shell/about.test.tsx").write_text(
+                'expect(texts).toContain("Version 0.2.0");\nexpect(n).toBe(10.2.0.1);\n', encoding="utf-8"
+            )
+            (root / "nsh/shell/other.test.ts").write_text('expect(v).toBe("1.0.0");\n', encoding="utf-8")
+            self.assertEqual(_MODULE.current_version(root), "0.2.0")
+            self.assertEqual(_MODULE.tests_naming(root, "0.2.0"), ["nsh/shell/about.test.tsx:1"])
+
 
 if __name__ == "__main__":
     unittest.main()

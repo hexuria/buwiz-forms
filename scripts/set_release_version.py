@@ -22,6 +22,11 @@ LOCKFILE_PATHS = (
     Path("Cargo.lock"),
     Path("nsh/Cargo.lock"),
 )
+# The rules generator stamps its own version (the workspace's) into this manifest, and CI's
+# `bir-rules-codegen check` compares the two. A bump that leaves it behind fails the first
+# pull request that touches the core crates (it happened with 0.2.1).
+RULES_CODEGEN_MANIFEST = Path("crates/bir-rules-codegen/Cargo.toml")
+GENERATED_RULES_MANIFEST = Path("crates/bir-rules/src/generated/manifest.json")
 ROLLBACK_PATHS = (
     Path("Cargo.toml"),
     Path("crates/bir-core/Cargo.toml"),
@@ -29,6 +34,7 @@ ROLLBACK_PATHS = (
     Path("nsh/Cargo.toml"),
     Path("nsh/nsh.json"),
     *LOCKFILE_PATHS,
+    GENERATED_RULES_MANIFEST,
 )
 
 
@@ -111,6 +117,45 @@ def refresh_lockfiles(root: Path) -> None:
             raise RuntimeError(f"cargo metadata failed for {relative}: {detail}")
 
 
+def refresh_generated_rules(root: Path) -> None:
+    """Regenerate the rules crate's manifest so it names the new version, then check it."""
+    if not (root / RULES_CODEGEN_MANIFEST).exists():
+        return
+    for step in ("generate", "check"):
+        result = subprocess.run(
+            ["cargo", "run", "--locked", "-p", "bir-rules-codegen", "--", step],
+            cwd=root,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or "").strip().splitlines()[-1:] or ["no output"]
+            raise RuntimeError(f"bir-rules-codegen {step} failed: {detail[0]}")
+
+
+def current_version(root: Path) -> str | None:
+    match = CARGO_VERSION_RE.search((root / "Cargo.toml").read_bytes().decode("utf-8"))
+    return match.group(0).split('"')[1] if match else None
+
+
+def tests_naming(root: Path, version: str) -> list[str]:
+    """Test files under nsh/ that still spell out `version` (they compare it with the running app)."""
+    found = []
+    nsh = root / "nsh"
+    if not nsh.is_dir():
+        return found
+    needle = re.compile(rf"(?<![\d.]){re.escape(version)}(?![\d.])")
+    for path in sorted(nsh.rglob("*.test.ts*")):
+        if ".nsh" in path.parts or "node_modules" in path.parts:
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            if needle.search(line):
+                found.append(f"{path.relative_to(root).as_posix()}:{number}")
+    return found
+
+
 def snapshot_files(root: Path) -> dict[Path, bytes | None]:
     snapshot = {}
     for relative in ROLLBACK_PATHS:
@@ -134,6 +179,7 @@ def update_version(root: Path, version: str) -> None:
     try:
         set_version(root, version)
         refresh_lockfiles(root)
+        refresh_generated_rules(root)
     except BaseException as error:
         try:
             restore_files(root, snapshot)
@@ -148,10 +194,17 @@ def main(argv: list[str]) -> int:
         return 2
     root = Path(__file__).resolve().parents[1]
     try:
+        previous = current_version(root)
         update_version(root, argv[1])
     except (OSError, RuntimeError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    if previous and previous != argv[1]:
+        stale = tests_naming(root, previous)
+        if stale:
+            print(f"These tests still name {previous}; change them to {argv[1]} before you commit:", file=sys.stderr)
+            for place in stale:
+                print(f"  {place}", file=sys.stderr)
     return 0
 
 
