@@ -11,10 +11,9 @@ there, but nobody has run it on that platform.
 
 | Feature | Status | Notes |
 |---|---|---|
-| Profiles, tax form library, editors, Validate, Save draft | ✓ | All 43 forms. |
-| Submission queue and dry run (SFTP upload, IMAP receipts) | ✓ |  |
-| Encrypted database (SQLCipher) | ✓ |  |
-| Database key storage | partial | Needs PR #85. Until it is merged the key is not kept between launches. After it: Secret Service, or a key file when there is none. |
+| Profiles, tax form library, editors, Check, Save draft | ✓ | All 43 forms. |
+| Submission queue and dry run | ✓ |  |
+| Database storage (plain SQLite, not encrypted) | ✓ |  |
 | Close button (X) and quit shortcut | ✓ | X, Ctrl+Q, Alt+F4 and Ctrl+W quit the app. |
 | System tray icon | partial | Needs a StatusNotifier host. Many desktops have none; the app then runs without a tray. |
 | Global show/hide hotkey | partial | Super+Shift+E suggestion. Hiding uses `xdotool`, which is X11 only. Wayland: unverified. |
@@ -28,12 +27,11 @@ there, but nobody has run it on that platform.
 | Desktop notifications | untested | In-app toast. System banner: unverified. |
 | Instant refresh when the database changes | ✓ | 1 s poll. |
 | Add deadlines to a calendar (.ics) | ✓ | Opens with `xdg-open`. |
-| Google Calendar credentials storage | untested | Through `keyring`. No backend in this branch (same cause as the database key). |
+| Google Calendar credentials storage | untested | Through `keyring`. |
 | Keyboard shortcuts | ✓ | Ctrl based; also F11. |
 | Packaging | ✓ | `.deb`, `.rpm`, x86_64 Arch package, tarball, installer, and x86_64 AUR build file. |
 | Agent control (gpui-agent) | ✓ | Opt-in build feature. |
 | Agent screenshots | ✗ | macOS only. |
-| Dev Mode panel (debug builds only) | ✓ |  |
 
 ## Install and run
 
@@ -51,7 +49,7 @@ curl -fsSL https://github.com/hexuria/buwiz-forms/releases/latest/download/insta
 To install a specific release:
 
 ```bash
-curl -fsSL https://github.com/hexuria/buwiz-forms/releases/latest/download/install-linux.sh | sh -s -- --version v0.1.0
+curl -fsSL https://github.com/hexuria/buwiz-forms/releases/latest/download/install-linux.sh | sh -s -- --version v0.2.0
 ```
 
 ### Manual package install
@@ -138,23 +136,16 @@ sudo apt-get install -y \
 
 ## Data
 
-- Database: `~/.taxman-ebir/bir_data.db`. Override with `BIR_DATABASE_PATH`.
-- Window size and position: `~/.taxman-ebir/window-geometry`.
-- Key file (when used): `~/.taxman-ebir/bir_key.txt`, mode 0600.
+- Database: `~/.local/share/dev.goldcoders.bir/bir_data.db` (the
+  `directories` crate with app id `dev.goldcoders.bir`). Override with
+  `BIR_DATABASE_PATH`.
+- The database is plain SQLite; nothing is encrypted and there is no key
+  to store. The Buwiz account refresh token uses `keyring` (Secret
+  Service) plus the fallback file `buwiz-cloud-account.json` beside the
+  database (see [cloud-account.md](../cloud-account.md)).
+- Window size and position: `window-geometry` in the data folder.
 - `instance.port`: in the local data folder chosen by the `directories` crate
   (exact path unverified).
-
-## Database key
-
-- In the current branch (`forms/integration`) the Linux build has no keyring
-  backend. The `keyring` crate then uses an in-memory mock: saving the key
-  "succeeds" but it is lost at exit, so each launch makes a new key.
-- Branch `fix/linux-keyring` (commit `907350af`, PR #85) fixes that. It turns
-  on the Secret Service backend, uses an existing `bir_key.txt` first, and
-  writes the key file when there is no Secret Service (for example on a
-  headless machine). Other keyring errors still refuse to make a new key.
-- Until that is merged, do not rely on an existing Linux database being
-  readable after a restart.
 
 ## Close, quit and the tray
 
@@ -174,8 +165,8 @@ sudo apt-get install -y \
   the loopback ping in `crates/bir-core/src/ipc.rs`. The first copy writes
   its UDP port to `instance.port`. A second copy sends `SHOW`, and if it gets an
   answer, it exits. A stale file is harmless: the ping times out after 100 ms.
-- Raising the first window uses `xdotool` and GPUI's activate. Whether this
-  works under Wayland is unverified.
+- Raising the first window uses `xdotool`. Whether this works under
+  Wayland is unverified.
 
 ## Global hotkey
 
@@ -186,10 +177,9 @@ sudo apt-get install -y \
 
 ## Print and export
 
-- Print preview writes the filled HTML to a temporary folder and opens it in
-  the default browser (`xdg-open`). The embedded webview cannot be used because
-  `wry`'s WebKitGTK backend accepts only an Xlib window handle, and GPUI gives
-  XCB or Wayland handles. Print from the browser.
+- Print preview opens the filled HTML in the default browser
+  (`xdg-open`); the NSH GTK backend has no embedded preview window.
+  Print from the browser.
 - Receipt PDFs print with `lp` (CUPS). If `lp` is missing, the file is opened.
 - Export dialogs use `rfd`. A dialog exists when the
   `org.freedesktop.portal.Desktop` name is on the session bus or `zenity` is on
@@ -210,11 +200,10 @@ sudo apt-get install -y \
 
 ## Keyboard shortcuts
 
-Ctrl+Enter, Ctrl+B (sidebar), Ctrl+Shift+B (tax profile), Ctrl+Shift+N
-(notifications), Ctrl+F, Ctrl+N, Ctrl+T (theme),
-Ctrl+Shift+X (cron tasks), Ctrl+, (Settings), Ctrl+K (command palette), F1
-(global dashboard), Ctrl+Q, Alt+F4, Ctrl+W, F11, Ctrl+=, Ctrl+- and Ctrl+0
-(zoom).
+Ctrl+K (command palette), Ctrl+B (sidebar), Ctrl+Shift+B (tax profile
+panel), Ctrl+Shift+N (notifications panel), Ctrl+T (theme), Ctrl+N (new
+return), Ctrl+, (Settings), Ctrl+L (lock), Ctrl+[ and Ctrl+] (back and
+forward), F11, Alt+F4, Ctrl+W.
 
 ## Unverified
 

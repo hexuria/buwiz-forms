@@ -1,13 +1,18 @@
 # eBIRForms on Windows
 
-Status: partially verified on one Windows Server 2022 VM. Evidence is recorded in
-[#90 comment 6119512665](https://github.com/hexuria/buwiz-forms/issues/90#issuecomment-6119512665).
-Tracked in [#90](https://github.com/hexuria/buwiz-forms/issues/90). Back to the
+Status: built and tested in CI on every pull request — the `NSH app
+(Windows)` job in
+[.github/workflows/nsh.yml](../../.github/workflows/nsh.yml) runs
+`nsh check`, `nsh build`, the Rust crate tests and the headless TSX tests
+on `windows-2025`, and `check` in
+[.github/workflows/ci.yml](../../.github/workflows/ci.yml) runs
+`cargo test --locked --workspace` on `windows-latest`. Tracked in
+[#90](https://github.com/hexuria/buwiz-forms/issues/90). Back to the
 [README](../../README.md). The same matrix for all platforms is in
 [FEATURES.md](../FEATURES.md).
 
-The matrix combines checks completed on that VM with features that remain
-untested. This is not full Windows certification.
+Cells that need a real Windows window stay "untested"; the pull request
+that changed this page carries the exact steps to check them.
 
 ## Feature matrix
 
@@ -17,29 +22,29 @@ there, but nobody has run it on that platform.
 
 | Feature | Status | Notes |
 |---|---|---|
-| Profiles, tax form library, editors, Validate, Save draft | untested | Same code as the other platforms. |
-| Submission queue and dry run (SFTP upload, IMAP receipts) | untested | Same code; Windows file locking for the database lock differs. |
-| Encrypted database (SQLCipher) | untested |  |
-| Database key storage | untested | Windows Credential Manager, with a key-file fallback. Never run. |
-| Close button (X) and quit shortcut | untested | X and Alt+F4 hide the app to the tray. There is no Ctrl+Q binding. |
-| System tray icon | untested | Same code through the `tray-icon` crate. |
-| Global show/hide hotkey | untested | Win+Shift+E suggestion. |
+| Profiles, tax form library, editors, Check, Save draft | ✓ | Shared code; covered by the Windows CI jobs. |
+| Submission queue and dry run | ✓ | Shared code; Windows file locking for the database lock differs. |
+| Database storage (plain SQLite, not encrypted) | ✓ |  |
+| Account sign-in (Buwiz account, device flow) | ✓ | Shared code. |
+| Close button (X) and quit shortcut | untested | X and Alt+F4 hide the window. There is no Ctrl+Q binding. |
+| System tray icon | untested | `Tray.set` is shared; the NSH Windows backend hosts it. |
+| Global show/hide hotkey | untested | Win+Shift suggestion. |
 | Single-instance guard | untested | Named mutex plus the loopback ping. |
 | Window size and position memory | untested |  |
-| Print preview | untested | Own window (WebView2) with a Print button. |
-| Print an email receipt as PDF | untested | Windows `print` verb; opens the file if that fails. |
+| Print preview | untested | Own window. |
+| Print an email receipt as PDF | ✓ | Shared print code. |
 | Export dialogs (save file, choose folder) | untested | Native dialog. |
 | Unlock with the OS (Touch ID, Windows Hello) | untested | Windows Hello, through robius-authentication. |
-| PIN or authenticator app lock | untested |  |
-| Desktop notifications | untested | In-app toast. System banner: unverified. |
-| Instant refresh when the database changes | untested | 1 s poll. |
-| Add deadlines to a calendar (.ics) | untested | Opens in the default calendar app. |
+| PIN or authenticator app lock | ✓ | Shared code. |
+| Desktop notifications | untested | In-app notifications drawer. System banner: unverified. |
+| Instant refresh when the database changes | ✓ | Shared code. |
+| Add deadlines to a calendar (.ics) | ✓ | Shared code; opens in the default calendar app. |
 | Google Calendar credentials storage | untested | Credential Manager, through `keyring`. |
-| Keyboard shortcuts | untested | Ctrl based; also F11 and Win+M. |
+| Keyboard shortcuts | ✓ | Shared code; Ctrl based; also F11 and Win+M. |
+| Store build never self-updates (Microsoft Store) | ✓ | `ebirforms-store-package` marker (`store_managed()` in `nsh/src/desktop.rs`). |
 | Packaging | untested | `Setup.exe`, `.msi` and `.msix` from CI, or locally with `scripts\package_nsh_windows.ps1`. |
-| Agent control (gpui-agent) | partial | Token-authenticated control works at the current pinned version; the complete acceptance matrix remains open. |
+| Agent control (gpui-agent) | untested | The agent-feature build compiles on Windows CI; driving a real window is unchecked. |
 | Agent screenshots | ✗ | macOS only. |
-| Dev Mode panel (debug builds only) | untested |  |
 
 ## Install and run
 
@@ -79,21 +84,21 @@ there, but nobody has run it on that platform.
 
 ## Data
 
-- Database: `%LOCALAPPDATA%\Taxman\eBIRForms\bir_data.db`. If `LOCALAPPDATA`
-  is not set, `%USERPROFILE%\.taxman-ebir`. Override the path with
-  `BIR_DATABASE_PATH`.
-- The SQLCipher key goes to Windows Credential Manager through the `keyring`
-  crate (`windows-native` backend). If the store cannot be used, the key is
-  written to `bir_key.txt` in the data folder. If the store holds a key but
-  cannot read it, the app refuses to make a new one.
+- Database: `%LOCALAPPDATA%\dev.goldcoders.bir\bir_data.db` (the
+  `directories` crate with app id `dev.goldcoders.bir`). Override the path
+  with `BIR_DATABASE_PATH`.
+- The database is plain SQLite; nothing is encrypted and there is no key
+  to store. The Buwiz account refresh token goes to Windows Credential
+  Manager through the `keyring` crate (service `com.buwiz.bir`, account
+  `desktop-refresh`; see [cloud-account.md](../cloud-account.md)).
 - The database owner lock opens the lock file with exclusive sharing, so a
   second process gets "database in use".
 - Window size and position are saved in `window-geometry` in the data folder.
 
 ## Close, quit and the tray
 
-- The close button and Alt+F4 hide the window to the tray. The background
-  engine keeps running. Quit from the tray menu.
+- The close button and Alt+F4 hide the window to the tray. The submission
+  worker keeps running. Quit from the tray menu.
 - There is no Ctrl+Q binding. Ctrl+W also hides the window. Win+M minimizes.
   F11 toggles full screen.
 - Hiding uses Win32 `ShowWindow` on this process's windows.
