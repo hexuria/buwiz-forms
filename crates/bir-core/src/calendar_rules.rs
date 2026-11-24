@@ -366,6 +366,21 @@ impl ResolvedTaxDeadline {
         month_match && quarter_match
     }
 
+    /// Whether the period is owed by a business that began on
+    /// `business_start`: a period whose last day precedes the start is
+    /// not owed; one that contains the start, or a later one, is owed
+    /// as usual. With no start date, or a deadline that names no period
+    /// (an as-needed obligation), the answer is today's behaviour: owed.
+    pub fn owed_since(&self, business_start: Option<NaiveDate>) -> bool {
+        if self.period.taxable_year().is_none() {
+            return true;
+        }
+        let (Some(start), Some(end)) = (business_start, self.period_end) else {
+            return true;
+        };
+        end >= start
+    }
+
     fn apply_business_day_calendar(&mut self, calendar: &BusinessDayCalendar) {
         let DeadlineKind::Dated {
             original_deadline,
@@ -779,6 +794,24 @@ impl DeadlineResolver {
         Self::resolve_taxable_year_with_overrides(taxable_year, overrides)
             .into_iter()
             .filter(|deadline| wanted.contains(deadline.form_code.as_str()))
+            .collect()
+    }
+
+    /// `deadlines_for_forms` for a business that began on
+    /// `business_start_date`: a period whose last day precedes the
+    /// business start is not owed and is not listed. The single
+    /// definition both deadline listings (the dashboard feed and the
+    /// calendar events builder) share. `None` is identical to
+    /// `deadlines_for_forms`.
+    pub fn deadlines_for_forms_since(
+        form_codes: &[String],
+        taxable_year: i32,
+        overrides: &[DeadlineOverride],
+        business_start_date: Option<NaiveDate>,
+    ) -> Vec<ResolvedTaxDeadline> {
+        Self::deadlines_for_forms(form_codes, taxable_year, overrides)
+            .into_iter()
+            .filter(|deadline| deadline.owed_since(business_start_date))
             .collect()
     }
 
