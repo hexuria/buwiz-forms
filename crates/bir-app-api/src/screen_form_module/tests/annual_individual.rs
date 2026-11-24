@@ -1290,7 +1290,7 @@ fn form_1701_details_of_payment_show_a_note() {
             assert!(
                 it["note"]
                     .as_str()
-                    .is_some_and(|n| n.contains("keeps this item shut"))
+                    .is_some_and(|n| n.contains("keeps this item switched off"))
             );
             assert_eq!(it["f"], json!([]));
             (it["no"].as_str().unwrap(), it["l"].as_str().unwrap())

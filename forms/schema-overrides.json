@@ -5083,7 +5083,7 @@
               "no": "24",
               "l": "Other Payments Made (please attach proof of payments – BIR Form No. 0605)",
               "p": 1,
-              "note": "The eBIRForms program has no box for this item, so nothing is filed here and it prints blank. Item 25 adds Items 20 to 23, as the program does."
+              "note": "The BIR's own eBIRForms program has no box for this item, so it cannot be filled here and stays blank on the return. Item 25 adds Items 20 to 23, as the program does."
             },
             {
               "no": "25",
@@ -16229,22 +16229,22 @@
             {
               "no": "34",
               "l": "Cash/Bank Debit Memo",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "35",
               "l": "Check",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "36",
               "l": "Tax Debit Memo",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "37",
               "l": "Others (specify below)",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             }
           ]
         },
@@ -23005,7 +23005,7 @@
             {
               "no": "",
               "l": "Signature over Printed Name of President/Principal Officer/Authorized Representative and of Treasurer/Assistant Treasurer, Title of Signatory and TIN",
-              "note": "The official eBIRForms program keeps the signatories' boxes shut and this app does not file them, so they have no box here; they stay blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps the signatories' boxes switched off, so they cannot be filled here and stay blank on the return."
             }
           ]
         },
@@ -23015,22 +23015,22 @@
             {
               "no": "24",
               "l": "Cash/Bank Debit Memo",
-              "note": "The official eBIRForms program keeps this item shut and this app does not file it, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "25",
               "l": "Check",
-              "note": "The official eBIRForms program keeps this item shut and this app does not file it, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "26",
               "l": "Tax Debit Memo",
-              "note": "The official eBIRForms program keeps this item shut and this app does not file it, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "27",
               "l": "Others (specify below)",
-              "note": "The official eBIRForms program keeps this item shut and this app does not file it, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             }
           ]
         },
@@ -26606,7 +26606,7 @@
             {
               "no": "",
               "l": "Signature over Printed Name of President/Principal Officer/Authorized Representative and of Treasurer/Assistant Treasurer, Title of Signatory and TIN",
-              "note": "The official eBIRForms program keeps the signatories' boxes shut and files them blank, so they have no box here; they stay blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps the signatories' boxes switched off, so they cannot be filled here and stay blank on the return."
             }
           ]
         },
@@ -26616,22 +26616,22 @@
             {
               "no": "23",
               "l": "Cash/Bank Debit Memo",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "24",
               "l": "Check",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "25",
               "l": "Tax Debit Memo",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "26",
               "l": "Others (specify below)",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             }
           ]
         },
@@ -32125,7 +32125,7 @@
             {
               "no": "",
               "l": "Tax Agent Accreditation No./Attorney's Roll No., Date of Issue, Date of Expiry",
-              "note": "No box: the official program keeps the tax agent's boxes disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes them."
+              "note": "The BIR's own eBIRForms program keeps the tax agent's boxes switched off, so they cannot be filled here and stay blank on the return."
             }
           ]
         },
@@ -32135,22 +32135,22 @@
             {
               "no": "20",
               "l": "Cash/Bank Debit Memo",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part III switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "21",
               "l": "Check",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part III switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "22",
               "l": "Tax Debit Memo",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part III switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "23",
               "l": "Others (specify below)",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part III switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             }
           ]
         },
@@ -33088,7 +33088,7 @@
             {
               "no": "",
               "l": "Tax Agent Accreditation No./Attorney's Roll No. (if applicable), Date of Issue and Date of Expiry",
-              "note": "The official eBIRForms program keeps these boxes shut and files them blank, so they have no box here; they stay blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps these boxes switched off, so they cannot be filled here and stay blank on the return."
             }
           ]
         },
@@ -33098,22 +33098,22 @@
             {
               "no": "22",
               "l": "Cash/Bank Debit Memo",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "23",
               "l": "Check",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "24",
               "l": "Tax Debit Memo",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "25",
               "l": "Others (specify below)",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             }
           ]
         },
@@ -33700,7 +33700,7 @@
             {
               "no": "9B",
               "l": "RDO Code",
-              "note": "No box: the official program has no residence RDO Code box (rules/forms/1800-v2018/fixtures/runtime-control-inventory-v796.json lists none), so the upload never carries one and the print leaves the cell blank (html-frozen/1800-2018/writer-cells.json not_joined_cells p1c33)."
+              "note": "The BIR's own eBIRForms program has no box for the residence RDO Code, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "10",
@@ -33868,7 +33868,7 @@
             {
               "no": "",
               "l": "Tax Agent Accreditation No./Attorney's Roll No., Date of Issue, Date of Expiry",
-              "note": "No box: the official program keeps the tax agent's boxes disabled (rules/forms/1800-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes them."
+              "note": "The BIR's own eBIRForms program keeps the tax agent's boxes switched off, so they cannot be filled here and stay blank on the return."
             }
           ]
         },
@@ -33878,22 +33878,22 @@
             {
               "no": "21",
               "l": "Cash/Bank Debit Memo",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/1800-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part III switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "22",
               "l": "Check",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/1800-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part III switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "23",
               "l": "Tax Debit Memo",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/1800-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part III switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "24",
               "l": "Others (Specify below)",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/1800-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part III switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             }
           ]
         },
@@ -36109,7 +36109,7 @@
             {
               "no": "",
               "l": "Tax Agent Accreditation No./Attorney's Roll No. (if applicable), Date of Issue and Date of Expiry",
-              "note": "The official eBIRForms program keeps these boxes shut and files them blank, so they have no box here; they stay blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps these boxes switched off, so they cannot be filled here and stay blank on the return."
             }
           ]
         },
@@ -36119,22 +36119,22 @@
             {
               "no": "20",
               "l": "Cash/Bank Debit Memo",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "21",
               "l": "Check",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "22",
               "l": "Tax Debit Memo",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             },
             {
               "no": "23",
               "l": "Others (specify)",
-              "note": "The official eBIRForms program keeps this item shut and files it blank, so it has no box here; it stays blank on the printed return."
+              "note": "The BIR's own eBIRForms program keeps this item switched off, so it cannot be filled here and stays blank on the return."
             }
           ]
         },
@@ -39414,7 +39414,7 @@
             {
               "no": "",
               "l": "Tax Agent Accreditation No./Attorney's Roll No., Date of Issue, Date of Expiry",
-              "note": "No box: the official program keeps the tax agent's boxes disabled (rules/forms/2200an-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes them."
+              "note": "The BIR's own eBIRForms program keeps the tax agent's boxes switched off, so they cannot be filled here and stay blank on the return."
             }
           ]
         },
@@ -39424,22 +39424,22 @@
             {
               "no": "25",
               "l": "Cash/Bank Debit Memo",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200an-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "26",
               "l": "Check",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200an-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "27",
               "l": "Tax Debit Memo",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200an-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "28",
               "l": "Others (specify)",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200an-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             }
           ]
         },
@@ -41423,7 +41423,7 @@
             {
               "no": "",
               "l": "Tax Agent Accreditation No./Attorney's Roll No., Date of Issue, Date of Expiry",
-              "note": "No box: the official program keeps the tax agent's boxes disabled (rules/forms/2200c-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes them."
+              "note": "The BIR's own eBIRForms program keeps the tax agent's boxes switched off, so they cannot be filled here and stay blank on the return."
             }
           ]
         },
@@ -41433,22 +41433,22 @@
             {
               "no": "25",
               "l": "Cash/Bank Debit Memo",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200c-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "26",
               "l": "Check",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200c-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "27",
               "l": "Tax Debit Memo",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200c-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "28",
               "l": "Others (specify)",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200c-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             }
           ]
         },
@@ -42916,7 +42916,7 @@
             {
               "no": "",
               "l": "Tax Agent Accreditation No./Attorney's Roll No., Date of Issue, Date of Expiry",
-              "note": "No box: the official program keeps the tax agent's boxes disabled (rules/forms/2200m-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes them."
+              "note": "The BIR's own eBIRForms program keeps the tax agent's boxes switched off, so they cannot be filled here and stay blank on the return."
             }
           ]
         },
@@ -42926,22 +42926,22 @@
             {
               "no": "25",
               "l": "Cash/Bank Debit Memo",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200m-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "26",
               "l": "Check",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200m-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "27",
               "l": "Tax Debit Memo",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200m-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "28",
               "l": "Others (specify)",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200m-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             }
           ]
         },
@@ -45503,7 +45503,7 @@
             {
               "no": "",
               "l": "Tax Agent Accreditation No./Attorney's Roll No., Date of Issue, Date of Expiry",
-              "note": "No box: the official program keeps the tax agent's boxes disabled (rules/forms/2200p-v2020/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes them."
+              "note": "The BIR's own eBIRForms program keeps the tax agent's boxes switched off, so they cannot be filled here and stay blank on the return."
             }
           ]
         },
@@ -45513,22 +45513,22 @@
             {
               "no": "25",
               "l": "Cash/Bank Debit Memo",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200p-v2020/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "26",
               "l": "Check",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200p-v2020/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "27",
               "l": "Tax Debit Memo",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200p-v2020/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "28",
               "l": "Others (specify)",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200p-v2020/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             }
           ]
         },
@@ -46479,7 +46479,7 @@
             {
               "no": "",
               "l": "Tax Agent Accreditation No./Attorney's Roll No., Date of Issue, Date of Expiry",
-              "note": "No box: the official program keeps the tax agent's boxes disabled (rules/forms/2200s-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes them."
+              "note": "The BIR's own eBIRForms program keeps the tax agent's boxes switched off, so they cannot be filled here and stay blank on the return."
             }
           ]
         },
@@ -46489,22 +46489,22 @@
             {
               "no": "27",
               "l": "Cash/Bank Debit Memo",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200s-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "28",
               "l": "Check",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200s-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "29",
               "l": "Tax Debit Memo",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200s-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "30",
               "l": "Others (specify)",
-              "note": "No box: the official program keeps Part IV disabled (rules/forms/2200s-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part IV switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             }
           ]
         },
@@ -50979,28 +50979,28 @@
               "no": "27",
               "l": "Cash/Bank Debit Advice",
               "k": [],
-              "note": "Filled in when the return is paid. The official 2550Q program has no box for it, so the upload carries none and the printed form leaves it blank.",
+              "note": "The bank or BIR fills this in when the return is paid. It cannot be filled here and stays blank on the return.",
               "p": 1
             },
             {
               "no": "28",
               "l": "Check",
               "k": [],
-              "note": "Filled in when the return is paid. The official 2550Q program has no box for it, so the upload carries none and the printed form leaves it blank.",
+              "note": "The bank or BIR fills this in when the return is paid. It cannot be filled here and stays blank on the return.",
               "p": 1
             },
             {
               "no": "29",
               "l": "Tax Debit Memo",
               "k": [],
-              "note": "Filled in when the return is paid. The official 2550Q program has no box for it, so the upload carries none and the printed form leaves it blank.",
+              "note": "The bank or BIR fills this in when the return is paid. It cannot be filled here and stays blank on the return.",
               "p": 1
             },
             {
               "no": "30",
               "l": "Others (Specify below)",
               "k": [],
-              "note": "Filled in when the return is paid. The official 2550Q program has no box for it, so the upload carries none and the printed form leaves it blank.",
+              "note": "The bank or BIR fills this in when the return is paid. It cannot be filled here and stays blank on the return.",
               "p": 1
             }
           ]
@@ -52829,22 +52829,22 @@
             {
               "no": "26",
               "l": "Cash/Bank Debit Memo",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part III switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "27",
               "l": "Check",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part III switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "28",
               "l": "Tax Debit Memo",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part III switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             },
             {
               "no": "29",
               "l": "Others (Specify below)",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "The BIR's own eBIRForms program keeps Part III switched off, so it cannot be filled here and stays blank on the return; the bank or BIR fills it."
             }
           ]
         },
