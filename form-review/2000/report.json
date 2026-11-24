@@ -1,69 +1,74 @@
 {
   "code": "2000",
   "verdict": "tweak",
-  "summary": "Page 1 matches the official Jan 2018 ENCS PDF well, but Page 2 has a severe TIN/Name cell collision at the top, blank Schedule 1 Tax Rate values, missing DST/ATC reference table, and 49 raw developer cell IDs used as field labels in forms/forms-schema.json.",
+  "summary": "Fixed Page 2 TIN + Taxpayer's Name concatenation by splitting the single 40-slot p2c5 comb into separate TIN (p2c5a..p2c5d) and Taxpayer's Name (p2c5e) combs in html-frozen/2000-dst-2018/{index.html,writer-cells.json}, and replaced all 64 raw developer cell-ID labels for 2000 in forms/forms-schema.json with plain labels. Confirmed Page 2 DST/ATC reference table is lifted to guide.html (by design) and Schedule 1 Tax Rate prints when ATC description is set from the dropdown. Comb-tick collisions on long names/addresses remain needs shared change.",
   "defects": [
     {
       "id": "2000-p2-tin-name-collision",
       "surface": "print",
-      "where": "Page 2 header TIN and Taxpayer's Name row",
-      "what": "TIN prints as uncombed free text ('00012345300000') and Taxpayer's Name starts inside the TIN column immediately concatenated onto the TIN ('00012345300000SANTOS, JUANA DELA CRUZ-MARIA...').",
+      "where": "Page 2 top bar (TIN and Taxpayer's Name, p2c5)",
+      "what": "Split p2c5 into p2c5a..p2c5d (14 TIN comb slots wired to frm2000:txtPg2TIN1..3 and txtPg2BranchCode) and p2c5e (26 Taxpayer's Name slots wired to frm2000:txtPg2TaxpayerName), eliminating TIN+Name concatenation when the name overflows 26 characters.",
       "before": "form-review/2000/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/2000/after/print-p2.png",
+      "status": "fixed"
     },
     {
       "id": "2000-p2-sched1-tax-rate-blank",
       "surface": "print",
-      "where": "Page 2 Schedule 1 Tax Rate column (rows 1-3)",
-      "what": "Tax Rate cells print blank even when ATC (DS101), Tax Base, and Tax Due are populated.",
+      "where": "Page 2 Schedule 1 Tax Rate column (p2c15, p2c23, p2c31)",
+      "what": "Verified p2c15/p2c23/p2c31 are joined to frm2000:sched1:txtTaxRate0..2; rate_text() in bir-core requires both atc_code and matching description (selecting from the ATC dropdown populates it; synthetic fill only set drpATCCode0).",
       "before": "form-review/2000/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/2000/after/print-p2.png",
+      "status": "by design"
     },
     {
       "id": "2000-p1-comb-collisions",
       "surface": "print",
-      "where": "Page 1 Items 6, 7, 11, and 12 (TIN with hyphens)",
-      "what": "Long name, address, Other Party Name, and Item 12 TIN collide with comb ticks.",
+      "where": "Page 1 Items 6, 7, 10, 12 and Page 2 Taxpayer's Name",
+      "what": "Long taxpayer name, address, line of business, Other Party name, and Page 2 Taxpayer's Name switch out of comb mode and collide with comb ticks.",
       "before": "form-review/2000/before/print-p1.png",
-      "after": "",
+      "after": "form-review/2000/after/print-p1.png",
       "status": "needs shared change"
     },
     {
       "id": "2000-p2-missing-atc-table",
       "surface": "print",
       "where": "Page 2 below Schedule 4",
-      "what": "Official BIR 2000 Jan 2018 ENCS Page 2 includes the two-column Documentary Stamp Tax (DST)/ATC reference table (DS010-DS132); printed sheet leaves the lower half blank.",
+      "what": "Official BIR 2000 Page 2 DST/ATC reference table (DS 101..DS 130) is intentionally lifted off the printed sheet into html-frozen/2000-dst-2018/guide.html by tools/formgen/guides.py.",
       "before": "form-review/2000/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/2000/after/print-p2.png",
+      "status": "by design"
     },
     {
       "id": "2000-screen-raw-cell-id-labels",
       "surface": "screen",
-      "where": "forms/forms-schema.json (2000 Schedules 1-4 field labels)",
-      "what": "49 field labels in forms/forms-schema.json are raw developer cell IDs (e.g. 'sched1:txtTaxBase0', 'sched1:txtTaxRate0', 'sched1:txtTotalDue1') instead of plain-language labels.",
+      "where": "Schedules 1-4 in forms/forms-schema.json (64 entries including row templates)",
+      "what": "Replaced all 64 raw developer cell-ID labels (sched1:txtTaxBase0, :txt tax base, etc.) with plain human-readable labels matching the BIR 2000 column headers.",
       "before": "form-review/2000/before/screen-05-schedule-1-summary-of-computation-of-t.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/2000/after/screen-05-schedule-1-summary-of-computation-of-t.png",
+      "status": "fixed"
     },
     {
-      "id": "2000-p2-header-page1-label",
+      "id": "2000-p2-page1-header-typo",
       "surface": "print",
       "where": "Page 2 top-left header",
-      "what": "Reads 'Page 1' on Page 2, which matches the exact typo printed on the official BIR 2000 Jan 2018 ENCS PDF.",
+      "what": "Reads 'Page 1' under 'January 2018 (ENCS)' on Page 2; matches the official BIR 2000 PDF verbatim (the official BIR PDF itself has this typo).",
       "before": "form-review/2000/before/print-p2.png",
-      "after": "",
+      "after": "form-review/2000/after/print-p2.png",
       "status": "by design"
     }
   ],
-  "files_changed": [],
-  "shared_changes_wanted": [
-    "neon-4 (try/forms-shared-print): comb-tick collisions on long name/address/Other Party Name/TIN"
+  "files_changed": [
+    "html-frozen/2000-dst-2018/index.html",
+    "html-frozen/2000-dst-2018/writer-cells.json",
+    "forms/forms-schema.json"
   ],
-  "tests_run": [],
-  "open_questions": [
-    "Should the Page 2 DST/ATC reference table be added to html-frozen/2000-dst-2018/ to match the official PDF?"
-  ]
+  "shared_changes_wanted": [
+    "neon-4 (try/forms-shared-print): comb-tick collisions on long names, addresses, line of business, and Other Party name",
+    "crates/bir-print/src/fixtures/{fitting-band-goldens,fitting-goldens,overflow-goldens}.json: refresh 2000-dst-2018 SHA-256 hashes (not edited to avoid touching crates/)"
+  ],
+  "tests_run": [
+    "Live Linux WebKitGTK Print Preview and screen captures verified for 2000 (Page 2 TIN digits now fill 14 comb cells cleanly and Taxpayer's Name starts in its own column; crates/bir-print/src/fixtures/*.json left untouched)"
+  ],
+  "open_questions": []
 }
