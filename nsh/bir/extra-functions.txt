@@ -14,3 +14,9 @@ list_legacy_filed_returns
 
 # PR 4: the "Save to profile?" ask-once answer, remembered per TIN + year + field.
 screen_form_profile_asked
+
+# Phase 2: read-only Buwiz Books COA via local Bot broker (/v1/ext/read) and Forms-side fallback mappings (ADR 0009).
+books_coa_list
+books_box_mappings_list
+books_box_mapping_save
+books_box_mapping_delete

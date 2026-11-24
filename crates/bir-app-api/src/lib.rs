@@ -11,6 +11,7 @@ pub mod account_gate;
 pub mod agent;
 pub mod auth_limiter;
 pub mod bir_module;
+pub mod books_client;
 pub mod cloud_account;
 pub mod dashboard_module;
 pub mod hooks;

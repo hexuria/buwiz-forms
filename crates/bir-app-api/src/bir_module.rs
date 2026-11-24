@@ -2753,14 +2753,16 @@ pub fn module() -> HostModule {
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
     let module = crate::legacy_import_module::register(module);
+    let module = crate::books_client::register(module);
     // bir-shell appends its scroll exports (GPUI elements) after these.
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}{}{}",
         crate::cloud_account::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
         crate::screen_form_module::DECLARATIONS,
         crate::dashboard_module::DECLARATIONS,
         crate::legacy_import_module::DECLARATIONS,
+        crate::books_client::DECLARATIONS,
     ))
 }
 

@@ -879,3 +879,41 @@ export interface LegacyFiledReturn {
 }
 /** The returns imported from the old program for one branch's TIN (12 to 14 digits, dashes allowed), oldest import first; none for a TIN the import never named. */
 export function list_legacy_filed_returns(tin: string): LegacyFiledReturn[];
+
+export interface BooksAccountNode {
+    id: string;
+    code: string;
+    name: string;
+    account_type: string;
+    parent_account_id: string | null;
+    balance: string;
+    subtree_balance: string;
+    is_active: boolean;
+    accrual_only: boolean;
+}
+export interface BooksCoaResponse {
+    book_id: string;
+    book_name: string;
+    basis: string;
+    accounts: BooksAccountNode[];
+}
+export interface BooksBoxMapping {
+    tin: string;
+    form_type: string;
+    box_key: string;
+    book_id: string;
+    account_id: string;
+    account_code: string;
+    account_name: string;
+    account_type: string;
+    include_subtree: boolean;
+    updated_at?: string;
+}
+/** Read-only Books chart of accounts via the local Buwiz Bot broker (/v1/ext/read). */
+export function books_coa_list(from?: string, to?: string, broker_url?: string, token?: string): BooksCoaResponse;
+/** Saved Forms-side fallback Books account mappings for a taxpayer and form type (ADR 0009). */
+export function books_box_mappings_list(tin: string, form_type: string): BooksBoxMapping[];
+/** Save or update a fallback Books account mapping for one form box. */
+export function books_box_mapping_save(mapping: BooksBoxMapping): null;
+/** Remove a fallback Books account mapping for one form box. */
+export function books_box_mapping_delete(tin: string, form_type: string, box_key: string): boolean;

@@ -46,6 +46,7 @@ import {
   dismissToast as kitDismissToast,
 } from "../../ui";
 import { app, store } from "../../shell";
+import { BooksCoaPicker, type FormBoxOption } from "./BooksCoaPicker";
 import { ItemRow, ProfileFold } from "./rows";
 import { existingOfferFor, filedOriginalStrip, FILED_KEPT, PERIOD_PART_LABELS, PROFILE_CHANGED_NOTE, partName, profileDiffersNote, profileUpdatesNote, SAMPLE_NOTE, sectionNames } from "./schema";
 import { formUi } from "./formUi";
@@ -256,6 +257,22 @@ export function FormPage(props: FormPageProps) {
   }
 
   const schema = s.schema;
+  const booksOpen = signal(false);
+  const booksBoxes = computed<FormBoxOption[]>(() => {
+    const out: FormBoxOption[] = [];
+    for (const part of schema?.parts || []) {
+      for (const it of part.items || []) {
+        for (const f of it.f || []) {
+          if (f.t === "currency" || f.t === "number") {
+            if (!s.box(f.k).locked()) {
+              out.push({ key: f.k, itemNo: it.n || f.k, label: f.l || it.l || f.k });
+            }
+          }
+        }
+      }
+    }
+    return out;
+  });
   return (
     <View testID="form-page" class="min-h-0 flex-1 flex-row" onLayout={(e) => width.set(e.bounds.size.width)}>
       <If when={wide() && schema && !s.header().error && !s.header().loading}>
@@ -276,7 +293,7 @@ export function FormPage(props: FormPageProps) {
           scrollEventThrottle={50}
         >
           <View class="w-full" classList={{ "self-center": !wide() }} style={{ maxWidth: wide() ? formW() : column() }} onLayout={(e) => (tops.column = e.bounds.origin.y)}>
-            <Header s={s} narrow={narrow} />
+            <Header s={s} narrow={narrow} onBooksCoa={() => booksOpen.set(true)} />
             <Notes s={s} />
             <If when={schema && !s.header().loading && !s.header().error}>
               <View class="gap-4" onLayout={(e) => (tops.parts = e.bounds.origin.y)}>
@@ -319,6 +336,19 @@ export function FormPage(props: FormPageProps) {
         </If>
       </View>
       <Dialogs s={s} />
+      <BooksCoaPicker
+        open={booksOpen}
+        narrow={narrow}
+        tin={() => props.tin}
+        formCode={() => props.formCode}
+        boxes={booksBoxes}
+        onClose={() => booksOpen.set(false)}
+        onApply={(boxKey, amount, accountLabel) => {
+          s.edit(boxKey, amount);
+          const notify = props.toast ?? kitToast;
+          notify(`Filled from Books (${accountLabel})`);
+        }}
+      />
     </View>
   );
 }
@@ -343,7 +373,7 @@ function SaveLine(props: { s: FormSession }) {
   );
 }
 
-function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
+function Header(props: { s: FormSession; narrow: Accessor<boolean>; onBooksCoa: () => void }) {
   const s = props.s;
   const f = s.schema;
   const h = () => s.header();
@@ -395,6 +425,13 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
             <AppButton testID="fp-back-to-amendment" size="sm" label="Back to the amendment" onPress={() => s.backToAmendment()} />
           </If>
           <If when={h().editable && !h().filedOriginalView}>
+            <AppButton
+              testID="fp-books-coa"
+              size="sm"
+              label="Books COA"
+              disabled={h().loading}
+              onPress={props.onBooksCoa}
+            />
             <AppButton
               testID="fp-check"
               size="sm"

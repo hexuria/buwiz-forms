@@ -26,6 +26,18 @@ export const as_needed_forms = (...args: Parameters<typeof Host.as_needed_forms>
 export const auth_state = (...args: Parameters<typeof Host.auth_state>): ReturnType<typeof Host.auth_state> =>
   Door.call("auth_state", args) as ReturnType<typeof Host.auth_state>;
 
+export const books_box_mapping_delete = (...args: Parameters<typeof Host.books_box_mapping_delete>): ReturnType<typeof Host.books_box_mapping_delete> =>
+  Door.call("books_box_mapping_delete", args) as ReturnType<typeof Host.books_box_mapping_delete>;
+
+export const books_box_mapping_save = (...args: Parameters<typeof Host.books_box_mapping_save>): ReturnType<typeof Host.books_box_mapping_save> =>
+  Door.call("books_box_mapping_save", args) as ReturnType<typeof Host.books_box_mapping_save>;
+
+export const books_box_mappings_list = (...args: Parameters<typeof Host.books_box_mappings_list>): ReturnType<typeof Host.books_box_mappings_list> =>
+  Door.call("books_box_mappings_list", args) as ReturnType<typeof Host.books_box_mappings_list>;
+
+export const books_coa_list = (...args: Parameters<typeof Host.books_coa_list>): ReturnType<typeof Host.books_coa_list> =>
+  Door.call("books_coa_list", args) as ReturnType<typeof Host.books_coa_list>;
+
 export const cancel_queued = (...args: Parameters<typeof Host.cancel_queued>): ReturnType<typeof Host.cancel_queued> =>
   Door.call("cancel_queued", args) as ReturnType<typeof Host.cancel_queued>;
 
@@ -453,6 +465,9 @@ export type {
   LegacyStandardFolder,
   LegacyImportReport,
   LegacyFiledReturn,
+  BooksAccountNode,
+  BooksCoaResponse,
+  BooksBoxMapping,
 } from "./types";
 
 /** Every wrapper above, for bir.system_info()-style calls. */
@@ -464,6 +479,10 @@ export const bir = {
   archive_background_job,
   as_needed_forms,
   auth_state,
+  books_box_mapping_delete,
+  books_box_mapping_save,
+  books_box_mappings_list,
+  books_coa_list,
   cancel_queued,
   change_owner,
   change_to_helpdesk,
@@ -593,6 +612,10 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "archive_background_job", kind: "sync" },
   { name: "as_needed_forms", kind: "sync" },
   { name: "auth_state", kind: "sync" },
+  { name: "books_box_mapping_delete", kind: "sync" },
+  { name: "books_box_mapping_save", kind: "sync" },
+  { name: "books_box_mappings_list", kind: "sync" },
+  { name: "books_coa_list", kind: "sync" },
   { name: "cancel_queued", kind: "sync" },
   { name: "change_owner", kind: "sync" },
   { name: "change_to_helpdesk", kind: "sync" },

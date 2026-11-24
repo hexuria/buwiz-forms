@@ -19,8 +19,10 @@
 
 mod alerts;
 mod amendment_snapshots;
+mod books_mappings;
 pub use alerts::{AlertAction, AlertRecordOutcome, AlertSeverity, AppAlert, kinds as alert_kinds};
 pub use amendment_snapshots::{AmendmentSnapshot, SnapshotPayloadSource};
+pub use books_mappings::BooksBoxMapping;
 mod drafts;
 pub use drafts::{
     ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Claim1601CSubmissionResult,

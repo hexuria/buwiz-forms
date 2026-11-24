@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 24;
+const CURRENT_MIGRATION_VERSION: i32 = 25;
 
 const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
     "No confirmed effective profile evidence for this taxable year; review required";
@@ -370,6 +370,9 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // v24: The user's own setups (owner decision 14): a name and a body
         // of forms and facts, never a date or anything personal.
         SETUPS_TABLE,
+        // v25: Forms-owned fallback mapping from a BIR form box to a Buwiz Books
+        // account (ADR 0009; used only for boxes without an authoritative Books rule).
+        BOOKS_BOX_MAPPINGS_TABLE,
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -495,6 +498,9 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     // Heal a database whose v24 table is missing. Idempotent.
     conn.execute_batch(SETUPS_TABLE)?;
 
+    // Heal a database whose v25 table is missing. Idempotent.
+    conn.execute_batch(BOOKS_BOX_MAPPINGS_TABLE)?;
+
     Ok(())
 }
 
@@ -508,6 +514,7 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
 /// none, so a copy that lost its version there reads as the mark below and
 /// those steps run again, as they all did before.
 const SHAPE_MARKS: &[(i32, &str, Option<&str>)] = &[
+    (25, "books_box_mappings", None),
     (24, "setups", None),
     (23, "year_facts", None),
     (22, "taxpayers", Some("pin_hash")),
@@ -563,6 +570,26 @@ const SETUPS_TABLE: &str = "
         body_json TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+";
+
+/// v25: Forms-owned fallback mapping from a BIR form box to a Books account (ADR 0009).
+const BOOKS_BOX_MAPPINGS_TABLE: &str = "
+    CREATE TABLE IF NOT EXISTS books_box_mappings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tin TEXT NOT NULL,
+        form_type TEXT NOT NULL,
+        box_key TEXT NOT NULL,
+        book_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        account_code TEXT NOT NULL,
+        account_name TEXT NOT NULL,
+        account_type TEXT NOT NULL,
+        include_subtree INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(tin, form_type, box_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_books_box_mappings_tin_form
+        ON books_box_mappings(tin, form_type);
 ";
 
 fn ensure_year_facts_table(conn: &Connection) -> Result<(), DbError> {
