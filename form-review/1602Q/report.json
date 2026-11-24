@@ -56,7 +56,7 @@
   "open_questions": [
     "Note: print-p*.png pages were generated from the running app Print preview sheet.html via headless Chrome + pdftoppm."
   ],
-  "status": "fixed_per_form_pending_shared_merge",
+  "status": "fixed_rebased_on_shared_print",
   "upstream_sheet_edits": [
     "html-frozen/1602q-2019/index.html: removed orphaned <div class='page page-3' id='page-3'> (which only held header + TIN/Name over 90% blank space after Schedules 5-6 reference tables were moved to guide.html)."
   ],
@@ -70,5 +70,11 @@
   "remaining_shared_issues": [
     "Long name/address over comb ticks: knockout preview on try/forms-overflow-knockout (commit c5cedcaa), awaiting owner decision.",
     "Growable schedule rows beyond fixed printed rows: documented in form-review/SHARED-FINDINGS.md on try/forms-shared-print (commit 1679ff23)."
+  ],
+  "upstream_buwiz_forms_html": [
+    {
+      "sheet_file": "forms-corrected/1602q-2019/index.html (frozen to html-frozen/1602q-2019/index.html by tools/formgen/freeze_html.py line 33)",
+      "generator_rule": "tools/formgen/guides.py splits Schedules 5-6 out of Page 3 into guide.html, leaving an orphaned <div class='page page-3' id='page-3'> with only the repeating page header and TIN/Name combs (p3c5/p3c6). Update tools/formgen/guides.py / tools/formgen/emit.py to drop pages whose non-header body was entirely moved to guide.html."
+    }
   ]
 }

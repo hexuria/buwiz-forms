@@ -56,7 +56,7 @@
   "open_questions": [
     "Note: print-p1.png was generated from the running app Print preview sheet.html via headless Chrome + pdftoppm."
   ],
-  "status": "fixed_per_form_pending_shared_merge",
+  "status": "fixed_rebased_on_shared_print",
   "upstream_sheet_edits": [
     "html-frozen/1600wp-2010/index.html: added fillable text cell p1c272 (left:434pt;top:465.96pt;width:158pt;height:13.94pt) after the printed 'NAME:' label in the Attachment header so frm1600WP:txtTaxpayerName prints on both Item 8 (p1c21) and the Attachment header (p1c272)."
   ],
@@ -72,5 +72,11 @@
     "Part II & Schedule 1.1 amounts left-aligned: fixed on try/forms-shared-print (commit 0f484378; before/after already verified on 1600WP p1).",
     "Item 11 SpecialLaw_1/SpecialLaw_2 and Attachment Seq. No. (derived:att_seq_1..6): require emitting keys in crates/bir-core/src/forms/form_1600wp.rs (outside per-form files).",
     "Schedule 1.1 rows beyond 6: documented in form-review/SHARED-FINDINGS.md on try/forms-shared-print (commit 1679ff23)."
+  ],
+  "upstream_buwiz_forms_html": [
+    {
+      "sheet_file": "forms-corrected/extra/1600wp-2010/index.html (frozen to html-frozen/1600wp-2010/index.html by tools/formgen/freeze_html.py line 39)",
+      "generator_rule": "tools/formgen/lattice.py and tools/formgen/emit.py did not classify the blank box beside 'Name of Withholding Agent' in the Attachment header as a fillable cell; add a correction record under tools/formgen/corrections/ (beside C05-1600wp-tin-branch-code.json and C06-1600wp-agent-tin-branch-code.json, applied by tools/formgen/correct.py) emitting p1c272."
+    }
   ]
 }

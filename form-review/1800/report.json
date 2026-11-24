@@ -86,7 +86,7 @@
   "open_questions": [
     "Note: print-p*.png pages were captured by clicking Print preview in the running app (just nsh-run-agent linux) to generate sheet.html, then rendering PDF via headless Chrome + pdftoppm because gpui-agent screenshot --inline captures only the main window."
   ],
-  "status": "fixed_per_form_pending_shared_merge",
+  "status": "fixed_rebased_on_shared_print",
   "upstream_sheet_edits": [
     "html-frozen/1800-2018/index.html: converted p1c64 (Item 14 cents cell) from a 2-input plain text cell (data-field-kind='text') to a 2-slot comb matching p1c72 so bir-print money_joins can populate Item 14."
   ],
@@ -106,5 +106,11 @@
     "Email lowercase: by design (matches official eBIRForms capital() and existing unit tests).",
     "Long name/address over comb ticks: knockout preview on try/forms-overflow-knockout (commit c5cedcaa), awaiting owner decision.",
     "Rows beyond 10 (growables overflow): documented in form-review/SHARED-FINDINGS.md on try/forms-shared-print (commit 1679ff23), awaiting owner design decision."
+  ],
+  "upstream_buwiz_forms_html": [
+    {
+      "sheet_file": "forms-corrected/extra/1800-2018/index.html (frozen to html-frozen/1800-2018/index.html by tools/formgen/freeze_html.py line 52)",
+      "generator_rule": "tools/formgen/comb_referee.py and tools/formgen/emit.py emitted p1c64 (Item 14 cents, two narrow ticks) as data-field-kind='text' with 2 inputs instead of data-field-kind='comb' data-comb-capacity='2' data-comb-slots='2' (or add a correction record under tools/formgen/corrections/ applied by tools/formgen/correct.py)."
+    }
   ]
 }
