@@ -10,7 +10,8 @@ test("phone: Sign in reaches the host; its refusal shows on the card and the but
   const app = await open(ENTRY, { host: { params: { gate: true, begin: "refuse", readout: true } } });
   await app.waitFor("id:gate-card");
   expect(app.texts()).toContain("Welcome to eBIRForms");
-  expect(app.texts()).toContain("Sign in with your Buwiz account to file from this device.");
+  expect(app.texts()).toContain("Sign in with your Buwiz account to use eBIRForms on this device.");
+  expect(app.texts()).toContain("Buwiz is the account behind eBIRForms. We email you a 6-digit code to sign in; there is no password.");
   expect(app.shows("id:frame")).toBe(false);
   expect(app.shows("id:setup-card")).toBe(false);
   await app.press("id:gate-sign-in");
@@ -25,6 +26,7 @@ test("phone: Sign in reaches the host; its refusal shows on the card and the but
 test("desktop: Create account's approval opens the session, then first launch", async () => {
   const app = await open(ENTRY, { ...WIDE, host: { params: { gate: true, begin: "code", readout: true } } });
   await app.waitFor("id:gate-card");
+  expect(app.texts()).toContain("Sign in with your Buwiz account to use eBIRForms on this computer.");
   await app.press("id:gate-create-account");
   await app.waitFor("id:setup-card");
   expect(app.texts()).toContain("calls: cloud_account_begin_sign_up,cloud_account_finish_sign_in,cloud_account_session_opened");
