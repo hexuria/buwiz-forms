@@ -477,6 +477,8 @@ export type {
   BooksAccountNode,
   BooksCoaResponse,
   BooksBoxMapping,
+  BooksBrokerStatus,
+  BooksBrokerConnectResult,
 } from "./types";
 
 /** Every wrapper above, for bir.system_info()-style calls. */
