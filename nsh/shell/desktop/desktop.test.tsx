@@ -83,7 +83,7 @@ test("the menu's items drive the frame: sidebar, panels, theme, palette, new ret
 
   await app.press("id:run:eBIRForms > About eBIRForms");
   await app.waitFor("id:about");
-  expect(app.texts()).toContain("Version 0.2.0");
+  expect(app.texts()).toContain("Version 0.2.1");
   expect(app.texts()).toContain("© 2026 Goldcoders Corp");
   await app.press("id:about-ok");
   await app.waitFor("id:about", { state: "gone" });
@@ -409,7 +409,7 @@ test("a check that finds nothing says the app is up to date, in the banner, and 
   await app.waitFor("id:sidebar");
   await app.press("id:run:Help > Check for Updates…");
   await app.waitFor("id:update-banner", { timeout: 15_000 });
-  expect(app.texts()).toContain("eBIRForms 0.2.0 is up to date.");
+  expect(app.texts()).toContain("eBIRForms 0.2.1 is up to date.");
   expect(app.shows("id:update-install")).toBe(false);
   await app.press("id:update-later");
   await app.waitFor("id:update-banner", { state: "gone" });

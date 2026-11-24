@@ -16,7 +16,7 @@ test("the door says how sending stands: a dry run, in a test environment", () =>
 
 test("system_info answers from an empty scratch database in the temp folder", () => {
   const info = bir.system_info();
-  expect(info.app_version).toBe("0.2.0");
+  expect(info.app_version).toBe("0.2.1");
   // The system the test runs on, named as Rust names it (std::env::consts::OS), as the standard `os` module does.
   expect(info.os).toBe(platform());
   expect(info.database_path).toContain("ebirforms-door");
