@@ -914,7 +914,7 @@ nsh-run db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_nsh-db-guard 
     cd nsh
     exec nsh run --target macos {{args}}
 
-# NSH: the app in a real window with the agent control planes on, for gpui-agent recipes: the window's own (NSH's development host:
+# NSH: the app in a real window with the agent control planes on, for gpui-agent recipes: the window's own (hexuria/nsh-gpui-agent:
 # tree, press, type, screenshot) on GPUI_AGENT_ADDR, and the app's data plane (app.info, profile.*, form.*) on the port it reports.
 # target is macos, linux, windows, ios (Simulator) or android (emulator; then `adb forward tcp:<port> tcp:<port>`).
 # GPUI_AGENT_TOKEN must be set by the caller (never printed, never compiled into the app). Dry-run dev mode as nsh-run: nothing is sent anywhere.
@@ -936,34 +936,57 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     else
         unset BIR_DATABASE_PATH
     fi
+    port="${GPUI_AGENT_ADDR##*:}"
+    run_args=()
     if [ "{{target}}" = android ]; then
         # An Android app process has no launch environment: the dry-run settings and the data plane's switch and address are
         # baked into this development build (nsh/src/dev_env.rs). The token is not (a baked one is readable in the built library):
         # it is written into the host's private files with `run-as`, over standard input so it is in no process's arguments, as
         # nsh does for the window plane. On a clean device the host is installed by `nsh run` below, so a background job waits
         # for the package first; the app waits up to 10 s for the file, then reads and deletes it (src/agent.rs, take_token).
-        # The data plane listens on the port after the window's: forward both.
-        port="${GPUI_AGENT_ADDR##*:}"
+        # The data plane listens on the port after the window's (the baked address is the window's; src/agent.rs choose()
+        # adds one): forward both. The window plane reads its switch and address from the launch intent's extras, so a
+        # second background job relaunches the host with them once the first launch is up (android-handoff.sh plug).
         export BUWIZ_ANDROID_DEV=1
-        export BUWIZ_ANDROID_DEV_ENV="EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$((port + 1))"
+        export BUWIZ_ANDROID_DEV_ENV="EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$port"
         # One adb and one device for the whole launch: the SDK's adb and the device nsh starts the app on, checked before
         # anything is built (nsh/agent/android-handoff.sh). The writer ends with this launcher: a failed or cancelled launch
         # writes no token afterwards.
         { read -r adb; read -r serial; } < <("$root/nsh/agent/android-handoff.sh" device) || true
         [ -n "${adb:-}" ] && [ -n "${serial:-}" ] || exit 1
         "$root/nsh/agent/android-handoff.sh" token "$adb" "$serial" "$$" &
+        # The relaunch points the activity back at nsh's dev server, so its port must be the one the run
+        # actually uses: --port in {{args}} wins (it is what `nsh run` binds), else NSH_DEV_PORT, else 8347.
+        devport="$(printf %s " {{args}} " | sed -n 's/.* --port[ =]\([0-9]*\).*/\1/p')"
+        devport="${devport:-${NSH_DEV_PORT:-8347}}"
+        case " {{args}} " in
+            *" --port "*|*" --port="*) ;;
+            *) run_args+=(--port "$devport") ;;
+        esac
+        "$root/nsh/agent/android-handoff.sh" plug "$adb" "$serial" "$$" "$port" "$devport" &
         echo "nsh-run-agent: device $serial, window plane on 127.0.0.1:$port, data plane on 127.0.0.1:$((port + 1)); run: \"$adb\" -s $serial forward tcp:$port tcp:$port && \"$adb\" -s $serial forward tcp:$((port + 1)) tcp:$((port + 1))"
     fi
     if [ "{{target}}" = ios ]; then
         # simctl gives the app only SIMCTL_CHILD_* variables, and nsh keeps GPUI_AGENT_TOKEN out of them (its window plane reads a
-        # private file): the dry-run switches and the database go by name, the data plane's token as BIR_AGENT_TOKEN (src/agent.rs).
+        # private file): the dry-run switches and the database go by name, the data plane's token as BIR_AGENT_TOKEN (src/agent.rs),
+        # the window plane's switch and address as GPUI_AGENT / GPUI_AGENT_ADDR and its token into the host's data container
+        # (nsh/agent/ios-handoff.sh, in the background until this launcher dies). The data plane listens on the port after
+        # the window's (src/agent.rs choose() adds one).
         unset SIMCTL_CHILD_BIR_SFTP_LIVE SIMCTL_CHILD_BIR_DATABASE_PATH
         export SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BIR_AUTH_BYPASS=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1
         export SIMCTL_CHILD_BIR_AGENT_TOKEN="$GPUI_AGENT_TOKEN"
+        export SIMCTL_CHILD_GPUI_AGENT=1 SIMCTL_CHILD_GPUI_AGENT_ADDR="127.0.0.1:$port"
         if [ -n "$db" ]; then export SIMCTL_CHILD_BIR_DATABASE_PATH="$db"; fi
+        simdev="booted"
+        case " {{args}} " in
+            *" --device "*) simdev="$(printf %s " {{args}} " | sed -n 's/.* --device \([^ ]*\).*/\1/p')" ;;
+            *" --device="*) simdev="$(printf %s " {{args}} " | sed -n 's/.* --device=\([^ ]*\).*/\1/p')" ;;
+        esac
+        "$root/nsh/agent/ios-handoff.sh" token "$$" "$simdev" &
+        echo "nsh-run-agent: window plane on 127.0.0.1:$port, data plane on 127.0.0.1:$((port + 1))"
     fi
     cd nsh
-    CARGO="$root/nsh/agent/cargo-with-agent.sh" exec nsh run --target {{target}} {{args}}
+    CARGO="$root/nsh/agent/cargo-with-agent.sh" exec nsh run --target {{target}} "${run_args[@]}" {{args}}
 
 # Windows: the same in PowerShell (target windows, or android with the emulator and adb on this machine). $CARGO is
 # nsh/agent/cargo-with-agent.cmd, the counterpart of cargo-with-agent.sh.
@@ -980,6 +1003,7 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     $env:GPUI_AGENT = '1'
     if (-not $env:GPUI_AGENT_ADDR) { $env:GPUI_AGENT_ADDR = '127.0.0.1:17421' }
     $writer = $null
+    $plugger = $null
     # The parameter arrives as an environment variable (PowerShell cannot read just's quoting of an apostrophe); a relative
     # path is the one the guard checked, from here, not from nsh/.
     $db = $env:db
@@ -990,7 +1014,7 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         # `run-as` once `nsh run` installs it, over stdin so it is in no process's arguments (src/agent.rs, take_token).
         $port = [int](($env:GPUI_AGENT_ADDR -split ':')[-1])
         $env:BUWIZ_ANDROID_DEV = '1'
-        $env:BUWIZ_ANDROID_DEV_ENV = "EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$($port + 1)"
+        $env:BUWIZ_ANDROID_DEV_ENV = "EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$port"
         # adb is the one nsh itself runs: in the SDK it finds (ANDROID_HOME, ANDROID_SDK_ROOT, then Android Studio's
         # default place), not whichever is on PATH. Checked here, before anything is built or launched.
         $sdkRoot = @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT) | Where-Object { $_ } | Select-Object -First 1
@@ -1047,23 +1071,88 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
             }
             "nsh-run-agent: the data plane's token was not stored (is the host installed?)"
         } -ArgumentList $adb, $serial, $env:GPUI_AGENT_TOKEN, $agentHost, $tokenDir, $PID, (Get-Process -Id $PID).StartTime.Ticks
+        # The window plane reads its switch and address from the launch intent's extras, which only a hook in
+        # `nsh run` could add — there is none for a plain run. This job stores files/gpui-agent-token, forwards
+        # both plane ports, then relaunches the activity on the same dev-server url once `nsh run`'s own launch
+        # is up (`am start -S` gives it a pid not seen before), rewriting the data plane's consumed token and
+        # sending its own `am start -S`. The url needs a known dev-server port, so the run below pins one.
+        # The dev-server port the relaunch points the activity back at: --port in {{args}} wins (it is what
+        # `nsh run` binds), else NSH_DEV_PORT, else 8347 — and no second --port is added to the run.
+        $devport = if (' {{args}} ' -match ' --port[= ](\d+) ') { [int]$Matches[1] }
+            elseif ($env:NSH_DEV_PORT) { [int]$env:NSH_DEV_PORT }
+            else { 8347 }
+        $plugger = Start-Job -ScriptBlock {
+            param($adb, $serial, $token, $pkg, $dir, $port, $devport, $launcher, $launcherStarted)
+            $seenPid = $null
+            $seenAny = $false
+            $forwarded = $false
+            $storeToken = {
+                param($deviceScript)
+                $writeToken = [Diagnostics.ProcessStartInfo]::new($adb)
+                foreach ($argument in '-s', $serial, 'shell', '-T', $deviceScript) {
+                    $writeToken.ArgumentList.Add($argument)
+                }
+                $writeToken.UseShellExecute = $false
+                $writeToken.RedirectStandardInput = $true
+                $writeToken.StandardInputEncoding = [Text.UTF8Encoding]::new($false)
+                $w = [Diagnostics.Process]::Start($writeToken)
+                $w.StandardInput.Write($token)
+                $w.StandardInput.Close()
+                $w.WaitForExit()
+            }
+            for ($i = 0; $i -lt 1800; $i++) {
+                $alive = Get-Process -Id $launcher -ErrorAction SilentlyContinue
+                if (-not $alive -or $alive.StartTime.Ticks -ne $launcherStarted) {
+                    # The run ended before the relaunch: only forwards this watcher made are removed — a stale
+                    # one may belong to another run.
+                    if ($forwarded) {
+                        & $adb -s $serial forward --remove "tcp:$port" 2>$null | Out-Null
+                        & $adb -s $serial forward --remove "tcp:$($port + 1)" 2>$null | Out-Null
+                    }
+                    return
+                }
+                & $adb -s $serial shell run-as $pkg true 2>$null | Out-Null
+                if ($LASTEXITCODE -eq 0) {
+                    & $adb -s $serial forward "tcp:$port" "tcp:$port" 2>$null | Out-Null
+                    & $adb -s $serial forward "tcp:$($port + 1)" "tcp:$($port + 1)" 2>$null | Out-Null
+                    $forwarded = $true
+                    & $storeToken "run-as $pkg sh -c 'umask 077 && [ -f files/gpui-agent-token ] || { cat > files/gpui-agent-token.new && mv files/gpui-agent-token.new files/gpui-agent-token; }'"
+                    # `nsh run` launches with `am start -S`: the process it starts has a pid not yet seen —
+                    # whether none ran or a stale host's was force-stopped (a transient down is shorter than a
+                    # poll). The first pid observed could still be a stale host; a new one is nsh's own launch.
+                    $hostPid = (& $adb -s $serial shell pidof $pkg 2>$null) -replace '\s', ''
+                    if (-not $seenAny) { $seenAny = $true; $seenPid = $hostPid }
+                    elseif ($hostPid -and $hostPid -ne $seenPid) {
+                        & $storeToken "run-as $pkg sh -c 'umask 077 && mkdir -p $dir && cat > $dir/agent-token.new && mv $dir/agent-token.new $dir/agent-token'"
+                        & $adb -s $serial shell am start -S -n "$pkg/com.longbridge.nsh.DevActivity" --es url "ws://127.0.0.1:$devport/ws" --es GPUI_AGENT 1 --es GPUI_AGENT_ADDR "127.0.0.1:$port" 2>$null | Out-Null
+                        return
+                    }
+                }
+                Start-Sleep -Milliseconds 500
+            }
+        } -ArgumentList $adb, $serial, $env:GPUI_AGENT_TOKEN, $agentHost, $tokenDir, $port, $devport, $PID, (Get-Process -Id $PID).StartTime.Ticks
         "nsh-run-agent: window plane on 127.0.0.1:$port, data plane on 127.0.0.1:$($port + 1) on $serial; run: adb -s $serial forward tcp:$port tcp:$port && adb -s $serial forward tcp:$($port + 1) tcp:$($port + 1)"
     }
     $env:CARGO = "$root\nsh\agent\cargo-with-agent.cmd"
     Set-Location nsh
     $code = 1
     try {
-        nsh run --target {{target}} {{args}}
+        if ('{{target}}' -eq 'android' -and ' {{args}} ' -notmatch ' --port[= ]') { nsh run --target {{target}} --port $devport {{args}} }
+        else { nsh run --target {{target}} {{args}} }
         $code = $LASTEXITCODE
     } finally {
         if ($writer) {
-            # The launch is over, however it ended (a failed build, a failed install, Ctrl+C): the writer must not go on
-            # polling the device, and a token the app never read must not stay in the host's files (nsh removes the
-            # window plane's the same way).
+            # The launch is over, however it ended (a failed build, a failed install, Ctrl+C): the writers must not go
+            # on polling the device, and a token the app never read must not stay in the host's files.
             Stop-Job $writer
             Receive-Job $writer | ForEach-Object { [Console]::Error.WriteLine($_) }
             Remove-Job $writer -Force
-            & $adb -s $serial shell "run-as $agentHost rm -f $tokenDir/agent-token $tokenDir/agent-token.new" 2>$null | Out-Null
+            if ($plugger) {
+                Stop-Job $plugger
+                Receive-Job $plugger | ForEach-Object { [Console]::Error.WriteLine($_) }
+                Remove-Job $plugger -Force
+            }
+            & $adb -s $serial shell "run-as $agentHost rm -f $tokenDir/agent-token $tokenDir/agent-token.new files/gpui-agent-token files/gpui-agent-token.new" 2>$null | Out-Null
         }
     }
     exit $code

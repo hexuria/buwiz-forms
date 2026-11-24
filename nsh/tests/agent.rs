@@ -357,7 +357,7 @@ fn the_development_settings_opt_in_needs_the_build_the_switch_and_a_token() {
     let token = || Some(TOKEN.to_owned());
     let on: &[(&str, &str)] = &[("GPUI_AGENT", "1")];
     let config = agent::settings_config(true, settings(on), token).expect("config").expect("opted in");
-    assert_eq!(config.addr, "127.0.0.1:17422".parse::<SocketAddr>().expect("address"));
+    assert_eq!(config.addr, "127.0.0.1:17421".parse::<SocketAddr>().expect("address"));
     assert_eq!(config.token.as_deref(), Some(TOKEN));
     let placed: &[(&str, &str)] = &[("GPUI_AGENT", "true"), ("GPUI_AGENT_ADDR", "127.0.0.1:17442")];
     let config = agent::settings_config(true, settings(placed), token).expect("config").expect("opted in");

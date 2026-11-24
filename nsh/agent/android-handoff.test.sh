@@ -116,4 +116,64 @@ check "a host that never installs is reported" [ $? -ne 0 ]
 check "by name" grep -q "was not stored on R58M123" <<<"$err"
 kill "$launcher" 2>/dev/null
 
+# plug mode, against a fake adb whose pidof answers the sequence in $work/pids.
+plugsdk="$work/plugsdk"
+mkdir -p "$plugsdk"
+cat >"$plugsdk/adb" <<'ADB'
+#!/usr/bin/env bash
+echo "$*" >>"$FAKE_LOG"
+[ "$1" = -s ] || exit 64
+shift 2
+case "$*" in
+"shell run-as com.longbridge.nsh.host true") [ -e "$FAKE_STATE/installed" ] ;;
+"shell pidof com.longbridge.nsh.host")
+    pid="$(head -1 "$FAKE_STATE/pids" 2>/dev/null)"
+    [ -n "$pid" ] && tail -n +2 "$FAKE_STATE/pids" >"$FAKE_STATE/pids.tmp" && mv "$FAKE_STATE/pids.tmp" "$FAKE_STATE/pids" || true
+    [ -n "$pid" ] || exit 1
+    echo "$pid"
+    ;;
+"shell -T"*) cat >>"$FAKE_STATE/writes" ;;
+"forward --remove "*) exit 0 ;;
+"forward "*) exit 0 ;;
+"shell am start "*) touch "$FAKE_STATE/am-started" ; exit 0 ;;
+esac
+ADB
+chmod +x "$plugsdk/adb"
+printf '' >"$work/writes"
+
+# A stale host that `nsh run` force-stops and replaces: the relaunch fires on the pid change, once.
+touch "$work/installed"
+printf '111\n222\n222\n222\n' >"$work/pids"
+sleep 30 &
+launcher=$!
+GPUI_AGENT_TOKEN=t "$handoff" plug "$plugsdk/adb" R58M123 "$launcher" 17421 8347
+check "a new pid relaunches the activity" [ -e "$work/am-started" ]
+check "with the agent extras and the dev port" grep -q "am start -S -n com.longbridge.nsh.host/com.longbridge.nsh.DevActivity --es url ws://127.0.0.1:8347/ws --es GPUI_AGENT 1 --es GPUI_AGENT_ADDR 127.0.0.1:17421" "$FAKE_LOG"
+check "and the window token was stored" [ -s "$work/writes" ]
+kill "$launcher" 2>/dev/null; rm -f "$work/am-started"; : >"$FAKE_LOG"; : >"$work/writes"
+
+# No host ever comes up while the launcher lives: nothing is launched.
+printf '\n\n\n' >"$work/pids"
+sleep 30 &
+launcher=$!
+NSH_AGENT_TOKEN_TRIES=4 NSH_AGENT_TOKEN_PAUSE=0.01 GPUI_AGENT_TOKEN=t "$handoff" plug "$plugsdk/adb" R58M123 "$launcher" 17421 8347
+check "no host means no relaunch" [ ! -e "$work/am-started" ]
+kill "$launcher" 2>/dev/null; rm -f "$work/am-started"; : >"$FAKE_LOG"
+
+# The launcher dies mid-watch: the job removes the forwards it made.
+printf '111\n' >"$work/pids"
+sleep 30 &
+launcher=$!
+(sleep 0.3 && kill "$launcher") &
+NSH_AGENT_TOKEN_TRIES=100 "$handoff" plug "$plugsdk/adb" R58M123 "$launcher" 17421 8347
+check "a dead launcher removes both forwards" bash -c 'grep -q "forward --remove tcp:17421" "$FAKE_LOG" && grep -q "forward --remove tcp:17422" "$FAKE_LOG"'
+
+# A launcher that dies before the host installs removes nothing it did not create.
+rm -f "$work/installed"; : >"$FAKE_LOG"
+sleep 30 &
+launcher=$!
+(sleep 0.3 && kill "$launcher") &
+NSH_AGENT_TOKEN_TRIES=100 "$handoff" plug "$plugsdk/adb" R58M123 "$launcher" 17421 8347
+check "a launch that never installed removes no forwards" bash -c '! grep -q "forward --remove" "$FAKE_LOG"'
+
 exit "$failed"

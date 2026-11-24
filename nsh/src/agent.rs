@@ -37,10 +37,35 @@ use std::cell::Cell;
 
 use nsh_core::prelude::*;
 
-// Linked only to switch on NSH's own window control plane (cargo feature `gpui-agent-server`, see Cargo.toml): the
-// generated macOS host and runner share this crate, so the feature reaches them through the one dependency graph.
+// The plug's window control plane (semantic tree, press, type, screenshot): each platform crate exposes an
+// `install()` that registers its surface hook, and it must run before the host opens any surface — `native()`
+// calls it (see src/lib.rs). Linked under `agent` only, one dependency graph reaching the generated hosts.
 #[cfg(all(feature = "agent", target_os = "macos"))]
-use nsh_platform_macos as _;
+use nsh_gpui_agent_macos;
+#[cfg(all(feature = "agent", target_os = "linux"))]
+use nsh_gpui_agent_linux;
+#[cfg(all(feature = "agent", target_os = "windows"))]
+use nsh_gpui_agent_windows;
+#[cfg(all(feature = "agent", target_os = "ios"))]
+use nsh_gpui_agent;
+// Android links its plug crate for the constructor it self-installs with — no call needed.
+#[cfg(all(feature = "agent", target_os = "android"))]
+use nsh_gpui_agent_android as _;
+
+/// Installs the plug's window-plane surface hook for this platform's crate. `native()` calls it before the
+/// host can open a surface; a no-op without `agent` or on a platform with no plug crate yet.
+pub fn install_window_plane() {
+    #[cfg(all(feature = "agent", target_os = "macos"))]
+    nsh_gpui_agent_macos::install();
+    #[cfg(all(feature = "agent", target_os = "linux"))]
+    nsh_gpui_agent_linux::install();
+    #[cfg(all(feature = "agent", target_os = "windows"))]
+    nsh_gpui_agent_windows::install();
+    #[cfg(all(feature = "agent", target_os = "ios"))]
+    if let Err(error) = nsh_gpui_agent::ios::install() {
+        tracing::error!(%error, "the window control plane did not install");
+    }
+}
 
 /// What the agent remote control is doing.
 #[derive(Debug, Clone, PartialEq, JsObject)]
@@ -269,6 +294,13 @@ mod live {
                 "the NSH app's agent listens on loopback only; GPUI_AGENT_ADDR {requested} is not loopback"
             ));
         }
+        // The window's own control plane (the plug, on the same `GPUI_AGENT_ADDR`) binds only once a
+        // surface opens — after this listener starts — so it must own the base port and this one moves
+        // to the next, as the Android default (`127.0.0.1:17422`) already intends.
+        let requested = SocketAddr::new(
+            requested.ip(),
+            requested.port().checked_add(1).unwrap_or(0),
+        );
         if std::net::TcpListener::bind(requested).is_err() {
             return Ok(SocketAddr::new(requested.ip(), 0));
         }
@@ -289,7 +321,8 @@ mod live {
         if !enabled || !matches!(var("GPUI_AGENT").as_deref(), Some("1" | "true")) {
             return Ok(None);
         }
-        let addr = var("GPUI_AGENT_ADDR").unwrap_or_else(|| "127.0.0.1:17422".to_owned());
+        // The default is the window plane's port: `choose` moves this listener to the port after it (17422).
+        let addr = var("GPUI_AGENT_ADDR").unwrap_or_else(|| "127.0.0.1:17421".to_owned());
         let addr: SocketAddr =
             addr.parse().map_err(|_| format!("GPUI_AGENT_ADDR {addr} is not a socket address"))?;
         let token = token()
@@ -480,11 +513,11 @@ mod live {
         use super::*;
 
         #[test]
-        fn a_taken_address_gives_another_loopback_port_and_a_remote_one_is_refused() {
+        fn a_taken_address_gives_the_next_loopback_port_and_a_remote_one_is_refused() {
             let held = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
             let taken = held.local_addr().expect("its address");
             let chosen = choose(taken).expect("loopback is accepted");
-            assert_eq!((chosen.ip(), chosen.port()), (taken.ip(), 0), "the system picks a free port");
+            assert_eq!(chosen, SocketAddr::new(taken.ip(), taken.port() + 1), "the data plane moves to the port after the window plane's");
             assert!(choose("192.0.2.1:17421".parse().expect("an address")).is_err());
         }
     }

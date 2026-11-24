@@ -1,6 +1,6 @@
 # nsh/ - the NSH (TSX) app
 
-eBIRForms on Native Shell (NSH 0.6.1: the hexuria/nsh fork, commit `70d8ff26b`, the tip of its `buwiz` branch; the pin is `NSH_PINNED_REF` in `.github/workflows/nsh.yml`), mixed mode: TSX screens over a Rust crate.
+eBIRForms on Native Shell (NSH 0.6.1: the hexuria/nsh fork, commit `ca39c0e91` on its `buwiz-next` branch; the pin is `NSH_PINNED_REF` in `.github/workflows/nsh.yml`), mixed mode: TSX screens over a Rust crate.
 Id `dev.goldcoders.bir`, version 0.2.0, own cargo workspace (empty `[workspace]` in Cargo.toml). The old app (`app/`,
 the retired gpui shell crate) is deleted; this app replaces it. Contract and Hard rules: `docs/plans/nsh-tsx-migration.md`. Read this file fully first.
 

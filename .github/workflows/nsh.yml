@@ -68,10 +68,10 @@ env:
   # repository's cache storage is full); panics still name their file and line.
   CARGO_PROFILE_DEV_DEBUG: "0"
   # THE PIN: the NSH commit every job builds against. Change it here and nowhere else.
-  # 70d8ff26b9e9dccb17a908de97cd4a3f3e381276 = hexuria/nsh, the tip of branch buwiz (NSH 0.6.1, after hexuria/nsh#31). Its
-  # development hosts serve the window's gpui-agent control plane (tree, press, type, screenshot) on macOS, Linux, Windows,
-  # Android and the iOS Simulator, which agent recipes that press the form's controls need (agent-recipes/ui).
-  NSH_PINNED_REF: 70d8ff26b9e9dccb17a908de97cd4a3f3e381276
+  # ca39c0e9103a389a31ea280799ef34796d7aac70 = hexuria/nsh, branch buwiz-next: upstream v0.6.1, the doors the window's
+  # control plane plugs into (branch gpui-agent, SOCKET.md there), and the app's own changes. The control plane itself
+  # is hexuria/nsh-gpui-agent, pinned in nsh/Cargo.toml. The release workflows and their policy test name this commit too.
+  NSH_PINNED_REF: ca39c0e9103a389a31ea280799ef34796d7aac70
   NSH_REPOSITORY: hexuria/nsh
   # The four safety variables: nothing reaches the keychain, a real database or the BIR.
   BUWIZ_NO_KEYCHAIN: "1"
@@ -181,6 +181,23 @@ jobs:
         if: matrix.shard == 0
         working-directory: buwiz-forms
         run: cargo test --manifest-path nsh/Cargo.toml --no-fail-fast
+
+      # The agent build, which nothing else here compiles. First the window's control plane (hexuria/nsh-gpui-agent)
+      # against this NSH: the app's crate and its tests build with `agent`, and the two data-plane tests run. Then
+      # the host nsh generates: with `agent` it must hold one nsh-testing, the checkout's. cargo tree stops with
+      # "ambiguous" when the control plane's Git copy of NSH is in the graph too; that build compiles, and its
+      # window listener never starts.
+      - name: The agent feature builds, with one NSH in the host
+        if: matrix.shard == 0
+        working-directory: buwiz-forms
+        run: |
+          cargo test --manifest-path nsh/Cargo.toml --features agent --no-run
+          cargo test --manifest-path nsh/Cargo.toml --features agent --test agent --test agent_send
+          cargo tree --manifest-path nsh/.nsh/rust/Cargo.toml -p nsh-app-nsh-app-ebirforms-macos-host \
+            --features app_nsh_app_ebirforms/agent -i nsh-testing --depth 1
+          # The iOS arm of the agent code is compiled nowhere else (it once named a crate the app does not have).
+          rustup target add aarch64-apple-ios-sim
+          cargo check --manifest-path nsh/Cargo.toml --features agent --target aarch64-apple-ios-sim
 
       # Every *.test.ts and *.test.tsx, one headless run per file, as `just nsh-test` does (nsh/verify holds real-window
       # verifiers that need the owner's data copy, so it is left out). `just nsh-test <file>` sets the four safety
@@ -335,6 +352,20 @@ jobs:
         if: matrix.shard == 0
         working-directory: buwiz-forms
         run: cargo test --manifest-path nsh/Cargo.toml --no-fail-fast
+
+      # The agent build, which nothing else here compiles. First the window's control plane (hexuria/nsh-gpui-agent)
+      # against this NSH: the app's crate and its tests build with `agent`, and the two data-plane tests run. Then
+      # the host nsh generates: with `agent` it must hold one nsh-testing, the checkout's. cargo tree stops with
+      # "ambiguous" when the control plane's Git copy of NSH is in the graph too; that build compiles, and its
+      # window listener never starts.
+      - name: The agent feature builds, with one NSH in the host
+        if: matrix.shard == 0
+        working-directory: buwiz-forms
+        run: |
+          cargo test --manifest-path nsh/Cargo.toml --features agent --no-run
+          cargo test --manifest-path nsh/Cargo.toml --features agent --test agent --test agent_send
+          cargo tree --manifest-path nsh/.nsh/rust/Cargo.toml -p nsh-app-nsh-app-ebirforms-linux-host \
+            --features app_nsh_app_ebirforms/agent -i nsh-testing --depth 1
 
       # The host `nsh run --target linux` builds, from the workspace nsh check generated in .nsh/rust: it links NSH's GTK
       # backend with its development features (the dev and agent code a plain build leaves out).
@@ -499,6 +530,21 @@ jobs:
         working-directory: buwiz-forms/nsh
         shell: pwsh
         run: cargo test --manifest-path Cargo.toml --no-fail-fast
+
+      # The agent build, as the macOS and Linux jobs check it: the control plane against this NSH, the two data-plane
+      # tests, and one nsh-testing in the generated host (cargo tree stops with "ambiguous" on two).
+      - name: The agent feature builds, with one NSH in the host
+        if: matrix.shard == 0
+        working-directory: buwiz-forms/nsh
+        shell: pwsh
+        run: |
+          cargo test --manifest-path Cargo.toml --features agent --no-run
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --manifest-path Cargo.toml --features agent --test agent --test agent_send
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo tree --manifest-path .nsh/rust/Cargo.toml -p nsh-app-nsh-app-ebirforms-windows-host `
+            --features app_nsh_app_ebirforms/agent -i nsh-testing --depth 1
+          exit $LASTEXITCODE
 
       # The host `nsh run --target windows` builds, from the workspace nsh check generated in .nsh/rust: it links NSH's
       # Win32 backend with its development features (the dev and agent code a plain build leaves out).

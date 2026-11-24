@@ -27,7 +27,7 @@ No Windows or Linux machine was available, so nothing below was run there. "Writ
 | Print and Save as PDF | built and tested (WebKit makes the PDF, the system print panel prints) | built (WebView2 makes the PDF, tested in a desktop session; the system print dialog, then WebView2 prints) | stub: "Print and Save as PDF are available on macOS and Windows only for now." |
 | One copy per database (a second launch brings the first forward) | built and tested | written (std file lock and a loopback port); never run | the same |
 | App menu, tray, hide to tray, global hotkey, updater driver | built; a test cannot click the system menu bar or tray | not tried: NSH's `nsh/desktop` decides what exists there | not tried |
-| Agent remote control (cargo feature `agent`) | built and tested; the window control plane is macOS-only | data plane only; type-checks | the same |
+| Agent remote control (cargo feature `agent`) | built and tested; the window control plane comes from hexuria/nsh-gpui-agent on every native platform | data plane only; type-checks | the same |
 | Private print folder (modes 0700/0600) and removal of stale ones at start | built and tested | per-user temp folder, no ACLs; stale ones removed at start (`OpenProcess`) | written (the Unix code); never run |
 
 ## Cross-check from the macOS machine

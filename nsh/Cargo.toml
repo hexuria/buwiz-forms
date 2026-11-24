@@ -7,7 +7,7 @@ publish = false
 # Its own workspace, as the retired shell's was: the root workspace (and its Cargo.lock) never sees this crate.
 [workspace]
 
-# Every nsh-* crate comes from the one NSH checkout, by path (the hexuria/nsh fork with upstream v0.5.1 merged, NSH 0.5.1).
+# Every nsh-* crate comes from the one NSH checkout, by path (the hexuria/nsh fork, branch buwiz-next, NSH 0.6.1; the pin is NSH_PINNED_REF in .github/workflows/nsh.yml).
 # The checkout is a SIBLING of the buwiz-forms checkout: <parent>/buwiz-forms and <parent>/nsh, so from this folder it is ../../nsh.
 # The worktree layout (features/nsh-tsx/{buwiz-forms,nsh}) and CI (.github/workflows/nsh.yml) both follow it. The nsh CLI takes
 # the source from these paths (`cargo metadata` makes them absolute), so relative paths work with nsh check/build/test/run.
@@ -35,6 +35,9 @@ libc = "0.2"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
+# The window's own control plane on Android is the plug's nsh-gpui-agent-android crate, linked for the
+# constructor it self-installs with; same rev as the other platform crates.
+nsh-gpui-agent-android = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", optional = true }
 
 # The database guard on Windows: the account's profile folder from its token (GetUserProfileDirectoryW), never
 # USERPROFILE, and a file or folder known by volume and file index (GetFileInformationByHandle). The version the lock
@@ -57,6 +60,11 @@ png = "0.17"
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk4 = { version = "0.11", features = ["v4_14"] }
 webkit6 = "0.6"
+# The window's own control plane on Linux is the plug's, in nsh-gpui-agent-linux: the same surface hook as the
+# macOS crate, a development listener gated on GPUI_AGENT=1 (there is no in-process server feature on this crate).
+# Every platform dep must name the same rev or the plug's shared crates (nsh-gpui-agent, nsh-agent-actions)
+# resolve twice.
+nsh-gpui-agent-linux = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_UI_Shell"] }
@@ -64,6 +72,9 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 # (Print) after the system's print dialog (PrintDlgEx). The versions nsh's Windows backend uses.
 webview2-com = "0.39"
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_RemoteDesktop", "Win32_System_Threading", "Win32_UI_Controls_Dialogs", "Win32_UI_WindowsAndMessaging"] }
+# The window's own control plane on Windows is the plug's, in nsh-gpui-agent-windows; same rev as the other
+# platform crates.
+nsh-gpui-agent-windows = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", optional = true }
 
 # Touch ID / the account password and Windows Hello (admin recovery, `mac_login`): the old host's crate and version
 # (the retired shell's Cargo.toml). Used by src/auth.rs.
@@ -83,18 +94,44 @@ dispatch2 = "0.3.1"
 # CGRect for the hidden web view on iOS (objc2-foundation names it NSRect on macOS only). Already in the lock.
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "objc2", "CFCGTypes"] }
+# The window's own control plane on iOS is the plug's `nsh-gpui-agent` crate's ios feature (the driver lives in
+# the shared crate; same rev as the other platform crates).
+nsh-gpui-agent = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", features = ["ios"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-# The window's own control plane (semantic tree, press, type, screenshot) is NSH's, in nsh-platform-macos: feature
-# `gpui-agent-server`, a second listener. Only under `agent`; see nsh/AGENTS.md "Agent remote control".
-nsh-platform-macos = { path = "../../nsh/crates/nsh-platform-macos", default-features = false, optional = true }
+# The window's own control plane (semantic tree, press, type, screenshot) is the plug's, in nsh-gpui-agent-macos:
+# feature `gpui-agent-server`, a second listener (the in-process server, as NSH's own was). Only under `agent`;
+# see nsh/AGENTS.md "Agent remote control". The plug's NSH pin is redirected to this app's checkout by the
+# [patch] below.
+nsh-gpui-agent-macos = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", default-features = false, features = ["gpui-agent-server"], optional = true }
 
 [features]
 default = []
 mas_build = ["bir-app-api/mas_build", "bir-core/mas_build"]
 # Agent remote control, as the old app (`bir --features agent`): the shared gpui-agent session over a loopback listener,
-# and NSH's own window control plane on macOS. Compiled in only here; the listener still needs GPUI_AGENT=1 (see src/agent.rs).
-agent = ["bir-app-api/agent", "dep:gpui-agent", "dep:nsh-platform-macos", "nsh-platform-macos/gpui-agent-server"]
+# and the plug's window control plane on every native platform. Compiled in only here; the listener still needs GPUI_AGENT=1 (see src/agent.rs).
+agent = ["bir-app-api/agent", "dep:gpui-agent", "dep:nsh-gpui-agent-macos", "dep:nsh-gpui-agent-linux", "dep:nsh-gpui-agent-windows", "dep:nsh-gpui-agent", "dep:nsh-gpui-agent-android"]
+
+# One NSH per build: the plug declares its nsh-* crates as git dependencies on hexuria/nsh, and cargo treats the
+# same crate from two sources as two different crates. Redirect every nsh-* the plug pulls to this app's own
+# checkout (the sibling ../nsh at the pin, which has every door the plug's NSH branch `gpui-agent` has). Keep this
+# list covering every nsh-* git dependency of the plug. nsh carries this table into the workspace it generates
+# (nsh/.nsh/rust), which is a workspace root of its own and would otherwise build the Git copy as well.
+[patch."https://github.com/hexuria/nsh"]
+nsh-core = { path = "../../nsh/crates/nsh-core" }
+nsh-dev = { path = "../../nsh/crates/nsh-dev" }
+nsh-testing = { path = "../../nsh/crates/nsh-testing" }
+nsh-base = { path = "../../nsh/crates/nsh-base" }
+nsh-cli = { path = "../../nsh/crates/nsh-cli" }
+nsh-ios-host = { path = "../../nsh/crates/nsh-ios-host" }
+nsh-linux-host = { path = "../../nsh/crates/nsh-linux-host" }
+nsh-macos-host = { path = "../../nsh/crates/nsh-macos-host" }
+nsh-windows-host = { path = "../../nsh/crates/nsh-windows-host" }
+nsh-platform-android = { path = "../../nsh/crates/nsh-platform-android" }
+nsh-platform-ios = { path = "../../nsh/crates/nsh-platform-ios" }
+nsh-platform-linux = { path = "../../nsh/crates/nsh-platform-linux" }
+nsh-platform-macos = { path = "../../nsh/crates/nsh-platform-macos" }
+nsh-platform-windows = { path = "../../nsh/crates/nsh-platform-windows" }
 
 [dev-dependencies]
 futures = "0.3"

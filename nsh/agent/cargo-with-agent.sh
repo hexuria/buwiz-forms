@@ -7,19 +7,27 @@
 # Used by `just nsh-run-agent`; nothing else sets $CARGO.
 real="${NSH_REAL_CARGO:-cargo}"
 if [ "$1" = "build" ]; then
-    # The generated Android library names NSH's `dev` feature only; the window's control plane is `dev-agent` (the desktop and
-    # iOS development hosts already carry it through NSH's host crates).
-    features="app_nsh_app_ebirforms/agent"
     for arg in "$@"; do
-        case "$arg" in
-            nsh-app-nsh-app-ebirforms-android) features="$features,nsh-platform-android/dev-agent" ;;
-        esac
-    done
-    for arg in "$@"; do
-        case "$arg" in
+        # On Windows nsh names the manifest with either slash, even both (...\nsh\.nsh/rust\Cargo.toml): compare and
+        # open it with forward slashes only, which every system's tools take.
+        # shellcheck disable=SC1003
+        case "$(printf '%s' "$arg" | tr '\\' '/')" in
             */.nsh/rust/Cargo.toml)
+                # shellcheck disable=SC1003
+                manifest="$(printf '%s' "$arg" | tr '\\' '/')"
+                # The plug's crates name hexuria/nsh as Git dependencies. The generated workspace is its own workspace
+                # root, so it has to redirect them to the app's checkout itself, or the host links a second NSH and the
+                # window's listener never starts (no error). nsh writes that table since the pinned commit: it carries
+                # the app's own [patch] tables over. An older nsh does not, so stop here instead of building that.
+                if ! grep -q 'patch."https://github.com/hexuria/nsh"' "$manifest"; then
+                    echo "cargo-with-agent: $manifest has no [patch.\"https://github.com/hexuria/nsh\"] table." >&2
+                    echo "  This nsh is older than the app's NSH pin (NSH_PINNED_REF in .github/workflows/nsh.yml)." >&2
+                    echo "  Rebuild it from the sibling checkout at that commit:" >&2
+                    echo "  cargo install --locked --path ../nsh/crates/nsh-cli --root ~/BuwizNsh/tools" >&2
+                    exit 1
+                fi
                 shift
-                exec "$real" build "$@" --features "$features"
+                exec "$real" build "$@" --features app_nsh_app_ebirforms/agent
                 ;;
         esac
     done

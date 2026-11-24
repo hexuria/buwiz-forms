@@ -78,8 +78,11 @@ polls `agent_take` every 50 ms, only while the listener runs, and applies `refre
 frame as `app/main.js` did. An agent's queue request is the host function `agent_send_draft`: the same validate, standing OK and Queue as the
 UI; the door's send guard has forced a dry run (`nsh/tests/agent_send.rs`).
 
-The window itself has a second control plane, NSH's own (`nsh-platform-macos` feature `gpui-agent-server`, switched on by `agent` on macOS):
-the semantic tree, press, type, key, scroll and a PNG of the window. It listens at `GPUI_AGENT_ADDR` (the data plane then takes another port;
+The window itself has a second control plane, from `hexuria/nsh-gpui-agent` (one crate per platform, linked by `agent` on macOS, Linux,
+Windows, iOS and Android; `nsh/src/agent.rs` installs it before the first surface opens): the semantic tree, press, type, key, scroll and
+a PNG of the window. It listens at `GPUI_AGENT_ADDR` (the data plane then takes another port;
 read it from the discovery record) and is not in `bir-mcp`: use the `gpui-agent` CLI. The `nsh` CLI builds its hosts without app features, so
-`just nsh-agent-check` sets `nsh/agent/cargo-with-agent.sh` as `$CARGO`, which adds the feature to the generated host's build.
+`just nsh-agent-check` sets `nsh/agent/cargo-with-agent.sh` as `$CARGO`, which adds the feature to the generated host's build. That
+script also stops the build when the generated workspace does not redirect the plug's NSH to the app's checkout, which means the `nsh`
+command line is older than the pin and must be rebuilt.
 `nsh/tests/window_plane.rs` drives a real window with both planes.
