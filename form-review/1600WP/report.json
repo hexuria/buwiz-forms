@@ -1,0 +1,51 @@
+{
+  "code": "1600WP",
+  "verdict": "tweak",
+  "summary": "The single-page 2010 sheet geometry matches the official PDF well, but Part II and Schedule 1.1 amounts are left-aligned, Attachment Withholding Agent Name and Seq. No. are blank, Item 11 No is unticked, and screen Part II shows a row-count mismatch.",
+  "defects": [
+    {
+      "id": "1600WP-P1",
+      "surface": "print",
+      "where": "Page 1, Part II Items 12-16 and Schedule 1.1 columns (6) and (8)",
+      "what": "All peso amounts print left-aligned instead of right-aligned.",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1600WP-P2",
+      "surface": "print",
+      "where": "Page 1, Attachment header (Withholding Agent Name) and Schedule 1.1 (Seq. No. and Total row)",
+      "what": "Withholding Agent Name in the Attachment header prints blank; Schedule 1.1 Seq. No. column (1) is blank; only 5 of 10 filled payee rows print; Total row P boxes are blank.",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1600WP-P3",
+      "surface": "print",
+      "where": "Page 1, Item 10 (Zip Code) and Item 11 (Tax Relief)",
+      "what": "Item 10 Zip Code prints blank; Item 11 No box is unticked on paper even though screen Part I states eBIRForms keeps it disabled with No ticked.",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1600WP-S1",
+      "surface": "screen",
+      "where": "Part II, Computation of Tax table",
+      "what": "Header displays \"2 rows\" while the table body states \"No rows yet.\".",
+      "before": "before/screen-03-part-ii-computation-of-tax.png",
+      "after": "",
+      "status": "open"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "crates/bir-print: tighten 14-digit TIN comb spacing in Attachment header so digits do not touch ticks"
+  ],
+  "tests_run": [],
+  "open_questions": [
+    "Note: print-p1.png was generated from the running app Print preview sheet.html via headless Chrome + pdftoppm."
+  ]
+}

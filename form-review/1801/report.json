@@ -1,0 +1,69 @@
+{
+  "code": "1801",
+  "verdict": "tweak",
+  "summary": "Page geometry matches the official 2018 PDF well, but Page 1 Items 5 (TIN), 16, 22, and 24 print blank, Page 2 schedule amounts are left-aligned with border clipping, and Page 1/2 name/address collide with comb ticks.",
+  "defects": [
+    {
+      "id": "1801-P1",
+      "surface": "print",
+      "where": "Page 1, Item 5 (Taxpayer Identification Number)",
+      "what": "Item 5 TIN prints completely blank on Page 1 even though Page 2 TIN prints 00012345300000.",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1801-P2",
+      "surface": "print",
+      "where": "Page 1, Items 16 (Net Taxable Estate), 22 (Tax Payable 1st installment), and 24 (Total Amount Payable)",
+      "what": "All three key summary boxes print completely blank despite Page 2 Item 40 (85,610,732.29) and Item 20 (3,806,273.97) being computed.",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1801-P3",
+      "surface": "print",
+      "where": "Page 1, Items 7, 8, 13 and Page 2 Header (Taxpayer Name)",
+      "what": "Taxpayer Name and Residence print as plain text colliding with comb ticks; Residence does not wrap cleanly to line 2; Email prints lowercase.",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "needs shared change"
+    },
+    {
+      "id": "1801-P4",
+      "surface": "print",
+      "where": "Page 1, Item 11 (TIN of Executor/Administrator)",
+      "what": "Executor TIN text overlaps the shaded dash separator boxes.",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1801-P5",
+      "surface": "print",
+      "where": "Page 2, Part IV (Columns A & B) and Part V (Schedules 1, 1A, 2, 2A, 3, 4, 5)",
+      "what": "All money amounts in Part IV A/B and Part V schedules are left-aligned instead of right-aligned; Schedule 1A OCT/TCT/CCT No. and Schedule 4 Registered Address clip against cell borders.",
+      "before": "before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1801-S1",
+      "surface": "screen",
+      "where": "Part I, Item 10 (Name of Executor/Administrator) and Item 11 (TIN)",
+      "what": "Long Executor Name scrolls past the left edge inside the input; TIN input segments need clear formatting when filled.",
+      "before": "before/screen-02-part-i-taxpayer-information.png",
+      "after": "",
+      "status": "needs shared change"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "crates/bir-print: comb-overflow fitting and uppercase formatting for Page 1/2 Name, Residence, and Email"
+  ],
+  "tests_run": [],
+  "open_questions": [
+    "Note: print-p*.png pages were generated from the running app Print preview sheet.html via headless Chrome + pdftoppm."
+  ]
+}

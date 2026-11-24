@@ -1,0 +1,51 @@
+{
+  "code": "1602Q",
+  "verdict": "rebuild part",
+  "summary": "Pages 1 and 2 align cleanly with the official 2019 PDF, but Page 3 prints as an almost-empty orphaned page after Schedules 5-6 were lifted to guide.html; Item 9A ZIP is blank and long addresses/names collide with comb ticks.",
+  "defects": [
+    {
+      "id": "1602Q-P1",
+      "surface": "print",
+      "where": "Page 3 (entire page)",
+      "what": "Page 3 prints only the top header banner (TIN and Withholding Agent Name) over 90% blank white space because Schedules 5 and 6 were moved to guide.html; either drop Page 3 from print output or restore the official reference tables.",
+      "before": "before/print-p3.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1602Q-P2",
+      "surface": "print",
+      "where": "Page 1, Item 9 (Registered Address), Item 12 (Email), and Page 2/3 Header (Withholding Agent Name)",
+      "what": "Long address and Page 2/3 header name print as plain text colliding with comb ticks; Email prints lowercase.",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "needs shared change"
+    },
+    {
+      "id": "1602Q-P3",
+      "surface": "print",
+      "where": "Page 1, Item 9A (ZIP Code)",
+      "what": "Item 9A ZIP Code prints blank despite profile ZIP 1209.",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1602Q-P4",
+      "surface": "print",
+      "where": "Page 2, Schedule 2 and Schedule 3 (Tax Rate column)",
+      "what": "Tax Rate prints left-aligned without a percent sign (4.00 instead of right-aligned 4.00%).",
+      "before": "before/print-p2.png",
+      "after": "",
+      "status": "open"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "crates/bir-print: comb-overflow fitting and uppercase formatting for address, email, and Page 2 header name"
+  ],
+  "tests_run": [],
+  "open_questions": [
+    "Note: print-p*.png pages were generated from the running app Print preview sheet.html via headless Chrome + pdftoppm."
+  ]
+}

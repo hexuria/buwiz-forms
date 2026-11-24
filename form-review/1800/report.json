@@ -1,0 +1,80 @@
+{
+  "code": "1800",
+  "verdict": "tweak",
+  "summary": "Page geometry matches the official 2018 PDF well, but Page 1 Item 14 is blank, addresses print URL-encoded over comb ticks, Schedule A/B rows 6-10 and right-alignment are missing, and screen Item 9B exposes internal repo paths.",
+  "defects": [
+    {
+      "id": "1800-P1",
+      "surface": "print",
+      "where": "Page 1, Items 8 and 9 (Registered & Residence Address)",
+      "what": "Address prints literally URL-encoded (%20, %2C) and plain text collides with comb ticks.",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "needs shared change"
+    },
+    {
+      "id": "1800-P2",
+      "surface": "print",
+      "where": "Page 1, Item 14 (Total Net Gifts Subject to Tax)",
+      "what": "Item 14 prints completely blank even though Page 2 Item 38 has 561,018,760.05 and Item 16 computed 33,661,125.60.",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1800-P3",
+      "surface": "print",
+      "where": "Page 1, Items 8A, 9A (ZIP Code) and 9B (RDO Code)",
+      "what": "ZIP Code boxes print blank even though profile has 1209; 9B is blank (by design, no eBIRForms field).",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1800-P4",
+      "surface": "print",
+      "where": "Page 1, Item 11 (Email Address) and Page 2 Header (Donor Name)",
+      "what": "Email prints lowercase over comb ticks; Page 2 Donor Name prints plain text across comb ticks instead of comb-spaced.",
+      "before": "before/print-p1.png",
+      "after": "",
+      "status": "needs shared change"
+    },
+    {
+      "id": "1800-P5",
+      "surface": "print",
+      "where": "Page 2, Part V Schedule A and Schedule B",
+      "what": "Only rows 1-5 print (rows 6-10 blank and overflow rows 11-18 dropped); Fair Market Value amounts are left-aligned instead of right-aligned; Schedule B Area text is tiny and cramped on the left border.",
+      "before": "before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1800-S1",
+      "surface": "screen",
+      "where": "Part I, Item 9B (RDO Code)",
+      "what": "Helper text exposes internal developer file paths (rules/forms/1800-v2018/fixtures/runtime-control-inventory-v796.json and html-frozen/1800-2018/writer-cells.json) to end users.",
+      "before": "before/screen-02-part-i-taxpayer-information.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1800-S2",
+      "surface": "screen",
+      "where": "Part V, Schedule A rows 6-15",
+      "what": "Schedule A rows 6-15 display Particulars without their Fair Market Value summary, unlike rows 1-5.",
+      "before": "before/screen-06-part-v-schedules.png",
+      "after": "",
+      "status": "open"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "crates/bir-print: decode URL-encoded address fields (%20/%2C) before printing",
+    "crates/bir-print: uppercase email/text values on CAPITAL LETTERS comb fields and improve comb-overflow fitting on long addresses and Page 2 header names",
+    "crates/bir-print: support continuation pages when growable schedule rows exceed paper row capacity"
+  ],
+  "tests_run": [],
+  "open_questions": [
+    "Note: print-p*.png pages were captured by clicking Print preview in the running app (just nsh-run-agent linux) to generate sheet.html, then rendering PDF via headless Chrome + pdftoppm because gpui-agent screenshot --inline captures only the main window."
+  ]
+}
