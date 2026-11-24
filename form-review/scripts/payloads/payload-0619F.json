@@ -1,0 +1,18 @@
+{
+  "open_args": {
+    "year": 2025,
+    "period": 2
+  },
+  "passes": [
+    {
+      "frm0619F:optAmend": "Y",
+      "frm0619F:optWithheld": "Y",
+      "frm0619F:txtDueDay": "10",
+      "frm0619F:txtTaxTypeCode": "WF"
+    },
+    {
+      "frm0619F:txtTax14": "176543210.75",
+      "frm0619F:txtTax16": "32109876.50"
+    }
+  ]
+}

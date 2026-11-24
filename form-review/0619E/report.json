@@ -1,0 +1,47 @@
+{
+  "form_code": "0619E",
+  "revision": "January 2018",
+  "html_frozen_slug": "0619e-2018",
+  "official_pdf": {
+    "source_file": "0619-E Jan 2018 rev final.pdf",
+    "url": "https://bir-cdn.bir.gov.ph/local/pdf/0619-E%20Jan%202018%20rev%20final.pdf",
+    "sha256": "0418160d63d4e6f68c34f2bad553273a5d148c3686d8562d338d35fcdd0c5215",
+    "sha256_matches_provenance": true,
+    "pages": 1
+  },
+  "branch": "try/forms-neon-1-b",
+  "base_commit": "48887449",
+  "verdict": "tweak",
+  "summary": "Single printed page matches the official January 2018 PDF cleanly (name, TIN, RDO, contact, email, and 9-digit amounts + statutory penalties all fit their comb cells); only Item 10 Registered Address collides with its comb tick marks.",
+  "test_data": {
+    "script": "form-review/scripts/seed_and_capture.py",
+    "payload": "form-review/scripts/payloads/payload-0619E.json",
+    "profile": "Juana Santos long-name demo profile (TIN 000-123-453-00000, RDO 008, Makati long address)",
+    "period": "2025-02 (February 2025)",
+    "schedule_overflow_attempted": "Not applicable — 0619E has no schedules."
+  },
+  "defects": [
+    {
+      "id": "0619E-P1",
+      "surface": "print",
+      "page": 1,
+      "area": "Part I Item 10 Registered Address (lines 1 & 2)",
+      "severity": "high",
+      "status": "needs shared change",
+      "description": "Long registered address prints as continuous plain text directly over the vertical comb tick marks on both lines."
+    }
+  ],
+  "evidence": {
+    "official": [
+      "form-review/0619E/official/page-01.png"
+    ],
+    "before": [
+      "form-review/0619E/before/print-p1.png",
+      "form-review/0619E/before/screen-01-return-details.png",
+      "form-review/0619E/before/screen-02-part-i-background-information.png",
+      "form-review/0619E/before/screen-03-part-ii-tax-remittance.png",
+      "form-review/0619E/before/screen-04-part-iii-details-of-payment.png",
+      "form-review/0619E/before/screen-05-not-on-the-printed-sheet.png"
+    ]
+  }
+}

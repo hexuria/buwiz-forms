@@ -1,0 +1,56 @@
+{
+  "form_code": "0619F",
+  "revision": "January 2018",
+  "html_frozen_slug": "0619f-2018",
+  "official_pdf": {
+    "source_file": "0619-F Jan 2018 rev final.pdf",
+    "url": "https://bir-cdn.bir.gov.ph/local/pdf/0619-F%20Jan%202018%20rev%20final.pdf",
+    "sha256": "edd7357390b1f0d95f2a38c9bb76252341c15b54b82bffd338bd540452ff15e1",
+    "sha256_matches_provenance": true,
+    "pages": 1
+  },
+  "branch": "try/forms-neon-1-b",
+  "base_commit": "48887449",
+  "verdict": "tweak",
+  "summary": "Single printed page matches the official January 2018 PDF for Part I identity fields and Part II 9-digit remittance/penalty amounts, but Item 9 Registered Address prints over comb ticks and Item 5 Tax Type Code ('WF') renders microscopic and top-left aligned inside the first slot.",
+  "test_data": {
+    "script": "form-review/scripts/seed_and_capture.py",
+    "payload": "form-review/scripts/payloads/payload-0619F.json",
+    "profile": "Juana Santos long-name demo profile (TIN 000-123-453-00000, RDO 008, Makati long address)",
+    "period": "2025-02 (February 2025); two-pass fill so Tax Type Code ('WF') is set before Item 14 WMF20 amount",
+    "schedule_overflow_attempted": "Not applicable — 0619F has no schedules."
+  },
+  "defects": [
+    {
+      "id": "0619F-P1",
+      "surface": "print",
+      "page": 1,
+      "area": "Part I Item 9 Registered Address (lines 1 & 2)",
+      "severity": "high",
+      "status": "needs shared change",
+      "description": "Long registered address prints as continuous plain text directly over the vertical comb tick marks on both lines."
+    },
+    {
+      "id": "0619F-P2",
+      "surface": "print",
+      "page": 1,
+      "area": "Header Item 5 Tax Type Code",
+      "severity": "medium",
+      "status": "open",
+      "description": "Tax Type Code ('WF') prints microscopic (~4-5pt) in the upper-left corner of the first box instead of centered across the two comb slots at normal form font size."
+    }
+  ],
+  "evidence": {
+    "official": [
+      "form-review/0619F/official/page-01.png"
+    ],
+    "before": [
+      "form-review/0619F/before/print-p1.png",
+      "form-review/0619F/before/screen-01-return-details.png",
+      "form-review/0619F/before/screen-02-part-i-background-information.png",
+      "form-review/0619F/before/screen-03-part-ii-tax-remittance.png",
+      "form-review/0619F/before/screen-04-part-iii-details-of-payment.png",
+      "form-review/0619F/before/screen-05-not-on-the-printed-sheet.png"
+    ]
+  }
+}

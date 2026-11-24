@@ -1,0 +1,15 @@
+{
+  "open_args": {
+    "year": 2025,
+    "period": 2
+  },
+  "passes": [
+    {
+      "frm0619E:optAmend": "Y",
+      "frm0619E:optWithheld": "Y",
+      "frm0619E:txtDueDay": "10",
+      "frm0619E:txtTax14": "187654321.75",
+      "frm0619E:txtTax15": "45678901.25"
+    }
+  ]
+}
