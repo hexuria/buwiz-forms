@@ -7208,6 +7208,7 @@ mod tests {
     // Form fields PR 1: 0605's split dates and official code picks on a
     // new return (bugs B1 and B2).
     mod fields_0605;
+    mod screen_path_audit;
     // Form fields PR 1 handoff 2: writes to shut boxes are refused with
     // the box's own tag (bug B16).
     mod shut_writes;
