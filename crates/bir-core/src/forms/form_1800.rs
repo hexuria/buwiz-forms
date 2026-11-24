@@ -1313,11 +1313,15 @@ mod tests {
         draft.residence_address = addr.to_string();
         let xml = draft.official_payload().expect("official_payload");
         assert!(
-            xml.contains(&format!("<div>frm1800v2018:txtRegAddress={first}frm1800v2018:txtRegAddress=</div>")),
+            xml.contains(&format!(
+                "<div>frm1800v2018:txtRegAddress={first}frm1800v2018:txtRegAddress=</div>"
+            )),
             "txtRegAddress mismatch in upload XML"
         );
         assert!(
-            xml.contains(&format!("<div>frm1800v2018:txtRegAddress2={second}frm1800v2018:txtRegAddress2=</div>")),
+            xml.contains(&format!(
+                "<div>frm1800v2018:txtRegAddress2={second}frm1800v2018:txtRegAddress2=</div>"
+            )),
             "txtRegAddress2 mismatch in upload XML"
         );
         assert!(!xml.contains("%20"), "upload XML leaked %20");

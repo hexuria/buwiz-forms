@@ -82,7 +82,10 @@ impl OverflowReport {
     /// One warning line per overflowing schedule, e.g.
     /// `"Schedule A: 8 rows are on an additional sheet"`.
     pub fn warning_lines(&self) -> Vec<String> {
-        self.schedules.iter().map(OverflowSchedule::warning_line).collect()
+        self.schedules
+            .iter()
+            .map(OverflowSchedule::warning_line)
+            .collect()
     }
 
     /// Combined single-string warning summary, or `None` when nothing overflows.
@@ -143,7 +146,9 @@ impl FilledDocument {
             if other_count == 1 {
                 lines.push("1 value overflowed its official box".to_string());
             } else if other_count > 1 {
-                lines.push(format!("{other_count} values overflowed their official boxes"));
+                lines.push(format!(
+                    "{other_count} values overflowed their official boxes"
+                ));
             }
         }
         lines
@@ -234,12 +239,7 @@ pub fn detect_overflow(
             .map(|c| c.end_idx.saturating_sub(c.start_idx) + 1)
             .max()
             .unwrap_or(0);
-        let base_idx = spec
-            .columns
-            .iter()
-            .map(|c| c.start_idx)
-            .min()
-            .unwrap_or(0);
+        let base_idx = spec.columns.iter().map(|c| c.start_idx).min().unwrap_or(0);
 
         let mut rows = Vec::new();
         let mut col_sums: Vec<f64> = vec![0.0; spec.columns.len()];
@@ -350,7 +350,8 @@ pub fn collect_truncated_entries(
         let open_tag_end = page_slice.find('>').unwrap_or(page_slice.len());
         let open_tag = &page_slice[..open_tag_end];
         if open_tag.contains("page-receipt")
-            || (open_tag.contains("page-continuation") && !open_tag.contains("page-continuation-band"))
+            || (open_tag.contains("page-continuation")
+                && !open_tag.contains("page-continuation-band"))
         {
             continue;
         }
@@ -361,12 +362,7 @@ pub fn collect_truncated_entries(
                 continue;
             }
             let cell_id = warning.cell.strip_suffix("-i").unwrap_or(&warning.cell);
-            let label = resolve_truncated_label(
-                cell_id,
-                page_slice,
-                &cell_labels,
-                overflow,
-            );
+            let label = resolve_truncated_label(cell_id, page_slice, &cell_labels, overflow);
             entries.push(TruncatedEntry {
                 page_number,
                 label,
@@ -756,7 +752,9 @@ fn resolve_truncated_label(
             let orig_cell_id = parts[4];
             if let Some(raw_printed) = cell_labels.get(orig_cell_id) {
                 let mut formatted = format_printed_label(raw_printed);
-                if let Some(row_num) = find_cloned_row_number(cell_id, page_html, sched_idx, overflow) {
+                if let Some(row_num) =
+                    find_cloned_row_number(cell_id, page_html, sched_idx, overflow)
+                {
                     formatted = replace_row_number_in_label(&formatted, row_num);
                 }
                 return formatted;
@@ -798,11 +796,7 @@ fn replace_row_number_in_label(label: &str, row_num: usize) -> String {
         let after = &label[pos + 4..];
         let digits_len = after.bytes().take_while(|b| b.is_ascii_digit()).count();
         if digits_len > 0 {
-            return format!(
-                "{}row {row_num}{}",
-                &label[..pos],
-                &after[digits_len..]
-            );
+            return format!("{}row {row_num}{}", &label[..pos], &after[digits_len..]);
         }
     }
     label.to_string()
@@ -912,10 +906,8 @@ fn nearest_printed_caption(page_html: &str, cell_id: &str) -> Option<String> {
             fallback_any = Some((dist, text.to_string()));
         }
         // Prefer captions above or to the left of the cell
-        if dy >= -4.0 && dx >= -12.0 {
-            if best.as_ref().is_none_or(|(d, _)| dist < *d) {
-                best = Some((dist, text.to_string()));
-            }
+        if dy >= -4.0 && dx >= -12.0 && best.as_ref().is_none_or(|(d, _)| dist < *d) {
+            best = Some((dist, text.to_string()));
         }
     }
 
@@ -1093,8 +1085,7 @@ fn discover_schedules(parsed: &Value) -> Vec<ScheduleSpec> {
         let Some((stem, start_idx, end_idx)) = derive_stem_and_range(&keys) else {
             continue;
         };
-        let is_amount =
-            group.is_money_section || infer_is_amount(&group.col_heading, &stem);
+        let is_amount = group.is_money_section || infer_is_amount(&group.col_heading, &stem);
         discovered_cols.push(DiscoveredCol {
             first_order: group.first_order,
             schedule_heading: group.schedule_heading,
@@ -1284,14 +1275,14 @@ fn extract_schedule_row_and_after(s: &str) -> Option<(String, usize, &str)> {
     let row_pos = lower.find(" row ")?;
     let before = s[..row_pos].trim();
     let after = s[row_pos + 5..].trim_start();
-    let digits_end = after
-        .bytes()
-        .take_while(|b| b.is_ascii_digit())
-        .count();
+    let digits_end = after.bytes().take_while(|b| b.is_ascii_digit()).count();
     let (row_num, rest) = if digits_end > 0 {
         let n = after[..digits_end].parse::<usize>().ok()?;
         (n, after[digits_end..].trim_start())
-    } else if after.as_bytes().first().is_some_and(|b| b.is_ascii_uppercase())
+    } else if after
+        .as_bytes()
+        .first()
+        .is_some_and(|b| b.is_ascii_uppercase())
         && after
             .as_bytes()
             .get(1)
@@ -1304,7 +1295,9 @@ fn extract_schedule_row_and_after(s: &str) -> Option<(String, usize, &str)> {
         return None;
     };
     // Normalize trailing "continuation" so Schedule 1 and Schedule 1 continuation merge
-    let sched = strip_trailing_word_ci(before, "continuation").trim().to_string();
+    let sched = strip_trailing_word_ci(before, "continuation")
+        .trim()
+        .to_string();
     if sched.is_empty() {
         return None;
     }
@@ -1349,10 +1342,26 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 3,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1707:txtPg2Pt4S2_{n}Col1", heading: "Name of Corporate Stock", is_amount: false },
-            PopupColDef { key_template: "frm1707:txtPg2Pt4S2_{n}Col2", heading: "No. of Shares", is_amount: false },
-            PopupColDef { key_template: "frm1707:txtPg2Pt4S2_{n}Col3", heading: "Stock Certificate Number", is_amount: false },
-            PopupColDef { key_template: "frm1707:txtPg2Pt4S2_{n}Col4", heading: "Taxable Base/Selling Price", is_amount: true },
+            PopupColDef {
+                key_template: "frm1707:txtPg2Pt4S2_{n}Col1",
+                heading: "Name of Corporate Stock",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1707:txtPg2Pt4S2_{n}Col2",
+                heading: "No. of Shares",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1707:txtPg2Pt4S2_{n}Col3",
+                heading: "Stock Certificate Number",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1707:txtPg2Pt4S2_{n}Col4",
+                heading: "Taxable Base/Selling Price",
+                is_amount: true,
+            },
         ],
     },
     PopupScheduleDef {
@@ -1362,8 +1371,16 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 3,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1707:txtPg2Pt4S3_{n}Col1", heading: "Particulars", is_amount: false },
-            PopupColDef { key_template: "frm1707:txtPg2Pt4S3_{n}Col2", heading: "Amount", is_amount: true },
+            PopupColDef {
+                key_template: "frm1707:txtPg2Pt4S3_{n}Col1",
+                heading: "Particulars",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1707:txtPg2Pt4S3_{n}Col2",
+                heading: "Amount",
+                is_amount: true,
+            },
         ],
     },
     // 1701A
@@ -1374,9 +1391,21 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 41,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1701A:txtmodalPartIVADesc_{n}C1", heading: "Other Non-Operating Income (specify)", is_amount: false },
-            PopupColDef { key_template: "frm1701A:txtmodalPartIVA_{n}C2", heading: "A) Taxpayer/Filer", is_amount: true },
-            PopupColDef { key_template: "frm1701A:txtmodalPartIVA_{n}C3", heading: "B) Spouse", is_amount: true },
+            PopupColDef {
+                key_template: "frm1701A:txtmodalPartIVADesc_{n}C1",
+                heading: "Other Non-Operating Income (specify)",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1701A:txtmodalPartIVA_{n}C2",
+                heading: "A) Taxpayer/Filer",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1701A:txtmodalPartIVA_{n}C3",
+                heading: "B) Spouse",
+                is_amount: true,
+            },
         ],
     },
     PopupScheduleDef {
@@ -1386,9 +1415,21 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 50,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1701A:txtmodalPartIVBDesc_{n}C1", heading: "Other Non-Operating Income (specify)", is_amount: false },
-            PopupColDef { key_template: "frm1701A:txtmodalPartIVB_{n}C2", heading: "A) Taxpayer/Filer", is_amount: true },
-            PopupColDef { key_template: "frm1701A:txtmodalPartIVB_{n}C3", heading: "B) Spouse", is_amount: true },
+            PopupColDef {
+                key_template: "frm1701A:txtmodalPartIVBDesc_{n}C1",
+                heading: "Other Non-Operating Income (specify)",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1701A:txtmodalPartIVB_{n}C2",
+                heading: "A) Taxpayer/Filer",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1701A:txtmodalPartIVB_{n}C3",
+                heading: "B) Spouse",
+                is_amount: true,
+            },
         ],
     },
     // 1707A
@@ -1399,12 +1440,36 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 3,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1707Av2021:txtS1C1DateOfTransaction_{n}", heading: "(A) Date of Transaction (MM/DD/YYYY)", is_amount: false },
-            PopupColDef { key_template: "frm1707Av2021:txtS1C2NameOfCorporateStock_{n}", heading: "(B) Name of Corporate Stock", is_amount: false },
-            PopupColDef { key_template: "frm1707Av2021:txtS1C3SellingPrice_{n}", heading: "(C) Selling Price", is_amount: true },
-            PopupColDef { key_template: "frm1707Av2021:txtS1C4Cost_{n}", heading: "(D) Cost", is_amount: true },
-            PopupColDef { key_template: "frm1707Av2021:txtS1C5CapitalGains_{n}", heading: "(E = C-D) Capital Gains", is_amount: true },
-            PopupColDef { key_template: "frm1707Av2021:txtS1C6TaxPaid_{n}", heading: "(F) Tax Paid", is_amount: true },
+            PopupColDef {
+                key_template: "frm1707Av2021:txtS1C1DateOfTransaction_{n}",
+                heading: "(A) Date of Transaction (MM/DD/YYYY)",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1707Av2021:txtS1C2NameOfCorporateStock_{n}",
+                heading: "(B) Name of Corporate Stock",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1707Av2021:txtS1C3SellingPrice_{n}",
+                heading: "(C) Selling Price",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1707Av2021:txtS1C4Cost_{n}",
+                heading: "(D) Cost",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1707Av2021:txtS1C5CapitalGains_{n}",
+                heading: "(E = C-D) Capital Gains",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1707Av2021:txtS1C6TaxPaid_{n}",
+                heading: "(F) Tax Paid",
+                is_amount: true,
+            },
         ],
     },
     PopupScheduleDef {
@@ -1414,11 +1479,31 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 3,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1707Av2021:txtS2C1DateOfTransaction_{n}", heading: "(A) Date of Transaction (MM/DD/YYYY)", is_amount: false },
-            PopupColDef { key_template: "frm1707Av2021:txtS2C2NameOfCorporateStock_{n}", heading: "(B) Name of Corporate Stock", is_amount: false },
-            PopupColDef { key_template: "frm1707Av2021:txtS2C3SellingPrice_{n}", heading: "(C) Selling Price", is_amount: true },
-            PopupColDef { key_template: "frm1707Av2021:txtS2C4Cost_{n}", heading: "(D) Cost", is_amount: true },
-            PopupColDef { key_template: "frm1707Av2021:txtS2C5CapitalLoss_{n}", heading: "(E = C-D) Capital Loss", is_amount: true },
+            PopupColDef {
+                key_template: "frm1707Av2021:txtS2C1DateOfTransaction_{n}",
+                heading: "(A) Date of Transaction (MM/DD/YYYY)",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1707Av2021:txtS2C2NameOfCorporateStock_{n}",
+                heading: "(B) Name of Corporate Stock",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1707Av2021:txtS2C3SellingPrice_{n}",
+                heading: "(C) Selling Price",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1707Av2021:txtS2C4Cost_{n}",
+                heading: "(D) Cost",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1707Av2021:txtS2C5CapitalLoss_{n}",
+                heading: "(E = C-D) Capital Loss",
+                is_amount: true,
+            },
         ],
     },
     // 1700
@@ -1429,15 +1514,51 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 3,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1700:txtPg2I4_{n}PartVIEmployerName1", heading: "Name of Employer", is_amount: false },
-            PopupColDef { key_template: "frm1700:txtPg2I4_{n}PartVIEmployerName2", heading: "Name of Employer (line 2)", is_amount: false },
-            PopupColDef { key_template: "frm1700:txtPg2I4_{n}PartVIEmployerTIN1", heading: "TIN (1)", is_amount: false },
-            PopupColDef { key_template: "frm1700:txtPg2I4_{n}PartVIEmployerTIN2", heading: "TIN (2)", is_amount: false },
-            PopupColDef { key_template: "frm1700:txtPg2I4_{n}PartVIEmployerTIN3", heading: "TIN (3)", is_amount: false },
-            PopupColDef { key_template: "frm1700:txtPg2I4_{n}PartVIEmployerBranchCode", heading: "Branch Code", is_amount: false },
-            PopupColDef { key_template: "frm1700:txtPg2ISched1c_4_{n}REG", heading: "Gross Compensation Income (Regular)", is_amount: true },
-            PopupColDef { key_template: "frm1700:txtPg2ISched1d_4_{n}CIFR", heading: "Compensation Income (Subject to Final/Other)", is_amount: true },
-            PopupColDef { key_template: "frm1700:txtPg2ISched1e_4_{n}TW", heading: "Tax Withheld", is_amount: true },
+            PopupColDef {
+                key_template: "frm1700:txtPg2I4_{n}PartVIEmployerName1",
+                heading: "Name of Employer",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1700:txtPg2I4_{n}PartVIEmployerName2",
+                heading: "Name of Employer (line 2)",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1700:txtPg2I4_{n}PartVIEmployerTIN1",
+                heading: "TIN (1)",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1700:txtPg2I4_{n}PartVIEmployerTIN2",
+                heading: "TIN (2)",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1700:txtPg2I4_{n}PartVIEmployerTIN3",
+                heading: "TIN (3)",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1700:txtPg2I4_{n}PartVIEmployerBranchCode",
+                heading: "Branch Code",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1700:txtPg2ISched1c_4_{n}REG",
+                heading: "Gross Compensation Income (Regular)",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1700:txtPg2ISched1d_4_{n}CIFR",
+                heading: "Compensation Income (Subject to Final/Other)",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1700:txtPg2ISched1e_4_{n}TW",
+                heading: "Tax Withheld",
+                is_amount: true,
+            },
         ],
     },
     // 1702EX
@@ -1448,8 +1569,16 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 5,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1702EX:txtPg3Pt6S1I17_{n}Col1", heading: "Description", is_amount: false },
-            PopupColDef { key_template: "frm1702EX:txtPg3Pt6S1I17_{n}Col2", heading: "Amount", is_amount: true },
+            PopupColDef {
+                key_template: "frm1702EX:txtPg3Pt6S1I17_{n}Col1",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702EX:txtPg3Pt6S1I17_{n}Col2",
+                heading: "Amount",
+                is_amount: true,
+            },
         ],
     },
     PopupScheduleDef {
@@ -1459,9 +1588,21 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 3,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1702EX:txtPg3Pt6S2I4_{n}Col1", heading: "Description", is_amount: false },
-            PopupColDef { key_template: "frm1702EX:txtPg3Pt6S2I4_{n}Col2", heading: "Legal Basis", is_amount: false },
-            PopupColDef { key_template: "frm1702EX:txtPg3Pt6S2I4_{n}Col3", heading: "Amount", is_amount: true },
+            PopupColDef {
+                key_template: "frm1702EX:txtPg3Pt6S2I4_{n}Col1",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702EX:txtPg3Pt6S2I4_{n}Col2",
+                heading: "Legal Basis",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702EX:txtPg3Pt6S2I4_{n}Col3",
+                heading: "Amount",
+                is_amount: true,
+            },
         ],
     },
     PopupScheduleDef {
@@ -1471,8 +1612,16 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 1,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1702EX:txtPg3Pt6S3I3_{n}Col1", heading: "Description", is_amount: false },
-            PopupColDef { key_template: "frm1702EX:txtPg3Pt6S3I3_{n}Col2", heading: "Amount", is_amount: true },
+            PopupColDef {
+                key_template: "frm1702EX:txtPg3Pt6S3I3_{n}Col1",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702EX:txtPg3Pt6S3I3_{n}Col2",
+                heading: "Amount",
+                is_amount: true,
+            },
         ],
     },
     PopupScheduleDef {
@@ -1482,8 +1631,16 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 1,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1702EX:txtPg3Pt6S3I6_{n}Col1", heading: "Description", is_amount: false },
-            PopupColDef { key_template: "frm1702EX:txtPg3Pt6S3I6_{n}Col2", heading: "Amount", is_amount: true },
+            PopupColDef {
+                key_template: "frm1702EX:txtPg3Pt6S3I6_{n}Col1",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702EX:txtPg3Pt6S3I6_{n}Col2",
+                heading: "Amount",
+                is_amount: true,
+            },
         ],
     },
     PopupScheduleDef {
@@ -1493,8 +1650,16 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 1,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1702EX:txtPg3Pt6S3I8_{n}Col1", heading: "Description", is_amount: false },
-            PopupColDef { key_template: "frm1702EX:txtPg3Pt6S3I8_{n}Col2", heading: "Amount", is_amount: true },
+            PopupColDef {
+                key_template: "frm1702EX:txtPg3Pt6S3I8_{n}Col1",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702EX:txtPg3Pt6S3I8_{n}Col2",
+                heading: "Amount",
+                is_amount: true,
+            },
         ],
     },
     // 1702MX
@@ -1505,12 +1670,36 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 3,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1702MX:txtPg6Sc6_{n}Col1", heading: "Description", is_amount: false },
-            PopupColDef { key_template: "frm1702MX:txtPg6Sc6_{n}Col2", heading: "Legal Basis", is_amount: false },
-            PopupColDef { key_template: "frm1702MX:txtPg6Sc6_{n}Col3", heading: "Column A", is_amount: true },
-            PopupColDef { key_template: "frm1702MX:txtPg6Sc6_{n}Col4", heading: "Column B", is_amount: true },
-            PopupColDef { key_template: "frm1702MX:txtPg6Sc6_{n}Col5", heading: "Column C", is_amount: true },
-            PopupColDef { key_template: "frm1702MX:txtPg6Sc6_{n}Col6", heading: "Column D", is_amount: true },
+            PopupColDef {
+                key_template: "frm1702MX:txtPg6Sc6_{n}Col1",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702MX:txtPg6Sc6_{n}Col2",
+                heading: "Legal Basis",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702MX:txtPg6Sc6_{n}Col3",
+                heading: "Column A",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1702MX:txtPg6Sc6_{n}Col4",
+                heading: "Column B",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1702MX:txtPg6Sc6_{n}Col5",
+                heading: "Column C",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1702MX:txtPg6Sc6_{n}Col6",
+                heading: "Column D",
+                is_amount: true,
+            },
         ],
     },
     // 1702RT
@@ -1521,8 +1710,16 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 1,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1702RT:txtPg2Pt4I54.{n}C1", heading: "Description", is_amount: false },
-            PopupColDef { key_template: "frm1702RT:txtPg2Pt4I54.{n}C2", heading: "Amount", is_amount: true },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg2Pt4I54.{n}C1",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg2Pt4I54.{n}C2",
+                heading: "Amount",
+                is_amount: true,
+            },
         ],
     },
     PopupScheduleDef {
@@ -1532,8 +1729,16 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 5,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1702RT:txtPg3Sc1I17i.{n}C1", heading: "Description", is_amount: false },
-            PopupColDef { key_template: "frm1702RT:txtPg3Sc1I17i.{n}C2", heading: "Amount", is_amount: true },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg3Sc1I17i.{n}C1",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg3Sc1I17i.{n}C2",
+                heading: "Amount",
+                is_amount: true,
+            },
         ],
     },
     PopupScheduleDef {
@@ -1543,9 +1748,21 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 3,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1702RT:txtPg3Sc2I4.{n}C1", heading: "Description", is_amount: false },
-            PopupColDef { key_template: "frm1702RT:txtPg3Sc2I4.{n}C2", heading: "Legal Basis", is_amount: false },
-            PopupColDef { key_template: "frm1702RT:txtPg3Sc2I4.{n}C3", heading: "Amount", is_amount: true },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg3Sc2I4.{n}C1",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg3Sc2I4.{n}C2",
+                heading: "Legal Basis",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg3Sc2I4.{n}C3",
+                heading: "Amount",
+                is_amount: true,
+            },
         ],
     },
     PopupScheduleDef {
@@ -1555,8 +1772,16 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 1,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1702RT:txtPg4Sc5I3.{n}C1", heading: "Description", is_amount: false },
-            PopupColDef { key_template: "frm1702RT:txtPg4Sc5I3.{n}C2", heading: "Amount", is_amount: true },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg4Sc5I3.{n}C1",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg4Sc5I3.{n}C2",
+                heading: "Amount",
+                is_amount: true,
+            },
         ],
     },
     PopupScheduleDef {
@@ -1566,8 +1791,16 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 1,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1702RT:txtPg4Sc5I6.{n}C1", heading: "Description", is_amount: false },
-            PopupColDef { key_template: "frm1702RT:txtPg4Sc5I6.{n}C2", heading: "Amount", is_amount: true },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg4Sc5I6.{n}C1",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg4Sc5I6.{n}C2",
+                heading: "Amount",
+                is_amount: true,
+            },
         ],
     },
     PopupScheduleDef {
@@ -1577,8 +1810,16 @@ const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
         row_num_base: 1,
         has_total: true,
         columns: &[
-            PopupColDef { key_template: "frm1702RT:txtPg4Sc5I8.{n}C1", heading: "Description", is_amount: false },
-            PopupColDef { key_template: "frm1702RT:txtPg4Sc5I8.{n}C2", heading: "Amount", is_amount: true },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg4Sc5I8.{n}C1",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1702RT:txtPg4Sc5I8.{n}C2",
+                heading: "Amount",
+                is_amount: true,
+            },
         ],
     },
 ];
@@ -1986,24 +2227,39 @@ mod tests {
         for i in 0..15 {
             let n = i + 1;
             let fmv = 10_000_000.0 + (n as f64) * 1_000_000.0;
-            f.insert(format!("frm2000OT:sched1A:txtOCTNo{i}"), format!("TCT-2026-{n:03}"));
-            f.insert(format!("frm2000OT:sched1A:txtTaxDecNo{i}"), format!("TD-2026-{n:03}"));
+            f.insert(
+                format!("frm2000OT:sched1A:txtOCTNo{i}"),
+                format!("TCT-2026-{n:03}"),
+            );
+            f.insert(
+                format!("frm2000OT:sched1A:txtTaxDecNo{i}"),
+                format!("TD-2026-{n:03}"),
+            );
             f.insert(
                 format!("frm2000OT:sched1A:txtLoc{i}"),
                 format!("MAKATI CITY PARCEL {n}"),
             );
+            f.insert(format!("frm2000OT:sched1A:txtLot{i}"), "LOT".into());
             f.insert(
-                format!("frm2000OT:sched1A:txtLot{i}"),
-                "LOT".into(),
+                format!("frm2000OT:sched1A:txtClassification{i}"),
+                "CR".into(),
             );
-            f.insert(format!("frm2000OT:sched1A:txtClassification{i}"), "CR".into());
-            f.insert(format!("frm2000OT:sched1A:txtArea{i}"), format!("{}.00", 200 + n * 10));
+            f.insert(
+                format!("frm2000OT:sched1A:txtArea{i}"),
+                format!("{}.00", 200 + n * 10),
+            );
             f.insert(
                 format!("frm2000OT:sched1A:txtFMVCol1{i}"),
                 format!("{:.2}", fmv - 500_000.0),
             );
-            f.insert(format!("frm2000OT:sched1A:txtFMVCol2{i}"), format!("{fmv:.2}"));
-            f.insert(format!("frm2000OT:sched1A:txtFMVSubTot{i}"), format!("{fmv:.2}"));
+            f.insert(
+                format!("frm2000OT:sched1A:txtFMVCol2{i}"),
+                format!("{fmv:.2}"),
+            );
+            f.insert(
+                format!("frm2000OT:sched1A:txtFMVSubTot{i}"),
+                format!("{fmv:.2}"),
+            );
         }
         f
     }
@@ -2044,7 +2300,10 @@ mod tests {
         for i in 1..=10 {
             let amt = 50_000.0 * i as f64;
             let tax = amt * 0.10;
-            f.insert(format!("frm1600WP:dtSched:txtTin{i}"), format!("123-456-{:03}-00000", 780 + i));
+            f.insert(
+                format!("frm1600WP:dtSched:txtTin{i}"),
+                format!("123-456-{:03}-00000", 780 + i),
+            );
             f.insert(
                 format!("frm1600WP:dtSched:txtFullname{i}"),
                 format!("PAYEE WINNER NUMBER {i}"),
@@ -2056,7 +2315,10 @@ mod tests {
             );
             f.insert(format!("frm1600WP:dtSched:amount{i}"), format!("{amt:.2}"));
             f.insert(format!("frm1600WP:dtSched:txtRatePercent{i}"), "10%".into());
-            f.insert(format!("frm1600WP:dtSched:taxWithheld{i}"), format!("{tax:.2}"));
+            f.insert(
+                format!("frm1600WP:dtSched:taxWithheld{i}"),
+                format!("{tax:.2}"),
+            );
         }
         f
     }
@@ -2074,7 +2336,10 @@ mod tests {
         assert_eq!(sched.rows[9].row_number, 15);
         assert_eq!(sched.columns.len(), 9);
         assert_eq!(sched.columns[0].heading, "OCT/TCT/CCT No.");
-        assert_eq!(sched.columns[8].heading, "Sub-total (between Columns 1 & 2)");
+        assert_eq!(
+            sched.columns[8].heading,
+            "Sub-total (between Columns 1 & 2)"
+        );
         assert!(sched.has_total);
         // Sum of rows 6..=15: 16M + 17M + ... + 25M = 205,000,000.00
         assert_eq!(sched.columns[8].subtotal.as_deref(), Some("205,000,000.00"));
@@ -2132,7 +2397,10 @@ mod tests {
         let mut fields = BTreeMap::new();
         for i in 0..5 {
             fields.insert(format!("frm2000OT:sched1A:txtOCTNo{i}"), format!("TCT-{i}"));
-            fields.insert(format!("frm2000OT:sched1A:txtFMVSubTot{i}"), "1000000.00".into());
+            fields.insert(
+                format!("frm2000OT:sched1A:txtFMVSubTot{i}"),
+                "1000000.00".into(),
+            );
         }
         let report = detect_overflow("2000-ot-2018", &fields).unwrap();
         assert!(report.is_empty());
@@ -2175,31 +2443,46 @@ mod tests {
         for i in 0..5 {
             let n = i + 1;
             let fmv = 10_000_000.0 + (n as f64) * 1_000_000.0;
-            fields_5.insert(format!("frm2000OT:sched1A:txtOCTNo{i}"), format!("TCT-2026-{n:03}"));
-            fields_5.insert(format!("frm2000OT:sched1A:txtTaxDecNo{i}"), format!("TD-2026-{n:03}"));
+            fields_5.insert(
+                format!("frm2000OT:sched1A:txtOCTNo{i}"),
+                format!("TCT-2026-{n:03}"),
+            );
+            fields_5.insert(
+                format!("frm2000OT:sched1A:txtTaxDecNo{i}"),
+                format!("TD-2026-{n:03}"),
+            );
             fields_5.insert(
                 format!("frm2000OT:sched1A:txtLoc{i}"),
                 format!("MAKATI CITY PARCEL {n}"),
             );
+            fields_5.insert(format!("frm2000OT:sched1A:txtLot{i}"), "LOT".into());
             fields_5.insert(
-                format!("frm2000OT:sched1A:txtLot{i}"),
-                "LOT".into(),
+                format!("frm2000OT:sched1A:txtClassification{i}"),
+                "CR".into(),
             );
-            fields_5.insert(format!("frm2000OT:sched1A:txtClassification{i}"), "CR".into());
-            fields_5.insert(format!("frm2000OT:sched1A:txtArea{i}"), format!("{}.00", 200 + n * 10));
+            fields_5.insert(
+                format!("frm2000OT:sched1A:txtArea{i}"),
+                format!("{}.00", 200 + n * 10),
+            );
             fields_5.insert(
                 format!("frm2000OT:sched1A:txtFMVCol1{i}"),
                 format!("{:.2}", fmv - 500_000.0),
             );
-            fields_5.insert(format!("frm2000OT:sched1A:txtFMVCol2{i}"), format!("{fmv:.2}"));
-            fields_5.insert(format!("frm2000OT:sched1A:txtFMVSubTot{i}"), format!("{fmv:.2}"));
+            fields_5.insert(
+                format!("frm2000OT:sched1A:txtFMVCol2{i}"),
+                format!("{fmv:.2}"),
+            );
+            fields_5.insert(
+                format!("frm2000OT:sched1A:txtFMVSubTot{i}"),
+                format!("{fmv:.2}"),
+            );
         }
         let doc_no_overflow = frozen_html::filled_document("2000-ot-2018", &fields_5).unwrap();
         assert!(!doc_no_overflow.contains("page-continuation"));
 
         let fields_15 = sample_2000ot_15_rows();
-        let filled = frozen_html::filled_document_with_report("2000-ot-2018", &fields_15, None)
-            .unwrap();
+        let filled =
+            frozen_html::filled_document_with_report("2000-ot-2018", &fields_15, None).unwrap();
         assert!(filled.html.contains("page-continuation"));
         assert_eq!(
             filled.warning_lines(),
@@ -2229,12 +2512,19 @@ mod tests {
         f2000.insert("derived:pg2_tin".into(), "00012345300000".into());
         f2000.insert("frm2000OT:txtPg2TaxpayerName".into(), "JUANA SANTOS".into());
         f2000.insert("frm2000OT:txtRDOCode".into(), "044".into());
-        f2000.insert("frm2000OT:txtAddress".into(), "123 RIZAL AVE, BRGY. SAN ANTONIO, MAKATI CITY".into());
+        f2000.insert(
+            "frm2000OT:txtAddress".into(),
+            "123 RIZAL AVE, BRGY. SAN ANTONIO, MAKATI CITY".into(),
+        );
         f2000.insert("frm2000OT:txtZipCode".into(), "1203".into());
         f2000.insert("frm2000OT:ATC_10".into(), "true".into());
         f2000.insert("frm2000OT:rbTransNature_2".into(), "true".into());
-        f2000.insert("frm2000OT:sched1A:txtFMVTotal".into(), "270000000.00".into());
-        let doc_2000_15 = frozen_html::filled_document_with_report("2000-ot-2018", &f2000, None).unwrap();
+        f2000.insert(
+            "frm2000OT:sched1A:txtFMVTotal".into(),
+            "270000000.00".into(),
+        );
+        let doc_2000_15 =
+            frozen_html::filled_document_with_report("2000-ot-2018", &f2000, None).unwrap();
         std::fs::write(out_dir.join("2000ot-15-rows.html"), &doc_2000_15.html).unwrap();
         std::fs::write(
             out_dir.join("2000ot-15-rows-report.json"),
@@ -2257,34 +2547,74 @@ mod tests {
             }
         }
         f2000_5.insert("frm2000OT:sched1A:txtFMVTotal".into(), "65000000.00".into());
-        let doc_2000_5 = frozen_html::filled_document_with_report("2000-ot-2018", &f2000_5, None).unwrap();
+        let doc_2000_5 =
+            frozen_html::filled_document_with_report("2000-ot-2018", &f2000_5, None).unwrap();
         assert!(doc_2000_5.overflow.is_empty());
         std::fs::write(out_dir.join("2000ot-no-overflow.html"), &doc_2000_5.html).unwrap();
 
         // 3. 1800 with 18 rows in Schedule A AND 8 rows in Schedule B simultaneously
         let mut f1800 = sample_1800_18_rows();
         f1800.insert("derived:pg2_tin".into(), "00012345300000".into());
-        f1800.insert("frm1800v2018:txtPg2TaxpayerName".into(), "JUANA SANTOS".into());
+        f1800.insert(
+            "frm1800v2018:txtPg2TaxpayerName".into(),
+            "JUANA SANTOS".into(),
+        );
         f1800.insert("frm1800v2018:txtRDOCode".into(), "044".into());
-        f1800.insert("frm1800v2018:txtAddress".into(), "123 RIZAL AVE, BRGY. SAN ANTONIO, MAKATI CITY".into());
-        f1800.insert("frm1800v2018:schedA:txtTotalPayment1".into(), "17100000.00".into());
+        f1800.insert(
+            "frm1800v2018:txtAddress".into(),
+            "123 RIZAL AVE, BRGY. SAN ANTONIO, MAKATI CITY".into(),
+        );
+        f1800.insert(
+            "frm1800v2018:schedA:txtTotalPayment1".into(),
+            "17100000.00".into(),
+        );
         let mut sched_b_total = 0.0_f64;
         for i in 0..8 {
             let row_no = i + 1;
             let ftd = 2_000_000.0 + (i as f64) * 250_000.0;
             let fbir = ftd + 200_000.0;
             sched_b_total += fbir;
-            f1800.insert(format!("frm1800v2018:schedB1:txtOCT{i}"), format!("TCT-B-{row_no:03}"));
-            f1800.insert(format!("frm1800v2018:schedB1:txtTaxDecNo{i}"), format!("TD-B-{row_no:03}"));
-            f1800.insert(format!("frm1800v2018:schedB1:txtLocation{i}"), format!("QUEZON CITY LOT {row_no}"));
-            f1800.insert(format!("frm1800v2018:schedB1:txtLotImprovement{i}"), format!("LOT {row_no} BLK 4 RESIDENTIAL"));
-            f1800.insert(format!("frm1800v2018:schedB1:txtClassification{i}"), "RR".into());
-            f1800.insert(format!("frm1800v2018:schedB2:txtArea{i}"), format!("{:.2}", 150.0 + (i as f64) * 15.0));
-            f1800.insert(format!("frm1800v2018:schedB2:txtFTD{i}"), format!("{ftd:.2}"));
-            f1800.insert(format!("frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue{i}"), format!("{fbir:.2}"));
-            f1800.insert(format!("frm1800v2018:schedB2:txtFairMarketValue{i}"), format!("{fbir:.2}"));
+            f1800.insert(
+                format!("frm1800v2018:schedB1:txtOCT{i}"),
+                format!("TCT-B-{row_no:03}"),
+            );
+            f1800.insert(
+                format!("frm1800v2018:schedB1:txtTaxDecNo{i}"),
+                format!("TD-B-{row_no:03}"),
+            );
+            f1800.insert(
+                format!("frm1800v2018:schedB1:txtLocation{i}"),
+                format!("QUEZON CITY LOT {row_no}"),
+            );
+            f1800.insert(
+                format!("frm1800v2018:schedB1:txtLotImprovement{i}"),
+                format!("LOT {row_no} BLK 4 RESIDENTIAL"),
+            );
+            f1800.insert(
+                format!("frm1800v2018:schedB1:txtClassification{i}"),
+                "RR".into(),
+            );
+            f1800.insert(
+                format!("frm1800v2018:schedB2:txtArea{i}"),
+                format!("{:.2}", 150.0 + (i as f64) * 15.0),
+            );
+            f1800.insert(
+                format!("frm1800v2018:schedB2:txtFTD{i}"),
+                format!("{ftd:.2}"),
+            );
+            f1800.insert(
+                format!("frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue{i}"),
+                format!("{fbir:.2}"),
+            );
+            f1800.insert(
+                format!("frm1800v2018:schedB2:txtFairMarketValue{i}"),
+                format!("{fbir:.2}"),
+            );
         }
-        f1800.insert("frm1800v2018:schedB2:txtTotal".into(), format!("{sched_b_total:.2}"));
+        f1800.insert(
+            "frm1800v2018:schedB2:txtTotal".into(),
+            format!("{sched_b_total:.2}"),
+        );
         let doc_1800 = frozen_html::filled_document_with_report("1800-2018", &f1800, None).unwrap();
         std::fs::write(out_dir.join("1800-18-rows.html"), &doc_1800.html).unwrap();
         std::fs::write(
@@ -2306,29 +2636,80 @@ mod tests {
             let base1 = 100_000.0 * (row_no as f64);
             let due1 = base1 * 0.006;
             s1_tot += due1;
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch1Date{row_no}"), format!("01/{row_no:02}/2026"));
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch1Seller{row_no}"), format!("SELLER {row_no} INC."));
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch1Buyer{row_no}"), format!("BUYER {row_no} CORP."));
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch1Corp{row_no}"), format!("ISSUER ALPHA {row_no}"));
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch1NumShares{row_no}"), format!("{}", 10_000 * row_no));
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch1TaxBase{row_no}"), format!("{base1:.2}"));
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch1TaxRate{row_no}"), "0.6%".into());
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch1TaxDue{row_no}"), format!("{due1:.2}"));
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch1Date{row_no}"),
+                format!("01/{row_no:02}/2026"),
+            );
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch1Seller{row_no}"),
+                format!("SELLER {row_no} INC."),
+            );
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch1Buyer{row_no}"),
+                format!("BUYER {row_no} CORP."),
+            );
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch1Corp{row_no}"),
+                format!("ISSUER ALPHA {row_no}"),
+            );
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch1NumShares{row_no}"),
+                format!("{}", 10_000 * row_no),
+            );
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch1TaxBase{row_no}"),
+                format!("{base1:.2}"),
+            );
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch1TaxRate{row_no}"),
+                "0.6%".into(),
+            );
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch1TaxDue{row_no}"),
+                format!("{due1:.2}"),
+            );
 
             let base2 = 250_000.0 * (row_no as f64);
             let due2 = base2 * 0.04;
             s2_tot += due2;
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch2Date{row_no}"), format!("02/{row_no:02}/2026"));
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch2Seller{row_no}"), format!("IPO SELLER {row_no}"));
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch2Buyer{row_no}"), format!("IPO BUYER {row_no}"));
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch2Corp{row_no}"), format!("IPO CORP {row_no}"));
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch2NumShares{row_no}"), format!("{}", 5_000 * row_no));
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch2TaxBase{row_no}"), format!("{base2:.2}"));
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch2Date{row_no}"),
+                format!("02/{row_no:02}/2026"),
+            );
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch2Seller{row_no}"),
+                format!("IPO SELLER {row_no}"),
+            );
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch2Buyer{row_no}"),
+                format!("IPO BUYER {row_no}"),
+            );
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch2Corp{row_no}"),
+                format!("IPO CORP {row_no}"),
+            );
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch2NumShares{row_no}"),
+                format!("{}", 5_000 * row_no),
+            );
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch2TaxBase{row_no}"),
+                format!("{base2:.2}"),
+            );
             f2552.insert(format!("frm2552:txtPg2Pt5Sch2TaxRate{row_no}"), "4%".into());
-            f2552.insert(format!("frm2552:txtPg2Pt5Sch2TaxDue{row_no}"), format!("{due2:.2}"));
+            f2552.insert(
+                format!("frm2552:txtPg2Pt5Sch2TaxDue{row_no}"),
+                format!("{due2:.2}"),
+            );
         }
-        f2552.insert("frm2552:txtPg2Pt5Sch1TaxDueTot".into(), format!("{s1_tot:.2}"));
-        f2552.insert("frm2552:txtPg2Pt5Sch2TaxDueTot".into(), format!("{s2_tot:.2}"));
+        f2552.insert(
+            "frm2552:txtPg2Pt5Sch1TaxDueTot".into(),
+            format!("{s1_tot:.2}"),
+        );
+        f2552.insert(
+            "frm2552:txtPg2Pt5Sch2TaxDueTot".into(),
+            format!("{s2_tot:.2}"),
+        );
         let doc_2552 = frozen_html::filled_document_with_report("2552-2018", &f2552, None).unwrap();
         std::fs::write(out_dir.join("2552-two-schedules.html"), &doc_2552.html).unwrap();
         std::fs::write(
@@ -2343,10 +2724,14 @@ mod tests {
             f1600wp.insert(format!("derived:sched_seq{seq}"), seq.to_string());
         }
         f1600wp.insert("frm1600WP:txtRDOCode".into(), "044".into());
-        f1600wp.insert("frm1600WP:txtAddress".into(), "123 RIZAL AVE, BRGY. SAN ANTONIO, MAKATI CITY".into());
+        f1600wp.insert(
+            "frm1600WP:txtAddress".into(),
+            "123 RIZAL AVE, BRGY. SAN ANTONIO, MAKATI CITY".into(),
+        );
         f1600wp.insert("derived:WB191_base".into(), "2750000.00".into());
         f1600wp.insert("derived:WB191_withheld".into(), "275000.00".into());
-        let doc_1600wp = frozen_html::filled_document_with_report("1600wp-2010", &f1600wp, None).unwrap();
+        let doc_1600wp =
+            frozen_html::filled_document_with_report("1600wp-2010", &f1600wp, None).unwrap();
         std::fs::write(out_dir.join("1600wp-10-payees.html"), &doc_1600wp.html).unwrap();
         std::fs::write(
             out_dir.join("1600wp-10-payees-report.json"),
@@ -2361,19 +2746,49 @@ mod tests {
         f1707.insert("frm1707:txtBuyerName".into(), "PEDRO REYES".into());
         f1707.insert("frm1707:txtRDO".into(), "044".into());
         for (idx, letter) in [(1, "A"), (2, "B"), (3, "C"), (4, "D")] {
-            f1707.insert(format!("frm1707:txtPg2Pt4S2Col1{letter}"), format!("OFFICIAL CORP {idx}"));
-            f1707.insert(format!("frm1707:txtPg2Pt4S2Col2{letter}"), format!("{idx}00"));
-            f1707.insert(format!("frm1707:txtPg2Pt4S2Col3{letter}"), format!("CERT-00{idx}"));
-            f1707.insert(format!("frm1707:txtPg2Pt4S2Col4{letter}"), format!("{idx}00000.00"));
-            f1707.insert(format!("frm1707:txtPg2Pt4S3Col1{letter}"), format!("OFFICIAL EXPENSE {idx}"));
-            f1707.insert(format!("frm1707:txtPg2Pt4S3Col2{letter}"), format!("{idx}500.00"));
+            f1707.insert(
+                format!("frm1707:txtPg2Pt4S2Col1{letter}"),
+                format!("OFFICIAL CORP {idx}"),
+            );
+            f1707.insert(
+                format!("frm1707:txtPg2Pt4S2Col2{letter}"),
+                format!("{idx}00"),
+            );
+            f1707.insert(
+                format!("frm1707:txtPg2Pt4S2Col3{letter}"),
+                format!("CERT-00{idx}"),
+            );
+            f1707.insert(
+                format!("frm1707:txtPg2Pt4S2Col4{letter}"),
+                format!("{idx}00000.00"),
+            );
+            f1707.insert(
+                format!("frm1707:txtPg2Pt4S3Col1{letter}"),
+                format!("OFFICIAL EXPENSE {idx}"),
+            );
+            f1707.insert(
+                format!("frm1707:txtPg2Pt4S3Col2{letter}"),
+                format!("{idx}500.00"),
+            );
         }
         for k in 1..=4 {
-            f1707.insert(format!("frm1707:txtPg2Pt4S2_{k}Col1"), format!("OVERFLOW CORP {k}"));
+            f1707.insert(
+                format!("frm1707:txtPg2Pt4S2_{k}Col1"),
+                format!("OVERFLOW CORP {k}"),
+            );
             f1707.insert(format!("frm1707:txtPg2Pt4S2_{k}Col2"), format!("{}50", k));
-            f1707.insert(format!("frm1707:txtPg2Pt4S2_{k}Col3"), format!("CERT-10{k}"));
-            f1707.insert(format!("frm1707:txtPg2Pt4S2_{k}Col4"), format!("{k}25000.00"));
-            f1707.insert(format!("frm1707:txtPg2Pt4S3_{k}Col1"), format!("OVERFLOW EXPENSE {k}"));
+            f1707.insert(
+                format!("frm1707:txtPg2Pt4S2_{k}Col3"),
+                format!("CERT-10{k}"),
+            );
+            f1707.insert(
+                format!("frm1707:txtPg2Pt4S2_{k}Col4"),
+                format!("{k}25000.00"),
+            );
+            f1707.insert(
+                format!("frm1707:txtPg2Pt4S3_{k}Col1"),
+                format!("OVERFLOW EXPENSE {k}"),
+            );
             f1707.insert(format!("frm1707:txtPg2Pt4S3_{k}Col2"), format!("{k}750.50"));
         }
         f1707.insert("frm1707:txtPg2Pt4S3Total".into(), "29002.00".into());
@@ -2393,15 +2808,39 @@ mod tests {
         for i in 1..=5 {
             f1801.insert(format!("frm1801v2018:sched1Oct_{i}"), format!("TCT-{i:04}"));
             f1801.insert(format!("frm1801v2018:sched1Td_{i}"), format!("TD-{i:04}"));
-            f1801.insert(format!("frm1801v2018:sched1Loc_{i}"), format!("MAKATI CITY LOT {i}"));
-            f1801.insert(format!("frm1801v2018:sched1Lot_{i}"), format!("LOT {i} BLK 2"));
-            f1801.insert(format!("frm1801v2018:sched1Area_{i}"), format!("{}.00", 120 * i));
+            f1801.insert(
+                format!("frm1801v2018:sched1Loc_{i}"),
+                format!("MAKATI CITY LOT {i}"),
+            );
+            f1801.insert(
+                format!("frm1801v2018:sched1Lot_{i}"),
+                format!("LOT {i} BLK 2"),
+            );
+            f1801.insert(
+                format!("frm1801v2018:sched1Area_{i}"),
+                format!("{}.00", 120 * i),
+            );
             f1801.insert(format!("frm1801v2018:sched1Class_{i}'"), "RES".into());
-            f1801.insert(format!("frm1801v2018:sched1Fmv_{i}"), format!("{}.00", 1_000_000 * i));
-            f1801.insert(format!("frm1801v2018:sched2Oct_{i}"), format!("FAM-TCT-{i:03}"));
-            f1801.insert(format!("frm1801v2018:sched2Td_{i}"), format!("FAM-TD-{i:03}"));
-            f1801.insert(format!("frm1801v2018:sched2Loc_{i}"), format!("TAGUIG HOME {i}"));
-            f1801.insert(format!("frm1801v2018:sched2Fmv_{i}"), format!("{}.00", 500_000 * i));
+            f1801.insert(
+                format!("frm1801v2018:sched1Fmv_{i}"),
+                format!("{}.00", 1_000_000 * i),
+            );
+            f1801.insert(
+                format!("frm1801v2018:sched2Oct_{i}"),
+                format!("FAM-TCT-{i:03}"),
+            );
+            f1801.insert(
+                format!("frm1801v2018:sched2Td_{i}"),
+                format!("FAM-TD-{i:03}"),
+            );
+            f1801.insert(
+                format!("frm1801v2018:sched2Loc_{i}"),
+                format!("TAGUIG HOME {i}"),
+            );
+            f1801.insert(
+                format!("frm1801v2018:sched2Fmv_{i}"),
+                format!("{}.00", 500_000 * i),
+            );
         }
         let doc_1801 = frozen_html::filled_document_with_report("1801-2018", &f1801, None).unwrap();
         std::fs::write(out_dir.join("1801-two-schedules.html"), &doc_1801.html).unwrap();
@@ -2422,15 +2861,28 @@ mod tests {
             let n = i + 1;
             f2550q.insert(format!("txtDatePurchase1{i}"), format!("01/1{n}/2026"));
             f2550q.insert(format!("txtSourceCode1{i}"), "D".into());
-            f2550q.insert(format!("txtDescription1{i}"), format!("CAPITAL EQUIPMENT {n}"));
-            f2550q.insert(format!("txtAmountPurchase1{i}"), format!("{}.00", 1_500_000 * n));
+            f2550q.insert(
+                format!("txtDescription1{i}"),
+                format!("CAPITAL EQUIPMENT {n}"),
+            );
+            f2550q.insert(
+                format!("txtAmountPurchase1{i}"),
+                format!("{}.00", 1_500_000 * n),
+            );
             f2550q.insert(format!("txtInputTax1{i}"), format!("{}.00", 180_000 * n));
             f2550q.insert(format!("txtEstimatedLife1{i}"), "60".into());
             f2550q.insert(format!("txtRecognizedLife1{i}"), "48".into());
-            f2550q.insert(format!("txtAllowedInputTax1{i}"), format!("{}.00", 9_000 * n));
-            f2550q.insert(format!("txtBalanceInputTax1{i}"), format!("{}.00", 171_000 * n));
+            f2550q.insert(
+                format!("txtAllowedInputTax1{i}"),
+                format!("{}.00", 9_000 * n),
+            );
+            f2550q.insert(
+                format!("txtBalanceInputTax1{i}"),
+                format!("{}.00", 171_000 * n),
+            );
         }
-        let doc_2550q = frozen_html::filled_document_with_report("2550q-2024", &f2550q, None).unwrap();
+        let doc_2550q =
+            frozen_html::filled_document_with_report("2550q-2024", &f2550q, None).unwrap();
         std::fs::write(out_dir.join("2550q-sched1-overflow.html"), &doc_2550q.html).unwrap();
         std::fs::write(
             out_dir.join("2550q-sched1-overflow-report.json"),
@@ -2448,14 +2900,33 @@ mod tests {
         f1701a.insert("frm1701A:txt42OtherDesc".into(), "ROYALTY INCOME".into());
         f1701a.insert("frm1701A:txt42A".into(), "80000.00".into());
         for n in 1..=4 {
-            f1701a.insert(format!("frm1701A:txtmodalPartIVADesc_{n}C1"), format!("OTHER NON-OP A {n}"));
-            f1701a.insert(format!("frm1701A:txtmodalPartIVA_{n}C2"), format!("{n}5000.00"));
-            f1701a.insert(format!("frm1701A:txtmodalPartIVA_{n}C3"), format!("{n}200.00"));
-            f1701a.insert(format!("frm1701A:txtmodalPartIVBDesc_{n}C1"), format!("OTHER NON-OP B {n}"));
-            f1701a.insert(format!("frm1701A:txtmodalPartIVB_{n}C2"), format!("{n}8000.00"));
-            f1701a.insert(format!("frm1701A:txtmodalPartIVB_{n}C3"), format!("{n}400.00"));
+            f1701a.insert(
+                format!("frm1701A:txtmodalPartIVADesc_{n}C1"),
+                format!("OTHER NON-OP A {n}"),
+            );
+            f1701a.insert(
+                format!("frm1701A:txtmodalPartIVA_{n}C2"),
+                format!("{n}5000.00"),
+            );
+            f1701a.insert(
+                format!("frm1701A:txtmodalPartIVA_{n}C3"),
+                format!("{n}200.00"),
+            );
+            f1701a.insert(
+                format!("frm1701A:txtmodalPartIVBDesc_{n}C1"),
+                format!("OTHER NON-OP B {n}"),
+            );
+            f1701a.insert(
+                format!("frm1701A:txtmodalPartIVB_{n}C2"),
+                format!("{n}8000.00"),
+            );
+            f1701a.insert(
+                format!("frm1701A:txtmodalPartIVB_{n}C3"),
+                format!("{n}400.00"),
+            );
         }
-        let doc_1701a = frozen_html::filled_document_with_report("1701a-2018", &f1701a, None).unwrap();
+        let doc_1701a =
+            frozen_html::filled_document_with_report("1701a-2018", &f1701a, None).unwrap();
         std::fs::write(out_dir.join("1701a-popup-rows.html"), &doc_1701a.html).unwrap();
         std::fs::write(
             out_dir.join("1701a-popup-rows-report.json"),
@@ -2535,7 +3006,12 @@ mod tests {
         Some(tag[at..end].to_string())
     }
 
-    fn corpus_contains_value(corpus: &str, corpus_no_commas: &str, val: &str, is_amount: bool) -> bool {
+    fn corpus_contains_value(
+        corpus: &str,
+        corpus_no_commas: &str,
+        val: &str,
+        is_amount: bool,
+    ) -> bool {
         let up = val.trim().to_ascii_uppercase();
         if up.is_empty() {
             return true;
@@ -2580,10 +3056,8 @@ mod tests {
             };
             let parsed: Value = serde_json::from_str(wc_json).unwrap();
             let stem_specs = discover_schedules(&parsed);
-            let popup_defs: Vec<&PopupScheduleDef> = POPUP_SCHEDULES
-                .iter()
-                .filter(|d| d.slug == slug)
-                .collect();
+            let popup_defs: Vec<&PopupScheduleDef> =
+                POPUP_SCHEDULES.iter().filter(|d| d.slug == slug).collect();
 
             if stem_specs.is_empty() && popup_defs.is_empty() {
                 continue;
@@ -2735,7 +3209,9 @@ mod tests {
         );
         assert!(doc.html.contains("Entries continued from the form"));
         assert!(doc.html.contains("Page 2"));
-        assert!(doc.html.contains("Schedule 1.B, row 3, Name of Corporate Stock (a)"));
+        assert!(doc
+            .html
+            .contains("Schedule 1.B, row 3, Name of Corporate Stock (a)"));
         assert!(doc.html.contains(long_stock));
         // Never leak internal cell ids or file names in the printed table.
         let cont_pos = doc.html.find("class=\"page page-continuation\"").unwrap();
@@ -2756,7 +3232,10 @@ mod tests {
         fields.insert("frm2000OT:txtDateMonth".into(), "01".into());
         fields.insert("frm2000OT:txtDateDay".into(), "15".into());
         fields.insert("frm2000OT:txtDateYear".into(), "2026".into());
-        fields.insert("frm2000OT:sched1B:txtNameOfCorpStock2".into(), "AYALA CORP".into());
+        fields.insert(
+            "frm2000OT:sched1B:txtNameOfCorpStock2".into(),
+            "AYALA CORP".into(),
+        );
 
         let doc = frozen_html::filled_document_with_report("2000-ot-2018", &fields, None).unwrap();
         assert!(!doc.html.contains("page-continuation"));
@@ -2785,7 +3264,8 @@ mod tests {
         let truncated = vec![TruncatedEntry {
             page_number: 2,
             label: "Part V, Item 7 — Foreign Tax Credits (specify)".into(),
-            full_text: "VERY LONG TAX CREDIT SPECIFICATION THAT DID NOT FIT ON THE OFFICIAL LINE".into(),
+            full_text: "VERY LONG TAX CREDIT SPECIFICATION THAT DID NOT FIT ON THE OFFICIAL LINE"
+                .into(),
         }];
         let combined = continuation_pages_html_with_truncated(
             "1701ms-2024",
@@ -2832,7 +3312,8 @@ mod tests {
             <div class=\"f\" id=\"p1c999\" style=\"left:40pt;top:114pt;width:80pt;height:14pt\">\
             <input id=\"p1c999-i\" data-overflow-warning=\"text-truncated\" data-writer-value=\"FULL UNLABELED TEXT\" value=\"FULL UN...\">\
             </div></div>";
-        let entries = collect_truncated_entries("2000-ot-2018", synthetic, &OverflowReport::default());
+        let entries =
+            collect_truncated_entries("2000-ot-2018", synthetic, &OverflowReport::default());
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].page_number, 1);
         assert_eq!(entries[0].label, "9 Other Remarks");

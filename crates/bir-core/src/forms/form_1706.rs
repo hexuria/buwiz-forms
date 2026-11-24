@@ -1753,7 +1753,11 @@ mod tests {
             let p = draft.to_print_field_map();
             assert_eq!(p["derived:sched1_class1"], code);
             assert_eq!(p["derived:sched1_class2"], "");
-            assert!(!draft.to_bir_field_map().contains_key("derived:sched1_class1"));
+            assert!(
+                !draft
+                    .to_bir_field_map()
+                    .contains_key("derived:sched1_class1")
+            );
         }
         draft.property_class = Some(Form1706PropertyClass::Others);
         draft.property_class_other = " ps ".into();

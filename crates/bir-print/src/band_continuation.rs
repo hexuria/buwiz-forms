@@ -195,8 +195,8 @@ pub(crate) fn build_continuation_pages(
     }
 
     let bands = parse_formgen_bands(raw_html);
-    let wc_parsed: Option<Value> = frozen_html::writer_cells_json(slug)
-        .and_then(|s| serde_json::from_str::<Value>(s).ok());
+    let wc_parsed: Option<Value> =
+        frozen_html::writer_cells_json(slug).and_then(|s| serde_json::from_str::<Value>(s).ok());
 
     let mut pages_html = String::new();
     let mut fallback_schedules: Vec<OverflowSchedule> = Vec::new();
@@ -244,9 +244,7 @@ enum CellJoinKind {
     /// Print-only sequence/ordinal cell (e.g. `1600WP`'s `derived:sched_seq*`),
     /// filled with the continuing row number (`7`, `8`, `9`, …) through the
     /// normal text fill path.
-    Ordinal {
-        orig_writer_key: String,
-    },
+    Ordinal { orig_writer_key: String },
 }
 
 #[derive(Debug, Clone)]
@@ -1406,9 +1404,7 @@ fn detect_page_header_bottom(page: &ParsedPage, first_band_y: f64) -> f64 {
     if has_header_tin {
         let mut max_cell_bottom = 0.0_f64;
         for c in page.cells.values() {
-            if c.top < first_section_y - 2.0
-                && c.raw_html.contains("data-cell-kind=\"field\"")
-            {
+            if c.top < first_section_y - 2.0 && c.raw_html.contains("data-cell-kind=\"field\"") {
                 let b = c.top + c.height;
                 if b > max_cell_bottom && b <= first_section_y + 1.0 {
                     max_cell_bottom = b;
@@ -1447,12 +1443,7 @@ fn find_band_header_top(
     let heavy_rule_above = page
         .svg_rects
         .iter()
-        .filter(|r| {
-            r.w > 400.0
-                && r.h >= 0.9
-                && r.y >= min_top - 2.0
-                && r.y <= table_top_y - 10.0
-        })
+        .filter(|r| r.w > 400.0 && r.h >= 0.9 && r.y >= min_top - 2.0 && r.y <= table_top_y - 10.0)
         .map(|r| r.y)
         .fold(None::<f64>, |acc, y| {
             Some(acc.map_or(y, |prev| prev.max(y)))
@@ -1482,12 +1473,7 @@ fn find_band_header_top(
     min_top
 }
 
-fn push_svg_rect(
-    structural: &mut String,
-    decorative: &mut String,
-    r: &SvgRect,
-    dy: f64,
-) {
+fn push_svg_rect(structural: &mut String, decorative: &mut String, r: &SvgRect, dy: f64) {
     let target = if r.layer.contains("decorative") {
         decorative
     } else {
@@ -1663,32 +1649,31 @@ mod tests {
 
     #[test]
     fn parses_formgen_bands_for_band_forms_and_empty_for_fallback() {
-        let b2000 = parse_formgen_bands(
-            include_str!("../../../html-frozen/2000-ot-2018/index.html"),
-        );
+        let b2000 =
+            parse_formgen_bands(include_str!("../../../html-frozen/2000-ot-2018/index.html"));
         assert_eq!(b2000.len(), 2, "2000-OT has 2 bands (p2g0, p2g1)");
         assert_eq!(b2000[0].id, "p2g0");
         assert_eq!(b2000[1].id, "p2g1");
 
-        let b1800 = parse_formgen_bands(
-            include_str!("../../../html-frozen/1800-2018/index.html"),
-        );
+        let b1800 = parse_formgen_bands(include_str!("../../../html-frozen/1800-2018/index.html"));
         assert_eq!(b1800.len(), 4, "1800 has 4 bands (p2g0..p2g3)");
 
-        let b2552 = parse_formgen_bands(
-            include_str!("../../../html-frozen/2552-2018/index.html"),
-        );
+        let b2552 = parse_formgen_bands(include_str!("../../../html-frozen/2552-2018/index.html"));
         assert_eq!(b2552.len(), 7, "2552 has 7 bands (p2g0..p2g6)");
 
-        let b1600wp = parse_formgen_bands(
-            include_str!("../../../html-frozen/1600wp-2010/index.html"),
+        let b1600wp =
+            parse_formgen_bands(include_str!("../../../html-frozen/1600wp-2010/index.html"));
+        assert!(
+            !b1600wp.is_empty(),
+            "1600WP now carries metadata-only formgen-bands"
         );
-        assert!(!b1600wp.is_empty(), "1600WP now carries metadata-only formgen-bands");
 
-        let b2200m = parse_formgen_bands(
-            include_str!("../../../html-frozen/2200m-2018/index.html"),
+        let b2200m =
+            parse_formgen_bands(include_str!("../../../html-frozen/2200m-2018/index.html"));
+        assert!(
+            b2200m.is_empty(),
+            "2200M stays on plain fallback (growables: [])"
         );
-        assert!(b2200m.is_empty(), "2200M stays on plain fallback (growables: [])");
     }
 
     #[test]
@@ -1700,7 +1685,10 @@ mod tests {
         fields.insert("frm2000OT:txtPg2TaxpayerName".into(), "JUANA SANTOS".into());
         for i in 0..15 {
             let n = i + 1;
-            fields.insert(format!("frm2000OT:sched1A:txtOCT{i}"), format!("TCT-{n:03}"));
+            fields.insert(
+                format!("frm2000OT:sched1A:txtOCT{i}"),
+                format!("TCT-{n:03}"),
+            );
             fields.insert(
                 format!("frm2000OT:sched1A:txtFMVCol1{i}"),
                 format!("{}.00", 1_000_000 * n),
@@ -1726,7 +1714,10 @@ mod tests {
 
         // Official pages (everything before the continuation page) must retain
         // the official grand total AND match a 5-row-only fill with the same total.
-        let cont_pos = doc.html.find("<div class=\"page page-continuation-band\"").unwrap();
+        let cont_pos = doc
+            .html
+            .find("<div class=\"page page-continuation-band\"")
+            .unwrap();
         let official_prefix = &doc.html[..cont_pos];
         assert!(
             official_prefix.contains("120000000.00"),
@@ -1750,10 +1741,22 @@ mod tests {
         fields.insert("frm2552:txtTaxpayerName".into(), "JUANA SANTOS".into());
         fields.insert("frm2552:txtYearEnded".into(), "2026".into());
         for row_no in 1..=8 {
-            fields.insert(format!("frm2552:txtPg2Pt5Sch1Seller{row_no}"), format!("S1-{row_no}"));
-            fields.insert(format!("frm2552:txtPg2Pt5Sch1TaxDue{row_no}"), format!("{}.00", row_no * 100));
-            fields.insert(format!("frm2552:txtPg2Pt5Sch2Seller{row_no}"), format!("S2-{row_no}"));
-            fields.insert(format!("frm2552:txtPg2Pt5Sch2TaxDue{row_no}"), format!("{}.00", row_no * 500));
+            fields.insert(
+                format!("frm2552:txtPg2Pt5Sch1Seller{row_no}"),
+                format!("S1-{row_no}"),
+            );
+            fields.insert(
+                format!("frm2552:txtPg2Pt5Sch1TaxDue{row_no}"),
+                format!("{}.00", row_no * 100),
+            );
+            fields.insert(
+                format!("frm2552:txtPg2Pt5Sch2Seller{row_no}"),
+                format!("S2-{row_no}"),
+            );
+            fields.insert(
+                format!("frm2552:txtPg2Pt5Sch2TaxDue{row_no}"),
+                format!("{}.00", row_no * 500),
+            );
         }
         fields.insert("frm2552:txtPg2Pt5Sch1TaxDueTot".into(), "3600.00".into());
         fields.insert("frm2552:txtPg2Pt5Sch2TaxDueTot".into(), "18000.00".into());
@@ -1776,13 +1779,25 @@ mod tests {
             if i <= 6 {
                 fields.insert(format!("derived:sched_seq{i}"), i.to_string());
             }
-            fields.insert(format!("frm1600WP:dtSched:txtFullname{i}"), format!("PAYEE {i}"));
-            fields.insert(format!("frm1600WP:dtSched:amount{i}"), format!("{}.00", i * 1000));
-            fields.insert(format!("frm1600WP:dtSched:taxWithheld{i}"), format!("{}.00", i * 100));
+            fields.insert(
+                format!("frm1600WP:dtSched:txtFullname{i}"),
+                format!("PAYEE {i}"),
+            );
+            fields.insert(
+                format!("frm1600WP:dtSched:amount{i}"),
+                format!("{}.00", i * 1000),
+            );
+            fields.insert(
+                format!("frm1600WP:dtSched:taxWithheld{i}"),
+                format!("{}.00", i * 100),
+            );
         }
         let doc = frozen_html::filled_document_with_report("1600wp-2010", &fields, None).unwrap();
         assert_eq!(doc.overflow.schedules.len(), 1);
-        let cont_pos = doc.html.find("<div class=\"page page-continuation-band\"").unwrap();
+        let cont_pos = doc
+            .html
+            .find("<div class=\"page page-continuation-band\"")
+            .unwrap();
         let cont = &doc.html[cont_pos..];
         for n in 7..=10 {
             assert!(
@@ -1801,16 +1816,23 @@ mod tests {
         for i in 1..=4 {
             fields.insert(format!("frm1801v2018:sched1Oct_{i}"), format!("TCT-{i:03}"));
             fields.insert(format!("frm1801v2018:sched1Class_{i}'"), "RES".into());
-            fields.insert(format!("frm1801v2018:sched1Fmv_{i}"), format!("{}.00", i * 100_000));
+            fields.insert(
+                format!("frm1801v2018:sched1Fmv_{i}"),
+                format!("{}.00", i * 100_000),
+            );
         }
         let doc = frozen_html::filled_document_with_report("1801-2018", &fields, None).unwrap();
         assert_eq!(doc.overflow.schedules.len(), 1);
-        let cont_pos = doc.html.find("<div class=\"page page-continuation-band\"").unwrap();
+        let cont_pos = doc
+            .html
+            .find("<div class=\"page page-continuation-band\"")
+            .unwrap();
         let cont = &doc.html[cont_pos..];
         assert!(cont.contains("TCT-003"));
         assert!(cont.contains("TCT-004"));
         assert!(
-            !cont.contains("continuation) (continued)") && !cont.contains("Continuation) (continued)"),
+            !cont.contains("continuation) (continued)")
+                && !cont.contains("Continuation) (continued)"),
             "1801 Schedule 1 continuation heading must not duplicate (continued)"
         );
     }
@@ -1825,14 +1847,23 @@ mod tests {
             f1707.insert(format!("frm1707:txtPg2Pt4S2_{k}Col1"), format!("CORP {k}"));
             f1707.insert(format!("frm1707:txtPg2Pt4S2_{k}Col2"), format!("{}00", k));
             f1707.insert(format!("frm1707:txtPg2Pt4S2_{k}Col3"), format!("CERT-{k}"));
-            f1707.insert(format!("frm1707:txtPg2Pt4S2_{k}Col4"), format!("{k}0000.00"));
-            f1707.insert(format!("frm1707:txtPg2Pt4S3_{k}Col1"), format!("EXPENSE {k}"));
+            f1707.insert(
+                format!("frm1707:txtPg2Pt4S2_{k}Col4"),
+                format!("{k}0000.00"),
+            );
+            f1707.insert(
+                format!("frm1707:txtPg2Pt4S3_{k}Col1"),
+                format!("EXPENSE {k}"),
+            );
             f1707.insert(format!("frm1707:txtPg2Pt4S3_{k}Col2"), format!("{k}500.25"));
         }
         let doc1707 = frozen_html::filled_document_with_report("1707-2021", &f1707, None).unwrap();
         assert_eq!(doc1707.overflow.schedules.len(), 2);
         assert!(doc1707.html.contains("CORP 1") && doc1707.html.contains("CORP 3"));
-        assert!(doc1707.html.contains("page-continuation-band"), "1707 Schedule 3 uses cloned band p2g1");
+        assert!(
+            doc1707.html.contains("page-continuation-band"),
+            "1707 Schedule 3 uses cloned band p2g1"
+        );
         assert!(doc1707.html.contains("EXPENSE 1") || doc1707.html.contains("value=\"E\""));
 
         // 1701A: Part IV-A & Part IV-B popup rows -> cloned bands p2g0 & p2g1
@@ -1840,44 +1871,105 @@ mod tests {
         f1701a.insert("derived:tin".into(), "00012345300000".into());
         f1701a.insert("frm1701A:txtTaxpayerName".into(), "JUANA SANTOS".into());
         for n in 1..=3 {
-            f1701a.insert(format!("frm1701A:txtmodalPartIVADesc_{n}C1"), format!("OTHER INC A {n}"));
-            f1701a.insert(format!("frm1701A:txtmodalPartIVA_{n}C2"), format!("{n}0000.00"));
-            f1701a.insert(format!("frm1701A:txtmodalPartIVA_{n}C3"), format!("{n}500.00"));
-            f1701a.insert(format!("frm1701A:txtmodalPartIVBDesc_{n}C1"), format!("OTHER INC B {n}"));
-            f1701a.insert(format!("frm1701A:txtmodalPartIVB_{n}C2"), format!("{n}2000.00"));
-            f1701a.insert(format!("frm1701A:txtmodalPartIVB_{n}C3"), format!("{n}300.00"));
+            f1701a.insert(
+                format!("frm1701A:txtmodalPartIVADesc_{n}C1"),
+                format!("OTHER INC A {n}"),
+            );
+            f1701a.insert(
+                format!("frm1701A:txtmodalPartIVA_{n}C2"),
+                format!("{n}0000.00"),
+            );
+            f1701a.insert(
+                format!("frm1701A:txtmodalPartIVA_{n}C3"),
+                format!("{n}500.00"),
+            );
+            f1701a.insert(
+                format!("frm1701A:txtmodalPartIVBDesc_{n}C1"),
+                format!("OTHER INC B {n}"),
+            );
+            f1701a.insert(
+                format!("frm1701A:txtmodalPartIVB_{n}C2"),
+                format!("{n}2000.00"),
+            );
+            f1701a.insert(
+                format!("frm1701A:txtmodalPartIVB_{n}C3"),
+                format!("{n}300.00"),
+            );
         }
-        let doc1701a = frozen_html::filled_document_with_report("1701a-2018", &f1701a, None).unwrap();
+        let doc1701a =
+            frozen_html::filled_document_with_report("1701a-2018", &f1701a, None).unwrap();
         assert_eq!(doc1701a.overflow.schedules.len(), 2);
-        assert!(doc1701a.html.contains("page-continuation-band"), "1701A uses cloned bands");
+        assert!(
+            doc1701a.html.contains("page-continuation-band"),
+            "1701A uses cloned bands"
+        );
         assert!(!doc1701a.html.contains("class=\"page page-continuation\""));
         assert!(doc1701a.html.contains("OTHER INC A 1") && doc1701a.html.contains("OTHER INC B 3"));
 
         // 1707A, 1700, 1702EX, 1702MX, 1702RT popup detection
         let mut f1707a = BTreeMap::new();
-        f1707a.insert("frm1707Av2021:txtS1C2NameOfCorporateStock_1".into(), "ALPHA CORP".into());
-        f1707a.insert("frm1707Av2021:txtS1C3SellingPrice_1".into(), "50000.00".into());
-        assert_eq!(continuation::detect_overflow("1707a-2021", &f1707a).unwrap().schedules.len(), 1);
+        f1707a.insert(
+            "frm1707Av2021:txtS1C2NameOfCorporateStock_1".into(),
+            "ALPHA CORP".into(),
+        );
+        f1707a.insert(
+            "frm1707Av2021:txtS1C3SellingPrice_1".into(),
+            "50000.00".into(),
+        );
+        assert_eq!(
+            continuation::detect_overflow("1707a-2021", &f1707a)
+                .unwrap()
+                .schedules
+                .len(),
+            1
+        );
 
         let mut f1700 = BTreeMap::new();
-        f1700.insert("frm1700:txtPg2I4_1PartVIEmployerName1".into(), "ACME INC".into());
+        f1700.insert(
+            "frm1700:txtPg2I4_1PartVIEmployerName1".into(),
+            "ACME INC".into(),
+        );
         f1700.insert("frm1700:txtPg2ISched1c_4_1REG".into(), "120000.00".into());
-        assert_eq!(continuation::detect_overflow("1700-2018", &f1700).unwrap().schedules.len(), 1);
+        assert_eq!(
+            continuation::detect_overflow("1700-2018", &f1700)
+                .unwrap()
+                .schedules
+                .len(),
+            1
+        );
 
         let mut f1702ex = BTreeMap::new();
         f1702ex.insert("frm1702EX:txtPg3Pt6S2I4_1Col1".into(), "SPECIAL DED".into());
         f1702ex.insert("frm1702EX:txtPg3Pt6S2I4_1Col3".into(), "9000.00".into());
-        assert_eq!(continuation::detect_overflow("1702ex-2018", &f1702ex).unwrap().schedules.len(), 1);
+        assert_eq!(
+            continuation::detect_overflow("1702ex-2018", &f1702ex)
+                .unwrap()
+                .schedules
+                .len(),
+            1
+        );
 
         let mut f1702mx = BTreeMap::new();
         f1702mx.insert("frm1702MX:txtPg6Sc6_1Col1".into(), "MX DED".into());
         f1702mx.insert("frm1702MX:txtPg6Sc6_1Col3".into(), "8000.00".into());
-        assert_eq!(continuation::detect_overflow("1702mx-2018c", &f1702mx).unwrap().schedules.len(), 1);
+        assert_eq!(
+            continuation::detect_overflow("1702mx-2018c", &f1702mx)
+                .unwrap()
+                .schedules
+                .len(),
+            1
+        );
 
         let mut f1702rt = BTreeMap::new();
         f1702rt.insert("frm1702RT:txtPg3Sc2I4.1C1".into(), "RT DED".into());
         f1702rt.insert("frm1702RT:txtPg3Sc2I4.1C3".into(), "7000.00".into());
-        assert_eq!(continuation::detect_overflow("1702rt-2018c", &f1702rt).unwrap().schedules.len(), 1);
+        assert_eq!(
+            continuation::detect_overflow("1702rt-2018c", &f1702rt)
+                .unwrap()
+                .schedules
+                .len(),
+            1
+        );
     }
 
     #[test]
@@ -1892,10 +1984,16 @@ mod tests {
             "frm1707:txtPg2Pt4S3_1Col1".into(),
             "EXTREMELY LONG DOCUMENTARY STAMP TAX AND BROKERAGE EXPENSE DESCRIPTION FOR WHITE BAND TEST".into(),
         );
-        f1707.insert("frm1707:txtPg2Pt4S3_1Col2".into(), "999999999999999.99".into());
+        f1707.insert(
+            "frm1707:txtPg2Pt4S3_1Col2".into(),
+            "999999999999999.99".into(),
+        );
 
         let doc = frozen_html::filled_document_with_report("1707-2021", &f1707, None).unwrap();
-        let cont_pos = doc.html.find("<div class=\"page page-continuation-band\"").unwrap();
+        let cont_pos = doc
+            .html
+            .find("<div class=\"page page-continuation-band\"")
+            .unwrap();
         let cont = &doc.html[cont_pos..];
         assert!(
             cont.contains("data-overflow-of=\"cont_"),

@@ -1145,10 +1145,9 @@ fn fit_plain_text(
     let min_pt = PLAIN_TEXT_MIN_PT.min(default_size);
 
     if allow_wrap && height >= PLAIN_WRAP_MIN_HEIGHT_PT {
-        let top_two_line = floor_size((height / PLAIN_TWO_LINE_HEIGHT_FACTOR).min(default_size))
-            .max(min_pt);
-        if let Some((l1, l2, sz)) =
-            fit_two_lines(sheet, letter, shrunk, text, top_two_line, min_pt)
+        let top_two_line =
+            floor_size((height / PLAIN_TWO_LINE_HEIGHT_FACTOR).min(default_size)).max(min_pt);
+        if let Some((l1, l2, sz)) = fit_two_lines(sheet, letter, shrunk, text, top_two_line, min_pt)
         {
             return Some(PlainTextFit {
                 text: format!("{l1}\n{l2}"),
@@ -1291,26 +1290,128 @@ fn is_amount_typed_key(key: &str) -> bool {
     // Exclude non-money numeric/code/text keys even if they contain substrings
     // like "tax" (TaxRate, TaxDec, Taxpayer, TaxAgent) or "value".
     for excluded in [
-        "rate", "percent", "pct", "area", "share", "qty", "quantity", "volume", "metric",
-        "liter", "gram", "kilo", "weight", "ratio", "unit", "count", "taxdec", "taxpayer",
-        "taxagent", "taxableyear", "tin", "zip", "rdo", "date", "month", "year", "day",
-        "name", "title", "addr", "email", "phone", "tel", "atc", "desc", "particular",
-        "location", "class", "oct", "tct", "cct", "sheet", "page", "seq", "memo", "bank",
-        "check", "ror", "drawee", "num", "no_", "code", "kind", "type", "status", "remarks",
+        "rate",
+        "percent",
+        "pct",
+        "area",
+        "share",
+        "qty",
+        "quantity",
+        "volume",
+        "metric",
+        "liter",
+        "gram",
+        "kilo",
+        "weight",
+        "ratio",
+        "unit",
+        "count",
+        "taxdec",
+        "taxpayer",
+        "taxagent",
+        "taxableyear",
+        "tin",
+        "zip",
+        "rdo",
+        "date",
+        "month",
+        "year",
+        "day",
+        "name",
+        "title",
+        "addr",
+        "email",
+        "phone",
+        "tel",
+        "atc",
+        "desc",
+        "particular",
+        "location",
+        "class",
+        "oct",
+        "tct",
+        "cct",
+        "sheet",
+        "page",
+        "seq",
+        "memo",
+        "bank",
+        "check",
+        "ror",
+        "drawee",
+        "num",
+        "no_",
+        "code",
+        "kind",
+        "type",
+        "status",
+        "remarks",
     ] {
         if tail.contains(excluded) {
             return false;
         }
     }
     for money_token in [
-        "_base", "_withheld", "amount", "amt", "fairmarketvalue", "fmv", "zonal", "ftd",
-        "total", "tax", "income", "payment", "payable", "value", "gross", "net", "deduct",
-        "credit", "surcharge", "interest", "compromise", "penalt", "remit", "price", "cost",
-        "sales", "receipt", "purchase", "loss", "claim", "estate", "realprop", "fam_",
-        "personalprop", "business_", "transfer", "gift", "asset", "liab", "equity",
-        "capital", "profit", "expense", "revenue", "allowance", "exemption", "withholding",
-        "base", "due", "paid", "overpay", "refund", "balance", "dividend", "royalt",
-        "compensation", "benefit", "gain", "proceed", "consideration",
+        "_base",
+        "_withheld",
+        "amount",
+        "amt",
+        "fairmarketvalue",
+        "fmv",
+        "zonal",
+        "ftd",
+        "total",
+        "tax",
+        "income",
+        "payment",
+        "payable",
+        "value",
+        "gross",
+        "net",
+        "deduct",
+        "credit",
+        "surcharge",
+        "interest",
+        "compromise",
+        "penalt",
+        "remit",
+        "price",
+        "cost",
+        "sales",
+        "receipt",
+        "purchase",
+        "loss",
+        "claim",
+        "estate",
+        "realprop",
+        "fam_",
+        "personalprop",
+        "business_",
+        "transfer",
+        "gift",
+        "asset",
+        "liab",
+        "equity",
+        "capital",
+        "profit",
+        "expense",
+        "revenue",
+        "allowance",
+        "exemption",
+        "withholding",
+        "base",
+        "due",
+        "paid",
+        "overpay",
+        "refund",
+        "balance",
+        "dividend",
+        "royalt",
+        "compensation",
+        "benefit",
+        "gain",
+        "proceed",
+        "consideration",
     ] {
         if tail.contains(money_token) {
             return true;
@@ -1352,11 +1453,48 @@ fn is_quantity_typed_key(key: &str) -> bool {
     let lower = key.to_ascii_lowercase();
     let tail = lower.rsplit(':').next().unwrap_or(&lower);
     for excluded in [
-        "rate", "percent", "pct", "taxdec", "taxpayer", "taxagent", "taxableyear", "tin", "zip",
-        "rdo", "date", "month", "year", "day", "name", "title", "addr", "email", "phone", "tel",
-        "atc", "desc", "particular", "location", "class", "oct", "tct", "cct", "sheet", "page",
-        "seq", "memo", "bank", "check", "ror", "drawee", "code", "kind", "type", "status",
-        "remarks", "cert",
+        "rate",
+        "percent",
+        "pct",
+        "taxdec",
+        "taxpayer",
+        "taxagent",
+        "taxableyear",
+        "tin",
+        "zip",
+        "rdo",
+        "date",
+        "month",
+        "year",
+        "day",
+        "name",
+        "title",
+        "addr",
+        "email",
+        "phone",
+        "tel",
+        "atc",
+        "desc",
+        "particular",
+        "location",
+        "class",
+        "oct",
+        "tct",
+        "cct",
+        "sheet",
+        "page",
+        "seq",
+        "memo",
+        "bank",
+        "check",
+        "ror",
+        "drawee",
+        "code",
+        "kind",
+        "type",
+        "status",
+        "remarks",
+        "cert",
     ] {
         if tail.contains(excluded) {
             return false;
@@ -1778,18 +1916,16 @@ fn fill_text_input(
                 || (is_quantity_typed_key(name) && is_formatted_numeric_quantity(print)));
         for &index in indices {
             let writer = via_cell.then_some(print);
-            let fit = dims
-                .filter(|_| !split)
-                .and_then(|(width, height)| {
-                    fit_plain_text(
-                        sheet,
-                        width,
-                        height,
-                        tags[index].tag,
-                        print,
-                        !right_align_numeric,
-                    )
-                });
+            let fit = dims.filter(|_| !split).and_then(|(width, height)| {
+                fit_plain_text(
+                    sheet,
+                    width,
+                    height,
+                    tags[index].tag,
+                    print,
+                    !right_align_numeric,
+                )
+            });
             let tag = match &fit {
                 Some(fit) => {
                     let mut tag = set_value(tags[index].tag, &fit.text, writer);
@@ -3312,8 +3448,7 @@ fn fill_peso_joins_with_sheet(
                         set_value(tags[index].tag, &values[offset], writer),
                     ));
                 }
-            } else if let Some((at, line)) =
-                comb_overflow_amount_line(html, html_id, &pesos, sheet)
+            } else if let Some((at, line)) = comb_overflow_amount_line(html, html_id, &pesos, sheet)
             {
                 replacements.push((at, at, line));
                 for (offset, index) in ordered.into_iter().enumerate() {
@@ -3913,7 +4048,12 @@ pub fn filled_document_with_report(
     let (width, height) = page_size_from_css(loaded.css);
     let cont = if !overflow.is_empty() {
         Some(crate::band_continuation::build_continuation_pages(
-            slug, loaded.html, fields, &overflow, &width, &height,
+            slug,
+            loaded.html,
+            fields,
+            &overflow,
+            &width,
+            &height,
         )?)
     } else {
         None
@@ -4682,10 +4822,7 @@ mod tests {
         assert_eq!(comb_values(&doc, "c"), ["0", "1"]);
         fields.insert("k".to_string(), "(0.00)".to_string());
         let doc = super::fill_money_joins(&html, &fields, &joins);
-        assert_eq!(
-            comb_values(&doc, "p"),
-            ["", "", "", "", "", "", "", "0"]
-        );
+        assert_eq!(comb_values(&doc, "p"), ["", "", "", "", "", "", "", "0"]);
         assert_eq!(comb_values(&doc, "c"), ["0", "0"]);
     }
 
@@ -4859,7 +4996,9 @@ mod tests {
             super::NegativeStyle::Unsigned
         );
         assert_eq!(
-            super::NegativeStyle::from_printed_label(Some("3 Net Operating Loss (Item 1 Less Item 2)")),
+            super::NegativeStyle::from_printed_label(Some(
+                "3 Net Operating Loss (Item 1 Less Item 2)"
+            )),
             super::NegativeStyle::Unsigned
         );
         assert_eq!(
@@ -4876,7 +5015,10 @@ mod tests {
             negative_style: super::NegativeStyle::Parentheses,
         }];
         let doc = super::fill_peso_joins(&html, &fields, &paren);
-        assert_eq!(comb_values(&doc, "p"), ["", "", "", "(", "1", "2", "3", ")"]);
+        assert_eq!(
+            comb_values(&doc, "p"),
+            ["", "", "", "(", "1", "2", "3", ")"]
+        );
 
         let unsigned = [super::PesoJoin {
             writer_key: "k".into(),
@@ -4897,7 +5039,11 @@ mod tests {
             )
         };
         // 1. MoneyJoin with separate peso + centavo combs (e.g. 2000OT / 1801)
-        let html = format!("{}{}", comb_div("p1c56", 90.0, 8), comb_div("p1c57", 24.0, 2));
+        let html = format!(
+            "{}{}",
+            comb_div("p1c56", 90.0, 8),
+            comb_div("p1c57", 24.0, 2)
+        );
         let mut fields = BTreeMap::new();
         fields.insert("k".to_string(), "-1,134,107,265.03".to_string());
         let joins = [super::MoneyJoin {
@@ -4976,15 +5122,15 @@ mod tests {
             vec!["p1c100_clone2".to_string()],
         );
         let sheet = super::SheetType::of(".fh0 { font-size:9pt;line-height:20pt }");
-        let doc = super::fill_by_name_set(
-            &html,
-            &fields,
-            &cells,
-            &BTreeMap::new(),
-            &sheet,
+        let doc = super::fill_by_name_set(&html, &fields, &cells, &BTreeMap::new(), &sheet);
+        assert!(
+            doc.contains("&#10;"),
+            "tall cell should wrap onto two lines: {doc}"
         );
-        assert!(doc.contains("&#10;"), "tall cell should wrap onto two lines: {doc}");
-        assert!(doc.contains("line-height:1.05"), "two-line wrap sets line-height: {doc}");
+        assert!(
+            doc.contains("line-height:1.05"),
+            "two-line wrap sets line-height: {doc}"
+        );
         assert!(
             super::overflow_warnings(&doc).is_empty(),
             "wrapped value that fits at >=6.5pt emits no truncation warning"
@@ -4993,14 +5139,11 @@ mod tests {
         // 2. Very long text in tall cloned cell floors at 6.50pt, ends with "...", and warns with full text.
         let huge = "AYALA LAND INCORPORATED CUMULATIVE REDEEMABLE NON-VOTING CONVERTIBLE PREFERRED SERIES B CLASS TWO SHARES OF STOCK";
         fields.insert("derived:stock_name".to_string(), huge.to_string());
-        let doc = super::fill_by_name_set(
-            &html,
-            &fields,
-            &cells,
-            &BTreeMap::new(),
-            &sheet,
+        let doc = super::fill_by_name_set(&html, &fields, &cells, &BTreeMap::new(), &sheet);
+        assert!(
+            doc.contains("font-size:6.50pt"),
+            "must floor at 6.50pt: {doc}"
         );
-        assert!(doc.contains("font-size:6.50pt"), "must floor at 6.50pt: {doc}");
         assert!(doc.contains("...\""), "must end with ellipsis: {doc}");
         let warnings = super::overflow_warnings(&doc);
         assert_eq!(warnings.len(), 1);
@@ -5013,16 +5156,19 @@ mod tests {
         let short_html = plain_div("p1c50", 90.0, 12.0);
         let mut scells = BTreeMap::new();
         scells.insert("derived:stock_name".to_string(), vec!["p1c50".to_string()]);
-        let doc = super::fill_by_name_set(
-            &short_html,
-            &fields,
-            &scells,
-            &BTreeMap::new(),
-            &sheet,
+        let doc = super::fill_by_name_set(&short_html, &fields, &scells, &BTreeMap::new(), &sheet);
+        assert!(
+            !doc.contains("&#10;"),
+            "short cell (<18pt) must not wrap: {doc}"
         );
-        assert!(!doc.contains("&#10;"), "short cell (<18pt) must not wrap: {doc}");
-        assert!(doc.contains("font-size:6.50pt"), "short cell floors at 6.50pt: {doc}");
-        assert!(doc.contains("...\""), "short cell ends with ellipsis: {doc}");
+        assert!(
+            doc.contains("font-size:6.50pt"),
+            "short cell floors at 6.50pt: {doc}"
+        );
+        assert!(
+            doc.contains("...\""),
+            "short cell ends with ellipsis: {doc}"
+        );
         let warnings = super::overflow_warnings(&doc);
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0].cell, "p1c50");
@@ -9066,7 +9212,10 @@ mod donor_estate_print_tests {
     fn plain_money_inputs_right_align_with_inset_while_non_money_stays_left() {
         // 1800 Schedule A Fair Market Value (money) vs Schedule B2 Area (non-money)
         let mut fields = donor(6, 15, 2025);
-        fields.insert("frm1800v2018:schedA:txtFairMarketValue0".into(), "150,000.00".into());
+        fields.insert(
+            "frm1800v2018:schedA:txtFairMarketValue0".into(),
+            "150,000.00".into(),
+        );
         fields.insert("frm1800v2018:schedB2:txtArea0".into(), "250.00".into());
         fields.insert("frm1800v2018:schedB2:txtFTD0".into(), "1,200,000.00".into());
         let html = filled_document("1800-2018", &fields).unwrap();

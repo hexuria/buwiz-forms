@@ -952,10 +952,7 @@ impl Form1606Draft {
         );
         // Official upload XML keeps two decimals (`48.00`), matching eBIRForms,
         // while print displays the installment count as a plain number (`48`).
-        if !fields
-            .get("frm1606:txtTotalN")
-            .is_none_or(String::is_empty)
-        {
+        if !fields.get("frm1606:txtTotalN").is_none_or(String::is_empty) {
             fields.insert(
                 "frm1606:txtTotalN".to_string(),
                 super::print_map::format_count(Some(self.number_of_installments)),
@@ -1786,7 +1783,11 @@ mod tests {
             let p = draft.to_print_field_map();
             assert_eq!(p["derived:sched1_class1"], code);
             assert_eq!(p["derived:sched1_class2"], "");
-            assert!(!draft.to_bir_field_map().contains_key("derived:sched1_class1"));
+            assert!(
+                !draft
+                    .to_bir_field_map()
+                    .contains_key("derived:sched1_class1")
+            );
         }
         draft.property_class = Some(Form1606PropertyClass::Others);
         draft.property_class_other = " cl ".into();

@@ -96,7 +96,7 @@ fn group_thousands_int(digits: &str) -> String {
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
     for (idx, ch) in digits.chars().enumerate() {
         let remaining = digits.len() - idx;
-        if idx > 0 && remaining % 3 == 0 {
+        if idx > 0 && remaining.is_multiple_of(3) {
             out.push(',');
         }
         out.push(ch);
@@ -207,6 +207,7 @@ mod tests {
 
     #[test]
     fn unset_date_parts_print_blank_across_all_15_affected_forms() {
+        use crate::TaxpayerProfile;
         use crate::forms::form_1600wp::Form1600WpDraft;
         use crate::forms::form_1606::Form1606Draft;
         use crate::forms::form_1706::Form1706Draft;
@@ -222,7 +223,6 @@ mod tests {
         use crate::forms::form_2200s::Form2200SDraft;
         use crate::forms::form_2200t::Form2200TDraft;
         use crate::forms::form_2552::Form2552Draft;
-        use crate::TaxpayerProfile;
 
         let p: TaxpayerProfile = serde_json::from_value(serde_json::json!({
             "id": null,
@@ -292,7 +292,11 @@ mod tests {
                 d.transaction_day = 0;
                 d.transaction_year = 0;
             },
-            ["frm1606:txtDateMonth", "frm1606:txtDateDay", "frm1606:txtDateYear"]
+            [
+                "frm1606:txtDateMonth",
+                "frm1606:txtDateDay",
+                "frm1606:txtDateYear"
+            ]
         );
         check_form!(
             Form1706Draft::new_from_profile(&p, 2026, 1),
@@ -301,7 +305,11 @@ mod tests {
                 d.transaction_day = 0;
                 d.transaction_year = 0;
             },
-            ["frm1706:txtDateMonth", "frm1706:txtDateDay", "frm1706:txtDateYear"]
+            [
+                "frm1706:txtDateMonth",
+                "frm1706:txtDateDay",
+                "frm1706:txtDateYear"
+            ]
         );
         check_form!(
             Form1707Draft::new_from_profile(&p, 2026, 1),
@@ -310,7 +318,11 @@ mod tests {
                 d.transaction_day = 0;
                 d.transaction_year = 0;
             },
-            ["frm1707:txtPg1I1Month", "frm1707:txtPg1I1Day", "frm1707:txtPg1I1Year"]
+            [
+                "frm1707:txtPg1I1Month",
+                "frm1707:txtPg1I1Day",
+                "frm1707:txtPg1I1Year"
+            ]
         );
         check_form!(
             Form1707ADraft::new_from_profile(&p, 2026, 1),
@@ -332,7 +344,11 @@ mod tests {
                 d.donation_day = 0;
                 d.donation_year = 0;
             },
-            ["frm1800v2018:txtMonth", "frm1800v2018:txtDate", "frm1800v2018:txtYear"]
+            [
+                "frm1800v2018:txtMonth",
+                "frm1800v2018:txtDate",
+                "frm1800v2018:txtYear"
+            ]
         );
         check_form!(
             Form1801Draft::new_from_profile(&p, 2026, 1),
@@ -367,7 +383,11 @@ mod tests {
                 d.day = 0;
                 d.year = 0;
             },
-            ["frm2200ANv2018:txtMonth", "frm2200ANv2018:txtDate", "frm2200ANv2018:txtYear"]
+            [
+                "frm2200ANv2018:txtMonth",
+                "frm2200ANv2018:txtDate",
+                "frm2200ANv2018:txtYear"
+            ]
         );
         check_form!(
             Form2200CDraft::new_from_profile(&p, 2026),
@@ -376,7 +396,11 @@ mod tests {
                 d.day = 0;
                 d.year = 0;
             },
-            ["frm2200C:txtPg1I1Month", "frm2200C:txtPg1I1Day", "frm2200C:txtPg1I1Year"]
+            [
+                "frm2200C:txtPg1I1Month",
+                "frm2200C:txtPg1I1Day",
+                "frm2200C:txtPg1I1Year"
+            ]
         );
         check_form!(
             Form2200MDraft::new_from_profile(&p, 2026, 6),
@@ -385,7 +409,11 @@ mod tests {
                 d.day = 0;
                 d.year = 0;
             },
-            ["frm2200M:txtPg1I1Month", "frm2200M:txtPg1I1Day", "frm2200M:txtPg1I1Year"]
+            [
+                "frm2200M:txtPg1I1Month",
+                "frm2200M:txtPg1I1Day",
+                "frm2200M:txtPg1I1Year"
+            ]
         );
         check_form!(
             Form2200PDraft::new_from_profile(&p, 2026, 6),
@@ -394,7 +422,11 @@ mod tests {
                 d.day = 0;
                 d.year = 0;
             },
-            ["frm2200P:txtPg1I1Month", "frm2200P:txtPg1I1Day", "frm2200P:txtPg1I1Year"]
+            [
+                "frm2200P:txtPg1I1Month",
+                "frm2200P:txtPg1I1Day",
+                "frm2200P:txtPg1I1Year"
+            ]
         );
         check_form!(
             Form2200SDraft::new_from_profile(&p, 2026, 6),
@@ -403,7 +435,11 @@ mod tests {
                 d.day = 0;
                 d.year = 0;
             },
-            ["frm2200S:txtMonth1", "frm2200S:txtDate", "frm2200S:txtForYr"]
+            [
+                "frm2200S:txtMonth1",
+                "frm2200S:txtDate",
+                "frm2200S:txtForYr"
+            ]
         );
         check_form!(
             Form2200TDraft::new_from_profile(&p, 2026, 6),
@@ -425,7 +461,11 @@ mod tests {
                 d.transaction_day = 0;
                 d.transaction_year = 0;
             },
-            ["frm2552:txtPg1I1Month", "frm2552:txtPg1I1Day", "frm2552:txtPg1I1Year"]
+            [
+                "frm2552:txtPg1I1Month",
+                "frm2552:txtPg1I1Day",
+                "frm2552:txtPg1I1Year"
+            ]
         );
     }
 }
