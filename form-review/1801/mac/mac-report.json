@@ -1,0 +1,22 @@
+{
+  "form": "1801",
+  "branch": "try/forms-neon-4",
+  "commit": "c6a347858c858fbb3ec3b83843ff6fe0052cb5ad",
+  "platform": "macOS 26.6.2 (arm64), WKWebView preview + WKWebView createPDF Save-as-PDF",
+  "verdict": "macOS matches Linux: yes (preview); saved PDF shows the already-diagnosed capture-zoom defect on the bottom legend row",
+  "preview": {
+    "matches_linux": true,
+    "notes": "print-p1/print-p2 stitched from preview scrolls. All Part II totals identical to Linux: 16=856,107,320.29, 18=51,366,439.22, 20=38,062,734.97, 21=10,000,000.00 (2026), 22=28,062,734.97, 24=28,062,734.97. Part IV items 29-40 and all Part V schedule rows (1,1A,2,2A,3,4,5) present and identical. Legend row spacing clean."
+  },
+  "pdf": {
+    "matches_linux": false,
+    "defect": "Bottom legend row collides: 'CondominiumCC-Commercial', 'LotGL-Government', 'PurposeI-Industrial', 'APD:Area' — small bold codes merge into the following italic annotation. Same zoom-dependent text-metric defect diagnosed on 2550Q/1706/1606 (sub-1 capture zoom); fixed on try/print-zoom-fix @e45bd5fa. Preview renders same text spaced correctly."
+  },
+  "carried_over_linux_defects_reproduced": [
+    "Item 11 Executor TIN comb: 'DEMO ENTRY 8: LONG SAMPLE TEXT' overlaps the shaded dash separators and item-12 '02 88 881234' — identical to Linux after/print-p1."
+  ],
+  "value_deltas_vs_linux": [
+    "Item 27 Number cell empty: form.fill refused 'frm1801v2018taxkNum' (key lacks a form:field colon binding); Linux pic shows 'DEMO ENTRY 30: LONG SAMPLE TEXT'.",
+    "installment_granted could not be set through form.fill (editor-owned) and UI Yes clicks toggled the freq row but never persisted to data_json; set via json_replace on the scratch DB's data_json, then draft reopened — items 21/22 then printed exactly as Linux."
+  ]
+}
