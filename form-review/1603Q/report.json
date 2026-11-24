@@ -1,0 +1,37 @@
+{
+  "form": "1603Q",
+  "title": "Quarterly Remittance Return of Final Income Taxes Withheld on Fringe Benefits Paid to Employees Other Than Rank and File",
+  "revision": "January 2018 (ENCS)",
+  "branch": "try/forms-neon-3-b",
+  "verdict": "tweak",
+  "captured_at": "2026-11-24",
+  "saved_draft": "return-7 (reloaded from Filings before capture)",
+  "manual_entry": "Entered Item 15 (12,500,000.00) by hand on the real form page; Schedule 1 has fixed 2 rows (WF360, WF330), no repeatable schedules",
+  "official_pages": [
+    "form-review/1603Q/official/page-1.png",
+    "form-review/1603Q/official/page-2.png"
+  ],
+  "before_captures": [
+    "form-review/1603Q/before/screen-01-part-0.png",
+    "form-review/1603Q/before/screen-02-part-1.png",
+    "form-review/1603Q/before/screen-03-part-2.png",
+    "form-review/1603Q/before/screen-04-part-3.png",
+    "form-review/1603Q/before/screen-05-part-4.png",
+    "form-review/1603Q/before/print-p1.png",
+    "form-review/1603Q/before/print-p2.png"
+  ],
+  "defects": [
+    {
+      "id": "1603Q-1",
+      "severity": "high",
+      "area": "Page 2 header Withholding Agent's Name comb",
+      "summary": "Page 2 Withholding Agent's Name truncates to 'SANTOS,' (7 characters) inside a 38-slot comb, dropping 'JUANA MARIE DELA CRUZ-VILLANUEVA' even though Page 1 Item 8 prints the full name cleanly."
+    },
+    {
+      "id": "1603Q-2",
+      "severity": "low",
+      "area": "Page 2 bottom 65% (Guidelines and Instructions)",
+      "summary": "Official Page 2 includes the 'Guidelines and Instructions for BIR Form No. 1603Q' below Schedule 1; the frozen print sheet omits the instruction block, leaving the lower 65% of Page 2 blank."
+    }
+  ]
+}
