@@ -1,0 +1,15 @@
+{
+  "form": "2551Q",
+  "branch": "try/forms-neon-2",
+  "commit": "0b9950b5e72449d30c1535eb04a73ef6d0c71b27",
+  "platform": "macOS 26.6.2 (WKWebView preview)",
+  "pages": 2,
+  "macos_matches_linux": "yes",
+  "differences": [],
+  "notes": [
+    "Preview (WKWebView) and Save-as-PDF renders are pixel-equivalent to Linux after/ pages: same layout, same values, same fonts, same page break.",
+    "All filled values present and identical: TIN 000-123-453-00000, name, address, ZIP 1005, phone 09171234567, email, RA 11534 treaty text, items 14-24 amounts incl. 25,000.00 compromise and 1,351,819.87 total payable, 'To be refunded' marked; Schedule 1 rows 1-6 with PT010 and all taxable amounts; total 3,370,370.35.",
+    "Schedule 1 rows 2-6 show blank ATC cells by design (matches Linux after/).",
+    "PDF page renders slightly shorter (different page box) but identical content/typography; mac page 2 is a short folio page same as Linux."
+  ]
+}
