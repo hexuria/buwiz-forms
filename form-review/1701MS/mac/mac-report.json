@@ -1,0 +1,34 @@
+{
+  "form": "1701MS",
+  "branch": "try/forms-neon-1",
+  "commit": "2f71cd11",
+  "platform": "macOS 26.6.2 arm64 (WKWebView preview + Save-as-PDF)",
+  "verdict": "macOS matches Linux: yes",
+  "fill": {
+    "method": "replayed form-review/scripts/payloads/payload-1701MS.json via form.fill: first pass blocked by a UI confirmation ('This answer replaces what you typed in item 9. Continue?') answered Continue in the window, then 73/73 applied, 0 refused; taxpayer_name patched via sqlite json_set to the Linux long name; draft reopened",
+    "persona": "SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA / TIN 000-123-453-00000 / RDO 008 / ZIP 1003; spouse DELA CRUZ-VILLANUEVA, ROBERTO MIGUEL ANTONIO; joint filing, married"
+  },
+  "pages": 2,
+  "page_size": "A4",
+  "comparison_vs_linux_after": {
+    "layout": "identical: same 2-page A4 sheet, same bands, page break after Part III",
+    "values": "all printed values identical: item 24/25 (2,773,698.7 / -277,369,987 col A; 2,599,417.9 / -259,941,799 col B), item 30 aggregate (537,311,760), item 31 refund 500,000.00, Part IV spouse column 1,812,309.7/-6,358,262, Part V credits incl. item 9 'PRIOR YEAR OVERPAYMENT CREDIT', totals 277,369,987/259,941,799",
+    "carried_over_linux_defects": [
+      "1701MS-P1: empty spouse TIN prints '---00000' in item 6B - identical",
+      "1701MS-P2 fixed: Col A/B font sizing uniform on mac too",
+      "1701MS-P3: negative/>8-digit amounts print as left-aligned plain text over comb ticks (items 25, 27, 29, 30; p2 items 9, 12, 14) - identical",
+      "1701MS-P4: p2 'Tax Filer's Last Name' prints the full name 'SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA' - identical",
+      "item 12 stray 'ex' mark left of the Exempt checkbox in col A - identical on Linux after/ and in the mac PDF",
+      "1701MS-P5 fixed: Part V items 7/9 specify text readable size on mac too"
+    ]
+  },
+  "saved_pdf_defects": {
+    "class": "mac-only capture-zoom text-metrics defect fixed on try/print-zoom-fix @e45bd5fa",
+    "seen": []
+  },
+  "notes": [
+    "no zoom-metric overlap found in the saved PDF at the source-of-income/ATC check rows, receipt/stamp lines, or Part V specify runs",
+    "'Differs from your profile' banner after the name patch; 'Use profile values' NOT clicked"
+  ],
+  "files": ["print-p1.png", "print-p2.png", "pdf-p-1.png", "pdf-p-2.png"]
+}
