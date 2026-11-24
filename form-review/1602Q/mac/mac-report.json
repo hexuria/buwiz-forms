@@ -1,0 +1,30 @@
+{
+  "form": "1602Q",
+  "year": 2026,
+  "period": "Q2",
+  "branch": "try/forms-neon-4",
+  "commit": "d807c124",
+  "machine": "macOS 26.6.2 arm64, WKWebView print preview + Save-as-PDF",
+  "pages": 2,
+  "verdict": "macOS matches Linux: yes (layout); value deltas from the fill path only",
+  "checks": [
+    "2-page A4 layout identical to Linux after/print-p1,p2 and official-p1,p2: same bands, combs, fonts, page break after Part III",
+    "Worst-case dataset reproduced: long name/address, RDO 047, TIN 000-123-453-00000, Q2, sheets 05, Special Rate, 14 Schedule-1 rows, 2 treaty rows, 2 IPA rows",
+    "Preview (WKWebView) and saved PDF render identically",
+    "Sched 1 rows 13-14 show 15% tax rate + BSP 4.00 as on Linux"
+  ],
+  "differences": [
+    "Item 16 / Schedule 3 total: mac prints 113,393,200.00 (withheld rows 56,096,000.00 + 57,297,200.00 = 4.00% of interest, matching the printed rate column). Linux after/ prints 1,133,932,000.00 (withheld rows 560,960,000.00 + 572,972,000.00 = 40x rate) — on macOS these cells are computed-only and cannot be forced; the mac values are arithmetically consistent.",
+    "Consequently item 17 (307,691,466.21 vs 1,328,230,266.21) and item 23 (1,268,866,773.46 vs 1,289,405,573.46) differ.",
+    "Items 24-27 penalties: mac computes them from the return due date (surcharge 67,216,693.36, interest 10,253,768.46, compromise 5,000.00, total 77,520,461.82) — form.fill refuses txt24-26 ('computed from the due date; choose Edit penalties'). Linux values were entered via the Edit penalties UI (322,351,393.37 / 49,174,042.69 / 5,000.00 / 371,575,436.06). Item 28 total differs accordingly (1,346,387,235.28 vs 1,660,981,009.52).",
+    "Known carry-over from Linux report defect P4: tax rate prints '4.00' not '4.00%' — reproduces identically on mac.",
+    "mac renders amounts with thousands separators (e.g. 12,869,136.25) where Linux refs show raw digits — recurring fill/render-path delta, not a layout issue."
+  ],
+  "files": [
+    "print-p1.png",
+    "print-p2.png",
+    "pdf-p-1.png",
+    "pdf-p-2.png",
+    "mac-report.json"
+  ]
+}
