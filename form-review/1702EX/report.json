@@ -1,0 +1,68 @@
+{
+  "code": "1702EX",
+  "verdict": "broken",
+  "summary": "The return prints on-spec for layout, but the Tax Due and Tax Rate are never written (only the sheet's preprinted '000'/'0%' show), and schedule rows beyond the printed lines vanish so the paper totals disagree with the data.",
+  "defects": [
+    {
+      "id": "EX1",
+      "surface": "print",
+      "where": "Page 2 Item 41 Tax Due (and Page 1 Item 18 which copies it)",
+      "what": "Tax Due is never written: the sheet's preprinted '0 0 0' is all that shows. The stored return has tax_due 2,679,876 and the sheet's own printed arithmetic implies 2,864,826 (Item 51 = 6,000,000 - 3,135,174). Verified by hand: Item 51 proves the engine computed a nonzero tax due that never reaches the comb.",
+      "severity": "high",
+      "picture": "mac/print-p2.png"
+    },
+    {
+      "id": "EX2",
+      "surface": "print",
+      "where": "Page 2 Item 40 Tax Rate",
+      "what": "Tax Rate prints only the preprinted '0%'; the screen stores tax_rate = 10.0. Value shown on screen is absent on paper (worse than blank: it reads as 0%).",
+      "severity": "high",
+      "picture": "mac/print-p2.png"
+    },
+    {
+      "id": "EX3",
+      "surface": "print",
+      "where": "Page 3 Schedule 1 Item 17 rows d-i",
+      "what": "12 attached rows entered on the screen (indices 5-16, sum 4,129,749) print nowhere: rows d-h map only to stored rows 0-4 and row i shows a separate 'OTHERS' figure (2,435,801). Rows past the printed lines are silently dropped - the SHARED-FINDINGS growable-capacity defect, confirmed on this form. Printed Item 18 total (21,704,926) therefore disagrees with the on-screen total (23,398,874).",
+      "severity": "high",
+      "picture": "mac/print-p3.png"
+    },
+    {
+      "id": "EX4",
+      "surface": "print",
+      "where": "Page 3 Schedule 2 rows 1-4; Schedule 3 rows 3, 6, 8 ('OTHERS')",
+      "what": "Overflow rows collapse into a single 'OTHERS' line whose amount is only a partial sum: Schedule 2 shows 'OTHERS ... LEGAL BASIS REFERENCE 1' = 511,110 (sum of 4 of the 5 entered EXEMPT ACTIVITY rows; row 5's 155,555 is lost) and the printed total (511,110) differs from stored (666,665). Schedule 3 'OTHERS' rows print 113,330 / 283,319, which do not equal the sums of the entered rows, and the printed schedule totals differ from the stored data.",
+      "severity": "high",
+      "picture": "mac/print-p3.png"
+    },
+    {
+      "id": "EX5",
+      "surface": "print",
+      "where": "Pages 2-3 header 'Registered Name'",
+      "what": "The 57-char name is clipped mid-word at the right edge ('...CONCEPCION DELA C' - 'RUZ' cut off) with no wrap or shrink.",
+      "severity": "medium",
+      "picture": "mac/print-p2.png"
+    },
+    {
+      "id": "EX6",
+      "surface": "print",
+      "where": "Page 1 Item 8 Registered Name",
+      "what": "The name wraps mid-word between comb lines ('JUANA M' / 'ARIA CONCEPCION DELA CRUZ'). Likely inherent to one-letter-per-box combs; noted, not counted as a fault.",
+      "severity": "low",
+      "picture": "mac/print-p1.png"
+    },
+    {
+      "id": "EX7",
+      "surface": "screen",
+      "where": "Form nav, Schedule 1 Item 17 attached rows",
+      "what": "Some attached rows show only the description in the row label (no amount) even though the amount is stored - cosmetic inconsistency in the list, data itself is intact.",
+      "severity": "low",
+      "picture": "mac/print-p3.png"
+    }
+  ],
+  "entered_by_hand": "Item 52 Regular Income Tax Otherwise Due = 5,000,000.00 typed on the Part V page; Schedule 1 Item 17 row 1 added through the real 'Add row' dialog (description + amount 887,654.32); Save pressed in the app.",
+  "open_questions": [
+    "provenance names '1702-EX Jan 2018 ENCS v2.pdf'; it is not in hexuria/buwiz-forms-html and the BIR site did not yield it, so mac/official-p*.png are renders of html-frozen/1702ex-2018/index.html (the byte-frozen official sheet) instead."
+  ],
+  "notes": "Whole-peso rounding of amount fields is by design on this sheet ('DO NOT enter Centavos'; writer-cells.json) and is not listed as a defect. WebKit 'Save as PDF' output matches the preview renders (pdf-pK vs print-pK); crops used for verification. Re-checked Items 18/40/41 and the dropped rows by hand before marking 'broken'."
+}
