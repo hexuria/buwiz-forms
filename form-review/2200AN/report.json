@@ -1,0 +1,36 @@
+{
+  "code": "2200AN",
+  "verdict": "tweak",
+  "summary": "The return prints very close to the official sheet on both pages: places spelled out in combs, every schedule row and total lands correctly. The one real fault is a doubled 'XG' prefix on the Others ATC box; the rest is polish.",
+  "defects": [
+    {
+      "id": "AN1",
+      "surface": "print",
+      "where": "Page 2, Schedule 1B 'Others (specify)' rows, ATC column",
+      "what": "The ATC cell prints 'XG' preprinted plus the typed value 'XG999' crammed as a superscript, so it reads 'XG XG999'. The official box shows 'XG___' and expects only the digits to be written in. Validation requires an XG-prefixed ATC on screen, so the writer doubles the prefix.",
+      "severity": "medium",
+      "picture": "mac/print-p2.png"
+    },
+    {
+      "id": "AN2",
+      "surface": "screen",
+      "where": "Draft card / open flow",
+      "what": "The app accepts a 2200AN draft opened with no period ('TY 2025') and saves it, then flags it in red as '2200AN is monthly: period must be 1-12' — a draft the app creates itself becomes invalid.",
+      "severity": "low",
+      "picture": "mac/print-p1.png"
+    },
+    {
+      "id": "AN3",
+      "surface": "print",
+      "where": "Page 2, Number of Units columns",
+      "what": "Unit counts print as long unseparated digit strings ('876543210'); faithful to the free-number style of the official sheet but hard to read at nine digits.",
+      "severity": "low",
+      "picture": "mac/print-p2.png"
+    }
+  ],
+  "entered_by_hand": "Retyped item 17A Balance Carried Over as 9,999,888.77 on the real Part III page (17C, 18, 20, 21A recomputed live) and typed XG021 Taxable market value 1,234,567.89 in the real Schedule 1A row card — both values print on the saved pages.",
+  "open_questions": [
+    "The official reference is the byte-frozen official sheet (html-frozen/2200an-2018/index.html) rendered to PDF, not the named source PDF, which is not mirrored in buwiz-forms-html."
+  ],
+  "checked_by_hand": "Opened the preview from the saved draft, saved the PDF, and compared both page renders against the official render. The doubled 'XG' was re-verified by zooming the printed cell and the official box. No 'broken' claim made."
+}
