@@ -281,6 +281,7 @@ impl Database {
 
     /// Persist the exact reviewed queue snapshot after revalidating it.
     pub fn save_queued_queueable<F: QueueableForm>(&self, draft: &F) -> Result<i64, DbError> {
+        crate::transport::refuse_queue_when_unavailable()?;
         if !matches!(draft.lifecycle().status, FilingStatus::Queued) {
             return Err(DbError::Other(format!(
                 "Only a queued {} return can be saved through the submission path",

@@ -114,11 +114,13 @@ When BIR receipt emails arrive in the inbox you configured, the
 status moves to Confirmed and then to Paid. A submitted return
 is read-only.
 
-**Dry run and live sending.** A release build sends to the real BIR when you
-submit a return and confirm. To simulate a submission instead, start the app
-with `BIR_SFTP_DRY_RUN=1` (or `BIR_SFTP_LIVE=0`); nothing is sent. Debug builds
-are dry by default and send live only with `BIR_SFTP_LIVE=1`; their Dev Mode
-panel defaults to dry run.
+**Sending is switched off.** This version cannot send a return to the BIR.
+Submit says so and the return stays a draft; a return queued by an earlier
+version stays queued and is not sent. Sending comes back in a later version.
+To simulate a submission, start the app with `BIR_SFTP_DRY_RUN=1`; nothing is
+sent. Debug builds are dry by default; their Dev Mode panel defaults to dry
+run. The code that files with the BIR itself is compiled only with bir-core's
+`direct-bir` cargo feature, which no build that ships enables.
 
 **Revert to Draft as an amendment.** Queued, Submitted and Confirmed returns
 can be reverted to Draft. Paid returns cannot. Reverting a Submitted or

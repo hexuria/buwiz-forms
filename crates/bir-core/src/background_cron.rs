@@ -1653,6 +1653,11 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
 }
 
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
+    // A build with nowhere to send leaves every queued return as it is: no
+    // attempt is counted and none goes back to Draft.
+    if crate::transport::sending_unavailable() {
+        return;
+    }
     let summaries = {
         let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
@@ -3180,6 +3185,51 @@ mod tests {
         let stored = stored_json(&db, TestForm::CODE, &queued.tin);
         assert!(stored.contains("\"submitted_at\""), "{stored}");
         assert!(!stored.contains("submitted_dry_run"), "{stored}");
+    }
+
+    /// A build with nowhere to send (not a dry run, no mock, no `direct-bir`) leaves a queued return exactly as it
+    /// is: no job starts for it, no attempt is counted and it does not go back to Draft.
+    #[cfg(not(feature = "direct-bir"))]
+    #[tokio::test]
+    async fn a_build_with_nowhere_to_send_leaves_the_queue_alone() {
+        let db = test_db();
+        let (queued, _) = stored_queued_2551q(&db);
+        let profile = reviewed_profile();
+        let job = format!(
+            "form:2551Q:{}:{}:{}",
+            profile.tin.full(),
+            queued.taxable_year,
+            queued.quarter
+        );
+        temp_env::async_with_vars(
+            [
+                ("EBIR_TEST_ENV", None),
+                ("BIR_SFTP_DRY_RUN", None),
+                ("BIR_SFTP_HOST", None),
+                (crate::transport::RELAY_URL_ENV, None),
+                ("BIR_SFTP_LIVE", Some("1")),
+            ],
+            async {
+                assert!(crate::transport::sending_unavailable());
+                let waiting = db.lock().unwrap().list_all_queued_submissions().unwrap();
+                assert_eq!(waiting.len(), 1, "the return is in the queue");
+                process_submission_queue(&profile, db.clone()).await;
+            },
+        )
+        .await;
+        assert!(
+            !get_active_jobs().lock().unwrap().contains(&job),
+            "no job started"
+        );
+        let stored = db
+            .lock()
+            .unwrap()
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.status, FilingStatus::Queued);
+        assert_eq!(stored.submission_attempts, 0);
+        assert_eq!(stored.last_error, None);
     }
 
     /// A queued 2551Q saved with its profile, and the worker's summary of it.

@@ -39,6 +39,12 @@ mock-bir = []
 # Never on in a build that ships, like `mock-bir`.
 mock-relay = []
 mock-account = []
+# Filing with the BIR itself: the dispatcher client in src/transport.rs, SFTP
+# to a host that is not loopback, and the `sftp_harness` binary. Never on in a
+# build that ships: without it the app has nowhere to send a return but a dry
+# run or a local mock, and CI checks that the app's dependency tree does not
+# enable it (.github/workflows/nsh.yml).
+direct-bir = []
 
 [[bin]]
 name = "mock_account"
@@ -54,6 +60,11 @@ required-features = ["mock-bir"]
 name = "mock_relay"
 path = "src/bin/mock_relay.rs"
 required-features = ["mock-relay"]
+
+[[bin]]
+name = "sftp_harness"
+path = "src/bin/sftp_harness.rs"
+required-features = ["direct-bir"]
 
 [dependencies]
 bir-rules = { path = "../bir-rules", version = "0.2.1" }
