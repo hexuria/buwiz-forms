@@ -1,0 +1,34 @@
+{
+  "form": "1700",
+  "branch": "try/forms-neon-1",
+  "commit": "2f71cd11",
+  "platform": "macOS 26.6.2 arm64 (WKWebView preview + Save-as-PDF)",
+  "verdict": "macOS matches Linux: yes",
+  "fill": {
+    "method": "form.open year=2025 period=YY + form.fill for all box fields; penalties are editor-owned (form.fill refused 31B/32B/33B, 'computed from the due date'), written via sqlite json_set on spouse_column.penalty_overrides in the scratch DB, draft reopened so the print picked them up",
+    "persona": "SANTOS, JUANA MARIA DELA CRUZ / TIN 000-123-453-00000 / RDO 008 / ZIP 1003; spouse DELA CRUZ-VILLANUEVA, ROBERTO MIGUEL ANTONIO, RDO 008; joint filing; FTN-998877665544 both"
+  },
+  "pages": 2,
+  "page_size": "A4 594.75 x 841.5 pts",
+  "comparison_vs_linux_after": {
+    "layout": "identical: same 2-page A4, same bands, comb cells, page break after Part IV, Schedule-1 area on p2 blank like Linux",
+    "values": "all printed values identical except item 36 aggregate: mac (852,310) vs Linux (888,310) - a 36,000 delta in the computed aggregate payable; inputs (26/27/29/31-33) are byte-identical, so the delta is inside the computed 35A/35B chain (fill-path or rounding), not a layout fault",
+    "carried_over_linux_defects": [
+      "1700-P1: long address and spouse name overflow comb boxes as plain text over the tick marks - identical on mac (shared fix pending)",
+      "1700-P2: items 28/30/34/35 computed out-of-range amounts print blank on mac exactly as on Linux; item 36 prints the bracketed negative",
+      "1700-P3: item 45 specify text sits on the bottom baseline (fix verified on mac too)",
+      "1700-P5: items 42/44/48-53 blanks for zero/negative - identical"
+    ]
+  },
+  "saved_pdf_defects": {
+    "class": "mac-only capture-zoom text-metrics defect fixed on try/print-zoom-fix @e45bd5fa",
+    "seen": [
+      "Part I item 6 and Part II item 20: 'X Employee' mark and the '(Regular Rates)' caption collide in the saved PDF while the preview renders them cleanly"
+    ]
+  },
+  "notes": [
+    "Line of business left empty (no fill box; Linux print shows no LoB item on the sheet either)",
+    "Schedule-1 rows print empty on mac exactly as on Linux (row 1 Spouse X only); employer name boxes exist but hold no data in either reference"
+  ],
+  "files": ["print-p1.png", "print-p2.png", "pdf-p-1.png", "pdf-p-2.png"]
+}
