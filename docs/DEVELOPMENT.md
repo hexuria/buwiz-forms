@@ -142,7 +142,7 @@ The project uses **two independent version identifiers** to satisfy both Apple A
 | Identifier | Source of Truth | Changed By | When |
 |---|---|---|---|
 | **App Version** (semver) | `nsh/nsh.json` → `version` (`"0.2.1"`) | You, manually | Feature release or hotfix |
-| **Build Number** (counter) | `BUILD_NUMBER` environment override, with the `justfile` value as the committed cross-store default | `just app` (ephemeral) or `just bump-build` (committed) | Every store submission |
+| **Build Number** (counter) | `BUILD_NUMBER` environment override, with the `justfile` value as the committed default | `just app` (ephemeral) or `just bump-build` (committed) | Every Apple submission; the Windows package does not use it |
 
 ### Why Two Numbers?
 
@@ -151,7 +151,7 @@ Apple and Microsoft handle versioning differently:
 | | macOS App Store | Microsoft Store |
 |---|---|---|
 | Marketing version | `CFBundleShortVersionString = "0.2.1"` | Store listing description |
-| Build identifier | `CFBundleVersion = "27"` (separate field) | `Version = "0.2.27.0"` in AppxManifest |
+| Build identifier | `CFBundleVersion = "27"` (separate field) | `Version = "0.2.1.0"` in AppxManifest — `Major.Minor.Patch.0`, no build counter |
 | Multiple builds per version? | ✅ Yes | ❌ No — each submission needs a higher `Version` |
 
 **macOS** has two separate fields — one for the user-facing version, one for the internal build counter. **Microsoft** has only a single `Version` field, and the 4th part (Revision) must always be `0`.
@@ -163,12 +163,17 @@ Given `nsh.json` `"version": "0.2.1"` and `BUILD_NUMBER = 27`:
 ```
 macOS App Store:
   CFBundleShortVersionString = "0.2.1"    ← what users see
-  CFBundleVersion            = "26"       ← internal build number
+  CFBundleVersion            = "27"       ← internal build number
 
 Microsoft Store:
-  AppxManifest Version       = "0.2.27.0" ← Major.Minor.BuildNumber.0
+  AppxManifest Version       = "0.2.1.0"   ← Major.Minor.Patch.0 (no build counter)
   Store listing              = "0.2.1"    ← what users see (set in Partner Center)
 ```
+
+The MSIX `Version` is written by `scripts/package_msix.ps1` as
+`Major.Minor.<patch>.0`; `scripts/package_nsh_windows.ps1` passes the semver
+patch number (`BuildNumber = [int]$patch`), so Windows has no separate build
+number.
 
 ### Developer Workflow
 
@@ -185,7 +190,7 @@ the build to its exact curated source revision before the app is assembled.
 just bump-build
 git add justfile && git commit -m "build: bump to $(just --evaluate BUILD_NUMBER)"
 just app   # macOS package; the live API counter is passed through the environment
-# Windows: scripts/package_nsh_windows.ps1 builds the MSIX with the committed default counter
+# Windows: scripts/package_nsh_windows.ps1 builds the MSIX; its Version is Major.Minor.Patch.0
 ```
 
 **Releasing a new version** (feature release or hotfix):
@@ -202,12 +207,12 @@ git add Cargo.toml justfile && git commit -m "release: v0.2.0"
 
 | Action | Cargo.toml | BUILD_NUMBER | macOS | Windows MSIX |
 |---|---|---|---|---|
-| Current | `0.2.1` | 27 | `0.2.1` (build 27) | `0.2.27.0` |
-| Bump build | `0.2.1` | 28 | `0.2.1` (build 28) | `0.2.28.0` |
-| Bump build | `0.2.1` | 29 | `0.2.1` (build 29) | `0.2.29.0` |
-| Hotfix | `0.2.2` | 30 | `0.2.2` (build 30) | `0.2.30.0` |
-| Feature release | `0.3.0` | 31 | `0.3.0` (build 31) | `0.3.31.0` |
-| Stable release | `1.0.0` | 31 | `1.0.0` (build 31) | `1.0.31.0` |
+| Current | `0.2.1` | 27 | `0.2.1` (build 27) | `0.2.1.0` |
+| Bump build | `0.2.1` | 28 | `0.2.1` (build 28) | `0.2.1.0` (unchanged) |
+| Bump build | `0.2.1` | 29 | `0.2.1` (build 29) | `0.2.1.0` (unchanged) |
+| Hotfix | `0.2.2` | 30 | `0.2.2` (build 30) | `0.2.2.0` |
+| Feature release | `0.3.0` | 31 | `0.3.0` (build 31) | `0.3.0.0` |
+| Stable release | `1.0.0` | 31 | `1.0.0` (build 31) | `1.0.0.0` |
 
 ## CI/CD Secrets & Codesigning
 

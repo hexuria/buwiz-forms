@@ -11,7 +11,7 @@ there, but nobody has run it on that platform.
 | Feature | macOS | Windows | Linux |
 |---|---|---|---|
 | Profiles, tax form library, editors, Check, Save draft | ✓ | ✓ | ✓ |
-| Submission queue and dry run | ✓ | ✓ | ✓ |
+| Submission queue (a queued return stays queued; no shipped build can send to the BIR) | ✓ | ✓ | ✓ |
 | Database storage (plain SQLite, not encrypted) | ✓ | ✓ | ✓ |
 | Account sign-in (Buwiz account, device flow in the browser) | ✓ | partial | ✓ |
 | Close button (X) and quit shortcut | ✓ | untested | ✓ |
@@ -68,7 +68,9 @@ TypeScript code:
 - Profiles, the PIN and authenticator-app lock, the calendar and the
   notifications drawer.
 - The light and dark theme (Cmd/Ctrl+T).
-- Dry-run and live sending (`BIR_SFTP_DRY_RUN`, `BIR_SFTP_LIVE`).
+- Dry-run mode for development (`BIR_SFTP_DRY_RUN`). Live filing is not in
+  any shipped build: the `direct-bir` cargo feature that would send to the
+  BIR itself is never enabled in them.
 - The frozen printed sheets.
 
 ## Security and privacy
@@ -88,8 +90,9 @@ TypeScript code:
 
 ## Automation
 
-- **Background engine.** A submission worker runs inside the app. No
-  separate daemon is needed.
+- **Background engine.** A submission worker runs inside the app and keeps
+  the queue. No separate daemon is needed. In shipped builds it cannot
+  send to the BIR itself.
 - **Receipt tracking.** Reading your inbox for BIR receipts moves returns
   from Submitted to Confirmed and Paid.
 - **Filters.** The library and calendar filter by period (Q1 to Q4,
