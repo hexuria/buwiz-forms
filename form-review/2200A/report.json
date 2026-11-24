@@ -1,0 +1,53 @@
+{
+  "code": "2200A",
+  "verdict": "tweak",
+  "summary": "The return prints close to the official sheet on all three pages: combs line up, Schedule 1 fills every fixed row, totals land in the right boxes. Remaining faults are an overflowing Others description, 'Others' rows that always print 0.00 tax due, and a contact/email row that only fills at view time.",
+  "defects": [
+    {
+      "id": "A1",
+      "surface": "print",
+      "where": "Page 3, Schedule 1 'Others (specify)' rows, Description column",
+      "what": "A long Others description runs out of its cell into the Tax Bracket column and is clipped at the column edge ('...TEXT FOR OVERFLOW|7654321.09'); the bracket value it collides with is unreadable. The text is neither wrapped nor shortened.",
+      "severity": "high",
+      "picture": "mac/print-p3.png"
+    },
+    {
+      "id": "A2",
+      "surface": "print",
+      "where": "Page 3, Schedule 1 'Others (specify)' rows, Basic Excise Tax Due column",
+      "what": "Every Others row prints 0.00 tax due even with millions of taxable base and a rate entered. There is no Tax Due input for these rows, and whatever the writer emits stays 0.00, so an excise return on an unlisted product reports no tax.",
+      "severity": "high",
+      "picture": "mac/print-p3.png"
+    },
+    {
+      "id": "A3",
+      "surface": "print",
+      "where": "Page 3, 'Others (specify)' Applicable Tax Rate column",
+      "what": "The Applicable Tax Rate cell prints the raw typed text ('6543210.98') with no percent sign and no validation, while the fixed rows above print real rates like 22% or 43.00.",
+      "severity": "medium",
+      "picture": "mac/print-p3.png"
+    },
+    {
+      "id": "A4",
+      "surface": "print",
+      "where": "Item 19, 'Less: Payment on Returns Previously Filed'",
+      "what": "Prints a lone '0' in the amount comb for an unamended return where the official sheet would be left blank; harmless but unlike the surrounding unfilled boxes which stay empty.",
+      "severity": "low",
+      "picture": "mac/print-p1.png"
+    },
+    {
+      "id": "A5",
+      "surface": "screen",
+      "where": "Print preview vs saved file",
+      "what": "Items 8 Contact Number and 9 Email Address only appear because the preview window fills them at view time; the sheet.html the preview window writes to disk keeps those comb cells empty until the webview injects them (verified: the file on disk contains neither value while the window and the saved PDF show both). Output is correct, but the written file alone is not a faithful record.",
+      "severity": "low",
+      "picture": "mac/pdf-p1.png"
+    }
+  ],
+  "entered_by_hand": "Clicked Part II '13 Payment on Actual Removal' on the real form page; opened Part V Schedule 1 row 1 (XA035, Effective January 1, 2020) and retyped Tax Base Taxable as 5,555,555.55 — the Basic Excise Tax Due recomputed to 1,111,111.11 on screen and prints that value on page 2.",
+  "open_questions": [
+    "The official reference is the byte-frozen official sheet (html-frozen/2200a-2020/index.html) rendered to PDF, not the named source PDF, which is not mirrored in buwiz-forms-html.",
+    "Basic Excise Tax Due for 'Others (specify)' rows may need a designated rate the demo payload did not supply in the format the writer expects; the 0.00 could be a fill-format issue rather than a writer bug, but no input format is documented or enforced on screen."
+  ],
+  "checked_by_hand": "Re-opened the saved draft after patching the taxpayer phone/email, re-verified validation in-app, opened the preview a second time and compared the saved PDF page images against the official render before writing this report. The blank Items 8/9 seen on the first preview were stale draft state from the fill, not a print defect."
+}
