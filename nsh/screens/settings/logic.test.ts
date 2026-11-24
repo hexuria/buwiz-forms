@@ -81,7 +81,7 @@ test("the server hint says where the address came from", () => {
 
 test("a request to delete the account is an email to support that names the account when it is known", () => {
   const url = deletionRequestUrl("juana+tax@example.com");
-  expect(url.startsWith("mailto:support@goldcoders.dev?subject=Delete%20my%20Buwiz%20account&body=")).toBe(true);
+  expect(url.startsWith("mailto:support@buwiz.com?subject=Delete%20my%20Buwiz%20account&body=")).toBe(true);
   expect(decodeURIComponent(url.split("&body=")[1])).toBe(
     "Please delete my Buwiz account for juana+tax@example.com and the email address held with it.",
   );

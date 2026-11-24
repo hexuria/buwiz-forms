@@ -68,7 +68,7 @@ test("macOS signed in: the same menus, items and accelerators as the old native 
     "Command Palette…  mod+k",
   ]);
   expect(shape(s, "Window")).toEqual(["role:minimize", "role:zoom", "-", "Bring All to Front"]);
-  expect(shape(s, "Help")).toEqual(["Check for Updates…", "Contact Support…", "Goldcoders Website"]);
+  expect(shape(s, "Help")).toEqual(["Check for Updates…", "Contact Support…", "eBIRForms Website"]);
   // AppKit adds its own Enter Full Screen to View: ours would show it twice.
   expect(flatten(menusOf(s)).some((l) => l.path.includes("Full Screen"))).toBe(false);
 });
@@ -83,7 +83,7 @@ test("Windows and Linux signed in: the eBIRForms menu first, File holds the app 
   expect(linesOf(win, "File")).toContain("Hide eBIRForms");
   expect(linesOf(win, "eBIRForms")).toContain("Quit eBIRForms  mod+q");
   expect(shape(win, "Edit")).not.toContain("Settings…");
-  expect(shape(win, "Help")).toEqual(["About eBIRForms", "-", "Check for Updates…", "Contact Support…", "Goldcoders Website"]);
+  expect(shape(win, "Help")).toEqual(["About eBIRForms", "-", "Check for Updates…", "Contact Support…", "eBIRForms Website"]);
   expect(linesOf(win, "View")).toContain("Enter Full Screen  f11");
   expect(shape(win, "Window")).toEqual(["role:minimize", "role:zoom"]);
 
@@ -98,8 +98,8 @@ test("Windows and Linux signed in: the eBIRForms menu first, File holds the app 
 });
 
 test("an install its store updates has no Check for Updates: a Mac App Store build, a Microsoft Store package", () => {
-  expect(shape(state("macos", { masBuild: true }), "Help")).toEqual(["Contact Support…", "Goldcoders Website"]);
-  expect(shape(state("windows", { storeManaged: true }), "Help")).toEqual(["About eBIRForms", "-", "Contact Support…", "Goldcoders Website"]);
+  expect(shape(state("macos", { masBuild: true }), "Help")).toEqual(["Contact Support…", "eBIRForms Website"]);
+  expect(shape(state("windows", { storeManaged: true }), "Help")).toEqual(["About eBIRForms", "-", "Contact Support…", "eBIRForms Website"]);
 });
 
 test("with no taxpayer the items that need one are there but disabled; nothing else changes", () => {
@@ -208,7 +208,7 @@ test("each item runs the action its label says", () => {
     "Window > Bring All to Front": "bring-all-to-front",
     "Help > Check for Updates…": "check-updates",
     "Help > Contact Support…": "support",
-    "Help > Goldcoders Website": "website",
+    "Help > eBIRForms Website": "website",
   };
   for (const [path, action] of Object.entries(want)) {
     ran.length = 0;

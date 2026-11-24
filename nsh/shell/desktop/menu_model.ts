@@ -90,9 +90,9 @@ export interface MenuTaxpayer {
 /** The app's name in the menus. */
 export const APP_NAME = "eBIRForms";
 /** Help > Contact Support. */
-export const SUPPORT_URL = "mailto:support@goldcoders.dev?subject=eBIRForms%20Support%20Request";
-/** Help > Goldcoders Website. */
-export const WEBSITE_URL = "https://goldcoders.dev";
+export const SUPPORT_URL = "mailto:support@buwiz.com?subject=eBIRForms%20Support%20Request";
+/** Help > eBIRForms Website. */
+export const WEBSITE_URL = "https://ebirforms.buwiz.com";
 /** The About text's last line. */
 export const COPYRIGHT = "© 2026 Goldcoders Corp";
 
@@ -421,7 +421,7 @@ function helpMenu(state: MenuState, run: Run): MenuItem {
     about ? SEP : null,
     state.masBuild || state.storeManaged ? null : item(run, "Check for Updates…", "check-updates"),
     item(run, "Contact Support…", "support"),
-    item(run, "Goldcoders Website", "website"),
+    item(run, "eBIRForms Website", "website"),
   ]);
 }
 

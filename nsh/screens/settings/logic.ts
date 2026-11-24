@@ -120,5 +120,5 @@ export function groupSections(view: readonly SettingsViewSection[]): { group: st
 export function deletionRequestUrl(email: string | null | undefined): string {
   const who = email ? " for " + email : "";
   const body = "Please delete my Buwiz account" + who + " and the email address held with it.";
-  return "mailto:support@goldcoders.dev?subject=" + encodeURIComponent("Delete my Buwiz account") + "&body=" + encodeURIComponent(body);
+  return "mailto:support@buwiz.com?subject=" + encodeURIComponent("Delete my Buwiz account") + "&body=" + encodeURIComponent(body);
 }
