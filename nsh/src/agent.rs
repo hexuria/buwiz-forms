@@ -63,7 +63,7 @@ pub fn install_window_plane() {
     nsh_gpui_agent_windows::install();
     #[cfg(all(feature = "agent", target_os = "ios"))]
     if let Err(error) = nsh_gpui_agent::ios::install() {
-        log::error!("the plug's window control plane did not install: {error}");
+        tracing::error!(%error, "the window control plane did not install");
     }
 }
 
