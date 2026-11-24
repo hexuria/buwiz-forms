@@ -20206,11 +20206,13 @@
     },
     "frm1701MS:txtLessNonTaxablea": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.5, manual-2): column A of item 2 (html-frozen/1701ms-2024/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "computed": false,
+      "evidence": "PR 7 (R3.5, manual-2): column A of item 2 (html-frozen/1701ms-2024/writer-cells.json caption \"... A. Taxpayer/Filer\") | rules/forms/1701ms-v2024/fixtures/runtime-control-inventory-v47.json L2426: disabled=false, readonly=false (filer-typed input to item 3)"
     },
     "frm1701MS:txtLessNonTaxableb": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.5, manual-2): column B of item 2 (html-frozen/1701ms-2024/writer-cells.json caption \"... B. Spouse\")"
+      "computed": false,
+      "evidence": "PR 7 (R3.5, manual-2): column B of item 2 (html-frozen/1701ms-2024/writer-cells.json caption \"... B. Spouse\") | rules/forms/1701ms-v2024/fixtures/runtime-control-inventory-v47.json L2433: disabled=true, readonly=false (gated on Joint in rows_annual_individual.rs)"
     },
     "frm1701MS:txtTaxableCompensationIncomea": {
       "label": "A. Taxpayer/Filer",
