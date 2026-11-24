@@ -1,0 +1,77 @@
+{
+  "form": "1701Q",
+  "revision": "January 2018 (ENCS)",
+  "html_frozen_slug": "1701q-2018",
+  "branch": "try/forms-neon-1-b",
+  "base_commit": "48887449",
+  "verdict": "tweak",
+  "official_pdf": {
+    "filename": "1701Q Jan 2018 final rev2_copy.pdf",
+    "sha256": "c731d3f12556e6f19ab81f6113ca7c4a23f7ed099675c03451ac0074d96b85ed",
+    "pages": 2,
+    "downloaded": true
+  },
+  "summary": "Page 1 and Page 2 whole-peso comb amounts and Page 2 Last Name ('SANTOS') fit cleanly, but Page 2 Header TIN prints all 14 digits ('00012345300000') as plain text over the 9-digit TIN comb ticks beside the preprinted '00000' branch code, the official Page 2 bottom Tax Rate Tables (Table 1 and Table 2, referenced by Item 46) are omitted, Page 1 Item 10 Registered Address and Item 14 Foreign Tax Number print as plain text over comb ticks (shared), and long Page 2 Item 43 specify text shrinks to ~4.5pt.",
+  "test_data": {
+    "script": "form-review/scripts/seed_and_capture.py",
+    "payload": "form-review/scripts/payloads/payload-1701Q.json",
+    "profile": "Juana Santos long-name/long-address demo profile (TIN 000-123-453-00000, RDO 008)",
+    "period": "Q2 2025 (year=2025, period=2)",
+    "notes": "Two-pass payload (pass 1: 19/19 applied; pass 2: 31/34 applied, 3 refused). Part II Spouse section stayed collapsed because the joint-filing toggle was not enabled, so Column B printed 0; 1701Q has no growable schedule row tables."
+  },
+  "defects": [
+    {
+      "id": "1701Q-P1",
+      "severity": "high",
+      "area": "print",
+      "page": 2,
+      "status": "open",
+      "description": "Page 2 Header TIN prints the full 14-digit TIN ('00012345300000') as plain text across the 9-digit TIN comb ticks to the left of the preprinted '0 0 0 0 0' branch code, duplicating the branch code and colliding with comb ticks."
+    },
+    {
+      "id": "1701Q-P2",
+      "severity": "medium",
+      "area": "print",
+      "page": 2,
+      "status": "open",
+      "description": "Official Page 2 bottom Tax Rate Tables (TABLE 1: 2018–2022 and TABLE 2: 2023 onwards, referenced by Item 46 'based on Tax Table below') are completely omitted, leaving the bottom ~15% of Page 2 blank."
+    },
+    {
+      "id": "1701Q-P3",
+      "severity": "medium",
+      "area": "print",
+      "page": 1,
+      "status": "needs shared change",
+      "description": "Page 1 Item 10 Registered Address (both lines) and Item 14 Foreign Tax Number ('FTN-2025-8899001122') print as plain text over comb ticks."
+    },
+    {
+      "id": "1701Q-P4",
+      "severity": "low",
+      "area": "print",
+      "page": 2,
+      "status": "open",
+      "description": "Page 2 Schedule I Item 43 Non-Operating Income specify text shrinks to ~4.5–5pt for a 57-character description."
+    }
+  ],
+  "evidence": {
+    "official_pages": [
+      "form-review/1701Q/official/page-01.png",
+      "form-review/1701Q/official/page-02.png"
+    ],
+    "before_print": [
+      "form-review/1701Q/before/print-p1.png",
+      "form-review/1701Q/before/print-p2.png"
+    ],
+    "before_screens": [
+      "form-review/1701Q/before/screen-01-return-details.png",
+      "form-review/1701Q/before/screen-02-part-i-background-information-on-taxpaye.png",
+      "form-review/1701Q/before/screen-03-part-ii-background-information-on-spouse.png",
+      "form-review/1701Q/before/screen-04-part-iii-total-tax-payable.png",
+      "form-review/1701Q/before/screen-05-part-v-schedule-i-for-graduated-it-rate.png",
+      "form-review/1701Q/before/screen-06-part-v-schedule-ii-for-8-it-rate.png",
+      "form-review/1701Q/before/screen-07-part-v-schedule-iii-tax-credits-payments.png",
+      "form-review/1701Q/before/screen-08-part-v-schedule-iv-penalties.png",
+      "form-review/1701Q/before/screen-09-not-on-the-printed-sheet.png"
+    ]
+  }
+}
