@@ -99,11 +99,13 @@
     "mechanism": "Canonical BEFORE SQLite database (/home/ubuntu/BuwizNsh/agents/before.db) is cloned verbatim to after-deterministic.db and each form draft is also exported to /home/ubuntu/BuwizNsh/agents/fixtures/<FORM>.json. replay_fixtures.py opens the exact saved draft via the Filings UI (nav-filings -> return-<id>, never form.open which resets open-ended O1 drafts), clicks fp-print, and asserts length(data_json) is identical before and after printing.",
     "draft_id": 5,
     "period_key": "O0",
-    "data_json_bytes": 3351,
-    "script": "/home/ubuntu/BuwizNsh/agents/replay_fixtures.py"
+    "data_json_bytes": 3877,
+    "script": "form-review/tools/replay_fixtures.py"
   },
   "review_followups": {
     "item_1_date": "Fixed in crates/bir-core/src/forms/form_2552.rs::to_print_field_map() (prints blank MM/DD instead of 0000 when unset; prints 06/15/2026 when set).",
+    "item_7a_zip_code": "Verified in after/print-p1.png with zip_code='1209' set in the saved fixture (Item 7A ZIP prints 1 2 0 9 cleanly).",
+    "schedule_1_print_verification": "Confirmed print path and writer-cells.json joins are 100% intact: populating draft.schedule rows 1-4 directly in the saved fixture prints Seller, Buyer, Issuing Corporation, Number of Shares (right-aligned), Tax Base (right-aligned), Tax Due (right-aligned), and Total 88,500.00 cleanly in after/print-p2.png (and flows 88,500.00 into Page 1 Items 13 & 16). Only the screen input mapping in crates/bir-app-api/src/screen_form_module.rs is missing.",
     "number_of_shares_alignment": "Fixed in shared print commit 058a0e9b on try/forms-shared-print (right-aligns plain numeric quantity columns including 2552 Schedules 1-3 col (e) and Part VI Number of Shares, plus 1800/1801/1706/1606 Area and Shares).",
     "item_11b_screen_label": "Fixed in forms/schema-overrides.json (2552 block) by changing the colon to an en-dash (\"11B Initial Public Offering \u2013 Primary\" / \"11B Initial Public Offering \u2013 Secondary\") so nsh/screens/form/schema.ts:191 choiceLabel does not strip the \"11B Initial Public Offering\" prefix; verified in after/screen-02-part-i-background-information.png."
   }

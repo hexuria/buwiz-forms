@@ -98,8 +98,9 @@
     "mechanism": "Canonical BEFORE SQLite database (/home/ubuntu/BuwizNsh/agents/before.db) is cloned verbatim to after-deterministic.db and each form draft is also exported to /home/ubuntu/BuwizNsh/agents/fixtures/<FORM>.json. replay_fixtures.py opens the exact saved draft via the Filings UI (nav-filings -> return-<id>, never form.open which resets open-ended O1 drafts), clicks fp-print, and asserts length(data_json) is identical before and after printing.",
     "draft_id": 2,
     "period_key": "O1",
-    "data_json_bytes": 32881,
-    "script": "/home/ubuntu/BuwizNsh/agents/replay_fixtures.py"
+    "data_json_bytes": 34841,
+    "positive_installment_fixture": "installment_portion set to 10,000,000.00 (< Item 20 38,062,734.97) so Items 22 and 24 print positive 28,062,734.97 in before/print-p1.png (origin/main: Items 5, 16, 24 blank) and after/print-p1.png (try/forms-neon-4: Items 5, 16, 22, 24 all populated). Original negative-installment fixture (installment_portion 11,721,700,000.00, 32,881 bytes) preserved as before/print-p1-negative.png and after/print-p1-negative.png for C1.",
+    "script": "form-review/tools/replay_fixtures.py"
   },
   "review_followups": {
     "after_data_loss_root_cause": "Not a code or shared-print regression: the earlier rebase refresh ran against an empty 2,989-byte draft because form.open overwrites open-ended O1 drafts. Re-captured AFTER print-p1.png and print-p2.png from the exact 32,881-byte before.db draft (verified unchanged after print): Item 5 TIN, Item 10 Executor, Item 16 (85,610,732.29), Items 18-21, Part III banks/checks, and all Page 2 Part IV & Schedules 1-5 print cleanly and right-aligned (including Schedule 2 No. of Shares via shared commit 058a0e9b). Item 22/24 remain blank only when Item 21 installment exceeds Item 20 by >=10 digits (negative overflow under C2)."
