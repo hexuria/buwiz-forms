@@ -88,6 +88,18 @@ pub fn server() -> Result<String, TransportError> {
     Ok(server.url)
 }
 
+/// Where the device key and id live when the keychain is not used: beside the database, as the saved sign-in
+/// is. A scratch database (a development, test or agent run) gets a scratch device, never a file in the app's
+/// real data folder.
+fn secrets_dir() -> std::path::PathBuf {
+    let database = crate::db::app_database_path();
+    database
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+}
+
 /// The client for the configured Buwiz server, made once per server.
 pub fn submitter() -> Result<Arc<Submitter>, TransportError> {
     let server = crate::cloud_account::configured_server()
@@ -104,10 +116,8 @@ pub fn submitter() -> Result<Arc<Submitter>, TransportError> {
     let config = SubmitConfig::new(&server.url)
         .map_err(|error| TransportError::Config(error.to_string()))?;
     trust_keys_allowed(&config.trust_keys, cfg!(debug_assertions))?;
-    let store = bir_submit::secrets::platform_store(
-        crate::platform::data_dir(),
-        !crate::platform::keychain_disabled(),
-    );
+    let store =
+        bir_submit::secrets::platform_store(secrets_dir(), !crate::platform::keychain_disabled());
     let submitter = Arc::new(Submitter::new(
         config,
         store,

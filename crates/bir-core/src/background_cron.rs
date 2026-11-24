@@ -4320,6 +4320,253 @@ mod tests {
         assert!(generic.lifecycle.queued_submission_fingerprint.is_some());
     }
 
+    // ===== End to end against a local Buwiz server in dry-run mode =====
+
+    /// Sign in to the local server as its test account without a browser: start the device flow, approve the code
+    /// with the test account's web session (the cookie line in `cookie_file`), poll, and save the sign-in.
+    fn local_sign_in(server: &str, cookie_file: &str) {
+        use crate::cloud_account;
+        let mut http = cloud_account::BlockingHttp::new();
+        let now = cloud_account::unix_now();
+        let challenge = cloud_account::start_device(&mut http, server, now).expect("device start");
+        let cookie = std::fs::read_to_string(cookie_file).expect("the test session cookie");
+        let approved = reqwest::blocking::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap()
+            .post(format!("{server}/device/decision"))
+            .header("origin", server)
+            .header("cookie", cookie.trim())
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(format!(
+                "user_code={}&decision=approve",
+                challenge.user_code
+            ))
+            .send()
+            .expect("device approval");
+        assert_eq!(approved.status().as_u16(), 303, "the approval redirects");
+        let tokens = cloud_account::poll_until(
+            &mut http,
+            &challenge,
+            &mut cloud_account::unix_now,
+            &mut |delay| std::thread::sleep(delay),
+        )
+        .expect("device poll");
+        let (user_id, email, practice) =
+            cloud_account::load_profile(&mut http, server, &tokens.access_token).expect("/me");
+        assert!(!practice, "the test account is not a practice account");
+        let mut stored =
+            cloud_account::StoredAccount::from_secrets(&cloud_account::AccountSecrets {
+                server_url: server.to_owned(),
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,
+                access_expires_at_unix: now + tokens.expires_in,
+                user_id,
+                email,
+                offline: false,
+                practice,
+            });
+        stored.last_refresh_unix = now;
+        cloud_account::save_stored_account(&stored).expect("save the sign-in");
+    }
+
+    /// The claims of a relay receipt, unverified (the client verified it before the queue kept it).
+    fn receipt_claims(jws: &str) -> serde_json::Value {
+        let payload = jws.split('.').nth(1).expect("a compact JWS");
+        let bytes = data_encoding::BASE64URL_NOPAD
+            .decode(payload.as_bytes())
+            .expect("base64url");
+        serde_json::from_slice(&bytes).expect("receipt claims")
+    }
+
+    /// The real worker, the real client and a real (local, dry-run) Buwiz server: sign in, register the device, send
+    /// a 1601C and get a signed dry-run receipt; rotate the token and send a 2551Q; send a return for a TIN that is
+    /// not on the account and see it refused back to Draft with the server's code.
+    ///
+    /// Needs the server the buwiz-com session runs (`BUWIZ_SERVER_URL`, on this computer), its test trust key
+    /// (`BUWIZ_TRUST_KEYS`) and the test account's web session cookie file (`RELAY_E2E_COOKIE_FILE`). Run with
+    /// `-- --ignored --exact background_cron::tests::relay_end_to_end_against_a_local_dry_run_server --nocapture`.
+    #[test]
+    #[ignore = "needs a local Buwiz server in dry-run mode"]
+    fn relay_end_to_end_against_a_local_dry_run_server() {
+        let server = std::env::var("BUWIZ_SERVER_URL").expect("BUWIZ_SERVER_URL");
+        let cookie_file = std::env::var("RELAY_E2E_COOKIE_FILE").expect("RELAY_E2E_COOKIE_FILE");
+        assert!(
+            std::env::var("BUWIZ_TRUST_KEYS").is_ok(),
+            "BUWIZ_TRUST_KEYS"
+        );
+        let scratch = tempfile::tempdir().unwrap();
+        let database = scratch.path().join("bir_data.db");
+        let account = scratch.path().join("account.json");
+        temp_env::with_vars(
+            [
+                ("BIR_DATABASE_PATH", Some(database.to_str().unwrap())),
+                (
+                    crate::cloud_account::ENV_ACCOUNT_FILE,
+                    Some(account.to_str().unwrap()),
+                ),
+                (crate::platform::NO_KEYCHAIN_ENV, Some("1")),
+                (crate::transport::RELAY_SEND_ENV, Some("1")),
+                ("EBIR_TEST_ENV", Some("1")),
+                ("BIR_SFTP_DRY_RUN", Some("1")),
+                ("BIR_SFTP_LIVE", None),
+                ("BIR_SFTP_HOST", None),
+                (crate::transport::RELAY_URL_ENV, None),
+            ],
+            || {
+                assert!(
+                    crate::transport::sends_through_buwiz(),
+                    "the relay is the route"
+                );
+                local_sign_in(&server, &cookie_file);
+
+                // The send future is deep: the worker's threads have 16 MiB stacks, and so does this one.
+                std::thread::Builder::new()
+                    .stack_size(32 * 1024 * 1024)
+                    .spawn(|| {
+                        tokio::runtime::Builder::new_multi_thread()
+                            .enable_all()
+                            .thread_stack_size(16 * 1024 * 1024)
+                            .build()
+                            .unwrap()
+                            .block_on(relay_end_to_end())
+                    })
+                    .unwrap()
+                    .join()
+                    .unwrap();
+            },
+        );
+        // Everything the run wrote is in the scratch folder: the sign-in and the device key and id.
+        let written: Vec<String> = std::fs::read_dir(scratch.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        println!("scratch folder: {written:?}");
+        assert!(
+            written.iter().any(|name| name.contains("device_key")),
+            "{written:?}"
+        );
+    }
+
+    async fn relay_end_to_end() {
+        // 1. A 1601C for the account's approved TIN: sent, with a dry-run receipt.
+        let profile = test_profile();
+        let (db, queued, summary) = stored_queued_1601c(&profile);
+        process_queued_1601c_with_transport(
+            &summary,
+            &profile,
+            db.clone(),
+            &NetworkSubmissionTransport,
+        )
+        .await;
+        let sent = db
+            .lock()
+            .unwrap()
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            sent.status,
+            FilingStatus::Submitted,
+            "{:?}",
+            sent.submission_error
+        );
+        assert!(sent.submitted_dry_run, "the server only simulated the send");
+        let claims = receipt_claims(sent.relay_receipt.as_deref().expect("a receipt"));
+        println!(
+            "1601C receipt: mode={} status={} form={} period={}",
+            claims["mode"], claims["status"], claims["form_type"], claims["period"]
+        );
+        assert_eq!(claims["mode"], "dry_run");
+        assert_eq!(claims["form_type"], "1601Cv2018");
+        assert_eq!(poll_jobs(&db), 0, "no BIR email is coming for a dry run");
+
+        // 2. Rotate the token (the server hands out a new refresh token), then a 2551Q on the other send path.
+        let before = crate::cloud_account::load_stored_account()
+            .unwrap()
+            .unwrap();
+        let rotated = tokio::task::spawn_blocking(|| {
+            crate::account_session::access_token(
+                &mut crate::cloud_account::BlockingHttp::new(),
+                crate::cloud_account::unix_now() + 20,
+                true,
+            )
+        })
+        .await
+        .unwrap()
+        .expect("a forced refresh");
+        let after = crate::cloud_account::load_stored_account()
+            .unwrap()
+            .unwrap();
+        assert_ne!(before.access_token, rotated, "a new access token");
+        assert_eq!(after.access_token, rotated, "saved");
+        println!(
+            "refresh token rotated: {}",
+            before.refresh_token != after.refresh_token
+        );
+
+        let db = test_db();
+        let (queued, summary) = stored_queued_2551q(&db);
+        process_queued_2551q_with_transport(
+            &summary,
+            &reviewed_profile(),
+            db.clone(),
+            &NetworkSubmissionTransport,
+        )
+        .await;
+        let sent = db
+            .lock()
+            .unwrap()
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            sent.status,
+            FilingStatus::Submitted,
+            "{:?}",
+            sent.last_error
+        );
+        assert!(sent.submitted_dry_run);
+        let claims = receipt_claims(sent.relay_receipt.as_deref().expect("a receipt"));
+        println!(
+            "2551Q receipt: mode={} status={} form={} period={}",
+            claims["mode"], claims["status"], claims["form_type"], claims["period"]
+        );
+        assert_eq!(claims["mode"], "dry_run");
+
+        // 3. A TIN that is not on the account: refused, back to Draft, with the server's sentence and code.
+        let mut stranger = test_profile();
+        stranger.tin.segment1 = "987".into();
+        stranger.tin.segment2 = "654".into();
+        stranger.tin.segment3 = "321".into();
+        let (db, queued, summary) = stored_queued_1601c(&stranger);
+        process_queued_1601c_with_transport(
+            &summary,
+            &stranger,
+            db.clone(),
+            &NetworkSubmissionTransport,
+        )
+        .await;
+        let refused = db
+            .lock()
+            .unwrap()
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        println!(
+            "refusal: status={:?} reason={:?}",
+            refused.status, refused.submission_error
+        );
+        assert_eq!(refused.status, FilingStatus::Draft);
+        assert!(refused.submission_claim_token.is_none());
+        let reason = refused.submission_error.unwrap_or_default();
+        assert!(
+            bir_submit::wire::TinRefusal::from_reason(&reason).is_some(),
+            "a TIN refusal with its code: {reason}"
+        );
+        assert_eq!(refused.relay_receipt, None);
+    }
+
     #[tokio::test]
     async fn generic_worker_refuses_a_form_the_registry_does_not_authorize() {
         let profile = test_profile();
