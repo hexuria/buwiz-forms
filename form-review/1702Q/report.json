@@ -4,20 +4,20 @@
   "html_frozen_slug": "1702q-2018",
   "branch": "try/forms-neon-1-b",
   "base_commit": "48887449",
-  "verdict": "broken",
+  "verdict": "tweak",
   "official_pdf": {
     "filename": "1702Q 2018ENCS final2.pdf",
     "sha256": "589e22190b9211571cb8a0ba14c97c17dff250f3b8ee9f9e8f6cc3b37b1b1be4",
     "pages": 3,
     "downloaded": true
   },
-  "summary": "Serious print data defects on both pages: every Part II and Part IV comb-cell amount prints with '.00' centavos inside whole-peso comb slots (despite the official form header 'Do NOT enter Centavos', except Schedule 1 Col B Item 13 which omits '.00'); Schedule 3 Item 5 prints '2' next to the preprinted '2 %' so the MCIT rate reads '22%'; Schedule 1 Col A Item 10 prints '0' next to preprinted '0 %' ('00%') and Item 11 prints '0.00' beside preprinted '000'; plus shared plain-text-over-comb-tick collisions on Item 9 address, Item 13A treaty specify, Page 2 header name, and Schedule 4 Items 6a–6b.",
+  "summary": "Fixed both critical/high print-map defects (1702Q-P1 and 1702Q-P2) in crates/bir-core/src/forms/form_1702q.rs without changing to_bir_field_map() or official upload XML: all 12-slot monetary combs now print right-aligned whole pesos without commas or '.00' (matching official '(Do NOT enter Centavos)' and form_1702ex.rs::print_whole_pesos), and preprinted static cells (Schedule 1A Item 10 '0%', Schedule 1A Item 11 '000', Schedule 3 Item 5 '2%') are no longer overwritten. Remaining open items are shared plain-text-over-comb collisions (needs shared change) and minor layout notes.",
   "test_data": {
     "script": "form-review/scripts/seed_and_capture.py",
     "payload": "form-review/scripts/payloads/payload-1702Q.json",
     "profile": "Juana Santos long-name/long-address demo profile (TIN 000-123-453-00000, RDO 008)",
     "period": "Q2 2025 (year=2025, period=2)",
-    "notes": "39/42 fields applied (3 penalty fields 21–23 refused because return is an overpayment). Schedule 4 Other Tax Credits is fixed at 2 rows (6a and 6b) with no Add row UI."
+    "notes": "Identical BEFORE and AFTER payload (39/42 fields applied; 3 penalty fields 21–23 refused because return is an overpayment). Schedule 4 Other Tax Credits is fixed at 2 rows (6a and 6b) with no Add row UI."
   },
   "defects": [
     {
@@ -25,16 +25,16 @@
       "severity": "critical",
       "area": "print",
       "page": 1,
-      "status": "open",
-      "description": "Every monetary comb cell on Pages 1 and 2 (Part II Items 14–25 and Part IV Schedules 1–4, except Schedule 1 Col B Item 13) prints '.00' centavos into whole-peso comb slots even though official 1702Q specifies '(Do NOT enter Centavos)' and has 12 integer slots; the decimal point occupies a peso slot and shifts the amount digits left by three slots."
+      "status": "fixed",
+      "description": "Every monetary comb cell on Pages 1 and 2 (Part II Items 14–25 and Part IV Schedules 1–4, except Schedule 1 Col B Item 13) printed '.00' centavos and commas into whole-peso 12-slot combs even though official 1702Q specifies '(Do NOT enter Centavos)'. Fixed in form_1702q.rs::print_amount to round to whole pesos (digits only, negative in parentheses, right-aligned in 12 slots)."
     },
     {
       "id": "1702Q-P2",
       "severity": "high",
       "area": "print",
       "page": 2,
-      "status": "open",
-      "description": "Preprinted static values are doubled by dynamic writes: Schedule 3 Item 5 MCIT Rate writes '2' beside the preprinted '2 %' so it reads '22%'; Schedule 1 Col A Item 10 writes '0' beside preprinted '0 %' ('00%'); Schedule 1 Col A Item 11 writes '0.00' in small plain text beside preprinted '000'."
+      "status": "fixed",
+      "description": "Preprinted static values were doubled by dynamic writes: Schedule 3 Item 5 ('2 %' -> '22%'), Schedule 1 Col A Item 10 ('0 %' -> '00%'), and Schedule 1 Col A Item 11 ('000' + '0.00'). Fixed in form_1702q.rs::to_print_field_map by omitting Sched1:txtTax11A, sched1_rate_a, and sched3_rate on print."
     },
     {
       "id": "1702Q-P3",
@@ -86,6 +86,34 @@
       "form-review/1702Q/before/screen-05-part-iv-schedule-2-declaration-this-quar.png",
       "form-review/1702Q/before/screen-06-part-iv-schedule-3-computation-of-minimu.png",
       "form-review/1702Q/before/screen-07-part-iv-schedule-4-tax-credits-payments.png"
+    ],
+    "after_print": [
+      "form-review/1702Q/after/print-p1.png",
+      "form-review/1702Q/after/print-p2.png"
+    ],
+    "after_screens": [
+      "form-review/1702Q/after/screen-01-return-details.png",
+      "form-review/1702Q/after/screen-02-part-i-background-information.png",
+      "form-review/1702Q/after/screen-03-part-ii-total-tax-payable.png",
+      "form-review/1702Q/after/screen-04-part-iv-schedule-1-declaration-this-quar.png",
+      "form-review/1702Q/after/screen-05-part-iv-schedule-2-declaration-this-quar.png",
+      "form-review/1702Q/after/screen-06-part-iv-schedule-3-computation-of-minimu.png",
+      "form-review/1702Q/after/screen-07-part-iv-schedule-4-tax-credits-payments.png"
     ]
+  },
+  "updated_assertions_and_goldens": [
+    "crates/bir-print/src/frozen_html.rs:5905 (p2c55): '5,000,001.00' -> '     5000001' — official 1702Q 12-slot money comb is whole pesos only (no commas, no centavos).",
+    "crates/bir-print/src/frozen_html.rs:5906 (p2c57): '1,200,000.00' -> '     1200000' — same 12-slot whole-peso comb rule.",
+    "crates/bir-print/src/frozen_html.rs:5907 (p2c13): '  800,001.00' -> '      800001' — same 12-slot whole-peso comb rule.",
+    "crates/bir-print/src/frozen_html.rs:5912 (p2c112): '    1,234.00' -> '        1234' — same 12-slot whole-peso comb rule.",
+    "crates/bir-print/src/frozen_html.rs:5913-5916 (p1c57): official_amount(income_tax_due) -> whole-peso right-aligned integer — same 12-slot whole-peso comb rule.",
+    "crates/bir-core/src/forms/form_1702q.rs (print_field_map_adds_only_derived_keys & print_amounts_fit_the_comb_or_stay_blank): updated expected comb strings to whole pesos (including negative '(1234)') and asserted Sched1:txtTax11A, sched1_rate_a, and sched3_rate stay blank so preprinted '000', '0%', and '2%' are not doubled.",
+    "Golden fixtures in crates/bir-print/src/fixtures/*-goldens.json: none changed."
+  ],
+  "tests_run": {
+    "bir_core_lib": "1600 passed, 0 failed",
+    "bir_print": "127 passed, 0 failed",
+    "bir_app_api_lib": "750 passed, 0 failed, 7 ignored",
+    "sample_payloads_test_1702q": "2 passed, 0 failed (141 filtered out)"
   }
 }

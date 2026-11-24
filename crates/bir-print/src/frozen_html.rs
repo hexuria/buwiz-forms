@@ -5902,20 +5902,17 @@ mod tests {
         assert_eq!(comb_text(&html, "p1c41"), "UEZON CITY");
         assert_eq!(comb_text(&html, "p1c47"), "sample@example.com");
         assert_eq!(comb_text(&html, "p2c5"), "123456788");
-        assert_eq!(comb_text(&html, "p2c55"), "5,000,001.00");
-        assert_eq!(comb_text(&html, "p2c57"), "1,200,000.00");
-        assert_eq!(comb_text(&html, "p2c13"), "  800,001.00");
+        assert_eq!(comb_text(&html, "p2c55"), "     5000001");
+        assert_eq!(comb_text(&html, "p2c57"), "     1200000");
+        assert_eq!(comb_text(&html, "p2c13"), "      800001");
         assert_eq!(comb_text(&html, "p2c42"), "10");
         assert_eq!(comb_text(&html, "p2c44"), "0");
         assert_eq!(comb_text(&html, "p2c73"), "25");
         assert_eq!(comb_text(&html, "p2c110"), "SAMPLE CREDIT");
-        assert_eq!(comb_text(&html, "p2c112"), "    1,234.00");
+        assert_eq!(comb_text(&html, "p2c112"), "        1234");
         assert_eq!(
             comb_text(&html, "p1c57"),
-            format!(
-                "{:>12}",
-                bir_core::official_xml::official_amount(draft.income_tax_due)
-            )
+            format!("{:>12}", draft.income_tax_due.round() as i64)
         );
         assert!(!html.contains("name=\"frm1702q:"));
     }

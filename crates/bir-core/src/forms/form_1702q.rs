@@ -562,23 +562,26 @@ fn print_lines(text: &str, width: usize) -> (String, String) {
     (first.trim_end().to_string(), second)
 }
 
-/// An official amount right-aligned in a `slots`-wide comb. Commas go first
-/// when it does not fit; `None` (blank on print) when it still does not.
+/// A whole-peso amount (50 centavos or more round up) right-aligned in a
+/// `slots`-wide comb with no commas or centavos; negative amounts print in
+/// parentheses, and values wider than `slots` stay blank (`None`).
 fn print_amount(text: &str, slots: usize) -> Option<String> {
     let text = text.trim();
     if text.is_empty() {
         return None;
     }
-    let fitted = if text.chars().count() <= slots {
-        text.to_string()
+    let bare: String = text.chars().filter(|ch| *ch != ',').collect();
+    let amount: f64 = bare.parse().ok()?;
+    let pesos = (amount.abs() + 0.5 + 1e-9).floor();
+    let formatted = if amount < 0.0 && pesos > 0.0 {
+        format!("({pesos:.0})")
     } else {
-        let bare: String = text.chars().filter(|ch| *ch != ',').collect();
-        if bare.chars().count() > slots {
-            return None;
-        }
-        bare
+        format!("{pesos:.0}")
     };
-    Some(format!("{fitted:>slots$}"))
+    if formatted.chars().count() > slots {
+        return None;
+    }
+    Some(format!("{formatted:>slots$}"))
 }
 
 /// A whole-number rate right-aligned in a 2-slot box; `None` when the rate
@@ -1162,10 +1165,12 @@ impl Form1702qDraft {
         });
 
         let mut amount_keys: Vec<String> = (14..=25).map(|n| format!("txtTax{n}")).collect();
-        for n in (1..=9).chain([11]) {
+        // Sched1:txtTax11A (p2c47) is omitted: the sheet preprints `000` in its last three slots.
+        for n in 1..=9 {
             amount_keys.push(format!("Sched1:txtTax{n}A"));
             amount_keys.push(format!("Sched1:txtTax{n}B"));
         }
+        amount_keys.push("Sched1:txtTax11B".to_string());
         amount_keys.push("Sched1:txtTax12B".to_string());
         amount_keys.push("Sched1:txtTax13B".to_string());
         for n in (1..=9).chain([11, 12, 13]) {
@@ -1186,20 +1191,14 @@ impl Form1702qDraft {
             }
         }
 
-        if let Some(rate) = print_whole_rate(&value("Sched1:txtTax10A")) {
-            derived.insert("sched1_rate_a".to_string(), rate);
-        }
+        // sched1_rate_a (p2c39, preprinted `0%`) and sched3_rate (p2c91, preprinted `2%`)
+        // are omitted on print so they do not double the preprinted rates.
         if let Some((whole, tenths)) = print_tenths_rate(&value("Sched1:txtTax10B")) {
             derived.insert("sched1_rate_b_whole".to_string(), whole);
             derived.insert("sched1_rate_b_tenths".to_string(), tenths);
         }
         if let Some(rate) = print_whole_rate(&value("Sched2:txtTax10")) {
             derived.insert("sched2_rate".to_string(), rate);
-        }
-        if self.mcit_open()
-            && let Some(rate) = print_whole_rate(&value("Sched3:txtTax5"))
-        {
-            derived.insert("sched3_rate".to_string(), rate);
         }
 
         for (key, text) in derived {
@@ -1946,25 +1945,30 @@ mod tests {
         );
         assert_eq!(get("address_line2"), "UEZON CITY");
         assert_eq!(get("tin_digits"), "123456788");
-        assert_eq!(get("txtTax25"), "  739,265.00");
-        assert_eq!(get("Sched2:txtTax1"), "5,000,001.00");
-        assert_eq!(get("Sched1:txtTax1B"), "  800,001.00");
-        assert_eq!(get("sched1_rate_a"), " 0");
+        assert_eq!(get("txtTax25"), "      739265");
+        assert_eq!(get("Sched2:txtTax1"), "     5000001");
+        assert_eq!(get("Sched1:txtTax1B"), "      800001");
+        assert_eq!(get("Sched1:txtTax11A"), "");
+        assert_eq!(get("sched1_rate_a"), "");
         assert_eq!(get("sched1_rate_b_whole"), "10");
         assert_eq!(get("sched1_rate_b_tenths"), "0");
         assert_eq!(get("sched2_rate"), "25");
-        assert_eq!(get("sched3_rate"), " 2");
+        assert_eq!(get("sched3_rate"), "");
     }
 
     #[test]
     fn print_amounts_fit_the_comb_or_stay_blank() {
         assert_eq!(
             print_amount("1,234.00", 12).as_deref(),
-            Some("    1,234.00")
+            Some("        1234")
         );
         assert_eq!(
             print_amount("12,345,678.90", 12).as_deref(),
-            Some(" 12345678.90")
+            Some("    12345679")
+        );
+        assert_eq!(
+            print_amount("-1,234.00", 12).as_deref(),
+            Some("      (1234)")
         );
         assert_eq!(print_amount("1,234,567,890,123.00", 12), None);
         assert_eq!(print_amount("", 12), None);
