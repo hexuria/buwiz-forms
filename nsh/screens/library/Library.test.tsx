@@ -88,13 +88,14 @@ test("desktop: the sidebar opens the library, and the scope, the frequency and t
   expect(app.texts()).toContain(`${monthlyVat} of ${TOTAL}`);
 });
 
-test("desktop: every card shows its code, its title and its chips, and Draft layout only where the layout is a draft", async () => {
+test("desktop: every card shows its code, its title and its chips, and no card marks a draft layout", async () => {
   const app = await open(ENTRY, { ...DESKTOP, ...asking({ start: "view=library" }) });
   await app.waitFor("id:library-grid");
   await app.press("id:library-scope >> text:/^All forms/");
   await app.waitFor(`text:${TOTAL} of ${TOTAL}`);
 
-  expect(app.texts().filter((t) => t === "Draft layout")).toHaveLength(count((f) => f.q < 0.8));
+  expect(count((f) => f.q < 0.8)).toBeGreaterThan(0);
+  expect(app.texts().filter((t) => t === "Draft layout")).toHaveLength(0);
   const sample = forms().find((f) => f.c === "1601C");
   expect(sample).toBeDefined();
   if (sample) {

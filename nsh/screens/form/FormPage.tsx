@@ -364,7 +364,6 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
           <Chip label={f.freq} />
           <Chip label={`${f.pages} page${f.pages > 1 ? "s" : ""}`} />
           <Chip label={`${s.fieldCount()} fields`} />
-          {f.q < 0.8 ? <Chip label="Draft layout" tone="warning" icon="triangle-alert" /> : null}
           <If when={h().status !== "Draft"}>
             <Chip testID="fp-status" label={statusLabel()} tone={h().status === "Queued" ? "accent" : "success"} />
           </If>
