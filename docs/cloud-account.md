@@ -1,6 +1,7 @@
 # Buwiz account
 
-Settings → Account signs this computer in to buwiz-server. It is separate
+Settings → Account signs this computer in to the Buwiz account server
+([buwiz-com](https://github.com/buwiz-com/buwiz-com)). It is separate
 from the PIN that unlocks a taxpayer on this computer. Preparing and filing
 returns does not wait on the server. With `EBIR_TEST_ENV=1` and
 `BIR_SFTP_DRY_RUN=1` the app never contacts BIR.
@@ -44,7 +45,7 @@ The app uses the server's existing device flow for the public client
    tokens and shows the account as offline.
 
 The request body is also sent in `x-buwiz-request-body` (`b64`), which is
-how buwiz-server reads small posts on the current Spin host.
+how the account server reads small posts on the current Spin host.
 
 Sign out calls `POST /api/auth/logout` with the access token, then deletes
 the local copy even if the server is unreachable.
