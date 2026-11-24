@@ -11,21 +11,20 @@ there, but nobody has run it on that platform.
 
 | Feature | Status | Notes |
 |---|---|---|
-| Profiles, tax form library, editors, Validate, Save draft | ✓ | All 43 forms. |
-| Submission queue and dry run (SFTP upload, IMAP receipts) | ✓ |  |
-| Encrypted database (SQLCipher) | ✓ |  |
-| Database key storage | ✓ | macOS Keychain, through the `security` tool. |
-| Close button (X) and quit shortcut | ✓ | X and Cmd+Q hide the app to the menu bar. Quit from the tray menu. |
-| System tray icon | ✓ | Menu bar icon with Show, Hide and Quit. |
+| Profiles, tax form library, editors, Check, Save draft | ✓ | All 43 forms. |
+| Submission queue and dry run | ✓ |  |
+| Database storage (plain SQLite, not encrypted) | ✓ |  |
+| Close button (X) and quit shortcut | ✓ | X and Cmd+W hide the window; Cmd+Q quits for real. |
+| System tray icon | ✗ | The status item shows but does not respond to clicks (hands-on check, 2026-11-24, dev host). |
 | Global show/hide hotkey | ✓ | Default Ctrl+Option+E suggestion. Off in Mac App Store builds. |
 | Single-instance guard | ✓ | The app bundle plus a loopback ping (`instance.port`). |
 | Window size and position memory | ✓ |  |
 | Print preview | ✓ | Own window with a Print button (native print dialog). |
-| Print an email receipt as PDF | ✓ | AppKit through a Swift helper; falls back to opening the file. |
+| Print an email receipt as PDF | ✓ | Through the print preview. |
 | Export dialogs (save file, choose folder) | ✓ | Native dialog. |
 | Unlock with the OS (Touch ID, Windows Hello) | ✓ | Touch ID, through robius-authentication. |
 | PIN or authenticator app lock | ✓ |  |
-| Desktop notifications | ✓ | System banner through GPUI in a `.app`; in-app toast otherwise. |
+| Desktop notifications | ✓ | In-app notifications drawer; OS banner delivery is unverified in this build. |
 | Instant refresh when the database changes | ✓ | Distributed notification plus a 5 s poll. |
 | Add deadlines to a calendar (.ics) | ✓ | Opens in Calendar. |
 | Google Calendar credentials storage | ✓ | Keychain, through the `security` tool. |
@@ -33,38 +32,43 @@ there, but nobody has run it on that platform.
 | Packaging | ✓ | Signed and notarized `.app` and `.dmg`; Mac App Store package. |
 | Agent control (gpui-agent) | ✓ | Opt-in build feature. |
 | Agent screenshots | ✓ | `screencapture`; needs Screen Recording permission. |
-| Dev Mode panel (debug builds only) | ✓ |  |
+
 
 ## Install and run
 
 - Download the `.dmg` from the
   [Releases](https://github.com/hexuria/buwiz-forms/releases) page and drag
   `eBIRForms.app` to Applications.
-- From source: run `scripts/setup-macos.sh`, then `just run`. Build a universal
-  (arm64 and x86_64) `.app` and DMG with `just _package-mac`.
-- Without `create-dmg`, `just _package-mac` makes a `.zip` instead.
+- From source: run `scripts/setup-macos.sh`, then `just run` (a development
+  window on a scratch database). The release workflow builds the signed and
+  notarized `.app` and DMG; `scripts/package_macos_release.sh` is the
+  packaging script it uses.
 
 ## Data
 
-- Database: `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db`.
+- Database: `~/Library/Application Support/dev.goldcoders.bir/bir_data.db`
+  (sandboxed Mac App Store builds use the group container
+  `~/Library/Group Containers/group.dev.goldcoders.bir/`).
   Override the path with `BIR_DATABASE_PATH`.
-- The SQLCipher key is in the Keychain (service `com.ebir.rust`, account
-  `sqlcipher_master_key`). The app reads it with the `security` tool, not the
-  Keychain framework, because the framework call can deadlock the GPUI main
-  loop. If the Keychain read fails for any reason other than "not found", the
-  app refuses to make a new key. A new key would make the old database
-  unreadable.
+- The database is plain SQLite; nothing is encrypted and there is no key
+  to store. The Buwiz account refresh token is the only keychain item
+  (service `com.buwiz.bir`, account `desktop-refresh`; see
+  [cloud-account.md](../cloud-account.md)).
 - Window size and position are saved in `window-geometry` in the data folder.
 - `instance.port` for the single-instance ping is in the user's local data
   folder (chosen by the `directories` crate; exact path unverified).
 
 ## Close, quit and the menu bar
 
-- The close button and Cmd+W hide the window. Cmd+Q and the app menu's
-  "Close to Menu Bar" item do the same. The app keeps running so the
-  background engine can poll for BIR receipts.
-- To quit for real, use Quit in the tray (menu bar) menu.
-- Clicking the Dock icon, or launching the app again, brings the window back.
+- The close button and Cmd+W hide the window. The app keeps running so the
+  submission worker can poll for BIR receipts.
+- Cmd+Q and the app menu's Quit item quit for real
+  (`nsh/shell/desktop/Desktop.tsx`).
+- The tray menu is meant to offer Show, Hide and Quit, but in the current
+  build the status item does not respond to clicks — the icon is there and
+  dead (hands-on check, 2026-11-24). With the window hidden the app runs
+  as an accessory: no Dock icon and no way back until the next launch.
+- Launching the app again brings the window back (single instance).
 - Cmd+H hides the app, Cmd+Alt+H hides other apps, Cmd+M minimizes and
   Cmd+Ctrl+F toggles full screen.
 
@@ -77,12 +81,10 @@ there, but nobody has run it on that platform.
 
 ## Print and export
 
-- Print preview opens in its own 1200 by 900 window with a Print button. The
-  button uses the native print operation, with A4 paper and zero margins. If
-  the preview window cannot open, the app writes the HTML to a temporary file
-  and opens it in the default browser.
-- Receipt PDFs print through AppKit with a Swift helper. If the Swift runtime
-  is not there, the file is opened instead.
+- Print preview opens in its own window (verified 1440x900 resizable) with
+  a Print button. If the preview window cannot open, the app writes the
+  HTML to a temporary file and opens it in the default browser.
+- Receipt PDFs go through the same print preview.
 - Export dialogs are always the native macOS dialogs.
 
 ## Security
@@ -92,12 +94,11 @@ there, but nobody has run it on that platform.
 
 ## Notifications
 
-- The app posts system banners through GPUI's `UNUserNotificationCenter`
-  support when it runs from a `.app`. A bare `cargo run` shows only the in-app
-  toast.
+- Alerts and receipts appear in the app's notifications drawer
+  (the bell in the top bar; Cmd/Ctrl+Shift+N).
+- Whether an installed `.app` also posts OS notification banners is
+  unverified.
 - The headless `bir` daemon posts banners with `osascript`.
-- Database changes made by the daemon reach the window at once through a
-  distributed notification. A 5 second poll is the fallback.
 
 ## Packaging
 
@@ -107,20 +108,15 @@ there, but nobody has run it on that platform.
   builds a DMG, notarizes it with `notarytool` and checks it with `spctl`.
   It needs the Apple secrets listed in
   [DEVELOPMENT.md](../DEVELOPMENT.md#cicd-secrets--codesigning).
-- `just app` builds the sandboxed Mac App Store package from the NSH app
-  (`nsh/`): `nsh package --target macos --arch universal` with
-  `nsh/mas/cargo-with-mas.sh` as `$CARGO`, which adds the app's `mas_build`
-  feature (no global hotkey, shell cron runner or updater) to the generated
-  host's build. The recipe drops the update archive and the updater's
-  configuration, embeds `assets/macos/embedded.provisionprofile` (it refuses a
-  store build whose profile is missing or expired), signs with `entitlements.plist`
-  (sandbox), adds `print-overrides/` under `Contents/Resources` and wraps the
-  app with `productbuild`. The store build inherits the NSH minimum of macOS 14.
-  It needs App Store Connect
-  credentials for the build number, `CODESIGN_IDENTITY` and
-  `INSTALLER_IDENTITY`. Without `CODESIGN_IDENTITY` the app is ad hoc signed
-  for a local sandbox run, without the profile and without the application and
-  team identifiers, which an ad hoc signature cannot carry.
+- The sandboxed Mac App Store package is built by
+  `scripts/package_macos_release.sh` and the release workflow: it adds the
+  app's `mas_build` feature (no global hotkey or self-updater) to the
+  generated host's build, embeds
+  `assets/macos/embedded.provisionprofile`, signs with
+  `entitlements.plist` (sandbox), adds `print-overrides/` under
+  `Contents/Resources` and wraps the app with `productbuild`. A store
+  build never offers self-updates (`store_managed()` in
+  `nsh/src/desktop.rs`).
 - Entitlement files are in `assets/macos/` and at the repository root.
 
 ## Agent control
@@ -133,4 +129,7 @@ there, but nobody has run it on that platform.
 ## Unverified
 
 - The exact `instance.port` path on macOS.
-- That `just _package-mac` output is byte-identical to the CI release build.
+- Whether the `bir` headless daemon still posts `osascript` banners.
+- Whether a packaged `.app` posts OS notification banners.
+- Whether the tray icon works in a packaged build; in the dev host it
+  appears but does not respond to clicks (2026-11-24).
