@@ -79,6 +79,18 @@ export function ScheduleControl(props: ScheduleInput) {
   const totals = () => (props.item.keys ?? []).map((_row, r) => r).filter(total);
   const open = () => props.openRow();
   const openRows = () => (open() === null ? [] : [open() as number]);
+  // A row whose typed text the host refused (no ATC chosen, a value the box cannot hold) can never be
+  // saved: the drawer must not close over it and list the row as if it existed. Done stays shut with
+  // the reason until the row is fixed or cleared.
+  const unfinished = () => {
+    const r = open();
+    if (r === null) return "";
+    for (const c of props.columns) {
+      const msg = props.cell(r, c.index).box.message?.() || "";
+      if (msg) return msg;
+    }
+    return "";
+  };
   const titleOf = (r: number) => (props.rowTitle ? props.rowTitle(r) : rowTitleOf(props.item, r));
   const remove = () => {
     const r = open();
@@ -163,10 +175,19 @@ export function ScheduleControl(props: ScheduleInput) {
               disabled={props.locked() || open() === null || props.summary(open() as number)() === ""}
               onPress={remove}
             />
-            <AppButton testID={`${props.testID}-done`} variant="primary" label="Done" onPress={() => props.onOpenRow(null)} />
+            <AppButton
+              testID={`${props.testID}-done`}
+              variant="primary"
+              label="Done"
+              disabled={unfinished() !== ""}
+              onPress={() => props.onOpenRow(null)}
+            />
           </>
         }
       >
+        <If when={unfinished() !== ""}>
+          <Text variant="meta" tone="danger" testID={`${props.testID}-unfinished`}>{unfinished()}</Text>
+        </If>
         <Each of={openRows()} key={(r) => r}>
           {(r) => <DrawerBody p={props} row={r()} />}
         </Each>

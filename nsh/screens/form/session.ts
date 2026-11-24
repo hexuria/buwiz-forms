@@ -1414,6 +1414,8 @@ export class FormSession {
       const listed = this.listedOptions(k);
       if (listed.length > 0 && !listed.some((o) => o.value === String(v))) {
         s.rejected[k] = "not one of the listed choices";
+        s.boxMessages[k] = "Not one of the listed choices.";
+        this.sBoxMsg.get(k).set("Not one of the listed choices.");
         offList.add(k);
       }
     }
@@ -3187,6 +3189,17 @@ export class FormSession {
       s.saved = true;
       // B19: a refused edit was never in the draft; the return still has it unsaved. An unfixable
       // one (shut/locked) put the stored value back, so it does not count (R7).
+      // A refusal whose text is no longer there (the row was cleared, the drawer discarded it, the
+      // agent put the stored value back) must not hold the return dirty: nothing is left unsaved.
+      // Only a refusal whose typed text still stands keeps the save line honest.
+      for (const k of Object.keys(s.rejected)) {
+        const v = this.sValue.get(k);
+        if (v && !untracked(() => v()).trim()) {
+          delete s.rejected[k];
+          delete s.boxMessages[k];
+          this.sBoxMsg.get(k).set("");
+        }
+      }
       if (Object.keys(s.rejected).some((k) => !s.unfixable.has(k))) s.dirty = true;
       s.saveState = s.dirty ? this.restingSaveState() : { state: "saved" };
       if (changed) this.hooks.onSaved?.(s.target);

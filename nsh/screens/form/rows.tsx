@@ -562,6 +562,14 @@ function Saved(props: { text: string; testID: string }) {
 }
 
 /** One item of a part. */
+/** How many of a table's rows hold anything the filer typed (the paper's row count means nothing:
+ *  a row whose every drawn box is computed, or empty, is not a row the return has). */
+export function rowCount(s: FormSession, it: SchemaItem): number {
+  const keys = it.keys || [];
+  const cols = (it.cols || []).map((col, index) => ({ index, col })).filter((c) => c.col.t !== "hidden" && !c.col.c);
+  return keys.filter((row) => cols.some((c) => !emptyCell(s.box(row[c.index]).value(), c.col.t))).length;
+}
+
 export function ItemRow(props: RowProps) {
   const s = props.s;
   const id = props.id;
@@ -620,7 +628,7 @@ export function ItemRow(props: RowProps) {
           <View class="flex-1" style={{ minWidth: rowHead(props.narrow()).labelMin ?? 0 }}>
             <Text variant="control" testID={`fp-label-${id}`}>{label}</Text>
           </View>
-          {it.rows ? <Text variant="meta" tone="fg3" class="pt-0.5">{`${it.rows} rows`}</Text> : null}
+          {it.rows && rowCount(props.s, it) > 0 ? <Text variant="meta" tone="fg3" class="pt-0.5">{rowCount(props.s, it) === 1 ? "1 row" : `${rowCount(props.s, it)} rows`}</Text> : null}
           {/* A profile TIN's own line under its boxes says it once; the row mark stays for every other profile row. */}
           <If when={info().fromProfile && !info().tinLine}>
             <Mark icon="user" id={id} tip={info().fromProfile} />
