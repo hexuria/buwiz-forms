@@ -9,9 +9,13 @@ real="${NSH_REAL_CARGO:-cargo}"
 if [ "$1" = "build" ]; then
     features="app_nsh_app_ebirforms/agent"
     for arg in "$@"; do
-        case "$arg" in
-            */.nsh/rust/Cargo.toml|*\\.nsh\\rust\\Cargo.toml)
-                manifest="$arg"
+        # On Windows nsh names the manifest with either slash, even both (...\nsh\.nsh/rust\Cargo.toml): compare and
+        # open it with forward slashes only, which every system's tools take.
+        # shellcheck disable=SC1003
+        case "$(printf '%s' "$arg" | tr '\\' '/')" in
+            */.nsh/rust/Cargo.toml)
+                # shellcheck disable=SC1003
+                manifest="$(printf '%s' "$arg" | tr '\\' '/')"
                 shift
                 # The generated workspace ignores the app crate's [patch]: patch entries apply only to the
                 # workspace root, which is this generated manifest. The plug's crates name hexuria/nsh as git

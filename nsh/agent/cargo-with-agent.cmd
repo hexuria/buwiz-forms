@@ -1,37 +1,32 @@
 @echo off
-rem Windows counterpart of cargo-with-agent.sh: stands in for `cargo` while nsh builds the app's generated hosts, so
-rem they carry the app's `agent` feature. Only a `cargo build` in the generated workspace (nsh\.nsh\rust) is changed;
-rem every other command passes through. Used by `just nsh-run-agent` on Windows; nothing else sets %CARGO%.
+rem Windows counterpart of cargo-with-agent.sh: stands in for `cargo` while nsh builds the app's generated hosts.
+rem Used by `just nsh-run-agent` on Windows; nothing else sets %CARGO%.
+rem
+rem The .sh is the one implementation, run here through Git Bash: it adds the app's `agent` feature and re-applies
+rem the [patch."https://github.com/hexuria/nsh"] block the generated workspace needs. Without that block the plug
+rem links a second NSH, its surface hook registers on the wrong copy, and the window's listener never starts.
+rem
+rem Git Bash is found from where git.exe is, never from PATH: on Windows the first `bash` on PATH is usually
+rem C:\Windows\System32\bash.exe, which starts WSL. NSH_AGENT_BASH names another one.
 setlocal
-rem The .sh is the one implementation: it also re-applies the [patch."https://github.com/hexuria/nsh"] block the
-rem generated workspace needs, or the plug links a second NSH and install_window_plane registers on the wrong copy.
-rem Git Bash ships with Git for Windows, which any Rust checkout already needs.
-where bash >nul 2>&1
-if not errorlevel 1 (
-    bash "%~dp0cargo-with-agent.sh" %*
-    exit /b %errorlevel%
+set "bash=%NSH_AGENT_BASH%"
+if defined bash goto run
+for /f "delims=" %%G in ('where git 2^>nul') do if not defined bash call :from_git "%%~dpG"
+if defined bash goto run
+for %%P in ("%ProgramFiles%\Git" "%ProgramFiles(x86)%\Git" "%LocalAppData%\Programs\Git") do if not defined bash if exist "%%~P\bin\bash.exe" set "bash=%%~P\bin\bash.exe"
+if defined bash goto run
+echo cargo-with-agent: Git Bash not found. Install Git for Windows, or set NSH_AGENT_BASH to a bash.exe that is not WSL's. 1>&2
+exit /b 1
+
+:run
+if not exist "%bash%" (
+    echo cargo-with-agent: no bash at "%bash%" 1>&2
+    exit /b 1
 )
-rem Fallback when bash is unavailable: feature-append only, which leaves the split-NSH bug this wrapper exists
-rem to fix, so builds here need Git Bash on PATH.
-set "real=%NSH_REAL_CARGO%"
-if not defined real set "real=cargo"
-if /I not "%~1"=="build" goto pass
-rem Each argument is read without its quotes into a quoted assignment and compared with delayed expansion, so a path
-rem with & or a space is only text. nsh names the manifest with either slash, even both (...\nsh\.nsh/rust\Cargo.toml).
-set "hit="
-setlocal enabledelayedexpansion
-:scan
-if "%~1"=="" goto scanned
-set "a=%~1"
-set "a=!a:/=\!"
-if not "!a:.nsh\rust\Cargo.toml=!"=="!a!" set "hit=1"
-shift
-goto scan
-:scanned
-endlocal & set "hit=%hit%"
-if not defined hit goto pass
-"%real%" %* --features app_nsh_app_ebirforms/agent
+"%bash%" "%~dp0cargo-with-agent.sh" %*
 exit /b %errorlevel%
-:pass
-"%real%" %*
-exit /b %errorlevel%
+
+rem git.exe sits in <Git>\cmd, <Git>\bin or <Git>\mingw64\bin; bash.exe is <Git>\bin\bash.exe.
+:from_git
+for %%D in ("%~1.." "%~1..\..") do if not defined bash if exist "%%~fD\bin\bash.exe" set "bash=%%~fD\bin\bash.exe"
+exit /b 0
