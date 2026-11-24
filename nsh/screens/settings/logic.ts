@@ -116,9 +116,16 @@ export function groupSections(view: readonly SettingsViewSection[]): { group: st
   return out;
 }
 
-/** Where a request to delete the account goes: an email to support, naming the account when it is known. */
-export function deletionRequestUrl(email: string | null | undefined): string {
-  const who = email ? " for " + email : "";
-  const body = "Please delete my Buwiz account" + who + " and the email address held with it.";
-  return "mailto:support@buwiz.com?subject=" + encodeURIComponent("Delete my Buwiz account") + "&body=" + encodeURIComponent(body);
+const PRODUCTION_API = "https://api.buwiz.com";
+const PRODUCTION_ACCOUNT = "https://account.buwiz.com";
+
+/**
+ * The page where the signed-in person deletes their Buwiz account (they confirm with a code sent to their email).
+ * Production's account pages live on their own host; a development or self-hosted server (`server` is the build's
+ * API address) serves its account pages itself, so the page is on that same address.
+ */
+export function deletionPageUrl(server: string | null | undefined): string {
+  const api = (server ?? "").trim().replace(/\/+$/, "");
+  if (!api || api === PRODUCTION_API) return PRODUCTION_ACCOUNT + "/delete";
+  return api + "/delete";
 }
