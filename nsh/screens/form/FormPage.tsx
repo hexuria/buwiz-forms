@@ -354,7 +354,7 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
       </View>
     );
   }
-  const statusLabel = () => (h().editable ? h().status : `${h().status} · read-only`);
+  const statusLabel = () => (h().editable ? h().statusWord : `${h().statusWord} · read-only`);
   return (
     <View testID="fp-header" class="mb-5 flex-row flex-wrap items-start gap-3.5">
       <View class="min-w-0 flex-1" style={{ minWidth: props.narrow() ? 0 : 420 }}>

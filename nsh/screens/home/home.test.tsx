@@ -230,6 +230,19 @@ for (const { name, size } of SIZES) {
 }
 
 for (const { name, size } of SIZES) {
+  test(`${name}: a dry-run send's rows say Dry run; a real send's say Filed`, async () => {
+    const shown = (texts: string[], word: string) => texts.filter((t) => t === word).length;
+    // A filed return with its template (so its row shows its chip) and an undated as-needed return, both sent.
+    const dry = await open(ENTRY, { ...size, ...asking({ filed: 1, template: true, undated: true, sent: "dry" }) });
+    await dry.waitFor("id:home-dashboard", { timeout: 60000 });
+    await dry.waitUntil(() => shown(dry.texts(), "Dry run") === 2, { timeout: 20000 });
+    expect(shown(dry.texts(), "Filed")).toBe(0);
+    const real = await open(ENTRY, { ...size, ...asking({ filed: 1, template: true, undated: true, sent: "real" }) });
+    await real.waitFor("id:home-dashboard", { timeout: 60000 });
+    await real.waitUntil(() => shown(real.texts(), "Filed") === 2, { timeout: 20000 });
+    expect(shown(real.texts(), "Dry run")).toBe(0);
+  }, 120_000);
+
   test(`${name}: each taxpayer's button opens the next deadline's return`, async () => {
     const app = await open(ENTRY, { ...size, ...asking({ second: true, branch: true }) });
     await app.waitFor("id:home-dashboard", { timeout: 30000 });

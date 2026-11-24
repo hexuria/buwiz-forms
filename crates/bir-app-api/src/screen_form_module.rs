@@ -205,6 +205,8 @@ export interface ScreenFormExisting {
     /** What the page may offer: `load` (a draft), `view` (read-only), `amend` (reached BIR, and the form has an amended-return answer), `keep`. */
     actions: ("load" | "view" | "amend" | "keep")[];
     submitted_at: string | null;
+    /** The send `submitted_at` names was only simulated (a dry run): nothing reached BIR. */
+    submitted_dry_run: boolean;
     confirmed_at: string | null;
 }
 export interface ScreenFormSamplePeriod {
@@ -4739,6 +4741,7 @@ fn existing_return(db: &Database, kind: AgentFormKind, stored: &Value) -> Result
     Ok(json!({
         "actions": actions,
         "submitted_at": stamp("submitted_at"),
+        "submitted_dry_run": lifecycle_flag(stored, "submitted_dry_run"),
         "confirmed_at": stamp("confirmed_at"),
         "form_code": kind.form_code(),
         "year": identity.taxable_year,
@@ -14517,6 +14520,16 @@ mod tests {
             assert!(real["submitted_at"].is_string(), "{code}");
             assert_eq!(real["submitted_dry_run"], false, "{code}");
             assert!(!raw_row(id).1.contains("submitted_dry_run"), "{code}");
+            // The sample's offer of the stored return says it too.
+            let offered = || {
+                sample_period(
+                    TIN,
+                    code,
+                    typed_parts(code, 2024, period as u8, 1, period as u8),
+                )["existing"]["submitted_dry_run"]
+                    .clone()
+            };
+            assert_eq!(offered(), false, "{code}");
 
             // The worker's dry-run send, as bir-core stores it.
             let (_, raw) = raw_row(id);
@@ -14534,6 +14547,7 @@ mod tests {
             assert_eq!(dry["status"], "Submitted", "{code}");
             assert_eq!(dry["submitted_at"], real["submitted_at"], "{code}");
             assert_eq!(dry["submitted_dry_run"], true, "{code}");
+            assert_eq!(offered(), true, "{code}");
         }
     }
 

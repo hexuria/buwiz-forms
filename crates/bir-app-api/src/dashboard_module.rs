@@ -43,6 +43,8 @@ export interface DeadlineRow {
     due_date: string;
     /** "Not started" | "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid" */
     status: string;
+    /** A Submitted return whose send was only simulated (a dry run, `send.stage` "test_sent"): nothing reached BIR. */
+    submitted_dry_run: boolean;
     draft_id: number | null;
     /** The saved return's stored key (`screen_form_open`'s `key`), null when none is saved. */
     return_key: number | null;
@@ -53,6 +55,8 @@ export interface AsNeededReturn {
     period: number;
     return_key: number | null;
     status: string;
+    /** A Submitted return whose send was only simulated (a dry run): nothing reached BIR. */
+    submitted_dry_run: boolean;
     updated_at: string;
 }
 export interface AsNeededForm {
@@ -316,6 +320,13 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
                         draft.map_or_else(|| "Not started".to_string(), |d| status_name(&d.status))
                     ),
                 );
+                row.insert(
+                    "submitted_dry_run".into(),
+                    json!(match draft {
+                        Some(draft) => dry_run(db, draft)?,
+                        None => false,
+                    }),
+                );
                 row.insert("draft_id".into(), json!(draft.map(|d| d.id)));
                 let key = match draft {
                     Some(draft) => db.draft_period_column(draft.id).map_err(error)?,
@@ -338,6 +349,16 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
             .then(a["form_code"].as_str().cmp(&b["form_code"].as_str()))
     });
     Ok(rows)
+}
+
+/// A Submitted return whose send was only simulated: its send state is
+/// `test_sent` (`send_state.rs`, from the worker's `submitted_dry_run`).
+fn dry_run(db: &Database, summary: &FormDraftSummary) -> Result<bool, HostError> {
+    if summary.status != FilingStatus::Submitted {
+        return Ok(false);
+    }
+    let send = crate::send_state::stored_send(db, summary.id).map_err(error)?;
+    Ok(send["stage"] == "test_sent")
 }
 
 /// The dated rows of a branch's saved as-needed returns, any taxable year,
@@ -380,6 +401,7 @@ fn as_needed_rows(
         );
         row.insert("due_date".into(), json!(due.format("%Y-%m-%d").to_string()));
         row.insert("status".into(), json!(status_name(&summary.status)));
+        row.insert("submitted_dry_run".into(), json!(dry_run(db, summary)?));
         row.insert("draft_id".into(), json!(summary.id));
         row.insert(
             "return_key".into(),
@@ -419,6 +441,7 @@ fn as_needed_form_rows(db: &Database, year: u16) -> Result<Vec<Value>, HostError
                     "period": summary_period(summary),
                     "return_key": db.draft_period_column(summary.id).map_err(error)?,
                     "status": status_name(&summary.status),
+                    "submitted_dry_run": dry_run(db, summary)?,
                     "updated_at": summary.updated_at,
                 }));
             }
@@ -754,6 +777,7 @@ mod tests {
         let undated = rows[0]["undated"].as_array().unwrap();
         assert_eq!(undated.len(), 1);
         assert_eq!(undated[0]["status"], "Draft");
+        assert_eq!(undated[0]["submitted_dry_run"], false, "a draft");
         assert!(undated[0]["draft_id"].is_number());
         let calendar = to_json(&deadlines_between(&args(&["2026-01-01", "2027-12-31"])).unwrap());
         assert!(
@@ -1194,6 +1218,7 @@ mod tests {
             "period_label",
             "return_key",
             "status",
+            "submitted_dry_run",
             "taxable_year",
             "taxpayer_name",
             "tin",
@@ -1239,7 +1264,14 @@ mod tests {
         );
         assert_eq!(
             keys(&with_undated["undated"][0]),
-            ["draft_id", "period", "return_key", "status", "updated_at"]
+            [
+                "draft_id",
+                "period",
+                "return_key",
+                "status",
+                "submitted_dry_run",
+                "updated_at"
+            ]
         );
         // And each TypeScript interface declares exactly those fields.
         assert_eq!(declared_fields("DeadlineRow"), keys(dated));
@@ -1373,6 +1405,46 @@ mod tests {
         assert_eq!(send(4)["code"], "tin_not_active");
         assert!(send(5).is_null(), "confirmed");
         assert!(send(6).is_null(), "unreadable stored JSON");
+    }
+
+    /// A deadline row says whether its Submitted send was only simulated
+    /// (the screens show "Dry run"); a real send, a Draft and a deadline
+    /// with no return say no.
+    #[test]
+    fn deadline_rows_say_which_submitted_send_was_a_dry_run() {
+        setup();
+        with_database(|db| {
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            for (month, dry) in [(2u8, true), (3, false)] {
+                let draft = bir_core::forms::Form1601CDraft::new_from_profile(&profile, 2026, month);
+                let id = db.save_1601c_draft(&draft).unwrap();
+                db.conn_for_tests()
+                    .execute(
+                        &format!(
+                            "UPDATE form_drafts SET status = 'Submitted',
+                                    data_json = json_set(data_json, '$.status', 'Submitted', '$.submitted_dry_run', json('{dry}'))
+                             WHERE id = ?1"
+                        ),
+                        [id],
+                    )
+                    .unwrap();
+            }
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&args(&["2026-01-01", "2026-12-31"])).unwrap());
+        let dry = |month: u64| {
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["taxable_year"] == 2026 && r["period"] == month)
+                .unwrap()["submitted_dry_run"]
+                .clone()
+        };
+        assert_eq!(dry(1), false, "a draft");
+        assert_eq!(dry(2), true, "a dry-run send");
+        assert_eq!(dry(3), false, "a real send");
+        assert_eq!(dry(4), false, "no return saved");
     }
 
     #[test]

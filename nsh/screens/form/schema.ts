@@ -2,6 +2,7 @@
 import type { ChoiceOption, FieldType, FormSchema, SchemaField, SchemaItem, SchemaPart } from "./contract";
 import { tinSegment } from "./controls/model";
 import { MONTHS, shortIsoDate } from "../../lib/dates";
+import { isDryRun } from "../../lib/statusWord";
 import type { ScreenFormExisting, SendState } from "../../bir";
 import { stripOtherError } from "./refusals";
 
@@ -324,11 +325,14 @@ export function existingOfferFor(existing: ScreenFormExisting): { title: string;
       fastLane: false,
     };
   }
+  // A send the worker only simulated is no submission: it says "dry run", the form page's word (`statusWord`).
+  const dry = isDryRun(existing);
   const filed = existing.status === "Submitted" ? "submitted" : "filed";
-  const choices: OfferChoice[] = [{ id: "view", label: "View read-only", hint: `See exactly what was ${filed}.`, variant: "primary" }];
+  const hint = dry ? "See exactly what was in the dry run." : `See exactly what was ${filed}.`;
+  const choices: OfferChoice[] = [{ id: "view", label: "View read-only", hint, variant: "primary" }];
   if (has("amend")) choices.push({ id: "amend", label: "Amend this return", hint: `New amended return. ${FILED_KEPT}`, variant: "danger" });
   choices.push(keep);
-  return { title: `${label} was ${filed}`, subtitle: "", choices, fastLane: false };
+  return { title: dry ? `${label} was a dry run, not sent to BIR` : `${label} was ${filed}`, subtitle: "", choices, fastLane: false };
 }
 
 /** A host refusal in plain words: bir-core's "Other error: " prefix is not for the filer. */

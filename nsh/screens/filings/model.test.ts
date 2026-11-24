@@ -168,3 +168,11 @@ test("a card's send chip: Held, Retrying, Needs attention and Not sent with the 
   for (const stage of ["queued", "sending", "sent", "test_sent"] as const) expect(sendChip(row({ send: send(stage) }))).toBe(null);
   expect(sendChip(row({}))).toBe(null);
 });
+
+test("a screen reader hears a dry-run send's word, Dry run, and a real send's Submitted", () => {
+  const send = (stage: SendState["stage"]): SendState => ({ stage, line: "", code: null, next_try_at: null, can_resolve: false });
+  const r = row({ form_code: "2550Q", period_label: "Q2 2026", status: "Submitted" });
+  expect(cardLabel({ ...r, send: send("test_sent") }).endsWith(", Dry run. Open")).toBe(true);
+  expect(cardLabel(r).endsWith(", Submitted. Open")).toBe(true);
+  expect(cardLabel({ ...r, send: send("sent") }).endsWith(", Submitted. Open")).toBe(true);
+});

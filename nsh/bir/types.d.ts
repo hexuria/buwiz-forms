@@ -637,6 +637,8 @@ export interface ScreenFormExisting {
     /** What the page may offer: `load` (a draft), `view` (read-only), `amend` (reached BIR, and the form has an amended-return answer), `keep`. */
     actions: ("load" | "view" | "amend" | "keep")[];
     submitted_at: string | null;
+    /** The send `submitted_at` names was only simulated (a dry run): nothing reached BIR. */
+    submitted_dry_run: boolean;
     confirmed_at: string | null;
 }
 export interface ScreenFormSamplePeriod {
@@ -763,6 +765,8 @@ export interface DeadlineRow {
     due_date: string;
     /** "Not started" | "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid" */
     status: string;
+    /** A Submitted return whose send was only simulated (a dry run, `send.stage` "test_sent"): nothing reached BIR. */
+    submitted_dry_run: boolean;
     draft_id: number | null;
     /** The saved return's stored key (`screen_form_open`'s `key`), null when none is saved. */
     return_key: number | null;
@@ -773,6 +777,8 @@ export interface AsNeededReturn {
     period: number;
     return_key: number | null;
     status: string;
+    /** A Submitted return whose send was only simulated (a dry run): nothing reached BIR. */
+    submitted_dry_run: boolean;
     updated_at: string;
 }
 export interface AsNeededForm {

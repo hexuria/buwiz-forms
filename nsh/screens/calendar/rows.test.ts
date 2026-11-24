@@ -1,6 +1,7 @@
 // The Calendar's pure side: what each filter keeps, how the List groups, the grid's days and the tones of a chip and a dot.
 import { expect, test } from "nsh/test";
 import type { DeadlineRow } from "../../bir";
+import { statusWord } from "../../lib/statusWord";
 import {
   byWhoAndHowOften, calendarRows, countText, dayTone, filtersActive, type Filters, gridCells, groupRows, inMonthCount, kindOf, longDay,
   monthGridStart, rowKey, toneOf, upcomingRange, upcomingRows, whoLine,
@@ -21,6 +22,7 @@ function row(over: Partial<DeadlineRow> & Pick<DeadlineRow, "form_code" | "due_d
     period: 1,
     period_label: "January 2026",
     status: "Not started",
+    submitted_dry_run: false,
     draft_id: null,
     return_key: next++,
     ...over,
@@ -98,6 +100,9 @@ test("a row's status, who and key", () => {
   expect(kindOf("Confirmed")).toBe("filed");
   expect(kindOf("Paid")).toBe("filed");
   expect(kindOf("Not started")).toBe("not_started");
+  // A chip passes the shown word: a simulated send is "Dry run", a real one keeps Submitted's "filed".
+  expect(kindOf(statusWord(row({ form_code: "0619E", due_date: "2026-02-10", status: "Submitted", submitted_dry_run: true })))).toBe("dry_run");
+  expect(kindOf(statusWord(row({ form_code: "0619E", due_date: "2026-02-10", status: "Submitted" })))).toBe("filed");
   expect(whoLine(rows[0])).toBe("Juana Santos");
   expect(whoLine({ ...rows[0], branch_count: 2 })).toBe("Juana Santos · Head office");
   expect(rowKey(rows[1])).toBe("00012345300000-1601C-2026-1");

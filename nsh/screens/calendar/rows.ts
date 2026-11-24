@@ -3,6 +3,7 @@
 // the store and hands them here. The clock is a parameter (the system's by default).
 import type { DeadlineRow } from "../../bir";
 import { addDays, daysUntil, isoDate, MONTHS, MONTHS_LONG } from "../../lib/dates";
+import { DRY_RUN_WORD } from "../../lib/statusWord";
 import type { ChipTone } from "../../ui";
 
 /** How often: every frequency, or one of three. */
@@ -113,10 +114,11 @@ export function groupRows(f: Pick<Filters, "freq">, rows: readonly DeadlineRow[]
 // ---------------------------------------------------------------- status and tone
 
 /** The status a row's chip says. */
-export type RowKind = "draft" | "queued" | "filed" | "not_started";
+export type RowKind = "draft" | "queued" | "dry_run" | "filed" | "not_started";
 
-/** A deadline's status as the chips name it. */
+/** A deadline's status as the chips name it. A chip passes the shown word (`statusWord`): a simulated send's "Dry run" is its own chip. */
 export function kindOf(status: string): RowKind {
+  if (status === DRY_RUN_WORD) return "dry_run";
   if (status === "Draft") return "draft";
   if (status === "Queued") return "queued";
   if (status === "Submitted" || status === "Confirmed" || status === "Paid") return "filed";

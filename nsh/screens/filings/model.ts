@@ -4,6 +4,7 @@
 // localMonth, returnTitle, namedBranch, whoLine, dateLine, FilingsFilters.rows and applyPreset).
 import type { ReturnRow } from "../../bir";
 import { MONTHS, shortDate } from "../../lib/dates";
+import { statusWord } from "../../lib/statusWord";
 import { type FormIndexEntry, frequencyOf, periodLabel } from "../../lib/periods";
 
 /** The real statuses, in board order. */
@@ -96,7 +97,7 @@ export function sendChip(r: ReturnRow): { label: string; tone: "neutral" | "warn
 }
 
 /** What a screen reader says of a card. */
-export const cardLabel = (r: ReturnRow): string => `${r.form_code} ${r.period_label}, ${whoLine(r)}, ${r.status}. Open`;
+export const cardLabel = (r: ReturnRow): string => `${r.form_code} ${r.period_label}, ${whoLine(r)}, ${statusWord(r)}. Open`;
 
 /** The search and the four filters; null in a set means every value. */
 export interface FilterValues {

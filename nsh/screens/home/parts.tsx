@@ -4,6 +4,7 @@ import { View } from "nsh";
 import type { AsNeededForm, AsNeededReturn, DeadlineRow, ReturnRow, Taxpayer } from "../../bir";
 import { nextText, progressText, type DashboardTaxpayerRow, type StripDay, type TileSpec } from "../../lib/dashboard";
 import { daysUntil, MONTHS, shortDate } from "../../lib/dates";
+import { statusWord } from "../../lib/statusWord";
 import { store, today } from "../../shell";
 import { AppButton, Avatar, Code, Icon, type IconName, Line, ListRow, NameCell, PressCard, PressCell, StatusChip, Text } from "../../ui";
 import { cancelQueued, openDeadline, openListed, openUndated, startAsNeeded, useAsTemplate } from "./actions";
@@ -156,7 +157,7 @@ export function DueRow(props: { d: DeadlineRow; compact: boolean }) {
         </View>
       </If>
       <View class="shrink-0 flex-row justify-end" style={{ width: 88 }}>
-        <StatusChip status={statusKind(props.d.status)} />
+        <StatusChip status={statusKind(statusWord(props.d))} />
       </View>
     </ListRow>
   );
@@ -175,7 +176,7 @@ function FiledActions(props: { r: ReturnRow }) {
         when={hasTemplate() || !filed()}
         else={<AppButton testID={`return-${props.r.id}-use-template`} label="Use as template" icon="layout-template" size="sm" onPress={() => useAsTemplate(props.r)} />}
       >
-        <StatusChip status={statusKind(props.r.status)} />
+        <StatusChip status={statusKind(statusWord(props.r))} />
       </If>
       <AppButton testID={`return-${props.r.id}-open`} label="Open" variant="ghost" size="sm" onPress={() => openListed(props.r)} />
     </>
@@ -308,7 +309,7 @@ export function AsNeededUndated(props: { f: AsNeededForm; r: AsNeededReturn; com
       </If>
       <NameCell title={props.f.trigger ? `No ${props.f.trigger.toLowerCase()} date yet` : "Saved return"} sub={`Saved ${shortDate(props.r.updated_at)}`} />
       <View class="shrink-0 flex-row justify-end" style={{ width: props.compact ? undefined : 88 }}>
-        <StatusChip status={statusKind(props.r.status)} />
+        <StatusChip status={statusKind(statusWord(props.r))} />
       </View>
       <AppButton testID={`${id()}-open`} label="Open" variant="ghost" size="sm" onPress={() => openUndated(props.f, props.r)} />
     </ListRow>

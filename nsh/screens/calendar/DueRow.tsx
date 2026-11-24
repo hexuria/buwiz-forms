@@ -3,6 +3,7 @@
 import { View } from "nsh";
 import type { DeadlineRow } from "../../bir";
 import { daysUntil, MONTHS } from "../../lib/dates";
+import { statusWord } from "../../lib/statusWord";
 import { openReturn, today } from "../../shell";
 import { Code, ListRow, NameCell, StatusChip, Text } from "../../ui";
 import { isOpenStatus, kindOf, rowKey, whoLine } from "./rows";
@@ -23,7 +24,7 @@ function RowChip(props: { d: DeadlineRow }) {
   const late = () => isOpenStatus(props.d) && n() < 0;
   const soon = () => isOpenStatus(props.d) && n() <= 14;
   return (
-    <If when={soon()} else={<StatusChip status={kindOf(props.d.status)} />}>
+    <If when={soon()} else={<StatusChip status={kindOf(statusWord(props.d))} />}>
       <StatusChip status={late() ? "overdue" : "due_soon"} days={n()} />
     </If>
   );
@@ -73,7 +74,7 @@ export function DueRow(props: DueRowProps) {
           </If>
         </View>
         <View class="w-22 shrink-0 flex-row justify-end">
-          <StatusChip status={kindOf(props.d.status)} />
+          <StatusChip status={kindOf(statusWord(props.d))} />
         </View>
       </If>
     </ListRow>

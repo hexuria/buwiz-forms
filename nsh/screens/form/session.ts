@@ -37,6 +37,7 @@ import {
 } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { cancelQueueMessage } from "../../lib/queue_message";
+import { statusWord } from "../../lib/statusWord";
 import { effectiveStops, nextRow, stopCall, todoRows, type TodoPart, type TodoRow } from "../../lib/todo";
 import { formatMoney, wholePesosOf } from "../../lib/money";
 import { DATE_ERROR, formatIso, formatLongDate, formatMDY, isTwoDigitDate, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
@@ -214,6 +215,8 @@ export interface HeaderInfo {
   loading: boolean;
   error: string;
   status: ScreenFormStatus;
+  /** The status as the chip says it (`statusWord`): "Dry run" for a send the worker only simulated, else `status`. */
+  statusWord: string;
   editable: boolean;
   sample: boolean;
   periodSet: boolean;
@@ -4129,6 +4132,7 @@ export class FormSession {
       loading: s.loading,
       error: s.error,
       status: s.status,
+      statusWord: statusWord({ status: s.status, submitted_dry_run: s.submittedDryRun, send: s.send }),
       editable: s.editable,
       sample: s.sample,
       periodSet: s.periodSet,

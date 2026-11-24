@@ -5,8 +5,8 @@
 import { expect, test } from "nsh/test";
 import { bir } from "../../bir";
 import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
-import { rfc3339, sendWords, sentWords, tryTime } from "./schema";
-import type { SendState } from "../../bir";
+import { existingOfferFor, rfc3339, sendWords, sentWords, tryTime } from "./schema";
+import type { ScreenFormExisting, SendState } from "../../bir";
 import { FormSession, type FormTarget } from "./session";
 
 // The first form call of a process builds every form's schema; a test's JS call has 2 s on the headless runner, a file's load 10 s.
@@ -28,15 +28,20 @@ function stored(formCode: string, period: number): Record<string, unknown> {
   return (bir.get_form_draft(DEMO.tin, formCode, YEAR, period) ?? {}) as Record<string, unknown>;
 }
 
-async function line(target: FormTarget): Promise<string> {
+/** The page's sent line and the status its chip says ("Dry run" for a simulated send). */
+async function header(target: FormTarget): Promise<{ line: string; chip: string }> {
   const s = new FormSession(target);
   try {
     expect(await s.open()).toBe(null);
     await s.idle();
-    return s.header().submittedLine;
+    return { line: s.header().submittedLine, chip: s.header().statusWord };
   } finally {
     s.dispose();
   }
+}
+
+async function line(target: FormTarget): Promise<string> {
+  return (await header(target)).line;
 }
 
 test("the words: a real send and a dry run", () => {
@@ -44,6 +49,19 @@ test("the words: a real send and a dry run", () => {
   expect(sentWords("2026-11-18T01:02:03+00:00", true)).toBe("Dry run Nov 18, 2026, not sent to BIR");
   expect(sentWords("2026-11-18T01:02:03+00:00", false, true)).toBe("Sent to the mock relay Nov 18, 2026, not to BIR");
   expect(sentWords("2026-11-18T01:02:03+00:00", true, true)).toBe("Dry run Nov 18, 2026, not sent to BIR");
+});
+
+test("a sample's offer of a stored return: a dry-run send says dry run, a real send says submitted", () => {
+  const existing = (submitted_dry_run: boolean): ScreenFormExisting => ({
+    form_code: "1601C", year: 2025, period: 9, label: "September 2025", status: "Submitted", updated_at: "2025-10-01 09:00:00", total_payable: null,
+    actions: ["view", "keep"], submitted_at: "2025-10-01T01:02:03+00:00", submitted_dry_run, confirmed_at: null,
+  });
+  const dry = existingOfferFor(existing(true));
+  expect(dry.title).toBe("September 2025 was a dry run, not sent to BIR");
+  expect(dry.choices[0].hint).toBe("See exactly what was in the dry run.");
+  const real = existingOfferFor(existing(false));
+  expect(real.title).toBe("September 2025 was submitted");
+  expect(real.choices[0].hint).toBe("See exactly what was submitted.");
 });
 
 const send = (stage: SendState["stage"], line: string, next: string | null): SendState => ({ stage, line, code: null, next_try_at: next, can_resolve: false });
@@ -83,6 +101,9 @@ test("a return the dry-run worker sent says Dry run, not sent to BIR", async () 
   const when = sentWords(String(sent.submitted_at), true);
   expect(when.startsWith("Dry run ")).toBe(true);
   expect(await line(at("1601C", 9))).toBe(`${when}. Nothing here can be changed.`);
+  // The status chip says the banner's word, not "Submitted": what is stored stays Submitted.
+  expect((await header(at("1601C", 9))).chip).toBe("Dry run");
+  expect(stored("1601C", 9).status).toBe("Submitted");
 });
 
 test("a return sent for real (no dry-run fact) says Sent to BIR", async () => {
@@ -96,4 +117,5 @@ test("a return sent for real (no dry-run fact) says Sent to BIR", async () => {
   bir.save_form_draft(DEMO.tin, "2550Q", YEAR, 2, "Submitted", draft);
   expect(stored("2550Q", 2).submitted_dry_run).toBe(undefined);
   expect(await line(at("2550Q", 2))).toBe("Sent to BIR Jul 20, 2025. Nothing here can be changed.");
+  expect((await header(at("2550Q", 2))).chip).toBe("Submitted");
 });
