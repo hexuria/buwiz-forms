@@ -1107,7 +1107,13 @@ fn is_amount_typed_key(key: &str) -> bool {
         "taxpayer",
         "taxagent",
         "taxableyear",
-        "tin",
+        "txttin",
+        "_tin",
+        "tin_",
+        "tin1",
+        "tin2",
+        "tin3",
+        "tin4",
         "zip",
         "rdo",
         "date",
@@ -1196,6 +1202,7 @@ fn is_amount_typed_key(key: &str) -> bool {
         "allowance",
         "exemption",
         "withholding",
+        "withheld",
         "base",
         "due",
         "paid",
@@ -1257,7 +1264,13 @@ fn is_quantity_typed_key(key: &str) -> bool {
         "taxpayer",
         "taxagent",
         "taxableyear",
-        "tin",
+        "txttin",
+        "_tin",
+        "tin_",
+        "tin1",
+        "tin2",
+        "tin3",
+        "tin4",
         "zip",
         "rdo",
         "date",
@@ -1708,6 +1721,149 @@ fn format_percentage_rate(raw: &str, preprinted_percent: bool) -> Option<String>
     }
 }
 
+fn parse_svg_path_bbox(d: &str) -> Option<(f64, f64, f64, f64)> {
+    let mut nums = Vec::new();
+    let mut cur = String::new();
+    for ch in d.chars() {
+        if ch.is_ascii_digit() || ch == '.' || (ch == '-' && cur.is_empty()) {
+            cur.push(ch);
+        } else {
+            if !cur.is_empty() {
+                if let Ok(v) = cur.parse::<f64>() {
+                    nums.push(v);
+                }
+                cur.clear();
+            }
+            if ch == '-' {
+                cur.push(ch);
+            }
+        }
+    }
+    if !cur.is_empty() {
+        if let Ok(v) = cur.parse::<f64>() {
+            nums.push(v);
+        }
+    }
+    if nums.len() < 4 {
+        return None;
+    }
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for pair in nums.as_chunks::<2>().0 {
+        min_x = min_x.min(pair[0]);
+        max_x = max_x.max(pair[0]);
+        min_y = min_y.min(pair[1]);
+        max_y = max_y.max(pair[1]);
+    }
+    Some((min_x, max_x, min_y, max_y))
+}
+
+/// Detects a preprinted decimal mark drawn inside `cell` on its page using
+/// sheet geometry (SVG dot path/circle/rect or text `.` in the lower-right
+/// centavo zone). Returns `(dot_rel_x, cell_width)` when present.
+fn preprinted_decimal_mark(html: &str, cell: &str) -> Option<(f64, f64)> {
+    let open = html.find(&format!("<div id=\"{cell}\""))?;
+    let end = html[open..].find('>')?;
+    let tag = &html[open..open + end];
+    let parse_pt = |s: &str, prop: &str| -> Option<f64> {
+        let needle = format!("{prop}:");
+        let start = s.find(&needle)? + needle.len();
+        s[start..].split("pt").next()?.trim().parse().ok()
+    };
+    let left = parse_pt(tag, "left")?;
+    let top = parse_pt(tag, "top")?;
+    let width = parse_pt(tag, "width")?;
+    let height = parse_pt(tag, "height")?;
+    if width < 30.0 {
+        return None;
+    }
+    let page_start = html[..open].rfind("<div class=\"page ").unwrap_or(0);
+    let page_end = html[open..]
+        .find("<div class=\"page ")
+        .map(|rel| open + rel)
+        .unwrap_or(html.len());
+    let page = &html[page_start..page_end];
+    let in_decimal_zone = |cx: f64, cy: f64| -> bool {
+        let right_gap = (left + width) - cx;
+        cx >= left + width * 0.5
+            && cx <= left + width - 8.0
+            && (8.0..=38.0).contains(&right_gap)
+            && cy >= top + height * 0.35
+            && cy <= top + height + 1.0
+    };
+
+    let mut cursor = 0;
+    while let Some(rel) = page[cursor..].find("<path ") {
+        let start = cursor + rel;
+        let Some(tag_end_rel) = page[start..].find('>') else {
+            break;
+        };
+        let p_tag = &page[start..start + tag_end_rel];
+        if let Some(d_at) = p_tag.find("d=\"") {
+            let d_rest = &p_tag[d_at + 3..];
+            if let Some(d_end) = d_rest.find('"') {
+                if let Some((x0, x1, y0, y1)) = parse_svg_path_bbox(&d_rest[..d_end]) {
+                    let bw = x1 - x0;
+                    let bh = y1 - y0;
+                    if (0.4..=4.0).contains(&bw) && (0.4..=4.0).contains(&bh) {
+                        let cx = (x0 + x1) * 0.5;
+                        let cy = (y0 + y1) * 0.5;
+                        if in_decimal_zone(cx, cy) {
+                            return Some((cx - left, width));
+                        }
+                    }
+                }
+            }
+        }
+        cursor = start + tag_end_rel + 1;
+    }
+
+    let mut cursor = 0;
+    while let Some(rel) = page[cursor..].find("<circle ") {
+        let start = cursor + rel;
+        let Some(tag_end_rel) = page[start..].find('>') else {
+            break;
+        };
+        let c_tag = &page[start..start + tag_end_rel];
+        let parse_attr = |k: &str| -> Option<f64> {
+            let needle = format!("{k}=\"");
+            let s = c_tag.find(&needle)? + needle.len();
+            c_tag[s..].split('"').next()?.parse().ok()
+        };
+        if let (Some(cx), Some(cy), Some(r)) = (parse_attr("cx"), parse_attr("cy"), parse_attr("r"))
+        {
+            if (0.2..=2.5).contains(&r) && in_decimal_zone(cx, cy) {
+                return Some((cx - left, width));
+            }
+        }
+        cursor = start + tag_end_rel + 1;
+    }
+
+    let mut cursor = 0;
+    while let Some(rel) = page[cursor..].find("<div class=\"t\"") {
+        let start = cursor + rel;
+        let Some(tag_end_rel) = page[start..].find('>') else {
+            break;
+        };
+        let tag_end = start + tag_end_rel;
+        let Some(close_rel) = page[tag_end + 1..].find("</div>") else {
+            break;
+        };
+        if page[tag_end + 1..tag_end + 1 + close_rel].trim() == "." {
+            let t_tag = &page[start..tag_end];
+            if let (Some(tl), Some(tt)) = (parse_pt(t_tag, "left"), parse_pt(t_tag, "top")) {
+                if in_decimal_zone(tl + 1.0, tt + 3.0) {
+                    return Some((tl + 1.0 - left, width));
+                }
+            }
+        }
+        cursor = tag_end + 1 + close_rel + "</div>".len();
+    }
+    None
+}
+
 /// One text value into one cell: a comb gets a character per slot, a plain
 /// box the whole value.
 fn fill_text_input(
@@ -1829,6 +1985,52 @@ fn fill_text_input(
             .then(|| plain_cell_width(html, input_name))
             .flatten();
         let is_rate_cell = via_cell && !split && is_percentage_rate_cell(name, caption);
+        let preprinted_dot =
+            if !is_rate_cell && via_cell && !split && is_formatted_money_amount(print) {
+                preprinted_decimal_mark(html, input_name)
+            } else {
+                None
+            };
+        if let Some((dot_rel_x, cell_width)) = preprinted_dot {
+            let (neg, raw_peso, raw_cents) = {
+                let s = print.trim();
+                let (neg, body) = match s.strip_prefix('-') {
+                    Some(rest) => (true, rest),
+                    None => (false, s),
+                };
+                let (p, c) = body.split_once('.').unwrap_or((body, "00"));
+                (neg, p, c)
+            };
+            let neg_style = NegativeStyle::from_printed_label(caption);
+            let (peso_text, cents_text) = if neg {
+                match neg_style {
+                    NegativeStyle::Parentheses => (format!("({raw_peso}"), format!("{raw_cents})")),
+                    NegativeStyle::Minus => (format!("-{raw_peso}"), raw_cents.to_string()),
+                    NegativeStyle::Unsigned => (raw_peso.to_string(), raw_cents.to_string()),
+                }
+            } else {
+                (raw_peso.to_string(), raw_cents.to_string())
+            };
+            let peso_right = (cell_width - dot_rel_x + 1.8).max(10.0);
+            let peso_width = (dot_rel_x - 3.0).max(10.0);
+            let cents_left = (dot_rel_x + 1.8).min(cell_width - 8.0);
+            for &index in indices {
+                let orig_tag = tags[index].tag;
+                let base_class = attr(orig_tag, "class").unwrap_or("fi");
+                let peso_size = plain_input_size(sheet, peso_width, orig_tag, &peso_text);
+                let size_css = peso_size
+                    .map(|sz| format!("font-size:{sz:.2}pt;"))
+                    .unwrap_or_default();
+                let blank_orig = set_value(orig_tag, "", Some(print));
+                let split_pair = format!(
+                    "{blank_orig}<input type=\"text\" class=\"{base_class}\" name=\"{input_name}-peso\" readonly value=\"{}\" style=\"position:absolute;top:0.75pt;bottom:0.75pt;left:1pt;right:{peso_right:.2}pt;{size_css}text-align:right;justify-content:flex-end;padding-right:1pt\" data-decimal-of=\"{input_name}\" data-decimal-part=\"peso\"><input type=\"text\" class=\"{base_class}\" name=\"{input_name}-cents\" readonly value=\"{}\" style=\"position:absolute;top:0.75pt;bottom:0.75pt;left:{cents_left:.2}pt;right:1pt;{size_css}text-align:left;justify-content:flex-start;padding-left:1pt\" data-decimal-of=\"{input_name}\" data-decimal-part=\"cents\">",
+                    html_escape(&peso_text),
+                    html_escape(&cents_text),
+                );
+                replacements.push((tags[index].start, tags[index].end, split_pair));
+            }
+            return;
+        }
         let formatted_rate = is_rate_cell
             .then(|| format_percentage_rate(print, has_preprinted_percent_beside(html, input_name)))
             .flatten();
@@ -3864,6 +4066,20 @@ pub fn unprinted_keys(
 /// a stamped key), slots in order: what a reader sees in that box.
 pub fn printed_text(document: &str, name: &str) -> String {
     let tags = input_tags(document);
+    let mut decimal_peso: Option<&str> = None;
+    let mut decimal_cents: Option<&str> = None;
+    for tag in &tags {
+        if attr(tag.tag, "data-decimal-of") == Some(name) {
+            match attr(tag.tag, "data-decimal-part") {
+                Some("peso") => decimal_peso = attr(tag.tag, "value"),
+                Some("cents") => decimal_cents = attr(tag.tag, "value"),
+                _ => {}
+            }
+        }
+    }
+    if let (Some(peso), Some(cents)) = (decimal_peso, decimal_cents) {
+        return format!("{peso}.{cents}");
+    }
     let indices: Vec<usize> = tags
         .iter()
         .enumerate()
@@ -9174,5 +9390,47 @@ mod donor_estate_print_tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn c12_preprinted_decimal_splits_pesos_and_centavos_without_second_dot() {
+        let mut f0605 = BTreeMap::new();
+        f0605.insert("frm0605:txtTax19".into(), "12,345.67".into());
+        f0605.insert("frm0605:txtTax20A".into(), "500.00".into());
+        f0605.insert("frm0605:txtTax21".into(), "12,845.67".into());
+        let html_0605 = filled_document("0605-1999", &f0605).unwrap();
+        assert!(html_0605.contains("value=\"12,345\""));
+        assert!(html_0605.contains("data-decimal-part=\"peso\""));
+        assert!(html_0605.contains("value=\"67\""));
+        assert!(html_0605.contains("data-decimal-part=\"cents\""));
+        assert!(!html_0605.contains(" value=\"12,345.67\""));
+
+        let mut f2553 = BTreeMap::new();
+        f2553.insert("frm2553:txt17C".into(), "100,000.00".into());
+        f2553.insert("frm2553:txt21".into(), "-2,500.50".into());
+        let html_2553 = filled_document("2553-1999", &f2553).unwrap();
+        assert!(html_2553.contains(" value=\"100,000\""));
+        assert!(!html_2553.contains(" value=\"100,000.00\""));
+        assert!(html_2553.contains("value=\"(2,500\""));
+        assert!(html_2553.contains("value=\"50)\""));
+
+        let mut f1601fq = BTreeMap::new();
+        f1601fq.insert("txtAmtIncomePay0".into(), "45,000,000.00".into());
+        f1601fq.insert("txtReqWithheld0".into(), "6,750,000.00".into());
+        let html_fq = filled_document("1601-fq-2020", &f1601fq).unwrap();
+        let col_e = super::input_tags(&html_fq)
+            .into_iter()
+            .find(|t| t.name == "p2c20")
+            .unwrap()
+            .tag
+            .to_string();
+        let col_g = super::input_tags(&html_fq)
+            .into_iter()
+            .find(|t| t.name == "p2c22")
+            .unwrap()
+            .tag
+            .to_string();
+        assert!(col_e.contains("text-align:right"), "1601FQ col E: {col_e}");
+        assert!(col_g.contains("text-align:right"), "1601FQ col G: {col_g}");
     }
 }
