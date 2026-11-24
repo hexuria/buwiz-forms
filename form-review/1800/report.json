@@ -67,14 +67,44 @@
       "status": "open"
     }
   ],
-  "files_changed": [],
+  "files_changed": [
+    "html-frozen/1800-2018/index.html",
+    "html-frozen/1800-2018/writer-cells.json",
+    "forms/schema-overrides.json",
+    "form-review/1800/after/*.png",
+    "form-review/1800/report.json"
+  ],
   "shared_changes_wanted": [
     "crates/bir-print: decode URL-encoded address fields (%20/%2C) before printing",
     "crates/bir-print: uppercase email/text values on CAPITAL LETTERS comb fields and improve comb-overflow fitting on long addresses and Page 2 header names",
     "crates/bir-print: support continuation pages when growable schedule rows exceed paper row capacity"
   ],
-  "tests_run": [],
+  "tests_run": [
+    "cargo test -p bir-print 1800 (2/2 passed)",
+    "Live app capture via just nsh-run-agent linux (form.validate errors: 0)"
+  ],
   "open_questions": [
     "Note: print-p*.png pages were captured by clicking Print preview in the running app (just nsh-run-agent linux) to generate sheet.html, then rendering PDF via headless Chrome + pdftoppm because gpui-agent screenshot --inline captures only the main window."
+  ],
+  "status": "fixed_per_form_pending_shared_merge",
+  "upstream_sheet_edits": [
+    "html-frozen/1800-2018/index.html: converted p1c64 (Item 14 cents cell) from a 2-input plain text cell (data-field-kind='text') to a 2-slot comb matching p1c72 so bir-print money_joins can populate Item 14."
+  ],
+  "blank_item_causes": {
+    "Item 14 (Total Net Gifts Subject to Tax)": "No money_join because p1c64 (cents cell) was emitted as a 2-input plain text cell instead of a 2-slot comb; converted p1c64 to a 2-slot comb and added frm1800v2018:TotalNetGifts -> p1c62 + p1c64 to money_joins.",
+    "Schedule A & Schedule B rows 6-10": "No joins in writer-cells.json for row indices 5-9 (only rows 1-5 were joined, even though the frozen sheet has 10 rows); added all 55 joins and removed them from not_joined/not_joined_cells.",
+    "Items 8A & 9A ZIP Code": "Not a print bug \u2014 ZIP was empty in the BEFORE capture payload; verified 1209 prints cleanly in p1c26 and p1c32 when filled."
+  },
+  "fixed_in_this_commit": [
+    "Item 14 (frm1800v2018:TotalNetGifts) now prints in p1c62 + p1c64.",
+    "Schedule A, Schedule B, and Schedule B continuation rows 6-10 now print on Page 2.",
+    "Replaced all 6 developer-facing note strings in forms/schema-overrides.json (Item 9B, Tax Agent Accreditation No., Part III Items 21-24) with plain taxpayer wording (no file paths or cell ids)."
+  ],
+  "remaining_shared_issues": [
+    "Addresses printing %20/%2C: fixed on try/forms-shared-print (commits d9c21823, d3ff824d).",
+    "Page 2 schedule amounts left-aligned: fixed on try/forms-shared-print (commit 0f484378).",
+    "Email lowercase: by design (matches official eBIRForms capital() and existing unit tests).",
+    "Long name/address over comb ticks: knockout preview on try/forms-overflow-knockout (commit c5cedcaa), awaiting owner decision.",
+    "Rows beyond 10 (growables overflow): documented in form-review/SHARED-FINDINGS.md on try/forms-shared-print (commit 1679ff23), awaiting owner design decision."
   ]
 }
