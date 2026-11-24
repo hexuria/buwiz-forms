@@ -3,8 +3,10 @@
 
 /* Filled fields: shrink-to-fit (approved) */
 /* 1701-2018-001 long line-of-business / description text needs 412px but cell is 358px */ #p3c98-i{font-size:10.1px !important}
-/* 1701-2018-002 long registered name needs 368px but cell is 140px (2.63x): text is cl */ #p3c186-i{font-size:4.5px !important}
 /* 1701-2018-003 long line-of-business / description text needs 412px but cell is 370px */ #p4c137-i{font-size:10.5px !important}
+
+/* Compact Yes/No checkboxes on Page 1 (Items 19-20) and Page 2 (Items 10-11) (8.6pt tall): center X cleanly */
+#p1c73-i, #p1c74-i, #p1c75-i, #p1c76-i, #p2c41-i, #p2c42-i, #p2c43-i, #p2c44-i { font-size:6.2pt;line-height:1;display:flex;align-items:center;justify-content:center }
 /* 1701-2018-004 long line-of-business / description text needs 412px but cell is 370px */ #p4c142-i{font-size:10.5px !important}
 /* 1701-2018-005 long line-of-business / description text needs 412px but cell is 370px */ #p4c147-i{font-size:10.5px !important}
 /* 1701-2018-006 long line-of-business / description text needs 412px but cell is 370px */ #p4c156-i{font-size:10.5px !important}

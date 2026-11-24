@@ -15,11 +15,11 @@
     {
       "id": "1701-P2",
       "surface": "print",
-      "where": "Page 1, Part I Items 19 and 20 (Income EXEMPT / SPECIAL-PREFERENTIAL RATE checkboxes)",
-      "what": "Yes/No checkbox inputs are vertically compressed so the X mark touches the top and bottom borders compared to the official PDF.",
+      "where": "Page 1, Part I Items 19 and 20 (Income EXEMPT / SPECIAL-PREFERENTIAL RATE checkboxes) and Page 2 Items 10-11",
+      "what": "Yes/No checkbox X marks touched the top and bottom borders of the 8.6pt boxes; centered and sized to 6.2pt in print-overrides/1701-2018.css.",
       "before": "before/print-p1.png",
       "after": "after/print-p1.png",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1701-P3",
@@ -43,10 +43,10 @@
       "id": "1701-P5",
       "surface": "print",
       "where": "Page 3, Schedule 6.A.1 Row 8 (Total NOLCO - Taxpayer/Filer, column D)",
-      "what": "Total amount renders at a microscopic font size (~2-3pt), far smaller than the matching Row 13 Spouse Total NOLCO on Page 4.",
+      "what": "Total amount rendered at 4.5px due to a bogus shrink-to-fit override on #p3c186-i in print-overrides/1701-2018.css; removed the bad rule so it renders at normal table size.",
       "before": "before/print-p3.png",
       "after": "after/print-p3.png",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1701-P6",
@@ -58,11 +58,17 @@
       "status": "by design"
     }
   ],
-  "files_changed": [],
+  "files_changed": [
+    "print-overrides/1701-2018.css"
+  ],
   "shared_changes_wanted": [
     "crates/bir-print (owned by neon-4 on try/forms-shared-print): mask comb ticks under overflowing long text, right-align/pad schedule amounts in Schedule 6.A.1/6.A.2, and handle >9-digit/negative comb overflow in Schedule 3.A."
   ],
-  "tests_run": [],
+  "tests_run": [
+    "just nsh-check && just nsh-build (exit 0)",
+    "cargo test -p bir-print (1701-2018 hash unchanged)",
+    "Live app capture via just nsh-run-agent linux on fresh scratch DB (1701 screen + print preview)"
+  ],
   "open_questions": [
     "Print preview window opens natively on Linux via WebKitGTK; full unclipped 1400px-wide print-p*.png pages were rendered from the running app's generated sheet.html via headless Chrome --print-to-pdf + pypdfium2."
   ]
