@@ -40,6 +40,24 @@ pub fn get_active_jobs() -> Arc<Mutex<HashSet<String>>> {
         .clone()
 }
 
+/// The key the submission worker holds in [`get_active_jobs`] while it sends one queued return:
+/// `form:{form_code}:{tin}:{year}:{month or quarter or 0}`, with `tin` as the worker's profile writes it
+/// (the 14 digits of `form_drafts.tin`) and the month and quarter of the return's
+/// [`crate::forms::FormDraftSummary`]. The worker and every reader of "is this return being sent now"
+/// build it here, so the two cannot drift.
+pub fn submission_job_key(
+    form_code: &str,
+    tin: &str,
+    taxable_year: u16,
+    month: Option<u8>,
+    quarter: Option<u8>,
+) -> String {
+    format!(
+        "form:{form_code}:{tin}:{taxable_year}:{}",
+        month.unwrap_or(quarter.unwrap_or(0))
+    )
+}
+
 /// Stop [`start_cron_jobs`] after the tick that is already running.
 ///
 /// Wakes a loop that is waiting out its 60 second gap so quit does not sit
@@ -1730,12 +1748,12 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
         .filter(|s| s.status == FilingStatus::Queued)
         .filter(|s| crate::forms::can_queue_for_submission(&s.form_code))
     {
-        let job_key = format!(
-            "form:{}:{}:{}:{}",
-            summary.form_code,
-            profile.tin.full(),
+        let job_key = submission_job_key(
+            &summary.form_code,
+            &profile.tin.full(),
             summary.taxable_year,
-            summary.month.unwrap_or(summary.quarter.unwrap_or(0))
+            summary.month,
+            summary.quarter,
         );
 
         let active_jobs = get_active_jobs();

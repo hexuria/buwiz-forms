@@ -57,7 +57,9 @@ pub enum AbandonedClaimRelease<T> {
     },
 }
 
-pub(super) fn abandoned_claim_audit(reason: &str) -> String {
+/// The reason a human-confirmed abandoned-claim release stores on the Draft it makes (`reason` is
+/// [`ABANDONED_CLAIM_RELEASE_REASON`], the only one the release accepts).
+pub fn abandoned_claim_audit(reason: &str) -> String {
     format!("Abandoned claim released ({reason}); human confirmed nothing reached BIR")
 }
 
@@ -1130,6 +1132,76 @@ impl Database {
             draft,
             reason: reason.to_string(),
         })
+    }
+
+    /// A person's answer "The email came" for a claimed 2551Q whose send ended
+    /// with an unknown outcome: the BIR's confirmation arrived, so the return
+    /// is Submitted as a real send (not a dry run), with its IAF filename (the
+    /// stored one, else the one the worker sends under), the claim cleared and
+    /// no relay receipt. Only a person's answer reaches this (the app's
+    /// `resolve_unknown_send`); the worker finishes its own sends with
+    /// [`Self::finish_claimed_2551q_submission`], which checks its token. One
+    /// transaction, compare-and-swap on the stored JSON; refused unless the
+    /// stored return is Queued with a complete claim.
+    pub fn mark_claimed_2551q_received(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        quarter: u8,
+    ) -> Result<Form2551QDraft, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![tin, i64::from(taxable_year), i64::from(quarter)],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Err(DbError::Other(
+                "No 2551Q return exists for this period".to_string(),
+            ));
+        };
+        let mut draft: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Queued"
+            || !matches!(draft.status, FilingStatus::Queued)
+            || !claim_fields_present(&draft.submission_claim_token, &draft.submission_claimed_at)
+        {
+            return Err(DbError::Other(
+                "Only a 2551Q whose send has an unknown outcome can be marked as received"
+                    .to_string(),
+            ));
+        }
+        let filename = draft
+            .submission_filename
+            .clone()
+            .unwrap_or_else(|| draft.default_submission_filename());
+        draft.transition_to_submitted(filename, false);
+        let json = serde_json::to_string(&draft)?;
+        let period_key = FilingPeriod::Quarterly(draft.quarter).to_period_key();
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = 'Submitted', data_json = ?1, period_key = ?2,
+                 updated_at = datetime('now')
+             WHERE id = ?3 AND status = 'Queued' AND data_json = ?4",
+            params![json, period_key, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(
+                "2551Q changed before it could be marked as received".to_string(),
+            ));
+        }
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(draft)
     }
 
     /// Atomically claim the exact queue generation that was revalidated by the
@@ -2332,6 +2404,76 @@ impl Database {
         })
     }
 
+    /// A person's answer "The email came" for a claimed 1601C whose send ended
+    /// with an unknown outcome: the BIR's confirmation arrived, so the return
+    /// is Submitted as a real send (not a dry run), with its IAF filename (the
+    /// stored one, else the one the worker sends under), the claim cleared and
+    /// no relay receipt. Only a person's answer reaches this (the app's
+    /// `resolve_unknown_send`); the worker finishes its own sends with
+    /// [`Self::finish_claimed_1601c_submission`], which checks its token. One
+    /// transaction, compare-and-swap on the stored JSON; refused unless the
+    /// stored return is Queued with a complete claim.
+    pub fn mark_claimed_1601c_received(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        month: u8,
+    ) -> Result<Form1601CDraft, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![tin, i64::from(taxable_year), i64::from(month)],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Err(DbError::Other(
+                "No 1601C return exists for this period".to_string(),
+            ));
+        };
+        let mut draft: Form1601CDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Queued"
+            || !matches!(draft.status, FilingStatus::Queued)
+            || !claim_fields_present(&draft.submission_claim_token, &draft.submission_claimed_at)
+        {
+            return Err(DbError::Other(
+                "Only a 1601C whose send has an unknown outcome can be marked as received"
+                    .to_string(),
+            ));
+        }
+        let filename = draft
+            .submission_filename
+            .clone()
+            .unwrap_or_else(|| draft.default_submission_filename());
+        draft.transition_to_submitted(filename, false);
+        let json = serde_json::to_string(&draft)?;
+        let period_key = FilingPeriod::Monthly(draft.month).to_period_key();
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = 'Submitted', data_json = ?1, period_key = ?2,
+                 updated_at = datetime('now')
+             WHERE id = ?3 AND status = 'Queued' AND data_json = ?4",
+            params![json, period_key, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(
+                "1601C changed before it could be marked as received".to_string(),
+            ));
+        }
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(draft)
+    }
+
     /// Atomically revalidate and claim the exact queued 1601C generation
     /// immediately before PUT. The worker opens the SFTP session first so a
     /// connect/login failure stays unclaimed.
@@ -3126,6 +3268,22 @@ impl Database {
             )
             .optional()?
             .flatten())
+    }
+
+    /// The summary and stored JSON of the return `draft_id`, in one read; `None` when the row is gone.
+    pub fn draft_summary_and_json(
+        &self,
+        draft_id: i64,
+    ) -> Result<Option<(FormDraftSummary, String)>, DbError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT id, tin, form_code, taxable_year, quarter, period_key, status, updated_at, data_json
+                 FROM form_drafts WHERE id = ?1",
+                params![draft_id],
+                |row| Ok((draft_summary_from_row(row)?, row.get::<_, String>(8)?)),
+            )
+            .optional()?)
     }
 
     /// Whether the submission worker sent the return `draft_id` to the local mock relay (the lifecycle's
@@ -4132,6 +4290,75 @@ mod tests {
             .unwrap();
         assert_eq!(requeued.status, FilingStatus::Queued);
         assert_eq!(requeued.to_bir_field_map(), canceled.to_bir_field_map());
+    }
+
+    /// A person's "The email came" (`mark_claimed_1601c_received`): refused for
+    /// a missing return, a Draft and an unclaimed queue; a claimed one becomes
+    /// Submitted as a real send under its IAF filename with the claim gone,
+    /// and the worker's own finish can no longer land on it.
+    #[test]
+    fn claimed_1601c_marked_received_by_a_person_is_submitted() {
+        let db = test_db();
+        let queued = queued_1601c_draft(&test_profile());
+        assert!(
+            db.mark_claimed_1601c_received(&queued.tin, queued.taxable_year, queued.month)
+                .is_err(),
+            "nothing stored"
+        );
+        db.save_queued_1601c_draft(&queued).unwrap();
+        let stored = db
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert!(
+            db.mark_claimed_1601c_received(&stored.tin, stored.taxable_year, stored.month)
+                .is_err(),
+            "an unclaimed queue is cancelled, not marked received"
+        );
+        let (claimed, token) = match db
+            .claim_queued_1601c_submission(
+                &stored.tin,
+                stored.taxable_year,
+                stored.month,
+                &stored.queued_submission_fingerprint,
+                &stored.next_retry_at,
+                stored.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim1601CSubmissionResult::Claimed { draft, token } => (draft, token),
+            _ => panic!("queued 1601C should be claimed"),
+        };
+        let received = db
+            .mark_claimed_1601c_received(&claimed.tin, claimed.taxable_year, claimed.month)
+            .unwrap();
+        assert_eq!(received.status, FilingStatus::Submitted);
+        assert!(!received.submitted_dry_run);
+        assert!(received.relay_receipt.is_none());
+        assert!(received.submission_claim_token.is_none());
+        assert!(received.submission_error.is_none());
+        assert_eq!(
+            received.submission_filename.as_deref(),
+            Some(claimed.default_submission_filename().as_str())
+        );
+        let persisted = db
+            .get_1601c_draft(&claimed.tin, claimed.taxable_year, claimed.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.status, FilingStatus::Submitted);
+        assert!(persisted.submitted_at.is_some());
+        assert!(
+            db.mark_claimed_1601c_received(&claimed.tin, claimed.taxable_year, claimed.month)
+                .is_err(),
+            "a Submitted return is not marked again"
+        );
+        let mut finished = claimed.clone();
+        finished.transition_to_submitted(claimed.default_submission_filename(), true);
+        assert!(
+            db.finish_claimed_1601c_submission(&finished, &token)
+                .is_err(),
+            "the worker's finish cannot overwrite the person's answer"
+        );
     }
 
     #[test]

@@ -1,10 +1,10 @@
 // Filings' pure rules, without a window: how a return is named, dated and grouped, what the search and filters keep, and what
 // a Home tile's preset sets. Rows are generated (the demo taxpayer's name and TIN, a Cebu branch, a second generated taxpayer).
 import { expect, test } from "nsh/test";
-import type { ReturnRow } from "../../bir";
+import type { ReturnRow, SendState } from "../../bir";
 import {
   cardLabel, COLUMNS, dateLine, type FilterValues, filterRows, localMonth, monthLabel, namedBranch, newestFirst, periodKey, periodRank,
-  plural, presetFilters, presetOf, returnTitle, STATUSES, whoLine,
+  plural, presetFilters, presetOf, returnTitle, sendChip, STATUSES, whoLine,
 } from "./model";
 
 const INDEX = [
@@ -17,7 +17,7 @@ const INDEX = [
 function row(over: Partial<ReturnRow>): ReturnRow {
   return {
     id: 1, tin: "00012345300000", tin_root: "000123453", branch_code: "00000", branch_name: "Head office", taxpayer_name: "Juana Santos", branch_count: 2,
-    form_code: "2551Q", taxable_year: 2026, period: 3, period_label: "Q3 2026", status: "Draft", updated_at: "2026-11-14 09:30:00", return_key: 3, submitted_via_relay: false, ...over,
+    form_code: "2551Q", taxable_year: 2026, period: 3, period_label: "Q3 2026", status: "Draft", updated_at: "2026-11-14 09:30:00", return_key: 3, submitted_via_relay: false, send: null, ...over,
   };
 }
 
@@ -157,4 +157,14 @@ test("a preset keeps the real statuses it names, every status is no filter, and 
   expect(presetFilters({ updatedMonth: "2026-11" })).toEqual({ statuses: null, updatedMonth: "2026-11" });
   expect(presetFilters({ updatedMonth: "Nov 2026" })).toEqual({ statuses: null, updatedMonth: null });
   expect(presetFilters({ statuses: ["Submitted"], updatedMonth: "2026-1" })).toEqual({ statuses: new Set(["Submitted"]), updatedMonth: null });
+});
+
+test("a card's send chip: Held, Retrying, Needs attention and Not sent with the host's line; the other stages and none say nothing", () => {
+  const send = (stage: SendState["stage"], line = `line of ${stage}`): SendState => ({ stage, line, code: null, next_try_at: null, can_resolve: stage === "needs_attention" });
+  expect(sendChip(row({ status: "Queued", send: send("held") }))).toEqual({ label: "Held", tone: "neutral", line: "line of held" });
+  expect(sendChip(row({ status: "Queued", send: send("waiting") }))).toEqual({ label: "Retrying", tone: "warning", line: "line of waiting" });
+  expect(sendChip(row({ status: "Queued", send: send("needs_attention") }))).toEqual({ label: "Needs attention", tone: "warning", line: "line of needs_attention" });
+  expect(sendChip(row({ status: "Draft", send: send("refused") }))).toEqual({ label: "Not sent", tone: "danger", line: "line of refused" });
+  for (const stage of ["queued", "sending", "sent", "test_sent"] as const) expect(sendChip(row({ send: send(stage) }))).toBe(null);
+  expect(sendChip(row({}))).toBe(null);
 });
