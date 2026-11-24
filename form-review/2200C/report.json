@@ -1,0 +1,45 @@
+{
+  "code": "2200C",
+  "verdict": "tweak",
+  "summary": "Both pages print close to the official sheet: all ten schedule rows, totals and the negative overpayment land correctly. Remaining faults are place codes printed as raw numbers, developer wording with a fixture file path in the Part IV cards, and '.00' tails on a whole-pesos schedule.",
+  "defects": [
+    {
+      "id": "C1",
+      "surface": "print",
+      "where": "Page 1, item 11 'Place where the invasive cosmetic procedures took place (i.e. address of clinic, hospital, etc.)'",
+      "what": "The Region / Province / City boxes print the raw 9-digit PSGC codes '130000000 / 137600000 / 137602000'. The official box asks for a place or address a person would write ('MAKATI'); sibling form 2200AN prints the actual names here, so this looks like a copy that prints codes instead of names.",
+      "severity": "medium",
+      "picture": "mac/print-p1.png"
+    },
+    {
+      "id": "C2",
+      "surface": "screen",
+      "where": "Part IV - Details of Payment (items 25-28 cards)",
+      "what": "Each payment row shows developer-facing text with an internal file path: 'No box: the official program keeps Part IV disabled (rules/forms/2200c-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it.' A user cannot fill Part IV and gets a path, not a reason.",
+      "severity": "medium",
+      "picture": "mac/print-p1.png"
+    },
+    {
+      "id": "C3",
+      "surface": "print",
+      "where": "Page 2, Schedule 1 columns A-J",
+      "what": "Every amount prints with a '.00' tail ('9,999,999.00', '932,099.00') although validation insists on whole numbers 'the official fields take digits only'. The printed page has plain columns, so the .00 reads as clutter rather than a comb error.",
+      "severity": "low",
+      "picture": "mac/print-p2.png"
+    },
+    {
+      "id": "C4",
+      "surface": "print",
+      "where": "Page 2 header comb",
+      "what": "TIN and taxpayer name print as one continuous run '00012345300000SANTOS-DELOS REYES-...' with no gap between the last TIN digit and the name, while the official header keeps the TIN comb separate.",
+      "severity": "low",
+      "picture": "mac/print-p2.png"
+    }
+  ],
+  "entered_by_hand": "Typed Schedule 1 row 1 column A (Cosmetic procedures performed - exempt) as 9,999,999 through the real row editor and watched computed columns H/I/J and Part III item 16 recompute; item 17A/17B set via the fill payload and 17A verified on the printed page.",
+  "open_questions": [
+    "The official reference is the byte-frozen official sheet (html-frozen/2200c-2018/index.html) rendered to PDF, not the named source PDF, which is not mirrored in buwiz-forms-html.",
+    "Whether printing PSGC codes in item 11 is intentional - the same pipeline prints names on 2200AN, so the two were checked against the same codepath's intended behavior and differ."
+  ],
+  "checked_by_hand": "Opened the preview from the saved draft, saved the PDF, and compared both page renders against the official render; re-zoomed item 11 and the Part IV cards before listing them. No 'broken' claim made. Schedule 1 is a fixed 10-row table; an 11th row cannot be entered, so the past-capacity check does not apply."
+}
