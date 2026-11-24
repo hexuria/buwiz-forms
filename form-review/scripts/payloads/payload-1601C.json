@@ -1,0 +1,49 @@
+{
+  "open_args": {
+    "year": 2025,
+    "period": 3
+  },
+  "passes": [
+    {
+      "frm1601c:AmendedRtn": "1",
+      "frm1601c:TaxWithheld": "1",
+      "frm1601c:txtSheets": "12",
+      "frm1601c:txtATC": "WW010",
+      "frm1601c:txtAddress2": "SAN LORENZO VILLAGE, MAKATI CITY, METRO MANILA 1223 PHILIPPINES",
+      "frm1601c:CatAgent": "P",
+      "frm1601c:SpecialTax": "1",
+      "frm1601c:selTreaty": "PEZA / SPECIAL ECONOMIC ZONE ACT RA 7916",
+      "frm1601c:txtTax14": "125847392.50",
+      "frm1601c:txtTax15": "12450890.25",
+      "frm1601c:txtTax16": "3456789.10",
+      "frm1601c:txtTax17": "8765432.00",
+      "frm1601c:txtTax18": "2345678.50",
+      "frm1601c:txtTax19": "4567890.75",
+      "frm1601c:txt20Other": "NON-TAXABLE ALLOWANCES & REIMBURSEMENTS",
+      "frm1601c:txtTax20": "1987654.30",
+      "frm1601c:txtTax23": "5432100.00",
+      "frm1601c:txtTax25": "18765432.65",
+      "frm1601c:txtTax28": "4500000.00",
+      "frm1601c:txt29Other": "PRIOR OVERREMITTANCE CREDIT MEMO 2025-02",
+      "frm1601c:txtTax29": "1250000.50",
+      "frm1601c:txtTax32": "325000.00",
+      "frm1601c:txtTax33": "184250.75",
+      "frm1601c:txtTax34": "25000.00",
+      "frm1601c:sched1:txtDatePaid0": "02/10/2025",
+      "frm1601c:sched1:txtBankCode0": "BDO-001",
+      "frm1601c:sched1:txtNumber0": "ROR-2025-00123456",
+      "frm1601c:sched1:txtTaxPaid0": "4567890.25",
+      "frm1601c:sched1:txtShouldTaxDue0": "4890123.50",
+      "frm1601c:sched1:txtDatePaid1": "01/10/2025",
+      "frm1601c:sched1:txtBankCode1": "BPI-042",
+      "frm1601c:sched1:txtNumber1": "ROR-2025-00098765",
+      "frm1601c:sched1:txtTaxPaid1": "3210987.40",
+      "frm1601c:sched1:txtShouldTaxDue1": "3100000.00",
+      "frm1601c:sched1:txtDatePaid2": "12/10/2024",
+      "frm1601c:sched1:txtBankCode2": "MBTC-108",
+      "frm1601c:sched1:txtNumber2": "ROR-2024-00776655",
+      "frm1601c:sched1:txtTaxPaid2": "2876543.15",
+      "frm1601c:sched1:txtShouldTaxDue2": "2950000.00"
+    }
+  ]
+}

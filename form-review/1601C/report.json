@@ -1,0 +1,104 @@
+{
+  "form_code": "1601C",
+  "revision": "January 2018 (ENCS)",
+  "html_frozen_slug": "1601c-2018",
+  "official_pdf": {
+    "source_file": "1601C final Jan 2018 with DPA.pdf",
+    "url": "https://bir-cdn.bir.gov.ph/local/pdf/1601C%20final%20Jan%202018%20with%20DPA.pdf",
+    "sha256": "c8faaa71015337a73b4ceb96bfb265c539589ab5e10eb27899bb81f87f417397",
+    "sha256_matches_provenance": true,
+    "pages": 2
+  },
+  "branch": "try/forms-neon-1-b",
+  "base_commit": "48887449",
+  "verdict": "tweak",
+  "summary": "Both printed pages match the January 2018 (ENCS) PDF structure and computed totals (including negative Schedule I adjustment), but long text in comb-divided boxes (Item 9 address, Item 13A treaty specify, Page 2 header name, Schedule I bank/number) prints as plain text over comb ticks; Page 2 header prints the full name instead of Last Name for an individual; Schedule I Col 1 (Previous Month/s) is unmapped in agent-forms and Schedule I is capped at 3 rows with no overflow path.",
+  "test_data": {
+    "script": "form-review/scripts/seed_and_capture.py",
+    "payload": "form-review/scripts/payloads/payload-1601C.json",
+    "profile": "Juana Santos long-name demo profile (TIN 000-123-453-00000, RDO 008, Makati long address)",
+    "period": "2025-03 (March 2025)",
+    "schedule_overflow_attempted": "Schedule I has 3 printed rows and is hard-capped at MAX_SCHEDULE_1_ROWS=3 in form_1601c.rs with no Add row button on screen."
+  },
+  "defects": [
+    {
+      "id": "1601C-P1",
+      "surface": "print",
+      "page": 1,
+      "area": "Part I Item 9 Registered Address (lines 1 & 2)",
+      "severity": "high",
+      "status": "needs shared change",
+      "description": "Long registered address prints as continuous plain text directly over the vertical comb tick marks on both lines, with line 1 slightly clipped at the right edge."
+    },
+    {
+      "id": "1601C-P2",
+      "surface": "print",
+      "page": 1,
+      "area": "Part I Item 13A If yes, specify",
+      "severity": "high",
+      "status": "needs shared change",
+      "description": "Treaty/special-law text ('PEZA / SPECIAL ECONOMIC ZONE ACT RA 7916') prints as continuous plain text directly over the vertical comb tick marks."
+    },
+    {
+      "id": "1601C-P3",
+      "surface": "print",
+      "page": 2,
+      "area": "Page 2 Header Withholding Agent's Name",
+      "severity": "medium",
+      "status": "needs shared change",
+      "description": "Prints the full taxpayer name ('SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA') as plain text across comb ticks, whereas the official form asks for 'Last Name for Individual OR Registered Name for Non-Individual' in comb boxes."
+    },
+    {
+      "id": "1601C-P4",
+      "surface": "print",
+      "page": 2,
+      "area": "Part IV Schedule I Col 3 (Drawee Bank/Agency) & Col 4 (Number)",
+      "severity": "medium",
+      "status": "needs shared change",
+      "description": "Bank codes ('BDO-001', 'BPI-042', 'MBTC-108') and payment reference numbers ('ROR-2025-00123456') print as continuous text colliding with the vertical comb tick marks."
+    },
+    {
+      "id": "1601C-P5",
+      "surface": "print",
+      "page": 2,
+      "area": "Part IV Schedule I Col 1 (Previous Month/s MM/YYYY) & row limit",
+      "severity": "medium",
+      "status": "open",
+      "description": "frm1601c:sched1:txtMonthYear0..2 is listed in agent-forms boxes but missing from bindings (unmapped), so Schedule I Col 1 prints blank via form.fill; additionally Schedule I is capped at 3 rows (no UI/API overflow past printed rows)."
+    },
+    {
+      "id": "1601C-P6",
+      "surface": "print",
+      "page": 1,
+      "area": "Part II Items 20 & 29 (specify)",
+      "severity": "low",
+      "status": "open",
+      "description": "Specify text sits flush on the printed underline with minimal vertical clearance."
+    },
+    {
+      "id": "1601C-P7",
+      "surface": "print",
+      "page": 2,
+      "area": "Page 2 lower half Guidelines and Instructions",
+      "severity": "info",
+      "status": "open",
+      "description": "Official PDF prints Guidelines and Instructions on the lower half of Page 2; app omits guidelines from the printed sheet (moved to guide.html)."
+    }
+  ],
+  "evidence": {
+    "official": [
+      "form-review/1601C/official/page-01.png",
+      "form-review/1601C/official/page-02.png"
+    ],
+    "before": [
+      "form-review/1601C/before/print-p1.png",
+      "form-review/1601C/before/print-p2.png",
+      "form-review/1601C/before/screen-01-return-details.png",
+      "form-review/1601C/before/screen-02-part-i-background-information.png",
+      "form-review/1601C/before/screen-03-part-ii-computation-of-tax.png",
+      "form-review/1601C/before/screen-04-part-iii-details-of-payment.png",
+      "form-review/1601C/before/screen-05-part-iv-schedule.png",
+      "form-review/1601C/before/screen-06-not-on-the-printed-sheet.png"
+    ]
+  }
+}
