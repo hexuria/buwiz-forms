@@ -1,32 +1,39 @@
 @echo off
-rem Windows counterpart of cargo-with-agent.sh: stands in for `cargo` while nsh builds the app's generated hosts.
-rem Used by `just nsh-run-agent` on Windows; nothing else sets %CARGO%.
-rem
-rem The .sh is the one implementation, run here through Git Bash: it adds the app's `agent` feature and re-applies
-rem the [patch."https://github.com/hexuria/nsh"] block the generated workspace needs. Without that block the plug
-rem links a second NSH, its surface hook registers on the wrong copy, and the window's listener never starts.
-rem
-rem Git Bash is found from where git.exe is, never from PATH: on Windows the first `bash` on PATH is usually
-rem C:\Windows\System32\bash.exe, which starts WSL. NSH_AGENT_BASH names another one.
+rem Windows counterpart of cargo-with-agent.sh: stands in for `cargo` while nsh builds the app's generated hosts, so
+rem they carry the app's `agent` feature. Only a `cargo build` in the generated workspace (nsh\.nsh\rust) is changed;
+rem every other command passes through. Used by `just nsh-run-agent` on Windows; nothing else sets %CARGO%.
 setlocal
-set "bash=%NSH_AGENT_BASH%"
-if defined bash goto run
-for /f "delims=" %%G in ('where git 2^>nul') do if not defined bash call :from_git "%%~dpG"
-if defined bash goto run
-for %%P in ("%ProgramFiles%\Git" "%ProgramFiles(x86)%\Git" "%LocalAppData%\Programs\Git") do if not defined bash if exist "%%~P\bin\bash.exe" set "bash=%%~P\bin\bash.exe"
-if defined bash goto run
-echo cargo-with-agent: Git Bash not found. Install Git for Windows, or set NSH_AGENT_BASH to a bash.exe that is not WSL's. 1>&2
+set "real=%NSH_REAL_CARGO%"
+if not defined real set "real=cargo"
+if /I not "%~1"=="build" goto pass
+rem Each argument is read without its quotes into a quoted assignment and compared with delayed expansion, so a path
+rem with & or a space is only text. nsh names the manifest with either slash, even both (...\nsh\.nsh/rust\Cargo.toml).
+set "hit="
+setlocal enabledelayedexpansion
+:scan
+if "%~1"=="" goto scanned
+set "a=%~1"
+set "a=!a:/=\!"
+if not "!a:.nsh\rust\Cargo.toml=!"=="!a!" set "hit=!a!"
+shift
+goto scan
+:scanned
+endlocal & set "manifest=%hit%"
+if not defined manifest goto pass
+rem The plug's crates name hexuria/nsh as Git dependencies. The generated workspace is its own workspace root, so it
+rem has to redirect them to the app's checkout itself, or the host links a second NSH and the window's listener never
+rem starts (no error). nsh writes that table since the pinned commit: it carries the app's own [patch] tables over.
+rem An older nsh does not, so stop here instead of building that.
+findstr /L /C:"patch.\"https://github.com/hexuria/nsh\"" "%manifest%" >nul 2>&1
+if not errorlevel 1 goto build
+echo cargo-with-agent: "%manifest%" has no [patch."https://github.com/hexuria/nsh"] table. 1>&2
+echo   This nsh is older than the app's NSH pin (NSH_PINNED_REF in .github\workflows\nsh.yml). 1>&2
+echo   Rebuild it from the sibling checkout at that commit: 1>&2
+echo   cargo install --locked --path ..\nsh\crates\nsh-cli --root %%USERPROFILE%%\BuwizNsh\tools 1>&2
 exit /b 1
-
-:run
-if not exist "%bash%" (
-    echo cargo-with-agent: no bash at "%bash%" 1>&2
-    exit /b 1
-)
-"%bash%" "%~dp0cargo-with-agent.sh" %*
+:build
+"%real%" %* --features app_nsh_app_ebirforms/agent
 exit /b %errorlevel%
-
-rem git.exe sits in <Git>\cmd, <Git>\bin or <Git>\mingw64\bin; bash.exe is <Git>\bin\bash.exe.
-:from_git
-for %%D in ("%~1.." "%~1..\..") do if not defined bash if exist "%%~fD\bin\bash.exe" set "bash=%%~fD\bin\bash.exe"
-exit /b 0
+:pass
+"%real%" %*
+exit /b %errorlevel%

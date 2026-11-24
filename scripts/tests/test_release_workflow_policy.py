@@ -100,7 +100,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
             publish = self.job(job, workflow)
             self.assertIn("secrets.NSH_UPDATE_KEY", publish)
             self.assertIn("hexuria/nsh", publish)
-            self.assertIn("70d8ff26b9e9dccb17a908de97cd4a3f3e381276", publish)
+            self.assertIn("411a99e42a1de61b80d6b347bc651219b590d332", publish)
             self.assertIn("cargo install --locked --path", publish)
         nsh = (REPOSITORY_ROOT / ".github/workflows/nsh.yml").read_text()
         self.assertEqual(nsh.count('"forms/**"'), 2)

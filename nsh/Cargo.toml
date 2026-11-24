@@ -7,7 +7,7 @@ publish = false
 # Its own workspace, as the retired shell's was: the root workspace (and its Cargo.lock) never sees this crate.
 [workspace]
 
-# Every nsh-* crate comes from the one NSH checkout, by path (the hexuria/nsh fork with upstream v0.5.1 merged, NSH 0.5.1).
+# Every nsh-* crate comes from the one NSH checkout, by path (the hexuria/nsh fork, branch buwiz-next, NSH 0.6.1; the pin is NSH_PINNED_REF in .github/workflows/nsh.yml).
 # The checkout is a SIBLING of the buwiz-forms checkout: <parent>/buwiz-forms and <parent>/nsh, so from this folder it is ../../nsh.
 # The worktree layout (features/nsh-tsx/{buwiz-forms,nsh}) and CI (.github/workflows/nsh.yml) both follow it. The nsh CLI takes
 # the source from these paths (`cargo metadata` makes them absolute), so relative paths work with nsh check/build/test/run.
@@ -114,8 +114,9 @@ agent = ["bir-app-api/agent", "dep:gpui-agent", "dep:nsh-gpui-agent-macos", "dep
 
 # One NSH per build: the plug declares its nsh-* crates as git dependencies on hexuria/nsh, and cargo treats the
 # same crate from two sources as two different crates. Redirect every nsh-* the plug pulls to this app's own
-# checkout (the sibling ../nsh, at the buwiz-next pin — which contains everything the plug's `gpui-agent` branch
-# has). Keep this list covering every nsh-* git dependency of the plug.
+# checkout (the sibling ../nsh at the pin, which has every door the plug's NSH branch `gpui-agent` has). Keep this
+# list covering every nsh-* git dependency of the plug. nsh carries this table into the workspace it generates
+# (nsh/.nsh/rust), which is a workspace root of its own and would otherwise build the Git copy as well.
 [patch."https://github.com/hexuria/nsh"]
 nsh-core = { path = "../../nsh/crates/nsh-core" }
 nsh-dev = { path = "../../nsh/crates/nsh-dev" }

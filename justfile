@@ -914,7 +914,7 @@ nsh-run db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_nsh-db-guard 
     cd nsh
     exec nsh run --target macos {{args}}
 
-# NSH: the app in a real window with the agent control planes on, for gpui-agent recipes: the window's own (NSH's development host:
+# NSH: the app in a real window with the agent control planes on, for gpui-agent recipes: the window's own (hexuria/nsh-gpui-agent:
 # tree, press, type, screenshot) on GPUI_AGENT_ADDR, and the app's data plane (app.info, profile.*, form.*) on the port it reports.
 # target is macos, linux, windows, ios (Simulator) or android (emulator; then `adb forward tcp:<port> tcp:<port>`).
 # GPUI_AGENT_TOKEN must be set by the caller (never printed, never compiled into the app). Dry-run dev mode as nsh-run: nothing is sent anywhere.

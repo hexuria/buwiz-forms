@@ -7,7 +7,6 @@
 # Used by `just nsh-run-agent`; nothing else sets $CARGO.
 real="${NSH_REAL_CARGO:-cargo}"
 if [ "$1" = "build" ]; then
-    features="app_nsh_app_ebirforms/agent"
     for arg in "$@"; do
         # On Windows nsh names the manifest with either slash, even both (...\nsh\.nsh/rust\Cargo.toml): compare and
         # open it with forward slashes only, which every system's tools take.
@@ -16,32 +15,19 @@ if [ "$1" = "build" ]; then
             */.nsh/rust/Cargo.toml)
                 # shellcheck disable=SC1003
                 manifest="$(printf '%s' "$arg" | tr '\\' '/')"
-                shift
-                # The generated workspace ignores the app crate's [patch]: patch entries apply only to the
-                # workspace root, which is this generated manifest. The plug's crates name hexuria/nsh as git
-                # dependencies, so without the patch the host links a second NSH and `install_window_plane`
-                # registers its surface hook on the wrong copy. Re-append it, rooted at .nsh/rust.
+                # The plug's crates name hexuria/nsh as Git dependencies. The generated workspace is its own workspace
+                # root, so it has to redirect them to the app's checkout itself, or the host links a second NSH and the
+                # window's listener never starts (no error). nsh writes that table since the pinned commit: it carries
+                # the app's own [patch] tables over. An older nsh does not, so stop here instead of building that.
                 if ! grep -q 'patch."https://github.com/hexuria/nsh"' "$manifest"; then
-                    cat >>"$manifest" <<'PATCH'
-
-[patch."https://github.com/hexuria/nsh"]
-nsh-core = { path = "../../../../nsh/crates/nsh-core" }
-nsh-dev = { path = "../../../../nsh/crates/nsh-dev" }
-nsh-testing = { path = "../../../../nsh/crates/nsh-testing" }
-nsh-base = { path = "../../../../nsh/crates/nsh-base" }
-nsh-cli = { path = "../../../../nsh/crates/nsh-cli" }
-nsh-ios-host = { path = "../../../../nsh/crates/nsh-ios-host" }
-nsh-linux-host = { path = "../../../../nsh/crates/nsh-linux-host" }
-nsh-macos-host = { path = "../../../../nsh/crates/nsh-macos-host" }
-nsh-windows-host = { path = "../../../../nsh/crates/nsh-windows-host" }
-nsh-platform-android = { path = "../../../../nsh/crates/nsh-platform-android" }
-nsh-platform-ios = { path = "../../../../nsh/crates/nsh-platform-ios" }
-nsh-platform-linux = { path = "../../../../nsh/crates/nsh-platform-linux" }
-nsh-platform-macos = { path = "../../../../nsh/crates/nsh-platform-macos" }
-nsh-platform-windows = { path = "../../../../nsh/crates/nsh-platform-windows" }
-PATCH
+                    echo "cargo-with-agent: $manifest has no [patch.\"https://github.com/hexuria/nsh\"] table." >&2
+                    echo "  This nsh is older than the app's NSH pin (NSH_PINNED_REF in .github/workflows/nsh.yml)." >&2
+                    echo "  Rebuild it from the sibling checkout at that commit:" >&2
+                    echo "  cargo install --locked --path ../nsh/crates/nsh-cli --root ~/BuwizNsh/tools" >&2
+                    exit 1
                 fi
-                exec "$real" build "$@" --features "$features"
+                shift
+                exec "$real" build "$@" --features app_nsh_app_ebirforms/agent
                 ;;
         esac
     done
