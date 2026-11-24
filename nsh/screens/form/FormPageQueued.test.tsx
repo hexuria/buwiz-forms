@@ -174,12 +174,14 @@ test("desktop: a Queued return says what its send is: queued, sending, held with
   expect(waiting.shows("id:fp-email-came")).toBe(false);
 });
 
-test("desktop: a sent return says it went through Buwiz; a test send says nothing reached the BIR", async () => {
-  const sent = await open(ENTRY, DESK({ send: "sent" }));
-  await sent.waitFor("text:Sent to the BIR through Buwiz. Waiting for the BIR's confirmation email. Nothing here can be changed.", { timeout: 15_000 });
-  expect(sent.texts()).toContain("Submitted · read-only");
-  const test = await open(ENTRY, DESK({ send: "test_sent" }));
-  await test.waitFor("text:Test send. Nothing reached the BIR. Nothing here can be changed.", { timeout: 15_000 });
+test("desktop: a sent return keeps its own dated words, whatever the host's send line says", async () => {
+  for (const stage of ["sent", "test_sent"] as const) {
+    const app = await open(ENTRY, DESK({ send: stage }));
+    await app.waitFor("text:Submitted · read-only", { timeout: 15_000 });
+    // The page's words for a sent return carry its date (F21); the host's line is for a return still in the queue.
+    await app.waitUntil(() => app.texts().some((text) => text.endsWith("Nothing here can be changed.")));
+    expect(app.texts().some((text) => text.includes("through Buwiz") || text.includes("Test send"))).toBe(false);
+  }
 });
 
 test("desktop: an unknown outcome asks the person; The email came, confirmed, marks it sent and the page reads it again", async () => {

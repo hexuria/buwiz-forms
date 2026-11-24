@@ -1,6 +1,6 @@
-// A return the submission worker sent in a dry run (nothing reached BIR) says so on its page: the host's send words ("Test send. Nothing
-// reached the BIR.", send_state.rs) where it has them, "Dry run <date>, not sent to BIR" where it has none, and a real send without a relay
-// receipt says "Sent to BIR <date>". The fact is the host's `submitted_dry_run`, which the worker stores at the send (F21).
+// A return the submission worker sent in a dry run (nothing reached BIR) says so on its page: "Dry run <date>, not sent to BIR", where a
+// real send says "Sent to BIR <date>". The fact is the host's `submitted_dry_run`, which the worker stores at the send (F21). A return
+// still in the queue says the host's send words instead (send_state.rs).
 // Through the real door: the dry-run worker of this process sends a Queued return of this file's scratch database at once.
 import { expect, test } from "nsh/test";
 import { bir } from "../../bir";
@@ -68,7 +68,7 @@ test("the send's words: a held or waiting send says when it goes again, in local
   expect(sendWords(send("queued", "Queued to send.", at(now)), now)).toBe("Queued to send.");
 });
 
-test("a return the dry-run worker sent says it was a test send", async () => {
+test("a return the dry-run worker sent says Dry run, not sent to BIR", async () => {
   createDemoTaxpayer();
   if (bir.list_tax_years(DEMO.tin).length === 0) bir.add_tax_year(DEMO.tin, YEAR, false);
   bir.set_yearly_forms(DEMO.tin, YEAR, ["1601C", "2550Q"]);
@@ -79,8 +79,10 @@ test("a return the dry-run worker sent says it was a test send", async () => {
   await until(() => stored("1601C", 9).status === "Submitted", "the dry-run worker sent the queued 1601C");
   const sent = stored("1601C", 9);
   expect(sent.submitted_dry_run).toBe(true);
-  // The host's send words (send_state.rs: test_sent) take the place of "Dry run <date>, not sent to BIR".
-  expect(await line(at("1601C", 9))).toBe("Test send. Nothing reached the BIR. Nothing here can be changed.");
+  // A sent return keeps its dated words; the host's send words (send_state.rs) are for a return still in the queue.
+  const when = sentWords(String(sent.submitted_at), true);
+  expect(when.startsWith("Dry run ")).toBe(true);
+  expect(await line(at("1601C", 9))).toBe(`${when}. Nothing here can be changed.`);
 });
 
 test("a return sent for real (no dry-run fact) says Sent to BIR", async () => {

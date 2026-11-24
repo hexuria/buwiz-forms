@@ -4121,7 +4121,9 @@ export class FormSession {
     if (s.confirmedAt) sent.push(`confirmed ${shortIsoDate(s.confirmedAt)}`);
     // The host's words for the send, where it has them (send_state.rs): a refused Draft's notice, a Queued or sent return's line.
     const send = s.sample || s.filedOriginalView ? null : s.send;
-    const sendLine = send && send.stage !== "refused" && !s.editable ? sendWords(send, new Date()) : "";
+    // A sent return keeps the words it always had, with their date ("Sent to BIR <date>", "Dry run <date>, not sent to BIR": F21); the
+    // host's send words are for a return still in the queue.
+    const sendLine = send && s.status === "Queued" && !s.editable ? sendWords(send, new Date()) : "";
     const sentLine = sent.length ? `${sent.join(", ")}. Nothing here can be changed.` : "";
     this.sHeader.set({
       loading: s.loading,
@@ -4134,7 +4136,7 @@ export class FormSession {
       amendUnsaved: Boolean(s.amends && !s.saved && s.editable),
       filedOriginal: Boolean(s.filedOriginal && !s.filedOriginalView),
       filedOriginalView: s.filedOriginalView,
-      submittedLine: !s.editable && !s.filedOriginalView ? (sendLine ? (s.status === "Submitted" ? `${sendLine} Nothing here can be changed.` : sendLine) : sentLine) : "",
+      submittedLine: !s.editable && !s.filedOriginalView ? sendLine || sentLine : "",
       sendNotice: send?.stage === "refused" && s.editable ? send.line : "",
       accountFix: send?.stage === "refused" && s.editable && ACCOUNT_FIX_CODES.includes(send.code ?? ""),
       canResolve: Boolean(send?.can_resolve) && s.status === "Queued" && !s.editable,
