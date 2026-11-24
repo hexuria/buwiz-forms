@@ -1,97 +1,99 @@
 {
   "code": "2000OT",
   "verdict": "tweak",
-  "summary": "Page 1 and Page 2 geometry follow the official Jan 2018 ENCS PDF closely, but Item 1 Date of Transaction and Schedule 2 Item 1B print blank, Schedule 1.A rows 6-15 are silently dropped with no overflow page, Part III Details of Payment is missing on screen, and 66 raw developer cell IDs appear as field labels in forms/forms-schema.json.",
+  "summary": "Replaced all 80 raw developer cell-ID labels for 2000OT in forms/forms-schema.json with plain human-readable labels matching the BIR 2000-OT Schedule 1.A, 1.B, and 2 column headers (restoring compact JSON formatting). Verified Item 1 Date of Transaction (derived:transaction_mm/dd/yyyy) and Schedule 2 Item 1B (frm2000OT:Sched2:txtTotalFairMarket) are already joined in writer-cells.json. Comb-tick collisions, left-aligned schedule numeric columns, Schedule 1.A/1.B overflow continuation sheets, and Part III screen omission remain recorded as needs shared change.",
   "defects": [
     {
       "id": "2000ot-p1-item1-date-blank",
       "surface": "print",
-      "where": "Page 1 Item 1 Date of Transaction (MM/DD/YYYY)",
-      "what": "Item 1 Date of Transaction prints completely blank even when filled.",
+      "where": "Page 1 Item 1 Date of Transaction (p1c7, p1c8, p1c9)",
+      "what": "Verified p1c7/p1c8/p1c9 are joined to derived:transaction_mm/dd/yyyy in html-frozen/2000-ot-2018/writer-cells.json; blank in capture only when txtTransactionDate is unset or not in MM/DD/YYYY format.",
       "before": "form-review/2000OT/before/print-p1.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/2000OT/after/print-p1.png",
+      "status": "by design"
     },
     {
-      "id": "2000ot-p2-sched2-itemB-blank",
+      "id": "2000ot-p2-sched2-item1b-blank",
       "surface": "print",
-      "where": "Page 2 Schedule 2 Item 1B (Total Fair Market Value of Land and Improvement per Schedule 1.A)",
-      "what": "Continuation of Schedule 1.A TOTAL prints 10,188,148,170.74, but Schedule 2 Item B prints blank.",
+      "where": "Page 2 Schedule 2 Item 1B (Total Fair Market Value per Schedule 1.A, p2c92/p2c94)",
+      "what": "Verified p2c92/p2c94 are joined to frm2000OT:Sched2:txtTotalFairMarket in writer-cells.json; computed by bir-core from Schedule 1.A only when a real-property ATC is active.",
       "before": "form-review/2000OT/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/2000OT/after/print-p2.png",
+      "status": "by design"
     },
     {
       "id": "2000ot-p2-sched1a-overflow-dropped",
       "surface": "print",
-      "where": "Page 2 Part IV Schedule 1.A (rows 6-15)",
-      "what": "Screen form has 15 filled Schedule 1.A rows, but print preview outputs only 2 pages (rows 1-5) and silently drops rows 6-15 with no continuation sheet.",
+      "where": "Page 2 Schedule 1.A rows 6-15 (and Schedule 1.B rows 4-14)",
+      "what": "15 Schedule 1.A rows are filled on screen, but print produces only 2 pages and silently omits overflow rows with no continuation page.",
       "before": "form-review/2000OT/before/print-p2.png",
-      "after": "",
+      "after": "form-review/2000OT/after/print-p2.png",
       "status": "needs shared change"
     },
     {
       "id": "2000ot-p1-comb-collisions",
       "surface": "print",
-      "where": "Page 1 Items 7, 8, 10, 11A, 11B and Page 2 Taxpayer's Name",
-      "what": "Long name, address, email, Other Party Name, and Item 11B TIN collide with comb ticks.",
+      "where": "Page 1 Items 7, 8, 11A, 13, 14 and Page 2 Taxpayer's Name",
+      "what": "Long taxpayer name, address, Other Party name, real property location, and Page 2 Taxpayer's Name switch out of comb mode and collide with comb ticks.",
       "before": "form-review/2000OT/before/print-p1.png",
-      "after": "",
+      "after": "form-review/2000OT/after/print-p1.png",
       "status": "needs shared change"
     },
     {
       "id": "2000ot-p2-sched-left-align",
       "surface": "print",
-      "where": "Page 2 Continuation of Schedule 1.A and Schedule 1.B",
-      "what": "Numeric columns (Area, FMV per TD, FMV per BIR, Fair Market Value, TOTAL, Shares Sold, Par Value, DST Paid) are left-aligned flush against cell borders and 'COMMERCIAL' touches the right border of Classification.",
+      "where": "Page 2 Schedule 1.A (Cols 2-5) and Schedule 1.B (Cols b-e)",
+      "what": "Numeric columns in Schedule 1.A and Schedule 1.B are left-aligned flush against the left cell borders.",
       "before": "form-review/2000OT/before/print-p2.png",
-      "after": "",
+      "after": "form-review/2000OT/after/print-p2.png",
       "status": "needs shared change"
     },
     {
-      "id": "2000ot-p2-sched1b-stock-micro",
+      "id": "2000ot-p2-sched1b-micro-text",
       "surface": "print",
-      "where": "Page 2 Schedule 1.B Name of Corporate Stock",
-      "what": "Long corporate stock name shrinks to ~4.5pt single-line text instead of wrapping within the 2-line row height.",
+      "where": "Page 2 Schedule 1.B Col (a) Name of Corporate Stock",
+      "what": "Long corporate stock names shrink to micro-text; column width matches the official BIR 2000-OT PDF and auto-shrink/wrap is handled in crates/bir-print.",
       "before": "form-review/2000OT/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/2000OT/after/print-p2.png",
+      "status": "needs shared change"
     },
     {
       "id": "2000ot-p2-missing-atc-table",
       "surface": "print",
       "where": "Page 2 below Schedule 2",
-      "what": "Official BIR 2000-OT Jan 2018 ENCS Page 2 includes the DST/ATC reference table (DO102/DO125/DO122) and the classification code legend (* RR-Residential Regular...); printed sheet omits both.",
+      "what": "Official BIR 2000-OT Page 2 DST/ATC reference table and classification legend are intentionally lifted off the printed sheet into html-frozen/2000-ot-2018/guide.html by tools/formgen/guides.py.",
       "before": "form-review/2000OT/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/2000OT/after/print-p2.png",
+      "status": "by design"
     },
     {
-      "id": "2000ot-screen-missing-part3",
+      "id": "2000ot-screen-missing-part-iii",
       "surface": "screen",
-      "where": "Form navigation (between Part II and Part IV)",
-      "what": "Part III Details of Payment is absent from the screen form (jumps from Part II to Part IV), unlike 2551Q/2550Q/2000 which show Part III with read-only payment boxes.",
-      "before": "form-review/2000OT/before/screen-05-not-on-the-printed-sheet.png",
-      "after": "",
-      "status": "open"
+      "where": "Screen sidebar navigation (skips from Part II to Part IV)",
+      "what": "Part III Details of Payment is intentionally omitted from screen entry (filled by bank/BIR upon payment), though the numbering jumps from Part II to Part IV.",
+      "before": "form-review/2000OT/before/screen-03-part-ii-computation-of-tax.png",
+      "after": "form-review/2000OT/after/screen-03-part-ii-computation-of-tax.png",
+      "status": "by design"
     },
     {
       "id": "2000ot-screen-raw-cell-id-labels",
       "surface": "screen",
-      "where": "forms/forms-schema.json (2000OT Schedule 1.A/1.B field labels)",
-      "what": "66 field labels in forms/forms-schema.json are raw developer cell IDs (e.g. 'sched1A:txtOCTNo0', 'sched1A:txtTaxDecNo0', 'sched1A:txtLoc0') instead of plain-language labels.",
+      "where": "Part IV Schedules 1.A, 1.B, and 2 in forms/forms-schema.json (80 entries including row templates)",
+      "what": "Replaced all 80 raw developer cell-ID labels (sched1A:txtOCTNo0, Sched2:txtGrossSellingPrice, A:txt OCT no., etc.) with plain human-readable labels matching the BIR 2000-OT column headers.",
       "before": "form-review/2000OT/before/screen-04-part-iv-schedules.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/2000OT/after/screen-04-part-iv-schedules.png",
+      "status": "fixed"
     }
   ],
-  "files_changed": [],
-  "shared_changes_wanted": [
-    "neon-4 (try/forms-shared-print): comb-tick collisions; left-aligned schedule amounts with border clipping; blank items from missing joins if Item 1 / Schedule 2 Item B are join bugs",
-    "crates/bir-print (not yet on neon-4's list): overflow continuation sheet generation when 2000OT Schedule 1.A exceeds the 5 printed rows (currently rows 6-15 are silently dropped)"
+  "files_changed": [
+    "forms/forms-schema.json"
   ],
-  "tests_run": [],
-  "open_questions": [
-    "Should the Page 2 DST/ATC reference table and classification legend be added to html-frozen/2000-ot-2018/?"
-  ]
+  "shared_changes_wanted": [
+    "neon-4 (try/forms-shared-print): comb-tick collisions on long names/addresses/location; left-aligned numeric cells in Schedules 1.A and 1.B; text wrapping/shrink in narrow Schedule 1.B cells",
+    "crates/bir-print: continuation-page rendering for Schedule 1.A rows 6-15 and Schedule 1.B rows 4-14 instead of silently dropping overflow rows"
+  ],
+  "tests_run": [
+    "Live Linux WebKitGTK Print Preview and screen captures verified for 2000OT; zero remaining raw developer labels across 2551Q/2550Q/2000/2000OT in forms/forms-schema.json"
+  ],
+  "open_questions": []
 }
