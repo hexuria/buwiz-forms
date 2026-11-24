@@ -37743,7 +37743,8 @@
     },
     "frm2200Av2020:txtSched1_xa_others1_Due": {
       "label": "Others (specify), row 1 Due",
-      "evidence": "agent box label: 'Others (specify), row 1 Due'; writer-cells printed caption: 'Others (specify), row 1 Due'"
+      "computed": false,
+      "evidence": "agent box label: 'Others (specify), row 1 Due'; writer-cells printed caption: 'Others (specify), row 1 Due' | rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json L2200: disabled=false, readonly=false (filer-typed)"
     },
     "frm2200Av2020:txtSched1_xa_others2_Atc": {
       "label": "Others (specify), row 2 ATC",
@@ -37771,7 +37772,8 @@
     },
     "frm2200Av2020:txtSched1_xa_others2_Due": {
       "label": "Others (specify), row 2 Due",
-      "evidence": "agent box label: 'Others (specify), row 2 Due'; writer-cells printed caption: 'Others (specify), row 2 Due'"
+      "computed": false,
+      "evidence": "agent box label: 'Others (specify), row 2 Due'; writer-cells printed caption: 'Others (specify), row 2 Due' | rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json L2226: disabled=false, readonly=false (filer-typed)"
     },
     "frm2200Av2020:txtSched1_xa_others3_Atc": {
       "label": "Others (specify), row 3 ATC",
@@ -37799,7 +37801,8 @@
     },
     "frm2200Av2020:txtSched1_xa_others3_Due": {
       "label": "Others (specify), row 3 Due",
-      "evidence": "agent box label: 'Others (specify), row 3 Due'; writer-cells printed caption: 'Others (specify), row 3 Due'"
+      "computed": false,
+      "evidence": "agent box label: 'Others (specify), row 3 Due'; writer-cells printed caption: 'Others (specify), row 3 Due' | rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json L2252: disabled=false, readonly=false (filer-typed)"
     },
     "frm2200Av2020:optPayment_1": {
       "label": "Payment on Actual Removal",

@@ -273,6 +273,18 @@ const FILER_TYPED: &[(&str, &str)] = &[
         "frm2552:txtPg1P2I17TaxPaidInPrevRtrn",
         "Item 17 Tax Paid in Return Previously Filed: disabled at load (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json source line 866) until Amended Return is Yes; form_2552.rs recompute zeroes tax_paid_previous unless is_amended",
     ),
+    (
+        "frm2200Av2020:txtSched1_xa_others1_Due",
+        "Schedule 1 Others row 1 Basic Excise Tax Due: enabled at load (rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json source line 2200, disabled=false, readonly=false); form_2200a.rs keeps row.amounts.tax_due as entered",
+    ),
+    (
+        "frm2200Av2020:txtSched1_xa_others2_Due",
+        "Schedule 1 Others row 2 Basic Excise Tax Due: enabled at load (rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json source line 2226, disabled=false, readonly=false); form_2200a.rs keeps row.amounts.tax_due as entered",
+    ),
+    (
+        "frm2200Av2020:txtSched1_xa_others3_Due",
+        "Schedule 1 Others row 3 Basic Excise Tax Due: enabled at load (rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json source line 2252, disabled=false, readonly=false); form_2200a.rs keeps row.amounts.tax_due as entered",
+    ),
 ];
 
 const EXCESS_MCIT_1702RT: &str = "1702RT Schedule IV column C (Excess MCIT over \
