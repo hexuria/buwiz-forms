@@ -25,10 +25,10 @@
       "id": "1701A-P3",
       "surface": "print",
       "where": "Page 2, Part IV.C Item 63 (Other Tax Credits/Payments specify)",
-      "what": "Long specify text runs flush against the right border of the specify box with no right padding.",
+      "what": "Long specify text ran flush against the right edge of the specify box; added left/bottom padding and slight horizontal breathing room on #p2c176-i in print-overrides/1701a-2018.css.",
       "before": "before/print-p2.png",
       "after": "after/print-p2.png",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1701A-P4",
@@ -40,11 +40,16 @@
       "status": "by design"
     }
   ],
-  "files_changed": [],
+  "files_changed": [
+    "print-overrides/1701a-2018.css"
+  ],
   "shared_changes_wanted": [
     "crates/bir-print (owned by neon-4 on try/forms-shared-print): mask comb ticks under overflowing long names/addresses (Items 9, 70) and handle >8-digit/negative comb overflow in Part II/IV."
   ],
-  "tests_run": [],
+  "tests_run": [
+    "just nsh-check && just nsh-build (exit 0)",
+    "Live app capture via just nsh-run-agent linux on fresh scratch DB (1701A screen + print preview)"
+  ],
   "open_questions": [
     "Print preview window opens natively on Linux via WebKitGTK; full unclipped 1400px-wide print-p*.png pages were rendered from the running app's generated sheet.html via headless Chrome --print-to-pdf + pypdfium2."
   ]
