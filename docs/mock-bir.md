@@ -156,7 +156,7 @@ PLIST=/Applications/eBIRForms.app/Contents/Info.plist
 /usr/libexec/PlistBuddy -c "Add :LSEnvironment:BIR_SFTP_USERNAME string mock-filer" "$PLIST"
 /usr/libexec/PlistBuddy -c "Add :LSEnvironment:BIR_SFTP_PASSWORD string mock-password-not-a-bir-secret" "$PLIST"
 /usr/libexec/PlistBuddy -c "Add :LSEnvironment:BIR_SFTP_HOST_KEY_SHA256 string <fingerprint>" "$PLIST"
-# Editing Info.plist breaks the signature: sign again, as `just _package-mac` does.
+# Editing Info.plist breaks the signature: sign again, as `scripts/package_macos_release.sh` does.
 codesign --force --options runtime --entitlements entitlements.dev.plist --sign - /Applications/eBIRForms.app
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/eBIRForms.app
 ```
