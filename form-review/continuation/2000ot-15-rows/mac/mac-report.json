@@ -1,0 +1,21 @@
+{
+ "form": "2000OT",
+ "branch": "try/forms-continuation-sheet",
+ "case": "continuation/2000ot-15-rows (15 rows in Schedule 1.A)",
+ "platform": "macOS 26.6.2 arm64 / WKWebView preview",
+ "verdict": "macOS matches Linux: yes",
+ "notes": [
+  "3 pages on macOS exactly as on Linux: p1-p2 official pages, p3 'Add'l Sheet' with cloned Schedule 1.A band - rows 6-15 in both the OCT/TD/Location table and the Continuation table, TOTAL 270,000,000.00 'as on page 2'.",
+  "Page breaks identical: Sched 1.A holds rows 1-5 on p2 and spills rows 6-15 onto the cloned band on p3; cloned header, TIN/name row, column headers and TOTAL render correctly. Item 12 'X' on 'Transfer of Real Property Classified as Capital Asset' matches.",
+  "Same two fill/render-path differences as the 1800 check (not layout): (a) mac renders amounts with thousands separators (10,500,000.00, TOTAL 270,000,000.00) where Linux shows raw 10500000.00/270000000.00; (b) mac computed values populated where Linux pictures are blank: Part II items show 0.00, Schedule 2 item B shows 270,000,000.00, and empty Sched 1.B rows show 0.00 in the amount columns.",
+  "No overflow, clipping, wrap or font fallback observed; row values and ordering identical."
+ ],
+ "files": [
+  "print-p1.png",
+  "print-p2.png",
+  "print-p3.png",
+  "pdf-p-1.png",
+  "pdf-p-2.png",
+  "pdf-p-3.png"
+ ]
+}
