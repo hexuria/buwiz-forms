@@ -1,0 +1,27 @@
+{
+  "form": "1600WP",
+  "branch": "try/forms-neon-4",
+  "commit": "d807c124",
+  "verdict": "macOS matches Linux: yes",
+  "preview": {
+    "matches_linux": true,
+    "notes": [
+      "Single A4 page; identical layout, geometry, fonts and page composition to Linux after/print-p1.png.",
+      "All fixes confirmed: Part II and Schedule 1.1 peso amounts right-aligned (12-16, col 6/8), Attachment header Withholding Agent Name prints (SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA), Seq. No. 1-6 printed, all 6 payee rows present, TOTAL row P boxes, ZIP box empty (blank), Item 11 No ticked.",
+      "Values identical: period From/To 06/15/2026, sheets 05, amended No, taxes withheld Yes, TIN 00012345300000, RDO 047, Private, 6 payee TINs/names/ATC WB090/0.00."
+    ]
+  },
+  "pdf": {
+    "matches_linux_and_preview": true,
+    "notes": [
+      "Save-as-PDF reproduces the preview exactly; no mac-only text-run overlap or extra clipping observed in the signature block, attachment header or schedule columns."
+    ]
+  },
+  "differences": [],
+  "fill_path_notes": [
+    "Schedule 1.1 rows were written via form.fill on the frm1600WP:dtSched:* keys directly (no modal needed, unlike 1707A).",
+    "Period is monthly: form.open needs period=6 (not 0615)."
+  ],
+  "carried_over_defects": "none beyond Linux",
+  "files": ["print-p1.png", "pdf-p-1.png"]
+}
