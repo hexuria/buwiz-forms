@@ -10,7 +10,7 @@ if [ "$1" = "build" ]; then
     features="app_nsh_app_ebirforms/agent"
     for arg in "$@"; do
         case "$arg" in
-            */.nsh/rust/Cargo.toml)
+            */.nsh/rust/Cargo.toml|*\\.nsh\\rust\\Cargo.toml)
                 manifest="$arg"
                 shift
                 # The generated workspace ignores the app crate's [patch]: patch entries apply only to the

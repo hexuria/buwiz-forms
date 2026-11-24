@@ -3,6 +3,16 @@ rem Windows counterpart of cargo-with-agent.sh: stands in for `cargo` while nsh 
 rem they carry the app's `agent` feature. Only a `cargo build` in the generated workspace (nsh\.nsh\rust) is changed;
 rem every other command passes through. Used by `just nsh-run-agent` on Windows; nothing else sets %CARGO%.
 setlocal
+rem The .sh is the one implementation: it also re-applies the [patch."https://github.com/hexuria/nsh"] block the
+rem generated workspace needs, or the plug links a second NSH and install_window_plane registers on the wrong copy.
+rem Git Bash ships with Git for Windows, which any Rust checkout already needs.
+where bash >nul 2>&1
+if not errorlevel 1 (
+    bash "%~dp0cargo-with-agent.sh" %*
+    exit /b %errorlevel%
+)
+rem Fallback when bash is unavailable: feature-append only, which leaves the split-NSH bug this wrapper exists
+rem to fix, so builds here need Git Bash on PATH.
 set "real=%NSH_REAL_CARGO%"
 if not defined real set "real=cargo"
 if /I not "%~1"=="build" goto pass
@@ -15,16 +25,12 @@ if "%~1"=="" goto scanned
 set "a=%~1"
 set "a=!a:/=\!"
 if not "!a:.nsh\rust\Cargo.toml=!"=="!a!" set "hit=1"
-rem The generated Android library names NSH's `dev` feature only; the window's control plane is `dev-agent`.
-if /I "%~1"=="nsh-app-nsh-app-ebirforms-android" set "android=1"
 shift
 goto scan
 :scanned
-endlocal & set "hit=%hit%" & set "android=%android%"
+endlocal & set "hit=%hit%"
 if not defined hit goto pass
-set "features=app_nsh_app_ebirforms/agent"
-if defined android set "features=%features%,nsh-platform-android/dev-agent"
-"%real%" %* --features %features%
+"%real%" %* --features app_nsh_app_ebirforms/agent
 exit /b %errorlevel%
 :pass
 "%real%" %*
