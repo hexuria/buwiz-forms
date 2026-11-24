@@ -1760,6 +1760,96 @@ const MAX_GATE_VALUES: usize = 4;
 /// sampled, not walked).
 const MAX_CODES: usize = 24;
 
+/// Selects the official form carries as a 1-based option position while the
+/// draft keeps the option's code: `(form code, key prefix, array path, leaf
+/// field, rows, evidence)`. The position never echoes the code, so the probe
+/// derives these as "derived by the app" and the page refuses them as
+/// unfillable. The official option list is pinned data from the package
+/// itself; even so a binding is emitted only after the field map shows the
+/// position the pinned list promises, probed on a draft the leaf is set in.
+const INDEXED_SELECTS: &[(&str, &str, &str, &str, usize, &str)] = &[(
+    "2551Q",
+    "drpATC",
+    "/schedule_1",
+    "atc",
+    6,
+    "2551Q Schedule 1 rows 1-6: data/official-xml/2551q-v2018-atc-options.json \
+     (the package's own xml/atcCodes.xml); form_2551q_xml.rs writes drpATC{n} \
+     as the option's 1-based list position, never the code",
+)];
+
+/// One pinned indexed select's official options: `(position, code)`.
+fn indexed_select_options(form: &str) -> Vec<(String, String)> {
+    match form {
+        "2551Q" => crate::forms::form_2551q_xml::official_atc_options()
+            .iter()
+            .map(|option| (option.value.clone(), option.code.clone()))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Bind the [`INDEXED_SELECTS`] boxes the echo probe cannot see, verifying
+/// each against the field map first: a draft with the leaf set to a probed
+/// code must carry the position the pinned official list promises. Rows past
+/// the seed's last are probed by repeating it, as `grow_rows` does. A box
+/// whose verification fails keeps its unmapped reason.
+fn bind_indexed_selects(kind: AgentFormKind, seeds: &[Value], def: &mut AgentFormDef) {
+    for (form, prefix, array, field, rows, _evidence) in INDEXED_SELECTS {
+        if *form != def.form_code {
+            continue;
+        }
+        let options = indexed_select_options(form);
+        if options.is_empty() {
+            continue;
+        }
+        let Some(seed) = seeds.first() else {
+            continue;
+        };
+        let probes: Vec<(String, String)> = options.iter().take(2).cloned().collect();
+        for row in 0..*rows {
+            let key = format!("{prefix}{}", row + 1);
+            if def.bindings.contains_key(&key) || !def.boxes.iter().any(|entry| entry.key == key) {
+                continue;
+            }
+            let leaf = format!("{array}/{row}/{field}");
+            let verified = probes.iter().all(|(value, code)| {
+                let mut draft = seed.clone();
+                if let Some(Value::Array(items)) = draft.pointer_mut(array) {
+                    while items.len() <= row {
+                        let Some(last) = items.last().cloned() else {
+                            break;
+                        };
+                        items.push(last);
+                    }
+                }
+                pointer_set(&mut draft, &leaf, Value::from(code.as_str()));
+                probe_eval(kind, &draft).is_some_and(|(_, map)| map.get(&key) == Some(value))
+            });
+            if !verified {
+                continue;
+            }
+            let binding = Binding::Choice {
+                options: options
+                    .iter()
+                    .map(|(value, code)| ChoiceOption {
+                        value: value.clone(),
+                        set: BTreeMap::from([(leaf.clone(), Value::from(code.as_str()))]),
+                    })
+                    .collect(),
+            };
+            def.bindings.insert(
+                key.clone(),
+                BoundBox {
+                    binding,
+                    lock: None,
+                },
+            );
+            def.unmapped.remove(&key);
+        }
+    }
+}
+
 /// Derive the bindings of `kind`'s boxes from sample drafts.
 ///
 /// `profile_values` are the sample taxpayer profile's strings (name,
@@ -1873,6 +1963,7 @@ pub fn derive(
             }
         }
     }
+    bind_indexed_selects(kind, seeds, &mut def);
     extend_rows(&mut def);
     let real: Vec<&Value> = probed_seeds
         .iter()

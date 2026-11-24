@@ -2627,14 +2627,7 @@
       "txtATCDue6",
       "txtTotalSched1"
     ],
-    "page_writes": [
-      "drpATC1",
-      "drpATC2",
-      "drpATC3",
-      "drpATC4",
-      "drpATC5",
-      "drpATC6"
-    ],
+    "page_writes": [],
     "period": [
       "frm2551Qv2018:rtnMonth",
       "frm2551Qv2018:txtYear",
