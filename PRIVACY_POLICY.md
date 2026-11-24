@@ -26,7 +26,8 @@ The app asks you to sign in to a Buwiz account before it can be used. Sign-in ha
   renew the sign-in. After you have signed in, the app keeps working without a connection to our server.
 - **What it is used for:** signing you in. It is not used for advertising and is not sold or shared.
 
-To delete your Buwiz account and the email address held with it, write to support@goldcoders.dev from that address.
+To delete your Buwiz account and the email address held with it, use Settings > Account > Delete account in the app
+(from version 0.2.1), or write to support@goldcoders.dev from that address.
 
 ## 2. What is stored on your computer
 
@@ -83,9 +84,10 @@ the sign-in under its own terms and privacy policy.
 
 ## 5. Update checks
 
-The Mac App Store version never checks for updates itself. Other versions ask GitHub
-(`github.com/hexuria/buwiz-forms`) whether a newer version exists, shortly after starting and every few hours. That
-request carries no information about you beyond what any web request does, such as your IP address.
+The Mac App Store and Microsoft Store versions never check for updates themselves; the store delivers them. Versions
+downloaded from GitHub ask GitHub (`github.com/hexuria/buwiz-forms`) whether a newer version exists, shortly after
+starting and every few hours. That request carries no information about you beyond what any web request does, such as
+your IP address. The Microsoft Store version behaves this way from version 0.2.1.
 
 ## 6. What the app does not do
 

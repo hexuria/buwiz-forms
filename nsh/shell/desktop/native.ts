@@ -15,6 +15,11 @@ export function allowsSelfUpdate(): boolean {
   return Desktop.allowsSelfUpdate();
 }
 
+/** A store delivers this install's updates (Mac App Store build, Microsoft Store package): it never checks for one itself. */
+export function storeManaged(): boolean {
+  return Desktop.storeManaged();
+}
+
 /** What changed since the last call: a second launch asking for the window, the updater commands the host functions queued, the menu refresh counter. */
 export function poll(): DesktopPoll {
   return Desktop.poll();

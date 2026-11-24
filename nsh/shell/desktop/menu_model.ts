@@ -77,6 +77,8 @@ export interface MenuState {
   capturing?: boolean;
   /** Mac App Store builds don't check for updates. */
   masBuild?: boolean;
+  /** Neither does a Microsoft Store package: its store delivers updates. */
+  storeManaged?: boolean;
 }
 
 /** One taxpayer in the Profiles menu. */
@@ -417,7 +419,7 @@ function helpMenu(state: MenuState, run: Run): MenuItem {
   return menu("Help", [
     about,
     about ? SEP : null,
-    state.masBuild ? null : item(run, "Check for Updates…", "check-updates"),
+    state.masBuild || state.storeManaged ? null : item(run, "Check for Updates…", "check-updates"),
     item(run, "Contact Support…", "support"),
     item(run, "Goldcoders Website", "website"),
   ]);

@@ -56,7 +56,7 @@ path = "src/bin/mock_relay.rs"
 required-features = ["mock-relay"]
 
 [dependencies]
-bir-rules = { path = "../bir-rules", version = "0.2.0" }
+bir-rules = { path = "../bir-rules", version = "0.2.1" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }

@@ -49,8 +49,11 @@ there, but nobody has run it on that platform.
 - `windows-release` contains `eBIRForms-Windows-x64-<version>-Setup.exe`
   (Inno Setup) and `eBIRForms-Windows-x64-<version>.msi` (WiX). The installer
   adds a Start menu entry and offers an optional desktop icon.
-- `windows-msix` contains the sideload `.msix` and the `-store.msix` package for
-  Partner Center. An unsigned run also includes a `.cer` test certificate.
+- The `.msix` in `windows-release` is the package for the Microsoft Store. Built without a signing certificate it is
+  unsigned and keeps the Store identity from `assets\windows\AppxManifest.xml`, which is what Partner Center takes (the
+  Store signs it). A run with `WINDOWS_CERTIFICATE_PFX` puts the certificate's subject in as publisher, which makes a
+  sideload package that the Store refuses. The package carries `ebirforms-store-package` beside the executable, so the
+  app in it never asks GitHub for a newer version (`nsh/src/desktop.rs` `store_managed`).
 - The CI MSIX smoke verifies registration, packaged VC runtime files, and an
   isolated unpacked-layout launch with a visible window and 10-second process
   persistence. On GitHub's `windows-latest` runner (UAC enabled) all three

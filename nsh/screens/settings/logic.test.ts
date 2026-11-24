@@ -2,8 +2,8 @@
 import { expect, test } from "nsh/test";
 import type { BackgroundJob } from "../../bir";
 import {
-  filterJobs, groupSections, jobActions, jobKey, jobSub, jobTone, levelTone, LOG_LINES, logHeadline, logLineLevel, logView,
-  retentionChoices, serverHint,
+  deletionRequestUrl, filterJobs, groupSections, jobActions, jobKey, jobSub, jobTone, levelTone, LOG_LINES, logHeadline, logLineLevel,
+  logView, retentionChoices, serverHint,
 } from "./logic";
 
 const job = (extra: Partial<BackgroundJob>): BackgroundJob => ({
@@ -77,6 +77,15 @@ test("the server hint says where the address came from", () => {
   expect(serverHint("invalid")).toBe("That address was rejected.");
   expect(serverHint("default")).toBe("Chosen for this build.");
   expect(serverHint(undefined)).toBe("Chosen for this build.");
+});
+
+test("a request to delete the account is an email to support that names the account when it is known", () => {
+  const url = deletionRequestUrl("juana+tax@example.com");
+  expect(url.startsWith("mailto:support@goldcoders.dev?subject=Delete%20my%20Buwiz%20account&body=")).toBe(true);
+  expect(decodeURIComponent(url.split("&body=")[1])).toBe(
+    "Please delete my Buwiz account for juana+tax@example.com and the email address held with it.",
+  );
+  expect(decodeURIComponent(deletionRequestUrl(null).split("&body=")[1])).toBe("Please delete my Buwiz account and the email address held with it.");
 });
 
 test("the retention choices are the host's, with an unusual current one added", () => {

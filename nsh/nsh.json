@@ -1,14 +1,14 @@
 {
   "name": "eBIRForms",
   "id": "dev.goldcoders.bir",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "build": 27,
   "rust": ".",
   "icon": "../assets/icon.png",
   "singleInstance": true,
   "macos": {
     "infoPlist": {
-      "NSLocalNetworkUsageDescription": "eBIRForms needs access to your local network to verify internet connectivity before submitting forms.",
+      "NSLocalNetworkUsageDescription": "eBIRForms connects to a device on your local network only if you enter one as the mail server for receipt tracking.",
       "NSScreenCaptureUsageDescription": "eBIRForms captures its own window so an agent can take a screenshot of the painted form (not the rest of the desktop)."
     },
     "entitlements": {

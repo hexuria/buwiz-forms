@@ -3,13 +3,13 @@ import { Application } from "nsh/desktop";
 import { checkForUpdate, downloadUpdate, installOnQuit, shellInfo } from "nsh/updater";
 import { app } from "../app";
 import { store } from "../store";
-import { allowsSelfUpdate, autoDownload, masBuild, publishUpdate } from "./native";
+import { allowsSelfUpdate, autoDownload, publishUpdate, storeManaged } from "./native";
 import { createUpdater, NOT_CONFIGURED, type Updater, type UpdateCommand, type UpdaterApi } from "./updater";
 
 /** nsh/updater, as the driver uses it. */
 export function realApi(stage = installOnQuit, restart = () => Application.restart()): UpdaterApi {
   return {
-    configured: () => !masBuild() && (shellInfo().version ?? null) !== null,
+    configured: () => !storeManaged() && (shellInfo().version ?? null) !== null,
     async check() {
       const found = await checkForUpdate();
       if (!found) return null;

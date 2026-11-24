@@ -115,3 +115,10 @@ export function groupSections(view: readonly SettingsViewSection[]): { group: st
   }
   return out;
 }
+
+/** Where a request to delete the account goes: an email to support, naming the account when it is known. */
+export function deletionRequestUrl(email: string | null | undefined): string {
+  const who = email ? " for " + email : "";
+  const body = "Please delete my Buwiz account" + who + " and the email address held with it.";
+  return "mailto:support@goldcoders.dev?subject=" + encodeURIComponent("Delete my Buwiz account") + "&body=" + encodeURIComponent(body);
+}

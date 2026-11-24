@@ -756,6 +756,17 @@ impl Desktop {
                 .is_some_and(|marker| matches!(marker.try_exists(), Ok(false)))
     }
 
+    /// Whether a store delivers this install's updates: a Mac App Store build, or a Microsoft Store package
+    /// (`ebirforms-store-package` beside the executable, placed by scripts/package_msix.ps1). Such an install never asks
+    /// GitHub for a newer version and never points the person at a download outside its store.
+    pub fn store_managed() -> bool {
+        Self::mas_build()
+            || std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(|dir| dir.join("ebirforms-store-package")))
+                .is_some_and(|marker| matches!(marker.try_exists(), Ok(true)))
+    }
+
     /// What changed since the last call: a second launch asking for the window, updater requests, menu refreshes.
     pub fn poll() -> DesktopPoll {
         mailbox(|mailbox| DesktopPoll {

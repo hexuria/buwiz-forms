@@ -13,10 +13,12 @@ for (const { name, size } of SIZES) {
     await app.waitFor(ready);
     expectTexts(app, ["Buwiz", "Server", "Set when this app was built.", "https://buwiz.example.test", "Not signed in", "Sign in"]);
     expect(app.shows("id:settings-account-sign-out")).toBe(false);
+    expect(app.shows("id:settings-account-delete-button")).toBe(false);
     await app.press("id:settings-account-sign-in");
     await app.waitFor("text:juana@example.com", { timeout: 15000 });
     expect(calls(app)).toEqual(["cloud_account_begin_sign_in", "cloud_account_finish_sign_in", "cloud_account_session_opened"]);
     expect(app.shows("id:settings-account-sign-out")).toBe(true);
+    expect(app.shows("id:settings-account-delete-button")).toBe(true);
     expect(app.shows("id:settings-account-sign-in")).toBe(false);
     expect(state(app)).toContain("cloudLocked=false");
   }, 60_000);

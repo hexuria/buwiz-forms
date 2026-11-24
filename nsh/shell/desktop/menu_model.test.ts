@@ -97,6 +97,11 @@ test("Windows and Linux signed in: the eBIRForms menu first, File holds the app 
   expect(linesOf(linux, "Edit")).toContain("Settings…  mod+,");
 });
 
+test("an install its store updates has no Check for Updates: a Mac App Store build, a Microsoft Store package", () => {
+  expect(shape(state("macos", { masBuild: true }), "Help")).toEqual(["Contact Support…", "Goldcoders Website"]);
+  expect(shape(state("windows", { storeManaged: true }), "Help")).toEqual(["About eBIRForms", "-", "Contact Support…", "Goldcoders Website"]);
+});
+
 test("with no taxpayer the items that need one are there but disabled; nothing else changes", () => {
   for (const os of OSES) {
     const none = flatten(menusOf(state(os, { hasTaxpayer: false })));

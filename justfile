@@ -579,6 +579,10 @@ _package-mac-appstore args="": build-frozen-html-identity
     /usr/libexec/PlistBuddy -c "Add :LSApplicationCategoryType string public.app-category.finance" "$PLIST" || true
     # Export compliance exemption, so App Store Connect skips the encryption question.
     /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" || true
+    # The screenshot text describes the agent. A build without it must not claim that permission.
+    if [ "$NSH_MAS_AGENT" != "1" ]; then
+        /usr/libexec/PlistBuddy -c "Delete :NSScreenCaptureUsageDescription" "$PLIST" 2>/dev/null || true
+    fi
     if [ "${DEV_MODE:-}" = "true" ] || [ "${DEVELOPER_MODE:-}" = "true" ]; then
         echo "Injecting DEVELOPER_MODE into Info.plist..."
         /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" "$PLIST" || true
@@ -599,6 +603,8 @@ _package-mac-appstore args="": build-frozen-html-identity
     fi
     {{PYTHON}} scripts/audit_no_legacy.py --package-root "$APP"
     xattr -cr "$APP"
+    # App Store Connect refuses a package whose files only their owner can read, which is what a umask of 077 builds.
+    chmod -R u+rwX,go+rX "$APP"
     echo "Codesigning application with identity: $CERT..."
     codesign --force --options runtime --timestamp=none --entitlements "$ENTITLEMENTS" --sign "$CERT" "$APP"
     codesign --verify --strict --verbose=1 "$APP"

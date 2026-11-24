@@ -200,7 +200,7 @@ try {
     Write-Log "Identity: $identityName"
     $nsh = $exeName -ieq 'eBIRForms.exe'
     $requiredFiles = if ($nsh) {
-        @('nsh\bundle.nshc', 'nsh\app.json', 'ebirforms-no-self-update', 'print-overrides')
+        @('nsh\bundle.nshc', 'nsh\app.json', 'ebirforms-no-self-update', 'ebirforms-store-package', 'print-overrides')
     } else {
         @('app\main.js', 'print-overrides')
     }

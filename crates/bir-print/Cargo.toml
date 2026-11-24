@@ -1,6 +1,6 @@
 [package]
 name = "bir-print"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license.workspace = true
 description = "eBIRForms print and frozen-HTML rendering."
@@ -15,7 +15,7 @@ name = "verify_certification_pdf"
 path = "src/bin/verify_certification_pdf.rs"
 
 [dependencies]
-bir-core = { path = "../bir-core", version = "0.2.0", default-features = false }
+bir-core = { path = "../bir-core", version = "0.2.1", default-features = false }
 tempfile = "3.27.0"
 serde.workspace = true
 serde_json.workspace = true

@@ -72,6 +72,9 @@ try {
                 throw "Required NSH MSIX payload file is missing: $required"
             }
         }
+        # The Store delivers this package's updates. With this file beside the executable the app never asks GitHub
+        # for a newer version and shows no link to a download outside the Store (nsh/src/desktop.rs store_managed).
+        New-Item -ItemType File -Path (Join-Path $stage 'ebirforms-store-package') | Out-Null
         $artwork = New-Item -ItemType Directory -Path (Join-Path $stage 'assets')
         Get-ChildItem -LiteralPath $assetsFullPath -Filter 'icon*.png' -File |
             Copy-Item -Destination $artwork.FullName

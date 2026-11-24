@@ -115,14 +115,21 @@ function visibleRows(query: string | null | undefined, sectionSearch: string, ro
 
 /**
  * The sections and rows the search keeps for this role. isAdmin is the signed-in admin (or an unlocked computer with no PIN).
+ * A Mac App Store build has no global hotkey; any install whose store delivers its updates has no update switch.
  */
-export function settingsView(query: string | null | undefined, isAdmin: boolean, touch = false, masBuild = false): SettingsViewSection[] {
+export function settingsView(
+  query: string | null | undefined,
+  isAdmin: boolean,
+  touch = false,
+  masBuild = false,
+  storeManaged = masBuild,
+): SettingsViewSection[] {
   const out: SettingsViewSection[] = [];
   for (const section of SETTINGS_SECTIONS) {
     if (section.adminOnly && !isAdmin) continue;
     if (touch && section.desktopOnly) continue;
     const rows = (SETTINGS_ROWS[section.id] || []).filter(
-      (row) => (isAdmin || !row.adminOnly) && (!touch || !row.desktopOnly) && (!masBuild || (row.id !== "hotkey" && row.id !== "updates")),
+      (row) => (isAdmin || !row.adminOnly) && (!touch || !row.desktopOnly) && (!masBuild || row.id !== "hotkey") && (!storeManaged || row.id !== "updates"),
     );
     const label = touch && section.id === "computer" ? "Device" : section.label;
     const search = touch && section.id === "computer" ? section.search.replaceAll("computer", "device") : section.search;
