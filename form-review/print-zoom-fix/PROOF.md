@@ -38,3 +38,10 @@ The "before" PDFs came from the neon branches' fixed sheets; try/print-zoom-fix 
 small differences unrelated to the zoom (e.g. schedule amount alignment fixed on neon-3) show as
 baseline noise here, not as regressions of this change. The 43-form sweep compares main-build vs
 fix-build PDFs on identical sheets.
+
+## Update: paper path, iOS, preview zooms, 43-form sweep (fix commit e45bd5fa54)
+
+- **Paper path**: system print dialog → "Open in Preview" on 1706 shows the corrected 2-page A4 (`paper-open-in-preview.png`) — paper prints carry the fix by construction (PDFKit prints the same PDF).
+- **Preview parity**: the preview window at "Fit width" (`prev-fit.png`) and at "100%" (`prev-100.png`) shows the same corrected layout as the saved PDF — after the fix the sheet lays out at zoom 1 and the transform scales paint only, so all zoom levels render identically.
+- **iOS**: `ios1706-after.pdf` (iPhone 17 sim, Save to Files; `ios1706-after-p1/p2.png`): A4, 2 pages, 0 same-line overlaps; 6A/7A names fit. Same `mod mac` capture path as macOS — fix covers iOS. Before: `ios1706.pdf` + `ios1706-1/6a/sig.png`.
+- **43-form sweep** (`sweep-manifest.json`, `sweep-pagediff.txt`): every sheet folder under html-frozen/ (44 bundles) rendered twice through the same WKWebView createPDF capture — once with the old `.sheet>.page{zoom:0.878}` fit_css, once with the new transform fit_css — and compared per page at 100 dpi. Result: identical page counts for all 44 bundles; per-page pixel diffs are 0.008%–0.57% (sub-pixel anti-aliasing at the smallest text sizes). No bundle differs by more than small-size text reflow; no contact sheets needed.

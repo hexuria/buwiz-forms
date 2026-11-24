@@ -1,0 +1,655 @@
+[
+ {
+  "dir": "0605-1999",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/0605-1999-old-p1.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/0605-1999-new-p1.pdf"
+  ]
+ },
+ {
+  "dir": "0619e-2018",
+  "native": [
+   612.0,
+   792.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/0619e-2018-old-p1.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/0619e-2018-new-p1.pdf"
+  ]
+ },
+ {
+  "dir": "0619f-2018",
+  "native": [
+   612.0,
+   792.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/0619f-2018-old-p1.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/0619f-2018-new-p1.pdf"
+  ]
+ },
+ {
+  "dir": "1600-pt-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1600-pt-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1600-pt-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1600-pt-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1600-pt-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1600-vt-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1600-vt-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1600-vt-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1600-vt-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1600-vt-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1600wp-2010",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1600wp-2010-old-p1.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1600wp-2010-new-p1.pdf"
+  ]
+ },
+ {
+  "dir": "1601-fq-2020",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1601-fq-2020-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1601-fq-2020-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1601-fq-2020-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1601-fq-2020-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1601c-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1601c-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1601c-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1601c-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1601c-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1601eq-2019",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1601eq-2019-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1601eq-2019-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1601eq-2019-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1601eq-2019-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1602q-2019",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1602q-2019-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1602q-2019-old-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1602q-2019-old-p3.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1602q-2019-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1602q-2019-new-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1602q-2019-new-p3.pdf"
+  ]
+ },
+ {
+  "dir": "1603q-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1603q-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1603q-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1603q-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1603q-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1604c-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1604c-2018-old-p1.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1604c-2018-new-p1.pdf"
+  ]
+ },
+ {
+  "dir": "1604e-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1604e-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1604e-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1604e-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1604e-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1604f-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1604f-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1604f-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1604f-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1604f-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1606-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1606-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1606-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1606-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1606-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1700-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1700-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1700-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1700-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1700-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1701-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701-2018-old-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701-2018-old-p3.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701-2018-old-p4.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701-2018-new-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701-2018-new-p3.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701-2018-new-p4.pdf"
+  ]
+ },
+ {
+  "dir": "1701a-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701a-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701a-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701a-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701a-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1701ms-2024",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701ms-2024-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701ms-2024-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701ms-2024-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701ms-2024-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1701q-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701q-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701q-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701q-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1701q-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1702ex-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702ex-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702ex-2018-old-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702ex-2018-old-p3.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702ex-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702ex-2018-new-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702ex-2018-new-p3.pdf"
+  ]
+ },
+ {
+  "dir": "1702mx-2018c",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702mx-2018c-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702mx-2018c-old-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702mx-2018c-old-p3.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702mx-2018c-old-p4.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702mx-2018c-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702mx-2018c-new-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702mx-2018c-new-p3.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702mx-2018c-new-p4.pdf"
+  ]
+ },
+ {
+  "dir": "1702q-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702q-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702q-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702q-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702q-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1702rt-2018c",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702rt-2018c-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702rt-2018c-old-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702rt-2018c-old-p3.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702rt-2018c-old-p4.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702rt-2018c-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702rt-2018c-new-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702rt-2018c-new-p3.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1702rt-2018c-new-p4.pdf"
+  ]
+ },
+ {
+  "dir": "1706-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1706-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1706-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1706-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1706-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1707-2021",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1707-2021-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1707-2021-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1707-2021-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1707-2021-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1707a-2021",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1707a-2021-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1707a-2021-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1707a-2021-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1707a-2021-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1800-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1800-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1800-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1800-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1800-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "1801-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1801-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1801-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1801-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/1801-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "2000-dst-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2000-dst-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2000-dst-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2000-dst-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2000-dst-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "2000-ot-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2000-ot-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2000-ot-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2000-ot-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2000-ot-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "2200a-2020",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200a-2020-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200a-2020-old-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200a-2020-old-p3.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200a-2020-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200a-2020-new-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200a-2020-new-p3.pdf"
+  ]
+ },
+ {
+  "dir": "2200an-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200an-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200an-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200an-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200an-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "2200c-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200c-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200c-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200c-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200c-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "2200m-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200m-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200m-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200m-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200m-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "2200p-2020",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200p-2020-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200p-2020-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200p-2020-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200p-2020-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "2200s-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200s-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200s-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200s-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200s-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "2200t-2022",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200t-2022-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200t-2022-old-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200t-2022-old-p3.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200t-2022-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200t-2022-new-p2.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2200t-2022-new-p3.pdf"
+  ]
+ },
+ {
+  "dir": "2550m-2007",
+  "native": [
+   612.0,
+   1008.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2550m-2007-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2550m-2007-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2550m-2007-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2550m-2007-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "2550q-2024",
+  "native": [
+   612.0,
+   1008.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2550q-2024-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2550q-2024-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2550q-2024-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2550q-2024-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "2551q-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2551q-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2551q-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2551q-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2551q-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "2552-2018",
+  "native": [
+   612.0,
+   936.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2552-2018-old-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2552-2018-old-p2.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2552-2018-new-p1.pdf",
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2552-2018-new-p2.pdf"
+  ]
+ },
+ {
+  "dir": "2553-1999",
+  "native": [
+   612.0,
+   1008.0
+  ],
+  "old": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2553-1999-old-p1.pdf"
+  ],
+  "new": [
+   "/Users/devin/build/agents/mac-check/artifacts/sweep/2553-1999-new-p1.pdf"
+  ]
+ }
+]
