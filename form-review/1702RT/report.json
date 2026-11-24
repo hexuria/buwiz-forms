@@ -1,0 +1,75 @@
+{
+  "form": "1702RT",
+  "revision": "January 2018 (ENCS)",
+  "html_frozen_slug": "1702rt-2018c",
+  "branch": "try/forms-neon-1-b",
+  "base_commit": "48887449",
+  "verdict": "tweak",
+  "official_pdf": {
+    "filename": "1702-RT Jan 2018 ENCS Final v3.pdf",
+    "sha256": "d9a6a8a13e0114934261151c4eb269a1573042e7ce670eaf12b15f169d308d2d",
+    "pages": 4,
+    "downloaded": true
+  },
+  "summary": "All 4 pages match the official January 2018 (ENCS) layout and Page 2–4 whole-peso comb slots omit centavos cleanly, but plain text collides with comb ticks across all 4 pages (Page 1 Item 9 address, Item 22 attachments, Part III bank/number/others; Pages 2–4 header Registered Name; Page 2 Item 53; Page 3 Schedule I Items 17d–h & Schedule II Description/Legal Basis; Page 4 Schedule V Items 2, 5, 7), and Page 1 Header Item 5 ATC 'IC010' leaves its description box blank. Note: form.fill reported 'applied' + 'not_shown' for Part IV/Schedule monetary keys while the screen and printed sheet stayed 0 (tooling/sync behavior to verify separately).",
+  "test_data": {
+    "script": "form-review/scripts/seed_and_capture.py",
+    "payload": "form-review/scripts/payloads/payload-1702RT.json",
+    "profile": "Juana Santos long-name/long-address demo profile (TIN 000-123-453-00000, RDO 008)",
+    "period": "TY 2025 (year=2025)",
+    "notes": "Two-pass payload (pass 1: 7/7 applied; pass 2: 299/316 applied, 17 refused). Whole-peso monetary fields returned 'not_shown' in form.fill and remained 0 on screen and print; text/description/rate/header/payment-text fields rendered and exercised all 4 pages."
+  },
+  "defects": [
+    {
+      "id": "1702RT-P1",
+      "severity": "medium",
+      "area": "print",
+      "page": 1,
+      "status": "needs shared change",
+      "description": "Plain text collides with comb ticks across all 4 pages: Page 1 Item 9 Registered Address (3 lines), Item 22 Number of Attachments, Part III Items 23–26 Drawee Bank / Number / Others; Pages 2–4 Header Registered Name; Page 2 Item 53 specify; Page 3 Schedule I Items 17d–17h specify and Schedule II Items 1–3 Description & Legal Basis; Page 4 Schedule V Items 2, 5, 7 specify."
+    },
+    {
+      "id": "1702RT-P2",
+      "severity": "low",
+      "area": "print",
+      "page": 1,
+      "status": "open",
+      "description": "Header Item 5 ATC 'IC010' prints slightly low/left in its code box and leaves the adjacent ATC description box blank."
+    },
+    {
+      "id": "1702RT-P3",
+      "severity": "low",
+      "area": "print",
+      "page": 1,
+      "status": "open",
+      "description": "Part III Item 26 Others (specify below) shrinks to ~4pt over comb ticks for a 43-character description."
+    }
+  ],
+  "evidence": {
+    "official_pages": [
+      "form-review/1702RT/official/page-01.png",
+      "form-review/1702RT/official/page-02.png",
+      "form-review/1702RT/official/page-03.png",
+      "form-review/1702RT/official/page-04.png"
+    ],
+    "before_print": [
+      "form-review/1702RT/before/print-p1.png",
+      "form-review/1702RT/before/print-p2.png",
+      "form-review/1702RT/before/print-p3.png",
+      "form-review/1702RT/before/print-p4.png"
+    ],
+    "before_screens": [
+      "form-review/1702RT/before/screen-01-return-details.png",
+      "form-review/1702RT/before/screen-02-part-i-background-information.png",
+      "form-review/1702RT/before/screen-03-part-ii-total-tax-payable.png",
+      "form-review/1702RT/before/screen-04-part-iii-details-of-payment.png",
+      "form-review/1702RT/before/screen-05-part-iv-computation-of-tax.png",
+      "form-review/1702RT/before/screen-06-part-v-tax-relief-availment.png",
+      "form-review/1702RT/before/screen-07-schedule-i-ordinary-allowable-itemized-d.png",
+      "form-review/1702RT/before/screen-08-schedule-ii-special-allowable-itemized-d.png",
+      "form-review/1702RT/before/screen-09-schedule-iii-computation-of-net-operatin.png",
+      "form-review/1702RT/before/screen-10-schedule-iiia-computation-of-available-n.png",
+      "form-review/1702RT/before/screen-11-schedule-iv-computation-of-minimum-corpo.png"
+    ]
+  }
+}
