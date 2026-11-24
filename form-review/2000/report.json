@@ -1,7 +1,7 @@
 {
   "code": "2000",
   "verdict": "tweak",
-  "summary": "Fixed Page 2 TIN + Taxpayer's Name concatenation by splitting the single 40-slot p2c5 comb into separate TIN (p2c5a..p2c5d) and Taxpayer's Name (p2c5e) combs in html-frozen/2000-dst-2018/{index.html,writer-cells.json}, and replaced all 64 raw developer cell-ID labels for 2000 in forms/forms-schema.json with plain labels. Confirmed Page 2 DST/ATC reference table is lifted to guide.html (by design) and Schedule 1 Tax Rate prints when ATC description is set from the dropdown. Comb-tick collisions on long names/addresses remain needs shared change.",
+  "summary": "Fixed Page 2 TIN/Taxpayer Name comb collision by splitting p2c5 into p2c5a..p2c5e and rewiring writer-cells.json (verified between matched before/print-p2.png and after/print-p2.png). Re-captured matched BEFORE and AFTER from the same saved draft with real catalog ATCs (DS101, DS102, DS103) so Schedule 1 Tax Rate (P2.00/P200, P1.50/P200, 75%) and Tax Due print cleanly in all 3 rows, and with Schedule 1 Row 1 open (screen-05b-*-row-open.png). Open-row captures confirm the UI row drawer already displays official column headings (ATC, Tax Base, Tax Rate, Tax Due) from forms/schema-overrides.json; the 64 label updates in forms/forms-schema.json clean the underlying schema data rather than a visible UI change.",
   "defects": [
     {
       "id": "2000-p2-tin-name-collision",
@@ -16,10 +16,10 @@
       "id": "2000-p2-sched1-tax-rate-blank",
       "surface": "print",
       "where": "Page 2 Schedule 1 Tax Rate column (p2c15, p2c23, p2c31)",
-      "what": "Verified p2c15/p2c23/p2c31 are joined to frm2000:sched1:txtTaxRate0..2; rate_text() in bir-core requires both atc_code and matching description (selecting from the ATC dropdown populates it; synthetic fill only set drpATCCode0).",
+      "what": "Schedule 1 Tax Rate was blank in the first capture only because raw ATC strings without catalog descriptions were filled; with catalog picks (DS101, DS102, DS103), Tax Rate (P2.00/P200, P1.50/P200, 75%) and Tax Due print cleanly in all 3 rows.",
       "before": "form-review/2000/before/print-p2.png",
       "after": "form-review/2000/after/print-p2.png",
-      "status": "by design"
+      "status": "verified in matched capture"
     },
     {
       "id": "2000-p1-comb-collisions",
@@ -43,7 +43,7 @@
       "id": "2000-screen-raw-cell-id-labels",
       "surface": "screen",
       "where": "Schedules 1-4 in forms/forms-schema.json (64 entries including row templates)",
-      "what": "Replaced all 64 raw developer cell-ID labels (sched1:txtTaxBase0, :txt tax base, etc.) with plain human-readable labels matching the BIR 2000 column headers.",
+      "what": "64 schedule field labels in forms/forms-schema.json had raw cell IDs (e.g. sched1:txtTaxBase0). Cleaned to official BIR headings in forms/forms-schema.json. Open-row BEFORE/AFTER captures (screen-05b-*-row-open.png) confirm the UI row drawer already used clean official headings from forms/schema-overrides.json, so the screen screenshots are unchanged.",
       "before": "form-review/2000/before/screen-05-schedule-1-summary-of-computation-of-t.png",
       "after": "form-review/2000/after/screen-05-schedule-1-summary-of-computation-of-t.png",
       "status": "fixed"

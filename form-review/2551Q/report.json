@@ -28,7 +28,8 @@
       "what": "Centered p1c187-i vertically above the underline (inset 1.5pt); horizontal width (151.5pt) matches the official PDF and auto-shrink is handled by crates/bir-print.",
       "before": "form-review/2551Q/before/print-p1.png",
       "after": "form-review/2551Q/after/print-p1.png",
-      "status": "fixed"
+      "status": "fixed",
+      "note": "Follow-up note: after vertical centering in index.html, long Item 17 specify text is still rendered very small by crates/bir-print single-line fitting."
     },
     {
       "id": "2551q-p2-tax-rate-align",
@@ -51,7 +52,7 @@
     {
       "id": "2551q-screen-sched1-not-yet",
       "surface": "screen",
-      "where": "Schedule 1 · Computation of Tax",
+      "where": "Schedule 1 \u00b7 Computation of Tax",
       "what": "Shows 'Can't be filled on this page yet.' (crates/bir-app-api/src/screen_form_module.rs, NOTE_NOT_YET) and Schedule 1 rows 2-6 ATC selectors cannot be edited on the form page. Making those rows fillable requires Rust screen-form table/row plumbing in crates/bir-app-api/src/screen_form_module.rs and nsh/screens/form/ (per-row ATC select + Taxable Amount input + computed Tax Rate/Tax Due wired to txtATC1..6 and txtATCAmt1..6).",
       "before": "form-review/2551Q/before/screen-05-schedule-1-computation-of-tax-attach-a.png",
       "after": "form-review/2551Q/after/screen-05-schedule-1-computation-of-tax-attach-a.png",
@@ -74,7 +75,8 @@
     "neon-4 (try/forms-shared-print): long names, addresses, and Item 12A specify colliding with comb ticks; right-aligning 2-slot Schedule 1 Tax Rate combs",
     "crates/bir-print/src/fixtures/{fitting-band-goldens,fitting-goldens,overflow-goldens}.json: refresh 2551q-2018 SHA-256 hashes (not edited to avoid touching crates/)",
     "crates/bir-app-api/src/screen_form_module.rs + nsh/screens/form/: editable Schedule 1 table rows (remove NOTE_NOT_YET)",
-    "crates/bir-core/src/forms/form_2551q.rs + nsh/screens/taxpayer/Facts.tsx: clearer Check guidance naming Tax profile -> Facts your forms use and guiding Income type prerequisite when opening annual income-tax election"
+    "crates/bir-core/src/forms/form_2551q.rs + nsh/screens/taxpayer/Facts.tsx: clearer Check guidance naming Tax profile -> Facts your forms use and guiding Income type prerequisite when opening annual income-tax election",
+    "2551Q Item 17 specify text is still very small under single-line fitting in crates/bir-print; consider a minimum readable font size with wrapping or ellipsis."
   ],
   "tests_run": [
     "cargo test -p bir-print: 122 passed, 3 expected golden SHA-256 diffs on 2551q-2018 only (crates/bir-print/src/fixtures/*.json left untouched)"
