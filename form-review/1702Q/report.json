@@ -1,0 +1,91 @@
+{
+  "form": "1702Q",
+  "revision": "January 2018 (ENCS)",
+  "html_frozen_slug": "1702q-2018",
+  "branch": "try/forms-neon-1-b",
+  "base_commit": "48887449",
+  "verdict": "broken",
+  "official_pdf": {
+    "filename": "1702Q 2018ENCS final2.pdf",
+    "sha256": "589e22190b9211571cb8a0ba14c97c17dff250f3b8ee9f9e8f6cc3b37b1b1be4",
+    "pages": 3,
+    "downloaded": true
+  },
+  "summary": "Serious print data defects on both pages: every Part II and Part IV comb-cell amount prints with '.00' centavos inside whole-peso comb slots (despite the official form header 'Do NOT enter Centavos', except Schedule 1 Col B Item 13 which omits '.00'); Schedule 3 Item 5 prints '2' next to the preprinted '2 %' so the MCIT rate reads '22%'; Schedule 1 Col A Item 10 prints '0' next to preprinted '0 %' ('00%') and Item 11 prints '0.00' beside preprinted '000'; plus shared plain-text-over-comb-tick collisions on Item 9 address, Item 13A treaty specify, Page 2 header name, and Schedule 4 Items 6a–6b.",
+  "test_data": {
+    "script": "form-review/scripts/seed_and_capture.py",
+    "payload": "form-review/scripts/payloads/payload-1702Q.json",
+    "profile": "Juana Santos long-name/long-address demo profile (TIN 000-123-453-00000, RDO 008)",
+    "period": "Q2 2025 (year=2025, period=2)",
+    "notes": "39/42 fields applied (3 penalty fields 21–23 refused because return is an overpayment). Schedule 4 Other Tax Credits is fixed at 2 rows (6a and 6b) with no Add row UI."
+  },
+  "defects": [
+    {
+      "id": "1702Q-P1",
+      "severity": "critical",
+      "area": "print",
+      "page": 1,
+      "status": "open",
+      "description": "Every monetary comb cell on Pages 1 and 2 (Part II Items 14–25 and Part IV Schedules 1–4, except Schedule 1 Col B Item 13) prints '.00' centavos into whole-peso comb slots even though official 1702Q specifies '(Do NOT enter Centavos)' and has 12 integer slots; the decimal point occupies a peso slot and shifts the amount digits left by three slots."
+    },
+    {
+      "id": "1702Q-P2",
+      "severity": "high",
+      "area": "print",
+      "page": 2,
+      "status": "open",
+      "description": "Preprinted static values are doubled by dynamic writes: Schedule 3 Item 5 MCIT Rate writes '2' beside the preprinted '2 %' so it reads '22%'; Schedule 1 Col A Item 10 writes '0' beside preprinted '0 %' ('00%'); Schedule 1 Col A Item 11 writes '0.00' in small plain text beside preprinted '000'."
+    },
+    {
+      "id": "1702Q-P3",
+      "severity": "medium",
+      "area": "print",
+      "page": 1,
+      "status": "needs shared change",
+      "description": "Long plain-text values print across comb ticks on Page 1 Item 9 Registered Address (both lines), Page 1 Item 13A treaty specify, Page 2 Header Registered Name, and Page 2 Schedule 4 Items 6a and 6b specify."
+    },
+    {
+      "id": "1702Q-P4",
+      "severity": "low",
+      "area": "print",
+      "page": 1,
+      "status": "open",
+      "description": "Header Item 5 second ATC row ('IC 010' / 'DOMESTIC CORPORATION IN GENERAL - 25%') sits slightly cramped against the bottom border of its boxes."
+    },
+    {
+      "id": "1702Q-S1",
+      "severity": "low",
+      "area": "screen",
+      "status": "open",
+      "description": "Part IV Schedule 4 Other Tax Credits/Payments is fixed at two items (6a and 6b) with no Add row control, so overflow past the 2 printed rows cannot be entered."
+    },
+    {
+      "id": "1702Q-P5",
+      "severity": "info",
+      "area": "print",
+      "page": 2,
+      "status": "open",
+      "description": "Official 1702Q PDF has 3 pages (Page 3 is Guidelines/Instructions); the app renders 2 form pages."
+    }
+  ],
+  "evidence": {
+    "official_pages": [
+      "form-review/1702Q/official/page-01.png",
+      "form-review/1702Q/official/page-02.png",
+      "form-review/1702Q/official/page-03.png"
+    ],
+    "before_print": [
+      "form-review/1702Q/before/print-p1.png",
+      "form-review/1702Q/before/print-p2.png"
+    ],
+    "before_screens": [
+      "form-review/1702Q/before/screen-01-return-details.png",
+      "form-review/1702Q/before/screen-02-part-i-background-information.png",
+      "form-review/1702Q/before/screen-03-part-ii-total-tax-payable.png",
+      "form-review/1702Q/before/screen-04-part-iv-schedule-1-declaration-this-quar.png",
+      "form-review/1702Q/before/screen-05-part-iv-schedule-2-declaration-this-quar.png",
+      "form-review/1702Q/before/screen-06-part-iv-schedule-3-computation-of-minimu.png",
+      "form-review/1702Q/before/screen-07-part-iv-schedule-4-tax-credits-payments.png"
+    ]
+  }
+}

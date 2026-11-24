@@ -1,0 +1,62 @@
+{
+  "open_args": {
+    "year": 2025,
+    "period": 2
+  },
+  "passes": [
+    {
+      "frm1702q:rbForClndrFscl": "1",
+      "frm1702q:rbAmendedRtn": "1",
+      "frm1702q:txtSheets": "12",
+      "frm1702q:rbATC": "2",
+      "frm1702q:rbATC_1": "true",
+      "frm1702q:rbMthdOfDdctns": "1",
+      "frm1702q:rbTxRlf": "1",
+      "frm1702q:txtTxRlfSpcfy": "PHILIPPINES-JAPAN TAX TREATY ARTICLE 7 BUSINESS PROFITS EXEMPTION",
+      "frm1702q:txtTax15": "1250000.00",
+      "frm1702q:txtTax21": "350000.00",
+      "frm1702q:txtTax22": "125000.50",
+      "frm1702q:txtTax23": "50000.00",
+      "frm1702q:Sched1:txtTax1A": "18500000.00",
+      "frm1702q:Sched1:txtTax1B": "24500000.00",
+      "frm1702q:Sched1:txtTax2A": "9200000.00",
+      "frm1702q:Sched1:txtTax2B": "11800000.00",
+      "frm1702q:Sched1:txtTax4A": "450000.00",
+      "frm1702q:Sched1:txtTax4B": "650000.00",
+      "frm1702q:Sched1:txtTax6A": "3100000.00",
+      "frm1702q:Sched1:txtTax6B": "4200000.00",
+      "frm1702q:Sched1:txtTax8A": "1850000.00",
+      "frm1702q:Sched1:txtTax8B": "2150000.00",
+      "frm1702q:Sched1:txtTax10B": "5",
+      "frm1702q:Sched1:txtTax12B": "95000.00",
+      "frm1702q:Sched2:txtTax1": "48500000.00",
+      "frm1702q:Sched2:txtTax2": "26400000.00",
+      "frm1702q:Sched2:txtTax4": "1250000.00",
+      "frm1702q:Sched2:txtTax6": "8750000.00",
+      "frm1702q:Sched2:txtTax8": "3400000.00",
+      "frm1702q:Sched3:txtTax1": "11200000.00",
+      "frm1702q:Sched3:txtTax2": "8400000.00",
+      "frm1702q:Sched3:txtTax3": "950000.00",
+      "frm1702q:Sched4:txtTax1": "1450000.00",
+      "frm1702q:Sched4:txtTax2": "825000.00",
+      "frm1702q:Sched4:txtTax3": "615000.00",
+      "frm1702q:Sched4:txtTax4": "540000.00",
+      "frm1702q:Sched4:txtTax5": "310000.00",
+      "frm1702q:Sched4:txtTax6": "225000.00",
+      "frm1702q:Sched4:txtOthrTxCrdts0": "FOREIGN TAX CREDIT UNDER PH-SG DTA CERTIFICATE 2025-001",
+      "frm1702q:Sched4:txtOthrTxCrdtAmnt0": "425000.00",
+      "frm1702q:Sched4:txtOthrTxCrdts1": "TAX CREDIT CERTIFICATE TCC-2025-00884422-MAKATI",
+      "frm1702q:Sched4:txtOthrTxCrdtAmnt1": "385000.00"
+    }
+  ],
+  "ui_rows": [
+    {
+      "section": "Schedule 4",
+      "rows": [
+        ["OVERFLOW CREDIT ROW 3 BOI INCOME TAX HOLIDAY ADJUSTMENT", "195000.00"],
+        ["OVERFLOW CREDIT ROW 4 PEZA EXPORT ENTERPRISE CREDIT", "175000.00"],
+        ["OVERFLOW CREDIT ROW 5 PRIOR AUDIT OVERPAYMENT CARRYOVER", "155000.00"]
+      ]
+    }
+  ]
+}
