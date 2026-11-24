@@ -51802,6 +51802,10 @@
       "kind": "int",
       "evidence": "fields.json logical_type date-string-mm-dd-yyyy, max_length 2 — one component of a split date"
     },
+    "frm2552:txtPg1P2I17TaxPaidInPrevRtrn": {
+      "computed": false,
+      "evidence": "Item 17 Tax Paid in Return Previously Filed: disabled at load (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json L866, readonly=false), enabled when Amended Return is Yes (gated in rows_as_needed.rs)"
+    },
     "frm2552:txtPg1I1Month": {
       "kind": "sel",
       "options": [

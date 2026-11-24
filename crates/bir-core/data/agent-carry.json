@@ -820,10 +820,7 @@
     ]
   },
   "1701ms-v2024": {
-    "computed": [
-      "frm1701MS:txtLessNonTaxablea",
-      "frm1701MS:txtLessNonTaxableb"
-    ],
+    "computed": [],
     "dates": [
       "frm1701MS:txtTaxpayerNo16a",
       "frm1701MS:txtTaxpayerNo16a1",
@@ -2696,7 +2693,6 @@
       "frm2552:txtPg1P2I14TaxDue",
       "frm2552:txtPg1P2I15TaxDue",
       "frm2552:txtPg1P2I16TotTaxDue",
-      "frm2552:txtPg1P2I17TaxPaidInPrevRtrn",
       "frm2552:txtPg1P2I19TotTaxCredPmnt",
       "frm2552:txtPg1P2I20TotTaxStllDueOvrPmnt",
       "frm2552:txtPg1P2I24TotPenalties",

@@ -18294,6 +18294,11 @@ mod tests {
                 tag.to_string(),
                 !offering,
             ),
+            (
+                "frm2552:txtPg1P2I17TaxPaidInPrevRtrn".to_string(),
+                "Needs Amended Return = Yes".to_string(),
+                draft["is_amended"].as_bool() != Some(true),
+            ),
         ];
         for n in 2..=5 {
             for stem in ["TransClass", "Amount"] {
@@ -18439,9 +18444,10 @@ mod tests {
                 // B16: 2551Q item 12's specify select waits for Item 12 Yes
                 // (CORPUS_GAPS_B16).
                 ("2551Q", 1),
-                // 10 for 2552 (PR 9): items 12A and 12B and Part IV rows
-                // 2-5's two boxes, which the official runtime keeps shut.
-                ("2552", 10),
+                // 11 for 2552 (PR 9 + Item 17): items 12A and 12B, item 17
+                // (while Amended Return is not Yes), and Part IV rows 2-5's
+                // two boxes, which the official runtime keeps shut.
+                ("2552", 11),
                 // PR 4: 2553 item 13's list waits for item 13 Yes too.
                 ("2553", 2),
             ])

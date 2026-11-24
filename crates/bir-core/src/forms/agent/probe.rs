@@ -269,6 +269,10 @@ const FILER_TYPED: &[(&str, &str)] = &[
         "frm1701MS:txtLessNonTaxableb",
         "Part IV item 2B Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered while Schedule A (Part IV.A) is open and clears it when Schedule A closes",
     ),
+    (
+        "frm2552:txtPg1P2I17TaxPaidInPrevRtrn",
+        "Item 17 Tax Paid in Return Previously Filed: disabled at load (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json source line 866) until Amended Return is Yes; form_2552.rs recompute zeroes tax_paid_previous unless is_amended",
+    ),
 ];
 
 const EXCESS_MCIT_1702RT: &str = "1702RT Schedule IV column C (Excess MCIT over \
