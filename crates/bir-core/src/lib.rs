@@ -15,6 +15,7 @@
 //! This crate is UI-agnostic and can be consumed by any frontend:
 //! CLI, GPUI desktop, web (via WASM), etc.
 
+pub mod account_session;
 pub mod background_cron;
 pub mod bir_xml;
 pub mod calendar_ics;
@@ -57,6 +58,7 @@ mod private_temp;
 pub mod profile;
 pub mod receipt;
 pub mod reference;
+pub mod relay;
 pub mod schema;
 pub mod tax_profile;
 pub mod time_utils;

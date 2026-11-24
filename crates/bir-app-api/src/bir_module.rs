@@ -126,12 +126,22 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     if SUBMISSION_WORKER.set(()).is_err() {
         return;
     }
+    // 16 MiB stacks: the relay client's send future (crates/bir-submit) overflows a default stack in a debug
+    // build. The worker's tasks run on the runtime's threads, its loop on this one.
+    const WORKER_STACK: usize = 16 * 1024 * 1024;
     let spawned = std::thread::Builder::new()
         .name("bir-submission-worker".into())
-        .spawn(move || match tokio::runtime::Runtime::new() {
-            Ok(runtime) => runtime.block_on(bir_core::background_cron::start_cron_jobs(db)),
-            Err(error) => {
-                tracing::error!("submission worker not started: no Tokio runtime: {error}");
+        .stack_size(WORKER_STACK)
+        .spawn(move || {
+            match tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .thread_stack_size(WORKER_STACK)
+                .build()
+            {
+                Ok(runtime) => runtime.block_on(bir_core::background_cron::start_cron_jobs(db)),
+                Err(error) => {
+                    tracing::error!("submission worker not started: no Tokio runtime: {error}");
+                }
             }
         });
     match spawned {

@@ -149,7 +149,8 @@ impl Harness {
             claimed
                 .submission_error
                 .as_deref()
-                .is_some_and(|message| message.contains("outcome pending")),
+                .is_some_and(|message| message.contains("outcome pending")
+                    || message.starts_with(crate::background_cron::OUTCOME_UNKNOWN)),
             "{:?}",
             claimed.submission_error
         );

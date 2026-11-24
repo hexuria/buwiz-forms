@@ -72,6 +72,7 @@ pub fn register(module: HostModule) -> HostModule {
 /// Pause filing, then open the UI only when a saved session still qualifies.
 /// Call this before the menu bar is built and before the database worker starts.
 pub fn prepare_launch() {
+    bir_core::account_session::on_session_ended(session_ended_by_server);
     bir_core::background_cron::set_submission_paused(true);
     forget_saved_server_url();
     if crate::account_gate::auth_bypass_enabled() {
@@ -178,8 +179,13 @@ fn finish_sign_in(
             offline: false,
             practice,
         };
-        bir_core::transport::set_practice_account(practice);
-        save_stored(&stored_from(secrets, now))?;
+        {
+            let _one = bir_core::account_session::lock();
+            bir_core::transport::set_practice_account(practice);
+            save_stored(&stored_from(secrets, now))?;
+        }
+        // A new sign-in registers a new device key with the relay (the old one belonged to the old sign-in).
+        bir_core::relay::forget_device();
         status_now()
     })
 }
@@ -188,6 +194,7 @@ fn refresh_account(
     _arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     spawn_account("buwiz-account-refresh", || {
+        let _one = bir_core::account_session::lock();
         let Some(stored) = load_stored()? else {
             return status_now();
         };
@@ -224,13 +231,17 @@ fn sign_out(
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     spawn_account("buwiz-account-sign-out", || {
         clear_pending();
-        if let Some(stored) = load_stored()? {
-            let mut http = BlockingHttp::new();
-            cloud_account::revoke_session(&mut http, &stored.to_secrets());
+        {
+            let _one = bir_core::account_session::lock();
+            if let Some(stored) = load_stored()? {
+                let mut http = BlockingHttp::new();
+                cloud_account::revoke_session(&mut http, &stored.to_secrets());
+            }
+            clear_stored();
         }
-        clear_stored();
         crate::account_gate::set_unlocked(false);
         bir_core::transport::set_practice_account(false);
+        bir_core::relay::forget_device();
         status_now()
     })
 }
@@ -255,9 +266,18 @@ fn session_closed() -> HostResult {
     Ok(HostValue::Null)
 }
 
+/// The sign-in ended outside a user action (a rejected refresh, a removed
+/// device): `bir_core::account_session` has cleared the saved account.
+fn session_ended_by_server() {
+    crate::account_gate::set_unlocked(false);
+    bir_core::transport::set_practice_account(false);
+    crate::hooks::hooks().refresh_menu();
+}
+
 /// Whether the gate opens, and whether the account is a practice account.
 /// Offline, the saved value stands.
 fn restore_saved_session() -> (bool, bool) {
+    let _one = bir_core::account_session::lock();
     let Ok(Some(stored)) = load_stored() else {
         return (false, false);
     };

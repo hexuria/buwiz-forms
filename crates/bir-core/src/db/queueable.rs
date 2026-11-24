@@ -851,10 +851,9 @@ impl Database {
         Ok(true)
     }
 
-    /// The relay proved it did not take this claimed queued return (it refused it, or was unavailable): only the worker holding
-    /// the claim lets it go. Refused: back to Draft with the relay's reason (the same file would be refused again).
-    /// Unavailable: still Queued, retried after the usual back-off (the fifth failure returns it to Draft). `false` when
-    /// the claim is no longer this worker's.
+    /// The send of this claimed queued return did not end in a receipt: only the worker holding the claim settles it,
+    /// as `how` says ([`crate::forms::queueable::NoReceipt`]: refused back to Draft with the reason, failed or held and
+    /// still Queued, or unknown with the claim kept). `false` when the claim is no longer this worker's.
     pub(crate) fn release_unaccepted_claimed_queueable<F: QueueableForm>(
         &self,
         tin: &str,
@@ -862,7 +861,7 @@ impl Database {
         period: i64,
         claim_token: &str,
         note: String,
-        refused: bool,
+        how: crate::forms::queueable::NoReceipt,
     ) -> Result<bool, DbError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
         let Some((id, raw_json, db_status)) =
@@ -879,12 +878,7 @@ impl Database {
         {
             return Ok(false);
         }
-        if refused {
-            draft.lifecycle_mut().revert_to_draft();
-            draft.lifecycle_mut().submission_error = Some(note);
-        } else {
-            draft.lifecycle_mut().record_submission_failure(note);
-        }
+        draft.lifecycle_mut().settle_without_receipt(note, how);
         let status = if matches!(draft.lifecycle().status, FilingStatus::Draft) {
             "Draft"
         } else {
