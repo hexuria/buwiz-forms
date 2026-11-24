@@ -621,6 +621,69 @@ _package-mac-appstore args="": build-frozen-html-identity
         echo "⚠️  Note: You must also codesign the .pkg with an 'Apple Distribution' certificate before submitting."
     fi
 
+# App Store iOS package (the devices are nsh.json's ios.infoPlist.UIDeviceFamily): nsh signs it with the App Store profile,
+# then the store's additions go in and the bundle is signed again with the same entitlements. CODESIGN_IDENTITY is the
+# "Apple Distribution: …" identity; the profile is the iOS App Store profile for dev.goldcoders.bir (docs/platforms/ios.md).
+# Upload the .ipa with `just ios-appstore-upload`.
+[macos]
+ios-appstore: build-frozen-html-identity
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # App Store Connect refuses a package whose files only their owner can read (a umask of 077 builds that).
+    umask 022
+    root="$(pwd)"
+    CERT="${CODESIGN_IDENTITY:?set CODESIGN_IDENTITY to the Apple Distribution identity}"
+    PROFILE="assets/ios/embedded.mobileprovision"
+    if [ ! -f "$PROFILE" ]; then
+        echo "❌ No $PROFILE: download the iOS App Store profile for dev.goldcoders.bir." >&2; exit 1
+    fi
+    EXPIRES="$(security cms -D -i "$PROFILE" | plutil -extract ExpirationDate raw -)"
+    if [[ "$EXPIRES" < "$(date -u +%Y-%m-%dT%H:%M:%SZ)" ]]; then
+        echo "❌ $PROFILE expired $EXPIRES." >&2; exit 1
+    fi
+    set -a && source .env && set +a
+    BUILD="$(uv run scripts/bump_build.py --print-next)"
+    case "$BUILD" in ''|*[!0-9]*) echo "Invalid App Store build number: $BUILD" >&2; exit 1 ;; esac
+    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    OUT="$root/{{RELEASE_DIR}}/ios"
+    APP="$OUT/{{APP_NAME}}.app"
+    IPA="$root/{{RELEASE_DIR}}/{{APP_NAME}}-iOS-{{VERSION}}.ipa"
+    rm -rf "$OUT" "$IPA"
+    mkdir -p "$OUT"
+    (cd nsh && nsh package --target ios --build "$BUILD" --app-version "{{VERSION}}" \
+        --sign "$CERT" --profile "$root/$PROFILE" -o "$OUT")
+    # The store build does not update itself (the updater never starts on a phone; its source goes too), it reads the
+    # per-form print CSS beside its executable (bir-app-api packaged.rs), and it carries Apple's privacy manifest.
+    rm -f "$OUT"/.nsh-updater.json "$OUT"/*.ipa "$APP/nsh/assets/nsh-updater.json"
+    cp -R print-overrides "$APP/"
+    cp assets/ios/PrivacyInfo.xcprivacy "$APP/"
+    # The screen-capture text describes the desktop agent; an iOS store build must not claim that permission.
+    if plutil -extract NSScreenCaptureUsageDescription raw "$APP/Info.plist" >/dev/null 2>&1; then
+        echo "❌ $APP/Info.plist has NSScreenCaptureUsageDescription." >&2; exit 1
+    fi
+    {{PYTHON}} scripts/audit_no_legacy.py --package-root "$APP"
+    xattr -cr "$APP"
+    chmod -R u+rwX,go+rX "$APP"
+    codesign --force --sign "$CERT" --preserve-metadata=entitlements,requirements,flags "$APP"
+    codesign --verify --strict --verbose=1 "$APP"
+    STAGE="$(mktemp -d)"
+    mkdir "$STAGE/Payload"
+    ditto "$APP" "$STAGE/Payload/{{APP_NAME}}.app"
+    (cd "$STAGE" && zip -qry "$IPA" Payload)
+    rm -rf "$STAGE"
+    echo "✅ $IPA ({{VERSION}}, build $BUILD)"
+
+# Uploads the iOS package `just ios-appstore` made, with the App Store Connect key in .env (as testflight-upload does).
+[macos]
+ios-appstore-upload:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    set -a && source .env && set +a
+    IPA="{{RELEASE_DIR}}/{{APP_NAME}}-iOS-{{VERSION}}.ipa"
+    [ -f "$IPA" ] || { echo "❌ No $IPA: run just ios-appstore first." >&2; exit 1; }
+    ~/BuwizNsh/tools/bin/nsh publish ios "$IPA" --app-id 6767850225 \
+        --issuer-id "$APP_STORE_ISSUER_ID" --key-id "$APP_STORE_KEY_ID" --private-key "$APP_STORE_P8_PATH"
+
 [unix]
 nsh-check *args="":
     #!/usr/bin/env bash
