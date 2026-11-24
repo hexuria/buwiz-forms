@@ -281,7 +281,7 @@ export function FormPage(props: FormPageProps) {
     for (const part of schema?.parts || []) {
       for (const it of part.items || []) {
         for (const f of it.f || []) {
-          if (f.t === "money" || f.t === "int" || f.t === "pct") {
+          if (f.t === "money" && !f.c) {
             if (!s.box(f.k).locked()) {
               out.push({ key: f.k, itemNo: it.no || f.k, label: f.l || it.l || f.k });
             }

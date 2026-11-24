@@ -576,7 +576,7 @@ export function ItemRow(props: RowProps) {
   const allCalc = !it.rows && fs.length > 0 && fs.every((x) => x.c);
   const req = fs.some((x) => x.r);
   const label = req ? `${it.l} *` : it.l;
-  const bookable = !it.rows ? fs.filter((x) => (x.t === "money" || x.t === "int" || x.t === "pct") && !x.c) : [];
+  const bookable = !it.rows ? fs.filter((x) => x.t === "money" && !x.c) : [];
   const booksTarget = () => bookable.find((x) => !s.box(x.k).locked()) ?? null;
   const booksLinked = () => {
     const t = booksTarget();
