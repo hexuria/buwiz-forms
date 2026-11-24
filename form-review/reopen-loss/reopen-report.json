@@ -1,0 +1,29 @@
+{
+ "test": "Deliberate reproduction of 'Updated from your tax profile' reopen behaviour",
+ "commit": "origin/main @ 29ba2caa4efb15d30c8b2bb3ae9b619a8163d3a0",
+ "platform": "macOS 26.6.2 arm64, NSH desktop host, scratch db, agent + by-hand UI clicks",
+ "mechanism": {
+  "trigger": "Opening a stored Draft after the tax profile changed. crates/bir-app-api/src/screen_form_module.rs open path calls follow_profile(kind, draft, from_profile): every profile-bound field the filer did not edit on that return (tracked in the draft's profile_baseline) is set to the current profile value, the result is SAVED quietly, and the page shows 'Updated from your tax profile: <field> <old> → <new>' listing what moved.",
+  "edited_boxes": "If the filer edited the profile boxes on the return, follow skips them; the page instead shows 'Differs from your profile: <field> <draft> (profile <new>)' plus a 'Use profile values' link. Clicking it calls screen_form_use_profile and applies profile values to every unedited profile box; it also re-ties the boxes to the profile, so the NEXT reopen follows again.",
+  "fields_overwritten": "Only profile-bound draft paths: rdo_code, taxpayer/buyer name, registered address, zip, phone, email, and baseline-tracked fact fields (birth date, taxpayer_classification, line_of_business). Observed moving: 'Contact Number 09051234567 → 09059876543' (2550Q); 'Buyer's and seller's RDO Codes 047 → 050', buyer name, registered address, email (1606); address, email, 'RDO 050 → 039' (2551Q).",
+  "user_told": "Yes — a banner at the top of the form page lists each moved field ('Updated from your tax profile: …'); the quiet save marks the draft 'Saved'."
+ },
+ "schedule_data": {
+  "1606": "Schedule-1 property fields (tct_number, tax_dec, location, area, FMVs — stored as flat draft fields) intact on screen and in data_json after both the 'Differs' reopen and a full auto-follow reopen.",
+  "2551Q": "schedule_1 Vec (6 rows incl. PT010 + 5 rows @11,111.11, total 333.33) intact on screen and in data_json after auto-follow reopen.",
+  "2550Q": "part_iv items (31A 1,234,567.89 etc.) and schedule_2 amounts intact on screen and in data_json after auto-follow reopen.",
+  "screen_vs_saved": "In every repro on this build the rows were lost NEITHER on screen NOR in storage. The original incident (1606 draft in forms-n3.db, fix session): the stored data_json still holds every schedule field, so at minimum the saved data was never lost there either — the emptied state was screen-side or transient, not a durable clobber.",
+  "permanence": "The follow's quiet save persists only the profile-followed values (by design). No path in follow_profile/with_profile_values/agent::compute writes schedule fields, so a subsequent Save cannot make row loss permanent unless the screen itself had dropped them."
+ },
+ "pictures": [
+  "filings-draft-card.png — Filings list, draft card reopened by hand",
+  "1606-differs-banner.png — 'Differs from your profile' banner (edited profile boxes)",
+  "1606-sched1-intact-differs.png — Schedule 1 intact, differs banner open",
+  "1606-updated-banner.png — 'Updated from your tax profile' banner after re-tie",
+  "1606-sched1-intact-follow.png — Schedule 1 intact after auto-follow",
+  "2551q-updated-banner.png — 2551Q updated banner (address/email/RDO)",
+  "2551q-sched1-rows-intact.png — 2551Q Schedule 1 six rows intact",
+  "2550q-differs-banner.png — 2550Q differs banner",
+  "2550q-part4-intact-follow.png — 2550Q Part IV amounts intact after follow"
+ ]
+}
