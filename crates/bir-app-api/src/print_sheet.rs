@@ -2,9 +2,16 @@
 //!
 //! Ported from the retired painted preview's A4 fit implementation. Each
 //! `.page` sits in a paper-sized `.sheet` (the wrappers are
-//! written by [`crate::static_html`]), the page is zoomed to fit A4, and
+//! written by [`crate::static_html`]), the page is scaled to fit A4, and
 //! html/body are pinned to the paper width so WebKit doesn't re-scale the
 //! print layout. Without that pin a 4-page form printed as 8 pages.
+//!
+//! The scale is a `transform`, never `zoom`: WebKit measures text at the
+//! zoomed size (a 7pt run at zoom 0.88 quantizes wider than at zoom 1), so a
+//! page laid out at sub-1 zoom does not have the widths the sheet was written
+//! with and its small runs overflow into the next column. A transform paints
+//! the natural layout scaled, so the preview and the PDF keep the authored
+//! widths.
 
 pub const PAPER_WIDTH_PT: f32 = 595.28;
 pub const PAPER_HEIGHT_PT: f32 = 841.89;
@@ -29,6 +36,11 @@ fn fit_scale(native: (f32, f32)) -> f32 {
 
 fn fit_css(native: (f32, f32)) -> String {
     let scale = fit_scale(native);
+    // The scaled page keeps its native box (a transform does not relayout):
+    // center it as `margin:0 auto` did, and pull its bottom edge up by what
+    // the scale shrinks so a `.sheet-flow` wraps the painted size.
+    let left = ((PAPER_WIDTH_PT - native.0 * scale) / 2.0).max(0.0);
+    let bottom = (1.0 - scale) * native.1;
     format!(
         "@page{{size:{w:.2}pt {h:.2}pt;margin:0}}\
 html,body{{width:{w:.2}pt;margin:0 auto;padding:0;background:#fff}}\
@@ -36,7 +48,7 @@ body>:not(.sheet){{display:none !important}}\
 .sheet{{position:relative;width:{w:.2}pt;height:{sheet_h:.2}pt;overflow:hidden;background:#fff;padding-top:{safety:.0}pt;break-after:page;page-break-after:always}}\
 .sheet:last-of-type{{break-after:auto;page-break-after:auto}}\
 .sheet-flow{{height:auto;min-height:{sheet_h:.2}pt;overflow:visible}}\
-.sheet>.page{{zoom:{scale:.4};margin:0 auto;break-after:auto;page-break-after:auto}}",
+.sheet>.page{{transform:scale({scale:.4});transform-origin:0 0;margin:0 0 -{bottom:.4}pt {left:.4}pt;break-after:auto;page-break-after:auto}}",
         w = PAPER_WIDTH_PT,
         h = PAPER_HEIGHT_PT,
         sheet_h = PAPER_HEIGHT_PT - 1.0,
