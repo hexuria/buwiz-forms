@@ -86,7 +86,7 @@ export function ScheduleControl(props: ScheduleInput) {
     const r = open();
     if (r === null) return "";
     for (const c of props.columns) {
-      const msg = props.cell(r, c.index).box.message?.() || "";
+      const msg = props.cell(r, c.index).box.refusal?.() || props.cell(r, c.index).box.message?.() || "";
       if (msg) return msg;
     }
     return "";

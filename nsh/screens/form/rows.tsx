@@ -101,7 +101,8 @@ export function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow
           const box = s.box(keys[r][c.index]);
           const v = box.value();
           if (emptyCell(v, c.col.t)) return "";
-          if (c.col.t === "sel") return box.options().find((o) => o.value === v)?.label.split(" — ")[0] ?? v;
+          // A choice shows its code; a value still on the wire ("catalog:2", the popup position) is not one.
+          if (c.col.t === "sel") return box.options().find((o) => o.value === v)?.label.split(" — ")[0] ?? (v.startsWith("catalog:") ? "" : v);
           return v === "true" ? c.col.l : v;
         })
         .filter(Boolean)
