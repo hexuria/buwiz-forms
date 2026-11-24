@@ -322,9 +322,9 @@ export function BooksCoaPicker(props: BooksCoaPickerProps): JSX.Element {
             onChange={(v) => query.set(v)}
           />
           <View class="flex-row items-center justify-between gap-2">
-            <Text variant="meta" tone="fg2">Include child sub-account balances</Text>
             <Switch
               testID="books-coa-subtree"
+              label="Include child sub-account balances"
               checked={includeSubtree()}
               onChange={(v) => includeSubtree.set(v)}
             />
@@ -340,9 +340,10 @@ export function BooksCoaPicker(props: BooksCoaPickerProps): JSX.Element {
                   return (
                     <PressCell
                       testID={`books-acc-${n().code}`}
+                      label={`${n().code} ${n().name} ${amt()}`}
+                      selected={isLinked()}
                       onPress={() => pickAccount(n())}
                       class="rounded-(--radius-row) px-2.5 py-2"
-                      classList={{ "bg-selected": isLinked() }}
                     >
                       <View
                         class="flex-row items-center justify-between gap-2"

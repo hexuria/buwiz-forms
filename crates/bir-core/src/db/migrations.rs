@@ -4411,7 +4411,7 @@ mod tests {
         let version: i32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 24);
+        assert_eq!(version, CURRENT_MIGRATION_VERSION);
         let setups: i64 = conn
             .query_row("SELECT count(*) FROM setups", [], |r| r.get(0))
             .unwrap();
@@ -4429,5 +4429,25 @@ mod tests {
             .query_row("SELECT count(*) FROM year_facts", [], |r| r.get(0))
             .unwrap();
         assert_eq!(facts, 1, "v23's records are kept");
+    }
+
+    #[test]
+    fn test_v25_adds_the_books_box_mappings_table_on_a_v24_database() {
+        let conn = test_conn();
+        migrate_database(&conn).unwrap();
+        conn.execute_batch(
+            "DROP TABLE books_box_mappings;
+             PRAGMA user_version = 24;",
+        )
+        .unwrap();
+        migrate_database(&conn).unwrap();
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 25);
+        let rows: i64 = conn
+            .query_row("SELECT count(*) FROM books_box_mappings", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 0);
     }
 }
