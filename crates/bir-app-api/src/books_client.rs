@@ -357,14 +357,14 @@ pub fn fetch_books_coa(
 pub fn parse_books_coa_result(result: &Value) -> Result<BooksCoaResponse, String> {
     let book_id = result
         .get("book")
-        .and_then(|b| b.get("id"))
+        .and_then(|b| b.get("id").or_else(|| b.get("ticket")))
         .or_else(|| result.get("book_id"))
         .and_then(Value::as_str)
         .unwrap_or("default")
         .to_owned();
     let book_name = result
         .get("book")
-        .and_then(|b| b.get("name"))
+        .and_then(|b| b.get("name").or_else(|| b.get("label")))
         .or_else(|| result.get("book_name"))
         .and_then(Value::as_str)
         .unwrap_or("Buwiz Books")
@@ -378,7 +378,11 @@ pub fn parse_books_coa_result(result: &Value) -> Result<BooksCoaResponse, String
         .to_owned();
 
     let mut accounts = Vec::new();
-    if let Some(groups) = result.get("groups").and_then(Value::as_array) {
+    if let Some(rows) = result.get("rows").and_then(Value::as_array) {
+        for row in rows {
+            accounts.push(parse_account_row(row, "other"));
+        }
+    } else if let Some(groups) = result.get("groups").and_then(Value::as_array) {
         for g in groups {
             let group_type = g
                 .get("type")
@@ -413,7 +417,12 @@ fn parse_account_row(row: &Value, default_type: &str) -> BooksAccountNode {
             .unwrap_or_default()
             .to_owned()
     };
-    let id = str_of("id");
+    let id = row
+        .get("id")
+        .or_else(|| row.get("ticket"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
     let code = row
         .get("code")
         .or_else(|| row.get("number"))
@@ -431,6 +440,7 @@ fn parse_account_row(row: &Value, default_type: &str) -> BooksAccountNode {
     let parent_account_id = row
         .get("parent_account_id")
         .or_else(|| row.get("parent_id"))
+        .or_else(|| row.get("parent_ticket"))
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
         .map(ToOwned::to_owned);
@@ -448,6 +458,7 @@ fn parse_account_row(row: &Value, default_type: &str) -> BooksAccountNode {
         .get("is_active")
         .or_else(|| row.get("active"))
         .and_then(Value::as_bool)
+        .or_else(|| row.get("off").and_then(Value::as_bool).map(|off| !off))
         .unwrap_or(true);
     let accrual_only = row
         .get("accrual_only")
@@ -584,6 +595,11 @@ fn books_broker_status(_args: &HostArguments) -> HostResult {
             .ok()
             .flatten()
             .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                std::env::var("BUWIZ_BROKER_URL")
+                    .ok()
+                    .filter(|s| !s.trim().is_empty())
+            })
             .unwrap_or_else(|| DEFAULT_BROKER_URL.to_owned());
         let tok = db
             .get_setting(SETTING_BROKER_TOKEN)
@@ -883,5 +899,54 @@ mod tests {
         assert_eq!(tok, "ext_scoped_token_42");
         revoke_books_read_grant(&url, "host_secret_42", &gid).unwrap();
         server.join().unwrap();
+    }
+
+    #[test]
+    fn parses_live_books_accounts_list_rows_payload() {
+        let payload = json!({
+            "book": {
+                "ticket": "tkt_BOOK1",
+                "label": "Buwiz Platform",
+                "basis": "accrual"
+            },
+            "groups": ["all", "Assets", "Revenue"],
+            "rows": [
+                {
+                    "ticket": "tkt_41000",
+                    "number": "41000",
+                    "name": "Sales Revenue",
+                    "type": "revenue",
+                    "parent_ticket": null,
+                    "balance": "41000.00",
+                    "subtree_balance": "46000.00",
+                    "off": false,
+                    "accrual_only": false
+                },
+                {
+                    "ticket": "tkt_41010",
+                    "number": "41010",
+                    "name": "Sales to Government",
+                    "type": "revenue",
+                    "parent_ticket": "tkt_41000",
+                    "balance": "5000.00",
+                    "subtree_balance": "5000.00",
+                    "off": false,
+                    "accrual_only": false
+                }
+            ]
+        });
+        let coa = parse_books_coa_result(&payload).unwrap();
+        assert_eq!(coa.book_id, "tkt_BOOK1");
+        assert_eq!(coa.book_name, "Buwiz Platform");
+        assert_eq!(coa.basis, "accrual");
+        assert_eq!(coa.accounts.len(), 2);
+        assert_eq!(coa.accounts[0].id, "tkt_41000");
+        assert_eq!(coa.accounts[0].code, "41000");
+        assert_eq!(coa.accounts[0].subtree_balance, "46000.00");
+        assert!(coa.accounts[0].is_active);
+        assert_eq!(
+            coa.accounts[1].parent_account_id.as_deref(),
+            Some("tkt_41000")
+        );
     }
 }
