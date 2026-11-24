@@ -1,0 +1,31 @@
+{
+  "code": "1606",
+  "platform": "macOS 26.6.2 arm64, WKWebView print preview (Folio sheet at 88%), Save-as-PDF via preview toolbar",
+  "branch_under_test": "try/forms-neon-3 @ b965e9002d0638dd5c2e10a6fd21a4639415aae5 (re-fetched; branch was force-updated 2562df04 -> b965e900 between 1706 and 1606)",
+  "verdict": "macOS matches Linux: yes (preview); saved PDF has the same mac-only text-overlap/clipping defect class as 2550Q/1706",
+  "fill_notes": "No worst-case fixture in branch; dataset copied from Linux after/ refs. Buyer = taxpayer profile (SANTOS / TIN 000-123-453 / RDO 044 -> form prints RDO 043 as item-5 property RDO from txtRDOCode16A-family fields). Writer-cell mapping decoded from html-frozen/1606-2018/writer-cells.json: j_id392:_1=Private, j_id394:_2=item10 No, j_id393:_2=Agricultural (prints 'A' via the shared Classification* fix), optATC13_3=Corporate (with txtTaxRate=5 -> WC 557). Penalty fields are app-computed (fillable=false) and printed identical to Linux (17A 541,884.38 / 17B 357,732.77 / 17C 40,000.00 / 17D 939,617.15 / 18 3,107,154.68).",
+  "differences": [
+    {
+      "id": "1606-mac-pdf-text-overlap",
+      "surface": "saved PDF only (mac-specific, same class as 2550Q/1706)",
+      "where": "P1: signature block left/right column labels collide ('...Tax Agent|Signature over Printed Name of President...'). P2: Schedule 1 continuation header 'Fair Market Value (whichever is higher between Columns 1 & 2' (italic note overlaps and runs off the cell); Schedule 3 item-2 caption '...For other transaction Item D' slightly overlapping.",
+      "what": "In the Save-as-PDF output, sibling text runs overlap horizontally where the WKWebView preview renders them cleanly.",
+      "status": "mac-specific defect"
+    },
+    {
+      "id": "1606-mac-pdf-shrink",
+      "surface": "saved PDF only (mac-specific)",
+      "where": "P1 item 7A buyer name",
+      "what": "PDF clips 'SANTOS, JUANA MARIE DELA CRUZ-VILLANU' at the cell border; the preview's shrink-to-fit shows the full 'VILLANUEVA'.",
+      "status": "mac-specific defect"
+    }
+  ],
+  "fixes_confirmed": [
+    "7A/8A long names and addresses shrink-to-fit inside cells (preview)",
+    "Item 13 tax-rate tenths digit centered in its box ('5 . 0 %')",
+    "P2 buyer-name comb box: name rendered over white band without comb-tick strike-through",
+    "Schedule 1 continuation Classification* column prints 'A' (Agricultural) via shared fix",
+    "Schedule 1 continuation amounts right-aligned with padding; TOTAL 43,350,750.50"
+  ],
+  "files": ["print-p1.png", "print-p2.png", "pdf-p-1.png", "pdf-p-2.png"]
+}
