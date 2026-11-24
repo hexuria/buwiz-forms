@@ -2236,13 +2236,17 @@ impl NegativeStyle {
         let lower = raw.to_ascii_lowercase();
         if [
             "/(overpay",
+            "/(over-pay",
             "/(overremit",
+            "/(over-remit",
             "/(loss",
             "/(deficit",
             "/(excess",
             "/(refund",
             "/ (overpay",
+            "/ (over-pay",
             "/ (overremit",
+            "/ (over-remit",
             "/ (loss",
             "/ (excess",
         ]
@@ -2252,7 +2256,9 @@ impl NegativeStyle {
             Self::Parentheses
         } else if [
             "overpayment",
+            "over-payment",
             "overremittance",
+            "over-remittance",
             "net operating loss",
             "excess tax",
         ]
@@ -3263,7 +3269,13 @@ fn fill_money_joins_with_sheet(
         let Some((negative, peso, cents)) = split_writer_money(value) else {
             continue;
         };
-        let peso = signed_digits(negative, &peso, &cents, join.negative_style, false);
+        let zero = peso.chars().chain(cents.chars()).all(|ch| ch == '0');
+        let parenthesized = negative && !zero && join.negative_style == NegativeStyle::Parentheses;
+        let peso = if parenthesized {
+            format!("({peso}")
+        } else {
+            signed_digits(negative, &peso, &cents, join.negative_style, false)
+        };
         for cells in &join.cells {
             let Some(peso_indices) = grouped.get(cells.peso_html_id.as_str()) else {
                 continue;
@@ -3315,11 +3327,14 @@ fn fill_money_joins_with_sheet(
                     ));
                 }
                 for (offset, index) in cent_ordered.into_iter().enumerate() {
-                    let ch = cents
+                    let mut ch = cents
                         .chars()
                         .nth(offset)
                         .map(|ch| ch.to_string())
                         .unwrap_or_default();
+                    if parenthesized && offset == 1 && !ch.is_empty() {
+                        ch.push(')');
+                    }
                     replacements.push((
                         tags[index].start,
                         tags[index].end,
@@ -3332,6 +3347,8 @@ fn fill_money_joins_with_sheet(
                 // overflow warning marker; never leave the comb blank.
                 let overflow_text = if cells.cent_html_id.is_some() {
                     peso.clone()
+                } else if parenthesized {
+                    format!("{peso}.{cents})")
                 } else {
                     format!("{peso}.{cents}")
                 };
@@ -3348,7 +3365,7 @@ fn fill_money_joins_with_sheet(
                         ));
                     }
                     for (offset, index) in cent_ordered.into_iter().enumerate() {
-                        let ch = if cells.cent_html_id.is_some() {
+                        let mut ch = if cells.cent_html_id.is_some() {
                             cents
                                 .chars()
                                 .nth(offset)
@@ -3357,6 +3374,13 @@ fn fill_money_joins_with_sheet(
                         } else {
                             String::new()
                         };
+                        if parenthesized
+                            && cells.cent_html_id.is_some()
+                            && offset == 1
+                            && !ch.is_empty()
+                        {
+                            ch.push(')');
+                        }
                         replacements.push((
                             tags[index].start,
                             tags[index].end,
@@ -4800,7 +4824,7 @@ mod tests {
     }
 
     #[test]
-    fn parenthesized_negative_money_join_puts_minus_left_of_pesos() {
+    fn parenthesized_negative_money_join_puts_parens_around_amount() {
         use std::collections::BTreeMap;
         let html = format!("{}{}", comb("p", 8), comb("c", 2));
         let mut fields = BTreeMap::new();
@@ -4817,9 +4841,9 @@ mod tests {
         let doc = super::fill_money_joins(&html, &fields, &joins);
         assert_eq!(
             comb_values(&doc, "p"),
-            ["", "-", "7", "9", "9", "0", "6", "1"]
+            ["", "(", "7", "9", "9", "0", "6", "1"]
         );
-        assert_eq!(comb_values(&doc, "c"), ["0", "1"]);
+        assert_eq!(comb_values(&doc, "c"), ["0", "1)"]);
         fields.insert("k".to_string(), "(0.00)".to_string());
         let doc = super::fill_money_joins(&html, &fields, &joins);
         assert_eq!(comb_values(&doc, "p"), ["", "", "", "", "", "", "", "0"]);
@@ -4991,6 +5015,50 @@ mod tests {
             super::NegativeStyle::from_printed_label(Some("24 Tax Payable/(Overpayment)")),
             super::NegativeStyle::Parentheses
         );
+        assert_eq!(
+            super::NegativeStyle::from_printed_label(Some("22 Tax Still Due/(Overremittance)")),
+            super::NegativeStyle::Parentheses
+        );
+        assert_eq!(
+            super::NegativeStyle::from_printed_label(Some("27 Tax Still Due/(Over-remittance)")),
+            super::NegativeStyle::Parentheses
+        );
+        assert_eq!(
+            super::NegativeStyle::from_printed_label(Some(
+                "23 Over-remittance from Previous Quarter"
+            )),
+            super::NegativeStyle::Unsigned
+        );
+        // Split peso+centavo combs on 1600PT, 1600VT, and 1601FQ print negative
+        // (Overremittance)/(Over-remittance) values in parentheses, not with '-'.
+        for (slug, key, peso_id, cent_id) in [
+            (
+                "1600-pt-2018",
+                "frm1600PT:txtPg1P2I22TaxStillDueOverremit",
+                "p1c116",
+                "p1c118",
+            ),
+            (
+                "1600-vt-2018",
+                "frm1600VT:txtPg1P2I27TotAmtStillDueOverremit",
+                "p1c136",
+                "p1c138",
+            ),
+            ("1601-fq-2020", "frm1601FQ:txtTax27", "p1c161", "p1c163"),
+            ("1601-fq-2020", "frm1601FQ:txtTax32", "p1c181", "p1c183"),
+        ] {
+            let mut m = BTreeMap::new();
+            m.insert(key.to_string(), "-1,234.56".to_string());
+            let doc = super::filled_document(slug, &m).unwrap();
+            let pesos = comb_values(&doc, peso_id);
+            let cents = comb_values(&doc, cent_id);
+            assert_eq!(
+                &pesos[pesos.len() - 5..],
+                ["(", "1", "2", "3", "4"],
+                "{slug} {key} pesos should start with '(': {pesos:?}"
+            );
+            assert_eq!(cents, ["5", "6)"], "{slug} {key} cents should end with ')'");
+        }
         assert_eq!(
             super::NegativeStyle::from_printed_label(Some("12 Total Amount of Overremittance")),
             super::NegativeStyle::Unsigned
