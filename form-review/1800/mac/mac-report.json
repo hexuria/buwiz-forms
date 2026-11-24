@@ -1,0 +1,18 @@
+{
+ "form": "1800",
+ "branch": "try/forms-neon-4",
+ "platform": "macOS 26.6.2 arm64 / WKWebView preview",
+ "verdict": "macOS matches Linux: yes",
+ "notes": [
+  "Print preview and Save-as-PDF renders match Linux after/ pages: same layout, values, fonts, page break at Part III->IV boundary.",
+  "All values verified equal to Linux after/: RDO 047, blank ZIPs, item14 561,018,760.05, 17A 26,412,346.25, 20 821,965.21, schedules A/B/B-cont rows identical.",
+  "Page count identical (2 pages, A4). No overflow, clipping, wrap or font fallback observed.",
+  "Minor: preview toolbar overlay and anti-aliasing differ from Blitz engine; not a layout defect."
+ ],
+ "files": [
+  "print-p1.png",
+  "print-p2.png",
+  "pdf-p-1.png",
+  "pdf-p-2.png"
+ ]
+}
