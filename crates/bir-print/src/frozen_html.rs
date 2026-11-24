@@ -967,6 +967,215 @@ const FIT_EPSILON_PT: f64 = 0.02;
 
 /// Minimum cell height (pt) for a plain text box to wrap onto two lines
 /// before shrinking (C7).
+/// Prototype field-rendering option selected via `BIR_PRINT_OPTION`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PrintOption {
+    Band,
+    Rect,
+    RectAll,
+}
+
+impl PrintOption {
+    fn current() -> Self {
+        match std::env::var("BIR_PRINT_OPTION")
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "rect" => Self::Rect,
+            "rectall" => Self::RectAll,
+            _ => Self::Band,
+        }
+    }
+}
+
+/// Prototype long-text strategy selected via `BIR_PRINT_TEXT`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PrintTextMode {
+    Shrink,
+    Wrap,
+    Grow,
+}
+
+impl PrintTextMode {
+    fn current() -> Self {
+        match std::env::var("BIR_PRINT_TEXT")
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "shrink" => Self::Shrink,
+            "grow" => Self::Grow,
+            _ => Self::Wrap,
+        }
+    }
+}
+
+fn format_with_commas(digits: &str) -> String {
+    let chars: Vec<char> = digits.chars().collect();
+    let mut out = String::with_capacity(chars.len() + chars.len() / 3);
+    for (i, ch) in chars.iter().enumerate() {
+        let remaining = chars.len() - i;
+        if i > 0 && remaining.is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(*ch);
+    }
+    out
+}
+
+fn format_rect_money(
+    negative: bool,
+    peso: &str,
+    cents: &str,
+    negative_style: NegativeStyle,
+) -> String {
+    let zero = peso.chars().chain(cents.chars()).all(|c| c == '0');
+    let base = format!("{}.{cents}", format_with_commas(peso));
+    if !negative || zero {
+        return base;
+    }
+    match negative_style {
+        NegativeStyle::Parentheses => format!("({base})"),
+        NegativeStyle::Minus => format!("-{base}"),
+        NegativeStyle::Unsigned => base,
+    }
+}
+
+fn format_rect_pesos(pesos: &str) -> String {
+    if let Some(inner) = pesos.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
+        return format!("({})", format_with_commas(inner));
+    }
+    if let Some(inner) = pesos.strip_prefix('-') {
+        return format!("-{}", format_with_commas(inner));
+    }
+    format_with_commas(pesos)
+}
+
+fn cell_rect(html: &str, cell: &str) -> Option<(usize, f64, f64, f64, f64)> {
+    let open = html.find(&format!("<div id=\"{cell}\""))?;
+    let tag = &html[open..open + html[open..].find('>')?];
+    let parse_prop = |prop: &str| -> Option<f64> {
+        let needle = format!("{prop}:");
+        let start = tag.find(&needle)? + needle.len();
+        tag[start..].split("pt").next()?.trim().parse().ok()
+    };
+    Some((
+        open,
+        parse_prop("left")?,
+        parse_prop("top")?,
+        parse_prop("width")?,
+        parse_prop("height")?,
+    ))
+}
+
+fn wrap_lines_at_size(sheet: &SheetType, max_width: f64, text: &str, size_pt: f64) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        let candidate = if current.is_empty() {
+            word.to_string()
+        } else {
+            format!("{current} {word}")
+        };
+        if sheet.width(Spacing::default(), &candidate, size_pt) <= max_width || current.is_empty() {
+            current = candidate;
+        } else {
+            lines.push(current);
+            current = word.to_string();
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    if lines.is_empty() {
+        lines.push(text.to_string());
+    }
+    lines
+}
+
+fn fit_rect_text(
+    sheet: &SheetType,
+    width: f64,
+    height: f64,
+    text: &str,
+    mode: PrintTextMode,
+) -> (String, f64, bool, f64) {
+    let room = (width - 5.0).max(12.0);
+    let default_size = 9.5_f64.min((height * 0.62).max(7.0));
+    let letter = Spacing::default();
+    if sheet.width(letter, text, default_size) <= room + FIT_EPSILON_PT {
+        return (text.to_string(), default_size, false, height);
+    }
+    let min_pt = PLAIN_TEXT_MIN_PT.min(default_size);
+    match mode {
+        PrintTextMode::Grow => {
+            let grow_pt = 8.0_f64;
+            let lines = wrap_lines_at_size(sheet, room, text, grow_pt);
+            let grown_h = (lines.len() as f64 * grow_pt * 1.18 + 4.0).max(height);
+            (lines.join("\n"), grow_pt, lines.len() > 1, grown_h)
+        }
+        PrintTextMode::Wrap if height >= 17.0 => {
+            let top_two = floor_size((height / PLAIN_TWO_LINE_HEIGHT_FACTOR).min(default_size))
+                .max(min_pt);
+            if let Some((l1, l2, sz)) = fit_two_lines(sheet, letter, room, text, top_two, min_pt) {
+                return (format!("{l1}\n{l2}"), sz, true, height);
+            }
+            if let Some((l1, l2)) = wrap_and_truncate_two_lines(sheet, letter, room, text, min_pt) {
+                return (format!("{l1}\n{l2}"), min_pt, true, height);
+            }
+            let sz = sheet.fit(letter, room, text, default_size).max(min_pt);
+            (text.to_string(), sz, false, height)
+        }
+        _ => {
+            let single = sheet.fit(letter, room, text, default_size);
+            if single >= min_pt {
+                return (text.to_string(), single, false, height);
+            }
+            let truncated = truncate_with_ellipsis(sheet, letter, room, text, min_pt)
+                .unwrap_or_else(|| text.to_string());
+            (truncated, min_pt, false, height)
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rect_overlay_div(
+    left: f64,
+    top: f64,
+    width: f64,
+    height: f64,
+    text: &str,
+    font_size_pt: f64,
+    align_right: bool,
+    multiline: bool,
+    grow: bool,
+) -> String {
+    let z = if grow { 25 } else { 20 };
+    let ai = if grow { "flex-start" } else { "center" };
+    let jc = if align_right {
+        "flex-end"
+    } else {
+        "flex-start"
+    };
+    let ta = if align_right { "right" } else { "left" };
+    let pad = if grow { "1.5pt 2.5pt" } else { "0 2.5pt" };
+    let ws = if multiline || grow { "pre-wrap" } else { "pre" };
+    let lh = if grow {
+        "1.18"
+    } else if multiline {
+        "1.05"
+    } else {
+        "1.0"
+    };
+    format!(
+        "<div class=\"c\" data-print-rect=\"1\" style=\"left:{left:.2}pt;top:{top:.2}pt;width:{width:.2}pt;height:{height:.2}pt;background:#fff;border:0.5pt solid #000;box-sizing:border-box;z-index:{z};display:flex;align-items:{ai};justify-content:{jc};padding:{pad};font-family:&quot;eBIRForms Arimo&quot;,Arimo,Arial,Helvetica,sans-serif;font-size:{font_size_pt:.2}pt;line-height:{lh};color:#000;white-space:{ws};overflow:hidden;text-align:{ta}\">{}</div>",
+        html_escape(text)
+    )
+}
+
 const PLAIN_WRAP_MIN_HEIGHT_PT: f64 = 18.0;
 
 /// Minimum readable type size (pt) for plain text boxes (C7). Below this
@@ -1854,7 +2063,47 @@ fn fill_text_input(
         // the last box.
         let whole_line = via_cell || is_email_key(name) || name.starts_with("derived:line:");
         let amount_comb = is_amount_comb_key(name) && is_amount_comb_value(print);
-        let overflow = (whole_line && chars.len() > ordered.len())
+    let opt = PrintOption::current();
+    let text_mode = PrintTextMode::current();
+    if (opt == PrintOption::RectAll
+        || (opt == PrintOption::Rect && whole_line && chars.len() > ordered.len()))
+        && !print.trim().is_empty()
+    {
+        if let Some((open, left, top, width, height)) = cell_rect(html, input_name) {
+            let (display, sz, multiline, final_h) = if amount_comb {
+                let formatted = format_rect_pesos(print.trim());
+                let sz = fit_line(sheet, (width - 5.0).max(12.0), &formatted)
+                    .min(9.5)
+                    .max(AMOUNT_OVERFLOW_MIN_PT);
+                (formatted, sz, false, height)
+            } else {
+                fit_rect_text(sheet, width, height, print, text_mode)
+            };
+            let grow = final_h > height + 0.1;
+            let overlay = rect_overlay_div(
+                left,
+                top,
+                width,
+                final_h,
+                &display,
+                sz,
+                amount_comb,
+                multiline,
+                grow,
+            );
+            replacements.push((open, open, overlay));
+            for (offset, index) in ordered.into_iter().enumerate() {
+                let writer = (via_cell && offset == 0).then_some(print);
+                replacements.push((
+                    tags[index].start,
+                    tags[index].end,
+                    set_value(tags[index].tag, "", writer),
+                ));
+            }
+            return;
+        }
+    }
+    let overflow = (whole_line && chars.len() > ordered.len())
             .then(|| {
                 if amount_comb {
                     comb_overflow_amount_line(html, input_name, print.trim(), sheet)
@@ -1914,8 +2163,41 @@ fn fill_text_input(
             && !split
             && ((is_amount_typed_key(name) && is_formatted_money_amount(print))
                 || (is_quantity_typed_key(name) && is_formatted_numeric_quantity(print)));
+        let text_mode = PrintTextMode::current();
         for &index in indices {
             let writer = via_cell.then_some(print);
+            if text_mode == PrintTextMode::Grow
+                && !split
+                && !right_align_numeric
+                && !print.trim().is_empty()
+            {
+                if let Some((open, left, top, width, height)) = cell_rect(html, input_name) {
+                    let room = (width - 5.0).max(12.0);
+                    let lines = wrap_lines_at_size(sheet, room, print, 8.0);
+                    let grown_h = (lines.len() as f64 * 8.0 * 1.18 + 4.0).max(height);
+                    if grown_h > height + 0.1 {
+                        let overlay = rect_overlay_div(
+                            left,
+                            top,
+                            width,
+                            grown_h,
+                            &lines.join("\n"),
+                            8.0,
+                            false,
+                            true,
+                            true,
+                        );
+                        replacements.push((open, open, overlay));
+                        replacements.push((
+                            tags[index].start,
+                            tags[index].end,
+                            set_value(tags[index].tag, "", writer),
+                        ));
+                        continue;
+                    }
+                }
+            }
+            let allow_wrap = !right_align_numeric && text_mode != PrintTextMode::Shrink;
             let fit = dims.filter(|_| !split).and_then(|(width, height)| {
                 fit_plain_text(
                     sheet,
@@ -1923,7 +2205,7 @@ fn fill_text_input(
                     height,
                     tags[index].tag,
                     print,
-                    !right_align_numeric,
+                    allow_wrap,
                 )
             });
             let tag = match &fit {
@@ -3260,10 +3542,11 @@ fn fill_money_joins_with_sheet(
         if value.is_empty() {
             continue;
         }
-        let Some((negative, peso, cents)) = split_writer_money(value) else {
+        let Some((negative, peso_digits, cents)) = split_writer_money(value) else {
             continue;
         };
-        let peso = signed_digits(negative, &peso, &cents, join.negative_style, false);
+        let peso = signed_digits(negative, &peso_digits, &cents, join.negative_style, false);
+        let opt = PrintOption::current();
         for cells in &join.cells {
             let Some(peso_indices) = grouped.get(cells.peso_html_id.as_str()) else {
                 continue;
@@ -3305,7 +3588,55 @@ fn fill_money_joins_with_sheet(
             if cent_ordered.len() != 2 {
                 continue;
             }
-            if let Some(peso_values) = right_aligned_slot_values(peso_ordered.len(), &peso) {
+            let fits_slots = right_aligned_slot_values(peso_ordered.len(), &peso);
+            let use_rect = opt == PrintOption::RectAll
+                || (opt == PrintOption::Rect && fits_slots.is_none());
+            if use_rect {
+                if let Some((open, left, top, peso_w, height)) =
+                    cell_rect(html, &cells.peso_html_id)
+                {
+                    let total_w = match &cells.cent_html_id {
+                        Some(cent_id) => cell_rect(html, cent_id)
+                            .map(|(_, cl, _, cw, _)| (cl + cw - left).max(peso_w))
+                            .unwrap_or(peso_w),
+                        None => peso_w,
+                    };
+                    let formatted =
+                        format_rect_money(negative, &peso_digits, &cents, join.negative_style);
+                    let sz = fit_line(sheet, (total_w - 5.0).max(12.0), &formatted)
+                        .min(9.5)
+                        .max(AMOUNT_OVERFLOW_MIN_PT);
+                    let overlay = rect_overlay_div(
+                        left,
+                        top,
+                        total_w,
+                        height,
+                        &formatted,
+                        sz,
+                        true,
+                        false,
+                        false,
+                    );
+                    replacements.push((open, open, overlay));
+                    for (offset, index) in peso_ordered.into_iter().enumerate() {
+                        let writer = (offset == 0).then_some(value.as_str());
+                        replacements.push((
+                            tags[index].start,
+                            tags[index].end,
+                            set_value(tags[index].tag, "", writer),
+                        ));
+                    }
+                    for index in cent_ordered {
+                        replacements.push((
+                            tags[index].start,
+                            tags[index].end,
+                            set_value(tags[index].tag, "", None),
+                        ));
+                    }
+                    continue;
+                }
+            }
+            if let Some(peso_values) = fits_slots {
                 for (offset, index) in peso_ordered.into_iter().enumerate() {
                     let writer = (offset == 0).then_some(value.as_str());
                     replacements.push((
@@ -3439,7 +3770,40 @@ fn fill_peso_joins_with_sheet(
                 continue;
             };
             let ordered = ordered_comb_indices(&tags, indices);
-            if let Some(values) = right_aligned_slot_values(ordered.len(), &pesos) {
+            let opt = PrintOption::current();
+            let fits_slots = right_aligned_slot_values(ordered.len(), &pesos);
+            let use_rect = opt == PrintOption::RectAll
+                || (opt == PrintOption::Rect && fits_slots.is_none());
+            if use_rect {
+                if let Some((open, left, top, width, height)) = cell_rect(html, html_id) {
+                    let formatted = format_rect_pesos(&pesos);
+                    let sz = fit_line(sheet, (width - 5.0).max(12.0), &formatted)
+                        .min(9.5)
+                        .max(AMOUNT_OVERFLOW_MIN_PT);
+                    let overlay = rect_overlay_div(
+                        left,
+                        top,
+                        width,
+                        height,
+                        &formatted,
+                        sz,
+                        true,
+                        false,
+                        false,
+                    );
+                    replacements.push((open, open, overlay));
+                    for (offset, index) in ordered.into_iter().enumerate() {
+                        let writer = (offset == 0).then_some(value.as_str());
+                        replacements.push((
+                            tags[index].start,
+                            tags[index].end,
+                            set_value(tags[index].tag, "", writer),
+                        ));
+                    }
+                    continue;
+                }
+            }
+            if let Some(values) = fits_slots {
                 for (offset, index) in ordered.into_iter().enumerate() {
                     let writer = (offset == 0).then_some(value.as_str());
                     replacements.push((
