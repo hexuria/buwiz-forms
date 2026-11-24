@@ -165,9 +165,11 @@ pub fn try_start_config(
             // is overwritten by it. Wait for that record first — the host's
             // record must be the last write, or a late serve-thread write
             // names the executable of the binary instead of the app's.
-            let serve_record = discovery::runtime_root()
-                .join("hosts")
-                .join(format!("{}-{}.json", std::process::id(), addr.port()));
+            let serve_record = discovery::runtime_root().join("hosts").join(format!(
+                "{}-{}.json",
+                std::process::id(),
+                addr.port()
+            ));
             let until = std::time::Instant::now() + Duration::from_secs(2);
             while !serve_record.exists() && std::time::Instant::now() < until {
                 std::thread::sleep(Duration::from_millis(5));
