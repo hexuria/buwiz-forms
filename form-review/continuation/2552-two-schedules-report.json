@@ -1,0 +1,180 @@
+{
+  "schedules": [
+    {
+      "heading": "Schedule 1",
+      "printed_capacity": 5,
+      "columns": [
+        {
+          "heading": "(a) Date",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "(b) Seller",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "(c) Buyer",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "(d) Issuing Corporation",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "(e) Number of Shares",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "(f) Tax Base",
+          "is_amount": true,
+          "subtotal": "2,100,000.00"
+        },
+        {
+          "heading": "(g) Tax Rate",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "(h) Tax Due",
+          "is_amount": true,
+          "subtotal": "12,600.00"
+        }
+      ],
+      "rows": [
+        {
+          "row_number": 6,
+          "values": [
+            "01/06/2026",
+            "SELLER 6 INC.",
+            "BUYER 6 CORP.",
+            "ISSUER ALPHA 6",
+            "60000",
+            "600000.00",
+            "0.6%",
+            "3600.00"
+          ]
+        },
+        {
+          "row_number": 7,
+          "values": [
+            "01/07/2026",
+            "SELLER 7 INC.",
+            "BUYER 7 CORP.",
+            "ISSUER ALPHA 7",
+            "70000",
+            "700000.00",
+            "0.6%",
+            "4200.00"
+          ]
+        },
+        {
+          "row_number": 8,
+          "values": [
+            "01/08/2026",
+            "SELLER 8 INC.",
+            "BUYER 8 CORP.",
+            "ISSUER ALPHA 8",
+            "80000",
+            "800000.00",
+            "0.6%",
+            "4800.00"
+          ]
+        }
+      ],
+      "has_total": true
+    },
+    {
+      "heading": "Schedule 2",
+      "printed_capacity": 5,
+      "columns": [
+        {
+          "heading": "(a) Date",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "(b) Seller",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "(c) Buyer",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "(d) Issuing Corporation",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "(e) Number of Shares",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "(f) Tax Base",
+          "is_amount": true,
+          "subtotal": "5,250,000.00"
+        },
+        {
+          "heading": "(g) Tax Rate",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "(h) Tax Due",
+          "is_amount": true,
+          "subtotal": "210,000.00"
+        }
+      ],
+      "rows": [
+        {
+          "row_number": 6,
+          "values": [
+            "02/06/2026",
+            "IPO SELLER 6",
+            "IPO BUYER 6",
+            "IPO CORP 6",
+            "30000",
+            "1500000.00",
+            "4%",
+            "60000.00"
+          ]
+        },
+        {
+          "row_number": 7,
+          "values": [
+            "02/07/2026",
+            "IPO SELLER 7",
+            "IPO BUYER 7",
+            "IPO CORP 7",
+            "35000",
+            "1750000.00",
+            "4%",
+            "70000.00"
+          ]
+        },
+        {
+          "row_number": 8,
+          "values": [
+            "02/08/2026",
+            "IPO SELLER 8",
+            "IPO BUYER 8",
+            "IPO CORP 8",
+            "40000",
+            "2000000.00",
+            "4%",
+            "80000.00"
+          ]
+        }
+      ],
+      "has_total": true
+    }
+  ]
+}

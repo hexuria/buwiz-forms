@@ -109,6 +109,102 @@
         }
       ],
       "has_total": true
+    },
+    {
+      "heading": "Schedule B",
+      "printed_capacity": 5,
+      "columns": [
+        {
+          "heading": "OCT/TCT/CCT No.",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Tax Declaration No.",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Location",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Lot/Improvement",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Classification",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Area",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "FMV per TD",
+          "is_amount": true,
+          "subtotal": null
+        },
+        {
+          "heading": "FMV per BIR (Zonal Value)",
+          "is_amount": true,
+          "subtotal": null
+        },
+        {
+          "heading": "FMV (whichever is higher)",
+          "is_amount": true,
+          "subtotal": null
+        }
+      ],
+      "rows": [
+        {
+          "row_number": 6,
+          "values": [
+            "TCT-B-006",
+            "TD-B-006",
+            "QUEZON CITY LOT 6",
+            "LOT 6 BLK 4 RESIDENTIAL",
+            "RR",
+            "225.00",
+            "3250000.00",
+            "3450000.00",
+            "3450000.00"
+          ]
+        },
+        {
+          "row_number": 7,
+          "values": [
+            "TCT-B-007",
+            "TD-B-007",
+            "QUEZON CITY LOT 7",
+            "LOT 7 BLK 4 RESIDENTIAL",
+            "RR",
+            "240.00",
+            "3500000.00",
+            "3700000.00",
+            "3700000.00"
+          ]
+        },
+        {
+          "row_number": 8,
+          "values": [
+            "TCT-B-008",
+            "TD-B-008",
+            "QUEZON CITY LOT 8",
+            "LOT 8 BLK 4 RESIDENTIAL",
+            "RR",
+            "255.00",
+            "3750000.00",
+            "3950000.00",
+            "3950000.00"
+          ]
+        }
+      ],
+      "has_total": false
     }
   ]
 }

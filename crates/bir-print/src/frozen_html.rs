@@ -3213,6 +3213,60 @@ fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<
     Ok(())
 }
 
+/// Fill a cloned-band continuation page fragment through the exact same fill
+/// path (`line_group_plan`, `fill_by_name_set`, `fill_money_joins`,
+/// `fill_peso_joins`, `fill_date_joins`, `split_single_character_cells`,
+/// `fill_xbox_joins`) used for official pages.
+pub(crate) fn fill_continuation_fragment(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    slug: &str,
+    extra_joins: &BTreeMap<String, Vec<String>>,
+    extra_money_joins: &[(String, String, Option<String>)],
+    extra_peso_joins: &[(String, String)],
+    caption_aliases: &BTreeMap<String, String>,
+) -> Result<String, String> {
+    let mut cells = writer_cells(slug)?;
+    for (syn_id, orig_id) in caption_aliases {
+        if let Some(cap) = cells.captions.get(orig_id).cloned() {
+            cells.captions.insert(syn_id.clone(), cap);
+        }
+    }
+    for (k, v) in extra_joins {
+        cells.joins.entry(k.clone()).or_default().extend(v.clone());
+    }
+    for (k, peso_id, cents_id) in extra_money_joins {
+        cells.money_joins.push(MoneyJoin {
+            writer_key: k.clone(),
+            cells: vec![MoneyCells {
+                peso_html_id: peso_id.clone(),
+                cent_html_id: cents_id.clone(),
+                point_slot: false,
+            }],
+        });
+    }
+    for (k, html_id) in extra_peso_joins {
+        cells.peso_joins.push(PesoJoin {
+            writer_key: k.clone(),
+            html_ids: vec![html_id.clone()],
+        });
+    }
+    let fields = &with_donor_estate_values(slug, fields);
+    let filled = fill_donor_estate_dates(html, fields, slug);
+    let sheet = bundle(slug).map_or_else(SheetType::plain, |loaded| {
+        SheetType::of_sheet(slug, loaded.css)
+    });
+    let plan = line_group_plan(&filled, fields, &cells, &sheet);
+    let filled = fill_by_name_set(&filled, fields, &cells.joins, &plan, &sheet);
+    let filled = fill_money_joins(&filled, fields, &cells.money_joins);
+    let filled = fill_peso_joins(&filled, fields, &cells.peso_joins);
+    let filled = fill_date_joins(&filled, fields, &cells.date_joins);
+    Ok(split_single_character_cells(
+        slug,
+        &fill_xbox_joins(&filled, fields, &cells.xbox_joins),
+    ))
+}
+
 fn fill_bundle(
     html: &str,
     fields: &BTreeMap<String, String>,
@@ -3457,20 +3511,26 @@ pub fn filled_document_with_report(
     let Some(loaded) = bundle(slug) else {
         return Err(format!("no frozen HTML bundle for {slug}"));
     };
-    let mut document = inline_local_assets(&fill_bundle(loaded.html, fields, slug)?, &loaded);
     let overflow = crate::continuation::detect_overflow(slug, fields)?;
-    if !overflow.is_empty() || receipt.is_some() {
-        let (width, height) = page_size_from_css(loaded.css);
-        if !overflow.is_empty() {
-            let pages = crate::continuation::continuation_pages_html(
-                slug, fields, &overflow, &width, &height,
-            );
-            document = append_before_body_end(&document, &pages);
+    let (width, height) = page_size_from_css(loaded.css);
+    let cont = if !overflow.is_empty() {
+        Some(crate::band_continuation::build_continuation_pages(
+            slug, loaded.html, fields, &overflow, &width, &height,
+        )?)
+    } else {
+        None
+    };
+
+    let official_filled = fill_bundle(loaded.html, fields, slug)?;
+    let mut document = inline_local_assets(&official_filled, &loaded);
+    if let Some(c) = cont {
+        if !c.pages_html.is_empty() {
+            let inlined_pages = inline_local_assets(&c.pages_html, &loaded);
+            document = append_before_body_end(&document, &inlined_pages);
         }
-        if let Some(receipt) = receipt {
-            document =
-                append_before_body_end(&document, &receipt_page_html(receipt, &width, &height));
-        }
+    }
+    if let Some(receipt) = receipt {
+        document = append_before_body_end(&document, &receipt_page_html(receipt, &width, &height));
     }
     Ok(crate::continuation::FilledDocument {
         html: document,

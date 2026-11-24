@@ -746,6 +746,10 @@ fn looks_like_schedule_row_caption(printed: &str) -> bool {
 /// - `"Schedule A row 1 Particulars"` -> `("Schedule A", 1, "Particulars")`
 /// - `"Schedule 1.1 row 1 Individual/Corporation"` -> `("Schedule 1.1", 1, "Individual/Corporation")`
 /// - `"Schedule 1 continuation row 1 FMV per TD"` -> `("Schedule 1", 1, "FMV per TD")`
+pub(crate) fn parse_schedule_row_and_column_pub(printed: &str) -> Option<(String, usize, String)> {
+    parse_schedule_row_and_column(printed)
+}
+
 fn parse_schedule_row_and_column(printed: &str) -> Option<(String, usize, String)> {
     let trimmed = printed.trim();
 
@@ -907,6 +911,24 @@ struct HeaderMeta {
     tin: String,
     taxpayer_name: String,
     return_period: String,
+}
+
+pub(crate) struct HeaderMetaPub {
+    pub tin: String,
+    pub taxpayer_name: String,
+    pub period: String,
+}
+
+pub(crate) fn extract_header_meta_pub(
+    slug: &str,
+    fields: &BTreeMap<String, String>,
+) -> HeaderMetaPub {
+    let m = extract_header_meta(slug, fields);
+    HeaderMetaPub {
+        tin: m.tin,
+        taxpayer_name: m.taxpayer_name,
+        period: m.return_period,
+    }
 }
 
 fn extract_header_meta(slug: &str, fields: &BTreeMap<String, String>) -> HeaderMeta {
@@ -1308,7 +1330,7 @@ mod tests {
         // be byte-for-byte identical to the document with no overflow rows!
         let split_at = filled
             .html
-            .find("<div class=\"page page-continuation\"")
+            .find("<div class=\"page page-continuation")
             .expect("continuation page inserted");
         let official_with_overflow = &filled.html[..split_at];
         let body_end = doc_no_overflow.rfind("</body>").unwrap();
@@ -1324,6 +1346,8 @@ mod tests {
 
         // 1. 2000OT with 15 rows in Schedule 1.A
         let mut f2000 = sample_2000ot_15_rows();
+        f2000.insert("derived:pg2_tin".into(), "00012345300000".into());
+        f2000.insert("frm2000OT:txtPg2TaxpayerName".into(), "JUANA SANTOS".into());
         f2000.insert("frm2000OT:txtRDOCode".into(), "044".into());
         f2000.insert("frm2000OT:txtAddress".into(), "123 RIZAL AVE, BRGY. SAN ANTONIO, MAKATI CITY".into());
         f2000.insert("frm2000OT:txtZipCode".into(), "1203".into());
@@ -1357,11 +1381,30 @@ mod tests {
         assert!(doc_2000_5.overflow.is_empty());
         std::fs::write(out_dir.join("2000ot-no-overflow.html"), &doc_2000_5.html).unwrap();
 
-        // 3. 1800 with 18 rows in Schedule A
+        // 3. 1800 with 18 rows in Schedule A AND 8 rows in Schedule B simultaneously
         let mut f1800 = sample_1800_18_rows();
+        f1800.insert("derived:pg2_tin".into(), "00012345300000".into());
+        f1800.insert("frm1800v2018:txtPg2TaxpayerName".into(), "JUANA SANTOS".into());
         f1800.insert("frm1800v2018:txtRDOCode".into(), "044".into());
         f1800.insert("frm1800v2018:txtAddress".into(), "123 RIZAL AVE, BRGY. SAN ANTONIO, MAKATI CITY".into());
         f1800.insert("frm1800v2018:schedA:txtTotalPayment1".into(), "17100000.00".into());
+        let mut sched_b_total = 0.0_f64;
+        for i in 0..8 {
+            let row_no = i + 1;
+            let ftd = 2_000_000.0 + (i as f64) * 250_000.0;
+            let fbir = ftd + 200_000.0;
+            sched_b_total += fbir;
+            f1800.insert(format!("frm1800v2018:schedB1:txtOCT{i}"), format!("TCT-B-{row_no:03}"));
+            f1800.insert(format!("frm1800v2018:schedB1:txtTaxDecNo{i}"), format!("TD-B-{row_no:03}"));
+            f1800.insert(format!("frm1800v2018:schedB1:txtLocation{i}"), format!("QUEZON CITY LOT {row_no}"));
+            f1800.insert(format!("frm1800v2018:schedB1:txtLotImprovement{i}"), format!("LOT {row_no} BLK 4 RESIDENTIAL"));
+            f1800.insert(format!("frm1800v2018:schedB1:txtClassification{i}"), "RR".into());
+            f1800.insert(format!("frm1800v2018:schedB2:txtArea{i}"), format!("{:.2}", 150.0 + (i as f64) * 15.0));
+            f1800.insert(format!("frm1800v2018:schedB2:txtFTD{i}"), format!("{ftd:.2}"));
+            f1800.insert(format!("frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue{i}"), format!("{fbir:.2}"));
+            f1800.insert(format!("frm1800v2018:schedB2:txtFairMarketValue{i}"), format!("{fbir:.2}"));
+        }
+        f1800.insert("frm1800v2018:schedB2:txtTotal".into(), format!("{sched_b_total:.2}"));
         let doc_1800 = frozen_html::filled_document_with_report("1800-2018", &f1800, None).unwrap();
         std::fs::write(out_dir.join("1800-18-rows.html"), &doc_1800.html).unwrap();
         std::fs::write(
@@ -1370,7 +1413,51 @@ mod tests {
         )
         .unwrap();
 
-        // 4. 1600WP (growables: []) with 10 payees in Schedule 1.1
+        // 4. 2552 with overflow in TWO schedules at once (Schedule 1: 8 rows, Schedule 2: 8 rows)
+        let mut f2552 = BTreeMap::new();
+        f2552.insert("derived:tin".into(), "00012345300000".into());
+        f2552.insert("derived:pg2_tin".into(), "00012345300000".into());
+        f2552.insert("frm2552:txtTaxpayerName".into(), "JUANA SANTOS".into());
+        f2552.insert("frm2552:txtPg2TaxpayerName".into(), "JUANA SANTOS".into());
+        f2552.insert("frm2552:txtYearEnded".into(), "2026".into());
+        let mut s1_tot = 0.0_f64;
+        let mut s2_tot = 0.0_f64;
+        for row_no in 1..=8 {
+            let base1 = 100_000.0 * (row_no as f64);
+            let due1 = base1 * 0.006;
+            s1_tot += due1;
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch1Date{row_no}"), format!("01/{row_no:02}/2026"));
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch1Seller{row_no}"), format!("SELLER {row_no} INC."));
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch1Buyer{row_no}"), format!("BUYER {row_no} CORP."));
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch1Corp{row_no}"), format!("ISSUER ALPHA {row_no}"));
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch1NumShares{row_no}"), format!("{}", 10_000 * row_no));
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch1TaxBase{row_no}"), format!("{base1:.2}"));
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch1TaxRate{row_no}"), "0.6%".into());
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch1TaxDue{row_no}"), format!("{due1:.2}"));
+
+            let base2 = 250_000.0 * (row_no as f64);
+            let due2 = base2 * 0.04;
+            s2_tot += due2;
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch2Date{row_no}"), format!("02/{row_no:02}/2026"));
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch2Seller{row_no}"), format!("IPO SELLER {row_no}"));
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch2Buyer{row_no}"), format!("IPO BUYER {row_no}"));
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch2Corp{row_no}"), format!("IPO CORP {row_no}"));
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch2NumShares{row_no}"), format!("{}", 5_000 * row_no));
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch2TaxBase{row_no}"), format!("{base2:.2}"));
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch2TaxRate{row_no}"), "4%".into());
+            f2552.insert(format!("frm2552:txtPg2Pt5Sch2TaxDue{row_no}"), format!("{due2:.2}"));
+        }
+        f2552.insert("frm2552:txtPg2Pt5Sch1TaxDueTot".into(), format!("{s1_tot:.2}"));
+        f2552.insert("frm2552:txtPg2Pt5Sch2TaxDueTot".into(), format!("{s2_tot:.2}"));
+        let doc_2552 = frozen_html::filled_document_with_report("2552-2018", &f2552, None).unwrap();
+        std::fs::write(out_dir.join("2552-two-schedules.html"), &doc_2552.html).unwrap();
+        std::fs::write(
+            out_dir.join("2552-two-schedules-report.json"),
+            serde_json::to_string_pretty(&doc_2552.overflow).unwrap(),
+        )
+        .unwrap();
+
+        // 5. 1600WP (growables: []) with 10 payees in Schedule 1.1 (plain fallback)
         let mut f1600wp = sample_1600wp_10_rows();
         f1600wp.insert("frm1600WP:txtRDOCode".into(), "044".into());
         f1600wp.insert("frm1600WP:txtAddress".into(), "123 RIZAL AVE, BRGY. SAN ANTONIO, MAKATI CITY".into());

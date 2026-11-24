@@ -6,6 +6,7 @@
 //! surface. Platform WebViews create print/PDF output, validated through
 //! [`html_output`].
 
+pub mod band_continuation;
 pub mod certification_observation;
 pub mod continuation;
 pub mod frozen_html;
