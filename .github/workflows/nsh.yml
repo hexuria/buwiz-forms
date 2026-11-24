@@ -353,6 +353,21 @@ jobs:
         working-directory: buwiz-forms
         run: cargo test --manifest-path nsh/Cargo.toml --no-fail-fast
 
+      # The app cannot file with the BIR itself: with every feature of the app on, on every target, nothing in its
+      # dependency tree enables bir-core's `direct-bir` feature (the dispatcher client and SFTP to a host that is not
+      # loopback). `cargo tree` prints a feature of bir-core only when something enables it. Linux only: the
+      # answer does not depend on the runner.
+      - name: The app does not enable direct-bir
+        if: matrix.shard == 0
+        working-directory: buwiz-forms
+        run: |
+          tree=$(cargo tree --manifest-path nsh/Cargo.toml --all-features --target all -e features -i bir-core)
+          if grep -q 'direct-bir' <<<"$tree"; then
+            echo "$tree" | grep -B2 -A2 'direct-bir'
+            echo "::error::the app enables bir-core's direct-bir feature"
+            exit 1
+          fi
+
       # The agent build, which nothing else here compiles. First the window's control plane (hexuria/nsh-gpui-agent)
       # against this NSH: the app's crate and its tests build with `agent`, and the two data-plane tests run. Then
       # the host nsh generates: with `agent` it must hold one nsh-testing, the checkout's. cargo tree stops with

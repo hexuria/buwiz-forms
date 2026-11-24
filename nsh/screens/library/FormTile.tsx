@@ -1,5 +1,5 @@
 // A form card of the Form library (the old shell's library.js formCard): the code, the title in two lines, and chips for the
-// frequency, the pages and the fields, plus "Draft layout" where the layout is still a draft (quality under 0.8).
+// frequency, the pages and the fields. The layout's quality (`q`) is not shown: a draft layout still fills, checks and prints.
 // The card is the kit's PressCard (hover border and shadow, the keyboard ring).
 import type { Accessor } from "nsh";
 import { View } from "nsh";
@@ -21,9 +21,6 @@ export function FormTile(props: FormTileProps) {
       <View class="flex-row items-center gap-2">
         <Text variant="title">{props.entry().c}</Text>
         <View class="flex-1" />
-        <If when={props.entry().q < 0.8}>
-          <Chip label="Draft layout" tone="warning" />
-        </If>
       </View>
       <Text variant="control" lines={2} class="h-9 leading-[18px]">{props.entry().t}</Text>
       <View class="flex-row flex-wrap gap-1.5">

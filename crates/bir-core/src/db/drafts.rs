@@ -694,6 +694,7 @@ impl Database {
         &self,
         draft: &Form2551QDraft,
     ) -> Result<super::PostCommitWrite<i64>, DbError> {
+        crate::transport::refuse_queue_when_unavailable()?;
         if !matches!(draft.status, FilingStatus::Queued) {
             return Err(DbError::Other(
                 "Only a queued 2551Q draft can be saved through the submission path".to_string(),
@@ -1979,6 +1980,7 @@ impl Database {
 
     /// Validate and atomically persist the exact user-reviewed queue snapshot.
     pub fn save_queued_1601c_draft(&self, draft: &Form1601CDraft) -> Result<i64, DbError> {
+        crate::transport::refuse_queue_when_unavailable()?;
         if !matches!(draft.status, FilingStatus::Queued) {
             return Err(DbError::Other(
                 "Only a queued 1601C draft can be saved through the submission path".to_string(),

@@ -119,7 +119,7 @@ export interface FormSchema {
   pages: number;
   /** Number of fields. */
   n: number;
-  /** Layout quality 0..1 (under 0.8 the page says "Draft layout"). */
+  /** Layout quality 0..1. Kept in the data; no screen shows it. */
   q: number;
   parts: SchemaPart[];
 }
