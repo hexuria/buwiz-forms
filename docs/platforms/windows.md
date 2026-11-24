@@ -11,7 +11,7 @@ on `windows-2025`, and `check` in
 [README](../../README.md). The same matrix for all platforms is in
 [FEATURES.md](../FEATURES.md).
 
-A real window has been run once on Windows Server 2022 with the agent
+A real window has been run on Windows Server 2022 with the agent
 (`nsh run --target windows`, `nsh-windows-handover.md` §4.6; store
 screenshots on `try/store-shots-windows`). Cells that need a real Windows
 window stay "untested" or "partial"; the pull request that changed this

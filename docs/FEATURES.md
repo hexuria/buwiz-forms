@@ -55,8 +55,8 @@ there, but nobody has run it on that platform.
   a click on the menu-bar icon brings the window back and a secondary
   click opens the Show / Hide / Quit menu (accessibility-press check on a
   real Mac, 2026-11-24). See [macos.md](platforms/macos.md).
-- The table was re-derived from `main` (the deleted `app/` gpui shell and
-  `crates/bir-shell` no longer exist; the app is the NSH app in `nsh/`).
+- The table was re-derived from `main`: the retired JS desktop shell and
+  its crate were deleted; the app is the NSH app in `nsh/`.
 
 ## Features that are the same everywhere
 
