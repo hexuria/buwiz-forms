@@ -1,0 +1,412 @@
+[
+  {
+    "file": "form-review/options/a1-fit-band.png",
+    "case": "A1",
+    "value": "1,750.50",
+    "variant": "band",
+    "form": "2551Q",
+    "item": "Page 1, Part II Item 19 Tax Still Payable/(Overpayment) (12-slot peso + dot + 2-slot centavo)"
+  },
+  {
+    "file": "form-review/options/a1-fit-rect.png",
+    "case": "A1",
+    "value": "1,750.50",
+    "variant": "rect",
+    "form": "2551Q",
+    "item": "Page 1, Part II Item 19 Tax Still Payable/(Overpayment) (12-slot peso + dot + 2-slot centavo)"
+  },
+  {
+    "file": "form-review/options/a1-fit-rectall.png",
+    "case": "A1",
+    "value": "1,750.50",
+    "variant": "rectall",
+    "form": "2551Q",
+    "item": "Page 1, Part II Item 19 Tax Still Payable/(Overpayment) (12-slot peso + dot + 2-slot centavo)"
+  },
+  {
+    "file": "form-review/options/a1-maxfit-band.png",
+    "case": "A1",
+    "value": "999,999,999,999.99 (12 peso digits, largest that fits)",
+    "variant": "band",
+    "form": "2551Q",
+    "item": "Page 1, Part II Item 19 Tax Still Payable/(Overpayment) (12-slot peso + dot + 2-slot centavo)"
+  },
+  {
+    "file": "form-review/options/a1-maxfit-rect.png",
+    "case": "A1",
+    "value": "999,999,999,999.99 (12 peso digits, largest that fits)",
+    "variant": "rect",
+    "form": "2551Q",
+    "item": "Page 1, Part II Item 19 Tax Still Payable/(Overpayment) (12-slot peso + dot + 2-slot centavo)"
+  },
+  {
+    "file": "form-review/options/a1-maxfit-rectall.png",
+    "case": "A1",
+    "value": "999,999,999,999.99 (12 peso digits, largest that fits)",
+    "variant": "rectall",
+    "form": "2551Q",
+    "item": "Page 1, Part II Item 19 Tax Still Payable/(Overpayment) (12-slot peso + dot + 2-slot centavo)"
+  },
+  {
+    "file": "form-review/options/a1-neg-band.png",
+    "case": "A1",
+    "value": "-1,234,567,890,123.45 (negative overpayment, 1 over)",
+    "variant": "band",
+    "form": "2551Q",
+    "item": "Page 1, Part II Item 19 Tax Still Payable/(Overpayment) (12-slot peso + dot + 2-slot centavo)"
+  },
+  {
+    "file": "form-review/options/a1-neg-rect.png",
+    "case": "A1",
+    "value": "-1,234,567,890,123.45 (negative overpayment, 1 over)",
+    "variant": "rect",
+    "form": "2551Q",
+    "item": "Page 1, Part II Item 19 Tax Still Payable/(Overpayment) (12-slot peso + dot + 2-slot centavo)",
+    "note": "Overlay covers hairlines, thick marks, grey decimal block, preprinted dot, and centavo divider; prints (1,234,567,890,123.45)."
+  },
+  {
+    "file": "form-review/options/a1-neg-rectall.png",
+    "case": "A1",
+    "value": "-1,234,567,890,123.45 (negative overpayment, 1 over)",
+    "variant": "rectall",
+    "form": "2551Q",
+    "item": "Page 1, Part II Item 19 Tax Still Payable/(Overpayment) (12-slot peso + dot + 2-slot centavo)"
+  },
+  {
+    "file": "form-review/options/a1-over1-band.png",
+    "case": "A1",
+    "value": "1,234,567,890,123.45 (13 peso digits, 1 over)",
+    "variant": "band",
+    "form": "2551Q",
+    "item": "Page 1, Part II Item 19 Tax Still Payable/(Overpayment) (12-slot peso + dot + 2-slot centavo)"
+  },
+  {
+    "file": "form-review/options/a1-over1-rect.png",
+    "case": "A1",
+    "value": "1,234,567,890,123.45 (13 peso digits, 1 over)",
+    "variant": "rect",
+    "form": "2551Q",
+    "item": "Page 1, Part II Item 19 Tax Still Payable/(Overpayment) (12-slot peso + dot + 2-slot centavo)",
+    "note": "Overlay needed z-index above the page text layer (.t) so the preprinted decimal dot would not bleed through."
+  },
+  {
+    "file": "form-review/options/a1-over1-rectall.png",
+    "case": "A1",
+    "value": "1,234,567,890,123.45 (13 peso digits, 1 over)",
+    "variant": "rectall",
+    "form": "2551Q",
+    "item": "Page 1, Part II Item 19 Tax Still Payable/(Overpayment) (12-slot peso + dot + 2-slot centavo)"
+  },
+  {
+    "file": "form-review/options/a2-fit-band.png",
+    "case": "A2",
+    "value": "12,345,678 (8 digits, fits 9-slot whole-peso comb)",
+    "variant": "band",
+    "form": "1701",
+    "item": "Page 1, Part II Item 22 Tax Due, A. Taxpayer/Filer (9-slot whole-peso comb)"
+  },
+  {
+    "file": "form-review/options/a2-fit-rect.png",
+    "case": "A2",
+    "value": "12,345,678 (8 digits, fits 9-slot whole-peso comb)",
+    "variant": "rect",
+    "form": "1701",
+    "item": "Page 1, Part II Item 22 Tax Due, A. Taxpayer/Filer (9-slot whole-peso comb)"
+  },
+  {
+    "file": "form-review/options/a2-fit-rectall.png",
+    "case": "A2",
+    "value": "12,345,678 (8 digits, fits 9-slot whole-peso comb)",
+    "variant": "rectall",
+    "form": "1701",
+    "item": "Page 1, Part II Item 22 Tax Due, A. Taxpayer/Filer (9-slot whole-peso comb)"
+  },
+  {
+    "file": "form-review/options/a2-over1-band.png",
+    "case": "A2",
+    "value": "1,234,567,890 (10 digits, 1 over 9-slot whole-peso comb)",
+    "variant": "band",
+    "form": "1701",
+    "item": "Page 1, Part II Item 22 Tax Due, A. Taxpayer/Filer (9-slot whole-peso comb)"
+  },
+  {
+    "file": "form-review/options/a2-over1-rect.png",
+    "case": "A2",
+    "value": "1,234,567,890 (10 digits, 1 over 9-slot whole-peso comb)",
+    "variant": "rect",
+    "form": "1701",
+    "item": "Page 1, Part II Item 22 Tax Due, A. Taxpayer/Filer (9-slot whole-peso comb)"
+  },
+  {
+    "file": "form-review/options/a2-over1-rectall.png",
+    "case": "A2",
+    "value": "1,234,567,890 (10 digits, 1 over 9-slot whole-peso comb)",
+    "variant": "rectall",
+    "form": "1701",
+    "item": "Page 1, Part II Item 22 Tax Due, A. Taxpayer/Filer (9-slot whole-peso comb)"
+  },
+  {
+    "file": "form-review/options/n1-fit-band.png",
+    "case": "N1",
+    "value": "MM/YYYY 12/2025, TIN 000-123-453-00000, RDO 043",
+    "variant": "band",
+    "form": "2551Q",
+    "item": "Page 1, Item 2 Year Ended (MM/YYYY), Item 6 TIN, Item 7 RDO Code (fitting combs)"
+  },
+  {
+    "file": "form-review/options/n1-fit-rect.png",
+    "case": "N1",
+    "value": "MM/YYYY 12/2025, TIN 000-123-453-00000, RDO 043",
+    "variant": "rect",
+    "form": "2551Q",
+    "item": "Page 1, Item 2 Year Ended (MM/YYYY), Item 6 TIN, Item 7 RDO Code (fitting combs)"
+  },
+  {
+    "file": "form-review/options/n1-fit-rectall.png",
+    "case": "N1",
+    "value": "MM/YYYY 12/2025, TIN 000-123-453-00000, RDO 043",
+    "variant": "rectall",
+    "form": "2551Q",
+    "item": "Page 1, Item 2 Year Ended (MM/YYYY), Item 6 TIN, Item 7 RDO Code (fitting combs)",
+    "note": "Item 2 (MM/YYYY) and Item 7 (RDO) convert to plain rectangles; Item 6 TIN segments stay boxed because TIN uses a separate fill path (fill_tin_segments)."
+  },
+  {
+    "file": "form-review/options/p1-page-band.png",
+    "case": "P1",
+    "value": "Long name (88 chars), long address (142 chars), overflowing Part II amounts (1,234,567,890,123.45)",
+    "variant": "band",
+    "form": "2551Q",
+    "item": "Page 1 full page (realistic long name, long address, overflowing amounts)"
+  },
+  {
+    "file": "form-review/options/p1-page-rect.png",
+    "case": "P1",
+    "value": "Long name (88 chars), long address (142 chars), overflowing Part II amounts (1,234,567,890,123.45)",
+    "variant": "rect",
+    "form": "2551Q",
+    "item": "Page 1 full page (realistic long name, long address, overflowing amounts)",
+    "note": "Only overflowing fields (Items 8, 9, 14, 19, 24) become clean rectangles; all fitting combs (TIN, RDO, ZIP, Contact, Email, Items 15-18, 20-23) stay official boxes."
+  },
+  {
+    "file": "form-review/options/p1-page-rectall.png",
+    "case": "P1",
+    "value": "Long name (88 chars), long address (142 chars), overflowing Part II amounts (1,234,567,890,123.45)",
+    "variant": "rectall",
+    "form": "2551Q",
+    "item": "Page 1 full page (realistic long name, long address, overflowing amounts)"
+  },
+  {
+    "file": "form-review/options/t1-fit-band.png",
+    "case": "T1",
+    "value": "SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA (40 chars exact)",
+    "variant": "band",
+    "form": "2551Q",
+    "item": "Page 1, Item 8 Taxpayer's Name (40-slot single-line comb)"
+  },
+  {
+    "file": "form-review/options/t1-fit-rect.png",
+    "case": "T1",
+    "value": "SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA (40 chars exact)",
+    "variant": "rect",
+    "form": "2551Q",
+    "item": "Page 1, Item 8 Taxpayer's Name (40-slot single-line comb)"
+  },
+  {
+    "file": "form-review/options/t1-fit-rectall.png",
+    "case": "T1",
+    "value": "SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA (40 chars exact)",
+    "variant": "rectall",
+    "form": "2551Q",
+    "item": "Page 1, Item 8 Taxpayer's Name (40-slot single-line comb)"
+  },
+  {
+    "file": "form-review/options/t1-long-band.png",
+    "case": "T1",
+    "value": "SANTOS, JUANA MARIE DELA CRUZ-VILLANUEVA DE LOS REYES CONCEPCION ENTERPRISES AND TRADING (88 chars)",
+    "variant": "band",
+    "form": "2551Q",
+    "item": "Page 1, Item 8 Taxpayer's Name (40-slot single-line comb)"
+  },
+  {
+    "file": "form-review/options/t1-long-rect-grow.png",
+    "case": "T1",
+    "value": "SANTOS, JUANA MARIE DELA CRUZ-VILLANUEVA DE LOS REYES CONCEPCION ENTERPRISES AND TRADING (88 chars)",
+    "variant": "rect-grow",
+    "form": "2551Q",
+    "item": "Page 1, Item 8 Taxpayer's Name (40-slot single-line comb)",
+    "note": "88 chars already fits on 1 line at 9.5pt in the 567pt box, so shrink/wrap/grow look identical on T1."
+  },
+  {
+    "file": "form-review/options/t1-long-rect-shrink.png",
+    "case": "T1",
+    "value": "SANTOS, JUANA MARIE DELA CRUZ-VILLANUEVA DE LOS REYES CONCEPCION ENTERPRISES AND TRADING (88 chars)",
+    "variant": "rect-shrink",
+    "form": "2551Q",
+    "item": "Page 1, Item 8 Taxpayer's Name (40-slot single-line comb)",
+    "note": "88 chars already fits on 1 line at 9.5pt in the 567pt box, so shrink/wrap/grow look identical on T1."
+  },
+  {
+    "file": "form-review/options/t1-long-rect-wrap.png",
+    "case": "T1",
+    "value": "SANTOS, JUANA MARIE DELA CRUZ-VILLANUEVA DE LOS REYES CONCEPCION ENTERPRISES AND TRADING (88 chars)",
+    "variant": "rect-wrap",
+    "form": "2551Q",
+    "item": "Page 1, Item 8 Taxpayer's Name (40-slot single-line comb)",
+    "note": "88 chars already fits on 1 line at 9.5pt in the 567pt box, so shrink/wrap/grow look identical on T1."
+  },
+  {
+    "file": "form-review/options/t1-long-rectall.png",
+    "case": "T1",
+    "value": "SANTOS, JUANA MARIE DELA CRUZ-VILLANUEVA DE LOS REYES CONCEPCION ENTERPRISES AND TRADING (88 chars)",
+    "variant": "rectall",
+    "form": "2551Q",
+    "item": "Page 1, Item 8 Taxpayer's Name (40-slot single-line comb)"
+  },
+  {
+    "file": "form-review/options/t1-over1-band.png",
+    "case": "T1",
+    "value": "SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVAS (41 chars, 1 over)",
+    "variant": "band",
+    "form": "2551Q",
+    "item": "Page 1, Item 8 Taxpayer's Name (40-slot single-line comb)"
+  },
+  {
+    "file": "form-review/options/t1-over1-rect.png",
+    "case": "T1",
+    "value": "SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVAS (41 chars, 1 over)",
+    "variant": "rect",
+    "form": "2551Q",
+    "item": "Page 1, Item 8 Taxpayer's Name (40-slot single-line comb)"
+  },
+  {
+    "file": "form-review/options/t1-over1-rectall.png",
+    "case": "T1",
+    "value": "SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVAS (41 chars, 1 over)",
+    "variant": "rectall",
+    "form": "2551Q",
+    "item": "Page 1, Item 8 Taxpayer's Name (40-slot single-line comb)"
+  },
+  {
+    "file": "form-review/options/t2-fit-band.png",
+    "case": "T2",
+    "value": "UNIT 1402 ROBINSOFT TOWER, ORTIGAS CENTER, SAN ANTONIO, PASIG CITY (66 chars, fits 40+31)",
+    "variant": "band",
+    "form": "2551Q",
+    "item": "Page 1, Item 9 Registered Address (two-line comb: 40 + 31 = 71 slots)"
+  },
+  {
+    "file": "form-review/options/t2-fit-rect.png",
+    "case": "T2",
+    "value": "UNIT 1402 ROBINSOFT TOWER, ORTIGAS CENTER, SAN ANTONIO, PASIG CITY (66 chars, fits 40+31)",
+    "variant": "rect",
+    "form": "2551Q",
+    "item": "Page 1, Item 9 Registered Address (two-line comb: 40 + 31 = 71 slots)"
+  },
+  {
+    "file": "form-review/options/t2-fit-rectall.png",
+    "case": "T2",
+    "value": "UNIT 1402 ROBINSOFT TOWER, ORTIGAS CENTER, SAN ANTONIO, PASIG CITY (66 chars, fits 40+31)",
+    "variant": "rectall",
+    "form": "2551Q",
+    "item": "Page 1, Item 9 Registered Address (two-line comb: 40 + 31 = 71 slots)"
+  },
+  {
+    "file": "form-review/options/t2-long-band.png",
+    "case": "T2",
+    "value": "UNIT 1402 ONE CORPORATE CENTRE, JULIA VARGAS AVENUE CORNER MERALCO AVENUE, ORTIGAS CENTER, BARANGAY SAN ANTONIO, PASIG CITY, METRO MANILA 1605 (142 chars)",
+    "variant": "band",
+    "form": "2551Q",
+    "item": "Page 1, Item 9 Registered Address (two-line comb: 40 + 31 = 71 slots)"
+  },
+  {
+    "file": "form-review/options/t2-long-rect.png",
+    "case": "T2",
+    "value": "UNIT 1402 ONE CORPORATE CENTRE, JULIA VARGAS AVENUE CORNER MERALCO AVENUE, ORTIGAS CENTER, BARANGAY SAN ANTONIO, PASIG CITY, METRO MANILA 1605 (142 chars)",
+    "variant": "rect",
+    "form": "2551Q",
+    "item": "Page 1, Item 9 Registered Address (two-line comb: 40 + 31 = 71 slots)"
+  },
+  {
+    "file": "form-review/options/t2-long-rectall.png",
+    "case": "T2",
+    "value": "UNIT 1402 ONE CORPORATE CENTRE, JULIA VARGAS AVENUE CORNER MERALCO AVENUE, ORTIGAS CENTER, BARANGAY SAN ANTONIO, PASIG CITY, METRO MANILA 1605 (142 chars)",
+    "variant": "rectall",
+    "form": "2551Q",
+    "item": "Page 1, Item 9 Registered Address (two-line comb: 40 + 31 = 71 slots)"
+  },
+  {
+    "file": "form-review/options/t2-over1-band.png",
+    "case": "T2",
+    "value": "UNIT 1402 ONE CORPORATE CENTRE, ORTIGAS CENTER, SAN ANTONIO, PASIG CITY1 (72 chars, 1 over 71)",
+    "variant": "band",
+    "form": "2551Q",
+    "item": "Page 1, Item 9 Registered Address (two-line comb: 40 + 31 = 71 slots)"
+  },
+  {
+    "file": "form-review/options/t2-over1-rect.png",
+    "case": "T2",
+    "value": "UNIT 1402 ONE CORPORATE CENTRE, ORTIGAS CENTER, SAN ANTONIO, PASIG CITY1 (72 chars, 1 over 71)",
+    "variant": "rect",
+    "form": "2551Q",
+    "item": "Page 1, Item 9 Registered Address (two-line comb: 40 + 31 = 71 slots)",
+    "note": "Both lines of Item 9 (p1c32 + p1c33) convert to clean rectangles when combined length exceeds 71 boxes; ZIP 9A stays untouched."
+  },
+  {
+    "file": "form-review/options/t2-over1-rectall.png",
+    "case": "T2",
+    "value": "UNIT 1402 ONE CORPORATE CENTRE, ORTIGAS CENTER, SAN ANTONIO, PASIG CITY1 (72 chars, 1 over 71)",
+    "variant": "rectall",
+    "form": "2551Q",
+    "item": "Page 1, Item 9 Registered Address (two-line comb: 40 + 31 = 71 slots)"
+  },
+  {
+    "file": "form-review/options/w1-long-grow.png",
+    "case": "W1",
+    "value": "PHILIPPINE METROPOLITAN COMMERCIAL HOLDINGS AND INFRASTRUCTURE DEVELOPMENT CORPORATION (CLASS A COMMON SHARES)",
+    "variant": "grow",
+    "form": "2000-OT",
+    "item": "Page 2, Schedule 1.B row 1 Name of Corporate Stock (tall >=18pt plain box)",
+    "note": "Prototype faked grow (widened cell height downward at 8pt): fits all 4 lines cleanly here ONLY because Schedule 1.B row 2 below is empty."
+  },
+  {
+    "file": "form-review/options/w1-long-shrink.png",
+    "case": "W1",
+    "value": "PHILIPPINE METROPOLITAN COMMERCIAL HOLDINGS AND INFRASTRUCTURE DEVELOPMENT CORPORATION (CLASS A COMMON SHARES)",
+    "variant": "shrink",
+    "form": "2000-OT",
+    "item": "Page 2, Schedule 1.B row 1 Name of Corporate Stock (tall >=18pt plain box)"
+  },
+  {
+    "file": "form-review/options/w1-long-wrap.png",
+    "case": "W1",
+    "value": "PHILIPPINE METROPOLITAN COMMERCIAL HOLDINGS AND INFRASTRUCTURE DEVELOPMENT CORPORATION (CLASS A COMMON SHARES)",
+    "variant": "wrap",
+    "form": "2000-OT",
+    "item": "Page 2, Schedule 1.B row 1 Name of Corporate Stock (tall >=18pt plain box)"
+  },
+  {
+    "file": "form-review/options/w2-long-grow.png",
+    "case": "W2",
+    "value": "WITHHOLDING TAX PAID IN SINGAPORE AND JAPAN ON CONSULTING FEES EARNED UNDER DOUBLE TAXATION TREATY ARTICLE 14",
+    "variant": "grow",
+    "form": "1701MS",
+    "item": "Page 2, Part V Item 7 Foreign Tax Credits (specify) (short <18pt plain box)",
+    "note": "Prototype faked grow (widened cell height downward at 8pt): SURPRISE \u2014 p2c177 spans the caption column (left:14.85pt), so growing covers both the '7 Foreign Tax Credits (specify)' label and Item 8 below."
+  },
+  {
+    "file": "form-review/options/w2-long-shrink.png",
+    "case": "W2",
+    "value": "WITHHOLDING TAX PAID IN SINGAPORE AND JAPAN ON CONSULTING FEES EARNED UNDER DOUBLE TAXATION TREATY ARTICLE 14",
+    "variant": "shrink",
+    "form": "1701MS",
+    "item": "Page 2, Part V Item 7 Foreign Tax Credits (specify) (short <18pt plain box)"
+  },
+  {
+    "file": "form-review/options/w2-long-wrap.png",
+    "case": "W2",
+    "value": "WITHHOLDING TAX PAID IN SINGAPORE AND JAPAN ON CONSULTING FEES EARNED UNDER DOUBLE TAXATION TREATY ARTICLE 14",
+    "variant": "wrap",
+    "form": "1701MS",
+    "item": "Page 2, Part V Item 7 Foreign Tax Credits (specify) (short <18pt plain box)"
+  }
+]

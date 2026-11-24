@@ -144,7 +144,20 @@ fn fill_by_name_set(
                         set_value(tags[index].tag, "", None),
                     ));
                 }
-                if let Some((at, line)) =
+                let opt = PrintOption::current();
+                if matches!(opt, PrintOption::Rect | PrintOption::RectAll) {
+                    if let Some((open, left, top, width, height)) = cell_rect(html, cell) {
+                        let sz = if text.is_empty() {
+                            9.0
+                        } else {
+                            size.max(PLAIN_TEXT_MIN_PT)
+                        };
+                        let overlay = rect_overlay_div(
+                            left, top, width, height, text, sz, false, false, false,
+                        );
+                        replacements.push((open, open, overlay));
+                    }
+                } else if let Some((at, line)) =
                     overflow_input(html, cell, text, *size).filter(|_| !text.is_empty())
                 {
                     replacements.push((at, at, line));
