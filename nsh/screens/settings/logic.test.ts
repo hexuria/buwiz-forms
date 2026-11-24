@@ -3,7 +3,7 @@ import { expect, test } from "nsh/test";
 import type { BackgroundJob } from "../../bir";
 import {
   deletionRequestUrl, filterJobs, groupSections, jobActions, jobKey, jobSub, jobTone, levelTone, LOG_LINES, logHeadline, logLineLevel,
-  logView, retentionChoices, serverHint,
+  logView, retentionChoices, accountHint, serverHint, showsServer,
 } from "./logic";
 
 const job = (extra: Partial<BackgroundJob>): BackgroundJob => ({
@@ -86,6 +86,22 @@ test("a request to delete the account is an email to support that names the acco
     "Please delete my Buwiz account for juana+tax@example.com and the email address held with it.",
   );
   expect(decodeURIComponent(deletionRequestUrl(null).split("&body=")[1])).toBe("Please delete my Buwiz account and the email address held with it.");
+});
+
+test("the server row shows only for a server that is not Buwiz's own, an address from the run, or a rejected one", () => {
+  expect(showsServer({ server_url: "https://api.buwiz.com", server_url_source: "default" })).toBe(false);
+  expect(showsServer({ server_url: "https://api.buwiz.com/", server_url_source: "build" })).toBe(false);
+  expect(showsServer({ server_url: "https://api.buwiz.com", server_url_source: "env" })).toBe(true);
+  expect(showsServer({ server_url: "http://localhost:3008", server_url_source: "default" })).toBe(true);
+  expect(showsServer({ server_url: "", server_url_source: "invalid" })).toBe(true);
+  expect(showsServer(null)).toBe(false);
+});
+
+test("the account line does not repeat its own title", () => {
+  expect(accountHint("Not signed in", "Not signed in.")).toBe("");
+  expect(accountHint("Not signed in", "Not signed in")).toBe("");
+  expect(accountHint("juana@example.com", "Signed in. Works offline.")).toBe("Signed in. Works offline.");
+  expect(accountHint("Not signed in", "The server did not answer.")).toBe("The server did not answer.");
 });
 
 test("the retention choices are the host's, with an unusual current one added", () => {
