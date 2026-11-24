@@ -1,0 +1,59 @@
+{
+  "code": "2200T",
+  "verdict": "tweak",
+  "summary": "Header, Part III amounts, the whole fixed schedule grid, all 3 Others rows and all four Part IV payment rows print correctly, but items 10/11 print blank despite being filled, row 7's Novel Tobacco money cells never print, and the Others-specify particulars cell clips text at its left edge.",
+  "defects": [
+    {
+      "id": "T1",
+      "surface": "print",
+      "where": "Page 1, items 10 Place of Production and 11 Place of Removal (Region/Province/City cells)",
+      "what": "All six cells print blank even though the selects were filled (PSGC 130000000/137600000/137602000) and validation accepted them; the strings appear nowhere in the generated sheet.html, so the binding is missing entirely. Checked by hand against the rendered preview and the app's own saved PDF - identical blanks.",
+      "severity": "high",
+      "picture": "mac/crop-p1-places.png"
+    },
+    {
+      "id": "T2",
+      "surface": "print",
+      "where": "Page 3, Schedule 1 row 7 Novel Tobacco Products (XT210/XT220), Export/Taxable/Due cells",
+      "what": "Both money cells for rows 7a (Effective Aug 10 2022 / Jan 1 2023) and 7b Vapor-row equivalent print blank while every other fixed row prints its filled values; the _7A/_7B fields accepted fills on screen.",
+      "severity": "medium",
+      "picture": "mac/crop-p3.png"
+    },
+    {
+      "id": "T3",
+      "surface": "screen",
+      "where": "Data model vs paper",
+      "what": "Fields txtSched1_*_2020_* and txtSched1_*_2021_* accept values but the paper only prints 'Effective January 1, 2022', 'Effective January 1, 2023' and a '2024 Onwards' note row - two years of filled cells silently never reach the print.",
+      "severity": "low",
+      "picture": "mac/crop-p2.png"
+    },
+    {
+      "id": "T4",
+      "surface": "print",
+      "where": "Page 1, Part IV Others (specify) Particulars cell",
+      "what": "Entered 'MISC PAYMENT' prints as 'C PAYMENT' - the left edge of the text is clipped out of the cell (bank, number, date and amount all print fine).",
+      "severity": "low",
+      "picture": "mac/crop-p1-bottom.png"
+    },
+    {
+      "id": "T5",
+      "surface": "screen",
+      "where": "Form header",
+      "what": "Same stuck 'Unsaved changes' flag as 2200S: after editing via the row editor and saving through the draft, the header kept 'Unsaved changes' and Print preview ignored three clicks; dismissing and reopening the saved draft fixed it.",
+      "severity": "low",
+      "picture": ""
+    },
+    {
+      "id": "T6",
+      "surface": "print",
+      "where": "Page 3, Others rows bracket cell",
+      "what": "Bracket prints 'PER PACK' uppercased (entered 'Per Pack'); cosmetic only.",
+      "severity": "low",
+      "picture": "mac/crop-p3.png"
+    }
+  ],
+  "entered_by_hand": "Opened Schedule 1 row 1a 'Effective January 1, 2022' editor and typed Tax Base Taxable 6,111,222.33 (prints on page 2, XT010 row 1a 2022). Also hand-verified the blank places cells and blank row-7 cells in the preview window and the saved PDF - checked by hand once more as required.",
+  "open_questions": [
+    "Is the places blankness the same missing binding as 2200S PSIC - both are select/computed-style fields that validate fine but never reach sheet.html?"
+  ]
+}
