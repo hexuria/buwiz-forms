@@ -13,6 +13,7 @@
 import { batch, signal, type Signal } from "nsh";
 import { bir } from "../bir";
 import { errorText } from "../lib/errors";
+import { zipChoices } from "../lib/format";
 
 /** A read that failed answers its fallback for this long, then is asked again. */
 export const FAILED_READ_RETRY_MS = 2000;
@@ -350,11 +351,11 @@ export const store = {
     }
     return rdoList;
   },
-  /** ZIP choices as { value, label }. Static, so kept past bump(). */
+  /** ZIP choices as { value, label }, one per code. Static, so kept past bump(). */
   zipOptions(): { value: string; label: string }[] {
     if (!zipList) {
       try {
-        zipList = bir.list_zip_codes().map((z) => ({ value: z.split(" - ")[0].trim(), label: z }));
+        zipList = zipChoices(bir.list_zip_codes());
       } catch {
         return [];
       }
