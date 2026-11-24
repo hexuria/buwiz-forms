@@ -68,10 +68,10 @@ env:
   # repository's cache storage is full); panics still name their file and line.
   CARGO_PROFILE_DEV_DEBUG: "0"
   # THE PIN: the NSH commit every job builds against. Change it here and nowhere else.
-  # 70d8ff26b9e9dccb17a908de97cd4a3f3e381276 = hexuria/nsh, the tip of branch buwiz (NSH 0.6.1, after hexuria/nsh#31). Its
-  # development hosts serve the window's gpui-agent control plane (tree, press, type, screenshot) on macOS, Linux, Windows,
-  # Android and the iOS Simulator, which agent recipes that press the form's controls need (agent-recipes/ui).
-  NSH_PINNED_REF: 70d8ff26b9e9dccb17a908de97cd4a3f3e381276
+  # 04955773231827a4ae8f008d5c6ea7c4ddb06f03 = hexuria/nsh, the tip of branch buwiz-next (upstream v0.6.1 plus the
+  # agent socket's doors plus the app's own changes; see hexuria/nsh SOCKET.md). The window's gpui-agent control
+  # plane moved to hexuria/nsh-gpui-agent: this checkout supplies the doors it plugs into.
+  NSH_PINNED_REF: 04955773231827a4ae8f008d5c6ea7c4ddb06f03
   NSH_REPOSITORY: hexuria/nsh
   # The four safety variables: nothing reaches the keychain, a real database or the BIR.
   BUWIZ_NO_KEYCHAIN: "1"

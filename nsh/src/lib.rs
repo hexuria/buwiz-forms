@@ -37,6 +37,9 @@ use nsh_core::prelude::*;
 /// The crate's UI set (`nsh.json` `"rust"`): everything TSX can import from `ebirforms/native`.
 #[native_module("ebirforms/native")]
 fn native(registry: &mut Registry) {
+    // The plug's window control plane: `native()` runs before the host opens any surface, so this is
+    // where the platform crate's surface hook is installed (see agent.rs, "Agent remote control").
+    agent::install_window_plane();
     // Desktop hosts register before NSH starts. Android waits for injected System.data_dir and
     // uses in-process configuration rather than changing the environment (see `door::process`).
     #[cfg(not(target_os = "android"))]
