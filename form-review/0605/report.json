@@ -1,0 +1,57 @@
+{
+  "code": "0605",
+  "verdict": "tweak",
+  "summary": "Part II money boxes (Items 19, 20A-20D, 21) print full decimal strings on top of the sheet's pre-printed static decimal dot. Item 18 'No. of Installment' prints blank because frm0605:txtNumOfInstallment is not_joined in writer-cells.json. Item 15 Registered Address is forced to 6.7px by print-overrides/0605-1999.css, Item 14 Telephone Number overflow band leaves comb tick stubs visible below the text, and the screen header says 'Revision 2003' instead of 'July 1999 (ENCS)'.",
+  "defects": [
+    {
+      "id": "0605-print-01",
+      "surface": "print",
+      "where": "Page 1, Part II Items 19, 20A, 20B, 20C, 20D, and 21 (Computation of Tax)",
+      "what": "Each Part II amount box has a pre-printed static decimal dot near the right end, but bir-print writes the full formatted amount (e.g. '248,501,750.50', '335,527,363.18') right-aligned into one text cell, so the printed centavos collide directly with the pre-printed decimal dot.",
+      "before": "form-review/0605/before/print-p1.png",
+      "official": "form-review/0605/official/page-1.png",
+      "status": "open"
+    },
+    {
+      "id": "0605-print-02",
+      "surface": "print",
+      "where": "Page 1, Part I Item 18 (Type of Payment — No. of Installment)",
+      "what": "Installment count ('4' on screen) prints completely blank because frm0605:txtNumOfInstallment is marked not_joined in html-frozen/0605-1999/writer-cells.json.",
+      "before": "form-review/0605/before/print-p1.png",
+      "official": "form-review/0605/official/page-1.png",
+      "status": "open"
+    },
+    {
+      "id": "0605-print-03",
+      "surface": "print",
+      "where": "Page 1, Part I Item 15 (Registered Address, #p1c38-i)",
+      "what": "print-overrides/0605-1999.css forces font-size:6.7px !important over bir-print's dynamic fitting, shrinking the address smaller than needed (and #p1c33-i Item 17 Others Specify is similarly forced to 6.1px).",
+      "before": "form-review/0605/before/print-p1.png",
+      "official": "form-review/0605/official/page-1.png",
+      "status": "open"
+    },
+    {
+      "id": "0605-print-04",
+      "surface": "print",
+      "where": "Page 1, Part I Item 14 (Telephone Number, 7-slot comb)",
+      "what": "11-digit mobile number '09171234567' overflows the 7-slot comb; the shared white band covers the text middle, leaving short vertical comb-tick stubs protruding along the bottom edge of the box.",
+      "before": "form-review/0605/before/print-p1.png",
+      "official": "form-review/0605/official/page-1.png",
+      "status": "open"
+    },
+    {
+      "id": "0605-screen-01",
+      "surface": "screen",
+      "where": "Form header",
+      "what": "Header displays 'BIR Form 0605 · Revision 2003' whereas the official BIR PDF and printed sheet are 'July 1999 (ENCS)'.",
+      "before": "form-review/0605/before/screen-04-part-3.png",
+      "official": "form-review/0605/official/page-1.png",
+      "status": "open"
+    }
+  ],
+  "hand_entry_verified": [
+    "frm0605:txtTax19 entered via form page UI (248501750.50 -> 248,501,750.50)"
+  ],
+  "growables": [],
+  "notes": "0605 has no repeatable schedules (official page 2 is the static Tax Type / ATC reference guide moved to guide.html). Saved in scratch DB audit-3b.db as draft id=1."
+}
