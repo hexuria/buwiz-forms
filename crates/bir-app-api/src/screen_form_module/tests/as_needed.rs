@@ -1310,7 +1310,10 @@ fn pr9_2552_page_2_is_its_printed_parts() {
             format!("frm2552:txtPg2Pt5Sch{}Date1", n + 1)
         );
         assert_eq!(table["cols"][0]["t"], "date");
-        assert_eq!(table["cols"][4]["t"], "int", "Number of Shares");
+        // A number of shares is a decimal-capable box: its binding is an
+        // amount, and the digits-only int mask would drop a typed decimal
+        // point and store another number without a word.
+        assert_eq!(table["cols"][4]["t"], "num", "Number of Shares");
         assert_eq!(table["calendar"], true);
         for (c, letter) in ["a", "b", "c", "d", "e", "f", "g", "h"].iter().enumerate() {
             assert!(
@@ -1324,7 +1327,7 @@ fn pr9_2552_page_2_is_its_printed_parts() {
     let vi = tables("Part VI · Details of Transactions not Subject to Percentage Tax");
     assert_eq!(vi[0]["rows"], 5);
     assert_eq!(vi[0]["calendar"], true);
-    assert_eq!(vi[0]["cols"][4]["t"], "int");
+    assert_eq!(vi[0]["cols"][4]["t"], "num");
     let sheet = sheet_text("2552-2018");
     for name in [
         "Part IV – Summary of Transactions not subject to Tax",

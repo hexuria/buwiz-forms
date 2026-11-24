@@ -28,7 +28,7 @@ export interface ControlsModule {
 // ---------------------------------------------------------------- the schema (forms/forms-schema.json, via bir.screen_form_schema)
 
 /** A box's kind. "radio" and "chk" are tick boxes; every other kind takes typing or a pick. */
-export type FieldType = "text" | "money" | "radio" | "chk" | "date" | "sel" | "pct" | "int" | "email" | "phone";
+export type FieldType = "text" | "money" | "num" | "radio" | "chk" | "date" | "sel" | "pct" | "int" | "email" | "phone";
 
 /** One box of an item. Flags are 1 when set (the schema writes 1, not true). */
 export interface SchemaField {
