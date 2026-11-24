@@ -1,0 +1,43 @@
+{
+  "code": "1706",
+  "platform": "macOS 26.6.2 arm64, WKWebView print preview (Folio sheet at 88%), Save-as-PDF via preview toolbar",
+  "branch_under_test": "try/forms-neon-3 @ 2562df04e30d2b21d4c0d2121929b7b6f4fca707",
+  "verdict": "macOS matches Linux: yes (preview); saved PDF has mac-only text-overlap/clipping defects",
+  "fill_notes": "No worst-case fixture in branch (sample-payloads steps fixture is a different generic dataset); dataset copied from Linux after/ refs. Profile saved with the 1706 seller persona (SANTOS, JUANA MARIE DELA CRUZ-VILLANUEVA / RDO 044 / San Lorenzo, Makati) before opening the draft — seller fields are profile-derived and form.fill refuses them. Buyer TIN fields refused (written through the form's own buyer_tin editors); branch code 00000 prints as '---00000'/'00000' exactly like Linux.",
+  "differences": [
+    {
+      "id": "1706-mac-pdf-text-overlap",
+      "surface": "saved PDF only (mac-specific, same class as 2550Q)",
+      "where": "P1: signature block 'Tax Agent(Indicate...'/'Signature over Printed Name of President...' columns run together. P2: Schedule 3 title 'Principal Residenc(e (if Part I Items 8 and 9 are applicable)'.",
+      "what": "In the Save-as-PDF output, sibling text runs (bold label + italic parenthetical, or left/right column labels) overlap horizontally; the WKWebView preview renders them cleanly.",
+      "status": "mac-specific defect"
+    },
+    {
+      "id": "1706-mac-pdf-shrink",
+      "surface": "saved PDF only (mac-specific)",
+      "where": "P1 item 6A seller name; P2 Schedule 1 Location cell",
+      "what": "PDF clips 'SANTOS, JUANA MARIE DELA CRUZ-VILLANU' and 'METRO MAN' at the cell borders; the preview's dynamic shrink-to-fit shows the full 'VILLANUEVA' and 'MANILA' within the same cells.",
+      "status": "mac-specific defect"
+    },
+    {
+      "id": "1706-mac-classification-blank",
+      "surface": "print (carried-over defect)",
+      "where": "P2 Schedule 1 continuation Classification* column",
+      "what": "Blank on print with 'Residential' (j_id391:_1) selected, identical to Linux 'needs shared change' defect.",
+      "status": "reproduces identically"
+    },
+    {
+      "id": "1706-mac-1200-comb",
+      "surface": "print (carried-over defect)",
+      "where": "P2 Schedule 2 item 6 No. of Installments",
+      "what": "Prints '12.00' (5 chars) across the 2-slot integer comb, identical to Linux 'needs shared change' defect.",
+      "status": "reproduces identically"
+    }
+  ],
+  "fixes_confirmed": [
+    "6A/7A long names shrink-to-fit inside cells without overflow or border collision (preview)",
+    "Schedule 1 continuation amounts right-aligned with padding",
+    "P2 buyer name comb box: name rendered without comb-tick strike-through"
+  ],
+  "files": ["print-p1.png", "print-p2.png", "pdf-p-1.png", "pdf-p-2.png"]
+}
