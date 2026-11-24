@@ -52547,12 +52547,12 @@
       "evidence": "PR 9 (manual-2): html-frozen/2552-2018/writer-cells.json xbox_joins '11A Shares Listed and Traded through the LSE'; html-frozen/2552-2018/index.html (BIR Form 2552, January 2018) '11A Shares of Stocks Listed and Traded through the LSE'"
     },
     "frm2552:rdoPg1I11TransactionPrimary": {
-      "label": "11B Initial Public Offering: Primary",
-      "evidence": "PR 9 (manual-2): html-frozen/2552-2018/writer-cells.json xbox_joins '11B Initial Public Offering, Primary'"
+      "label": "11B Initial Public Offering \u2013 Primary",
+      "evidence": "PR 9 (manual-2): html-frozen/2552-2018/writer-cells.json xbox_joins '11B Initial Public Offering, Primary'; en-dash avoids choiceLabel colon-stripping"
     },
     "frm2552:rdoPg1I11TransactionSecondary": {
-      "label": "11B Initial Public Offering: Secondary",
-      "evidence": "PR 9 (manual-2): html-frozen/2552-2018/writer-cells.json xbox_joins '11B Initial Public Offering, Secondary'"
+      "label": "11B Initial Public Offering \u2013 Secondary",
+      "evidence": "PR 9 (manual-2): html-frozen/2552-2018/writer-cells.json xbox_joins '11B Initial Public Offering, Secondary'; en-dash avoids choiceLabel colon-stripping"
     },
     "frm2552:rdoPg1OverpaymentRefund": {
       "label": "To be refunded",

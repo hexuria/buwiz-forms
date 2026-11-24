@@ -779,9 +779,25 @@ impl Form2552Draft {
         fields
     }
 
-    /// The exact official submit plaintext.
+    /// The official submit plaintext.
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         self.official_payload()
+    }
+
+    /// Print field map: keeps Item 1 date parts blank instead of `"00"` / `"0000"`
+    /// when a draft has not yet been assigned a transaction date.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        if self.transaction_month == 0 {
+            fields.insert("frm2552:txtPg1I1Month".to_string(), String::new());
+        }
+        if self.transaction_day == 0 {
+            fields.insert("frm2552:txtPg1I1Day".to_string(), String::new());
+        }
+        if self.transaction_year == 0 {
+            fields.insert("frm2552:txtPg1I1Year".to_string(), String::new());
+        }
+        fields
     }
 
     /// `checkDatePage1`, `dateInPage1Item1` and `checkYear`.
@@ -1207,7 +1223,7 @@ impl Form2552Draft {
 
 impl QueueableForm for Form2552Draft {
     fn print_field_map(&self) -> BTreeMap<String, String> {
-        self.to_bir_field_map()
+        self.to_print_field_map()
     }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]
@@ -1767,5 +1783,24 @@ mod tests {
                 .any(|(field, _)| field == "surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+
+    #[test]
+    fn print_field_map_blanks_unset_item_1_date_parts() {
+        let mut draft = sample();
+        draft.transaction_month = 6;
+        draft.transaction_day = 15;
+        draft.transaction_year = 2026;
+        let dated = draft.to_print_field_map();
+        assert_eq!(dated["frm2552:txtPg1I1Month"], "06");
+        assert_eq!(dated["frm2552:txtPg1I1Day"], "15");
+        assert_eq!(dated["frm2552:txtPg1I1Year"], "2026");
+
+        draft.transaction_month = 0;
+        draft.transaction_day = 0;
+        let undated = draft.to_print_field_map();
+        assert_eq!(undated["frm2552:txtPg1I1Month"], "");
+        assert_eq!(undated["frm2552:txtPg1I1Day"], "");
+        assert_eq!(undated["frm2552:txtPg1I1Year"], "2026");
     }
 }

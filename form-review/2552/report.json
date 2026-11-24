@@ -10,7 +10,7 @@
       "what": "Amount Involved, Number of Shares, Tax Base, Tax Rate, Tax Due, and Total values all print left-aligned instead of right-aligned.",
       "before": "before/print-p2.png",
       "after": "",
-      "status": "open"
+      "status": "fixed_shared"
     },
     {
       "id": "2552-P2",
@@ -19,7 +19,7 @@
       "what": "Schedule 1 rows 1-4 print Dates (06/15/2026) but Seller, Buyer, Issuing Corporation, Number of Shares, and Tax Base print blank/0.00 despite being filled.",
       "before": "before/print-p2.png",
       "after": "",
-      "status": "open"
+      "status": "deferred_shared"
     },
     {
       "id": "2552-P3",
@@ -28,7 +28,7 @@
       "what": "Address, Email, and 10A Specify collide with comb ticks; Email prints lowercase; Item 7A ZIP Code prints blank.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "needs shared change"
+      "status": "by_design"
     },
     {
       "id": "2552-S1",
@@ -37,7 +37,7 @@
       "what": "The 5-digit branch code (00000) is truncated with ellipsis (000...) in the read-only TIN box.",
       "before": "before/screen-02-part-i-background-information.png",
       "after": "",
-      "status": "needs shared change"
+      "status": "deferred_nsh"
     },
     {
       "id": "2552-S2",
@@ -46,7 +46,14 @@
       "what": "Segmented options show \"11A Shares of Stocks Listed and Traded through the LSE | Primary | Secondary\" without the \"11B Initial Public Offering\" label for Primary/Secondary.",
       "before": "before/screen-02-part-i-background-information.png",
       "after": "",
-      "status": "open"
+      "status": "fixed"
+    },
+    {
+      "id": "2552-P4",
+      "where": "Page 1, Item 1 (Date of Transaction)",
+      "status": "fixed",
+      "cause": "before.db draft had transaction_month=0, transaction_day=0, transaction_year=2026, and Form2552Draft::to_bir_field_map formatted 0 as \"00\" -> \"00002026\".",
+      "fix": "Added Form2552Draft::to_print_field_map() in crates/bir-core/src/forms/form_2552.rs (leaving upload to_bir_field_map untouched) to emit empty string for unset 0 month/day/year parts, with unit test print_field_map_blanks_unset_item_1_date_parts."
     }
   ],
   "files_changed": [
@@ -87,5 +94,17 @@
   "remaining_shared_issues": [
     "Page 2 numeric columns left-aligned: fixed on try/forms-shared-print (commit 0f484378; before/after already verified on 2552 p2).",
     "Growable schedule rows beyond 5: documented in form-review/SHARED-FINDINGS.md on try/forms-shared-print (commit 1679ff23)."
-  ]
+  ],
+  "fixture_replay": {
+    "mechanism": "Canonical BEFORE SQLite database (/home/ubuntu/BuwizNsh/agents/before.db) is cloned verbatim to after-deterministic.db and each form draft is also exported to /home/ubuntu/BuwizNsh/agents/fixtures/<FORM>.json. replay_fixtures.py opens the exact saved draft via the Filings UI (nav-filings -> return-<id>, never form.open which resets open-ended O1 drafts), clicks fp-print, and asserts length(data_json) is identical before and after printing.",
+    "draft_id": 5,
+    "period_key": "O0",
+    "data_json_bytes": 3351,
+    "script": "/home/ubuntu/BuwizNsh/agents/replay_fixtures.py"
+  },
+  "review_followups": {
+    "item_1_date": "Fixed in crates/bir-core/src/forms/form_2552.rs::to_print_field_map() (prints blank MM/DD instead of 0000 when unset; prints 06/15/2026 when set).",
+    "number_of_shares_alignment": "Fixed in shared print commit 058a0e9b on try/forms-shared-print (right-aligns plain numeric quantity columns including 2552 Schedules 1-3 col (e) and Part VI Number of Shares, plus 1800/1801/1706/1606 Area and Shares).",
+    "item_11b_screen_label": "Fixed in forms/schema-overrides.json (2552 block) by changing the colon to an en-dash (\"11B Initial Public Offering \u2013 Primary\" / \"11B Initial Public Offering \u2013 Secondary\") so nsh/screens/form/schema.ts:191 choiceLabel does not strip the \"11B Initial Public Offering\" prefix; verified in after/screen-02-part-i-background-information.png."
+  }
 }

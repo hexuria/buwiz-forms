@@ -10,7 +10,7 @@
       "what": "Item 5 TIN prints completely blank on Page 1 even though Page 2 TIN prints 00012345300000.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1801-P2",
@@ -19,7 +19,7 @@
       "what": "All three key summary boxes print completely blank despite Page 2 Item 40 (85,610,732.29) and Item 20 (3,806,273.97) being computed.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1801-P3",
@@ -28,7 +28,7 @@
       "what": "Taxpayer Name and Residence print as plain text colliding with comb ticks; Residence does not wrap cleanly to line 2; Email prints lowercase.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "needs shared change"
+      "status": "by_design"
     },
     {
       "id": "1801-P4",
@@ -37,7 +37,7 @@
       "what": "Executor TIN text overlaps the shaded dash separator boxes.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "open"
+      "status": "deferred_shared"
     },
     {
       "id": "1801-P5",
@@ -46,7 +46,7 @@
       "what": "All money amounts in Part IV A/B and Part V schedules are left-aligned instead of right-aligned; Schedule 1A OCT/TCT/CCT No. and Schedule 4 Registered Address clip against cell borders.",
       "before": "before/print-p2.png",
       "after": "",
-      "status": "open"
+      "status": "fixed_shared"
     },
     {
       "id": "1801-S1",
@@ -55,7 +55,7 @@
       "what": "Long Executor Name scrolls past the left edge inside the input; TIN input segments need clear formatting when filled.",
       "before": "before/screen-02-part-i-taxpayer-information.png",
       "after": "",
-      "status": "needs shared change"
+      "status": "deferred_nsh"
     }
   ],
   "files_changed": [
@@ -93,5 +93,15 @@
     "Long name/address over comb ticks: knockout preview on try/forms-overflow-knockout (commit c5cedcaa), awaiting owner decision.",
     "Negative amounts in money_joins comb boxes (overpayment): bir-print currently leaves comb boxes blank for negative values; flagged for shared print follow-up.",
     "Schedule rows beyond fixed printed rows: documented in form-review/SHARED-FINDINGS.md on try/forms-shared-print (commit 1679ff23)."
-  ]
+  ],
+  "fixture_replay": {
+    "mechanism": "Canonical BEFORE SQLite database (/home/ubuntu/BuwizNsh/agents/before.db) is cloned verbatim to after-deterministic.db and each form draft is also exported to /home/ubuntu/BuwizNsh/agents/fixtures/<FORM>.json. replay_fixtures.py opens the exact saved draft via the Filings UI (nav-filings -> return-<id>, never form.open which resets open-ended O1 drafts), clicks fp-print, and asserts length(data_json) is identical before and after printing.",
+    "draft_id": 2,
+    "period_key": "O1",
+    "data_json_bytes": 32881,
+    "script": "/home/ubuntu/BuwizNsh/agents/replay_fixtures.py"
+  },
+  "review_followups": {
+    "after_data_loss_root_cause": "Not a code or shared-print regression: the earlier rebase refresh ran against an empty 2,989-byte draft because form.open overwrites open-ended O1 drafts. Re-captured AFTER print-p1.png and print-p2.png from the exact 32,881-byte before.db draft (verified unchanged after print): Item 5 TIN, Item 10 Executor, Item 16 (85,610,732.29), Items 18-21, Part III banks/checks, and all Page 2 Part IV & Schedules 1-5 print cleanly and right-aligned (including Schedule 2 No. of Shares via shared commit 058a0e9b). Item 22/24 remain blank only when Item 21 installment exceeds Item 20 by >=10 digits (negative overflow under C2)."
+  }
 }

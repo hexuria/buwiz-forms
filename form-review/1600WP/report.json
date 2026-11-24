@@ -10,7 +10,7 @@
       "what": "All peso amounts print left-aligned instead of right-aligned.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "open"
+      "status": "fixed_shared"
     },
     {
       "id": "1600WP-P2",
@@ -19,7 +19,7 @@
       "what": "Withholding Agent Name in the Attachment header prints blank; Schedule 1.1 Seq. No. column (1) is blank; only 5 of 10 filled payee rows print; Total row P boxes are blank.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1600WP-P3",
@@ -28,7 +28,7 @@
       "what": "Item 10 Zip Code prints blank; Item 11 No box is unticked on paper even though screen Part I states eBIRForms keeps it disabled with No ticked.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "open"
+      "status": "fixed_shared"
     },
     {
       "id": "1600WP-S1",
@@ -37,7 +37,7 @@
       "what": "Header displays \"2 rows\" while the table body states \"No rows yet.\".",
       "before": "before/screen-03-part-ii-computation-of-tax.png",
       "after": "",
-      "status": "open"
+      "status": "by_design"
     }
   ],
   "files_changed": [
@@ -78,5 +78,15 @@
       "sheet_file": "forms-corrected/extra/1600wp-2010/index.html (frozen to html-frozen/1600wp-2010/index.html by tools/formgen/freeze_html.py line 39)",
       "generator_rule": "tools/formgen/lattice.py and tools/formgen/emit.py did not classify the blank box beside 'Name of Withholding Agent' in the Attachment header as a fillable cell; add a correction record under tools/formgen/corrections/ (beside C05-1600wp-tin-branch-code.json and C06-1600wp-agent-tin-branch-code.json, applied by tools/formgen/correct.py) emitting p1c272."
     }
-  ]
+  ],
+  "fixture_replay": {
+    "mechanism": "Canonical BEFORE SQLite database (/home/ubuntu/BuwizNsh/agents/before.db) is cloned verbatim to after-deterministic.db and each form draft is also exported to /home/ubuntu/BuwizNsh/agents/fixtures/<FORM>.json. replay_fixtures.py opens the exact saved draft via the Filings UI (nav-filings -> return-<id>, never form.open which resets open-ended O1 drafts), clicks fp-print, and asserts length(data_json) is identical before and after printing.",
+    "draft_id": 6,
+    "period_key": "M06",
+    "data_json_bytes": 2488,
+    "script": "/home/ubuntu/BuwizNsh/agents/replay_fixtures.py"
+  },
+  "review_followups": {
+    "sched_1_1_total_row": "html-frozen/1600wp-2010/index.html generates the Schedule 1.1 TOTAL cells (p1c241 Amount total and p1c243 Tax Required to be Withheld total) as data-cell-kind=\"label\" (not fillable <input>) because the preprinted peso sign sits inside each cell, and writer-cells.json:626 puts frm1600WP:dtSched:TotaltaxWithheld in not_joined. Thus the total row is always blank after the peso marker regardless of whether totals are zero or non-zero. If converted to a fillable cell upstream in buwiz-forms-html and joined, a zero total should print as 0.00 (matching Part II items 14-16). Item 11 No tick and Schedule 1.1 Seq. No. 1-6 are now fixed via shared commit b9fee804."
+  }
 }

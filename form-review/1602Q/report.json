@@ -10,7 +10,7 @@
       "what": "Page 3 prints only the top header banner (TIN and Withholding Agent Name) over 90% blank white space because Schedules 5 and 6 were moved to guide.html; either drop Page 3 from print output or restore the official reference tables.",
       "before": "before/print-p3.png",
       "after": "",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1602Q-P2",
@@ -19,7 +19,7 @@
       "what": "Long address and Page 2/3 header name print as plain text colliding with comb ticks; Email prints lowercase.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "needs shared change"
+      "status": "by_design"
     },
     {
       "id": "1602Q-P3",
@@ -28,7 +28,7 @@
       "what": "Item 9A ZIP Code prints blank despite profile ZIP 1209.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1602Q-P4",
@@ -76,5 +76,15 @@
       "sheet_file": "forms-corrected/1602q-2019/index.html (frozen to html-frozen/1602q-2019/index.html by tools/formgen/freeze_html.py line 33)",
       "generator_rule": "tools/formgen/guides.py splits Schedules 5-6 out of Page 3 into guide.html, leaving an orphaned <div class='page page-3' id='page-3'> with only the repeating page header and TIN/Name combs (p3c5/p3c6). Update tools/formgen/guides.py / tools/formgen/emit.py to drop pages whose non-header body was entirely moved to guide.html."
     }
-  ]
+  ],
+  "fixture_replay": {
+    "mechanism": "Canonical BEFORE SQLite database (/home/ubuntu/BuwizNsh/agents/before.db) is cloned verbatim to after-deterministic.db and each form draft is also exported to /home/ubuntu/BuwizNsh/agents/fixtures/<FORM>.json. replay_fixtures.py opens the exact saved draft via the Filings UI (nav-filings -> return-<id>, never form.open which resets open-ended O1 drafts), clicks fp-print, and asserts length(data_json) is identical before and after printing.",
+    "draft_id": 7,
+    "period_key": "Q2",
+    "data_json_bytes": 2774,
+    "script": "/home/ubuntu/BuwizNsh/agents/replay_fixtures.py"
+  },
+  "review_followups": {
+    "sched_2_3_tax_rate": "Schedule 2 and 3 Rate cells (p2c166, p2c176, p2c206, p2c216) print \"4.00\" left-aligned with no \"%\" sign because the official BIR 1602Q column header already carries \"Rate (%)\", form_1602q.rs emits \"4.00\" matching official eBIRForms XML, and shared money/quantity right-alignment rules intentionally exclude rate/percent keys."
+  }
 }

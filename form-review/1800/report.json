@@ -10,7 +10,7 @@
       "what": "Address prints literally URL-encoded (%20, %2C) and plain text collides with comb ticks.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "needs shared change"
+      "status": "fixed_shared"
     },
     {
       "id": "1800-P2",
@@ -19,7 +19,7 @@
       "what": "Item 14 prints completely blank even though Page 2 Item 38 has 561,018,760.05 and Item 16 computed 33,661,125.60.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1800-P3",
@@ -28,7 +28,7 @@
       "what": "ZIP Code boxes print blank even though profile has 1209; 9B is blank (by design, no eBIRForms field).",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1800-P4",
@@ -37,7 +37,7 @@
       "what": "Email prints lowercase over comb ticks; Page 2 Donor Name prints plain text across comb ticks instead of comb-spaced.",
       "before": "before/print-p1.png",
       "after": "",
-      "status": "needs shared change"
+      "status": "by_design"
     },
     {
       "id": "1800-P5",
@@ -46,7 +46,7 @@
       "what": "Only rows 1-5 print (rows 6-10 blank and overflow rows 11-18 dropped); Fair Market Value amounts are left-aligned instead of right-aligned; Schedule B Area text is tiny and cramped on the left border.",
       "before": "before/print-p2.png",
       "after": "",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1800-S1",
@@ -55,7 +55,7 @@
       "what": "Helper text exposes internal developer file paths (rules/forms/1800-v2018/fixtures/runtime-control-inventory-v796.json and html-frozen/1800-2018/writer-cells.json) to end users.",
       "before": "before/screen-02-part-i-taxpayer-information.png",
       "after": "",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1800-S2",
@@ -64,7 +64,7 @@
       "what": "Schedule A rows 6-15 display Particulars without their Fair Market Value summary, unlike rows 1-5.",
       "before": "before/screen-06-part-v-schedules.png",
       "after": "",
-      "status": "open"
+      "status": "deferred_shared"
     }
   ],
   "files_changed": [
@@ -112,5 +112,15 @@
       "sheet_file": "forms-corrected/extra/1800-2018/index.html (frozen to html-frozen/1800-2018/index.html by tools/formgen/freeze_html.py line 52)",
       "generator_rule": "tools/formgen/comb_referee.py and tools/formgen/emit.py emitted p1c64 (Item 14 cents, two narrow ticks) as data-field-kind='text' with 2 inputs instead of data-field-kind='comb' data-comb-capacity='2' data-comb-slots='2' (or add a correction record under tools/formgen/corrections/ applied by tools/formgen/correct.py)."
     }
-  ]
+  ],
+  "fixture_replay": {
+    "mechanism": "Canonical BEFORE SQLite database (/home/ubuntu/BuwizNsh/agents/before.db) is cloned verbatim to after-deterministic.db and each form draft is also exported to /home/ubuntu/BuwizNsh/agents/fixtures/<FORM>.json. replay_fixtures.py opens the exact saved draft via the Filings UI (nav-filings -> return-<id>, never form.open which resets open-ended O1 drafts), clicks fp-print, and asserts length(data_json) is identical before and after printing.",
+    "draft_id": 1,
+    "period_key": "O1",
+    "data_json_bytes": 10405,
+    "script": "/home/ubuntu/BuwizNsh/agents/replay_fixtures.py"
+  },
+  "review_followups": {
+    "sched_b_area_font_size": "Schedule B continuation Area rows 1-5 (p2c178-i..p2c198-i) print smaller (8px = 6pt) than rows 6-10 (9pt .fh7) because upstream html-frozen/1800-2018/form.css misclassified those 5 cells as \"full TIN with branch code needs 105px but cell is 72px\" and emitted #p2c178-i{font-size:8.0px !important}..#p2c198-i{font-size:8.0px !important}. Upstream buwiz-forms-html fix needed to remove those 5 bogus TIN overrides. Schedule B Area cells are now right-aligned via shared commit 058a0e9b."
+  }
 }
