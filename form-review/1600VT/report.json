@@ -1,0 +1,62 @@
+{
+  "code": "1600VT",
+  "verdict": "rebuild part",
+  "summary": "Part II Items 13-17 rows do not persist/render (either via form.fill or after adding 5 rows by hand through '+ Add row' and entering Tax Base), leaving Part II blank with 0.00 Tax Withheld; opening the 'Other Selected ATC rows' drawer puts the Done button offscreen at 1400px width. On Page 2 Schedule 1, Total Taxes Withheld and Remitted (55,650,177.41) and Tax Rate (6) print left-aligned, TINs print undashed (14 raw digits) and TIN/Name cells are shrunk to 5.7-7.0px by print-overrides/1600-vt-2018.css. Page 1 zero rows print 0.00, overremittance prints '-' in the comb, and Page 2 omits Table 1 ATC reference.",
+  "defects": [
+    {
+      "id": "1600VT-screen-01",
+      "surface": "both",
+      "where": "Page 1, Part II Items 13-17 and 'Other Selected ATC rows' attachment drawer",
+      "what": "Part II rows 13-17 filled via form.fill or added by hand via '+ Add row' (entering Tax Base without an ATC picker selection) do not appear or print, leaving Items 13-18 at 0.00. Opening the 'Other Selected ATC rows' drawer places its Done button offscreen (x=1325) at 1400x900.",
+      "before": "form-review/1600VT/before/print-p1.png",
+      "official": "form-review/1600VT/official/page-1.png",
+      "status": "open"
+    },
+    {
+      "id": "1600VT-print-02",
+      "surface": "print",
+      "where": "Page 2, Schedule 1 Total Taxes Withheld and Remitted and Column (6) Tax Rate",
+      "what": "Schedule 1 Total Taxes Withheld and Remitted (55,650,177.41) prints left-aligned instead of right-aligned, and Column (6) Tax Rate ('5.00', '12.00') prints left-aligned flush against the left border with no '%' sign.",
+      "before": "form-review/1600VT/before/print-p2.png",
+      "official": "form-review/1600VT/official/page-2.png",
+      "status": "open"
+    },
+    {
+      "id": "1600VT-print-03",
+      "surface": "print",
+      "where": "Page 2, Schedule 1 Columns (2) TIN and (3) Name of Payees (#p2c16-i..#p2c45-i)",
+      "what": "Payee TINs print as 14 undashed digits ('00012345100000') instead of dashed format, and print-overrides/1600-vt-2018.css forces tiny 5.7-7.0px !important sizes on both TIN and Name of Payees.",
+      "before": "form-review/1600VT/before/print-p2.png",
+      "official": "form-review/1600VT/official/page-2.png",
+      "status": "open"
+    },
+    {
+      "id": "1600VT-print-04",
+      "surface": "print",
+      "where": "Page 1, Part II Items 13-19, 22-27 (zero rows and overremittance)",
+      "what": "Zero/unused Part II money combs print '0 | . | 00' instead of blank, and overremittance Items 22 and 27 print a leading '-' inside the comb instead of parentheses per the '(Overremittance)' caption.",
+      "before": "form-review/1600VT/before/print-p1.png",
+      "official": "form-review/1600VT/official/page-1.png",
+      "status": "open"
+    },
+    {
+      "id": "1600VT-print-05",
+      "surface": "print",
+      "where": "Page 2, bottom half (Table 1 - Alphanumeric Tax Code)",
+      "what": "Official Page 2 includes Table 1 (Alphanumeric Tax Code reference) below Schedule 1; printed Page 2 omits Table 1, leaving the bottom half blank.",
+      "before": "form-review/1600VT/before/print-p2.png",
+      "official": "form-review/1600VT/official/page-2.png",
+      "status": "open"
+    }
+  ],
+  "hand_entry_verified": [
+    "Part II Item 20 (Other Payments Made) entered by hand on form page (850000.50)",
+    "Part II Items 13-17 added via '+ Add row' drawer (5 rows, Tax Base entered by hand) and Other Selected ATC rows drawer tested",
+    "Schedule 1 Row 5 added by hand via '+ Add row' drawer (ATC WV060, Income Payment 67890123.45, Rate 12)"
+  ],
+  "growables": [
+    { "page": 1, "rows": 5, "capacity": 5, "pitch_pt": 18.0 },
+    { "page": 2, "rows": 4, "capacity": 4, "pitch_pt": 14.88 }
+  ],
+  "notes": "Saved in scratch DB audit-3b.db as draft id=5 (Jan 2025) and reloaded via Filings UI before print. Schedule 1 filled to all 5 printed rows."
+}
