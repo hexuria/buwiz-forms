@@ -1,0 +1,49 @@
+{
+  "code": "2550Q",
+  "platform": "macOS 26.6.2 arm64, WKWebView print preview (Legal sheet at 82%), Save-as-PDF via preview toolbar",
+  "branch_under_test": "try/forms-neon-2 @ 0b9950b5e72449d30c1535eb04a73ef6d0c71b27",
+  "verdict": "macOS matches Linux: yes (preview); saved PDF has a mac-only text-overlap defect",
+  "fill_notes": "No fill fixture in branch; dataset reconstructed by crop-zooming Linux after/ refs. form.fill refused derived cells (OptQuarter, RtnPeriodFrom/ToNo4, domestic/service/importInputTax) — mac computes them itself; all derived values are internally consistent on mac. mac renders amounts with thousands separators, same as Linux.",
+  "differences": [
+    {
+      "id": "2550q-mac-pdf-text-overlap",
+      "surface": "saved PDF only (mac-specific)",
+      "where": "P1: item 9 caption tail 'Registered fsa-Nom-Individual)', 'Officer or Representative/Tax Agent(Indicate...', receiving-office stamp line. P2: 'Schedule 1 ... Capital Gdddach additional sheet(s)', 'Schedule 3 ... Withhpdach additional', 'Schedule 4 ... Paymeitach additional sheets', Sched-2 'SaleTo Part IV, Item 53)', Sched-1 Total row '(Item9(?)'.",
+      "what": "In the PDF produced by the preview's Save-as-PDF, sibling text runs (a bold label followed by an italic parenthetical annotation) overlap horizontally and garble. The same regions render cleanly in the WKWebView preview, so the PDF export positions the second run too far left. Not observed in the Linux preview refs (no Linux PDF exists to compare against).",
+      "status": "mac-specific defect"
+    },
+    {
+      "id": "2550q-mac-derived-totals",
+      "surface": "values (fill path, not layout)",
+      "where": "Items 15, 21, 26 on P1; 50B, 51, 57, 59, 60B, 61 on P2",
+      "what": "mac recomputes derived cells from components: 50B=174,497,777.74, 57=7,085,555,580.98, 60B=375,115,052.49, 61=-348,418,756.08, so 15=-348,418,756.08 and 21=-5,468,418,768.70. Linux refs print 50B=174,497,774.76, 57=6,491,942,244.98, 60B=1,439,728,388.49, 15=-1,413,032,092.08, 21=-6,533,032,104.70, which are arithmetically inconsistent with their own components (e.g. Linux 57 < item 56 alone) — the Linux dataset's derived cells were stored, not computed. Not a layout defect.",
+      "status": "fill-path difference"
+    },
+    {
+      "id": "2550q-mac-item26-mirror",
+      "surface": "values (shared anomaly)",
+      "where": "Page 1 item 26",
+      "what": "Both engines print item 26 mirroring item 25's digits (mac 491,358,026.25, Linux -491,358,026.25) instead of 21+25. Reproduces on mac with opposite sign.",
+      "status": "shared anomaly reproduced"
+    },
+    {
+      "id": "2550q-mac-comb-collisions",
+      "surface": "print (carried-over defect)",
+      "where": "Page 1 items 9, 10, 14A; page 2 name row",
+      "what": "Long name/address/14A text overflows comb cells and collides with ticks, identical to Linux 'needs shared change' defect.",
+      "status": "reproduces identically"
+    },
+    {
+      "id": "2550q-mac-sched-left-align",
+      "surface": "print (carried-over defect)",
+      "where": "Page 2 Part V schedules 1-4 amount columns",
+      "what": "Amounts left-aligned flush against left cell border, same as Linux 'needs shared change' defect.",
+      "status": "reproduces identically"
+    }
+  ],
+  "fixes_confirmed": [
+    "Item 26 '(Excess Credits)' spacing fix renders identically on mac",
+    "Item 52 '(From Part V Schedule 1, Column I)' caption clears the border identically on mac"
+  ],
+  "files": ["print-p1.png", "print-p2.png", "pdf-p-1.png", "pdf-p-2.png"]
+}
