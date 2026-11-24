@@ -1,3 +1,5 @@
+> **Historical record:** this file describes a past state of the project, kept for reference.
+
 # eBIRForms NSH (TSX) app: Windows handover
 
 For whoever (a person or a coding agent) picks this up cold on a Windows machine. This file stands alone: everything you need to build, run and test the NSH app on Windows is here or in the repository paths it names. Paths are relative to the buwiz-forms checkout unless they start with a drive letter or say "NSH checkout". Line numbers are at commit 11675f95; if a file has moved on, search for the symbol named next to the number.

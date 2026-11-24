@@ -1,3 +1,5 @@
+> **Historical record:** this file describes a past state of the project, kept for reference.
+
 # TIN Root, Branch Code, and Multi-Branch Filing Guide
 
 **Research cutoff:** 2026-08-07

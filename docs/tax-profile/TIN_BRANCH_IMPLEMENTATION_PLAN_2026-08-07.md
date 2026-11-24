@@ -1,3 +1,5 @@
+> **Historical record:** this file describes a past state of the project, kept for reference.
+
 # TIN Root, Registration Units, and Filing Scope — Revised Implementation Plan
 
 **Status:** proposed architecture and dependency-ordered execution plan, revision 2\
