@@ -1,0 +1,23 @@
+{
+ "form": "1800",
+ "branch": "try/forms-continuation-sheet",
+ "case": "continuation/1800-18-rows (18 rows in Schedule A, 8 rows in Schedules B and B-continuation)",
+ "platform": "macOS 26.6.2 arm64 / WKWebView preview",
+ "verdict": "macOS matches Linux: yes",
+ "notes": [
+  "4 pages on macOS exactly as on Linux: p1-p2 official pages, p3 'Add'l Sheet' Schedule A (continued) rows 6-18, p4 'Add'l Sheet' Schedule B (continued) rows 6-8 + B-continuation rows 6-8.",
+  "Page breaks identical: Sched A spills after row 5 onto the cloned band on p3; Sched B and B-continuation spill after row 5 onto p4. Cloned header, TIN/name row and TOTAL rows render correctly.",
+  "Two consistent value-formatting differences vs the Linux refs (fill/render path, not layout): (a) mac renders amounts with thousands separators (e.g. 1,300,000.00, TOTAL 17,100,000.00) where Linux shows raw 1300000.00/17100000.00; (b) mac's Part IV computed items are populated (item25 17,100,000.00, 26 24,600,000.00, 27 41,700,000.00, 34 41,700,000.00, 36 41,700,000.00, 38 41,450,000.00) where the Linux pictures leave them blank except item 37 (250,000.00) - the mac fill path runs compute, the Linux draft did not store computed values.",
+  "No overflow, clipping, wrap or font fallback observed; row values and ordering identical."
+ ],
+ "files": [
+  "print-p1.png",
+  "print-p2.png",
+  "print-p3.png",
+  "print-p4.png",
+  "pdf-p-1.png",
+  "pdf-p-2.png",
+  "pdf-p-3.png",
+  "pdf-p-4.png"
+ ]
+}
