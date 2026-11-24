@@ -1,0 +1,75 @@
+{
+  "code": "2200S",
+  "verdict": "broken",
+  "summary": "Page 1 prints fine, but the printed Schedule 1 table drops every Sales Value, Volume of Removals and Basic Excise Tax Due cell for all 12 rows - the whole point of the form - while the grand total still prints; item 10 prints the literal text 'PSIC.' instead of the value.",
+  "defects": [
+    {
+      "id": "S1",
+      "surface": "print",
+      "where": "Page 2, Schedule 1 rows XB010-XB100 plus both Others rows, columns Sales Value / Volume of Removals / Basic Excise Tax Due",
+      "what": "Every money cell is blank on the print even though the on-screen cards show the values and per-row tax due, and GRAND TOTAL EXCISE TAX DUE prints 307,785,184.86. Verified by hand three ways: the print-preview window, the app's own Save-as-PDF output, and the generated sheet.html - all identical, all blank. A return printed like this is unusable: it shows a 307.8M total with no supporting rows.",
+      "severity": "high",
+      "picture": "mac/crop-p2-sched.png"
+    },
+    {
+      "id": "S2",
+      "surface": "print",
+      "where": "Page 1, item 10 PSIC",
+      "what": "The PSIC cell prints the literal characters 'P S I C .' instead of the entered value 10750 (the string '10750' appears nowhere in the sheet for this field; validation also kept flagging the filled field as invalid). Looks like a placeholder rendered where the value should be.",
+      "severity": "high",
+      "picture": "mac/crop-p1-lob.png"
+    },
+    {
+      "id": "S3",
+      "surface": "print",
+      "where": "Page 1, item 9 Main Line of Business",
+      "what": "LOB prints '10750 - BEVERAGE M' and stops mid-word; the comb clips the rest of 'MANUFACTURING'. The official box is a plain free-text comb wide enough for the full line.",
+      "severity": "medium",
+      "picture": "mac/crop-p1-lob.png"
+    },
+    {
+      "id": "S4",
+      "surface": "print",
+      "where": "Page 1, items 12/13 City",
+      "what": "City prints 'CITY OF MAKAT' - clipped mid-word at the cell edge (official City cell is a free-text comb). Region/Province do spell out names correctly ('NCR', 'NCR SECOND DISTRI').",
+      "severity": "low",
+      "picture": "mac/crop-p1-items.png"
+    },
+    {
+      "id": "S5",
+      "surface": "screen",
+      "where": "Part V Others row editor",
+      "what": "The 'Applicable Tax Rate' field can be entered by hand in the row editor but the agent fill API refuses it ('it is written through'), so a script cannot fill a required column; validation then reports 'rate equals zero' for every Others row.",
+      "severity": "low",
+      "picture": ""
+    },
+    {
+      "id": "S6",
+      "surface": "screen",
+      "where": "Part V Others list",
+      "what": "The screen lists 12 Others rows while the paper prints only 2 write-in rows; rows 3-12 (and payload rows 13-15, which the list does not even show) silently never reach the print - same missing-overflow family as 2200M/2200P.",
+      "severity": "medium",
+      "picture": "mac/screen-others-list.png"
+    },
+    {
+      "id": "S7",
+      "surface": "screen",
+      "where": "Form header",
+      "what": "After saving through the draft API the header kept showing 'Unsaved changes' and the Print preview button did nothing on three clicks; only dismissing and reopening the saved draft produced a working preview. State-sync hiccup worth noting alongside the other forms.",
+      "severity": "low",
+      "picture": ""
+    },
+    {
+      "id": "S8",
+      "surface": "screen",
+      "where": "Part IV - Details of Payment",
+      "what": "No fillable fields exist for items 27-30 (Cash/Bank Debit Memo, Check, Tax Debit Memo, Others) - same unfillable-by-design family as 2200C/2200M/2200P.",
+      "severity": "low",
+      "picture": ""
+    }
+  ],
+  "entered_by_hand": "Opened Others row 1 editor and typed Applicable Tax Rate 12.00 and Sales Value 4,555,666.77; also hand-checked the print preview and the saved app PDF to confirm the blank schedule (S1) - checked by hand once more as required, defect stands.",
+  "open_questions": [
+    "PSIC '10750' validates as filled on screen but still fails the 'enter a valid PSIC' rule and prints as the literal text 'PSIC.' - is the field bound to a different key than txtPSIC?"
+  ]
+}
