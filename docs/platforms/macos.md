@@ -15,7 +15,7 @@ there, but nobody has run it on that platform.
 | Submission queue and dry run | ✓ |  |
 | Database storage (plain SQLite, not encrypted) | ✓ |  |
 | Close button (X) and quit shortcut | ✓ | X and Cmd+W hide the window; Cmd+Q quits for real. |
-| System tray icon | ✗ | The status item shows but does not respond to clicks (hands-on check, 2026-11-24, dev host). |
+| System tray icon | ✓ | The `NSStatusItem` click handler restores the window; a secondary click opens the Show / Hide / Quit menu (hands-on check, 2026-11-24). |
 | Global show/hide hotkey | ✓ | Default Ctrl+Option+E suggestion. Off in Mac App Store builds. |
 | Single-instance guard | ✓ | The app bundle plus a loopback ping (`instance.port`). |
 | Window size and position memory | ✓ |  |
@@ -64,10 +64,12 @@ there, but nobody has run it on that platform.
   submission worker can poll for BIR receipts.
 - Cmd+Q and the app menu's Quit item quit for real
   (`nsh/shell/desktop/Desktop.tsx`).
-- The tray menu is meant to offer Show, Hide and Quit, but in the current
-  build the status item does not respond to clicks — the icon is there and
-  dead (hands-on check, 2026-11-24). With the window hidden the app runs
-  as an accessory: no Dock icon and no way back until the next launch.
+- While hidden or closed the app lives on as a menu-bar item only — the
+  Dock icon goes away (`nsh/shell/desktop/Desktop.tsx`, `Tray.set` →
+  `nsh-platform-macos/src/tray.rs`). A click on the menu-bar icon brings
+  the window back (verified 2026-11-24 by an accessibility `AXPress` on
+  the status item after ⌘H: window count 0 → 1), and a right or
+  Control-click opens the Show / Hide / Quit menu.
 - Launching the app again brings the window back (single instance).
 - Cmd+H hides the app, Cmd+Alt+H hides other apps, Cmd+M minimizes and
   Cmd+Ctrl+F toggles full screen.
@@ -131,5 +133,6 @@ there, but nobody has run it on that platform.
 - The exact `instance.port` path on macOS.
 - Whether the `bir` headless daemon still posts `osascript` banners.
 - Whether a packaged `.app` posts OS notification banners.
-- Whether the tray icon works in a packaged build; in the dev host it
-  appears but does not respond to clicks (2026-11-24).
+- Whether real-mouse clicks (not accessibility actions) reach the
+  menu-bar item on remote/dev machines — a raw mouse click can be
+  swallowed by the remote desktop while `AXPress` works (2026-11-24).

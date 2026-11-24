@@ -15,7 +15,7 @@ there, but nobody has run it on that platform.
 | Database storage (plain SQLite, not encrypted) | ✓ | ✓ | ✓ |
 | Account sign-in (Buwiz account, device flow in the browser) | ✓ | ✓ | ✓ |
 | Close button (X) and quit shortcut | ✓ | untested | ✓ |
-| System tray icon | ✗ | untested | partial |
+| System tray icon | ✓ | untested | partial |
 | App menu launcher, icons and dock grouping (app id `dev.goldcoders.bir`) | n/a | n/a | ✓ |
 | Global show/hide hotkey | ✓ | untested | partial |
 | Single-instance guard | ✓ | untested | ✓ |
@@ -50,9 +50,11 @@ there, but nobody has run it on that platform.
   ancestor line (a dev host window with a scratch database), including the
   menus, the editor header and the print preview window.
 - The system tray row: on macOS the app sets an `NSStatusItem`
-  (`nsh/shell/desktop/Desktop.tsx`, `Tray.set`), but a hands-on check on
-  2026-11-24 found the icon does not respond to left, right or Control
-  clicks, so the cell is ✗ for now. See [macos.md](platforms/macos.md).
+  (`nsh/shell/desktop/Desktop.tsx`, `Tray.set` → `nsh-platform-macos/src/tray.rs`).
+  Hide and Close keep the app running in the menu bar without a Dock icon;
+  a click on the menu-bar icon brings the window back and a secondary
+  click opens the Show / Hide / Quit menu (accessibility-press check on a
+  real Mac, 2026-11-24). See [macos.md](platforms/macos.md).
 - The table was re-derived from `main` (the deleted `app/` gpui shell and
   `crates/bir-shell` no longer exist; the app is the NSH app in `nsh/`).
 
