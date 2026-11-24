@@ -576,15 +576,28 @@ fn unavailable_for(route: &Route, direct: bool) -> bool {
     matches!(route, Route::Bir) && !direct
 }
 
-/// No return is stored as Queued while [`sending_unavailable`] holds: every
-/// route that queues one (the form page, the agent) ends in a database write
-/// that asks this first. A return queued now would be sent, unasked, by the
-/// first later version that can send.
+/// A release build stores no return as Queued while [`sending_unavailable`]
+/// holds: every route that queues one (the form page, the agent) ends in a
+/// database write that asks this first. A return queued now would be sent,
+/// unasked, by the first later version that can send.
 pub(crate) fn refuse_queue_when_unavailable() -> Result<(), crate::db::DbError> {
-    if sending_unavailable() {
+    if queue_refused(cfg!(debug_assertions), sending_unavailable) {
         return Err(crate::db::DbError::Other(QUEUE_UNAVAILABLE.into()));
     }
     Ok(())
+}
+
+/// Whether Queue is refused. Only a release build refuses: its environment is
+/// read at launch and does not change, so the answer is one answer.
+///
+/// A development build never refuses here (with nowhere to send, its worker
+/// leaves the queued return alone). It must not: the answer depends on the
+/// process environment, tests change that environment for a moment
+/// (`temp_env`) while other tests on other threads queue returns, and a
+/// refusal read through another test's environment failed those at random.
+/// `unavailable` is not even asked in a development build.
+fn queue_refused(development: bool, unavailable: impl FnOnce() -> bool) -> bool {
+    !development && unavailable()
 }
 
 /// A build without `direct-bir` opens SFTP only to a loopback address (the
@@ -1994,14 +2007,26 @@ mod tests {
                     matches!(&refused, Err(TransportError::Config(why)) if why == SENDING_UNAVAILABLE),
                     "{refused:?}"
                 );
-                let queue = refuse_queue_when_unavailable();
-                assert!(
-                    matches!(&queue, Err(crate::db::DbError::Other(why)) if why == QUEUE_UNAVAILABLE),
-                    "{queue:?}"
+                // A release build refuses Queue here; this development build does not ask.
+                assert!(queue_refused(false, sending_unavailable));
+                assert_eq!(
+                    refuse_queue_when_unavailable().is_ok(),
+                    cfg!(debug_assertions)
                 );
             },
         )
         .await;
+    }
+
+    /// Queue is refused only by a release build with nowhere to send. A development build never refuses and never
+    /// reads the environment for it: another test may be changing that environment on another thread.
+    #[test]
+    fn only_a_release_build_with_nowhere_to_send_refuses_queue() {
+        assert!(queue_refused(false, || true));
+        assert!(!queue_refused(false, || false));
+        assert!(!queue_refused(true, || panic!(
+            "a development build does not ask"
+        )));
     }
 
     /// A dry run, the mock relay and a lab host are somewhere to send: the queue runs and Queue is allowed.
@@ -2021,7 +2046,7 @@ mod tests {
         ] {
             isolated_sftp_env(vars, || {
                 assert!(!sending_unavailable(), "{vars:?}");
-                assert!(refuse_queue_when_unavailable().is_ok(), "{vars:?}");
+                assert!(!queue_refused(false, sending_unavailable), "{vars:?}");
             });
         }
     }
