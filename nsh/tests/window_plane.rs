@@ -3,7 +3,7 @@
 //! is ignored by default: `just nsh-agent-check` starts one (macOS, a real window, a scratch database, the host built with the
 //! `agent` feature) and runs this against it.
 //!
-//! The window's plane is nsh-platform-macos' `gpui-agent-server` at `GPUI_AGENT_ADDR`; the data plane is a second listener of this
+//! The window's plane is nsh-gpui-agent-macos' `gpui-agent-server` at `GPUI_AGENT_ADDR`; the data plane is a second listener of this
 //! app, found through its discovery record (app `bir-shell`) in `GPUI_AGENT_RUNTIME_DIR`, as `bir-mcp` finds it.
 #![cfg(all(feature = "agent", target_os = "macos"))]
 
