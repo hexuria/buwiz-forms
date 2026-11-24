@@ -5,28 +5,30 @@
 [![Release (macOS)](https://github.com/hexuria/buwiz-forms/actions/workflows/release-macos.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/release-macos.yml)
 
 E-BIRForms is an offline-first desktop app to prepare, validate, print and
-submit Philippine BIR returns. It is a native Rust app built with the
-[GPUI](https://gpui.rs/) framework. It covers 43 eBIRForms 7.9.6.2.1 forms. A
+submit Philippine BIR returns. It is a native app: a Rust back end and screens
+built on NSH (Native Shell). It covers 43 eBIRForms 7.9.6.2.1 forms. A
 submission queue sends returns to BIR in the background, and a dry-run mode
 lets you test the whole flow without sending anything. Profiles, TINs and
-drafts stay in an encrypted SQLite database on your own machine.
+drafts stay in a SQLite database on your own machine. The app does not encrypt
+that file; see [PRIVACY_POLICY.md](PRIVACY_POLICY.md).
 
-Settings → Account can sign in to [buwiz-server](https://github.com/hexuria/buwiz-server)
-with the device flow (the password stays in the browser). Release builds use
+A new install asks you to sign in to a Buwiz account
+([buwiz-server](https://github.com/hexuria/buwiz-server)) before it can be used.
+Sign-in uses the device flow, in the browser. Release builds use
 `https://api.buwiz.com` and open account pages on `https://account.buwiz.com`.
 Debug builds use `http://localhost:3008`. A build can bake in
 `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL`. A running process can still
 override those with the same variable names. The app does not ask for the
-address. It still prepares and files returns when that server is
-unreachable. Details: [docs/cloud-account.md](docs/cloud-account.md).
+address. Once signed in, it still prepares and files returns when that server
+is unreachable. Details: [docs/cloud-account.md](docs/cloud-account.md).
 
 ## Platforms
 
 | Platform | Status | Setup script | Database | Details |
 | --- | --- | --- | --- | --- |
-| macOS | Fully tested | `scripts/setup-macos.sh` | `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db` | [macos.md](docs/platforms/macos.md) |
-| Linux | Fully tested | `scripts/setup-linux.sh` | `~/.taxman-ebir/bir_data.db` | [linux.md](docs/platforms/linux.md) |
-| Windows | Partly verified, on one Windows Server 2022 VM | `scripts\setup-windows.ps1` | `%LOCALAPPDATA%\Taxman\eBIRForms\bir_data.db` | [windows.md](docs/platforms/windows.md) |
+| macOS | Fully tested | `scripts/setup-macos.sh` | `~/Library/Application Support/dev.goldcoders.bir/bir_data.db` | [macos.md](docs/platforms/macos.md) |
+| Linux | Fully tested | `scripts/setup-linux.sh` | `~/.local/share/dev.goldcoders.bir/bir_data.db` | [linux.md](docs/platforms/linux.md) |
+| Windows | Partly verified, on one Windows Server 2022 VM | `scripts\setup-windows.ps1` | `%LOCALAPPDATA%\dev.goldcoders.bir\bir_data.db` | [windows.md](docs/platforms/windows.md) |
 
 Not every feature works the same on every platform. The full table is in
 [docs/FEATURES.md](docs/FEATURES.md). Each platform page lists the packages,
@@ -112,9 +114,11 @@ When BIR receipt emails arrive in the inbox you configured, the
 status moves to Confirmed and then to Paid. A submitted return
 is read-only.
 
-**Dry run and live sending.** Live sending to BIR is opt-in: set
-`BIR_SFTP_LIVE=1`. Set `BIR_SFTP_DRY_RUN=1` to simulate a submission; nothing
-is sent. In debug builds the Dev Mode panel defaults to dry run.
+**Dry run and live sending.** A release build sends to the real BIR when you
+submit a return and confirm. To simulate a submission instead, start the app
+with `BIR_SFTP_DRY_RUN=1` (or `BIR_SFTP_LIVE=0`); nothing is sent. Debug builds
+are dry by default and send live only with `BIR_SFTP_LIVE=1`; their Dev Mode
+panel defaults to dry run.
 
 **Revert to Draft as an amendment.** Queued, Submitted and Confirmed returns
 can be reverted to Draft. Paid returns cannot. Reverting a Submitted or
