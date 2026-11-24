@@ -352,6 +352,7 @@ mod tests {
             "tin_paused",
             "tin_test_only",
             "account_banned",
+            "account_practice",
             "return_mismatch",
         ] {
             let reason = format!("The server's sentence. ({code})");

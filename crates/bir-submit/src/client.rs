@@ -1303,7 +1303,7 @@ mod tests {
         }
     }
 
-    const TIN_CODES: [&str; 7] = [
+    const TIN_CODES: [&str; 8] = [
         "tin_not_active",
         "tin_unverified",
         "tin_pending",
@@ -1311,6 +1311,7 @@ mod tests {
         "tin_paused",
         "tin_test_only",
         "account_banned",
+        "account_practice",
     ];
 
     /// A ticket refusal reaches the worker as `ClientError::Server`'s text,
@@ -1743,6 +1744,36 @@ mod tests {
 
     /// A relay refusal carrying class `ours` still goes by its code: a TIN
     /// refusal or a mismatch is final, and 429 limits are not tries but
+    /// The server's own body for a practice account (`403 account_practice`,
+    /// buwiz-com: an account with a fixed sign-in code never sends, whatever
+    /// its TINs): a refusal with the server's sentence and its code, never a
+    /// hold and never "maybe sent".
+    #[test]
+    fn a_practice_account_is_refused_with_the_servers_sentence() {
+        let body: Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/contract-error-account-practice.json"
+        ))
+        .unwrap();
+        let error = server_error(403, None, &body, Utc::now());
+        assert!(
+            matches!(&error, ClientError::Server { status: 403, code, .. } if code == "account_practice"),
+            "{error:?}"
+        );
+        assert_eq!(error.tin_refusal(), Some(TinRefusal::AccountPractice));
+        assert!(!error.is_not_a_try(), "a refusal, not a hold");
+        let reason = error.to_string();
+        assert_eq!(
+            reason,
+            "This is a practice account: you can prepare returns, but Buwiz never sends them to the BIR. (account_practice)"
+        );
+        // As the queue stores it: the one decoder reads the code back, and it is final.
+        assert_eq!(
+            SendError::NotSent(reason.clone()).refusal(),
+            Some(TinRefusal::AccountPractice)
+        );
+        assert!(crate::wire::is_final_reason(&reason));
+    }
+
     /// honour `Retry-After` (up to 7 days).
     #[test]
     fn a_refusal_code_wins_over_class_ours_and_a_429_is_not_a_try() {
@@ -1750,6 +1781,7 @@ mod tests {
             "tin_not_active",
             "tin_needs_fix",
             "account_banned",
+            "account_practice",
             "return_mismatch",
         ] {
             let body = json!({"error": {"code": code, "class": "ours", "message": "x"}});
