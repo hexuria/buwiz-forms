@@ -1,25 +1,25 @@
 {
   "code": "1701MS",
   "verdict": "tweak",
-  "summary": "Both printed pages match the August 2024 PDF structure; needs form-local tweaks for Page 2 Tax Filer's Last Name mapping, empty Spouse TIN dashes, Part I Col A/B font sizing, and Page 2 Part V Items 7 & 9 microscopic specify text, plus shared print fixes for comb overflow.",
+  "summary": "Both printed pages match the August 2024 PDF structure; removed bogus !important shrink-to-fit overrides in print-overrides/1701ms-2024.css (fixing Part I Col A/B font sizing and Part V Item 9 specify text, and baseline-aligning Items 7 & 9). Remaining two defects (empty Spouse TIN '---00000' and Page 2 full name) live in crates/bir-core/src/forms/form_1701ms.rs and are routed as shared changes.",
   "defects": [
     {
       "id": "1701MS-P1",
       "surface": "print",
-      "where": "Page 1, Part I Item 6 B. Spouse TIN",
-      "what": "Empty spouse TIN prints '---00000' instead of staying blank.",
+      "where": "Page 1, Part I Item 6 B. Spouse TIN (crates/bir-core/src/forms/form_1701ms.rs:1480-1481)",
+      "what": "Empty spouse TIN prints '---00000' instead of staying blank because to_print_field_map unconditionally calls split_tin(&spouse.tin) and emits format!(\"{a}-{b}-{c}-{branch}\") even when spouse.tin is empty.",
       "before": "before/print-p1.png",
       "after": "after/print-p1.png",
-      "status": "open"
+      "status": "needs shared change"
     },
     {
       "id": "1701MS-P2",
       "surface": "print",
-      "where": "Page 1, Part I Items 8, 9, 10 and 18 (Column A vs Column B)",
-      "what": "Text in Column A (Taxpayer/Filer) shrinks noticeably smaller than equivalent text in Column B (Spouse), e.g., Contact Number and Email Address.",
+      "where": "Page 1, Part I Items 8, 9, 10 and 18 (print-overrides/1701ms-2024.css:5-12)",
+      "what": "Static !important font-size rules (7.5px-9.6px) on #p1c29-i/#p1c30-i/#p1c32-i/#p1c33-i/#p1c35-i/#p1c61-i/#p1c64-i/#p1c67-i (with no rule on Spouse #p1c36-i) forced Taxpayer Column A text smaller than Spouse Column B. Removed those overrides so bir-print dynamic sizing handles both columns uniformly. (Item 18 #p1c87-i dynamically shrinks to 6.02pt only because 'BUSINESS INCOME- GRADUATED IT RATES' is 35 chars in a 128.5pt box.)",
       "before": "before/print-p1.png",
       "after": "after/print-p1.png",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1701MS-P3",
@@ -33,20 +33,20 @@
     {
       "id": "1701MS-P4",
       "surface": "print",
-      "where": "Page 2, Header 'Tax Filer's Last Name'",
-      "what": "Prints the entire full taxpayer name instead of only the last name, overflowing the comb boxes and colliding with the comb tick marks.",
+      "where": "Page 2, Header 'Tax Filer's Last Name' (crates/bir-core/src/forms/form_1701ms.rs:1473)",
+      "what": "Prints the entire full taxpayer name instead of only the last name because form_1701ms.rs:1473 emits self.taxpayer_name.trim().to_uppercase() without splitting before the first comma (unlike form_1701q.rs:656-663).",
       "before": "before/print-p2.png",
       "after": "after/print-p2.png",
-      "status": "open"
+      "status": "needs shared change"
     },
     {
       "id": "1701MS-P5",
       "surface": "print",
-      "where": "Page 2, Part V Items 7 and 9 (Foreign Tax Credits and Other Tax Credits specify boxes)",
-      "what": "Specify text renders at a microscopic font size (~3.5pt) pinned near the top of the cell.",
+      "where": "Page 2, Part V Items 7 and 9 (print-overrides/1701ms-2024.css:13-14)",
+      "what": "Static !important rules (#p2c177-i 4.5px, #p2c179-i 5.5px) forced specify text microscopic and pinned near the top; removed both overrides and baseline-aligned #p2c177-i and #p2c179-i above their underline (Item 9 now prints ~8pt; Item 7 fits dynamically within its 85.5pt single-line slot).",
       "before": "before/print-p2.png",
       "after": "after/print-p2.png",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1701MS-P6",
@@ -67,12 +67,21 @@
       "status": "needs shared change"
     }
   ],
-  "files_changed": [],
+  "test_data": "Scripted via form-review/scripts/seed_and_capture.py with form-review/scripts/payloads/payload-1701MS.json (long-name Juana Santos profile, real Spouse Item 8 name, Item 31 To be refunded ticked with 500000.00, realistic Part V Items 7 & 9 specify text; 73/73 fields applied, 0 text cell diffs between before and after sheet.html, exact 1372x871 screen and 1400x1982 print dimensions). Branch try/forms-neon-1 was rebased onto origin/try/forms-shared-print (058a0e9b) before capturing AFTER.",
+  "files_changed": [
+    "print-overrides/1701ms-2024.css",
+    "form-review/scripts/seed_and_capture.py"
+  ],
   "shared_changes_wanted": [
+    "crates/bir-core/src/forms/form_1701ms.rs:1480-1481: guard sp_tin emission with `if !spouse.tin.trim().is_empty()` so empty spouse TIN stays blank instead of printing '---00000'.",
+    "crates/bir-core/src/forms/form_1701ms.rs:1473: extract last name before the first comma for derived:page2_name (matching form_1701q.rs:656-663) and update the p2c6 test assertion in crates/bir-print/src/frozen_html.rs.",
     "crates/bir-print (owned by neon-4 on try/forms-shared-print): mask comb ticks under overflowing negative/large amounts in Part II and Part IV.B1.",
     "nsh/screens/form/ (shared screen code): widen read-only 5-digit TIN branch code box so '00000' does not truncate to '000...' on 1701MS."
   ],
-  "tests_run": [],
+  "tests_run": [
+    "just nsh-check && just nsh-build (exit 0 on rebased try/forms-neon-1 over origin/try/forms-shared-print 058a0e9b)",
+    "Live app capture via just nsh-run-agent linux on fresh scratch DB using form-review/scripts/seed_and_capture.py (1701MS BEFORE and AFTER, 0 cell text diffs)"
+  ],
   "open_questions": [
     "Print preview window opens natively on Linux via WebKitGTK; full unclipped 1400px-wide print-p*.png pages were rendered from the running app's generated sheet.html via headless Chrome --print-to-pdf + pypdfium2."
   ]

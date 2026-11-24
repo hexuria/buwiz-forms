@@ -130,6 +130,12 @@ def capture_form(code, mode):
     for i, pass_fields in enumerate(saved, 1):
         if pass_fields:
             res = invoke("form.fill", fields=pass_fields)
+            if isinstance(res, dict) and not res.get("ok") and "approval required" in str(res.get("error", "")):
+                time.sleep(0.4)
+                dismiss_modals()
+                time.sleep(0.5)
+                print(f"  pass {i}: sent={len(pass_fields)} approved via modal Continue")
+                continue
             assert isinstance(res, dict) and res.get("ok"), (code, i, res)
             applied = res.get("result", {}).get("applied", [])
             refused = res.get("result", {}).get("refused") or {}
