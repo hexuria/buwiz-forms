@@ -73,7 +73,8 @@ describe("settingsView", () => {
     expect(rowsOf(view, "general")).toEqual(["theme", "recent", "compact", "updates"]);
   });
   test("a section named by the query keeps all its rows, even ones whose own words do not match", () => {
-    expect(rowsOf(settingsView("account", true), "account")).toEqual(["buwiz", "identity", "google", "security"]);
+    expect(rowsOf(settingsView("account", true), "account")).toEqual(["buwiz", "identity", "google", "books", "security"]);
+    expect(settingsView("books", true).map((s) => [s.id, s.rows])).toEqual([["account", ["books"]]]);
   });
   test("every word of the query must match: a word that matches nothing leaves nothing", () => {
     expect(settingsView("theme zzz", true)).toEqual([]);

@@ -63,6 +63,7 @@ export const SETTINGS_ROWS: Readonly<Record<string, readonly SettingsRow[]>> = {
     { id: "buwiz", search: "buwiz server cloud sign in sign out device" },
     { id: "identity", search: "account name email tin profile sign out add account taxpayer" },
     { id: "google", search: "google gmail connect disconnect oauth inbox tracking mail" },
+    { id: "books", search: "books bot coa chart accounts broker connect pair accounting", desktopOnly: true },
     { id: "security", search: "pin authenticator recovery key security" },
   ],
   transfer: [

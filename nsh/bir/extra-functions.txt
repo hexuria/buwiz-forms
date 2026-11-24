@@ -20,3 +20,6 @@ books_coa_list
 books_box_mappings_list
 books_box_mapping_save
 books_box_mapping_delete
+books_broker_status
+books_broker_connect
+books_broker_disconnect

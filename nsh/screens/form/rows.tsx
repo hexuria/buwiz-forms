@@ -3,6 +3,7 @@
 // signal and its boxes' signals only, so an edit re-runs the rows it changed and nothing else.
 import type { Accessor, JSX, Signal, ViewRef } from "nsh";
 import { signal, untracked, View } from "nsh";
+import type { BooksBoxMapping } from "../../bir";
 import { AppButton, CalendarButton, Chip, Code, DateField, DateTouchField, Dropdown, Icon, type IconName, ListRow, Segmented, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
@@ -23,6 +24,10 @@ export interface RowProps {
   /** The first and the last row of its part's list (the rows are recycled cells, so CSS first:/last: cannot tell). */
   first?: Accessor<boolean>;
   last?: Accessor<boolean>;
+  /** Saved Forms-side Books COA fallback mappings keyed by box_key. */
+  booksMappings?: Accessor<ReadonlyMap<string, BooksBoxMapping>>;
+  /** Open the responsive Books COA picker targeted at one box key. */
+  onOpenBooks?: (boxKey: string) => void;
 }
 
 /** The props of one box's control. */
@@ -571,6 +576,12 @@ export function ItemRow(props: RowProps) {
   const allCalc = !it.rows && fs.length > 0 && fs.every((x) => x.c);
   const req = fs.some((x) => x.r);
   const label = req ? `${it.l} *` : it.l;
+  const bookable = !it.rows ? fs.filter((x) => (x.t === "money" || x.t === "int" || x.t === "pct") && !x.c) : [];
+  const booksTarget = () => bookable.find((x) => !s.box(x.k).locked()) ?? null;
+  const booksLinked = () => {
+    const t = booksTarget();
+    return t ? props.booksMappings?.().get(t.k) ?? null : null;
+  };
   const messageRefs = new Map<string, Signal<ViewRef | null>>();
   for (const date of oneDates(it)) {
     for (const field of [date.month, date.day, date.year]) {
@@ -641,6 +652,28 @@ export function ItemRow(props: RowProps) {
               testID={`fp-penalty-${id}`}
               onPress={() => (info().penalty === "computed" ? s.usePenaltyComputed(id) : s.openPenalties(id))}
             />
+          </If>
+          <If when={props.onOpenBooks && booksTarget()}>
+            {(target) => (
+              <AppButton
+                size="sm"
+                variant="ghost"
+                icon="git-branch"
+                label={booksLinked() ? `Books · ${booksLinked()!.account_code}` : "Link COA"}
+                tooltip={
+                  booksLinked()
+                    ? `Linked to ${booksLinked()!.account_code} ${booksLinked()!.account_name} — click to change or refresh`
+                    : "Fill from Buwiz Books chart of accounts"
+                }
+                accessibilityLabel={
+                  booksLinked()
+                    ? `Books account ${booksLinked()!.account_code} for ${it.l}`
+                    : `Link Books COA for ${it.l}`
+                }
+                testID={`fp-books-${target().k}`}
+                onPress={() => props.onOpenBooks?.(target().k)}
+              />
+            )}
           </If>
           <If when={info().canEdit && !info().editing}>
             <AppButton size="sm" variant="ghost" icon="pencil" label="Edit" tooltip="Change it on this return only" accessibilityLabel={`Edit ${it.l} on this return`} testID={`fp-edit-${id}`} onPress={() => s.startProfileEdit(id)} />

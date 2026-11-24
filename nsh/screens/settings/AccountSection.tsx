@@ -1,4 +1,5 @@
-// Settings > Account (old accountCards): Buwiz, who is signed in, Google, Security; each only where the search keeps its row.
+// Settings > Account (old accountCards): Buwiz, who is signed in, Google, Buwiz Books, Security; each only where the search keeps its row.
+import { BooksBotCard } from "./BooksBot";
 import { BuwizCard } from "./Buwiz";
 import { GoogleBlock } from "./Google";
 import { IdentityBlock } from "./Identity";
@@ -19,6 +20,11 @@ export function AccountSection(props: { rows: string[] }) {
       </If>
       <If when={has("google")}>
         <GoogleBlock />
+      </If>
+      <If when={has("books")}>
+        <Labeled label="Buwiz Books">
+          <BooksBotCard />
+        </Labeled>
       </If>
       <If when={has("security")}>
         <Labeled label="Security">

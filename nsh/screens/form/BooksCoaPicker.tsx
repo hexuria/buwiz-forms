@@ -88,6 +88,8 @@ export interface BooksCoaPickerProps {
   tin: Accessor<string>;
   formCode: Accessor<string>;
   boxes: Accessor<readonly FormBoxOption[]>;
+  initialBox?: Accessor<string | null>;
+  onMappingsChanged?: (mappings: readonly BooksBoxMapping[]) => void;
   onClose: () => void;
   onApply: (boxKey: string, amount: string, accountLabel: string) => void;
 }
@@ -131,8 +133,11 @@ export function BooksCoaPicker(props: BooksCoaPickerProps): JSX.Element {
 
   effect(() => {
     if (!props.open()) return;
+    const requested = props.initialBox?.();
     const list = props.boxes();
-    if (!selectedBox() && list.length > 0) {
+    if (requested) {
+      selectedBox.set(requested);
+    } else if (!selectedBox() && list.length > 0) {
       selectedBox.set(list[0].key);
     }
     loadData();
@@ -148,6 +153,17 @@ export function BooksCoaPicker(props: BooksCoaPickerProps): JSX.Element {
     if (!data) return [];
     return buildCoaTreeRows(data.accounts, query());
   });
+
+  const connectOneClick = () => {
+    error.set("");
+    try {
+      const url = brokerUrl().trim() || undefined;
+      bir.books_broker_connect(url);
+      loadData();
+    } catch (e) {
+      error.set(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const saveConnection = () => {
     const url = brokerUrl().trim();
@@ -184,7 +200,9 @@ export function BooksCoaPicker(props: BooksCoaPickerProps): JSX.Element {
         account_type: node.account_type,
         include_subtree: sub,
       });
-      mappings.set(bir.books_box_mappings_list(props.tin(), props.formCode()));
+      const updated = bir.books_box_mappings_list(props.tin(), props.formCode());
+      mappings.set(updated);
+      props.onMappingsChanged?.(updated);
       props.onApply(boxKey, amount, `${node.code} ${node.name}`);
       props.onClose();
     } catch (e) {
@@ -197,7 +215,9 @@ export function BooksCoaPicker(props: BooksCoaPickerProps): JSX.Element {
     if (!boxKey) return;
     try {
       bir.books_box_mapping_delete(props.tin(), props.formCode(), boxKey);
-      mappings.set(bir.books_box_mappings_list(props.tin(), props.formCode()));
+      const updated = bir.books_box_mappings_list(props.tin(), props.formCode());
+      mappings.set(updated);
+      props.onMappingsChanged?.(updated);
     } catch (e) {
       error.set(e instanceof Error ? e.message : String(e));
     }
@@ -278,10 +298,22 @@ export function BooksCoaPicker(props: BooksCoaPickerProps): JSX.Element {
 
       <If when={showConnect()}>
         <View class="gap-2 rounded-(--radius-card) border border-border bg-card p-3">
-          <Text variant="metaStrong">Connect local Buwiz Bot broker</Text>
-          <Text variant="cap" tone="fg2">
-            Loopback only (127.0.0.1). Paste a read-only grant token for app.buwiz.books.
-          </Text>
+          <View class="flex-row items-center justify-between gap-2">
+            <View class="flex-1 gap-0.5">
+              <Text variant="metaStrong">Connect local Buwiz Bot broker</Text>
+              <Text variant="cap" tone="fg2">
+                Loopback only (127.0.0.1). Pair in one click or enter a manual read-only grant token.
+              </Text>
+            </View>
+            <AppButton
+              testID="books-connect-auto"
+              size="sm"
+              variant="primary"
+              label="Connect Buwiz Bot"
+              onPress={connectOneClick}
+            />
+          </View>
+          <Line />
           <TextField
             testID="books-broker-url"
             label="Broker URL"
@@ -290,7 +322,7 @@ export function BooksCoaPicker(props: BooksCoaPickerProps): JSX.Element {
           />
           <TextField
             testID="books-ext-token"
-            label="Read-only grant token"
+            label="Manual read-only grant token"
             value={extToken()}
             onChange={(v) => extToken.set(v)}
           />
@@ -298,8 +330,8 @@ export function BooksCoaPicker(props: BooksCoaPickerProps): JSX.Element {
             <AppButton
               testID="books-connect-save"
               size="sm"
-              variant="primary"
-              label="Connect"
+              variant="secondary"
+              label="Save manual token"
               onPress={saveConnection}
             />
           </View>

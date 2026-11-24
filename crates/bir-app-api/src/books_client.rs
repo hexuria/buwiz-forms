@@ -10,6 +10,7 @@
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use bir_core::db::BooksBoxMapping;
@@ -20,11 +21,33 @@ use serde_json::{Value, json};
 use crate::bir_module::{serialize, with_database, with_reader};
 
 const DEFAULT_BROKER_URL: &str = "http://127.0.0.1:8787";
+const BOOKS_CLIENT_NAME: &str = "buwiz-forms";
 const BOOKS_PLUGIN_ID: &str = "app.buwiz.books";
 const BOOKS_ACCOUNTS_TOOL: &str = "books_accounts_list";
 const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 const SETTING_BROKER_URL: &str = "books_broker_url";
 const SETTING_BROKER_TOKEN: &str = "books_ext_read_token";
+const SETTING_BROKER_GRANT_ID: &str = "books_ext_grant_id";
+
+/// Local Buwiz Bot broker connection status (never exposes bearer or host tokens).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BooksBrokerStatus {
+    pub connected: bool,
+    pub broker_url: String,
+    pub grant_id: Option<String>,
+    pub host_detected: bool,
+}
+
+/// Result of one-click pairing with the local Buwiz Bot broker.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BooksBrokerConnectResult {
+    pub connected: bool,
+    pub broker_url: String,
+    pub grant_id: String,
+    pub book_name: Option<String>,
+    pub account_count: usize,
+    pub note: Option<String>,
+}
 
 /// One account node returned by Buwiz Books' read-only `books_accounts_list` tool.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -83,28 +106,19 @@ pub fn parse_loopback_broker_addr(raw_url: &str) -> Result<(String, SocketAddr),
     Ok((format!("{host}:{port}"), addr))
 }
 
-/// Perform a synchronous loopback HTTP/1.1 POST to `/v1/ext/read` with `Authorization: Bearer`.
-pub fn post_ext_read(
+/// Perform a synchronous loopback HTTP/1.1 JSON POST with one auth header.
+fn post_loopback_json(
     broker_url: &str,
-    token: &str,
-    plugin: &str,
-    tool: &str,
-    args: Value,
+    path: &str,
+    auth_header: &str,
+    auth_value: &str,
+    payload: &Value,
 ) -> Result<Value, String> {
-    let token = token.trim();
-    if token.is_empty() {
-        return Err("Books read-only grant token is required".to_owned());
-    }
-    if token.contains('\r') || token.contains('\n') {
-        return Err("Books read-only grant token contains invalid characters".to_owned());
+    if auth_value.contains('\r') || auth_value.contains('\n') {
+        return Err("broker auth header contains invalid characters".to_owned());
     }
     let (host_header, addr) = parse_loopback_broker_addr(broker_url)?;
-    let body = serde_json::to_vec(&json!({
-        "plugin": plugin,
-        "tool": tool,
-        "args": args,
-    }))
-    .map_err(|e| format!("encode request: {e}"))?;
+    let body = serde_json::to_vec(payload).map_err(|e| format!("encode request: {e}"))?;
 
     let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(3))
         .map_err(|e| format!("cannot reach Buwiz Bot broker at {host_header}: {e}"))?;
@@ -112,7 +126,7 @@ pub fn post_ext_read(
     let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
 
     let mut req = format!(
-        "POST /v1/ext/read HTTP/1.1\r\nHost: {host_header}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "POST {path} HTTP/1.1\r\nHost: {host_header}\r\n{auth_header}: {auth_value}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     )
     .into_bytes();
@@ -160,10 +174,132 @@ pub fn post_ext_read(
         let msg = parsed
             .get("message")
             .and_then(Value::as_str)
-            .unwrap_or("broker refused /v1/ext/read request");
+            .unwrap_or("broker refused request");
         return Err(format!("HTTP {status}: {msg}"));
     }
+    Ok(parsed)
+}
+
+/// Perform a synchronous loopback HTTP/1.1 POST to `/v1/ext/read` with `Authorization: Bearer`.
+pub fn post_ext_read(
+    broker_url: &str,
+    token: &str,
+    plugin: &str,
+    tool: &str,
+    args: Value,
+) -> Result<Value, String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err("Books read-only grant token is required".to_owned());
+    }
+    let parsed = post_loopback_json(
+        broker_url,
+        "/v1/ext/read",
+        "Authorization",
+        &format!("Bearer {token}"),
+        &json!({
+            "plugin": plugin,
+            "tool": tool,
+            "args": args,
+        }),
+    )?;
     Ok(parsed.get("result").cloned().unwrap_or(Value::Null))
+}
+
+/// Candidate local Buwiz Broker data directories holding `host-token` (0600, current user only).
+fn broker_data_dir_candidates() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    for var in ["BUWIZ_BROKER_DATA_DIR", "BUWIZ_DATA_DIR"] {
+        if let Ok(v) = std::env::var(var) {
+            let trimmed = v.trim();
+            if !trimmed.is_empty() {
+                dirs.push(PathBuf::from(trimmed));
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    if let Ok(home) = std::env::var("HOME") {
+        let base = PathBuf::from(home).join("Library/Application Support");
+        dirs.push(base.join("Buwiz Broker"));
+        dirs.push(base.join("Grok Shell"));
+    }
+    #[cfg(target_os = "windows")]
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        dirs.push(PathBuf::from(appdata).join("Buwiz Broker"));
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if let Ok(xdg) = std::env::var("XDG_DATA_HOME")
+            && !xdg.trim().is_empty()
+        {
+            dirs.push(PathBuf::from(xdg).join("buwiz-broker"));
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            dirs.push(PathBuf::from(home).join(".local/share/buwiz-broker"));
+        }
+    }
+    dirs
+}
+
+/// Read the local Buwiz Broker's `host-token` transiently for one-click pairing. Never logged or exposed to JS.
+fn discover_host_token() -> Option<String> {
+    for dir in broker_data_dir_candidates() {
+        let path = dir.join("host-token");
+        if let Ok(raw) = std::fs::read_to_string(&path) {
+            let tok = raw.trim();
+            if !tok.is_empty() && !tok.contains('\r') && !tok.contains('\n') {
+                return Some(tok.to_owned());
+            }
+        }
+    }
+    None
+}
+
+/// Mint a narrowly scoped read-only grant for `app.buwiz.books` / `books_accounts_list` via `/v1/host/ext/grant`.
+pub fn request_books_read_grant(
+    broker_url: &str,
+    host_token: &str,
+) -> Result<(String, String), String> {
+    let parsed = post_loopback_json(
+        broker_url,
+        "/v1/host/ext/grant",
+        "X-Buwiz-Host",
+        host_token.trim(),
+        &json!({
+            "client": BOOKS_CLIENT_NAME,
+            "plugin": BOOKS_PLUGIN_ID,
+            "tools": [BOOKS_ACCOUNTS_TOOL],
+        }),
+    )?;
+    let id = parsed
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "broker grant response missing id".to_owned())?
+        .to_owned();
+    let token = parsed
+        .get("token")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "broker grant response missing token".to_owned())?
+        .to_owned();
+    Ok((id, token))
+}
+
+/// Best-effort revoke a previously minted grant via `/v1/host/ext/revoke`.
+pub fn revoke_books_read_grant(
+    broker_url: &str,
+    host_token: &str,
+    grant_id: &str,
+) -> Result<(), String> {
+    let _ = post_loopback_json(
+        broker_url,
+        "/v1/host/ext/revoke",
+        "X-Buwiz-Host",
+        host_token.trim(),
+        &json!({ "id": grant_id }),
+    )?;
+    Ok(())
 }
 
 fn decode_chunked(mut input: &[u8]) -> Result<Vec<u8>, String> {
@@ -440,12 +576,114 @@ fn books_box_mapping_delete(args: &HostArguments) -> HostResult {
     Ok(HostValue::Bool(removed))
 }
 
+fn books_broker_status(_args: &HostArguments) -> HostResult {
+    crate::account_gate::ensure_unlocked()?;
+    let (broker_url, token, grant_id) = with_reader(|db| {
+        let url = db
+            .get_setting(SETTING_BROKER_URL)
+            .ok()
+            .flatten()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| DEFAULT_BROKER_URL.to_owned());
+        let tok = db
+            .get_setting(SETTING_BROKER_TOKEN)
+            .ok()
+            .flatten()
+            .filter(|s| !s.trim().is_empty());
+        let gid = db
+            .get_setting(SETTING_BROKER_GRANT_ID)
+            .ok()
+            .flatten()
+            .filter(|s| !s.trim().is_empty());
+        Ok((url, tok, gid))
+    })?;
+    let status = BooksBrokerStatus {
+        connected: token.is_some(),
+        broker_url,
+        grant_id,
+        host_detected: discover_host_token().is_some(),
+    };
+    serialize(&status)
+}
+
+fn books_broker_connect(args: &HostArguments) -> HostResult {
+    crate::account_gate::ensure_unlocked()?;
+    let broker_override = opt_str_arg(args, 0);
+    let broker_url = match broker_override {
+        Some(u) => u,
+        None => with_reader(|db| {
+            Ok(db
+                .get_setting(SETTING_BROKER_URL)
+                .ok()
+                .flatten()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| DEFAULT_BROKER_URL.to_owned()))
+        })?,
+    };
+    parse_loopback_broker_addr(&broker_url).map_err(HostError::new)?;
+    let host_token = discover_host_token().ok_or_else(|| {
+        HostError::new(
+            "Buwiz Bot is not detected on this computer. Open Buwiz Bot first, or enter a manual read-only grant token.",
+        )
+    })?;
+    let (grant_id, token) =
+        request_books_read_grant(&broker_url, &host_token).map_err(HostError::new)?;
+    with_database(|db| {
+        let _ = db.set_setting(SETTING_BROKER_URL, &broker_url);
+        let _ = db.set_setting(SETTING_BROKER_TOKEN, &token);
+        let _ = db.set_setting(SETTING_BROKER_GRANT_ID, &grant_id);
+        Ok(())
+    })?;
+    let (book_name, account_count, note) = match fetch_books_coa(&broker_url, &token, None, None) {
+        Ok(coa) => (Some(coa.book_name), coa.accounts.len(), None),
+        Err(e) => (None, 0, Some(e)),
+    };
+    serialize(&BooksBrokerConnectResult {
+        connected: true,
+        broker_url,
+        grant_id,
+        book_name,
+        account_count,
+        note,
+    })
+}
+
+fn books_broker_disconnect(_args: &HostArguments) -> HostResult {
+    crate::account_gate::ensure_unlocked()?;
+    let (broker_url, grant_id) = with_reader(|db| {
+        let url = db
+            .get_setting(SETTING_BROKER_URL)
+            .ok()
+            .flatten()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| DEFAULT_BROKER_URL.to_owned());
+        let gid = db
+            .get_setting(SETTING_BROKER_GRANT_ID)
+            .ok()
+            .flatten()
+            .filter(|s| !s.trim().is_empty());
+        Ok((url, gid))
+    })?;
+    if let (Some(gid), Some(host_token)) = (grant_id, discover_host_token()) {
+        let _ = revoke_books_read_grant(&broker_url, &host_token, &gid);
+    }
+    with_database(|db| {
+        let _ = db.set_setting(SETTING_BROKER_TOKEN, "");
+        let _ = db.set_setting(SETTING_BROKER_GRANT_ID, "");
+        Ok(())
+    })?;
+    Ok(HostValue::Bool(true))
+}
+
 pub fn register(module: HostModule) -> HostModule {
     module
         .function("books_coa_list", books_coa_list)
         .function("books_box_mappings_list", books_box_mappings_list)
         .function("books_box_mapping_save", books_box_mapping_save)
         .function("books_box_mapping_delete", books_box_mapping_delete)
+        .function("books_broker_status", books_broker_status)
+        .function("books_broker_connect", books_broker_connect)
+        .function("books_broker_disconnect", books_broker_disconnect)
 }
 
 pub const DECLARATIONS: &str = r#"
@@ -478,6 +716,20 @@ export interface BooksBoxMapping {
     include_subtree: boolean;
     updated_at?: string;
 }
+export interface BooksBrokerStatus {
+    connected: boolean;
+    broker_url: string;
+    grant_id: string | null;
+    host_detected: boolean;
+}
+export interface BooksBrokerConnectResult {
+    connected: boolean;
+    broker_url: string;
+    grant_id: string;
+    book_name: string | null;
+    account_count: number;
+    note: string | null;
+}
 /** Read-only Books chart of accounts via the local Buwiz Bot broker (/v1/ext/read). */
 export function books_coa_list(from?: string, to?: string, broker_url?: string, token?: string): BooksCoaResponse;
 /** Saved Forms-side fallback Books account mappings for a taxpayer and form type (ADR 0009). */
@@ -486,6 +738,12 @@ export function books_box_mappings_list(tin: string, form_type: string): BooksBo
 export function books_box_mapping_save(mapping: BooksBoxMapping): null;
 /** Remove a fallback Books account mapping for one form box. */
 export function books_box_mapping_delete(tin: string, form_type: string, box_key: string): boolean;
+/** Read the current local Buwiz Bot broker connection status without exposing tokens. */
+export function books_broker_status(): BooksBrokerStatus;
+/** Pair with the local Buwiz Bot broker by minting a scoped read-only Books COA grant. */
+export function books_broker_connect(broker_url?: string): BooksBrokerConnectResult;
+/** Revoke (best-effort) and clear the saved Buwiz Bot broker grant. */
+export function books_broker_disconnect(): boolean;
 "#;
 
 #[cfg(test)]
@@ -583,5 +841,47 @@ mod tests {
             coa.accounts[1].parent_account_id.as_deref(),
             Some("acc_41000")
         );
+    }
+
+    #[test]
+    fn pairs_and_revokes_scoped_grant_over_loopback() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            for expected_path in ["/v1/host/ext/grant", "/v1/host/ext/revoke"] {
+                let (mut sock, _) = listener.accept().unwrap();
+                let mut buf = [0u8; 4096];
+                let n = sock.read(&mut buf).unwrap();
+                let req = std::str::from_utf8(&buf[..n]).unwrap();
+                assert!(req.starts_with(&format!("POST {expected_path} HTTP/1.1")));
+                assert!(req.contains("X-Buwiz-Host: host_secret_42"));
+                let body = if expected_path == "/v1/host/ext/grant" {
+                    assert!(req.contains("\"plugin\":\"app.buwiz.books\""));
+                    assert!(req.contains("\"tools\":[\"books_accounts_list\"]"));
+                    json!({
+                        "ok": true,
+                        "id": "grant_42",
+                        "token": "ext_scoped_token_42",
+                    })
+                    .to_string()
+                } else {
+                    assert!(req.contains("\"id\":\"grant_42\""));
+                    json!({ "ok": true }).to_string()
+                };
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                sock.write_all(resp.as_bytes()).unwrap();
+            }
+        });
+
+        let url = format!("http://127.0.0.1:{port}");
+        let (gid, tok) = request_books_read_grant(&url, "host_secret_42").unwrap();
+        assert_eq!(gid, "grant_42");
+        assert_eq!(tok, "ext_scoped_token_42");
+        revoke_books_read_grant(&url, "host_secret_42", &gid).unwrap();
+        server.join().unwrap();
     }
 }

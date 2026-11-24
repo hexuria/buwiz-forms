@@ -909,6 +909,20 @@ export interface BooksBoxMapping {
     include_subtree: boolean;
     updated_at?: string;
 }
+export interface BooksBrokerStatus {
+    connected: boolean;
+    broker_url: string;
+    grant_id: string | null;
+    host_detected: boolean;
+}
+export interface BooksBrokerConnectResult {
+    connected: boolean;
+    broker_url: string;
+    grant_id: string;
+    book_name: string | null;
+    account_count: number;
+    note: string | null;
+}
 /** Read-only Books chart of accounts via the local Buwiz Bot broker (/v1/ext/read). */
 export function books_coa_list(from?: string, to?: string, broker_url?: string, token?: string): BooksCoaResponse;
 /** Saved Forms-side fallback Books account mappings for a taxpayer and form type (ADR 0009). */
@@ -917,3 +931,9 @@ export function books_box_mappings_list(tin: string, form_type: string): BooksBo
 export function books_box_mapping_save(mapping: BooksBoxMapping): null;
 /** Remove a fallback Books account mapping for one form box. */
 export function books_box_mapping_delete(tin: string, form_type: string, box_key: string): boolean;
+/** Read the current local Buwiz Bot broker connection status without exposing tokens. */
+export function books_broker_status(): BooksBrokerStatus;
+/** Pair with the local Buwiz Bot broker by minting a scoped read-only Books COA grant. */
+export function books_broker_connect(broker_url?: string): BooksBrokerConnectResult;
+/** Revoke (best-effort) and clear the saved Buwiz Bot broker grant. */
+export function books_broker_disconnect(): boolean;

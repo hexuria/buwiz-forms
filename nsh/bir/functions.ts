@@ -35,6 +35,15 @@ export const books_box_mapping_save = (...args: Parameters<typeof Host.books_box
 export const books_box_mappings_list = (...args: Parameters<typeof Host.books_box_mappings_list>): ReturnType<typeof Host.books_box_mappings_list> =>
   Door.call("books_box_mappings_list", args) as ReturnType<typeof Host.books_box_mappings_list>;
 
+export const books_broker_connect = (...args: Parameters<typeof Host.books_broker_connect>): ReturnType<typeof Host.books_broker_connect> =>
+  Door.call("books_broker_connect", args) as ReturnType<typeof Host.books_broker_connect>;
+
+export const books_broker_disconnect = (...args: Parameters<typeof Host.books_broker_disconnect>): ReturnType<typeof Host.books_broker_disconnect> =>
+  Door.call("books_broker_disconnect", args) as ReturnType<typeof Host.books_broker_disconnect>;
+
+export const books_broker_status = (...args: Parameters<typeof Host.books_broker_status>): ReturnType<typeof Host.books_broker_status> =>
+  Door.call("books_broker_status", args) as ReturnType<typeof Host.books_broker_status>;
+
 export const books_coa_list = (...args: Parameters<typeof Host.books_coa_list>): ReturnType<typeof Host.books_coa_list> =>
   Door.call("books_coa_list", args) as ReturnType<typeof Host.books_coa_list>;
 
@@ -482,6 +491,9 @@ export const bir = {
   books_box_mapping_delete,
   books_box_mapping_save,
   books_box_mappings_list,
+  books_broker_connect,
+  books_broker_disconnect,
+  books_broker_status,
   books_coa_list,
   cancel_queued,
   change_owner,
@@ -615,6 +627,9 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "books_box_mapping_delete", kind: "sync" },
   { name: "books_box_mapping_save", kind: "sync" },
   { name: "books_box_mappings_list", kind: "sync" },
+  { name: "books_broker_connect", kind: "sync" },
+  { name: "books_broker_disconnect", kind: "sync" },
+  { name: "books_broker_status", kind: "sync" },
   { name: "books_coa_list", kind: "sync" },
   { name: "cancel_queued", kind: "sync" },
   { name: "change_owner", kind: "sync" },

@@ -21,6 +21,7 @@
 // The pill names the part at the top of the viewport: the scroll offset against the part cards' laid-out tops.
 import type { Accessor, ListRef, ScrollRef, ViewRef } from "nsh";
 import { cleanup, computed, effect, keymap, List, Scroll, signal, untracked, View, windowSize } from "nsh";
+import { bir, type BooksBoxMapping } from "../../bir";
 import { BREAK } from "../../theme/tokens";
 import {
   AppButton,
@@ -258,6 +259,23 @@ export function FormPage(props: FormPageProps) {
 
   const schema = s.schema;
   const booksOpen = signal(false);
+  const booksTargetBox = signal<string | null>(null);
+  const booksMappings = signal<ReadonlyMap<string, BooksBoxMapping>>(new Map());
+  const refreshBooksMappings = (list?: readonly BooksBoxMapping[]) => {
+    try {
+      const items = list ?? bir.books_box_mappings_list(props.tin, props.formCode);
+      const next = new Map<string, BooksBoxMapping>();
+      for (const m of items) next.set(m.box_key, m);
+      booksMappings.set(next);
+    } catch {
+      booksMappings.set(new Map());
+    }
+  };
+  refreshBooksMappings();
+  const openBooksPicker = (boxKey: string | null) => {
+    booksTargetBox.set(boxKey);
+    booksOpen.set(true);
+  };
   const booksBoxes = computed<FormBoxOption[]>(() => {
     const out: FormBoxOption[] = [];
     for (const part of schema?.parts || []) {
@@ -293,7 +311,7 @@ export function FormPage(props: FormPageProps) {
           scrollEventThrottle={50}
         >
           <View class="w-full" classList={{ "self-center": !wide() }} style={{ maxWidth: wide() ? formW() : column() }} onLayout={(e) => (tops.column = e.bounds.origin.y)}>
-            <Header s={s} narrow={narrow} onBooksCoa={() => booksOpen.set(true)} />
+            <Header s={s} narrow={narrow} onBooksCoa={() => openBooksPicker(null)} />
             <Notes s={s} />
             <If when={schema && !s.header().loading && !s.header().error}>
               <View class="gap-4" onLayout={(e) => (tops.parts = e.bounds.origin.y)}>
@@ -302,6 +320,8 @@ export function FormPage(props: FormPageProps) {
                     s={s}
                     pi={pi}
                     narrow={narrow}
+                    booksMappings={booksMappings}
+                    onOpenBooks={(k) => openBooksPicker(k)}
                     onRef={(id, ref) => rowRefs.set(id, ref)}
                     onUnref={(id, ref) => rowRefs.get(id) === ref && rowRefs.delete(id)}
                     onList={(list) => (list ? lists.set(pi, list) : lists.delete(pi))}
@@ -342,6 +362,8 @@ export function FormPage(props: FormPageProps) {
         tin={() => props.tin}
         formCode={() => props.formCode}
         boxes={booksBoxes}
+        initialBox={booksTargetBox}
+        onMappingsChanged={(list) => refreshBooksMappings(list)}
         onClose={() => booksOpen.set(false)}
         onApply={(boxKey, amount, accountLabel) => {
           s.edit(boxKey, amount);
@@ -533,6 +555,8 @@ interface PartCardProps {
   s: FormSession;
   pi: number;
   narrow: Accessor<boolean>;
+  booksMappings?: Accessor<ReadonlyMap<string, BooksBoxMapping>>;
+  onOpenBooks?: (boxKey: string) => void;
   onRef: (id: string, ref: ViewRef) => void;
   onUnref: (id: string, ref: ViewRef) => void;
   onList: (list: PartList | null) => void;
@@ -556,6 +580,8 @@ function PartItem(props: { card: PartCardProps; ii: number; first: Accessor<bool
       narrow={c.narrow}
       first={props.first}
       last={props.last}
+      booksMappings={c.booksMappings}
+      onOpenBooks={c.onOpenBooks}
       onRef={(rid, ref) => {
         mine = ref;
         c.onRef(rid, ref);
