@@ -27,6 +27,7 @@ export interface CloudAccountStatus {
     email: string | null;
     user_id: string | null;
     offline: boolean;
+    practice: boolean;
     detail: string;
 }
 export interface CloudSignInStart {
@@ -74,10 +75,14 @@ pub fn prepare_launch() {
     bir_core::background_cron::set_submission_paused(true);
     forget_saved_server_url();
     if crate::account_gate::auth_bypass_enabled() {
+        bir_core::transport::set_practice_account(false);
         crate::account_gate::set_unlocked(true);
         return;
     }
-    crate::account_gate::set_unlocked(restore_saved_session());
+    let (unlocked, practice) = restore_saved_session();
+    // Set before the gate opens, so no send can start ahead of it.
+    bir_core::transport::set_practice_account(unlocked && practice);
+    crate::account_gate::set_unlocked(unlocked);
 }
 
 fn status_now() -> HostResult {
@@ -91,6 +96,7 @@ fn status_now() -> HostResult {
                 email: None,
                 user_id: None,
                 offline: false,
+                practice: false,
                 detail: error.to_string(),
             }));
         }
@@ -158,7 +164,7 @@ fn finish_sign_in(
                 "The server did not return a refresh token. Sign in again.",
             ));
         }
-        let (user_id, email) =
+        let (user_id, email, practice) =
             cloud_account::load_profile(&mut http, &challenge.server_url, &tokens.access_token)
                 .map_err(host_error)?;
         let now = cloud_account::unix_now();
@@ -170,7 +176,9 @@ fn finish_sign_in(
             user_id,
             email,
             offline: false,
+            practice,
         };
+        bir_core::transport::set_practice_account(practice);
         save_stored(&stored_from(secrets, now))?;
         status_now()
     })
@@ -194,14 +202,17 @@ fn refresh_account(
             .map_err(host_error)?
         {
             SessionUpdate::Online(secrets) => {
+                bir_core::transport::set_practice_account(secrets.practice);
                 save_stored(&stored_from(secrets, now))?;
             }
             SessionUpdate::Offline(secrets) => {
+                bir_core::transport::set_practice_account(secrets.practice);
                 save_stored(&stored_from(secrets, stored.last_refresh_unix))?;
             }
             SessionUpdate::SignedOut => {
                 clear_stored();
                 crate::account_gate::set_unlocked(false);
+                bir_core::transport::set_practice_account(false);
             }
         }
         status_now()
@@ -219,11 +230,17 @@ fn sign_out(
         }
         clear_stored();
         crate::account_gate::set_unlocked(false);
+        bir_core::transport::set_practice_account(false);
         status_now()
     })
 }
 
 fn session_opened() -> HostResult {
+    // The page opens the gate after a sign-in; take the flag from the saved
+    // account. An unreadable store leaves the value finish_sign_in set.
+    if let Ok(Some(stored)) = load_stored() {
+        bir_core::transport::set_practice_account(stored.practice);
+    }
     crate::account_gate::set_unlocked(true);
     crate::bir_module::open_database_at_launch();
     crate::hooks::hooks().start_updater();
@@ -233,31 +250,37 @@ fn session_opened() -> HostResult {
 
 fn session_closed() -> HostResult {
     crate::account_gate::set_unlocked(false);
+    bir_core::transport::set_practice_account(false);
     crate::hooks::hooks().refresh_menu();
     Ok(HostValue::Null)
 }
 
-fn restore_saved_session() -> bool {
+/// Whether the gate opens, and whether the account is a practice account.
+/// Offline, the saved value stands.
+fn restore_saved_session() -> (bool, bool) {
     let Ok(Some(stored)) = load_stored() else {
-        return false;
+        return (false, false);
     };
     let Ok(resolved) = resolve() else {
-        return false;
+        return (false, false);
     };
     if stored.server_url != resolved.url {
-        return false;
+        return (false, false);
     }
     let now = cloud_account::unix_now();
     let mut http = BlockingHttp::new();
     let previous_refresh = stored.last_refresh_unix;
+    let mut practice = stored.practice;
     let outcome = match cloud_account::refresh_session(&mut http, &stored.to_secrets(), now) {
         Ok(SessionUpdate::Online(secrets)) => {
+            practice = secrets.practice;
             if save_stored(&stored_from(secrets, now)).is_err() {
-                return false;
+                return (false, false);
             }
             RefreshOutcome::Online
         }
         Ok(SessionUpdate::Offline(secrets)) => {
+            practice = secrets.practice;
             let _ = save_stored(&stored_from(secrets, previous_refresh));
             RefreshOutcome::Offline
         }
@@ -266,16 +289,16 @@ fn restore_saved_session() -> bool {
         Err(_) => RefreshOutcome::Offline,
     };
     match cloud_account::gate_after_refresh(outcome) {
-        GateDecision::Open { .. } => true,
+        GateDecision::Open { .. } => (true, practice),
         GateDecision::Closed {
             clear_secrets: true,
         } => {
             clear_stored();
-            false
+            (false, false)
         }
         GateDecision::Closed {
             clear_secrets: false,
-        } => false,
+        } => (false, false),
     }
 }
 
@@ -365,6 +388,7 @@ fn status_value(status: &AccountStatus) -> HostValue {
         .field("email", optional_text(status.email.as_deref()))
         .field("user_id", optional_text(status.user_id.as_deref()))
         .field("offline", status.offline)
+        .field("practice", status.practice)
         .field("detail", status.detail.clone())
         .into()
 }

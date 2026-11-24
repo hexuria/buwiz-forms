@@ -39,6 +39,9 @@ export function BuwizCard() {
           />
         </If>
       </SettingRow>
+      <If when={status().practice}>
+        <SettingRow testID="settings-account-practice" title="Practice account" hint="Returns are simulated and never sent to the BIR" />
+      </If>
       <If when={status().signed_in}>
         <SettingRow testID="settings-account-delete" title="Delete account" hint="Writes an email to support asking to delete this Buwiz account">
           <AppButton

@@ -13,7 +13,8 @@
 //   jobs      true: a fake job table (a queued filing, a scheduled job, a failed one, an archived one, a completed one): delete,
 //             archive, purge and cancel_queued change it, and every call is listed in the readout
 //   log       "mixed" (every level), "long" (300 lines, to see the 200 cap), "empty" (no file yet), "error" (the read fails); else the real file
-//   cloud     "out" (signed out; sign-in works), "in" (signed in as juana@example.com; sign-out works), "down" (the server is unreachable)
+//   cloud     "out" (signed out; sign-in works), "in" (signed in as juana@example.com; sign-out works), "down" (the server is unreachable),
+//             "practice" (signed in as the app-store reviewers' practice account)
 //   import    "database" | "profile" | "invalid" | "cancelled" | "fail": what import_archive answers (the dialog is the host's)
 //   ebir      F18, the eBIRForms import (the folder dialog is the host's): "found" (a folder with 1 taxpayer, 3 filed returns, 1 draft,
 //             1 file not read; Import creates the committed fixture's taxpayer for real, so the frame's lists re-read), "standard" (the
@@ -55,7 +56,7 @@ interface Params {
   readout?: boolean;
   jobs?: boolean;
   log?: "mixed" | "long" | "empty" | "error";
-  cloud?: "out" | "in" | "down";
+  cloud?: "out" | "in" | "down" | "practice";
   import?: "database" | "profile" | "invalid" | "cancelled" | "fail";
   ebir?: "found" | "standard" | "empty" | "wrong" | "cancelled" | "fail" | "importfail" | "slow" | "foundonce";
   status?: "refused" | "invalid";
@@ -151,13 +152,13 @@ function fakeLog(kind: "mixed" | "long" | "empty" | "error"): void {
 }
 
 const SIGNED_OUT: CloudAccountStatus = {
-  server_url: "https://buwiz.example.test", server_url_source: "build", signed_in: false, email: null, user_id: null, offline: false,
+  server_url: "https://buwiz.example.test", server_url_source: "build", signed_in: false, email: null, user_id: null, offline: false, practice: false,
   detail: "Not signed in. Preparing and filing returns on this computer does not need an account.",
 };
 const SIGNED_IN: CloudAccountStatus = { ...SIGNED_OUT, signed_in: true, email: "juana@example.com", user_id: "u-1", detail: "Signed in. Your account is checked now and then." };
 
-function fakeCloud(kind: "out" | "in" | "down"): void {
-  let status = kind === "in" ? SIGNED_IN : SIGNED_OUT;
+function fakeCloud(kind: "out" | "in" | "down" | "practice"): void {
+  let status = kind === "practice" ? { ...SIGNED_IN, practice: true } : kind === "in" ? SIGNED_IN : SIGNED_OUT;
   swap("cloud_account_status", () => () => status);
   swap("cloud_account_refresh", () => async () => {
     note("cloud_account_refresh");

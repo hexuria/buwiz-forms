@@ -162,6 +162,8 @@ pub struct AccountSecrets {
     pub user_id: String,
     pub email: Option<String>,
     pub offline: bool,
+    /// The app-store reviewers' login: every send is a dry run.
+    pub practice: bool,
 }
 
 impl std::fmt::Debug for AccountSecrets {
@@ -171,6 +173,7 @@ impl std::fmt::Debug for AccountSecrets {
             .field("user_id", &self.user_id)
             .field("email", &self.email)
             .field("offline", &self.offline)
+            .field("practice", &self.practice)
             .field("access_expires_at_unix", &self.access_expires_at_unix)
             .field("access_token", &"<redacted>")
             .field("refresh_token", &"<redacted>")
@@ -187,6 +190,7 @@ pub struct AccountStatus {
     pub email: Option<String>,
     pub user_id: Option<String>,
     pub offline: bool,
+    pub practice: bool,
     pub detail: String,
 }
 
@@ -276,6 +280,10 @@ pub struct StoredAccount {
     /// app; only sign-out or an explicit rejection closes it.
     #[serde(default)]
     pub last_refresh_unix: i64,
+    /// Kept so an offline launch stays a dry run. A session saved before this
+    /// field existed loads as `false` until the next online refresh.
+    #[serde(default)]
+    pub practice: bool,
 }
 
 impl std::fmt::Debug for StoredAccount {
@@ -294,6 +302,7 @@ impl StoredAccount {
             user_id: self.user_id.clone(),
             email: self.email.clone(),
             offline: self.offline,
+            practice: self.practice,
         }
     }
 
@@ -307,6 +316,7 @@ impl StoredAccount {
             email: secrets.email.clone(),
             offline: secrets.offline,
             last_refresh_unix: 0,
+            practice: secrets.practice,
         }
     }
 
@@ -479,6 +489,7 @@ pub fn status_from(resolved: &ResolvedServer, secrets: Option<&AccountSecrets>) 
             email: None,
             user_id: None,
             offline: false,
+            practice: false,
             detail: "Not signed in. Preparing and filing returns on this computer does not need an account.".into(),
         };
     };
@@ -499,6 +510,7 @@ pub fn status_from(resolved: &ResolvedServer, secrets: Option<&AccountSecrets>) 
         email: secrets.email.clone(),
         user_id: Some(secrets.user_id.clone()),
         offline: secrets.offline,
+        practice: secrets.practice,
         detail,
     }
 }
@@ -614,11 +626,13 @@ pub fn refresh_tokens(
     }
 }
 
+/// `GET /me`: user id, email, and whether this is a practice account. An
+/// older server omits `practice`; anything but `true` means a real account.
 pub fn load_profile(
     http: &mut dyn Http,
     server_url: &str,
     access_token: &str,
-) -> Result<(String, Option<String>), CloudError> {
+) -> Result<(String, Option<String>, bool), CloudError> {
     let response = http.exchange(&HttpRequest {
         method: "GET",
         url: format!("{server_url}/me"),
@@ -639,7 +653,11 @@ pub fn load_profile(
         .and_then(Value::as_str)
         .filter(|email| !email.is_empty())
         .map(str::to_owned);
-    Ok((user_id, email))
+    let practice = value
+        .get("practice")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    Ok((user_id, email, practice))
 }
 
 /// Keep the access token fresh. A network failure keeps the previous tokens
@@ -652,11 +670,12 @@ pub fn refresh_session(
     let access_still_valid = secrets.access_expires_at_unix > now_unix.saturating_add(30);
     if access_still_valid {
         match load_profile(http, &secrets.server_url, &secrets.access_token) {
-            Ok((user_id, email)) => {
+            Ok((user_id, email, practice)) => {
                 let mut next = secrets.clone();
                 next.user_id = user_id;
                 next.email = email;
                 next.offline = false;
+                next.practice = practice;
                 return Ok(SessionUpdate::Online(next));
             }
             Err(CloudError::Network(message)) => {
@@ -671,7 +690,7 @@ pub fn refresh_session(
     }
     match refresh_tokens(http, &secrets.server_url, &secrets.refresh_token) {
         Ok(tokens) => {
-            let (user_id, email) =
+            let (user_id, email, practice) =
                 match load_profile(http, &secrets.server_url, &tokens.access_token) {
                     Ok(profile) => profile,
                     Err(CloudError::Network(_)) => {
@@ -694,6 +713,7 @@ pub fn refresh_session(
                 user_id,
                 email,
                 offline: false,
+                practice,
             }))
         }
         Err(CloudError::Network(_)) => {
@@ -1101,6 +1121,7 @@ mod tests {
             user_id: "user-1".into(),
             email: Some("filer@example.test".into()),
             offline: false,
+            practice: false,
         }
     }
 
@@ -1440,6 +1461,63 @@ mod tests {
         )
         .unwrap();
         assert_eq!(legacy.last_refresh_unix, 0);
+        assert!(
+            !legacy.practice,
+            "a session saved before the field is not practice"
+        );
+    }
+
+    fn profile_from(body: &str) -> (String, Option<String>, bool) {
+        let mut http = Scripted {
+            steps: vec![Ok(HttpResponse {
+                status: 200,
+                body: body.into(),
+            })],
+            seen: Vec::new(),
+        };
+        load_profile(&mut http, "http://localhost:3008", "access-secret").unwrap()
+    }
+
+    #[test]
+    fn the_me_answer_marks_a_practice_account_and_an_older_server_is_not_one() {
+        let (_, _, practice) =
+            profile_from(r#"{"user_id":"user-1","email":"review@example.test","practice":true}"#);
+        assert!(practice);
+        let (_, _, practice) = profile_from(r#"{"user_id":"user-1","email":"filer@example.test"}"#);
+        assert!(!practice);
+        let (_, _, practice) = profile_from(r#"{"user_id":"user-1","practice":"true"}"#);
+        assert!(!practice, "only a JSON boolean counts");
+
+        let mut http = Scripted {
+            steps: vec![Ok(HttpResponse {
+                status: 200,
+                body: r#"{"user_id":"user-1","email":"review@example.test","practice":true}"#
+                    .into(),
+            })],
+            seen: Vec::new(),
+        };
+        let SessionUpdate::Online(next) = refresh_session(&mut http, &secrets(), 100).unwrap()
+        else {
+            panic!("expected a fresh session");
+        };
+        assert!(next.practice);
+        let stored =
+            StoredAccount::decode(&StoredAccount::from_secrets(&next).encode().unwrap()).unwrap();
+        assert!(stored.to_secrets().practice);
+        let resolved =
+            resolve_server_url(Some("http://localhost:3008"), None, BuildProfile::Release).unwrap();
+        assert!(status_from(&resolved, Some(&next)).practice);
+        assert!(!status_from(&resolved, None).practice);
+
+        let mut offline = Scripted {
+            steps: vec![Err(CloudError::Network("connection refused".into()))],
+            seen: Vec::new(),
+        };
+        let SessionUpdate::Offline(kept) = refresh_session(&mut offline, &next, 100).unwrap()
+        else {
+            panic!("expected offline");
+        };
+        assert!(kept.practice, "an offline launch stays a practice account");
     }
 
     #[test]

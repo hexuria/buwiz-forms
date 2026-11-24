@@ -26,6 +26,7 @@ use sha1::Sha1;
 use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
@@ -345,9 +346,27 @@ fn env_flag_disabled(name: &str) -> bool {
     })
 }
 
+/// The signed-in Buwiz account is the app-store reviewers' practice login.
+/// The account layer keeps it in step with sign-in, launch and sign-out.
+static PRACTICE_ACCOUNT: AtomicBool = AtomicBool::new(false);
+
+/// Mark the signed-in account as a practice account (`false` when signed out).
+pub fn set_practice_account(on: bool) {
+    PRACTICE_ACCOUNT.store(on, Ordering::SeqCst);
+}
+
+/// A practice account never sends to BIR: every send is a dry run.
+pub fn practice_account() -> bool {
+    PRACTICE_ACCOUNT.load(Ordering::SeqCst)
+}
+
 /// Dry run from the environment, or from the Dev Mode panel (debug builds
-/// only, and only while no `BIR_SFTP_*` mode variable is set).
+/// only, and only while no `BIR_SFTP_*` mode variable is set). A practice
+/// account is always a dry run, whatever Dev Mode says.
 pub fn is_sftp_dry_run() -> bool {
+    if practice_account() {
+        return true;
+    }
     match crate::dev_mode::panel_submission_mode() {
         Some(mode) => mode == crate::dev_mode::SubmissionMode::DryRun,
         None => sftp_dry_run_requested(),
@@ -364,13 +383,15 @@ pub(crate) struct SftpDryRunInputs {
     pub live_enabled: bool,
     pub lab_host: bool,
     pub debug: bool,
+    pub practice: bool,
 }
 
 /// Dry run when a test/dry flag forces it, including over a lab host.
 /// An explicit live ack or a lab host stays live. With no flags, a debug
-/// build is dry and a release build proceeds to the dispatcher.
+/// build is dry and a release build proceeds to the dispatcher. A practice
+/// account is dry over every live flag.
 pub(crate) fn dry_run_from_inputs(inputs: SftpDryRunInputs) -> bool {
-    if inputs.test_env || inputs.dry_run || inputs.live_disabled {
+    if inputs.test_env || inputs.dry_run || inputs.live_disabled || inputs.practice {
         return true;
     }
     if inputs.live_enabled || inputs.lab_host {
@@ -387,6 +408,7 @@ fn sftp_dry_run_requested() -> bool {
         live_enabled: env_flag_enabled("BIR_SFTP_LIVE"),
         lab_host: env_nonempty("BIR_SFTP_HOST").is_some(),
         debug: cfg!(debug_assertions),
+        practice: practice_account(),
     })
 }
 
@@ -476,7 +498,8 @@ pub async fn resolve_sftp_endpoint(
             );
             return Ok(ResolvedSftpTarget::DryRun { folder });
         }
-        Some(crate::dev_mode::SubmissionMode::TestServer) => {
+        // A practice account falls through to the dry run below instead.
+        Some(crate::dev_mode::SubmissionMode::TestServer) if !practice_account() => {
             let endpoint = crate::dev_mode::test_server_endpoint(form_type)?;
             info!(
                 source = "env",
@@ -492,7 +515,7 @@ pub async fn resolve_sftp_endpoint(
                 source: SftpEndpointSource::Env,
             });
         }
-        None => {}
+        _ => {}
     }
     // The mock relay (a loopback URL, or a refusal) comes before the dry run: setting it is the ask to send there.
     if let Some(url) = relay_url() {
@@ -1639,6 +1662,7 @@ mod tests {
             live_enabled: false,
             lab_host: false,
             debug: false,
+            practice: false,
         };
         assert!(!dry_run_from_inputs(none));
         assert!(dry_run_from_inputs(SftpDryRunInputs {
@@ -1667,6 +1691,61 @@ mod tests {
             debug: false,
             ..none
         }));
+    }
+
+    #[test]
+    fn a_practice_account_is_a_dry_run_over_a_live_ack_and_a_lab_host() {
+        let live = SftpDryRunInputs {
+            test_env: false,
+            dry_run: false,
+            live_disabled: false,
+            live_enabled: true,
+            lab_host: true,
+            debug: false,
+            practice: false,
+        };
+        assert!(!dry_run_from_inputs(live));
+        assert!(dry_run_from_inputs(SftpDryRunInputs {
+            practice: true,
+            ..live
+        }));
+    }
+
+    /// Resets the process-wide flag even when an assertion fails.
+    struct PracticeReset;
+
+    impl Drop for PracticeReset {
+        fn drop(&mut self) {
+            set_practice_account(false);
+        }
+    }
+
+    // Runs under the temp_env lock (as every test that expects a live target
+    // does), so no other test sees the flag set.
+    #[tokio::test]
+    async fn the_practice_flag_forces_a_dry_run_and_resetting_restores_it() {
+        isolated_sftp_env_async(
+            [
+                ("BIR_SFTP_HOST", Some("127.0.0.1")),
+                ("BIR_SFTP_USERNAME", Some("lab")),
+                ("BIR_SFTP_PASSWORD", Some("secret")),
+                ("BIR_SFTP_ACCEPT_ANY_HOST_KEY", Some("1")),
+            ],
+            async {
+                let _reset = PracticeReset;
+                assert!(!is_sftp_dry_run(), "a lab host is live without the flag");
+                set_practice_account(true);
+                assert!(practice_account());
+                assert!(is_sftp_dry_run());
+                let target = resolve_sftp_endpoint("1601Cv2018", "000000000")
+                    .await
+                    .unwrap();
+                assert_eq!(target.source(), SftpEndpointSource::DryRun);
+                set_practice_account(false);
+                assert!(!is_sftp_dry_run());
+            },
+        )
+        .await;
     }
 
     #[test]

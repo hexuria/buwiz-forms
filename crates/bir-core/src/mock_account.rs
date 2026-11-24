@@ -549,7 +549,8 @@ mod tests {
                     panic!("already approved")
                 })
                 .unwrap();
-            let (id, email) = cloud::load_profile(&mut http, &url, &tokens.access_token).unwrap();
+            let (id, email, _) =
+                cloud::load_profile(&mut http, &url, &tokens.access_token).unwrap();
             assert_eq!(email.as_deref(), Some("tester@buwiz.local"));
             let next = cloud::refresh_tokens(&mut http, &url, &tokens.refresh_token).unwrap();
             assert_ne!(tokens.refresh_token, next.refresh_token);
@@ -573,6 +574,7 @@ mod tests {
                     user_id: id,
                     email,
                     offline: false,
+                    practice: false,
                 },
             );
             assert!(matches!(

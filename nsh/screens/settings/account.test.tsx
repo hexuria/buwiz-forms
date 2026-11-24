@@ -33,6 +33,17 @@ for (const { name, size } of SIZES) {
     expect(calls(app)).toEqual(["cloud_account_refresh", "cloud_account_sign_out", "cloud_account_session_closed"]);
   }, 60_000);
 
+  test(`${name}: a practice account says its returns are simulated; a real account does not`, async () => {
+    const app = await openSettings(size, { cloud: "practice", solo: true }, "account");
+    await app.waitFor(ready);
+    await app.waitFor("id:settings-account-practice");
+    expectTexts(app, ["Practice account", "Returns are simulated and never sent to the BIR"]);
+    const real = await openSettings(size, { cloud: "in", solo: true }, "account");
+    await real.waitFor(ready);
+    await real.waitFor("text:calls: cloud_account_refresh");
+    expect(real.shows("id:settings-account-practice")).toBe(false);
+  }, 60_000);
+
   test(`${name}: an unreachable server leaves the card as it was and says why`, async () => {
     const app = await openSettings(size, { cloud: "down", solo: true }, "account");
     await app.waitFor(ready);

@@ -221,6 +221,7 @@ export interface CloudAccountStatus {
     email: string | null;
     user_id: string | null;
     offline: boolean;
+    practice: boolean;
     detail: string;
 }
 export interface CloudSignInStart {

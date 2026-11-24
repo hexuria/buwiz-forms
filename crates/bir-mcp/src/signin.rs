@@ -89,6 +89,7 @@ impl Session {
             email: self.email.clone(),
             offline: false,
             last_refresh_unix: unix_now(),
+            practice: false,
         }
     }
 }
@@ -256,7 +257,7 @@ where
     if tokens.refresh_token.is_empty() {
         return Err("The server did not return a refresh token. Sign in again.".to_string());
     }
-    let (user_id, email) =
+    let (user_id, email, _) =
         cloud_account::load_profile(&mut http, &api_origin, &tokens.access_token)
             .map_err(login_error)?;
     let now = (hooks.now)();
