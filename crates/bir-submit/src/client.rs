@@ -1,0 +1,2415 @@
+//! The client of buwiz-server: the device key, tickets, sealed v2
+//! submissions, the relay pipe and receipts, with the host's sign-in
+//! ([`TokenSource`]).
+
+use std::sync::{Arc, Mutex, RwLock};
+
+use chrono::{DateTime, Utc};
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+
+use crate::device::{self, DeviceKey, HEADER_DEVICE, hex};
+use crate::pipe::{self, Ended};
+use crate::receipt::Receipt;
+use crate::seal::{self, SealingKey};
+use crate::secrets::SecretStore;
+use crate::trust::{self, TrustList};
+use crate::wire::{
+    Blame, FailureClass, TinRefusal, capped_wait_until, is_final_reason, is_hold_code,
+    is_limit_code,
+};
+
+/// The production Buwiz server, for a host that has no URL of its own.
+pub const DEFAULT_SERVER_URL: &str = "https://api.buwiz.com";
+/// The header that names the app and its version on every request to the
+/// Buwiz server: `buwiz-forms/0.2.1`, `mini/0.5.0`.
+pub const CLIENT_HEADER: &str = "buwiz-client";
+const DEVICE_KEY: &str = "device_key";
+const DEVICE_ID: &str = "device_id";
+
+/// The app's one Buwiz sign-in. This crate never signs in, refreshes or stores a token.
+pub trait TokenSource: Send + Sync {
+    /// An access token for the signed-in account; `force_refresh` after the server answered 401 `invalid_token`.
+    /// `Err(ClientError::SignedOut)` when no one is signed in.
+    fn access_token(
+        &self,
+        force_refresh: bool,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, ClientError>> + Send + '_>>;
+    /// Who is signed in (the email, empty when unknown); `None` when no one is. No request.
+    fn login(&self) -> Option<String>;
+    /// The server ended the sign-in (`403 device_revoked`): the host signs the user out.
+    fn session_ended(&self);
+}
+
+#[derive(Clone, Debug)]
+pub struct SubmitConfig {
+    pub server_url: String,
+    /// Shown on the account site's device list.
+    pub device_name: String,
+    /// Public keys (base64url) the signed trust list must verify with:
+    /// [`trust::pinned_keys`] unless a test or lab sets its own in code.
+    pub trust_keys: Vec<String>,
+}
+
+/// An https URL, or an http one whose host is this machine.
+pub(crate) fn is_private_url(url: &str) -> bool {
+    if url.starts_with("https://") {
+        return true;
+    }
+    let Some(rest) = url.strip_prefix("http://") else {
+        return false;
+    };
+    let authority = rest.split('/').next().unwrap_or_default();
+    let host = match authority.strip_prefix('[') {
+        Some(v6) => v6.split(']').next().unwrap_or_default(),
+        None => authority.split(':').next().unwrap_or_default(),
+    };
+    matches!(host, "localhost" | "127.0.0.1" | "::1")
+}
+
+impl SubmitConfig {
+    /// The host's own server URL (its [`DEFAULT_SERVER_URL`] unless it says
+    /// otherwise). Only https, or http to this machine: tokens never cross
+    /// a network in plain text. Any other URL is an error.
+    pub fn new(server_url: &str) -> Result<Self, ClientError> {
+        let url = server_url.trim();
+        if !is_private_url(url) {
+            return Err(ClientError::Other(format!(
+                "The Buwiz server URL must be https, or http to this machine: {url}"
+            )));
+        }
+        Ok(Self {
+            server_url: url.trim_end_matches('/').to_owned(),
+            device_name: format!("eBIRForms on {}", std::env::consts::OS),
+            trust_keys: trust::pinned_keys(),
+        })
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ClientError {
+    #[error("Sign in to send returns.")]
+    SignedOut,
+    /// The server answered `403 device_revoked`: the device, and the sign-in
+    /// it belongs to, were removed on the account site. The host was told
+    /// ([`TokenSource::session_ended`]). Not a try: nothing reached the BIR.
+    #[error("This device was removed from your Buwiz account. Sign in again to send returns.")]
+    DeviceRevoked,
+    #[error("could not reach the Buwiz server: {0}")]
+    Network(String),
+    /// The server's sentence, with its code in brackets so the app can
+    /// tell `tin_not_active` and the like apart.
+    #[error("{message} ({code})")]
+    Server {
+        status: u16,
+        code: String,
+        message: String,
+    },
+    #[error("{0}")]
+    Other(String),
+    /// The server says this was not a try and nothing reached the BIR: a
+    /// hold (`503` with `bir_offline`, `bir_busy`, `relay_paused` or
+    /// `restarting`), or a fault on Buwiz's side (`class: "ours"`). Its
+    /// text keeps the code in brackets, as [`ClientError::Server`]'s does.
+    /// `wait_until` is the body's, or `Retry-After` from now.
+    #[error("{message} ({code})")]
+    NotATry {
+        status: u16,
+        code: String,
+        message: String,
+        wait_until: Option<DateTime<Utc>>,
+    },
+}
+
+impl ClientError {
+    /// The TIN refusal the server's code names, if any.
+    pub fn tin_refusal(&self) -> Option<TinRefusal> {
+        match self {
+            ClientError::Server { code, .. } => TinRefusal::from_code(code),
+            _ => None,
+        }
+    }
+
+    /// Whether this error says nothing reached the BIR and no try was made:
+    /// a hold or class `ours` ([`ClientError::NotATry`]), being signed out
+    /// (or the device removed), or not reaching the Buwiz server at all.
+    pub fn is_not_a_try(&self) -> bool {
+        matches!(
+            self,
+            ClientError::NotATry { .. }
+                | ClientError::SignedOut
+                | ClientError::DeviceRevoked
+                | ClientError::Network(_)
+        )
+    }
+
+    /// The server's `wait_until` on a hold.
+    pub fn wait_until(&self) -> Option<DateTime<Utc>> {
+        match self {
+            ClientError::NotATry { wait_until, .. } => *wait_until,
+            _ => None,
+        }
+    }
+}
+
+impl From<reqwest::Error> for ClientError {
+    fn from(error: reqwest::Error) -> Self {
+        Self::Network(error.to_string())
+    }
+}
+
+impl From<crate::secrets::StoreError> for ClientError {
+    fn from(error: crate::secrets::StoreError) -> Self {
+        Self::Other(error.to_string())
+    }
+}
+
+/// How a send ended when it did not end in a receipt.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum SendError {
+    /// Nothing reached BIR; sending again is safe.
+    #[error("{0}")]
+    NotSent(String),
+    /// BIR may have the return. Never send it again automatically.
+    #[error("{0}")]
+    MaybeSent(String),
+    /// Nothing reached BIR and it was not a try: Buwiz held the ticket, the
+    /// relay failed on Buwiz's side (class `ours`), the app is signed out or
+    /// could not reach Buwiz. Sending again is safe; the queue does not
+    /// count it. Not before `wait_until` when the server gave one.
+    #[error("{reason}")]
+    NotATry {
+        reason: String,
+        wait_until: Option<DateTime<Utc>>,
+    },
+    /// Something touched the BIR's way in and it did not get through; sending
+    /// again is safe. It counts as a try, and `blame` says where it failed:
+    /// the whole queue backs off for a way in that is down, this return
+    /// alone for the rest.
+    #[error("{reason}")]
+    Counted { reason: String, blame: Blame },
+}
+
+impl SendError {
+    /// The TIN refusal a not-sent reason ends with
+    /// ([`TinRefusal::from_reason`]). Never one for [`SendError::MaybeSent`]:
+    /// BIR may have that return whatever its text says.
+    pub fn refusal(&self) -> Option<TinRefusal> {
+        match self {
+            SendError::NotSent(reason) => TinRefusal::from_reason(reason),
+            SendError::MaybeSent(_) | SendError::NotATry { .. } | SendError::Counted { .. } => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Sent {
+    pub submission_id: String,
+    pub receipt_jws: String,
+    pub receipt: Receipt,
+}
+
+/// The parts of an eBIRForms file name, `{TIN}-{form}-{period}#{email}#.xml`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileName {
+    pub tin: String,
+    pub form: String,
+    pub period: String,
+    pub email: String,
+}
+
+impl FileName {
+    pub fn parse(name: &str) -> Option<Self> {
+        let stem = name.strip_suffix("#.xml")?;
+        let (head, email) = stem.split_once('#')?;
+        let mut parts = head.splitn(3, '-');
+        let (tin, form, period) = (parts.next()?, parts.next()?, parts.next()?);
+        let digits = matches!(tin.len(), 12 | 14) && tin.bytes().all(|byte| byte.is_ascii_digit());
+        (digits && !form.is_empty() && !period.is_empty() && email.contains('@')).then(|| Self {
+            tin: tin.to_owned(),
+            form: form.to_owned(),
+            period: period.to_owned(),
+            email: email.to_owned(),
+        })
+    }
+}
+
+/// The longest the relay WebSocket may take to open.
+const RELAY_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// One app's connection to buwiz-server. Cheap to share behind an `Arc`.
+pub struct Submitter {
+    config: SubmitConfig,
+    http: reqwest::Client,
+    store: Box<dyn SecretStore>,
+    /// The host's sign-in.
+    tokens: Arc<dyn TokenSource>,
+    /// Serializes device registration.
+    session_lock: tokio::sync::Mutex<()>,
+    /// The account's TIN list ([`crate::tins`]).
+    pub(crate) tins: crate::tins::TinsCache,
+    /// The [`CLIENT_HEADER`] value.
+    client: RwLock<String>,
+    /// Per idempotency key: when the server's last open submission can no
+    /// longer hold the key (its ticket's expiry plus [`OPEN_GRACE`]). A send
+    /// before then would be answered `already_submitted`, which reads as
+    /// maybe sent, so none is made.
+    open_until: Mutex<std::collections::HashMap<String, DateTime<Utc>>>,
+}
+
+/// How long past its ticket's expiry the server may still hold a try open.
+const OPEN_GRACE: chrono::Duration = chrono::Duration::seconds(30);
+/// The server's ticket lifetime (300 s) plus the grace, for an answer that
+/// names no expiry.
+const OPEN_DEFAULT: chrono::Duration = chrono::Duration::seconds(330);
+/// No answer holds a key longer than this, whatever expiry it names.
+const OPEN_MOST: chrono::Duration = chrono::Duration::seconds(900);
+
+/// What `send_return` learned about the server's open submission, for
+/// [`Submitter::settle`].
+#[derive(Default)]
+struct OpenTry {
+    /// The floor once a ticket was obtained.
+    until: Option<DateTime<Utc>>,
+    /// The server's own status (`failed`, `expired`) says the submission is
+    /// closed.
+    closed: bool,
+}
+
+/// The ticket answer's `expires_at` (unix seconds) plus the grace, or now
+/// plus 330 s when it is absent or unreadable.
+fn open_floor(ticket: &Value, now: DateTime<Utc>) -> DateTime<Utc> {
+    let expiry = ticket["expires_at"]
+        .as_i64()
+        .and_then(|seconds| DateTime::from_timestamp(seconds, 0))
+        .map(|expiry| expiry.min(now + OPEN_MOST - OPEN_GRACE) + OPEN_GRACE);
+    expiry.unwrap_or(now + OPEN_DEFAULT)
+}
+
+/// The app name the header carries until the app says its own:
+/// `buwiz-forms` and this crate's version.
+fn default_client() -> String {
+    format!(
+        "buwiz-forms/{}",
+        header_word(env!("CARGO_PKG_VERSION"), "0")
+    )
+}
+
+/// A header-safe name or version: ASCII letters, digits and `._-+`, at most
+/// 32 characters. Anything else (a space, a control character, a non-ASCII
+/// letter) becomes `-`; a word with nothing left is `fallback`. Never an
+/// error: the app is named whatever it was called.
+fn header_word(word: &str, fallback: &str) -> String {
+    let clean: String = word
+        .trim()
+        .chars()
+        .take(32)
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || "._-+".contains(c) {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    if clean.chars().all(|c| c == '-') {
+        fallback.to_owned()
+    } else {
+        clean
+    }
+}
+
+impl Submitter {
+    pub fn new(
+        config: SubmitConfig,
+        store: Box<dyn SecretStore>,
+        tokens: Arc<dyn TokenSource>,
+    ) -> Self {
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .user_agent(format!(
+                "buwiz-forms/{} ({})",
+                env!("CARGO_PKG_VERSION"),
+                std::env::consts::OS
+            ))
+            .build()
+            .expect("an HTTP client");
+        Self {
+            http,
+            store,
+            tokens,
+            session_lock: tokio::sync::Mutex::new(()),
+            tins: crate::tins::TinsCache::default(),
+            client: RwLock::new(default_client()),
+            open_until: Mutex::new(std::collections::HashMap::new()),
+            config,
+        }
+    }
+
+    pub fn config(&self) -> &SubmitConfig {
+        &self.config
+    }
+
+    fn url(&self, path: &str) -> String {
+        format!("{}{path}", self.config.server_url)
+    }
+
+    /// Name the app in the [`CLIENT_HEADER`] of every later request:
+    /// `set_client("buwiz-forms", "0.2.1")`. A name or version with characters
+    /// a header cannot carry is cleaned (each such character becomes `-`),
+    /// never refused.
+    pub fn set_client(&self, app: &str, version: &str) {
+        if let Ok(mut client) = self.client.write() {
+            *client = format!("{}/{}", header_word(app, "app"), header_word(version, "0"));
+        }
+    }
+
+    /// The [`CLIENT_HEADER`] value requests carry now.
+    pub fn client(&self) -> String {
+        self.client
+            .read()
+            .map(|client| client.clone())
+            .unwrap_or_else(|_| default_client())
+    }
+
+    /// A request to the Buwiz server at `path`, with the [`CLIENT_HEADER`].
+    fn request(&self, method: reqwest::Method, path: &str) -> reqwest::RequestBuilder {
+        self.http
+            .request(method, self.url(path))
+            .header(CLIENT_HEADER, self.client())
+    }
+
+    /// Who is signed in (the email, empty when unknown); `None` when no one
+    /// is. Asks the host ([`TokenSource::login`]), which makes no request.
+    pub(crate) fn login(&self) -> Option<String> {
+        self.tokens.login()
+    }
+
+    /// `GET path` with the bearer token alone and a 5 second limit, for
+    /// [`crate::tins`]: once more with a refreshed token when the server says
+    /// the token expired.
+    pub(crate) async fn bearer_get(&self, path: &str) -> Result<Value, ClientError> {
+        let mut refreshed = false;
+        loop {
+            let access_token = self.tokens.access_token(refreshed).await?;
+            let response = self
+                .request(reqwest::Method::GET, path)
+                .bearer_auth(&access_token)
+                .timeout(std::time::Duration::from_secs(5))
+                .send()
+                .await?;
+            match self.ok_json(response).await {
+                Err(ClientError::Server {
+                    status: 401, code, ..
+                }) if code == "invalid_token" && !refreshed => {
+                    refreshed = true;
+                }
+                other => return other,
+            }
+        }
+    }
+
+    async fn authorized_get(&self, path: &str) -> Result<Value, ClientError> {
+        let access_token = self.tokens.access_token(false).await?;
+        let response = self
+            .request(reqwest::Method::GET, path)
+            .bearer_auth(&access_token)
+            .send()
+            .await?;
+        self.ok_json(response).await
+    }
+
+    // -------------------------------------------------------- device key
+
+    fn device_key(&self) -> Result<DeviceKey, ClientError> {
+        if let Some(key) = self
+            .store
+            .get(DEVICE_KEY)?
+            .as_deref()
+            .and_then(DeviceKey::from_stored)
+        {
+            return Ok(key);
+        }
+        let key = DeviceKey::generate();
+        self.store.set(DEVICE_KEY, &key.to_stored())?;
+        Ok(key)
+    }
+
+    /// Forgets this device's key and id, and the TIN list: a new sign-in
+    /// registers a new key. The host calls it on sign-in and sign-out.
+    pub fn forget_device(&self) -> Result<(), ClientError> {
+        self.tins.clear();
+        self.store.delete(DEVICE_KEY)?;
+        self.store.delete(DEVICE_ID)?;
+        Ok(())
+    }
+
+    /// Registers the device key once per sign-in; answers its id.
+    async fn ensure_device(&self) -> Result<String, ClientError> {
+        if let Some(id) = self.store.get(DEVICE_ID)? {
+            return Ok(id);
+        }
+        let _guard = self.session_lock.lock().await;
+        if let Some(id) = self.store.get(DEVICE_ID)? {
+            return Ok(id);
+        }
+        let access_token = self.tokens.access_token(false).await?;
+        let key = self.device_key()?;
+        let body = serde_json::to_vec(
+            &json!({ "public_key": key.public_key(), "name": self.config.device_name }),
+        )
+        .expect("json");
+        let path = "/api/devices";
+        let mut request = self
+            .request(reqwest::Method::POST, path)
+            .bearer_auth(&access_token)
+            .header("content-type", "application/json")
+            .body(body.clone());
+        for (name, value) in key.sign("POST", path, &body, device::now(), &device::nonce()) {
+            request = request.header(name, value);
+        }
+        let registered: Value = self.ok_json(request.send().await?).await?;
+        let id = registered["id"]
+            .as_str()
+            .ok_or_else(|| ClientError::Other("no device id".into()))?
+            .to_owned();
+        self.store.set(DEVICE_ID, &id)?;
+        Ok(id)
+    }
+
+    /// A request signed with the device key. Retries once with a refreshed
+    /// token when the access token has just expired, and once with a newly
+    /// registered key when the server does not know this device (it belongs
+    /// to another sign-in).
+    pub async fn signed(
+        &self,
+        method: &str,
+        path: &str,
+        body: &Value,
+    ) -> Result<Value, ClientError> {
+        let body = serde_json::to_vec(body).expect("json");
+        let mut refreshed = false;
+        let mut force_refresh = false;
+        let mut registered_again = false;
+        loop {
+            let device_id = self.ensure_device().await?;
+            let key = self.device_key()?;
+            let access_token = self
+                .tokens
+                .access_token(std::mem::take(&mut force_refresh))
+                .await?;
+            let method_value = reqwest::Method::from_bytes(method.as_bytes())
+                .map_err(|e| ClientError::Other(e.to_string()))?;
+            let mut request = self
+                .request(method_value, path)
+                .bearer_auth(&access_token)
+                .header(HEADER_DEVICE, &device_id)
+                .header("content-type", "application/json")
+                .body(body.clone());
+            for (name, value) in key.sign(method, path, &body, device::now(), &device::nonce()) {
+                request = request.header(name, value);
+            }
+            match self.ok_json(request.send().await?).await {
+                Err(ClientError::Server {
+                    status: 401, code, ..
+                }) if code == "invalid_token" && !refreshed => {
+                    refreshed = true;
+                    force_refresh = true;
+                }
+                Err(ClientError::Server {
+                    status: 401, code, ..
+                }) if code == "unknown_device" && !registered_again => {
+                    self.forget_device()?;
+                    registered_again = true;
+                }
+                Err(ClientError::Server { code, .. }) if code == "device_revoked" => {
+                    self.forget_device()?;
+                    self.tokens.session_ended();
+                    return Err(ClientError::DeviceRevoked);
+                }
+                other => return other,
+            }
+        }
+    }
+
+    /// The server's relay trust list, checked against the pinned keys.
+    /// Without a valid one there is no send.
+    pub async fn trust_list(&self) -> Result<TrustList, ClientError> {
+        let response = self
+            .request(reqwest::Method::GET, "/.well-known/buwiz-trust.json")
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(ClientError::Other(format!(
+                "Can't send: the server has no signed trust list ({}).",
+                response.status()
+            )));
+        }
+        let text = response.text().await?;
+        let jws = text.trim().trim_matches('"');
+        trust::verify(&self.config.trust_keys, jws, device::now())
+            .map_err(|error| ClientError::Other(format!("Can't send: {error}.")))
+    }
+
+    /// The Sender's sealing key: the one `/.well-known/buwiz-hpke.json`
+    /// names as current, taken only if `list` carries it.
+    pub async fn sealing_key(&self, list: &TrustList) -> Result<SealingKey, ClientError> {
+        let document: Value = self
+            .ok_json(
+                self.request(reqwest::Method::GET, "/.well-known/buwiz-hpke.json")
+                    .send()
+                    .await?,
+            )
+            .await?;
+        let offered: SealingKey = serde_json::from_value(document["keys"][0].clone())
+            .map_err(|_| ClientError::Other("the server published no sealing key".into()))?;
+        list.sealing_key(&offered)
+            .map_err(|error| ClientError::Other(format!("Can't send: {error}.")))
+    }
+
+    /// Checks a receipt against the receipt keys of the signed trust list
+    /// only; any other key is refused.
+    pub async fn verify_receipt(
+        &self,
+        jws: &str,
+        xml_sha256: &str,
+        jti: Option<&str>,
+    ) -> Result<Receipt, ClientError> {
+        let list = self.trust_list().await?;
+        list.verify_receipt(jws, xml_sha256, jti)
+            .map_err(|error| ClientError::Other(error.to_string()))
+    }
+
+    /// Everything a send needs before the return itself: a live sign-in,
+    /// a registered device, a valid trust list and a listed sealing key.
+    /// A TIN refusal on the way (a banned account) makes the next TIN list
+    /// read ask the server, as one on a send does.
+    pub async fn ready(&self) -> Result<(), ClientError> {
+        let ready = self.check_ready().await;
+        if let Err(error) = &ready
+            && error.tin_refusal().is_some()
+        {
+            self.tins.invalidate();
+        }
+        ready
+    }
+
+    async fn check_ready(&self) -> Result<(), ClientError> {
+        let list = self.trust_list().await?;
+        self.ensure_device().await?;
+        self.sealing_key(&list).await?;
+        Ok(())
+    }
+
+    // --------------------------------------------------------------- send
+
+    /// Sends one return: ticket, sealed envelope, relay, verified receipt.
+    /// A refusal for the TIN makes the next TIN list read ask the server.
+    pub async fn send(&self, filename: &str, xml: &[u8]) -> Result<Sent, SendError> {
+        let sent = self.send_return(filename, xml).await;
+        if let Err(error) = &sent
+            && error.refusal().is_some()
+        {
+            self.tins.invalidate();
+        }
+        sent
+    }
+
+    async fn send_return(&self, filename: &str, xml: &[u8]) -> Result<Sent, SendError> {
+        let name = FileName::parse(filename)
+            .ok_or_else(|| SendError::NotSent(format!("not an eBIRForms file name: {filename}")))?;
+        let xml_sha256 = hex(&Sha256::digest(xml));
+        let idempotency_key = hex(&Sha256::digest(
+            format!("buwiz-send\0{filename}\0{xml_sha256}").as_bytes(),
+        ))[..40]
+            .to_owned();
+        let now = Utc::now();
+        if let Some(until) = self.open_floor_for(&idempotency_key, now) {
+            let minutes = ((until - now).num_seconds().max(0) + 59) / 60;
+            return Err(SendError::NotATry {
+                reason: format!(
+                    "The last try for this return is still open on the server. It tries again in about {} min.",
+                    minutes.max(1)
+                ),
+                wait_until: Some(until),
+            });
+        }
+        let mut open = OpenTry::default();
+        let sent = self
+            .send_open(&name, xml, &xml_sha256, &idempotency_key, &mut open)
+            .await;
+        self.settle(&idempotency_key, sent, open)
+    }
+
+    /// The floor still in the future for `key`, if any.
+    fn open_floor_for(&self, key: &str, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+        let mut floors = self
+            .open_until
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        floors.retain(|_, until| *until > now);
+        floors.get(key).copied()
+    }
+
+    /// Keeps or clears the floor for `key` by how the send ended, and lifts
+    /// a [`SendError::NotATry`]'s `wait_until` to it. Once a ticket was
+    /// obtained, only a success, a maybe-sent or a server status of
+    /// `failed` or `expired` leaves the key free to try again at once.
+    fn settle(
+        &self,
+        key: &str,
+        sent: Result<Sent, SendError>,
+        open: OpenTry,
+    ) -> Result<Sent, SendError> {
+        let mut floors = self
+            .open_until
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let free = open.closed || matches!(sent, Ok(_) | Err(SendError::MaybeSent(_)));
+        let Some(until) = open.until.filter(|_| !free) else {
+            if open.until.is_some() || free {
+                floors.remove(key);
+            }
+            return sent;
+        };
+        floors.insert(key.to_owned(), until);
+        match sent {
+            Err(SendError::NotATry { reason, wait_until }) => Err(SendError::NotATry {
+                reason,
+                wait_until: Some(wait_until.map_or(until, |own| own.max(until))),
+            }),
+            other => other,
+        }
+    }
+
+    async fn send_open(
+        &self,
+        name: &FileName,
+        xml: &[u8],
+        xml_sha256: &str,
+        idempotency_key: &str,
+        open: &mut OpenTry,
+    ) -> Result<Sent, SendError> {
+        let not_sent = |error: ClientError| {
+            if error.is_not_a_try() {
+                SendError::NotATry {
+                    wait_until: error.wait_until(),
+                    reason: error.to_string(),
+                }
+            } else {
+                SendError::NotSent(error.to_string())
+            }
+        };
+        // No valid trust list or listed sealing key, no ticket: nothing is
+        // spent, and nothing sealed, for a send that can't be trusted.
+        let list = self.trust_list().await.map_err(not_sent)?;
+        let sealing_key = self.sealing_key(&list).await.map_err(not_sent)?;
+
+        let ticket = match self
+            .signed(
+                "POST",
+                "/api/tickets",
+                &json!({
+                    "tin": name.tin, "form": name.form, "period": name.period,
+                    "payload_sha256": xml_sha256, "email": name.email, "idempotency_key": idempotency_key,
+                }),
+            )
+            .await
+        {
+            Ok(ticket) => ticket,
+            Err(ClientError::Server { code, message, .. }) if code == "already_submitted" => {
+                return Err(SendError::MaybeSent(message));
+            }
+            Err(error) => return Err(not_sent(error)),
+        };
+        let (Some(jws), Some(jti)) = (ticket["ticket"].as_str(), ticket["jti"].as_str()) else {
+            return Err(SendError::NotSent(
+                "the server answered without a ticket".into(),
+            ));
+        };
+        open.until = Some(open_floor(&ticket, Utc::now()));
+        let envelope = seal::seal(&sealing_key, jti, xml)
+            .map_err(|error| SendError::NotSent(error.to_string()))?;
+        let submission = match self
+            .signed(
+                "POST",
+                "/api/v2/submissions",
+                &json!({ "ticket": jws, "envelope": envelope }),
+            )
+            .await
+        {
+            Ok(submission) => submission,
+            Err(error) => return Err(not_sent(error)),
+        };
+        let (Some(id), Some(relay_path)) =
+            (submission["id"].as_str(), submission["relay_path"].as_str())
+        else {
+            return Err(SendError::NotSent(
+                "the server answered without a submission".into(),
+            ));
+        };
+
+        let ended = self.relay_with(&list, relay_path).await.map_err(not_sent)?;
+        let mut relay_class = None;
+        let mut hold_until = None;
+        let mut held = false;
+        let touched;
+        let (ending, status, error, receipt_jws) = match ended {
+            Ended::Result {
+                status,
+                error,
+                receipt,
+                class,
+                hold,
+                opened,
+                path_down,
+            } => {
+                open.closed = matches!(status.as_str(), "failed" | "expired");
+                relay_class = class.as_deref().map(FailureClass::from_wire);
+                hold_until = hold.as_ref().and_then(|hold| hold.wait_until);
+                held = hold.is_some();
+                touched = Touched {
+                    opened,
+                    path_down,
+                    dropped: false,
+                };
+                (Ending::Result, status, error, receipt)
+            }
+            Ended::Dropped { opened, path_down } => {
+                touched = Touched {
+                    opened,
+                    path_down,
+                    dropped: true,
+                };
+                let ending = if opened {
+                    Ending::DroppedAfterOpening
+                } else {
+                    Ending::DroppedBeforeOpening
+                };
+                match self.authorized_get(&format!("/api/submissions/{id}")).await {
+                    Ok(view) => (
+                        ending,
+                        {
+                            let status = view["status"].as_str().unwrap_or("unknown");
+                            open.closed = matches!(status, "failed" | "expired");
+                            status.to_owned()
+                        },
+                        view["error"].as_str().map(str::to_owned),
+                        view["receipt_jws"].as_str().map(str::to_owned),
+                    ),
+                    Err(_) if !opened => (
+                        ending,
+                        "failed".to_owned(),
+                        Some("the connection ended before sending".into()),
+                        None,
+                    ),
+                    Err(_) => (
+                        ending,
+                        "unknown".to_owned(),
+                        Some("the connection ended during the send".into()),
+                        None,
+                    ),
+                }
+            }
+        };
+        let (receipt_jws, receipt) = outcome(ending, &status, error, receipt_jws, |receipt_jws| {
+            list.verify_receipt(receipt_jws, xml_sha256, Some(jti))
+        })
+        .map_err(|failure| relay_failure(failure, relay_class, held, hold_until, touched))?;
+        Ok(Sent {
+            submission_id: id.to_owned(),
+            receipt_jws,
+            receipt,
+        })
+    }
+
+    /// Opens the relay WebSocket for a submission and forwards, only to the
+    /// hosts of the verified trust list, until the server's result.
+    pub async fn relay(&self, relay_path: &str) -> Result<Ended, ClientError> {
+        let list = self.trust_list().await?;
+        self.relay_with(&list, relay_path).await
+    }
+
+    async fn relay_with(&self, list: &TrustList, relay_path: &str) -> Result<Ended, ClientError> {
+        let device_id = self.ensure_device().await?;
+        let key = self.device_key()?;
+        let access_token = self.tokens.access_token(false).await?;
+        let url = self.url(relay_path).replacen("http", "ws", 1);
+        let mut request = url
+            .into_client_request()
+            .map_err(|error| ClientError::Other(error.to_string()))?;
+        let headers = request.headers_mut();
+        let mut put = |name: &'static str, value: String| -> Result<(), ClientError> {
+            let value = value
+                .parse()
+                .map_err(|_| ClientError::Other(format!("bad {name} header")))?;
+            headers.insert(name, value);
+            Ok(())
+        };
+        put("authorization", format!("Bearer {access_token}"))?;
+        put(CLIENT_HEADER, self.client())?;
+        put(HEADER_DEVICE, device_id)?;
+        for (name, value) in key.sign("GET", relay_path, b"", device::now(), &device::nonce()) {
+            put(name, value)?;
+        }
+        let (socket, _) = tokio::time::timeout(
+            RELAY_CONNECT_TIMEOUT,
+            tokio_tungstenite::connect_async(request),
+        )
+        .await
+        .map_err(|_| ClientError::Network("the relay did not answer in time".into()))?
+        .map_err(|error| match error {
+            tokio_tungstenite::tungstenite::Error::Http(response) => ClientError::Server {
+                status: response.status().as_u16(),
+                code: "relay_refused".into(),
+                message: format!("the server refused the relay ({})", response.status()),
+            },
+            other => ClientError::Network(other.to_string()),
+        })?;
+        Ok(pipe::serve(socket, list).await)
+    }
+}
+
+/// How the relay ended, for [`outcome`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Ending {
+    /// The server delivered its `result` over the socket.
+    Result,
+    /// The socket closed before any connection toward BIR was made; the
+    /// status was read back from the server.
+    DroppedBeforeOpening,
+    /// The socket closed after the relay had opened a connection toward
+    /// BIR; the status was read back from the server.
+    DroppedAfterOpening,
+}
+
+/// What a send's final status means. `verify` checks a receipt and runs
+/// only for `sent` or `dry_run` with one. Once the relay had opened toward
+/// BIR and dropped, a status read back at that moment may not record the
+/// upload yet, so only an explicit `failed` is not sent.
+fn outcome<R, E: std::fmt::Display>(
+    ending: Ending,
+    status: &str,
+    error: Option<String>,
+    receipt_jws: Option<String>,
+    verify: impl FnOnce(&str) -> Result<R, E>,
+) -> Result<(String, R), SendError> {
+    match (status, receipt_jws) {
+        ("sent" | "dry_run", Some(receipt_jws)) => match verify(&receipt_jws) {
+            Ok(receipt) => Ok((receipt_jws, receipt)),
+            Err(error) => Err(SendError::MaybeSent(format!(
+                "the server reports the return sent, but its receipt does not check out ({error}); check for BIR's confirmation email"
+            ))),
+        },
+        ("expired" | "ready", _) if ending == Ending::DroppedAfterOpening => Err(SendError::MaybeSent(format!(
+            "the connection ended after the relay opened toward BIR, and the server still reports the return {status}; BIR may have received this return; check for its confirmation email before sending again"
+        ))),
+        ("failed" | "expired" | "ready", _) => {
+            Err(SendError::NotSent(error.unwrap_or_else(|| "the server did not send the return".into())))
+        }
+        _ => Err(SendError::MaybeSent(error.unwrap_or_else(|| {
+            "BIR may have received this return; check for its confirmation email before sending again".into()
+        }))),
+    }
+}
+
+/// What the app saw of its own connections toward the BIR during a send.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Touched {
+    /// Some connection opened: the BIR was reached, whatever the class says.
+    opened: bool,
+    /// Every connection the app attempted failed on the way in.
+    path_down: bool,
+    /// The relay's socket ended without a result.
+    dropped: bool,
+}
+
+/// The BIR's front desk (the dispatcher) failed to answer: the try never got
+/// past it.
+fn front_desk_failed(reason: &str) -> bool {
+    let reason = reason.to_ascii_lowercase();
+    [
+        "dispatcher did not answer",
+        "dispatcher request failed",
+        "dispatcher answered",
+    ]
+    .iter()
+    .any(|text| reason.contains(text))
+}
+
+/// The BIR has no upload service for this TIN (the dispatcher's mode 0).
+pub fn no_service_reason(reason: &str) -> bool {
+    reason
+        .to_ascii_lowercase()
+        .contains("no upload server for this tin")
+}
+
+/// A refused login after the upload stream opened: the relay's own words
+/// ("SFTP login was refused"), not any text that mentions a login.
+fn login_refused(reason: &str) -> bool {
+    reason.to_ascii_lowercase().contains("login was refused")
+}
+
+/// What a relay that ended without a receipt means for the queue.
+///
+/// - A maybe-sent outcome stays maybe sent, whatever else is said.
+/// - A refusal code (`tin_*`, `account_banned`) or `return_mismatch` always
+///   wins: not sent, final, whatever class the relay gave.
+/// - A hold, or class `ours` when NO stream opened, is not a try: nothing
+///   touched the BIR. If any stream opened it is a counted failure whatever
+///   its class, and nothing decides that from `class` or `bir`.
+/// - A counted failure is blamed on the way in (every open the app attempted
+///   was refused, or the front desk failed) or on the return (no upload
+///   service, a refused login), else on the upload.
+fn relay_failure(
+    failure: SendError,
+    class: Option<FailureClass>,
+    held: bool,
+    wait_until: Option<DateTime<Utc>>,
+    touched: Touched,
+) -> SendError {
+    let SendError::NotSent(reason) = failure else {
+        return failure;
+    };
+    if is_final_reason(&reason) {
+        return SendError::NotSent(reason);
+    }
+    let wait_until = wait_until.map(|until| capped_wait_until(until, Utc::now()));
+    if held {
+        return SendError::NotATry { reason, wait_until };
+    }
+    if no_service_reason(&reason) {
+        return SendError::Counted {
+            reason,
+            blame: Blame::NoService,
+        };
+    }
+    let blame = if touched.path_down || (!touched.opened && front_desk_failed(&reason)) {
+        Blame::Path
+    } else if !touched.opened && touched.dropped {
+        // The pipe to Buwiz broke before any connection toward the BIR
+        // opened: nothing touched the BIR.
+        return SendError::NotATry { reason, wait_until };
+    } else if touched.opened && login_refused(&reason) {
+        Blame::Return
+    } else if touched.opened || class != Some(FailureClass::Ours) {
+        Blame::Upload
+    } else {
+        return SendError::NotATry { reason, wait_until };
+    };
+    SendError::Counted { reason, blame }
+}
+
+impl Submitter {
+    /// The JSON body of a 2xx answer, or the server's `{"error":{…}}`. A
+    /// `bir` object in the body (the server's BIR sign) is ignored.
+    async fn ok_json<T: serde::de::DeserializeOwned>(
+        &self,
+        response: reqwest::Response,
+    ) -> Result<T, ClientError> {
+        let status = response.status();
+        if status.is_success() {
+            return response
+                .json()
+                .await
+                .map_err(|error| ClientError::Other(format!("unreadable answer: {error}")));
+        }
+        let retry_after = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.trim().parse::<i64>().ok());
+        let body: Value = response.json().await.unwrap_or_default();
+        Err(server_error(
+            status.as_u16(),
+            retry_after,
+            &body,
+            Utc::now(),
+        ))
+    }
+}
+
+/// The error a non-2xx answer with `body` stands for. A hold code or class
+/// `ours` is [`ClientError::NotATry`], with the body's `wait_until`, else
+/// `Retry-After` (the header, then the body's `retry_after`) from `now`.
+fn server_error(
+    status: u16,
+    retry_after: Option<i64>,
+    body: &Value,
+    now: DateTime<Utc>,
+) -> ClientError {
+    let (code, message) = error_code_and_message(status, body);
+    let error = &body["error"];
+    let class = error
+        .get("class")
+        .or_else(|| body.get("class"))
+        .and_then(Value::as_str);
+    let ours = class.map(FailureClass::from_wire) == Some(FailureClass::Ours);
+    // A refusal code always wins over class: a TIN refusal or a mismatch is
+    // final, whoever says it failed.
+    let final_code = TinRefusal::from_code(&code).is_some() || code == crate::wire::RETURN_MISMATCH;
+    if final_code || !(is_hold_code(&code) || is_limit_code(&code) || ours) {
+        return ClientError::Server {
+            status,
+            code,
+            message,
+        };
+    }
+    let wait_until = error
+        .get("wait_until")
+        .and_then(Value::as_str)
+        .and_then(crate::wire::parse_time)
+        .or_else(|| {
+            retry_after
+                .or_else(|| error.get("retry_after").and_then(Value::as_i64))
+                .filter(|seconds| *seconds >= 0)
+                .map(|seconds| {
+                    now + chrono::Duration::seconds(seconds.min(crate::wire::MAX_SERVER_WAIT_S))
+                })
+        })
+        .map(|until| capped_wait_until(until, now));
+    ClientError::NotATry {
+        status,
+        code,
+        message,
+        wait_until,
+    }
+}
+
+fn error_code_and_message(status: u16, body: &Value) -> (String, String) {
+    match &body["error"] {
+        Value::Object(error) => (
+            error
+                .get("code")
+                .and_then(Value::as_str)
+                .unwrap_or("error")
+                .to_owned(),
+            error
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("the server refused")
+                .to_owned(),
+        ),
+        Value::String(code) => (
+            code.clone(),
+            body["error_description"]
+                .as_str()
+                .unwrap_or(code)
+                .to_owned(),
+        ),
+        _ => ("error".to_owned(), format!("the server answered {status}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_names_split_into_ticket_fields() {
+        let name =
+            FileName::parse("00012345300000-1701Qv2018-2026Q1#juana@example.com#.xml").unwrap();
+        assert_eq!(name.tin, "00012345300000");
+        assert_eq!(
+            (name.form.as_str(), name.period.as_str()),
+            ("1701Qv2018", "2026Q1")
+        );
+        assert_eq!(name.email, "juana@example.com");
+        assert_eq!(
+            FileName::parse("00012345300000-1701Qv2018-2026Q1.xml"),
+            None
+        );
+        assert_eq!(FileName::parse("0001-1701Qv2018-2026Q1#a@b.c#.xml"), None);
+    }
+
+    #[test]
+    fn the_server_url_must_be_https_or_this_machine() {
+        let url = |text: &str| SubmitConfig::new(text).map(|config| config.server_url);
+        assert_eq!(url(DEFAULT_SERVER_URL).unwrap(), DEFAULT_SERVER_URL);
+        assert_eq!(
+            url("http://localhost:3008/").unwrap(),
+            "http://localhost:3008"
+        );
+        assert_eq!(url(" http://127.0.0.1:9 ").unwrap(), "http://127.0.0.1:9");
+        assert_eq!(url("http://[::1]:3008").unwrap(), "http://[::1]:3008");
+        assert_eq!(url("https://lab.example/").unwrap(), "https://lab.example");
+        for refused in [
+            "http://buwiz.example",
+            "http://localhost.example:3008",
+            "ftp://localhost",
+            "",
+        ] {
+            assert!(
+                matches!(url(refused), Err(ClientError::Other(_))),
+                "{refused:?}"
+            );
+        }
+        let config = SubmitConfig::new(DEFAULT_SERVER_URL).unwrap();
+        assert_eq!(
+            config.device_name,
+            format!("eBIRForms on {}", std::env::consts::OS)
+        );
+        assert_eq!(config.trust_keys, trust::pinned_keys());
+    }
+
+    /// What `outcome` answers, as a word: sent, not sent or maybe sent.
+    fn decided(ending: Ending, status: &str, receipt: Option<&str>) -> &'static str {
+        let verify = |jws: &str| {
+            if jws == "good" {
+                Ok(())
+            } else {
+                Err("bad signature")
+            }
+        };
+        match outcome(ending, status, None, receipt.map(str::to_owned), verify) {
+            Ok(_) => "sent",
+            Err(SendError::NotSent(_)) => "not sent",
+            Err(SendError::MaybeSent(_)) => "maybe sent",
+            Err(SendError::NotATry { .. }) => "not a try",
+            Err(SendError::Counted { .. }) => "counted",
+        }
+    }
+
+    /// RELAY-PROTOCOL.md §6: only `failed` says nothing reached BIR. Once
+    /// the relay had opened toward BIR and dropped, a `ready` or `expired`
+    /// read back may only mean the server has not recorded the upload yet.
+    #[test]
+    fn every_final_status_maps_to_one_outcome() {
+        use Ending::{
+            DroppedAfterOpening as Opened, DroppedBeforeOpening as Before, Result as Res,
+        };
+        let rows: [(&str, Option<&str>, [&str; 3]); 9] = [
+            ("sent", Some("good"), ["sent", "sent", "sent"]),
+            ("dry_run", Some("good"), ["sent", "sent", "sent"]),
+            (
+                "sent",
+                Some("forged"),
+                ["maybe sent", "maybe sent", "maybe sent"],
+            ),
+            ("sent", None, ["maybe sent", "maybe sent", "maybe sent"]),
+            ("failed", None, ["not sent", "not sent", "not sent"]),
+            ("expired", None, ["not sent", "not sent", "maybe sent"]),
+            ("ready", None, ["not sent", "not sent", "maybe sent"]),
+            ("unknown", None, ["maybe sent", "maybe sent", "maybe sent"]),
+            (
+                "uploading",
+                None,
+                ["maybe sent", "maybe sent", "maybe sent"],
+            ),
+        ];
+        for (status, receipt, want) in rows {
+            for (ending, want) in [Res, Before, Opened].into_iter().zip(want) {
+                assert_eq!(
+                    decided(ending, status, receipt),
+                    want,
+                    "{ending:?}, {status}, receipt {receipt:?}"
+                );
+            }
+        }
+    }
+
+    /// After the relay opened and dropped, a `ready` or `expired` tells the
+    /// person BIR may have the return, not the server's own error.
+    #[test]
+    fn a_dropped_relay_that_opened_says_bir_may_have_the_return() {
+        for status in ["ready", "expired"] {
+            let answer = outcome(
+                Ending::DroppedAfterOpening,
+                status,
+                Some("the ticket expired".into()),
+                None,
+                |_: &str| Ok::<(), String>(()),
+            );
+            let Err(SendError::MaybeSent(message)) = answer else {
+                panic!("{status}: {answer:?}");
+            };
+            assert!(
+                message.contains("BIR may have received this return"),
+                "{message}"
+            );
+            assert!(message.contains("confirmation email"), "{message}");
+        }
+    }
+
+    /// The server's error and the verifier's text pass through as before.
+    #[test]
+    fn outcome_messages_are_unchanged_where_the_outcome_is() {
+        let message = |answer: Result<(String, ()), SendError>| match answer {
+            Err(SendError::NotSent(message) | SendError::MaybeSent(message)) => message,
+            Err(SendError::NotATry { reason, .. } | SendError::Counted { reason, .. }) => reason,
+            Ok(_) => panic!("sent"),
+        };
+        let ok = |_: &str| Ok::<(), String>(());
+        for ending in [
+            Ending::Result,
+            Ending::DroppedBeforeOpening,
+            Ending::DroppedAfterOpening,
+        ] {
+            assert_eq!(
+                message(outcome(
+                    ending,
+                    "failed",
+                    Some("no ticket".into()),
+                    None,
+                    ok
+                )),
+                "no ticket"
+            );
+            assert_eq!(
+                message(outcome(ending, "failed", None, None, ok)),
+                "the server did not send the return"
+            );
+            assert_eq!(
+                message(outcome(
+                    ending,
+                    "unknown",
+                    Some("the connection ended during the send".into()),
+                    None,
+                    ok
+                )),
+                "the connection ended during the send"
+            );
+            assert_eq!(
+                message(outcome(ending, "unknown", None, None, ok)),
+                "BIR may have received this return; check for its confirmation email before sending again"
+            );
+            assert_eq!(
+                message(outcome(
+                    ending,
+                    "sent",
+                    None,
+                    Some("x".into()),
+                    |_: &str| Err::<(), _>("bad signature")
+                )),
+                "the server reports the return sent, but its receipt does not check out (bad signature); check for BIR's confirmation email"
+            );
+        }
+        for ending in [Ending::Result, Ending::DroppedBeforeOpening] {
+            assert_eq!(
+                message(outcome(
+                    ending,
+                    "expired",
+                    Some("the ticket expired".into()),
+                    None,
+                    ok
+                )),
+                "the ticket expired"
+            );
+            assert_eq!(
+                message(outcome(ending, "ready", None, None, ok)),
+                "the server did not send the return"
+            );
+        }
+    }
+
+    const TIN_CODES: [&str; 7] = [
+        "tin_not_active",
+        "tin_unverified",
+        "tin_pending",
+        "tin_needs_fix",
+        "tin_paused",
+        "tin_test_only",
+        "account_banned",
+    ];
+
+    /// A ticket refusal reaches the worker as `ClientError::Server`'s text,
+    /// which keeps the code for the one decoder.
+    #[test]
+    fn a_ticket_refusal_keeps_its_code_in_the_text() {
+        for code in TIN_CODES {
+            let error = ClientError::Server {
+                status: 403,
+                code: code.into(),
+                message: "Some sentence (with brackets) the server chose.".into(),
+            };
+            let text = error.to_string();
+            assert!(text.ends_with(&format!("({code})")), "{text}");
+            let refusal = TinRefusal::from_reason(&text).expect(code);
+            assert_eq!(refusal.code(), code);
+            assert_eq!(error.tin_refusal(), Some(refusal));
+            let not_sent = SendError::NotSent(format!("Not sent (nothing reached BIR): {text}"));
+            assert_eq!(not_sent.refusal(), Some(refusal));
+        }
+        let other = ClientError::Server {
+            status: 409,
+            code: "already_submitted".into(),
+            message: "x".into(),
+        };
+        assert_eq!(other.tin_refusal(), None);
+        assert_eq!(
+            ClientError::Network("tin_not_active".into()).tin_refusal(),
+            None
+        );
+    }
+
+    /// The relay may end `failed` with a TIN code when the TIN stopped
+    /// being sendable after the ticket: nothing reached BIR, the same
+    /// refusal. A maybe-sent text with a code is never one.
+    #[test]
+    fn a_relay_failed_with_a_tin_code_is_a_refusal() {
+        let ok = |_: &str| Ok::<(), String>(());
+        for ending in [
+            Ending::Result,
+            Ending::DroppedBeforeOpening,
+            Ending::DroppedAfterOpening,
+        ] {
+            let error = Some(
+                "Sending is paused for this TIN. Write to support@buwiz.com. (tin_paused)"
+                    .to_owned(),
+            );
+            let Err(failure) = outcome(ending, "failed", error, None, ok) else {
+                panic!("a failed relay is not sent");
+            };
+            assert!(matches!(failure, SendError::NotSent(_)), "{failure:?}");
+            assert_eq!(failure.refusal(), Some(TinRefusal::Paused));
+        }
+        let maybe =
+            SendError::MaybeSent("the connection ended during the send (tin_paused)".into());
+        assert_eq!(maybe.refusal(), None);
+        assert_eq!(
+            SendError::NotSent("the relay closed early (relay_closed)".into()).refusal(),
+            None
+        );
+    }
+
+    /// A good receipt comes back with its JWS; `verify` runs only for one.
+    #[test]
+    fn outcome_verifies_only_a_sent_receipt() {
+        let answer = outcome(
+            Ending::Result,
+            "dry_run",
+            None,
+            Some("jws".into()),
+            |jws: &str| Ok::<_, String>(jws.len()),
+        );
+        assert_eq!(answer.unwrap(), ("jws".to_owned(), 3));
+        let answer = outcome(
+            Ending::Result,
+            "failed",
+            None,
+            Some("jws".into()),
+            |_: &str| -> Result<(), String> { panic!("verified a failed send's receipt") },
+        );
+        assert!(matches!(answer, Err(SendError::NotSent(_))));
+    }
+
+    // ------------------------------------------ the host's sign-in
+
+    /// A signed call asks the host for a token once; after a 401
+    /// `invalid_token` once more with `force_refresh`, and only once.
+    #[tokio::test]
+    async fn the_token_is_asked_again_with_force_refresh_after_invalid_token() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, seen) = serve(|request| match request.header("authorization") {
+            Some("Bearer a2") => Answer::json(200, &json!({"ok": true})),
+            _ => Answer::json(
+                401,
+                &json!({"error": {"code": "invalid_token", "message": "expired"}}),
+            ),
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        assert_eq!(
+            client
+                .signed("POST", "/api/tickets", &json!({}))
+                .await
+                .unwrap(),
+            json!({"ok": true})
+        );
+        assert_eq!(tokens.asked(), [false, true]);
+        assert_eq!(seen.lock().unwrap().len(), 2);
+
+        let (url, seen) = serve(|_| {
+            Answer::json(
+                401,
+                &json!({"error": {"code": "invalid_token", "message": "expired"}}),
+            )
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        let error = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, ClientError::Server { status: 401, code, .. } if code == "invalid_token"),
+            "{error:?}"
+        );
+        assert_eq!(tokens.asked(), [false, true], "refreshed once, not again");
+        assert_eq!(seen.lock().unwrap().len(), 2);
+
+        // A plain call is asked once, never forced.
+        let (url, _) = serve(|_| Answer::json(200, &json!({"ok": true})));
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap();
+        assert_eq!(tokens.asked(), [false]);
+    }
+
+    /// The host's `SignedOut` is the call's, and nothing is asked of the
+    /// server; a send signed out is not a try.
+    #[tokio::test]
+    async fn the_hosts_signed_out_surfaces_as_signed_out() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, seen) = serve(|_| Answer::json(200, &json!({"id": "d2"})));
+        let (client, _) = submitter_tokens(&url, false, Vec::new());
+        let error = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ClientError::SignedOut), "{error:?}");
+        assert!(matches!(
+            client.bearer_get("/api/tax-profiles").await,
+            Err(ClientError::SignedOut)
+        ));
+        assert!(seen.lock().unwrap().is_empty());
+        assert!(error.is_not_a_try());
+    }
+
+    /// `403 device_revoked`: the device is forgotten, the host told the
+    /// sign-in ended, and the sentence is the one before.
+    #[tokio::test]
+    async fn a_revoked_device_is_forgotten_and_the_session_ended() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, _) = serve(|_| {
+            Answer::json(
+                403,
+                &json!({"error": {"code": "device_revoked", "message": "revoked"}}),
+            )
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        client.device_key().unwrap();
+        assert!(client.store.get(DEVICE_KEY).unwrap().is_some());
+        let error = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "This device was removed from your Buwiz account. Sign in again to send returns."
+        );
+        assert!(matches!(error, ClientError::DeviceRevoked), "{error:?}");
+        assert!(error.is_not_a_try(), "nothing reached the BIR");
+        assert_eq!(tokens.ended(), 1);
+        assert_eq!(client.store.get(DEVICE_KEY).unwrap(), None);
+        assert_eq!(client.store.get(DEVICE_ID).unwrap(), None);
+        assert_eq!(client.login(), None, "the host signed out");
+    }
+
+    /// `401 unknown_device` (the device is another sign-in's): the device
+    /// is forgotten, a new key registered once and the call made once more.
+    #[tokio::test]
+    async fn an_unknown_device_registers_a_new_key_and_tries_once_more() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let unknown = || {
+            Answer::json(
+                401,
+                &json!({"error": {"code": "unknown_device", "message": "who?"}}),
+            )
+        };
+        let (url, seen) =
+            serve(
+                move |request| match (request.path.as_str(), request.header(HEADER_DEVICE)) {
+                    ("/api/devices", _) => Answer::json(200, &json!({"id": "d2"})),
+                    ("/api/tickets", Some("d2")) => Answer::json(200, &json!({"ok": true})),
+                    _ => unknown(),
+                },
+            );
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        let old_key = client.device_key().unwrap().public_key();
+        assert_eq!(
+            client
+                .signed("POST", "/api/tickets", &json!({}))
+                .await
+                .unwrap(),
+            json!({"ok": true})
+        );
+        let paths: Vec<(String, Option<String>)> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|request| {
+                (
+                    request.path.clone(),
+                    request.header(HEADER_DEVICE).map(str::to_owned),
+                )
+            })
+            .collect();
+        assert_eq!(
+            paths,
+            [
+                ("/api/tickets".to_owned(), Some("d".to_owned())),
+                ("/api/devices".to_owned(), None),
+                ("/api/tickets".to_owned(), Some("d2".to_owned())),
+            ]
+        );
+        assert_eq!(client.store.get(DEVICE_ID).unwrap().as_deref(), Some("d2"));
+        assert_ne!(
+            client.device_key().unwrap().public_key(),
+            old_key,
+            "a new key"
+        );
+        assert_eq!(tokens.ended(), 0, "not a sign-out");
+
+        // A second `unknown_device` is the answer: registered once, not again.
+        let (url, seen) = serve(move |request| match request.path.as_str() {
+            "/api/devices" => Answer::json(200, &json!({"id": "d2"})),
+            _ => unknown(),
+        });
+        let (client, _) = submitter_tokens(&url, true, Vec::new());
+        let error = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, ClientError::Server { status: 401, code, .. } if code == "unknown_device"),
+            "{error:?}"
+        );
+        let paths: Vec<String> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|request| request.path.clone())
+            .collect();
+        assert_eq!(paths, ["/api/tickets", "/api/devices", "/api/tickets"]);
+    }
+
+    // ----------------------------------------------- the version header
+
+    #[tokio::test]
+    async fn every_request_names_the_app_and_its_version() {
+        use crate::testkit::{Answer, serve, submitter};
+        let (url, seen) = serve(|_| {
+            Answer::json(
+                404,
+                &json!({"error": {"code": "not_found", "message": "no such route"}}),
+            )
+        });
+        let client = submitter(&url, true, Vec::new());
+        let desktop = format!("buwiz-forms/{}", env!("CARGO_PKG_VERSION"));
+        assert_eq!(client.client(), desktop);
+        let _ = client.trust_list().await;
+        let _ = client.bearer_get("/api/tax-profiles").await;
+        client.set_client("mini", "0.5.0");
+        let _ = client.signed("POST", "/api/tickets", &json!({})).await;
+        client.set_client("mini app", "0.5.0");
+        assert_eq!(
+            client.client(),
+            "mini-app/0.5.0",
+            "a space is cleaned, not refused"
+        );
+        client.set_client("mini", "0.5.0\r\nx-evil: 1");
+        assert_eq!(
+            client.client(),
+            "mini/0.5.0--x-evil--1",
+            "no control character reaches a header"
+        );
+        client.set_client("", "");
+        assert_eq!(client.client(), "app/0");
+        client.set_client("mini", "0.5.0");
+        let seen = seen.lock().unwrap().clone();
+        assert_eq!(
+            seen.iter()
+                .map(|request| request.method.as_str())
+                .collect::<Vec<_>>(),
+            ["GET", "GET", "POST"]
+        );
+        let agent = format!(
+            "buwiz-forms/{} ({})",
+            env!("CARGO_PKG_VERSION"),
+            std::env::consts::OS
+        );
+        assert!(
+            seen.iter()
+                .all(|request| request.header("user-agent") == Some(agent.as_str()))
+        );
+        let labels: Vec<(&str, Option<&str>)> = seen
+            .iter()
+            .map(|request| (request.path.as_str(), request.header(CLIENT_HEADER)))
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                ("/.well-known/buwiz-trust.json", Some(desktop.as_str())),
+                ("/api/tax-profiles", Some(desktop.as_str())),
+                ("/api/tickets", Some("mini/0.5.0")),
+            ]
+        );
+    }
+
+    // ------------------------------------------------------- the holds
+
+    fn hold(status: u16, retry_after: Option<i64>, fixture: &str) -> ClientError {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-11-11T09:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        server_error(
+            status,
+            retry_after,
+            &crate::testkit::fixture_json(fixture),
+            now,
+        )
+    }
+
+    /// The public contract (`docs/bir-uptime.md` in `buwiz-com/buwiz-com`): every hold is not a try, keeps its code in its
+    /// text, and carries `wait_until` (the body's, else `Retry-After`).
+    #[test]
+    fn the_holds_of_api_5_2_and_10_are_not_tries() {
+        let at = |text: &str| Some(crate::wire::parse_time(text).unwrap());
+        let offline = hold(503, Some(841), "contract-hold-bir-offline.json");
+        let ClientError::NotATry {
+            status,
+            code,
+            wait_until,
+            ..
+        } = &offline
+        else {
+            panic!("{offline:?}")
+        };
+        assert_eq!((*status, code.as_str()), (503, "bir_offline"));
+        assert_eq!(
+            *wait_until,
+            at("2026-11-11T09:13:41Z"),
+            "the body's exact time"
+        );
+        assert!(offline.to_string().ends_with("(bir_offline)"));
+        assert!(offline.is_not_a_try());
+        assert_eq!(offline.tin_refusal(), None);
+
+        let busy = hold(503, Some(600), "contract-hold-bir-busy.json");
+        assert_eq!(
+            busy.wait_until(),
+            at("2026-11-11T09:10:00Z"),
+            "Retry-After from now"
+        );
+        assert!(busy.is_not_a_try());
+
+        let paused = hold(503, None, "contract-error-relay-paused.json");
+        assert!(
+            matches!(&paused, ClientError::NotATry { code, wait_until: None, .. } if code == "relay_paused")
+        );
+
+        let restarting = server_error(
+            503,
+            Some(30),
+            &json!({"error": {"code": "restarting", "message": "Buwiz is restarting."}}),
+            Utc::now(),
+        );
+        assert!(restarting.is_not_a_try());
+        assert!(restarting.wait_until().is_some());
+
+        let internal = hold(500, None, "contract-error-internal-ours.json");
+        assert!(
+            matches!(&internal, ClientError::NotATry { code, .. } if code == "internal"),
+            "class ours"
+        );
+
+        // Everything else stays a server error, as before.
+        for (status, body) in [
+            (
+                403,
+                json!({"error": {"code": "tin_not_active", "message": "x"}}),
+            ),
+            (
+                503,
+                json!({"error": {"code": "a_code_from_the_future", "message": "x"}}),
+            ),
+            (
+                500,
+                json!({"error": {"code": "internal", "class": "bir", "message": "x"}}),
+            ),
+            (
+                400,
+                json!({"error": "invalid_grant", "error_description": "x"}),
+            ),
+        ] {
+            let error = server_error(status, Some(10), &body, Utc::now());
+            assert!(matches!(error, ClientError::Server { .. }), "{body}");
+            assert!(!error.is_not_a_try());
+        }
+        assert!(ClientError::SignedOut.is_not_a_try());
+        assert!(ClientError::Network("refused".into()).is_not_a_try());
+        assert!(!ClientError::Other("Can't send: no list.".into()).is_not_a_try());
+        // A Retry-After that makes no sense is no time.
+        let silly = server_error(
+            503,
+            Some(-5),
+            &json!({"error": {"code": "bir_busy"}}),
+            Utc::now(),
+        );
+        assert_eq!(silly.wait_until(), None);
+    }
+
+    /// A relay refusal carrying class `ours` still goes by its code: a TIN
+    /// refusal or a mismatch is final, and 429 limits are not tries but
+    /// honour `Retry-After` (up to 7 days).
+    #[test]
+    fn a_refusal_code_wins_over_class_ours_and_a_429_is_not_a_try() {
+        for code in [
+            "tin_not_active",
+            "tin_needs_fix",
+            "account_banned",
+            "return_mismatch",
+        ] {
+            let body = json!({"error": {"code": code, "class": "ours", "message": "x"}});
+            for status in [403, 409, 500, 503] {
+                let error = server_error(status, Some(60), &body, Utc::now());
+                assert!(
+                    matches!(error, ClientError::Server { .. }),
+                    "{code} {status}: {error:?}"
+                );
+            }
+        }
+        let now = Utc::now();
+        for code in ["rate_limited", "quota_exceeded", "try_anyway_limited"] {
+            let body = json!({"error": {"code": code, "message": "x"}});
+            let error = server_error(429, Some(600), &body, now);
+            assert!(error.is_not_a_try(), "{code}");
+            assert_eq!(
+                error.wait_until(),
+                Some(now + chrono::Duration::seconds(600))
+            );
+        }
+        let body = json!({"error": {"code": "rate_limited", "message": "x"}});
+        let year = server_error(429, Some(365 * 86_400), &body, now);
+        assert_eq!(
+            year.wait_until(),
+            Some(now + chrono::Duration::days(7)),
+            "beyond 7 days reads as 7 days"
+        );
+        let far = json!({"error": {"code": "bir_busy", "wait_until": "2099-01-01T00:00:00Z", "message": "x"}});
+        assert_eq!(
+            server_error(503, None, &far, now).wait_until(),
+            Some(now + chrono::Duration::days(7))
+        );
+    }
+
+    /// Nothing decides a resend from `class`: a result is not a try only
+    /// when no stream opened.
+    #[test]
+    fn a_relay_failure_is_not_a_try_only_when_nothing_opened() {
+        let wait = Some(Utc::now());
+        let failed = |text: &str| SendError::NotSent(text.into());
+        let none = Touched::default();
+        let opened = Touched {
+            opened: true,
+            ..none
+        };
+        let down = Touched {
+            path_down: true,
+            ..none
+        };
+        let dropped = Touched {
+            dropped: true,
+            ..none
+        };
+        let ours = Some(FailureClass::Ours);
+
+        // Class ours, nothing opened: not a try. A hold is, whatever opened.
+        assert_eq!(
+            relay_failure(failed("held"), ours, false, wait, none),
+            SendError::NotATry {
+                reason: "held".into(),
+                wait_until: wait
+            }
+        );
+        assert!(matches!(
+            relay_failure(failed("held"), None, true, wait, opened),
+            SendError::NotATry { .. }
+        ));
+        // Class ours, a stream opened: a counted failure.
+        assert_eq!(
+            relay_failure(failed("write failed"), ours, false, wait, opened),
+            SendError::Counted {
+                reason: "write failed".into(),
+                blame: Blame::Upload
+            }
+        );
+        // Other classes, nothing opened and nothing known: the old reading.
+        for class in [
+            None,
+            Some(FailureClass::Bir),
+            Some(FailureClass::UserNetwork),
+        ] {
+            assert_eq!(
+                relay_failure(failed("x"), class, false, None, none),
+                SendError::Counted {
+                    reason: "x".into(),
+                    blame: Blame::Upload
+                }
+            );
+        }
+        // The way in down, whatever the class says: the path.
+        for class in [ours, None] {
+            assert_eq!(
+                relay_failure(failed("could not reach BIR"), class, false, None, down),
+                SendError::Counted {
+                    reason: "could not reach BIR".into(),
+                    blame: Blame::Path
+                }
+            );
+        }
+        let desk = "BIR's dispatcher did not answer: tls://x: dispatcher request failed";
+        assert!(matches!(
+            relay_failure(failed(desk), None, false, None, none),
+            SendError::Counted {
+                blame: Blame::Path,
+                ..
+            }
+        ));
+        // A refused login after the stream opened is the return's own.
+        assert!(matches!(
+            relay_failure(failed("the login was refused"), None, false, None, opened),
+            SendError::Counted {
+                blame: Blame::Return,
+                ..
+            }
+        ));
+        // No upload service for the TIN.
+        let none_for_tin = "dispatcher has no upload server for this TIN (mode 0)";
+        assert!(matches!(
+            relay_failure(failed(none_for_tin), None, false, None, none),
+            SendError::Counted {
+                blame: Blame::NoService,
+                ..
+            }
+        ));
+        // A pipe that broke before anything opened touched nothing.
+        assert!(matches!(
+            relay_failure(
+                failed("the connection ended before sending"),
+                None,
+                false,
+                None,
+                dropped
+            ),
+            SendError::NotATry { .. }
+        ));
+        // A refusal code or a mismatch wins over class and over a hold.
+        for text in [
+            "no (tin_not_active)",
+            "no (account_banned)",
+            "no (return_mismatch)",
+        ] {
+            for (class, held) in [(ours, false), (ours, true), (None, false)] {
+                assert_eq!(
+                    relay_failure(failed(text), class, held, wait, none),
+                    failed(text),
+                    "{text}"
+                );
+            }
+        }
+        // Maybe sent stays maybe sent, whatever the class.
+        let maybe = SendError::MaybeSent("the connection ended during the send".into());
+        assert_eq!(relay_failure(maybe.clone(), ours, true, wait, none), maybe);
+        assert_eq!(
+            SendError::NotATry {
+                reason: "x (tin_not_active)".into(),
+                wait_until: None
+            }
+            .refusal(),
+            None
+        );
+    }
+
+    /// The relay's real failure texts, each pinned to its blame. They come
+    /// from `src/bir/dispatcher.rs`, `src/bir/sftp.rs` and `src/bir/mod.rs`
+    /// in `buwiz-com/buwiz-com`. `None` is not a try. The upload server's
+    /// texts are written without their leading protocol name ("SFTP login
+    /// was refused" is "login was refused" here): the repo's secrets check
+    /// keeps that word out of code, and the matching never reads it.
+    #[test]
+    fn every_relay_failure_text_has_its_blame() {
+        let none = Touched::default();
+        let opened = Touched {
+            opened: true,
+            ..none
+        };
+        let ours = Some(FailureClass::Ours);
+        let rows: [(&str, Touched, Option<FailureClass>, Option<Blame>); 14] = [
+            // The front desk did not answer: the way in.
+            (
+                "dispatcher request failed: connection reset",
+                none,
+                None,
+                Some(Blame::Path),
+            ),
+            ("dispatcher answered 502", none, None, Some(Blame::Path)),
+            (
+                "BIR's dispatcher did not answer: tls://example.test:1: timed out",
+                none,
+                None,
+                Some(Blame::Path),
+            ),
+            // It answered, and the answer was the fault: not the way in.
+            (
+                "dispatcher answer was not understood: bad frame",
+                none,
+                ours,
+                None,
+            ),
+            (
+                "dispatcher answer was not understood: bad frame",
+                none,
+                None,
+                Some(Blame::Upload),
+            ),
+            (
+                "the dispatcher named an unknown upload server: example.test:22",
+                none,
+                ours,
+                None,
+            ),
+            (
+                "the dispatcher named an unknown upload server: example.test:22",
+                none,
+                None,
+                Some(Blame::Upload),
+            ),
+            (
+                "dispatcher has no upload server for this TIN (mode 0)",
+                none,
+                None,
+                Some(Blame::NoService),
+            ),
+            // After a stream opened.
+            ("login was refused", opened, None, Some(Blame::Return)),
+            (
+                "SSH failed: connection reset",
+                opened,
+                None,
+                Some(Blame::Upload),
+            ),
+            (
+                "failed before the upload started: no such file",
+                opened,
+                None,
+                Some(Blame::Upload),
+            ),
+            (
+                "failed during the upload: broken pipe",
+                opened,
+                None,
+                Some(Blame::Upload),
+            ),
+            (
+                "timed out before the upload started",
+                opened,
+                None,
+                Some(Blame::Upload),
+            ),
+            (
+                "the server's host key is not pinned (SHA256:abc)",
+                opened,
+                ours,
+                Some(Blame::Upload),
+            ),
+        ];
+        for (text, touched, class, want) in rows {
+            let got = relay_failure(SendError::NotSent(text.into()), class, false, None, touched);
+            match (want, got) {
+                (Some(blame), SendError::Counted { blame: got, .. }) => {
+                    assert_eq!(got, blame, "{text}")
+                }
+                (None, SendError::NotATry { .. }) => {}
+                (want, got) => panic!("{text}: wanted {want:?}, got {got:?}"),
+            }
+        }
+        for text in [
+            "dispatcher answer was not understood: x",
+            "the dispatcher named an unknown upload server: x",
+            "login was refused",
+            "SSH failed: x",
+        ] {
+            assert!(
+                !front_desk_failed(text),
+                "{text} is not the way in being down"
+            );
+        }
+        // A transient BIR error that merely says "login" is not the return's.
+        for text in [
+            "BIR login page is down",
+            "authentication service busy",
+            "permission denied by a proxy",
+        ] {
+            let got = relay_failure(SendError::NotSent(text.into()), None, false, None, opened);
+            assert!(
+                matches!(
+                    got,
+                    SendError::Counted {
+                        blame: Blame::Upload,
+                        ..
+                    }
+                ),
+                "{text}: {got:?}"
+            );
+        }
+        assert!(no_service_reason(
+            "dispatcher has no upload server for this TIN (mode 0)"
+        ));
+        assert!(login_refused("The Login Was Refused"));
+    }
+
+    /// End to end on loopback: a held ticket comes back as not a try with
+    /// the hold's time; the hold's sign (`bir` in the body) is ignored.
+    #[tokio::test]
+    async fn a_held_ticket_is_not_sent_and_not_a_try() {
+        use crate::testkit::{Answer, fixture_json, serve, submitter, trust_documents};
+        let (public, jws, sealing) = trust_documents(&["127.0.0.1:9"]);
+        let (url, seen) = serve(move |request| match request.path.as_str() {
+            "/.well-known/buwiz-trust.json" => Answer {
+                status: 200,
+                headers: Vec::new(),
+                body: jws.clone(),
+            },
+            "/.well-known/buwiz-hpke.json" => Answer {
+                status: 200,
+                headers: Vec::new(),
+                body: sealing.clone(),
+            },
+            "/api/tickets" => Answer::json(503, &fixture_json("contract-hold-bir-offline.json"))
+                .with("retry-after", "841")
+                .with("buwiz-bir", "v=1, seq=4100, state=offline"),
+            _ => Answer::json(
+                404,
+                &json!({"error": {"code": "not_found", "message": "x"}}),
+            ),
+        });
+        let client = submitter(&url, true, vec![public]);
+        let sent = client
+            .send(
+                "00000000000000-1601Cv2018-102026#juana@example.test#.xml",
+                b"<xml/>",
+            )
+            .await;
+        let Err(SendError::NotATry { reason, wait_until }) = sent else {
+            panic!("{sent:?}")
+        };
+        assert!(reason.ends_with("(bir_offline)"), "{reason}");
+        assert_eq!(wait_until, crate::wire::parse_time("2026-11-11T09:13:41Z"));
+        let seen = seen.lock().unwrap();
+        assert!(seen.iter().any(|request| request.path == "/api/tickets"));
+        assert!(
+            !seen
+                .iter()
+                .any(|request| request.path == "/api/v2/submissions"),
+            "no submission after a hold"
+        );
+        assert!(
+            seen.iter()
+                .all(|request| request.header(CLIENT_HEADER).is_some())
+        );
+    }
+
+    /// Nothing reachable at all: not a try, never a counted failure.
+    #[tokio::test]
+    async fn an_unreachable_server_is_not_a_try() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        drop(listener);
+        let client = crate::testkit::submitter(&url, true, Vec::new());
+        let sent = client
+            .send(
+                "00000000000000-1601Cv2018-102026#juana@example.test#.xml",
+                b"<xml/>",
+            )
+            .await;
+        assert!(
+            matches!(
+                sent,
+                Err(SendError::NotATry {
+                    wait_until: None,
+                    ..
+                })
+            ),
+            "{sent:?}"
+        );
+    }
+
+    // ------------------------------------------- an open submission's floor
+
+    use crate::testkit::{Answer, Seen, serve, submitter, trust_documents};
+
+    const RETURN: &str = "00000000000000-1601Cv2018-102026#juana@example.test#.xml";
+
+    /// A loopback server that gives a ticket (expiring 300 s out), then
+    /// answers the submission, the relay and the read-back as told.
+    fn filing(
+        submission: Answer,
+        relay: Answer,
+        read_back: Answer,
+    ) -> (Submitter, std::sync::Arc<Mutex<Vec<Seen>>>, i64) {
+        let (public, jws, sealing) = trust_documents(&["127.0.0.1:9"]);
+        let expires_at = Utc::now().timestamp() + 300;
+        let (url, seen) = serve(move |request| match request.path.as_str() {
+            "/.well-known/buwiz-trust.json" => Answer {
+                status: 200,
+                headers: Vec::new(),
+                body: jws.clone(),
+            },
+            "/.well-known/buwiz-hpke.json" => Answer {
+                status: 200,
+                headers: Vec::new(),
+                body: sealing.clone(),
+            },
+            "/api/tickets" => Answer::json(
+                200,
+                &json!({"ticket": "a.b.c", "jti": "jti-1", "expires_at": expires_at}),
+            ),
+            "/api/v2/submissions" => submission.clone(),
+            "/relay/s1" => relay.clone(),
+            "/api/submissions/s1" => read_back.clone(),
+            _ => Answer::json(
+                404,
+                &json!({"error": {"code": "not_found", "message": "x"}}),
+            ),
+        });
+        (submitter(&url, true, vec![public]), seen, expires_at)
+    }
+
+    fn created() -> Answer {
+        Answer::json(200, &json!({"id": "s1", "relay_path": "/relay/s1"}))
+    }
+
+    fn count(seen: &std::sync::Arc<Mutex<Vec<Seen>>>) -> usize {
+        seen.lock().unwrap().len()
+    }
+
+    fn tickets(seen: &std::sync::Arc<Mutex<Vec<Seen>>>) -> usize {
+        seen.lock()
+            .unwrap()
+            .iter()
+            .filter(|request| request.path == "/api/tickets")
+            .count()
+    }
+
+    /// The floor: the ticket's expiry plus 30 s.
+    fn floor(expires_at: i64) -> DateTime<Utc> {
+        DateTime::from_timestamp(expires_at + 30, 0).unwrap()
+    }
+
+    /// The first send ended not sent while the server may hold the
+    /// submission open: it waits for the ticket's expiry plus 30 s, and an
+    /// immediate second send makes no request at all.
+    async fn waits_for_the_floor(
+        client: &Submitter,
+        seen: &std::sync::Arc<Mutex<Vec<Seen>>>,
+        expires_at: i64,
+    ) {
+        let before = count(seen);
+        let second = client.send(RETURN, b"<xml/>").await;
+        let Err(SendError::NotATry { reason, wait_until }) = second else {
+            panic!("{second:?}")
+        };
+        assert!(reason.contains("still open on the server"), "{reason}");
+        assert!(wait_until.unwrap() >= floor(expires_at));
+        assert_eq!(count(seen), before, "no request while the last try is open");
+    }
+
+    #[tokio::test]
+    async fn a_submission_post_that_dies_in_transport_waits_for_the_ticket_to_expire() {
+        let (client, seen, expires_at) =
+            filing(Answer::hang_up(), Answer::hang_up(), Answer::hang_up());
+        let first = client.send(RETURN, b"<xml/>").await;
+        let Err(SendError::NotATry { wait_until, .. }) = first else {
+            panic!("{first:?}")
+        };
+        assert!(
+            wait_until.unwrap() >= floor(expires_at),
+            "the queue stores the floor"
+        );
+        assert!(
+            seen.lock()
+                .unwrap()
+                .iter()
+                .any(|request| request.path == "/api/v2/submissions")
+        );
+        waits_for_the_floor(&client, &seen, expires_at).await;
+        assert_eq!(tickets(&seen), 1);
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_submission_answer_waits_for_the_ticket_to_expire() {
+        let garbled = Answer {
+            status: 200,
+            headers: Vec::new(),
+            body: "not json".into(),
+        };
+        let (client, seen, expires_at) = filing(garbled, Answer::hang_up(), Answer::hang_up());
+        let first = client.send(RETURN, b"<xml/>").await;
+        assert!(matches!(first, Err(SendError::NotSent(_))), "{first:?}");
+        waits_for_the_floor(&client, &seen, expires_at).await;
+    }
+
+    #[tokio::test]
+    async fn a_relay_that_cannot_be_opened_waits_for_the_ticket_to_expire() {
+        // Hung up: the app could not open the socket.
+        let (client, seen, expires_at) = filing(created(), Answer::hang_up(), Answer::hang_up());
+        let first = client.send(RETURN, b"<xml/>").await;
+        let Err(SendError::NotATry { wait_until, .. }) = first else {
+            panic!("{first:?}")
+        };
+        assert!(wait_until.unwrap() >= floor(expires_at));
+        waits_for_the_floor(&client, &seen, expires_at).await;
+        // Refused with an HTTP answer: not sent, and the same floor.
+        let refused = Answer::json(
+            403,
+            &json!({"error": {"code": "forbidden", "message": "x"}}),
+        );
+        let (client, seen, expires_at) = filing(created(), refused, Answer::hang_up());
+        let first = client.send(RETURN, b"<xml/>").await;
+        assert!(matches!(first, Err(SendError::NotSent(_))), "{first:?}");
+        waits_for_the_floor(&client, &seen, expires_at).await;
+    }
+
+    #[tokio::test]
+    async fn a_relay_that_dropped_before_opening_with_the_submission_ready_keeps_the_floor() {
+        let ready = Answer::json(200, &json!({"status": "ready"}));
+        let (client, seen, expires_at) = filing(created(), Answer::relay(&[]), ready);
+        let first = client.send(RETURN, b"<xml/>").await;
+        let Err(SendError::NotATry { wait_until, .. }) = first else {
+            panic!("{first:?}")
+        };
+        assert!(wait_until.unwrap() >= floor(expires_at));
+        waits_for_the_floor(&client, &seen, expires_at).await;
+        // Its status cannot be read back: the same.
+        let (client, seen, expires_at) = filing(created(), Answer::relay(&[]), Answer::hang_up());
+        let first = client.send(RETURN, b"<xml/>").await;
+        assert!(matches!(first, Err(SendError::NotATry { .. })), "{first:?}");
+        waits_for_the_floor(&client, &seen, expires_at).await;
+    }
+
+    #[tokio::test]
+    async fn a_failed_or_expired_submission_leaves_no_floor() {
+        let results = [
+            Answer::relay(&[
+                r#"{"type":"result","status":"failed","error":"the BIR's mailbox did not answer","receipt":null,"class":"bir"}"#,
+            ]),
+            Answer::relay(&[
+                r#"{"type":"result","status":"expired","error":"the ticket expired","receipt":null}"#,
+            ]),
+            Answer::relay(&[
+                r#"{"type":"result","status":"failed","error":"held","receipt":null,"class":"ours","hold":{"code":"bir_offline"}}"#,
+            ]),
+        ];
+        for relay in results {
+            let (client, seen, _) = filing(created(), relay, Answer::hang_up());
+            let first = client.send(RETURN, b"<xml/>").await;
+            assert!(first.is_err(), "{first:?}");
+            let second = client.send(RETURN, b"<xml/>").await;
+            assert!(
+                !matches!(&second, Err(SendError::NotATry { reason, .. }) if reason.contains("still open")),
+                "{second:?}"
+            );
+            assert_eq!(tickets(&seen), 2, "the second send asked for a ticket");
+        }
+        // A dropped relay whose status reads back failed.
+        for status in ["failed", "expired"] {
+            let (client, seen, _) = filing(
+                created(),
+                Answer::relay(&[]),
+                Answer::json(200, &json!({"status": status})),
+            );
+            let _ = client.send(RETURN, b"<xml/>").await;
+            let _ = client.send(RETURN, b"<xml/>").await;
+            assert_eq!(tickets(&seen), 2, "{status}");
+        }
+    }
+
+    #[tokio::test]
+    async fn already_submitted_is_still_maybe_sent() {
+        let (public, jws, sealing) = trust_documents(&["127.0.0.1:9"]);
+        let (url, _) = serve(move |request| match request.path.as_str() {
+            "/.well-known/buwiz-trust.json" => Answer {
+                status: 200,
+                headers: Vec::new(),
+                body: jws.clone(),
+            },
+            "/.well-known/buwiz-hpke.json" => Answer {
+                status: 200,
+                headers: Vec::new(),
+                body: sealing.clone(),
+            },
+            _ => Answer::json(
+                409,
+                &json!({"error": {"code": "already_submitted", "message": "Already submitted."}}),
+            ),
+        });
+        let client = submitter(&url, true, vec![public]);
+        let sent = client.send(RETURN, b"<xml/>").await;
+        assert!(
+            matches!(&sent, Err(SendError::MaybeSent(message)) if message == "Already submitted."),
+            "{sent:?}"
+        );
+    }
+
+    /// A maybe-sent or a success clears the floor; a floor with no ticket
+    /// behind it never exists.
+    #[test]
+    fn a_maybe_sent_clears_the_floor() {
+        let client = submitter("http://127.0.0.1:9", false, Vec::new());
+        let later = Utc::now() + chrono::Duration::seconds(300);
+        let open = || OpenTry {
+            until: Some(later),
+            closed: false,
+        };
+        let kept = client.settle("k", Err(SendError::NotSent("x".into())), open());
+        assert!(matches!(kept, Err(SendError::NotSent(_))));
+        assert_eq!(client.open_floor_for("k", Utc::now()), Some(later));
+        let maybe = client.settle("k", Err(SendError::MaybeSent("x".into())), open());
+        assert!(matches!(maybe, Err(SendError::MaybeSent(_))));
+        assert_eq!(client.open_floor_for("k", Utc::now()), None);
+        client
+            .settle("k", Err(SendError::NotSent("x".into())), open())
+            .ok();
+        client
+            .settle(
+                "k",
+                Err(SendError::NotSent("y".into())),
+                OpenTry {
+                    until: Some(later),
+                    closed: true,
+                },
+            )
+            .ok();
+        assert_eq!(
+            client.open_floor_for("k", Utc::now()),
+            None,
+            "a closed submission frees the key"
+        );
+        // Before a ticket there is nothing to hold.
+        client
+            .settle(
+                "k",
+                Err(SendError::NotATry {
+                    reason: "x".into(),
+                    wait_until: None,
+                }),
+                OpenTry::default(),
+            )
+            .ok();
+        assert_eq!(client.open_floor_for("k", Utc::now()), None);
+    }
+
+    #[test]
+    fn the_floor_is_the_expiry_plus_30_s_else_330_s_and_never_beyond_15_minutes() {
+        let now = Utc::now();
+        let at = |seconds: i64| (now + chrono::Duration::seconds(seconds)).timestamp();
+        assert_eq!(
+            open_floor(&json!({"expires_at": at(300)}), now).timestamp(),
+            at(330)
+        );
+        for odd in [
+            json!({}),
+            json!({"expires_at": "soon"}),
+            json!({"expires_at": null}),
+        ] {
+            assert_eq!(open_floor(&odd, now), now + chrono::Duration::seconds(330));
+        }
+        assert_eq!(
+            open_floor(&json!({"expires_at": at(86_400)}), now).timestamp(),
+            at(900)
+        );
+    }
+}
