@@ -1183,7 +1183,7 @@
     },
     {
      "no": "4",
-     "l": "Item 4 (add more...): more than four employers. Row 4_1 is the employer in Item 4; Item 4 then reads OTHERS with these rows' subtotal",
+     "l": "Additional employers (more than three). The first row is the employer in Item 4; when you add more, Item 4 prints OTHERS with the subtotal of these rows.",
      "p": 2,
      "cols": [
       {

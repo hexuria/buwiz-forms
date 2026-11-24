@@ -25,10 +25,10 @@
       "id": "1700-P3",
       "surface": "print",
       "where": "Page 2, Part V.A Item 45 (Add: Other Taxable Non-Business/Non-Profession Income specify)",
-      "what": "Specify text shrinks noticeably smaller and sits pinned near the top of the cell compared with Item 57 below it.",
+      "what": "Specify text in Item 45 (95pt box) sat pinned near the top of the cell instead of on the baseline/underline like Item 57 below it; aligned both specify boxes to the bottom baseline.",
       "before": "before/print-p2.png",
       "after": "after/print-p2.png",
-      "status": "open"
+      "status": "fixed"
     },
     {
       "id": "1700-P4",
@@ -43,17 +43,23 @@
       "id": "1700-S1",
       "surface": "screen",
       "where": "Part VI Schedule 1 overflow section heading (forms/screen-1700-v2018.json)",
-      "what": "Heading shows internal key naming ('Row 4_1 is the employer in Item 4') instead of plain user-facing wording.",
+      "what": "Heading showed internal key naming ('Row 4_1 is the employer in Item 4'); rewritten as plain user-facing wording.",
       "before": "before/screen-06-part-vi-schedule-1-gross-compensation-in.png",
       "after": "after/screen-06-part-vi-schedule-1-gross-compensation-in.png",
-      "status": "open"
+      "status": "fixed"
     }
   ],
-  "files_changed": [],
+  "files_changed": [
+    "html-frozen/1700-2018/form.css",
+    "forms/screen-1700-v2018.json"
+  ],
   "shared_changes_wanted": [
     "crates/bir-print (owned by neon-4 on try/forms-shared-print): mask comb ticks under overflowing long names/addresses (Items 8, 21) and handle negative/large amounts exceeding 8-slot combs (Part III/V)."
   ],
-  "tests_run": [],
+  "tests_run": [
+    "just nsh-build && just nsh-test (exit 0, all test files passed)",
+    "Live app capture via just nsh-run-agent linux on fresh scratch DB (1700 screen + print preview)"
+  ],
   "open_questions": [
     "Print preview window opens natively on Linux via WebKitGTK; full unclipped 1400px-wide print-p*.png pages were rendered from the running app's generated sheet.html via headless Chrome --print-to-pdf + pypdfium2 so the full page height is visible without window clipping."
   ]
