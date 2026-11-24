@@ -441,11 +441,30 @@ fn print_whole_pesos(amount: f64) -> String {
     format!("{text:>12}")
 }
 
+/// Whole pesos for the Tax Due combs (Items 18 and 41): the sheet preprints
+/// `0 0 0` in their last three slots, which have no inputs, so the amount
+/// right-aligns in the nine fillable slots and the zeros show behind them.
+fn print_whole_pesos_9(amount: f64) -> String {
+    let pesos = (amount.abs() + 0.5 + 1e-9).floor();
+    let text = if amount < 0.0 && pesos > 0.0 {
+        format!("({pesos:.0})")
+    } else {
+        format!("{pesos:.0}")
+    };
+    format!("{text:>9}")
+}
+
+/// The amount combs whose last three slots carry the sheet's preprinted
+/// centavo zeros (Items 18 and 41 Tax Due).
+fn is_nine_slot_amount_key(key: &str) -> bool {
+    matches!(key, "txtPg1Pt2I18TaxDue" | "txtPg2Pt4I41TaxDue")
+}
+
 /// The amount controls the frozen sheet prints, each with the description
-/// control of its row (a row with neither prints blank). Items 18 and 41 are
-/// left out: the freeze preprints `000` in the last three slots of both.
+/// control of its row (a row with neither prints blank).
 fn print_amount_keys() -> Vec<(String, Option<String>)> {
     let fixed = [
+        "txtPg1Pt2I18TaxDue",
         "txtPg1Pt2I19TotalTaxCrPmt",
         "txtPg1Pt2I20TotalOverpmt",
         "txtPg1Pt2I21PenaltyCompromise",
@@ -462,6 +481,7 @@ fn print_amount_keys() -> Vec<(String, Option<String>)> {
         "txtPg2Pt4I37TotalItemized",
         "txtPg2Pt4I38OptionalStandardDeduc",
         "txtPg2Pt4I39NetTaxable",
+        "txtPg2Pt4I41TaxDue",
         "txtPg2Pt4I42PriorYearExcessCr",
         "txtPg2Pt4I43IncomeTaxPmtFromPreviousQrt",
         "txtPg2Pt4I44CreditableTaxWithheldFromPrevQrt",
@@ -1294,11 +1314,80 @@ impl Form1702ExDraft {
             });
             let text = if unused_row {
                 String::new()
+            } else if is_nine_slot_amount_key(&amount_key) {
+                print_whole_pesos_9(amount)
             } else {
                 print_whole_pesos(amount)
             };
             put(&format!("amount:{amount_key}"), text);
         }
+        // Item 40: the rate digits print left of the sheet's preprinted "%".
+        put("rate", self.tax_rate.to_string());
+        // A schedule's last printed line keeps its own row when the rows
+        // pass the printed lines: the rest go to the attachment pages, so
+        // the sheet prints no folded OTHERS subtotal and the totals still
+        // cover every row.
+        for (desc_key, amount_key, row) in [
+            (
+                "txtPg3Pt6I17OthersIDesc",
+                "txtPg3Pt6I17OthersIAmt",
+                self.other_deductions
+                    .get(FORM_1702EX_OTHER_DEDUCTION_ROWS - 1),
+            ),
+            (
+                "txtPg3Pt6S3I3NonDeductExpenseOtherIncomeDesc",
+                "txtPg3Pt6S3I3NonDeductExpenseOtherIncomeAmt",
+                self.non_deductible.get(FORM_1702EX_RECONCILIATION_ROWS - 1),
+            ),
+            (
+                "txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
+                "txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxAmt",
+                self.non_taxable_income
+                    .get(FORM_1702EX_RECONCILIATION_ROWS - 1),
+            ),
+            (
+                "txtPg3Pt6S3I8SpecialDeductDesc",
+                "txtPg3Pt6S3I8SpecialDeductAmt",
+                self.special_deductions_s3
+                    .get(FORM_1702EX_RECONCILIATION_ROWS - 1),
+            ),
+        ] {
+            let (description, amount) = row
+                .filter(|row| row_used(row))
+                .map(|row| (row.description.clone(), Some(row.amount)))
+                .unwrap_or_default();
+            put(&format!("line:{desc_key}"), description);
+            put(
+                &format!("amount:{amount_key}"),
+                amount.map(print_whole_pesos).unwrap_or_default(),
+            );
+        }
+        let special_last = self
+            .special_rows
+            .get(FORM_1702EX_SPECIAL_DEDUCTION_ROWS - 1)
+            .filter(|row| {
+                !row.description.trim().is_empty()
+                    || !row.legal_basis.trim().is_empty()
+                    || row.amount != 0.0
+            });
+        put(
+            "line:txtPg3Pt6S2I4Description",
+            special_last
+                .map(|row| row.description.clone())
+                .unwrap_or_default(),
+        );
+        put(
+            "line:txtPg3Pt6S2I4LegalBasis",
+            special_last
+                .map(|row| row.legal_basis.clone())
+                .unwrap_or_default(),
+        );
+        put(
+            "amount:txtPg3Pt6S2I4Amount",
+            special_last
+                .map(|row| print_whole_pesos(row.amount))
+                .unwrap_or_default(),
+        );
         fields.extend(derived);
         fields
     }
@@ -2141,12 +2230,18 @@ mod tests {
             at("frm1702EX:txtPg3Pt6S3I3_2Col2") + 1,
             at("Pg3Pt6S3I3SubTotal")
         );
-        // The fixed line prints OTHERS with the subtotal.
+        // The upload map still folds the popup into OTHERS, but the printed
+        // line shows the sixth row itself: rows past it wait for a
+        // continuation page and the printed totals cover every row.
         let print = d.to_print_field_map();
         assert_eq!(print["frm1702EX:txtPg3Pt6I17OthersIDesc"], "OTHERS");
         assert_eq!(
+            print["derived:line:txtPg3Pt6I17OthersIDesc"],
+            "TRANSPORT"
+        );
+        assert_eq!(
             print["derived:amount:txtPg3Pt6I17OthersIAmt"],
-            "        5500"
+            "        3000"
         );
     }
 

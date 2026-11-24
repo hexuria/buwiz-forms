@@ -6688,9 +6688,13 @@ mod tests {
                 "{unchecked}"
             );
         }
-        // Items 18 and 41 (freeze preprints 000), signatory and Part III stay blank.
-        assert_eq!(comb_text(&html, "p1c75"), "");
-        assert_eq!(comb_text(&html, "p2c38"), "");
+        // Items 18 and 41 print a 0 tax due in their nine fillable slots,
+        // leaving the sheet's preprinted centavo zeros in the last three;
+        // Item 40 prints the 0 rate digits left of the preprinted "%".
+        assert_eq!(comb_text(&html, "p1c75"), "        0");
+        assert_eq!(comb_text(&html, "p2c38"), "        0");
+        assert_eq!(named_values(&html, "p2c36a"), vec!["0".to_string()]);
+        // Signatory and Part III stay blank.
         assert_eq!(comb_text(&html, "p1c116"), "");
         assert!(!html.contains("name=\"frm1702EX:"));
     }

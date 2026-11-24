@@ -1,7 +1,7 @@
 {
  "form_id": "1702ex-v2018c",
  "html_slug": "1702ex-2018",
- "rule": "Fill-path only, mapped by sheet geometry: each join targets the single fillable cell whose printed caption (from the frozen page's own text layer) names the item. The sheet prints whole pesos ('DO NOT enter Centavos') in 12-slot combs with no centavo comb, so every amount prints from a derived:amount: key of to_print_field_map: the writer's amount rounded to whole pesos (50 centavos or more round up), right-aligned, a loss or overpayment in parentheses; description rows nobody filled print blank. Year Ended, the incorporation and effectivity dates, the registered name and address lines (38/38 and 38/38/30 slots), the attachment count and the 9-digit page 2/3 TIN combs are also derived: keys (never submitted). The sheet preprints the branch code as 00000 on all three pages (no fillable cells), so a non-zero branch code does not print. Booleans fill X in the box left of the printed option. Long descriptions are cut at the comb width; the submitted XML always carries the full text. Not joined (blank on print): Item 18 Tax Due (p1c75) and Item 41 Tax Due (p2c38), because the frozen sheet preprints 0 0 0 in the last three of their twelve slots and leaves only nine fillable, so a right-aligned amount would read a thousand times larger (a defect of the freeze, not of the form); Item 40 Tax Rate (the sheet has no fillable cell for it), the signature and Title of Signatory/TIN cells, and Part III Details of Payment (the model does not hold them). Add More popup rows beyond the fixed rows are not modeled. Since #113 every value the print map carries has a box or a reviewed not_joined reason (the raw controls behind each derived: key are listed there).",
+ "rule": "Fill-path only, mapped by sheet geometry: each join targets the single fillable cell whose printed caption (from the frozen page's own text layer) names the item. The sheet prints whole pesos ('DO NOT enter Centavos') in 12-slot combs with no centavo comb, so every amount prints from a derived:amount: key of to_print_field_map: the writer's amount rounded to whole pesos (50 centavos or more round up), right-aligned, a loss or overpayment in parentheses; description rows nobody filled print blank. Year Ended, the incorporation and effectivity dates, the registered name and address lines (38/38 and 38/38/30 slots), the attachment count and the 9-digit page 2/3 TIN combs are also derived: keys (never submitted). The sheet preprints the branch code as 00000 on all three pages (no fillable cells), so a non-zero branch code does not print. Booleans fill X in the box left of the printed option. Long descriptions are cut at the comb width; the submitted XML always carries the full text. Items 18 and 41 Tax Due print whole pesos right-aligned in the nine fillable slots of their twelve-slot combs; the sheet preprints 0 0 0 in the last three slots and the print map spaces them out (p1c75, p2c38). Item 40 Tax Rate prints in a small fillable cell (p2c36a) left of the sheet's preprinted %. A schedule row that lands on the last printed line shows its own row (a derived:line:/derived:amount: pair): rows past the printed lines go to the attachment pages, so no line prints a folded OTHERS subtotal while the totals cover every row. Not joined (blank on print): the signature and Title of Signatory/TIN cells, and Part III Details of Payment (the model does not hold them). Add More popup rows beyond the fixed rows are not modeled. Since #113 every value the print map carries has a box or a reviewed not_joined reason (the raw controls behind each derived: key are listed there).",
  "joins": [
   {
    "writer_key": "derived:year_end_mm1",
@@ -568,10 +568,10 @@
    "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML; whole pesos (the sheet says DO NOT enter Centavos; 49 centavos or less drop down, 50 or more round up), right-aligned in the 12-slot comb"
   },
   {
-   "writer_key": "frm1702EX:txtPg3Pt6I17OthersIDesc",
+   "writer_key": "derived:line:txtPg3Pt6I17OthersIDesc",
    "html_id": "p3c72",
    "printed": "Schedule 1 Item 17i description",
-   "reason": "geometry: the only fillable cell for this printed item on the 1702-EX (January 2018) sheet"
+   "reason": "print-only value from the model row on the last printed line: rows past the printed lines go to the attachment pages, so the line shows its own row, never a folded OTHERS subtotal"
   },
   {
    "writer_key": "derived:amount:txtPg3Pt6I17OthersIAmt",
@@ -640,16 +640,16 @@
    "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML; whole pesos (the sheet says DO NOT enter Centavos; 49 centavos or less drop down, 50 or more round up), right-aligned in the 12-slot comb"
   },
   {
-   "writer_key": "frm1702EX:txtPg3Pt6S2I4Description",
+   "writer_key": "derived:line:txtPg3Pt6S2I4Description",
    "html_id": "p3c93",
    "printed": "Schedule 2 Item 4 Description",
-   "reason": "geometry: the only fillable cell for this printed item on the 1702-EX (January 2018) sheet"
+   "reason": "print-only value from the model row on the last printed line: rows past the printed lines go to the attachment pages, so the line shows its own row, never a folded OTHERS subtotal"
   },
   {
-   "writer_key": "frm1702EX:txtPg3Pt6S2I4LegalBasis",
+   "writer_key": "derived:line:txtPg3Pt6S2I4LegalBasis",
    "html_id": "p3c94",
    "printed": "Schedule 2 Item 4 Legal Basis",
-   "reason": "geometry: the only fillable cell for this printed item on the 1702-EX (January 2018) sheet"
+   "reason": "print-only value from the model row on the last printed line: rows past the printed lines go to the attachment pages, so the line shows its own row, never a folded OTHERS subtotal"
   },
   {
    "writer_key": "derived:amount:txtPg3Pt6S2I4Amount",
@@ -682,10 +682,10 @@
    "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML; whole pesos (the sheet says DO NOT enter Centavos; 49 centavos or less drop down, 50 or more round up), right-aligned in the 12-slot comb"
   },
   {
-   "writer_key": "frm1702EX:txtPg3Pt6S3I3NonDeductExpenseOtherIncomeDesc",
+   "writer_key": "derived:line:txtPg3Pt6S3I3NonDeductExpenseOtherIncomeDesc",
    "html_id": "p3c107",
    "printed": "Schedule 3 Item 3 description",
-   "reason": "geometry: the only fillable cell for this printed item on the 1702-EX (January 2018) sheet"
+   "reason": "print-only value from the model row on the last printed line: rows past the printed lines go to the attachment pages, so the line shows its own row, never a folded OTHERS subtotal"
   },
   {
    "writer_key": "derived:amount:txtPg3Pt6S3I3NonDeductExpenseOtherIncomeAmt",
@@ -706,10 +706,10 @@
    "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML; whole pesos (the sheet says DO NOT enter Centavos; 49 centavos or less drop down, 50 or more round up), right-aligned in the 12-slot comb"
   },
   {
-   "writer_key": "frm1702EX:txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
+   "writer_key": "derived:line:txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
    "html_id": "p3c118",
    "printed": "Schedule 3 Item 6 description",
-   "reason": "geometry: the only fillable cell for this printed item on the 1702-EX (January 2018) sheet"
+   "reason": "print-only value from the model row on the last printed line: rows past the printed lines go to the attachment pages, so the line shows its own row, never a folded OTHERS subtotal"
   },
   {
    "writer_key": "derived:amount:txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxAmt",
@@ -730,10 +730,10 @@
    "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML; whole pesos (the sheet says DO NOT enter Centavos; 49 centavos or less drop down, 50 or more round up), right-aligned in the 12-slot comb"
   },
   {
-   "writer_key": "frm1702EX:txtPg3Pt6S3I8SpecialDeductDesc",
+   "writer_key": "derived:line:txtPg3Pt6S3I8SpecialDeductDesc",
    "html_id": "p3c127",
    "printed": "Schedule 3 Item 8 description",
-   "reason": "geometry: the only fillable cell for this printed item on the 1702-EX (January 2018) sheet"
+   "reason": "print-only value from the model row on the last printed line: rows past the printed lines go to the attachment pages, so the line shows its own row, never a folded OTHERS subtotal"
   },
   {
    "writer_key": "derived:amount:txtPg3Pt6S3I8SpecialDeductAmt",
@@ -758,6 +758,24 @@
    "html_id": "p3c133",
    "printed": "Schedule 3 Item 10 Net Taxable Income/(Loss)",
    "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML; whole pesos (the sheet says DO NOT enter Centavos; 49 centavos or less drop down, 50 or more round up), right-aligned in the 12-slot comb"
+  },
+  {
+   "writer_key": "derived:amount:txtPg1Pt2I18TaxDue",
+   "html_id": "p1c75",
+   "printed": "18 Tax Due (Item 16 multiply by Item 17) (To Part IV Item 41)",
+   "reason": "whole pesos right-aligned in the nine fillable slots; the sheet preprints 0 0 0 in the last three slots and the print map leaves them blank"
+  },
+  {
+   "writer_key": "derived:amount:txtPg2Pt4I41TaxDue",
+   "html_id": "p2c38",
+   "printed": "41 Tax Due (Item 39 Multiply by Item 40) (To Part II Item 18)",
+   "reason": "whole pesos right-aligned in the nine fillable slots; the sheet preprints 0 0 0 in the last three slots and the print map leaves them blank"
+  },
+  {
+   "writer_key": "derived:rate",
+   "html_id": "p2c36a",
+   "printed": "40 Tax Rate",
+   "reason": "the rate digits print left of the sheet's preprinted % in a small fillable cell added where the freeze's placeholder 0 sat"
   }
  ],
  "money_joins": [],
@@ -970,11 +988,11 @@
     "frm1702EX:txtPg1Pt2I18TaxDue",
     "frm1702EX:txtPg2Pt4I41TaxDue"
    ],
-   "reason": "Items 18 and 41 Tax Due: the frozen sheet preprints 0 0 0 in the last three of their twelve slots and leaves nine fillable, so a right-aligned amount would read a thousand times larger; printing them needs the freeze fixed in html-frozen/1702ex-2018/index.html (reported on #113)"
+   "reason": "Items 18 and 41 Tax Due print from derived:amount: keys: whole pesos right-aligned in the nine fillable slots; the sheet preprints 0 0 0 in the last three slots and the print map spaces them out"
   },
   {
    "writer_key": "frm1702EX:txtPg2Pt4I40TaxRate",
-   "reason": "Item 40 Tax Rate: the frozen sheet has no fillable cell for it"
+   "reason": "Item 40 Tax Rate prints from derived:rate: the digits sit left of the sheet's preprinted % in cell p2c36a"
   },
   {
    "writer_keys": [
@@ -1155,6 +1173,17 @@
     "frm1702EX:txtPg3Pt6S3I8_9Col2"
    ],
    "reason": "row of the '(more...)' popup (the schedule's last fixed line and every later row): the fixed line prints OTHERS with the popup subtotal, so the popup rows have no box of their own on the sheet"
+  },
+  {
+   "writer_keys": [
+    "frm1702EX:txtPg3Pt6I17OthersIDesc",
+    "frm1702EX:txtPg3Pt6S2I4Description",
+    "frm1702EX:txtPg3Pt6S2I4LegalBasis",
+    "frm1702EX:txtPg3Pt6S3I3NonDeductExpenseOtherIncomeDesc",
+    "frm1702EX:txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
+    "frm1702EX:txtPg3Pt6S3I8SpecialDeductDesc"
+   ],
+   "reason": "Upload-map fold values kept for the file map only; on the sheet each of these cells prints derived:line:<key> so the last printed line shows that row's own description instead of a folded OTHERS."
   }
  ]
 }

@@ -1,0 +1,84 @@
+{
+  "code": "1702EX",
+  "verdict": "tweak",
+  "summary": "FIXED on try/forms-macos-fix: Items 18/41 Tax Due and Item 40 Tax Rate now print (whole pesos beside the preprinted '000', '10' left of the preprinted '%'), and Schedules 1-3 print the first rows plus the true all-rows total with no folded or partial OTHERS line. Open: rows beyond each schedule's printed capacity still need the continuation pages (handed over), and the long registered name still clips on pages 2-3.",
+  "defects": [
+    {
+      "id": "EX1",
+      "status": "fixed",
+      "surface": "print",
+      "where": "Page 2 Item 41 Tax Due (and Page 1 Item 18 which copies it)",
+      "what": "Was: Tax Due never written; only the preprinted '0 0 0' showed. Now: '2 6 7 9 8 7 6' fills the nine fillable comb slots left of the preprinted '0 0 0' on both items. Root cause: cells p1c75/p2c38 are 12-slot combs whose last 3 slots are preprinted divs with no inputs, so a 12-char value triggered the overflow line and blanked everything; the map now emits a 9-char whole-pesos string (print_whole_pesos_9) via derived:amount: joins.",
+      "severity": "high",
+      "picture": "after/pdf-p2.png"
+    },
+    {
+      "id": "EX2",
+      "status": "fixed",
+      "surface": "print",
+      "where": "Page 2 Item 40 Tax Rate",
+      "what": "Was: only the preprinted '0%' showed. Now: '10' prints left of the preprinted '%'. Root cause: no cell existed for the digits (the '0' was a text-layer div); a new field cell p2c36a was added to index.html and joined to a new derived:rate key emitting tax_rate as a bare integer.",
+      "severity": "high",
+      "picture": "after/pdf-p2.png"
+    },
+    {
+      "id": "EX3",
+      "status": "fixed",
+      "surface": "print",
+      "where": "Page 3 Schedule 1 Item 17 rows d-i",
+      "what": "Was: 12 attached rows printed nowhere and row i showed a partial 'OTHERS' figure so the printed total (21,704,926) disagreed with the data. Now: rows d-i print stored rows 0-5 with their own descriptions and amounts (row i = 'JANITORIAL AND MESSENGERIAL SERVICES TO OUTSOURCED PROVIDERS' 887,654), no fold, and Item 18 prints the true total 23,398,874. Rows 6-16 still await continuation pages (see EX8).",
+      "severity": "high",
+      "picture": "after/pdf-p3.png"
+    },
+    {
+      "id": "EX4",
+      "status": "fixed",
+      "surface": "print",
+      "where": "Page 3 Schedule 2 rows 1-4; Schedule 3 rows 3, 6, 8 ('OTHERS')",
+      "what": "Was: overflow rows collapsed into a partial 'OTHERS' line (Schedule 2 showed 511,110 for 4 of 5 rows) and printed totals disagreed with stored data. Now: the last printed line of each schedule shows that line's real row (S2 row 4 = 'EXEMPT ACTIVITY CLASSIFICATION ROW 1' / 'LEGAL BASIS REFERENCE 1' / 111,111; S3 line rows = 'RECONCILIATION ITEM FAM3/6/8 ROW 1' / 23,333 each) and totals are true sums of ALL rows: S1 23,398,874, S2 666,665, S3 item 4 4,243,563, item 9 1,410,206, item 10 2,833,357.",
+      "severity": "high",
+      "picture": "after/pdf-p3.png"
+    },
+    {
+      "id": "EX5",
+      "status": "open",
+      "surface": "print",
+      "where": "Pages 2-3 header 'Registered Name'",
+      "what": "The 57-char name is still clipped mid-word at the right edge ('...CONCEPCION DELA C') with no wrap or shrink. Not part of this fix.",
+      "severity": "medium",
+      "picture": "after/pdf-p2.png"
+    },
+    {
+      "id": "EX6",
+      "status": "open",
+      "surface": "print",
+      "where": "Page 1 Item 8 Registered Name",
+      "what": "The name wraps mid-word between comb lines ('JUANA M' / 'ARIA CONCEPCION DELA CRUZ'). Inherent to one-letter-per-box combs; noted, not counted as a fault.",
+      "severity": "low",
+      "picture": "after/pdf-p1.png"
+    },
+    {
+      "id": "EX7",
+      "status": "open",
+      "surface": "screen",
+      "where": "Form nav, Schedule 1 Item 17 attached rows",
+      "what": "Some attached rows show only the description in the row label (no amount) even though the amount is stored - cosmetic inconsistency in the list, data itself is intact. Screen-side, not in this print fix.",
+      "severity": "low",
+      "picture": "after/pdf-p3.png"
+    },
+    {
+      "id": "EX8",
+      "status": "handed over",
+      "surface": "print",
+      "where": "Schedule 1 rows past line i, Schedule 2 rows past row 4, Schedule 3 rows past each group's row 2",
+      "what": "Rows beyond the printed capacity (S1: 6 fillable Others lines d-i; S2: 4 rows; S3: 2 rows per group) print nowhere. Continuation pages are being built by another agent on origin/try/forms-continuation-sheet.",
+      "severity": "high",
+      "picture": "after/pdf-p3.png"
+    }
+  ],
+  "entered_by_hand": "Item 52 Regular Income Tax Otherwise Due = 5,000,000.00 typed on the Part V page; Schedule 1 Item 17 row 1 added through the real 'Add row' dialog (description + amount 887,654.32); Save pressed in the app. Same saved return reused for the after/ pictures.",
+  "open_questions": [
+    "provenance names '1702-EX Jan 2018 ENCS v2.pdf'; it is not in hexuria/buwiz-forms-html and the BIR site did not yield it, so before/official-p*.png are renders of html-frozen/1702ex-2018/index.html (the byte-frozen official sheet) instead."
+  ],
+  "notes": "Whole-peso rounding of amount fields is by design on this sheet ('DO NOT enter Centavos'; writer-cells.json). after/print-pK = Chrome headless render of the regenerated sheet.html; after/pdf-pK = WebKit 'Save as PDF' from the same saved return. Re-verified every fixed item by hand against the app PDF."
+}
