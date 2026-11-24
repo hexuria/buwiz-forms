@@ -37,7 +37,7 @@ We follow a "less is better" philosophy. You only need to remember a few core co
 
 - `just run` — Run the app locally in a development window (use a scratch database).
 - `just install [format]` — Install a package you already built (macOS `.app`/`.pkg`/`.dmg`, Windows `msix`/`exe`, Linux `deb`/`tar`). It looks in `target/release-artifacts` and does not build anything.
-- Build the packages with `scripts/package_nsh_windows.ps1` after `nsh package --target windows` (Windows: Setup program, MSI, MSIX), `scripts/package_macos_release.sh` (macOS direct `.app` and DMG and the Mac App Store package) and `packaging/linux/build-packages.sh` (Linux `.deb`, `.rpm`, tarball, Arch package and install script). The release workflows build the same packages.
+- Build the packages with `scripts/package_nsh_windows.ps1` after `nsh package --target windows` (Windows: Setup program, MSI, MSIX), `just _package-mac` (macOS universal `.app` and DMG — it runs `scripts/package_macos_release.sh`, ad-hoc signed unless `CODESIGN_IDENTITY` is set) and `packaging/linux/build-packages.sh` (Linux `.deb`, `.rpm`, tarball, Arch package and install script). The Mac App Store `.pkg` is `just app` (queries App Store Connect for the next build number, then `just _package-mac-appstore`, which adds the `mas_build` feature via `nsh/mas/cargo-with-mas.sh`). The release workflows build the same packages.
 - `just testflight [--agent]` — Build the App Store package and upload it to TestFlight (`just testflight-agent` is the same with the gpui-agent control plane; internal testing only). `just testflight-upload` re-uploads the last build without rebuilding.
 - `just nsh-run-agent macos <db>` — Run the development host with the gpui-agent control planes compiled in (see [agent.md](agent.md)). Still silent until `GPUI_AGENT=1` (release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`).
 - `just publish` — Auto-increment the patch version, tag, and push (triggers the release workflow in GitHub Actions).
@@ -142,7 +142,7 @@ The project uses **two independent version identifiers** to satisfy both Apple A
 | Identifier | Source of Truth | Changed By | When |
 |---|---|---|---|
 | **App Version** (semver) | `nsh/nsh.json` → `version` (`"0.2.1"`) | You, manually | Feature release or hotfix |
-| **Build Number** (counter) | `BUILD_NUMBER` environment override, with the `justfile` value as the committed cross-store default | `scripts/package_macos_release.sh` (ephemeral) or `just bump-build` (committed) | Every store submission |
+| **Build Number** (counter) | `BUILD_NUMBER` environment override, with the `justfile` value as the committed cross-store default | `just app` (ephemeral) or `just bump-build` (committed) | Every store submission |
 
 ### Why Two Numbers?
 
@@ -174,7 +174,7 @@ Microsoft Store:
 
 **Submitting a macOS App Store build** (most common):
 ```bash
-scripts/package_macos_release.sh  # Queries App Store Connect and passes the next counter without editing tracked source
+just app  # Queries App Store Connect and passes the next counter without editing tracked source
 ```
 
 Keeping the checkout clean lets packaged renderer identity verification bind
@@ -184,7 +184,7 @@ the build to its exact curated source revision before the app is assembled.
 ```bash
 just bump-build
 git add justfile && git commit -m "build: bump to $(just --evaluate BUILD_NUMBER)"
-scripts/package_macos_release.sh   # macOS package; the live API counter is passed through the environment
+just app   # macOS package; the live API counter is passed through the environment
 # Windows: scripts/package_nsh_windows.ps1 builds the MSIX with the committed default counter
 ```
 
@@ -223,7 +223,7 @@ The **macOS** release job codesigns and notarizes the DMG. Configure these Repos
 | `APPLE_ID` | macOS Notarization | Your Apple ID email address |
 | `APPLE_APP_PASSWORD` | macOS Notarization | App-specific password generated at appleid.apple.com |
 
-> **Note:** The release workflow's first macOS step checks that all five secrets are set and fails the job if one is missing (`Require macOS signing and notarization inputs`). Windows has a similar check for its signing inputs. Local builds from `scripts/package_macos_release.sh` are ad-hoc signed unless `CODESIGN_IDENTITY` is set.
+> **Note:** The release workflow's first macOS step checks that all five secrets are set and fails the job if one is missing (`Require macOS signing and notarization inputs`). Windows has a similar check for its signing inputs. Local `just _package-mac` builds are ad-hoc signed unless `CODESIGN_IDENTITY` is set.
 
 ## Architecture
 
@@ -292,5 +292,5 @@ so developers can run the workflow without an agent-specific command wrapper.
 - **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate. Google OAuth for a shared inbox is stored once in `inbox_oauth_tokens` and copied onto every profile that uses that mailbox. Never log raw tokens.
 - **Feature Flags:**
   - `dev-tools` — Developer diagnostics: the `--dev-export-live-database` command, and (in a **release** build) permission to open a form whose HTML release certification is still in progress. A debug build already satisfies that gate through `debug_assertions`, so `dev-tools` changes nothing there. Automatically included in `just run`.
-  - `agent` — Opt-in gpui-agent control plane for the NSH app and the headless `bir` command (`crates/bir-cli`). It does **not** need `dev-tools`: a debug build with `--features agent` alone binds the agent and drives every form the app can open. Release builds omit the feature unless explicitly enabled; the Mac App Store package builds with `mas_build`. Runtime bind requires `GPUI_AGENT=1` **and** `GPUI_AGENT_TOKEN` (protocol v2 HMAC). Release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`. `GPUI_AGENT_INSECURE_NO_TOKEN=1` is demo-only. There is no `scripts/bir-agent` wrapper; set those env vars and use `gpui-agent`. Authorization, `--wait` handoff, and the AI-agent playbook live in [`docs/agent.md`](agent.md).
+  - `agent` — Opt-in gpui-agent control plane for the NSH app and the headless `bir` command (`crates/bir-cli`). It does **not** need `dev-tools`: a debug build with `--features agent` alone binds the agent and drives every form the app can open. Release builds omit the feature unless explicitly enabled; the Mac App Store package (`just _package-mac-appstore`) builds with `mas_build`. Runtime bind requires `GPUI_AGENT=1` **and** `GPUI_AGENT_TOKEN` (protocol v2 HMAC). Release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`. `GPUI_AGENT_INSECURE_NO_TOKEN=1` is demo-only. There is no `scripts/bir-agent` wrapper; set those env vars and use `gpui-agent`. Authorization, `--wait` handoff, and the AI-agent playbook live in [`docs/agent.md`](agent.md).
 - **Tracing:** Debug builds initialize `tracing-subscriber` automatically. Control verbosity with `RUST_LOG` (default: `nsh_app_ebirforms=debug,bir_print=debug,bir_core=info`).

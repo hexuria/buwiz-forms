@@ -40,9 +40,11 @@ there, but nobody has run it on that platform.
   [Releases](https://github.com/hexuria/buwiz-forms/releases) page and drag
   `eBIRForms.app` to Applications.
 - From source: run `scripts/setup-macos.sh`, then `just run` (a development
-  window on a scratch database). The release workflow builds the signed and
-  notarized `.app` and DMG; `scripts/package_macos_release.sh` is the
-  packaging script it uses.
+  window on a scratch database). `just _package-mac` builds the universal
+  `.app` and DMG (it runs `scripts/package_macos_release.sh`); `just app`
+  builds the Mac App Store `.pkg` (it resolves the next App Store build
+  number, then runs `just _package-mac-appstore` with `mas_build`); and
+  `just testflight` is `just app` plus the upload.
 
 ## Data
 
@@ -111,7 +113,7 @@ there, but nobody has run it on that platform.
   It needs the Apple secrets listed in
   [DEVELOPMENT.md](../DEVELOPMENT.md#cicd-secrets--codesigning).
 - The sandboxed Mac App Store package is built by
-  `scripts/package_macos_release.sh` and the release workflow: it adds the
+  `just _package-mac-appstore` and the release workflow: it adds the
   app's `mas_build` feature (no global hotkey or self-updater) to the
   generated host's build, embeds
   `assets/macos/embedded.provisionprofile`, signs with

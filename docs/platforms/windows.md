@@ -11,8 +11,11 @@ on `windows-2025`, and `check` in
 [README](../../README.md). The same matrix for all platforms is in
 [FEATURES.md](../FEATURES.md).
 
-Cells that need a real Windows window stay "untested"; the pull request
-that changed this page carries the exact steps to check them.
+A real window has been run once on Windows Server 2022 with the agent
+(`nsh run --target windows`, `nsh-windows-handover.md` §4.6; store
+screenshots on `try/store-shots-windows`). Cells that need a real Windows
+window stay "untested" or "partial"; the pull request that changed this
+page carries the exact steps to check them.
 
 ## Feature matrix
 
@@ -25,14 +28,14 @@ there, but nobody has run it on that platform.
 | Profiles, tax form library, editors, Check, Save draft | ✓ | Shared code; covered by the Windows CI jobs. |
 | Submission queue and dry run | ✓ | Shared code; Windows file locking for the database lock differs. |
 | Database storage (plain SQLite, not encrypted) | ✓ |  |
-| Account sign-in (Buwiz account, device flow) | ✓ | Shared code. |
-| Close button (X) and quit shortcut | untested | X and Alt+F4 hide the window. There is no Ctrl+Q binding. |
+| Account sign-in (Buwiz account, device flow) | partial | The screens' logic runs in the headless Windows CI tests (`nsh/screens/auth/gate.test.tsx`, `nsh/screens/settings/account.test.tsx`), but opening the default browser (`open::that` in `crates/bir-core/src/cloud_account.rs`) and the credential store (Windows Credential Manager via `keyring`, plus the file fallback) are unchecked on a real Windows. |
+| Close button (X) and quit shortcut | untested | Code: X, Alt+F4 and Close Window (Ctrl+W) ask "Hide to tray or Quit?" by default ("Don't ask again" remembers the choice; Settings > Keyboard changes it); Ctrl+Q quits for real (`closePolicy` in `nsh/shell/desktop/menu_model.ts`). |
 | System tray icon | untested | `Tray.set` is shared; the NSH Windows backend hosts it. |
 | Global show/hide hotkey | untested | Win+Shift suggestion. |
 | Single-instance guard | untested | Named mutex plus the loopback ping. |
 | Window size and position memory | untested |  |
-| Print preview | untested | Own window. |
-| Print an email receipt as PDF | ✓ | Shared print code. |
+| Print preview | untested | In-app window showing one picture per sheet, drawn by Blitz + `vello_cpu` (`nsh/src/print.rs`, `nsh/src/sheets.rs`). |
+| Print an email receipt as PDF | untested | Windows uses a hidden WebView2 `PrintToPdf` (`nsh/src/print.rs`) — platform code, not covered headless. |
 | Export dialogs (save file, choose folder) | untested | Native dialog. |
 | Unlock with the OS (Touch ID, Windows Hello) | untested | Windows Hello, through robius-authentication. |
 | PIN or authenticator app lock | ✓ | Shared code. |
@@ -40,10 +43,10 @@ there, but nobody has run it on that platform.
 | Instant refresh when the database changes | ✓ | Shared code. |
 | Add deadlines to a calendar (.ics) | ✓ | Shared code; opens in the default calendar app. |
 | Google Calendar credentials storage | untested | Credential Manager, through `keyring`. |
-| Keyboard shortcuts | ✓ | Shared code; Ctrl based; also F11 and Win+M. |
+| Keyboard shortcuts | ✓ | Shared code; Ctrl based; the menu keymap is covered by `nsh/shell/desktop/menu_model.test.ts` in CI. |
 | Store build never self-updates (Microsoft Store) | ✓ | `ebirforms-store-package` marker (`store_managed()` in `nsh/src/desktop.rs`). |
 | Packaging | untested | `Setup.exe`, `.msi` and `.msix` from CI, or locally with `scripts\package_nsh_windows.ps1`. |
-| Agent control (gpui-agent) | untested | The agent-feature build compiles on Windows CI; driving a real window is unchecked. |
+| Agent control (gpui-agent) | partial | A real window ran on Windows Server 2022 with the agent (docs/platforms/nsh-windows-handover.md §4.6; store screenshots on `try/store-shots-windows`, 2026-11-24); not covered by CI. |
 | Agent screenshots | ✗ | macOS only. |
 
 ## Install and run

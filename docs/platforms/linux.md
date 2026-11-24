@@ -14,13 +14,13 @@ there, but nobody has run it on that platform.
 | Profiles, tax form library, editors, Check, Save draft | ✓ | All 43 forms. |
 | Submission queue and dry run | ✓ |  |
 | Database storage (plain SQLite, not encrypted) | ✓ |  |
-| Close button (X) and quit shortcut | ✓ | X, Ctrl+Q, Alt+F4 and Ctrl+W quit the app. |
+| Close button (X) and quit shortcut | ✓ | X, Alt+F4 and Ctrl+W (Close Window) ask "Hide to tray or Quit?" by default; Ctrl+Q quits for real (`closePolicy` in `nsh/shell/desktop/menu_model.ts`). |
 | System tray icon | partial | Needs a StatusNotifier host. Many desktops have none; the app then runs without a tray. |
 | Global show/hide hotkey | partial | Super+Shift+E suggestion. Hiding uses `xdotool`, which is X11 only. Wayland: unverified. |
 | Single-instance guard | ✓ | Loopback ping only (`instance.port`). The platform hook is an empty stub. |
 | Window size and position memory | ✓ | Restoring the position under Wayland: unverified. |
-| Print preview | partial | Opens the filled HTML in the default browser. Print from the browser. |
-| Print an email receipt as PDF | ✓ | `lp` (CUPS); opens the file if `lp` is missing. |
+| Print preview | partial | In-app window: one picture per sheet drawn on the CPU by Blitz + `vello_cpu` (`nsh/src/print.rs`, `nsh/src/sheets.rs`). The PDF/print path uses WebKitGTK's print operation (GTK's "Print to File"). |
+| Print an email receipt as PDF | ✓ | WebKitGTK print operation (GTK "Print to File"), `nsh/src/print.rs`. |
 | Export dialogs (save file, choose folder) | partial | Needs `xdg-desktop-portal` or `zenity`. Otherwise files go to `~/Documents/eBIRForms/exports`. |
 | Unlock with the OS (Touch ID, Windows Hello) | ✗ | Not built on Linux. Use the PIN or authenticator app. |
 | PIN or authenticator app lock | ✓ |  |
@@ -149,9 +149,11 @@ sudo apt-get install -y \
 
 ## Close, quit and the tray
 
-- The window's X button, Ctrl+Q, Alt+F4 and Ctrl+W quit the app. They go through the
-  same guarded quit path as the tray's Quit. The window stays open only when
-  unsaved Profile compliance changes block quitting.
+- The window's X button, Alt+F4 and Ctrl+W (Close Window) ask "Hide to tray
+  or Quit?" by default ("Don't ask again" remembers the choice; Settings >
+  Keyboard changes it). Ctrl+Q quits for real. Any quit while returns are
+  still sending warns first: Quit anyway / Wait / Hide to tray
+  (`closePolicy` and the guarded quit path in `nsh/shell/desktop/`).
 - Why: many Linux desktops (GNOME, fluxbox) have no StatusNotifier tray host,
   and there is no dependable way to hide a window. `xdotool` is optional and
   X11-only.
@@ -177,10 +179,11 @@ sudo apt-get install -y \
 
 ## Print and export
 
-- Print preview opens the filled HTML in the default browser
-  (`xdg-open`); the NSH GTK backend has no embedded preview window.
-  Print from the browser.
-- Receipt PDFs print with `lp` (CUPS). If `lp` is missing, the file is opened.
+- Print preview opens in the app's own window: each sheet is laid out by
+  Blitz (stylo, taffy, parley) and painted by `vello_cpu` into a picture
+  (`nsh/src/print.rs`, `nsh/src/sheets.rs`); no browser is involved.
+- The PDF and the printout go through WebKitGTK's print operation (GTK's
+  "Print to File" printer and the GTK print dialog, `nsh/src/print.rs`).
 - Export dialogs use `rfd`. A dialog exists when the
   `org.freedesktop.portal.Desktop` name is on the session bus or `zenity` is on
   `PATH`. Otherwise the export goes to `~/Documents/eBIRForms/exports/<name>`

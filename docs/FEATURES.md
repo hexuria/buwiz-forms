@@ -13,7 +13,7 @@ there, but nobody has run it on that platform.
 | Profiles, tax form library, editors, Check, Save draft | ✓ | ✓ | ✓ |
 | Submission queue and dry run | ✓ | ✓ | ✓ |
 | Database storage (plain SQLite, not encrypted) | ✓ | ✓ | ✓ |
-| Account sign-in (Buwiz account, device flow in the browser) | ✓ | ✓ | ✓ |
+| Account sign-in (Buwiz account, device flow in the browser) | ✓ | partial | ✓ |
 | Close button (X) and quit shortcut | ✓ | untested | ✓ |
 | System tray icon | ✓ | untested | partial |
 | App menu launcher, icons and dock grouping (app id `dev.goldcoders.bir`) | n/a | n/a | ✓ |
@@ -21,7 +21,7 @@ there, but nobody has run it on that platform.
 | Single-instance guard | ✓ | untested | ✓ |
 | Window size and position memory | ✓ | untested | ✓ |
 | Print preview | ✓ | untested | partial |
-| Print an email receipt as PDF | ✓ | ✓ | ✓ |
+| Print an email receipt as PDF | ✓ | untested | ✓ |
 | Export dialogs (save file, choose folder) | ✓ | untested | partial |
 | Unlock with the OS (Touch ID, Windows Hello) | ✓ | untested | ✗ |
 | PIN or authenticator app lock | ✓ | ✓ | ✓ |
@@ -32,7 +32,7 @@ there, but nobody has run it on that platform.
 | Keyboard shortcuts | ✓ | ✓ | ✓ |
 | Store builds never self-update (Mac App Store, Microsoft Store) | ✓ | ✓ | n/a |
 | Packaging | ✓ | untested | ✓ |
-| Agent control (gpui-agent) | ✓ | untested | ✓ |
+| Agent control (gpui-agent) | ✓ | partial | ✓ |
 | Agent screenshots | ✓ | ✗ | ✗ |
 
 ## Reading this table

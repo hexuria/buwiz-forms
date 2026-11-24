@@ -56,8 +56,9 @@ macOS and Linux to verify an existing install), then:
 just run                  # run the app in a development window (use a scratch database)
 ```
 
-Packaging is described on the platform pages: `scripts/package_macos_release.sh`
-on macOS, `packaging/linux/build-packages.sh` on Linux, and on Windows
+Packaging is described on the platform pages: `just _package-mac` (and
+`just app` for the Mac App Store package) on macOS,
+`packaging/linux/build-packages.sh` on Linux, and on Windows
 `scripts/package_nsh_windows.ps1` (the release workflows build these on every tag).
 
 ## Headless command line (`bir`)
@@ -125,8 +126,9 @@ received.
 
 **Print preview.** Print preview fills the frozen printed sheet of the
 exact BIR revision with your data. It never changes the return's
-status. It opens in its own window (verified on macOS). Export what you
-want to keep.
+status. It opens in its own window — a web view on macOS, sheet images
+drawn in-app by Blitz and `vello_cpu` on Windows and Linux
+(`nsh/src/print.rs`). Export what you want to keep.
 
 **Notifications drawer.** The bell in the top bar opens a drawer with alerts
 and receipts. It closes when you change page.
