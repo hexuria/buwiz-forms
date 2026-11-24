@@ -8069,7 +8069,7 @@ mod tests {
         boxes
     }
 
-    /// Every band box of every sheet ([`band_boxes`], 1,458 of them) holds
+    /// Every band box of every sheet ([`band_boxes`], 1,474 of them) holds
     /// a value in its 1 pt band and prints byte for byte as at dcc6386a:
     /// `fixtures/fitting-band-box-goldens.json` holds, per sheet, the
     /// SHA-256 of the document dcc6386a's fill printed for that sheet's
@@ -8079,7 +8079,9 @@ mod tests {
     /// The 12b merge into integration added two band boxes on 1801 —
     /// PR 10's `freqOtherInput` and `txtInstallmentYear` joins, which the
     /// branch's pin predates — and re-recorded that sheet's golden; every
-    /// other sheet stays byte-pinned at dcc6386a.
+    /// other sheet stays byte-pinned at dcc6386a. The 1702MX print fix
+    /// added sixteen band boxes (the Schedule 6 amount columns and
+    /// Schedule 9 columns D-G joins) and re-recorded that sheet's golden.
     #[test]
     fn every_band_box_prints_as_at_dcc6386a() {
         let golden: BTreeMap<String, String> =
@@ -8120,7 +8122,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1458, "band boxes");
+        assert_eq!(total, 1474, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 

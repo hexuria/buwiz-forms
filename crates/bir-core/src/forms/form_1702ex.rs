@@ -2235,10 +2235,7 @@ mod tests {
         // continuation page and the printed totals cover every row.
         let print = d.to_print_field_map();
         assert_eq!(print["frm1702EX:txtPg3Pt6I17OthersIDesc"], "OTHERS");
-        assert_eq!(
-            print["derived:line:txtPg3Pt6I17OthersIDesc"],
-            "TRANSPORT"
-        );
+        assert_eq!(print["derived:line:txtPg3Pt6I17OthersIDesc"], "TRANSPORT");
         assert_eq!(
             print["derived:amount:txtPg3Pt6I17OthersIAmt"],
             "        3000"
