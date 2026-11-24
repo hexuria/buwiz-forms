@@ -40,12 +40,37 @@
       "status": "open"
     }
   ],
-  "files_changed": [],
+  "files_changed": [
+    "html-frozen/1600wp-2010/index.html",
+    "html-frozen/1600wp-2010/writer-cells.json",
+    "form-review/1600WP/after/*.png",
+    "form-review/1600WP/report.json"
+  ],
   "shared_changes_wanted": [
     "crates/bir-print: tighten 14-digit TIN comb spacing in Attachment header so digits do not touch ticks"
   ],
-  "tests_run": [],
+  "tests_run": [
+    "cargo test -p bir-print 1600wp (1/1 passed)",
+    "Live app capture via just nsh-run-agent linux"
+  ],
   "open_questions": [
     "Note: print-p1.png was generated from the running app Print preview sheet.html via headless Chrome + pdftoppm."
+  ],
+  "status": "fixed_per_form_pending_shared_merge",
+  "upstream_sheet_edits": [
+    "html-frozen/1600wp-2010/index.html: added fillable text cell p1c272 (left:434pt;top:465.96pt;width:158pt;height:13.94pt) after the printed 'NAME:' label in the Attachment header so frm1600WP:txtTaxpayerName prints on both Item 8 (p1c21) and the Attachment header (p1c272)."
+  ],
+  "blank_item_causes": {
+    "Attachment Withholding Agent Name": "No fillable cell on the frozen sheet (p1c234 was emitted as a plain label cell covering the entire 'NAME:' area). Added fillable text cell p1c272 after 'NAME:' and joined frm1600WP:txtTaxpayerName to [p1c21, p1c272]; verified printing cleanly.",
+    "Attachment Schedule 1.1 Seq. No. (rows 1-6)": "Value missing from the print map: the 6 fillable cells (p1c94, p1c102, p1c110, p1c118, p1c126, p1c134) exist on the frozen sheet, but crates/bir-core/src/forms/form_1600wp.rs::to_print_field_map() emits no derived:att_seq_1..6 keys.",
+    "Item 11 Tax Relief 'No' checkbox": "Value missing from the print map: writer-cells.json already joins frm1600WP:SpecialLaw_1 -> p1c28 and frm1600WP:SpecialLaw_2 -> p1c29 in xbox_joins, but crates/bir-core/src/forms/form_1600wp.rs::to_bir_field_map() does not emit SpecialLaw_1 or SpecialLaw_2 at all."
+  },
+  "fixed_in_this_commit": [
+    "Attachment Withholding Agent Name now prints in p1c272 via frm1600WP:txtTaxpayerName."
+  ],
+  "remaining_shared_issues": [
+    "Part II & Schedule 1.1 amounts left-aligned: fixed on try/forms-shared-print (commit 0f484378; before/after already verified on 1600WP p1).",
+    "Item 11 SpecialLaw_1/SpecialLaw_2 and Attachment Seq. No. (derived:att_seq_1..6): require emitting keys in crates/bir-core/src/forms/form_1600wp.rs (outside per-form files).",
+    "Schedule 1.1 rows beyond 6: documented in form-review/SHARED-FINDINGS.md on try/forms-shared-print (commit 1679ff23)."
   ]
 }

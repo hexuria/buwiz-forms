@@ -65,9 +65,12 @@
   },
   {
    "writer_key": "frm1600WP:txtTaxpayerName",
-   "html_id": "p1c21",
-   "printed": "8 Withholding Agent's Name",
-   "reason": "geometry: the only fillable cell for this printed item on the 1600-WP (January 2010) sheet"
+   "printed": "7 Withholding Agent\u2019s Name + Attachment Withholding Agent\u2019s Name",
+   "reason": "geometry: the only fillable cell for this printed item on the 1600-WP (January 2010) sheet",
+   "html_ids": [
+    "p1c21",
+    "p1c272"
+   ]
   },
   {
    "writer_key": "frm1600WP:txtAddress",
