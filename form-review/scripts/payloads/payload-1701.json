@@ -9,13 +9,13 @@
     "frm1701:rdoPg1I21AMethodDeduction": "I",
     "frm1701:rdoPg1I2Amended": "No",
     "frm1701:rdoPg1I3ShortPeriod": "No",
-    "frm1701:rdoPg1I6TaxpayerType": "S",
+    "frm1701:rdoPg1I6TaxpayerTypeS": "true",
     "frm1701:rdoPg1I7ATC_II013": "true",
     "frm1701:rdoPg1Overpayment": "Refund",
     "frm1701:rdoPg2I10IncomeExempt": "Yes",
     "frm1701:rdoPg2I11IncomeSpecial": "Yes",
     "frm1701:rdoPg2I12AMethodDeduction": "I",
-    "frm1701:rdoPg2I3SpouseType": "S",
+    "frm1701:rdoPg2I3SpouseTypeS": "true",
     "frm1701:rdoPg2I4ATC_II013": "true",
     "frm1701:rdoPg2I8ForeignTaxCredits": "Yes",
     "frm1701:txtPg1I10BirthDate": "01/15/1988",
@@ -164,7 +164,9 @@
     "frm1701:txtPg4IShed6_9B": "15081424.55",
     "frm1701:txtPg4IShed6_9C": "18260555.92",
     "frm1701:txtPg4IShed6_9D": "21439686.29",
-    "frm1701:txtPg4IShed6_9Year": "2025",
+    "frm1701:txtPg4IShed6_9Year": "2025"
+  },
+  {
     "frm1701:rdoPg1I6TaxpayerTypeC": "true",
     "frm1701:rdoPg2I3SpouseTypeC": "true"
   }

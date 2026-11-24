@@ -61,13 +61,13 @@
       "id": "1701-S1",
       "surface": "screen",
       "where": "Screen 02, Part I Item 7 (Alphanumeric Tax Code)",
-      "what": "Displayed 'Item 7 ATC is not available for the Item 6 taxpayer type' beside saved ATC II013. Root cause: validation in crates/bir-core/src/forms/form_1701_official.rs:1095-1116 is correct — II013 (Mixed Income - Graduated) requires Item 6 Compensation Earner (frm1701:rdoPg1I6TaxpayerTypeC) to be ticked alongside Single Proprietor. Fixed form-review/scripts/payloads/payload-1701.json to tick rdoPg1I6TaxpayerTypeC and rdoPg2I3SpouseTypeC.",
+      "what": "Earlier captures displayed 'Item 7 ATC is not available for the Item 6 taxpayer type' beside saved ATC II013. Root cause: validation in crates/bir-core/src/forms/form_1701_official.rs:1095-1116 is correct — II013 (Mixed Income - Graduated) requires Item 6 Compensation Earner (frm1701:rdoPg1I6TaxpayerTypeC) to be ticked alongside Single Proprietor (frm1701:rdoPg1I6TaxpayerTypeS). Fixed form-review/scripts/payloads/payload-1701.json (two passes so Single Proprietor is set before Compensation Earner) and retook both BEFORE and AFTER; Screen 02 and Screen 05 now show both boxes ticked with no contradictory ATC warning.",
       "before": "before/screen-02-part-i-background-information-of-taxpaye.png",
       "after": "after/screen-02-part-i-background-information-of-taxpaye.png",
-      "status": "by design"
+      "status": "fixed"
     }
   ],
-  "test_data": "Scripted via seed_and_capture.py: seeds the demo taxpayer via profile.save (TIN 00012345300000, name 'SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA', RDO 008, long two-line Makati address, ZIP 1003, email juana.santos@example.com, phone 09171234567, birth_date 1988-01-15) and replays the saved BEFORE payload-1701.json via form.fill (165/165 fields applied; verified 0 text cell diffs between before and after sheet.html, exact 1372x871 screen and 1400x1982 print dimensions).",
+  "test_data": "Scripted via form-review/scripts/seed_and_capture.py on try/forms-neon-1 rebased onto origin/try/forms-shared-print (058a0e9b): seeds the demo taxpayer via profile.save (TIN 00012345300000, name 'SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA', RDO 008, long two-line Makati address, ZIP 1003, email juana.santos@example.com, phone 09171234567, birth_date 1988-01-15) and replays payload-1701.json via form.fill (pass 1: 165/165 fields including rdoPg1I6TaxpayerTypeS and rdoPg2I3SpouseTypeS; pass 2: 2/2 fields ticking rdoPg1I6TaxpayerTypeC and rdoPg2I3SpouseTypeC; verified 0 text cell diffs between before and after sheet.html, exact 1372x871 screen and 1400x1982 print dimensions).",
   "files_changed": [
     "print-overrides/1701-2018.css"
   ],
