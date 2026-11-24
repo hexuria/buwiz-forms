@@ -55,6 +55,15 @@ impl OverflowSchedule {
     }
 }
 
+/// One text cell whose rendered text was shortened with `"..."` at the 6.5 pt
+/// floor, carried onto the plain additional sheet with its full value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TruncatedEntry {
+    pub page_number: usize,
+    pub label: String,
+    pub full_text: String,
+}
+
 /// Structured overflow report for one filled return.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct OverflowReport {
@@ -119,7 +128,18 @@ impl FilledDocument {
                     "{amount_count} amounts printed as fitted lines instead of in boxes"
                 ));
             }
-            let other_count = cell_warnings.len() - amount_count;
+            let truncated_count = cell_warnings
+                .iter()
+                .filter(|w| w.kind == "text-truncated")
+                .count();
+            if truncated_count == 1 {
+                lines.push("1 long entry is printed in full on an additional sheet".to_string());
+            } else if truncated_count > 1 {
+                lines.push(format!(
+                    "{truncated_count} long entries are printed in full on an additional sheet"
+                ));
+            }
+            let other_count = cell_warnings.len() - amount_count - truncated_count;
             if other_count == 1 {
                 lines.push("1 value overflowed its official box".to_string());
             } else if other_count > 1 {
@@ -309,17 +329,76 @@ pub fn continuation_pages_html(
     width: &str,
     height: &str,
 ) -> String {
-    if report.is_empty() {
+    continuation_pages_html_with_truncated(slug, fields, report, &[], width, height)
+}
+
+/// Collect every `text-truncated` cell from `document_html` (official pages
+/// and cloned band continuation pages alike), resolving each cell's 1-based
+/// page number, official printed label (falling back to the nearest printed
+/// caption on that page — never a cell id or file name), and full value from
+/// `data-writer-value`.
+pub fn collect_truncated_entries(
+    slug: &str,
+    document_html: &str,
+    overflow: &OverflowReport,
+) -> Vec<TruncatedEntry> {
+    let cell_labels = load_cell_printed_labels(slug);
+    let mut entries = Vec::new();
+    let mut page_number = 0usize;
+
+    for page_slice in split_page_divs(document_html) {
+        let open_tag_end = page_slice.find('>').unwrap_or(page_slice.len());
+        let open_tag = &page_slice[..open_tag_end];
+        if open_tag.contains("page-receipt")
+            || (open_tag.contains("page-continuation") && !open_tag.contains("page-continuation-band"))
+        {
+            continue;
+        }
+        page_number += 1;
+
+        for warning in frozen_html::overflow_warnings(page_slice) {
+            if warning.kind != "text-truncated" {
+                continue;
+            }
+            let cell_id = warning.cell.strip_suffix("-i").unwrap_or(&warning.cell);
+            let label = resolve_truncated_label(
+                cell_id,
+                page_slice,
+                &cell_labels,
+                overflow,
+            );
+            entries.push(TruncatedEntry {
+                page_number,
+                label,
+                full_text: warning.value,
+            });
+        }
+    }
+
+    entries
+}
+
+/// Render one coherent set of plain `.page-continuation` sheets containing
+/// any fallback overflowing schedule tables plus any `"Entries continued from
+/// the form"` truncated-text entries. Returns an empty string when both are empty.
+pub fn continuation_pages_html_with_truncated(
+    slug: &str,
+    fields: &BTreeMap<String, String>,
+    report: &OverflowReport,
+    truncated_entries: &[TruncatedEntry],
+    width: &str,
+    height: &str,
+) -> String {
+    if report.is_empty() && truncated_entries.is_empty() {
         return String::new();
     }
 
     let meta = extract_header_meta(slug, fields);
-    // Split schedules into page chunks of at most MAX_ROWS_PER_PAGE rows.
-    let chunks = paginate_schedules(&report.schedules, MAX_ROWS_PER_PAGE);
-    let total_pages = chunks.len();
+    let pages = paginate_plain_pages(&report.schedules, truncated_entries, MAX_ROWS_PER_PAGE);
+    let total_pages = pages.len();
 
     let mut out = String::new();
-    for (page_idx, page_chunks) in chunks.iter().enumerate() {
+    for (page_idx, page) in pages.iter().enumerate() {
         let page_num = page_idx + 1;
         let id_attr = if page_idx == 0 {
             "page-continuation".to_string()
@@ -354,6 +433,11 @@ pub fn continuation_pages_html(
                 escape_html(&meta.form_title),
             ));
         }
+        if !page.truncated_entries.is_empty() {
+            out.push_str(
+                "<div style=\"font-size:7.5pt;color:#444;margin-top:3pt\">Entries shortened with &quot;...&quot; on the form are printed in full below.</div>",
+            );
+        }
         out.push_str(
             "<table style=\"width:100%;border-collapse:collapse;margin-top:8pt;font-size:8pt\"><tbody><tr>",
         );
@@ -372,7 +456,7 @@ pub fn continuation_pages_html(
         out.push_str("</tr></tbody></table></div>");
 
         // Schedule tables on this page
-        for chunk in page_chunks {
+        for chunk in &page.schedule_chunks {
             let sched = chunk.schedule;
             let rows = chunk.rows;
             let first_row = rows.first().map(|r| r.row_number).unwrap_or(0);
@@ -464,34 +548,74 @@ pub fn continuation_pages_html(
             out.push_str("</tbody></table></div>");
         }
 
+        // Truncated text entries on this page
+        if !page.truncated_entries.is_empty() {
+            let section_heading = if page.truncated_is_continuation {
+                "Entries continued from the form (continued)"
+            } else {
+                "Entries continued from the form"
+            };
+            out.push_str("<div style=\"margin-bottom:14pt\">");
+            out.push_str(&format!(
+                "<div style=\"display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4pt\">\
+                 <div style=\"font-size:9.5pt;font-weight:700\">{section_heading}</div>\
+                 <div style=\"font-size:7.5pt;color:#444\">Full text of entries shortened with &quot;...&quot; on the form</div>\
+                 </div>",
+            ));
+            out.push_str(
+                "<table style=\"width:100%;border-collapse:collapse;table-layout:fixed;font-size:7.5pt\"><thead><tr>\
+                 <th style=\"width:10%;border:0.75pt solid #000;background:#f2f2f2;padding:3pt 4pt;text-align:center;font-weight:700;vertical-align:bottom\">Page</th>\
+                 <th style=\"width:32%;border:0.75pt solid #000;background:#f2f2f2;padding:3pt 4pt;text-align:left;font-weight:700;vertical-align:bottom\">Item / Field</th>\
+                 <th style=\"width:58%;border:0.75pt solid #000;background:#f2f2f2;padding:3pt 4pt;text-align:left;font-weight:700;vertical-align:bottom\">Full Entry</th>\
+                 </tr></thead><tbody>",
+            );
+            for entry in &page.truncated_entries {
+                out.push_str(&format!(
+                    "<tr>\
+                     <td style=\"border:0.75pt solid #000;padding:3pt 4pt;text-align:center;vertical-align:top;color:#333\">Page {}</td>\
+                     <td style=\"border:0.75pt solid #000;padding:3pt 4pt;text-align:left;vertical-align:top;overflow-wrap:break-word;font-weight:600\">{}</td>\
+                     <td style=\"border:0.75pt solid #000;padding:3pt 4pt;text-align:left;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap\">{}</td>\
+                     </tr>",
+                    entry.page_number,
+                    escape_html(&entry.label),
+                    escape_html(&entry.full_text),
+                ));
+            }
+            out.push_str("</tbody></table></div>");
+        }
+
         out.push_str("</div>");
     }
 
     out
 }
 
-struct ScheduleChunk<'a> {
-    schedule: &'a OverflowSchedule,
-    rows: &'a [OverflowRow],
-    is_last_chunk_of_schedule: bool,
+struct PlainPagePlan<'a> {
+    schedule_chunks: Vec<ScheduleChunk<'a>>,
+    truncated_entries: Vec<&'a TruncatedEntry>,
+    truncated_is_continuation: bool,
 }
 
-fn paginate_schedules<'a>(
+fn paginate_plain_pages<'a>(
     schedules: &'a [OverflowSchedule],
+    truncated_entries: &'a [TruncatedEntry],
     max_rows_per_page: usize,
-) -> Vec<Vec<ScheduleChunk<'a>>> {
-    let mut pages: Vec<Vec<ScheduleChunk<'a>>> = Vec::new();
-    let mut current_page: Vec<ScheduleChunk<'a>> = Vec::new();
+) -> Vec<PlainPagePlan<'a>> {
+    let mut pages: Vec<PlainPagePlan<'a>> = Vec::new();
+    let mut current_scheds: Vec<ScheduleChunk<'a>> = Vec::new();
     let mut used_rows = 0usize;
 
     for sched in schedules {
         let mut offset = 0usize;
         while offset < sched.rows.len() {
-            // Reserve 2 rows of vertical budget for each schedule header block
             let header_cost = 2usize;
-            if !current_page.is_empty() && used_rows + header_cost + 1 > max_rows_per_page {
-                pages.push(current_page);
-                current_page = Vec::new();
+            if !current_scheds.is_empty() && used_rows + header_cost + 1 > max_rows_per_page {
+                pages.push(PlainPagePlan {
+                    schedule_chunks: current_scheds,
+                    truncated_entries: Vec::new(),
+                    truncated_is_continuation: false,
+                });
+                current_scheds = Vec::new();
                 used_rows = 0;
             }
             let avail = max_rows_per_page
@@ -499,7 +623,7 @@ fn paginate_schedules<'a>(
                 .max(1);
             let end = (offset + avail).min(sched.rows.len());
             let is_last = end == sched.rows.len();
-            current_page.push(ScheduleChunk {
+            current_scheds.push(ScheduleChunk {
                 schedule: sched,
                 rows: &sched.rows[offset..end],
                 is_last_chunk_of_schedule: is_last,
@@ -509,10 +633,343 @@ fn paginate_schedules<'a>(
         }
     }
 
-    if !current_page.is_empty() {
-        pages.push(current_page);
+    if truncated_entries.is_empty() {
+        if !current_scheds.is_empty() {
+            pages.push(PlainPagePlan {
+                schedule_chunks: current_scheds,
+                truncated_entries: Vec::new(),
+                truncated_is_continuation: false,
+            });
+        }
+        return pages;
     }
+
+    let mut current_truncated: Vec<&'a TruncatedEntry> = Vec::new();
+    let mut started_truncated = false;
+    let mut current_is_cont = false;
+
+    for entry in truncated_entries {
+        let entry_cost = ((entry.full_text.chars().count() / 70) + 1).clamp(1, 6);
+        let header_cost = if current_truncated.is_empty() { 2 } else { 0 };
+        let has_content = !current_scheds.is_empty() || !current_truncated.is_empty();
+        if has_content && used_rows + header_cost + entry_cost > max_rows_per_page {
+            pages.push(PlainPagePlan {
+                schedule_chunks: current_scheds,
+                truncated_entries: current_truncated,
+                truncated_is_continuation: current_is_cont,
+            });
+            current_scheds = Vec::new();
+            current_truncated = Vec::new();
+            used_rows = 0;
+            current_is_cont = started_truncated;
+        }
+        if current_truncated.is_empty() {
+            used_rows += 2;
+        }
+        current_truncated.push(entry);
+        started_truncated = true;
+        used_rows += entry_cost;
+    }
+
+    if !current_scheds.is_empty() || !current_truncated.is_empty() {
+        pages.push(PlainPagePlan {
+            schedule_chunks: current_scheds,
+            truncated_entries: current_truncated,
+            truncated_is_continuation: current_is_cont,
+        });
+    }
+
     pages
+}
+
+fn split_page_divs(html: &str) -> Vec<&str> {
+    let marker = "<div class=\"page ";
+    let mut starts = Vec::new();
+    let mut pos = 0usize;
+    while let Some(rel) = html[pos..].find(marker) {
+        let abs = pos + rel;
+        starts.push(abs);
+        pos = abs + marker.len();
+    }
+    let mut slices = Vec::with_capacity(starts.len());
+    for i in 0..starts.len() {
+        let start = starts[i];
+        let end = starts.get(i + 1).copied().unwrap_or(html.len());
+        slices.push(&html[start..end]);
+    }
+    slices
+}
+
+fn load_cell_printed_labels(slug: &str) -> BTreeMap<String, String> {
+    let mut map = BTreeMap::new();
+    let Some(raw) = frozen_html::writer_cells_json(slug) else {
+        return map;
+    };
+    let Ok(parsed) = serde_json::from_str::<Value>(raw) else {
+        return map;
+    };
+    for section in ["joins", "money_joins", "peso_joins", "xbox_joins", "boxes"] {
+        let Some(arr) = parsed.get(section).and_then(Value::as_array) else {
+            continue;
+        };
+        for item in arr {
+            let printed = item
+                .get("printed")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .unwrap_or("");
+            if printed.is_empty() {
+                continue;
+            }
+            if let Some(id) = item.get("html_id").and_then(Value::as_str) {
+                map.entry(id.to_string())
+                    .or_insert_with(|| printed.to_string());
+            }
+            if let Some(ids) = item.get("html_ids").and_then(Value::as_array) {
+                for id in ids.iter().filter_map(Value::as_str) {
+                    map.entry(id.to_string())
+                        .or_insert_with(|| printed.to_string());
+                }
+            }
+            for key in ["peso_id", "cents_id"] {
+                if let Some(id) = item.get(key).and_then(Value::as_str) {
+                    map.entry(id.to_string())
+                        .or_insert_with(|| printed.to_string());
+                }
+            }
+        }
+    }
+    map
+}
+
+fn resolve_truncated_label(
+    cell_id: &str,
+    page_html: &str,
+    cell_labels: &BTreeMap<String, String>,
+    overflow: &OverflowReport,
+) -> String {
+    // Cloned band continuation cell: `cont_s{sched}_p{page}_b{band}_r{k}_{orig_cell_id}`
+    if let Some(rest) = cell_id.strip_prefix("cont_s") {
+        let parts: Vec<&str> = rest.splitn(5, '_').collect();
+        if parts.len() == 5 {
+            let sched_idx = parts[0].parse::<usize>().ok();
+            let orig_cell_id = parts[4];
+            if let Some(raw_printed) = cell_labels.get(orig_cell_id) {
+                let mut formatted = format_printed_label(raw_printed);
+                if let Some(row_num) = find_cloned_row_number(cell_id, page_html, sched_idx, overflow) {
+                    formatted = replace_row_number_in_label(&formatted, row_num);
+                }
+                return formatted;
+            }
+        }
+    }
+
+    if let Some(raw_printed) = cell_labels.get(cell_id) {
+        return format_printed_label(raw_printed);
+    }
+
+    if let Some(caption) = nearest_printed_caption(page_html, cell_id) {
+        return caption;
+    }
+
+    "Form entry".to_string()
+}
+
+fn find_cloned_row_number(
+    cell_id: &str,
+    _page_html: &str,
+    sched_idx: Option<usize>,
+    overflow: &OverflowReport,
+) -> Option<usize> {
+    let sched = overflow.schedules.get(sched_idx?)?;
+    // Parse `cont_s{sched}_p{page}_b{band}_r{k}_{orig}` -> row index `k` within the page;
+    // when all rows are on page 0 (common case), `sched.rows.get(k)` gives the exact row number.
+    let rest = cell_id.strip_prefix("cont_s")?;
+    let parts: Vec<&str> = rest.splitn(5, '_').collect();
+    if parts.len() != 5 {
+        return None;
+    }
+    let k = parts[3].strip_prefix('r')?.parse::<usize>().ok()?;
+    sched.rows.get(k).map(|r| r.row_number)
+}
+
+fn replace_row_number_in_label(label: &str, row_num: usize) -> String {
+    if let Some(pos) = label.find("row ") {
+        let after = &label[pos + 4..];
+        let digits_len = after.bytes().take_while(|b| b.is_ascii_digit()).count();
+        if digits_len > 0 {
+            return format!(
+                "{}row {row_num}{}",
+                &label[..pos],
+                &after[digits_len..]
+            );
+        }
+    }
+    label.to_string()
+}
+
+/// Turn a `writer-cells.json` `"printed"` string into a clean official-form
+/// item label (e.g. `"Schedule 1.B, row 3, Name of Corporate Stock (a)"`,
+/// `"Part V, Item 7 — Foreign Tax Credits (specify)"`, or
+/// `"Item 17 — Other Tax Credit/Payment (specify)"`).
+fn format_printed_label(raw: &str) -> String {
+    let s = raw.trim();
+    // Pattern: "<column> (<Schedule ... row N>)" -> "<Schedule ...>, row N, <column>"
+    if let Some(stripped) = s.strip_suffix(')') {
+        if let Some(open) = stripped.rfind(" (") {
+            let col = stripped[..open].trim();
+            let ctx = stripped[open + 2..].trim();
+            if let Some(row_pos) = ctx.find(" row ") {
+                let sched = ctx[..row_pos].trim();
+                let row_part = ctx[row_pos + 1..].trim();
+                if !sched.is_empty() && !col.is_empty() {
+                    return format!("{sched}, {row_part}, {col}");
+                }
+            }
+        }
+    }
+    // Pattern: "Schedule <X> row <N> <col>" -> "Schedule <X>, row <N>, <col>"
+    if s.starts_with("Schedule ") {
+        if let Some(row_pos) = s.find(" row ") {
+            let sched = s[..row_pos].trim();
+            let after_row = &s[row_pos + 5..];
+            let digits_len = after_row.bytes().take_while(|b| b.is_ascii_digit()).count();
+            if digits_len > 0 {
+                let row_num = &after_row[..digits_len];
+                let col = after_row[digits_len..].trim();
+                if !col.is_empty() {
+                    return format!("{sched}, row {row_num}, {col}");
+                }
+            }
+        }
+    }
+    // Pattern: "Part <ROMAN> <ITEM> <rest>" -> "Part <ROMAN>, Item <ITEM> — <rest>"
+    if let Some(after_part) = s.strip_prefix("Part ") {
+        let mut tokens = after_part.splitn(3, ' ');
+        if let (Some(roman), Some(item_tok), Some(rest)) =
+            (tokens.next(), tokens.next(), tokens.next())
+        {
+            if item_tok.bytes().next().is_some_and(|b| b.is_ascii_digit()) {
+                return format!("Part {roman}, Item {item_tok} — {}", rest.trim());
+            }
+        }
+    }
+    // Pattern: "<ITEM> <rest>" where ITEM starts with a digit (e.g. "17 Other ...")
+    if let Some((first, rest)) = s.split_once(' ') {
+        if first.bytes().next().is_some_and(|b| b.is_ascii_digit())
+            && first.len() <= 4
+            && !rest.trim().is_empty()
+        {
+            return format!("Item {first} — {}", rest.trim());
+        }
+    }
+    s.to_string()
+}
+
+/// Fallback when a cell has no `writer-cells.json` `"printed"` entry: find the
+/// nearest printed `<div class="t ...">` caption on the same page by geometry.
+fn nearest_printed_caption(page_html: &str, cell_id: &str) -> Option<String> {
+    let id_needle = format!("id=\"{cell_id}\"");
+    let cell_pos = page_html.find(&id_needle)?;
+    let div_start = page_html[..cell_pos].rfind('<')?;
+    let div_end = cell_pos + page_html[cell_pos..].find('>')?;
+    let cell_tag = &page_html[div_start..=div_end];
+    let (cell_left, cell_top) = parse_left_top_pt(cell_tag)?;
+
+    let mut best: Option<(f64, String)> = None;
+    let mut fallback_any: Option<(f64, String)> = None;
+    let mut pos = 0usize;
+    while let Some(rel) = page_html[pos..].find("<div class=\"t") {
+        let start = pos + rel;
+        let next_byte = page_html.as_bytes().get(start + 13).copied();
+        if !matches!(next_byte, Some(b' ' | b'"')) {
+            pos = start + 13;
+            continue;
+        }
+        let Some(gt_rel) = page_html[start..].find('>') else {
+            break;
+        };
+        let open_end = start + gt_rel;
+        let Some(close_rel) = page_html[open_end + 1..].find("</div>") else {
+            break;
+        };
+        let open_tag = &page_html[start..=open_end];
+        let inner = &page_html[open_end + 1..open_end + 1 + close_rel];
+        pos = open_end + 1 + close_rel + 6;
+
+        let text = strip_tags_and_unescape(inner);
+        let text = text.trim();
+        if text.len() < 2 || !text.chars().any(|c| c.is_ascii_alphabetic()) {
+            continue;
+        }
+        let Some((t_left, t_top)) = parse_left_top_pt(open_tag) else {
+            continue;
+        };
+        let dx = cell_left - t_left;
+        let dy = cell_top - t_top;
+        let dist = dx.abs() * 0.5 + dy.abs();
+        if fallback_any.as_ref().is_none_or(|(d, _)| dist < *d) {
+            fallback_any = Some((dist, text.to_string()));
+        }
+        // Prefer captions above or to the left of the cell
+        if dy >= -4.0 && dx >= -12.0 {
+            if best.as_ref().is_none_or(|(d, _)| dist < *d) {
+                best = Some((dist, text.to_string()));
+            }
+        }
+    }
+
+    best.or(fallback_any).map(|(_, text)| text)
+}
+
+fn parse_left_top_pt(tag: &str) -> Option<(f64, f64)> {
+    let style_pos = tag.find("style=\"")?;
+    let rest = &tag[style_pos + 7..];
+    let style_end = rest.find('"')?;
+    let style = &rest[..style_end];
+    let mut left = None;
+    let mut top = None;
+    for decl in style.split(';') {
+        let Some((k, v)) = decl.split_once(':') else {
+            continue;
+        };
+        let key = k.trim();
+        let val = v.trim().strip_suffix("pt").unwrap_or(v.trim());
+        if key == "left" {
+            left = val.parse::<f64>().ok();
+        } else if key == "top" {
+            top = val.parse::<f64>().ok();
+        }
+    }
+    Some((left?, top?))
+}
+
+fn strip_tags_and_unescape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut in_tag = false;
+    for ch in s.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(ch),
+            _ => {}
+        }
+    }
+    out.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&nbsp;", " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+struct ScheduleChunk<'a> {
+    schedule: &'a OverflowSchedule,
+    rows: &'a [OverflowRow],
+    is_last_chunk_of_schedule: bool,
 }
 
 fn collect_not_joined_keys(parsed: &Value) -> BTreeSet<String> {
@@ -1537,7 +1994,7 @@ mod tests {
             );
             f.insert(
                 format!("frm2000OT:sched1A:txtLot{i}"),
-                format!("LOT {n} BLK 12 / COMMERCIAL BLDG"),
+                "LOT".into(),
             );
             f.insert(format!("frm2000OT:sched1A:txtClassification{i}"), "CR".into());
             f.insert(format!("frm2000OT:sched1A:txtArea{i}"), format!("{}.00", 200 + n * 10));
@@ -1726,7 +2183,7 @@ mod tests {
             );
             fields_5.insert(
                 format!("frm2000OT:sched1A:txtLot{i}"),
-                format!("LOT {n} BLK 12 / COMMERCIAL BLDG"),
+                "LOT".into(),
             );
             fields_5.insert(format!("frm2000OT:sched1A:txtClassification{i}"), "CR".into());
             fields_5.insert(format!("frm2000OT:sched1A:txtArea{i}"), format!("{}.00", 200 + n * 10));
@@ -2042,6 +2499,12 @@ mod tests {
             }
             out.push(' ');
             out.push_str(&val);
+            if val.contains("&#10;") {
+                out.push(' ');
+                out.push_str(&val.replace("&#10;", ""));
+                out.push(' ');
+                out.push_str(&val.replace("&#10;", " "));
+            }
         }
         if !comb_buf.is_empty() {
             out.push(' ');
@@ -2248,5 +2711,131 @@ mod tests {
             failures.len(),
             failures.join("\n  - ")
         );
+    }
+
+    #[test]
+    fn truncated_cell_produces_one_additional_sheet_with_full_text() {
+        let mut fields = BTreeMap::new();
+        fields.insert("derived:tin".into(), "00012345300000".into());
+        fields.insert("frm2000OT:txtTaxpayerName".into(), "JUANA SANTOS".into());
+        fields.insert("frm2000OT:txtDateMonth".into(), "01".into());
+        fields.insert("frm2000OT:txtDateDay".into(), "15".into());
+        fields.insert("frm2000OT:txtDateYear".into(), "2026".into());
+        let long_stock = "METROPOLITAN PHILIPPINE INFRASTRUCTURE HOLDINGS AND INDUSTRIAL DEVELOPMENT CORPORATION CUMULATIVE PARTICIPATING REDEEMABLE PREFERRED SHARES SERIES 2026-A";
+        fields.insert(
+            "frm2000OT:sched1B:txtNameOfCorpStock2".into(),
+            long_stock.into(),
+        );
+
+        let doc = frozen_html::filled_document_with_report("2000-ot-2018", &fields, None).unwrap();
+        assert_eq!(
+            doc.html.matches("class=\"page page-continuation\"").count(),
+            1,
+            "one truncated cell must produce exactly one additional sheet"
+        );
+        assert!(doc.html.contains("Entries continued from the form"));
+        assert!(doc.html.contains("Page 2"));
+        assert!(doc.html.contains("Schedule 1.B, row 3, Name of Corporate Stock (a)"));
+        assert!(doc.html.contains(long_stock));
+        // Never leak internal cell ids or file names in the printed table.
+        let cont_pos = doc.html.find("class=\"page page-continuation\"").unwrap();
+        let cont_html = &doc.html[cont_pos..];
+        assert!(!cont_html.contains("p2c"));
+        assert!(!cont_html.contains("writer-cells.json"));
+        // The official cell ends with "..." followed by nothing else.
+        let official_html = &doc.html[..cont_pos];
+        assert!(official_html.contains("data-overflow-warning=\"text-truncated\""));
+        assert!(official_html.contains("...\""));
+    }
+
+    #[test]
+    fn no_truncated_cell_produces_no_additional_sheet() {
+        let mut fields = BTreeMap::new();
+        fields.insert("derived:tin".into(), "00012345300000".into());
+        fields.insert("frm2000OT:txtTaxpayerName".into(), "JUANA SANTOS".into());
+        fields.insert("frm2000OT:txtDateMonth".into(), "01".into());
+        fields.insert("frm2000OT:txtDateDay".into(), "15".into());
+        fields.insert("frm2000OT:txtDateYear".into(), "2026".into());
+        fields.insert("frm2000OT:sched1B:txtNameOfCorpStock2".into(), "AYALA CORP".into());
+
+        let doc = frozen_html::filled_document_with_report("2000-ot-2018", &fields, None).unwrap();
+        assert!(!doc.html.contains("page-continuation"));
+        assert!(!doc.html.contains("Entries continued from the form"));
+    }
+
+    #[test]
+    fn extra_schedule_rows_and_truncated_cell_produce_one_coherent_set_of_additional_sheets() {
+        // Case 1: plain fallback schedule rows + truncated cell on the SAME plain sheet sequence
+        let mut plain_fields = BTreeMap::new();
+        plain_fields.insert("frm2000OT:txtTaxpayerName".into(), "JUANA SANTOS".into());
+        let sched = OverflowSchedule {
+            heading: "Schedule 1".into(),
+            printed_capacity: 5,
+            columns: vec![OverflowColumn {
+                heading: "Description".into(),
+                is_amount: false,
+                subtotal: None,
+            }],
+            rows: vec![OverflowRow {
+                row_number: 6,
+                values: vec!["Overflow row 6".into()],
+            }],
+            has_total: false,
+        };
+        let truncated = vec![TruncatedEntry {
+            page_number: 2,
+            label: "Part V, Item 7 — Foreign Tax Credits (specify)".into(),
+            full_text: "VERY LONG TAX CREDIT SPECIFICATION THAT DID NOT FIT ON THE OFFICIAL LINE".into(),
+        }];
+        let combined = continuation_pages_html_with_truncated(
+            "1701ms-2024",
+            &plain_fields,
+            &OverflowReport {
+                schedules: vec![sched],
+            },
+            &truncated,
+            "612pt",
+            "936pt",
+        );
+        assert_eq!(
+            combined.matches("id=\"page-continuation\"").count(),
+            1,
+            "must produce one coherent additional sheet, not two competing ones"
+        );
+        assert!(combined.contains("Schedule 1 (continued)"));
+        assert!(combined.contains("Entries continued from the form"));
+        assert!(combined.contains("Part V, Item 7 — Foreign Tax Credits (specify)"));
+
+        // Case 2: end-to-end 2000-OT with BOTH 15 Schedule 1.A rows (cloned band)
+        // AND a truncated Schedule 1.B stock name -> band page + 1 plain additional sheet
+        let mut fields = sample_2000ot_15_rows();
+        let long_stock = "METROPOLITAN PHILIPPINE INFRASTRUCTURE HOLDINGS AND INDUSTRIAL DEVELOPMENT CORPORATION CUMULATIVE PARTICIPATING REDEEMABLE PREFERRED SHARES SERIES 2026-A";
+        fields.insert(
+            "frm2000OT:sched1B:txtNameOfCorpStock2".into(),
+            long_stock.into(),
+        );
+        let doc = frozen_html::filled_document_with_report("2000-ot-2018", &fields, None).unwrap();
+        assert!(doc.html.contains("page-continuation-band"));
+        assert_eq!(
+            doc.html.matches("id=\"page-continuation\"").count(),
+            1,
+            "only one plain additional sheet id"
+        );
+        assert!(doc.html.contains("Entries continued from the form"));
+        assert!(doc.html.contains(long_stock));
+    }
+
+    #[test]
+    fn truncated_cell_without_writer_label_falls_back_to_nearest_printed_caption() {
+        let synthetic = "<div class=\"page page-1\" style=\"width:612pt;height:936pt\">\
+            <div class=\"t\" style=\"left:40pt;top:100pt\">9 Other Remarks</div>\
+            <div class=\"f\" id=\"p1c999\" style=\"left:40pt;top:114pt;width:80pt;height:14pt\">\
+            <input id=\"p1c999-i\" data-overflow-warning=\"text-truncated\" data-writer-value=\"FULL UNLABELED TEXT\" value=\"FULL UN...\">\
+            </div></div>";
+        let entries = collect_truncated_entries("2000-ot-2018", synthetic, &OverflowReport::default());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].page_number, 1);
+        assert_eq!(entries[0].label, "9 Other Remarks");
+        assert_eq!(entries[0].full_text, "FULL UNLABELED TEXT");
     }
 }

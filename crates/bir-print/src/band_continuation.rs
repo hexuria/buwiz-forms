@@ -147,8 +147,11 @@ pub(crate) struct BandText {
 
 /// Output of building continuation pages for a filled return.
 pub(crate) struct ContinuationOutput {
-    /// HTML fragments (`<div class="page ...">...</div>`) to append before `</body>`.
+    /// Cloned-band continuation page fragments (`<div class="page page-continuation-band" ...>`).
     pub pages_html: String,
+    /// Schedules without matching band metadata that must be rendered on plain
+    /// `.page-continuation` sheets (unified with any truncated-text entries).
+    pub fallback_schedules: Vec<OverflowSchedule>,
 }
 
 /// Parse `<script type="application/json" id="formgen-bands">...</script>` from
@@ -187,6 +190,7 @@ pub(crate) fn build_continuation_pages(
     if report.is_empty() {
         return Ok(ContinuationOutput {
             pages_html: String::new(),
+            fallback_schedules: Vec::new(),
         });
     }
 
@@ -214,16 +218,11 @@ pub(crate) fn build_continuation_pages(
         }
     }
 
-    if !fallback_schedules.is_empty() {
-        let fb_report = OverflowReport {
-            schedules: fallback_schedules,
-        };
-        pages_html.push_str(&continuation::continuation_pages_html(
-            slug, fields, &fb_report, width, height,
-        ));
-    }
-
-    Ok(ContinuationOutput { pages_html })
+    let _ = (width, height);
+    Ok(ContinuationOutput {
+        pages_html,
+        fallback_schedules,
+    })
 }
 
 /// How one cell in a band's template row maps to an `OverflowSchedule` column.

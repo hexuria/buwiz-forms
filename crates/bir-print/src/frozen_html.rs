@@ -3921,10 +3921,30 @@ pub fn filled_document_with_report(
 
     let official_filled = fill_bundle(loaded.html, fields, slug)?;
     let mut document = inline_local_assets(&official_filled, &loaded);
+    let mut fallback_schedules = Vec::new();
     if let Some(c) = cont {
         if !c.pages_html.is_empty() {
             let inlined_pages = inline_local_assets(&c.pages_html, &loaded);
             document = append_before_body_end(&document, &inlined_pages);
+        }
+        fallback_schedules = c.fallback_schedules;
+    }
+    let truncated_entries =
+        crate::continuation::collect_truncated_entries(slug, &document, &overflow);
+    if !fallback_schedules.is_empty() || !truncated_entries.is_empty() {
+        let fb_report = crate::continuation::OverflowReport {
+            schedules: fallback_schedules,
+        };
+        let plain_pages = crate::continuation::continuation_pages_html_with_truncated(
+            slug,
+            fields,
+            &fb_report,
+            &truncated_entries,
+            &width,
+            &height,
+        );
+        if !plain_pages.is_empty() {
+            document = append_before_body_end(&document, &plain_pages);
         }
     }
     if let Some(receipt) = receipt {
@@ -8817,7 +8837,7 @@ mod donor_estate_print_tests {
             ),
             (
                 "1801-2018",
-                "26fe57e80ee1a068033de86725a87756c661fa1f77dda52eeda8e93f5db8532d",
+                "b8a44f8e52735ba9728a68699e6cba2a609d08b9c008032ae1b294f89d5f2328",
             ),
             (
                 "1800-2018",
