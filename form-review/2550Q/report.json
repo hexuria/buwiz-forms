@@ -1,0 +1,68 @@
+{
+  "code": "2550Q",
+  "verdict": "tweak",
+  "summary": "Page 1 and Page 2 match the official April 2024 ENCS layout closely; small print tweaks needed (Item 26 label extra space, Item 52 caption touching bottom border), while comb-tick collisions, left-aligned schedule amounts, and a misattached screen validation error on Item 37 need shared changes.",
+  "defects": [
+    {
+      "id": "2550q-p1-comb-collisions",
+      "surface": "print",
+      "where": "Page 1 Items 9, 10, 14A and Page 2 Taxpayer's Last Name/Registered Name",
+      "what": "Long registered name, address, and Item 14A specify text switch out of comb mode and collide with comb ticks.",
+      "before": "form-review/2550Q/before/print-p1.png",
+      "after": "",
+      "status": "needs shared change"
+    },
+    {
+      "id": "2550q-p2-sched-left-align",
+      "surface": "print",
+      "where": "Page 2 Part V Schedules 1, 2, 3, and 4",
+      "what": "Numeric amounts in Schedule 1 (Cols D-I), Schedule 2, Schedule 3 (Cols C-D), and Schedule 4 (Col E) are left-aligned flush against the left cell border.",
+      "before": "form-review/2550Q/before/print-p2.png",
+      "after": "",
+      "status": "needs shared change"
+    },
+    {
+      "id": "2550q-p1-item26-space",
+      "surface": "print",
+      "where": "Page 1 Part II Item 26 label",
+      "what": "Label reads 'TOTAL AMOUNT PAYABLE/( Excess Credits)' with an unintended space after '(' vs official 'TOTAL AMOUNT PAYABLE/(Excess Credits)'.",
+      "before": "form-review/2550Q/before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "2550q-p2-item52-wrap",
+      "surface": "print",
+      "where": "Page 2 Part IV Item 52 label",
+      "what": "Second line '(From Part V Schedule 1, Column I)' touches the bottom cell border.",
+      "before": "form-review/2550Q/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "2550q-screen-item37-wrong-error",
+      "surface": "screen",
+      "where": "Part IV Item 37 (Total Adjusted Output Tax Due)",
+      "what": "Computed read-only numeric Item 37 displays 'Use at most 50 characters.' repeated three times (misattached length errors from other text fields).",
+      "before": "form-review/2550Q/before/screen-05-part-iv-details-of-vat-computation.png",
+      "after": "",
+      "status": "needs shared change"
+    },
+    {
+      "id": "2550q-screen-sched-row-count-badge",
+      "surface": "screen",
+      "where": "Part V Schedules (Schedule 1 and Schedule 3 headers)",
+      "what": "Header shows '12 rows' on the right while the body says 'No rows yet.' with '+ Add row', which is contradictory (shows capacity instead of current row count).",
+      "before": "form-review/2550Q/before/screen-06-part-v-schedules.png",
+      "after": "",
+      "status": "needs shared change"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "neon-4 (try/forms-shared-print): comb-tick collisions on long name/address/14A; left-aligned amounts in Part V Schedules 1-4",
+    "crates/bir-app-api or nsh/screens/form/: misattached 'Use at most 50 characters.' errors on read-only Item 37; contradictory '12 rows' vs 'No rows yet.' badge on empty growable schedules"
+  ],
+  "tests_run": [],
+  "open_questions": []
+}

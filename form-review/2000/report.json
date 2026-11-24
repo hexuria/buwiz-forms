@@ -1,0 +1,69 @@
+{
+  "code": "2000",
+  "verdict": "tweak",
+  "summary": "Page 1 matches the official Jan 2018 ENCS PDF well, but Page 2 has a severe TIN/Name cell collision at the top, blank Schedule 1 Tax Rate values, missing DST/ATC reference table, and 49 raw developer cell IDs used as field labels in forms/forms-schema.json.",
+  "defects": [
+    {
+      "id": "2000-p2-tin-name-collision",
+      "surface": "print",
+      "where": "Page 2 header TIN and Taxpayer's Name row",
+      "what": "TIN prints as uncombed free text ('00012345300000') and Taxpayer's Name starts inside the TIN column immediately concatenated onto the TIN ('00012345300000SANTOS, JUANA DELA CRUZ-MARIA...').",
+      "before": "form-review/2000/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "2000-p2-sched1-tax-rate-blank",
+      "surface": "print",
+      "where": "Page 2 Schedule 1 Tax Rate column (rows 1-3)",
+      "what": "Tax Rate cells print blank even when ATC (DS101), Tax Base, and Tax Due are populated.",
+      "before": "form-review/2000/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "2000-p1-comb-collisions",
+      "surface": "print",
+      "where": "Page 1 Items 6, 7, 11, and 12 (TIN with hyphens)",
+      "what": "Long name, address, Other Party Name, and Item 12 TIN collide with comb ticks.",
+      "before": "form-review/2000/before/print-p1.png",
+      "after": "",
+      "status": "needs shared change"
+    },
+    {
+      "id": "2000-p2-missing-atc-table",
+      "surface": "print",
+      "where": "Page 2 below Schedule 4",
+      "what": "Official BIR 2000 Jan 2018 ENCS Page 2 includes the two-column Documentary Stamp Tax (DST)/ATC reference table (DS010-DS132); printed sheet leaves the lower half blank.",
+      "before": "form-review/2000/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "2000-screen-raw-cell-id-labels",
+      "surface": "screen",
+      "where": "forms/forms-schema.json (2000 Schedules 1-4 field labels)",
+      "what": "49 field labels in forms/forms-schema.json are raw developer cell IDs (e.g. 'sched1:txtTaxBase0', 'sched1:txtTaxRate0', 'sched1:txtTotalDue1') instead of plain-language labels.",
+      "before": "form-review/2000/before/screen-05-schedule-1-summary-of-computation-of-t.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "2000-p2-header-page1-label",
+      "surface": "print",
+      "where": "Page 2 top-left header",
+      "what": "Reads 'Page 1' on Page 2, which matches the exact typo printed on the official BIR 2000 Jan 2018 ENCS PDF.",
+      "before": "form-review/2000/before/print-p2.png",
+      "after": "",
+      "status": "by design"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "neon-4 (try/forms-shared-print): comb-tick collisions on long name/address/Other Party Name/TIN"
+  ],
+  "tests_run": [],
+  "open_questions": [
+    "Should the Page 2 DST/ATC reference table be added to html-frozen/2000-dst-2018/ to match the official PDF?"
+  ]
+}

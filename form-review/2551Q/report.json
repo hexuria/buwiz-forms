@@ -1,0 +1,80 @@
+{
+  "code": "2551Q",
+  "verdict": "tweak",
+  "summary": "Overall Page 1 and Page 2 geometry match the official Jan 2018 ENCS PDF well; localized print tweaks needed (Non-Individual signature text clipping into Expiry Date, Item 17 specify micro-text, missing Page 2 Table 1 ATC reference table check, Schedule 1 Tax Rate alignment), plus shared print/screen items (comb-tick collisions owned by neon-4, Schedule 1 screen NOTE_NOT_YET editability, and Item 13 profile-readiness UX gap).",
+  "defects": [
+    {
+      "id": "2551q-p1-comb-collisions",
+      "surface": "print",
+      "where": "Page 1 Items 8, 9, 12A and Page 2 Taxpayer's Last Name/Registered Name",
+      "what": "Long registered name, address, and Item 12A tax-relief text switch out of comb mode and collide with the comb ticks underneath.",
+      "before": "form-review/2551Q/before/print-p1.png",
+      "after": "",
+      "status": "needs shared change"
+    },
+    {
+      "id": "2551q-p1-sig-nonindiv-clip",
+      "surface": "print",
+      "where": "Page 1 Declaration / Signature block (For Non-Individual)",
+      "what": "The third line '(Indicate title/designation and TIN)' overflows the grey signature caption bar and collides with 'Expiry Date (MM/DD/YYYY)' below it; on the official PDF it fits in 2 lines with clear separation.",
+      "before": "form-review/2551Q/before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "2551q-p1-item17-specify-micro",
+      "surface": "print",
+      "where": "Page 1 Part II Item 17 Other Tax Credit/Payment (specify)",
+      "what": "Long Item 17 specification text shrinks to near-illegible micro-text (~4pt) in the narrow inline box.",
+      "before": "form-review/2551Q/before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "2551q-p2-tax-rate-align",
+      "surface": "print",
+      "where": "Page 2 Schedule 1 Row 1 Tax Rate",
+      "what": "Single-digit tax rate '3' is left-aligned flush against the left border of the rate box instead of right-aligned in the comb cells next to '%'.",
+      "before": "form-review/2551Q/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "2551q-p2-missing-table1",
+      "surface": "print",
+      "where": "Page 2 below Schedule 1 Item 7",
+      "what": "Official BIR 2551Q Jan 2018 ENCS Page 2 includes 'Table 1 - Alphanumeric Tax Code (ATC)' (PT010-PT132); the printed sheet leaves the lower 65% of Page 2 blank.",
+      "before": "form-review/2551Q/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "2551q-screen-sched1-not-yet",
+      "surface": "screen",
+      "where": "Schedule 1 · Computation of Tax",
+      "what": "Shows 'Can't be filled on this page yet.' (crates/bir-app-api/src/screen_form_module.rs, NOTE_NOT_YET) and Schedule 1 rows 2-6 ATC selectors cannot be edited on the form page. Making those rows fillable requires Rust screen-form table/row plumbing in crates/bir-app-api/src/screen_form_module.rs and nsh/screens/form/ (per-row ATC select + Taxable Amount input + computed Tax Rate/Tax Due wired to txtATC1..6 and txtATCAmt1..6).",
+      "before": "form-review/2551Q/before/screen-05-schedule-1-computation-of-tax-attach-a.png",
+      "after": "",
+      "status": "needs shared change"
+    },
+    {
+      "id": "2551q-screen-item13-profile-route",
+      "surface": "screen",
+      "where": "Part I Item 13 and Q2-Q4 prerequisite banner",
+      "what": "Both Item 13 election and EOPT tier are settable in Tax profile -> Profile -> Facts your forms use (nsh/screens/taxpayer/Facts.tsx) and via inline cards on the form page, but Check's annual_income_tax_election message (crates/bir-core/src/forms/form_2551q.rs) does not name the profile path or the Income type prerequisite, and clicking 'Set annual income-tax election' before setting Income type lands on a profile row whose Set button is hidden until Income type is set.",
+      "before": "form-review/2551Q/before/screen-02-part-i-background-information.png",
+      "after": "",
+      "status": "needs shared change"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "neon-4 (try/forms-shared-print): long names, addresses, and Item 12A specify colliding with comb ticks",
+    "crates/bir-app-api/src/screen_form_module.rs + nsh/screens/form/: editable Schedule 1 table rows (remove NOTE_NOT_YET)",
+    "crates/bir-core/src/forms/form_2551q.rs + nsh/screens/taxpayer/Facts.tsx: clearer Check guidance naming Tax profile -> Facts your forms use and guiding Income type prerequisite when opening annual income-tax election"
+  ],
+  "tests_run": [],
+  "open_questions": [
+    "Should Page 2 'Table 1 - Alphanumeric Tax Code (ATC)' reference table be added to html-frozen/2551q-2018/ to match the official BIR PDF, or kept omitted as a reference-only table?"
+  ]
+}
