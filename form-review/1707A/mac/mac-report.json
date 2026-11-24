@@ -1,0 +1,18 @@
+{
+  "form": "1707A",
+  "year": 2025,
+  "branch": "try/forms-neon-3",
+  "commit": "b965e9002d0638dd5c2e10a6fd21a4639415aae5",
+  "macos": "26.6.2 (arm64), WKWebView print preview",
+  "dataset": "Linux worst-case from after/print-p1.png+p2.png: profile updated first (RDO 039, ZIP 1100, address UNIT 1408 TOWER B RESIDENCIAS DE SAN LORENZO CONDOMINIUM, email juana.santos.demo@example.com), Calendar year 12/31/2025, amended No, sheets 05, ATC II030 Individual, treaty Yes. Sched1 rows I1-I3 via form.fill; Sched2 rows I1-I3 via form.fill; OTHERS row 4 of each schedule entered through the app's Add-row modal (form.fill cannot create extra rows; window-plane typing used).",
+  "verdict": "yes",
+  "verdict_line": "macOS matches Linux: yes",
+  "findings": [
+    "Print preview page 1 identical to Linux after/: calendar/fiscal combs, amended No, sheets 05, ATC II030 X, TIN+RDO 039 combs, name/address/ZIP 1100/contact/email, treaty Yes X, items 13-15 (24,003,279.65 / 5,327,070.50 / 18,676,209.15), 16 15%, 17 2,801,431.37, 18A/C 3,600,492.38, item 19 and item 21 overpayment printed as '- 799 061 . 01' with leading minus (the fixed behavior).",
+    "Print preview page 2 identical: Sched1 rows 1-3 + OTHERS (48,448,889.10 / 29,946,109.95 / 18,502,779.15 / 2,775,417.30), TOTAL 24,003,279.65 / 3,600,492.38; Sched2 rows 1-3 + OTHERS (10,303,839.00 / 14,205,658.50 / 3,901,819.50), TOTAL 5,327,070.50; right-aligned amount columns and Taxpayer Classification block match.",
+    "Saved PDF matches the preview: no mac-only text-run overlaps and no harder shrink-fit clipping observed on this form (unlike 2550Q/1706/1606 - stock names here are short enough to fit, and the italic/bold sibling runs on this layout do not collide).",
+    "Comb white band behind digits and italic captions identical to Linux; page break at the same place (Part IV starts page 2, 'Page 2 of 2').",
+    "Carried-over Linux defects from report.json reproduce identically on macOS preview: none new introduced; screen-only items (TIN branch box width, validation message repeat) are out of print scope.",
+    "Fill-path note (not a print difference): OTHERS rows cannot be written via form.fill (non-fillable derived rows); they require the per-schedule 'Add row' modal in the UI, where they aggregate from continuation rows 4+."
+  ]
+}
