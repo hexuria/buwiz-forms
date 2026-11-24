@@ -12,7 +12,7 @@ there, but nobody has run it on that platform.
 | Feature | Status | Notes |
 |---|---|---|
 | Profiles, tax form library, editors, Check, Save draft | ✓ | All 43 forms. |
-| Submission queue and dry run | ✓ |  |
+| Submission queue (a queued return stays queued; no shipped build can send to the BIR) | ✓ |  |
 | Database storage (plain SQLite, not encrypted) | ✓ |  |
 | Close button (X) and quit shortcut | ✓ | X, Alt+F4 and Ctrl+W (Close Window) ask "Hide to tray or Quit?" by default; Ctrl+Q quits for real (`closePolicy` in `nsh/shell/desktop/menu_model.ts`). |
 | System tray icon | partial | Needs a StatusNotifier host. Many desktops have none; the app then runs without a tray. |
@@ -20,14 +20,11 @@ there, but nobody has run it on that platform.
 | Single-instance guard | ✓ | Loopback ping only (`instance.port`). The platform hook is an empty stub. |
 | Window size and position memory | ✓ | Restoring the position under Wayland: unverified. |
 | Print preview | partial | In-app window: one picture per sheet drawn on the CPU by Blitz + `vello_cpu` (`nsh/src/print.rs`, `nsh/src/sheets.rs`). The PDF/print path uses WebKitGTK's print operation (GTK's "Print to File"). |
-| Print an email receipt as PDF | ✓ | WebKitGTK print operation (GTK "Print to File"), `nsh/src/print.rs`. |
-| Export dialogs (save file, choose folder) | partial | Needs `xdg-desktop-portal` or `zenity`. Otherwise files go to `~/Documents/eBIRForms/exports`. |
-| Unlock with the OS (Touch ID, Windows Hello) | ✗ | Not built on Linux. Use the PIN or authenticator app. |
+| Export profile (Settings → Transfer) and Save as PDF (print preview) | partial | Needs `xdg-desktop-portal` or `zenity`. Otherwise files go to `~/Documents/eBIRForms/exports`. |
 | PIN or authenticator app lock | ✓ |  |
-| Desktop notifications | untested | In-app toast. System banner: unverified. |
-| Instant refresh when the database changes | ✓ | 1 s poll. |
-| Add deadlines to a calendar (.ics) | ✓ | Opens with `xdg-open`. |
-| Google Calendar credentials storage | untested | Through `keyring`. |
+| In-app notifications drawer and toasts | ✓ | Notifications panel (Ctrl+Shift+N) and in-app toasts. |
+| Background refresh when the database changes | ✓ | The paced watch in `nsh/shell/app.ts` re-reads. |
+| Gmail connect for BIR receipt tracking | ✓ | Settings → Account → Google, or the taxpayer inbox card; the host opens the browser. |
 | Keyboard shortcuts | ✓ | Ctrl based; also F11. |
 | Packaging | ✓ | `.deb`, `.rpm`, x86_64 Arch package, tarball, installer, and x86_64 AUR build file. |
 | Agent control (gpui-agent) | ✓ | Opt-in build feature. |
@@ -193,13 +190,16 @@ sudo apt-get install -y \
 
 ## Security
 
-- Touch ID and Windows Hello code is not built on Linux. Use the PIN or an
-  authenticator app.
+- The PIN and authenticator-app locks are in Settings → Account → Security.
+- No screen offers calendar export (.ics), Google Calendar, unlock with
+  Touch ID/Windows Hello, or printing a receipt as PDF; that code exists
+  in the core crates and `nsh/src/auth.rs` but has no control in
+  `nsh/screens` or `nsh/shell`.
 
 ## Notifications
 
-- In-app toasts work. Whether the system banner appears is unverified.
-  the headless `bir` uses `notify-rust`.
+- Notifications are in-app (the drawer and toasts). The headless `bir`
+  uses `notify-rust`.
 
 ## Keyboard shortcuts
 
@@ -212,4 +212,3 @@ forward), F11, Alt+F4, Ctrl+W.
 
 - Wayland behavior of the hotkey, window raise and window position memory.
 - The exact `instance.port` path.
-- Whether system notification banners appear.

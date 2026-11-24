@@ -21,14 +21,11 @@ there, but nobody has run it on that platform.
 | Single-instance guard | ✓ | untested | ✓ |
 | Window size and position memory | ✓ | untested | ✓ |
 | Print preview | ✓ | untested | partial |
-| Print an email receipt as PDF | ✓ | untested | ✓ |
-| Export dialogs (save file, choose folder) | ✓ | untested | partial |
-| Unlock with the OS (Touch ID, Windows Hello) | ✓ | untested | ✗ |
+| Export profile (Settings → Transfer) and Save as PDF (print preview) | ✓ | untested | partial |
 | PIN or authenticator app lock | ✓ | ✓ | ✓ |
-| Desktop notifications | ✓ | untested | untested |
-| Instant refresh when the database changes | ✓ | ✓ | ✓ |
-| Add deadlines to a calendar (.ics) | ✓ | ✓ | ✓ |
-| Google Calendar credentials storage | ✓ | untested | untested |
+| In-app notifications drawer and toasts | ✓ | ✓ | ✓ |
+| Background refresh when the database changes | ✓ | ✓ | ✓ |
+| Gmail connect for BIR receipt tracking (Settings → Account → Google; host opens the browser) | ✓ | partial | ✓ |
 | Keyboard shortcuts | ✓ | ✓ | ✓ |
 | Store builds never self-update (Mac App Store, Microsoft Store) | ✓ | ✓ | n/a |
 | Packaging | ✓ | untested | ✓ |
@@ -57,6 +54,13 @@ there, but nobody has run it on that platform.
   real Mac, 2026-11-24). See [macos.md](platforms/macos.md).
 - The table was re-derived from `main`: the retired JS desktop shell and
   its crate were deleted; the app is the NSH app in `nsh/`.
+- Features whose code exists but which no screen offers were removed from
+  this table: adding deadlines to a calendar (the .ics builder,
+  `crates/bir-core/src/calendar_ics.rs`, is not called from `nsh/screens`
+  or `nsh/shell`), Google Calendar credentials storage, unlocking with the
+  OS (Touch ID / Windows Hello — `nsh/src/auth.rs` `os_authenticate` has no
+  caller), and printing an email receipt as PDF (the receipt code in
+  `crates/bir-core/src/email/` is not reached from a screen).
 
 ## Features that are the same everywhere
 
@@ -79,9 +83,9 @@ TypeScript code:
   database on your machine; it is not encrypted. See each platform page for
   the path, and [PRIVACY_POLICY.md](../PRIVACY_POLICY.md) for what is stored
   and sent.
-- **App lock.** A 4-digit PIN or an authenticator app. On macOS and Windows
-  the lock screen can also use Touch ID or Windows Hello (Windows Hello is
-  untested).
+- **App lock.** A 4-digit PIN or an authenticator app (Settings → Account →
+  Security). OS unlock (Touch ID / Windows Hello) exists in
+  `nsh/src/auth.rs` but no screen calls it, so the app does not offer it.
 - **Profile snapshot at save time.** A saved form keeps the profile data as
   it was when you saved. Changing the profile later does not change the
   saved form.

@@ -12,7 +12,7 @@ there, but nobody has run it on that platform.
 | Feature | Status | Notes |
 |---|---|---|
 | Profiles, tax form library, editors, Check, Save draft | ✓ | All 43 forms. |
-| Submission queue and dry run | ✓ |  |
+| Submission queue (a queued return stays queued; no shipped build can send to the BIR) | ✓ |  |
 | Database storage (plain SQLite, not encrypted) | ✓ |  |
 | Close button (X) and quit shortcut | ✓ | X and Cmd+W hide the window; Cmd+Q quits for real. |
 | System tray icon | ✓ | The `NSStatusItem` click handler restores the window; a secondary click opens the Show / Hide / Quit menu (hands-on check, 2026-11-24). |
@@ -20,14 +20,11 @@ there, but nobody has run it on that platform.
 | Single-instance guard | ✓ | The app bundle plus a loopback ping (`instance.port`). |
 | Window size and position memory | ✓ |  |
 | Print preview | ✓ | Own window with a Print button (native print dialog). |
-| Print an email receipt as PDF | ✓ | Through the print preview. |
-| Export dialogs (save file, choose folder) | ✓ | Native dialog. |
-| Unlock with the OS (Touch ID, Windows Hello) | ✓ | Touch ID, through robius-authentication. |
+| Export profile (Settings → Transfer) and Save as PDF (print preview) | ✓ | Native save dialog (`pick_save_path`). |
 | PIN or authenticator app lock | ✓ |  |
-| Desktop notifications | ✓ | In-app notifications drawer; OS banner delivery is unverified in this build. |
-| Instant refresh when the database changes | ✓ | Distributed notification plus a 5 s poll. |
-| Add deadlines to a calendar (.ics) | ✓ | Opens in Calendar. |
-| Google Calendar credentials storage | ✓ | Keychain, through the `security` tool. |
+| In-app notifications drawer and toasts | ✓ | The bell in the top bar (⌘⇧N); in-app toasts. |
+| Background refresh when the database changes | ✓ | The paced watch in `nsh/shell/app.ts` re-reads. |
+| Gmail connect for BIR receipt tracking | ✓ | Settings → Account → Google, or the taxpayer inbox card; the host opens the browser. |
 | Keyboard shortcuts | ✓ | Cmd based; also Cmd+H, Cmd+M, Cmd+Ctrl+F. |
 | Packaging | ✓ | Signed and notarized `.app` and `.dmg`; Mac App Store package. |
 | Agent control (gpui-agent) | ✓ | Opt-in build feature. |
@@ -88,20 +85,17 @@ there, but nobody has run it on that platform.
 - Print preview opens in its own window (verified 1440x900 resizable) with
   a Print button. If the preview window cannot open, the app writes the
   HTML to a temporary file and opens it in the default browser.
-- Receipt PDFs go through the same print preview.
 - Export dialogs are always the native macOS dialogs.
-
-## Security
-
-- Touch ID unlock uses `robius-authentication`. If biometrics fail or are
-  cancelled, the lock screen falls back to the PIN.
+- No screen offers calendar export (.ics), Google Calendar, unlock with
+  Touch ID, or printing a receipt as PDF; that code exists in the core
+  crates and `nsh/src/auth.rs` but has no control in `nsh/screens` or
+  `nsh/shell`.
 
 ## Notifications
 
 - Alerts and receipts appear in the app's notifications drawer
-  (the bell in the top bar; Cmd/Ctrl+Shift+N).
-- Whether an installed `.app` also posts OS notification banners is
-  unverified.
+  (the bell in the top bar; ⌘⇧N). Delivery is in-app; there is no OS
+  notification-banner code in `nsh/`.
 - The headless `bir` daemon posts banners with `osascript`.
 
 ## Packaging
@@ -134,7 +128,6 @@ there, but nobody has run it on that platform.
 
 - The exact `instance.port` path on macOS.
 - Whether the `bir` headless daemon still posts `osascript` banners.
-- Whether a packaged `.app` posts OS notification banners.
 - Whether real-mouse clicks (not accessibility actions) reach the
   menu-bar item on remote/dev machines — a raw mouse click can be
   swallowed by the remote desktop while `AXPress` works (2026-11-24).

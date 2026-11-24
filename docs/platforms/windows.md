@@ -26,7 +26,7 @@ there, but nobody has run it on that platform.
 | Feature | Status | Notes |
 |---|---|---|
 | Profiles, tax form library, editors, Check, Save draft | ✓ | Shared code; covered by the Windows CI jobs. |
-| Submission queue and dry run | ✓ | Shared code; Windows file locking for the database lock differs. |
+| Submission queue (a queued return stays queued; no shipped build can send to the BIR) | ✓ | Shared code; Windows file locking for the database lock differs. |
 | Database storage (plain SQLite, not encrypted) | ✓ |  |
 | Account sign-in (Buwiz account, device flow) | partial | The screens' logic runs in the headless Windows CI tests (`nsh/screens/auth/gate.test.tsx`, `nsh/screens/settings/account.test.tsx`), but opening the default browser (`open::that` in `crates/bir-core/src/cloud_account.rs`) and the credential store (Windows Credential Manager via `keyring`, plus the file fallback) are unchecked on a real Windows. |
 | Close button (X) and quit shortcut | untested | Code: X, Alt+F4 and Close Window (Ctrl+W) ask "Hide to tray or Quit?" by default ("Don't ask again" remembers the choice; Settings > Keyboard changes it); Ctrl+Q quits for real (`closePolicy` in `nsh/shell/desktop/menu_model.ts`). |
@@ -35,14 +35,11 @@ there, but nobody has run it on that platform.
 | Single-instance guard | untested | Named mutex plus the loopback ping. |
 | Window size and position memory | untested |  |
 | Print preview | untested | In-app window showing one picture per sheet, drawn by Blitz + `vello_cpu` (`nsh/src/print.rs`, `nsh/src/sheets.rs`). |
-| Print an email receipt as PDF | untested | Windows uses a hidden WebView2 `PrintToPdf` (`nsh/src/print.rs`) — platform code, not covered headless. |
-| Export dialogs (save file, choose folder) | untested | Native dialog. |
-| Unlock with the OS (Touch ID, Windows Hello) | untested | Windows Hello, through robius-authentication. |
+| Export profile (Settings → Transfer) and Save as PDF (print preview) | untested | Native dialog. |
 | PIN or authenticator app lock | ✓ | Shared code. |
-| Desktop notifications | untested | In-app notifications drawer. System banner: unverified. |
-| Instant refresh when the database changes | ✓ | Shared code. |
-| Add deadlines to a calendar (.ics) | ✓ | Shared code; opens in the default calendar app. |
-| Google Calendar credentials storage | untested | Credential Manager, through `keyring`. |
+| In-app notifications drawer and toasts | ✓ | Shared code. |
+| Background refresh when the database changes | ✓ | Shared code. |
+| Gmail connect for BIR receipt tracking | partial | Settings → Account → Google, or the taxpayer inbox card. The host opens the default browser — an OS call untested on real Windows. |
 | Keyboard shortcuts | ✓ | Shared code; Ctrl based; the menu keymap is covered by `nsh/shell/desktop/menu_model.test.ts` in CI. |
 | Store build never self-updates (Microsoft Store) | ✓ | `ebirforms-store-package` marker (`store_managed()` in `nsh/src/desktop.rs`). |
 | Packaging | untested | `Setup.exe`, `.msi` and `.msix` from CI, or locally with `scripts\package_nsh_windows.ps1`. |
@@ -100,11 +97,14 @@ there, but nobody has run it on that platform.
 
 ## Close, quit and the tray
 
-- The close button and Alt+F4 hide the window to the tray. The submission
-  worker keeps running. Quit from the tray menu.
-- There is no Ctrl+Q binding. Ctrl+W also hides the window. Win+M minimizes.
-  F11 toggles full screen.
-- Hiding uses Win32 `ShowWindow` on this process's windows.
+- The close button, Alt+F4 and Close Window (Ctrl+W) ask "Hide to tray or
+  Quit?" by default; "Don't ask again" remembers the choice (Settings >
+  Keyboard). Ctrl+Q quits for real (`closePolicy` in
+  `nsh/shell/desktop/menu_model.ts`).
+- A quit while returns are still sending warns first: Quit anyway / Wait /
+  Hide to tray.
+- When hidden, the window leaves the taskbar; Show in the tray menu brings
+  it back. Hiding uses Win32 `ShowWindow` on this process's windows.
 
 ## Single instance
 
@@ -119,24 +119,19 @@ there, but nobody has run it on that platform.
 
 ## Print and export
 
-- Print preview opens in its own window that uses WebView2 (through `wry`),
-  with a Print button that calls the WebView2 print UI. If the window cannot
-  open, the HTML is written to a temp file and opened in the default browser.
-  WebView2 runtime requirement: unverified.
-- Receipt PDFs print with the Windows `print` verb. If the default PDF viewer
-  does not support it, the file is opened and a message tells you to press
-  Ctrl+P.
+- Print preview opens in the app's own window: each sheet is laid out by
+  Blitz (stylo, taffy, parley) and painted by `vello_cpu` into a picture
+  (`nsh/src/print.rs`, `nsh/src/sheets.rs`); no browser is involved.
+- The PDF and the printout come from the web engine: a hidden WebView2
+  prints with `PrintToPdf` (`nsh/src/print.rs`).
 - Opening a file removes its `Zone.Identifier` stream (Mark of the Web) and
   uses backslashes, to avoid the Windows security prompt.
-- Export dialogs use the native Windows dialogs.
-
-## Security
-
-- Windows Hello unlock uses `robius-authentication`. After it returns, the app
-  releases a stuck Alt key and takes back keyboard focus
-  (`reclaim_keyboard_focus`), because the Hello dialog can leave Alt pressed.
-  That workaround is in the code because of a known library bug; whether it is
-  enough has not been checked.
+- Export dialogs use the native Windows dialogs: Settings → Transfer →
+  Export (profile) and the print preview's Save as PDF.
+- No screen offers calendar export (.ics), Google Calendar, unlock with
+  Windows Hello, or printing a receipt as PDF; that code exists in the
+  core crates and `nsh/src/auth.rs` but has no control in `nsh/screens` or
+  `nsh/shell`.
 
 ## Agent control
 
@@ -159,7 +154,7 @@ there, but nobody has run it on that platform.
   not public release attachments.
 - `scripts\package_msix.ps1` (called by `scripts\package_nsh_windows.ps1`) makes
   the MSIX from `assets\windows\AppxManifest.xml`. The MSIX
-  version is `Major.Minor.BuildNumber.0`; see
+  version is `Major.Minor.Patch.0` (the caller passes `BuildNumber = [int]$patch`); see
   [Versioning](../DEVELOPMENT.md#versioning--build-numbers).
 - `just bump-build` needs the App Store Connect credentials, so it works on
   macOS only. On Windows, `git pull` to get the latest `BUILD_NUMBER`.
