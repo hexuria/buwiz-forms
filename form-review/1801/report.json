@@ -58,12 +58,40 @@
       "status": "needs shared change"
     }
   ],
-  "files_changed": [],
+  "files_changed": [
+    "html-frozen/1801-2018/writer-cells.json",
+    "form-review/1801/after/*.png",
+    "form-review/1801/report.json"
+  ],
   "shared_changes_wanted": [
     "crates/bir-print: comb-overflow fitting and uppercase formatting for Page 1/2 Name, Residence, and Email"
   ],
-  "tests_run": [],
+  "tests_run": [
+    "cargo test -p bir-print 1801 (3/3 passed)",
+    "cargo test -p bir-print writer_cells (4/4 passed)",
+    "Live app capture via just nsh-run-agent linux"
+  ],
   "open_questions": [
     "Note: print-p*.png pages were generated from the running app Print preview sheet.html via headless Chrome + pdftoppm."
+  ],
+  "status": "fixed_per_form_pending_shared_merge",
+  "upstream_sheet_edits": [],
+  "blank_item_causes": {
+    "Item 5 (TIN)": "No joins in writer-cells.json (left in not_joined because p1c14/p1c15 have 4 slots with slot 0 holding the printed dash, and p1c17 has 0 inputs because 00000 is preprinted). Because p1c13, p1c14, and p1c15 already contain exactly 3 <input> elements each, adding writer-cells.json joins for tinA_1 -> p1c13, tinB_1 -> p1c14, tinC_1 -> p1c15 fills Item 5 cleanly with zero HTML edits.",
+    "Item 16 (Net Taxable Estate)": "No money_join in writer-cells.json (left in not_joined because p1c57 has 3 slots with slot 0 holding the printed dot). Because p1c57 already contains exactly 2 <input> elements (s1, s2), adding txtTaxableEstate -> p1c56 + p1c57 to money_joins fills Item 16 cleanly with zero HTML edits.",
+    "Item 22 (Tax Payable, 1st installment)": "Already joined in money_joins (p1c88 + p1c90). Printed blank in BEFORE because the synthetic BEFORE payload had Item 21 (117,217,000.00) > Item 20 (3,806,273.97), making Item 22 negative (-113,410,726.03), and bir-print money_joins currently omits negative amounts from comb boxes. With a valid installment portion (1,000,000.00), Item 22 prints 3,706,273.97 cleanly.",
+    "Item 24 (TOTAL AMOUNT PAYABLE)": "No money_join in writer-cells.json (left in not_joined because p1c112 is a mixed cell with caption + 11 inputs). Because p1c112 already has 11 <input> elements positioned after the caption and p1c114 has 2 <input> elements, adding txtTotPayable -> p1c112 + p1c114 to money_joins fills Item 24 cleanly with zero HTML edits."
+  },
+  "fixed_in_this_commit": [
+    "Item 5 TIN (tinA_1, tinB_1, tinC_1) now prints in p1c13, p1c14, p1c15 (branch 00000 is preprinted).",
+    "Item 16 Net Taxable Estate (txtTaxableEstate) now prints in p1c56 + p1c57.",
+    "Item 24 Total Amount Payable (txtTotPayable) now prints in p1c112 + p1c114.",
+    "Verified Item 22 (txtTaxPayable_1st) prints cleanly in p1c88 + p1c90 when non-negative."
+  ],
+  "remaining_shared_issues": [
+    "Page 2 schedule amounts left-aligned: fixed on try/forms-shared-print (commit 0f484378).",
+    "Long name/address over comb ticks: knockout preview on try/forms-overflow-knockout (commit c5cedcaa), awaiting owner decision.",
+    "Negative amounts in money_joins comb boxes (overpayment): bir-print currently leaves comb boxes blank for negative values; flagged for shared print follow-up.",
+    "Schedule rows beyond fixed printed rows: documented in form-review/SHARED-FINDINGS.md on try/forms-shared-print (commit 1679ff23)."
   ]
 }
