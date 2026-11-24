@@ -3157,6 +3157,7 @@ fn evaluate_here(
     // whose entry is not the one the sheet prints there).
     if let Value::Array(list) = &mut errors {
         list.extend(rows_dst_pt_vat::notices(kind, draft));
+        list.extend(rows_2550m::notices(kind, draft));
         list.extend(rows_annual_corporate::notices(kind, draft));
         list.extend(rows_annual_individual::notices(kind, draft));
         // PR 9's notices: a stored partial date the page shows blank.
