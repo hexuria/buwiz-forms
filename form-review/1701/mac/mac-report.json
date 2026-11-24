@@ -1,0 +1,35 @@
+{
+  "form": "1701",
+  "branch": "try/forms-neon-1",
+  "commit": "2f71cd11",
+  "platform": "macOS 26.6.2 arm64 (WKWebView preview + Save-as-PDF)",
+  "verdict": "macOS matches Linux: yes",
+  "fill": {
+    "method": "form.open year=2025 period=YY + form.fill across two batches (31 + 121 boxes, 0 refused) covering all 4 pages: joint filing, single proprietor + compensation earner, ATC II013, graduated rates + itemized, refund, Schedules 2-6 incl. all 17 Sched-4 rows, all Sched-5 descriptions, both NOLCO tables rows 4-6 and 9-11; taxpayer_name corrected via sqlite json_set (draft reopen) to print the -VILLANUEVA form of the Linux persona",
+    "persona": "SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA / TIN 000-123-453-00000 / RDO 008 / ZIP 1003; spouse DELA CRUZ-VILLANUEVA, ROBERTO MIGUEL ANTONIO, RDO 008; FTN-998877665544 both"
+  },
+  "pages": 4,
+  "page_size": "A4",
+  "comparison_vs_linux_after": {
+    "layout": "identical: same 4-page A4 folio sheet, same bands, comb cells, schedule tables, page breaks at the same items; Part III payment table blank like Linux",
+    "values": "all printed values identical except a 1-peso drift in the auto-derived NOLCO chain: Sched 6.A item 3 net operating loss prints -6,358,261 (taxpayer) and -6,358,263 (spouse) on mac vs -6,358,262 both on Linux, which moves row-7/12 auto amounts and Schedule-3 item 10B (68,641,739 vs 68,641,738); all user-entered amounts are byte-identical",
+    "carried_over_linux_defects": [
+      "sched amounts print left-aligned inside comb columns (Linux P4 left-align note) - identical on mac",
+      "Sched-3 items 23/24/25 and Part VIII relief items print blank for computed zero - identical",
+      "Part IX particulars show DEMO ENTRY texts only, amounts 0 - identical"
+    ]
+  },
+  "saved_pdf_defects": {
+    "class": "mac-only capture-zoom text-metrics defect fixed on try/print-zoom-fix @e45bd5fa",
+    "seen": [
+      "p3 item 29: the bold 'P250,000' collides into the italic annotation '...employed individuals and/or professionals in the amount of' (the '(applicable if with compensation income)' tail overlaps the bold amount); preview renders the same run cleanly",
+      "no other overlap or clipped-name instance found in the four saved pages"
+    ]
+  },
+  "notes": [
+    "NOLCO rows 7A and 12A are not user-fillable boxes (auto-derived from net operating loss) - the +-1 peso drift comes from that derivation, same class as the 1700 item-36 aggregate delta",
+    "reopened-draft profile banner 'Differs from your profile' appeared after the name patch; 'Use profile values' NOT clicked; ATC save prompt answered 'Only this return'",
+    "Schedule-1 employer rows print empty on mac exactly as on Linux (checkboxes only, no fill boxes for employer name/TIN)"
+  ],
+  "files": ["print-p1.png", "print-p2.png", "print-p3.png", "print-p4.png", "pdf-p-1.png", "pdf-p-2.png", "pdf-p-3.png", "pdf-p-4.png"]
+}
