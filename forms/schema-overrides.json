@@ -48780,6 +48780,30 @@
     }
   },
   "2550M": {
+    "frm2550m:txtTax13B": {
+      "evidence": "Official HTA runtime enables Item 13B at load (rules/forms/2550m-v2007/fixtures/runtime-control-inventory-v796.json source line 738, disabled=false, readonly=false); compute13B fills 12% on blur of 13A and leaves 13B editable (probe.rs FILER_TYPED).",
+      "computed": false
+    },
+    "frm2550m:txtTax18F": {
+      "evidence": "Official HTA runtime enables Item 18F at load (inventory source line 857, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18E and leaves 18F editable (probe.rs FILER_TYPED).",
+      "computed": false
+    },
+    "frm2550m:txtTax18H": {
+      "evidence": "Official HTA runtime enables Item 18H at load (inventory source line 866, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18G and leaves 18H editable (probe.rs FILER_TYPED).",
+      "computed": false
+    },
+    "frm2550m:txtTax18J": {
+      "evidence": "Official HTA runtime enables Item 18J at load (inventory source line 876, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18I and leaves 18J editable (probe.rs FILER_TYPED).",
+      "computed": false
+    },
+    "frm2550m:txtTax18L": {
+      "evidence": "Official HTA runtime enables Item 18L at load (inventory source line 886, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18K and leaves 18L editable (probe.rs FILER_TYPED).",
+      "computed": false
+    },
+    "frm2550m:txtTax18O": {
+      "evidence": "Official HTA runtime enables Item 18O at load (inventory source line 903, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18N and leaves 18O editable (probe.rs FILER_TYPED).",
+      "computed": false
+    },
     "item:2:0": {
       "label": "Vatable sales/receipts, private",
       "evidence": "item 12A: painted view (retired): 'Vatable sales/receipts, private'"

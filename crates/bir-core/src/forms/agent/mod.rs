@@ -1646,6 +1646,46 @@ fn write_bound_box(
             _ => {}
         }
     }
+    // 2550M's Item 13A and Item 18 base boxes run blur handlers in the
+    // official HTA (`compute13B`, `changedTxtTax13A`, `compute18TransactionbyRow`)
+    // that fill the paired 12% tax box (and 7% Schedule 4 standard input tax
+    // for 13A) while leaving those tax boxes editable for user overrides.
+    if kind == AgentFormKind::Queueable(QueueableKind::Form2550M) {
+        use crate::forms::form_2550m::Form2550MPurchase as Purchase;
+        match key {
+            "frm2550m:txtTax13A" => {
+                return write_2550m_base_amount(kind, draft, key, &text, |d, v| {
+                    d.set_sales_to_government(v);
+                });
+            }
+            "frm2550m:txtTax18E" => {
+                return write_2550m_base_amount(kind, draft, key, &text, |d, v| {
+                    d.set_purchase(Purchase::DomesticGoods, v);
+                });
+            }
+            "frm2550m:txtTax18G" => {
+                return write_2550m_base_amount(kind, draft, key, &text, |d, v| {
+                    d.set_purchase(Purchase::ImportedGoods, v);
+                });
+            }
+            "frm2550m:txtTax18I" => {
+                return write_2550m_base_amount(kind, draft, key, &text, |d, v| {
+                    d.set_purchase(Purchase::DomesticServices, v);
+                });
+            }
+            "frm2550m:txtTax18K" => {
+                return write_2550m_base_amount(kind, draft, key, &text, |d, v| {
+                    d.set_purchase(Purchase::NonResidentServices, v);
+                });
+            }
+            "frm2550m:txtTax18N" => {
+                return write_2550m_base_amount(kind, draft, key, &text, |d, v| {
+                    d.set_purchase(Purchase::Others, v);
+                });
+            }
+            _ => {}
+        }
+    }
     match &bound.binding {
         Binding::Text {
             path,
@@ -1798,6 +1838,29 @@ fn write_0605_pick(
 ) -> Result<(), String> {
     let mut typed = parse::<crate::forms::form_0605::Form0605Draft>(kind, draft)?;
     guarded("write", || set(&mut typed))??;
+    *draft = to_json(&typed)?;
+    Ok(())
+}
+
+/// One 2550M base-amount blur (`13A`, `18E/G/I/K/N`): parses the amount and
+/// invokes the typed setter so the paired 12% tax box (and 7% Schedule 4
+/// standard input tax for `13A`) is computed while staying editable for
+/// subsequent user overrides.
+fn write_2550m_base_amount(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    key: &str,
+    text: &str,
+    set: impl FnOnce(&mut crate::forms::form_2550m::Form2550MDraft, f64),
+) -> Result<(), String> {
+    let amount = if text.trim().is_empty() {
+        0.0
+    } else {
+        parse_amount(text)
+            .ok_or_else(|| format!("`{key}` must be an amount such as 1234.50 (got `{text}`)"))?
+    };
+    let mut typed = parse::<crate::forms::form_2550m::Form2550MDraft>(kind, draft)?;
+    set(&mut typed, amount);
     *draft = to_json(&typed)?;
     Ok(())
 }

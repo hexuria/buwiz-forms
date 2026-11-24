@@ -112,9 +112,29 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<(Schedule, usize, u
     })
 }
 
-/// Earlier rows first within a batch, and a row's amount before its input
-/// tax (the amount resets the input tax to 12%, as `getInputTaxCompute` does).
+/// Earlier rows first within a batch, and every base amount before the
+/// editable tax box(es) its blur handler fills (`13A` before `13B` and
+/// `txtlessStdTaxSched4`, `18E/G/I/K/N` before `18F/H/J/L/O`, and schedule
+/// row amounts before their input tax).
 pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
+    if kind.form_code() == "2550M" {
+        match key {
+            "frm2550m:txtTax13A"
+            | "frm2550m:txtTax18E"
+            | "frm2550m:txtTax18G"
+            | "frm2550m:txtTax18I"
+            | "frm2550m:txtTax18K"
+            | "frm2550m:txtTax18N" => return Some(0),
+            "frm2550m:txtTax13B"
+            | "txtlessStdTaxSched4"
+            | "frm2550m:txtTax18F"
+            | "frm2550m:txtTax18H"
+            | "frm2550m:txtTax18J"
+            | "frm2550m:txtTax18L"
+            | "frm2550m:txtTax18O" => return Some(1),
+            _ => {}
+        }
+    }
     cell(kind, key).map(|(_, col, row)| 2 + row.saturating_mul(8).saturating_add(col))
 }
 
@@ -309,4 +329,77 @@ pub(super) fn fill(
     typed.recompute();
     *draft = serde_json::to_value(typed).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bir_core::forms::queueable::QueueableKind;
+    use serde_json::json;
+
+    #[test]
+    fn edit_order_puts_bases_before_paired_tax_boxes() {
+        let kind = AgentFormKind::Queueable(QueueableKind::Form2550M);
+        for (base, tax) in [
+            ("frm2550m:txtTax13A", "frm2550m:txtTax13B"),
+            ("frm2550m:txtTax13A", "txtlessStdTaxSched4"),
+            ("frm2550m:txtTax18E", "frm2550m:txtTax18F"),
+            ("frm2550m:txtTax18G", "frm2550m:txtTax18H"),
+            ("frm2550m:txtTax18I", "frm2550m:txtTax18J"),
+            ("frm2550m:txtTax18K", "frm2550m:txtTax18L"),
+            ("frm2550m:txtTax18N", "frm2550m:txtTax18O"),
+            ("txtAmt0", "txtInputTax0"),
+            ("txtAmt3A0", "txtInputTax3A0"),
+        ] {
+            assert!(
+                edit_order(kind, base) < edit_order(kind, tax),
+                "{base} must sort before {tax}"
+            );
+        }
+    }
+
+    #[test]
+    fn schedule_2_and_3a_compute_12_percent_and_preserve_override() {
+        let kind = AgentFormKind::Queueable(QueueableKind::Form2550M);
+        let profile: bir_core::profile::TaxpayerProfile = serde_json::from_value(json!({
+            "id": null,
+            "full_name": "Juana Santos",
+            "tin": {"segment1": "000", "segment2": "123", "segment3": "453", "branch": "00000"},
+            "rdo_code": "008",
+            "line_of_business": "Retail",
+            "registered_address": "1 Sample Street, Makati City",
+            "zip_code": "1003",
+            "phone": "09171234567",
+            "email": "juana.santos@example.com",
+            "default_form_type": "2550M",
+            "taxpayer_type": "Corporation",
+        }))
+        .unwrap();
+        let mut draft =
+            serde_json::to_value(Form2550MDraft::new_from_profile(&profile, 2022, 6)).unwrap();
+        fill(&mut draft, cell(kind, "txtAmt0").unwrap(), &json!("120000")).unwrap();
+        assert_eq!(draft["schedule_2"][0]["input_tax"], json!(14400.0));
+        fill(
+            &mut draft,
+            cell(kind, "txtInputTax0").unwrap(),
+            &json!("14000"),
+        )
+        .unwrap();
+        assert_eq!(draft["schedule_2"][0]["input_tax"], json!(14000.0));
+
+        fill(
+            &mut draft,
+            cell(kind, "txtAmt3A0").unwrap(),
+            &json!("1500000.25"),
+        )
+        .unwrap();
+        assert_eq!(draft["schedule_3a"][0]["input_tax"], json!(180000.03));
+        fill(
+            &mut draft,
+            cell(kind, "txtInputTax3A0").unwrap(),
+            &json!("179000"),
+        )
+        .unwrap();
+        assert_eq!(draft["schedule_3a"][0]["input_tax"], json!(179000.0));
+    }
 }
