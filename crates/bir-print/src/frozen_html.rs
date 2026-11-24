@@ -965,15 +965,231 @@ fn fit_line(sheet: &SheetType, width: f64, text: &str) -> f64 {
 /// fits on the page.
 const FIT_EPSILON_PT: f64 = 0.02;
 
-/// The width (pt) of plain (`data-field-kind="text"`) box `cell` of `html`.
-fn plain_cell_width(html: &str, cell: &str) -> Option<f64> {
+/// Minimum cell height (pt) for a plain text box to wrap onto two lines
+/// before shrinking (C7).
+const PLAIN_WRAP_MIN_HEIGHT_PT: f64 = 18.0;
+
+/// Minimum readable type size (pt) for plain text boxes (C7). Below this
+/// floor, text is truncated with `"..."` and flagged for the continuation sheet.
+const PLAIN_TEXT_MIN_PT: f64 = 6.5;
+
+/// Vertical room factor for two wrapped lines (2 lines + small leading margin).
+const PLAIN_TWO_LINE_HEIGHT_FACTOR: f64 = 2.15;
+
+/// Line-height applied to two-line wrapped plain text cells.
+const PLAIN_TWO_LINE_CSS_HEIGHT: &str = "1.05";
+
+/// The width and height (pt) of plain (`data-field-kind="text"`) box `cell` of `html`.
+fn plain_cell_dimensions(html: &str, cell: &str) -> Option<(f64, f64)> {
     let open = html.find(&format!("<div id=\"{cell}\""))?;
     let tag = &html[open..open + html[open..].find('>')?];
     if attr(tag, "data-field-kind") != Some("text") {
         return None;
     }
     let width_at = tag.find(";width:")? + ";width:".len();
-    tag[width_at..].split("pt").next()?.parse().ok()
+    let width = tag[width_at..].split("pt").next()?.parse().ok()?;
+    let height_at = tag.find(";height:")? + ";height:".len();
+    let height = tag[height_at..].split("pt").next()?.parse().ok()?;
+    Some((width, height))
+}
+
+/// The width (pt) of plain (`data-field-kind="text"`) box `cell` of `html`.
+#[cfg(test)]
+fn plain_cell_width(html: &str, cell: &str) -> Option<f64> {
+    plain_cell_dimensions(html, cell).map(|(width, _)| width)
+}
+
+/// Result of fitting text into a plain (`data-field-kind="text"`) input cell.
+struct PlainTextFit {
+    text: String,
+    font_size_pt: f64,
+    two_lines: bool,
+    truncated: bool,
+}
+
+/// Truncate `text` with `"..."` so it fits within `room` pt at `size` pt.
+fn truncate_with_ellipsis(
+    sheet: &SheetType,
+    letter: Spacing,
+    room: f64,
+    text: &str,
+    size: f64,
+) -> Option<String> {
+    if sheet.width(letter, "...", size) > room {
+        return None;
+    }
+    let mut best_end = 0;
+    for (idx, ch) in text.char_indices() {
+        let end = idx + ch.len_utf8();
+        let candidate = format!("{}...", text[..end].trim_end());
+        if sheet.width(letter, &candidate, size) <= room {
+            best_end = end;
+        } else {
+            break;
+        }
+    }
+    let prefix = text[..best_end].trim_end();
+    Some(format!("{prefix}..."))
+}
+
+/// Find the best two-line split of `text` that fits within `room` pt at a font
+/// size in `[min_size, max_size]`. Prefers word boundaries; falls back to
+/// character boundaries when `text` has no spaces.
+fn fit_two_lines(
+    sheet: &SheetType,
+    letter: Spacing,
+    room: f64,
+    text: &str,
+    max_size: f64,
+    min_size: f64,
+) -> Option<(String, String, f64)> {
+    let mut best: Option<(String, String, f64, usize)> = None;
+    let mut consider = |l1: &str, l2: &str| {
+        if l1.is_empty() || l2.is_empty() {
+            return;
+        }
+        let s1 = sheet.fit(letter, room, l1, max_size);
+        let s2 = sheet.fit(letter, room, l2, max_size);
+        let sz = s1.min(s2);
+        if sz < min_size {
+            return;
+        }
+        let l1_chars = l1.chars().count();
+        let better = match &best {
+            None => true,
+            Some((_, _, best_sz, best_l1)) => {
+                sz > *best_sz + 1e-6 || ((sz - *best_sz).abs() <= 1e-6 && l1_chars > *best_l1)
+            }
+        };
+        if better {
+            best = Some((l1.to_string(), l2.to_string(), sz, l1_chars));
+        }
+    };
+
+    let mut had_space = false;
+    for (idx, ch) in text.char_indices() {
+        if ch.is_whitespace() {
+            had_space = true;
+            let l1 = text[..idx].trim_end();
+            let l2 = text[idx + ch.len_utf8()..].trim_start();
+            consider(l1, l2);
+        }
+    }
+    if !had_space {
+        for (idx, _) in text.char_indices().skip(1) {
+            consider(&text[..idx], &text[idx..]);
+        }
+    }
+    best.map(|(l1, l2, sz, _)| (l1, l2, sz))
+}
+
+/// Wrap `text` greedily onto line 1 at `size` pt and fit line 2 with `"..."`.
+fn wrap_and_truncate_two_lines(
+    sheet: &SheetType,
+    letter: Spacing,
+    room: f64,
+    text: &str,
+    size: f64,
+) -> Option<(String, String)> {
+    let mut last_fit_char = 0;
+    let mut last_fit_space = None;
+    for (idx, ch) in text.char_indices() {
+        let end = idx + ch.len_utf8();
+        let slice = text[..end].trim_end();
+        if !slice.is_empty() && sheet.width(letter, slice, size) <= room {
+            last_fit_char = end;
+            if ch.is_whitespace() {
+                last_fit_space = Some(idx);
+            }
+        } else if !ch.is_whitespace() {
+            break;
+        }
+    }
+    let split_at = last_fit_space
+        .filter(|&pos| !text[..pos].trim_end().is_empty())
+        .unwrap_or(last_fit_char);
+    if split_at == 0 || split_at >= text.len() {
+        return None;
+    }
+    let l1 = text[..split_at].trim_end().to_string();
+    let rest = text[split_at..].trim_start();
+    if l1.is_empty() || rest.is_empty() {
+        return None;
+    }
+    let l2 = truncate_with_ellipsis(sheet, letter, room, rest, size)?;
+    Some((l1, l2))
+}
+
+/// Fit `text` into plain input `tag` inside a cell of `(width, height)` pt:
+/// - If it fits on one line at the class's default size, returns `None` (unchanged).
+/// - If `allow_wrap && height >= 18pt`, wraps onto two lines before shrinking,
+///   never below 6.5 pt; if still too long, ends with `"..."` and marks `truncated`.
+/// - Otherwise shrinks on one line down to 6.5 pt; if still too long, ends with
+///   `"..."` and marks `truncated`.
+fn fit_plain_text(
+    sheet: &SheetType,
+    width: f64,
+    height: f64,
+    tag: &str,
+    text: &str,
+    allow_wrap: bool,
+) -> Option<PlainTextFit> {
+    let classes = attr(tag, "class")?;
+    let default_size = sheet.size_for(classes)?;
+    let letter = sheet.letter_for(classes);
+    let room = input_room(width, tag);
+    if sheet.width(letter, text, default_size) <= room + FIT_EPSILON_PT {
+        return None;
+    }
+    let shrunk = shrunk_room(room);
+    let min_pt = PLAIN_TEXT_MIN_PT.min(default_size);
+
+    if allow_wrap && height >= PLAIN_WRAP_MIN_HEIGHT_PT {
+        let top_two_line = floor_size((height / PLAIN_TWO_LINE_HEIGHT_FACTOR).min(default_size))
+            .max(min_pt);
+        if let Some((l1, l2, sz)) =
+            fit_two_lines(sheet, letter, shrunk, text, top_two_line, min_pt)
+        {
+            return Some(PlainTextFit {
+                text: format!("{l1}\n{l2}"),
+                font_size_pt: sz,
+                two_lines: true,
+                truncated: false,
+            });
+        }
+        if let Some((l1, l2)) = wrap_and_truncate_two_lines(sheet, letter, shrunk, text, min_pt) {
+            return Some(PlainTextFit {
+                text: format!("{l1}\n{l2}"),
+                font_size_pt: min_pt,
+                two_lines: true,
+                truncated: true,
+            });
+        }
+    }
+
+    let single_size = sheet.fit(letter, shrunk, text, default_size);
+    if single_size >= min_pt {
+        return Some(PlainTextFit {
+            text: text.to_string(),
+            font_size_pt: single_size,
+            two_lines: false,
+            truncated: false,
+        });
+    }
+    if let Some(truncated) = truncate_with_ellipsis(sheet, letter, shrunk, text, min_pt) {
+        return Some(PlainTextFit {
+            text: truncated,
+            font_size_pt: min_pt,
+            two_lines: false,
+            truncated: true,
+        });
+    }
+    Some(PlainTextFit {
+        text: text.to_string(),
+        font_size_pt: single_size,
+        two_lines: false,
+        truncated: false,
+    })
 }
 
 /// The room (pt) input `tag` leaves for text in a cell `width` pt wide:
@@ -1009,6 +1225,7 @@ fn inset(style: &str) -> (f64, f64) {
 /// measured in the sheet's type ([`SheetType::fit`]) to set within
 /// [`shrunk_room`], the room less 1 pt to spare, at a whole hundredth of a
 /// point. `None` while it fits: it prints byte for byte as before.
+#[cfg(test)]
 fn plain_input_size(sheet: &SheetType, width: f64, tag: &str, text: &str) -> Option<f64> {
     let classes = attr(tag, "class")?;
     let size = sheet.size_for(classes)?;
@@ -1548,10 +1765,12 @@ fn fill_text_input(
             }
             return;
         }
-        // A value longer than its plain input prints smaller, measured, so
-        // it stays inside the input; one that fits keeps its bytes.
-        let width = via_cell
-            .then(|| plain_cell_width(html, input_name))
+        // A value longer than its plain input wraps onto two lines when the
+        // cell is at least 18 pt tall, shrinks down to 6.5 pt, and truncates
+        // with "..." + an overflow warning if it still does not fit; one that
+        // fits keeps its bytes.
+        let dims = via_cell
+            .then(|| plain_cell_dimensions(html, input_name))
             .flatten();
         let right_align_numeric = via_cell
             && !split
@@ -1559,11 +1778,36 @@ fn fill_text_input(
                 || (is_quantity_typed_key(name) && is_formatted_numeric_quantity(print)));
         for &index in indices {
             let writer = via_cell.then_some(print);
-            let tag = set_value(tags[index].tag, print, writer);
-            let size = width
+            let fit = dims
                 .filter(|_| !split)
-                .and_then(|width| plain_input_size(sheet, width, tags[index].tag, print));
-            let tag = size.map_or_else(|| tag.clone(), |size| with_font_size(&tag, size));
+                .and_then(|(width, height)| {
+                    fit_plain_text(
+                        sheet,
+                        width,
+                        height,
+                        tags[index].tag,
+                        print,
+                        !right_align_numeric,
+                    )
+                });
+            let tag = match &fit {
+                Some(fit) => {
+                    let mut tag = set_value(tags[index].tag, &fit.text, writer);
+                    tag = with_font_size(&tag, fit.font_size_pt);
+                    if fit.two_lines {
+                        tag = with_style_declaration(
+                            &tag,
+                            &format!("line-height:{PLAIN_TWO_LINE_CSS_HEIGHT}"),
+                        );
+                    }
+                    if fit.truncated {
+                        let insert_at = tag.rfind('>').unwrap_or(tag.len());
+                        tag.insert_str(insert_at, " data-overflow-warning=\"text-truncated\"");
+                    }
+                    tag
+                }
+                None => set_value(tags[index].tag, print, writer),
+            };
             let tag = if right_align_numeric {
                 with_style_declaration(
                     &tag,
@@ -3875,6 +4119,7 @@ fn html_escape(value: &str) -> String {
             '<' => out.push_str("&lt;"),
             '>' => out.push_str("&gt;"),
             '"' => out.push_str("&quot;"),
+            '\n' => out.push_str("&#10;"),
             _ => out.push(ch),
         }
     }
@@ -4021,11 +4266,13 @@ pub fn overflow_warnings(document: &str) -> Vec<OverflowWarning> {
         };
         let cell = attr(tag, "data-overflow-of")
             .or_else(|| attr(tag, "name"))
-            .or_else(|| attr(tag, "id"))
+            .or_else(|| attr(tag, "id").map(|id| id.strip_suffix("-i").unwrap_or(id)))
             .unwrap_or("")
             .to_string();
-        let value = attr(tag, "value")
+        let value = attr(tag, "data-writer-value")
+            .or_else(|| attr(tag, "value"))
             .unwrap_or("")
+            .replace("&#10;", "\n")
             .replace("&quot;", "\"")
             .replace("&lt;", "<")
             .replace("&gt;", ">")
@@ -4682,6 +4929,85 @@ mod tests {
         assert_eq!(printed, "(199914152)");
         assert!(doc.contains("text-align:right;justify-content:flex-end;padding-right:1pt"));
         assert_eq!(super::overflow_warnings(&doc).len(), 1);
+    }
+
+    #[test]
+    fn plain_text_wraps_above_18pt_floors_at_6_5pt_and_ellipsizes_on_official_and_cloned_cells() {
+        use std::collections::BTreeMap;
+
+        let plain_div = |id: &str, width: f64, height: f64| {
+            format!(
+                "<style>.fh0{{font-size:9pt;line-height:{height}pt}}</style>\
+                 <div id=\"{id}\" class=\"c f\" data-cell-kind=\"field\" data-field-kind=\"text\" \
+                 style=\"left:0pt;top:0pt;width:{width}pt;height:{height}pt\">\
+                 <input type=\"text\" class=\"fi fh0\" id=\"{id}-i\" name=\"{id}\" style=\"inset:0.75pt\" value=\"\">\
+                 </div>"
+            )
+        };
+
+        // 1. Tall cell (>= 18pt) wraps onto 2 lines before shrinking below 6.5pt (no warning).
+        let html = plain_div("p1c100_clone2", 120.0, 20.0);
+        let medium = "AYALA LAND INCORPORATED PREFERRED B SHARES";
+        let mut fields = BTreeMap::new();
+        fields.insert("derived:stock_name".to_string(), medium.to_string());
+        let mut cells = BTreeMap::new();
+        cells.insert(
+            "derived:stock_name".to_string(),
+            vec!["p1c100_clone2".to_string()],
+        );
+        let sheet = super::SheetType::of(".fh0 { font-size:9pt;line-height:20pt }");
+        let doc = super::fill_by_name_set(
+            &html,
+            &fields,
+            &cells,
+            &BTreeMap::new(),
+            &sheet,
+        );
+        assert!(doc.contains("&#10;"), "tall cell should wrap onto two lines: {doc}");
+        assert!(doc.contains("line-height:1.05"), "two-line wrap sets line-height: {doc}");
+        assert!(
+            super::overflow_warnings(&doc).is_empty(),
+            "wrapped value that fits at >=6.5pt emits no truncation warning"
+        );
+
+        // 2. Very long text in tall cloned cell floors at 6.50pt, ends with "...", and warns with full text.
+        let huge = "AYALA LAND INCORPORATED CUMULATIVE REDEEMABLE NON-VOTING CONVERTIBLE PREFERRED SERIES B CLASS TWO SHARES OF STOCK";
+        fields.insert("derived:stock_name".to_string(), huge.to_string());
+        let doc = super::fill_by_name_set(
+            &html,
+            &fields,
+            &cells,
+            &BTreeMap::new(),
+            &sheet,
+        );
+        assert!(doc.contains("font-size:6.50pt"), "must floor at 6.50pt: {doc}");
+        assert!(doc.contains("...\""), "must end with ellipsis: {doc}");
+        let warnings = super::overflow_warnings(&doc);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].cell, "p1c100_clone2");
+        assert_eq!(warnings[0].kind, "text-truncated");
+        assert_eq!(warnings[0].value, huge);
+        assert_eq!(warnings[0].font_size_pt, Some(6.5));
+
+        // 3. Short cell (< 18pt) does NOT wrap; floors at 6.50pt with "..." and warns.
+        let short_html = plain_div("p1c50", 90.0, 12.0);
+        let mut scells = BTreeMap::new();
+        scells.insert("derived:stock_name".to_string(), vec!["p1c50".to_string()]);
+        let doc = super::fill_by_name_set(
+            &short_html,
+            &fields,
+            &scells,
+            &BTreeMap::new(),
+            &sheet,
+        );
+        assert!(!doc.contains("&#10;"), "short cell (<18pt) must not wrap: {doc}");
+        assert!(doc.contains("font-size:6.50pt"), "short cell floors at 6.50pt: {doc}");
+        assert!(doc.contains("...\""), "short cell ends with ellipsis: {doc}");
+        let warnings = super::overflow_warnings(&doc);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].cell, "p1c50");
+        assert_eq!(warnings[0].kind, "text-truncated");
+        assert_eq!(warnings[0].value, huge);
     }
 
     #[test]
@@ -7205,14 +7531,17 @@ mod tests {
                                 .and_then(|size| size.parse().ok());
                             let letter = sheet.letter_for(classes);
                             if let Some(size) = shrunk {
-                                // Shrunk: it sets within the room less 1 pt;
-                                // a room under 2 pt, within the room.
-                                let measured = sheet.width(letter, &text, size);
+                                // Shrunk (or two-line wrapped / ellipsized): every printed
+                                // line sets within the room less 1 pt; a room under 2 pt,
+                                // within the room.
                                 let bound = if room >= 2.0 { room - 1.0 } else { room };
-                                assert!(
-                                    measured <= bound,
-                                    "{slug} {case} {cell}: {text:?} shrunk to {size}pt measures {measured}pt in a {room}pt box"
-                                );
+                                for line in text.split("&#10;") {
+                                    let measured = sheet.width(letter, line, size);
+                                    assert!(
+                                        measured <= bound,
+                                        "{slug} {case} {cell}: {line:?} shrunk to {size}pt measures {measured}pt in a {room}pt box"
+                                    );
+                                }
                             } else {
                                 // Unshrunk: it fit at its class size.
                                 let size = sheet
@@ -7625,11 +7954,18 @@ mod tests {
         let document =
             filled_document(slug, &BTreeMap::from([(key.clone(), long.clone())])).unwrap();
         let (value, size) = read(&document);
-        assert_eq!(value, long, "the whole value prints");
+        assert_eq!(
+            value.replace("&#10;", " "),
+            long,
+            "the whole value prints (wrapped onto two lines in a >=18pt box)"
+        );
         let size = size.expect("a smaller size");
         assert!(size < class_size);
+        assert!(size >= PLAIN_TEXT_MIN_PT);
         assert!(room >= 2.0);
-        assert!(sheet.width(sheet.letter_for(classes), &value, size) <= room - 1.0);
+        for line in value.split("&#10;") {
+            assert!(sheet.width(sheet.letter_for(classes), line, size) <= room - 1.0);
+        }
         let fitting = words_of(20);
         let document =
             filled_document(slug, &BTreeMap::from([(key.clone(), fitting.clone())])).unwrap();
@@ -8360,7 +8696,13 @@ mod tests {
                 let [(room, classes, tag)] = plain_inputs(&document, cell)[..] else {
                     panic!("{slug} {cell}: one input");
                 };
-                assert_eq!(attr(tag, "value"), Some(value.as_str()));
+                let printed = attr(tag, "value").expect("printed value");
+                if printed.ends_with("...") {
+                    assert_eq!(attr(tag, "data-overflow-warning"), Some("text-truncated"));
+                    assert_eq!(attr(tag, "data-writer-value"), Some(value.as_str()));
+                } else {
+                    assert_eq!(printed.replace("&#10;", " "), value);
+                }
                 let letter = sheet.letter_for(classes);
                 let class_size = sheet.size_for(classes).unwrap();
                 assert!(sheet.width(letter, &value, class_size) > room + FIT_EPSILON_PT);
@@ -8368,15 +8710,14 @@ mod tests {
                 let at = style.find("font-size:").expect("an inline size") + "font-size:".len();
                 let size: f64 = style[at..].split("pt").next().unwrap().parse().unwrap();
                 assert!(size < class_size, "{slug} {cell} {space:?}");
+                assert!(size >= PLAIN_TEXT_MIN_PT, "{slug} {cell} {space:?}");
                 assert!(room >= 2.0);
-                assert!(
-                    sheet.width(letter, &value, size) <= room - 1.0,
-                    "{slug} {cell} {space:?}: at {size}pt"
-                );
-                assert!(
-                    sheet.width(letter, &value, size + 0.01) > room - 1.0,
-                    "{slug} {cell} {space:?}: the largest size that sets"
-                );
+                for line in printed.split("&#10;") {
+                    assert!(
+                        sheet.width(letter, line, size) <= room - 1.0,
+                        "{slug} {cell} {space:?}: {line:?} at {size}pt"
+                    );
+                }
             }
         }
     }
@@ -8476,7 +8817,7 @@ mod donor_estate_print_tests {
             ),
             (
                 "1801-2018",
-                "2be29a9aa326266ae41ca903b670670fd2222da26539cd09975928de3c855969",
+                "26fe57e80ee1a068033de86725a87756c661fa1f77dda52eeda8e93f5db8532d",
             ),
             (
                 "1800-2018",
