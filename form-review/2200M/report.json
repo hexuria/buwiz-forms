@@ -1,0 +1,51 @@
+{
+  "code": "2200M",
+  "verdict": "tweak",
+  "summary": "2200M prints both pages faithfully and spells out region/province/city, but a schedule Tax Rate cell renders its value as crushed unreadable microtext, the Part IV screen cards leak a developer fixture path, and a schedule volume field silently corrupts a typed decimal into a 100x larger number.",
+  "defects": [
+    {
+      "id": "M1",
+      "surface": "print",
+      "where": "Page 2, Schedule 1 - continuation, XM060 'Other Metallic Minerals' rows 1-2, column (I) Tax Rate",
+      "what": "The Tax Rate value is printed as a vertical sliver of ~4px microtext (e.g. '4,321,098.76' is rendered crushed and rotated) while every neighbouring cell prints normally; the cell is blank-white on the official sheet so users write any rate there.",
+      "severity": "medium",
+      "picture": "mac/crop-crushed-rate.png"
+    },
+    {
+      "id": "M2",
+      "surface": "screen",
+      "where": "Form page, Part IV - Details of Payment, items 25-28 cards",
+      "what": "Each card shows developer text leaking a repo fixture path: 'No box: the official program keeps Part IV disabled (rules/forms/2200m-v2018/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it.' Same defect family as 2200C C2.",
+      "severity": "medium",
+      "picture": "mac/screen-part4-fixture.png"
+    },
+    {
+      "id": "M3",
+      "surface": "screen",
+      "where": "Form page, Part V Schedule 1, XM010 row 2 'Volume Removed (MT): Taxable' input",
+      "what": "Typed '9,876,543.21' by hand; the field stored 987,654,321 (decimal point silently dropped) and the printed sheet shows 987,654,321.00 - a 100x overstatement of the amount the user typed. A neighbouring amount field accepted the same comma+decimal format correctly.",
+      "severity": "high",
+      "picture": "mac/crop-row2-corrupt.png"
+    },
+    {
+      "id": "M4",
+      "surface": "print",
+      "where": "Page 2, Schedule 1",
+      "what": "The runtime accepts 26 schedule rows but the sheet (and the UI) only shows the 10 paper rows; rows 11-26 filled via payload are silently dropped from print with no sign. Not reachable by typing in the UI today (rows are fixed), so a user cannot hit it through the page alone.",
+      "severity": "low",
+      "picture": "mac/print-p2.png"
+    },
+    {
+      "id": "M5",
+      "surface": "print",
+      "where": "Page 1, item 19 Payment on Returns Previously Filed",
+      "what": "Prints '0.00' in the comb for an unset amount (the lone-zero pattern seen on 2200A item 19).",
+      "severity": "low",
+      "picture": "mac/print-p1.png"
+    }
+  ],
+  "entered_by_hand": "Part III item 17A 'Balance Carried Over from Previous Return' typed as 9,999,888.77 (printed correctly); Part V XM010 row 2 'Place of Removal' typed as 'SITE BRAVO 2' (printed correctly) and 'Volume Removed Taxable' typed as 9,876,543.21 which the field corrupted to 987,654,321.00 (defect M3).",
+  "open_questions": [],
+  "checked_by_hand": "Re-opened the saved draft, re-opened print preview and Save as PDF, and re-inspected the XM060 continuation column and row-2 volume cell at zoom after the first pass; M1, M2 and M3 reproduced on the second look.",
+  "notes": "Places of Production/Removal (items 10 and 11) print spelled-out names (NCR / NCR SECOND DISTRICT / CITY OF MAKATI), matching 2200AN rather than the raw PSGC codes of 2200A/2200C. Item 16 total equals the sum of the printed continuation column L only; dropped rows 11-26 do not corrupt it. Part IV (items 25-28) has no fillable fields at all and prints blank, same as 2200C."
+}
