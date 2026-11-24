@@ -1,7 +1,7 @@
 {
   "code": "2550Q",
   "verdict": "tweak",
-  "summary": "Page 1 and Page 2 match the official April 2024 ENCS layout closely; small print tweaks needed (Item 26 label extra space, Item 52 caption touching bottom border), while comb-tick collisions, left-aligned schedule amounts, and a misattached screen validation error on Item 37 need shared changes.",
+  "summary": "Fixed Page 1 Item 26 '(Excess Credits)' spacing and Page 2 Item 52 caption clearance in html-frozen/2550q-2024/index.html. Comb-tick collisions, left-aligned Part V schedule amounts, misattached 50-char validation errors on read-only Item 37, and contradictory '12 rows' vs 'No rows yet.' badge remain recorded as needs shared change.",
   "defects": [
     {
       "id": "2550q-p1-comb-collisions",
@@ -9,7 +9,7 @@
       "where": "Page 1 Items 9, 10, 14A and Page 2 Taxpayer's Last Name/Registered Name",
       "what": "Long registered name, address, and Item 14A specify text switch out of comb mode and collide with comb ticks.",
       "before": "form-review/2550Q/before/print-p1.png",
-      "after": "",
+      "after": "form-review/2550Q/after/print-p1.png",
       "status": "needs shared change"
     },
     {
@@ -18,26 +18,26 @@
       "where": "Page 2 Part V Schedules 1, 2, 3, and 4",
       "what": "Numeric amounts in Schedule 1 (Cols D-I), Schedule 2, Schedule 3 (Cols C-D), and Schedule 4 (Col E) are left-aligned flush against the left cell border.",
       "before": "form-review/2550Q/before/print-p2.png",
-      "after": "",
+      "after": "form-review/2550Q/after/print-p2.png",
       "status": "needs shared change"
     },
     {
       "id": "2550q-p1-item26-space",
       "surface": "print",
-      "where": "Page 1 Part II Item 26 label",
-      "what": "Label reads 'TOTAL AMOUNT PAYABLE/( Excess Credits)' with an unintended space after '(' vs official 'TOTAL AMOUNT PAYABLE/(Excess Credits)'.",
+      "where": "Page 1 Part II Item 26 label (p1t129)",
+      "what": "Adjusted p1t129 left position from 162.93pt to 159.5pt so 'TOTAL AMOUNT PAYABLE/(Excess Credits)' has no extra gap after '('.",
       "before": "form-review/2550Q/before/print-p1.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/2550Q/after/print-p1.png",
+      "status": "fixed"
     },
     {
       "id": "2550q-p2-item52-wrap",
       "surface": "print",
-      "where": "Page 2 Part IV Item 52 label",
-      "what": "Second line '(From Part V Schedule 1, Column I)' touches the bottom cell border.",
+      "where": "Page 2 Part IV Item 52 label (p2t116)",
+      "what": "Moved p2t116 '(From Part V Schedule 1, Column I)' from top:516pt+translateY(1.05pt) to top:514.2pt so it clears the bottom border cleanly.",
       "before": "form-review/2550Q/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/2550Q/after/print-p2.png",
+      "status": "fixed"
     },
     {
       "id": "2550q-screen-item37-wrong-error",
@@ -45,7 +45,7 @@
       "where": "Part IV Item 37 (Total Adjusted Output Tax Due)",
       "what": "Computed read-only numeric Item 37 displays 'Use at most 50 characters.' repeated three times (misattached length errors from other text fields).",
       "before": "form-review/2550Q/before/screen-05-part-iv-details-of-vat-computation.png",
-      "after": "",
+      "after": "form-review/2550Q/after/screen-05-part-iv-details-of-vat-computation.png",
       "status": "needs shared change"
     },
     {
@@ -54,15 +54,20 @@
       "where": "Part V Schedules (Schedule 1 and Schedule 3 headers)",
       "what": "Header shows '12 rows' on the right while the body says 'No rows yet.' with '+ Add row', which is contradictory (shows capacity instead of current row count).",
       "before": "form-review/2550Q/before/screen-06-part-v-schedules.png",
-      "after": "",
+      "after": "form-review/2550Q/after/screen-06-part-v-schedules.png",
       "status": "needs shared change"
     }
   ],
-  "files_changed": [],
+  "files_changed": [
+    "html-frozen/2550q-2024/index.html"
+  ],
   "shared_changes_wanted": [
     "neon-4 (try/forms-shared-print): comb-tick collisions on long name/address/14A; left-aligned amounts in Part V Schedules 1-4",
+    "crates/bir-print/src/fixtures/{fitting-band-goldens,fitting-goldens,overflow-goldens}.json: refresh 2550q-2024 SHA-256 hashes (not edited to avoid touching crates/)",
     "crates/bir-app-api or nsh/screens/form/: misattached 'Use at most 50 characters.' errors on read-only Item 37; contradictory '12 rows' vs 'No rows yet.' badge on empty growable schedules"
   ],
-  "tests_run": [],
+  "tests_run": [
+    "Live Linux WebKitGTK Print Preview and screen captures verified for 2550Q (crates/bir-print/src/fixtures/*.json left untouched)"
+  ],
   "open_questions": []
 }
