@@ -1,0 +1,28 @@
+{
+  "open_args": {
+    "year": 2025,
+    "period": 1
+  },
+  "passes": [
+    {
+      "frm1601EQ:optAmend": "Y",
+      "frm1601EQ:optWithheld": "Y",
+      "frm1601EQ:txtNoSheets": "8",
+      "frm1601EQ:optCategory": "P",
+      "frm1601EQ:txtAtcCd8": "WI010",
+      "frm1601EQ:txtTaxBase9": "15432100.50",
+      "frm1601EQ:txtTaxBase10": "24567890.25",
+      "frm1601EQ:txtTaxBase11": "31234567.00",
+      "frm1601EQ:txtAtcCd12": "WC100",
+      "frm1601EQ:txtTaxBase13": "18900000.00",
+      "frm1601EQ:txtTaxBase14": "9876543.75",
+      "frm1601EQ:txtTaxBase15": "6543210.50",
+      "frm1601EQ:txtTaxBase16": "4321098.25",
+      "frm1601EQ:txtTax20": "1250000.00",
+      "frm1601EQ:txtTax21": "1100000.00",
+      "frm1601EQ:txtTax22": "500000.00",
+      "frm1601EQ:txtTax23": "250000.00",
+      "frm1601EQ:if": "CarriedOver"
+    }
+  ]
+}
