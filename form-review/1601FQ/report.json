@@ -1,0 +1,50 @@
+{
+  "form": "1601FQ",
+  "title": "Quarterly Remittance Return of Final Income Taxes Withheld",
+  "revision": "September 2020 (ENCS)",
+  "branch": "try/forms-neon-3-b",
+  "verdict": "rebuild part",
+  "captured_at": "2026-11-24",
+  "saved_draft": "return-6 (reloaded from Filings before capture)",
+  "manual_entry": "Entered Item 23 (12,500,000.00), Part II Items 14-19 Tax Bases via + Add row, and Schedule 1 Row 1 (45,000,000.00 @ 15%) by hand on the real form page",
+  "official_pages": [
+    "form-review/1601FQ/official/page-1.png",
+    "form-review/1601FQ/official/page-2.png"
+  ],
+  "before_captures": [
+    "form-review/1601FQ/before/screen-01-part-0.png",
+    "form-review/1601FQ/before/screen-02-part-1.png",
+    "form-review/1601FQ/before/screen-03-part-2.png",
+    "form-review/1601FQ/before/screen-04-part-3.png",
+    "form-review/1601FQ/before/screen-05-part-4.png",
+    "form-review/1601FQ/before/screen-06-part-5.png",
+    "form-review/1601FQ/before/print-p1.png",
+    "form-review/1601FQ/before/print-p2.png"
+  ],
+  "defects": [
+    {
+      "id": "1601FQ-1",
+      "severity": "high",
+      "area": "Page 1 Part II Items 14-19 (ATC rows) & row drawer",
+      "summary": "Hand-added Part II rows 14-19 (Tax Bases entered without picking an ATC) drop back to 'No rows yet.' after reloading the saved draft, leaving Items 14-20 at 0.00; the row drawer's ATC picker and Done button extend to x=1325..1384, and Part II still displays '6 rows' next to 'No rows yet.'."
+    },
+    {
+      "id": "1601FQ-2",
+      "severity": "high",
+      "area": "Page 2 Part IV Schedule 1 (Columns D, E, F, G)",
+      "summary": "All Schedule 1 numeric columns print left-aligned flush against the left border (45,000,000.00 in Col E, 15.00 with no '%' in Col F, 6,750,000.00 in Col G) unlike the right-aligned Total below them, and unused rows 2-5 print '-' in Col D and '0.00' in Cols E, F, and G instead of blank."
+    },
+    {
+      "id": "1601FQ-3",
+      "severity": "medium",
+      "area": "Page 2 bottom 70% (Schedules 2 and 3)",
+      "summary": "Official Page 2 carries Schedule 2 (Tax Treaty Code) and Schedule 3 (Nature of Income Payment); the frozen print sheet omits both reference tables, leaving ~70% of Page 2 blank."
+    },
+    {
+      "id": "1601FQ-4",
+      "severity": "low",
+      "area": "Page 1 Part II zero combs and Over-remittance (Items 27, 32)",
+      "summary": "Unused/zero combs (Items 14-20, 25, 28-31) print '0.00' instead of blank, and over-remittance in Items 27 and 32 prints a leading '-' inside the comb instead of parentheses per the caption '(Over-remittance)'."
+    }
+  ]
+}
