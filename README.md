@@ -6,9 +6,10 @@
 
 E-BIRForms is an offline-first desktop app to prepare, validate, print and
 submit Philippine BIR returns. It is a native app: a Rust back end and screens
-built on NSH (Native Shell). It covers 43 eBIRForms 7.9.6.2.1 forms. A
-submission queue keeps returns you marked for filing (this version cannot
-send them to the BIR — see "Sending is switched off" below). Profiles, TINs and
+built on NSH (Native Shell). It covers 43 eBIRForms 7.9.6.2.1 forms.
+In this version Queue is refused — pressing it says the return cannot be
+sent to the BIR yet and keeps it a draft; a return queued by an older
+version stays queued (see "Sending is switched off" below). Profiles, TINs and
 drafts stay in a SQLite database on your own machine. The app does not encrypt
 that file; see [PRIVACY_POLICY.md](PRIVACY_POLICY.md).
 
@@ -103,12 +104,15 @@ form. Pick a form and a period to open its editor.
 totals are computed for you.
 
 **Validate, print, queue.** The editor header has
-`[Print preview] [Check] [Queue]`. Check validates the return; Queue
-sends it to the submission queue once it validates. After an amendment
+`[Print preview] [Check] [Queue]`. Check validates the return. In this
+version Queue refuses — it says the return cannot be sent to the BIR yet
+and keeps it a draft. After an amendment
 the header shows the amendment state instead.
 
 **Statuses.** A return moves through Draft, Queued, Submitted, Confirmed and
-Paid. Submit queues the return. When BIR receipt emails arrive in the
+Paid. In this version Queue refuses, so returns stay Draft; a return an
+older version queued keeps its Queued status. When BIR receipt emails
+arrive in the
 inbox you configured, the status moves to Confirmed and then to Paid. A
 submitted return is read-only.
 

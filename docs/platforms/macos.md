@@ -12,7 +12,7 @@ there, but nobody has run it on that platform.
 | Feature | Status | Notes |
 |---|---|---|
 | Profiles, tax form library, editors, Check, Save draft | ✓ | All 43 forms. |
-| Submission queue (a queued return stays queued; no shipped build can send to the BIR) | ✓ |  |
+| Submission queue (in shipped builds Queue is refused — the return stays a draft; a return queued by an older version stays Queued) | ✓ |  |
 | Database storage (plain SQLite, not encrypted) | ✓ |  |
 | Close button (X) and quit shortcut | ✓ | X and Cmd+W hide the window; Cmd+Q quits for real. |
 | System tray icon | ✓ | The `NSStatusItem` click handler restores the window; a secondary click opens the Show / Hide / Quit menu (hands-on check, 2026-11-24). |

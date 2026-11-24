@@ -11,7 +11,7 @@ there, but nobody has run it on that platform.
 | Feature | macOS | Windows | Linux |
 |---|---|---|---|
 | Profiles, tax form library, editors, Check, Save draft | ✓ | ✓ | ✓ |
-| Submission queue (a queued return stays queued; no shipped build can send to the BIR) | ✓ | ✓ | ✓ |
+| Submission queue (in shipped builds Queue is refused — the return stays a draft; a return queued by an older version stays Queued) | ✓ | ✓ | ✓ |
 | Database storage (plain SQLite, not encrypted) | ✓ | ✓ | ✓ |
 | Account sign-in (Buwiz account, device flow in the browser) | ✓ | partial | ✓ |
 | Close button (X) and quit shortcut | ✓ | untested | ✓ |

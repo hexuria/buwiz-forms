@@ -26,7 +26,7 @@ there, but nobody has run it on that platform.
 | Feature | Status | Notes |
 |---|---|---|
 | Profiles, tax form library, editors, Check, Save draft | ✓ | Shared code; covered by the Windows CI jobs. |
-| Submission queue (a queued return stays queued; no shipped build can send to the BIR) | ✓ | Shared code; Windows file locking for the database lock differs. |
+| Submission queue (in shipped builds Queue is refused — the return stays a draft; a return queued by an older version stays Queued) | ✓ | Shared code; Windows file locking for the database lock differs. |
 | Database storage (plain SQLite, not encrypted) | ✓ |  |
 | Account sign-in (Buwiz account, device flow) | partial | The screens' logic runs in the headless Windows CI tests (`nsh/screens/auth/gate.test.tsx`, `nsh/screens/settings/account.test.tsx`), but opening the default browser (`open::that` in `crates/bir-core/src/cloud_account.rs`) and the credential store (Windows Credential Manager via `keyring`, plus the file fallback) are unchecked on a real Windows. |
 | Close button (X) and quit shortcut | untested | Code: X, Alt+F4 and Close Window (Ctrl+W) ask "Hide to tray or Quit?" by default ("Don't ask again" remembers the choice; Settings > Keyboard changes it); Ctrl+Q quits for real (`closePolicy` in `nsh/shell/desktop/menu_model.ts`). |

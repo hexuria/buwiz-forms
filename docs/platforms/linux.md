@@ -12,7 +12,7 @@ there, but nobody has run it on that platform.
 | Feature | Status | Notes |
 |---|---|---|
 | Profiles, tax form library, editors, Check, Save draft | ✓ | All 43 forms. |
-| Submission queue (a queued return stays queued; no shipped build can send to the BIR) | ✓ |  |
+| Submission queue (in shipped builds Queue is refused — the return stays a draft; a return queued by an older version stays Queued) | ✓ |  |
 | Database storage (plain SQLite, not encrypted) | ✓ |  |
 | Close button (X) and quit shortcut | ✓ | X, Alt+F4 and Ctrl+W (Close Window) ask "Hide to tray or Quit?" by default; Ctrl+Q quits for real (`closePolicy` in `nsh/shell/desktop/menu_model.ts`). |
 | System tray icon | partial | Needs a StatusNotifier host. Many desktops have none; the app then runs without a tray. |
