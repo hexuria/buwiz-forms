@@ -40,12 +40,35 @@
       "status": "open"
     }
   ],
-  "files_changed": [],
+  "files_changed": [
+    "html-frozen/1602q-2019/index.html",
+    "html-frozen/1602q-2019/writer-cells.json",
+    "form-review/1602Q/after/*.png",
+    "form-review/1602Q/report.json"
+  ],
   "shared_changes_wanted": [
     "crates/bir-print: comb-overflow fitting and uppercase formatting for address, email, and Page 2 header name"
   ],
-  "tests_run": [],
+  "tests_run": [
+    "cargo test -p bir-print writer_cells (4/4 passed)",
+    "Live app capture via just nsh-run-agent linux (2 print pages, no orphaned page 3)"
+  ],
   "open_questions": [
     "Note: print-p*.png pages were generated from the running app Print preview sheet.html via headless Chrome + pdftoppm."
+  ],
+  "status": "fixed_per_form_pending_shared_merge",
+  "upstream_sheet_edits": [
+    "html-frozen/1602q-2019/index.html: removed orphaned <div class='page page-3' id='page-3'> (which only held header + TIN/Name over 90% blank space after Schedules 5-6 reference tables were moved to guide.html)."
+  ],
+  "blank_item_causes": {
+    "Item 9A ZIP Code": "Not a print bug \u2014 frm1602Q:txtZipCode -> p1c42 was already joined in writer-cells.json; the BEFORE capture payload left txtZipCode empty. Verified 1209 prints cleanly in p1c42."
+  },
+  "fixed_in_this_commit": [
+    "Removed orphaned blank Page 3 from html-frozen/1602q-2019/index.html and cleaned p3c5/p3c6 joins in writer-cells.json (1602Q now prints cleanly as 2 pages).",
+    "Verified Item 9A ZIP Code (1209) prints cleanly in p1c42."
+  ],
+  "remaining_shared_issues": [
+    "Long name/address over comb ticks: knockout preview on try/forms-overflow-knockout (commit c5cedcaa), awaiting owner decision.",
+    "Growable schedule rows beyond fixed printed rows: documented in form-review/SHARED-FINDINGS.md on try/forms-shared-print (commit 1679ff23)."
   ]
 }
