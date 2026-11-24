@@ -513,10 +513,14 @@ version = "0.2.0"
 name = "bir-mcp"
 version = "0.2.0"
 dependencies = [
+ "bir-app-api",
  "bir-core",
  "gpui-agent",
+ "rand 0.10.2",
+ "regex",
  "reqwest",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "tiny_http",
 ]

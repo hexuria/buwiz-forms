@@ -6,6 +6,7 @@
 //! tool, and `tools_list_has_no_submit_queue_file_or_pay_tool` keeps it that way.
 //! `bir_form_review` only brings a validated draft up in BIR with its Submit
 //! button highlighted; the user's own click is what files it.
+use crate::tickets;
 use serde_json::{Map, Value, json};
 
 /// What a tool reaches on a BIR host.
@@ -116,7 +117,7 @@ pub static TOOLS: &[Tool] = &[
     Tool {
         name: "bir_profiles_list",
         action: Action::Host(HostCall::Invoke("profile.list")),
-        description: "List the taxpayer profiles saved in BIR (TIN, branch, registered name, RDO). Use this to let the user pick which taxpayer the return is for; pass the chosen `tin` exactly as returned to bir_form_open.",
+        description: "List the taxpayer profiles saved in BIR (opaque ticket tkt_..., registered name, RDO). Raw TINs never leave BIR; pass the chosen `tin` ticket exactly as returned to bir_form_open.",
         schema: empty_schema,
         build_args: no_args,
     },
@@ -285,7 +286,7 @@ fn open_schema() -> Value {
             },
             "tin": {
                 "type": "string",
-                "description": "Taxpayer TIN exactly as returned by bir_profiles_list."
+                "description": "Taxpayer ticket (tkt_...) exactly as returned by bir_profiles_list or bir_connect. Raw TINs are refused."
             }
         },
         "required": ["code", "year", "tin"],
@@ -313,6 +314,17 @@ fn fill_schema() -> Value {
                 "type": "boolean",
                 "default": false,
                 "description": "True when these are the user's answers to a bir_form_card card (then source is `user`)."
+            },
+            "source_ref": {
+                "type": "object",
+                "description": "Optional provenance reference (e.g. from Buwiz Books hand-off): { plugin, handoff, inputs_hash }.",
+                "properties": {
+                    "plugin": { "type": "string", "minLength": 3, "maxLength": 64 },
+                    "handoff": { "type": "string", "minLength": 1, "maxLength": 64 },
+                    "inputs_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+                },
+                "required": ["plugin", "handoff", "inputs_hash"],
+                "additionalProperties": false
             }
         },
         "required": ["fields"],
@@ -431,12 +443,45 @@ fn open_args(args: &Map<String, Value>) -> Result<Value, String> {
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|tin| !tin.is_empty())
-        .ok_or("`tin` is required: pick the taxpayer with bir_profiles_list")?;
+        .ok_or("`tin` is required: pick the taxpayer ticket with bir_profiles_list")?;
+    if !tickets::is_ticket(tin) {
+        return Err(
+            "`tin` must be a taxpayer ticket (tkt_...) from bir_profiles_list or bir_connect; raw TINs are not accepted"
+                .into(),
+        );
+    }
     Ok(json!({ "code": code, "year": year, "period": period, "tin": tin }))
 }
 
+fn check_source_ref(value: &Value) -> Result<Value, String> {
+    let obj = value
+        .as_object()
+        .ok_or("`source_ref` must be an object { plugin, handoff, inputs_hash }")?;
+    reject_unknown(obj, &["plugin", "handoff", "inputs_hash"])?;
+    let plugin = obj
+        .get("plugin")
+        .and_then(Value::as_str)
+        .filter(|s| (3..=64).contains(&s.len()))
+        .ok_or("`source_ref.plugin` must be a string of 3..=64 characters")?;
+    let handoff = obj
+        .get("handoff")
+        .and_then(Value::as_str)
+        .filter(|s| (1..=64).contains(&s.len()))
+        .ok_or("`source_ref.handoff` must be a string of 1..=64 characters")?;
+    let inputs_hash = obj
+        .get("inputs_hash")
+        .and_then(Value::as_str)
+        .filter(|s| s.len() == 64 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+        .ok_or("`source_ref.inputs_hash` must be 64 lowercase hex characters")?;
+    Ok(json!({
+        "plugin": plugin,
+        "handoff": handoff,
+        "inputs_hash": inputs_hash
+    }))
+}
+
 fn fill_args(args: &Map<String, Value>) -> Result<Value, String> {
-    reject_unknown(args, &["fields", "source", "from_card"])?;
+    reject_unknown(args, &["fields", "source", "from_card", "source_ref"])?;
     let fields = match args.get("fields") {
         Some(Value::Object(fields)) if !fields.is_empty() => fields,
         Some(Value::Object(_)) => return Err("`fields` is empty; nothing to fill".into()),
@@ -448,6 +493,10 @@ fn fill_args(args: &Map<String, Value>) -> Result<Value, String> {
     {
         return Err(format!("field `{key}` must be a string, number or boolean"));
     }
+    let source_ref = match args.get("source_ref") {
+        None | Some(Value::Null) => None,
+        Some(value) => Some(check_source_ref(value)?),
+    };
     let from_card = match args.get("from_card") {
         None | Some(Value::Null) => false,
         Some(Value::Bool(flag)) => *flag,
@@ -457,13 +506,21 @@ fn fill_args(args: &Map<String, Value>) -> Result<Value, String> {
         // The user's own answers to a chat form card, and nothing else.
         return match args.get("source").and_then(Value::as_str) {
             Some(USER_SOURCE) => {
-                Ok(json!({ "fields": fields, "source": USER_SOURCE, "from_card": true }))
+                let mut out = json!({ "fields": fields, "source": USER_SOURCE, "from_card": true });
+                if let Some(sr) = source_ref {
+                    out["source_ref"] = sr;
+                }
+                Ok(out)
             }
             _ => Err("answers from a form card are sent with `source: \"user\"`".into()),
         };
     }
     let source = optional_enum(args, "source", &FILL_SOURCES)?.unwrap_or_else(|| "ai".into());
-    Ok(json!({ "fields": fields, "source": source }))
+    let mut out = json!({ "fields": fields, "source": source });
+    if let Some(sr) = source_ref {
+        out["source_ref"] = sr;
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -591,27 +648,29 @@ mod tests {
     #[test]
     fn open_args_validate_code_period_and_tin() {
         let open = find("bir_form_open").unwrap();
+        let tkt = "tkt_0000000000000000000000000A";
         assert_eq!(
             open.host_args(&obj(
-                json!({"code": "2551q", "year": "2026", "period": 2, "tin": " 111111114000 "})
+                json!({"code": "2551q", "year": "2026", "period": 2, "tin": format!(" {tkt} ")})
             ))
             .unwrap(),
-            json!({"code": "2551Q", "year": 2026, "period": 2, "tin": "111111114000"})
+            json!({"code": "2551Q", "year": 2026, "period": 2, "tin": tkt})
         );
         // Any of the 43 forms by code; BIR checks the code and the period.
         assert_eq!(
             open.host_args(&obj(
-                json!({"code": "form 1702-rt", "year": 2025, "tin": "1"})
+                json!({"code": "form 1702-rt", "year": 2025, "tin": tkt})
             ))
             .unwrap(),
-            json!({"code": "1702RT", "year": 2025, "period": 0, "tin": "1"})
+            json!({"code": "1702RT", "year": 2025, "period": 0, "tin": tkt})
         );
         for bad in [
-            json!({"code": "17O1", "year": 2026, "period": 1, "tin": "1"}),
-            json!({"code": "2551Q", "year": 2026, "period": 1000, "tin": "1"}),
-            json!({"code": "1601C", "year": 1999, "period": 12, "tin": "1"}),
+            json!({"code": "17O1", "year": 2026, "period": 1, "tin": tkt}),
+            json!({"code": "2551Q", "year": 2026, "period": 1000, "tin": tkt}),
+            json!({"code": "1601C", "year": 1999, "period": 12, "tin": tkt}),
             json!({"code": "1601C", "year": 2026, "period": 1}),
-            json!({"code": "1601C", "year": 2026, "period": 1, "tin": "1", "confirm": true}),
+            json!({"code": "1601C", "year": 2026, "period": 1, "tin": "11111111400000"}),
+            json!({"code": "1601C", "year": 2026, "period": 1, "tin": tkt, "confirm": true}),
         ] {
             assert!(open.host_args(&obj(bad.clone())).is_err(), "{bad}");
         }
@@ -682,6 +741,38 @@ mod tests {
             fill.host_args(&obj(json!({"fields": {"a": 1}, "from_card": "yes"})))
                 .is_err()
         );
+        let good_ref = json!({
+            "plugin": "app.buwiz.books",
+            "handoff": "1",
+            "inputs_hash": "a".repeat(64)
+        });
+        assert_eq!(
+            fill.host_args(&obj(json!({
+                "fields": {"txtATCAmt1": "290000.00"},
+                "source": "document",
+                "source_ref": good_ref
+            })))
+            .unwrap(),
+            json!({
+                "fields": {"txtATCAmt1": "290000.00"},
+                "source": "document",
+                "source_ref": good_ref
+            })
+        );
+        for bad_ref in [
+            json!({"plugin": "ab", "handoff": "1", "inputs_hash": "a".repeat(64)}),
+            json!({"plugin": "app.buwiz.books", "handoff": "", "inputs_hash": "a".repeat(64)}),
+            json!({"plugin": "app.buwiz.books", "handoff": "1", "inputs_hash": "not-hex"}),
+            json!({"plugin": "app.buwiz.books", "handoff": "1", "inputs_hash": "a".repeat(64), "extra": 1}),
+        ] {
+            assert!(
+                fill.host_args(&obj(
+                    json!({"fields": {"a": "1"}, "source": "document", "source_ref": bad_ref})
+                ))
+                .is_err(),
+                "{bad_ref}"
+            );
+        }
     }
 
     #[test]

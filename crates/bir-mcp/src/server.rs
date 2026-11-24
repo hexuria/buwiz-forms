@@ -3,6 +3,7 @@
 //! `tools/call`. stdout carries protocol messages only; diagnostics go to
 //! stderr.
 use crate::license::License;
+use crate::tickets::TicketBook;
 use crate::tools::{self, APP_INFO, Action, HostCall};
 use serde_json::{Map, Value, json};
 use std::io::{BufRead, Write};
@@ -84,6 +85,7 @@ pub struct Server<H> {
     host: H,
     selected: Option<Selection>,
     license: License,
+    tickets: TicketBook,
 }
 
 impl<H: BirHost> Server<H> {
@@ -99,6 +101,7 @@ impl<H: BirHost> Server<H> {
             host,
             selected: None,
             license,
+            tickets: TicketBook::default(),
         }
     }
 
@@ -192,11 +195,14 @@ impl<H: BirHost> Server<H> {
             Action::Host(call) => self.host_call(call, args),
         };
         Ok(match outcome {
-            Ok(value) => tool_result(
-                serde_json::to_string_pretty(&value).expect("json value"),
-                false,
-            ),
-            Err(message) => tool_result(message, true),
+            Ok(mut value) => {
+                self.tickets.scrub_value(&mut value);
+                tool_result(
+                    serde_json::to_string_pretty(&value).expect("json value"),
+                    false,
+                )
+            }
+            Err(message) => tool_result(self.tickets.scrub_text(&message), true),
         })
     }
 
@@ -242,8 +248,11 @@ impl<H: BirHost> Server<H> {
     fn connect(&mut self, args: &Value) -> Result<Value, String> {
         // Whatever happens next, the previous selection is gone: a failed
         // switch must not leave the model working on the old app.
-        self.selected = None;
+        let prev_id = self.selected.take().map(|s| s.app.id);
         let id = args["id"].as_str().unwrap_or_default();
+        if prev_id.as_deref().is_some_and(|prev| prev != id) {
+            self.tickets.clear();
+        }
         let confirm_real = args["confirm_real"].as_bool().unwrap_or(false);
         let app = self.host.resolve(id)?;
         if !app.token_known {
@@ -286,6 +295,7 @@ impl<H: BirHost> Server<H> {
         let selection = self.selected.clone().ok_or(NOT_SELECTED)?;
         if !self.host.alive(&selection.app) {
             self.selected = None;
+            self.tickets.clear();
             return Err(format!(
                 "the selected BIR app `{}` is no longer running, so no app is selected now — call bir_list_apps, ask the user which one, then bir_connect",
                 selection.app.id
@@ -312,8 +322,16 @@ impl<H: BirHost> Server<H> {
         }))
     }
 
-    fn host_call(&mut self, call: HostCall, args: Value) -> Result<Value, String> {
+    fn host_call(&mut self, call: HostCall, mut args: Value) -> Result<Value, String> {
         let selection = self.live_selection()?;
+        if call == HostCall::Invoke("form.open")
+            && let Some(ticket) = args.get("tin").and_then(Value::as_str)
+        {
+            let full_tin = self.tickets.resolve(ticket).ok_or_else(|| {
+                "unknown taxpayer ticket; call bir_profiles_list or bir_connect first".to_string()
+            })?;
+            args["tin"] = Value::String(full_tin.to_string());
+        }
         match self.host.call(&selection.app, call, args) {
             Ok(result) => Ok(json!({ "app": selection.label(), "result": result })),
             Err(error) => Err(format!("{error}\n{}", selection.suffix())),
@@ -545,7 +563,7 @@ mod tests {
     #[test]
     fn protocol_roundtrip_initialize_list_connect_and_call() {
         let mut server = Server::new(FakeHost::single());
-        let replies = roundtrip(
+        let first = roundtrip(
             &mut server,
             &[
                 json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
@@ -558,10 +576,30 @@ mod tests {
                 json!({"jsonrpc": "2.0", "id": 3, "method": "ping"}),
                 call(4, "bir_list_apps", json!({})),
                 call(5, "bir_connect", json!({"id": "bir-demo"})),
+            ],
+        );
+        // The notification produced no line.
+        assert_eq!(first.len(), 5, "{first:?}");
+        assert!(first.iter().all(|r| r["jsonrpc"] == "2.0"));
+
+        let listed = payload(&first[3]);
+        let ticket = listed["apps"][0]["taxpayers"][0]["tin"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(
+            crate::tickets::is_ticket(&ticket),
+            "expected ticket, got {ticket}"
+        );
+        assert!(!first[3].to_string().contains("11111111400000"));
+
+        let rest = roundtrip(
+            &mut server,
+            &[
                 call(
                     6,
                     "bir_form_open",
-                    json!({"code": "2551Q", "year": 2026, "period": 1, "tin": "111111114000"}),
+                    json!({"code": "2551Q", "year": 2026, "period": 1, "tin": ticket}),
                 ),
                 call(
                     7,
@@ -571,9 +609,8 @@ mod tests {
                 call(8, "bir_status", json!({})),
             ],
         );
-        // The notification produced no line.
+        let replies: Vec<Value> = first.into_iter().chain(rest).collect();
         assert_eq!(replies.len(), 8, "{replies:?}");
-        assert!(replies.iter().all(|r| r["jsonrpc"] == "2.0"));
 
         let init = &replies[0];
         assert_eq!(init["id"], 1);
@@ -626,7 +663,7 @@ mod tests {
             json!([{
                 "id": "bir-demo", "pid": 11, "addr": "127.0.0.1:50011",
                 "mode": "desktop", "token": "known", "database": "test",
-                "taxpayers": [{"tin": "11111111400000", "name": "Test Taxpayer"}],
+                "taxpayers": [{"tin": ticket, "name": "Test Taxpayer"}],
                 "selected": false
             }])
         );
@@ -637,6 +674,7 @@ mod tests {
             connect["app"],
             json!({"id": "bir-demo", "mode": "desktop", "database": "test"})
         );
+        assert_eq!(connect["taxpayers"][0]["tin"], ticket);
 
         let opened = payload(&replies[5]);
         assert_eq!(
@@ -654,7 +692,7 @@ mod tests {
             vec![
                 (
                     HostCall::Invoke("form.open"),
-                    json!({"code": "2551Q", "year": 2026, "period": 1, "tin": "111111114000"})
+                    json!({"code": "2551Q", "year": 2026, "period": 1, "tin": "11111111400000"})
                 ),
                 (
                     HostCall::Invoke("form.fill"),
@@ -695,7 +733,7 @@ mod tests {
             }
             let args = match tool.name {
                 "bir_form_open" => {
-                    json!({"code": "1601C", "year": 2026, "period": 3, "tin": "111111114000"})
+                    json!({"code": "1601C", "year": 2026, "period": 3, "tin": "tkt_0000000000000000000000000A"})
                 }
                 "bir_form_fill" => json!({"fields": {"k": "v"}, "source": "profile"}),
                 _ => json!({}),
@@ -836,11 +874,12 @@ mod tests {
     #[test]
     fn host_refusals_become_tool_errors_with_bir_message_and_app_label() {
         let mut server = connected(FakeHost::single(), "bir-demo");
+        let ticket = server.tickets.issue("11111111400000");
         let open = |id, code| {
             call(
                 id,
                 "bir_form_open",
-                json!({"code": code, "year": 2026, "period": 1, "tin": "111111114000"}),
+                json!({"code": code, "year": 2026, "period": 1, "tin": ticket}),
             )
         };
         let replies = roundtrip(
@@ -962,10 +1001,11 @@ mod tests {
     #[test]
     fn every_tool_reaches_only_its_mapped_ops() {
         let mut server = connected(FakeHost::single(), "bir-demo");
+        let ticket = server.tickets.issue("11111111400000");
         for (i, tool) in tools::TOOLS.iter().enumerate() {
             let args = match tool.name {
                 "bir_form_open" => {
-                    json!({"code": "1601C", "year": 2026, "period": 3, "tin": "111111114000"})
+                    json!({"code": "1601C", "year": 2026, "period": 3, "tin": ticket})
                 }
                 "bir_form_fill" => json!({"fields": {"k": "v"}, "source": "profile"}),
                 "bir_connect" => json!({"id": "bir-demo"}),

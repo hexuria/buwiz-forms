@@ -19,6 +19,8 @@ sqlcipher = ["bir-core/sqlcipher"]
 
 [dependencies]
 serde_json = { workspace = true }
+regex = { workspace = true }
+rand = "0.10.1"
 # Workspace pin shared with bir-app-api's `agent` feature.
 gpui-agent = { workspace = true }
 # Blocking client for the buwiz-server license check. rustls, no OpenSSL.
@@ -30,3 +32,5 @@ bir-core = { path = "../bir-core", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"
+sha2 = { workspace = true }
+bir-app-api = { path = "../bir-app-api", features = ["agent"] }

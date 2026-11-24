@@ -79,6 +79,7 @@ struct OpenForm {
     tin: String,
     draft: Value,
     sources: BTreeMap<String, String>,
+    source_refs: BTreeMap<String, Value>,
     dirty: bool,
     /// A fill is held in the window for the filer's approval (it removes
     /// what they typed): nothing of it is stored, and every call reads the
@@ -530,6 +531,7 @@ impl Session {
             tin: tin.clone(),
             draft,
             sources: BTreeMap::new(),
+            source_refs: BTreeMap::new(),
             dirty: false,
             awaiting: false,
         });
@@ -563,6 +565,7 @@ impl Session {
                 card_json(
                     &CardBox::new(def, entry, &map),
                     open.sources.get(&entry.key),
+                    open.source_refs.get(&entry.key),
                 )
             })
             .collect();
@@ -572,7 +575,7 @@ impl Session {
                     continue;
                 };
                 let card = CardBox::new(def, entry, &map);
-                let mut value = card_json(&card, None);
+                let mut value = card_json(&card, None, None);
                 value["locked"] = json!(lock);
                 boxes.push(value);
             }
@@ -626,6 +629,7 @@ impl Session {
         }
         let fields = collect_fill_fields(args)?;
         let source = fill_source(args, &fields, kind, &draft)?;
+        let source_ref = args.get("source_ref").filter(|v| v.is_object()).cloned();
         let db = self.lock_db()?;
         let profile = load_profile(&db, &tin, year)?;
         let from_profile = profile_context(&db, kind, &profile, year, period)?;
@@ -690,6 +694,11 @@ impl Session {
                 open.dirty |= !filled.is_empty() || !forgot.is_empty();
                 for key in &filled {
                     open.sources.insert(key.clone(), source.clone());
+                    if let Some(sr) = &source_ref {
+                        open.source_refs.insert(key.clone(), sr.clone());
+                    } else {
+                        open.source_refs.remove(key);
+                    }
                 }
             }
         }
@@ -719,6 +728,11 @@ impl Session {
             "filled": filled.clone(),
             "kept_user_boxes": kept,
         });
+        if let Some(sr) = source_ref
+            && let Value::Object(object) = &mut result
+        {
+            object.insert("source_ref".into(), sr);
+        }
         if !not_shown.is_empty()
             && let Value::Object(object) = &mut result
         {
@@ -740,6 +754,7 @@ impl Session {
         let kind = open.kind;
         let mut draft = open.draft.clone();
         let sources = open.sources.clone();
+        let source_refs = open.source_refs.clone();
         let errors = agent::validate(kind, &mut draft)?;
         let map = agent::field_map(kind, &draft)?;
         let needs = agent::needs_you(kind, &map, &errors);
@@ -749,7 +764,7 @@ impl Session {
         Ok(DispatchResult::json(json!({
             "form": kind.form_code(),
             "ok": errors.is_empty(),
-            "boxes": needs.boxes.iter().map(|card| card_json(card, sources.get(&card.key))).collect::<Vec<_>>(),
+            "boxes": needs.boxes.iter().map(|card| card_json(card, sources.get(&card.key), source_refs.get(&card.key))).collect::<Vec<_>>(),
             "other_errors": field_errors(&needs.other_errors),
         })))
     }
@@ -1650,7 +1665,10 @@ fn collect_fill_fields(args: &Value) -> Result<Map<String, Value>, String> {
     }
     if let Some(object) = args.as_object() {
         for (key, value) in object {
-            if !matches!(key.as_str(), "fields" | "source" | "from_card" | "ask") {
+            if !matches!(
+                key.as_str(),
+                "fields" | "source" | "from_card" | "ask" | "source_ref"
+            ) {
                 fields.insert(key.clone(), value.clone());
             }
         }
@@ -1706,12 +1724,15 @@ fn fill_source(
     Ok("user".into())
 }
 
-fn card_json(card: &CardBox, source: Option<&String>) -> Value {
+fn card_json(card: &CardBox, source: Option<&String>, source_ref: Option<&Value>) -> Value {
     let mut value = serde_json::to_value(card).unwrap_or(Value::Null);
     if let Value::Object(object) = &mut value {
         object.insert("field".into(), json!(card.key));
         if let Some(source) = source {
             object.insert("source".into(), json!(source));
+        }
+        if let Some(source_ref) = source_ref {
+            object.insert("source_ref".into(), source_ref.clone());
         }
     }
     value
@@ -2035,7 +2056,10 @@ mod tests {
         ("form.open", FORM_OPEN_ARGS),
         ("filing.start", FORM_OPEN_ARGS),
         ("form.fields", &["locked"]),
-        ("form.fill", &["fields", "source", "from_card", "ask"]),
+        (
+            "form.fill",
+            &["fields", "source", "from_card", "ask", "source_ref"],
+        ),
         ("form.needs_you", &[]),
         ("form.validate", &[]),
         ("filing.validate", &[]),
@@ -2156,6 +2180,11 @@ mod tests {
             "form.fill",
             "from_card",
             "marks the person's own answers to a form card; an MCP flow",
+        ),
+        (
+            "form.fill",
+            "source_ref",
+            "records MCP hand-off provenance (e.g. from Buwiz Books); an MCP flow",
         ),
     ];
 

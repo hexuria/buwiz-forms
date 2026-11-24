@@ -12,5 +12,6 @@ pub mod license;
 pub mod oauth;
 pub mod server;
 pub mod signin;
+pub mod tickets;
 pub mod tokens;
 pub mod tools;
