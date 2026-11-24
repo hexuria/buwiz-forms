@@ -1538,6 +1538,12 @@
    "html_id": "p2c256",
    "printed": "Schedule 7 Total Applied (to Item 23B)",
    "reason": "geometry: the fillable cell on this printed item's row/column of the 2550M (2007) sheet"
+  },
+  {
+   "writer_key": "derived:special_tax_specify",
+   "html_id": "p1c23",
+   "printed": "11 If yes, specify",
+   "reason": "human-readable Item 11 special tax relief label derived from lstSpecialTax"
   }
  ],
  "xbox_joins": [

@@ -126,6 +126,14 @@ impl Form2550MTaxRelief {
             Self::InternationalTaxTreaty => "2",
         }
     }
+
+    fn print_label(self) -> &'static str {
+        match self {
+            Self::No | Self::YesUnspecified => "",
+            Self::SpecialRate => "SPECIAL RATE",
+            Self::InternationalTaxTreaty => "INTERNATIONAL TAX TREATY",
+        }
+    }
 }
 
 /// Item 18 purchases whose input tax the page fills at 12%
@@ -1880,11 +1888,19 @@ impl Form2550MDraft {
             basic_tax_due: "Item 24", |d| d.tax_still_payable,
         )
     }
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        let label = self.tax_relief.print_label();
+        if !label.is_empty() {
+            fields.insert("derived:special_tax_specify".to_string(), label.to_string());
+        }
+        fields
+    }
 }
 
 impl QueueableForm for Form2550MDraft {
     fn print_field_map(&self) -> BTreeMap<String, String> {
-        self.to_bir_field_map()
+        self.to_print_field_map()
     }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]
@@ -2436,5 +2452,20 @@ mod tests {
                 .any(|(field, _)| field == "surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+
+    #[test]
+    fn to_print_field_map_adds_special_tax_specify_label() {
+        let mut draft = sample();
+        draft.tax_relief = Form2550MTaxRelief::InternationalTaxTreaty;
+        let bir = draft.to_bir_field_map();
+        let print = draft.to_print_field_map();
+        assert!(!bir.contains_key("derived:special_tax_specify"));
+        assert_eq!(
+            print.get("derived:special_tax_specify").map(String::as_str),
+            Some("INTERNATIONAL TAX TREATY")
+        );
+        draft.tax_relief = Form2550MTaxRelief::No;
+        assert!(!draft.to_print_field_map().contains_key("derived:special_tax_specify"));
     }
 }

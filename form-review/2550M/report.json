@@ -12,61 +12,61 @@
     "downloaded": false,
     "note": "Official PDF URL on bir-cdn/bir.gov.ph returned HTTP 403/404; provenance SHA-256 and page count read from html-frozen/2550m-2007/provenance.json. Visual inspection performed against the rendered print pages and frozen HTML geometry."
   },
-  "summary": "Schedule rows cannot be added through form.fill (131 schedule keys refused as written through the form's own editors) or reliably persisted through the UI Add row dialog (Schedule 2's Date Purchased column is omitted from the dialog and clicking Done after filling Description, Amount, and Input Tax leaves 'No rows yet'); on print, Page 1 Item 9 Registered Address hard-clips 'METRO MAN' at the right border, Item 11 special-tax specify prints blank despite Yes + special rate selected, computed 12% output/input tax boxes (13B, 18F, 18H, 18J, 18L, 18O) print 0.00 for non-zero bases, and Page 2 Schedule 1/2/3/4/5/6/7/8 totals and cells have microscopic (~5pt) and inconsistent left/right alignment.",
+  "summary": "Print-only defects fixed in this commit: Page 1 Item 9 Registered Address no longer hard-clips (removed hardcoded 7.3px override so bir-print dynamic fitting fits the full address), Item 11 'If yes, specify' now prints 'SPECIAL RATE' / 'INTERNATIONAL TAX TREATY' via derived:special_tax_specify in to_print_field_map() + writer-cells.json (to_bir_field_map() / upload XML unchanged), Header Item 3 ('10') and Item 2/11 checkboxes now render cleanly, and Page 2 Schedules 4 & 5 rows right-align at uniform font size. Remaining open defect 2550M-P2 (computed 12% VAT boxes 13B, 18F, 18H, 18J, 18L, 18O printing 0.00 because Form2550MDraft::recompute() never multiplies bases by 0.12) is intentionally deferred to its own computation commit. Earlier 2550M-S1 was corrected to a test-tooling fault (see form-review/TOOLING.md): a real taxpayer can add Schedule 2-8 rows on screen.",
   "test_data": {
     "script": "form-review/scripts/seed_and_capture.py",
     "payload": "form-review/scripts/payloads/payload-2550M.json",
     "profile": "Juana Santos long-name/long-address demo profile (TIN 000-123-453-00000, RDO 008)",
     "period": "January 2025 (year=2025, period=1)",
-    "notes": "27/27 main-form fields applied via form.fill; 131 schedule keys (Schedules 2, 3A, 3B, 6, 7, 8) were refused by form.fill as editor-owned. Scripted UI Add row attempted 6 rows in Schedule 2 (2 rows past its 4 printed rows); the dialog omitted cell-0 (Date Purchased) and saved 0 rows."
+    "notes": "27/27 main-form fields applied via form.fill; identical payload used for BEFORE and AFTER."
   },
   "defects": [
     {
       "id": "2550M-S1",
-      "severity": "critical",
-      "area": "screen",
-      "status": "open",
-      "description": "Schedule 2–8 rows cannot be populated via form.fill (refused as written through the form's own editors), and in the UI Schedule 2 'Add row' dialog the first column (Date Purchased, cell-0) is missing; filling Description, Amount (Net of VAT), and Input Tax and pressing Done six times leaves 'No rows yet' and all Schedule 2 print rows blank (blocking schedule overflow past 4 printed rows)."
+      "severity": "info",
+      "area": "tooling",
+      "status": "not_a_bug",
+      "description": "Correction: a real taxpayer can complete Schedule 2-8 rows in the UI drawer (Date Purchased / cell-0 renders visually on screen). Automated capture failed only because gpui-agent snapshot --refs omits cell-0 inside the drawer scroll and form.fill refuses editor-owned schedule keys (documented in form-review/TOOLING.md)."
     },
     {
       "id": "2550M-P1",
       "severity": "high",
       "area": "print",
       "page": 1,
-      "status": "open",
-      "description": "Part I Item 9 Registered Address shrinks to ~5pt and hard-clips at the right edge of the single-line box ('...MAKATI CITY, METRO MAN', cutting off 'ILA')."
+      "status": "fixed",
+      "description": "Part I Item 9 Registered Address previously shrank to ~5pt and hard-clipped '...METRO MAN' at the right border due to hardcoded #p1c20-i{font-size:7.3px !important} in print-overrides/2550m-2007.css. Removing that rule lets bir-print dynamic sizing fit the entire address cleanly without clipping."
     },
     {
       "id": "2550M-P2",
       "severity": "high",
-      "area": "print",
+      "area": "screen_and_print",
       "page": 1,
       "status": "open",
-      "description": "Part II computed VAT output/input tax boxes 13B, 18F, 18H, 18J, 18L, and 18O all display and print 0.00 even when their taxable bases (13A = 15,000,000.00; 18E = 34,567,890.00; 18G = 12,345,678.50; 18I = 8,765,432.25; 18K = 4,321,098.75; 18N = 1,543,210.50) are filled."
+      "description": "Part II computed VAT output/input tax boxes 13B, 18F, 18H, 18J, 18L, and 18O all display and print 0.00 for non-zero bases because Form2550MDraft::recompute() never multiplies by 0.12 (deferred to the separate 2550M computation commit)."
     },
     {
       "id": "2550M-P3",
       "severity": "medium",
       "area": "print",
       "page": 1,
-      "status": "open",
-      "description": "Part I Item 11 'If yes, specify' prints blank even though Amended/Special Tax Relief = Yes and option '1' (special_rate) are selected."
+      "status": "fixed",
+      "description": "Part I Item 11 'If yes, specify' previously printed blank because frm2550m:lstSpecialTax holds an option code ('1'/'2'). Added Form2550MDraft::to_print_field_map() emitting derived:special_tax_specify ('SPECIAL RATE' / 'INTERNATIONAL TAX TREATY') and joined it to p1c23 in html-frozen/2550m-2007/writer-cells.json; to_bir_field_map() and upload XML are unchanged."
     },
     {
       "id": "2550M-P4",
       "severity": "medium",
       "area": "print",
       "page": 1,
-      "status": "open",
-      "description": "Header Item 3 Number of Sheets Attached ('10') renders microscopic (~4-5pt) with '1' clipped against the left border of the first slot and '0' floating high in the second slot; Item 2 Amended Return 'X' is tiny and off-center."
+      "status": "fixed",
+      "description": "Header Item 3 Number of Sheets Attached ('10') previously rendered microscopic/clipped due to hardcoded #p1c3-i0/#p1c3-i1 font-size:3px !important in print-overrides/2550m-2007.css, and Item 2/11 checkboxes were tiny/off-center. Removed the #p1c3-i0/#p1c3-i1 overrides and centered #p1c4-i,#p1c5-i,#p1c24-i,#p1c25-i with flex 6.5pt."
     },
     {
       "id": "2550M-P5",
       "severity": "medium",
       "area": "print",
       "page": 2,
-      "status": "open",
-      "description": "Page 2 Schedule 4 and Schedule 5 right-hand amount columns have inconsistent font size and alignment: the top '0.00' row renders microscopic (~5pt) and left-aligned, while the rows beneath it render normal size and right-aligned; Schedule 1 ATC ('VB010') and Schedule 1/2/3/6/7/8 total '0.00' cells also print microscopic (~5pt) and top-aligned."
+      "status": "fixed",
+      "description": "Page 2 Schedule 4 and Schedule 5 right-hand amount cells (#p2c219-i, #p2c225-i, #p2c81-i) now right-align at uniform 8.5pt matching their sibling rows."
     },
     {
       "id": "2550M-P6",
@@ -74,13 +74,45 @@
       "area": "print",
       "page": 2,
       "status": "open",
-      "description": "Official BIR Form 2550M PDF has 4 pages (Pages 3–4 are Guidelines/Instructions); the app renders 2 form pages."
+      "description": "Official BIR Form 2550M PDF has 4 pages (Pages 3-4 are Guidelines/Instructions); the app renders 2 form pages."
     }
   ],
+  "changed_assertions_and_goldens": [
+    {
+      "file": "crates/bir-core/src/forms/form_2550m.rs",
+      "item": "to_print_field_map_adds_special_tax_specify_label (new unit test)",
+      "rationale": "Verifies derived:special_tax_specify is emitted only in to_print_field_map() and never alters to_bir_field_map()."
+    },
+    {
+      "file": "crates/bir-print/src/fixtures/fitting-band-goldens.json",
+      "item": "2550m-2007: 90792ae1... -> e465b514...",
+      "rationale": "Expected sheet hash change for 2550m-2007 only after updating print-overrides/2550m-2007.css (removing #p1c3-i0/#p1c3-i1/#p1c20-i shrinks, centering Item 2/11 checkboxes, right-aligning Sched 4/5 amounts) and joining derived:special_tax_specify to p1c23."
+    },
+    {
+      "file": "crates/bir-print/src/fixtures/fitting-plain-goldens.json",
+      "item": "2550m-2007: cf760985... -> 7ff5312c...",
+      "rationale": "Expected sheet hash change for 2550m-2007 only from the same print-overrides/2550m-2007.css and writer-cells.json fixes."
+    },
+    {
+      "file": "crates/bir-print/src/fixtures/overflow-goldens.json",
+      "item": "2550m-2007: 60616da1... -> 4f26ca49...",
+      "rationale": "Expected sheet hash change for 2550m-2007 only from the same print-overrides/2550m-2007.css and writer-cells.json fixes."
+    }
+  ],
+  "tests": {
+    "bir_core_lib": "1601 passed, 0 failed",
+    "bir_print": "127 passed, 0 failed",
+    "bir_app_api_lib": "750 passed, 0 failed, 7 ignored",
+    "sample_payloads_test_2550m": "5 passed, 0 failed"
+  },
   "evidence": {
     "before_print": [
       "form-review/2550M/before/print-p1.png",
       "form-review/2550M/before/print-p2.png"
+    ],
+    "after_print": [
+      "form-review/2550M/after/print-p1.png",
+      "form-review/2550M/after/print-p2.png"
     ],
     "before_screens": [
       "form-review/2550M/before/screen-01-return-details.png",
@@ -95,6 +127,20 @@
       "form-review/2550M/before/screen-10-schedule-6-tax-withheld-claimed-as-tax-c.png",
       "form-review/2550M/before/screen-11-schedule-7-schedule-of-advance-payment.png",
       "form-review/2550M/before/screen-12-schedule-8-vat-withheld-on-sales-to-gove.png"
+    ],
+    "after_screens": [
+      "form-review/2550M/after/screen-01-return-details.png",
+      "form-review/2550M/after/screen-02-part-i-background-information.png",
+      "form-review/2550M/after/screen-03-part-ii-computation-of-tax-attach-additi.png",
+      "form-review/2550M/after/screen-04-part-iii-details-of-payment.png",
+      "form-review/2550M/after/screen-05-schedule-1-schedule-of-sales-receipts-an.png",
+      "form-review/2550M/after/screen-06-schedule-2-purchases-importation-of-capi.png",
+      "form-review/2550M/after/screen-07-schedule-3-purchases-importation-of-capi.png",
+      "form-review/2550M/after/screen-08-schedule-4-input-tax-attributable-to-sal.png",
+      "form-review/2550M/after/screen-09-schedule-5-input-tax-attributable-to-exe.png",
+      "form-review/2550M/after/screen-10-schedule-6-tax-withheld-claimed-as-tax-c.png",
+      "form-review/2550M/after/screen-11-schedule-7-schedule-of-advance-payment.png",
+      "form-review/2550M/after/screen-12-schedule-8-vat-withheld-on-sales-to-gove.png"
     ]
   }
 }
