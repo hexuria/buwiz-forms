@@ -273,14 +273,23 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
                 None => global.clone(),
             };
             // A period that ended before the branch's business began is
-            // not owed; an unreadable facts record lists as before.
-            let start = db
+            // not owed. The start is the EARLIEST known for the branch —
+            // a certificate re-issued mid-life carries the re-issue
+            // segment's date, never the first registration's. An
+            // unreadable profile or facts record lists everything.
+            let facts_start = db
                 .effective_year_facts(&branch.tin, year16)
                 .ok()
                 .and_then(|facts| facts.facts.business_start_date);
-            for deadline in
-                DeadlineResolver::deadlines_for_forms_since(&codes, year, &overrides, start)
-            {
+            let start = profile
+                .as_ref()
+                .and_then(|profile| profile.earliest_business_start(facts_start));
+            let deadlines = DeadlineResolver::filter_deadlines_for_listing(
+                DeadlineResolver::deadlines_for_forms(&codes, year, &overrides),
+                start,
+                &drafts,
+            );
+            for deadline in deadlines {
                 let Some(due) = deadline.final_deadline_date() else {
                     continue;
                 };
@@ -656,6 +665,47 @@ mod tests {
             rows.iter()
                 .any(|r| r["form_code"] == "1701" && r["frequency"] == "Annual"),
             "the start year's annual return is owed"
+        );
+    }
+
+    /// A return already saved for a period before the start date is
+    /// evidence the start is wrong: nothing is filtered for the branch.
+    #[test]
+    fn deadlines_between_lists_everything_when_a_saved_return_predates_the_start() {
+        setup();
+        with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["1701", "1701Q", "2550Q", "2551Q"])
+                .unwrap();
+            db.set_year_facts(
+                HEAD,
+                2026,
+                &bir_core::tax_profile::YearFactsPatch {
+                    business_start_date: Some(Some(
+                        chrono::NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
+                    )),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            let first_quarter =
+                bir_core::forms::form_2551q::Form2551QDraft::new_from_profile(&profile, 2026, 1);
+            db.save_2551q_draft(&first_quarter).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&args(&["2026-01-01", "2027-12-31"])).unwrap());
+        let rows: Vec<_> = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["taxable_year"] == 2026 && r["form_code"] == "2551Q")
+            .collect();
+        let quarters: Vec<i64> = rows.iter().map(|r| r["period"].as_i64().unwrap()).collect();
+        assert_eq!(
+            quarters,
+            [1, 2, 3, 4],
+            "the saved Q1 return proves the business ran before October"
         );
     }
 

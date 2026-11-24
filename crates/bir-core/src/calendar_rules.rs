@@ -815,6 +815,36 @@ impl DeadlineResolver {
             .collect()
     }
 
+    /// The deadlines a branch's listings show: `all` filtered to the
+    /// periods owed since the branch's earliest known business start,
+    /// unless a saved return (draft, queued or filed) already names a
+    /// filtered-out period — the filing is evidence the start date is
+    /// wrong for this branch, and hiding its period is worse than listing
+    /// everything, so nothing is filtered. Both listing sites (the
+    /// dashboard feed and the calendar events builder) share this one
+    /// definition.
+    pub fn filter_deadlines_for_listing(
+        all: Vec<ResolvedTaxDeadline>,
+        earliest_start: Option<NaiveDate>,
+        filings: &[crate::forms::FormDraftSummary],
+    ) -> Vec<ResolvedTaxDeadline> {
+        if earliest_start.is_none() {
+            return all;
+        }
+        let filtered: Vec<ResolvedTaxDeadline> = all
+            .iter()
+            .filter(|deadline| deadline.owed_since(earliest_start))
+            .cloned()
+            .collect();
+        let contradicted = all.iter().any(|deadline| {
+            !deadline.owed_since(earliest_start)
+                && filings
+                    .iter()
+                    .any(|filing| filing_matches_period(filing, deadline))
+        });
+        if contradicted { all } else { filtered }
+    }
+
     pub fn resolve_deadline_calendar_year(calendar_year: i32) -> Vec<ResolvedTaxDeadline> {
         Self::resolve_deadline_calendar_year_with_overrides(calendar_year, &[])
     }
@@ -1280,6 +1310,23 @@ impl DeadlineResolver {
             (year, month + 1)
         };
         NaiveDate::from_ymd_opt(ny, nm, 1).unwrap() - Duration::days(1)
+    }
+}
+
+/// Whether a saved return names the deadline's period: same form, same
+/// month or quarter, or the annual period (a filing that keys neither).
+fn filing_matches_period(
+    filing: &crate::forms::FormDraftSummary,
+    deadline: &ResolvedTaxDeadline,
+) -> bool {
+    if filing.form_code != deadline.form_code {
+        return false;
+    }
+    match deadline.period {
+        DeadlinePeriod::Monthly { month, .. } => filing.month == Some(month),
+        DeadlinePeriod::Quarterly { quarter, .. } => filing.quarter == Some(quarter),
+        DeadlinePeriod::Annual { .. } => filing.month.is_none() && filing.quarter.is_none(),
+        DeadlinePeriod::EventBased => false,
     }
 }
 
