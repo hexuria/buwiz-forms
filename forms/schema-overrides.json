@@ -50099,6 +50099,14 @@
     }
   },
   "2550Q": {
+    "txtTotalTaxWithHeld30": {
+      "computed": false,
+      "evidence": "2550Q Schedule 3 row 0 tax withheld: static placeholder is disabled at load before the modal opens, while txtTotalTaxWithHeld3{N>=0} is a user-typed input."
+    },
+    "txtTotalTaxWithHeld31": {
+      "computed": false,
+      "evidence": "2550Q Schedule 3 row 1 tax withheld: static placeholder is disabled at load before the modal opens, while txtTotalTaxWithHeld3{N>=0} is a user-typed input."
+    },
     "item:2:19": {
       "label": "Total Sales & Output Tax Due",
       "evidence": "item (unnumbered): agent box label: 'Total Sales & Output Tax Due'; writer-cells printed caption: 'Total Sales & Output Tax Due'"
@@ -51780,6 +51788,22 @@
     }
   },
   "2552": {
+    "frm2552:txtPg2Pt6NumShares2": {
+      "computed": false,
+      "evidence": "2552 Part VI row 2 number of shares: disabled at load until prior rows are filled, unlike row 1; not in rules/forms/2552-v2018/calculations.json."
+    },
+    "frm2552:txtPg2Pt6NumShares3": {
+      "computed": false,
+      "evidence": "2552 Part VI row 3 number of shares: disabled at load until prior rows are filled, unlike row 1; not in rules/forms/2552-v2018/calculations.json."
+    },
+    "frm2552:txtPg2Pt6NumShares4": {
+      "computed": false,
+      "evidence": "2552 Part VI row 4 number of shares: disabled at load until prior rows are filled, unlike row 1; not in rules/forms/2552-v2018/calculations.json."
+    },
+    "frm2552:txtPg2Pt6NumShares5": {
+      "computed": false,
+      "evidence": "2552 Part VI row 5 number of shares: disabled at load until prior rows are filled, unlike row 1; not in rules/forms/2552-v2018/calculations.json."
+    },
     "item:1:9": {
       "label": "If yes, specify",
       "evidence": "item 10A: painted view (retired): 'If yes, specify'"

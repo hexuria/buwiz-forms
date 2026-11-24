@@ -269,6 +269,30 @@ const FILER_TYPED: &[(&str, &str)] = &[
         "frm1701MS:txtLessNonTaxableb",
         "Part IV item 2B Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered while Schedule A (Part IV.A) is open and clears it when Schedule A closes",
     ),
+    (
+        "txtTotalTaxWithHeld30",
+        "2550Q Schedule 3 row 0 tax withheld: static placeholder is disabled at load in rules/forms/2550q-v2024/fixtures/runtime-control-inventory-v796.json (L3020) before the Schedule 3 modal opens, while txtTotalTaxWithHeld3{N>=0} is a user-typed input for rows 0 onward",
+    ),
+    (
+        "txtTotalTaxWithHeld31",
+        "2550Q Schedule 3 row 1 tax withheld: static placeholder is disabled at load in rules/forms/2550q-v2024/fixtures/runtime-control-inventory-v796.json (L3050) before the Schedule 3 modal opens, while txtTotalTaxWithHeld3{N>=0} is a user-typed input for rows 0 onward",
+    ),
+    (
+        "frm2552:txtPg2Pt6NumShares2",
+        "2552 Part VI row 2 number of shares: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L2339) until prior rows are entered, unlike row 1 (L2314); not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2Pt6NumShares3",
+        "2552 Part VI row 3 number of shares: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L2364) until prior rows are entered, unlike row 1 (L2314); not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2Pt6NumShares4",
+        "2552 Part VI row 4 number of shares: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L2389) until prior rows are entered, unlike row 1 (L2314); not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2Pt6NumShares5",
+        "2552 Part VI row 5 number of shares: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L2414) until prior rows are entered, unlike row 1 (L2314); not in rules/forms/2552-v2018/calculations.json",
+    ),
 ];
 
 const EXCESS_MCIT_1702RT: &str = "1702RT Schedule IV column C (Excess MCIT over \
@@ -998,6 +1022,13 @@ const GATED_ENTRY: &[(&str, &str)] = &[
     ),
     ("frm1702RT:txtPg2Pt4I54C2", RT_ADD_MORE_LINE),
     ("frm1702RT:txtPg3Sc1I17iC2", RT_ADD_MORE_LINE),
+    (
+        "txtTotalTaxWithHeld30",
+        "2550Q Schedule 3 row 0 tax withheld: typed by the filer; row 0's \
+         0.00 placeholder is only materialized in the upload map once any \
+         row-0 field (such as /schedule_3/0/income_payment) is non-empty, \
+         which the probe would otherwise treat as a combination",
+    ),
     ("frm1702RT:txtPg3Sc2I4C3", RT_ADD_MORE_LINE),
     ("frm1702RT:txtPg4Sc5I3C2", RT_ADD_MORE_LINE),
     ("frm1702RT:txtPg4Sc5I6C2", RT_ADD_MORE_LINE),

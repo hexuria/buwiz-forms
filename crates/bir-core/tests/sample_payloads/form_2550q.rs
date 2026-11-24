@@ -286,3 +286,88 @@ pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
         serde_json::to_value(sample_2550q_specify()).expect("sample serializes"),
     ]
 }
+
+#[test]
+fn form_2550q_schedule_3_rows_0_and_1_are_writable_via_agent_fill() {
+    use bir_core::forms::agent::{self, AgentFormKind};
+    use std::collections::BTreeSet;
+
+    let kind = AgentFormKind::from_code("2550Q").expect("2550Q kind");
+    let def = kind.definition();
+    let computed: BTreeSet<&str> = def
+        .boxes
+        .iter()
+        .filter(|b| b.computed || b.layout_only)
+        .map(|b| b.key.as_str())
+        .collect();
+    assert!(
+        !computed.contains("txtTotalTaxWithHeld30") && !computed.contains("txtTotalTaxWithHeld31"),
+        "Schedule 3 rows 0 and 1 tax withheld must be writable for form.fill"
+    );
+
+    let base = Form2550QDraft::new_from_profile(&dummy_profile("2550Q", "Corporation"), 2025, 1);
+    let mut draft = serde_json::to_value(&base).expect("base serializes");
+    for (k, v) in [
+        ("txtTotalTaxWithHeld30", "5,000.00"),
+        ("txtTotalTaxWithHeld31", "10,000.00"),
+    ] {
+        agent::fill_as_user(
+            kind,
+            &mut draft,
+            k,
+            &serde_json::Value::String(v.to_string()),
+        )
+        .unwrap_or_else(|e| panic!("fill_as_user failed for {k}={v:?}: {e}"));
+    }
+    agent::compute(kind, &mut draft).expect("compute succeeds");
+    let map = agent::field_map(kind, &draft).expect("field map");
+    assert_eq!(
+        map.get("txtTotalTaxWithHeld30").map(String::as_str),
+        Some("5,000.00")
+    );
+    assert_eq!(
+        map.get("txtTotalTaxWithHeld31").map(String::as_str),
+        Some("10,000.00")
+    );
+    assert_eq!(
+        map.get("sched3TotalTax").map(String::as_str),
+        Some("15,000.00")
+    );
+    assert_eq!(
+        map.get("frm2550qv2024:creditableVat").map(String::as_str),
+        Some("15,000.00")
+    );
+}
+
+#[test]
+fn form_2552_part_vi_num_shares_rows_2_to_5_are_writable_via_agent_fill() {
+    use bir_core::forms::agent::{self, AgentFormKind};
+    use bir_core::forms::form_2552::Form2552Draft;
+
+    let kind = AgentFormKind::from_code("2552").expect("2552 kind");
+    let base = Form2552Draft::new_from_profile(&dummy_profile("2552", "Corporation"), 2025, 3, 15);
+    let mut draft = serde_json::to_value(&base).expect("2552 draft serializes");
+    let edits = [
+        ("frm2552:txtPg2Pt6NumShares2", "250.00"),
+        ("frm2552:txtPg2Pt6NumShares3", "350.00"),
+        ("frm2552:txtPg2Pt6NumShares4", "450.00"),
+        ("frm2552:txtPg2Pt6NumShares5", "550.00"),
+    ];
+    for (k, v) in edits {
+        agent::fill_as_user(
+            kind,
+            &mut draft,
+            k,
+            &serde_json::Value::String(v.to_string()),
+        )
+        .unwrap_or_else(|e| panic!("2552 Part VI {k} must be writable: {e}"));
+    }
+    let map = agent::field_map(kind, &draft).expect("field map");
+    for (k, expected) in edits {
+        assert_eq!(
+            map.get(k).map(String::as_str),
+            Some(expected),
+            "mismatch for {k}"
+        );
+    }
+}
