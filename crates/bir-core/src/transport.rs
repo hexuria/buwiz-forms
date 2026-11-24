@@ -9,43 +9,71 @@
 //!
 //! This module reproduces that protocol with credentials supplied at runtime.
 //! It does not embed live BIR passwords.
+//!
+//! **No build that ships can file this way.** The dispatcher client is compiled
+//! only with the `direct-bir` cargo feature, which the app never enables, and
+//! without it an SFTP session opens only to a loopback address (the local mock
+//! BIR). Such a build answers [`sending_unavailable`] where it would have gone
+//! to the dispatcher: the queue leaves its returns alone and the app refuses to
+//! queue new ones.
 
+#[cfg(any(test, feature = "direct-bir"))]
 use aes::Aes256;
+#[cfg(any(test, feature = "direct-bir"))]
 use aes::cipher::block_padding::Pkcs7;
+#[cfg(any(test, feature = "direct-bir"))]
 use cbc::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+#[cfg(any(test, feature = "direct-bir"))]
 use pbkdf2::pbkdf2_hmac;
+#[cfg(any(test, feature = "direct-bir"))]
 use rand::RngExt;
+#[cfg(feature = "direct-bir")]
 use reqwest::Client;
 use russh::Disconnect;
 use russh::client::{self, Handle};
 use russh::keys::PublicKeyOrCertificate;
 use russh_sftp::client::SftpSession;
 use russh_sftp::protocol::OpenFlags;
+#[cfg(any(test, feature = "direct-bir"))]
 use serde::Deserialize;
+#[cfg(any(test, feature = "direct-bir"))]
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(feature = "direct-bir")]
 use std::time::Duration;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tracing::{info, warn};
 use zeroize::Zeroizing;
 
+#[cfg(any(test, feature = "direct-bir"))]
 const DISPATCHER_PRIMARY: &str = "http://birgovph.com/tinDispatcherSFTP.php";
+#[cfg(any(test, feature = "direct-bir"))]
 const DISPATCHER_BACKUP: &str = "http://ws2.birgovph.com/tinDispatcherSFTP.php";
+#[cfg(feature = "direct-bir")]
 const DISPATCHER_HTTPS_TIMEOUT: Duration = Duration::from_secs(4);
+#[cfg(feature = "direct-bir")]
 const DISPATCHER_CLIENT_VERSION: &str = "7.9.6.0";
 /// Passphrase used by official `ebfSFTP.exe` to unwrap dispatcher ciphertext.
 /// This is a protocol constant present in every 7.9.6 install, not a taxpayer secret.
+/// It stays in this file: buwiz-com's `deploy/ec2/bir-env-from-forms.sh` reads it from here.
+#[cfg(any(test, feature = "direct-bir"))]
 const DISPATCHER_WRAP_PASSPHRASE: &str = "Carlo*TSSD2!018";
+#[cfg(any(test, feature = "direct-bir"))]
 const PBKDF2_ROUNDS: u32 = 100_000;
+#[cfg(any(test, feature = "direct-bir"))]
 const SALT_LEN: usize = 32;
+#[cfg(any(test, feature = "direct-bir"))]
 const IV_LEN: usize = 16;
+#[cfg(any(test, feature = "direct-bir"))]
 const KEY_LEN: usize = 32;
 
+#[cfg(any(test, feature = "direct-bir"))]
 type Aes256CbcEnc = cbc::Encryptor<Aes256>;
+#[cfg(any(test, feature = "direct-bir"))]
 type Aes256CbcDec = cbc::Decryptor<Aes256>;
 
 #[derive(Error, Debug)]
@@ -418,6 +446,7 @@ fn dispatcher_live_ack_requested() -> bool {
     env_flag_enabled("BIR_SFTP_LIVE")
 }
 
+#[cfg(any(test, feature = "direct-bir"))]
 fn https_dispatcher_url(http_base: &str) -> String {
     http_base.replacen("http://", "https://", 1)
 }
@@ -481,25 +510,120 @@ fn lab_host_key_policy_from_env() -> Result<HostKeyPolicy, TransportError> {
     }
 }
 
-/// Pick dry-run, a complete `BIR_SFTP_*` lab override, or the official dispatcher.
-pub async fn resolve_sftp_endpoint(
-    form_type: &str,
-    tin: &str,
-) -> Result<ResolvedSftpTarget, TransportError> {
+/// Whether this build can file with the BIR itself: the `direct-bir` cargo
+/// feature. No build that ships has it.
+pub const fn direct_filing_built_in() -> bool {
+    cfg!(feature = "direct-bir")
+}
+
+/// What a build without `direct-bir` says where it would have filed with the BIR.
+pub const SENDING_UNAVAILABLE: &str =
+    "This version of eBIRForms cannot send returns to the BIR yet.";
+
+/// What a refused Queue says while [`sending_unavailable`] holds.
+pub const QUEUE_UNAVAILABLE: &str = "This version of eBIRForms cannot send returns to the BIR yet. The return was not queued and stays a draft.";
+
+/// Where a send goes, in the order [`resolve_sftp_endpoint`] decides it. Reads
+/// settings only: no network, no keychain.
+enum Route {
+    /// The Dev Mode panel's dry run.
+    PanelDryRun,
+    /// The Dev Mode panel's test server (debug builds).
+    PanelTestServer,
+    /// [`RELAY_URL_ENV`] is set: the local mock relay, or why it is refused.
+    MockRelay(Result<String, TransportError>),
+    /// A test, dry-run or practice-account flag.
+    DryRun,
+    /// `BIR_SFTP_HOST` is set.
+    LabHost,
+    /// None of the above: the BIR's own dispatcher.
+    Bir,
+}
+
+fn route() -> Route {
     // Dev Mode panel (debug builds, no env override). Its only modes are dry
     // run and a test server; it can never reach the production dispatcher.
     match crate::dev_mode::panel_submission_mode() {
-        Some(crate::dev_mode::SubmissionMode::DryRun) => {
+        Some(crate::dev_mode::SubmissionMode::DryRun) => return Route::PanelDryRun,
+        // A practice account falls through to the dry run below instead.
+        Some(crate::dev_mode::SubmissionMode::TestServer) if !practice_account() => {
+            return Route::PanelTestServer;
+        }
+        _ => {}
+    }
+    // The mock relay (a loopback URL, or a refusal) comes before the dry run: setting it is the ask to send there.
+    if let Some(url) = relay_url() {
+        return Route::MockRelay(url);
+    }
+    if sftp_dry_run_requested() {
+        return Route::DryRun;
+    }
+    if env_nonempty("BIR_SFTP_HOST").is_some() {
+        return Route::LabHost;
+    }
+    Route::Bir
+}
+
+/// This build has nowhere to send a return: nothing selects a dry run, the
+/// mock relay or a lab host, and filing with the BIR itself is not built in
+/// ([`direct_filing_built_in`]). The queue leaves its returns alone while this
+/// holds, and the app refuses to queue new ones, with [`SENDING_UNAVAILABLE`].
+pub fn sending_unavailable() -> bool {
+    unavailable_for(&route(), direct_filing_built_in())
+}
+
+fn unavailable_for(route: &Route, direct: bool) -> bool {
+    matches!(route, Route::Bir) && !direct
+}
+
+/// No return is stored as Queued while [`sending_unavailable`] holds: every
+/// route that queues one (the form page, the agent) ends in a database write
+/// that asks this first. A return queued now would be sent, unasked, by the
+/// first later version that can send.
+pub(crate) fn refuse_queue_when_unavailable() -> Result<(), crate::db::DbError> {
+    if sending_unavailable() {
+        return Err(crate::db::DbError::Other(QUEUE_UNAVAILABLE.into()));
+    }
+    Ok(())
+}
+
+/// A build without `direct-bir` opens SFTP only to a loopback address (the
+/// local mock BIR): whatever `BIR_SFTP_HOST` or the Dev Mode panel names, it
+/// cannot reach a BIR server. `host` must be an IP literal; a name is refused
+/// rather than resolved.
+fn require_loopback_unless_direct(host: &str, direct: bool) -> Result<(), TransportError> {
+    let loopback = host
+        .trim()
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .parse::<std::net::IpAddr>()
+        .is_ok_and(|ip| ip.is_loopback());
+    if direct || loopback {
+        Ok(())
+    } else {
+        Err(TransportError::Config(
+            "This build sends over SFTP only to a local test server on 127.0.0.1 or ::1.".into(),
+        ))
+    }
+}
+
+/// Pick dry-run, a complete `BIR_SFTP_*` lab override, or the official dispatcher
+/// (`direct-bir` builds only; any other build answers [`SENDING_UNAVAILABLE`]).
+pub async fn resolve_sftp_endpoint(
+    form_type: &str,
+    #[cfg_attr(not(feature = "direct-bir"), allow(unused_variables))] tin: &str,
+) -> Result<ResolvedSftpTarget, TransportError> {
+    match route() {
+        Route::PanelDryRun => {
             let folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
             info!(
                 source = "dry-run",
                 folder = folder.as_str(),
                 "SFTP dry-run (Dev Mode panel): no network"
             );
-            return Ok(ResolvedSftpTarget::DryRun { folder });
+            Ok(ResolvedSftpTarget::DryRun { folder })
         }
-        // A practice account falls through to the dry run below instead.
-        Some(crate::dev_mode::SubmissionMode::TestServer) if !practice_account() => {
+        Route::PanelTestServer => {
             let endpoint = crate::dev_mode::test_server_endpoint(form_type)?;
             info!(
                 source = "env",
@@ -510,67 +634,74 @@ pub async fn resolve_sftp_endpoint(
                 password_len = endpoint.password.len(),
                 "Using Dev Mode test SFTP server"
             );
-            return Ok(ResolvedSftpTarget::Live {
+            Ok(ResolvedSftpTarget::Live {
                 endpoint,
                 source: SftpEndpointSource::Env,
-            });
+            })
         }
-        _ => {}
+        Route::MockRelay(url) => {
+            let url = url?;
+            let folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
+            info!(
+                source = "relay",
+                form = form_type,
+                "Using the local mock relay"
+            );
+            Ok(ResolvedSftpTarget::Relay { url, folder })
+        }
+        Route::DryRun => {
+            let folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
+            info!(
+                source = "dry-run",
+                folder = folder.as_str(),
+                "SFTP dry-run: no network"
+            );
+            Ok(ResolvedSftpTarget::DryRun { folder })
+        }
+        Route::LabHost => {
+            let endpoint = from_bir_sftp_env(form_type).ok_or_else(|| {
+                TransportError::Config("BIR_SFTP_HOST was unset while the send was resolved".into())
+            })??;
+            info!(
+                source = "env",
+                host = endpoint.host.as_str(),
+                port = endpoint.port,
+                folder = endpoint.remote_folder.as_str(),
+                username_len = endpoint.username.len(),
+                password_len = endpoint.password.len(),
+                "Using BIR_SFTP_* override"
+            );
+            Ok(ResolvedSftpTarget::Live {
+                endpoint,
+                source: SftpEndpointSource::Env,
+            })
+        }
+        // Debug with no flags already resolved to a dry run. A release build with
+        // no flags, and any build with `BIR_SFTP_LIVE=1`, reaches this arm.
+        #[cfg(feature = "direct-bir")]
+        Route::Bir => {
+            let endpoint = fetch_sftp_endpoint(tin, form_type).await?;
+            info!(
+                source = "dispatcher",
+                host = endpoint.host.as_str(),
+                port = endpoint.port,
+                folder = endpoint.remote_folder.as_str(),
+                username_len = endpoint.username.len(),
+                password_len = endpoint.password.len(),
+                "Using tinDispatcherSFTP.php"
+            );
+            Ok(ResolvedSftpTarget::Live {
+                endpoint,
+                source: SftpEndpointSource::Dispatcher,
+            })
+        }
+        #[cfg(not(feature = "direct-bir"))]
+        Route::Bir => Err(TransportError::Config(SENDING_UNAVAILABLE.into())),
     }
-    // The mock relay (a loopback URL, or a refusal) comes before the dry run: setting it is the ask to send there.
-    if let Some(url) = relay_url() {
-        let url = url?;
-        let folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
-        info!(
-            source = "relay",
-            form = form_type,
-            "Using the local mock relay"
-        );
-        return Ok(ResolvedSftpTarget::Relay { url, folder });
-    }
-    if sftp_dry_run_requested() {
-        let folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
-        info!(
-            source = "dry-run",
-            folder = folder.as_str(),
-            "SFTP dry-run: no network"
-        );
-        return Ok(ResolvedSftpTarget::DryRun { folder });
-    }
-    if let Some(endpoint) = from_bir_sftp_env(form_type) {
-        let endpoint = endpoint?;
-        info!(
-            source = "env",
-            host = endpoint.host.as_str(),
-            port = endpoint.port,
-            folder = endpoint.remote_folder.as_str(),
-            username_len = endpoint.username.len(),
-            password_len = endpoint.password.len(),
-            "Using BIR_SFTP_* override"
-        );
-        return Ok(ResolvedSftpTarget::Live {
-            endpoint,
-            source: SftpEndpointSource::Env,
-        });
-    }
-    // Debug with no flags already returned DryRun above. A release build
-    // with no flags, and any build with `BIR_SFTP_LIVE=1`, uses the dispatcher.
-    let endpoint = fetch_sftp_endpoint(tin, form_type).await?;
-    info!(
-        source = "dispatcher",
-        host = endpoint.host.as_str(),
-        port = endpoint.port,
-        folder = endpoint.remote_folder.as_str(),
-        username_len = endpoint.username.len(),
-        password_len = endpoint.password.len(),
-        "Using tinDispatcherSFTP.php"
-    );
-    Ok(ResolvedSftpTarget::Live {
-        endpoint,
-        source: SftpEndpointSource::Dispatcher,
-    })
 }
 
+#[cfg(any(test, feature = "direct-bir"))]
+#[cfg_attr(not(feature = "direct-bir"), allow(dead_code))]
 #[derive(Debug, Deserialize)]
 struct DispatcherResponse {
     mode: String,
@@ -589,6 +720,7 @@ struct DispatcherResponse {
 /// Layout: `Base64(salt[32] || iv[16] || AES-256-CBC(PKCS7(UTF-8 plaintext)))`
 /// Key: PBKDF2-HMAC-SHA1(password=`Carlo*TSSD2!018`, salt, rounds=100000, dkLen=32).
 /// StreamWriter in the official helper prepends a UTF-8 BOM.
+#[cfg(any(test, feature = "direct-bir"))]
 pub fn unwrap_dispatcher_field(cipher_text: &str) -> Result<String, TransportError> {
     let raw = data_encoding::BASE64
         .decode(cipher_text.trim().as_bytes())
@@ -620,6 +752,7 @@ pub fn unwrap_dispatcher_field(cipher_text: &str) -> Result<String, TransportErr
 }
 
 /// Encrypt a dispatcher field for local harness round-trips. Not used against BIR.
+#[cfg(any(test, feature = "direct-bir"))]
 pub fn wrap_dispatcher_field(plain_text: &str) -> Result<String, TransportError> {
     let mut salt = [0u8; SALT_LEN];
     let mut iv = [0u8; IV_LEN];
@@ -648,6 +781,7 @@ pub fn wrap_dispatcher_field(plain_text: &str) -> Result<String, TransportError>
     Ok(data_encoding::BASE64.encode(&out))
 }
 
+#[cfg(any(test, feature = "direct-bir"))]
 fn parse_dispatcher_json(body: &str) -> Result<DispatcherResponse, TransportError> {
     let normalized = body.trim().replace('\'', "\"");
     serde_json::from_str(&normalized).map_err(|error| {
@@ -655,6 +789,7 @@ fn parse_dispatcher_json(body: &str) -> Result<DispatcherResponse, TransportErro
     })
 }
 
+#[cfg(feature = "direct-bir")]
 async fn fetch_dispatcher(
     client: &Client,
     base: &str,
@@ -664,6 +799,7 @@ async fn fetch_dispatcher(
     fetch_dispatcher_timed(client, base, tin, form_type, Duration::from_secs(8)).await
 }
 
+#[cfg(feature = "direct-bir")]
 async fn fetch_dispatcher_timed(
     client: &Client,
     base: &str,
@@ -689,6 +825,7 @@ async fn fetch_dispatcher_timed(
 }
 
 /// Prefer HTTPS; official ebfSFTP still uses HTTP, so fall back.
+#[cfg(feature = "direct-bir")]
 async fn fetch_dispatcher_prefer_https(
     client: &Client,
     http_base: &str,
@@ -726,6 +863,7 @@ async fn fetch_dispatcher_prefer_https(
 }
 
 /// Ask the official dispatcher for SFTP connection fields and unwrap them.
+#[cfg(feature = "direct-bir")]
 pub async fn fetch_sftp_endpoint(
     tin: &str,
     form_type: &str,
@@ -1041,6 +1179,7 @@ async fn open_iaf_session_with_source(
     endpoint: SftpEndpoint,
     source: SftpEndpointSource,
 ) -> Result<IafSftpSession, TransportError> {
+    require_loopback_unless_direct(&endpoint.host, direct_filing_built_in())?;
     info!(
         "Connecting to BIR SFTP gateway {}:{} folder={}",
         endpoint.host, endpoint.port, form_type
@@ -1773,6 +1912,118 @@ mod tests {
         );
         assert_eq!(puts[0].payload_len, payload.len());
         assert_eq!(puts[0].payload_sha256, hex::encode(Sha256::digest(payload)));
+    }
+
+    #[test]
+    fn only_the_bir_route_without_direct_filing_has_nowhere_to_send() {
+        for route in [
+            Route::PanelDryRun,
+            Route::PanelTestServer,
+            Route::MockRelay(Ok("http://127.0.0.1:8787".into())),
+            Route::MockRelay(Err(TransportError::Config("refused".into()))),
+            Route::DryRun,
+            Route::LabHost,
+        ] {
+            assert!(!unavailable_for(&route, false));
+            assert!(!unavailable_for(&route, true));
+        }
+        assert!(unavailable_for(&Route::Bir, false));
+        assert!(!unavailable_for(&Route::Bir, true));
+    }
+
+    #[test]
+    fn sftp_without_direct_filing_is_loopback_only() {
+        for host in ["127.0.0.1", "::1", "[::1]", " 127.0.0.1 ", "127.8.9.10"] {
+            assert!(
+                require_loopback_unless_direct(host, false).is_ok(),
+                "{host}"
+            );
+        }
+        for host in [
+            "192.0.2.1",
+            "10.0.2.2",
+            "0.0.0.0",
+            "localhost",
+            "ebf2.example",
+            "127.0.0.1.example",
+            "",
+        ] {
+            assert!(
+                matches!(
+                    require_loopback_unless_direct(host, false),
+                    Err(TransportError::Config(_))
+                ),
+                "{host}"
+            );
+            assert!(require_loopback_unless_direct(host, true).is_ok(), "{host}");
+        }
+    }
+
+    /// A lab host that is not this computer resolves (the settings are complete)
+    /// but the session never connects: refused before any socket opens.
+    #[cfg(not(feature = "direct-bir"))]
+    #[tokio::test]
+    async fn a_lab_host_off_this_computer_is_refused_before_connecting() {
+        let endpoint = SftpEndpoint {
+            host: "192.0.2.1".into(),
+            port: 22,
+            username: "lab".into(),
+            password: Zeroizing::new("secret".into()),
+            remote_folder: "1601Cv2018".into(),
+            host_key_policy: HostKeyPolicy::AcceptAnyLab,
+        };
+        let refused =
+            open_iaf_session_with_source("1601Cv2018", endpoint, SftpEndpointSource::Env).await;
+        assert!(matches!(refused, Err(TransportError::Config(_))));
+    }
+
+    /// The careless launch of a build that ships: not a test environment, a live
+    /// acknowledgement, nothing else. It has nowhere to send, says so without
+    /// touching the network, and refuses to queue.
+    #[cfg(not(feature = "direct-bir"))]
+    #[tokio::test]
+    async fn a_live_ack_without_direct_filing_sends_nowhere() {
+        isolated_sftp_env_async(
+            [("EBIR_TEST_ENV", None), ("BIR_SFTP_LIVE", Some("1"))],
+            async {
+                assert!(!is_sftp_dry_run(), "the setup must ask for a live send");
+                assert!(!direct_filing_built_in());
+                assert!(sending_unavailable());
+                let refused = resolve_sftp_endpoint("1601Cv2018", "000000000").await;
+                assert!(
+                    matches!(&refused, Err(TransportError::Config(why)) if why == SENDING_UNAVAILABLE),
+                    "{refused:?}"
+                );
+                let queue = refuse_queue_when_unavailable();
+                assert!(
+                    matches!(&queue, Err(crate::db::DbError::Other(why)) if why == QUEUE_UNAVAILABLE),
+                    "{queue:?}"
+                );
+            },
+        )
+        .await;
+    }
+
+    /// A dry run, the mock relay and a lab host are somewhere to send: the queue runs and Queue is allowed.
+    #[test]
+    fn a_dry_run_a_mock_relay_and_a_lab_host_are_somewhere_to_send() {
+        for vars in [
+            [("EBIR_TEST_ENV", None), ("BIR_SFTP_DRY_RUN", Some("1"))],
+            [("EBIR_TEST_ENV", Some("1")), ("BIR_SFTP_LIVE", Some("1"))],
+            [
+                ("EBIR_TEST_ENV", None),
+                ("BIR_RELAY_URL", Some("http://127.0.0.1:8787")),
+            ],
+            [
+                ("EBIR_TEST_ENV", None),
+                ("BIR_SFTP_HOST", Some("127.0.0.1")),
+            ],
+        ] {
+            isolated_sftp_env(vars, || {
+                assert!(!sending_unavailable(), "{vars:?}");
+                assert!(refuse_queue_when_unavailable().is_ok(), "{vars:?}");
+            });
+        }
     }
 
     #[tokio::test]

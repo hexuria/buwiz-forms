@@ -4,7 +4,14 @@
   "version": "0.2.1",
   "build": 27,
   "rust": ".",
-  "icon": "../assets/icon.png",
+  "icon": {
+    "macos": "../assets/icon.png",
+    "windows": "../assets/icon.png",
+    "linux": "../assets/icon.png",
+    "android": "../assets/icon.png",
+    "web": "../assets/icon.png",
+    "ios": "../assets/ios/icon-1024.png"
+  },
   "singleInstance": true,
   "macos": {
     "infoPlist": {
@@ -13,6 +20,21 @@
     },
     "entitlements": {
       "com.apple.security.network.client": true
+    }
+  },
+  "ios": {
+    "infoPlist": {
+      "ITSAppUsesNonExemptEncryption": false,
+      "UIDeviceFamily": [
+        1,
+        2
+      ]
+    },
+    "launchScreen": {
+      "background": {
+        "light": "#f4f4f6",
+        "dark": "#0e0e10"
+      }
     }
   },
   "updater": {

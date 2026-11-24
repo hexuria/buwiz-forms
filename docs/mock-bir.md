@@ -215,8 +215,8 @@ before this queue authorization, so the timing rule ignores it.
 
 - **The dispatcher.** With `BIR_SFTP_HOST` set the app skips the dispatcher
   request, its HTTPS-then-HTTP fallback and the unwrapping of the connection
-  fields. A release build with no flags goes through all of that; the mock
-  does not.
+  fields. Only a build with bir-core's `direct-bir` cargo feature goes through
+  all of that (no build that ships has it); the mock does not.
 - **Host-key handling.** The mock run pins the mock's key. The official path
   accepts any host key.
 - **The real server.** Its SSH implementation and algorithms, which SFTP
