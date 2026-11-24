@@ -490,7 +490,7 @@ pub fn status_from(resolved: &ResolvedServer, secrets: Option<&AccountSecrets>) 
             user_id: None,
             offline: false,
             practice: false,
-            detail: "Not signed in. Preparing and filing returns on this computer does not need an account.".into(),
+            detail: "Not signed in.".into(),
         };
     };
     let who = secrets

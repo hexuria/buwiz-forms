@@ -153,7 +153,7 @@ function fakeLog(kind: "mixed" | "long" | "empty" | "error"): void {
 
 const SIGNED_OUT: CloudAccountStatus = {
   server_url: "https://buwiz.example.test", server_url_source: "build", signed_in: false, email: null, user_id: null, offline: false, practice: false,
-  detail: "Not signed in. Preparing and filing returns on this computer does not need an account.",
+  detail: "Not signed in.",
 };
 const SIGNED_IN: CloudAccountStatus = { ...SIGNED_OUT, signed_in: true, email: "juana@example.com", user_id: "u-1", detail: "Signed in. Your account is checked now and then." };
 

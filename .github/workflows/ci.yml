@@ -210,6 +210,23 @@ jobs:
     - name: Clippy
       run: cargo clippy --locked --workspace -- -D warnings
 
+    # `direct-bir` (filing with the BIR itself) is off in every build that ships, so nothing above compiles the
+    # dispatcher client or the sftp_harness binary. This keeps them building.
+    - name: Clippy, bir-core with direct-bir
+      run: cargo clippy --locked -p bir-core --features direct-bir -- -D warnings
+
+    # No package that ships can turn `direct-bir` on, whatever features it is built with: bir-core's own feature
+    # list is the only place that names it. `cargo tree` prints a feature of bir-core only when something enables it.
+    - name: Nothing that ships enables direct-bir
+      shell: bash
+      run: |
+        tree=$(cargo tree --locked -p bir-app-api -p bir-cli -p bir-mcp -p bir-print --all-features -e features -i bir-core)
+        if grep -q 'direct-bir' <<<"$tree"; then
+          echo "$tree" | grep -B2 -A2 'direct-bir'
+          echo "::error::a shipped package enables bir-core's direct-bir feature"
+          exit 1
+        fi
+
     # One command per line: this job's default shell is pwsh on windows-latest,
     # and bash `\` continuations are a parse error there.
     - name: Frozen HTML inventory and TIN name stamps

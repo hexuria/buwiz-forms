@@ -1,7 +1,8 @@
 //! The two guards that stand between the TSX screens and the owner's data or the BIR.
 //!
 //! * The **send guard** ([`send_guard`]) runs once, before the first database open and before the
-//!   submission worker starts. Desktop releases normally use the shared filing transport. Development,
+//!   submission worker starts. A desktop release has nowhere to send a return ([`SendMode::Off`]): bir-core's
+//!   `direct-bir` feature, the only code that files with the BIR itself, is off in this app. Development,
 //!   test, agent and mobile runs stay dry unless a local mock is selected.
 //! * The **database guard** ([`database_refusal`]) refuses to open a database inside the owner's data
 //!   folders, by name and by device and inode. It is checked before every host call, so a lazy open can
@@ -32,8 +33,12 @@ use bir_core::dev_mode::SubmissionMode;
 /// What the send guard decided.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SendMode {
-    /// The desktop release uses the configured filing transport.
+    /// The desktop release uses the configured filing transport. Only a build with bir-core's `direct-bir` feature,
+    /// which no build that ships has.
     Live,
+    /// This build has nowhere to send a return (`bir_core::transport::sending_unavailable`). Everything else works: the
+    /// worker starts for its other jobs, leaves queued returns alone, and the app refuses to queue new ones.
+    Off,
     /// `BIR_SFTP_DRY_RUN=1`: a queued return is "sent" to a folder on this computer, nothing leaves it.
     DryRun,
     /// The mock BIR server is listening on literal `127.0.0.1` or `::1`.
@@ -51,10 +56,11 @@ impl SendMode {
         !matches!(self, SendMode::Refused(_))
     }
 
-    /// The word TSX sees: `live`, `dry_run`, `mock`, `relay` or `refused`.
+    /// The word TSX sees: `live`, `off`, `dry_run`, `mock`, `relay` or `refused`.
     pub fn label(&self) -> &'static str {
         match self {
             SendMode::Live => "live",
+            SendMode::Off => "off",
             SendMode::DryRun => "dry_run",
             SendMode::Mock { .. } => "mock",
             SendMode::Relay { .. } => "relay",
@@ -66,6 +72,7 @@ impl SendMode {
     pub fn note(&self) -> Option<String> {
         match self {
             SendMode::Live | SendMode::DryRun => None,
+            SendMode::Off => Some(bir_core::transport::SENDING_UNAVAILABLE.into()),
             SendMode::Mock { host, port } => Some(format!(
                 "Sending to the local mock endpoint at {host}:{port}. Nothing reaches the BIR."
             )),
@@ -93,6 +100,7 @@ pub fn send_guard() -> SendMode {
         port_is_listening,
         mock_health,
         bir_core::transport::is_sftp_dry_run,
+        bir_core::transport::sending_unavailable,
     )
 }
 
@@ -114,7 +122,13 @@ fn send_guard_with_health(
     listening: impl Fn(&str, u16) -> bool,
     healthy: impl Fn(&str, u16) -> Result<bool, String>,
 ) -> SendMode {
-    send_guard_for(true, listening, healthy, bir_core::transport::is_sftp_dry_run)
+    send_guard_for(
+        true,
+        listening,
+        healthy,
+        bir_core::transport::is_sftp_dry_run,
+        bir_core::transport::sending_unavailable,
+    )
 }
 
 fn send_guard_for(
@@ -122,6 +136,7 @@ fn send_guard_for(
     listening: impl Fn(&str, u16) -> bool,
     healthy: impl Fn(&str, u16) -> Result<bool, String>,
     transport_dry_run: impl FnOnce() -> bool,
+    nowhere_to_send: impl FnOnce() -> bool,
 ) -> SendMode {
     if restricted {
         #[cfg(target_os = "android")]
@@ -146,6 +161,8 @@ fn send_guard_for(
         return relay_verdict(relay).unwrap_or_else(|| {
             if transport_dry_run() {
                 SendMode::DryRun
+            } else if nowhere_to_send() {
+                SendMode::Off
             } else {
                 SendMode::Live
             }
@@ -785,13 +802,20 @@ mod tests {
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     #[test]
     fn desktop_release_leaves_the_filing_transport_in_control() {
-        for (transport_is_dry, expected) in [(false, SendMode::Live), (true, SendMode::DryRun)] {
+        // A dry run wins; then a build with nowhere to send is off; only a build that can file itself is live.
+        for (transport_is_dry, nowhere_to_send, expected) in [
+            (false, false, SendMode::Live),
+            (false, true, SendMode::Off),
+            (true, true, SendMode::DryRun),
+            (true, false, SendMode::DryRun),
+        ] {
             sending_env(&[], || {
                 let mode = send_guard_for(
                     restrict_sending(false),
                     |_, _| panic!("no mock requested"),
                     |_, _| panic!("no relay requested"),
                     || transport_is_dry,
+                    || nowhere_to_send,
                 );
                 assert_eq!(mode, expected);
                 assert!(mode.worker_may_start());
@@ -799,6 +823,21 @@ mod tests {
                 assert_eq!(live(), None);
             });
         }
+    }
+
+    /// Off is not a refusal: the worker starts (its other jobs run), the screens read `off`, and the note says why.
+    #[test]
+    fn off_starts_the_worker_and_says_sending_is_not_available() {
+        let mode = SendMode::Off;
+        assert!(mode.worker_may_start());
+        assert_eq!(mode.label(), "off");
+        assert_eq!(mode.note().as_deref(), Some(bir_core::transport::SENDING_UNAVAILABLE));
+    }
+
+    /// The app this crate builds cannot file with the BIR itself: bir-core's `direct-bir` feature is off here.
+    #[test]
+    fn this_app_is_built_without_direct_filing() {
+        assert!(!bir_core::transport::direct_filing_built_in());
     }
 
     #[test]
@@ -811,6 +850,7 @@ mod tests {
                     |_, _| panic!("no mock requested"),
                     |_, _| panic!("no relay requested"),
                     bir_core::transport::is_sftp_dry_run,
+                    || panic!("a dry run is decided first"),
                 );
                 assert_eq!(mode, SendMode::DryRun);
                 assert_eq!(dry_run().as_deref(), Some("1"));
