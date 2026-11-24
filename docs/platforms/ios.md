@@ -11,7 +11,7 @@ The iOS app is the NSH app in `nsh/`, packaged by `nsh package --target ios`. De
 | Icon | `assets/ios/icon-1024.png` (from `icon-ios.svg`) | Apple wants 1024×1024 with no alpha. The desktop `assets/icon.png` (512, transparent) fails `actool`. |
 | Launch screen | `nsh/nsh.json` `ios.launchScreen` | The app's own background, light and dark, so launch shows no flash. |
 | Export compliance | `ios.infoPlist.ITSAppUsesNonExemptEncryption` | `false`, as the Mac App Store build says. |
-| Privacy manifest | `assets/ios/PrivacyInfo.xcprivacy`, copied to the bundle root | Required-reason APIs (UserDefaults, boot time, file timestamps) and the account email. Keep it in step with App Privacy in App Store Connect. |
+| Privacy manifest | `assets/ios/PrivacyInfo.xcprivacy`, copied to the bundle root | Required-reason APIs (UserDefaults, boot time, file timestamps) and the account's email and user id. Keep it in step with App Privacy in App Store Connect. |
 | Print fixes | `print-overrides/`, copied beside the executable | `bir-app-api` reads them there (`packaged.rs`); a debug run reads the checkout's. |
 
 The recipe also removes the updater's configuration (an iOS app does not update itself; the updater never starts on a
