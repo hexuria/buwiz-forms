@@ -89,7 +89,11 @@ fn page_starts(html: &str) -> Vec<(usize, bool)> {
         let rest = &html[at + "<div class=\"page".len()..];
         if rest.starts_with('"') || rest.starts_with(' ') {
             let cls_end = rest.find('"').unwrap_or(0);
-            v.push((at, rest[..cls_end].contains("page-receipt")));
+            let cls = &rest[..cls_end];
+            v.push((
+                at,
+                cls.contains("page-receipt") || cls.contains("page-continuation"),
+            ));
         }
         from = at + 4;
     }
@@ -190,5 +194,13 @@ mod tests {
         // Balanced: every sheet closes before </body>.
         let body = &out[out.find("<body>").unwrap()..out.find("</body>").unwrap()];
         assert_eq!(body.matches("<div").count(), body.matches("</div>").count());
+    }
+
+    #[test]
+    fn continuation_page_gets_sheet_flow() {
+        let doc = r##"<html><head></head><body><div class="page page-1"><input type="text" class="fi" id="p1c1" value="X"></div><div class="page page-continuation" id="page-continuation"><table><tr><td>Row 6</td></tr></table></div></body></html>"##;
+        let out = super::staticize(doc);
+        assert_eq!(out.matches(r#"<div class="sheet"#).count(), 2);
+        assert!(out.contains(r#"<div class="sheet sheet-flow" data-preview-label="Page 2 of 2">"#));
     }
 }

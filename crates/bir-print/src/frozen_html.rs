@@ -1661,7 +1661,7 @@ fn apply_replacements(html: &str, mut replacements: Vec<(usize, usize, String)>)
     out
 }
 
-fn writer_cells_json(slug: &str) -> Option<&'static str> {
+pub(crate) fn writer_cells_json(slug: &str) -> Option<&'static str> {
     match slug {
         "0605-1999" => Some(include_str!(
             "../../../html-frozen/0605-1999/writer-cells.json"
@@ -3446,21 +3446,45 @@ pub struct ReceiptPage {
     pub body_html: Option<String>,
 }
 
+/// `filled_document` plus continuation pages when schedule rows overflow,
+/// plus the receipt page when the return is confirmed, along with the
+/// structured overflow report for preview warnings.
+pub fn filled_document_with_report(
+    slug: &str,
+    fields: &BTreeMap<String, String>,
+    receipt: Option<&ReceiptPage>,
+) -> Result<crate::continuation::FilledDocument, String> {
+    let Some(loaded) = bundle(slug) else {
+        return Err(format!("no frozen HTML bundle for {slug}"));
+    };
+    let mut document = inline_local_assets(&fill_bundle(loaded.html, fields, slug)?, &loaded);
+    let overflow = crate::continuation::detect_overflow(slug, fields)?;
+    if !overflow.is_empty() || receipt.is_some() {
+        let (width, height) = page_size_from_css(loaded.css);
+        if !overflow.is_empty() {
+            let pages = crate::continuation::continuation_pages_html(
+                slug, fields, &overflow, &width, &height,
+            );
+            document = append_before_body_end(&document, &pages);
+        }
+        if let Some(receipt) = receipt {
+            document =
+                append_before_body_end(&document, &receipt_page_html(receipt, &width, &height));
+        }
+    }
+    Ok(crate::continuation::FilledDocument {
+        html: document,
+        overflow,
+    })
+}
+
 /// `filled_document` plus, when the return is confirmed, the receipt page.
 pub fn filled_document_with_receipt(
     slug: &str,
     fields: &BTreeMap<String, String>,
     receipt: Option<&ReceiptPage>,
 ) -> Result<String, String> {
-    let Some(loaded) = bundle(slug) else {
-        return Err(format!("no frozen HTML bundle for {slug}"));
-    };
-    let mut document = inline_local_assets(&fill_bundle(loaded.html, fields, slug)?, &loaded);
-    if let Some(receipt) = receipt {
-        let (width, height) = page_size_from_css(loaded.css);
-        document = append_before_body_end(&document, &receipt_page_html(receipt, &width, &height));
-    }
-    Ok(document)
+    Ok(filled_document_with_report(slug, fields, receipt)?.html)
 }
 
 /// `@page { size:612pt 936pt; … }` from the bundle's form.css, so the receipt

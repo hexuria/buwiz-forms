@@ -1,0 +1,198 @@
+{
+  "schedules": [
+    {
+      "heading": "Schedule 1.A",
+      "printed_capacity": 5,
+      "columns": [
+        {
+          "heading": "OCT/TCT/CCT No.",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Tax Declaration No. (TD)",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Location",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Lot / Improvement",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Classification",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Area (sq.m.)",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Fair Market Value per sq.m. (Column 1)",
+          "is_amount": true,
+          "subtotal": "200,000,000.00"
+        },
+        {
+          "heading": "Fair Market Value per sq.m. (Column 2)",
+          "is_amount": true,
+          "subtotal": "205,000,000.00"
+        },
+        {
+          "heading": "Sub-total (between Columns 1 & 2)",
+          "is_amount": true,
+          "subtotal": "205,000,000.00"
+        }
+      ],
+      "rows": [
+        {
+          "row_number": 6,
+          "values": [
+            "TCT-2026-006",
+            "TD-2026-006",
+            "MAKATI CITY PARCEL 6",
+            "LOT 6 BLK 12 / COMMERCIAL BLDG",
+            "CR",
+            "260.00",
+            "15500000.00",
+            "16000000.00",
+            "16000000.00"
+          ]
+        },
+        {
+          "row_number": 7,
+          "values": [
+            "TCT-2026-007",
+            "TD-2026-007",
+            "MAKATI CITY PARCEL 7",
+            "LOT 7 BLK 12 / COMMERCIAL BLDG",
+            "CR",
+            "270.00",
+            "16500000.00",
+            "17000000.00",
+            "17000000.00"
+          ]
+        },
+        {
+          "row_number": 8,
+          "values": [
+            "TCT-2026-008",
+            "TD-2026-008",
+            "MAKATI CITY PARCEL 8",
+            "LOT 8 BLK 12 / COMMERCIAL BLDG",
+            "CR",
+            "280.00",
+            "17500000.00",
+            "18000000.00",
+            "18000000.00"
+          ]
+        },
+        {
+          "row_number": 9,
+          "values": [
+            "TCT-2026-009",
+            "TD-2026-009",
+            "MAKATI CITY PARCEL 9",
+            "LOT 9 BLK 12 / COMMERCIAL BLDG",
+            "CR",
+            "290.00",
+            "18500000.00",
+            "19000000.00",
+            "19000000.00"
+          ]
+        },
+        {
+          "row_number": 10,
+          "values": [
+            "TCT-2026-010",
+            "TD-2026-010",
+            "MAKATI CITY PARCEL 10",
+            "LOT 10 BLK 12 / COMMERCIAL BLDG",
+            "CR",
+            "300.00",
+            "19500000.00",
+            "20000000.00",
+            "20000000.00"
+          ]
+        },
+        {
+          "row_number": 11,
+          "values": [
+            "TCT-2026-011",
+            "TD-2026-011",
+            "MAKATI CITY PARCEL 11",
+            "LOT 11 BLK 12 / COMMERCIAL BLDG",
+            "CR",
+            "310.00",
+            "20500000.00",
+            "21000000.00",
+            "21000000.00"
+          ]
+        },
+        {
+          "row_number": 12,
+          "values": [
+            "TCT-2026-012",
+            "TD-2026-012",
+            "MAKATI CITY PARCEL 12",
+            "LOT 12 BLK 12 / COMMERCIAL BLDG",
+            "CR",
+            "320.00",
+            "21500000.00",
+            "22000000.00",
+            "22000000.00"
+          ]
+        },
+        {
+          "row_number": 13,
+          "values": [
+            "TCT-2026-013",
+            "TD-2026-013",
+            "MAKATI CITY PARCEL 13",
+            "LOT 13 BLK 12 / COMMERCIAL BLDG",
+            "CR",
+            "330.00",
+            "22500000.00",
+            "23000000.00",
+            "23000000.00"
+          ]
+        },
+        {
+          "row_number": 14,
+          "values": [
+            "TCT-2026-014",
+            "TD-2026-014",
+            "MAKATI CITY PARCEL 14",
+            "LOT 14 BLK 12 / COMMERCIAL BLDG",
+            "CR",
+            "340.00",
+            "23500000.00",
+            "24000000.00",
+            "24000000.00"
+          ]
+        },
+        {
+          "row_number": 15,
+          "values": [
+            "TCT-2026-015",
+            "TD-2026-015",
+            "MAKATI CITY PARCEL 15",
+            "LOT 15 BLK 12 / COMMERCIAL BLDG",
+            "CR",
+            "350.00",
+            "24500000.00",
+            "25000000.00",
+            "25000000.00"
+          ]
+        }
+      ],
+      "has_total": true
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "schedules": [
+    {
+      "heading": "Schedule 1.1",
+      "printed_capacity": 6,
+      "columns": [
+        {
+          "heading": "TIN",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Individual/Corporation",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "ATC",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Nature of Payment",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Amount",
+          "is_amount": true,
+          "subtotal": null
+        },
+        {
+          "heading": "Tax Rate",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Tax Required to be Withheld",
+          "is_amount": true,
+          "subtotal": null
+        }
+      ],
+      "rows": [
+        {
+          "row_number": 7,
+          "values": [
+            "123-456-787-00000",
+            "PAYEE WINNER NUMBER 7",
+            "WB191",
+            "Winnings or prizes in horse races",
+            "350000.00",
+            "10%",
+            "35000.00"
+          ]
+        },
+        {
+          "row_number": 8,
+          "values": [
+            "123-456-788-00000",
+            "PAYEE WINNER NUMBER 8",
+            "WB191",
+            "Winnings or prizes in horse races",
+            "400000.00",
+            "10%",
+            "40000.00"
+          ]
+        },
+        {
+          "row_number": 9,
+          "values": [
+            "123-456-789-00000",
+            "PAYEE WINNER NUMBER 9",
+            "WB191",
+            "Winnings or prizes in horse races",
+            "450000.00",
+            "10%",
+            "45000.00"
+          ]
+        },
+        {
+          "row_number": 10,
+          "values": [
+            "123-456-790-00000",
+            "PAYEE WINNER NUMBER 10",
+            "WB191",
+            "Winnings or prizes in horse races",
+            "500000.00",
+            "10%",
+            "50000.00"
+          ]
+        }
+      ],
+      "has_total": false
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "schedules": [
+    {
+      "heading": "Schedule A",
+      "printed_capacity": 5,
+      "columns": [
+        {
+          "heading": "Particulars",
+          "is_amount": false,
+          "subtotal": null
+        },
+        {
+          "heading": "Fair Market Value",
+          "is_amount": true,
+          "subtotal": "15,600,000.00"
+        }
+      ],
+      "rows": [
+        {
+          "row_number": 6,
+          "values": [
+            "Cash gift to donee #6 — bank transfer reference REF-2026-006",
+            "600000.00"
+          ]
+        },
+        {
+          "row_number": 7,
+          "values": [
+            "Cash gift to donee #7 — bank transfer reference REF-2026-007",
+            "700000.00"
+          ]
+        },
+        {
+          "row_number": 8,
+          "values": [
+            "Cash gift to donee #8 — bank transfer reference REF-2026-008",
+            "800000.00"
+          ]
+        },
+        {
+          "row_number": 9,
+          "values": [
+            "Cash gift to donee #9 — bank transfer reference REF-2026-009",
+            "900000.00"
+          ]
+        },
+        {
+          "row_number": 10,
+          "values": [
+            "Cash gift to donee #10 — bank transfer reference REF-2026-010",
+            "1000000.00"
+          ]
+        },
+        {
+          "row_number": 11,
+          "values": [
+            "Cash gift to donee #11 — bank transfer reference REF-2026-011",
+            "1100000.00"
+          ]
+        },
+        {
+          "row_number": 12,
+          "values": [
+            "Cash gift to donee #12 — bank transfer reference REF-2026-012",
+            "1200000.00"
+          ]
+        },
+        {
+          "row_number": 13,
+          "values": [
+            "Cash gift to donee #13 — bank transfer reference REF-2026-013",
+            "1300000.00"
+          ]
+        },
+        {
+          "row_number": 14,
+          "values": [
+            "Cash gift to donee #14 — bank transfer reference REF-2026-014",
+            "1400000.00"
+          ]
+        },
+        {
+          "row_number": 15,
+          "values": [
+            "Cash gift to donee #15 — bank transfer reference REF-2026-015",
+            "1500000.00"
+          ]
+        },
+        {
+          "row_number": 16,
+          "values": [
+            "Cash gift to donee #16 — bank transfer reference REF-2026-016",
+            "1600000.00"
+          ]
+        },
+        {
+          "row_number": 17,
+          "values": [
+            "Cash gift to donee #17 — bank transfer reference REF-2026-017",
+            "1700000.00"
+          ]
+        },
+        {
+          "row_number": 18,
+          "values": [
+            "Cash gift to donee #18 — bank transfer reference REF-2026-018",
+            "1800000.00"
+          ]
+        }
+      ],
+      "has_total": true
+    }
+  ]
+}
