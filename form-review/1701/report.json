@@ -56,8 +56,18 @@
       "before": "before/print-p4.png",
       "after": "after/print-p4.png",
       "status": "by design"
+    },
+    {
+      "id": "1701-S1",
+      "surface": "screen",
+      "where": "Screen 02, Part I Item 7 (Alphanumeric Tax Code)",
+      "what": "Displays 'Item 7 ATC is not available for the Item 6 taxpayer type' beside a saved ATC (low, contradictory message).",
+      "before": "before/screen-02-part-i-background-information-of-taxpaye.png",
+      "after": "after/screen-02-part-i-background-information-of-taxpaye.png",
+      "status": "open"
     }
   ],
+  "test_data": "Scripted via seed_and_capture.py: seeds the demo taxpayer via profile.save (TIN 00012345300000, name 'SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA', RDO 008, long two-line Makati address, ZIP 1003, email juana.santos@example.com, phone 09171234567, birth_date 1988-01-15) and replays the saved BEFORE payload-1701.json via form.fill (165/165 fields applied; verified 0 text cell diffs between before and after sheet.html, exact 1372x871 screen and 1400x1982 print dimensions).",
   "files_changed": [
     "print-overrides/1701-2018.css"
   ],
@@ -66,8 +76,7 @@
   ],
   "tests_run": [
     "just nsh-check && just nsh-build (exit 0)",
-    "cargo test -p bir-print (1701-2018 hash unchanged)",
-    "Live app capture via just nsh-run-agent linux on fresh scratch DB (1701 screen + print preview)"
+    "Live app capture via just nsh-run-agent linux on fresh scratch DB (1701 screen + print preview with exact BEFORE profile and payload)"
   ],
   "open_questions": [
     "Print preview window opens natively on Linux via WebKitGTK; full unclipped 1400px-wide print-p*.png pages were rendered from the running app's generated sheet.html via headless Chrome --print-to-pdf + pypdfium2."

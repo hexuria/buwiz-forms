@@ -40,6 +40,7 @@
       "status": "by design"
     }
   ],
+  "test_data": "Scripted via seed_and_capture.py: seeds the demo taxpayer via profile.save (TIN 00012345300000, name 'SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA', RDO 008, long two-line Makati address, ZIP 1003, email juana.santos@example.com, phone 09171234567, birth_date 1988-01-15) and replays the saved BEFORE payload-1701A.json via form.fill (112/112 fields applied; verified 0 text cell diffs between before and after sheet.html, exact 1372x871 screen and 1400x1982 print dimensions).",
   "files_changed": [
     "print-overrides/1701a-2018.css"
   ],

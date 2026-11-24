@@ -40,6 +40,15 @@
       "status": "by design"
     },
     {
+      "id": "1700-P5",
+      "surface": "print",
+      "where": "Page 2, Part V Items 42, 44, and 48 to 53",
+      "what": "Zero or negative amounts print as blank boxes while zero prints as 0 elsewhere (low; negative amounts belong to neon-4's shared fix).",
+      "before": "before/print-p2.png",
+      "after": "after/print-p2.png",
+      "status": "needs shared change"
+    },
+    {
       "id": "1700-S1",
       "surface": "screen",
       "where": "Part VI Schedule 1 overflow section heading (forms/screen-1700-v2018.json)",
@@ -49,6 +58,7 @@
       "status": "fixed"
     }
   ],
+  "test_data": "Scripted via seed_and_capture.py: seeds the demo taxpayer via profile.save (TIN 00012345300000, name 'SANTOS, JUANA MARIA DELA CRUZ-VILLANUEVA', RDO 008, long two-line Makati address, ZIP 1003, email juana.santos@example.com, phone 09171234567, birth_date 1988-01-15) and replays the saved BEFORE payload-1700.json via form.fill (46/46 fields applied; verified 0 text cell diffs between before and after sheet.html, exact 1372x871 screen and 1400x1982 print dimensions).",
   "files_changed": [
     "html-frozen/1700-2018/form.css",
     "forms/screen-1700-v2018.json"
