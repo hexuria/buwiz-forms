@@ -7,7 +7,7 @@ The iOS app is the NSH app in `nsh/`, packaged by `nsh package --target ios`. De
 
 | Piece | Where | Why |
 | --- | --- | --- |
-| Devices | `nsh/nsh.json` `ios.infoPlist.UIDeviceFamily` | `[1]`: iPhone only (iPads run the iPhone app). `[1, 2]` adds iPad, which then needs its own 13-inch screenshots. |
+| Devices | `nsh/nsh.json` `ios.infoPlist.UIDeviceFamily` | `[1, 2]`: iPhone and iPad. NSH gives iPad all four orientations (iPad multitasking needs them) and iPhone portrait and both landscapes; the launch screen and the icon serve both (`actool` makes the iPad sizes from the 1024 image). iPad needs its own 13-inch screenshots. |
 | Icon | `assets/ios/icon-1024.png` (from `icon-ios.svg`) | Apple wants 1024×1024 with no alpha. The desktop `assets/icon.png` (512, transparent) fails `actool`. |
 | Launch screen | `nsh/nsh.json` `ios.launchScreen` | The app's own background, light and dark, so launch shows no flash. |
 | Export compliance | `ios.infoPlist.ITSAppUsesNonExemptEncryption` | `false`, as the Mac App Store build says. |
@@ -37,5 +37,4 @@ just ios-appstore-upload                                       # nsh publish ios
 
 ## Screenshots
 
-App Store Connect requires the iPhone 6.1"/6.3" set (1206×2622 or 1179×2556, e.g. iPhone 18 Pro) and, when iPad is
-on, the iPad 13" set (2064×2752 or 2048×2732). No alpha. Previews are 886×1920, 15–30 s, at most 30 fps.
+App Store Connect requires the iPhone 6.1"/6.3" set (1206×2622 or 1179×2556, e.g. iPhone 18 Pro) and the iPad 13" set (2064×2752 or 2048×2732). No alpha. Previews are 886×1920, 15–30 s, at most 30 fps.
