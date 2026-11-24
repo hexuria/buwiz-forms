@@ -79,13 +79,12 @@ test("the server hint says where the address came from", () => {
   expect(serverHint(undefined)).toBe("Chosen for this build.");
 });
 
-test("Delete account opens the account site's deletion page: production's own host, or the server the build talks to", () => {
-  expect(deletionPageUrl("https://api.buwiz.com")).toBe("https://account.buwiz.com/delete");
-  expect(deletionPageUrl("https://api.buwiz.com/")).toBe("https://account.buwiz.com/delete");
+test("Delete account opens /delete on the account site the host resolved, and production's when there is none", () => {
+  expect(deletionPageUrl("https://account.buwiz.com")).toBe("https://account.buwiz.com/delete");
+  expect(deletionPageUrl("https://account.buwiz.com/")).toBe("https://account.buwiz.com/delete");
+  expect(deletionPageUrl("http://account.localhost:3008")).toBe("http://account.localhost:3008/delete");
   expect(deletionPageUrl(null)).toBe("https://account.buwiz.com/delete");
   expect(deletionPageUrl("")).toBe("https://account.buwiz.com/delete");
-  expect(deletionPageUrl("http://localhost:3008")).toBe("http://localhost:3008/delete");
-  expect(deletionPageUrl("https://buwiz.example.test/")).toBe("https://buwiz.example.test/delete");
 });
 
 test("the retention choices are the host's, with an unusual current one added", () => {

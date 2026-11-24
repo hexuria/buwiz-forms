@@ -49,7 +49,7 @@ export function BuwizCard() {
             label="Open deletion page"
             variant="ghost"
             size="sm"
-            onPress={() => void openUrl(deletionPageUrl(status().server_url))}
+            onPress={() => void openUrl(deletionPageUrl(status().account_url))}
           />
         </SettingRow>
       </If>

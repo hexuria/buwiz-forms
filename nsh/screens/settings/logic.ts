@@ -116,16 +116,15 @@ export function groupSections(view: readonly SettingsViewSection[]): { group: st
   return out;
 }
 
-const PRODUCTION_API = "https://api.buwiz.com";
 const PRODUCTION_ACCOUNT = "https://account.buwiz.com";
 
 /**
- * The page where the signed-in person deletes their Buwiz account (they confirm with a code sent to their email).
- * Production's account pages live on their own host; a development or self-hosted server (`server` is the build's
- * API address) serves its account pages itself, so the page is on that same address.
+ * The page where the signed-in person deletes their Buwiz account (they confirm with a code sent to their email):
+ * `/delete` on the account site. `account` is the account site's address as the host resolved it for this build
+ * (production's, a development server's `account.localhost`, or a self-hosted one); it is never derived from the API
+ * address, because the two live on different hosts. Without one, production's.
  */
-export function deletionPageUrl(server: string | null | undefined): string {
-  const api = (server ?? "").trim().replace(/\/+$/, "");
-  if (!api || api === PRODUCTION_API) return PRODUCTION_ACCOUNT + "/delete";
-  return api + "/delete";
+export function deletionPageUrl(account: string | null | undefined): string {
+  const origin = (account ?? "").trim().replace(/\/+$/, "");
+  return (origin || PRODUCTION_ACCOUNT) + "/delete";
 }
