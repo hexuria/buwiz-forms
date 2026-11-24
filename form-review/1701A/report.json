@@ -1,0 +1,51 @@
+{
+  "code": "1701A",
+  "verdict": "tweak",
+  "summary": "Both printed pages closely match the official 2018 v5 PDF; needs a small form-local tweak for Page 2 Item 63 specify text padding, plus shared print fixes for comb tick collisions and >8-digit comb overflow.",
+  "defects": [
+    {
+      "id": "1701A-P1",
+      "surface": "print",
+      "where": "Page 1 Item 9 Registered Address and Page 2 Part V Item 70 Spouse's Name",
+      "what": "Long address and spouse name overflow their comb boxes and collide directly with the comb tick marks.",
+      "before": "before/print-p1.png",
+      "after": "after/print-p1.png",
+      "status": "needs shared change"
+    },
+    {
+      "id": "1701A-P2",
+      "surface": "print",
+      "where": "Page 1 Part II Items 21, 22, 24-30 and Page 2 Part IV.A Items 38-40, 44-45, IV.C Items 64-65",
+      "what": "Large or negative computed amounts exceeding 8 comb slots print blank.",
+      "before": "before/print-p1.png",
+      "after": "after/print-p1.png",
+      "status": "needs shared change"
+    },
+    {
+      "id": "1701A-P3",
+      "surface": "print",
+      "where": "Page 2, Part IV.C Item 63 (Other Tax Credits/Payments specify)",
+      "what": "Long specify text runs flush against the right border of the specify box with no right padding.",
+      "before": "before/print-p2.png",
+      "after": "after/print-p2.png",
+      "status": "open"
+    },
+    {
+      "id": "1701A-P4",
+      "surface": "print",
+      "where": "Page 2, bottom reference tables (Table 1 and Table 2 Tax Rates)",
+      "what": "Reference tax rate tables are moved out of the filed sheet into guide.html per provenance.json.",
+      "before": "before/print-p2.png",
+      "after": "after/print-p2.png",
+      "status": "by design"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "crates/bir-print (owned by neon-4 on try/forms-shared-print): mask comb ticks under overflowing long names/addresses (Items 9, 70) and handle >8-digit/negative comb overflow in Part II/IV."
+  ],
+  "tests_run": [],
+  "open_questions": [
+    "Print preview window opens natively on Linux via WebKitGTK; full unclipped 1400px-wide print-p*.png pages were rendered from the running app's generated sheet.html via headless Chrome --print-to-pdf + pypdfium2."
+  ]
+}

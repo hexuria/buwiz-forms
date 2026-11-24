@@ -1,0 +1,79 @@
+{
+  "code": "1701MS",
+  "verdict": "tweak",
+  "summary": "Both printed pages match the August 2024 PDF structure; needs form-local tweaks for Page 2 Tax Filer's Last Name mapping, empty Spouse TIN dashes, Part I Col A/B font sizing, and Page 2 Part V Items 7 & 9 microscopic specify text, plus shared print fixes for comb overflow.",
+  "defects": [
+    {
+      "id": "1701MS-P1",
+      "surface": "print",
+      "where": "Page 1, Part I Item 6 B. Spouse TIN",
+      "what": "Empty spouse TIN prints '---00000' instead of staying blank.",
+      "before": "before/print-p1.png",
+      "after": "after/print-p1.png",
+      "status": "open"
+    },
+    {
+      "id": "1701MS-P2",
+      "surface": "print",
+      "where": "Page 1, Part I Items 8, 9, 10 and 18 (Column A vs Column B)",
+      "what": "Text in Column A (Taxpayer/Filer) shrinks noticeably smaller than equivalent text in Column B (Spouse), e.g., Contact Number and Email Address.",
+      "before": "before/print-p1.png",
+      "after": "after/print-p1.png",
+      "status": "open"
+    },
+    {
+      "id": "1701MS-P3",
+      "surface": "print",
+      "where": "Page 1 Part II Items 25, 27, 29, 30 and Page 2 Part IV.B1 Items 9, 10C, 10D, 12, 13, 14",
+      "what": "Negative or >8-digit amounts overflow the 8-slot comb boxes and render as left-aligned plain text colliding directly with comb tick marks.",
+      "before": "before/print-p1.png",
+      "after": "after/print-p1.png",
+      "status": "needs shared change"
+    },
+    {
+      "id": "1701MS-P4",
+      "surface": "print",
+      "where": "Page 2, Header 'Tax Filer's Last Name'",
+      "what": "Prints the entire full taxpayer name instead of only the last name, overflowing the comb boxes and colliding with the comb tick marks.",
+      "before": "before/print-p2.png",
+      "after": "after/print-p2.png",
+      "status": "open"
+    },
+    {
+      "id": "1701MS-P5",
+      "surface": "print",
+      "where": "Page 2, Part V Items 7 and 9 (Foreign Tax Credits and Other Tax Credits specify boxes)",
+      "what": "Specify text renders at a microscopic font size (~3.5pt) pinned near the top of the cell.",
+      "before": "before/print-p2.png",
+      "after": "after/print-p2.png",
+      "status": "open"
+    },
+    {
+      "id": "1701MS-P6",
+      "surface": "print",
+      "where": "Page 2, bottom reference tables (Table 1 ATCs and Table 2 Tax Rates)",
+      "what": "Reference tables are moved out of the filed sheet into guide.html per provenance.json.",
+      "before": "before/print-p2.png",
+      "after": "after/print-p2.png",
+      "status": "by design"
+    },
+    {
+      "id": "1701MS-S1",
+      "surface": "screen",
+      "where": "Part I, Item 6 Taxpayer Identification Number (TIN) - A. Taxpayer/Filer",
+      "what": "5-digit branch code ('00000') truncates with an ellipsis ('000...') inside the read-only TIN branch box.",
+      "before": "before/screen-02-part-i-taxpayer-filer-and-spouse-informa.png",
+      "after": "after/screen-02-part-i-taxpayer-filer-and-spouse-informa.png",
+      "status": "needs shared change"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "crates/bir-print (owned by neon-4 on try/forms-shared-print): mask comb ticks under overflowing negative/large amounts in Part II and Part IV.B1.",
+    "nsh/screens/form/ (shared screen code): widen read-only 5-digit TIN branch code box so '00000' does not truncate to '000...' on 1701MS."
+  ],
+  "tests_run": [],
+  "open_questions": [
+    "Print preview window opens natively on Linux via WebKitGTK; full unclipped 1400px-wide print-p*.png pages were rendered from the running app's generated sheet.html via headless Chrome --print-to-pdf + pypdfium2."
+  ]
+}

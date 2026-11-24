@@ -1,0 +1,69 @@
+{
+  "code": "1701",
+  "verdict": "tweak",
+  "summary": "All four printed pages closely match the official 2018 ENCS PDF; needs form-local tweaks for Page 1 Items 19-20 checkbox geometry and Page 3 Schedule 6.A.1 Row 8 microscopic font size, plus shared print fixes for comb ticks and schedule amount alignment.",
+  "defects": [
+    {
+      "id": "1701-P1",
+      "surface": "print",
+      "where": "Page 1 Item 9 Registered Address, Page 2 Part IV Item 5 Spouse's Name, Page 3 Schedule 5 Descriptions",
+      "what": "Long text overflows comb boxes and collides directly with comb tick marks.",
+      "before": "before/print-p1.png",
+      "after": "after/print-p1.png",
+      "status": "needs shared change"
+    },
+    {
+      "id": "1701-P2",
+      "surface": "print",
+      "where": "Page 1, Part I Items 19 and 20 (Income EXEMPT / SPECIAL-PREFERENTIAL RATE checkboxes)",
+      "what": "Yes/No checkbox inputs are vertically compressed so the X mark touches the top and bottom borders compared to the official PDF.",
+      "before": "before/print-p1.png",
+      "after": "after/print-p1.png",
+      "status": "open"
+    },
+    {
+      "id": "1701-P3",
+      "surface": "print",
+      "where": "Page 2, Part V Schedule 3.A Items 16, 18, 23, 24",
+      "what": "Large or negative computed amounts exceeding 9 comb slots print completely blank.",
+      "before": "before/print-p2.png",
+      "after": "after/print-p2.png",
+      "status": "needs shared change"
+    },
+    {
+      "id": "1701-P4",
+      "surface": "print",
+      "where": "Page 3 Schedule 6.A.1 (rows 4-7) and Page 4 Schedule 6.A.2 (rows 9-13)",
+      "what": "NOLCO schedule amounts print left-aligned without thousand separators right against the left cell borders.",
+      "before": "before/print-p3.png",
+      "after": "after/print-p3.png",
+      "status": "needs shared change"
+    },
+    {
+      "id": "1701-P5",
+      "surface": "print",
+      "where": "Page 3, Schedule 6.A.1 Row 8 (Total NOLCO - Taxpayer/Filer, column D)",
+      "what": "Total amount renders at a microscopic font size (~2-3pt), far smaller than the matching Row 13 Spouse Total NOLCO on Page 4.",
+      "before": "before/print-p3.png",
+      "after": "after/print-p3.png",
+      "status": "open"
+    },
+    {
+      "id": "1701-P6",
+      "surface": "print",
+      "where": "Page 4, bottom reference tables (Table 1 and Table 2 Tax Rates)",
+      "what": "Reference tax rate tables are moved out of the filed sheet into guide.html per provenance.json.",
+      "before": "before/print-p4.png",
+      "after": "after/print-p4.png",
+      "status": "by design"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "crates/bir-print (owned by neon-4 on try/forms-shared-print): mask comb ticks under overflowing long text, right-align/pad schedule amounts in Schedule 6.A.1/6.A.2, and handle >9-digit/negative comb overflow in Schedule 3.A."
+  ],
+  "tests_run": [],
+  "open_questions": [
+    "Print preview window opens natively on Linux via WebKitGTK; full unclipped 1400px-wide print-p*.png pages were rendered from the running app's generated sheet.html via headless Chrome --print-to-pdf + pypdfium2."
+  ]
+}
