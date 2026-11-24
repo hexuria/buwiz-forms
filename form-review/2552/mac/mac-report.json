@@ -1,0 +1,20 @@
+{
+  "form": "2552",
+  "branch": "try/forms-neon-4",
+  "commit": "c6a347858c858fbb3ec3b83843ff6fe0052cb5ad",
+  "platform": "macOS 26.6.2 (arm64), WKWebView preview + WKWebView createPDF Save-as-PDF",
+  "verdict": "macOS matches Linux: yes (preview); saved PDF has one overlap in the signature block (known capture-zoom defect)",
+  "preview": {
+    "matches_linux": true,
+    "notes": "print-p1/print-p2. Item 1 date 02/26/2026, treaty RP-US TAX TREATY ART. 12, 11A X (LSE), PT200 88,500.00, item18 49,382,712.78, item19 49,382,713.00, items 20/25 -49,294,213.00 overpayment with 'To be refunded' X, Part IV RESIDENTIAL 50,123,448.78, Schedule 1 all 4 rows fully populated (seller/buyer/corp/shares/base/rate/due, TOTAL 88,500.00), right-aligned numeric columns, Part VI all 5 rows."
+  },
+  "pdf": {
+    "matches_linux": false,
+    "defect": "Page 1 signature block: 'Signature over Printed Name of Taxpayer/Authorized Representative/Tax Agent' runs into the second column's '...President/Vice President/Authorized Officer...' label. Same sub-1 capture-zoom text-metric defect (try/print-zoom-fix @e45bd5fa). Page 2 clean."
+  },
+  "notes_vs_linux_report": [
+    "2552-P2 (Schedule-1 non-Date columns blank) did NOT reproduce: form.fill on mac persisted all Schedule-1 columns into draft.schedule (verified in data_json), so the print matches the Linux fixture-based after/ picture, not the blank-column defect.",
+    "Item 1 date set via scratch-DB json_replace (transaction_month/day are not form.fill boxes); printed 02/26/2026.",
+    "Item-4 TIN full branch code '00000' prints on the sheet (truncation was a screen-only defect)."
+  ]
+}
