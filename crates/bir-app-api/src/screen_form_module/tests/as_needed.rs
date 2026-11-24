@@ -1339,7 +1339,11 @@ fn pr9_2552_page_2_is_its_printed_parts() {
         .unwrap()
         .iter()
         .map(|it| {
-            assert!(it["note"].as_str().is_some_and(|n| n.contains("switched off")));
+            assert!(
+                it["note"]
+                    .as_str()
+                    .is_some_and(|n| n.contains("switched off"))
+            );
             it["no"].as_str().unwrap().to_string()
         })
         .collect();

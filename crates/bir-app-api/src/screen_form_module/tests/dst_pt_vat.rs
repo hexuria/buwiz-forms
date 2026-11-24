@@ -331,7 +331,11 @@ fn pr4_form_2000_tax_agent_boxes_show_their_caption_and_a_note() {
             .unwrap()
             .starts_with("Tax Agent Accreditation No.")
     );
-    assert!(last["note"].as_str().is_some_and(|n| n.contains("cannot be filled here")));
+    assert!(
+        last["note"]
+            .as_str()
+            .is_some_and(|n| n.contains("cannot be filled here"))
+    );
     assert!(
         sheet_text("2000-dst-2018")
             .contains("Tax Agent Accreditation No./ Date of Issue Date of Expiry")

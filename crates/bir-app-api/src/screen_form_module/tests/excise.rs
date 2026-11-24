@@ -369,7 +369,10 @@ fn pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them() {
                 .unwrap_or_else(|| panic!("{code}: item {no} is a note"));
             assert!(note["l"].as_str().unwrap().starts_with(row), "{code} {no}");
             assert!(
-                note["note"].as_str().unwrap().contains("keeps Part IV switched off"),
+                note["note"]
+                    .as_str()
+                    .unwrap()
+                    .contains("keeps Part IV switched off"),
                 "{code} {no}"
             );
             // The sheet prints it under that number.
