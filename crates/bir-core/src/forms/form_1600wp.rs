@@ -431,11 +431,6 @@ impl Form1600WpDraft {
         put("txtTaxpayerName", text(&self.agent_name));
         put("txtAddress", text(&self.registered_address));
         put("txtZipCode", self.zip_code.trim().to_string());
-        // Item 11 (Tax relief under Special Law/Treaty) is fixed to "No" in
-        // eBIRForms 1600WP; emitting both flags matches the official XML
-        // defaults and lets the print sheet tick the "No" box.
-        put("SpecialLaw_1", flag(false));
-        put("SpecialLaw_2", flag(true));
 
         for (index, row) in self.atc_rows.iter().enumerate() {
             let n = index + 1;
@@ -577,6 +572,11 @@ impl Form1600WpDraft {
         }
         let sched_total_amount: f64 = self.schedule.iter().map(|row| row.amount).sum();
         put("sched_total_amount", official_amount(sched_total_amount));
+        // Item 11 (Tax relief under Special Law/Treaty) is fixed to "No" in
+        // eBIRForms 1600WP; the upload XML template already supplies these
+        // defaults, so emit them print-only for the sheet to tick "No".
+        fields.insert("frm1600WP:SpecialLaw_1".to_string(), "false".to_string());
+        fields.insert("frm1600WP:SpecialLaw_2".to_string(), "true".to_string());
         super::print_map::blank_unset_date_parts(
             &mut fields,
             &[
@@ -1221,8 +1221,8 @@ mod tests {
         draft.schedule.push(draft.schedule[0].clone());
         let upload = draft.to_bir_field_map();
         let print = draft.to_print_field_map();
-        assert_eq!(upload["frm1600WP:SpecialLaw_1"], "false");
-        assert_eq!(upload["frm1600WP:SpecialLaw_2"], "true");
+        assert!(!upload.contains_key("frm1600WP:SpecialLaw_1"));
+        assert!(!upload.contains_key("frm1600WP:SpecialLaw_2"));
         assert_eq!(print["frm1600WP:SpecialLaw_1"], "false");
         assert_eq!(print["frm1600WP:SpecialLaw_2"], "true");
         assert!(!upload.contains_key("derived:sched_seq1"));
