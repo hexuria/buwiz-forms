@@ -200,6 +200,14 @@ pub(super) fn apply_combs(form: &mut Value, code: &str) {
             if let (true, Some((n, _))) = (takes_slots(def, field), slot(field)) {
                 field["slots"] = json!(n);
             }
+            if matches!(field["t"].as_str(), Some("money" | "num"))
+                && let Some(digits) = field["k"]
+                    .as_str()
+                    .and_then(|k| cells.get(k))
+                    .and_then(|cell| cell["digits"].as_u64())
+            {
+                field["amount_slots"] = json!(digits);
+            }
         }
         // Runs of text lines printed under one address caption.
         let mut start = 0;
@@ -244,6 +252,53 @@ pub(super) fn apply_combs(form: &mut Value, code: &str) {
                 }
             }
             start = end;
+        }
+    }
+    // Schedule-table columns: the keys live per row in `keys`, one writer cell
+    // each; every row's comb for a column shares its digit count, so the first
+    // row key that names a print cell speaks for the column. (A second pass:
+    // the first loop holds the item's fields open the whole time.)
+    let items = form["parts"]
+        .as_array_mut()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array_mut().into_iter().flatten());
+    for item in items {
+        let row_keys: Vec<Vec<String>> = item["keys"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|row| {
+                row.as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|key| key.as_str().map(str::to_string))
+                    .collect()
+            })
+            .collect();
+        if row_keys.is_empty() {
+            continue;
+        }
+        let Some(cols) = item["cols"].as_array_mut() else {
+            continue;
+        };
+        for (c, col) in cols.iter_mut().enumerate() {
+            let Some(cell) = row_keys
+                .iter()
+                .filter_map(|row| row.get(c))
+                .find_map(|key| cells.get(key))
+            else {
+                continue;
+            };
+            if matches!(col["t"].as_str(), Some("money" | "num"))
+                && let Some(digits) = cell["digits"].as_u64()
+            {
+                col["amount_slots"] = json!(digits);
+            } else if takes_slots(def, col)
+                && let Some(n) = cell["slots"].as_u64()
+            {
+                col["slots"] = json!(n);
+            }
         }
     }
 }
@@ -611,6 +666,45 @@ mod tests {
                         }
                     }
                     keys.entry(key.to_string()).or_insert_with(|| cell);
+                }
+            }
+            // Amount boxes: the integer digits a money comb holds. A peso comb
+            // beside its centavo comb is all digit slots; a point-column comb
+            // keeps its centavos in the same cell, the last two slots, so the
+            // pesos have the rest. Whole-peso joins are digit slots throughout.
+            // The print fills digits without commas (a leading minus is one),
+            // right-aligned; more digits than the slots prints a plain number.
+            for join in cells["money_joins"].as_array().into_iter().flatten() {
+                let (Some(key), Some(id)) =
+                    (join["writer_key"].as_str(), join["peso_html_id"].as_str())
+                else {
+                    continue;
+                };
+                let Some(slots) = combs.get(id).copied() else {
+                    continue;
+                };
+                let digits = if join["point_slot"].as_bool() == Some(true) {
+                    slots.saturating_sub(2)
+                } else {
+                    slots
+                };
+                if digits > 0 {
+                    let entry = keys.entry(key.to_string()).or_insert_with(
+                        || json!({"printed": join["printed"].as_str().unwrap_or_default()}),
+                    );
+                    entry["digits"] = json!(digits);
+                }
+            }
+            for join in cells["peso_joins"].as_array().into_iter().flatten() {
+                let (Some(key), Some(id)) = (join["writer_key"].as_str(), join["html_id"].as_str())
+                else {
+                    continue;
+                };
+                if let Some(slots) = combs.get(id) {
+                    let entry = keys.entry(key.to_string()).or_insert_with(
+                        || json!({"printed": join["printed"].as_str().unwrap_or_default()}),
+                    );
+                    entry["digits"] = json!(slots);
                 }
             }
             for join in cells["date_joins"].as_array().into_iter().flatten() {

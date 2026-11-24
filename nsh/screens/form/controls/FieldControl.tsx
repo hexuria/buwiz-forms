@@ -224,7 +224,7 @@ function TypedBox(props: { p: FieldInput }) {
                       onBlur={() => p.onBlur()}
                       width={widthOf(p)}
                       error={p.box.message?.() || p.box.invalid()}
-                      maxLength={p.field.m}
+                      maxLength={p.field.slots || p.field.pool?.slots?.length ? undefined : p.field.m}
                       placeholder={p.placeholder}
                       keyboardType={kind() === "email" ? "email-address" : kind() === "phone" ? "phone-pad" : undefined}
                       autoCapitalize={kind() === "email" ? "none" : undefined}
@@ -257,7 +257,7 @@ function TypedBox(props: { p: FieldInput }) {
                 width={widthOf(p)}
                 align={cellOf(p) ? "center" : undefined}
                 error={p.box.message?.() || p.box.invalid()}
-                maxDigits={p.field.m}
+                maxDigits={p.field.amount_slots || p.field.slots ? 15 : p.field.m}
                 placeholder={p.placeholder}
                 inputRef={(ref) => giveFocus(p, ref)}
               />
@@ -321,6 +321,41 @@ export function FieldControl(props: FieldInput) {
       >
         <TickBox p={props} />
       </If>
+      <BoxCounter p={props} />
     </View>
+  );
+}
+
+/** What the print does with what does not fit (rule 7): a text longer than its character boxes prints as a
+ *  plain line, an amount with more integer digits than the amount boxes a plain number. The line is information,
+ *  never an error — plain words, no colour, and nothing blocks. It is always mounted (empty or not) so the
+ *  row of boxes never shifts when the words appear. */
+function BoxCounter(props: { p: FieldInput }) {
+  const p = props.p;
+  const counted = () => Boolean(p.field.slots || (p.field.pool?.slots?.length ?? 0) || p.field.amount_slots);
+  const line = () => {
+    const value = p.box.value();
+    if (!value.trim()) return "";
+    if (p.field.amount_slots) {
+      // Only the overflow says anything: digits of the integer part (the print's leading minus is one of them).
+      const integer = value.split(".")[0].replace(/[^0-9-]/g, "");
+      const digits = integer.replace(/-/g, "").length + (integer.includes("-") ? 1 : 0);
+      if (digits <= p.field.amount_slots) return "";
+      return "Too long for the boxes on paper. This will print as a plain number.";
+    }
+    const total = p.field.slots ?? (p.field.pool?.slots ?? []).reduce((a, b) => a + b, 0);
+    if (!total) return "";
+    const n = [...value.trimEnd()].length;
+    const fits = n <= total;
+    return `${n} of ${total} characters${fits ? "" : ". This will print as a plain line."}`;
+  };
+  return (
+    <If when={counted()}>
+      <View class="min-h-4">
+        <If when={line() !== ""}>
+          <Text variant="meta" tone="fg3" testID={p.testID ? `${p.testID}-count` : undefined}>{line()}</Text>
+        </If>
+      </View>
+    </If>
   );
 }

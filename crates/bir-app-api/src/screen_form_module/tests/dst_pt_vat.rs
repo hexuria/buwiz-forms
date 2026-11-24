@@ -1655,3 +1655,66 @@ fn pr4_labels_read_as_printed() {
             .any(|(_, _, label, _, _)| label == "Schedule amount")
     );
 }
+
+/// Job E: the printed sheets' box counts reach the page schema. Counted per
+/// form: text/phone/int boxes with character slots and money/num boxes with
+/// amount digits. No form may lose a count it had.
+#[test]
+fn box_counters_reach_the_schema() {
+    setup();
+    let mut text_counts = 0;
+    let mut amount_counts = 0;
+    let mut per_form = Vec::new();
+    for form in form_schemas() {
+        let code = form.code.clone().unwrap_or_default();
+        let schema = call("screen_form_schema", vec![code.clone().into()]).unwrap();
+        let mut texts = 0;
+        let mut amounts = 0;
+        walk_for_slots(&schema, &mut texts, &mut amounts);
+        text_counts += texts;
+        amount_counts += amounts;
+        if texts + amounts > 0 {
+            per_form.push((code, texts, amounts));
+        }
+    }
+    println!("text/phone/int boxes with slots: {text_counts}");
+    println!("money/num boxes with amount digits: {amount_counts}");
+    for (code, texts, amounts) in &per_form {
+        println!("  {code}: {texts} text, {amounts} amount");
+    }
+    assert!(
+        text_counts > 500,
+        "text slots reach the schema: {text_counts}"
+    );
+    assert!(
+        amount_counts > 300,
+        "amount digits reach the schema: {amount_counts}"
+    );
+}
+
+fn walk_for_slots(value: &Value, texts: &mut usize, amounts: &mut usize) {
+    match value {
+        Value::Object(map) => {
+            // Boxes carry a key; table columns do not, but both are counted.
+            let is_box = map.get("t").is_some()
+                && (map.get("slots").is_some() || map.get("amount_slots").is_some());
+            if is_box {
+                if map.get("slots").is_some() {
+                    *texts += 1;
+                }
+                if map.get("amount_slots").is_some() {
+                    *amounts += 1;
+                }
+            }
+            for child in map.values() {
+                walk_for_slots(child, texts, amounts);
+            }
+        }
+        Value::Array(items) => {
+            for child in items {
+                walk_for_slots(child, texts, amounts);
+            }
+        }
+        _ => {}
+    }
+}

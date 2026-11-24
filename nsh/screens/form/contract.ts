@@ -54,7 +54,11 @@ export interface SchemaField {
   /** How many boxes the radio's group has (host). */
   rg?: number;
   /** A pooled address line: drawn once by the pool's first line. */
-  pool?: { keys: string[] };
+  pool?: { keys: string[]; slots?: number[] };
+  /** The character boxes the printed sheet gives the field; past them it prints as a plain line. */
+  slots?: number;
+  /** The integer digits the printed sheet's amount boxes hold; past them the amount prints as a plain number. */
+  amount_slots?: number;
 }
 
 /** A column of a schedule table. "hidden" columns are not drawn. */
@@ -64,6 +68,10 @@ export interface SchemaColumn {
   c?: 1;
   w?: 1;
   o?: string[];
+  /** The character boxes the printed sheet gives the column's cells. */
+  slots?: number;
+  /** The integer digits the printed sheet's amount boxes hold. */
+  amount_slots?: number;
 }
 
 /** One numbered item (row) of a part: its boxes (f), or a schedule table (rows, cols, keys[row][col]). */
