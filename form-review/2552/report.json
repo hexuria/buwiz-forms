@@ -49,13 +49,43 @@
       "status": "open"
     }
   ],
-  "files_changed": [],
-  "shared_changes_wanted": [
-    "crates/bir-print: comb-overflow fitting and uppercase formatting for Items 7, 9, and 10A",
-    "nsh/screens/form: widen 5-digit TIN branch code box so 00000 does not truncate to 000..."
+  "files_changed": [
+    "forms/schema-overrides.json",
+    "form-review/2552/after/*.png",
+    "form-review/2552/report.json"
   ],
-  "tests_run": [],
+  "shared_changes_wanted": [
+    {
+      "issue": "2552 Part I Item 4 TIN branch code truncates '00000' to '000...'",
+      "file": "nsh/screens/form/schema.ts",
+      "line": 39,
+      "proposed_one_line_change": "return fs.map((f, i) => (i === fs.length - 1 && (f.m === 5 || (fs.length === 4 && f.m == null)) ? 1.4 : 1));",
+      "picture": "form-review/2552/before/screen-02-part-i-background-information.png",
+      "note": "Left nsh/screens/form/schema.ts untouched per orchestrator instruction; data half ('m': 5) added in forms/schema-overrides.json."
+    },
+    {
+      "issue": "2552 Part V Schedule 1 Seller/Buyer/Corp/NumShares/TaxBase not persisted from screen form fill into draft.schedule",
+      "file": "crates/bir-app-api/src/screen_form_module.rs",
+      "note": "writer-cells.json joins and form_2552.rs field_map are intact; screen draft binding drops non-Date Schedule 1 columns."
+    }
+  ],
+  "tests_run": [
+    "Live app capture via just nsh-run-agent linux (verified Part III plain notes on screen-04 and 2552 print pages)"
+  ],
   "open_questions": [
     "Note: print-p*.png pages were generated from the running app Print preview sheet.html via headless Chrome + pdftoppm."
+  ],
+  "status": "fixed_per_form_pending_shared_merge",
+  "upstream_sheet_edits": [],
+  "blank_item_causes": {
+    "Part V Schedule 1 columns (Seller, Buyer, Corp, Shares, Tax Base, Tax Due)": "Not a missing join or wrong cell id: html-frozen/2552-2018/writer-cells.json already joins all 40 Schedule 1 cells (p2c22..p2c75), and crates/bir-core/src/forms/form_2552.rs emits them cleanly when draft.schedule is populated (pinned by field_map_uses_official_formats). In the live app, form.fill persisted Date on rows 1-4 but left Seller/Buyer/Corp/NumShares/TaxBase empty in the saved draft (screen_form_module.rs draft-mapping gap)."
+  },
+  "fixed_in_this_commit": [
+    "Replaced all 4 developer-facing Part III notes (Items 26-29) in forms/schema-overrides.json with plain taxpayer wording (no file paths or jargon).",
+    "Added data half '\"m\": 5' for frm2552:txtPg1TIN4 in the 2552 block of forms/schema-overrides.json (checked 1800, 1801, 1600WP, 1602Q: all four already have m: 5 on their TIN branch boxes)."
+  ],
+  "remaining_shared_issues": [
+    "Page 2 numeric columns left-aligned: fixed on try/forms-shared-print (commit 0f484378; before/after already verified on 2552 p2).",
+    "Growable schedule rows beyond 5: documented in form-review/SHARED-FINDINGS.md on try/forms-shared-print (commit 1679ff23)."
   ]
 }
