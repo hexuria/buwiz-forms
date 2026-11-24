@@ -445,10 +445,17 @@ pub fn continuation_pages_html_with_truncated(
             "<td style=\"width:46%;padding:2pt 8pt 2pt 0;vertical-align:top;overflow-wrap:anywhere;word-break:break-word\"><span style=\"color:#444;font-weight:700\">Taxpayer's Name:</span> {}</td>",
             escape_html(&meta.taxpayer_name),
         ));
-        out.push_str(&format!(
-            "<td style=\"width:26%;padding:2pt 0;vertical-align:top;text-align:right\"><span style=\"color:#444;font-weight:700\">Return Period:</span> {}</td>",
-            escape_html(&meta.return_period),
-        ));
+        if let Some((label, value)) = &meta.period {
+            out.push_str(&format!(
+                "<td style=\"width:26%;padding:2pt 0;vertical-align:top;text-align:right\"><span style=\"color:#444;font-weight:700\">{}:</span> {}</td>",
+                escape_html(label),
+                escape_html(value),
+            ));
+        } else {
+            out.push_str(
+                "<td style=\"width:26%;padding:2pt 0;vertical-align:top;text-align:right\"></td>",
+            );
+        }
         out.push_str("</tr></tbody></table></div>");
 
         // Schedule tables on this page
@@ -2031,7 +2038,7 @@ struct HeaderMeta {
     form_title: String,
     tin: String,
     taxpayer_name: String,
-    return_period: String,
+    period: Option<(&'static str, String)>,
 }
 
 pub(crate) struct HeaderMetaPub {
@@ -2048,7 +2055,7 @@ pub(crate) fn extract_header_meta_pub(
     HeaderMetaPub {
         tin: m.tin,
         taxpayer_name: m.taxpayer_name,
-        period: m.return_period,
+        period: m.period.map(|(_, v)| v).unwrap_or_default(),
     }
 }
 
@@ -2072,14 +2079,14 @@ fn extract_header_meta(slug: &str, fields: &BTreeMap<String, String>) -> HeaderM
     )
     .unwrap_or_else(|| "—".to_string());
 
-    let return_period = extract_return_period(fields);
+    let period = extract_return_period(slug, fields);
 
     HeaderMeta {
         form_number,
         form_title,
         tin,
         taxpayer_name,
-        return_period,
+        period,
     }
 }
 
@@ -2129,52 +2136,94 @@ fn format_tin_digits(raw: &str) -> String {
     }
 }
 
-fn extract_return_period(fields: &BTreeMap<String, String>) -> String {
+fn period_header_label(slug: &str) -> &'static str {
+    let s = slug.to_ascii_lowercase();
+    if s.starts_with("2000-ot")
+        || s.starts_with("1606")
+        || s.starts_with("1706")
+        || s.starts_with("1707-")
+        || s.starts_with("2552")
+    {
+        "Date of Transaction"
+    } else if s.starts_with("1800") {
+        "Date of Donation"
+    } else if s.starts_with("1801") {
+        "Date of Death"
+    } else if s.starts_with("1600wp") {
+        "Date of Withholding"
+    } else if s.starts_with("1707a") {
+        "Year Ended"
+    } else if s.starts_with("2200") {
+        "Date"
+    } else {
+        "Return Period"
+    }
+}
+
+fn is_valid_date_part(val: &str) -> bool {
+    let t = val.trim();
+    !t.is_empty() && !t.chars().all(|c| c == '0')
+}
+
+fn extract_return_period(
+    slug: &str,
+    fields: &BTreeMap<String, String>,
+) -> Option<(&'static str, String)> {
+    let label = period_header_label(slug);
     // 1. Explicit date (transaction date / date of donation / date of withholding)
     if let Some(d) = fields
         .get("derived:from_date")
-        .filter(|v| !v.trim().is_empty())
+        .filter(|v| is_valid_date_part(v))
     {
-        return format_mmddyyyy(d);
+        return Some((label, format_mmddyyyy(d)));
     }
     let m = first_matching_field(
         fields,
         &[
             "txtDateMonth",
             "DateWithholdingMonth",
+            "txtPg1I1Month",
+            "txtMonth1",
             "txtMonth",
             "rtnMonth",
-            "txtMonth1",
         ],
-    );
-    let d = first_matching_field(fields, &["txtDateDay", "DateWithholdingDay", "txtDay"]);
+    )
+    .filter(|v| is_valid_date_part(v));
+    let d = first_matching_field(
+        fields,
+        &[
+            "txtDateDay",
+            "DateWithholdingDay",
+            "txtPg1I1Day",
+            "txtDay",
+            "txtDate",
+        ],
+    )
+    .filter(|v| is_valid_date_part(v));
     let y = first_matching_field(
         fields,
         &[
             "txtDateYear",
             "DateWithholdingYear",
+            "txtPg1I1Year",
             "txtYear",
+            "txtForYr",
             "rtnYear",
             "txtYearEnded",
         ],
-    );
+    )
+    .filter(|v| is_valid_date_part(v));
 
     if let (Some(mm), Some(dd), Some(yyyy)) = (&m, &d, &y) {
-        if !mm.is_empty() && !dd.is_empty() && !yyyy.is_empty() && mm != "00" && dd != "00" {
-            return format!("{mm}/{dd}/{yyyy}");
-        }
+        return Some((label, format!("{mm}/{dd}/{yyyy}")));
     }
     if let (Some(mm), Some(yyyy)) = (&m, &y) {
-        if !mm.is_empty() && !yyyy.is_empty() && mm != "00" {
-            return format!("{mm}/{yyyy}");
-        }
+        return Some((label, format!("{mm}/{yyyy}")));
     }
     if let Some(yyyy) = y {
-        if !yyyy.is_empty() {
-            return yyyy;
-        }
+        return Some((label, yyyy));
     }
-    "—".to_string()
+    None
 }
 
 fn format_mmddyyyy(raw: &str) -> String {
@@ -3318,5 +3367,47 @@ mod tests {
         assert_eq!(entries[0].page_number, 1);
         assert_eq!(entries[0].label, "9 Other Remarks");
         assert_eq!(entries[0].full_text, "FULL UNLABELED TEXT");
+    }
+
+    #[test]
+    fn additional_sheet_header_uses_form_date_label_or_omits_period_never_dash() {
+        let truncated = vec![TruncatedEntry {
+            page_number: 2,
+            label: "Schedule 1.B, row 3, Name of Corporate Stock (a)".to_string(),
+            full_text: "LONG STOCK NAME".to_string(),
+        }];
+        let mut fields = BTreeMap::new();
+        fields.insert("frm2000OT:txtTIN1".into(), "000".into());
+        fields.insert("frm2000OT:txtTIN2".into(), "123".into());
+        fields.insert("frm2000OT:txtTIN3".into(), "453".into());
+        fields.insert("frm2000OT:txtBranchCode".into(), "00000".into());
+        fields.insert("frm2000OT:txtTaxpayerName".into(), "SANTOS, JUANA".into());
+        // No transaction date -> omit period label completely, never print a dash.
+        let html_no_date = continuation_pages_html_with_truncated(
+            "2000-ot-2018",
+            &fields,
+            &OverflowReport::default(),
+            &truncated,
+            "612pt",
+            "936pt",
+        );
+        assert!(!html_no_date.contains("Return Period:"));
+        assert!(!html_no_date.contains("Date of Transaction:"));
+        assert!(!html_no_date.contains("—"));
+
+        // With transaction date -> print the form's own Item 1 label ("Date of Transaction").
+        fields.insert("frm2000OT:txtDateMonth".into(), "06".into());
+        fields.insert("frm2000OT:txtDateDay".into(), "15".into());
+        fields.insert("frm2000OT:txtDateYear".into(), "2026".into());
+        let html_with_date = continuation_pages_html_with_truncated(
+            "2000-ot-2018",
+            &fields,
+            &OverflowReport::default(),
+            &truncated,
+            "612pt",
+            "936pt",
+        );
+        assert!(html_with_date.contains("Date of Transaction:</span> 06/15/2026"));
+        assert!(!html_with_date.contains("Return Period:"));
     }
 }
