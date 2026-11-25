@@ -3505,6 +3505,30 @@ fn html_escape(value: &str) -> String {
     out
 }
 
+/// Replace one `<link rel="stylesheet" href="{href}">` tag with an inline
+/// `<style>`, whatever the attribute order or self-closing: sheets are
+/// maintained by hand after freezing, and a correction round-trip once
+/// alphabetised one sheet's attributes (`<link href=... rel="stylesheet"/>`),
+/// which the exact-byte match before this helper silently left external.
+fn inline_stylesheet_link(document: &str, href: &str, css: &str) -> Option<String> {
+    let mut scan = 0;
+    while let Some(at) = document[scan..].find("<link").map(|i| scan + i) {
+        let tag_end = document[at..].find('>').map(|i| at + i + 1)?;
+        let tag = &document[at..tag_end];
+        let is_stylesheet = tag.contains("rel=\"stylesheet\"") || tag.contains("rel='stylesheet'");
+        let has_href = tag.contains(&format!("href=\"{href}\"")) || tag.contains(&format!("href='{href}'"));
+        if is_stylesheet && has_href {
+            return Some(format!(
+                "{}<style>{css}</style>{}",
+                &document[..at],
+                &document[tag_end..]
+            ));
+        }
+        scan = tag_end;
+    }
+    None
+}
+
 fn inline_local_assets(html: &str, loaded: &FrozenBundle) -> String {
     let mut document = html.to_string();
     let base = BASE_CSS.replace(
@@ -3515,14 +3539,11 @@ fn inline_local_assets(html: &str, loaded: &FrozenBundle) -> String {
         "url(\"../fonts/arimo-latin-wght-italic.woff2\")",
         &format!("url(\"{}\")", data_uri("font/woff2", FONT_ARIMO_ITALIC)),
     );
-    document = document.replace(
-        "<link rel=\"stylesheet\" href=\"../base.css\">",
-        &format!("<style>{base}</style>"),
-    );
-    document = document.replace(
-        "<link rel=\"stylesheet\" href=\"form.css\">",
-        &format!("<style>{form}</style>"),
-    );
+    for (href, css) in [("../base.css", &base), ("form.css", &form)] {
+        if let Some(inlined) = inline_stylesheet_link(&document, href, css) {
+            document = inlined;
+        }
+    }
     for (name, bytes) in loaded.assets {
         let uri = data_uri("image/png", bytes);
         document = document.replace(&format!("../assets/{name}"), &uri);
