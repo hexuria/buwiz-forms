@@ -4,7 +4,7 @@
 // Nothing moves when a sentence comes or goes: the line under the field and the line under the boxes keep one line's room in
 // every state (a sentence that wraps grows the card downward only on a phone, where the card is anchored at its top). Sizes are
 // the kit's (nsh/ui look.ts CTL, fields.tsx TextField and PinCells): 32 points with a pointer, 44 on touch (the boxes 48).
-import { View } from "nsh";
+import { type InputRef, View } from "nsh";
 import { app } from "../../shell";
 import { AppButton, deviceCopy, PinCells, Spinner, Text, TextField, TOUCH } from "../../ui";
 import { codeSaid, emailSaid, resendLabel, type Said, signInFlow, type SignInState } from "./signInFlow";
@@ -26,6 +26,18 @@ function SaidLine(props: { said: Said | null; testID: string }) {
       </Text>
     </If>
   );
+}
+
+/**
+ * Back from Change email: the field takes the focus with the whole address selected, so typing replaces it instead of adding to
+ * its end (a tap places the caret). After the mount, once the box is there to take the focus.
+ */
+function selectAfterChange(input: InputRef): void {
+  if (!signInFlow.takeReselect()) return;
+  setTimeout(() => {
+    input.focus();
+    input.setSelection(0, signInFlow.emailText().length);
+  }, 0);
 }
 
 /**
@@ -56,6 +68,7 @@ export function EmailCardBody(props: { prefix: string }) {
           returnKeyType="go"
           value={signInFlow.emailText()}
           onChange={signInFlow.setEmail}
+          inputRef={selectAfterChange}
           onSubmit={() => void signInFlow.sendCode()}
           error={said()?.danger === true}
         />

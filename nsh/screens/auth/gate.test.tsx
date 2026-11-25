@@ -395,6 +395,40 @@ for (const { name, size, device } of SIZES) {
     expect(calls(app)).toBe("calls: cloud_account_email_start,cloud_account_email_verify 246810,cloud_account_session_opened");
   }, 60_000);
 
+  test(`${name}: signing in puts the keyboard down, on the way Home and on the way to the first-run question`, async () => {
+    for (const params of [{ demo: true, mode: "solo", firstRun: false }, {}]) {
+      // Keyboard.dismiss is the framework's (nsh); its stand-in counts the calls.
+      let dismissed = 0;
+      const app = await open(ENTRY, {
+        ...size,
+        host: { params: { gate: true, readout: true, ...params } },
+        modules: { nsh: { "Keyboard.dismiss": () => void dismissed++ } },
+      });
+      await toCode(app);
+      await app.type("id:gate-code-boxes", "12345");
+      expect(dismissed).toBe(0);
+      await app.type("id:gate-code-boxes", "6");
+      await app.waitFor("text:That code is not right. 4 tries left.");
+      expect(dismissed).toBe(0);
+      await app.clear("id:gate-code-boxes");
+      await app.type("id:gate-code-boxes", "246810");
+      await app.waitFor(params.firstRun === false ? "id:frame" : "id:setup-card", { timeout: 15000 });
+      expect(dismissed).toBe(1);
+    }
+  }, 120_000);
+
+  test(`${name}: back from Change email the address field has the focus (its address selected, so typing replaces it)`, async () => {
+    const app = await at();
+    await toCode(app);
+    await app.press("id:gate-change-email");
+    await app.waitFor("id:gate-card");
+    expect(app.value("id:gate-email")).toBe("juana@example.com");
+    // A key goes to the focused input, and the field was not pressed: it has the focus. Headless inputs keep no selection
+    // (nsh test docs, app.type), so here the key is added at the end; on a device it replaces the selected address.
+    await app.keyboard.press("x");
+    expect(app.value("id:gate-email")).toBe("juana@example.comx");
+  }, 60_000);
+
   test(`${name}: the network's limit on code checks and a busy server are said with no try spent, and the same request signs in after`, async () => {
     const app = await at({ demo: true, mode: "solo", firstRun: false });
     await toCode(app);

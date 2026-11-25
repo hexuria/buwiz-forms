@@ -6,7 +6,7 @@
 // tokens come through EmailPath (the address, then the emailed code; the host keeps the pending request, so a gate made anew,
 // after a relaunch or a new engine, opens on the code page). TokenPath is the seam
 // for a second way to the first tokens (a later change); nothing implements or draws one now. Every way ends in `approve`.
-import { batch, signal } from "nsh";
+import { batch, Keyboard, signal } from "nsh";
 import type { CloudAccountStatus, CloudEmailCheck, CloudEmailStep } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { app, store } from "../../shell";
@@ -83,6 +83,8 @@ let email: EmailPath = hostEmailPath;
  */
 let held: { request: CodeRequest; tooMany: boolean } | null = null;
 let ticker: ReturnType<typeof setInterval> | null = null;
+/** Change email was pressed: the email page, when it shows, takes the focus with its whole address selected (once). */
+let reselect = false;
 const approvedHooks: ((status: CloudAccountStatus) => void)[] = [];
 
 /** The state, with the code page's clock running only while it shows. */
@@ -99,8 +101,12 @@ function setState(next: SignInState): void {
   }
 }
 
-/** Signed in: the session opens (the gate goes Home) and whoever listens hears the account. */
+/**
+ * Signed in: the keyboard goes down (the code page's number pad would stay up over Home or the first-run question, as the
+ * field that had it goes), the session opens (the gate goes Home) and whoever listens hears the account.
+ */
 function approve(status: CloudAccountStatus): void {
+  Keyboard.dismiss();
   setState({ kind: "approved", status });
   for (const hook of approvedHooks) hook(status);
 }
@@ -280,12 +286,14 @@ async function newCode(): Promise<void> {
 }
 
 /**
- * Change email: the email page comes back with the address, to correct or to keep. The request is kept (the host's and the
+ * Change email: the email page comes back with the address, to correct or to keep: its field has the focus with the whole
+ * address selected, so what is typed replaces it (a tap places the caret instead). The request is kept (the host's and the
  * code page in `held`): the same address continues on it; a request for another address replaces it.
  */
 function changeEmail(): void {
   run++;
   codeText.set("");
+  reselect = true;
   setState({ kind: "email", said: null });
 }
 
@@ -335,6 +343,12 @@ export const signInFlow = {
     if (current.kind === "email" && current.said) setState({ kind: "email", said: null });
   },
   codeText: (): string => codeText(),
+  /** Whether the email page now showing comes after Change email (its field then selects the address); true once. */
+  takeReselect: (): boolean => {
+    const was = reselect;
+    reselect = false;
+    return was;
+  },
   now: (): number => now(),
   sendCode,
   typeCode,
@@ -351,6 +365,7 @@ export const signInFlow = {
   /** Back to the email page before anything happened, forgetting the code page kept for Change email (sign-out, a test). */
   reset: (): void => {
     run++;
+    reselect = false;
     codeText.set("");
     setState({ kind: "idle" });
   },
