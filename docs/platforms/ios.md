@@ -54,7 +54,7 @@ signed out. Name one under the app container's `Documents/`: the door's guard le
 folder stays refused. No `BIR_AUTH_BYPASS`: with it a test run skips the sign-in gate.
 
 ```sh
-just mock-account --port 3008                                  # in another terminal; every code is 246810
+just mock-account --port 3008                                  # in another terminal; the code is printed in the mock's output
 cd nsh
 export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
 export SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1 \
@@ -73,7 +73,7 @@ nsh run --target ios
 
 | Step | What it should show |
 | --- | --- |
-| Step 2 opens on the email page: type an address, Continue with email; on the code page type 246810 | Home; `buwiz-cloud-account.json` beside the database; the mock prints `POST /api/devices`. |
+| Step 2 opens on the email page: type an address, Continue with email; on the code page type the code printed in the mock's output ("sign-in code for <email>: <code>") | Home; `buwiz-cloud-account.json` beside the database; the mock prints `POST /api/devices`. |
 | Relaunch, same variables | Still signed in. |
 | Delete the app (`xcrun simctl uninstall booted dev.goldcoders.bir`), then steps 1 and 2 again | Signed out, on the email page: the files went with the app. |
 

@@ -252,7 +252,7 @@ export interface CloudEmailStep {
     retry_after: number | null;
 }
 export interface CloudEmailCheck {
-    outcome: "approved" | "wrong" | "expired" | "too-many" | "restart" | "error";
+    outcome: "approved" | "wrong" | "expired" | "too-many" | "wait" | "restart" | "error";
     message: string | null;
     attempts_left: number | null;
     status: CloudAccountStatus;

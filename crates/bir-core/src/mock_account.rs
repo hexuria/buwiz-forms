@@ -5,7 +5,7 @@
 //! nothing is stored once it exits.
 
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -17,13 +17,18 @@ use uuid::Uuid;
 
 const TTL: Duration = Duration::from_secs(900);
 const DEFAULT_EMAIL: &str = "dev@buwiz.local";
-/// The code every email sign-in gets unless the options say otherwise.
+/// The first email sign-in's code unless the options say otherwise; each later code (a new request or a Resend) counts
+/// up from it: 246810, 246811, … Every code is printed when it is sent.
 pub const DEFAULT_CODE: &str = "246810";
 /// Wrong codes a request takes before it answers `too_many_attempts`.
 const ATTEMPTS: u32 = 5;
 /// Codes mailed to one address in an hour (start and resend together) before `too_many_requests` (the contract's shared
 /// per-address limit).
 const PER_ADDRESS_HOURLY: usize = 5;
+/// Start and resend calls one network may make in an hour, answered or not, before `too_many_requests`.
+pub const START_PER_NETWORK_HOURLY: usize = 40;
+/// Verify calls one network may make in an hour before `too_many_requests` (none of them spends a request's try).
+pub const VERIFY_PER_NETWORK_HOURLY: usize = 60;
 /// The clients the email sign-in serves (a `CLIENTS` entry with scope `app`): the contract's, and the one this app sends.
 const APP_CLIENTS: [&str; 2] = ["buwiz-ebirforms", "buwiz-desktop"];
 const PLATFORMS: [&str; 6] = ["ios", "ipados", "android", "macos", "windows", "linux"];
@@ -33,7 +38,8 @@ const PLATFORMS: [&str; 6] = ["ios", "ipados", "android", "macos", "windows", "l
 pub struct MockOptions {
     /// Approve device codes at once as [`DEFAULT_EMAIL`].
     pub auto_approve: bool,
-    /// Every request's code; `None`: a new random code per request (printed, and [`MockAccount::code_for`]).
+    /// The first code; each later one (a new request or a Resend) counts up from it, so no two requests share one.
+    /// `None`: a new random code each time. Either way it is printed, and [`MockAccount::code_for`] tells a test.
     pub code: Option<String>,
     /// How long a code works (`expires_in`).
     pub code_ttl: Duration,
@@ -51,6 +57,13 @@ pub struct MockOptions {
     pub html: bool,
     /// `/auth/email/*` answer the outer rate limit's HTML 429.
     pub html_429: bool,
+    /// Start and resend calls per network (client address) an hour ([`START_PER_NETWORK_HOURLY`]); on loopback every
+    /// caller is one network, so a test sets it low.
+    pub start_per_network: usize,
+    /// Verify calls per network an hour ([`VERIFY_PER_NETWORK_HOURLY`]).
+    pub verify_per_network: usize,
+    /// `/auth/email/verify` answers 503 `busy` (the server's waiting places are full), with `Retry-After`.
+    pub busy_verify: bool,
 }
 
 impl Default for MockOptions {
@@ -66,6 +79,9 @@ impl Default for MockOptions {
             banned: Vec::new(),
             html: false,
             html_429: false,
+            start_per_network: START_PER_NETWORK_HOURLY,
+            verify_per_network: VERIFY_PER_NETWORK_HOURLY,
+            busy_verify: false,
         }
     }
 }
@@ -99,8 +115,6 @@ struct EmailRequest {
     secret_hash: String,
     code: String,
     link: String,
-    /// Links of earlier codes of this request (after a Resend): `link_used`.
-    old_links: Vec<String>,
     started: Instant,
     expires: Instant,
     resend_at: Instant,
@@ -124,8 +138,13 @@ struct State {
     sessions: HashMap<String, User>,
     grants: Vec<Grant>,
     email_requests: HashMap<String, EmailRequest>,
+    /// Codes handed out so far (the counter behind [`MockOptions::code`]).
+    codes_issued: u32,
     /// When a code was mailed, per address (the per-address limit, and what a test counts).
     mailed: HashMap<String, Vec<Instant>>,
+    /// Start and resend calls, and verify calls, per network (the per-network limits).
+    network_starts: HashMap<IpAddr, Vec<Instant>>,
+    network_verifies: HashMap<IpAddr, Vec<Instant>>,
     /// By (account, install id); a registration without an install id gets a row of its own.
     registered: HashMap<(String, String), DeviceRow>,
     /// The sign-ins (grant sessions) that have registered their device: one each.
@@ -159,12 +178,13 @@ impl MockAccount {
         }));
         let shared = state.clone();
         let task = tokio::spawn(async move {
-            while let Ok((mut stream, _)) = listener.accept().await {
+            while let Ok((mut stream, peer)) = listener.accept().await {
                 let state = shared.clone();
                 tokio::spawn(async move {
                     let work = async {
                         let response = match read_request(&mut stream).await {
-                            Ok(request) => {
+                            Ok(mut request) => {
+                                request.peer = peer.ip();
                                 println!(
                                     "[mock-account] {} {}",
                                     request.method,
@@ -241,6 +261,8 @@ fn newest_request<'a>(state: &'a State, email: &str) -> Option<(&'a String, &'a 
 }
 
 struct Request {
+    /// The caller's address: its network, for the per-network limits.
+    peer: IpAddr,
     method: String,
     target: String,
     headers: HashMap<String, String>,
@@ -302,6 +324,7 @@ async fn read_request(stream: &mut TcpStream) -> Result<Request, String> {
         body = decode_b64(encoded).ok_or("invalid base64 body header")?;
     }
     Ok(Request {
+        peer: IpAddr::from([127, 0, 0, 1]),
         method,
         target,
         headers,
@@ -655,9 +678,34 @@ fn dispatch(r: &Request, state: &mut State) -> Response {
             }
             page
         }
-        ("POST", "/auth/email/start") => email_start(state, &value),
-        ("POST", "/auth/email/resend") => email_resend(state, &value),
-        ("POST", "/auth/email/verify") => email_verify(state, &value),
+        ("POST", "/auth/email/start" | "/auth/email/resend") => {
+            let limit = state.options.start_per_network;
+            if let Some(refused) = per_network(&mut state.network_starts, r.peer, limit) {
+                return refused;
+            }
+            if path == "/auth/email/start" {
+                email_start(state, &value)
+            } else {
+                email_resend(state, &value)
+            }
+        }
+        ("POST", "/auth/email/verify") if state.options.busy_verify => {
+            let mut busy = failure(
+                503,
+                "busy",
+                "The server is busy. Try again in a moment.",
+                json!({}),
+            );
+            busy.headers.push(("retry-after", "5".into()));
+            busy
+        }
+        ("POST", "/auth/email/verify") => {
+            let limit = state.options.verify_per_network;
+            if let Some(refused) = per_network(&mut state.network_verifies, r.peer, limit) {
+                return refused;
+            }
+            email_verify(state, &value)
+        }
         ("POST", "/api/devices") => register_device(r, state, &value),
         _ => oauth(404, "not_found", "no such endpoint"),
     }
@@ -680,7 +728,8 @@ fn failure(status: u16, code: &str, message: &str, extra: Value) -> Response {
     response
 }
 
-/// The per-address limit: `too_many_requests` with the wait once an hour holds [`PER_ADDRESS_HOURLY`] mailed codes.
+/// The per-address limit: `too_many_requests` once an hour holds [`PER_ADDRESS_HOURLY`] codes for the address. As the
+/// server's, its `retry_after` is a fixed hour, not the time until the oldest code is an hour old.
 fn over_the_limit(state: &mut State, email: &str) -> Option<Response> {
     let hour = Duration::from_secs(3600);
     let mailed = state.mailed.entry(email.to_owned()).or_default();
@@ -688,15 +737,34 @@ fn over_the_limit(state: &mut State, email: &str) -> Option<Response> {
     if mailed.len() < PER_ADDRESS_HOURLY {
         return None;
     }
-    let wait = mailed
-        .first()
-        .map_or(3600, |first| seconds_until(*first + hour).max(1));
     Some(failure(
         429,
         "too_many_requests",
         "Too many sign-in codes were sent to this address. Try again later.",
-        json!({"retry_after": wait}),
+        json!({"retry_after": hour.as_secs()}),
     ))
+}
+
+/// A per-network limit: `limit` calls an hour from `peer`, every call counted, answered or not; the next is
+/// `too_many_requests` with an hour's wait (as the per-address limit's), and is not counted.
+fn per_network(
+    calls: &mut HashMap<IpAddr, Vec<Instant>>,
+    peer: IpAddr,
+    limit: usize,
+) -> Option<Response> {
+    let hour = Duration::from_secs(3600);
+    let made = calls.entry(peer).or_default();
+    made.retain(|at| at.elapsed() < hour);
+    if made.len() >= limit {
+        return Some(failure(
+            429,
+            "too_many_requests",
+            "Too many requests from this network. Try again later.",
+            json!({"retry_after": hour.as_secs()}),
+        ));
+    }
+    made.push(Instant::now());
+    None
 }
 
 /// A code went out to `email` (counted for the limit and for tests).
@@ -738,18 +806,21 @@ fn seconds_until(when: Instant) -> u64 {
         .ceil() as u64
 }
 
-fn new_code(options: &MockOptions) -> String {
-    options.code.clone().unwrap_or_else(|| {
-        let n = u32::from_le_bytes(rand::random::<[u8; 4]>()) % 1_000_000;
-        format!("{n:06}")
-    })
+/// The next code: the first one counted up by the codes handed out so far (or random), so each differs from the last.
+fn new_code(state: &mut State) -> String {
+    let issued = state.codes_issued;
+    state.codes_issued += 1;
+    let n = match state.options.code.as_deref().map(str::parse::<u32>) {
+        Some(Ok(first)) => first.wrapping_add(issued),
+        _ => u32::from_le_bytes(rand::random::<[u8; 4]>()),
+    } % 1_000_000;
+    format!("{n:06}")
 }
 
-/// A request's code and link start over: a new pair, a new life, Resend locked again.
-fn reissue(options: &MockOptions, request: &mut EmailRequest) {
-    let old = std::mem::replace(&mut request.link, token());
-    request.old_links.push(old);
-    request.code = new_code(options);
+/// A request's code and link start over: a new pair (the old link is now `link_used`), a new life, Resend locked again.
+fn reissue(options: &MockOptions, request: &mut EmailRequest, code: String) {
+    request.link = token();
+    request.code = code;
     request.expires = Instant::now() + options.code_ttl;
     request.resend_at = Instant::now() + options.resend_wait;
     request.attempts_left = ATTEMPTS;
@@ -842,9 +913,8 @@ fn email_start(state: &mut State, value: &Value) -> Response {
     let request = EmailRequest {
         email,
         secret_hash: get("secret_hash").to_owned(),
-        code: new_code(&options),
+        code: new_code(state),
         link: token(),
-        old_links: Vec::new(),
         started: Instant::now(),
         expires: Instant::now() + options.code_ttl,
         resend_at: Instant::now() + options.resend_wait,
@@ -904,6 +974,7 @@ fn email_resend(state: &mut State, value: &Value) -> Response {
     if let Some(refused) = over_the_limit(state, &email) {
         return refused;
     }
+    let code = new_code(state);
     let Some(request) = state.email_requests.get_mut(&id) else {
         return failure(
             400,
@@ -912,12 +983,17 @@ fn email_resend(state: &mut State, value: &Value) -> Response {
             json!({}),
         );
     };
-    reissue(&options, request);
+    reissue(&options, request, code);
     let answer = email_answer(&options, &id, request);
     mailed(state, &email);
     answer
 }
 
+/// `/auth/email/verify`, its checks in the server's order: (1) the request exists and is unused and (2) the secret is
+/// its own, else `invalid_request`; (3) it has not expired, else `code_expired` (whatever was sent); (4) the code (no
+/// tries left: `too_many_attempts`; wrong: `invalid_code` with the tries left, or `too_many_attempts` on the last) or the
+/// link (wrong or replaced by a Resend: `link_used`); a right one is taken, the request spent; (5) then a banned account
+/// is `account_banned` (its request stays spent); (6) the tokens.
 fn email_verify(state: &mut State, value: &Value) -> Response {
     let options = state.options.clone();
     let get = |k: &str| value.get(k).and_then(Value::as_str).unwrap_or_default();
@@ -926,22 +1002,6 @@ fn email_verify(state: &mut State, value: &Value) -> Response {
         Ok(found) => found,
         Err(response) => return response,
     };
-    if !link.is_empty() && request.old_links.contains(&link) {
-        return failure(
-            400,
-            "link_used",
-            "This sign-in link was already used.",
-            json!({}),
-        );
-    }
-    if request.attempts_left == 0 {
-        return failure(
-            400,
-            "too_many_attempts",
-            "Too many wrong codes. Send a new code to try again.",
-            json!({}),
-        );
-    }
     if options.expired_codes || request.expires <= Instant::now() {
         return failure(
             400,
@@ -950,29 +1010,40 @@ fn email_verify(state: &mut State, value: &Value) -> Response {
             json!({}),
         );
     }
-    let matches = if link.is_empty() {
-        !options.wrong_codes && code == request.code
-    } else {
-        link == request.link
-    };
-    if !matches {
-        request.attempts_left -= 1;
-        if request.attempts_left == 0 {
-            return failure(
+    if link.is_empty() {
+        let too_many = || {
+            failure(
                 400,
                 "too_many_attempts",
                 "Too many wrong codes. Send a new code to try again.",
                 json!({}),
+            )
+        };
+        if request.attempts_left == 0 {
+            return too_many();
+        }
+        if options.wrong_codes || code != request.code {
+            request.attempts_left -= 1;
+            if request.attempts_left == 0 {
+                return too_many();
+            }
+            return failure(
+                400,
+                "invalid_code",
+                "That code is not right.",
+                json!({"attempts_left": request.attempts_left}),
             );
         }
+    } else if link != request.link {
         return failure(
             400,
-            "invalid_code",
-            "That code is not right.",
-            json!({"attempts_left": request.attempts_left}),
+            "link_used",
+            "This sign-in link was already used.",
+            json!({}),
         );
     }
-    // The ban is checked last; only a sign-in that goes through spends the request (one transaction).
+    // The right code or link is taken and the request spent; only then is a ban checked.
+    request.spent = true;
     let email = request.email.clone();
     let install = request.install.clone();
     if options
@@ -982,7 +1053,6 @@ fn email_verify(state: &mut State, value: &Value) -> Response {
     {
         return failure(403, "account_banned", "This account is closed.", json!({}));
     }
-    request.spent = true;
     let u = user(state, &email);
     issue(state, u, None, install)
 }
@@ -1359,13 +1429,6 @@ mod tests {
             .unwrap()
     }
 
-    fn random_codes() -> MockOptions {
-        MockOptions {
-            code: None,
-            ..MockOptions::default()
-        }
-    }
-
     #[test]
     fn the_secret_hash_is_unpadded_base64url_sha256() {
         assert_eq!(
@@ -1401,12 +1464,18 @@ mod tests {
                     200
                 );
             }
-            let (status, refused) = post(&mut http, &url, "/auth/email/start", body.clone());
-            assert_eq!(
-                (status, refused["error"].as_str()),
-                (429, Some("too_many_requests"))
-            );
-            assert!(refused["retry_after"].as_u64().unwrap() > 0);
+            // The sixth: a fixed hour's wait, in the body and the Retry-After header alike.
+            let sixth = reqwest::blocking::Client::new()
+                .post(format!("{url}/auth/email/start"))
+                .header("content-type", "application/json")
+                .body(body.to_string())
+                .send()
+                .unwrap();
+            assert_eq!(sixth.status(), 429);
+            assert_eq!(sixth.headers()["retry-after"], "3600");
+            let refused: Value = sixth.json().unwrap();
+            assert_eq!(refused["error"], "too_many_requests");
+            assert_eq!(refused["retry_after"], 3600);
             assert!(refused["message"].as_str().is_some_and(|m| !m.is_empty()));
             assert_eq!(
                 server.codes_mailed("limit@example.test"),
@@ -1501,7 +1570,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_code_from_another_request_is_invalid_code() {
-        let server = mock(random_codes()).await;
+        let server = mock(MockOptions::default()).await;
         let url = server.url();
         tokio::task::spawn_blocking(move || {
             let mut http = BlockingHttp::new();
@@ -1519,9 +1588,8 @@ mod tests {
             );
             let code_a = server.code_for("a@example.test").unwrap();
             let code_b = server.code_for("b@example.test").unwrap();
-            if code_a == code_b {
-                return; // one in a million: nothing to tell apart
-            }
+            // Each request has its own code: the first is the default, the next counts up.
+            assert_eq!((code_a.as_str(), code_b.as_str()), (DEFAULT_CODE, "246811"));
             // Device B types the code of A's mail: B's request, B's secret, A's code.
             let (status, wrong) = post(
                 &mut http,
@@ -1559,7 +1627,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn resend_waits_for_the_expiry_and_the_old_code_and_link_stop() {
         let server = mock(MockOptions {
-            code: None,
             code_ttl: Duration::from_secs(1),
             resend_wait: Duration::from_secs(1),
             ..MockOptions::default()
@@ -1627,18 +1694,17 @@ mod tests {
             );
             assert_eq!((status, used["error"].as_str()), (400, Some("link_used")));
             let new_code = server.code_for("r@example.test").unwrap();
-            if new_code != old_code {
-                let (status, stale) = post(
-                    &mut http,
-                    &url,
-                    "/auth/email/verify",
-                    json!({"request_id":id,"secret":"s","code":old_code}),
-                );
-                assert_eq!(
-                    (status, stale["error"].as_str()),
-                    (400, Some("invalid_code"))
-                );
-            }
+            assert_ne!(new_code, old_code, "a Resend's code is a new one");
+            let (status, stale) = post(
+                &mut http,
+                &url,
+                "/auth/email/verify",
+                json!({"request_id":id,"secret":"s","code":old_code}),
+            );
+            assert_eq!(
+                (status, stale["error"].as_str()),
+                (400, Some("invalid_code"))
+            );
             let link = server.link_for("r@example.test").unwrap();
             let (status, _) = post(
                 &mut http,
@@ -1830,6 +1896,278 @@ mod tests {
         .unwrap();
     }
 
+    /// The checks of `/auth/email/verify` in the server's order, one step at a time: each later check is only reached
+    /// once the earlier ones pass.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn verify_checks_request_secret_expiry_code_or_link_then_ban() {
+        let server = mock(MockOptions {
+            code_ttl: Duration::from_secs(1),
+            resend_wait: Duration::from_secs(1),
+            banned: vec!["banned@example.test".into()],
+            ..MockOptions::default()
+        })
+        .await;
+        let url = server.url();
+        tokio::task::spawn_blocking(move || {
+            let mut http = BlockingHttp::new();
+            let start = |http: &mut BlockingHttp, email: &str| {
+                let (status, started) =
+                    post(http, &url, "/auth/email/start", start_body(email, "s"));
+                assert_eq!(status, 200, "{started}");
+                (
+                    started["request_id"].clone(),
+                    server.code_for(email).unwrap(),
+                    server.link_for(email).unwrap(),
+                )
+            };
+            let verify = |http: &mut BlockingHttp, id: &Value, secret: &str, key: &str, v: &str| {
+                let mut body = json!({"request_id":id,"secret":secret});
+                body[key] = json!(v);
+                let (status, answer) = post(http, &url, "/auth/email/verify", body);
+                (status, answer["error"].as_str().map(str::to_owned), answer)
+            };
+            let error = |http: &mut BlockingHttp, id: &Value, secret: &str, key: &str, v: &str| {
+                let (status, error, _) = verify(http, id, secret, key, v);
+                (status, error.unwrap_or_default())
+            };
+            let refused = |status: u16, error: &str| (status, error.to_owned());
+
+            // (1) An unknown request.
+            let nobody = json!("no-such-request");
+            assert_eq!(
+                error(&mut http, &nobody, "s", "code", DEFAULT_CODE),
+                refused(400, "invalid_request")
+            );
+
+            // (4) Before any expiry: no tries left is too_many_attempts even for the right code; a wrong or replaced
+            // link is link_used.
+            let (worn, worn_code, _) = start(&mut http, "worn@example.test");
+            for _ in 0..ATTEMPTS {
+                verify(&mut http, &worn, "s", "code", "000000");
+            }
+            assert_eq!(
+                error(&mut http, &worn, "s", "code", &worn_code),
+                refused(400, "too_many_attempts")
+            );
+            let (linked, _, _) = start(&mut http, "link@example.test");
+            assert_eq!(
+                error(&mut http, &linked, "s", "link_token", "not-the-link"),
+                refused(400, "link_used")
+            );
+            // (5) A banned account: a wrong code is only invalid_code (the ban is not reached) ...
+            let (banned, banned_code, _) = start(&mut http, "banned@example.test");
+            let (status, wrong, answer) = verify(&mut http, &banned, "s", "code", "000000");
+            assert_eq!((status, wrong.as_deref()), (400, Some("invalid_code")));
+            assert_eq!(answer["attempts_left"], 4);
+            // ... the right one spends the request, then answers account_banned; the request is used up after it.
+            assert_eq!(
+                error(&mut http, &banned, "s", "code", &banned_code),
+                refused(403, "account_banned")
+            );
+            assert_eq!(
+                error(&mut http, &banned, "s", "code", &banned_code),
+                refused(400, "invalid_request")
+            );
+            // (6) The right code signs in; the request is spent (1: used).
+            let (good, good_code, _) = start(&mut http, "good@example.test");
+            let (status, _, tokens) = verify(&mut http, &good, "s", "code", &good_code);
+            assert_eq!(status, 200);
+            assert!(tokens["access_token"].as_str().is_some());
+            assert_eq!(
+                error(&mut http, &good, "s", "code", &good_code),
+                refused(400, "invalid_request")
+            );
+
+            // (3) Once a request has expired, every try answers code_expired: the right code, a wrong one (no try is
+            // spent), a wrong link, and a request whose tries are used up.
+            let (late, late_code, late_link) = start(&mut http, "late@example.test");
+            std::thread::sleep(Duration::from_millis(1100));
+            // (2) The secret is checked before the expiry: another secret is invalid_request.
+            assert_eq!(
+                error(&mut http, &late, "other", "code", &late_code),
+                refused(400, "invalid_request")
+            );
+            for (key, v) in [
+                ("code", late_code.as_str()),
+                ("code", "000000"),
+                ("link_token", "not-the-link"),
+                ("link_token", late_link.as_str()),
+            ] {
+                assert_eq!(
+                    error(&mut http, &late, "s", key, v),
+                    refused(400, "code_expired"),
+                    "{key} {v}"
+                );
+            }
+            assert_eq!(
+                error(&mut http, &worn, "s", "code", &worn_code),
+                refused(400, "code_expired")
+            );
+            // A Resend gives the expired request a new code, and the tries back: the code is reached again.
+            let (status, _) = post(
+                &mut http,
+                &url,
+                "/auth/email/resend",
+                json!({"request_id":late,"secret":"s"}),
+            );
+            assert_eq!(status, 200);
+            let (_, wrong, _) = verify(&mut http, &late, "s", "code", &late_code);
+            assert_eq!(
+                wrong.as_deref(),
+                Some("invalid_code"),
+                "the old code is a wrong try now"
+            );
+            // The replaced link: link_used.
+            assert_eq!(
+                error(&mut http, &late, "s", "link_token", &late_link),
+                refused(400, "link_used")
+            );
+            let link = server.link_for("late@example.test").unwrap();
+            assert_eq!(verify(&mut http, &late, "s", "link_token", &link).0, 200);
+        })
+        .await
+        .unwrap();
+    }
+
+    /// The per-network limits: start and resend together, every call counted (a refused one too); code checks on their
+    /// own count. Over the check limit, or while the server is busy, a check spends none of the request's tries, and the
+    /// same request takes the right code once the hour has passed (here: the count forgotten) or the server is free.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_network_limits_and_busy_spend_no_try() {
+        let server = mock(MockOptions {
+            start_per_network: 2,
+            verify_per_network: 1,
+            ..MockOptions::default()
+        })
+        .await;
+        let url = server.url();
+        let state = server.state.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut http = BlockingHttp::new();
+            let (status, _) = post(
+                &mut http,
+                &url,
+                "/auth/email/start",
+                start_body("not-an-address", "s"),
+            );
+            assert_eq!(status, 400);
+            let (_, started) = post(
+                &mut http,
+                &url,
+                "/auth/email/start",
+                start_body("n@example.test", "s"),
+            );
+            let id = started["request_id"].clone();
+            let code = server.code_for("n@example.test").unwrap();
+            let raw = reqwest::blocking::Client::new()
+                .post(format!("{url}/auth/email/resend"))
+                .header("content-type", "application/json")
+                .body(json!({"request_id":id,"secret":"s"}).to_string())
+                .send()
+                .unwrap();
+            assert_eq!(raw.status(), 429);
+            assert_eq!(raw.headers()["retry-after"], "3600");
+            let refused: Value = raw.json().unwrap();
+            assert_eq!(
+                (refused["error"].as_str(), refused["retry_after"].as_u64()),
+                (Some("too_many_requests"), Some(3600))
+            );
+            let verify = |http: &mut BlockingHttp, code: &str| {
+                post(
+                    http,
+                    &url,
+                    "/auth/email/verify",
+                    json!({"request_id":id,"secret":"s","code":code}),
+                )
+            };
+            let tries = || {
+                state
+                    .lock()
+                    .unwrap()
+                    .email_requests
+                    .values()
+                    .next()
+                    .unwrap()
+                    .attempts_left
+            };
+            assert_eq!(verify(&mut http, "000000").1["attempts_left"], 4);
+            let (status, limited) = verify(&mut http, &code);
+            assert_eq!(
+                (status, limited["error"].as_str()),
+                (429, Some("too_many_requests"))
+            );
+            assert_eq!(limited["retry_after"], 3600);
+            assert_eq!(tries(), 4, "the network's limit spends no try");
+            state.lock().unwrap().options.busy_verify = true;
+            let (status, busy) = verify(&mut http, &code);
+            assert_eq!((status, busy["error"].as_str()), (503, Some("busy")));
+            assert_eq!(tries(), 4, "busy spends no try");
+            // An hour later and the server free: the same request takes its code.
+            {
+                let mut state = state.lock().unwrap();
+                state.options.busy_verify = false;
+                state.network_verifies.clear();
+            }
+            assert_eq!(verify(&mut http, &code).0, 200);
+        })
+        .await
+        .unwrap();
+    }
+
+    /// `code_already_sent` holds the same install while its code is unexpired, unspent and has tries left, with the
+    /// seconds until it expires; it does not care whether a mail went out.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_same_install_is_held_while_its_code_is_usable() {
+        let server = mock(MockOptions {
+            code_ttl: Duration::from_secs(2),
+            resend_wait: Duration::from_secs(2),
+            ..MockOptions::default()
+        })
+        .await;
+        let url = server.url();
+        tokio::task::spawn_blocking(move || {
+            let mut http = BlockingHttp::new();
+            assert_eq!(
+                post(
+                    &mut http,
+                    &url,
+                    "/auth/email/start",
+                    start_body("h@example.test", "a")
+                )
+                .0,
+                200
+            );
+            let (status, held) = post(
+                &mut http,
+                &url,
+                "/auth/email/start",
+                start_body("h@example.test", "b"),
+            );
+            assert_eq!(
+                (status, held["error"].as_str()),
+                (429, Some("code_already_sent"))
+            );
+            assert!(
+                (1..=2).contains(&held["retry_after"].as_u64().unwrap()),
+                "{held}"
+            );
+            std::thread::sleep(Duration::from_millis(2100));
+            // Expired: no longer held.
+            assert_eq!(
+                post(
+                    &mut http,
+                    &url,
+                    "/auth/email/start",
+                    start_body("h@example.test", "c")
+                )
+                .0,
+                200
+            );
+        })
+        .await
+        .unwrap();
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_device_registers_once_per_sign_in_and_one_row_per_install() {
         let server = mock(MockOptions::default()).await;
@@ -1843,11 +2181,12 @@ mod tests {
                     "/auth/email/start",
                     start_body("one@example.test", secret),
                 );
+                let code = server.code_for("one@example.test").unwrap();
                 let (_, tokens) = post(
                     http,
                     &url,
                     "/auth/email/verify",
-                    json!({"request_id":started["request_id"],"secret":secret,"code":DEFAULT_CODE}),
+                    json!({"request_id":started["request_id"],"secret":secret,"code":code}),
                 );
                 tokens
             };
@@ -2028,6 +2367,7 @@ mod tests {
         );
         let response = dispatch(
             &Request {
+                peer: IpAddr::from([127, 0, 0, 1]),
                 method: "POST".into(),
                 target: "/auth/device/poll".into(),
                 headers: HashMap::new(),

@@ -394,6 +394,23 @@ for (const { name, size, device } of SIZES) {
     expect(app.shows("id:gate-root")).toBe(false);
     expect(calls(app)).toBe("calls: cloud_account_email_start,cloud_account_email_verify 246810,cloud_account_session_opened");
   }, 60_000);
+
+  test(`${name}: the network's limit on code checks and a busy server are said with no try spent, and the same request signs in after`, async () => {
+    const app = await at({ demo: true, mode: "solo", firstRun: false });
+    await toCode(app);
+    await app.type("id:gate-code-boxes", "777777");
+    await app.waitFor("text:Too many codes were tried from this network. Try again in 3 minutes.");
+    expect(app.texts().some((t) => t.includes("tries left"))).toBe(false);
+    expect(app.value("id:gate-code-boxes")).toBe("");
+    await app.type("id:gate-code-boxes", "888888");
+    await app.waitFor("text:Sign-in is busy right now. Try again in a moment.");
+    expect(app.value("id:gate-code-boxes")).toBe("");
+    await app.type("id:gate-code-boxes", "246810");
+    await app.waitFor("id:frame", { timeout: 15000 });
+    expect(calls(app)).toBe(
+      "calls: cloud_account_email_start,cloud_account_email_verify 777777,cloud_account_email_verify 888888,cloud_account_email_verify 246810,cloud_account_session_opened",
+    );
+  }, 60_000);
 }
 
 test("desktop: a new account's code opens the session, then first launch", async () => {

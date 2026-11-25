@@ -213,13 +213,16 @@ async function checkCode(digits: string): Promise<void> {
       setState({ kind: "email", said: said("This sign-in request has ended. Start again.") });
       return;
     }
-    // An answer the server never gave (no connection, a challenge page, the outer limit) keeps what was typed.
+    // An answer the server never gave (no connection, a challenge page, the outer limit) keeps what was typed. A wait (the
+    // network's limit on code checks, a busy server) spent no try: the boxes clear so the same code, typed again after the
+    // wait, is checked again on the same request.
     if (checked.outcome !== "error") codeText.set("");
     if (checked.outcome === "expired") {
       const at = Date.now();
       const request = { ...page.request, expiresAt: Math.min(page.request.expiresAt, at), resendAt: Math.min(page.request.resendAt, at) };
       setState(codePage(request, said("This code has expired. Press Resend for a new one.")));
     } else if (checked.outcome === "too-many") setState(codePage(page.request, said(TOO_MANY), true));
+    else if (checked.outcome === "wait") setState(codePage(page.request, said("Sign-in is busy right now. Try again in a moment.")));
     else setState(codePage(page.request, said(checked.outcome === "wrong" ? "That code is not right. Try again." : "No connection. Check your internet and try again.")));
   } catch (error) {
     const page = state();

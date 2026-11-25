@@ -20,7 +20,7 @@ export interface CloudEmailStep {
     retry_after: number | null;
 }
 export interface CloudEmailCheck {
-    outcome: "approved" | "wrong" | "expired" | "too-many" | "restart" | "error";
+    outcome: "approved" | "wrong" | "expired" | "too-many" | "wait" | "restart" | "error";
     message: string | null;
     attempts_left: number | null;
     status: CloudAccountStatus;
@@ -231,7 +231,7 @@ fn check_value(outcome: &str, error: Option<&EmailError>) -> HostResult {
         .field("outcome", outcome)
         .field(
             "message",
-            error.map_or(HostValue::Null, |e| HostValue::Str(e.sentence())),
+            error.map_or(HostValue::Null, |e| HostValue::Str(e.verify_sentence())),
         )
         .field("attempts_left", attempts)
         .field("status", crate::cloud_account::status_now()?)
@@ -239,7 +239,9 @@ fn check_value(outcome: &str, error: Option<&EmailError>) -> HostResult {
 }
 
 /// `cloud_account_email_verify`: the code for the pending request. Approved: the tokens are saved as the browser's
-/// device flow saves them and the request is gone. Wrong, expired, too many: the request stays (Resend).
+/// device flow saves them and the request is gone. Wrong, expired, too many: the request stays (Resend). `wait`: the
+/// network's limit on code checks (`too_many_requests`, with its wait) or a busy server (`busy`): no try was spent, and
+/// the same request takes the code again later.
 pub(crate) fn verify_with(http: &mut dyn Http, code: &str, now: i64) -> HostResult {
     let _one = step_lock();
     let Some(pending) = email_sign_in::load_pending() else {
@@ -271,6 +273,7 @@ pub(crate) fn verify_with(http: &mut dyn Http, code: &str, now: i64) -> HostResu
                 "invalid_code" => "wrong",
                 "code_expired" => "expired",
                 "too_many_attempts" => "too-many",
+                "too_many_requests" | "busy" => "wait",
                 code if ends_the_request(code) => {
                     email_sign_in::clear_pending();
                     "restart"
@@ -817,6 +820,114 @@ mod tests {
                 now + 30,
             ));
             assert_eq!(check["outcome"], "approved");
+        });
+    }
+
+    /// An old request's code no longer works. Change email to another address and back, inside the first code's life,
+    /// starts nothing new (`code_already_sent`: the server holds this install for that address); once the first code
+    /// has expired, Continue with the same address starts a new request with its own code. The first request's code,
+    /// typed now, is a wrong try of the new request (`invalid_code`, rule A: a code works only with its own request);
+    /// the new code signs in.
+    #[test]
+    fn against_the_mock_an_old_request_s_code_is_refused_and_the_new_one_signs_in() {
+        let options = bir_core::mock_account::MockOptions {
+            code_ttl: std::time::Duration::from_secs(1),
+            resend_wait: std::time::Duration::from_secs(1),
+            ..Default::default()
+        };
+        against_the_mock(options, |mock, url| {
+            let mut http = BlockingHttp::new();
+            let now = cloud_account::unix_now();
+            assert_eq!(
+                json(start_with(&mut http, url, "juana@example.test", now))["step"],
+                "code"
+            );
+            let first = mock.code_for("juana@example.test").unwrap();
+            // Change email: another address, then back while the first code lives.
+            assert_eq!(
+                json(start_with(&mut http, url, "pedro@example.test", now))["step"],
+                "code"
+            );
+            let back = json(start_with(&mut http, url, "juana@example.test", now));
+            assert_eq!(back["step"], "refused", "{back}");
+            std::thread::sleep(std::time::Duration::from_millis(1100));
+            let now = cloud_account::unix_now();
+            assert_eq!(
+                json(start_with(&mut http, url, "juana@example.test", now))["step"],
+                "code"
+            );
+            let second = mock.code_for("juana@example.test").unwrap();
+            assert_ne!(first, second);
+            let old = json(verify_with(&mut http, &first, now));
+            assert_eq!(old["outcome"], "wrong");
+            assert_eq!(old["message"], "That code is not right. 4 tries left.");
+            let new = json(verify_with(&mut http, &second, now));
+            assert_eq!(new["outcome"], "approved");
+            assert_eq!(new["status"]["email"], "juana@example.test");
+        });
+    }
+
+    /// The network's limits and a busy server, through the host against the mock. A start or resend over the network's
+    /// limit says a sentence true for either limit; a code check over its own limit, or met by a busy server, is `wait`
+    /// with its sentence, spends no try, and the same request then takes the right code.
+    #[test]
+    fn against_the_mock_the_network_limits_and_busy_spend_no_try() {
+        let options = bir_core::mock_account::MockOptions {
+            start_per_network: 1,
+            verify_per_network: 2,
+            ..Default::default()
+        };
+        against_the_mock(options, |mock, url| {
+            let mut http = BlockingHttp::new();
+            let now = cloud_account::unix_now();
+            assert_eq!(
+                json(start_with(&mut http, url, "juana@example.test", now))["step"],
+                "code"
+            );
+            let code = mock.code_for("juana@example.test").unwrap();
+            let refused = json(start_with(&mut http, url, "pedro@example.test", now));
+            assert_eq!(refused["step"], "refused");
+            assert_eq!(
+                refused["message"],
+                "Too many sign-in codes were asked for. Try again in 60 minutes."
+            );
+            assert_eq!(refused["retry_after"], 3600.0);
+            // Two checks this hour: a wrong one (4 tries left), then the network's limit.
+            assert_eq!(
+                json(verify_with(&mut http, "000000", now))["attempts_left"],
+                4.0
+            );
+            assert_eq!(
+                json(verify_with(&mut http, "000001", now))["attempts_left"],
+                3.0
+            );
+            let wait = json(verify_with(&mut http, &code, now));
+            assert_eq!(wait["outcome"], "wait");
+            assert_eq!(
+                wait["message"],
+                "Too many codes were tried from this network. Try again in 60 minutes."
+            );
+            assert_eq!(wait["attempts_left"], serde_json::Value::Null);
+            assert!(
+                email_sign_in::load_pending().is_some(),
+                "the request is kept"
+            );
+        });
+        let busy = bir_core::mock_account::MockOptions {
+            busy_verify: true,
+            ..Default::default()
+        };
+        against_the_mock(busy, |_, url| {
+            let mut http = BlockingHttp::new();
+            let now = cloud_account::unix_now();
+            start_with(&mut http, url, "juana@example.test", now).unwrap();
+            let check = json(verify_with(&mut http, "246810", now));
+            assert_eq!(check["outcome"], "wait");
+            assert_eq!(
+                check["message"],
+                "Sign-in is busy right now. Try again in a moment."
+            );
+            assert!(email_sign_in::load_pending().is_some());
         });
     }
 

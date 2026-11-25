@@ -8,7 +8,8 @@
 //   resend     "early": Resend is refused as too early (the server's wait, 60 s); "ended": the request has ended
 //   slow       true: Continue, the check, Resend and Send a new code take 4 seconds (the spinner, "Checking…", a double press)
 //   blocked    "html": the check and Resend meet a challenge page; "throttled": the outer limit's HTML 429
-// The code 246810 signs in; 111111 has expired; 999999 is one too many; 555555 belongs to an ended request; any other code is wrong,
+// The code 246810 signs in; 111111 has expired; 999999 is one too many; 555555 belongs to an ended request; 777777 meets the
+// network's limit on code checks and 888888 a busy server (both "wait": no try spent); any other code is wrong,
 // with 4, 3, 2, 1 tries left and then too many. The address is the one typed (pending: juana@example.com).
 import type { CloudAccountStatus, CloudEmailCheck, CloudEmailStep } from "../../bir";
 
@@ -102,6 +103,8 @@ export function fakeEmail(
       pending = false;
       return check("approved", null);
     }
+    if (code === "777777") return check("wait", "Too many codes were tried from this network. Try again in 3 minutes.");
+    if (code === "888888") return check("wait", "Sign-in is busy right now. Try again in a moment.");
     if (code === "111111") return check("expired", "This code has expired. Press Resend for a new one.");
     if (code === "555555") {
       pending = false;

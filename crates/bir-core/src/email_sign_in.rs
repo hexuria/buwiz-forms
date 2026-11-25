@@ -128,7 +128,7 @@ impl EmailError {
                 retry_after,
                 attempts_left,
                 ..
-            } if says_a_number(code, *retry_after, *attempts_left) => {
+            } if own_sentence(code, *retry_after, *attempts_left) => {
                 local_sentence(code, *retry_after, *attempts_left)
             }
             Self::Refused { message, .. } if !message.trim().is_empty() => {
@@ -148,6 +148,26 @@ impl EmailError {
     }
 }
 
+impl EmailError {
+    /// The sentence on the code page: as [`EmailError::sentence`], but a `too_many_requests` there is the network's limit
+    /// on code checks (60 an hour), which spends none of the request's tries: "Too many codes were tried from this
+    /// network. Try again in N minutes." (in a minute under 90 seconds).
+    pub fn verify_sentence(&self) -> String {
+        match self {
+            Self::Refused {
+                code, retry_after, ..
+            } if code == "too_many_requests" => {
+                let wait = match retry_after {
+                    Some(s) if *s >= 90 => format!("in {} minutes", (s + 59) / 60),
+                    _ => "in a minute".into(),
+                };
+                format!("Too many codes were tried from this network. Try again {wait}.")
+            }
+            _ => self.sentence(),
+        }
+    }
+}
+
 impl std::fmt::Display for EmailError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.sentence())
@@ -156,11 +176,14 @@ impl std::fmt::Display for EmailError {
 
 impl std::error::Error for EmailError {}
 
-/// Whether this app's sentence for `code` carries a number the answer gave (see [`EmailError::sentence`]).
-fn says_a_number(code: &str, retry_after: Option<i64>, attempts_left: Option<i64>) -> bool {
+/// Whether this app's sentence for `code` is said whatever the message (see [`EmailError::sentence`]): it carries a
+/// number the answer gave, or the server's message may be untrue for this case (`too_many_requests` is the address's
+/// limit or the network's, and the answer does not say which; `busy` is said as one sentence everywhere).
+fn own_sentence(code: &str, retry_after: Option<i64>, attempts_left: Option<i64>) -> bool {
     match code {
         "invalid_code" => attempts_left.is_some_and(|n| n > 0),
         "code_already_sent" | "restarting" => retry_after.is_some_and(|s| s > 0),
+        "too_many_requests" | "busy" => true,
         _ => false,
     }
 }
@@ -190,7 +213,7 @@ pub fn local_sentence(code: &str, retry_after: Option<i64>, attempts_left: Optio
     match code {
         "invalid_email" => "That email address does not look right. Check it and try again.".into(),
         "too_many_requests" => format!(
-            "Too many sign-in codes were sent to this address. Try again in {}.",
+            "Too many sign-in codes were asked for. Try again in {}.",
             minutes(retry_after)
         ),
         "code_already_sent" => format!(
@@ -205,6 +228,7 @@ pub fn local_sentence(code: &str, retry_after: Option<i64>, attempts_left: Optio
         "unknown_client" => {
             "This app is not known to the Buwiz server. Update the app and try again.".into()
         }
+        "busy" => "Sign-in is busy right now. Try again in a moment.".into(),
         "restarting" => format!(
             "The Buwiz server is restarting. Try again {}.",
             wait_words(retry_after)
@@ -225,7 +249,7 @@ pub fn local_sentence(code: &str, retry_after: Option<i64>, attempts_left: Optio
 }
 
 /// Every `error` the contract answers on these paths.
-const CONTRACT_CODES: [&str; 17] = [
+const CONTRACT_CODES: [&str; 18] = [
     "install_mismatch",
     "attestation_refused",
     "invalid_request",
@@ -243,6 +267,7 @@ const CONTRACT_CODES: [&str; 17] = [
     "too_many_requests",
     "mail_failed",
     "restarting",
+    "busy",
 ];
 
 /// Whether an answer on any of the three paths is not this contract's: a 404, or anything that is neither a 200 JSON
@@ -802,7 +827,7 @@ mod tests {
             (
                 429,
                 r#"too_many_requests","retry_after":120"#,
-                "Too many sign-in codes were sent to this address. Try again in 2 minutes.",
+                "Too many sign-in codes were asked for. Try again in 2 minutes.",
             ),
             (
                 429,
@@ -940,8 +965,46 @@ mod tests {
             Fake::answering(&[(429, r#"{"error":"too_many_requests","retry_after":600}"#)]);
         assert_eq!(
             start_with(&mut fake).unwrap_err().sentence(),
-            "Too many sign-in codes were sent to this address. Try again in 10 minutes."
+            "Too many sign-in codes were asked for. Try again in 10 minutes."
         );
+    }
+
+    /// The code check's own answers: the network's limit on checks (with its wait, rounded up to minutes, "in a minute" under
+    /// 90 seconds; the server's message, which may name another limit, is not said) and busy, whose sentence is the same
+    /// on every page.
+    #[test]
+    fn a_throttled_or_busy_check_says_so_plainly() {
+        for (retry, words) in [
+            (Some(3600), "in 60 minutes"),
+            (Some(90), "in 2 minutes"),
+            (Some(89), "in a minute"),
+            (None, "in a minute"),
+        ] {
+            let mut body = json!({"error":"too_many_requests","message":"Too many sign-in codes were sent to this address."});
+            if let Some(s) = retry {
+                body["retry_after"] = json!(s);
+            }
+            let mut fake = Fake::answering(&[(429, &body.to_string())]);
+            let refused = verify(&mut fake, "http://127.0.0.1:9", "r1", "s", "123456").unwrap_err();
+            assert_eq!(refused.code(), "too_many_requests");
+            assert_eq!(
+                refused.verify_sentence(),
+                format!("Too many codes were tried from this network. Try again {words}.")
+            );
+        }
+        let mut fake =
+            Fake::answering(&[(503, r#"{"error":"busy","message":"The server is busy."}"#)]);
+        let busy = verify(&mut fake, "http://127.0.0.1:9", "r1", "s", "123456").unwrap_err();
+        assert_eq!(
+            busy.code(),
+            "busy",
+            "the contract's, not taken for not offered"
+        );
+        assert_eq!(
+            busy.verify_sentence(),
+            "Sign-in is busy right now. Try again in a moment."
+        );
+        assert_eq!(busy.sentence(), busy.verify_sentence());
     }
 
     #[test]
@@ -955,7 +1018,7 @@ mod tests {
         ] {
             assert_eq!(
                 local_sentence("too_many_requests", retry, None),
-                format!("Too many sign-in codes were sent to this address. Try again in {words}.")
+                format!("Too many sign-in codes were asked for. Try again in {words}.")
             );
         }
     }
@@ -1058,15 +1121,10 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn against_the_mock_a_code_from_another_request_is_refused_and_its_own_signs_in() {
         use crate::mock_account::{MockAccount, MockOptions};
-        let server = MockAccount::start_with(
-            "127.0.0.1:0".parse().unwrap(),
-            MockOptions {
-                code: None,
-                ..MockOptions::default()
-            },
-        )
-        .await
-        .unwrap();
+        let server =
+            MockAccount::start_with("127.0.0.1:0".parse().unwrap(), MockOptions::default())
+                .await
+                .unwrap();
         let url = server.url();
         tokio::task::spawn_blocking(move || {
             let mut http = crate::cloud_account::BlockingHttp::new();
@@ -1097,12 +1155,11 @@ mod tests {
                 server.code_for("here@example.test").unwrap(),
                 server.code_for("there@example.test").unwrap(),
             );
-            if code_here != code_there {
-                let refused =
-                    verify(&mut http, &url, &here.request_id, &mine, &code_there).unwrap_err();
-                assert_eq!(refused.code(), "invalid_code");
-                assert!(refused.sentence().starts_with("That code is not right."));
-            }
+            assert_ne!(code_here, code_there, "each request has its own code");
+            let refused =
+                verify(&mut http, &url, &here.request_id, &mine, &code_there).unwrap_err();
+            assert_eq!(refused.code(), "invalid_code");
+            assert!(refused.sentence().starts_with("That code is not right."));
             // This request's id with another secret: not this app's request.
             assert_eq!(
                 verify(&mut http, &url, &here.request_id, &theirs, &code_here)
