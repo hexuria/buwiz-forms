@@ -3,7 +3,7 @@
 import { signal, untracked, View } from "nsh";
 import type { BranchFieldName } from "../../bir";
 import { errorText } from "../../lib/errors";
-import { app, back, go, store, toast } from "../../shell";
+import { app, back, go, replace, store, toast } from "../../shell";
 import { DigitCells, Field, FieldCell, FieldGrid, FormActions, PageHeader, Switch, TextField } from "../../ui";
 import { SearchPick } from "../form/controls";
 import { BRANCH_CODE_ERROR, BRANCH_FIELDS, factError, shownErrors } from "./logic";
@@ -90,7 +90,8 @@ export function NewBranchPage() {
       return;
     }
     app.selectBranch(cur.code);
-    go("profile");
+    // In place of this form, as New taxpayer does: Back must not return to the form that made the branch.
+    replace("profile");
     toast(`${name} added.`);
   }
 
