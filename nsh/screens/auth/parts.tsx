@@ -5,6 +5,7 @@ import type { JSX } from "nsh";
 import { Scroll, View } from "nsh";
 import { Button } from "nsh/base";
 import { deviceCopy, Icon, Text, TOUCH, type IconName } from "../../ui";
+import { authScrollStyle } from "./signInLook";
 
 export { deviceCopy };
 
@@ -17,11 +18,18 @@ export const AUTH_SCROLL_CONTENT = TOUCH ? "grow items-center px-4 pt-6 pb-6" : 
 /**
  * The 400-wide card (the full width less 16 on each side when narrower) in a scroll view: centred in the window with a pointer,
  * near the top on touch. Being a scroll view, it is what NSH pads and scrolls when the keyboard covers its focused field
- * (nsh docs, Forms and the keyboard: "Inside scroll views: automatic"); a tap on a button while the keyboard is up presses it.
+ * (nsh docs, Forms and the keyboard: "Inside scroll views: automatic"); a tap on a button while the keyboard is up presses it. On
+ * touch it also ends at the keyboard's top (signInLook.ts authScrollStyle), so the whole card can be scrolled above it.
  */
 export function AuthCard(props: { testID: string; shadow?: boolean; children?: JSX.Element }) {
   return (
-    <Scroll testID="auth-scroll" keyboardShouldPersistTaps="handled" class="min-h-0 flex-1" contentClass={AUTH_SCROLL_CONTENT}>
+    <Scroll
+      testID="auth-scroll"
+      keyboardShouldPersistTaps="handled"
+      class="min-h-0 flex-1"
+      style={authScrollStyle(TOUCH)}
+      contentClass={AUTH_SCROLL_CONTENT}
+    >
       <View
         testID={props.testID}
         class={`w-full gap-4 rounded-(--radius-dialog) border border-border bg-card p-6 wide:p-8 ${props.shadow === false ? "" : "shadow-lg"}`}

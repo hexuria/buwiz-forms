@@ -20,3 +20,14 @@ export const SAID_SLOT = "min-h-5 w-full";
 export function codeActionsClass(touch: boolean): string {
   return touch ? "w-full gap-3" : "w-full flex-row flex-wrap justify-center gap-3";
 }
+
+/**
+ * The locked pages' scroll view (parts.tsx AuthCard) on touch ends at the keyboard's top: a bottom margin as tall as the
+ * keyboard (`env(keyboard-inset-height)`, 0 while it is down, moving with it). The page is a little taller than a phone held
+ * sideways, so without it the only room to scroll is what the platform makes for the focused field (the field, not the button
+ * under it): "Continue with email" stayed under the keyboard and could not be scrolled out. With it the whole card is in a
+ * viewport above the keyboard and scrolls in it. Nothing changes while the keyboard is down, nor with a pointer.
+ */
+export function authScrollStyle(touch: boolean): { marginBottom?: "env(keyboard-inset-height)" } {
+  return touch ? { marginBottom: "env(keyboard-inset-height)" } : {};
+}
