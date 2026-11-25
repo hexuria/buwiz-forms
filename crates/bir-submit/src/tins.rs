@@ -121,6 +121,10 @@ pub struct AccountTin {
     /// only when it is a page of [`ACCOUNT_SITE`] ([`pinned_account_url`]).
     /// For app-only surfaces, like `note`: it names the row's claim.
     pub action_url: Option<String>,
+    /// The server marks a test TIN (`"test_only": true`): its sends end in a
+    /// dry-run receipt and nothing reaches the BIR, whatever `status` and
+    /// `can_send` say. False when absent (servers before the field).
+    pub test_only: bool,
 }
 
 impl AccountTin {
@@ -147,6 +151,7 @@ impl AccountTin {
                 .unwrap_or_default(),
             note: text(&row["note"]),
             action_url: text(&row["action"]["url"]).and_then(|url| pinned_account_url(&url)),
+            test_only: row["test_only"].as_bool().unwrap_or(false),
         })
     }
 }
@@ -160,6 +165,7 @@ impl std::fmt::Debug for AccountTin {
             .field("reasons", &self.reasons.len())
             .field("note", &self.note.is_some())
             .field("action_url", &self.action_url.is_some())
+            .field("test_only", &self.test_only)
             .finish_non_exhaustive()
     }
 }
@@ -789,6 +795,29 @@ mod tests {
             assert_eq!(row.status, TinStatus::TestOnly);
             assert!(!row.can_send);
         }
+    }
+
+    /// Today's server lists its test TIN as approved and sendable, with
+    /// `"test_only": true`; an older server has no such field, which reads
+    /// as false.
+    #[test]
+    fn test_only_is_read_and_defaults_to_false() {
+        let body = json!({"include":"all","profiles":[
+            {"tin":"000-000-000-00000","registered_name":"TEST","status":"approved","can_send":true,"test_only":true},
+            {"tin":"000-123-453-00000","registered_name":"X","status":"approved","can_send":true},
+            {"tin":"000-123-454-00000","registered_name":"Y","status":"approved","can_send":true,"test_only":false},
+            {"tin":"000-123-455-00000","registered_name":"Z","status":"approved","can_send":true,"test_only":"yes"}
+        ]});
+        let list = AccountTins::parse(&body, 1);
+        assert_eq!(list.rows.len(), 4);
+        let test = &list.rows[0];
+        assert!(test.test_only);
+        assert_eq!(test.status, TinStatus::Approved);
+        assert!(test.can_send);
+        assert!(!list.rows[1].test_only, "absent");
+        assert!(!list.rows[2].test_only, "false");
+        assert!(!list.rows[3].test_only, "not a boolean");
+        assert!(format!("{test:?}").contains("test_only: true"));
     }
 
     #[tokio::test]
