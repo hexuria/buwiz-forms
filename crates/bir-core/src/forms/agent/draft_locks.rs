@@ -1539,9 +1539,22 @@ mod tests {
             status: FilingStatus,
             election: Item13Election,
         ) {
+            store_q1_sent(db, tin, year, status, election, |_| {});
+        }
+
+        /// [`store_q1`] with the send's facts as `sent` sets them (a dry run, a relay receipt).
+        fn store_q1_sent(
+            db: &Database,
+            tin: &str,
+            year: u16,
+            status: FilingStatus,
+            election: Item13Election,
+            sent: impl FnOnce(&mut Form2551QDraft),
+        ) {
             let mut q1 = draft(year, 1);
             q1.tin = tin.to_string();
             q1.item_13_election = election;
+            sent(&mut q1);
             let id = db.save_2551q_draft(&q1).unwrap();
             q1.id = Some(id);
             q1.status = status;
@@ -1610,6 +1623,58 @@ mod tests {
                         .all(|(field, _)| field != "item_13_election"),
                     "{status:?}"
                 );
+            }
+        }
+
+        #[test]
+        fn a_q1_only_simulated_leaves_item_13_open_and_a_relay_sent_one_locks_it() {
+            // The worker's dry run sent nothing: the later quarter keeps its own answer.
+            let db = Database::open_in_memory_for_tests().unwrap();
+            store_q1_sent(
+                &db,
+                &tin(),
+                2026,
+                FilingStatus::Submitted,
+                Item13Election::EightPercent,
+                |q1| q1.submitted_dry_run = true,
+            );
+            let mut q3 = draft(2026, 3);
+            q3.item_13_election = Item13Election::Graduated;
+            let q3 = opened(&db, q3);
+            assert_eq!(q3["item_13_election"], "graduated");
+            for key in item_13::KEYS {
+                assert_eq!(page_lock(kind("2551Q"), &q3, key), None, "{key}");
+            }
+            // Sent through the relay with a receipt (no dry run): it reached the BIR and locks.
+            let db = Database::open_in_memory_for_tests().unwrap();
+            store_q1_sent(
+                &db,
+                &tin(),
+                2026,
+                FilingStatus::Submitted,
+                Item13Election::EightPercent,
+                |q1| q1.relay_receipt = Some("a.b.c".into()),
+            );
+            let mut q3 = draft(2026, 3);
+            q3.item_13_election = Item13Election::Graduated;
+            let q3 = opened(&db, q3);
+            assert_eq!(q3["item_13_election"], "eight_percent");
+            for key in item_13::KEYS {
+                assert!(page_lock(kind("2551Q"), &q3, key).is_some(), "{key}");
+            }
+            // Confirmed and Paid lock even if a flag was left on them.
+            for status in [FilingStatus::Confirmed, FilingStatus::Paid] {
+                let db = Database::open_in_memory_for_tests().unwrap();
+                store_q1_sent(
+                    &db,
+                    &tin(),
+                    2026,
+                    status.clone(),
+                    Item13Election::EightPercent,
+                    |q1| q1.submitted_dry_run = true,
+                );
+                let q3 = opened(&db, draft(2026, 3));
+                assert_eq!(q3["item_13_election"], "eight_percent", "{status:?}");
             }
         }
 
