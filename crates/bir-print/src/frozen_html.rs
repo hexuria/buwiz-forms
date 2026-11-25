@@ -974,8 +974,9 @@ fn fit_line(sheet: &SheetType, width: f64, text: &str) -> f64 {
 const FIT_EPSILON_PT: f64 = 0.02;
 
 /// Minimum cell height (pt) for a plain text box to wrap onto two lines
-/// before shrinking (C7).
-const PLAIN_WRAP_MIN_HEIGHT_PT: f64 = 18.0;
+/// before shrinking (Rule 3: two lines at 7.5pt with 1.05 line-height need
+/// 16.125pt, allowing 16.56pt–16.68pt rows like 2200P Others to wrap).
+const PLAIN_WRAP_MIN_HEIGHT_PT: f64 = 16.2;
 
 /// Minimum readable type size (pt) for text in plain cells and converted
 /// rectangles (Rule 3). Below this floor, text is truncated with `"..."` and
@@ -1131,9 +1132,10 @@ fn wrap_and_truncate_two_lines(
 
 /// Fit `text` into plain input `tag` inside a cell of `(width, height)` pt:
 /// - If it fits on one line at the class's default size, returns `None` (unchanged).
-/// - If `allow_wrap && height >= 18pt`, wraps onto two lines before shrinking,
-///   never below 6.5 pt; if still too long, ends with `"..."` and marks `truncated`.
-/// - Otherwise shrinks on one line down to 6.5 pt; if still too long, ends with
+/// - If `allow_wrap && height >= PLAIN_WRAP_MIN_HEIGHT_PT`, wraps onto two lines
+///   before shrinking, never below `PLAIN_TEXT_MIN_PT` (7.5 pt); if still too long,
+///   ends with `"..."` and marks `truncated`.
+/// - Otherwise shrinks on one line down to 7.5 pt; if still too long, ends with
 ///   `"..."` and marks `truncated`.
 fn fit_plain_text(
     sheet: &SheetType,
@@ -1151,11 +1153,12 @@ fn fit_plain_text(
         return None;
     }
     let shrunk = shrunk_room(room);
-    let min_pt = PLAIN_TEXT_MIN_PT.min(default_size);
+    let min_pt = PLAIN_TEXT_MIN_PT;
+    let start_size = default_size.max(min_pt);
 
     if allow_wrap && height >= PLAIN_WRAP_MIN_HEIGHT_PT {
         let top_two_line =
-            floor_size((height / PLAIN_TWO_LINE_HEIGHT_FACTOR).min(default_size)).max(min_pt);
+            floor_size((height / PLAIN_TWO_LINE_HEIGHT_FACTOR).min(start_size)).max(min_pt);
         if let Some((l1, l2, sz)) = fit_two_lines(sheet, letter, shrunk, text, top_two_line, min_pt)
         {
             return Some(PlainTextFit {
@@ -1175,7 +1178,7 @@ fn fit_plain_text(
         }
     }
 
-    let single_size = sheet.fit(letter, shrunk, text, default_size);
+    let single_size = sheet.fit(letter, shrunk, text, start_size);
     if single_size >= min_pt {
         return Some(PlainTextFit {
             text: text.to_string(),
@@ -1193,10 +1196,10 @@ fn fit_plain_text(
         });
     }
     Some(PlainTextFit {
-        text: text.to_string(),
-        font_size_pt: single_size,
+        text: "...".to_string(),
+        font_size_pt: min_pt,
         two_lines: false,
-        truncated: false,
+        truncated: true,
     })
 }
 
@@ -5293,6 +5296,40 @@ fn overflow_input_with_fit(
             html_escape(&display)
         ),
     ))
+}
+
+/// Every official writer key mapped to a printed text or money box on `slug`,
+/// paired with whether its printed caption describes a non-numeric text box.
+/// Used by RULES 7 so official zero-default filling only targets boxes that
+/// actually print on the sheet (never internal or unprinted keys).
+pub fn printed_writer_keys(slug: &str) -> BTreeMap<String, bool> {
+    let mut keys = BTreeMap::new();
+    let Ok(wc) = writer_cells(slug) else {
+        return keys;
+    };
+    for (key, cids) in &wc.joins {
+        let caption = cids
+            .iter()
+            .filter_map(|cid| wc.captions.get(cid))
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_ascii_lowercase();
+        let is_text_only = (caption.contains("legal basis")
+            || caption.contains("registered activity")
+            || caption.contains("description")
+            || caption.contains("specify"))
+            && !caption.contains("amount")
+            && !caption.contains("tax")
+            && !caption.contains("rate")
+            && !caption.contains("number")
+            && !caption.contains("no.");
+        keys.insert(key.clone(), is_text_only);
+    }
+    for join in &wc.money_joins {
+        keys.insert(join.writer_key.clone(), false);
+    }
+    keys
 }
 
 /// [`printed_cell`] for every comb cell a filled document has, read in one
@@ -9904,11 +9941,11 @@ mod donor_estate_print_tests {
             ),
             (
                 "1801-2018",
-                "31ac6efa8d3e2f87fe4d8277c5a5ebeea16ed92dbbe389284c65b7ec7834bd15",
+                "cc52af4fcd819902b734d2477be7d1a0049fa1505bbccff235764e09e3e5bb17",
             ),
             (
                 "1800-2018",
-                "011875fad804b6bae856460cf118ab2666ebb6891f2d69a47ead1f25cba6575b",
+                "a0d3b160e58ef1d18941257c6ccdb7cf8e80b6f37b6f10325cdfb44defbdbe9d",
             ),
         ] {
             let html = filled_document(slug, &every_join_filled(slug)).unwrap();
@@ -10281,5 +10318,59 @@ mod donor_estate_print_tests {
             !rate_tag.contains("text-align:right"),
             "1600WP tax rate (non-money) must stay left-aligned: {rate_tag}"
         );
+    }
+
+    #[test]
+    fn rule3_2200p_others_wraps_at_7_5pt_and_never_drops_below_floor() {
+        let mut fields = BTreeMap::new();
+        let long_desc = "REFINED PETROLEUM NAPHTHA AND SPECIALIZED INDUSTRIAL LUBRICANT BLEND";
+        fields.insert("frm2200P:txtSched1Description26".into(), long_desc.into());
+        fields.insert(
+            "frm2200P:txtSched1Description27".into(),
+            "REFINED PETROLEUM NAPHTHA".into(),
+        );
+        let html = filled_document("2200p-2020", &fields).unwrap();
+
+        let p2c377 = super::input_tags(&html)
+            .into_iter()
+            .find(|t| t.name == "p2c377")
+            .expect("2200P Others row 1 description");
+        assert!(
+            p2c377.tag.contains("font-size:7.50pt"),
+            "2200P Others row 1 must stay at >= 7.50pt floor: {}",
+            p2c377.tag
+        );
+        assert!(
+            p2c377.tag.contains("&#10;") && p2c377.tag.contains("..."),
+            "2200P Others row 1 must wrap onto 2 lines then ellipsize: {}",
+            p2c377.tag
+        );
+        assert!(
+            p2c377
+                .tag
+                .contains("data-overflow-warning=\"text-truncated\""),
+            "2200P Others row 1 must trigger the additional sheet: {}",
+            p2c377.tag
+        );
+        assert!(
+            html.contains("page-continuation") && html.contains(long_desc),
+            "2200P full Others description must appear on the additional sheet"
+        );
+
+        let p2c391 = super::input_tags(&html)
+            .into_iter()
+            .find(|t| t.name == "p2c391")
+            .expect("2200P Others row 2 description");
+        assert!(
+            p2c391.tag.contains("&#10;") && !p2c391.tag.contains("..."),
+            "2200P Others row 2 medium text should wrap cleanly on 2 lines without truncating: {}",
+            p2c391.tag
+        );
+        let sz = super::attr(p2c391.tag, "style")
+            .and_then(|s| s.split("font-size:").nth(1))
+            .and_then(|s| s.split("pt").next())
+            .and_then(|s| s.parse::<f64>().ok())
+            .expect("font-size on p2c391");
+        assert!(sz >= 7.5, "p2c391 font-size {sz}pt went below 7.5pt floor");
     }
 }
