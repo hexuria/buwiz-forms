@@ -310,15 +310,16 @@ struct ShutdownGuard;
 
 impl Drop for ShutdownGuard {
     fn drop(&mut self) {
-        let _ = std::panic::catch_unwind(end_engine);
+        // The thread's locals are going (the logger's among them), so the shutdown's work runs on a thread of its own.
+        let _ = std::panic::catch_unwind(|| end_engine(bir_app_api::bir_module::shutdown_at_engine_end));
     }
 }
 
-/// This engine's end: its worker stopped, its database closed, and the booted module let go, so a later call on the
-/// same thread (a host that reuses its engine thread) boots and launches again instead of reusing a module whose
-/// launch has ended.
-fn end_engine() {
-    bir_app_api::bir_module::shutdown_for_quit();
+/// This engine's end: its worker stopped, its database closed (by `shutdown`), and the booted module let go, so a
+/// later call on the same thread (a host that reuses its engine thread) boots and launches again instead of reusing a
+/// module whose launch has ended.
+fn end_engine(shutdown: fn()) {
+    shutdown();
     let _ = BOOTED.try_with(|slot| slot.borrow_mut().take());
 }
 
@@ -530,7 +531,7 @@ pub fn database_path() -> PathBuf {
 
 /// Stop this engine's submission worker and close its database (the old host's quit path). A second call does nothing.
 pub fn shutdown() {
-    end_engine();
+    end_engine(bir_app_api::bir_module::shutdown_for_quit);
     // The print previews' files (a filled return each) go with the run.
     crate::print::remove_all();
 }

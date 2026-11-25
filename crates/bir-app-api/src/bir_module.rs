@@ -316,10 +316,9 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     });
 }
 
-/// Stop this engine's submission worker, if it runs one; the slot is empty
+/// Stop `engine`'s submission worker, if it runs one; the slot is empty
 /// afterwards. Another engine's worker is left alone, and the log says so.
-fn stop_this_engines_worker() {
-    let engine = this_engine();
+fn stop_worker_of(engine: u64) {
     let worker = {
         let mut slot = SUBMISSION_WORKER
             .lock()
@@ -375,8 +374,37 @@ pub fn shutdown_for_quit() {
         return;
     }
     LAUNCH_PENDING.with(|pending| pending.set(false));
-    stop_this_engines_worker();
-    release_database();
+    stop_worker_of(this_engine());
+    release_taken(take_database_slot());
+}
+
+/// [`shutdown_for_quit`] at an engine thread's end (the NSH door's guard,
+/// which runs while the thread's locals are being destroyed). Only taking
+/// this engine's slots happens on this thread; stopping the worker and
+/// closing the database run on a thread of their own, waited for. They log,
+/// and a log line reads thread locals of the logger's own (the fmt layer's
+/// buffer) that this thread may have destroyed already: a log line here
+/// panics, the panic hook's own log line panics again, and the process aborts.
+pub fn shutdown_at_engine_end() {
+    // No destructors on these three, so they are still there.
+    if ENGINE_SHUT_DOWN.with(|done| done.replace(true)) {
+        return;
+    }
+    LAUNCH_PENDING.with(|pending| pending.set(false));
+    let engine = this_engine();
+    let slot = take_database_slot();
+    let ended = std::thread::Builder::new()
+        .name("bir-engine-end".into())
+        .spawn(move || {
+            stop_worker_of(engine);
+            release_taken(slot);
+        });
+    // With no thread to run on, the closure is dropped unrun: the handle goes
+    // with it (the owner lock too, when it was the last holder), the worker is
+    // left running, and nothing can say so here.
+    if let Ok(thread) = ended {
+        let _ = thread.join();
+    }
 }
 
 /// Make this thread's database slots before its end guard (the NSH door
@@ -389,21 +417,40 @@ pub fn prepare_engine() {
     READER.with(|_| ());
 }
 
-fn release_database() {
-    // `try_with`: at an engine thread's end a slot may already be gone (its
-    // handle dropped with it), which is not a reason to stop here.
+/// What [`take_database_slot`] found in this thread's database slot.
+enum TakenSlot {
+    /// Destroyed before the engine's end ran (its handle dropped with it).
+    Gone,
+    Empty,
+    Held(std::sync::Arc<std::sync::Mutex<Database>>),
+}
+
+/// Empty this thread's database slots, without logging (see
+/// [`shutdown_at_engine_end`]). The reader is dropped here: it is this
+/// thread's alone.
+fn take_database_slot() -> TakenSlot {
+    // `try_with`: at an engine thread's end a slot may already be gone, which
+    // is not a reason to stop here.
     let _ = READER.try_with(|slot| slot.borrow_mut().take());
     match DATABASE.try_with(|slot| slot.borrow_mut().take()) {
-        Err(_) => {
+        Err(_) => TakenSlot::Gone,
+        Ok(None) => TakenSlot::Empty,
+        Ok(Some(handle)) => {
+            RELEASED.set(false);
+            TakenSlot::Held(handle)
+        }
+    }
+}
+
+fn release_taken(slot: TakenSlot) {
+    match slot {
+        TakenSlot::Gone => {
             tracing::warn!(
                 "database slot already gone at the engine's end; its handle went with it"
             );
         }
-        Ok(None) => {}
-        Ok(Some(handle)) => {
-            RELEASED.set(false);
-            close_handle(handle);
-        }
+        TakenSlot::Empty => {}
+        TakenSlot::Held(handle) => close_handle(handle),
     }
 }
 
@@ -5842,6 +5889,9 @@ mod tests {
                 "BIR_DATABASE_PATH",
                 scratch.path().join("data").join("bir_data.db"),
             )
+            // A child that installs the app's logger writes its files here, at info.
+            .env("BIR_LOG_DIR", scratch.path().join("logs"))
+            .env("RUST_LOG", "info")
             .env("EBIR_TEST_ENV", "1")
             .env("BIR_AUTH_BYPASS", "1")
             .env("BUWIZ_NO_KEYCHAIN", "1")
@@ -6024,6 +6074,78 @@ mod tests {
                 "engine {month}: the lock is free for the next"
             );
         }
+        std::fs::write(scratch.join("child-done"), "ok").unwrap();
+    }
+
+    /// The door's end guard is a thread local, armed before the engine first
+    /// logs, so at the thread's end the logger's own per-thread buffer is
+    /// destroyed before the guard runs. Here the end logs (the worker is
+    /// another engine's) with the app's logger and panic hook installed: before,
+    /// that log line panicked, the panic hook's own log line panicked again and
+    /// the process aborted (14 screen-test files on macOS). Now the engine ends,
+    /// the other engine's worker runs on, and that engine's end frees the lock.
+    #[test]
+    fn an_engine_end_that_logs_while_its_thread_goes_does_not_abort() {
+        run_engine_child("an_engine_end_that_logs_while_its_thread_goes_does_not_abort");
+        let Some(scratch) = engine_child() else {
+            return;
+        };
+        assert!(bir_core::logging::install(
+            bir_core::logging::InstallOptions {
+                developer_mode: false,
+                default_filter: "info",
+            }
+        ));
+
+        struct DoorGuard;
+        impl Drop for DoorGuard {
+            fn drop(&mut self) {
+                let _ = std::panic::catch_unwind(shutdown_at_engine_end);
+            }
+        }
+        thread_local! {
+            static ARMED: DoorGuard = const { DoorGuard };
+        }
+
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _end = EngineEnd;
+                    open_database_at_launch();
+                    assert!(
+                        submission_worker_runs_for_this_engine(),
+                        "engine A started the worker"
+                    );
+                    scope
+                        .spawn(|| {
+                            // As the door boots an engine: the slots, the guard, then the first log line.
+                            prepare_engine();
+                            ARMED.with(|_| {});
+                            tracing::info!("engine B boots");
+                        })
+                        .join()
+                        .expect("engine B's thread ends without a panic");
+                    assert!(
+                        submission_worker_runs_for_this_engine(),
+                        "engine B's end left engine A's worker running"
+                    );
+                })
+                .join()
+                .expect("engine A");
+        });
+        assert!(
+            !submission_worker_started(),
+            "engine A's worker went with it"
+        );
+        assert!(owner_lock_is_free(), "engine A's end freed the lock");
+        let logs = std::fs::read_dir(scratch.join("logs"))
+            .unwrap()
+            .map(|entry| std::fs::read_to_string(entry.unwrap().path()).unwrap_or_default())
+            .collect::<String>();
+        assert!(
+            logs.contains("quit on a thread that did not start the submission worker"),
+            "engine B's end said why it stopped nothing"
+        );
         std::fs::write(scratch.join("child-done"), "ok").unwrap();
     }
 
