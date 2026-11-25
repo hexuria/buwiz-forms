@@ -39,3 +39,107 @@ test("desktop: an approved owner with a PIN gets the sign-in next", async () => 
   await app.waitFor("id:auth-card");
   expect(app.shows("id:frame")).toBe(false);
 });
+
+// The sign-in flow's cards on the gate (screens/auth/signInFlow.ts), at phone size and at desktop size. "hold" keeps the wait going
+// until Cancel or the fixture's "Test: approve" / "Test: expire"; nothing reaches the network.
+const EXPIRED = "The sign-in code expired before it was approved. Press Sign in again for a new code.";
+const SIZES = [
+  { name: "phone", size: {}, device: "this device" },
+  { name: "desktop", size: WIDE, device: "this computer" },
+] as const;
+
+for (const { name, size, device } of SIZES) {
+  const at = (params: Record<string, unknown>) => open(ENTRY, { ...size, host: { params: { gate: true, begin: "code", finish: "hold", readout: true, ...params } } });
+  /** No address of the page, no "Waiting…" button: what the owner saw and rejected. */
+  const expectNoRawAddress = (texts: string[]) => {
+    expect(texts.some((t) => t.includes("http://") || t.includes("https://") || t.includes("user_code"))).toBe(false);
+    expect(texts).not.toContain("Waiting…");
+  };
+
+  test(`${name}: the browser opened: its card shows the code with Copy, Open the page again reopens it, the approval goes Home`, async () => {
+    const app = await at({ opened: true, demo: true, mode: "solo", firstRun: false });
+    await app.waitFor("id:gate-card");
+    await app.press("id:gate-sign-in");
+    await app.waitFor("id:gate-wait-card");
+    expect(app.texts()).toContain("Finish signing in in your browser");
+    expect(app.texts()).toContain(`Approve ${device} in the page that opened, then come back here.`);
+    expect(app.texts()).toContain("WXYZ-2345");
+    expect(app.texts()).toContain("Open the page again");
+    expect(app.texts()).toContain("Cancel");
+    expect(app.shows("id:gate-address")).toBe(false);
+    expect(app.shows("id:gate-sign-in")).toBe(false);
+    expectNoRawAddress(app.texts());
+    await app.press("id:gate-code-copy");
+    await app.waitFor("text:Copied WXYZ-2345");
+    expect(app.clipboard()).toBe("WXYZ-2345");
+    await app.press("id:gate-reopen");
+    await app.waitFor("text:/cloud_account_reopen_sign_in/");
+    expect(app.shows("id:gate-wait-card")).toBe(true);
+    await app.press("id:demo-approve");
+    await app.waitFor("id:frame", { timeout: 15000 });
+    expect(app.shows("id:gate-root")).toBe(false);
+    expect(app.texts()).toContain("calls: cloud_account_begin_sign_in,cloud_account_finish_sign_in,cloud_account_reopen_sign_in,cloud_account_session_opened");
+  }, 60_000);
+
+  test(`${name}: nothing opened: the short address and the code, each with Copy; tapping the address opens the page`, async () => {
+    const app = await at({});
+    await app.waitFor("id:gate-card");
+    await app.press("id:gate-create-account");
+    await app.waitFor("id:gate-wait-card");
+    expect(app.texts()).toContain("Open the sign-in page");
+    expect(app.texts()).toContain(`Go to this address in a browser, sign in, and enter the code to approve ${device}.`);
+    expect(app.texts()).toContain("localhost:3008/device");
+    expect(app.texts()).toContain("WXYZ-2345");
+    expect(app.texts()).toContain("Try opening it again");
+    expectNoRawAddress(app.texts());
+    await app.press("id:gate-address-copy");
+    await app.waitFor("text:Copied localhost:3008/device");
+    expect(app.clipboard()).toBe("localhost:3008/device");
+    await app.press("id:gate-code-copy");
+    await app.waitFor("text:Copied WXYZ-2345");
+    expect(app.clipboard()).toBe("WXYZ-2345");
+    // The address is a link: it opens the page, and once it opened the card is the browser's.
+    await app.press("id:gate-address-value");
+    await app.waitFor("text:Finish signing in in your browser");
+    expect(app.texts()).toContain("calls: cloud_account_begin_sign_up,cloud_account_finish_sign_in,cloud_account_reopen_sign_in");
+  }, 60_000);
+
+  test(`${name}: Try opening it again that opens nothing keeps the address and says so`, async () => {
+    const app = await at({ reopen: false });
+    await app.waitFor("id:gate-card");
+    await app.press("id:gate-sign-in");
+    await app.waitFor("id:gate-wait-card");
+    await app.press("id:gate-reopen");
+    await app.waitFor("text:The browser did not open. Go to the address shown instead.");
+    expect(app.texts()).toContain("Open the sign-in page");
+    expect(app.texts()).toContain("localhost:3008/device");
+  }, 60_000);
+
+  test(`${name}: Cancel brings the two buttons back with nothing to say, and Sign in works again`, async () => {
+    const app = await at({ opened: true });
+    await app.waitFor("id:gate-card");
+    await app.press("id:gate-sign-in");
+    await app.waitFor("id:gate-wait-card");
+    await app.press("id:gate-cancel");
+    await app.waitFor("id:gate-card");
+    expect(app.texts()).toContain(`Sign in with your Buwiz account to use eBIRForms on ${device}.`);
+    expect(app.enabled("id:gate-sign-in")).toBe(true);
+    expect(app.enabled("id:gate-create-account")).toBe(true);
+    expect(app.texts()).toContain("calls: cloud_account_begin_sign_in,cloud_account_finish_sign_in,cloud_account_cancel_sign_in");
+    await app.press("id:gate-sign-in");
+    await app.waitFor("id:gate-wait-card");
+    expect(app.texts()).toContain("calls: cloud_account_begin_sign_in,cloud_account_finish_sign_in,cloud_account_cancel_sign_in,cloud_account_begin_sign_in,cloud_account_finish_sign_in");
+  }, 60_000);
+
+  test(`${name}: an expired code brings the two buttons back with the expiry sentence`, async () => {
+    const app = await at({ opened: true });
+    await app.waitFor("id:gate-card");
+    await app.press("id:gate-sign-in");
+    await app.waitFor("id:gate-wait-card");
+    await app.press("id:demo-expire");
+    await app.waitFor(`text:${EXPIRED}`);
+    expect(app.shows("id:gate-card")).toBe(true);
+    expect(app.enabled("id:gate-sign-in")).toBe(true);
+    expect(app.enabled("id:gate-create-account")).toBe(true);
+  }, 60_000);
+}

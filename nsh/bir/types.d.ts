@@ -229,8 +229,12 @@ export interface CloudAccountStatus {
 export interface CloudSignInStart {
     user_code: string;
     verification_uri: string;
-    verification_uri_complete: string;
+    short_uri: string;
     browser_opened: boolean;
+}
+export interface CloudSignInFinish {
+    outcome: "approved" | "cancelled" | "expired";
+    status: CloudAccountStatus;
 }
 export interface CloudAccountGate {
     unlocked: boolean;
@@ -243,7 +247,9 @@ export function cloud_account_status(): CloudAccountStatus;
 export function cloud_account_gate(): CloudAccountGate;
 export function cloud_account_begin_sign_in(): Promise<CloudSignInStart>;
 export function cloud_account_begin_sign_up(): Promise<CloudSignInStart>;
-export function cloud_account_finish_sign_in(): Promise<CloudAccountStatus>;
+export function cloud_account_finish_sign_in(): Promise<CloudSignInFinish>;
+export function cloud_account_cancel_sign_in(): null;
+export function cloud_account_reopen_sign_in(): Promise<boolean>;
 export function cloud_account_refresh(): Promise<CloudAccountStatus>;
 export function cloud_account_sign_out(): Promise<CloudAccountStatus>;
 export function cloud_account_session_opened(): null;

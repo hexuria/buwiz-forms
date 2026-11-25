@@ -5,7 +5,8 @@
 //! a mode-0600 file beside the database — the same fallback the database key
 //! uses when the keychain is missing. The page cannot read either store.
 
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bir_core::cloud_account::{
@@ -33,8 +34,12 @@ export interface CloudAccountStatus {
 export interface CloudSignInStart {
     user_code: string;
     verification_uri: string;
-    verification_uri_complete: string;
+    short_uri: string;
     browser_opened: boolean;
+}
+export interface CloudSignInFinish {
+    outcome: "approved" | "cancelled" | "expired";
+    status: CloudAccountStatus;
 }
 export interface CloudAccountGate {
     unlocked: boolean;
@@ -47,14 +52,27 @@ export function cloud_account_status(): CloudAccountStatus;
 export function cloud_account_gate(): CloudAccountGate;
 export function cloud_account_begin_sign_in(): Promise<CloudSignInStart>;
 export function cloud_account_begin_sign_up(): Promise<CloudSignInStart>;
-export function cloud_account_finish_sign_in(): Promise<CloudAccountStatus>;
+export function cloud_account_finish_sign_in(): Promise<CloudSignInFinish>;
+export function cloud_account_cancel_sign_in(): null;
+export function cloud_account_reopen_sign_in(): Promise<boolean>;
 export function cloud_account_refresh(): Promise<CloudAccountStatus>;
 export function cloud_account_sign_out(): Promise<CloudAccountStatus>;
 export function cloud_account_session_opened(): null;
 export function cloud_account_session_closed(): null;
 "#;
 
-static PENDING: Mutex<Option<DeviceChallenge>> = Mutex::new(None);
+/// The device sign-in that is waiting for its approval: the code, the page opened for it, and the switch that stops its
+/// wait.
+struct Pending {
+    challenge: DeviceChallenge,
+    page: String,
+    stop: Arc<AtomicBool>,
+}
+
+static PENDING: Mutex<Option<Pending>> = Mutex::new(None);
+
+/// The longest a Cancel waits for the poll to notice it.
+const STOP_SLICE: Duration = Duration::from_millis(200);
 
 pub fn register(module: HostModule) -> HostModule {
     module
@@ -63,6 +81,8 @@ pub fn register(module: HostModule) -> HostModule {
         .async_function("cloud_account_begin_sign_in", begin_sign_in)
         .async_function("cloud_account_begin_sign_up", begin_sign_up)
         .async_function("cloud_account_finish_sign_in", finish_sign_in)
+        .function("cloud_account_cancel_sign_in", |_| cancel_sign_in())
+        .async_function("cloud_account_reopen_sign_in", reopen_sign_in)
         .async_function("cloud_account_refresh", refresh_account)
         .async_function("cloud_account_sign_out", sign_out)
         .function("cloud_account_session_opened", |_| session_opened())
@@ -136,30 +156,77 @@ fn begin_browser(
             cloud_account::start_device(&mut http, &resolved.url, cloud_account::unix_now())
                 .map_err(host_error)?;
         let url = cloud_account::account_browser_url(&account.url, entry, &challenge.user_code);
+        // The page itself is never shown: only the short address (for typing) and the code are.
+        let user_code = challenge.user_code.clone();
+        let verification_uri = challenge.verification_uri.clone();
+        set_pending(challenge, url.clone());
         let browser_opened = cloud_account::open_browser(&url).is_ok();
-        let started = HostObject::new()
-            .field("user_code", challenge.user_code.clone())
-            .field("verification_uri", challenge.verification_uri.clone())
-            .field("verification_uri_complete", url)
+        Ok(HostObject::new()
+            .field("user_code", user_code)
+            .field("short_uri", cloud_account::short_address(&verification_uri))
+            .field("verification_uri", verification_uri)
             .field("browser_opened", browser_opened)
-            .into();
-        *pending_lock() = Some(challenge);
-        Ok(started)
+            .into())
     })
+}
+
+/// A new sign-in replaces the one waiting, whose wait stops.
+fn set_pending(challenge: DeviceChallenge, page: String) {
+    let previous = pending_lock().replace(Pending {
+        challenge,
+        page,
+        stop: Arc::new(AtomicBool::new(false)),
+    });
+    if let Some(previous) = previous {
+        previous.stop.store(true, Ordering::SeqCst);
+    }
 }
 
 fn finish_sign_in(
     _arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
-    let challenge = pending_lock()
-        .take()
-        .ok_or_else(|| HostError::new("Sign-in has not started. Press Sign in again."))?;
+    finish_pending(BlockingHttp::new())
+}
+
+/// Waits for the pending sign-in's approval with `http`. The pending record stays while it waits (Open again reopens
+/// its page; Cancel stops it), and goes when the wait ends, however it ends. Cancelled and expired are answers, not
+/// errors.
+fn finish_pending<H: cloud_account::Http + Send + 'static>(
+    mut http: H,
+) -> Result<impl std::future::Future<Output = HostResult> + Send + use<H>, HostError> {
+    let (challenge, stop) = {
+        let pending = pending_lock();
+        let pending = pending
+            .as_ref()
+            .ok_or_else(|| HostError::new("Sign-in has not started. Press Sign in again."))?;
+        (pending.challenge.clone(), Arc::clone(&pending.stop))
+    };
     spawn_account("buwiz-account-finish", move || {
-        let mut http = BlockingHttp::new();
+        let stopped = || stop.load(Ordering::SeqCst);
         let mut now = cloud_account::unix_now;
-        let mut sleep = |delay: Duration| std::thread::sleep(delay);
-        let tokens = cloud_account::poll_until(&mut http, &challenge, &mut now, &mut sleep)
-            .map_err(host_error)?;
+        let mut sleep = |delay: Duration| {
+            cloud_account::sleep_unless_stopped(
+                delay,
+                STOP_SLICE,
+                &mut || stopped(),
+                &mut |piece| std::thread::sleep(piece),
+            )
+        };
+        let polled = cloud_account::poll_until_stopped(
+            &mut http,
+            &challenge,
+            &mut now,
+            &mut sleep,
+            &mut || stopped(),
+        );
+        forget_pending(&challenge.device_code);
+        let tokens = match polled {
+            Ok(_) if stopped() => return finish_value("cancelled"),
+            Ok(tokens) => tokens,
+            Err(CloudError::Cancelled) => return finish_value("cancelled"),
+            Err(CloudError::TimedOut) => return finish_value("expired"),
+            Err(error) => return Err(host_error(error)),
+        };
         if tokens.refresh_token.is_empty() {
             return Err(HostError::new(
                 "The server did not return a refresh token. Sign in again.",
@@ -186,8 +253,50 @@ fn finish_sign_in(
         }
         // A new sign-in registers a new device key with the relay (the old one belonged to the old sign-in).
         bir_core::relay::forget_device();
-        status_now()
+        finish_value("approved")
     })
+}
+
+fn finish_value(outcome: &str) -> HostResult {
+    Ok(HostObject::new()
+        .field("outcome", outcome)
+        .field("status", status_now()?)
+        .into())
+}
+
+/// Cancel: the waiting sign-in stops (its poll notices within [`STOP_SLICE`]) and is forgotten, so Sign in starts a new
+/// one. Nothing waiting: nothing to do.
+fn cancel_sign_in() -> HostResult {
+    clear_pending();
+    Ok(HostValue::Null)
+}
+
+/// Open the sign-in page again: the same page, for the same code, in the browser. Answers whether it opened.
+fn reopen_sign_in(
+    _arguments: &HostArguments,
+) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
+    let page = pending_page()?;
+    spawn_account("buwiz-account-reopen", move || {
+        Ok(HostValue::Bool(cloud_account::open_browser(&page).is_ok()))
+    })
+}
+
+fn pending_page() -> Result<String, HostError> {
+    pending_lock()
+        .as_ref()
+        .map(|pending| pending.page.clone())
+        .ok_or_else(|| HostError::new("No sign-in is waiting. Press Sign in again."))
+}
+
+/// Forgets the pending sign-in if it is still the one with `device_code` (a newer one stays).
+fn forget_pending(device_code: &str) {
+    let mut pending = pending_lock();
+    if pending
+        .as_ref()
+        .is_some_and(|pending| pending.challenge.device_code == device_code)
+    {
+        *pending = None;
+    }
 }
 
 fn refresh_account(
@@ -424,14 +533,17 @@ fn host_error(error: impl std::fmt::Display) -> HostError {
     HostError::new(error.to_string())
 }
 
-fn pending_lock() -> std::sync::MutexGuard<'static, Option<DeviceChallenge>> {
+fn pending_lock() -> std::sync::MutexGuard<'static, Option<Pending>> {
     PENDING
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// Stops and forgets the waiting sign-in, if any.
 fn clear_pending() {
-    *pending_lock() = None;
+    if let Some(pending) = pending_lock().take() {
+        pending.stop.store(true, Ordering::SeqCst);
+    }
 }
 
 /// Server origin and the user access token, when this computer is signed in.
@@ -544,6 +656,95 @@ mod tests {
             .unwrap();
         let _ = std::fs::remove_dir_all(&scratch);
         assert!(status.success(), "startup did not drop buwiz_server_url");
+    }
+
+    /// A server that never approves (no network: the test's own answer).
+    struct NeverApproved;
+    impl cloud_account::Http for NeverApproved {
+        fn exchange(
+            &mut self,
+            _: &cloud_account::HttpRequest,
+        ) -> Result<cloud_account::HttpResponse, CloudError> {
+            Ok(cloud_account::HttpResponse {
+                status: 400,
+                body: r#"{"error":"authorization_pending"}"#.into(),
+            })
+        }
+    }
+
+    fn waiting_challenge(device_code: &str) -> DeviceChallenge {
+        DeviceChallenge {
+            server_url: "http://127.0.0.1:9".into(),
+            device_code: device_code.into(),
+            user_code: "WXYZ-2345".into(),
+            verification_uri: "http://127.0.0.1:9/device".into(),
+            verification_uri_complete: "http://127.0.0.1:9/device?user_code=WXYZ-2345".into(),
+            interval: Duration::from_secs(5),
+            expires_at_unix: cloud_account::unix_now() + 900,
+        }
+    }
+
+    fn outcome(value: HostValue) -> String {
+        let json = crate::bir_module::to_json(&value);
+        json["outcome"].as_str().unwrap_or_default().to_owned()
+    }
+
+    /// Cancel, Open again and a new sign-in, one after another (they share the one pending sign-in, so one test).
+    #[test]
+    fn cancel_stops_the_wait_promptly_and_a_new_sign_in_starts_clean() {
+        use_ephemeral_database();
+        clear_pending();
+        // Nothing waiting: Open again says so, Cancel is harmless, finishing is refused.
+        let error = pending_page().unwrap_err();
+        assert_eq!(
+            error.message(),
+            "No sign-in is waiting. Press Sign in again."
+        );
+        assert!(matches!(cancel_sign_in(), Ok(HostValue::Null)));
+        assert!(finish_pending(NeverApproved).is_err());
+
+        for device_code in ["first", "second"] {
+            set_pending(
+                waiting_challenge(device_code),
+                "http://127.0.0.1:9/login".into(),
+            );
+            assert_eq!(pending_page().unwrap(), "http://127.0.0.1:9/login");
+            let waiting = finish_pending(NeverApproved).expect("the wait starts");
+            // Let the poll reach its 5-second sleep, then cancel.
+            std::thread::sleep(Duration::from_millis(300));
+            let cancelled_at = std::time::Instant::now();
+            cancel_sign_in().unwrap();
+            let answer =
+                futures::executor::block_on(waiting).expect("cancelled is an answer, not an error");
+            assert!(
+                cancelled_at.elapsed() < Duration::from_millis(600),
+                "the wait noticed the Cancel late: {:?}",
+                cancelled_at.elapsed()
+            );
+            assert_eq!(outcome(answer), "cancelled");
+            assert!(pending_lock().is_none(), "Cancel forgets the code");
+            assert!(pending_page().is_err());
+        }
+
+        // A second Sign in while one waits stops the first wait; the second stays pending.
+        set_pending(waiting_challenge("old"), "http://127.0.0.1:9/old".into());
+        let old = finish_pending(NeverApproved).unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        set_pending(waiting_challenge("new"), "http://127.0.0.1:9/new".into());
+        assert_eq!(
+            outcome(futures::executor::block_on(old).unwrap()),
+            "cancelled"
+        );
+        assert_eq!(pending_page().unwrap(), "http://127.0.0.1:9/new");
+        clear_pending();
+    }
+
+    #[test]
+    fn the_host_answer_names_no_full_page_address() {
+        assert!(!DECLARATIONS.contains("verification_uri_complete"));
+        assert!(DECLARATIONS.contains("short_uri"));
+        assert!(DECLARATIONS.contains("cloud_account_cancel_sign_in"));
+        assert!(DECLARATIONS.contains("cloud_account_reopen_sign_in"));
     }
 
     fn delete_saved_server_url_on_startup() {

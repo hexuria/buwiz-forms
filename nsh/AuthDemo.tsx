@@ -9,6 +9,10 @@
 //   gate      true: the Buwiz account gate is closed (the host's gate answer is replaced; the dev bypass would open it)
 //   begin     "refuse": Sign in / Create account are refused by the host call (no network in a test); "code": they answer
 //             a device code (browser not opened) and the approval then succeeds
+//   opened    true: the browser opened for the code (the "Finish signing in in your browser" card)
+//   finish    "approve" (default): approved at once; "hold": the wait lasts until Cancel or the buttons "Test: approve" /
+//             "Test: expire"; "expire": the code expires at once
+//   reopen    false: Open the page again / Try opening it again does not open anything (default: it opens)
 //   lock      true: the sign-in screen once the frame is up, whatever the codes (to show "Open without signing in")
 //   readout   true: print the session and what the session can see (returns, deadlines by TIN root) at the top right
 //   start     the dev route            firstRun  default true
@@ -39,6 +43,9 @@ interface Params {
   recent?: boolean;
   gate?: boolean;
   begin?: "refuse" | "code";
+  opened?: boolean;
+  finish?: "approve" | "hold" | "expire";
+  reopen?: boolean;
   readout?: boolean;
   lock?: boolean;
   authFails?: string;
@@ -53,6 +60,8 @@ const SECOND = { root: "000111229", name: "Sample Trading Corp" };
 /** The host functions the app called that this fixture answers (the readout lists them). */
 const calls = signal<string[]>([]);
 const called = (name: string) => calls.set([...calls(), name]);
+/** The held wait of finish "hold": answers it (approved, expired, cancelled). */
+let held: ((outcome: "approved" | "expired" | "cancelled") => void) | null = null;
 /** The help desk's recovery key, as setup_helpdesk answered it (the readout shows it). */
 let recoveryKey = "";
 
@@ -97,15 +106,32 @@ function fakeAccount(p: Params): void {
   }
   const begin = (name: string) => async () => {
     called(name);
-    if (p.begin === "code") return { user_code: "WXYZ-2345", verification_uri: "http://localhost:3008/device", verification_uri_complete: "http://localhost:3008/login?next=%2Fdevice%3Fuser_code%3DWXYZ-2345", browser_opened: false };
+    if (p.begin === "code") return { user_code: "WXYZ-2345", verification_uri: "http://localhost:3008/device", short_uri: "localhost:3008/device", browser_opened: p.opened === true };
     throw new Error("Could not reach the Buwiz server at http://localhost:3008. Check the connection and try again.");
   };
   if (p.begin) {
+    const approved = { server_url: "http://localhost:3008", server_url_source: "build", signed_in: true, email: "demo@example.com", user_id: "demo", offline: false, practice: false, detail: "" };
     h.cloud_account_begin_sign_in = begin("cloud_account_begin_sign_in");
     h.cloud_account_begin_sign_up = begin("cloud_account_begin_sign_up");
-    h.cloud_account_finish_sign_in = async () => {
+    h.cloud_account_finish_sign_in = () => {
       called("cloud_account_finish_sign_in");
-      return { server_url: "http://localhost:3008", server_url_source: "build", signed_in: true, email: "demo@example.com", user_id: "demo", offline: false, detail: "" };
+      if (p.finish === "expire") return Promise.resolve({ outcome: "expired", status: { ...approved, signed_in: false } });
+      if (p.finish !== "hold") return Promise.resolve({ outcome: "approved", status: approved });
+      return new Promise((resolve) => {
+        held = (outcome) => {
+          held = null;
+          resolve({ outcome, status: outcome === "approved" ? approved : { ...approved, signed_in: false } });
+        };
+      });
+    };
+    h.cloud_account_cancel_sign_in = () => {
+      called("cloud_account_cancel_sign_in");
+      held?.("cancelled");
+      return null;
+    };
+    h.cloud_account_reopen_sign_in = async () => {
+      called("cloud_account_reopen_sign_in");
+      return p.reopen !== false;
     };
   }
 }
@@ -198,6 +224,10 @@ function Demo() {
       <View class="absolute bottom-0 right-0 flex-row gap-1">
         <If when={Boolean(p.authFails)}>
           <AppButton testID="demo-auth-heal" label="Test: heal auth" size="sm" onPress={() => authBroken.set(false)} />
+        </If>
+        <If when={p.finish === "hold"}>
+          <AppButton testID="demo-approve" label="Test: approve" size="sm" onPress={() => held?.("approved")} />
+          <AppButton testID="demo-expire" label="Test: expire" size="sm" onPress={() => held?.("expired")} />
         </If>
         <If when={p.polls === true}>
           <AppButton testID="demo-toast" label="Test: toast" size="sm" onPress={() => app.toast("A note for the person at the keyboard.")} />

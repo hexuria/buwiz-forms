@@ -1,15 +1,37 @@
 // Settings > Account > Buwiz (old AccountCard): the cloud account. Separate from the PIN that unlocks this computer. Filing keeps
-// working when the server is unreachable.
-import { openUrl } from "nsh";
-import { AppButton, Card, deviceCopy, Line, SettingRow } from "../../ui";
+// working when the server is unreachable. Signing in is the shared flow (screens/auth/signInFlow.ts): while the person approves,
+// the card is that flow's waiting card (the code with Copy, Open the page again, Cancel), drawn as on the gate.
+import { openUrl, View } from "nsh";
+import { AppButton, Card, deviceCopy, Line, SettingRow, Text } from "../../ui";
+import { FlowCardBody, StartButton } from "../auth/signInCards";
+import { flowCard, signInFlow, startMessage } from "../auth/signInFlow";
 import { cloud, openAccount, signIn, signOut } from "./cloud";
 import { accountHint, deletionRequestUrl, serverHint, showsServer } from "./logic";
 
 export function BuwizCard() {
   openAccount();
   const status = () => cloud.status();
+  const card = () => (status().signed_in ? null : flowCard(signInFlow.state()));
+  return (
+    <If when={card()} else={<AccountCard />}>
+      <Card testID="settings-account">
+        <View testID="settings-account-wait" class="w-full gap-3 py-3.5">
+          <Text variant="control" testID="settings-account-wait-title">{card()!.title}</Text>
+          <FlowCardBody card={card()!} prefix="settings-account" />
+        </View>
+      </Card>
+    </If>
+  );
+}
+
+/** The account: who is signed in (or Sign in), the server, a practice account, deletion. */
+function AccountCard() {
+  const status = () => cloud.status();
   const who = () => (status().signed_in ? status().email || status().user_id || "Signed in" : "Not signed in");
-  const hint = () => deviceCopy(cloud.busy() ? status().detail || "Waiting…" : cloud.failure() || accountHint(who(), status().detail || ""));
+  const hint = () => {
+    const said = status().signed_in ? null : startMessage(signInFlow.state());
+    return deviceCopy(said?.text ?? cloud.failure() ?? accountHint(who(), status().detail || ""));
+  };
   return (
     <Card testID="settings-account">
       <If when={showsServer(status())}>
@@ -20,16 +42,7 @@ export function BuwizCard() {
       <SettingRow testID="settings-account-who" title={who()} hint={hint()}>
         <If
           when={status().signed_in}
-          else={
-            <AppButton
-              testID="settings-account-sign-in"
-              label={cloud.busy() ? "Waiting…" : "Sign in"}
-              variant="primary"
-              size="sm"
-              disabled={cloud.busy()}
-              onPress={() => void signIn()}
-            />
-          }
+          else={<StartButton entry="sign-in" testID="settings-account-sign-in" label="Sign in" primary onStart={() => void signIn()} />}
         >
           <AppButton
             testID="settings-account-sign-out"

@@ -36,11 +36,3 @@ export function wrongCode(totp: boolean, taxpayerHasNoCode: boolean): string {
   if (taxpayerHasNoCode) return "That taxpayer has no PIN yet. Ask the admin to open it.";
   return totp ? "Wrong TIN or code. Try again." : "Wrong TIN or PIN. Try again.";
 }
-
-/** The gate's line while the browser approves this computer (old startAccountFlow). */
-export function waitingDetail(started: { user_code?: string | null; browser_opened: boolean; verification_uri_complete: string }): string {
-  const code = started.user_code ? ` Code ${started.user_code}.` : "";
-  return started.browser_opened
-    ? `Finish in the browser, then return here.${code}`
-    : deviceCopy(`Open ${started.verification_uri_complete} and approve this computer.${code}`);
-}

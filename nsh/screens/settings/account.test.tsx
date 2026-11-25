@@ -108,6 +108,68 @@ for (const { name, size } of SIZES) {
   }, 90_000);
 }
 
+// The sign-in flow's waiting cards in Settings > Account (screens/auth/signInFlow.ts, the same flow as the gate's). "hold" keeps the
+// wait going until Cancel or the fixture's "Test: approve" / "Test: expire".
+const EXPIRED = "The sign-in code expired before it was approved. Press Sign in again for a new code.";
+
+for (const { name, size } of SIZES) {
+  const device = name === "phone" ? "this device" : "this computer";
+  const noRawAddress = (texts: string[]) => {
+    expect(texts.some((t) => t.includes("https://buwiz.example.test/device") || t.includes("?c=") || t.includes("user_code"))).toBe(false);
+    expect(texts).not.toContain("Waiting…");
+  };
+
+  test(`${name}: the browser opened: the account card waits with the code and Copy; Cancel brings Sign in back`, async () => {
+    const app = await openSettings(size, { cloud: "out", solo: true, opened: true, hold: true }, "account");
+    await app.waitFor(ready);
+    await app.press("id:settings-account-sign-in");
+    await app.waitFor("id:settings-account-wait");
+    expectTexts(app, ["Finish signing in in your browser", `Approve ${device} in the page that opened, then come back here.`, "ABCD-1234", "Open the page again", "Cancel"]);
+    noRawAddress(app.texts());
+    await app.press("id:settings-account-code-copy");
+    await app.waitFor("text:Copied ABCD-1234");
+    expect(app.clipboard()).toBe("ABCD-1234");
+    await app.press("id:settings-account-reopen");
+    await app.waitFor("text:/cloud_account_reopen_sign_in/");
+    await app.press("id:settings-account-cancel");
+    await app.waitFor("id:settings-account-sign-in");
+    expect(app.enabled("id:settings-account-sign-in")).toBe(true);
+    expect(app.texts()).toContain("Not signed in");
+    expect(app.texts()).not.toContain(EXPIRED);
+    expect(calls(app)).toEqual(["cloud_account_begin_sign_in", "cloud_account_finish_sign_in", "cloud_account_reopen_sign_in", "cloud_account_cancel_sign_in"]);
+  }, 60_000);
+
+  test(`${name}: nothing opened: the short address and the code with Copy; the address opens the page; the approval shows the account`, async () => {
+    const app = await openSettings(size, { cloud: "out", solo: true, hold: true }, "account");
+    await app.waitFor(ready);
+    await app.press("id:settings-account-sign-in");
+    await app.waitFor("id:settings-account-wait");
+    expectTexts(app, ["Open the sign-in page", "buwiz.example.test/device", "ABCD-1234", "Try opening it again", "Cancel"]);
+    noRawAddress(app.texts());
+    await app.press("id:settings-account-address-copy");
+    await app.waitFor("text:Copied buwiz.example.test/device");
+    expect(app.clipboard()).toBe("buwiz.example.test/device");
+    await app.press("id:settings-account-address-value");
+    await app.waitFor("text:Finish signing in in your browser");
+    await app.press("id:demo-approve");
+    await app.waitFor("text:juana@example.com", { timeout: 15000 });
+    expect(app.shows("id:settings-account-wait")).toBe(false);
+    expect(app.shows("id:settings-account-sign-out")).toBe(true);
+    expect(calls(app)).toEqual(["cloud_account_begin_sign_in", "cloud_account_finish_sign_in", "cloud_account_reopen_sign_in", "cloud_account_session_opened"]);
+  }, 60_000);
+
+  test(`${name}: an expired code brings Sign in back with the expiry sentence`, async () => {
+    const app = await openSettings(size, { cloud: "out", solo: true, opened: true, hold: true }, "account");
+    await app.waitFor(ready);
+    await app.press("id:settings-account-sign-in");
+    await app.waitFor("id:settings-account-wait");
+    await app.press("id:demo-expire");
+    await app.waitFor(`text:${EXPIRED}`);
+    expect(app.shows("id:settings-account-sign-in")).toBe(true);
+    expect(app.enabled("id:settings-account-sign-in")).toBe(true);
+  }, 60_000);
+}
+
 for (const { name, size } of SIZES) {
   test(`${name}: a first PIN signs the owner in as the admin, shows a recovery key once, and Change and Remove follow`, async () => {
     const app = await openSettings(size, { solo: true }, "account");

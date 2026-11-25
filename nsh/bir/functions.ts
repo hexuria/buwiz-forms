@@ -44,6 +44,9 @@ export const cloud_account_begin_sign_in = (...args: Parameters<typeof Host.clou
 export const cloud_account_begin_sign_up = (...args: Parameters<typeof Host.cloud_account_begin_sign_up>): ReturnType<typeof Host.cloud_account_begin_sign_up> =>
   Door.callAsync("cloud_account_begin_sign_up", args) as ReturnType<typeof Host.cloud_account_begin_sign_up>;
 
+export const cloud_account_cancel_sign_in = (...args: Parameters<typeof Host.cloud_account_cancel_sign_in>): ReturnType<typeof Host.cloud_account_cancel_sign_in> =>
+  Door.call("cloud_account_cancel_sign_in", args) as ReturnType<typeof Host.cloud_account_cancel_sign_in>;
+
 export const cloud_account_finish_sign_in = (...args: Parameters<typeof Host.cloud_account_finish_sign_in>): ReturnType<typeof Host.cloud_account_finish_sign_in> =>
   Door.callAsync("cloud_account_finish_sign_in", args) as ReturnType<typeof Host.cloud_account_finish_sign_in>;
 
@@ -52,6 +55,9 @@ export const cloud_account_gate = (...args: Parameters<typeof Host.cloud_account
 
 export const cloud_account_refresh = (...args: Parameters<typeof Host.cloud_account_refresh>): ReturnType<typeof Host.cloud_account_refresh> =>
   Door.callAsync("cloud_account_refresh", args) as ReturnType<typeof Host.cloud_account_refresh>;
+
+export const cloud_account_reopen_sign_in = (...args: Parameters<typeof Host.cloud_account_reopen_sign_in>): ReturnType<typeof Host.cloud_account_reopen_sign_in> =>
+  Door.callAsync("cloud_account_reopen_sign_in", args) as ReturnType<typeof Host.cloud_account_reopen_sign_in>;
 
 export const cloud_account_session_closed = (...args: Parameters<typeof Host.cloud_account_session_closed>): ReturnType<typeof Host.cloud_account_session_closed> =>
   Door.call("cloud_account_session_closed", args) as ReturnType<typeof Host.cloud_account_session_closed>;
@@ -402,6 +408,7 @@ export type {
   JobLogTail,
   CloudAccountStatus,
   CloudSignInStart,
+  CloudSignInFinish,
   CloudAccountGate,
   BranchFieldName,
   BranchFacts,
@@ -474,9 +481,11 @@ export const bir = {
   check_inbox_now,
   cloud_account_begin_sign_in,
   cloud_account_begin_sign_up,
+  cloud_account_cancel_sign_in,
   cloud_account_finish_sign_in,
   cloud_account_gate,
   cloud_account_refresh,
+  cloud_account_reopen_sign_in,
   cloud_account_session_closed,
   cloud_account_session_opened,
   cloud_account_sign_out,
@@ -604,9 +613,11 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "check_inbox_now", kind: "async" },
   { name: "cloud_account_begin_sign_in", kind: "async" },
   { name: "cloud_account_begin_sign_up", kind: "async" },
+  { name: "cloud_account_cancel_sign_in", kind: "sync" },
   { name: "cloud_account_finish_sign_in", kind: "async" },
   { name: "cloud_account_gate", kind: "sync" },
   { name: "cloud_account_refresh", kind: "async" },
+  { name: "cloud_account_reopen_sign_in", kind: "async" },
   { name: "cloud_account_session_closed", kind: "sync" },
   { name: "cloud_account_session_opened", kind: "sync" },
   { name: "cloud_account_sign_out", kind: "async" },

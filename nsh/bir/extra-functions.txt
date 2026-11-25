@@ -17,3 +17,7 @@ screen_form_profile_asked
 
 # Relay filing: a person answers whether the BIR's email came for a send with an unknown outcome (the form page).
 resolve_unknown_send
+
+# The sign-in flow: Cancel stops the wait; Open the page again reopens the same page for the same code.
+cloud_account_cancel_sign_in
+cloud_account_reopen_sign_in

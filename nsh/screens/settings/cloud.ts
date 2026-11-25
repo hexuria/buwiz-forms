@@ -5,6 +5,7 @@ import { signal } from "nsh";
 import type { CloudAccountStatus } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { app, store } from "../../shell";
+import { signInFlow } from "../auth/signInFlow";
 
 const status = signal<CloudAccountStatus | null>(null);
 const busy = signal(false);
@@ -50,33 +51,16 @@ export async function refresh(): Promise<void> {
   }
 }
 
-/** The browser sign-in: the host opens it, this says what to do while it waits, and finishes when it is approved. */
+/**
+ * Sign in from Settings: the shared flow (screens/auth/signInFlow.ts) does it, the same as on the gate; once it is approved the card
+ * shows the account. An expiry or a failure is said by the card from the flow's state.
+ */
 export async function signIn(): Promise<void> {
   if (busy()) return;
-  busy.set(true);
   failure.set(null);
-  status.set({ ...cloud.status(), detail: "Opening your browser to sign in…" });
-  try {
-    const started = await store.call("cloud_account_begin_sign_in");
-    const code = started.user_code ? ` Code ${started.user_code}.` : "";
-    status.set({
-      ...cloud.status(),
-      detail: started.browser_opened
-        ? `Finish signing in in the browser, then return here.${code}`
-        : `Open ${started.verification_uri_complete} and approve this computer.${code}`,
-    });
-    status.set(await store.call("cloud_account_finish_sign_in"));
-    failure.set(null);
-    await app.finishUnlock();
-  } catch (error) {
-    failure.set(errorText(error));
-    try {
-      status.set(store.call("cloud_account_status"));
-    } catch {
-      /* keep the previous status */
-    }
-  }
-  busy.set(false);
+  const ended = await signInFlow.begin("sign-in");
+  if (ended.kind === "approved") status.set(ended.status);
+  else load();
 }
 
 export async function signOut(): Promise<void> {
@@ -86,6 +70,7 @@ export async function signOut(): Promise<void> {
   try {
     status.set(await store.call("cloud_account_sign_out"));
     failure.set(null);
+    signInFlow.reset();
     app.lockCloud();
   } catch (error) {
     failure.set(errorText(error));

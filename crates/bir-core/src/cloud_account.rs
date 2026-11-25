@@ -130,7 +130,11 @@ pub enum CloudError {
     Network(String),
     InvalidGrant,
     TimedOut,
-    Server { description: String },
+    /// The person stopped the wait (Cancel). Not a failure: nothing is shown for it.
+    Cancelled,
+    Server {
+        description: String,
+    },
     Unexpected(String),
     Url(ServerUrlError),
 }
@@ -147,6 +151,7 @@ impl std::fmt::Display for CloudError {
                 f,
                 "The sign-in code expired before it was approved. Press Sign in again for a new code."
             ),
+            Self::Cancelled => write!(f, "Sign-in was cancelled."),
             Self::Server { description } => write!(f, "{description}"),
             Self::Unexpected(message) => write!(f, "{message}"),
             Self::Url(error) => write!(f, "{error}"),
@@ -568,8 +573,24 @@ pub fn poll_until(
     now: &mut dyn FnMut() -> i64,
     sleep: &mut dyn FnMut(Duration),
 ) -> Result<TokenSet, CloudError> {
+    poll_until_stopped(http, challenge, now, sleep, &mut || false)
+}
+
+/// [`poll_until`] that the person can stop: `stopped` is asked before every
+/// try, and a stopped wait ends as [`CloudError::Cancelled`]. A caller that
+/// wants a prompt stop sleeps in short slices ([`sleep_unless_stopped`]).
+pub fn poll_until_stopped(
+    http: &mut dyn Http,
+    challenge: &DeviceChallenge,
+    now: &mut dyn FnMut() -> i64,
+    sleep: &mut dyn FnMut(Duration),
+    stopped: &mut dyn FnMut() -> bool,
+) -> Result<TokenSet, CloudError> {
     // 900s / 1s, with room for slow_down. A frozen clock still stops.
     for _ in 0..1000 {
+        if stopped() {
+            return Err(CloudError::Cancelled);
+        }
         if now() >= challenge.expires_at_unix {
             return Err(CloudError::TimedOut);
         }
@@ -582,6 +603,33 @@ pub fn poll_until(
         }
     }
     Err(CloudError::TimedOut)
+}
+
+/// Sleeps `total` in pieces of at most `slice`, and stops early once
+/// `stopped` says so: a Cancel is answered within one slice.
+pub fn sleep_unless_stopped(
+    total: Duration,
+    slice: Duration,
+    stopped: &mut dyn FnMut() -> bool,
+    sleep: &mut dyn FnMut(Duration),
+) {
+    let mut left = total;
+    while !left.is_zero() && !stopped() {
+        let piece = left.min(slice);
+        sleep(piece);
+        left = left.saturating_sub(piece);
+    }
+}
+
+/// The approval page's address as a person reads and types it: no scheme,
+/// no trailing slash (`account.buwiz.com/device`, `localhost:3008/device`).
+pub fn short_address(uri: &str) -> String {
+    let trimmed = uri.trim();
+    let rest = trimmed
+        .strip_prefix("https://")
+        .or_else(|| trimmed.strip_prefix("http://"))
+        .unwrap_or(trimmed);
+    rest.trim_end_matches('/').to_owned()
 }
 
 fn poll_device(http: &mut dyn Http, challenge: &DeviceChallenge) -> Result<Poll, CloudError> {
@@ -973,6 +1021,10 @@ fn interpret_token_response(
     }
     if error == "invalid_grant" || error == "invalid_token" || status == 401 {
         return Err(CloudError::InvalidGrant);
+    }
+    if allow_pending && error == "expired_token" {
+        // The device code ran out on the server's own clock.
+        return Err(CloudError::TimedOut);
     }
     if error == "expired_token" || error == "access_denied" {
         let description = value
@@ -1451,6 +1503,92 @@ mod tests {
         let error = poll_until(&mut http, &challenge(), &mut || 1_000, &mut |_| {}).unwrap_err();
         assert_eq!(error, CloudError::TimedOut);
         assert_eq!(http.0, 1000);
+    }
+
+    #[test]
+    fn a_stopped_wait_ends_as_cancelled_before_the_next_try() {
+        struct AlwaysPending(usize);
+        impl Http for AlwaysPending {
+            fn exchange(&mut self, _: &HttpRequest) -> Result<HttpResponse, CloudError> {
+                self.0 += 1;
+                Ok(HttpResponse {
+                    status: 400,
+                    body: r#"{"error":"authorization_pending"}"#.into(),
+                })
+            }
+        }
+        let mut http = AlwaysPending(0);
+        let mut tries_left = 2;
+        let error = poll_until_stopped(
+            &mut http,
+            &challenge(),
+            &mut || 1_000,
+            &mut |_| {},
+            &mut || {
+                if tries_left == 0 {
+                    return true;
+                }
+                tries_left -= 1;
+                false
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error, CloudError::Cancelled);
+        assert_eq!(http.0, 2);
+    }
+
+    #[test]
+    fn a_sliced_sleep_stops_within_one_slice() {
+        let mut slept = Vec::new();
+        let mut asked = 0;
+        sleep_unless_stopped(
+            Duration::from_secs(5),
+            Duration::from_millis(200),
+            &mut || {
+                asked += 1;
+                asked > 3
+            },
+            &mut |piece| slept.push(piece),
+        );
+        assert_eq!(slept, vec![Duration::from_millis(200); 3]);
+        let mut whole = Duration::ZERO;
+        sleep_unless_stopped(
+            Duration::from_millis(450),
+            Duration::from_millis(200),
+            &mut || false,
+            &mut |piece| whole += piece,
+        );
+        assert_eq!(whole, Duration::from_millis(450));
+    }
+
+    #[test]
+    fn the_servers_expired_code_ends_as_expired() {
+        let mut http = Scripted {
+            steps: vec![Ok(HttpResponse {
+                status: 400,
+                body: r#"{"error":"expired_token","error_description":"unknown or expired device code"}"#.into(),
+            })],
+            seen: Vec::new(),
+        };
+        let error = poll_until(&mut http, &challenge(), &mut || 1_000, &mut |_| {}).unwrap_err();
+        assert_eq!(error, CloudError::TimedOut);
+    }
+
+    #[test]
+    fn the_short_address_drops_the_scheme_and_the_last_slash() {
+        assert_eq!(
+            short_address("https://account.buwiz.com/device"),
+            "account.buwiz.com/device"
+        );
+        assert_eq!(
+            short_address("https://account.buwiz.com/device/"),
+            "account.buwiz.com/device"
+        );
+        assert_eq!(
+            short_address("http://localhost:3008/device"),
+            "localhost:3008/device"
+        );
+        assert_eq!(short_address(" http://127.0.0.1:3008/ "), "127.0.0.1:3008");
     }
 
     #[test]
