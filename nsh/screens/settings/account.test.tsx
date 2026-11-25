@@ -1,6 +1,6 @@
-// Settings > Account at phone size and at desktop size: the Buwiz account (sign in, sign out, the refresh when it opens, an unreachable
-// server), who is signed in, the profile card's pencils, Google, and Security (PIN, authenticator, recovery key) for the owner, a help
-// desk's admin and a taxpayer. Against a scratch database with the demo taxpayer (SettingsDemo.tsx).
+// Settings > Account at phone size and at desktop size: the Buwiz account (its one row, Sign out of Buwiz with its question, Sign in
+// showing the gate; the sign-in pages are the gate's only, screens/auth/gate.test.tsx), the profile on this device (who is signed
+// in, its pencils), Google, and Security (PIN, authenticator, recovery key) for the owner, a help desk's admin and a taxpayer. Against a scratch database with the demo taxpayer (SettingsDemo.tsx).
 import { expect, test } from "nsh/test";
 import { totpCode } from "../auth/testTotp";
 import { calls, expectTexts, openSettings, SIZES, state } from "./testing";
@@ -8,40 +8,60 @@ import { calls, expectTexts, openSettings, SIZES, state } from "./testing";
 const ready = "id:settings-security";
 
 for (const { name, size } of SIZES) {
-  test(`${name}: signed out, Sign in opens the email page, then the code page; the right code shows who is signed in`, async () => {
-    const app = await openSettings(size, { cloud: "out", solo: true }, "account");
-    await app.waitFor(ready);
-    expectTexts(app, ["Buwiz", "Server", "Set when this app was built.", "https://buwiz.example.test", "Not signed in", "Sign in"]);
-    expect(app.shows("id:settings-account-sign-out")).toBe(false);
-    expect(app.shows("id:settings-account-delete-button")).toBe(false);
-    await app.press("id:settings-account-sign-in");
-    await app.waitFor("id:settings-account-email-page");
-    expectTexts(app, ["Sign in to eBIRForms", "Email", "Continue with email"]);
-    for (const gone of ["Sign in with Buwiz", "Continue in your browser", "Open the sign-in page"]) expect(app.texts()).not.toContain(gone);
-    await app.type("id:settings-account-email", "juana@example.com");
-    await app.press("id:settings-account-continue");
-    await app.waitFor("id:settings-account-code", { timeout: 15000 });
-    expectTexts(app, ["Enter the code", "We sent a 6-digit code to juana@example.com.", "Resend in 5:00", "Change email"]);
-    await app.type("id:settings-account-code-boxes", "123456");
-    await app.waitFor("text:That code is not right. 4 tries left.");
-    await app.type("id:settings-account-code-boxes", "246810");
-    await app.waitFor("id:settings-account-sign-out", { timeout: 15000 });
-    expect(app.texts()).toContain("juana@example.com");
-    expect(calls(app)).toEqual(["cloud_account_email_start", "cloud_account_email_verify 123456", "cloud_account_email_verify 246810", "cloud_account_session_opened"]);
-    expect(app.shows("id:settings-account-sign-out")).toBe(true);
-    expect(app.shows("id:settings-account-delete-button")).toBe(true);
-    expect(app.shows("id:settings-account-sign-in")).toBe(false);
-    expect(state(app)).toContain("cloudLocked=false");
-  }, 60_000);
-
-  test(`${name}: signed in, the saved sign-in is checked once as the card opens; Sign out locks the gate`, async () => {
+  const device = name === "phone" ? "this device" : "this computer";
+  const profileHeading = name === "phone" ? "Profile on this device" : "Profile on this computer";
+  test(`${name}: the Buwiz account row signed in: the email and "Sign out of Buwiz"; the saved sign-in is checked once as the card opens`, async () => {
     const app = await openSettings(size, { cloud: "in", solo: true }, "account");
     await app.waitFor(ready);
     await app.waitFor("text:calls: cloud_account_refresh");
-    expectTexts(app, ["juana@example.com", "Sign out"]);
+    expectTexts(app, ["Buwiz account", "juana@example.com", "Sign out of Buwiz"]);
+    expect(app.shows("id:settings-account-delete-button")).toBe(true);
+    expect(app.shows("id:settings-account-sign-in")).toBe(false);
+    // No sign-in page inside Settings.
+    for (const gone of ["Sign in to eBIRForms", "Continue with email", "Enter the code"]) expect(app.texts()).not.toContain(gone);
+  }, 60_000);
+
+  test(`${name}: Sign out of Buwiz asks once: Cancel changes nothing; confirming signs out and shows the gate`, async () => {
+    const app = await openSettings(size, { cloud: "in", solo: true }, "account");
+    await app.waitFor(ready);
+    await app.waitFor("text:calls: cloud_account_refresh");
     await app.press("id:settings-account-sign-out");
+    await app.waitFor("id:settings-sign-out-confirm");
+    const sentence = `You will go back to the sign-in page. Your drafts and returns stay on ${device}.`;
+    expect(app.texts()).toContain(sentence);
+    expect(app.shows("id:settings-sign-out-yes")).toBe(true);
+    expect(app.texts()).toContain("Cancel");
+    await app.press("id:settings-sign-out-cancel");
+    await app.waitFor("id:settings-sign-out-confirm", { state: "gone" });
+    expect(calls(app)).toEqual(["cloud_account_refresh"]);
+    expect(state(app)).toContain("cloudLocked=false");
+    await app.press("id:settings-account-sign-out");
+    await app.waitFor("id:settings-sign-out-yes");
+    await app.press("id:settings-sign-out-yes");
     await app.waitFor("text:/cloudLocked=true/");
+    await app.waitFor("id:gate-card");
     expect(calls(app)).toEqual(["cloud_account_refresh", "cloud_account_sign_out", "cloud_account_session_closed"]);
+  }, 60_000);
+
+  test(`${name}: signed out (a development state): "Not signed in to Buwiz" and Sign in, which shows the gate`, async () => {
+    const app = await openSettings(size, { cloud: "out", solo: true }, "account");
+    await app.waitFor(ready);
+    expectTexts(app, ["Buwiz account", "Server", "Set when this app was built.", "https://buwiz.example.test", "Not signed in to Buwiz", "Sign in"]);
+    expect(app.texts()).not.toContain("Not signed in.");
+    expect(app.shows("id:settings-account-sign-out")).toBe(false);
+    expect(app.shows("id:settings-account-delete-button")).toBe(false);
+    await app.press("id:settings-account-sign-in");
+    await app.waitFor("id:gate-card");
+    expect(state(app)).toContain("cloudLocked=true");
+    expect(app.texts()).toContain("Sign in to eBIRForms");
+  }, 60_000);
+
+  test(`${name}: two headings: "Buwiz account" and the profile ${name === "phone" ? "on this device" : "on this computer"}, whose line names it too`, async () => {
+    const app = await openSettings(size, { cloud: "in", solo: true }, "account");
+    await app.waitFor(ready);
+    expectTexts(app, ["Buwiz account", profileHeading, `Admin · ${device}`, "Sign out"]);
+    expect(app.texts()).not.toContain(name === "phone" ? "Profile on this computer" : "Profile on this device");
+    expect(app.texts()).not.toContain(name === "phone" ? "Admin · this computer" : "Admin · this device");
   }, 60_000);
 
   test(`${name}: a practice account says its returns are simulated; a real account does not`, async () => {
@@ -53,18 +73,6 @@ for (const { name, size } of SIZES) {
     await real.waitFor(ready);
     await real.waitFor("text:calls: cloud_account_refresh");
     expect(real.shows("id:settings-account-practice")).toBe(false);
-  }, 60_000);
-
-  test(`${name}: no connection is said on the email page, which stays`, async () => {
-    const app = await openSettings(size, { cloud: "down", solo: true }, "account");
-    await app.waitFor(ready);
-    await app.press("id:settings-account-sign-in");
-    await app.type("id:settings-account-email", "juana@example.com");
-    await app.press("id:settings-account-continue");
-    await app.waitFor("text:No connection. Check your internet and try again.", { timeout: 15000 });
-    expect(app.shows("id:settings-account-email-page")).toBe(true);
-    expect(app.enabled("id:settings-account-continue")).toBe(true);
-    expect(state(app)).toContain("cloudLocked=false");
   }, 60_000);
 
   test(`${name}: who is signed in, the registered name and email with a pencil each, Sign out and Add account`, async () => {
@@ -130,28 +138,6 @@ for (const { name, size } of SIZES) {
       expectTexts(none, ["No taxpayer yet", "Add a taxpayer before connecting a Gmail account."]);
     }, 90_000);
   }
-}
-
-// The code page in Settings > Account (screens/auth/signInFlow.ts, the same flow as the gate's): Change email, and a request kept from
-// before a relaunch.
-for (const { name, size } of SIZES) {
-  test(`${name}: Change email goes back to the email page; a kept request opens the code page with its countdown`, async () => {
-    const app = await openSettings(size, { cloud: "out", solo: true }, "account");
-    await app.waitFor(ready);
-    await app.press("id:settings-account-sign-in");
-    await app.type("id:settings-account-email", "juana@example.com");
-    await app.press("id:settings-account-continue");
-    await app.waitFor("id:settings-account-code", { timeout: 15000 });
-    await app.press("id:settings-account-change-email");
-    await app.waitFor("id:settings-account-email-page");
-    expect(app.value("id:settings-account-email")).toBe("juana@example.com");
-    expect(calls(app)).toEqual(["cloud_account_email_start", "cloud_account_email_cancel"]);
-    const kept = await openSettings(size, { cloud: "out", solo: true, pending: 200 }, "account");
-    await kept.waitFor(ready);
-    await kept.press("id:settings-account-sign-in");
-    await kept.waitFor("id:settings-account-code");
-    expect(kept.texts()).toContain("Resend in 3:20");
-  }, 60_000);
 }
 
 for (const { name, size } of SIZES) {

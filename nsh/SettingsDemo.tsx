@@ -13,9 +13,8 @@
 //   jobs      true: a fake job table (a queued filing, a scheduled job, a failed one, an archived one, a completed one): delete,
 //             archive, purge and cancel_queued change it, and every call is listed in the readout
 //   log       "mixed" (every level), "long" (300 lines, to see the 200 cap), "empty" (no file yet), "error" (the read fails); else the real file
-//   cloud     "out" (signed out; sign-in works), "in" (signed in as juana@example.com; sign-out works), "down" (the server is unreachable),
-//             "practice" (signed in as the app-store reviewers' practice account)
-//   email, expiresIn, resendIn, pending, resend: the email-and-code sign-in (screens/auth/testEmail.ts); "down" makes it "offline"
+//   cloud     "out" (signed out; Sign in shows the gate, whose email sign-in is the fake of screens/auth/testEmail.ts), "in" (signed
+//             in as juana@example.com; sign-out works), "practice" (signed in as the app-store reviewers' practice account)
 //   import    "database" | "profile" | "invalid" | "cancelled" | "fail": what import_archive answers (the dialog is the host's)
 //   ebir      F18, the eBIRForms import (the folder dialog is the host's): "found" (a folder with 1 taxpayer, 3 filed returns, 1 draft,
 //             1 file not read; Import creates the committed fixture's taxpayer for real, so the frame's lists re-read), "standard" (the
@@ -37,7 +36,7 @@ import "./theme/fonts";
 import { bir, type BackgroundJob, type CloudAccountStatus, type InboxState, type UpdateStatus } from "./bir";
 import type { LegacyScanAnswer, LegacyScanSummary } from "./bir";
 import { store } from "./shell/store";
-import { type EmailParams, fakeEmail } from "./screens/auth/testEmail";
+import { fakeEmail } from "./screens/auth/testEmail";
 import { createDemoTaxpayer } from "./bir/testing";
 import { totpCode } from "./screens/auth/testTotp";
 import { app } from "./shell/app";
@@ -58,12 +57,7 @@ interface Params {
   readout?: boolean;
   jobs?: boolean;
   log?: "mixed" | "long" | "empty" | "error";
-  cloud?: "out" | "in" | "down" | "practice";
-  email?: EmailParams["email"];
-  expiresIn?: number;
-  resendIn?: number;
-  pending?: number;
-  resend?: EmailParams["resend"];
+  cloud?: "out" | "in" | "practice";
   import?: "database" | "profile" | "invalid" | "cancelled" | "fail";
   ebir?: "found" | "standard" | "empty" | "wrong" | "cancelled" | "fail" | "importfail" | "slow" | "foundonce";
   status?: "refused" | "invalid";
@@ -164,21 +158,15 @@ const SIGNED_OUT: CloudAccountStatus = {
 };
 const SIGNED_IN: CloudAccountStatus = { ...SIGNED_OUT, signed_in: true, email: "juana@example.com", user_id: "u-1", detail: "Signed in. Your account is checked now and then." };
 
-function fakeCloud(kind: "out" | "in" | "down" | "practice", p: Params): void {
+function fakeCloud(kind: "out" | "in" | "practice"): void {
   let status = kind === "practice" ? { ...SIGNED_IN, practice: true } : kind === "in" ? SIGNED_IN : SIGNED_OUT;
   swap("cloud_account_status", () => () => status);
   swap("cloud_account_refresh", () => async () => {
     note("cloud_account_refresh");
     return status;
   });
-  const table = bir as unknown as Record<string, unknown>;
-  fakeEmail(table, { ...p, email: kind === "down" ? "offline" : p.email }, note, SIGNED_IN);
-  const verify = table.cloud_account_email_verify as (code: string) => Promise<{ outcome: string }>;
-  table.cloud_account_email_verify = async (code: string) => {
-    const checked = await verify(code);
-    if (checked.outcome === "approved") status = SIGNED_IN;
-    return checked;
-  };
+  // The gate that Sign in shows never reaches the host's email sign-in.
+  fakeEmail(bir as unknown as Record<string, unknown>, {}, note, SIGNED_IN);
   swap("cloud_account_sign_out", () => async () => {
     note("cloud_account_sign_out");
     status = SIGNED_OUT;
@@ -316,7 +304,7 @@ function Demo() {
   if (p.demo !== false) seed(p);
   if (p.jobs) fakeJobs();
   if (p.log) fakeLog(p.log);
-  if (p.cloud) fakeCloud(p.cloud, p);
+  if (p.cloud) fakeCloud(p.cloud);
   if (p.import) fakeImport(p.import);
   if (p.ebir) fakeEbir(p.ebir);
   if (p.update) fakeUpdate();

@@ -1,6 +1,6 @@
-// Settings > Account > Buwiz (old account.js AccountActions): the cloud account's status, the refresh when Settings opens, sign
-// in and sign out. The sign-in screens (the gate) are D2's; these are the same host calls the old card made, and the gate's
-// seam on the frame: app.finishUnlock and app.lockCloud. One owner: this file's private signals.
+// Settings > Account > Buwiz account (old account.js AccountActions): the cloud account's status, the refresh when Settings
+// opens, sign in (the gate) and sign out. The sign-in pages are the gate's only; these are the same host calls the old card
+// made, and the gate's seam on the frame: app.finishUnlock and app.lockCloud. One owner: this file's private signals.
 import { signal } from "nsh";
 import type { CloudAccountStatus } from "../../bir";
 import { errorText } from "../../lib/errors";
@@ -51,18 +51,17 @@ export async function refresh(): Promise<void> {
   }
 }
 
-// Every approval of the shared flow (the email code, or the browser path from its link) shows the account here.
+// Every approval of the sign-in flow shows the account here.
 signInFlow.onApproved((approved) => {
   status.set(approved);
   failure.set(null);
 });
 
-/** Sign in from Settings: the shared flow's email page (screens/auth/signInFlow.ts), the same as on the gate. */
+/** Sign in from Settings (signed out: a development state): the gate, the one place to sign in (screens/auth/Gate.tsx). */
 export function signIn(): void {
   if (busy()) return;
   failure.set(null);
-  signInFlow.restore();
-  signInFlow.openEmail();
+  app.lockCloud();
 }
 
 export async function signOut(): Promise<void> {
