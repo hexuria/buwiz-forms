@@ -390,7 +390,8 @@ pub fn unix_now() -> i64 {
         .unwrap_or(0)
 }
 
-/// API origin. `runtime` is the process environment (`BUWIZ_SERVER_URL`).
+/// API origin. `runtime` is the process's `BUWIZ_SERVER_URL` as [`crate::config::var`] reads it (the
+/// environment, or an Android development build's baked list).
 /// `compiled` is `option_env!("BUWIZ_SERVER_URL")`. A runtime value wins.
 /// Neither is a secret, and neither is something the person at the keyboard types.
 pub fn resolve_server_url(
@@ -413,7 +414,7 @@ pub fn resolve_account_url(
 
 /// The API origin for this process.
 pub fn configured_server() -> Result<ResolvedServer, ServerUrlError> {
-    let runtime = std::env::var(ENV_SERVER_URL).ok();
+    let runtime = crate::config::var(ENV_SERVER_URL).ok();
     resolve_server_url(
         runtime.as_deref(),
         option_env!("BUWIZ_SERVER_URL"),
@@ -423,7 +424,7 @@ pub fn configured_server() -> Result<ResolvedServer, ServerUrlError> {
 
 /// Where the browser opens login and signup.
 pub fn configured_account() -> Result<ResolvedServer, ServerUrlError> {
-    let runtime = std::env::var(ENV_ACCOUNT_URL).ok();
+    let runtime = crate::config::var(ENV_ACCOUNT_URL).ok();
     resolve_account_url(
         runtime.as_deref(),
         option_env!("BUWIZ_ACCOUNT_URL"),
@@ -1320,7 +1321,7 @@ mod tests {
     #[test]
     fn configured_origins_follow_runtime_then_compile_time_then_profile() {
         let profile = active_build_profile();
-        let server_runtime = std::env::var(ENV_SERVER_URL).ok();
+        let server_runtime = crate::config::var(ENV_SERVER_URL).ok();
         let server = configured_server().unwrap();
         assert_eq!(
             server,
@@ -1331,7 +1332,7 @@ mod tests {
             )
             .unwrap()
         );
-        let account_runtime = std::env::var(ENV_ACCOUNT_URL).ok();
+        let account_runtime = crate::config::var(ENV_ACCOUNT_URL).ok();
         let account = configured_account().unwrap();
         assert_eq!(
             account,

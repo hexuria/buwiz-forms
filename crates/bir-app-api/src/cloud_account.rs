@@ -345,7 +345,7 @@ fn forget_saved_server_url() {
 }
 
 fn rejected_origin_text(runtime_name: &str, compiled: Option<&str>) -> String {
-    std::env::var(runtime_name)
+    bir_core::config::var(runtime_name)
         .ok()
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty())

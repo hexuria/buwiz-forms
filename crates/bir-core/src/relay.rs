@@ -78,13 +78,24 @@ fn trust_keys_allowed(
     Ok(())
 }
 
+/// The trust list's pinned keys for this process: `BUWIZ_TRUST_KEYS` as [`crate::config::var`] reads it (the
+/// process environment, or an Android development build's baked list), under `bir_submit`'s own rule: it replaces
+/// the production key only in a debug or `lab` build.
+fn trust_keys() -> Vec<String> {
+    bir_submit::trust::pinned_keys_from(
+        crate::config::var(bir_submit::trust::KEYS_ENV)
+            .ok()
+            .as_deref(),
+    )
+}
+
 /// The Buwiz server this build may send through, or why it may not: the configured server, which for a
 /// development build must be on this computer and trusted through a test key. No request is made.
 pub fn server() -> Result<String, TransportError> {
     let server = crate::cloud_account::configured_server()
         .map_err(|error| TransportError::Config(error.to_string()))?;
     server_allowed(&server.url, cfg!(debug_assertions))?;
-    trust_keys_allowed(&bir_submit::trust::pinned_keys(), cfg!(debug_assertions))?;
+    trust_keys_allowed(&trust_keys(), cfg!(debug_assertions))?;
     Ok(server.url)
 }
 
@@ -117,6 +128,7 @@ pub fn submitter() -> Result<Arc<Submitter>, TransportError> {
         .map_err(|error| TransportError::Config(error.to_string()))?;
     config.install_id = Some(crate::install_id::install_id());
     config.platform = Some(crate::install_id::platform().to_owned());
+    config.trust_keys = trust_keys();
     trust_keys_allowed(&config.trust_keys, cfg!(debug_assertions))?;
     let store =
         bir_submit::secrets::platform_store(secrets_dir(), !crate::platform::keychain_disabled());
@@ -518,6 +530,64 @@ mod tests {
             );
         }
         assert!(trust_keys_allowed(&production, false).is_ok());
+    }
+
+    /// The server and the trust keys are read through `config::var` (an Android development build's baked list),
+    /// and that path keeps both rules: on this computer, and a test key, never production's. Runs in a child
+    /// process, so its overrides never reach another test.
+    #[test]
+    fn configured_server_and_trust_keys_keep_the_development_rules() {
+        const CHILD: &str = "BIR_RELAY_CONFIG_CHILD";
+        const TEST: &str =
+            "relay::tests::configured_server_and_trust_keys_keep_the_development_rules";
+        let test_key = "dGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXk";
+        let production = bir_submit::trust::TRUST_KEYS[0];
+        if std::env::var_os(CHILD).is_none() {
+            // The environment names production's server and key: the overrides below must win over it.
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", TEST, "--nocapture"])
+                .env(CHILD, "1")
+                .env("BUWIZ_SERVER_URL", "https://api.buwiz.com")
+                .env("BUWIZ_TRUST_KEYS", production)
+                .env_remove("BUWIZ_ACCOUNT_URL")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        use crate::config::force;
+        force("BUWIZ_SERVER_URL", Some("http://localhost:3008"));
+        force("BUWIZ_TRUST_KEYS", Some(test_key));
+        assert_eq!(
+            crate::cloud_account::configured_server().unwrap().url,
+            "http://localhost:3008"
+        );
+        let expected = if cfg!(debug_assertions) {
+            vec![test_key.to_owned()]
+        } else {
+            vec![production.to_owned()]
+        };
+        assert_eq!(trust_keys(), expected);
+        if !cfg!(debug_assertions) {
+            return;
+        }
+        assert_eq!(server().unwrap(), "http://localhost:3008");
+        for keys in [Some(production), None] {
+            force("BUWIZ_TRUST_KEYS", keys);
+            let refused = server().unwrap_err().to_string();
+            assert!(refused.contains("test key"), "{keys:?}: {refused}");
+        }
+        force("BUWIZ_TRUST_KEYS", Some(test_key));
+        for url in ["https://api.buwiz.com", "http://192.0.2.1:3008"] {
+            force("BUWIZ_SERVER_URL", Some(url));
+            let refused = server().unwrap_err().to_string();
+            assert!(refused.contains("on this computer"), "{url}: {refused}");
+        }
     }
 
     fn receipt(mode: &str, status: &str) -> Sent {

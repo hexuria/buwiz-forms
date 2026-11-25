@@ -48,7 +48,8 @@ pub struct SubmitConfig {
     /// Shown on the account site's device list.
     pub device_name: String,
     /// Public keys (base64url) the signed trust list must verify with:
-    /// [`trust::pinned_keys`] unless a test or lab sets its own in code.
+    /// [`trust::pinned_keys`] unless a test or lab sets its own in code, or
+    /// the host sets [`trust::pinned_keys_from`] with the value it read.
     pub trust_keys: Vec<String>,
     /// This install's id, sent with the registration (the host's own; never
     /// a raw hardware value).

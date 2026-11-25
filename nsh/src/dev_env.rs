@@ -14,21 +14,33 @@ const ALLOWED: &[&str] = &[
     // token comes from a private file at run time (`agent::take_token`) and `GPUI_AGENT_TOKEN` is refused here.
     "GPUI_AGENT",
     "GPUI_AGENT_ADDR",
+    // The Buwiz account server and its site, and the test key a development build's relay client trusts
+    // (`bir_core::cloud_account::configured_server` / `configured_account`, `bir_core::relay`): an emulator has no
+    // launch environment, so without them an Android development build could only sign in to production. A
+    // development build still sends only through a server on this computer, on a test key (`bir_core::relay`), and
+    // `BUWIZ_RELAY_SEND` stays out: sending from an Android development build is a later step.
+    "BUWIZ_SERVER_URL",
+    "BUWIZ_ACCOUNT_URL",
+    "BUWIZ_TRUST_KEYS",
 ];
 
-pub(crate) const ENABLED: bool = cfg!(debug_assertions)
-    || match option_env!("BUWIZ_ANDROID_DEV") {
-        Some(value) => matches!(value.as_bytes(), [b'1']),
-        None => false,
-    };
+pub(crate) const ENABLED: bool = enabled(cfg!(debug_assertions), option_env!("BUWIZ_ANDROID_DEV"));
 
-const BAKED: Option<&str> = {
-    if ENABLED {
-        option_env!("BUWIZ_ANDROID_DEV_ENV")
-    } else {
-        None
-    }
-};
+/// Whether the development list is honoured: a debug build, or one built with `BUWIZ_ANDROID_DEV=1` exactly.
+const fn enabled(debug_build: bool, android_dev: Option<&str>) -> bool {
+    debug_build
+        || match android_dev {
+            Some(value) => matches!(value.as_bytes(), [b'1']),
+            None => false,
+        }
+}
+
+const BAKED: Option<&str> = honoured(ENABLED, option_env!("BUWIZ_ANDROID_DEV_ENV"));
+
+/// The baked list when the development list is honoured; nothing at all otherwise.
+const fn honoured(enabled: bool, baked: Option<&'static str>) -> Option<&'static str> {
+    if enabled { baked } else { None }
+}
 
 pub(crate) fn load(path: &Path) -> Result<(), String> {
     let values = read(path)?;
@@ -134,8 +146,25 @@ mod tests {
         let before: Vec<_> = ALLOWED.iter().map(std::env::var_os).collect();
         let root = tempfile::tempdir().unwrap();
         let path = root.path().join("dev.env");
-        std::fs::write(&path, "EBIR_TEST_ENV=1\nBIR_AUTH_BYPASS=1\nBUWIZ_NO_KEYCHAIN=1\nBIR_SFTP_DRY_RUN=1\nBIR_RELAY_URL=http://127.0.0.1:8787").unwrap();
+        std::fs::write(&path, "EBIR_TEST_ENV=1\nBIR_AUTH_BYPASS=1\nBUWIZ_NO_KEYCHAIN=1\nBIR_SFTP_DRY_RUN=1\nBIR_RELAY_URL=http://127.0.0.1:8787\nBUWIZ_SERVER_URL=http://localhost:3008\nBUWIZ_ACCOUNT_URL=http://localhost:3008\nBUWIZ_TRUST_KEYS=dGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXk").unwrap();
         load(&path).unwrap();
+        let server = bir_core::cloud_account::configured_server().unwrap();
+        assert_eq!(server.url, "http://localhost:3008");
+        assert_eq!(server.source, bir_core::cloud_account::UrlSource::Environment);
+        assert_eq!(bir_core::cloud_account::configured_account().unwrap().url, "http://localhost:3008");
+        // A development build makes its relay client on the loaded server and test key; production's key or a
+        // server off this computer loaded the same way is still refused.
+        #[cfg(debug_assertions)]
+        {
+            assert_eq!(bir_core::relay::server().unwrap(), "http://localhost:3008");
+            // Production's trust key (`bir_submit::trust::TRUST_KEYS`, public); nsh does not depend on bir-submit.
+            bir_core::config::force("BUWIZ_TRUST_KEYS", Some("qyjpSeVbiWvpVOX9mIzkPsuXARRi0de8SQTetHj5o4M"));
+            assert!(bir_core::relay::server().unwrap_err().to_string().contains("test key"));
+            bir_core::config::force("BUWIZ_TRUST_KEYS", Some("dGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXk"));
+            bir_core::config::force("BUWIZ_SERVER_URL", Some("https://api.buwiz.com"));
+            assert!(bir_core::relay::server().unwrap_err().to_string().contains("on this computer"));
+            bir_core::config::force("BUWIZ_SERVER_URL", Some("http://localhost:3008"));
+        }
         assert!(bir_core::db::test_environment());
         #[cfg(debug_assertions)]
         assert!(bir_app_api::account_gate::auth_bypass_enabled());
@@ -179,6 +208,41 @@ mod tests {
                 .collect::<Vec<_>>(),
             before
         );
+    }
+
+    #[test]
+    fn only_a_debug_or_buwiz_android_dev_build_honours_the_baked_list() {
+        assert!(enabled(true, None));
+        assert!(enabled(false, Some("1")));
+        for value in [None, Some(""), Some("0"), Some("true"), Some("1 "), Some("11")] {
+            assert!(!enabled(false, value), "{value:?}");
+        }
+        // A release build ignores whatever was baked, the account server and trust key included: nothing is loaded,
+        // so it keeps the compiled server and the built-in production trust key.
+        let baked = "BUWIZ_SERVER_URL=http://localhost:3008;BUWIZ_TRUST_KEYS=dev-test-key-not-production";
+        assert_eq!(honoured(false, Some(baked)), None);
+        assert!(merge(honoured(false, Some(baked)), Vec::new()).unwrap().is_empty());
+        assert_eq!(honoured(true, Some(baked)), Some(baked));
+        if !ENABLED {
+            assert_eq!(BAKED, None);
+        }
+    }
+
+    #[test]
+    fn the_account_server_and_trust_key_are_allowed_but_sending_is_not() {
+        assert_eq!(
+            parse_baked(
+                "BUWIZ_SERVER_URL=http://localhost:3008;BUWIZ_ACCOUNT_URL=http://localhost:3008;BUWIZ_TRUST_KEYS=dev-test-key-not-production"
+            )
+            .unwrap(),
+            vec![
+                ("BUWIZ_SERVER_URL".into(), "http://localhost:3008".into()),
+                ("BUWIZ_ACCOUNT_URL".into(), "http://localhost:3008".into()),
+                ("BUWIZ_TRUST_KEYS".into(), "dev-test-key-not-production".into()),
+            ]
+        );
+        assert!(parse_baked("BUWIZ_RELAY_SEND=1").is_err());
+        assert!(!ALLOWED.contains(&"BUWIZ_RELAY_SEND"));
     }
 
     #[test]
