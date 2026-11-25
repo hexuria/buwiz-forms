@@ -673,7 +673,11 @@ play-bundle build="":
     fi
     case "$BUILD" in ''|*[!0-9]*) echo "Invalid build number: $BUILD" >&2; exit 1 ;; esac
     TARGET_SDK="$({{PYTHON}} -c 'import json; print(json.load(open("nsh/nsh.json"))["android"]["targetSdk"])')"
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    # The build folder is this checkout's own (target/play-bundle) unless CARGO_TARGET_DIR is set: Cargo cannot tell two
+    # checkouts of the same crate version apart in a shared folder, so a bundle could link another worktree's bir-core,
+    # form definitions included, with no error.
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/play-bundle}"
+    echo "build: app $(git rev-parse --short=8 HEAD 2>/dev/null || echo ?), nsh $(git -C ../nsh rev-parse --short=8 HEAD 2>/dev/null || echo ?) beside it, tool $(nsh --version 2>/dev/null || echo missing), folder $CARGO_TARGET_DIR" >&2
     # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one.
     unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV
     # nsh builds libnsh.so in its generated workspace, which has no [profile.release]: this repository's own profile never

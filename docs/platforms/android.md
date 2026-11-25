@@ -52,7 +52,8 @@ Three steps on the owner's Mac. The first needs no secret; the second is the onl
 1. **Build** (`just play-bundle`, or `just play-bundle build=28` to choose the number). It builds the bundle, removes
    the debug signature `nsh package` puts on it and the updater's source, and checks the result: package
    `com.buwiz.ebirforms`, the expected `versionCode`, `targetSdkVersion` from `nsh.json`, backup off, not debuggable,
-   phone ABIs only (`scripts/android_bundle.py check`). It writes
+   phone ABIs only (`scripts/android_bundle.py check`). It builds in the checkout's own `target/play-bundle` unless
+   `CARGO_TARGET_DIR` is set, so a bundle never links crates compiled from another worktree. It writes
    `target/release-artifacts/eBIRForms-Android-<version>-<build>.aab`, unsigned.
 2. **Sign** (`just play-sign`): the owner types the upload key's password when `jarsigner` asks. It writes
    `…-signed.aab` beside the unsigned file, verifies it, and shows it in Finder.
