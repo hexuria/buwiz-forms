@@ -74,7 +74,8 @@ echo "at $(git -C "$checkout" log --oneline -1)"
 # shares one build folder between checkouts (a huacnlee/cargo build on the owner's Mac): another NSH checkout's crates
 # could end up in the store tool.
 nsh_cargo="$(cd "$checkout" && rustup which cargo 2>/dev/null)" || fail "rustup cannot name the NSH checkout's cargo"
-export PATH="$(dirname "$nsh_cargo"):$PATH"
+nsh_cargo_dir="$(dirname "$nsh_cargo")"
+export PATH="$nsh_cargo_dir:$PATH"
 case "$(cargo --version)" in *huacnlee/cargo*) fail "cargo is still $(cargo --version), which shares one build folder between checkouts" ;; esac
 echo "building with $(cargo --version) ($(command -v cargo))"
 
