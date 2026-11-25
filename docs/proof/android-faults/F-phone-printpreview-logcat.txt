@@ -1,0 +1,60 @@
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at bpgb.e(:com.google.android.gms@242335041@24.23.35 (190800-646585959):17)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at bpgp.onSucceeded(:com.google.android.gms@242335041@24.23.35 (190800-646585959):7)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at m.mw.onSucceeded(:com.google.android.gms.dynamite_cronetdynamite@242335041@24.23.35 (190800-0):3)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at m.lt.run(:com.google.android.gms.dynamite_cronetdynamite@242335041@24.23.35 (190800-0):25)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	... 6 more
+11-25 08:13:45.772  1630 18674 W GLSUser : Caused by: fkhe: Protocol message contained an invalid tag (zero).
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at fkea.k(:com.google.android.gms@242335041@24.23.35 (190800-646585959):39)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at fkid.c(:com.google.android.gms@242335041@24.23.35 (190800-646585959):309)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at fkid.i(:com.google.android.gms@242335041@24.23.35 (190800-646585959):8)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at fkgi.fe(:com.google.android.gms@242335041@24.23.35 (190800-646585959):25)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at fkgc.g(:com.google.android.gms@242335041@24.23.35 (190800-646585959):3)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at fkdw.e(:com.google.android.gms@242335041@24.23.35 (190800-646585959):1)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at fkdw.d(:com.google.android.gms@242335041@24.23.35 (190800-646585959):3)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at fkdw.p(:com.google.android.gms@242335041@24.23.35 (190800-646585959):1)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at bpdw.g(:com.google.android.gms@242335041@24.23.35 (190800-646585959):68)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	at bpdw.b(:com.google.android.gms@242335041@24.23.35 (190800-646585959):11)
+11-25 08:13:45.772  1630 18674 W GLSUser : 	... 10 more
+11-25 08:13:45.774  1630 18674 W GLSUser : [DeviceKeyStore] Cannot load key: Device key file not found.
+11-25 08:13:45.778   380 18871 I resolv  : GetAddrInfoHandler::run: {102 786534 102 983142 10143 0}
+11-25 08:13:45.778   380 18872 I resolv  : res_nmkquery: (QUERY, IN, AAAA)
+11-25 08:13:45.778   380 18873 I resolv  : res_nmkquery: (QUERY, IN, A)
+11-25 08:13:45.782   380 18872 I resolv  : res_nsend: used send_dg 269 terrno: 0
+11-25 08:13:45.782   380 18872 I resolv  : doQuery: rcode=0, ancount=8, return value=269
+11-25 08:13:45.818   380 18873 I resolv  : res_nsend: used send_dg 173 terrno: 0
+11-25 08:13:45.818   380 18873 I resolv  : doQuery: rcode=0, ancount=8, return value=173
+11-25 08:13:45.821  1630 17826 D TrafficStats: tagSocket(196) with statsTag=0x34000609, statsUid=10139
+11-25 08:13:45.838  1630 17826 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-25 08:13:45.839  1630 17826 W Conscrypt: 	at com.google.android.gms.org.conscrypt.Platform.setSocketWriteTimeout(:com.google.android.gms@242335041@24.23.35 (190800-646585959):204)
+11-25 08:13:45.839  1630 17826 W Conscrypt: 	at com.google.android.gms.org.conscrypt.ConscryptFileDescriptorSocket.setSoWriteTimeout(:com.google.android.gms@242335041@24.23.35 (190800-646585959):4)
+11-25 08:13:46.343  1630 17826 W Conscrypt: Could not set socket write timeout: java.net.SocketException: Socket closed
+11-25 08:13:46.343  1630 17826 W Conscrypt: 	at com.google.android.gms.org.conscrypt.Platform.setSocketWriteTimeout(:com.google.android.gms@242335041@24.23.35 (190800-646585959):204)
+11-25 08:13:46.343  1630 17826 W Conscrypt: 	at com.google.android.gms.org.conscrypt.ConscryptFileDescriptorSocket.setSoWriteTimeout(:com.google.android.gms@242335041@24.23.35 (190800-646585959):4)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: Voilatile gRPC failure INVALID_ARGUMENT: Application credential header not valid. Please fix the client to pass a valid application credential header. [CONTEXT service_id=6 ]
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: gbzz: INVALID_ARGUMENT: Application credential header not valid. Please fix the client to pass a valid application credential header.
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at gbzy.h(:com.google.android.gms@242335041@24.23.35 (190800-646585959):3)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at anbi.u(:com.google.android.gms@242335041@24.23.35 (190800-646585959):29)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at anbi.g(:com.google.android.gms@242335041@24.23.35 (190800-646585959):97)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at efkz.b(:com.google.android.gms@242335041@24.23.35 (190800-646585959):39)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at efkr.a(:com.google.android.gms@242335041@24.23.35 (190800-646585959):274)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at ehaz.call(:com.google.android.gms@242335041@24.23.35 (190800-646585959):1026)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at java.util.concurrent.FutureTask.run(FutureTask.java:264)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at angs.c(:com.google.android.gms@242335041@24.23.35 (190800-646585959):50)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at angs.run(:com.google.android.gms@242335041@24.23.35 (190800-646585959):76)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at anmg.run(:com.google.android.gms@242335041@24.23.35 (190800-646585959):8)
+11-25 08:13:46.377  1630 18674 W GlsClientGrpc: 	at java.lang.Thread.run(Thread.java:1012)
+11-25 08:13:46.381  1630  2709 I ActivityScheduler: nextTriggerTime: 101747672, in 64283ms, detectorType: 39, FULL_TYPE alarmWindowMillis: 200000
+11-25 08:13:46.740   597  3488 E TaskPersister: File error accessing recents directory (directory doesn't exist?).
+11-25 08:13:46.856  1276  1443 D EGL_emulation: app_time_stats: avg=46822.60ms min=46822.60ms max=46822.60ms count=1
+11-25 08:13:46.924   597   621 D CompatChangeReporter: Compat change id reported: 296060945; UID 10143; state: ENABLED
+11-25 08:13:47.697   597  1163 W IPCThreadState: Sending oneway calls to frozen process.
+11-25 08:13:47.697   597  1163 W IPCThreadState: Sending oneway calls to frozen process.
+11-25 08:13:47.697   597  1163 W IPCThreadState: Sending oneway calls to frozen process.
+11-25 08:13:47.698  4346  4432 I BugleRcsEngine: handleMessage processing message:[NOTIFY_UPTIME_IGNORE_STATE_CHANGED] with [non-null]:RcsEngineImpl reference [CONTEXT log_prefix="RcsEngineImpl[DUAL_REG]:[425efefc-1dbf]>Handler" thread_id=66 ]
+11-25 08:13:47.698  4346  4404 I BugleRcsEngine: Connected state: [1], networkType: [WIFI] [CONTEXT thread_id=53 ]
+11-25 08:13:47.700  1630  2868 I ChimeraSrvcProxy: NullBinder for android.net.action.RECOMMEND_NETWORKS triggering remote TransactionTooLargeException due to Service without Chimera impl
+11-25 08:13:47.700  1630  2868 W .gms.persistent: Large reply transaction of 1056768 bytes, interface descriptor , code 1
+11-25 08:13:47.702  4346  4432 I BugleRcsEngine: No RCS Configuration was found in Bugle for simID: redacted-pii:sim_id[chars:20,last3:897] [CONTEXT log_prefix="ProvisioningEngineDataRetriever" thread_id=66 ]
+11-25 08:13:48.313     0     0 I logd    : logdr: UID=2000 GID=2000 PID=18878 n tail=0 logMask=99 pid=0 start=0ns deadline=0ns
