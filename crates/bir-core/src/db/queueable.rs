@@ -13,9 +13,10 @@ use super::drafts::{
     AbandonedClaimRelease, abandoned_claim_audit, claim_fields_partial, claim_fields_present,
     filing_status_to_db, require_abandoned_release_reason,
 };
-use super::receipts::ReceiptConfirmationOutcome;
+use super::receipts::{ReceiptConfirmationOutcome, ReceiptSource};
 use super::{Database, DbError, SubmissionReceipt};
 use crate::forms::FilingStatus;
+use crate::forms::dry_run::is_dry_run;
 use crate::forms::queueable::QueueableForm;
 
 /// Result of claiming one exact queued generation before PUT.
@@ -593,10 +594,22 @@ impl Database {
         let mut draft = current.clone();
         let mut snapshot_id = None;
         let mut marked_amended = false;
-        if matches!(
-            previous_status,
-            FilingStatus::Submitted | FilingStatus::Confirmed
-        ) {
+        // A dry run reached nobody: it is no original to amend. It goes back
+        // to a plain Draft, as a cancelled queue does (no snapshot, no
+        // amended mark), and is sent again as the original.
+        let dry_run = is_dry_run(&previous_status, current.lifecycle().submitted_dry_run);
+        if dry_run && replacement.is_some() {
+            return Err(DbError::Other(format!(
+                "This {} return was a dry run: nothing reached the BIR, so there is no filed return to amend",
+                F::FORM_CODE
+            )));
+        }
+        if !dry_run
+            && matches!(
+                previous_status,
+                FilingStatus::Submitted | FilingStatus::Confirmed
+            )
+        {
             let lifecycle = current.lifecycle();
             let (xml, source) = sent_payload(&current);
             let period_key = current.filing_period().to_period_key();
@@ -1138,6 +1151,7 @@ impl Database {
     fn find_submitted_queueable_by_filename<F: QueueableForm>(
         &self,
         receipt_filename: &str,
+        source: ReceiptSource,
     ) -> Result<Option<F>, DbError> {
         fn base(name: &str) -> String {
             let name = name.rsplit(['/', '\\']).next().unwrap_or(name);
@@ -1154,11 +1168,13 @@ impl Database {
         let rows = stmt.query_map(params![F::FORM_CODE], |row| row.get::<_, String>(0))?;
         for raw in rows {
             let draft: F = serde_json::from_str(&raw?)?;
-            if draft
-                .lifecycle()
-                .submission_filename
-                .as_deref()
-                .is_some_and(|name| base(name) == wanted)
+            // A dry run is never matched to a BIR email.
+            if source.may_confirm(draft.lifecycle().submitted_dry_run)
+                && draft
+                    .lifecycle()
+                    .submission_filename
+                    .as_deref()
+                    .is_some_and(|name| base(name) == wanted)
             {
                 return Ok(Some(draft));
             }
@@ -1166,15 +1182,30 @@ impl Database {
         Ok(None)
     }
 
+    /// A BIR email's receipt confirms the Submitted return it names, never a
+    /// dry run (it reached nobody: the receipt is Ignored, as one with no
+    /// return is).
     pub fn confirm_queueable_from_receipt<F: QueueableForm>(
         &self,
         receipt: &SubmissionReceipt,
     ) -> Result<ReceiptConfirmationOutcome, DbError> {
+        self.confirm_queueable_from_receipt_as::<F>(receipt, ReceiptSource::BirEmail)
+    }
+
+    pub(crate) fn confirm_queueable_from_receipt_as<F: QueueableForm>(
+        &self,
+        receipt: &SubmissionReceipt,
+        source: ReceiptSource,
+    ) -> Result<ReceiptConfirmationOutcome, DbError> {
+        let matches = |draft: &F| {
+            matches!(draft.lifecycle().status, FilingStatus::Submitted)
+                && source.may_confirm(draft.lifecycle().submitted_dry_run)
+        };
         let by_period = match F::parse_period_code(&receipt.period) {
             Some((year, period)) => {
                 let column = crate::forms::queueable::period_column(&period);
                 self.get_queueable_draft::<F>(&receipt.tin, year, column)?
-                    .filter(|draft| matches!(draft.lifecycle().status, FilingStatus::Submitted))
+                    .filter(|draft| matches(draft))
             }
             None => None,
         };
@@ -1184,12 +1215,12 @@ impl Database {
         // filename the worker uploaded instead.
         let draft = match by_period {
             Some(draft) => Some(draft),
-            None => self.find_submitted_queueable_by_filename::<F>(&receipt.filename)?,
+            None => self.find_submitted_queueable_by_filename::<F>(&receipt.filename, source)?,
         };
         let Some(mut draft) = draft else {
             return Ok(ReceiptConfirmationOutcome::Ignored);
         };
-        if !matches!(draft.lifecycle().status, FilingStatus::Submitted) {
+        if !matches(&draft) {
             return Ok(ReceiptConfirmationOutcome::Ignored);
         }
         let receipt_id = receipt.id.ok_or_else(|| {
@@ -1472,23 +1503,184 @@ mod tests {
         assert_eq!(kept[0].period_key, "M06");
     }
 
-    #[test]
-    fn reverting_a_dry_run_return_for_amendment_clears_the_dry_run_fact() {
-        let db = Database::open_in_memory_for_tests().unwrap();
+    fn dry_run() -> TestForm {
         let mut form = queued();
         let filename = form.submission_filename();
         form.lifecycle.transition_to_submitted(filename, true);
-        store(&db, &form);
+        form
+    }
+
+    fn relay_sent() -> TestForm {
+        let mut form = submitted();
+        form.lifecycle.relay_receipt = Some("a.b.c".to_string());
+        form
+    }
+
+    fn paid() -> TestForm {
+        let mut form = confirmed();
+        form.lifecycle.status = FilingStatus::Paid;
+        form
+    }
+
+    /// A dry run reached nobody: Revert to Draft gives back a plain Draft, as a
+    /// cancelled queue does (no snapshot, no amended mark, no sent payload).
+    #[test]
+    fn reverting_a_dry_run_is_a_plain_revert_and_leaves_no_original() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let id = store(&db, &dry_run());
         let result = db
             .revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
             .unwrap();
-        assert!(result.marked_amended);
+        assert_eq!(result.previous_status, FilingStatus::Submitted);
+        assert_eq!(result.snapshot_id, None);
+        assert!(!result.marked_amended);
+        assert!(!result.draft.is_amended);
         assert!(!result.draft.lifecycle.submitted_dry_run);
+        assert_eq!(rows(&db), vec![(id, 6, "Draft".to_string())]);
         let stored = db
             .get_queueable_draft::<TestForm>(TIN, 2025, 6)
             .unwrap()
             .unwrap();
+        assert!(stored.lifecycle.is_editable());
+        assert!(!stored.is_amended);
         assert!(!stored.lifecycle.submitted_dry_run);
+        assert!(stored.lifecycle.submitted_payload.is_none());
+        assert!(stored.lifecycle.submitted_at.is_none());
+        assert!(snapshots(&db).is_empty());
+        // Sent again, it is the original.
+        assert!(
+            !db.has_filed_original(TIN, TestForm::CODE, 2025, "M06", None)
+                .unwrap()
+        );
+    }
+
+    /// An amendment's first save over a dry run is refused: there is no filed
+    /// return to amend, and the dry run stays as it was.
+    #[test]
+    fn an_amendment_saved_over_a_dry_run_is_refused() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let sent = dry_run();
+        let id = store(&db, &sent);
+        let mut amended = sent.clone();
+        amended.lifecycle.revert_to_draft();
+        amended.is_amended = true;
+        amended.id = Some(id);
+        let base = AmendmentBase {
+            status: FilingStatus::Submitted,
+            updated_at: sent.lifecycle.updated_at.clone(),
+        };
+        let error = db
+            .save_queueable_amendment(&amended, &base)
+            .map(|_| ())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("dry run"), "{error}");
+        assert_eq!(rows(&db), vec![(id, 6, "Submitted".to_string())]);
+        assert!(snapshots(&db).is_empty());
+    }
+
+    /// A real send, one through the relay with a receipt, and a Confirmed one
+    /// still go back as an amendment with their snapshot; Paid never reverts.
+    #[test]
+    fn reverting_a_real_or_relay_send_or_a_confirmed_return_still_amends() {
+        for form in [submitted(), relay_sent(), confirmed()] {
+            let db = Database::open_in_memory_for_tests().unwrap();
+            store(&db, &form);
+            let result = db
+                .revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
+                .unwrap();
+            assert!(result.marked_amended, "{:?}", form.lifecycle.status);
+            assert!(result.snapshot_id.is_some());
+            assert_eq!(snapshots(&db).len(), 1);
+        }
+        let db = Database::open_in_memory_for_tests().unwrap();
+        store(&db, &paid());
+        assert!(
+            db.revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
+                .is_err()
+        );
+    }
+
+    /// Matched by the uploaded filename (an event-based form's period does
+    /// not key it), a BIR email skips a dry run that shares the filename and
+    /// confirms the real send; with only the dry run, it is Ignored.
+    #[test]
+    fn a_bir_email_by_filename_skips_a_dry_run_and_confirms_the_real_send() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let dry = dry_run();
+        let filename = dry.lifecycle.submission_filename.clone().unwrap();
+        let dry_id = store(&db, &dry);
+        let local_now =
+            chrono::Utc::now() + chrono::Duration::hours(8) + chrono::Duration::minutes(1);
+        let confirmation = crate::receipt::BirReceiptConfirmation {
+            filename: format!("{}.xml", filename.split('#').next().unwrap()),
+            date_received: local_now.date_naive(),
+            time_received: local_now.time(),
+            source_from: Some("ebirforms-noreply@bir.gov.ph".to_string()),
+            raw_text: "This confirms receipt".to_string(),
+            raw_html: None,
+        };
+        let (mut receipt, _) = db.save_submission_receipt(&confirmation).unwrap();
+        receipt.period = "03152025_T123456".to_string();
+        assert_eq!(
+            db.confirm_queueable_from_receipt::<TestForm>(&receipt)
+                .unwrap(),
+            ReceiptConfirmationOutcome::Ignored
+        );
+        // A real send of another period under the same uploaded filename.
+        let mut real = submitted();
+        real.month = 7;
+        real.lifecycle.submission_filename = Some(filename.clone());
+        let real_id = store(&db, &real);
+        assert_eq!(
+            db.confirm_queueable_from_receipt::<TestForm>(&receipt)
+                .unwrap(),
+            ReceiptConfirmationOutcome::Confirmed
+        );
+        let status = |id: i64| -> String {
+            db.conn
+                .query_row(
+                    "SELECT status FROM form_drafts WHERE id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        assert_eq!(status(dry_id), "Submitted");
+        assert_eq!(status(real_id), "Confirmed");
+    }
+
+    /// save-009's original: a dry run is none; a real send, a relay send,
+    /// Confirmed and Paid are.
+    #[test]
+    fn a_dry_run_is_not_a_filed_original() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        store(&db, &dry_run());
+        assert!(
+            !db.has_filed_original(TIN, TestForm::CODE, 2025, "M06", None)
+                .unwrap()
+        );
+        // Flag under `lifecycle` (another build's shape) reads the same.
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET data_json = json_set(json_remove(data_json, '$.submitted_dry_run'), '$.lifecycle', json('{\"submitted_dry_run\":true}'))",
+                [],
+            )
+            .unwrap();
+        assert!(
+            !db.has_filed_original(TIN, TestForm::CODE, 2025, "M06", None)
+                .unwrap()
+        );
+        for form in [submitted(), relay_sent(), confirmed(), paid()] {
+            let db = Database::open_in_memory_for_tests().unwrap();
+            store(&db, &form);
+            assert!(
+                db.has_filed_original(TIN, TestForm::CODE, 2025, "M06", None)
+                    .unwrap(),
+                "{:?}",
+                form.lifecycle.status
+            );
+        }
     }
 
     #[test]
