@@ -698,6 +698,14 @@ play-bundle build="":
         exit 1
     fi
     echo "nsh: $HAVE; Android release runtime at $PIN, classes.dex sha256 $(shasum -a 256 "$RUNTIME/classes.dex" | cut -d' ' -f1)"
+    # NSH's CLI sets CC and AR for Android but not RANLIB, which the vendored OpenSSL needs: the NDK has only llvm-ranlib
+    # (setup-linux-nsh.sh and setup-android-windows.ps1 set the same).
+    SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
+    NDK="${ANDROID_NDK_HOME:-$(ls -d "$SDK"/ndk/* 2>/dev/null | sort -V | tail -1)}"
+    RANLIB_NDK="$(ls "$NDK"/toolchains/llvm/prebuilt/*/bin/llvm-ranlib 2>/dev/null | head -1)"
+    [ -x "$RANLIB_NDK" ] || { echo "❌ No llvm-ranlib in the NDK ($NDK): run scripts/setup-android-macos.sh." >&2; exit 1; }
+    export RANLIB_aarch64_linux_android="${RANLIB_aarch64_linux_android:-$RANLIB_NDK}"
+    export RANLIB_armv7_linux_androideabi="${RANLIB_armv7_linux_androideabi:-$RANLIB_NDK}"
     # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one.
     unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV
     # nsh builds libnsh.so in its generated workspace, which has no [profile.release]: this repository's own profile never
