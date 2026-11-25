@@ -4032,4 +4032,62 @@ mod tests {
         assert_eq!(context["profile"]["registered_name"], "TEST");
         assert!(context["past_returns"].as_array().is_some());
     }
+
+    #[test]
+    fn form_fill_1702mx_nolco_populates_official_xml() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1702MX", "year": 2025, "period": 0, "tin": TIN}),
+        )
+        .unwrap();
+        let reply = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized": "true",
+                    "frm1702MX:txtPg3IShed7_4Year": "2022",
+                    "frm1702MX:txtPg3IShed7_4A": "300000",
+                    "frm1702MX:txtPg3IShed7_4B": "50000",
+                    "frm1702MX:txtPg3IShed7_4C": "20000",
+                    "frm1702MX:txtPg3IShed7_4D": "80000",
+                    "frm1702MX:txtPg3IShed8_4Year": "2022",
+                    "frm1702MX:txtPg4IShed8_4A": "400000",
+                    "frm1702MX:txtPg4IShed8_4B": "60000",
+                    "frm1702MX:txtPg4IShed8_4C": "25000",
+                    "frm1702MX:txtPg4IShed8_4D": "90000"
+                }
+            }),
+        )
+        .unwrap();
+        assert!(
+            reply.get("refused").is_none(),
+            "unexpected refusals: {reply}"
+        );
+
+        let draft = session.open.as_ref().expect("open 1702MX").draft.clone();
+        let typed: bir_core::forms::form_1702mx::Form1702MXDraft =
+            serde_json::from_value(draft).unwrap();
+        let xml = typed.to_bir_xml_payload();
+        let parsed = bir_core::bir_xml::parse_bir_xml_checked(&xml).unwrap();
+        for (key, expected) in [
+            ("frm1702MX:txtPg3IShed7_4A", "300,000.00"),
+            ("frm1702MX:txtPg3IShed7_4B", "50,000.00"),
+            ("frm1702MX:txtPg3IShed7_4C", "20,000.00"),
+            ("frm1702MX:txtPg3IShed7_4D", "80,000.00"),
+            ("frm1702MX:txtPg4IShed8_4A", "400,000.00"),
+            ("frm1702MX:txtPg4IShed8_4B", "60,000.00"),
+            ("frm1702MX:txtPg4IShed8_4C", "25,000.00"),
+            ("frm1702MX:txtPg4IShed8_4D", "90,000.00"),
+        ] {
+            assert_eq!(
+                parsed.get(key).map(String::as_str),
+                Some(expected),
+                "form.fill official XML missing {key}"
+            );
+        }
+    }
 }

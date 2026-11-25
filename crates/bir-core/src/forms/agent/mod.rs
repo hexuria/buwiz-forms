@@ -1707,7 +1707,22 @@ fn write_bound_box(
                     .map_err(|_| format!("`{key}` must be a whole number (got `{text}`)"))?;
                 Value::from(number)
             };
-            set_path(draft, path, leaf, &def.rows)
+            set_path(draft, path, leaf.clone(), &def.rows)?;
+            // `WholePesoInput` (1702MX) stores `{ amount, raw }` and serializes
+            // `raw` into the official BIR XML and print field map: keep `raw`
+            // in step with `amount` in official format (`1,234.00`, `0`, or ``).
+            if let Some(parent) = path.strip_suffix("/amount")
+                && let Some(Value::Object(slot)) = draft.pointer_mut(parent)
+                && slot.contains_key("raw")
+            {
+                let raw_text = match leaf.as_i64() {
+                    None => String::new(),
+                    Some(0) => "0".to_string(),
+                    Some(number) => crate::official_xml::official_amount(number as f64),
+                };
+                slot.insert("raw".to_string(), Value::String(raw_text));
+            }
+            Ok(())
         }
         // A select's blank official choice ("Select Tax Rate") when the
         // binding lists none: every option sets the same one field, so blank
@@ -2952,5 +2967,101 @@ mod tests {
         assert!(
             gate(&def, "mA", None).is_some_and(|gate| matches!(gate, Gate::Lock(Lock::Election)))
         );
+    }
+
+    /// Official 1702MX runtime fixture (`rules/forms/1702mx-v2018c/fixtures/
+    /// runtime-control-inventory-v796.json`, lines 4011-4058 and 4205-4252):
+    /// Schedule 7.1 and 8.1 rows 4-6 columns A-D are open NOLCO inputs.
+    /// Filling them via `agent::fill` (used by both the form page and
+    /// `form.fill`) must populate `WholePesoInput.raw` alongside `amount` so
+    /// `Form1702MXDraft::to_bir_xml_payload()` carries every value to BIR.
+    #[test]
+    fn form_1702mx_nolco_fill_populates_official_xml() {
+        let kind = AgentFormKind::from_code("1702MX").unwrap();
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "DEMO CORP",
+            "tin": {"segment1": "000", "segment2": "123", "segment3": "453", "branch": "00000"},
+            "rdo_code": "039",
+            "line_of_business": "Services",
+            "registered_address": "1 Example Street",
+            "zip_code": "1600",
+            "phone": "",
+            "email": "",
+            "default_form_type": "1702MXv2018c"
+        }))
+        .unwrap();
+        let mut draft = serde_json::to_value(
+            crate::forms::form_1702mx::Form1702MXDraft::new_from_profile(&profile, 2025),
+        )
+        .unwrap();
+        fill(
+            kind,
+            &mut draft,
+            "frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized",
+            &Value::from("true"),
+            None,
+        )
+        .unwrap();
+
+        let cases = [
+            ("frm1702MX:txtPg3IShed7_4A", "300000", "300,000.00"),
+            ("frm1702MX:txtPg3IShed7_4B", "50000", "50,000.00"),
+            ("frm1702MX:txtPg3IShed7_4C", "20000", "20,000.00"),
+            ("frm1702MX:txtPg3IShed7_4D", "80000", "80,000.00"),
+            ("frm1702MX:txtPg3IShed7_5A", "200000", "200,000.00"),
+            ("frm1702MX:txtPg3IShed7_5B", "30000", "30,000.00"),
+            ("frm1702MX:txtPg3IShed7_5C", "10000", "10,000.00"),
+            ("frm1702MX:txtPg3IShed7_5D", "40000", "40,000.00"),
+            ("frm1702MX:txtPg3IShed7_6A", "100000", "100,000.00"),
+            ("frm1702MX:txtPg3IShed7_6B", "15000", "15,000.00"),
+            ("frm1702MX:txtPg3IShed7_6C", "5000", "5,000.00"),
+            ("frm1702MX:txtPg3IShed7_6D", "25000", "25,000.00"),
+            ("frm1702MX:txtPg4IShed8_4A", "400000", "400,000.00"),
+            ("frm1702MX:txtPg4IShed8_4B", "60000", "60,000.00"),
+            ("frm1702MX:txtPg4IShed8_4C", "25000", "25,000.00"),
+            ("frm1702MX:txtPg4IShed8_4D", "90000", "90,000.00"),
+            ("frm1702MX:txtPg4IShed8_5A", "250000", "250,000.00"),
+            ("frm1702MX:txtPg4IShed8_5B", "35000", "35,000.00"),
+            ("frm1702MX:txtPg4IShed8_5C", "15000", "15,000.00"),
+            ("frm1702MX:txtPg4IShed8_5D", "45000", "45,000.00"),
+            ("frm1702MX:txtPg4IShed8_6A", "150000", "150,000.00"),
+            ("frm1702MX:txtPg4IShed8_6B", "20000", "20,000.00"),
+            ("frm1702MX:txtPg3IShed8_6C", "10000", "10,000.00"),
+            ("frm1702MX:txtPg4IShed8_6D", "30000", "30,000.00"),
+        ];
+        for (key, value, _) in cases {
+            fill(kind, &mut draft, key, &Value::from(value), None).unwrap();
+        }
+        compute(kind, &mut draft).unwrap();
+
+        let typed: crate::forms::form_1702mx::Form1702MXDraft =
+            serde_json::from_value(draft.clone()).unwrap();
+        let xml = typed.to_bir_xml_payload();
+        let parsed = crate::bir_xml::parse_bir_xml_checked(&xml).unwrap();
+        for (key, _, expected) in cases {
+            assert_eq!(
+                parsed.get(key).map(String::as_str),
+                Some(expected),
+                "official XML missing or mismatched for {key}"
+            );
+        }
+
+        // Clearing back to 0 keeps amount and raw synchronized.
+        fill(
+            kind,
+            &mut draft,
+            "frm1702MX:txtPg3IShed7_4A",
+            &Value::from("0"),
+            None,
+        )
+        .unwrap();
+        let zeroed: crate::forms::form_1702mx::Form1702MXDraft =
+            serde_json::from_value(draft).unwrap();
+        assert_eq!(
+            zeroed.schedule_7_1.rows[0].amount.amount,
+            Some(crate::forms::form_1702mx::WholePeso(0))
+        );
+        assert_eq!(zeroed.schedule_7_1.rows[0].amount.raw, "0");
     }
 }

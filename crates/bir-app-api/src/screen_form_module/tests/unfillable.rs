@@ -168,6 +168,18 @@ fn f3_1702mx_nolco_amounts_are_fillable() {
     assert_eq!(map["frm1702MX:txtPg3IShed7_4D"], "50,000.00");
     // Column E (unapplied) is computed: 300000 - 100000 - 0 - 50000.
     assert_eq!(map["frm1702MX:txtPg3IShed7_4E"], "150,000");
+
+    // Official BIR XML upload payload (to_bir_xml_payload -> insert_money)
+    // must carry every typed NOLCO value (not blank `raw: ""`).
+    let typed_draft: bir_core::forms::form_1702mx::Form1702MXDraft =
+        serde_json::from_value(row1["draft"].clone()).unwrap();
+    let typed_xml = typed_draft.to_bir_xml_payload();
+    let typed_fields = bir_core::bir_xml::parse_bir_xml_checked(&typed_xml).unwrap();
+    assert_eq!(typed_fields["frm1702MX:txtPg3IShed7_4A"], "300,000.00");
+    assert_eq!(typed_fields["frm1702MX:txtPg3IShed7_4B"], "100,000.00");
+    assert_eq!(typed_fields["frm1702MX:txtPg3IShed7_4C"], "0");
+    assert_eq!(typed_fields["frm1702MX:txtPg3IShed7_4D"], "50,000.00");
+    assert_eq!(typed_fields["frm1702MX:txtPg3IShed7_4E"], "150000");
     // Row 4 (item 7) is the form's own current-year row: never an entry.
     for key in [
         "frm1702MX:txtPg3IShed7_7Year",
