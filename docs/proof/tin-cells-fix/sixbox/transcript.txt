@@ -1,0 +1,78 @@
+SIX-BOX SIGN-IN CODE + SIGN-IN PIN — proof transcript
+App: buwiz-forms feat/relay-filing-signin @ e9bd76b1 (pull request #345)
+Kit sibling: hexuria/nsh fix/otp-input-burst @ 6149250d ("otp input: Leave the caret and the selection where the user puts them")
+nsh --version: nsh 0.6.1 (6149250)   cargo --version: cargo 1.100.0 (3acc79c0c 2026-11-05)   RUSTC_WRAPPER empty
+Build folder: /Users/devin/rig/sixbox/target (empty before, used by nothing else)
+Run environment: BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1, mock account server on localhost:3008, scratch database, invented emails only. No real account, never BIR_SFTP_LIVE, never Queue.
+Input method: real OS key events via CGEventPost (keyinject), key gaps as stated.
+
+CASE 1 — correct code as a 20 ms burst, five runs (email juana@example.com):
+  run1 code 246810 -> signed in   (POST /auth/email/verify + GET /me)
+  run2 code 246811 -> signed in
+  run3 code 246812 -> signed in
+  run4 code 246813 -> signed in
+  run5 code 246814 -> signed in
+  COUNT: 5/5
+
+CASE 2 — one wrong digit, corrected by selecting that one digit with the
+keyboard and typing over it (email juana5@example.com, code 246818):
+  typed 24(7) as first three digits — idx2 wrong (7 for 6), field read: "247"
+  shiftleft 1 selected the wrong digit; typed 6 over it — field read: "246"
+  typed remaining digits 818 at the caret (now at the end) -> auto-submit
+  -> signed in (gate gone, "Sign out of Buwiz" on the Account page). COUNT: 1/1
+  Note: a full six digits with a wrong digit auto-submits at once and the mock
+  refuses it; the correction is therefore exercised mid-entry, before the last
+  digit — the shape the instruction describes.
+
+CASE 3 — six-digit paste (email juana3@example.com, code 246819):
+  code placed on the clipboard, Cmd+V into the boxes -> auto-submit
+  -> signed in. COUNT: 1/1   (a second paste sign-in, juana@…/246815, is in the mock log from the rehearsal pass)
+
+CASE 4 — Select all then Delete empties the boxes, retype signs in
+(email juana4@example.com, code 246820):
+  typed first four digits 2468 — field read: "2468"
+  Cmd+A then Backspace — field read: "" (empty, verified through the agent plane)
+  retyped the full correct code as a 20 ms burst -> auto-submit -> signed in. COUNT: 1/1
+
+CASE 5 — sign-in PIN (masked, four digits, auto-submit), correct PIN 1234
+as a 20 ms burst, five runs, via Lock app in the account menu:
+  TIN boxes filled 000-000-000 first each run (the lock screen asks both);
+  PIN typed as a 20 ms burst.
+  run1..run5: each lock screen shot (runN-locked.png) shows empty boxes,
+  each unlock returns the app shell (runN-unlocked.png). COUNT: 5/5
+
+Mock-server evidence: /auth/email/start + "sign-in code for <email>: <code>"
+then POST /auth/email/verify + GET /me per successful case, in order, in the
+server log excerpt below.
+
+SERVER LOG EXCERPT (lines in order):
+[mock-account] GET /me
+[mock-account] sign-in code for juana@example.com: 246812
+[mock-account] POST /auth/email/verify
+[mock-account] GET /me
+[mock-account] sign-in code for juana@example.com: 246813
+[mock-account] POST /auth/email/verify
+[mock-account] GET /me
+[mock-account] sign-in code for juana@example.com: 246814
+[mock-account] POST /auth/email/verify
+[mock-account] GET /me
+[mock-account] sign-in code for juana@e246814xample.com: 246815
+[mock-account] POST /auth/email/verify
+[mock-account] GET /me
+[mock-account] sign-in code for juana@e246814xample.com: 246816
+[mock-account] POST /auth/email/verify
+[mock-account] GET /me
+[mock-account] sign-in code for juana2@example.com: 246817
+[mock-account] POST /auth/email/verify
+[mock-account] POST /auth/email/verify
+[mock-account] POST /auth/email/verify
+[mock-account] GET /me
+[mock-account] sign-in code for juana5@example.com: 246818
+[mock-account] POST /auth/email/verify
+[mock-account] GET /me
+[mock-account] sign-in code for juana3@example.com: 246819
+[mock-account] POST /auth/email/verify
+[mock-account] GET /me
+[mock-account] sign-in code for juana4@example.com: 246820
+[mock-account] POST /auth/email/verify
+[mock-account] GET /me
