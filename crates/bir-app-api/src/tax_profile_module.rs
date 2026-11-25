@@ -681,7 +681,7 @@ fn update_taxpayer(arguments: &HostArguments) -> HostResult {
 fn move_taxpayer_tin(arguments: &HostArguments) -> HostResult {
     let old_root = arguments.string(0)?;
     let new_root = arguments.string(1)?;
-    reject_wrong_check_digit(&new_root)?;
+    reject_wrong_check_digit(new_root)?;
     with_database(|db| {
         let moved = db
             .move_taxpayer_tin(old_root, new_root)
