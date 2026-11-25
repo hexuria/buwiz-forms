@@ -4180,35 +4180,59 @@ mod tests {
             json!({"code": "1701", "year": 2025, "period": 0, "tin": TIN}),
         )
         .unwrap();
-        let reply = call(
+
+        // A fresh 1701 is a single filer's: item 17 (spouse income) waits on
+        // item 16 Married, and Part IV's spouse boxes wait on a joint return
+        // (items 16 Married, 17 Yes, 18 Joint Filing). The page fades them;
+        // form.fill must refuse them with the same reasons.
+        let fresh = call(
             &mut session,
             "form.fill",
             json!({
                 "fields": {
-                    "frm1701:txtPg2Sched3AI8A": "1000000",
-                    "frm1701:txtPg2Sched4I3A": "50000",
-                    "frm1701:txtPg3Sched6I6A": "25000"
+                    "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+                    "frm1701:txtPg2I5SpouseName": "SPOUSE NAME",
                 }
             }),
         )
         .unwrap();
-        assert_eq!(
-            reply["filled"],
-            json!([]),
-            "fresh 1701 must refuse gated boxes: {reply}"
+        assert!(
+            fresh["filled"].as_array().unwrap().is_empty(),
+            "fresh 1701 should refuse both gated boxes: {fresh}"
         );
-        for key in [
-            "frm1701:txtPg2Sched3AI8A",
-            "frm1701:txtPg2Sched4I3A",
-            "frm1701:txtPg3Sched6I6A",
-        ] {
-            assert!(
-                reply["refused"][key]
-                    .as_str()
-                    .is_some_and(|s| !s.is_empty()),
-                "fresh 1701 should refuse {key}: {reply}"
-            );
-        }
+        let income_reason = fresh["refused"]["frm1701:rdoPg1I17SpouseIncomeYes"]
+            .as_str()
+            .unwrap_or("");
+        assert!(
+            income_reason.contains("married filer") && income_reason.contains("item 16"),
+            "item 17 should carry the item-16-Married gate reason, got: {income_reason}"
+        );
+        let tin_reason = fresh["refused"]["frm1701:txtPg2I5SpouseName"]
+            .as_str()
+            .unwrap_or("");
+        assert!(
+            tin_reason.contains("joint return") && tin_reason.contains("item 18"),
+            "spouse name should carry the joint-return gate reason, got: {tin_reason}"
+        );
+
+        // Counter-case: making the gating choices opens the same boxes.
+        let opened = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm1701:rdoPg1I16CivilStatusM": "true",
+                    "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+                    "frm1701:rdoPg1I18FilingStatusJ": "true",
+                    "frm1701:txtPg2I5SpouseName": "SPOUSE NAME",
+                }
+            }),
+        )
+        .unwrap();
+        assert!(
+            opened.get("refused").is_none(),
+            "once married + spouse income + joint filing are chosen the same boxes fill: {opened}"
+        );
     }
 
     /// Official 1702EX runtime fixture (`rules/forms/1702ex-v2018c/fixtures/
