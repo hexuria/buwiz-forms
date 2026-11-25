@@ -1,0 +1,18 @@
+case	row	part	result	detail
+columns	25	bank	position-ok	under Drawee Bank/Agency heading
+columns	25	number	position-ok	under Number heading
+columns	25	date	position-ok	under Date heading; MM/DD/YYYY sheet order (11/20/2026 prints as 11 20 2026)
+columns	25	amount	position-ok	pesos left of printed decimal mark, centavos right
+longest-bank	25	bank	TRUNCATED	'Rizal Commercial Banking Corporation International Remittance' (56 chars) prints as 'RIZAL' (5)
+longest-number	25	number	TRUNCATED	'111222333444555' (15 digits) prints as '111222' (6)
+small-amount	25	amount	ok	0.05 prints pesos 0, centavos 05
+12-digit-amount	26	amount	WRONG-VALUE	held 123456789012.34 prints as 23456789012.34; leading digit silently dropped (11 peso slots)
+longest-bank	26	bank	TRUNCATED	prints 'BANK ' (5 of 57 chars)
+longest-number	26	number	TRUNCATED	prints '987654' (6 of 18 digits)
+only-amount	27	amount	ok	7777777.77 prints with centavos 77; bank column shows grey no-bank bar by design
+only-bank	28	bank	ok-position	METRO (5 of 24 chars) under bank heading; number/date/amount empty as held
+row28-desc	28	label	OVERLAP	'MISCELLANEOUS EXCISE PAYMENT' prints over the row 28 '(specify)' label area; also present on main (pre-existing)
+all-rows	25-28	all	partial	see per-row rows above
+empty-part4	25-28	all	ok	all four rows blank when nothing held (2200A-head-empty.pdf)
+main-tell	25-28	all	blank-on-main	main 92b3e201 and pre d1777a31 print all rows blank although draft holds values
+other-boxes	all	all	unchanged	pdftotext diff head-vs-main: only Part IV region lines differ (17 diff lines, all rows 25-28)

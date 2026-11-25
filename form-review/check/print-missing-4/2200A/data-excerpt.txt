@@ -1,0 +1,23 @@
+2200A draft field values at print time (agent form.fields dump, head f8dc14c5,
+same values filled at pre d1777a31 and main 92b3e201 through the same write path):
+
+txtPay_TaxPayment = '33,333,333.33'   (item 23A payment made today)
+cashBank  = 'Rizal Commercial Banking Corporation International Remittance'  (56 chars)
+cashNum   = '111222333444555'         (15 digits)
+cashDate  = '11/20/2026'
+cashAmt   = '0.05'
+checkBank = 'Bank of the Philippine Islands Commonwealth Avenue Branch'      (57 chars)
+checkNum  = '987654321012345678'      (18 digits)
+checkDate = '11/24/2026'
+checkAmt  = '123456789012.34'         (12 whole digits + centavos)
+taxNum    = ''   taxDate = ''   taxAmt = '7777777.77'   (row 27: only the amount filled)
+othersDetails = 'Miscellaneous excise payment'
+othersBank = 'Metrobank Only Bank Case'   (row 28: only the bank filled; number/date/amount empty)
+
+Arithmetic (mine): the four row amounts as HELD sum to
+0.05 + 123,456,789,012.34 + 7,777,777.77 + 0 = 123,464,566,790.16.
+The return's printed payment total (item 23C) is 33,333,333.33 — the app does not
+tie Part IV rows to item 23 in any validation, so they differ by construction.
+The important comparison is per-row: what the paper prints vs what the draft holds.
+Row 26 as PRINTED reads 23,456,789,012.34 — not the held 123,456,789,012.34
+(the 12th leading digit is silently dropped by the 11-peso-slot comb).
