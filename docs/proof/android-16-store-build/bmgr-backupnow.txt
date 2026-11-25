@@ -1,0 +1,3 @@
+Running incremental backup for 1 requested packages.
+Package com.buwiz.ebirforms with result: Backup is not allowed
+Backup finished with result: Success

@@ -1,0 +1,3 @@
+`adb shell dumpsys backup | grep -i ebirforms` printed NOTHING (no lines mention the
+package anywhere in the backup service state), consistent with the backup being refused.
+The direct proof is in bmgr-backupnow.txt: "Package com.buwiz.ebirforms with result: Backup is not allowed".
