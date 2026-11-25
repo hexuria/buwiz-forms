@@ -326,6 +326,9 @@ export function checkText(r: { ok: boolean; still_pending: boolean; error: strin
 }
 
 /** The tracking line at the foot of the inbox section. */
+/** A build with no Google client id offers the app password only, and says so in one line. */
+export const GOOGLE_UNAVAILABLE = "Google sign-in is not available in this version. Use an app password.";
+
 export function trackingLine(s: Pick<InboxState, "tracking_enabled" | "still_pending">): string {
   if (!s.tracking_enabled) return "○ Verify your connection to activate email tracking.";
   return s.still_pending

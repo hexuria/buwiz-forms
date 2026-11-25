@@ -231,6 +231,8 @@ export interface InboxState {
     has_app_password: boolean;
     /** A usable Google refresh token exists on the profile or the inbox row. */
     oauth_connected: boolean;
+    /** This build can start Google's sign-in for mail (a client id and secret exist); false: offer the app password only. */
+    google_available: boolean;
     oauth_inbox_email: string | null;
     oauth_updated_at: string | null;
     /** A sibling on this inbox still has a Submitted return awaiting its BIR receipt. */
@@ -1168,6 +1170,10 @@ fn inbox_state_value(db: &Database, tin: &str) -> Result<HostValue, HostError> {
                 .is_some_and(|pw| !pw.trim().is_empty()),
         )
         .field("oauth_connected", oauth_connected)
+        .field(
+            "google_available",
+            bir_core::email::google_sign_in_available(),
+        )
         .field(
             "oauth_inbox_email",
             tokens
@@ -2165,6 +2171,11 @@ mod tests {
         assert_eq!(state["tracking_enabled"], false);
         assert_eq!(state["has_app_password"], false);
         assert_eq!(state["oauth_connected"], false);
+        // Whether Google is offered is the build's fact (a client id and secret), not the profile's.
+        assert_eq!(
+            state["google_available"],
+            bir_core::email::google_sign_in_available()
+        );
         assert_eq!(state["still_pending"], false);
         assert_eq!(state["matching_tins"], json!([HEAD]));
         assert_eq!(state["last_check_at"], Value::Null);

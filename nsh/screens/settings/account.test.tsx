@@ -84,7 +84,8 @@ for (const { name, size } of SIZES) {
     await app.waitFor("text:/view=new_taxpayer/");
   }, 60_000);
 
-  // Gmail is desktop only: its sign-in waits on a local web address a phone cannot answer (taxpayer/Inbox.tsx).
+  // Gmail is desktop only: its sign-in waits on a local web address a phone cannot answer (taxpayer/Inbox.tsx). On a desktop
+  // it also needs a build with a Google client id.
   if (name === "phone") {
     test("phone: Settings > Account has no Google card, so Gmail cannot be connected", async () => {
       const app = await openSettings(size, { google: true, solo: true }, "account");
@@ -116,6 +117,14 @@ for (const { name, size } of SIZES) {
       await none.waitFor("id:settings-google-empty");
       expectTexts(none, ["No taxpayer yet", "Add a taxpayer before connecting a Gmail account."]);
     }, 90_000);
+
+    test("desktop: a build with no Google client id offers no Connect, and says to use an app password", async () => {
+      const app = await openSettings(size, { google: "unavailable", solo: true }, "account");
+      await app.waitFor("id:settings-google");
+      expectTexts(app, ["Gmail", "Google sign-in is not available in this version. Use an app password.", "Receipt tracking"]);
+      expect(app.shows("id:settings-google-connect")).toBe(false);
+      expect(app.texts()).not.toContain("OAuth failed: GOOGLE_CLIENT_ID must be set in .env");
+    }, 60_000);
   }
 }
 

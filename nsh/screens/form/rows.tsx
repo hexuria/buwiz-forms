@@ -88,7 +88,8 @@ export function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow
   const numbered = !it.row_labels || it.numbered !== false;
   const rowName = (r: number) => (numbered ? String((it.start ?? 1) + r) : it.row_labels?.rows[r] || String((it.start ?? 1) + r));
   const openRow = signal<number | null>(null);
-  const filled = (r: number) => columns.some((c) => !emptyCell(s.box(keys[r][c.index]).value(), c.col.t));
+  const filled = (r: number) =>
+    columns.some((c) => !s.box(keys[r][c.index]).refusal?.() && !emptyCell(s.box(keys[r][c.index]).value(), c.col.t));
   return {
     item: it,
     testID: `fp-table-${keys[0]?.[0] ?? id}`,
@@ -99,9 +100,13 @@ export function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow
       columns
         .map((c) => {
           const box = s.box(keys[r][c.index]);
+          // A value the host refused is not the row's content: it never stored, so the line
+          // must not print it as if the row held it.
+          if (box.refusal?.()) return "";
           const v = box.value();
           if (emptyCell(v, c.col.t)) return "";
-          if (c.col.t === "sel") return box.options().find((o) => o.value === v)?.label.split(" — ")[0] ?? v;
+          // A choice shows its code; a value still on the wire ("catalog:2", the popup position) is not one.
+          if (c.col.t === "sel") return box.options().find((o) => o.value === v)?.label.split(" — ")[0] ?? (v.startsWith("catalog:") ? "" : v);
           return v === "true" ? c.col.l : v;
         })
         .filter(Boolean)
@@ -138,6 +143,17 @@ export function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow
     },
     openRow: () => openRow(),
     onOpenRow: (r) => {
+      // The one gate every way out passes through: Done, the X, Escape, a click outside, opening
+      // another row, a part-nav or Back click the scrim swallows. While any box of the open row
+      // carries a refusal the drawer stays open with the reason — the row can never be closed
+      // over and listed as if it existed. Fixing the box, clearing it or Delete row are the ways
+      // out. (A close the window itself ending the return forces is safe: the refused text was
+      // never stored, so nothing the draft holds is lost and nothing it does not hold is kept.)
+      const cur = openRow();
+      if (cur !== null && r !== cur && keys[cur]) {
+        const blocked = columns.some((c) => Boolean(s.box(keys[cur][c.index]).refusal?.()));
+        if (blocked) return;
+      }
       if (r === null) s.touch(id);
       openRow.set(r);
     },
@@ -562,6 +578,14 @@ function Saved(props: { text: string; testID: string }) {
 }
 
 /** One item of a part. */
+/** How many of a table's rows hold anything the filer typed (the paper's row count means nothing:
+ *  a row whose every drawn box is computed, or empty, is not a row the return has). */
+export function rowCount(s: FormSession, it: SchemaItem): number {
+  const keys = it.keys || [];
+  const cols = (it.cols || []).map((col, index) => ({ index, col })).filter((c) => c.col.t !== "hidden" && !c.col.c);
+  return keys.filter((row) => cols.some((c) => !s.box(row[c.index]).refusal?.() && !emptyCell(s.box(row[c.index]).value(), c.col.t))).length;
+}
+
 export function ItemRow(props: RowProps) {
   const s = props.s;
   const id = props.id;
@@ -620,7 +644,7 @@ export function ItemRow(props: RowProps) {
           <View class="flex-1" style={{ minWidth: rowHead(props.narrow()).labelMin ?? 0 }}>
             <Text variant="control" testID={`fp-label-${id}`}>{label}</Text>
           </View>
-          {it.rows ? <Text variant="meta" tone="fg3" class="pt-0.5">{`${it.rows} rows`}</Text> : null}
+          {it.rows && rowCount(props.s, it) > 0 ? <Text variant="meta" tone="fg3" class="pt-0.5">{rowCount(props.s, it) === 1 ? "1 row" : `${rowCount(props.s, it)} rows`}</Text> : null}
           {/* A profile TIN's own line under its boxes says it once; the row mark stays for every other profile row. */}
           <If when={info().fromProfile && !info().tinLine}>
             <Mark icon="user" id={id} tip={info().fromProfile} />

@@ -37,6 +37,10 @@
       }
     }
   },
+  "android": {
+    "targetSdk": 36,
+    "allowBackup": false
+  },
   "updater": {
     "github": "hexuria/buwiz-forms",
     "publicKey": "azPTfgyyZg7ggQ6w52Rx/Ma9BLfMVjnTvqOflxfMhsc="

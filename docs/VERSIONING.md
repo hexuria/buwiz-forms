@@ -1,7 +1,7 @@
 # Versions and build numbers
 
 One version number names a release everywhere: the downloads, the Mac App Store, the App Store for iPhone and iPad,
-and the Microsoft Store. This page says where that number lives, what each store adds to it, and how to raise
+the Microsoft Store and Google Play. This page says where that number lives, what each store adds to it, and how to raise
 it in one step.
 
 ## The two numbers
@@ -9,7 +9,7 @@ it in one step.
 | Number | Looks like | Where it lives | Who changes it |
 | --- | --- | --- | --- |
 | Version | `1.0.0` | `nsh/nsh.json` (`version`), the workspace `Cargo.toml`, `nsh/Cargo.toml`, `crates/bir-print/Cargo.toml`, and the lock files | `scripts/set_release_version.py`, never by hand |
-| Apple build number | `27` | Nowhere in the repository for a store build: `just app` and `just ios-appstore` ask App Store Connect for the highest build it has and use the next one (`scripts/bump_build.py --print-next`) | The recipe, at packaging time |
+| Apple build number | `27` | Nowhere in the repository for a store build: `just app`, `just ios-appstore` and `just play-bundle` ask App Store Connect for the highest build it has and use the next one (`scripts/bump_build.py --print-next`) | The recipe, at packaging time |
 
 `BUILD_NUMBER` in the `justfile` is only the fallback for a package made without asking App Store Connect.
 
@@ -21,13 +21,17 @@ it in one step.
 | Mac App Store | `1.0.0` (`CFBundleShortVersionString`) | The build number (`CFBundleVersion`) | Every upload needs a higher build number, even when the version is the same |
 | App Store, iPhone and iPad | `1.0.0` | The same build counter as the Mac (one App Store Connect app, one counter) | The same |
 | Microsoft Store | `1.0.0` | The package version `1.0.0.0` | Every upload needs a higher package version than the one before |
+| Google Play | `1.0.0` (`versionName`) | `versionCode`: the Apple build number | Every upload needs a higher `versionCode` than any Google Play already has, on any track |
 
 The Microsoft Store package has no separate build number. `scripts/package_nsh_windows.ps1` passes the version's
 third part to `scripts/package_msix.ps1`, which writes `Major.Minor.Patch.0`; the Store requires the fourth part to
 be 0. So for Windows the version itself is the only thing that can go up.
 
-Google Play is not packaged yet. When it is, its `versionName` is the version and its `versionCode` should be the
-Apple build number, so that one counter serves every store that has one.
+Google Play's `versionCode` is the Apple build number, so that one counter serves every store that has one:
+`just play-bundle` takes App Store Connect's next number, as the Apple recipes do. Google Play does not know App Store
+Connect, so two Google Play uploads with no Apple upload between them would get the same number, and Google Play
+refuses the second. Then pass the number yourself, one higher: `just play-bundle build=28`
+([platforms/android.md](platforms/android.md)).
 
 ## Raising the version
 

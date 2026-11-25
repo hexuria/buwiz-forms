@@ -5,7 +5,7 @@ import type { JSX } from "nsh";
 import { batch, signal, untracked, View } from "nsh";
 import type { Taxpayer } from "../../bir";
 import { errorText } from "../../lib/errors";
-import { app, back, go, store, toast } from "../../shell";
+import { app, back, go, replace, store, toast } from "../../shell";
 import { DigitCells, Dropdown, Field, FieldCell, FieldGrid, FormActions, PageHeader, Text, TextField } from "../../ui";
 import { SearchPick } from "../form/controls";
 import { startFromChoice } from "./actions";
@@ -103,13 +103,14 @@ export function NewTaxpayerPage() {
           startFromChoice("setup", headTin, y, { id, label: setup ? setup.name : "The setup" });
         }
         app.selectYear(y);
-        go("forms");
+        replace("forms");
         return;
       } catch (e) {
         toast(`${name} added, but it did not start from your choice: ${errorText(e)}`, "triangle-alert");
       }
     }
-    go("forms", { addYear: true });
+    // In place of this form, not after it: the taxpayer exists now, and Back must not return to the form that made it.
+    replace("forms", { addYear: true });
     toast(`${name} added. Add a tax year to choose its forms.`);
   }
 
