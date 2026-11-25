@@ -81,3 +81,14 @@ Evidence in C:\Users\Administrator\BuwizNsh\scratch\android-evidence\ — key sh
 
 ### 5. Sign-in/onboarding loss after force-stop
 - Steps: sign in, create taxpayer, force-stop app, relaunch. Result: Welcome gate again (partly dev artifact: BUWIZ_NO_KEYCHAIN=1). After re-sign-in the onboarding restarts at an EMPTY New-taxpayer form; the earlier taxpayer never resurfaces. Reproduced twice. Confound: mock account server is in-memory — but it was NOT restarted between the cycles, so the account identity should have matched; suspect taxpayers are keyed to something ephemeral or the post-sign-in flow always pushes creation regardless of existing data.
+
+---
+
+## TABLET SUPPLEMENT (buwiz_tab10, Pixel Tablet API 35 google_apis x86_64, 2560x1600)
+
+- a. install/first launch: app already installed; boots to sign-in gate — the gate and onboarding render as centered phone-width CARDS with wide empty margins (tab10-first.png, tab10-after-signin.png). No crash/blank frames.
+- b. sign-in: PASS, silent auto-approve, same as phone.
+- c. add taxpayer: PARTLY-PASS — created after struggle. Tablet-specific findings: (1) the New-taxpayer form uses a proper two-column wide layout, NOT a stretched phone layout (tab10-newtaxpayer.png); (2) in landscape the soft keyboard covers the entire lower half — ZIP/RDO/Phone/Email fields are unreachable while it is open, you must dismiss it first (layout does not scroll them clear); (3) keyboard auto-raises aggressively after each dropdown interaction, repeatedly covering the next field you need; (4) input corruption reproduced: address text interleaved into the Registered-name field ("Tab Testy1 Short St, Olongddd") and even ON-SCREEN KEYBOARD TAPS dropped characters (t,e,s,t taps produced "1te") — problem 4 is not adb-injection-only.
+- d-h partial: rotation PASS — at 10" portrait the desktop shell keeps a collapsed icon rail at top; landscape shows the FULL DESKTOP layout (tab10-home.png).
+- j. WIDTH USE — the headline answer: at 2560x1600 the app runs its DESKTOP shell, not a phone layout: left sidebar with Home / Form library / Calendar / Filings, a search box with a visible "Ctrl+K" hint, top bar with back/forward, notification bell, user chip "Admin · this device" (tab10-home.png). In portrait the sidebar collapses to icons (tab10-portrait.png). NOT a stretched phone layout at any point. Store-reviewer note: the visible "Ctrl+K" keyboard hint on a touch-only tablet is a desktop-ism. Split-screen: not tested (emulator instability budget).
+- Emulator environment note: during the tablet pass the SYSTEM launcher itself ANR'd ("Pixel Launcher isn't responding") — evidence the host is at its limit; app-level conclusions are still valid where noted, but timing-sensitive observations (ANRs) should be re-verified on hardware.
