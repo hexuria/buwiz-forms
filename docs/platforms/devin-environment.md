@@ -129,6 +129,35 @@ just mock-account &
 ~/BuwizNsh/nsh2404.sh nsh run --target android --port 8792
 ```
 
+### A Linux emulator machine from nothing
+
+What a new Linux machine needs before its first Android check (written from setting up `buwiz-forms-linux-5`, which
+booted API 35 in about two minutes and reached the app's first screen in about 14 minutes from a cold build):
+
+1. `ls -l /dev/kvm` and `test -r /dev/kvm -a -w /dev/kvm`: without KVM the emulator is software-only and too slow
+   for these checks; stop there.
+2. At least 40 GB free on the home volume: the NSH, app and three-ABI Android builds fill a smaller disk part way
+   through.
+3. Bring the checkout's `main` up to date (`git fetch && git merge --ff-only origin/main`) first: the setup script reads
+   the NSH pin from the checkout.
+4. `scripts/setup-linux-nsh.sh`. It ends with every line green, including `nsh android dev runtime` and
+   `nsh android release runtime` at the pin. Both are copies with the commit in `nsh-ref`. `nsh package` takes the
+   release one even for a development build. Never link a runtime into an NSH checkout's build folder, and never run
+   `nsh update`, which replaces the tool with Longbridge's latest release: either one makes every later check a check
+   of another NSH than the pin.
+5. `emulator -accel-check`, then `emulator -avd buwiz -no-window -no-audio -gpu swiftshader_indirect &` and wait for
+   `getprop sys.boot_completed` = 1.
+6. `just mock-account --auto-approve &` for unattended runs: without it a sign-in waits for an approval in a browser.
+7. `adb reverse tcp:3008 tcp:3008`. If the app stays on "Connecting…", the development host is dialling a port other
+   than `--port`: read it from `adb logcat` (`ws://127.0.0.1:<port>/ws`) and reverse that one to `--port` too.
+8. For recordings: `adb shell settings put system show_touches 1` (and `pointer_location 1` when coordinates matter).
+   `adb shell input text` takes `%s` for a space.
+
+A check that builds an older app commit uses that commit's own `NSH_PINNED_REF`: build the CLI and both runtimes at
+that pin into a separate tools folder (`~/BuwizNsh/tools-<pin>`, with `nsh-ref`), and point the build at it with
+`PATH` and `NSH_RUNTIME`, leaving `~/BuwizNsh/tools` at the current pin. Every report names the app commit, the
+NSH commit of the `nsh` tool and the SHA-256 of the runtime `classes.dex` the package used.
+
 ## Windows (Android)
 
 `scripts/setup-android-windows.ps1` installs JDK 17, the Android command-line tools, `platform-tools`, the emulator,
