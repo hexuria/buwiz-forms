@@ -84,6 +84,7 @@ export const dateLine = (r: ReturnRow): string => `${r.status === "Draft" ? "Sav
 
 /** The send states a card calls out, with its chip's words and tone (the host's `send.stage`). */
 export const SEND_CHIPS: Readonly<Record<string, { label: string; tone: "neutral" | "warning" | "danger" }>> = {
+  checking: { label: "Checking", tone: "neutral" },
   held: { label: "Held", tone: "neutral" },
   waiting: { label: "Retrying", tone: "warning" },
   needs_attention: { label: "Needs attention", tone: "warning" },

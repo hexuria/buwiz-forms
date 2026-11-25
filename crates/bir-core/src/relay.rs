@@ -187,20 +187,68 @@ pub(crate) async fn open() -> Result<RelaySession, TransportError> {
 }
 
 impl RelaySession {
-    /// Send the plain return `xml` under its eBIRForms file name.
+    /// Send the plain return `xml` under its eBIRForms file name. `note`
+    /// keeps the client's pending send on the claimed return before anything
+    /// could reach the BIR ([`bir_submit::Submitter::send_noting`]).
     pub(crate) async fn store(
         self,
         filename: &str,
         xml: &[u8],
+        note: bir_submit::Note<'_>,
     ) -> Result<StoreReport, TransportError> {
         let name = crate::transport::iaf_basename(filename);
-        match tokio::time::timeout(SEND_LIMIT, self.submitter.send(name, xml)).await {
+        match tokio::time::timeout(SEND_LIMIT, self.submitter.send_noting(name, xml, note)).await {
             Ok(sent) => send_outcome(sent),
             Err(_) => Err(TransportError::RelayUnknown(
                 "Sending took longer than 10 minutes and was stopped. The BIR may have received this return."
                     .into(),
             )),
         }
+    }
+}
+
+/// What the Buwiz server says of a send this app noted and did not see end
+/// ([`settle`]).
+#[derive(Debug)]
+pub(crate) enum Settlement {
+    /// A receipt that verified: finish the return as a send that went.
+    Sent(StoreReport),
+    /// No receipt: the outcome the send itself would have had.
+    Failed(TransportError),
+    /// Nothing to go on yet (the server cannot be asked, the person is signed
+    /// out or signed in elsewhere, the submission is still under way).
+    NotYet,
+    /// The server does not know the submission, or the record is unreadable.
+    Gone,
+}
+
+/// Ask the Buwiz server how the noted send `pending` (the stored
+/// `bir_submit::PendingSend` JSON) ended. Only through the client this
+/// build may send through ([`submitter`]: a development build's rules hold),
+/// and only with a sign-in for that server: otherwise nothing is asked.
+pub(crate) async fn settle(pending: &str) -> Settlement {
+    let Ok(pending) = serde_json::from_str::<bir_submit::PendingSend>(pending) else {
+        return Settlement::Gone;
+    };
+    let Ok(submitter) = submitter() else {
+        return Settlement::NotYet;
+    };
+    if signed_in_to(&submitter.config().server_url).is_err() {
+        return Settlement::NotYet;
+    }
+    settlement(submitter.settle(&pending).await)
+}
+
+/// The client's answer as the queue's, through [`send_outcome`]. Pure.
+pub(crate) fn settlement(settled: bir_submit::Settled) -> Settlement {
+    match settled {
+        bir_submit::Settled::Sent(sent) => match send_outcome(Ok(*sent)) {
+            Ok(report) => Settlement::Sent(report),
+            Err(error) => Settlement::Failed(error),
+        },
+        bir_submit::Settled::Failed(error) => Settlement::Failed(send_failure(error)),
+        bir_submit::Settled::NotYet => Settlement::NotYet,
+        bir_submit::Settled::Gone => Settlement::Gone,
     }
 }
 
@@ -221,16 +269,23 @@ pub(crate) fn send_outcome(sent: Result<Sent, SendError>) -> Result<StoreReport,
             simulated: sent.receipt.is_test() || sent.receipt.mode != "live",
             relay_receipt: Some(sent.receipt_jws),
         }),
-        Err(SendError::NotSent(reason)) if is_final_reason(&reason) => Err(
-            TransportError::Refused(TinRefusal::capped(&reason, REFUSAL_CHARS)),
-        ),
-        Err(SendError::NotSent(reason)) | Err(SendError::Counted { reason, .. }) => {
-            Err(TransportError::RelayFailed(reason))
+        Err(error) => Err(send_failure(error)),
+    }
+}
+
+/// [`send_outcome`] of a send that ended without a receipt.
+fn send_failure(error: SendError) -> TransportError {
+    match error {
+        SendError::NotSent(reason) if is_final_reason(&reason) => {
+            TransportError::Refused(TinRefusal::capped(&reason, REFUSAL_CHARS))
         }
-        Err(SendError::NotATry { reason, wait_until }) => {
-            Err(TransportError::RelayHeld { reason, wait_until })
+        SendError::NotSent(reason) | SendError::Counted { reason, .. } => {
+            TransportError::RelayFailed(reason)
         }
-        Err(SendError::MaybeSent(reason)) => Err(TransportError::RelayUnknown(reason)),
+        SendError::NotATry { reason, wait_until } => {
+            TransportError::RelayHeld { reason, wait_until }
+        }
+        SendError::MaybeSent(reason) => TransportError::RelayUnknown(reason),
     }
 }
 
