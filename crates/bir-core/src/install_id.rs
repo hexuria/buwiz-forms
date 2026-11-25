@@ -2,15 +2,14 @@
 //! (`install_id` in `/auth/email/start` and in the browser device flow's start, then in the device registration).
 //!
 //! It is 16–64 URL-safe characters and never a raw hardware value. It stays across sign-out.
-//! - iPhone, iPad: a random id, today in the file beside the database. It is the one item meant for the Keychain (so it
-//!   survives a delete and reinstall): `bir_submit::ios_storage` gains that call on the iPhone-storage branch, and it
-//!   goes in [`OsSources::keychain_get`] / [`OsSources::keychain_set`]. Until then the rule is written and tested here,
-//!   and the iOS arm answers "no Keychain".
+//! - iPhone, iPad: a random id kept by `bir_submit::ios_storage::install_id`: the Keychain first (this device only), so
+//!   it survives a delete and reinstall; a file beside the database when the Keychain is switched off
+//!   (`BUWIZ_NO_KEYCHAIN`) or cannot be used for any reason.
 //! - Android: a salted SHA-256 of `Settings.Secure.ANDROID_ID`, which the app crate reads through its Java access and
 //!   registers here ([`crate::platform::set_device_id_source`]).
 //! - macOS, Windows, Linux: a salted SHA-256 of the machine's id (IOPlatformUUID, MachineGuid, /etc/machine-id)
 //!   together with the OS user name. No new permission.
-//! - Otherwise (no Keychain, no machine id, `BUWIZ_NO_KEYCHAIN`): a random id in a file beside the database, logged
+//! - Otherwise (no machine id): a random id in a file beside the database, logged
 //!   as "random install id". The id itself is never logged.
 //! - A test environment (`EBIR_TEST_ENV`) always uses a random id in that file, which is then a scratch folder: a test
 //!   never reads the real machine id.
@@ -28,8 +27,6 @@ const SALT: &str = "buwiz-install-id/v1";
 /// Where the id came from (logged, never the id).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Origin {
-    /// The iOS Keychain item (made now, or by an earlier install).
-    Keychain,
     /// Hashed from the machine's (or Android's) id.
     Derived,
     /// The random id in the file beside the database.
@@ -39,9 +36,6 @@ pub enum Origin {
 /// What [`resolve`] reads. The real one is [`OsSources`]; tests give a fake.
 pub(crate) trait Sources {
     fn test_environment(&self) -> bool;
-    /// iOS with the Keychain on: the item's value (`Ok(None)` when there is none, `Err` when it cannot be read now).
-    fn keychain_get(&self) -> Option<Result<Option<String>, String>>;
-    fn keychain_set(&self, value: &str) -> Result<(), String>;
     /// The machine's id (desktops) or `ANDROID_ID` (Android); `None` on iOS and when it cannot be read.
     fn machine_id(&self) -> Option<String>;
     /// The OS user name, on desktops.
@@ -85,23 +79,7 @@ pub(crate) fn resolve(sources: &dyn Sources) -> (String, Origin) {
     if sources.test_environment() {
         return (from_file(&sources.folder()), Origin::File);
     }
-    if let Some(stored) = sources.keychain_get() {
-        match stored {
-            Ok(Some(id)) if valid(id.trim()) => return (id.trim().to_owned(), Origin::Keychain),
-            Ok(_) => {
-                let id = random();
-                match sources.keychain_set(&id) {
-                    Ok(()) => return (id, Origin::Keychain),
-                    Err(error) => {
-                        tracing::warn!("the install id could not be kept in the Keychain: {error}")
-                    }
-                }
-            }
-            Err(error) => {
-                tracing::warn!("the install id could not be read from the Keychain now: {error}")
-            }
-        }
-    } else if let Some(machine) = sources.machine_id().filter(|id| usable_machine_id(id)) {
+    if let Some(machine) = sources.machine_id().filter(|id| usable_machine_id(id)) {
         return (
             derive(&machine, sources.user_name().as_deref()),
             Origin::Derived,
@@ -158,10 +136,27 @@ pub fn install_id() -> String {
     {
         return id.clone();
     }
-    let (id, origin) = resolve(&sources);
-    tracing::info!("install id: {origin:?}");
+    let (id, origin) = resolve_here(&sources, &folder);
+    tracing::info!("install id: {origin}");
     *cache = Some((folder, id.clone()));
     id
+}
+
+/// [`resolve`], except on iPhone and iPad outside a test environment: there `bir_submit::ios_storage::install_id` keeps
+/// it (the Keychain first, else its file beside the database), offered a fresh random id for a first install.
+fn resolve_here(sources: &OsSources, folder: &Path) -> (String, String) {
+    #[cfg(target_os = "ios")]
+    if !sources.test_environment() {
+        let kept = bir_submit::ios_storage::install_id(
+            folder,
+            !crate::platform::keychain_disabled(),
+            Some(&random()),
+        );
+        return (kept.value, format!("{:?}", kept.source));
+    }
+    let _ = folder;
+    let (id, origin) = resolve(sources);
+    (id, format!("{origin:?}"))
 }
 
 /// The `platform` the server is told: ios, ipados, android, macos, windows or linux.
@@ -231,23 +226,12 @@ fn ios_machine() -> String {
     }
 }
 
-/// The real sources: the Keychain on iOS, the machine's id on desktops, `ANDROID_ID` on Android.
+/// The real sources: the machine's id on desktops, `ANDROID_ID` on Android (iOS goes to `bir_submit::ios_storage`).
 pub(crate) struct OsSources;
 
 impl Sources for OsSources {
     fn test_environment(&self) -> bool {
         cfg!(test) || crate::db::test_environment()
-    }
-
-    // iPhone and iPad: THE PLACE FOR THE KEYCHAIN CALL (the install-id API `bir_submit::ios_storage` gains on the
-    // iPhone-storage branch: Keychain first, a file beside the database otherwise). Until it lands, no platform has a
-    // Keychain source here, so iOS uses the file beside the database.
-    fn keychain_get(&self) -> Option<Result<Option<String>, String>> {
-        None
-    }
-
-    fn keychain_set(&self, _value: &str) -> Result<(), String> {
-        Err("no Keychain here".into())
     }
 
     fn machine_id(&self) -> Option<String> {
@@ -405,28 +389,15 @@ mod tests {
     #[derive(Default)]
     struct Fake {
         test_env: bool,
-        keychain: Option<Result<Option<String>, String>>,
-        keychain_fails: bool,
         machine: Option<String>,
         user: Option<String>,
         folder: PathBuf,
-        written: RefCell<Vec<String>>,
         machine_read: RefCell<bool>,
     }
 
     impl Sources for Fake {
         fn test_environment(&self) -> bool {
             self.test_env
-        }
-        fn keychain_get(&self) -> Option<Result<Option<String>, String>> {
-            self.keychain.clone()
-        }
-        fn keychain_set(&self, value: &str) -> Result<(), String> {
-            if self.keychain_fails {
-                return Err("refused".into());
-            }
-            self.written.borrow_mut().push(value.to_owned());
-            Ok(())
         }
         fn machine_id(&self) -> Option<String> {
             *self.machine_read.borrow_mut() = true;
@@ -495,16 +466,11 @@ mod tests {
         let mut sources = fake(dir.path());
         sources.test_env = true;
         sources.machine = Some("real-machine-id-1234".into());
-        sources.keychain = Some(Ok(Some("k".repeat(32))));
         let (first, origin) = resolve(&sources);
         assert_eq!(origin, Origin::File);
         assert!(
             !*sources.machine_read.borrow(),
             "the machine id is not read"
-        );
-        assert!(
-            sources.written.borrow().is_empty(),
-            "the Keychain is not written"
         );
         assert_eq!(
             std::fs::read_to_string(dir.path().join(INSTALL_ID_FILE)).unwrap(),
@@ -520,45 +486,6 @@ mod tests {
                 .mode();
             assert_eq!(mode & 0o777, 0o600);
         }
-    }
-
-    #[test]
-    fn the_ios_keychain_item_is_used_kept_or_made() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut sources = fake(dir.path());
-        let kept = "K".repeat(32);
-        sources.keychain = Some(Ok(Some(kept.clone())));
-        assert_eq!(resolve(&sources), (kept, Origin::Keychain));
-        assert!(sources.written.borrow().is_empty());
-
-        // None yet (a first install), or a value that is not an id: a new one is made and kept.
-        for stored in [None, Some("bad".to_owned())] {
-            let mut sources = fake(dir.path());
-            sources.keychain = Some(Ok(stored));
-            let (id, origin) = resolve(&sources);
-            assert_eq!(origin, Origin::Keychain);
-            assert!(valid(&id));
-            assert_eq!(*sources.written.borrow(), vec![id]);
-            assert!(!dir.path().join(INSTALL_ID_FILE).exists());
-            assert!(!*sources.machine_read.borrow());
-        }
-    }
-
-    #[test]
-    fn a_keychain_that_cannot_be_read_or_written_falls_back_to_the_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut locked = fake(dir.path());
-        locked.keychain = Some(Err("locked".into()));
-        let (id, origin) = resolve(&locked);
-        assert_eq!(origin, Origin::File);
-        assert!(
-            locked.written.borrow().is_empty(),
-            "a locked item is never overwritten"
-        );
-        let mut refused = fake(dir.path());
-        refused.keychain = Some(Ok(None));
-        refused.keychain_fails = true;
-        assert_eq!(resolve(&refused), (id, Origin::File), "the same file id");
     }
 
     #[test]
