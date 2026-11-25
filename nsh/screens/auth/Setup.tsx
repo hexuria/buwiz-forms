@@ -58,7 +58,8 @@ function HelpdeskPin() {
         line="The help desk admin signs in with TIN 000-000-000 and this PIN. It also opens any taxpayer who forgot theirs."
       />
       <Labelled label="Admin PIN">
-        <PinCells testID="setup-admin-pin" label="Admin PIN" length={4} masked value={auth.setupPin()} onChange={auth.setSetupPin} error={Boolean(auth.error())} />
+        {/* On a phone or tablet the keyboard is up as the page opens; a desktop leaves the focus where it was. */}
+        <PinCells testID="setup-admin-pin" label="Admin PIN" length={4} masked autoFocus={TOUCH} value={auth.setupPin()} onChange={auth.setSetupPin} error={Boolean(auth.error())} />
       </Labelled>
       <ErrorLine message={auth.error()} />
       <Actions

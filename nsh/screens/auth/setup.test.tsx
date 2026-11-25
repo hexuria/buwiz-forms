@@ -63,6 +63,25 @@ test("desktop: I help other taxpayers asks for 4 digits, shows the recovery key 
   expect(app.texts()).toContain("TIN 000-000-000");
 });
 
+test("phone: the admin PIN's cells have the focus as the page opens, so the keyboard is up without a tap", async () => {
+  const app = await open(ENTRY, { host: { params: { readout: true } } });
+  await app.waitFor("id:setup-card");
+  await app.press("id:setup-helpdesk");
+  await app.waitFor("id:setup-pin-card");
+  // A key goes to the focused input, and the cells were not pressed: they have the focus.
+  await app.keyboard.press("1");
+  expect(app.value("id:setup-admin-pin")).toBe("1");
+});
+
+test("desktop: the admin PIN page leaves the focus alone", async () => {
+  const app = await open(ENTRY, { ...WIDE, host: { params: { readout: true } } });
+  await app.waitFor("id:setup-card");
+  await app.press("id:setup-helpdesk");
+  await app.waitFor("id:setup-pin-card");
+  await app.keyboard.press("1");
+  expect(app.value("id:setup-admin-pin")).toBe("");
+});
+
 test("desktop: Just me with a taxpayer already there makes it the owner at once", async () => {
   const app = await open(ENTRY, { ...WIDE, host: { params: { demo: true, readout: true } } });
   await app.waitFor("id:setup-card");

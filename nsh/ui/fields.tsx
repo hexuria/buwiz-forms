@@ -745,6 +745,8 @@ export interface PinCellsProps {
   testID?: string;
   /** Receives the function that puts the keys in the cells (a screen hands them on from another box). */
   focusRef?: (focus: () => void) => void;
+  /** The cells take the keys as they appear, so a phone's keyboard is up without a tap. */
+  autoFocus?: boolean;
   onFocus?: () => void;
   onBlur?: () => void;
 }
@@ -754,7 +756,11 @@ export function PinCells(props: PinCellsProps) {
   return (
     <OtpInput
       testID={props.testID}
-      ref={(r: OtpInputRef) => props.focusRef?.(() => r.focus())}
+      ref={(r: OtpInputRef) => {
+        props.focusRef?.(() => r.focus());
+        // After the mount, once the cells are there to take the focus.
+        if (props.autoFocus) setTimeout(() => r.focus(), 0);
+      }}
       onFocus={() => props.onFocus?.()}
       onBlur={() => props.onBlur?.()}
       length={props.length}
