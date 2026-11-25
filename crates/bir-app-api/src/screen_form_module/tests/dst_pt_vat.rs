@@ -1663,3 +1663,75 @@ fn pr4_labels_read_as_printed() {
             .any(|(_, _, label, _, _)| label == "Schedule amount")
     );
 }
+
+#[test]
+fn v2018_2551q_schedule_1_atc_rows_are_fillable() {
+    setup();
+    let opened = open("2551Q", 1);
+    // No dropdown of Schedule 1 carries the not-yet note any more, and each
+    // lists the official options.
+    let whys = opened["whys"].as_object().cloned().unwrap_or_default();
+    for row in 1..=6 {
+        assert!(
+            !whys.contains_key(&format!("drpATC{row}")),
+            "drpATC{row} carries no note: {:?}",
+            whys.get(&format!("drpATC{row}"))
+        );
+    }
+
+    // Row 1's default PT010 can be changed; rows 2 to 6 can be chosen.
+    let kind = kind_of("2551Q").unwrap();
+    let row1 = fill("2551Q", &opened["draft"], json!({"drpATC1": "2"}));
+    assert_eq!(
+        row1["rejected"],
+        json!({}),
+        "row 1 re-picks: {:?}",
+        row1["rejected"]
+    );
+    let row1 = fill("2551Q", &row1["draft"], json!({"txtATCAmt1": "1000"}));
+    let row2 = fill("2551Q", &row1["draft"], json!({"drpATC2": "4"}));
+    assert_eq!(
+        row2["rejected"],
+        json!({}),
+        "row 2 picks: {:?}",
+        row2["rejected"]
+    );
+    let row2 = fill("2551Q", &row2["draft"], json!({"txtATCAmt2": "2000"}));
+    assert_eq!(row2["rejected"], json!({}));
+    let xml = agent::field_map(kind, &row2["draft"]).unwrap();
+    // The upload carries the option positions the official program carries,
+    // with each row's rate and tax due.
+    assert_eq!(xml["drpATC1"], "2", "PT040 is the list's second option");
+    assert_eq!(xml["txtATCRate1"], "3.0");
+    assert_eq!(xml["txtATCDue1"], "30.00");
+    assert_eq!(xml["drpATC2"], "4", "PT060 is the list's fourth option");
+    assert_eq!(xml["txtATCRate2"], "2.0");
+    assert_eq!(xml["txtATCDue2"], "40.00");
+    assert_eq!(xml["txtTotalSched1"], "70.00");
+
+    // A row cleared again files the blank option, as the official page does.
+    let cleared = fill("2551Q", &row2["draft"], json!({"drpATC2": ""}));
+    let xml = agent::field_map(kind, &cleared["draft"]).unwrap();
+    assert_eq!(xml["drpATC2"], "0");
+    assert_eq!(xml["txtATCRate2"], "0.00");
+}
+
+#[test]
+fn v2018_2551q_official_sample_row_through_the_page() {
+    setup();
+    let opened = open("2551Q", 1);
+    let kind = kind_of("2551Q").unwrap();
+    // The official sample (2551Q-122025Q1) keeps row 1 at PT010 and types
+    // 180,000.00: the page's write path files exactly what it files.
+    let filled = fill("2551Q", &opened["draft"], json!({"txtATCAmt1": "180000"}));
+    assert_eq!(filled["rejected"], json!({}));
+    let xml = agent::field_map(kind, &filled["draft"]).unwrap();
+    assert_eq!(xml["drpATC1"], "1");
+    assert_eq!(xml["txtATCAmt1"], "180,000.00");
+    assert_eq!(xml["txtATCRate1"], "3.0");
+    assert_eq!(xml["txtATCDue1"], "5,400.00");
+    assert_eq!(xml["txtTotalSched1"], "5,400.00");
+    for row in 2..=6 {
+        assert_eq!(xml[format!("drpATC{row}").as_str()], "0");
+    }
+}

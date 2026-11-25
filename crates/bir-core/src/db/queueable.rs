@@ -926,6 +926,46 @@ impl Database {
         Ok(true)
     }
 
+    /// Keep (`Some`) or clear (`None`) the relay's pending send on a return
+    /// this worker claimed ([`crate::forms::queueable::SubmissionLifecycle::relay_pending`]).
+    /// `false` when the claim is no longer `claim_token`'s.
+    pub(crate) fn note_claimed_queueable_relay_pending<F: QueueableForm>(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        period: i64,
+        claim_token: &str,
+        pending: Option<&str>,
+    ) -> Result<bool, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) =
+            select_row(&tx, F::FORM_CODE, tin, taxable_year, period)?
+        else {
+            return Ok(false);
+        };
+        let mut draft: F = serde_json::from_str(&raw_json)?;
+        let lifecycle = draft.lifecycle();
+        if db_status != "Queued"
+            || !matches!(lifecycle.status, FilingStatus::Queued)
+            || lifecycle.submission_claim_token.as_deref() != Some(claim_token)
+            || lifecycle.submission_claimed_at.is_none()
+        {
+            return Ok(false);
+        }
+        draft.lifecycle_mut().relay_pending = pending.map(str::to_owned);
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
     /// The send of this claimed queued return did not end in a receipt: only the worker holding the claim settles it,
     /// as `how` says ([`crate::forms::queueable::NoReceipt`]: refused back to Draft with the reason, failed or held and
     /// still Queued, or unknown with the claim kept). `false` when the claim is no longer this worker's.

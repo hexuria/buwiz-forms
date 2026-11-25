@@ -1641,6 +1641,189 @@ fn pr9_2552_item_11_asks_before_it_clears_part_v_and_row_5_fills() {
     assert_eq!(refused["values"]["frm2552:txtPg2Pt5Sch1Seller5"], "OTHERS");
 }
 
+/// 2552 Item 17 (Less: Tax Paid in Return Previously Filed, if Amended Return):
+/// not marked computed in the page schema; disabled until Amended Return is Yes
+/// (matching runtime-control-inventory-v796.json L866); once Amended Return is
+/// Yes, typing Item 17 flows into Items 19, 20 and 25 and reproduces the
+/// official 2552-03142025 sample across every key with no known differences.
+#[test]
+fn form_2552_item_17_is_gated_on_amended_and_reproduces_official_sample() {
+    setup();
+    assert!(!schema_computed(
+        "2552",
+        "frm2552:txtPg1P2I17TaxPaidInPrevRtrn"
+    ));
+
+    let fresh = open("2552", 1);
+    assert_eq!(
+        fresh["off"]["frm2552:txtPg1P2I17TaxPaidInPrevRtrn"],
+        rows_as_needed::AMENDED_2552
+    );
+    let refused = fill(
+        "2552",
+        &fresh["draft"],
+        json!({"frm2552:txtPg1P2I17TaxPaidInPrevRtrn": "100.50"}),
+    );
+    assert_eq!(
+        refused["rejected"]["frm2552:txtPg1P2I17TaxPaidInPrevRtrn"],
+        rows_as_needed::AMENDED_2552
+    );
+
+    let xml = include_str!("../../../../bir-core/tests/sample-payloads/2552-03142025.official.xml");
+    let mut official = BTreeMap::new();
+    for chunk in xml.split("<div>").skip(1) {
+        let Some((inner, _)) = chunk.split_once("</div>") else {
+            continue;
+        };
+        let Some((k, rest)) = inner.split_once('=') else {
+            continue;
+        };
+        let suffix = format!("{k}=");
+        let v = rest.strip_suffix(&suffix).unwrap_or(rest);
+        official.insert(k.to_string(), v.to_string());
+    }
+    assert!(!official.is_empty());
+
+    let profile: TaxpayerProfile = serde_json::from_value(json!({
+        "id": null,
+        "full_name": "SAMPLE DUMMY TAXPAYER",
+        "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+        "rdo_code": "039",
+        "line_of_business": "SAMPLE CONSULTING SERVICES",
+        "registered_address": "123 SAMPLE STREET, BARANGAY EXAMPLE, QUEZON CITY",
+        "zip_code": "1100",
+        "phone": "09170000000",
+        "email": "sample.taxpayer@example.com",
+        "default_form_type": "2552",
+        "taxpayer_type": "Individual",
+        "is_vat_registered": false,
+        "has_employees": false,
+        "withholds_compensation": false,
+        "withholds_expanded": false,
+        "birth_date": "1985-05-15",
+    }))
+    .unwrap();
+    let draft = bir_core::forms::form_2552::Form2552Draft::new_from_profile(&profile, 2025, 3, 14);
+    let draft_json = serde_json::to_value(&draft).unwrap();
+
+    // Open Amended Return = Yes, Tax Relief = Yes, and Item 11 = LSE.
+    let step1 = fill(
+        "2552",
+        &draft_json,
+        json!({
+            "frm2552:rdoPg1I2AmendedYes": "true",
+            "frm2552:rdoPg1I2AmendedNo": "false",
+            "frm2552:txtPg1I3NoOfSheets": "1",
+            "frm2552:rdoPg1I10TaxReliefYes": "true",
+            "frm2552:rdoPg1I10TaxReliefNo": "false",
+            "frm2552:txtPg1Pt1I10TaxReliefSpec": "SPECIAL LAW SAMPLE",
+            "frm2552:rdoPg1I11TransactionLSE": "true",
+            "frm2552:rdoPg1I11TransactionPrimary": "false",
+            "frm2552:rdoPg1I11TransactionSecondary": "false",
+        }),
+    );
+    assert!(
+        step1["rejected"].as_object().unwrap().is_empty(),
+        "step1 rejected: {}",
+        step1["rejected"]
+    );
+    assert!(
+        step1["off"]["frm2552:txtPg1P2I17TaxPaidInPrevRtrn"].is_null(),
+        "Item 17 must unlock when Amended Return is Yes"
+    );
+
+    let step2 = fill_unlocked(
+        "2552",
+        &step1["draft"],
+        json!({
+            "frm2552:txtPg1P2I17TaxPaidInPrevRtrn": "100.50",
+            "frm2552:txtPg1P2I18CredTaxWthhld": "1000.25",
+            "frm2552:txtPg1P2I21Surcharge": "25.50",
+            "frm2552:txtPg1P2I22Interest": "10.00",
+            "frm2552:txtPg2P4I1TransClass": "EXEMPT SAMPLE ONE",
+            "frm2552:txtPg2P4I1Amount": "1000.01",
+            "frm2552:txtPg2P4I2TransClass": "EXEMPT SAMPLE TWO",
+            "frm2552:txtPg2P4I2Amount": "250.00",
+            "frm2552:txtPg2Pt5Sch1Date1": "03/14/2025",
+            "frm2552:txtPg2Pt5Sch1Seller1": "SAMPLE SELLER ONE",
+            "frm2552:txtPg2Pt5Sch1Buyer1": "SAMPLE BUYER ONE",
+            "frm2552:txtPg2Pt5Sch1Corp1": "SAMPLE LISTED CORP",
+            "frm2552:txtPg2Pt5Sch1NumShares1": "1000.00",
+            "frm2552:txtPg2Pt5Sch1TaxBase1": "1234567.89",
+            "frm2552:txtPg2Pt5Sch1Date2": "03/14/2025",
+            "frm2552:txtPg2Pt5Sch1Seller2": "SAMPLE SELLER TWO",
+            "frm2552:txtPg2Pt5Sch1Buyer2": "SAMPLE BUYER TWO",
+            "frm2552:txtPg2Pt5Sch1Corp2": "SAMPLE LISTED CORP",
+            "frm2552:txtPg2Pt5Sch1NumShares2": "500.50",
+            "frm2552:txtPg2Pt5Sch1TaxBase2": "1000000.00",
+            "frm2552:txtPg2Pt5Sch1Date3": "03/13/2025",
+            "frm2552:txtPg2Pt5Sch1Seller3": "SAMPLE SELLER THREE",
+            "frm2552:txtPg2Pt5Sch1Buyer3": "SAMPLE BUYER THREE",
+            "frm2552:txtPg2Pt5Sch1Corp3": "SAMPLE LISTED CORP",
+            "frm2552:txtPg2Pt5Sch1NumShares3": "75.00",
+            "frm2552:txtPg2Pt5Sch1TaxBase3": "2500.83",
+            "frm2552:txtPg2Pt6Date1": "03/12/2025",
+            "frm2552:txtPg2Pt6Seller1": "SAMPLE SELLER SIX",
+            "frm2552:txtPg2Pt6Buyer1": "SAMPLE BUYER SIX",
+            "frm2552:txtPg2Pt6Corp1": "OTHER SAMPLE CORP",
+            "frm2552:txtPg2Pt6NumShares1": "42.00",
+        }),
+        &[
+            "frm2552:txtPg1P2I21Surcharge",
+            "frm2552:txtPg1P2I22Interest",
+            "frm2552:txtPg1P2I23Compromise",
+        ],
+    );
+    assert!(
+        step2["rejected"].as_object().unwrap().is_empty(),
+        "step2 rejected: {}",
+        step2["rejected"]
+    );
+
+    let final_draft: bir_core::forms::form_2552::Form2552Draft =
+        serde_json::from_value(step2["draft"].clone()).unwrap();
+    let payload = final_draft
+        .to_bir_xml_payload()
+        .expect("screen-filled 2552 must validate");
+    let mut actual = BTreeMap::new();
+    for chunk in payload.split("<div>").skip(1) {
+        let Some((inner, _)) = chunk.split_once("</div>") else {
+            continue;
+        };
+        let Some((k, rest)) = inner.split_once('=') else {
+            continue;
+        };
+        let suffix = format!("{k}=");
+        let v = rest.strip_suffix(&suffix).unwrap_or(rest);
+        actual.insert(k.to_string(), v.to_string());
+    }
+    assert_eq!(actual["frm2552:txtPg1P2I17TaxPaidInPrevRtrn"], "100.50");
+    assert_eq!(actual["frm2552:txtPg1P2I19TotTaxCredPmnt"], "1,101.00");
+    assert_eq!(
+        actual["frm2552:txtPg1P2I20TotTaxStllDueOvrPmnt"],
+        "12,321.00"
+    );
+    assert_eq!(actual["frm2552:txtPg1P2I25TotAmntPyable"], "12,357.00");
+
+    let mut diffs = Vec::new();
+    for (k, want) in &official {
+        let got = actual.get(k).map(String::as_str).unwrap_or("<missing>");
+        if got != want {
+            diffs.push(format!("{k}: official={want:?} ours={got:?}"));
+        }
+    }
+    for (k, got) in &actual {
+        if !official.contains_key(k) {
+            diffs.push(format!("{k}: extra ours={got:?}"));
+        }
+    }
+    assert!(
+        diffs.is_empty(),
+        "2552 screen-path sample diffs:\n{}",
+        diffs.join("\n")
+    );
+}
+
 /// Review F13: a Schedule 2 row holding only its typed rate is a typed row,
 /// and item 11 asks before it clears the old schedule's rows even when the
 /// same batch types a row under the new one. Review F15: row 5's date takes
