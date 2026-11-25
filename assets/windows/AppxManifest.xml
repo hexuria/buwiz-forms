@@ -16,7 +16,7 @@
     <DisplayName>eBIRForms</DisplayName>
     <PublisherDisplayName>GoldCoders Corp</PublisherDisplayName>
     <Logo>assets\icon.png</Logo>
-    <Description>Philippine BIR tax return filing desktop application. Supports form preparation, validation, SFTP submission, email tracking, and PDF generation.</Description>
+    <Description>Prepare, check, print and file Philippine BIR tax returns. Totals are worked out as you type, returns are checked against the BIR's validation rules, and they print or save as PDF on the official form layout.</Description>
   </Properties>
 
   <Dependencies>
