@@ -293,6 +293,26 @@ const FILER_TYPED: &[(&str, &str)] = &[
         "frm2552:txtPg2Pt6NumShares5",
         "2552 Part VI row 5 number of shares: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L2414) until prior rows are entered, unlike row 1 (L2314); not in rules/forms/2552-v2018/calculations.json",
     ),
+    (
+        "frm2552:txtPg1Pt1I12TotShare",
+        "2552 Part I Item 12 total number of outstanding shares: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L759) until Item 11 Transaction is Primary or Secondary Offering; not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2P4I2Amount",
+        "2552 Part IV Item 2 amount: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L1327) until Item 11 is Primary/Secondary Offering and row 2 is open; not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2P4I3Amount",
+        "2552 Part IV Item 3 amount: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L1337) until Item 11 is Primary/Secondary Offering and row 3 is open; not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2P4I4Amount",
+        "2552 Part IV Item 4 amount: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L1347) until Item 11 is Primary/Secondary Offering and row 4 is open; not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2P4I5Amount",
+        "2552 Part IV Item 5 amount: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L1357) until Item 11 is Primary/Secondary Offering and row 5 is open; not in rules/forms/2552-v2018/calculations.json",
+    ),
 ];
 
 const EXCESS_MCIT_1702RT: &str = "1702RT Schedule IV column C (Excess MCIT over \
