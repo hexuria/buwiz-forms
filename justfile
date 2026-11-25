@@ -582,7 +582,14 @@ _package-mac-appstore args="": build-frozen-html-identity
     fi
     dirty=""
     git -C "$root" diff --quiet HEAD -- || dirty=" (with uncommitted changes)"
-    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, folder $CARGO_TARGET_DIR"
+    # The owner's cargo fork (huacnlee/cargo) ignores CARGO_TARGET_DIR and builds every workspace in its own ./target (the app's:
+    # nsh/.nsh/rust/target): the line names the cargo and the folder really used.
+    cargo_v="$(cargo --version 2>/dev/null || echo "cargo missing")"
+    case "$cargo_v" in
+        *huacnlee/cargo*) folder="$root/nsh/.nsh/rust/target (this cargo ignores CARGO_TARGET_DIR)" ;;
+        *) folder="$CARGO_TARGET_DIR" ;;
+    esac
+    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, $cargo_v, folder $folder"
     echo "$PROVENANCE" >&2
     echo "Building the NSH app for the Mac App Store ($ARCH, build {{BUILD_NUMBER}}, agent=$NSH_MAS_AGENT)..."
     rm -rf "$OUT"
@@ -768,7 +775,14 @@ ios-appstore: build-frozen-html-identity
     fi
     dirty=""
     git -C "$root" diff --quiet HEAD -- || dirty=" (with uncommitted changes)"
-    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, folder $CARGO_TARGET_DIR"
+    # The owner's cargo fork (huacnlee/cargo) ignores CARGO_TARGET_DIR and builds every workspace in its own ./target (the app's:
+    # nsh/.nsh/rust/target): the line names the cargo and the folder really used.
+    cargo_v="$(cargo --version 2>/dev/null || echo "cargo missing")"
+    case "$cargo_v" in
+        *huacnlee/cargo*) folder="$root/nsh/.nsh/rust/target (this cargo ignores CARGO_TARGET_DIR)" ;;
+        *) folder="$CARGO_TARGET_DIR" ;;
+    esac
+    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, $cargo_v, folder $folder"
     echo "$PROVENANCE" >&2
     OUT="$root/{{RELEASE_DIR}}/ios"
     APP="$OUT/{{APP_NAME}}.app"
