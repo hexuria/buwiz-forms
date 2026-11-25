@@ -11,8 +11,8 @@
 # The tools go to $NSH_TOOLS (default ~/BuwizNsh/tools, the folder every nsh recipe uses). On a Mac whose shared tool must
 # stay as it is (other work builds with it), put the pinned one beside it and point play-bundle there:
 #
-#   NSH_TOOLS=~/BuwizNsh/play-android/tools CARGO_TARGET_DIR=~/BuwizNsh/play-android/target scripts/setup-android-macos.sh
-#   NSH_TOOLS=~/BuwizNsh/play-android/tools CARGO_TARGET_DIR=~/BuwizNsh/play-android/target just play-bundle
+#   NSH_TOOLS=~/BuwizNsh/store-tools scripts/setup-android-macos.sh
+#   NSH_TOOLS=~/BuwizNsh/store-tools just play-bundle
 #
 # Usage:
 #   scripts/setup-android-macos.sh           # check, then build what is missing

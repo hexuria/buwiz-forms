@@ -76,7 +76,7 @@ for a development build. The recipe prints the runtime's `classes.dex` SHA-256 w
 and point both at it, with a build folder of its own:
 
 ```sh
-export NSH_TOOLS=~/BuwizNsh/play-android/tools CARGO_TARGET_DIR=~/BuwizNsh/play-android/target
+export NSH_TOOLS=~/BuwizNsh/store-tools
 scripts/setup-android-macos.sh
 just play-bundle
 ```
