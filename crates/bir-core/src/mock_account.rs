@@ -25,10 +25,13 @@ const ATTEMPTS: u32 = 5;
 /// Codes mailed to one address in an hour (start and resend together) before `too_many_requests` (the contract's shared
 /// per-address limit).
 const PER_ADDRESS_HOURLY: usize = 5;
-/// Start and resend calls one network may make in an hour, answered or not, before `too_many_requests`.
-pub const START_PER_NETWORK_HOURLY: usize = 40;
-/// Verify calls one network may make in an hour before `too_many_requests` (none of them spends a request's try).
-pub const VERIFY_PER_NETWORK_HOURLY: usize = 60;
+/// Start and resend calls one network may make in an hour, answered or not, before `too_many_requests` (#81: 200).
+/// The real server also shares one hourly budget among all networks past 100,000 in an hour; it answers the same
+/// `too_many_requests`, so the mock does not model it.
+pub const START_PER_NETWORK_HOURLY: usize = 200;
+/// Verify calls one network may make in an hour, app and web together, before `too_many_requests` (#81: 300; none of
+/// them spends a request's try).
+pub const VERIFY_PER_NETWORK_HOURLY: usize = 300;
 /// The clients the email sign-in serves (a `CLIENTS` entry with scope `app`): the contract's, and the one this app sends.
 const APP_CLIENTS: [&str; 2] = ["buwiz-ebirforms", "buwiz-desktop"];
 const PLATFORMS: [&str; 6] = ["ios", "ipados", "android", "macos", "windows", "linux"];

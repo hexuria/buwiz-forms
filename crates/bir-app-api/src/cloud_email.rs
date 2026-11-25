@@ -905,7 +905,7 @@ mod tests {
             assert_eq!(wait["outcome"], "wait");
             assert_eq!(
                 wait["message"],
-                "Too many codes were tried from this network. Try again in 60 minutes."
+                "Too many sign-in codes are being checked right now. Try again in 60 minutes."
             );
             assert_eq!(wait["attempts_left"], serde_json::Value::Null);
             assert!(

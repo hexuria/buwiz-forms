@@ -433,7 +433,7 @@ for (const { name, size, device } of SIZES) {
     const app = await at({ demo: true, mode: "solo", firstRun: false });
     await toCode(app);
     await app.type("id:gate-code-boxes", "777777");
-    await app.waitFor("text:Too many codes were tried from this network. Try again in 3 minutes.");
+    await app.waitFor("text:Too many sign-in codes are being checked right now. Try again in 3 minutes.");
     expect(app.texts().some((t) => t.includes("tries left"))).toBe(false);
     expect(app.value("id:gate-code-boxes")).toBe("");
     await app.type("id:gate-code-boxes", "888888");

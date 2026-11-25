@@ -161,7 +161,7 @@ impl EmailError {
                     Some(s) if *s >= 90 => format!("in {} minutes", (s + 59) / 60),
                     _ => "in a minute".into(),
                 };
-                format!("Too many codes were tried from this network. Try again {wait}.")
+                format!("Too many sign-in codes are being checked right now. Try again {wait}.")
             }
             _ => self.sentence(),
         }
@@ -989,7 +989,7 @@ mod tests {
             assert_eq!(refused.code(), "too_many_requests");
             assert_eq!(
                 refused.verify_sentence(),
-                format!("Too many codes were tried from this network. Try again {words}.")
+                format!("Too many sign-in codes are being checked right now. Try again {words}.")
             );
         }
         let mut fake =
