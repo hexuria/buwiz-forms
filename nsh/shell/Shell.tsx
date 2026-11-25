@@ -124,8 +124,8 @@ function ViewFrame(props: { route?: Route }) {
   );
 }
 
-/** The narrow layout on a phone or tablet: its pages are in the platform's navigation stack. A narrow desktop window keeps the one view. */
-const stacked = (): boolean => app.layout.narrow() && (platform.os === "ios" || platform.os === "android");
+/** A phone or tablet (always the narrow layout): its pages are in the platform's navigation stack. A narrow desktop window keeps the one view. */
+const stacked = (): boolean => TOUCH;
 
 /** The surface the screens draw on: inset 8 with radius 12 and a hairline when wide, flush when narrow. */
 function MainSurface() {

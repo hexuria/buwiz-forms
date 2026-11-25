@@ -7,6 +7,7 @@
 import type { JSX } from "nsh";
 import { effect, untracked } from "nsh";
 import { createNavStack, NavPage, NavStack } from "nsh/base";
+import { formUi } from "../screens/form/formUi";
 import { app } from "./app";
 import { TABS, type Route } from "./routes";
 
@@ -28,15 +29,26 @@ export function NarrowStack(props: { page: (route: Route) => JSX.Element }) {
       {(seq: number) => {
         const route = untracked(() => app.stackRoute(seq));
         if (!route) return <NavPage headerVisible={false} />;
+        /** The view this page shows: the tax profile's tabs switch it in place (app.switchView), without a new page. */
+        const view = () => app.stackRoute(seq)?.view ?? route.view;
         return (
           <NavPage
             headerVisible={false}
             // A tab takes the place of whatever was there, as tabs do; a pushed page slides in.
             animation={TAB_VIEWS.includes(route.view) ? "none" : "default"}
+            // The back gesture waits while a move is saving what was typed, and while the return on a form page is still opening
+            // (a page that goes mid-way would leave half a session behind). Back in the header still works then: it waits too.
+            popOnSwipe={!app.moving() && (view() !== "form" || formUi.canStep())}
             onDismiss={() => app.pagePopped(seq)}
             class="min-h-0 flex-1 bg-card"
           >
-            {props.page(route)}
+            {() => {
+              void view();
+              return untracked(() => {
+                const now = app.stackRoute(seq);
+                return now ? props.page(now) : null;
+              });
+            }}
           </NavPage>
         );
       }}
