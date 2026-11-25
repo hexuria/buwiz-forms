@@ -5,7 +5,7 @@
   "build": 27,
   "rust": ".",
   "icon": {
-    "macos": "../assets/icon.png",
+    "macos": "../assets/macos/icon-1024.png",
     "windows": "../assets/icon.png",
     "linux": "../assets/icon.png",
     "android": "../assets/icon.png",
