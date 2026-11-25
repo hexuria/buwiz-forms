@@ -1,0 +1,38 @@
+{
+  "form": "1604C",
+  "title": "Annual Information Return of Income Taxes Withheld on Compensation",
+  "revision": "January 2018",
+  "branch": "try/forms-neon-3-b",
+  "verdict": "tweak",
+  "worst_finding": "Continuation of Part II Adjustment and Penalties columns (all 12 monthly rows) print left-aligned flush against the left border while their TOTAL row and the Taxes Withheld / Total Amount Remitted columns print right-aligned.",
+  "test_return": {
+    "taxpayer": "SANTOS, JUANA MARIE DELA CRUZ-VILLANUEVA",
+    "tin": "000-123-453-00000",
+    "rdo": "039",
+    "year": 2025,
+    "schedules": "Fixed 12 monthly rows (Jan-Dec) in Part II (no growable schedules; 0 not_joined cells in writer-cells.json). Part I Item 11A (01/15/2026), Item 12 (1,250,000.75), and Part II December row (248,501,750.50 / 350,000.25 / 45,000.50) entered/re-entered by hand on the form page, saved, and reloaded from Filings."
+  },
+  "findings": [
+    {
+      "severity": "medium",
+      "area": "Page 1 — Continuation of Part II Adjustment & Penalties columns (January-December)",
+      "detail": "All 12 monthly row amounts in the Adjustment column (251,000.25..350,000.25) and Penalties column (15,500.50..45,000.50) print left-aligned flush against the left cell border, whereas their TOTAL row (3,166,016.75 and 243,033.50) and the Taxes Withheld and Total Amount Remitted columns print right-aligned."
+    },
+    {
+      "severity": "low",
+      "area": "Page 1 — Item 1 For the Year (20YY)",
+      "detail": "Official PDF has a 4-slot comb with pre-printed '2 0' and two empty year slots. The frozen sheet uses a single plain text cell and prints '2025' left-aligned with no comb ticks."
+    }
+  ],
+  "verified_ok": [
+    "Page 1 Item 4 TIN (000 / 123 / 453 / 00000), Item 5 RDO (039), Item 6 Name (full 40-char name in comb), Item 7 long 126-char Registered Address (wraps cleanly on 2 lines with white band, no clipping), Item 7A ZIP (1100), Items 8/8A/11 checkboxes, Item 9 Contact Number, Item 10 Email Address, Item 11A Date of Refund (01/15/2026), and Item 12 Overremittance (1,250,000.75) all print cleanly.",
+    "Part II Taxes Withheld (total 393,335,083.76) and Total Amount Remitted (total 396,744,134.01) compute and print right-aligned cleanly across all 12 months."
+  ],
+  "artifacts": [
+    "official-p1.png",
+    "screen-p1.png",
+    "screen-p2.png",
+    "screen-p3.png",
+    "print-p1.png"
+  ]
+}
