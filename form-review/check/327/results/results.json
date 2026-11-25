@@ -1,0 +1,134 @@
+{
+  "vt-x": {
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": false,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": true,
+      "no_rows": false,
+      "catalog_raw": false
+    },
+    "after": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": false,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": true,
+      "no_rows": false,
+      "catalog_raw": false
+    }
+  },
+  "vt-escape": {
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": false,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": true,
+      "no_rows": false,
+      "catalog_raw": false
+    },
+    "after": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": false,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": true,
+      "no_rows": false,
+      "catalog_raw": false
+    }
+  },
+  "vt-outside": {
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": false,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": true,
+      "no_rows": true,
+      "catalog_raw": false
+    },
+    "after": {
+      "drawer_open": false,
+      "row_listed": true,
+      "done_enabled": null,
+      "save": "Unsaved changes",
+      "refusal": false,
+      "one_row": true,
+      "no_rows": true,
+      "catalog_raw": false
+    }
+  },
+  "vt-partnav": {
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": false,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": true,
+      "no_rows": true,
+      "catalog_raw": false
+    },
+    "after": {
+      "drawer_open": false,
+      "row_listed": true,
+      "done_enabled": null,
+      "save": "Unsaved changes",
+      "refusal": false,
+      "one_row": true,
+      "no_rows": true,
+      "catalog_raw": false
+    }
+  },
+  "vt-back": {
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": false,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": true,
+      "no_rows": true,
+      "catalog_raw": false
+    },
+    "after": {
+      "drawer_open": false,
+      "row_listed": true,
+      "done_enabled": null,
+      "save": "Unsaved changes",
+      "refusal": false,
+      "one_row": true,
+      "no_rows": true,
+      "catalog_raw": false
+    }
+  },
+  "vt-otherrow": {
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": false,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": false,
+      "no_rows": true,
+      "catalog_raw": false
+    },
+    "after": {
+      "drawer_open": false,
+      "row_listed": true,
+      "done_enabled": null,
+      "save": "Unsaved changes",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": true,
+      "catalog_raw": false
+    }
+  }
+}

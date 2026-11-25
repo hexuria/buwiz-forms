@@ -1,0 +1,690 @@
+{
+  "done": {
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": true,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, 1000. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [
+        "Choose this row's ATC first."
+      ],
+      "print_exists": true,
+      "print_enabled": true
+    },
+    "after": {
+      "drawer_open": false,
+      "row_listed": true,
+      "done_enabled": null,
+      "save": "Unsaved changes",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, 1,000.00. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [],
+      "print_exists": true,
+      "print_enabled": true
+    },
+    "settle": {
+      "initial": "Unsaved changes",
+      "after": "Unsaved changes"
+    },
+    "print": {
+      "attempted": true,
+      "windows_before": 0,
+      "opened": false,
+      "windows_after": 0,
+      "not_open_screenshot": "/home/ubuntu/scratch/check327/before/vt-done-preview-not-open.png"
+    },
+    "reopen": {
+      "drawer_open": false,
+      "row_listed": false,
+      "done_enabled": null,
+      "save": "\u2713 Saved",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": true,
+      "catalog_raw": false,
+      "rows": [],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [],
+      "print_exists": true,
+      "print_enabled": true
+    }
+  },
+  "x": {
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": true,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, 1000. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [
+        "Choose this row's ATC first."
+      ],
+      "print_exists": true,
+      "print_enabled": true,
+      "close_present": true
+    },
+    "after": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": true,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, 1,000.00. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [
+        "Choose this row's ATC first."
+      ],
+      "print_exists": true,
+      "print_enabled": true
+    },
+    "settle": {
+      "initial": "Unsaved changes",
+      "after": "Unsaved changes"
+    },
+    "print": {
+      "attempted": false,
+      "result": "not attempted: drawer still open, print control is behind the modal drawer/scrim"
+    },
+    "reopen": {
+      "drawer_open": false,
+      "row_listed": false,
+      "done_enabled": null,
+      "save": "\u2713 Saved",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": true,
+      "catalog_raw": false,
+      "rows": [],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [],
+      "print_exists": true,
+      "print_enabled": true
+    }
+  },
+  "escape": {
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": true,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, 1000. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [
+        "Choose this row's ATC first."
+      ],
+      "print_exists": true,
+      "print_enabled": true
+    },
+    "after": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": true,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, 1000. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [
+        "Choose this row's ATC first."
+      ],
+      "print_exists": true,
+      "print_enabled": true
+    },
+    "settle": {
+      "initial": "Unsaved changes",
+      "after": "Unsaved changes"
+    },
+    "print": {
+      "attempted": false,
+      "result": "not attempted: drawer still open, print control is behind the modal drawer/scrim"
+    },
+    "reopen": {
+      "drawer_open": false,
+      "row_listed": false,
+      "done_enabled": null,
+      "save": "\u2713 Saved",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": true,
+      "catalog_raw": false,
+      "rows": [],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [],
+      "print_exists": true,
+      "print_enabled": true
+    }
+  },
+  "outside": {
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": true,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, 1000. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [
+        "Choose this row's ATC first."
+      ],
+      "print_exists": true,
+      "print_enabled": true
+    },
+    "after": {
+      "drawer_open": false,
+      "row_listed": true,
+      "done_enabled": null,
+      "save": "Unsaved changes",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, 1,000.00. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [],
+      "print_exists": true,
+      "print_enabled": true
+    },
+    "settle": {
+      "initial": "Unsaved changes",
+      "after": "Unsaved changes"
+    },
+    "print": {
+      "attempted": true,
+      "windows_before": 0,
+      "opened": false,
+      "windows_after": 0,
+      "not_open_screenshot": "/home/ubuntu/scratch/check327/before/vt-outside-preview-not-open.png"
+    },
+    "reopen": {
+      "drawer_open": false,
+      "row_listed": false,
+      "done_enabled": null,
+      "save": "\u2713 Saved",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": true,
+      "catalog_raw": false,
+      "rows": [],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [],
+      "print_exists": true,
+      "print_enabled": true
+    }
+  },
+  "partnav": {
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": true,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, 1000. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [
+        "Choose this row's ATC first."
+      ],
+      "print_exists": true,
+      "print_enabled": true
+    },
+    "after": {
+      "drawer_open": false,
+      "row_listed": true,
+      "done_enabled": null,
+      "save": "Unsaved changes",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, 1,000.00. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [],
+      "print_exists": true,
+      "print_enabled": true
+    },
+    "settle": {
+      "initial": "Unsaved changes",
+      "after": "Unsaved changes"
+    },
+    "print": {
+      "attempted": true,
+      "windows_before": 0,
+      "opened": false,
+      "windows_after": 0,
+      "not_open_screenshot": "/home/ubuntu/scratch/check327/before/vt-partnav-preview-not-open.png"
+    },
+    "reopen": {
+      "drawer_open": false,
+      "row_listed": false,
+      "done_enabled": null,
+      "save": "\u2713 Saved",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": true,
+      "catalog_raw": false,
+      "rows": [],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [],
+      "print_exists": true,
+      "print_enabled": true
+    }
+  },
+  "back": {
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": true,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, 1000. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [
+        "Choose this row's ATC first."
+      ],
+      "print_exists": true,
+      "print_enabled": true
+    },
+    "after": {
+      "drawer_open": false,
+      "row_listed": true,
+      "done_enabled": null,
+      "save": "Unsaved changes",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, 1,000.00. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [],
+      "print_exists": true,
+      "print_enabled": true
+    },
+    "settle": {
+      "initial": "Unsaved changes",
+      "after": "Unsaved changes"
+    },
+    "print": {
+      "attempted": true,
+      "windows_before": 0,
+      "opened": false,
+      "windows_after": 0,
+      "not_open_screenshot": "/home/ubuntu/scratch/check327/before/vt-back-preview-not-open.png"
+    },
+    "reopen": {
+      "drawer_open": false,
+      "row_listed": false,
+      "done_enabled": null,
+      "save": "\u2713 Saved",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": true,
+      "catalog_raw": false,
+      "rows": [],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [],
+      "print_exists": true,
+      "print_enabled": true
+    }
+  },
+  "otherrow": {
+    "setup": {
+      "item3": true,
+      "item10": true,
+      "valid_state": {
+        "drawer_open": false,
+        "row_listed": true,
+        "done_enabled": null,
+        "save": "\u2713 Saved",
+        "refusal": false,
+        "one_row": false,
+        "no_rows": false,
+        "catalog_raw": false,
+        "rows": [
+          {
+            "id": "fp-row-frm1600VT:txtAtcCd1-0",
+            "name": "Row 13, WV110 \u00b7 500.00 \u00b7  12.0 \u00b7 60.00. Open",
+            "enabled": true
+          }
+        ],
+        "count_texts": [
+          "5 rows"
+        ],
+        "refusal_texts": [],
+        "print_exists": true,
+        "print_enabled": true
+      }
+    },
+    "before": {
+      "drawer_open": true,
+      "row_listed": true,
+      "done_enabled": true,
+      "save": "Unsaved changes",
+      "refusal": true,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, WV110 \u00b7 500.00 \u00b7  12.0 \u00b7 60.00. Open",
+          "enabled": true
+        },
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-1",
+          "name": "Row 14, 1000. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [
+        "Choose this row's ATC first."
+      ],
+      "print_exists": true,
+      "print_enabled": true,
+      "drawer_notes": [
+        "Row 14",
+        "ATC",
+        "Choose\u2026",
+        "Tax Base",
+        "\u20b1",
+        "Choose this row's ATC first.",
+        "Tax Rate",
+        "Shows the ATC's rate once this row's ATC is chosen.",
+        "Tax Withheld",
+        "\u20b1",
+        "0.00",
+        "Delete row",
+        "Done"
+      ],
+      "row_click_target": {
+        "id": "fp-row-frm1600VT:txtAtcCd1-0",
+        "role": "button",
+        "name": "Row 13, WV110 \u00b7 500.00 \u00b7  12.0 \u00b7 60.00. Open",
+        "enabled": true,
+        "focused": false,
+        "bounds": {
+          "x": 1178.0,
+          "y": 406.0,
+          "w": 728.0,
+          "h": 52.0
+        },
+        "children": [
+          {
+            "id": "n38288",
+            "role": "generic",
+            "name": "",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 1194.0,
+              "y": 421.0,
+              "w": 30.0,
+              "h": 22.0
+            },
+            "children": [
+              {
+                "id": "n38290",
+                "role": "note",
+                "name": "13",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                  "x": 1201.0,
+                  "y": 422.0,
+                  "w": 16.0,
+                  "h": 20.0
+                }
+              }
+            ]
+          },
+          {
+            "id": "n38294",
+            "role": "generic",
+            "name": "",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 1236.0,
+              "y": 421.0,
+              "w": 626.0,
+              "h": 22.0
+            },
+            "children": [
+              {
+                "id": "n38296",
+                "role": "note",
+                "name": "WV110 \u00b7 500.00 \u00b7  12.0 \u00b7 60.00",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                  "x": 1236.0,
+                  "y": 421.0,
+                  "w": 626.0,
+                  "h": 22.0
+                }
+              }
+            ]
+          },
+          {
+            "id": "n38300",
+            "role": "generic",
+            "name": "",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 1874.0,
+              "y": 424.0,
+              "w": 16.0,
+              "h": 16.0
+            }
+          }
+        ]
+      }
+    },
+    "after": {
+      "drawer_open": false,
+      "row_listed": true,
+      "done_enabled": null,
+      "save": "Unsaved changes",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, WV110 \u00b7 500.00 \u00b7  12.0 \u00b7 60.00. Open",
+          "enabled": true
+        },
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-1",
+          "name": "Row 14, 1,000.00. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [],
+      "print_exists": true,
+      "print_enabled": true,
+      "drawer_notes": []
+    },
+    "settle": {
+      "initial": "Unsaved changes",
+      "after": "Unsaved changes"
+    },
+    "print": {
+      "attempted": true,
+      "windows_before": 0,
+      "opened": false,
+      "windows_after": 0,
+      "not_open_screenshot": "/home/ubuntu/scratch/check327/before/vt-otherrow-preview-not-open.png"
+    },
+    "reopen": {
+      "drawer_open": false,
+      "row_listed": true,
+      "done_enabled": null,
+      "save": "\u2713 Saved",
+      "refusal": false,
+      "one_row": false,
+      "no_rows": false,
+      "catalog_raw": false,
+      "rows": [
+        {
+          "id": "fp-row-frm1600VT:txtAtcCd1-0",
+          "name": "Row 13, WV110 \u00b7 500.00 \u00b7  12.0 \u00b7 60.00. Open",
+          "enabled": true
+        }
+      ],
+      "count_texts": [
+        "5 rows"
+      ],
+      "refusal_texts": [],
+      "print_exists": true,
+      "print_enabled": true
+    }
+  }
+}

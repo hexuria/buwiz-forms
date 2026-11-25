@@ -1,0 +1,32 @@
+{
+  "initial": {
+    "drawer_open": true,
+    "row_listed": true,
+    "done_enabled": true,
+    "save": "\u2713 Saved",
+    "refusal": false,
+    "one_row": true,
+    "no_rows": false,
+    "catalog_raw": false
+  },
+  "after_x": {
+    "drawer_open": true,
+    "row_listed": true,
+    "done_enabled": true,
+    "save": "\u2713 Saved",
+    "refusal": false,
+    "one_row": true,
+    "no_rows": false,
+    "catalog_raw": false
+  },
+  "after_escape": {
+    "drawer_open": true,
+    "row_listed": true,
+    "done_enabled": true,
+    "save": "\u2713 Saved",
+    "refusal": false,
+    "one_row": true,
+    "no_rows": false,
+    "catalog_raw": false
+  }
+}

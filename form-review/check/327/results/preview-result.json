@@ -1,0 +1,27 @@
+{
+  "before": {
+    "drawer_open": true,
+    "row_listed": true,
+    "done_enabled": false,
+    "save": "Unsaved changes",
+    "refusal": true,
+    "one_row": true,
+    "no_rows": true,
+    "catalog_raw": false
+  },
+  "escaped": {
+    "drawer_open": false,
+    "row_listed": true,
+    "done_enabled": null,
+    "save": "Unsaved changes",
+    "refusal": false,
+    "one_row": true,
+    "no_rows": true,
+    "catalog_raw": false
+  },
+  "print_node": {
+    "exists": true,
+    "enabled": true
+  },
+  "opened": false
+}
