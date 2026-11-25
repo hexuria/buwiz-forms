@@ -156,13 +156,12 @@ mod tests {
             ],
             dir,
         );
-        assert_eq!(
-            values[0].1,
-            "/data/user/0/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir/test-data/bir_data.db"
-        );
+        // Built with `join` so the separator is the host's: the code runs on Android, the test on every desktop.
+        assert_eq!(values[0].1, dir.join("test-data/bir_data.db").to_string_lossy());
         assert_eq!(values[1].1, "1");
-        let absolute = under_data_dir(vec![("BIR_DATABASE_PATH".into(), "/x/bir_data.db".into())], dir);
-        assert_eq!(absolute[0].1, "/x/bir_data.db");
+        let absolute_path = std::env::temp_dir().join("bir_data.db").to_string_lossy().into_owned();
+        let absolute = under_data_dir(vec![("BIR_DATABASE_PATH".into(), absolute_path.clone())], dir);
+        assert_eq!(absolute[0].1, absolute_path);
         assert!(parse("BIR_DATABASE_PATH=test-data/bir_data.db").is_ok());
     }
 
