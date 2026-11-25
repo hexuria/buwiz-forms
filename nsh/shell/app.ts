@@ -25,7 +25,7 @@ import type { FormTarget } from "../screens/form/FormPage";
 import { BREAK } from "../theme/tokens";
 import { deviceCopy, dismissToast, ICONS, toast as kitToast, type IconName } from "../ui";
 import { eventToast, takeFresh } from "./events";
-import { isViewName, ROUTES, type Route, type ViewName, type ViewParams } from "./routes";
+import { isViewName, ROUTES, TABS, type Route, type ViewName, type ViewParams } from "./routes";
 import { allowedStart, parseStart, parseStartForm } from "./start";
 import { POLL_KEYS, store, WORKER_KEYS } from "./store";
 import { nextThemePreference, parseThemePreference, storedThemePreference, THEME_PREF_KEY, themePreferenceFromStart, type ThemePreference } from "./theme";
@@ -600,11 +600,63 @@ export function back(): boolean {
     batch(() => {
       forward.set([...forward(), here]);
       history.set(h.slice(0, at));
-      route.set({ ...stop.route, seq: ++seq });
+      // The stop keeps its seq: on a phone its page is still there under the one being left (the navigation stack), and Back
+      // shows that page, not a new one. Elsewhere the seq still differs from the page being left, so the view is made again.
+      route.set(stop.route);
     });
     closeTransient();
   });
   return true;
+}
+
+// ---- the phone's navigation stack (shell/NarrowStack.tsx): its pages are the history from the last tab onward
+
+const TAB_ROOTS: ReadonlySet<string> = new Set(TABS.map((t) => t.view));
+
+/**
+ * The pages a phone's navigation stack holds, bottom to top: from the last tab the person was on up to where they are. Every
+ * page is a stop of the history (or the current route), named by its seq. A tab is always a root: going to one empties the stack.
+ */
+const stackPages = computed<Route[]>(() => {
+  const pages = [...history().map((stop) => stop.route), route()];
+  let from = 0;
+  for (let i = pages.length - 1; i >= 0; i--) {
+    if (TAB_ROOTS.has(pages[i].view)) {
+      from = i;
+      break;
+    }
+  }
+  return pages.slice(from);
+});
+
+/** The route of the stack's page `pageSeq` (null once it left the history). */
+function stackRoute(pageSeq: number): Route | null {
+  return stackPages().find((page) => page.seq === pageSeq) ?? null;
+}
+
+/**
+ * The person backed out of the page `popped` by the system's own gesture (a swipe from the edge, Android's back): the stack
+ * has dropped the page already, so the history follows at once. No wait for the leave hooks: the page is gone and its own
+ * cleanup ran (the form saves what is typed as it goes). A page the app left itself (its Back) is not the top any more: nothing to do.
+ */
+function pagePopped(popped: number): void {
+  if (route().seq !== popped) return;
+  const h = history();
+  if (!h.length) return;
+  const stop = h[h.length - 1];
+  const here: Stop = { route: route(), sel: currentSelection() };
+  restoreSelection(stop.sel);
+  batch(() => {
+    forward.set([...forward(), here]);
+    history.set(h.slice(0, -1));
+    route.set(stop.route);
+  });
+  closeTransient();
+}
+
+/** A layer Back closes before it moves (dismiss() would answer true). */
+function hasLayer(): boolean {
+  return overlay() !== null || panel() !== null || (overlayMode() && sidebarOpen());
 }
 
 /** Forward one step, onto the taxpayer that screen was left on. False when there is none. */
@@ -1426,6 +1478,13 @@ export const app = {
   view,
   params: (): ViewParams => route().params,
   canBack: () => lastAlive(history()) >= 0,
+  /** A phone's navigation stack: its pages, the route of one, and the page the system's gesture popped. */
+  stack: (): Route[] => stackPages(),
+  stackRoute,
+  pagePopped,
+  hasLayer,
+  /** The view a route shows (a taxpayer view falls to Home while no taxpayer exists). */
+  viewOf: (r: Route): ViewName => (ROUTES[r.view].needsTaxpayer && isFresh() ? "home" : r.view),
   /** The page Back would show (a header names it, a sub-page asks whether its parent is there); null when there is none. */
   previous: (): Route | null => history()[lastAlive(history())]?.route ?? null,
   canForward: () => lastAlive(forward()) >= 0,
