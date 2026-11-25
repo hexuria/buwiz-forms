@@ -25,3 +25,11 @@ API 35, landscape (2560x1600). Show-taps was on for every recording. Made-up tax
 | F-print-preview-tablet-open.png | tablet: system print UI with both 2551Q pages | NO |
 | F-phone-printpreview-logcat.txt | logcat 1 s before to 5 s after the phone Print-preview tap (only unrelated gms noise) | — |
 | F-tablet-printpreview-logcat.txt | same for the tablet tap | — |
+
+## job 2b additions (docked keyboard, return-to-app, keyboard-between-fields)
+NOTE: run on the same API 35 phone, but with the PR #345 dev build (b51fabe4) still installed from job 5, not origin/main; input/insets plumbing is shared.
+- `B1-docked-keyboard.png` / `B1-docked-after-typing.png` / `B1-docked-after-scroll.png` - Gboard cleared first (docked, full width). REPRODUCED even docked: the 2551Q result row sits at y1720-1771, below the IME top edge (1517) - behind the keyboard.
+- `B1-ime-insets.txt` - dumpsys: mImeHeight=820, ime frame=[0,1517][1080,2400] sideHint=BOTTOM, mImeInsetsConsumed=false - the system reports the inset but the app does not consume it.
+- `B1-docked-keyboard-search.mp4` - typing, scroll attempts, tap attempts: row never reveals, taps hit the keyboard (0 selected).
+- `G-return-from-other-activity.mp4` / `G-after-font-change.png` / `G-logcat.txt` - return-to-app cases: home+relaunch, recents, font_scale 1.3, Gboard-settings+back ALL keep the same pid and the app stays where it was (Form library). No reset to onboarding reproduced on this host.
+- `A-keyboard-between-fields.mp4` + `A-shift-on-at-name-field.png` + `A-keyboard-tin-cell.png` + `A-keyboard-address.png` - keyboard between fields; Shift is ON (filled black arrow) when the name field is first focused.

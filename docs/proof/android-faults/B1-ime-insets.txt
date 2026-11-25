@@ -1,0 +1,11 @@
+    mImeHeight=820
+    mImeInsetsConsumed=false
+        InsetsSource id=3 type=ime frame=[0,1517][1080,2400] visibleFrame=[0,1517][1080,2400] visible=true flags= sideHint=BOTTOM boundingRects=null
+        InsetsSourceControl: {3 mType=ime mSurfacePosition=Point(0, 136) mInsetsHint=Insets{left=0, top=0, right=0, bottom=883}}
+      ImeInsetsSourceProvider
+      frameRateBoostOnTouch=true
+      dvrrWindowFrameRateHint=true}
+    mViewVisibility=0x0 mHaveFrame=true mObscured=false
+    mGivenContentInsets=[0,1381][0,0] mGivenVisibleInsets=[0,1381][0,0]
+    Frames: parent=[0,136][1080,2400] display=[0,136][1080,2400] frame=[0,136][1080,2400] last=[0,136][1080,2400] insetsChanged=false
+    isVisible=true
