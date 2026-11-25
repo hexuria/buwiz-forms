@@ -1,3 +1,5 @@
+> **Historical record:** this file describes a past state of the project, kept for reference.
+
 # NSH (TSX) migration plan
 
 Owner's picks: 2026-11-15. Feature slug `nsh-tsx`, branch `feat/nsh-tsx`, worktree `/Volumes/goldcoders/features/nsh-tsx/buwiz-forms`.

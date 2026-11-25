@@ -594,10 +594,11 @@ fn pr8_form_1707a_shut_items_show_their_caption_and_a_note() {
     let iii = part("Part III · Details of Payment");
     let numbers: Vec<&str> = iii.iter().map(|it| it["no"].as_str().unwrap()).collect();
     assert_eq!(numbers, ["22", "23", "24", "25"]);
-    assert!(
-        iii.iter()
-            .all(|it| it["note"].as_str().is_some_and(|n| n.contains("no box")))
-    );
+    assert!(iii.iter().all(|it| {
+        it["note"]
+            .as_str()
+            .is_some_and(|n| n.contains("cannot be filled here"))
+    }));
     let agent = part("Part II · Computation of Tax").last().unwrap().clone();
     assert!(
         agent["l"]
@@ -605,7 +606,11 @@ fn pr8_form_1707a_shut_items_show_their_caption_and_a_note() {
             .unwrap()
             .starts_with("Tax Agent Accreditation No.")
     );
-    assert!(agent["note"].as_str().is_some_and(|n| n.contains("no box")));
+    assert!(
+        agent["note"]
+            .as_str()
+            .is_some_and(|n| n.contains("cannot be filled here"))
+    );
     let text = sheet_text("1707a-2021");
     assert!(text.contains(
         "22 Cash/Bank Debit Memo ● 23 Check ● 24 Tax Debit Memo ● 25 Others (specify below)"
@@ -1508,10 +1513,11 @@ fn pr8_form_1702ex_shut_items_show_their_caption_and_a_note() {
     let iii = part("Part III · Details of Payment");
     let numbers: Vec<&str> = iii.iter().map(|it| it["no"].as_str().unwrap()).collect();
     assert_eq!(numbers, ["24", "25", "26", "27"]);
-    assert!(
-        iii.iter()
-            .all(|it| it["note"].as_str().is_some_and(|n| n.contains("no box")))
-    );
+    assert!(iii.iter().all(|it| {
+        it["note"]
+            .as_str()
+            .is_some_and(|n| n.contains("cannot be filled here"))
+    }));
     let sign = part("Part II · Total Tax Payable").last().unwrap().clone();
     assert!(
         sign["l"]
@@ -1519,7 +1525,11 @@ fn pr8_form_1702ex_shut_items_show_their_caption_and_a_note() {
             .unwrap()
             .starts_with("Signature over Printed Name")
     );
-    assert!(sign["note"].as_str().is_some_and(|n| n.contains("no box")));
+    assert!(
+        sign["note"]
+            .as_str()
+            .is_some_and(|n| n.contains("cannot be filled here"))
+    );
     let shut = disabled_at_load("1702ex-v2018c");
     let opened = open("1702EX", 0);
     let map = printed("1702EX", &opened["draft"]);
@@ -1937,10 +1947,11 @@ fn pr8_form_1702mx_shut_items_show_their_caption_and_a_note() {
         .clone();
     let numbers: Vec<&str> = iii.iter().map(|it| it["no"].as_str().unwrap()).collect();
     assert_eq!(numbers, ["23", "24", "25", "26"]);
-    assert!(
-        iii.iter()
-            .all(|it| it["note"].as_str().is_some_and(|n| n.contains("no box")))
-    );
+    assert!(iii.iter().all(|it| {
+        it["note"]
+            .as_str()
+            .is_some_and(|n| n.contains("cannot be filled here"))
+    }));
     let shut = disabled_at_load("1702mx-v2018c");
     let opened = open("1702MX", 0);
     let map = printed("1702MX", &opened["draft"]);

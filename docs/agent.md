@@ -49,9 +49,9 @@ must not be used for remote binds.
 `form.dismiss` refuses to close a form with unsaved edits by default. To
 close without writing the agent's copy of the return, invoke `form.dismiss`
 with `{"discard": true}`; the result includes `"discarded": true`. The NSH
-window saves what the filer typed as it leaves. In the classic GPUI shell,
-`enterView` switches views without saving, so unsaved typing there is not
-stored.
+window saves what the filer typed as it leaves. (The retired GPUI shell's
+`enterView` switched views without saving, so unsaved typing there was not
+stored.)
 
 `form.fields` lists boxes the agent can fill. Pass `{"locked": true}` to
 include locked boxes as read-only, marked with their lock name; this does not
@@ -64,9 +64,8 @@ after the filer answers, read the return again with `form.fields`.
 ## Where the code lives
 
 The session (every `invoke`), the UI-command queue, the opt-in rules, the batch drain and the headless daemon with its CLI are UI-free and
-live in `crates/bir-app-api/src/agent/` (cargo features `agent`, and `headless` for the daemon): one copy, used by the gpui shell, by
-the `bir` command and by the NSH app. `bir-shell` keeps only the gpui glue (`src/agent/mod.rs`: the drain timer, which waits `bir_app_api::agent::drain_interval`: 1 ms while a request arrived in the last 500 ms and 32 ms when idle, and the semantic tree of the
-script view). Their tests run with `cargo test -p bir-app-api --features headless --lib agent::` (the four safety variables); the daemon end to end (`serve --detach`, `status`, `logs`, `shutdown`) with `cargo test -p bir-cli`.
+live in `crates/bir-app-api/src/agent/` (cargo features `agent`, and `headless` for the daemon): one copy, used by
+the `bir` command and by the NSH app. Their tests run with `cargo test -p bir-app-api --features headless --lib agent::` (the four safety variables); the daemon end to end (`serve --detach`, `status`, `logs`, `shutdown`) with `cargo test -p bir-cli`.
 
 ## NSH app
 

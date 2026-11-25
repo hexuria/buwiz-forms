@@ -11,60 +11,65 @@ there, but nobody has run it on that platform.
 
 | Feature | Status | Notes |
 |---|---|---|
-| Profiles, tax form library, editors, Validate, Save draft | ✓ | All 43 forms. |
-| Submission queue and dry run (SFTP upload, IMAP receipts) | ✓ |  |
-| Encrypted database (SQLCipher) | ✓ |  |
-| Database key storage | ✓ | macOS Keychain, through the `security` tool. |
-| Close button (X) and quit shortcut | ✓ | X and Cmd+Q hide the app to the menu bar. Quit from the tray menu. |
-| System tray icon | ✓ | Menu bar icon with Show, Hide and Quit. |
+| Profiles, tax form library, editors, Check, Save draft | ✓ | All 43 forms. |
+| Submission queue (in shipped builds Queue is refused — the return stays a draft; a return queued by an older version stays Queued) | ✓ |  |
+| Database storage (plain SQLite, not encrypted) | ✓ |  |
+| Close button (X) and quit shortcut | ✓ | X and Cmd+W hide the window; Cmd+Q quits for real. |
+| System tray icon | ✓ | The `NSStatusItem` click handler restores the window; a secondary click opens the Show / Hide / Quit menu (hands-on check, 2026-11-24). |
 | Global show/hide hotkey | ✓ | Default Ctrl+Option+E suggestion. Off in Mac App Store builds. |
 | Single-instance guard | ✓ | The app bundle plus a loopback ping (`instance.port`). |
 | Window size and position memory | ✓ |  |
 | Print preview | ✓ | Own window with a Print button (native print dialog). |
-| Print an email receipt as PDF | ✓ | AppKit through a Swift helper; falls back to opening the file. |
-| Export dialogs (save file, choose folder) | ✓ | Native dialog. |
-| Unlock with the OS (Touch ID, Windows Hello) | ✓ | Touch ID, through robius-authentication. |
+| Export profile (Settings → Transfer) and Save as PDF (print preview) | ✓ | Native save dialog (`pick_save_path`). |
 | PIN or authenticator app lock | ✓ |  |
-| Desktop notifications | ✓ | System banner through GPUI in a `.app`; in-app toast otherwise. |
-| Instant refresh when the database changes | ✓ | Distributed notification plus a 5 s poll. |
-| Add deadlines to a calendar (.ics) | ✓ | Opens in Calendar. |
-| Google Calendar credentials storage | ✓ | Keychain, through the `security` tool. |
+| In-app notifications drawer and toasts | ✓ | The bell in the top bar (⌘⇧N); in-app toasts. |
+| Background refresh when the database changes | ✓ | The paced watch in `nsh/shell/app.ts` re-reads. |
+| Gmail connect for BIR receipt tracking | ✓ | Settings → Account → Google, or the taxpayer inbox card; the host opens the browser. |
 | Keyboard shortcuts | ✓ | Cmd based; also Cmd+H, Cmd+M, Cmd+Ctrl+F. |
 | Packaging | ✓ | Signed and notarized `.app` and `.dmg`; Mac App Store package. |
 | Agent control (gpui-agent) | ✓ | Opt-in build feature. |
 | Agent screenshots | ✓ | `screencapture`; needs Screen Recording permission. |
-| Dev Mode panel (debug builds only) | ✓ |  |
+
 
 ## Install and run
 
 - Download the `.dmg` from the
   [Releases](https://github.com/hexuria/buwiz-forms/releases) page and drag
   `eBIRForms.app` to Applications.
-- From source: run `scripts/setup-macos.sh`, then `just run`. Build a universal
-  (arm64 and x86_64) `.app` and DMG with `just _package-mac`.
-- Without `create-dmg`, `just _package-mac` makes a `.zip` instead.
+- From source: run `scripts/setup-macos.sh`, then `just run` (a development
+  window on a scratch database). `just _package-mac` builds the universal
+  `.app` and DMG (it runs `scripts/package_macos_release.sh`); `just app`
+  builds the Mac App Store `.pkg` (it resolves the next App Store build
+  number, then runs `just _package-mac-appstore` with `mas_build`); and
+  `just testflight` is `just app` plus the upload.
 
 ## Data
 
-- Database: `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db`.
+- Database: `~/Library/Application Support/dev.goldcoders.bir/bir_data.db`
+  (sandboxed Mac App Store builds use the group container
+  `~/Library/Group Containers/group.dev.goldcoders.bir/`).
   Override the path with `BIR_DATABASE_PATH`.
-- The SQLCipher key is in the Keychain (service `com.ebir.rust`, account
-  `sqlcipher_master_key`). The app reads it with the `security` tool, not the
-  Keychain framework, because the framework call can deadlock the GPUI main
-  loop. If the Keychain read fails for any reason other than "not found", the
-  app refuses to make a new key. A new key would make the old database
-  unreadable.
+- The database is plain SQLite; nothing is encrypted and there is no key
+  to store. The Buwiz account refresh token is the only keychain item
+  (service `com.buwiz.bir`, account `desktop-refresh`; see
+  [cloud-account.md](../cloud-account.md)).
 - Window size and position are saved in `window-geometry` in the data folder.
 - `instance.port` for the single-instance ping is in the user's local data
   folder (chosen by the `directories` crate; exact path unverified).
 
 ## Close, quit and the menu bar
 
-- The close button and Cmd+W hide the window. Cmd+Q and the app menu's
-  "Close to Menu Bar" item do the same. The app keeps running so the
-  background engine can poll for BIR receipts.
-- To quit for real, use Quit in the tray (menu bar) menu.
-- Clicking the Dock icon, or launching the app again, brings the window back.
+- The close button and Cmd+W hide the window. The app keeps running so the
+  submission worker can poll for BIR receipts.
+- Cmd+Q and the app menu's Quit item quit for real
+  (`nsh/shell/desktop/Desktop.tsx`).
+- While hidden or closed the app lives on as a menu-bar item only — the
+  Dock icon goes away (`nsh/shell/desktop/Desktop.tsx`, `Tray.set` →
+  `nsh-platform-macos/src/tray.rs`). A click on the menu-bar icon brings
+  the window back (verified 2026-11-24 by an accessibility `AXPress` on
+  the status item after ⌘H: window count 0 → 1), and a right or
+  Control-click opens the Show / Hide / Quit menu.
+- Launching the app again brings the window back (single instance).
 - Cmd+H hides the app, Cmd+Alt+H hides other apps, Cmd+M minimizes and
   Cmd+Ctrl+F toggles full screen.
 
@@ -77,27 +82,21 @@ there, but nobody has run it on that platform.
 
 ## Print and export
 
-- Print preview opens in its own 1200 by 900 window with a Print button. The
-  button uses the native print operation, with A4 paper and zero margins. If
-  the preview window cannot open, the app writes the HTML to a temporary file
-  and opens it in the default browser.
-- Receipt PDFs print through AppKit with a Swift helper. If the Swift runtime
-  is not there, the file is opened instead.
+- Print preview opens in its own window (verified 1440x900 resizable) with
+  a Print button. If the preview window cannot open, the app writes the
+  HTML to a temporary file and opens it in the default browser.
 - Export dialogs are always the native macOS dialogs.
-
-## Security
-
-- Touch ID unlock uses `robius-authentication`. If biometrics fail or are
-  cancelled, the lock screen falls back to the PIN.
+- No screen offers calendar export (.ics), Google Calendar, unlock with
+  Touch ID, or printing a receipt as PDF; that code exists in the core
+  crates and `nsh/src/auth.rs` but has no control in `nsh/screens` or
+  `nsh/shell`.
 
 ## Notifications
 
-- The app posts system banners through GPUI's `UNUserNotificationCenter`
-  support when it runs from a `.app`. A bare `cargo run` shows only the in-app
-  toast.
+- Alerts and receipts appear in the app's notifications drawer
+  (the bell in the top bar; ⌘⇧N). Delivery is in-app; there is no OS
+  notification-banner code in `nsh/`.
 - The headless `bir` daemon posts banners with `osascript`.
-- Database changes made by the daemon reach the window at once through a
-  distributed notification. A 5 second poll is the fallback.
 
 ## Packaging
 
@@ -107,20 +106,15 @@ there, but nobody has run it on that platform.
   builds a DMG, notarizes it with `notarytool` and checks it with `spctl`.
   It needs the Apple secrets listed in
   [DEVELOPMENT.md](../DEVELOPMENT.md#cicd-secrets--codesigning).
-- `just app` builds the sandboxed Mac App Store package from the NSH app
-  (`nsh/`): `nsh package --target macos --arch universal` with
-  `nsh/mas/cargo-with-mas.sh` as `$CARGO`, which adds the app's `mas_build`
-  feature (no global hotkey, shell cron runner or updater) to the generated
-  host's build. The recipe drops the update archive and the updater's
-  configuration, embeds `assets/macos/embedded.provisionprofile` (it refuses a
-  store build whose profile is missing or expired), signs with `entitlements.plist`
-  (sandbox), adds `print-overrides/` under `Contents/Resources` and wraps the
-  app with `productbuild`. The store build inherits the NSH minimum of macOS 14.
-  It needs App Store Connect
-  credentials for the build number, `CODESIGN_IDENTITY` and
-  `INSTALLER_IDENTITY`. Without `CODESIGN_IDENTITY` the app is ad hoc signed
-  for a local sandbox run, without the profile and without the application and
-  team identifiers, which an ad hoc signature cannot carry.
+- The sandboxed Mac App Store package is built by
+  `just _package-mac-appstore` and the release workflow: it adds the
+  app's `mas_build` feature (no global hotkey or self-updater) to the
+  generated host's build, embeds
+  `assets/macos/embedded.provisionprofile`, signs with
+  `entitlements.plist` (sandbox), adds `print-overrides/` under
+  `Contents/Resources` and wraps the app with `productbuild`. A store
+  build never offers self-updates (`store_managed()` in
+  `nsh/src/desktop.rs`).
 - Entitlement files are in `assets/macos/` and at the repository root.
 
 ## Agent control
@@ -133,4 +127,7 @@ there, but nobody has run it on that platform.
 ## Unverified
 
 - The exact `instance.port` path on macOS.
-- That `just _package-mac` output is byte-identical to the CI release build.
+- Whether the `bir` headless daemon still posts `osascript` banners.
+- Whether real-mouse clicks (not accessibility actions) reach the
+  menu-bar item on remote/dev machines — a raw mouse click can be
+  swallowed by the remote desktop while `AXPress` works (2026-11-24).

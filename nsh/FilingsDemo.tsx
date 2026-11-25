@@ -10,12 +10,15 @@
 //          office and Cebu branch, one for the second taxpayer); "second": only the second taxpayer's. Default: the host's own answer
 //          (none: nothing was imported). An import cannot be made through the host here (the folder dialog is the host's), so a test
 //          stands in for the host's answer, as SettingsDemo does for the import.
+//   send   true: bir.list_returns answers the send states the worker leaves (SENDS below) on four seeded returns: the 2551Q draft
+//          refused, the queued 1601C with an unknown outcome, the Cebu 2551Q held and the second taxpayer's 1601C waiting for its next
+//          try (those two as Queued). A worker that leaves them cannot run here (nothing is sent from a test), so a test stands in for it.
 // It sits at the nsh root because a real-window run serves assets (fonts, icons) from the entry's folder down.
 import { batch, effect, host, mount, untracked, View } from "nsh";
 import "./theme/fonts";
-import { bir, type LegacyFiledReturn, type ReturnRow } from "./bir";
+import { bir, type LegacyFiledReturn, type ReturnRow, type SendState } from "./bir";
 import { createDemoTaxpayer, DEMO } from "./bir/testing";
-import { CEBU, SECOND, seedFilings } from "./screens/filings/seed";
+import { CEBU, IDS, SECOND, seedFilings } from "./screens/filings/seed";
 import { go, store } from "./shell";
 import { app } from "./shell/app";
 import { Shell } from "./shell/Shell";
@@ -26,6 +29,25 @@ interface Params {
   go?: Record<string, unknown>;
   generated?: boolean;
   legacy?: "rows" | "second";
+  send?: boolean;
+}
+
+const sendOf = (stage: SendState["stage"], line: string, code: string | null = null): SendState => ({
+  stage, line, code, next_try_at: stage === "held" || stage === "waiting" ? "2026-11-24T07:40:00+00:00" : null, can_resolve: stage === "needs_attention",
+});
+/** The send states the host answers on four seeded returns (param `send`), and the status each then has. */
+const SENDS: Record<number, { status: string; send: SendState }> = {
+  [IDS.draft]: { status: "Draft", send: sendOf("refused", "This TIN is not on your Buwiz account.", "tin_not_active") },
+  [IDS.queued]: { status: "Queued", send: sendOf("needs_attention", "The BIR may have received this return. Check for the BIR's confirmation email before sending it again.") },
+  [IDS.cebu]: { status: "Queued", send: sendOf("held", "Buwiz is holding sends for now.") },
+  [IDS.second]: { status: "Queued", send: sendOf("waiting", "Not sent yet: BIR is not accepting returns right now. It tries again by itself.") },
+};
+
+/** bir.list_returns with SENDS on its rows. */
+function answerSends(): void {
+  const real = bir.list_returns;
+  const table = bir as unknown as Record<string, typeof bir.list_returns>;
+  table.list_returns = (which) => real(which).map((r) => (SENDS[r.id] ? { ...r, ...SENDS[r.id] } : r));
 }
 
 /** What the host answers for a TIN once the old program's folder was imported (made up: the demo taxpayers, their branch). */
@@ -55,12 +77,13 @@ function answerLegacy(only: "rows" | "second"): void {
 /** A generated queued return (not in the database): what a window shows for the moment the worker has not taken one. */
 const QUEUED: ReturnRow = {
   id: 9001, tin: DEMO.tin, tin_root: "000123453", branch_code: "00000", branch_name: "Head office", taxpayer_name: "Juana Santos", branch_count: 2,
-  form_code: "1601C", taxable_year: 2026, period: 10, period_label: "October 2026", status: "Queued", updated_at: "2026-11-14 09:30:00", return_key: 10, submitted_via_relay: false,
+  form_code: "1601C", taxable_year: 2026, period: 10, period_label: "October 2026", status: "Queued", updated_at: "2026-11-14 09:30:00", return_key: 10, submitted_via_relay: false, send: null,
 };
 
 function Demo() {
   const p = host.params as Params;
   if (p.legacy) answerLegacy(p.legacy);
+  if (p.send) answerSends();
   if (p.seed === "none") createDemoTaxpayer();
   else seedFilings();
   if (p.go) {

@@ -18,6 +18,57 @@ use super::{FilingPeriod, FilingStatus};
 use crate::filing_queue::{QueueAuthSource, QueueAuthorization};
 use crate::penalties::PenaltyComponent;
 
+/// How a send that did not end in a receipt leaves a queued return. The
+/// worker that held the claim (or was about to take it) decides. Every case
+/// but [`NoReceipt::Unknown`] proved that nothing reached the BIR.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NoReceipt {
+    /// The return itself was refused (a TIN the account may not send for, a
+    /// file that does not match its name): back to Draft with the reason.
+    /// Sending the same file again would be refused again.
+    Refused,
+    /// A failed try on the direct path or the mock relay: still Queued,
+    /// retried after 1, 2, 4, 8 minutes; the fifth failure returns it to Draft.
+    Failed,
+    /// A failed try through the Buwiz relay (the BIR's way in did not take
+    /// it): still Queued, retried after 5 minutes, 30 minutes, 1 hour, then
+    /// every 2 hours. It never goes back to Draft by itself: a BIR outage
+    /// must not empty the queue.
+    RelayFailed,
+    /// Not a try: Buwiz held the send, the app is signed out or could not
+    /// reach Buwiz. Still Queued and nothing is counted; not before `until`,
+    /// and not for 5 minutes.
+    Held {
+        until: Option<chrono::DateTime<chrono::Utc>>,
+    },
+    /// The BIR may have the return. The claim stays, so nothing sends it
+    /// again by itself; only the reason is recorded, for the person to
+    /// resolve (the email came, or it did not and the return goes again).
+    Unknown,
+}
+
+/// The wait before try `attempts + 1` through the Buwiz relay.
+pub(crate) fn relay_retry_delay(attempts: u32) -> chrono::Duration {
+    match attempts {
+        0 | 1 => chrono::Duration::minutes(5),
+        2 => chrono::Duration::minutes(30),
+        3 => chrono::Duration::hours(1),
+        _ => chrono::Duration::hours(2),
+    }
+}
+
+/// When a held return may go again: `until`, but not within 5 minutes and
+/// not beyond 7 days, whatever the server said.
+pub(crate) fn held_until(
+    until: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> chrono::DateTime<chrono::Utc> {
+    let soonest = now + chrono::Duration::minutes(5);
+    until
+        .unwrap_or(soonest)
+        .clamp(soonest, now + chrono::Duration::days(7))
+}
+
 /// Status, queue authorization, network claim and retry state of one return.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SubmissionLifecycle {
@@ -41,6 +92,13 @@ pub struct SubmissionLifecycle {
     /// it. Absent (false) on every other send.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub submitted_via_relay: bool,
+    /// The signed receipt (a compact JWS) the Buwiz relay gave for the send
+    /// that made this return Submitted. Written by the worker alone, at that
+    /// moment; cleared when the return goes back to Draft or is queued again.
+    /// Absent on every send that did not go through the relay. Never filed,
+    /// printed or part of the queued fingerprint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay_receipt: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirmed_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -137,6 +195,7 @@ impl Default for SubmissionLifecycle {
             submitted_at: None,
             submitted_dry_run: false,
             submitted_via_relay: false,
+            relay_receipt: None,
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
@@ -187,6 +246,7 @@ impl SubmissionLifecycle {
         self.queue_authorization = Some(authorization);
         self.submitted_dry_run = false;
         self.submitted_via_relay = false;
+        self.relay_receipt = None;
         self.clear_claim();
         self.status = FilingStatus::Queued;
         self.submission_attempts = 0;
@@ -215,6 +275,7 @@ impl SubmissionLifecycle {
         self.submission_filename = Some(filename);
         self.submitted_dry_run = dry_run;
         self.submitted_via_relay = false;
+        self.relay_receipt = None;
         self.submission_attempts = 0;
         self.submission_error = None;
         self.next_retry_at = None;
@@ -257,6 +318,7 @@ impl SubmissionLifecycle {
         self.submitted_at = None;
         self.submitted_dry_run = false;
         self.submitted_via_relay = false;
+        self.relay_receipt = None;
         self.confirmed_at = None;
         self.receipt_id = None;
         self.submission_filename = None;
@@ -306,6 +368,58 @@ impl SubmissionLifecycle {
                 Some((chrono::Utc::now() + chrono::Duration::minutes(delay_minutes)).to_rfc3339());
         }
         self.touch();
+    }
+
+    /// A failed try through the Buwiz relay: counted, retried on the long
+    /// ladder ([`relay_retry_delay`]), never back to Draft.
+    pub fn record_relay_failure(&mut self, error_msg: String) {
+        assert!(
+            matches!(self.status, FilingStatus::Queued),
+            "Cannot record a relay failure in {:?} status - must be Queued",
+            self.status
+        );
+        self.submission_attempts += 1;
+        self.submission_error = Some(error_msg);
+        self.clear_claim();
+        self.next_retry_at =
+            Some((chrono::Utc::now() + relay_retry_delay(self.submission_attempts)).to_rfc3339());
+        self.touch();
+    }
+
+    /// Not a try: the reason is kept, nothing is counted, and the return
+    /// waits until [`held_until`].
+    pub fn hold_submission(
+        &mut self,
+        reason: String,
+        until: Option<chrono::DateTime<chrono::Utc>>,
+    ) {
+        assert!(
+            matches!(self.status, FilingStatus::Queued),
+            "Cannot hold a submission in {:?} status - must be Queued",
+            self.status
+        );
+        self.submission_error = Some(reason);
+        self.clear_claim();
+        self.next_retry_at = Some(held_until(until, chrono::Utc::now()).to_rfc3339());
+        self.touch();
+    }
+
+    /// A send that did not end in a receipt: leave the return as `how` says,
+    /// with `note` as its reason.
+    pub(crate) fn settle_without_receipt(&mut self, note: String, how: NoReceipt) {
+        match how {
+            NoReceipt::Refused => {
+                self.revert_to_draft();
+                self.submission_error = Some(note);
+            }
+            NoReceipt::Failed => self.record_submission_failure(note),
+            NoReceipt::RelayFailed => self.record_relay_failure(note),
+            NoReceipt::Held { until } => self.hold_submission(note, until),
+            NoReceipt::Unknown => {
+                self.submission_error = Some(note);
+                self.touch();
+            }
+        }
     }
 
     /// Take the network claim. Callers hold the storage transaction.

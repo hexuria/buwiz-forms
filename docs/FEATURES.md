@@ -10,10 +10,10 @@ there, but nobody has run it on that platform.
 
 | Feature | macOS | Windows | Linux |
 |---|---|---|---|
-| Profiles, tax form library, editors, Validate, Save draft | ✓ | untested | ✓ |
-| Submission queue and dry run (SFTP upload, IMAP receipts) | ✓ | untested | ✓ |
-| Encrypted database (SQLCipher) | ✓ | untested | ✓ |
-| Database key storage | ✓ | untested | partial |
+| Profiles, tax form library, editors, Check, Save draft | ✓ | ✓ | ✓ |
+| Submission queue (in shipped builds Queue is refused — the return stays a draft; a return queued by an older version stays Queued) | ✓ | ✓ | ✓ |
+| Database storage (plain SQLite, not encrypted) | ✓ | ✓ | ✓ |
+| Account sign-in (Buwiz account, device flow in the browser) | ✓ | partial | ✓ |
 | Close button (X) and quit shortcut | ✓ | untested | ✓ |
 | System tray icon | ✓ | untested | partial |
 | App menu launcher, icons and dock grouping (app id `dev.goldcoders.bir`) | n/a | n/a | ✓ |
@@ -21,60 +21,83 @@ there, but nobody has run it on that platform.
 | Single-instance guard | ✓ | untested | ✓ |
 | Window size and position memory | ✓ | untested | ✓ |
 | Print preview | ✓ | untested | partial |
-| Print an email receipt as PDF | ✓ | untested | ✓ |
-| Export dialogs (save file, choose folder) | ✓ | untested | partial |
-| Unlock with the OS (Touch ID, Windows Hello) | ✓ | untested | ✗ |
-| PIN or authenticator app lock | ✓ | untested | ✓ |
-| Desktop notifications | ✓ | untested | untested |
-| Instant refresh when the database changes | ✓ | untested | ✓ |
-| Add deadlines to a calendar (.ics) | ✓ | untested | ✓ |
-| Google Calendar credentials storage | ✓ | untested | untested |
-| Keyboard shortcuts | ✓ | untested | ✓ |
+| Export profile (Settings → Transfer) and Save as PDF (print preview) | ✓ | untested | partial |
+| PIN or authenticator app lock | ✓ | ✓ | ✓ |
+| In-app notifications drawer and toasts | ✓ | ✓ | ✓ |
+| Background refresh when the database changes | ✓ | ✓ | ✓ |
+| Gmail connect for BIR receipt tracking (Settings → Account → Google; host opens the browser) | ✓ | partial | ✓ |
+| Keyboard shortcuts | ✓ | ✓ | ✓ |
+| Store builds never self-update (Mac App Store, Microsoft Store) | ✓ | ✓ | n/a |
 | Packaging | ✓ | untested | ✓ |
 | Agent control (gpui-agent) | ✓ | partial | ✓ |
 | Agent screenshots | ✓ | ✗ | ✗ |
-| Dev Mode panel (debug builds only) | ✓ | untested | ✓ |
 
 ## Reading this table
 
-- macOS and Linux are fully tested. Windows has partial evidence from one
-  Windows Server 2022 VM ([#90 comment 6119512665](https://github.com/hexuria/buwiz-forms/issues/90#issuecomment-6119512665));
-  this is not full certification, and all Windows cells without specific
-  evidence remain "untested".
-- The table was derived from the code on branch `forms/integration` (commit
-  `fe86f57d`): `cfg(target_os)` blocks, the retired gpui shell's `src/platform/`,
-  `gui.rs`, `export_target.rs`, `crates/bir-core/src/db/mod.rs` and the
-  packaging files. It was not produced by running the app on each platform.
-- The same data drives the matrix at the top of each platform page.
+- macOS and Linux are fully tested. Windows shared features are ✓ when the
+  CI covers them: the `NSH app (Windows)` job in
+  [.github/workflows/nsh.yml](../.github/workflows/nsh.yml) runs `nsh check`,
+  `nsh build`, the Rust crate tests and the headless TSX tests on
+  `windows-2025`, and `check` in
+  [.github/workflows/ci.yml](../.github/workflows/ci.yml) runs
+  `cargo test --locked --workspace` on `windows-latest`. Those jobs exercise
+  the shared Rust and TypeScript code, not a real Windows window, so every
+  Windows cell that needs a person looking at a desktop stays "untested".
+- The macOS cells were checked against the running app on this commit's
+  ancestor line (a dev host window with a scratch database), including the
+  menus, the editor header and the print preview window.
+- The system tray row: on macOS the app sets an `NSStatusItem`
+  (`nsh/shell/desktop/Desktop.tsx`, `Tray.set` → `nsh-platform-macos/src/tray.rs`).
+  Hide and Close keep the app running in the menu bar without a Dock icon;
+  a click on the menu-bar icon brings the window back and a secondary
+  click opens the Show / Hide / Quit menu (accessibility-press check on a
+  real Mac, 2026-11-24). See [macos.md](platforms/macos.md).
+- The table was re-derived from `main`: the retired JS desktop shell and
+  its crate were deleted; the app is the NSH app in `nsh/`.
+- Features whose code exists but which no screen offers were removed from
+  this table: adding deadlines to a calendar (the .ics builder,
+  `crates/bir-core/src/calendar_ics.rs`, is not called from `nsh/screens`
+  or `nsh/shell`), Google Calendar credentials storage, unlocking with the
+  OS (Touch ID / Windows Hello — `nsh/src/auth.rs` `os_authenticate` has no
+  caller), and printing an email receipt as PDF (the receipt code in
+  `crates/bir-core/src/email/` is not reached from a screen).
 
 ## Features that are the same everywhere
 
-These have no platform code and behave the same in the shared Rust code:
+These have no platform code and behave the same in the shared Rust and
+TypeScript code:
 
 - The 43 forms, their validation, XML output and the submission queue.
 - The statuses Draft, Queued, Submitted, Confirmed and Paid, and Revert to Draft.
 - Profiles, the PIN and authenticator-app lock, the calendar and the
   notifications drawer.
 - The light and dark theme (Cmd/Ctrl+T).
-- Dry-run and live sending (`BIR_SFTP_DRY_RUN`, `BIR_SFTP_LIVE`).
+- Dry-run mode for development (`BIR_SFTP_DRY_RUN`). Live filing is not in
+  any shipped build: the `direct-bir` cargo feature that would send to the
+  BIR itself is never enabled in them.
 - The frozen printed sheets.
 
 ## Security and privacy
 
-- **Offline first.** Profiles, TINs and drafts are stored in an encrypted SQLite
-  (SQLCipher) database on your machine. See each platform page for the path.
-- **App lock.** A 4-digit PIN or an authenticator app. On macOS and Windows the
-  lock screen can also use Touch ID or Windows Hello.
-- **Profile snapshot at save time.** A saved form keeps the profile data as it
-  was when you saved. Changing the profile later does not change the saved form.
-- **Post-submission lock.** Once a return is submitted its fields are read-only.
-  Revert to Draft to change it.
+- **Offline first.** Profiles, TINs and drafts are stored in a plain SQLite
+  database on your machine; it is not encrypted. See each platform page for
+  the path, and [PRIVACY_POLICY.md](../PRIVACY_POLICY.md) for what is stored
+  and sent.
+- **App lock.** A 4-digit PIN or an authenticator app (Settings → Account →
+  Security). OS unlock (Touch ID / Windows Hello) exists in
+  `nsh/src/auth.rs` but no screen calls it, so the app does not offer it.
+- **Profile snapshot at save time.** A saved form keeps the profile data as
+  it was when you saved. Changing the profile later does not change the
+  saved form.
+- **Post-submission lock.** Once a return is submitted its fields are
+  read-only. Revert to Draft to change it.
 
 ## Automation
 
-- **Background engine.** A cron engine runs on a dedicated thread inside the
-  app. No separate daemon is needed.
-- **Receipt tracking.** IMAP fetching scans your inbox for BIR receipts and
-  moves returns from Submitted to Confirmed and Paid.
-- **Filters.** The dashboard filters by period (Q1 to Q4, monthly, yearly) and
-  by status.
+- **Background engine.** A submission worker runs inside the app and keeps
+  the queue. No separate daemon is needed. In shipped builds it cannot
+  send to the BIR itself.
+- **Receipt tracking.** Reading your inbox for BIR receipts moves returns
+  from Submitted to Confirmed and Paid.
+- **Filters.** The library and calendar filter by period (Q1 to Q4,
+  monthly, yearly) and by status.

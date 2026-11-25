@@ -17,7 +17,7 @@ rules/ evidence
     |
     | explicit deterministic code generation
     v
-bir-rules  <-  bir-core  <-  bir-shell (GPUI)
+bir-rules  <-  bir-core  <-  bir-app-api  <-  the nsh app and the bir command
 ```
 
 - `bir-rules` must not depend on `bir-core`, GPUI, the database, networking, or

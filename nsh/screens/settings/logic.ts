@@ -88,6 +88,23 @@ export function jobKey(job: BackgroundJob): string {
   return `${job.kind}-${job.id}`;
 }
 
+const PRODUCTION_SERVER = "https://api.buwiz.com";
+
+/**
+ * Whether Settings shows the account server's address. The ordinary build talks to Buwiz's own server, and naming it
+ * reads like a developer setting; the row is for a build or a run that points somewhere else, or at a rejected address.
+ */
+export function showsServer(status: { server_url: string; server_url_source: string } | null | undefined): boolean {
+  if (!status) return false;
+  if (status.server_url_source === "invalid" || status.server_url_source === "env") return true;
+  return status.server_url.trim().replace(/\/+$/, "") !== PRODUCTION_SERVER;
+}
+
+/** The line under who is signed in: the host's detail, unless it only repeats the title ("Not signed in" / "Not signed in."). */
+export function accountHint(who: string, detail: string): string {
+  return detail.trim().replace(/\.$/, "") === who.trim() ? "" : detail;
+}
+
 /** The words under the cloud account's server row. */
 export function serverHint(source: string | null | undefined): string {
   if (source === "env") return "From BUWIZ_SERVER_URL for this run.";

@@ -24,7 +24,7 @@ pub use amendment_snapshots::{AmendmentSnapshot, SnapshotPayloadSource};
 mod drafts;
 pub use drafts::{
     ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Claim1601CSubmissionResult,
-    Claim2551QSubmissionResult,
+    Claim2551QSubmissionResult, abandoned_claim_audit,
 };
 mod form_rule_state;
 pub use form_rule_state::{FormFinalCopy, FormRuleIdentity, FormRuleState, FormRuleStateError};

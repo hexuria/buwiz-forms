@@ -88,10 +88,10 @@ target/release/bir-mcp --http 127.0.0.1:8765
 - Only loopback addresses are accepted (`127.0.0.0/8`, `[::1]`); anything
   else is refused at startup.
 - `--http` is an OAuth 2.1 protected resource. There is no shared bearer
-  secret. A request with no token, or a token buwiz-server minted for a
+  secret. A request with no token, or a token the account server (buwiz-com) minted for a
   different resource, gets `401` and
   `WWW-Authenticate: Bearer resource_metadata="…"`. The client registers
-  with buwiz-server, signs in in the browser, and sends the access token
+  with the account server (buwiz-com), signs in in the browser, and sends the access token
   whose audience is this MCP URL.
 - A request whose `Origin` header is present and not a loopback origin gets
   `403` (the MCP spec's DNS-rebinding guard).

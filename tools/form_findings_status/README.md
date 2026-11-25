@@ -1,3 +1,5 @@
+> **Historical record:** this file describes a past state of the project, kept for reference.
+
 # Findings ledger
 
 One JSON file per pull-request group in `tools/form_findings_priority.json`,

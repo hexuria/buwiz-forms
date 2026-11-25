@@ -1,7 +1,8 @@
 // The wide title bar (old chrome.js renderTitleBar): 40 points, a window drag region, room for the macOS traffic lights
 // and the Windows caption buttons (nsh/desktop titleBar(): the hidden title bar's area). Left: sidebar toggle, back,
 // forward, and search and "+" while the sidebar is hidden. Centre: the context pill. Right: bell, theme, panel.
-import { keymap, View, windowSize } from "nsh";
+// On an iPad (and a phone turned wide) the bar starts under the status bar: the safe area's top is added above its 40 points.
+import { keymap, safeArea, View, windowSize } from "nsh";
 import { titleBar } from "nsh/desktop";
 import { BREAK, SIZE } from "../theme/tokens";
 import { ContextPill, IconButton } from "../ui";
@@ -23,8 +24,13 @@ export function TitleBar() {
   const left = () => (chromeNow().toolbarHoldsWindowButtons ? titleBar().left : 0);
   const right = () => (chromeNow().toolbarHoldsWindowButtons ? titleBar().right : 0);
   return (
-    <View testID="title-bar" desktop={{ windowDrag: true }} class="shrink-0 flex-row items-center" style={{ height: SIZE.titleBar }}>
-      <View class="min-w-0 flex-1 basis-0 flex-row items-center gap-1" style={{ paddingLeft: 10 + left() }}>
+    <View
+      testID="title-bar"
+      desktop={{ windowDrag: true }}
+      class="shrink-0 flex-row items-center"
+      style={{ height: SIZE.titleBar + safeArea().top, paddingTop: safeArea().top }}
+    >
+      <View class="min-w-0 flex-1 basis-0 flex-row items-center gap-1" style={{ paddingLeft: 10 + left() + safeArea().left }}>
         <IconButton
           testID="tb-sidebar"
           icon="panel-left"
@@ -55,7 +61,7 @@ export function TitleBar() {
           onPress={() => app.togglePanel("profile")}
         />
       </View>
-      <View class="min-w-0 flex-1 basis-0 flex-row items-center justify-end gap-1" style={{ paddingRight: 10 + right() }}>
+      <View class="min-w-0 flex-1 basis-0 flex-row items-center justify-end gap-1" style={{ paddingRight: 10 + right() + safeArea().right }}>
         <IconButton
           testID="tb-notifications"
           icon="bell"

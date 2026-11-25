@@ -91,6 +91,19 @@ test("splitLabel and matchWords: every typed word must be in the label or code, 
   expect(matchWords(rdo, "south", 1).length).toBe(1);
 });
 
+test("matchWords: an accent does not have to be typed, and typing it still matches", () => {
+  const zip = [
+    { value: "1100", label: "1100 - Central, Piñahan, Project 6" },
+    { value: "1700", label: "1700 - Parañaque" },
+    { value: "4114", label: "4114 - Dasmariñas" },
+  ];
+  expect(matchWords(zip, "pinahan").map((o) => o.value)).toEqual(["1100"]);
+  expect(matchWords(zip, "Piñahan").map((o) => o.value)).toEqual(["1100"]);
+  expect(matchWords(zip, "PARANAQUE").map((o) => o.value)).toEqual(["1700"]);
+  expect(matchWords(zip, "dasmarinas 4114").map((o) => o.value)).toEqual(["4114"]);
+  expect(matchWords(zip, "PIÑAHAN").map((o) => o.value)).toEqual(["1100"]);
+});
+
 test("rowTitleOf: the row's printed number, with its caption after a dot", () => {
   expect(rowTitleOf({}, 0)).toBe("Row 1");
   expect(rowTitleOf({ start: 5 }, 2)).toBe("Row 7");

@@ -309,6 +309,13 @@ pub struct Form2551QDraft {
     /// it. Absent (false) on every other send.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub submitted_via_relay: bool,
+    /// The signed receipt (a compact JWS) the Buwiz relay gave for the send
+    /// that made this return Submitted. Written by the worker alone, at that
+    /// moment; cleared when the return goes back to Draft or is queued again.
+    /// Absent on every send that did not go through the relay. Never filed,
+    /// printed or part of the queued fingerprint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay_receipt: Option<String>,
     #[serde(default)]
     pub confirmed_at: Option<String>,
     #[serde(default)]
@@ -492,6 +499,7 @@ impl Form2551QDraft {
             submitted_at: None,
             submitted_dry_run: false,
             submitted_via_relay: false,
+            relay_receipt: None,
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
@@ -1181,6 +1189,7 @@ impl Form2551QDraft {
         ));
         self.submitted_dry_run = false;
         self.submitted_via_relay = false;
+        self.relay_receipt = None;
         self.submission_claim_token = None;
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
@@ -1215,6 +1224,7 @@ impl Form2551QDraft {
         self.submission_filename = Some(filename);
         self.submitted_dry_run = dry_run;
         self.submitted_via_relay = false;
+        self.relay_receipt = None;
         self.submission_attempts = 0;
         self.next_retry_at = None;
         self.last_error = None;
@@ -1279,6 +1289,7 @@ impl Form2551QDraft {
         self.submitted_at = None;
         self.submitted_dry_run = false;
         self.submitted_via_relay = false;
+        self.relay_receipt = None;
         self.confirmed_at = None;
         self.receipt_id = None;
         self.submission_filename = None;
@@ -1382,6 +1393,72 @@ impl Form2551QDraft {
         self.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
         self.updated_at = chrono::Utc::now().to_rfc3339();
         true
+    }
+
+    /// A failed try through the Buwiz relay: counted, retried on the long
+    /// ladder ([`super::queueable::relay_retry_delay`]), never back to Draft.
+    pub fn record_relay_failure(&mut self, error_msg: String) {
+        assert!(
+            matches!(self.status, FilingStatus::Queued),
+            "Cannot record a relay failure in {:?} status - must be Queued",
+            self.status
+        );
+        self.submission_attempts += 1;
+        self.last_error = Some(error_msg);
+        self.submission_claim_token = None;
+        self.submission_claimed_at = None;
+        self.submission_claim_lease_until = None;
+        self.submission_put_started_at = None;
+        self.next_retry_at = Some(
+            (chrono::Utc::now() + super::queueable::relay_retry_delay(self.submission_attempts))
+                .to_rfc3339(),
+        );
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Not a try: the reason is kept, nothing is counted, and the return
+    /// waits until [`super::queueable::held_until`].
+    pub fn hold_submission(
+        &mut self,
+        reason: String,
+        until: Option<chrono::DateTime<chrono::Utc>>,
+    ) {
+        assert!(
+            matches!(self.status, FilingStatus::Queued),
+            "Cannot hold a submission in {:?} status - must be Queued",
+            self.status
+        );
+        self.last_error = Some(reason);
+        self.submission_claim_token = None;
+        self.submission_claimed_at = None;
+        self.submission_claim_lease_until = None;
+        self.submission_put_started_at = None;
+        self.next_retry_at =
+            Some(super::queueable::held_until(until, chrono::Utc::now()).to_rfc3339());
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// A send that did not end in a receipt: leave the return as `how` says,
+    /// with `note` as its reason.
+    pub(crate) fn settle_without_receipt(
+        &mut self,
+        note: String,
+        how: super::queueable::NoReceipt,
+    ) {
+        use super::queueable::NoReceipt;
+        match how {
+            NoReceipt::Refused => {
+                self.revert_to_draft();
+                self.last_error = Some(note);
+            }
+            NoReceipt::Failed => self.record_submission_failure(note),
+            NoReceipt::RelayFailed => self.record_relay_failure(note),
+            NoReceipt::Held { until } => self.hold_submission(note, until),
+            NoReceipt::Unknown => {
+                self.last_error = Some(note);
+                self.updated_at = chrono::Utc::now().to_rfc3339();
+            }
+        }
     }
 
     pub fn record_submission_failure(&mut self, error_msg: String) {

@@ -168,7 +168,7 @@ knowledge:
   - name: startup
     contents: |
       Android: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1
-      GPUI desktop (separate process, repository root):
+      Desktop app (separate process, repository root):
         $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
         $env:OPENSSL_DIR = [Environment]::GetEnvironmentVariable('OPENSSL_DIR','User')
         $env:OPENSSL_LIB_DIR = [Environment]::GetEnvironmentVariable('OPENSSL_LIB_DIR','User')

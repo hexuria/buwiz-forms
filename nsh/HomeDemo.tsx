@@ -109,6 +109,7 @@ function queuedRow(): ReturnRow {
     updated_at: new Date().toISOString().slice(0, 19).replace("T", " "),
     return_key: null,
     submitted_via_relay: false,
+    send: null,
   };
 }
 

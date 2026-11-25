@@ -1,3 +1,5 @@
+> **Historical record:** this file describes a past state of the project, kept for reference.
+
 # eBIRForms Linux downloads (Native Shell)
 
 ## Requirements and safety

@@ -135,6 +135,8 @@ export interface ScreenFormOpened {
     /** That send went to the local mock relay (docs/relay.md), not to BIR. False for every other send. */
     submitted_via_relay: boolean;
     confirmed_at: string | null;
+    /** What the page says about the stored return's send (refused, held, waiting, needs attention, sent ...); null for a sample, a new return, and where the status says it all. */
+    send: SendState | null;
     /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
     amends?: ScreenFormStatus;
     /** Boxes another answer turns off right now, each with its tag ("Needs item 13 = Yes"; the page fades them). */
@@ -3541,6 +3543,18 @@ fn open_screen_form(
             (None, Vec::new(), true)
         })
     };
+    // What the page says about the stored return's send (send_state.rs),
+    // read apart and never in the way of opening.
+    let send = match draft["id"].as_i64() {
+        Some(id) if !sample => with_database(|db| {
+            crate::send_state::stored_send(db, id).map_err(|error| host_error(error.to_string()))
+        })
+        .unwrap_or_else(|error| {
+            tracing::warn!("{code}: reading the send state failed: {}", error.message());
+            Value::Null
+        }),
+        _ => Value::Null,
+    };
     Ok(async move {
         let mut opened = on_large_stack(move || {
             opened_json(kind, year, period, draft, from_profile, build, checked)
@@ -3554,6 +3568,7 @@ fn open_screen_form(
         opened["filed_original"] = filed_original;
         opened["profile_updates"] = json!(followed);
         opened["notes"] = json!(notes);
+        opened["send"] = send;
         for (field, value) in carried {
             opened[field] = value;
         }
@@ -14519,6 +14534,87 @@ mod tests {
             assert_eq!(dry["status"], "Submitted", "{code}");
             assert_eq!(dry["submitted_at"], real["submitted_at"], "{code}");
             assert_eq!(dry["submitted_dry_run"], true, "{code}");
+        }
+    }
+
+    /// `send` in the open's answer is the stored return's send state
+    /// (send_state.rs), for each storage shape: null on a plain Draft and a
+    /// Submitted return without a relay receipt, `refused` on a Draft the
+    /// worker put back with the server's sentence, `held` and
+    /// `needs_attention` on Queued ones, `sent` with a receipt.
+    #[test]
+    fn open_says_what_the_send_is() {
+        setup();
+        for (code, period) in [("0619E", 5i64), ("1601C", 5), ("2551Q", 3)] {
+            let reason_key = if code == "2551Q" {
+                "last_error"
+            } else {
+                "submission_error"
+            };
+            let opened = open_for(TIN, code, 2024, period);
+            assert!(opened["send"].is_null(), "{code}: a new return");
+            let id = store_filed(code, &opened["draft"], "Submitted");
+            assert!(
+                open_for(TIN, code, 2024, period)["send"].is_null(),
+                "{code}: sent without a receipt"
+            );
+            let restore = |status: &str, set: &[(&str, Value)]| {
+                let (_, raw) = raw_row(id);
+                let mut stored = with_status(&serde_json::from_str(&raw).unwrap(), status);
+                let at = if stored["lifecycle"].is_object() {
+                    &mut stored["lifecycle"]
+                } else {
+                    &mut stored
+                };
+                for (key, value) in set {
+                    at[*key] = value.clone();
+                }
+                raw_exec(
+                    &format!("UPDATE form_drafts SET status = ?1, data_json = ?2 WHERE id = {id}"),
+                    &[status, &serde_json::to_string(&stored).unwrap()],
+                );
+                open_for(TIN, code, 2024, period)["send"].clone()
+            };
+            let sent = restore("Submitted", &[("relay_receipt", json!("a.b.c"))]);
+            assert_eq!(sent["stage"], "sent", "{code}: {sent}");
+            let held = restore(
+                "Queued",
+                &[
+                    ("relay_receipt", Value::Null),
+                    ("submitted_at", Value::Null),
+                    (reason_key, json!("Buwiz is holding sends for now.")),
+                    ("next_retry_at", json!("2026-11-24T07:40:00+00:00")),
+                ],
+            );
+            assert_eq!(held["stage"], "held", "{code}: {held}");
+            assert_eq!(held["line"], "Buwiz is holding sends for now.", "{code}");
+            assert_eq!(held["next_try_at"], "2026-11-24T07:40:00+00:00", "{code}");
+            let unknown = restore(
+                "Queued",
+                &[
+                    ("submission_claim_token", json!("token")),
+                    ("submission_claimed_at", json!("2026-11-24T07:00:00+00:00")),
+                    (
+                        "submission_put_started_at",
+                        json!("2026-11-24T07:00:01+00:00"),
+                    ),
+                ],
+            );
+            assert_eq!(unknown["stage"], "needs_attention", "{code}: {unknown}");
+            assert_eq!(unknown["can_resolve"], true, "{code}");
+            let refused = restore(
+                "Draft",
+                &[
+                    ("submission_claim_token", Value::Null),
+                    ("submission_claimed_at", Value::Null),
+                    ("submission_put_started_at", Value::Null),
+                    ("next_retry_at", Value::Null),
+                    (reason_key, json!("Not on your account. (tin_not_active)")),
+                ],
+            );
+            assert_eq!(refused["stage"], "refused", "{code}: {refused}");
+            assert_eq!(refused["line"], "Not on your account.", "{code}");
+            assert_eq!(refused["code"], "tin_not_active", "{code}");
         }
     }
 

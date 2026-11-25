@@ -6,21 +6,24 @@
 
 E-BIRForms is an offline-first desktop app to prepare, validate, print and
 submit Philippine BIR returns. It is a native app: a Rust back end and screens
-built on NSH (Native Shell). It covers 43 eBIRForms 7.9.6.2.1 forms. A
-submission queue sends returns to BIR in the background, and a dry-run mode
-lets you test the whole flow without sending anything. Profiles, TINs and
+built on NSH (Native Shell). It covers 43 eBIRForms 7.9.6.2.1 forms.
+In this version Queue is refused — pressing it says the return cannot be
+sent to the BIR yet and keeps it a draft; a return queued by an older
+version stays queued (see "Sending is switched off" below). Profiles, TINs and
 drafts stay in a SQLite database on your own machine. The app does not encrypt
 that file; see [PRIVACY_POLICY.md](PRIVACY_POLICY.md).
 
-A new install asks you to sign in to a Buwiz account
-([buwiz-server](https://github.com/hexuria/buwiz-server)) before it can be used.
-Sign-in uses the device flow, in the browser. Release builds use
-`https://api.buwiz.com` and open account pages on `https://account.buwiz.com`.
+A new install asks you to sign in to a Buwiz account before it can be
+used (the account server is [buwiz-com](https://github.com/buwiz-com/buwiz-com),
+which serves `account.buwiz.com` and `api.buwiz.com`). Sign-in is
+passwordless: the app opens your browser to `account.buwiz.com`, you
+sign in with a six-digit code mailed to your address, and approving the
+device signs the app in. Release builds call `https://api.buwiz.com`.
 Debug builds use `http://localhost:3008`. A build can bake in
 `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL`. A running process can still
-override those with the same variable names. The app does not ask for the
-address. Once signed in, it still prepares and files returns when that server
-is unreachable. Details: [docs/cloud-account.md](docs/cloud-account.md).
+override those with the same variable names. The app does not ask for
+the address. Once signed in, it still prepares and files returns when
+that server is unreachable. Details: [docs/cloud-account.md](docs/cloud-account.md).
 
 ## Platforms
 
@@ -28,7 +31,7 @@ is unreachable. Details: [docs/cloud-account.md](docs/cloud-account.md).
 | --- | --- | --- | --- | --- |
 | macOS | Fully tested | `scripts/setup-macos.sh` | `~/Library/Application Support/dev.goldcoders.bir/bir_data.db` | [macos.md](docs/platforms/macos.md) |
 | Linux | Fully tested | `scripts/setup-linux.sh` | `~/.local/share/dev.goldcoders.bir/bir_data.db` | [linux.md](docs/platforms/linux.md) |
-| Windows | Partly verified, on one Windows Server 2022 VM | `scripts\setup-windows.ps1` | `%LOCALAPPDATA%\dev.goldcoders.bir\bir_data.db` | [windows.md](docs/platforms/windows.md) |
+| Windows | Built and tested in CI on every pull request | `scripts\setup-windows.ps1` | `%LOCALAPPDATA%\dev.goldcoders.bir\bir_data.db` | [windows.md](docs/platforms/windows.md) |
 
 Not every feature works the same on every platform. The full table is in
 [docs/FEATURES.md](docs/FEATURES.md). Each platform page lists the packages,
@@ -51,12 +54,13 @@ Run the setup script for your platform from the table above (add `--check` on
 macOS and Linux to verify an existing install), then:
 
 ```bash
-just run                  # development build with diagnostics
+just run                  # run the app in a development window (use a scratch database)
 ```
 
-Packaging is described on the platform pages: `just _package-mac` and `just app`
-on macOS, `packaging/linux/build-packages.sh` on Linux, and on Windows
-`nsh package --target windows` and then `scripts/package_nsh_windows.ps1`.
+Packaging is described on the platform pages: `just _package-mac` (and
+`just app` for the Mac App Store package) on macOS,
+`packaging/linux/build-packages.sh` on Linux, and on Windows
+`scripts/package_nsh_windows.ps1` (the release workflows build these on every tag).
 
 ## Headless command line (`bir`)
 
@@ -87,32 +91,30 @@ from the dmg, deb or exe on the Releases page. Publish flow and tags are in
 
 ## Using the app
 
-**Set up a profile.** Create a taxpayer profile (Cmd/Ctrl+N) with the TIN and
-registered details. You can keep many profiles in one workspace. The profile
-page has tabs for the tax profile, email settings (used to read BIR
-receipts), the calendar, security (an optional PIN or authenticator lock) and
-export. A saved return keeps a
-snapshot of the profile as it was at save time.
+**Set up a profile.** Create a taxpayer profile with the TIN and
+registered details. You can keep many profiles in one workspace. A saved
+return keeps a snapshot of the profile as it was at save time.
 
-**Browse the tax form library.** The dashboard has two tabs, Calendar and Tax
-Form Library. The Calendar shows your deadlines. The library has a card for
-each form. Pick a form and a period to open its editor.
+**Browse the tax form library.** The sidebar picks **Home**, **Form
+library**, **Calendar**, **Filings**, **Taxpayers** and **Settings**.
+The Calendar shows your deadlines. The library has a card for each
+form. Pick a form and a period to open its editor.
 
 **Fill a return.** Type into the form. Validation errors show on the form, and
 totals are computed for you.
 
-**Validate, Submit, more.** The editor header has three controls:
-`[Validate] [Submit] [⋯]`. Validate checks the return. With the default
-"Separate Validate button" setting, Submit waits until you have validated.
-The ⋯ menu has Save draft, Print preview, Revert to Draft and, after an
-amendment, View what was sent. Submit is hidden for the four 2200 excise forms
-that cannot be queued.
+**Validate, print, queue.** The editor header has
+`[Print preview] [Check] [Queue]`. Check validates the return. In this
+version Queue refuses — it says the return cannot be sent to the BIR yet
+and keeps it a draft. After an amendment
+the header shows the amendment state instead.
 
 **Statuses.** A return moves through Draft, Queued, Submitted, Confirmed and
-Paid. Submit queues the return. The background engine uploads it over SFTP.
-When BIR receipt emails arrive in the inbox you configured, the
-status moves to Confirmed and then to Paid. A submitted return
-is read-only.
+Paid. In this version Queue refuses, so returns stay Draft; a return an
+older version queued keeps its Queued status. When BIR receipt emails
+arrive in the
+inbox you configured, the status moves to Confirmed and then to Paid. A
+submitted return is read-only.
 
 **Sending is switched off.** This version cannot send a return to the BIR.
 Submit says so and the return stays a draft; a return queued by an earlier
@@ -127,10 +129,11 @@ can be reverted to Draft. Paid returns cannot. Reverting a Submitted or
 Confirmed return starts an amendment and keeps a read-only copy of what BIR
 received.
 
-**Print preview.** Print preview fills the frozen printed sheet of the exact
-BIR revision with your data. It never changes the return's status. On macOS
-and Windows it opens in its own window with a Print button. On Linux it opens
-in your default browser. Export what you want to keep.
+**Print preview.** Print preview fills the frozen printed sheet of the
+exact BIR revision with your data. It never changes the return's
+status. It opens in its own window — a web view on macOS, sheet images
+drawn in-app by Blitz and `vello_cpu` on Windows and Linux
+(`nsh/src/print.rs`). Export what you want to keep.
 
 **Notifications drawer.** The bell in the top bar opens a drawer with alerts
 and receipts. It closes when you change page.
@@ -138,13 +141,11 @@ and receipts. It closes when you change page.
 **Theme.** Switch between light and dark with the theme button in the top bar,
 or Cmd/Ctrl+T.
 
-**Dev Mode (debug builds only).** Debug builds have a Dev Mode panel with
-switches for submission mode, test SFTP server, showing uncertified forms and a
-separate dev database. A release build ignores every one of them.
-
-**Keyboard shortcuts** (Cmd on macOS, Ctrl elsewhere): Enter submits the
-current form, N creates a profile, B toggles the sidebar, F focuses search, K
-opens the command palette, Shift+X opens cron tasks, comma opens Settings.
+**Keyboard shortcuts** (Cmd on macOS, Ctrl elsewhere): K opens the
+command palette, B toggles the sidebar, Shift+B the tax profile panel,
+Shift+N the notifications panel, T switches theme, N starts a new
+return, comma opens Settings, L locks the app, [ and ] go back and
+forward.
 
 ## More documentation
 

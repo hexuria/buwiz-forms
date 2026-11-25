@@ -91,6 +91,20 @@ export interface ReturnRow {
     return_key: number | null;
     /** The worker sent it to the local mock relay, not to BIR (stored at submission; false for drafts and real sends). */
     submitted_via_relay: boolean;
+    /** What the screens say about its send (refused, held, waiting, needs attention ...); null where they keep the status alone. */
+    send: SendState | null;
+}
+/** What a screen says about a return's send (bir-app-api `send_state.rs`). */
+export interface SendState {
+    stage: "queued" | "sending" | "waiting" | "held" | "needs_attention" | "refused" | "sent" | "test_sent";
+    /** The sentence the person reads. */
+    line: string;
+    /** The code a refusal's reason ended in (`tin_not_active`), else null. */
+    code: string | null;
+    /** When the worker tries again (held and waiting; an RFC 3339 time), else null. */
+    next_try_at: string | null;
+    /** The person may say whether the BIR's email came (`resolve_unknown_send`). */
+    can_resolve: boolean;
 }
 export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
 "#;
@@ -492,6 +506,10 @@ fn return_rows(db: &Database, which: &str) -> Result<Vec<Value>, HostError> {
         row.insert(
             "submitted_via_relay".into(),
             json!(db.draft_submitted_via_relay(summary.id).map_err(error)?),
+        );
+        row.insert(
+            "send".into(),
+            crate::send_state::stored_send(db, summary.id).map_err(error)?,
         );
         rows.push(Value::Object(row));
     }
@@ -1291,6 +1309,70 @@ mod tests {
         );
         assert_eq!(relayed(3), false, "a real send keeps BIR's wording");
         assert_eq!(relayed(1), false, "a draft was never sent");
+    }
+
+    /// Each row says what the screens say about its send (send_state.rs):
+    /// a Queued return the worker holds, one that waits for its next try, a
+    /// Draft the server refused; a plain Draft and a Confirmed return say
+    /// nothing; stored JSON its shape cannot read says nothing too.
+    #[test]
+    fn list_returns_says_what_each_send_is() {
+        setup();
+        with_database(|db| {
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            for (month, status, set) in [
+                (2u8, "Queued", r#"json_set(data_json, '$.submission_error', 'Sign in to send returns.', '$.next_retry_at', '2026-11-24T07:40:00+00:00')"#),
+                (3, "Queued", r#"json_set(data_json, '$.submission_error', 'BIR did not answer', '$.submission_attempts', 2, '$.next_retry_at', '2026-11-24T07:40:00+00:00')"#),
+                (4, "Draft", r#"json_set(data_json, '$.submission_error', 'Not on your account. (tin_not_active)')"#),
+                (5, "Confirmed", r#"json_set(data_json, '$.relay_receipt', 'a.b.c')"#),
+                (6, "Queued", r#"'{broken'"#),
+            ] {
+                let draft = bir_core::forms::Form1601CDraft::new_from_profile(&profile, 2026, month);
+                let id = db.save_1601c_draft(&draft).unwrap();
+                db.conn_for_tests()
+                    .execute(
+                        &format!(
+                            "UPDATE form_drafts SET status = '{status}', data_json = {set} WHERE id = ?1"
+                        ),
+                        [id],
+                    )
+                    .unwrap();
+                if status != "Draft" && month != 6 {
+                    db.conn_for_tests()
+                        .execute(
+                            &format!(
+                                "UPDATE form_drafts SET data_json = json_set(data_json, '$.status', '{status}') WHERE id = ?1"
+                            ),
+                            [id],
+                        )
+                        .unwrap();
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&list_returns(&args(&["all"])).unwrap());
+        let send = |month: u64| {
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["period"] == month)
+                .unwrap()["send"]
+                .clone()
+        };
+        assert!(send(1).is_null(), "a plain draft");
+        assert_eq!(send(2)["stage"], "held");
+        assert_eq!(send(2)["line"], "Sign in to send returns.");
+        assert_eq!(send(2)["next_try_at"], "2026-11-24T07:40:00+00:00");
+        assert_eq!(send(3)["stage"], "waiting");
+        assert_eq!(
+            send(3)["line"],
+            "Not sent yet: BIR did not answer. It tries again by itself."
+        );
+        assert_eq!(send(4)["stage"], "refused");
+        assert_eq!(send(4)["code"], "tin_not_active");
+        assert!(send(5).is_null(), "confirmed");
+        assert!(send(6).is_null(), "unreadable stored JSON");
     }
 
     #[test]

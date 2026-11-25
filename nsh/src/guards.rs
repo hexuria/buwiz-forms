@@ -46,6 +46,10 @@ pub enum SendMode {
     /// The local mock relay (`just mock-relay`, docs/relay.md) is listening at `url`, a loopback `http://` origin,
     /// and the transport sends there, and nowhere else. The relay may hand the file on to the mock BIR server.
     Relay { url: String },
+    /// A development build was asked to send through the Buwiz relay (`BUWIZ_RELAY_SEND=1`), and the Buwiz server at
+    /// `url` is on this computer, trusted through a test key, and listening. Whether anything reaches the BIR is that
+    /// server's mode; no build that ships has this mode yet.
+    Buwiz { url: String },
     /// Sending is not a dry run and not the mock: the submission worker does not start. Why.
     Refused(String),
 }
@@ -56,7 +60,7 @@ impl SendMode {
         !matches!(self, SendMode::Refused(_))
     }
 
-    /// The word TSX sees: `live`, `off`, `dry_run`, `mock`, `relay` or `refused`.
+    /// The word TSX sees: `live`, `off`, `dry_run`, `mock`, `relay`, `buwiz` or `refused`.
     pub fn label(&self) -> &'static str {
         match self {
             SendMode::Live => "live",
@@ -64,6 +68,7 @@ impl SendMode {
             SendMode::DryRun => "dry_run",
             SendMode::Mock { .. } => "mock",
             SendMode::Relay { .. } => "relay",
+            SendMode::Buwiz { .. } => "buwiz",
             SendMode::Refused(_) => "refused",
         }
     }
@@ -78,6 +83,9 @@ impl SendMode {
             )),
             SendMode::Relay { url } => Some(format!(
                 "Sending through the mock relay at {url}. Nothing reaches the BIR."
+            )),
+            SendMode::Buwiz { url } => Some(format!(
+                "Sending through the Buwiz server at {url} on this computer. Whether anything reaches the BIR is that server's mode."
             )),
             SendMode::Refused(reason) => Some(reason.clone()),
         }
@@ -168,8 +176,11 @@ fn send_guard_for(
             }
         });
     }
+    // The local Buwiz relay is asked for like the mock relay; the mock relay, when set, comes first (the transport
+    // decides in that order too).
+    let buwiz = if relay.is_none() { buwiz_target(&listening) } else { None };
     let mock = mock_target(&listening);
-    if !matches!(relay, Some(Ok(_))) && mock.is_none() {
+    if !matches!(relay, Some(Ok(_))) && !matches!(buwiz, Some(Ok(_))) && mock.is_none() {
         #[cfg(target_os = "android")]
         bir_core::config::force("BIR_SFTP_DRY_RUN", Some("1"));
         #[cfg(not(target_os = "android"))]
@@ -180,7 +191,50 @@ fn send_guard_for(
     }
     let panel = bir_core::dev_mode::panel_submission_mode();
     relay_verdict(relay)
+        .or_else(|| buwiz_verdict(buwiz))
         .unwrap_or_else(|| verdict(mock, transport_dry_run(), panel))
+}
+
+/// The decision when a development build is asked to send through the Buwiz relay (`buwiz`: the server's origin when
+/// it is allowed and listening, else why not): it is that server or nothing. `None` when it was not asked for.
+pub(crate) fn buwiz_verdict(buwiz: Option<Result<String, String>>) -> Option<SendMode> {
+    Some(match buwiz? {
+        Ok(url) => SendMode::Buwiz { url },
+        Err(why) => SendMode::Refused(why),
+    })
+}
+
+/// The Buwiz server a development build may send through (`bir_core::relay::server`: on this computer, trusted
+/// through a test key) when its port answers; the refusal otherwise. `None` unless `BUWIZ_RELAY_SEND=1` in a
+/// development build.
+fn buwiz_target(listening: &impl Fn(&str, u16) -> bool) -> Option<Result<String, String>> {
+    if !bir_core::transport::buwiz_relay_requested() {
+        return None;
+    }
+    let url = match bir_core::relay::server() {
+        Ok(url) => url,
+        Err(error) => return Some(Err(format!("{error} The submission worker was not started."))),
+    };
+    let authority = url.split("://").nth(1).unwrap_or_default().split('/').next().unwrap_or_default();
+    let (host, port) = match authority.strip_prefix('[') {
+        Some(ipv6) => {
+            let (host, rest) = ipv6.split_once(']').unwrap_or((ipv6, ""));
+            (host, rest.strip_prefix(':').and_then(|port| port.parse::<u16>().ok()))
+        }
+        None => match authority.rsplit_once(':') {
+            Some((host, port)) => (host, port.parse::<u16>().ok()),
+            None => (authority, None),
+        },
+    };
+    let port = port.unwrap_or(if url.starts_with("https://") { 443 } else { 80 });
+    let hosts: &[&str] = if host.eq_ignore_ascii_case("localhost") { &["127.0.0.1", "::1"] } else { &[host] };
+    if hosts.iter().any(|host| listening(host, port)) {
+        Some(Ok(url))
+    } else {
+        Some(Err(format!(
+            "The Buwiz server at {url} is not listening; the submission worker was not started."
+        )))
+    }
 }
 
 /// The decision when `BIR_RELAY_URL` is set (`relay`: its origin when it is a listening loopback one, else why
@@ -774,6 +828,9 @@ mod tests {
             "BIR_SFTP_HOST",
             "BIR_SFTP_PORT",
             "BIR_RELAY_URL",
+            "BUWIZ_RELAY_SEND",
+            "BUWIZ_SERVER_URL",
+            "BUWIZ_TRUST_KEYS",
             "EBIR_TEST_ENV",
             "GPUI_AGENT",
         ];
@@ -823,6 +880,47 @@ mod tests {
                 assert_eq!(live(), None);
             });
         }
+    }
+
+    /// The local Buwiz relay is that server or nothing, like the mock relay.
+    #[test]
+    fn the_local_buwiz_relay_is_that_server_or_a_refusal() {
+        assert_eq!(buwiz_verdict(None), None);
+        let mode = buwiz_verdict(Some(Ok("http://localhost:3008".into()))).unwrap();
+        assert_eq!(mode, SendMode::Buwiz { url: "http://localhost:3008".into() });
+        assert!(mode.worker_may_start());
+        assert_eq!(mode.label(), "buwiz");
+        assert!(mode.note().unwrap().contains("http://localhost:3008"));
+        let refused = buwiz_verdict(Some(Err("why".into()))).unwrap();
+        assert_eq!(refused, SendMode::Refused("why".into()));
+        assert!(!refused.worker_may_start());
+    }
+
+    /// Asked for with nothing listening, a development build refuses to start the worker; a server that is not on
+    /// this computer, or production's trust key, is refused before any port is tried.
+    #[test]
+    fn the_local_buwiz_relay_needs_a_listening_server_on_this_computer_and_a_test_key() {
+        let test_key = "dGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXk";
+        sending_env(
+            &[("BUWIZ_RELAY_SEND", "1"), ("BUWIZ_SERVER_URL", "http://localhost:3008"), ("BUWIZ_TRUST_KEYS", test_key)],
+            || {
+                assert_eq!(buwiz_target(&|_, port| port == 3008), Some(Ok("http://localhost:3008".into())));
+                let down = buwiz_target(&|_, _| false).unwrap().unwrap_err();
+                assert!(down.contains("not listening"), "{down}");
+            },
+        );
+        sending_env(&[("BUWIZ_RELAY_SEND", "1"), ("BUWIZ_SERVER_URL", "http://localhost:3008")], || {
+            let refused = buwiz_target(&|_, _| panic!("no port is tried")).unwrap().unwrap_err();
+            assert!(refused.contains("test key"), "{refused}");
+        });
+        sending_env(
+            &[("BUWIZ_RELAY_SEND", "1"), ("BUWIZ_SERVER_URL", "https://api.buwiz.com"), ("BUWIZ_TRUST_KEYS", test_key)],
+            || {
+                let refused = buwiz_target(&|_, _| panic!("no port is tried")).unwrap().unwrap_err();
+                assert!(refused.contains("on this computer"), "{refused}");
+            },
+        );
+        sending_env(&[], || assert_eq!(buwiz_target(&|_, _| panic!("not asked for")), None));
     }
 
     /// Off is not a refusal: the worker starts (its other jobs run), the screens read `off`, and the note says why.

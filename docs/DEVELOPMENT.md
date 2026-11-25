@@ -35,11 +35,11 @@ parity are in [FORMS.md](FORMS.md).
 
 We follow a "less is better" philosophy. You only need to remember a few core commands:
 
-- `just run` — Run the app locally with developer diagnostics.
+- `just run` — Run the app locally in a development window (use a scratch database).
 - `just install [format]` — Install a package you already built (macOS `.app`/`.pkg`/`.dmg`, Windows `msix`/`exe`, Linux `deb`/`tar`). It looks in `target/release-artifacts` and does not build anything.
-- Build the packages with `nsh package --target windows` and then `scripts/package_nsh_windows.ps1` (Windows: Setup program, MSI, MSIX and update archive), `just app` (macOS App Store build), `just _package-mac` (macOS direct `.app` and DMG) and `packaging/linux/build-packages.sh` (Linux `.deb`, `.rpm`, tarball, Arch package and install script). The release workflows build the same packages.
+- Build the packages with `scripts/package_nsh_windows.ps1` after `nsh package --target windows` (Windows: Setup program, MSI, MSIX), `just _package-mac` (macOS universal `.app` and DMG — it runs `scripts/package_macos_release.sh`, ad-hoc signed unless `CODESIGN_IDENTITY` is set) and `packaging/linux/build-packages.sh` (Linux `.deb`, `.rpm`, tarball, Arch package and install script). The Mac App Store `.pkg` is `just app` (queries App Store Connect for the next build number, then `just _package-mac-appstore`, which adds the `mas_build` feature via `nsh/mas/cargo-with-mas.sh`). The release workflows build the same packages.
 - `just testflight [--agent]` — Build the App Store package and upload it to TestFlight (`just testflight-agent` is the same with the gpui-agent control plane; internal testing only). `just testflight-upload` re-uploads the last build without rebuilding.
-- `just _package-mac --agent` — Mac release `.app` with the gpui-agent control plane compiled in. Still silent until `GPUI_AGENT=1` (release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`).
+- `just nsh-run-agent macos <db>` — Run the development host with the gpui-agent control planes compiled in (see [agent.md](agent.md)). Still silent until `GPUI_AGENT=1` (release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`).
 - `just publish` — Auto-increment the patch version, tag, and push (triggers the release workflow in GitHub Actions).
 
 **Quality & Testing:**
@@ -61,8 +61,9 @@ We follow a "less is better" philosophy. You only need to remember a few core co
 ## Driving the app with gpui-agent
 
 The agent is a build feature, off by default. Nothing in a product build can
-reach it unless you compile `--features agent` (Mac release bundle:
-`just _package-mac --agent`). Even a feature-enabled binary stays silent
+reach it unless it is compiled in (`just nsh-run-agent` wraps the nsh build
+with `nsh/agent/cargo-with-agent.sh`; the headless `bir` builds its `agent`
+and `headless` cargo features). Even a feature-enabled binary stays silent
 until `GPUI_AGENT=1`. There is no `scripts/bir-agent` wrapper: launch the
 host with env vars, then talk to it with `gpui-agent`.
 
@@ -78,18 +79,19 @@ version. Set `GPUI_AGENT_TOKEN` for secure driving. For local-only driving,
 `GPUI_AGENT_INSECURE_NO_TOKEN=1` remains available (never on shared machines).
 
 ```bash
-# Build the shell GUI with the control plane. `dev-tools` is not required;
-# add it only for --dev-export-live-database or to open a form that is still
-# being certified from a *release* build.
-cargo build --locked --manifest-path crates/bir-app-api/Cargo.toml --features headless
+# Start the NSH window with the control planes (scratch database only):
+GPUI_AGENT=1 GPUI_AGENT_TOKEN=<local-development-token> \
+  just nsh-run-agent macos <scratch.db>
 
-export GPUI_AGENT=1
-export GPUI_AGENT_TOKEN=<local-development-token> # required to bind (protocol v2 HMAC)
+# Or the headless host (no window):
+cargo build --locked -p bir-cli --features headless
+GPUI_AGENT=1 GPUI_AGENT_TOKEN=<local-development-token> \
+  target/debug/bir serve
+
 export GPUI_AGENT_ADDR=127.0.0.1:17421      # default; use 127.0.0.1:17423 when NativeChat owns 17421
 # Release binaries also need:
 # export GPUI_AGENT_ALLOW_RELEASE=1
 export GPUI_AGENT_SCREENSHOT_DIR=/tmp/bir-shots
-./target/debug/bir
 ```
 
 Then, from another shell with the same `GPUI_AGENT_TOKEN` / `GPUI_AGENT_ADDR`:
@@ -139,8 +141,8 @@ The project uses **two independent version identifiers** to satisfy both Apple A
 
 | Identifier | Source of Truth | Changed By | When |
 |---|---|---|---|
-| **App Version** (semver) | `Cargo.toml` → `version = "0.1.0"` | You, manually | Feature release or hotfix |
-| **Build Number** (counter) | `BUILD_NUMBER` environment override, with the `justfile` value as the committed cross-store default | `just app` (ephemeral) or `just bump-build` (committed) | Every store submission |
+| **App Version** (semver) | `nsh/nsh.json` → `version` (`"0.2.1"`) | You, manually | Feature release or hotfix |
+| **Build Number** (counter) | `BUILD_NUMBER` environment override, with the `justfile` value as the committed default | `just app` (ephemeral) or `just bump-build` (committed) | Every Apple submission; the Windows package does not use it |
 
 ### Why Two Numbers?
 
@@ -148,25 +150,30 @@ Apple and Microsoft handle versioning differently:
 
 | | macOS App Store | Microsoft Store |
 |---|---|---|
-| Marketing version | `CFBundleShortVersionString = "0.1.0"` | Store listing description |
-| Build identifier | `CFBundleVersion = "26"` (separate field) | `Version = "0.1.26.0"` in AppxManifest |
+| Marketing version | `CFBundleShortVersionString = "0.2.1"` | Store listing description |
+| Build identifier | `CFBundleVersion = "27"` (separate field) | `Version = "0.2.1.0"` in AppxManifest — `Major.Minor.Patch.0`, no build counter |
 | Multiple builds per version? | ✅ Yes | ❌ No — each submission needs a higher `Version` |
 
 **macOS** has two separate fields — one for the user-facing version, one for the internal build counter. **Microsoft** has only a single `Version` field, and the 4th part (Revision) must always be `0`.
 
 ### How the Version Maps to Each Store
 
-Given `Cargo.toml version = "0.1.0"` and `BUILD_NUMBER = 26`:
+Given `nsh.json` `"version": "0.2.1"` and `BUILD_NUMBER = 27`:
 
 ```
 macOS App Store:
-  CFBundleShortVersionString = "0.1.0"    ← what users see
-  CFBundleVersion            = "26"       ← internal build number
+  CFBundleShortVersionString = "0.2.1"    ← what users see
+  CFBundleVersion            = "27"       ← internal build number
 
 Microsoft Store:
-  AppxManifest Version       = "0.1.26.0" ← Major.Minor.BuildNumber.0
-  Store listing              = "0.1.0"    ← what users see (set in Partner Center)
+  AppxManifest Version       = "0.2.1.0"   ← Major.Minor.Patch.0 (no build counter)
+  Store listing              = "0.2.1"    ← what users see (set in Partner Center)
 ```
+
+The MSIX `Version` is written by `scripts/package_msix.ps1` as
+`Major.Minor.<patch>.0`; `scripts/package_nsh_windows.ps1` passes the semver
+patch number (`BuildNumber = [int]$patch`), so Windows has no separate build
+number.
 
 ### Developer Workflow
 
@@ -183,12 +190,12 @@ the build to its exact curated source revision before the app is assembled.
 just bump-build
 git add justfile && git commit -m "build: bump to $(just --evaluate BUILD_NUMBER)"
 just app   # macOS package; the live API counter is passed through the environment
-# Windows: scripts/package_nsh_windows.ps1 builds the MSIX with the committed default counter
+# Windows: scripts/package_nsh_windows.ps1 builds the MSIX; its Version is Major.Minor.Patch.0
 ```
 
 **Releasing a new version** (feature release or hotfix):
 ```bash
-# 1. Manually edit Cargo.toml: version = "0.2.0"
+# 1. Manually edit nsh/nsh.json: "version": "0.3.0"
 # 2. Then bump and build as usual:
 just bump-build
 git add Cargo.toml justfile && git commit -m "release: v0.2.0"
@@ -200,12 +207,12 @@ git add Cargo.toml justfile && git commit -m "release: v0.2.0"
 
 | Action | Cargo.toml | BUILD_NUMBER | macOS | Windows MSIX |
 |---|---|---|---|---|
-| Current | `0.1.0` | 26 | `0.1.0` (build 26) | `0.1.26.0` |
-| Bump build | `0.1.0` | 27 | `0.1.0` (build 27) | `0.1.27.0` |
-| Bump build | `0.1.0` | 28 | `0.1.0` (build 28) | `0.1.28.0` |
-| Hotfix | `0.1.1` | 29 | `0.1.1` (build 29) | `0.1.29.0` |
-| Feature release | `0.2.0` | 30 | `0.2.0` (build 30) | `0.2.30.0` |
-| Stable release | `1.0.0` | 31 | `1.0.0` (build 31) | `1.0.31.0` |
+| Current | `0.2.1` | 27 | `0.2.1` (build 27) | `0.2.1.0` |
+| Bump build | `0.2.1` | 28 | `0.2.1` (build 28) | `0.2.1.0` (unchanged) |
+| Bump build | `0.2.1` | 29 | `0.2.1` (build 29) | `0.2.1.0` (unchanged) |
+| Hotfix | `0.2.2` | 30 | `0.2.2` (build 30) | `0.2.2.0` |
+| Feature release | `0.3.0` | 31 | `0.3.0` (build 31) | `0.3.0.0` |
+| Stable release | `1.0.0` | 31 | `1.0.0` (build 31) | `1.0.0.0` |
 
 ## CI/CD Secrets & Codesigning
 
@@ -229,12 +236,11 @@ The **macOS** release job codesigns and notarizes the DMG. Configure these Repos
   - `forms/` — Form data models, `FormValidator` trait, ATC tax code tables, and the form registry.
   - `db/` — Decomposed database layer with domain-specific modules (`profiles.rs`, `drafts.rs`, `submissions.rs`, `receipts.rs`, `jobs.rs`, `notices.rs`, `migrations.rs`).
 - `crates/bir-app-api/`: The UI-free host functions both hosts share: windows, forms, inputs, locking, and theming. Opt-in gpui-agent / headless `bir` runbook: [`docs/agent.md`](agent.md).
-- `nsh/`: The eBIRForms app on Native Shell — windows, forms, printing and the tray live here.
-  - `components/form_engine.rs` — `FormViewTrait` providing shared status pipeline, header, and action infrastructure for all tax forms.
-  - `components/form_parts.rs` — Reusable UI primitives: `form_accordion`, `taxpayer_info_section`, `atc_schedule_table`, `computation_row_*`, `penalty_summary_section`, and more.
-  - `views/` — Per-form view implementations (e.g., `form_2551q_view.rs`, `form_1701q_view.rs`) that compose the shared components.
+- `nsh/`: The eBIRForms app on Native Shell — TypeScript screens in
+  `nsh/screens/`, the frame in `nsh/shell/`, the kit in `nsh/ui/`, and the
+  Rust host and door in `nsh/src/` (windows, printing and the tray live
+  here). See `nsh/AGENTS.md`.
 - `crates/bir-print/`: Frozen HTML fill/print, native output coordination, PDF validation, and PDF merging.
-- `crates/gpui-component/`: A centralized design system and UI toolkit customized exclusively for GPUI.
 - `packages/form-specs/`: Paper/pagination specifications plus migration and release-evidence manifests.
 - `html-frozen/`: Committed freeze sheets used for fill/print preview. TIN `name=` stamps come from the identity catalog. 1601C/2551Q leftover identity keys, 2551Q header period fields, and demo tax money rows fill through `writer-cells.json`. Letter combs ASCII-uppercase on the fill path only.
 
@@ -281,15 +287,15 @@ so developers can run the workflow without an agent-specific command wrapper.
 ## Development notes
 
 - **Database Location:** `bir_data.db` in the data directory. Override with `BIR_DATABASE_PATH`.
-  - macOS: `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db`
-  - Windows: `%LOCALAPPDATA%\Taxman\eBIRForms\bir_data.db`
-  - Linux: `~/.taxman-ebir/bir_data.db`
-  - Debug builds with the Dev Mode "separate database" switch use `bir_data.dev.db` next to it.
+  - macOS: `~/Library/Application Support/dev.goldcoders.bir/bir_data.db`
+    (the sandboxed Mac App Store build uses the group container)
+  - Windows: `%LOCALAPPDATA%\dev.goldcoders.bir\bir_data.db`
+  - Linux: `~/.local/share/dev.goldcoders.bir/bir_data.db`
   - gpui-agent / headless `bir` live path, token, and `--wait` handoff: [`docs/agent.md`](agent.md)
 - **Background Engine:** Background cron tasks (auto-fetch) run in-process on a dedicated thread and are decoupled from the active taxpayer profile.
 - **Schema Migrations:** Managed via a `schema_version` table with forward-only numbered migrations in `bir-core/src/db/migrations.rs`.
-- **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate. Google OAuth for a shared inbox is stored once in `inbox_oauth_tokens` (SQLCipher) and copied onto every profile that uses that mailbox. Never log raw tokens.
+- **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate. Google OAuth for a shared inbox is stored once in `inbox_oauth_tokens` and copied onto every profile that uses that mailbox. Never log raw tokens.
 - **Feature Flags:**
   - `dev-tools` — Developer diagnostics: the `--dev-export-live-database` command, and (in a **release** build) permission to open a form whose HTML release certification is still in progress. A debug build already satisfies that gate through `debug_assertions`, so `dev-tools` changes nothing there. Automatically included in `just run`.
-  - `agent` — Opt-in gpui-agent control plane for the shell GUI and the headless `bir` command (`crates/bir-cli`). It does **not** need `dev-tools`: a debug build with `--features agent` alone binds the agent and drives every form the shell can open. Release builds omit the feature unless explicitly enabled; `just app` uses `mas_build` for Mac App Store packaging. Runtime bind requires `GPUI_AGENT=1` **and** `GPUI_AGENT_TOKEN` (protocol v2 HMAC). Release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`. `GPUI_AGENT_INSECURE_NO_TOKEN=1` is demo-only. There is no `scripts/bir-agent` wrapper; set those env vars and use `gpui-agent`. Authorization, `--wait` handoff, and the AI-agent playbook live in [`docs/agent.md`](agent.md).
-- **Tracing:** Debug builds initialize `tracing-subscriber` automatically. Control verbosity with `RUST_LOG` (default: `bir_shell=debug,bir_print=debug,bir_core=info`).
+  - `agent` — Opt-in gpui-agent control plane for the NSH app and the headless `bir` command (`crates/bir-cli`). It does **not** need `dev-tools`: a debug build with `--features agent` alone binds the agent and drives every form the app can open. Release builds omit the feature unless explicitly enabled; the Mac App Store package (`just _package-mac-appstore`) builds with `mas_build`. Runtime bind requires `GPUI_AGENT=1` **and** `GPUI_AGENT_TOKEN` (protocol v2 HMAC). Release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`. `GPUI_AGENT_INSECURE_NO_TOKEN=1` is demo-only. There is no `scripts/bir-agent` wrapper; set those env vars and use `gpui-agent`. Authorization, `--wait` handoff, and the AI-agent playbook live in [`docs/agent.md`](agent.md).
+- **Tracing:** Debug builds initialize `tracing-subscriber` automatically. Control verbosity with `RUST_LOG` (default: `nsh_app_ebirforms=debug,bir_print=debug,bir_core=info`).

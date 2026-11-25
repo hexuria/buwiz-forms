@@ -47,7 +47,7 @@ import {
 } from "../../ui";
 import { app, store } from "../../shell";
 import { ItemRow, ProfileFold } from "./rows";
-import { existingOfferFor, filedOriginalStrip, FILED_KEPT, PERIOD_PART_LABELS, PROFILE_CHANGED_NOTE, partName, profileDiffersNote, profileUpdatesNote, SAMPLE_NOTE, sectionNames } from "./schema";
+import { ACCOUNT_FIX, existingOfferFor, filedOriginalStrip, FILED_KEPT, PERIOD_PART_LABELS, PROFILE_CHANGED_NOTE, partName, profileDiffersNote, profileUpdatesNote, SAMPLE_NOTE, sectionNames } from "./schema";
 import { formUi } from "./formUi";
 import { FormSession, type FormTarget, type Overlay, type SessionHooks, type ToastAction } from "./session";
 
@@ -410,7 +410,7 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
             />
             <AppButton testID="fp-queue" size="sm" icon="send" label="Queue" variant={formUi.reviewing() ? "primary" : undefined} disabled={h().loading} onPress={() => s.queue()} />
           </If>
-          <If when={h().status === "Queued" && !h().sample}>
+          <If when={h().status === "Queued" && !h().sample && !h().canResolve}>
             <AppButton testID="fp-cancel-queue" size="sm" label="Cancel queue" onPress={() => s.cancelQueue()} />
           </If>
           <If when={h().editable && h().sample && !h().periodSet}>
@@ -465,8 +465,22 @@ function Notes(props: { s: FormSession }) {
           <Each of={h().profileChanged}>{(c) => <Text variant="meta" tone="fg3">{`· ${c()}`}</Text>}</Each>
         </View>
       </If>
+      <If when={h().sendNotice}>
+        <View testID="fp-send-notice" class="gap-1 rounded-(--radius-row) border border-warning bg-warning-soft p-3">
+          <Text variant="meta" tone="fg2">{h().sendNotice}</Text>
+          <If when={h().accountFix}>
+            <Text testID="fp-account-fix" variant="meta" tone="fg2">{ACCOUNT_FIX}</Text>
+          </If>
+        </View>
+      </If>
       <If when={h().submittedLine}>
-        <Text variant="meta" tone="fg2">{h().submittedLine}</Text>
+        <Text testID="fp-send-line" variant="meta" tone="fg2">{h().submittedLine}</Text>
+      </If>
+      <If when={h().canResolve}>
+        <View class="flex-row flex-wrap items-center gap-2">
+          <AppButton testID="fp-email-came" size="sm" label="The email came" onPress={() => s.askResolve("received")} />
+          <AppButton testID="fp-email-missing" size="sm" label="It did not arrive" onPress={() => s.askResolve("not_received")} />
+        </View>
       </If>
       <Each of={h().formErrors}>{(e) => <Text variant="meta" tone="danger">{e()}</Text>}</Each>
     </View>
@@ -902,6 +916,10 @@ function Dialogs(props: { s: FormSession }) {
     const v = o();
     return v?.kind === "queue-confirm" ? v.warns : [];
   };
+  const resolving = () => {
+    const v = o();
+    return v?.kind === "resolve-confirm" ? v : null;
+  };
   const period = () => {
     const v = o();
     return v?.kind === "sample-period" ? v : null;
@@ -982,6 +1000,17 @@ function Dialogs(props: { s: FormSession }) {
           <AppButton testID="queue-continue" variant="primary" block label="Continue" onPress={() => s.confirmQueue()} />
           <AppButton testID="queue-cancel" block label="Cancel" onPress={() => s.cancelQueueConfirm()} />
         </View>
+      </Dialog>
+      <Dialog testID="resolve-confirm" width={420} open={kind("resolve-confirm")} onOpenChange={(open) => !open && s.cancelResolve()}>
+        <If when={resolving()}>
+          {(r) => (
+            <View class="gap-3 p-5">
+              <Text variant="title">{r().question}</Text>
+              <AppButton testID="resolve-continue" variant="primary" block label={r().button} onPress={() => s.confirmResolve()} />
+              <AppButton testID="resolve-cancel" block label="Cancel" onPress={() => s.cancelResolve()} />
+            </View>
+          )}
+        </If>
       </Dialog>
       <Dialog testID="sample-period" width={420} open={kind("sample-period")} onOpenChange={(open) => !open && s.closeSamplePeriod()}>
         <If when={period()}>

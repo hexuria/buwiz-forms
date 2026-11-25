@@ -1,8 +1,8 @@
 // Pure helpers over the form schema, ported from the old shell's form_page.js (no door, no signals).
 import type { ChoiceOption, FieldType, FormSchema, SchemaField, SchemaItem, SchemaPart } from "./contract";
 import { tinSegment } from "./controls/model";
-import { shortIsoDate } from "../../lib/dates";
-import type { ScreenFormExisting } from "../../bir";
+import { MONTHS, shortIsoDate } from "../../lib/dates";
+import type { ScreenFormExisting, SendState } from "../../bir";
 import { stripOtherError } from "./refusals";
 
 /**
@@ -215,6 +215,52 @@ export function sentWords(submittedAt: string, dryRun: boolean, viaRelay = false
   if (dryRun) return `Dry run ${when}, not sent to BIR`;
   return viaRelay ? `Sent to the mock relay ${when}, not to BIR` : `Sent to BIR ${when}`;
 }
+
+/** An RFC 3339 time (the host's `next_try_at`, fractions and an offset allowed) as a Date; null when it does not read as one. */
+export function rfc3339(text: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/i.exec(text.trim());
+  if (!m) return null;
+  const utc = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], m[6] ? +m[6] : 0);
+  const zone = m[7] && m[7].toUpperCase() !== "Z" ? /^([+-])(\d{2}):?(\d{2})$/.exec(m[7]) : null;
+  const offset = zone ? (zone[1] === "-" ? -1 : 1) * (Number(zone[2]) * 60 + Number(zone[3])) : 0;
+  const at = new Date(utc - offset * 60_000);
+  return Number.isNaN(at.getTime()) ? null : at;
+}
+
+/** "3:40 PM" on today's date (local time), "on Nov 25 at 3:40 PM" on another day this year, "on Jan 2, 2027 at 3:40 PM" in another year. */
+export function tryTime(at: Date, now: Date): string {
+  const hours = at.getHours();
+  const time = `${hours % 12 || 12}:${String(at.getMinutes()).padStart(2, "0")} ${hours < 12 ? "AM" : "PM"}`;
+  const sameDay = at.getFullYear() === now.getFullYear() && at.getMonth() === now.getMonth() && at.getDate() === now.getDate();
+  if (sameDay) return `at ${time}`;
+  const day = `${MONTHS[at.getMonth()]} ${at.getDate()}${at.getFullYear() === now.getFullYear() ? "" : `, ${at.getFullYear()}`}`;
+  return `on ${day} at ${time}`;
+}
+
+/** A sentence that ends in a full stop (or its own ! or ?). */
+const stopped = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`);
+
+/**
+ * What the page says about the return's send (the host's `send`): its line, and for a held send or one waiting for its next try, when
+ * it goes again in local time ("It goes again at 3:40 PM." / "Next try at 3:40 PM."; the date too when it is not today).
+ */
+export function sendWords(send: SendState, now: Date): string {
+  const at = send.next_try_at ? rfc3339(send.next_try_at) : null;
+  if (!at || (send.stage !== "held" && send.stage !== "waiting")) return send.line;
+  return `${stopped(send.line)} ${send.stage === "held" ? "It goes again" : "Next try"} ${tryTime(at, now)}.`;
+}
+
+/** The codes of a refusal the person fixes on their Buwiz account. */
+export const ACCOUNT_FIX_CODES: readonly string[] = ["tin_not_active", "tin_unverified", "tin_needs_fix"];
+
+/** Said under a refusal the person fixes on their Buwiz account (plain text, no link). */
+export const ACCOUNT_FIX = "Open your Buwiz account to fix this: https://account.buwiz.com";
+
+/** The confirm step of each answer to a send whose outcome is unknown: the question, and its button. */
+export const RESOLVE_ASK = {
+  received: { question: "Mark this return as sent to the BIR?", button: "Mark as sent" },
+  not_received: { question: "Put this return back to Draft so you can send it again?", button: "Back to Draft" },
+} as const;
 
 /** The strip on an amended return's filed version, opened from its history. */
 export function filedOriginalStrip(view: { filed_on: string | null }): string {

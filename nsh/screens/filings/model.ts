@@ -81,6 +81,20 @@ export function returnTitle(index: FormIndex, r: ReturnRow): string {
 /** A draft's date is its last save; any other return's is its last change. */
 export const dateLine = (r: ReturnRow): string => `${r.status === "Draft" ? "Saved" : "Updated"} ${shortDate(r.updated_at)}`;
 
+/** The send states a card calls out, with its chip's words and tone (the host's `send.stage`). */
+export const SEND_CHIPS: Readonly<Record<string, { label: string; tone: "neutral" | "warning" | "danger" }>> = {
+  held: { label: "Held", tone: "neutral" },
+  waiting: { label: "Retrying", tone: "warning" },
+  needs_attention: { label: "Needs attention", tone: "warning" },
+  refused: { label: "Not sent", tone: "danger" },
+};
+
+/** A card's send chip and its line (the host's `send.line`), or null where the card says only its status. */
+export function sendChip(r: ReturnRow): { label: string; tone: "neutral" | "warning" | "danger"; line: string } | null {
+  const chip = r.send ? SEND_CHIPS[r.send.stage] : undefined;
+  return chip && r.send ? { ...chip, line: r.send.line } : null;
+}
+
 /** What a screen reader says of a card. */
 export const cardLabel = (r: ReturnRow): string => `${r.form_code} ${r.period_label}, ${whoLine(r)}, ${r.status}. Open`;
 
