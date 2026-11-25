@@ -72,7 +72,16 @@ fn fill_by_name_with_cells(
     cells: &BTreeMap<String, Vec<String>>,
     plan: &BTreeMap<String, CellFill>,
 ) -> String {
-    fill_by_name_set(html, fields, cells, plan, &SheetType::plain())
+    let empty_captions = BTreeMap::new();
+    let filled = fill_by_name_set(
+        html,
+        fields,
+        cells,
+        &empty_captions,
+        plan,
+        &SheetType::plain(),
+    );
+    strip_converted_rect_separators(&filled)
 }
 
 /// [`fill_by_name_with_cells`] with a value longer than its boxes measured
@@ -81,6 +90,7 @@ fn fill_by_name_set(
     html: &str,
     fields: &BTreeMap<String, String>,
     cells: &BTreeMap<String, Vec<String>>,
+    captions: &BTreeMap<String, String>,
     plan: &BTreeMap<String, CellFill>,
     sheet: &SheetType,
 ) -> String {
@@ -113,6 +123,7 @@ fn fill_by_name_set(
                 input_name,
                 value,
                 via_cell,
+                caption: captions.get(input_name).map(String::as_str),
                 sheet,
             };
             fill_text_input(html, &tags, indices, &target, &mut replacements);
@@ -132,6 +143,7 @@ fn fill_by_name_set(
                     input_name: cell,
                     value: line,
                     via_cell: true,
+                    caption: captions.get(cell).map(String::as_str),
                     sheet,
                 };
                 fill_text_input(html, &tags, indices, &target, &mut replacements);
@@ -144,9 +156,7 @@ fn fill_by_name_set(
                         set_value(tags[index].tag, "", None),
                     ));
                 }
-                if let Some((at, line)) =
-                    overflow_input(html, cell, text, *size).filter(|_| !text.is_empty())
-                {
+                if let Some((at, line)) = overflow_input_with_fit(html, cell, text, *size, sheet) {
                     replacements.push((at, at, line));
                 }
             }
@@ -170,8 +180,6 @@ enum CellFill {
 
 /// The type a comb's boxes print in: the largest an overflow line uses.
 const PLAIN_MAX_PT: f64 = 9.0;
-/// Readable floor for an over-wide numeric amount fitted across a comb.
-const AMOUNT_OVERFLOW_MIN_PT: f64 = 5.5;
 /// What the per-character estimate assumed before every sheet's overflow
 /// type was measured (P4-7): about 0.58 em a character. Kept for the tests
 /// that show how it fell short.
@@ -969,9 +977,10 @@ const FIT_EPSILON_PT: f64 = 0.02;
 /// before shrinking (C7).
 const PLAIN_WRAP_MIN_HEIGHT_PT: f64 = 18.0;
 
-/// Minimum readable type size (pt) for plain text boxes (C7). Below this
-/// floor, text is truncated with `"..."` and flagged for the continuation sheet.
-const PLAIN_TEXT_MIN_PT: f64 = 6.5;
+/// Minimum readable type size (pt) for text in plain cells and converted
+/// rectangles (Rule 3). Below this floor, text is truncated with `"..."` and
+/// printed in full on the additional sheet.
+const PLAIN_TEXT_MIN_PT: f64 = 7.5;
 
 /// Vertical room factor for two wrapped lines (2 lines + small leading margin).
 const PLAIN_TWO_LINE_HEIGHT_FACTOR: f64 = 2.15;
@@ -1310,7 +1319,13 @@ fn is_amount_typed_key(key: &str) -> bool {
         "taxpayer",
         "taxagent",
         "taxableyear",
-        "tin",
+        "txttin",
+        "_tin",
+        "tin_",
+        "tin1",
+        "tin2",
+        "tin3",
+        "tin4",
         "zip",
         "rdo",
         "date",
@@ -1399,6 +1414,7 @@ fn is_amount_typed_key(key: &str) -> bool {
         "allowance",
         "exemption",
         "withholding",
+        "withheld",
         "base",
         "due",
         "paid",
@@ -1460,7 +1476,13 @@ fn is_quantity_typed_key(key: &str) -> bool {
         "taxpayer",
         "taxagent",
         "taxableyear",
-        "tin",
+        "txttin",
+        "_tin",
+        "tin_",
+        "tin1",
+        "tin2",
+        "tin3",
+        "tin4",
         "zip",
         "rdo",
         "date",
@@ -1785,8 +1807,608 @@ struct TextTarget<'a> {
     input_name: &'a str,
     value: &'a str,
     via_cell: bool,
+    caption: Option<&'a str>,
     /// The sheet's type, which a value longer than its boxes is measured in.
     sheet: &'a SheetType,
+}
+
+fn is_percentage_rate_cell(writer_key: &str, caption: Option<&str>) -> bool {
+    if writer_key.starts_with("derived:")
+        || writer_key.starts_with("frm2200")
+        || writer_key.starts_with("frm2000")
+    {
+        return false;
+    }
+    let Some(caption) = caption else {
+        return false;
+    };
+    let kl = writer_key.to_ascii_lowercase();
+    let pl = caption.to_ascii_lowercase();
+    if [
+        "export", "taxable", "due", "stock", "payment", "excise", "vat", "amount", "income",
+    ]
+    .iter()
+    .any(|bad| kl.contains(bad))
+    {
+        return false;
+    }
+    if [
+        "amount",
+        "income",
+        "tax due",
+        "payment",
+        "export",
+        "taxable",
+        "stock",
+        "(whole)",
+        "(tenths)",
+        "(decimals)",
+    ]
+    .iter()
+    .any(|bad| pl.contains(bad))
+    {
+        return false;
+    }
+    pl.contains("tax rate")
+        || pl.contains("schedule 2 rate")
+        || pl.contains("schedule 3 rate")
+        || pl.ends_with(" rate")
+}
+
+/// Whether a plain cell or rectangle holds a short code (ATC, treaty code,
+/// tax type code, seq no) that Rule 4 centers.
+fn is_short_code_cell(writer_key: &str, caption: Option<&str>, value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.chars().count() > 12 {
+        return false;
+    }
+    let kl = writer_key.to_ascii_lowercase();
+    let tail = kl.rsplit(':').next().unwrap_or(&kl);
+    let pl = caption.unwrap_or("").to_ascii_lowercase();
+    if tail.contains("desc")
+        || tail.contains("name")
+        || tail.contains("nature")
+        || tail.contains("addr")
+        || pl.contains("description")
+        || pl.contains("nature")
+        || pl.contains("name")
+    {
+        return false;
+    }
+    tail.contains("atc")
+        || tail.contains("treaty")
+        || tail.contains("taxtype")
+        || tail.contains("taxcode")
+        || pl.ends_with(" atc")
+        || pl == "atc"
+        || pl.contains("tax type code")
+        || pl.contains("treaty code")
+}
+
+fn has_preprinted_percent_beside(html: &str, cell: &str) -> bool {
+    let Some((left, top, width, height)) = cell_box_pt(html, cell) else {
+        return false;
+    };
+    let Some(open) = html.find(&format!("<div id=\"{cell}\"")) else {
+        return false;
+    };
+    let page_start = html[..open].rfind("<div class=\"page ").unwrap_or(0);
+    let page_end = html[open..]
+        .find("<div class=\"page ")
+        .map(|rel| open + rel)
+        .unwrap_or(html.len());
+    let page = &html[page_start..page_end];
+    let mut cursor = 0;
+    while let Some(rel) = page[cursor..].find("<div class=\"t\"") {
+        let start = cursor + rel;
+        let Some(tag_end_rel) = page[start..].find('>') else {
+            break;
+        };
+        let tag_end = start + tag_end_rel;
+        let Some(close_rel) = page[tag_end + 1..].find("</div>") else {
+            break;
+        };
+        let text = page[tag_end + 1..tag_end + 1 + close_rel].trim();
+        if text == "%" {
+            let t_tag = &page[start..tag_end];
+            if let (Some(tl), Some(tt)) =
+                (parse_style_pt(t_tag, "left"), parse_style_pt(t_tag, "top"))
+            {
+                if (tt - top).abs() <= height.max(14.0) && tl >= left && tl <= left + width + 22.0 {
+                    return true;
+                }
+            }
+        }
+        cursor = tag_end + 1 + close_rel + "</div>".len();
+    }
+    false
+}
+
+fn format_percentage_rate(raw: &str, preprinted_percent: bool) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty()
+        || !trimmed.chars().all(|c| c.is_ascii_digit() || c == '.')
+        || !trimmed.chars().any(|c| c.is_ascii_digit())
+        || trimmed.matches('.').count() > 1
+    {
+        return None;
+    }
+    let normalized = if let Some((whole, frac)) = trimmed.split_once('.') {
+        let frac = frac.trim_end_matches('0');
+        let whole = if whole.is_empty() { "0" } else { whole };
+        if frac.is_empty() {
+            whole.to_string()
+        } else {
+            format!("{whole}.{frac}")
+        }
+    } else {
+        trimmed.to_string()
+    };
+    if preprinted_percent {
+        Some(normalized)
+    } else {
+        Some(format!("{normalized} %"))
+    }
+}
+
+fn parse_style_pt(tag: &str, prop: &str) -> Option<f64> {
+    let needle = format!("{prop}:");
+    let start = tag.find(&needle)? + needle.len();
+    tag[start..].split("pt").next()?.trim().parse().ok()
+}
+
+fn cell_box_pt(html: &str, cell: &str) -> Option<(f64, f64, f64, f64)> {
+    let open = html.find(&format!("<div id=\"{cell}\""))?;
+    let end = html[open..].find('>')?;
+    let tag = &html[open..open + end];
+    let w = parse_style_pt(tag, "width")?;
+    let h = parse_style_pt(tag, "height").unwrap_or(14.0);
+    let l = parse_style_pt(tag, "left").unwrap_or(0.0);
+    let t = parse_style_pt(tag, "top").unwrap_or(0.0);
+    Some((l, t, w, h))
+}
+
+fn parse_svg_path_bbox(d: &str) -> Option<(f64, f64, f64, f64)> {
+    let mut nums = Vec::new();
+    let mut cur = String::new();
+    for ch in d.chars() {
+        if ch.is_ascii_digit() || ch == '.' || (ch == '-' && cur.is_empty()) {
+            cur.push(ch);
+        } else {
+            if !cur.is_empty() {
+                if let Ok(v) = cur.parse::<f64>() {
+                    nums.push(v);
+                }
+                cur.clear();
+            }
+            if ch == '-' {
+                cur.push(ch);
+            }
+        }
+    }
+    if !cur.is_empty() {
+        if let Ok(v) = cur.parse::<f64>() {
+            nums.push(v);
+        }
+    }
+    if nums.len() < 4 {
+        return None;
+    }
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for pair in nums.as_chunks::<2>().0 {
+        min_x = min_x.min(pair[0]);
+        max_x = max_x.max(pair[0]);
+        min_y = min_y.min(pair[1]);
+        max_y = max_y.max(pair[1]);
+    }
+    Some((min_x, max_x, min_y, max_y))
+}
+
+/// Detects a preprinted decimal mark drawn inside `cell` on its page using
+/// sheet geometry (SVG dot path/circle or text `.` in the lower-right
+/// centavo zone). Returns `(dot_rel_x, cell_width)` when present.
+fn preprinted_decimal_mark(html: &str, cell: &str) -> Option<(f64, f64)> {
+    let (left, top, width, height) = cell_box_pt(html, cell)?;
+    if width < 30.0 {
+        return None;
+    }
+    let open = html.find(&format!("<div id=\"{cell}\""))?;
+    let page_start = html[..open].rfind("<div class=\"page ").unwrap_or(0);
+    let page_end = html[open..]
+        .find("<div class=\"page ")
+        .map(|rel| open + rel)
+        .unwrap_or(html.len());
+    let page = &html[page_start..page_end];
+    let in_decimal_zone = |cx: f64, cy: f64| -> bool {
+        let right_gap = (left + width) - cx;
+        cx >= left + width * 0.5
+            && cx <= left + width - 8.0
+            && (8.0..=38.0).contains(&right_gap)
+            && cy >= top + height * 0.35
+            && cy <= top + height + 1.0
+    };
+
+    let mut cursor = 0;
+    while let Some(rel) = page[cursor..].find("<path ") {
+        let start = cursor + rel;
+        let Some(tag_end_rel) = page[start..].find('>') else {
+            break;
+        };
+        let p_tag = &page[start..start + tag_end_rel];
+        if let Some(d_at) = p_tag.find("d=\"") {
+            let d_rest = &p_tag[d_at + 3..];
+            if let Some(d_end) = d_rest.find('"') {
+                if let Some((x0, x1, y0, y1)) = parse_svg_path_bbox(&d_rest[..d_end]) {
+                    let bw = x1 - x0;
+                    let bh = y1 - y0;
+                    if (0.4..=4.0).contains(&bw) && (0.4..=4.0).contains(&bh) {
+                        let cx = (x0 + x1) * 0.5;
+                        let cy = (y0 + y1) * 0.5;
+                        if in_decimal_zone(cx, cy) {
+                            return Some((cx - left, width));
+                        }
+                    }
+                }
+            }
+        }
+        cursor = start + tag_end_rel + 1;
+    }
+
+    let mut cursor = 0;
+    while let Some(rel) = page[cursor..].find("<circle ") {
+        let start = cursor + rel;
+        let Some(tag_end_rel) = page[start..].find('>') else {
+            break;
+        };
+        let c_tag = &page[start..start + tag_end_rel];
+        let parse_attr = |k: &str| -> Option<f64> {
+            let needle = format!("{k}=\"");
+            let s = c_tag.find(&needle)? + needle.len();
+            c_tag[s..].split('"').next()?.parse().ok()
+        };
+        if let (Some(cx), Some(cy), Some(r)) = (parse_attr("cx"), parse_attr("cy"), parse_attr("r"))
+        {
+            if (0.2..=2.5).contains(&r) && in_decimal_zone(cx, cy) {
+                return Some((cx - left, width));
+            }
+        }
+        cursor = start + tag_end_rel + 1;
+    }
+
+    let mut cursor = 0;
+    while let Some(rel) = page[cursor..].find("<div class=\"t\"") {
+        let start = cursor + rel;
+        let Some(tag_end_rel) = page[start..].find('>') else {
+            break;
+        };
+        let tag_end = start + tag_end_rel;
+        let Some(close_rel) = page[tag_end + 1..].find("</div>") else {
+            break;
+        };
+        if page[tag_end + 1..tag_end + 1 + close_rel].trim() == "." {
+            let t_tag = &page[start..tag_end];
+            if let (Some(tl), Some(tt)) =
+                (parse_style_pt(t_tag, "left"), parse_style_pt(t_tag, "top"))
+            {
+                if in_decimal_zone(tl + 1.0, tt + 3.0) {
+                    return Some((tl + 1.0 - left, width));
+                }
+            }
+        }
+        cursor = tag_end + 1 + close_rel + "</div>".len();
+    }
+    None
+}
+
+/// Inserts thousands commas into an unsigned ASCII digit string.
+fn group_thousands(digits: &str) -> String {
+    let trimmed = digits.trim_start_matches('0');
+    let d = if trimmed.is_empty() { "0" } else { trimmed };
+    let mut out = String::with_capacity(d.len() + d.len() / 3);
+    for (i, ch) in d.chars().enumerate() {
+        let rem = d.len() - i;
+        if i > 0 && rem.is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    out
+}
+
+/// Formats an amount for a converted plain-rectangle cell (Rule 2):
+/// thousands commas, `.cents` when `cents` is `Some`, and brackets/minus
+/// per `style`.
+fn format_rect_amount(
+    negative: bool,
+    peso_digits: &str,
+    cents: Option<&str>,
+    style: NegativeStyle,
+) -> String {
+    let grouped = group_thousands(peso_digits);
+    let body = match cents {
+        Some(c) => format!("{grouped}.{c}"),
+        None => grouped,
+    };
+    if !negative || (peso_digits.chars().all(|c| c == '0') && cents.unwrap_or("00") == "00") {
+        return body;
+    }
+    match style {
+        NegativeStyle::Parentheses => format!("({body})"),
+        NegativeStyle::Minus => format!("-{body}"),
+        NegativeStyle::Unsigned => body,
+    }
+}
+
+/// Formats a raw numeric amount string (e.g. from a plain/comb amount key)
+/// with thousands commas while preserving whether it carries decimals.
+fn format_comb_amount_for_rect(raw: &str, style: NegativeStyle) -> String {
+    let trimmed = raw.trim();
+    let (negative, inner, effective_style) =
+        if let Some(s) = trimmed.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
+            (true, s.trim(), NegativeStyle::Parentheses)
+        } else if let Some(s) = trimmed.strip_prefix('-') {
+            (true, s.trim(), style)
+        } else {
+            (false, trimmed, style)
+        };
+    let clean: String = inner.chars().filter(|&c| c != ',').collect();
+    if let Some((p, c)) = clean.split_once('.') {
+        if !p.is_empty()
+            && p.bytes().all(|b| b.is_ascii_digit())
+            && c.bytes().all(|b| b.is_ascii_digit())
+        {
+            return format_rect_amount(negative, p, Some(c), effective_style);
+        }
+    } else if !clean.is_empty() && clean.bytes().all(|b| b.is_ascii_digit()) {
+        return format_rect_amount(negative, &clean, None, effective_style);
+    }
+    trimmed.to_string()
+}
+
+/// Removes interior separators (hairlines, thick group marks, caps, grey
+/// decimal blocks, preprinted dots, centavo dividers) from the SVG and text
+/// layers of every page for every cell converted into a plain rectangle
+/// (`data-rect-box="L,T,R,B"`). Outer borders and neighbouring grid lines are
+/// preserved; vertical lines that span neighbouring rows are split around the
+/// cell's vertical extent rather than deleted.
+fn strip_converted_rect_separators(html: &str) -> String {
+    if !html.contains("data-rect-box=\"") {
+        return html.to_string();
+    }
+    let mut out = String::with_capacity(html.len());
+    let mut pos = 0;
+    while let Some(rel) = html[pos..].find("<div class=\"page ") {
+        let page_start = pos + rel;
+        out.push_str(&html[pos..page_start]);
+        let page_end = html[page_start + 1..]
+            .find("<div class=\"page ")
+            .map(|r| page_start + 1 + r)
+            .unwrap_or(html.len());
+        let page = &html[page_start..page_end];
+        out.push_str(&strip_page_rect_separators(page));
+        pos = page_end;
+    }
+    out.push_str(&html[pos..]);
+    out
+}
+
+fn strip_page_rect_separators(page: &str) -> String {
+    let mut boxes: Vec<(String, f64, f64, f64, f64)> = Vec::new();
+    let needle = "data-rect-box=\"";
+    let mut cur = 0;
+    while let Some(rel) = page[cur..].find(needle) {
+        let start = cur + rel + needle.len();
+        let Some(end_rel) = page[start..].find('"') else {
+            break;
+        };
+        let tag_start = page[..cur + rel].rfind('<').unwrap_or(0);
+        let tag_end = start + end_rel + page[start + end_rel..].find('>').unwrap_or(0);
+        let owner = attr(&page[tag_start..=tag_end], "data-overflow-of")
+            .unwrap_or("")
+            .to_string();
+        let parts: Vec<f64> = page[start..start + end_rel]
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect();
+        if parts.len() == 4 {
+            boxes.push((owner, parts[0], parts[1], parts[2], parts[3]));
+        }
+        cur = start + end_rel + 1;
+    }
+    if boxes.is_empty() {
+        return page.to_string();
+    }
+
+    let parse_f64_attr = |tag: &str, k: &str| -> Option<f64> {
+        let n = format!(" {k}=\"");
+        let s = tag.find(&n)? + n.len();
+        tag[s..].split('"').next()?.parse().ok()
+    };
+
+    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+    let mut hidden_rules_by_cell: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+    // 1. SVG <rect .../> inside <svg class="rl">
+    if let (Some(svg_start), Some(svg_end_rel)) = (page.find("<svg "), page.find("</svg>")) {
+        let svg_end = svg_end_rel + "</svg>".len();
+        let mut sc = svg_start;
+        while sc < svg_end {
+            let Some(rel) = page[sc..svg_end].find("<rect ") else {
+                break;
+            };
+            let rs = sc + rel;
+            let Some(re_rel) = page[rs..svg_end].find('>') else {
+                break;
+            };
+            let re = rs + re_rel + 1;
+            let rtag = &page[rs..re];
+            sc = re;
+            let (Some(x), Some(y), Some(w), Some(h)) = (
+                parse_f64_attr(rtag, "x"),
+                parse_f64_attr(rtag, "y"),
+                parse_f64_attr(rtag, "width"),
+                parse_f64_attr(rtag, "height"),
+            ) else {
+                continue;
+            };
+            let rule_id = attr(rtag, "data-rule-id").map(str::to_string);
+            // Check against every converted box on this page.
+            let mut segments: Vec<(f64, f64)> = vec![(y, y + h)];
+            let mut modified = false;
+            for (owner, bl, bt, br, bb) in &boxes {
+                let (bl, bt, br, bb) = (*bl, *bt, *br, *bb);
+                let bw = br - bl;
+                // Strictly inside horizontally and not a wide horizontal grid border
+                if x > bl + 1.2 && x + w < br - 1.2 && w < bw * 0.5 {
+                    let mut next = Vec::new();
+                    let mut touched_this_box = false;
+                    for (sy0, sy1) in segments {
+                        if sy1 <= bt - 1.5 || sy0 >= bb + 2.5 {
+                            next.push((sy0, sy1));
+                        } else if sy0 >= bt - 1.5 && sy1 <= bb + 2.5 {
+                            // Purely owned by this cell: remove completely.
+                            modified = true;
+                            touched_this_box = true;
+                        } else {
+                            // Extends into a neighbouring row above or below: split cleanly.
+                            modified = true;
+                            touched_this_box = true;
+                            if sy0 < bt + 0.5 {
+                                next.push((sy0, bt + 0.5));
+                            }
+                            if sy1 > bb - 0.5 {
+                                next.push((bb - 0.5, sy1));
+                            }
+                        }
+                    }
+                    if touched_this_box && !owner.is_empty() {
+                        if let Some(ref rid) = rule_id {
+                            hidden_rules_by_cell
+                                .entry(owner.clone())
+                                .or_default()
+                                .push(rid.clone());
+                        }
+                    }
+                    segments = next;
+                }
+            }
+            if modified {
+                let mut rebuilt = String::new();
+                for (sy0, sy1) in segments {
+                    let sh = sy1 - sy0;
+                    if sh < 0.2 {
+                        continue;
+                    }
+                    let seg = replace_svg_attr(rtag, "y", &format!("{sy0:.2}"));
+                    let seg = replace_svg_attr(&seg, "height", &format!("{sh:.2}"));
+                    rebuilt.push_str(&seg);
+                }
+                replacements.push((rs, re, rebuilt));
+            }
+        }
+
+        // 2. Small SVG <path .../> dots inside converted boxes
+        let mut pc = svg_start;
+        while pc < svg_end {
+            let Some(rel) = page[pc..svg_end].find("<path ") else {
+                break;
+            };
+            let ps = pc + rel;
+            let Some(pe_rel) = page[ps..svg_end].find('>') else {
+                break;
+            };
+            let pe = ps + pe_rel + 1;
+            let ptag = &page[ps..pe];
+            pc = pe;
+            if let Some(d_at) = ptag.find("d=\"") {
+                let d_rest = &ptag[d_at + 3..];
+                if let Some(d_end) = d_rest.find('"') {
+                    if let Some((x0, x1, y0, y1)) = parse_svg_path_bbox(&d_rest[..d_end]) {
+                        if (x1 - x0) <= 5.0 && (y1 - y0) <= 5.0 {
+                            let cx = (x0 + x1) * 0.5;
+                            let cy = (y0 + y1) * 0.5;
+                            if boxes.iter().any(|(_, bl, bt, br, bb)| {
+                                cx > bl + 1.2 && cx < br - 1.2 && cy >= bt - 1.0 && cy <= bb + 2.0
+                            }) {
+                                replacements.push((ps, pe, String::new()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Preprinted "." text elements inside converted boxes
+    let mut tc = 0;
+    while let Some(rel) = page[tc..].find("<div class=\"t\"") {
+        let ts = tc + rel;
+        let Some(tag_end_rel) = page[ts..].find('>') else {
+            break;
+        };
+        let tag_end = ts + tag_end_rel;
+        let Some(close_rel) = page[tag_end + 1..].find("</div>") else {
+            break;
+        };
+        let te = tag_end + 1 + close_rel + "</div>".len();
+        tc = te;
+        if matches!(
+            page[tag_end + 1..tag_end + 1 + close_rel].trim(),
+            "." | "\u{25cf}" | "\u{2022}" | "\u{00b7}"
+        ) {
+            let t_tag = &page[ts..tag_end];
+            if let (Some(tl), Some(tt)) =
+                (parse_style_pt(t_tag, "left"), parse_style_pt(t_tag, "top"))
+            {
+                if boxes.iter().any(|(_, bl, bt, br, bb)| {
+                    tl > bl + 1.0 && tl < br - 1.0 && tt >= bt - 2.0 && tt < bb - 1.5
+                }) {
+                    replacements.push((ts, te, String::new()));
+                }
+            }
+        }
+    }
+
+    // 4. Record hidden SVG rule IDs on each converted cell's <div> so band
+    // shift and row cloning can mirror the separator removal.
+    for (cell_id, rules) in hidden_rules_by_cell {
+        if rules.is_empty() {
+            continue;
+        }
+        let needle = format!("<div id=\"{cell_id}\"");
+        if let Some(open) = page.find(&needle) {
+            if let Some(end_rel) = page[open..].find('>') {
+                let close = open + end_rel;
+                let joined = rules.join(",");
+                replacements.push((close, close, format!(" data-hidden-svg-rules=\"{joined}\"")));
+            }
+        }
+    }
+
+    if replacements.is_empty() {
+        page.to_string()
+    } else {
+        apply_replacements(page, replacements)
+    }
+}
+
+fn replace_svg_attr(tag: &str, name: &str, new_val: &str) -> String {
+    let needle = format!(" {name}=\"");
+    let Some(at) = tag.find(&needle) else {
+        return tag.to_string();
+    };
+    let val_start = at + needle.len();
+    let Some(val_end_rel) = tag[val_start..].find('"') else {
+        return tag.to_string();
+    };
+    format!(
+        "{}{new_val}{}",
+        &tag[..val_start],
+        &tag[val_start + val_end_rel..]
+    )
 }
 
 /// One text value into one cell: a comb gets a character per slot, a plain
@@ -1803,6 +2425,7 @@ fn fill_text_input(
         input_name,
         value,
         via_cell,
+        caption,
         sheet,
     } = *target;
     // Writer-cell text joins print as BIR CAPITAL LETTERS. Stamped
@@ -1857,7 +2480,9 @@ fn fill_text_input(
         let overflow = (whole_line && chars.len() > ordered.len())
             .then(|| {
                 if amount_comb {
-                    comb_overflow_amount_line(html, input_name, print.trim(), sheet)
+                    let style = NegativeStyle::from_printed_label(caption);
+                    let formatted = format_comb_amount_for_rect(print, style);
+                    comb_overflow_amount_line(html, input_name, &formatted, sheet)
                 } else {
                     comb_overflow_line(html, input_name, print, sheet)
                 }
@@ -1903,14 +2528,71 @@ fn fill_text_input(
             }
             return;
         }
+        let is_rate_cell = via_cell && !split && is_percentage_rate_cell(name, caption);
+        let preprinted_dot =
+            if !is_rate_cell && via_cell && !split && is_formatted_money_amount(print) {
+                preprinted_decimal_mark(html, input_name)
+            } else {
+                None
+            };
+        if let Some((dot_rel_x, cell_width)) = preprinted_dot {
+            let (neg, raw_peso, raw_cents) = {
+                let s = print.trim();
+                let (neg, body) = match s.strip_prefix('-') {
+                    Some(rest) => (true, rest),
+                    None => (false, s),
+                };
+                let (p, c) = body.split_once('.').unwrap_or((body, "00"));
+                (neg, p, c)
+            };
+            let neg_style = NegativeStyle::from_printed_label(caption);
+            let (peso_text, cents_text) = if neg {
+                match neg_style {
+                    NegativeStyle::Parentheses => (format!("({raw_peso}"), format!("{raw_cents})")),
+                    NegativeStyle::Minus => (format!("-{raw_peso}"), raw_cents.to_string()),
+                    NegativeStyle::Unsigned => (raw_peso.to_string(), raw_cents.to_string()),
+                }
+            } else {
+                (raw_peso.to_string(), raw_cents.to_string())
+            };
+            let peso_right = (cell_width - dot_rel_x + 1.8).max(10.0);
+            let peso_width = (dot_rel_x - 3.0).max(10.0);
+            let cents_left = (dot_rel_x + 1.8).min(cell_width - 8.0);
+            for &index in indices {
+                let orig_tag = tags[index].tag;
+                let base_class = attr(orig_tag, "class").unwrap_or("fi");
+                let peso_size =
+                    fit_plain_text(sheet, peso_width, 12.0, orig_tag, &peso_text, false)
+                        .map(|f| f.font_size_pt);
+                let size_css = peso_size
+                    .map(|sz| format!("font-size:{sz:.2}pt;"))
+                    .unwrap_or_default();
+                let blank_orig = set_value(orig_tag, "", Some(print));
+                let split_pair = format!(
+                    "{blank_orig}<input type=\"text\" class=\"{base_class}\" name=\"{input_name}-peso\" readonly value=\"{}\" style=\"position:absolute;top:0.75pt;bottom:0.75pt;left:1pt;right:{peso_right:.2}pt;{size_css}text-align:right;justify-content:flex-end;padding-right:1pt\" data-decimal-of=\"{input_name}\" data-decimal-part=\"peso\"><input type=\"text\" class=\"{base_class}\" name=\"{input_name}-cents\" readonly value=\"{}\" style=\"position:absolute;top:0.75pt;bottom:0.75pt;left:{cents_left:.2}pt;right:1pt;{size_css}text-align:left;justify-content:flex-start;padding-left:1pt\" data-decimal-of=\"{input_name}\" data-decimal-part=\"cents\">",
+                    html_escape(&peso_text),
+                    html_escape(&cents_text),
+                );
+                replacements.push((tags[index].start, tags[index].end, split_pair));
+            }
+            return;
+        }
+        let formatted_rate = is_rate_cell
+            .then(|| format_percentage_rate(print, has_preprinted_percent_beside(html, input_name)))
+            .flatten();
+        let display = formatted_rate.as_deref().unwrap_or(print);
+        let center_short_code =
+            !is_rate_cell && via_cell && !split && is_short_code_cell(name, caption, display);
         // A value longer than its plain input wraps onto two lines when the
-        // cell is at least 18 pt tall, shrinks down to 6.5 pt, and truncates
-        // with "..." + an overflow warning if it still does not fit; one that
-        // fits keeps its bytes.
+        // cell is at least 18 pt tall, shrinks down to PLAIN_TEXT_MIN_PT, and
+        // truncates with "..." + an overflow warning if it still does not fit;
+        // one that fits keeps its bytes.
         let dims = via_cell
             .then(|| plain_cell_dimensions(html, input_name))
             .flatten();
-        let right_align_numeric = via_cell
+        let right_align_numeric = !is_rate_cell
+            && !center_short_code
+            && via_cell
             && !split
             && ((is_amount_typed_key(name) && is_formatted_money_amount(print))
                 || (is_quantity_typed_key(name) && is_formatted_numeric_quantity(print)));
@@ -1922,7 +2604,7 @@ fn fill_text_input(
                     width,
                     height,
                     tags[index].tag,
-                    print,
+                    display,
                     !right_align_numeric,
                 )
             });
@@ -1942,9 +2624,11 @@ fn fill_text_input(
                     }
                     tag
                 }
-                None => set_value(tags[index].tag, print, writer),
+                None => set_value(tags[index].tag, display, writer),
             };
-            let tag = if right_align_numeric {
+            let tag = if (is_rate_cell || center_short_code) && !display.is_empty() {
+                with_style_declaration(&tag, "text-align:center;justify-content:center")
+            } else if right_align_numeric {
                 with_style_declaration(
                     &tag,
                     "text-align:right;justify-content:flex-end;padding-right:2pt",
@@ -2239,6 +2923,8 @@ impl NegativeStyle {
             "/(over-pay",
             "/(overremit",
             "/(over-remit",
+            "/(over remit",
+            "/ (over remit",
             "/(loss",
             "/(deficit",
             "/(excess",
@@ -3266,16 +3952,12 @@ fn fill_money_joins_with_sheet(
         if value.is_empty() {
             continue;
         }
-        let Some((negative, peso, cents)) = split_writer_money(value) else {
+        let Some((negative, raw_peso, cents)) = split_writer_money(value) else {
             continue;
         };
-        let zero = peso.chars().chain(cents.chars()).all(|ch| ch == '0');
+        let zero = raw_peso.chars().chain(cents.chars()).all(|ch| ch == '0');
         let parenthesized = negative && !zero && join.negative_style == NegativeStyle::Parentheses;
-        let peso = if parenthesized {
-            format!("({peso}")
-        } else {
-            signed_digits(negative, &peso, &cents, join.negative_style, false)
-        };
+        let peso = signed_digits(negative, &raw_peso, &cents, join.negative_style, false);
         for cells in &join.cells {
             let Some(peso_indices) = grouped.get(cells.peso_html_id.as_str()) else {
                 continue;
@@ -3317,76 +3999,59 @@ fn fill_money_joins_with_sheet(
             if cent_ordered.len() != 2 {
                 continue;
             }
-            if let Some(peso_values) = right_aligned_slot_values(peso_ordered.len(), &peso) {
-                for (offset, index) in peso_ordered.into_iter().enumerate() {
-                    let writer = (offset == 0).then_some(value.as_str());
-                    replacements.push((
-                        tags[index].start,
-                        tags[index].end,
-                        set_value(tags[index].tag, &peso_values[offset], writer),
-                    ));
-                }
-                for (offset, index) in cent_ordered.into_iter().enumerate() {
-                    let mut ch = cents
-                        .chars()
-                        .nth(offset)
-                        .map(|ch| ch.to_string())
-                        .unwrap_or_default();
-                    if parenthesized && offset == 1 && !ch.is_empty() {
-                        ch.push(')');
-                    }
-                    replacements.push((
-                        tags[index].start,
-                        tags[index].end,
-                        set_value(tags[index].tag, &ch, None),
-                    ));
-                }
-            } else {
-                // Over-wide amount: print as one right-aligned fitted line across the
-                // peso comb (or combined decimal comb) with white knockout band and
-                // overflow warning marker; never leave the comb blank.
-                let overflow_text = if cells.cent_html_id.is_some() {
-                    peso.clone()
-                } else if parenthesized {
-                    format!("{peso}.{cents})")
-                } else {
-                    format!("{peso}.{cents}")
-                };
-                if let Some((at, line)) =
-                    comb_overflow_amount_line(html, &cells.peso_html_id, &overflow_text, sheet)
-                {
-                    replacements.push((at, at, line));
+            if !parenthesized {
+                if let Some(peso_values) = right_aligned_slot_values(peso_ordered.len(), &peso) {
                     for (offset, index) in peso_ordered.into_iter().enumerate() {
                         let writer = (offset == 0).then_some(value.as_str());
                         replacements.push((
                             tags[index].start,
                             tags[index].end,
-                            set_value(tags[index].tag, "", writer),
+                            set_value(tags[index].tag, &peso_values[offset], writer),
                         ));
                     }
                     for (offset, index) in cent_ordered.into_iter().enumerate() {
-                        let mut ch = if cells.cent_html_id.is_some() {
-                            cents
-                                .chars()
-                                .nth(offset)
-                                .map(|ch| ch.to_string())
-                                .unwrap_or_default()
-                        } else {
-                            String::new()
-                        };
-                        if parenthesized
-                            && cells.cent_html_id.is_some()
-                            && offset == 1
-                            && !ch.is_empty()
-                        {
-                            ch.push(')');
-                        }
+                        let ch = cents
+                            .chars()
+                            .nth(offset)
+                            .map(|ch| ch.to_string())
+                            .unwrap_or_default();
                         replacements.push((
                             tags[index].start,
                             tags[index].end,
                             set_value(tags[index].tag, &ch, None),
                         ));
                     }
+                    continue;
+                }
+            }
+            // Rule 2: an amount that does not fit its digit boxes (too many
+            // digits, or a negative that needs brackets) becomes a plain
+            // rectangle across the full peso+centavo union, right-aligned with
+            // thousands commas and two decimals.
+            let formatted =
+                format_rect_amount(negative, &raw_peso, Some(&cents), join.negative_style);
+            if let Some((start, end, line)) = comb_overflow_amount_union(
+                html,
+                &cells.peso_html_id,
+                cells.cent_html_id.as_deref(),
+                &formatted,
+                sheet,
+            ) {
+                replacements.push((start, end, line));
+                for (offset, index) in peso_ordered.into_iter().enumerate() {
+                    let writer = (offset == 0).then_some(value.as_str());
+                    replacements.push((
+                        tags[index].start,
+                        tags[index].end,
+                        set_value(tags[index].tag, "", writer),
+                    ));
+                }
+                for index in cent_ordered {
+                    replacements.push((
+                        tags[index].start,
+                        tags[index].end,
+                        set_value(tags[index].tag, "", None),
+                    ));
                 }
             }
         }
@@ -3472,16 +4137,20 @@ fn fill_peso_joins_with_sheet(
                         set_value(tags[index].tag, &values[offset], writer),
                     ));
                 }
-            } else if let Some((at, line)) = comb_overflow_amount_line(html, html_id, &pesos, sheet)
-            {
-                replacements.push((at, at, line));
-                for (offset, index) in ordered.into_iter().enumerate() {
-                    let writer = (offset == 0).then_some(value.as_str());
-                    replacements.push((
-                        tags[index].start,
-                        tags[index].end,
-                        set_value(tags[index].tag, "", writer),
-                    ));
+            } else {
+                let formatted = format_comb_amount_for_rect(&pesos, join.negative_style);
+                if let Some((at, line)) =
+                    comb_overflow_amount_line(html, html_id, &formatted, sheet)
+                {
+                    replacements.push((at, at, line));
+                    for (offset, index) in ordered.into_iter().enumerate() {
+                        let writer = (offset == 0).then_some(value.as_str());
+                        replacements.push((
+                            tags[index].start,
+                            tags[index].end,
+                            set_value(tags[index].tag, "", writer),
+                        ));
+                    }
                 }
             }
         }
@@ -3814,14 +4483,20 @@ pub(crate) fn fill_continuation_fragment(
         SheetType::of_sheet(slug, loaded.css)
     });
     let plan = line_group_plan(&filled, fields, &cells, &sheet);
-    let filled = fill_by_name_set(&filled, fields, &cells.joins, &plan, &sheet);
-    let filled = fill_money_joins(&filled, fields, &cells.money_joins);
-    let filled = fill_peso_joins(&filled, fields, &cells.peso_joins);
+    let filled = fill_by_name_set(
+        &filled,
+        fields,
+        &cells.joins,
+        &cells.captions,
+        &plan,
+        &sheet,
+    );
+    let filled = fill_money_joins_with_sheet(&filled, fields, &cells.money_joins, &sheet);
+    let filled = fill_peso_joins_with_sheet(&filled, fields, &cells.peso_joins, &sheet);
     let filled = fill_date_joins(&filled, fields, &cells.date_joins);
-    Ok(split_single_character_cells(
-        slug,
-        &fill_xbox_joins(&filled, fields, &cells.xbox_joins),
-    ))
+    let filled =
+        split_single_character_cells(slug, &fill_xbox_joins(&filled, fields, &cells.xbox_joins));
+    Ok(strip_converted_rect_separators(&filled))
 }
 
 fn fill_bundle(
@@ -3837,14 +4512,20 @@ fn fill_bundle(
         SheetType::of_sheet(slug, loaded.css)
     });
     let plan = line_group_plan(&filled, fields, &cells, &sheet);
-    let filled = fill_by_name_set(&filled, fields, &cells.joins, &plan, &sheet);
+    let filled = fill_by_name_set(
+        &filled,
+        fields,
+        &cells.joins,
+        &cells.captions,
+        &plan,
+        &sheet,
+    );
     let filled = fill_money_joins_with_sheet(&filled, fields, &cells.money_joins, &sheet);
     let filled = fill_peso_joins_with_sheet(&filled, fields, &cells.peso_joins, &sheet);
     let filled = fill_date_joins(&filled, fields, &cells.date_joins);
-    Ok(split_single_character_cells(
-        slug,
-        &fill_xbox_joins(&filled, fields, &cells.xbox_joins),
-    ))
+    let filled =
+        split_single_character_cells(slug, &fill_xbox_joins(&filled, fields, &cells.xbox_joins));
+    Ok(strip_converted_rect_separators(&filled))
 }
 
 /// One Rust-side join: `(writer key, cell, printed caption)`.
@@ -4014,6 +4695,20 @@ pub fn unprinted_keys(
 /// a stamped key), slots in order: what a reader sees in that box.
 pub fn printed_text(document: &str, name: &str) -> String {
     let tags = input_tags(document);
+    let mut decimal_peso: Option<&str> = None;
+    let mut decimal_cents: Option<&str> = None;
+    for tag in &tags {
+        if attr(tag.tag, "data-decimal-of") == Some(name) {
+            match attr(tag.tag, "data-decimal-part") {
+                Some("peso") => decimal_peso = attr(tag.tag, "value"),
+                Some("cents") => decimal_cents = attr(tag.tag, "value"),
+                _ => {}
+            }
+        }
+    }
+    if let (Some(peso), Some(cents)) = (decimal_peso, decimal_cents) {
+        return format!("{peso}.{cents}");
+    }
     let indices: Vec<usize> = tags
         .iter()
         .enumerate()
@@ -4408,19 +5103,52 @@ fn comb_overflow_amount_line(
     text: &str,
     sheet: &SheetType,
 ) -> Option<(usize, String)> {
-    let open = html.find(&format!("<div id=\"{cell}\""))?;
-    let tag = &html[open..open + html[open..].find('>')?];
-    let width_at = tag.find(";width:")? + ";width:".len();
-    let width: f64 = tag[width_at..].split("pt").next()?.parse().ok()?;
-    let size = fit_line(sheet, width, text).max(AMOUNT_OVERFLOW_MIN_PT);
+    comb_overflow_amount_union(html, cell, None, text, sheet).map(|(at, _, line)| (at, line))
+}
+
+/// Rule 2: one right-aligned plain-rectangle amount spanning `peso_cell`
+/// (and `cent_cell` if separate), with `data-rect-box` marking the union
+/// rectangle for SVG/text separator removal.
+fn comb_overflow_amount_union(
+    html: &str,
+    peso_cell: &str,
+    cent_cell: Option<&str>,
+    text: &str,
+    sheet: &SheetType,
+) -> Option<(usize, usize, String)> {
+    let (pl, pt, pw, ph) = cell_box_pt(html, peso_cell)?;
+    let (l, t, r, b) = if let Some(cent) = cent_cell.and_then(|c| cell_box_pt(html, c)) {
+        (
+            pl.min(cent.0),
+            pt.min(cent.1),
+            (pl + pw).max(cent.0 + cent.2),
+            (pt + ph).max(cent.1 + cent.3),
+        )
+    } else {
+        (pl, pt, pl + pw, pt + ph)
+    };
+    let union_w = r - l;
+    let size = fit_line(sheet, union_w, text).max(PLAIN_TEXT_MIN_PT);
+    let open = html.find(&format!("<div id=\"{peso_cell}\""))?;
     let close = open + html[open..].find('>')?;
-    Some((
-        close + 1,
+    let width_css = if cent_cell.is_some() {
         format!(
-            "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"font-size:{size:.2}pt;text-align:right;justify-content:flex-end;padding-right:1pt;z-index:1\" data-overflow-warning=\"amount-comb\" data-overflow-of=\"{cell}\">",
-            html_escape(text)
-        ),
-    ))
+            "inset:0.75pt auto 0.75pt 1pt;width:{:.2}pt;",
+            (union_w - 2.0).max(10.0)
+        )
+    } else {
+        String::new()
+    };
+    let input = format!(
+        "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"{width_css}font-size:{size:.2}pt;text-align:right;justify-content:flex-end;padding-right:1pt;z-index:1\" data-overflow-warning=\"amount-comb\" data-overflow-of=\"{peso_cell}\" data-rect-box=\"{l:.2},{t:.2},{r:.2},{b:.2}\">",
+        html_escape(text)
+    );
+    if cent_cell.is_some() {
+        let open_tag = with_style_declaration(&html[open..=close], "overflow:visible");
+        Some((open, close + 1, format!("{open_tag}{input}")))
+    } else {
+        Some((close + 1, close + 1, input))
+    }
 }
 
 /// One cell whose printed value overflowed its official box (e.g. an amount
@@ -4484,23 +5212,85 @@ fn comb_overflow_line(
     text: &str,
     sheet: &SheetType,
 ) -> Option<(usize, String)> {
-    let open = html.find(&format!("<div id=\"{cell}\""))?;
-    let tag = &html[open..open + html[open..].find('>')?];
-    let width_at = tag.find(";width:")? + ";width:".len();
-    let width: f64 = tag[width_at..].split("pt").next()?.parse().ok()?;
-    overflow_input(html, cell, text, fit_line(sheet, width, text))
+    let (_, _, width, _) = cell_box_pt(html, cell)?;
+    overflow_input_with_fit(html, cell, text, fit_line(sheet, width, text), sheet)
 }
 
-/// [`comb_overflow_line`] at type `size` (pt). The input names the cell
-/// it lies over (`data-overflow-of`).
-fn overflow_input(html: &str, cell: &str, text: &str, size: f64) -> Option<(usize, String)> {
+/// Rule 1 + Rule 3: plain-rectangle text for an overflowing comb cell,
+/// wrapped onto 2 lines if tall enough, floored at [`PLAIN_TEXT_MIN_PT`]
+/// (7.5 pt), truncated with `"..."` + `text-truncated` warning if still too
+/// long, and carrying `data-rect-box` for SVG separator removal.
+fn overflow_input_with_fit(
+    html: &str,
+    cell: &str,
+    text: &str,
+    proposed_size: f64,
+    sheet: &SheetType,
+) -> Option<(usize, String)> {
+    let (l, t, width, height) = cell_box_pt(html, cell)?;
+    let r = l + width;
+    let b = t + height;
     let open = html.find(&format!("<div id=\"{cell}\""))?;
     let close = open + html[open..].find('>')?;
+    if text.is_empty() {
+        return Some((
+            close + 1,
+            format!(
+                "<input type=\"text\" class=\"fi\" readonly value=\"\" style=\"font-size:{:.2}pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"{cell}\" data-rect-box=\"{l:.2},{t:.2},{r:.2},{b:.2}\">",
+                proposed_size.max(PLAIN_TEXT_MIN_PT)
+            ),
+        ));
+    }
+    let (display, size, two_lines, truncated) = if proposed_size < PLAIN_TEXT_MIN_PT {
+        let letter = sheet.letter_for("fi");
+        let room = (width - 2.0).max(4.0);
+        if height >= PLAIN_WRAP_MIN_HEIGHT_PT {
+            let max_two_line = (height / PLAIN_TWO_LINE_HEIGHT_FACTOR).min(PLAIN_MAX_PT);
+            if max_two_line >= PLAIN_TEXT_MIN_PT {
+                if let Some((l1, l2, sz)) =
+                    fit_two_lines(sheet, letter, room, text, max_two_line, PLAIN_TEXT_MIN_PT)
+                {
+                    (format!("{l1}\n{l2}"), sz, true, false)
+                } else if let Some((l1, l2)) =
+                    wrap_and_truncate_two_lines(sheet, letter, room, text, PLAIN_TEXT_MIN_PT)
+                {
+                    (format!("{l1}\n{l2}"), PLAIN_TEXT_MIN_PT, true, true)
+                } else {
+                    let cut = truncate_with_ellipsis(sheet, letter, room, text, PLAIN_TEXT_MIN_PT)
+                        .unwrap_or_else(|| "...".to_string());
+                    (cut, PLAIN_TEXT_MIN_PT, false, true)
+                }
+            } else {
+                let cut = truncate_with_ellipsis(sheet, letter, room, text, PLAIN_TEXT_MIN_PT)
+                    .unwrap_or_else(|| "...".to_string());
+                (cut, PLAIN_TEXT_MIN_PT, false, true)
+            }
+        } else {
+            let cut = truncate_with_ellipsis(sheet, letter, room, text, PLAIN_TEXT_MIN_PT)
+                .unwrap_or_else(|| "...".to_string());
+            (cut, PLAIN_TEXT_MIN_PT, false, true)
+        }
+    } else {
+        (text.to_string(), proposed_size, false, false)
+    };
+    let lh_css = if two_lines {
+        format!("line-height:{PLAIN_TWO_LINE_CSS_HEIGHT};")
+    } else {
+        String::new()
+    };
+    let warn_attr = if truncated {
+        format!(
+            " data-overflow-warning=\"text-truncated\" data-writer-value=\"{}\"",
+            html_escape(text)
+        )
+    } else {
+        String::new()
+    };
     Some((
         close + 1,
         format!(
-            "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"font-size:{size:.2}pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"{cell}\">",
-            html_escape(text)
+            "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"font-size:{size:.2}pt;{lh_css}text-align:left;padding-left:1pt;z-index:1\"{warn_attr} data-overflow-of=\"{cell}\" data-rect-box=\"{l:.2},{t:.2},{r:.2},{b:.2}\">",
+            html_escape(&display)
         ),
     ))
 }
@@ -4538,6 +5328,7 @@ pub fn printed_cells(document: &str) -> BTreeMap<String, (String, Option<f64>)> 
         }
         let text = attr(tag, "value")
             .unwrap_or("")
+            .replace("&#10;", "\n")
             .replace("&quot;", "\"")
             .replace("&lt;", "<")
             .replace("&gt;", ">")
@@ -4571,14 +5362,16 @@ pub fn printed_cell(document: &str, cell: &str) -> (String, Option<f64>) {
     if !boxes.trim().is_empty() {
         return (boxes, None);
     }
-    let needle = format!(" data-overflow-of=\"{cell}\">");
-    let Some(end) = document.find(&needle) else {
+    let needle = format!(" data-overflow-of=\"{cell}\"");
+    let Some(at) = document.find(&needle) else {
         return (boxes, None);
     };
-    let start = document[..end].rfind("<input").unwrap_or(0);
-    let tag = &document[start..end + needle.len()];
+    let start = document[..at].rfind("<input").unwrap_or(0);
+    let end = at + document[at..].find('>').unwrap_or(needle.len());
+    let tag = &document[start..=end];
     let text = attr(tag, "value")
         .unwrap_or("")
+        .replace("&#10;", "\n")
         .replace("&quot;", "\"")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
@@ -4826,7 +5619,11 @@ mod tests {
     #[test]
     fn parenthesized_negative_money_join_puts_parens_around_amount() {
         use std::collections::BTreeMap;
-        let html = format!("{}{}", comb("p", 8), comb("c", 2));
+        let html = format!(
+            "<div id=\"p\" style=\"left:0pt;top:0pt;width:90pt;height:14pt\">{}</div><div id=\"c\" style=\"left:95pt;top:0pt;width:24pt;height:14pt\">{}</div>",
+            comb("p", 8),
+            comb("c", 2)
+        );
         let mut fields = BTreeMap::new();
         fields.insert("k".to_string(), "(799,061.01)".to_string());
         let joins = [super::MoneyJoin {
@@ -4839,11 +5636,14 @@ mod tests {
             negative_style: super::NegativeStyle::Parentheses,
         }];
         let doc = super::fill_money_joins(&html, &fields, &joins);
-        assert_eq!(
-            comb_values(&doc, "p"),
-            ["", "(", "7", "9", "9", "0", "6", "1"]
-        );
-        assert_eq!(comb_values(&doc, "c"), ["0", "1)"]);
+        // Rule 2: a bracketed negative on a split peso+centavo comb becomes a
+        // clean plain rectangle across the full amount, right-aligned with
+        // commas and two decimals.
+        let (printed, size) = super::printed_cell(&doc, "p");
+        assert_eq!(printed, "(799,061.01)");
+        assert!(size.unwrap() >= super::PLAIN_TEXT_MIN_PT);
+        assert_eq!(comb_values(&doc, "p"), [""; 8]);
+        assert_eq!(comb_values(&doc, "c"), [""; 2]);
         fields.insert("k".to_string(), "(0.00)".to_string());
         let doc = super::fill_money_joins(&html, &fields, &joins);
         assert_eq!(comb_values(&doc, "p"), ["", "", "", "", "", "", "", "0"]);
@@ -5050,14 +5850,13 @@ mod tests {
             let mut m = BTreeMap::new();
             m.insert(key.to_string(), "-1,234.56".to_string());
             let doc = super::filled_document(slug, &m).unwrap();
-            let pesos = comb_values(&doc, peso_id);
-            let cents = comb_values(&doc, cent_id);
+            let (printed, size) = super::printed_cell(&doc, peso_id);
             assert_eq!(
-                &pesos[pesos.len() - 5..],
-                ["(", "1", "2", "3", "4"],
-                "{slug} {key} pesos should start with '(': {pesos:?}"
+                printed, "(1,234.56)",
+                "{slug} {key} should convert to a bracketed plain rectangle"
             );
-            assert_eq!(cents, ["5", "6)"], "{slug} {key} cents should end with ')'");
+            assert!(size.unwrap() >= super::PLAIN_TEXT_MIN_PT);
+            assert!(comb_values(&doc, cent_id).iter().all(|v| v.is_empty()));
         }
         assert_eq!(
             super::NegativeStyle::from_printed_label(Some("12 Total Amount of Overremittance")),
@@ -5125,15 +5924,15 @@ mod tests {
         }];
         let doc = super::fill_money_joins(&html, &fields, &joins);
         let (printed, size) = super::printed_cell(&doc, "p1c56");
-        assert_eq!(printed, "-1134107265");
-        assert!(size.unwrap() >= super::AMOUNT_OVERFLOW_MIN_PT);
+        assert_eq!(printed, "-1,134,107,265.03");
+        assert!(size.unwrap() >= super::PLAIN_TEXT_MIN_PT);
         assert!(doc.contains("text-align:right;justify-content:flex-end;padding-right:1pt"));
-        assert_eq!(comb_values(&doc, "p1c57"), ["0", "3"]);
+        assert_eq!(comb_values(&doc, "p1c57"), ["", ""]);
         let warnings = super::overflow_warnings(&doc);
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0].cell, "p1c56");
         assert_eq!(warnings[0].kind, "amount-comb");
-        assert_eq!(warnings[0].value, "-1134107265");
+        assert_eq!(warnings[0].value, "-1,134,107,265.03");
 
         // 2. PesoJoin (e.g. 1701)
         let html = comb_div("cont2-p1c80", 72.0, 8);
@@ -5145,8 +5944,8 @@ mod tests {
         }];
         let doc = super::fill_peso_joins(&html, &fields, &pjoins);
         let (printed, size) = super::printed_cell(&doc, "cont2-p1c80");
-        assert_eq!(printed, "(199914152)");
-        assert!(size.unwrap() >= super::AMOUNT_OVERFLOW_MIN_PT);
+        assert_eq!(printed, "(199,914,152)");
+        assert!(size.unwrap() >= super::PLAIN_TEXT_MIN_PT);
         let warnings = super::overflow_warnings(&doc);
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0].cell, "cont2-p1c80");
@@ -5160,7 +5959,7 @@ mod tests {
         cells.insert("derived:amount_22A".to_string(), vec!["p1c90".to_string()]);
         let doc = super::fill_by_name_with_cells(&html, &dfields, &cells, &BTreeMap::new());
         let (printed, _) = super::printed_cell(&doc, "p1c90");
-        assert_eq!(printed, "(199914152)");
+        assert_eq!(printed, "(199,914,152)");
         assert!(doc.contains("text-align:right;justify-content:flex-end;padding-right:1pt"));
         assert_eq!(super::overflow_warnings(&doc).len(), 1);
     }
@@ -5190,7 +5989,14 @@ mod tests {
             vec!["p1c100_clone2".to_string()],
         );
         let sheet = super::SheetType::of(".fh0 { font-size:9pt;line-height:20pt }");
-        let doc = super::fill_by_name_set(&html, &fields, &cells, &BTreeMap::new(), &sheet);
+        let doc = super::fill_by_name_set(
+            &html,
+            &fields,
+            &cells,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &sheet,
+        );
         assert!(
             doc.contains("&#10;"),
             "tall cell should wrap onto two lines: {doc}"
@@ -5201,16 +6007,23 @@ mod tests {
         );
         assert!(
             super::overflow_warnings(&doc).is_empty(),
-            "wrapped value that fits at >=6.5pt emits no truncation warning"
+            "wrapped value that fits at >=7.5pt emits no truncation warning"
         );
 
-        // 2. Very long text in tall cloned cell floors at 6.50pt, ends with "...", and warns with full text.
+        // 2. Very long text in tall cloned cell floors at 7.50pt, ends with "...", and warns with full text.
         let huge = "AYALA LAND INCORPORATED CUMULATIVE REDEEMABLE NON-VOTING CONVERTIBLE PREFERRED SERIES B CLASS TWO SHARES OF STOCK";
         fields.insert("derived:stock_name".to_string(), huge.to_string());
-        let doc = super::fill_by_name_set(&html, &fields, &cells, &BTreeMap::new(), &sheet);
+        let doc = super::fill_by_name_set(
+            &html,
+            &fields,
+            &cells,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &sheet,
+        );
         assert!(
-            doc.contains("font-size:6.50pt"),
-            "must floor at 6.50pt: {doc}"
+            doc.contains("font-size:7.50pt"),
+            "must floor at 7.50pt: {doc}"
         );
         assert!(doc.contains("...\""), "must end with ellipsis: {doc}");
         let warnings = super::overflow_warnings(&doc);
@@ -5218,20 +6031,27 @@ mod tests {
         assert_eq!(warnings[0].cell, "p1c100_clone2");
         assert_eq!(warnings[0].kind, "text-truncated");
         assert_eq!(warnings[0].value, huge);
-        assert_eq!(warnings[0].font_size_pt, Some(6.5));
+        assert_eq!(warnings[0].font_size_pt, Some(7.5));
 
-        // 3. Short cell (< 18pt) does NOT wrap; floors at 6.50pt with "..." and warns.
+        // 3. Short cell (< 18pt) does NOT wrap; floors at 7.50pt with "..." and warns.
         let short_html = plain_div("p1c50", 90.0, 12.0);
         let mut scells = BTreeMap::new();
         scells.insert("derived:stock_name".to_string(), vec!["p1c50".to_string()]);
-        let doc = super::fill_by_name_set(&short_html, &fields, &scells, &BTreeMap::new(), &sheet);
+        let doc = super::fill_by_name_set(
+            &short_html,
+            &fields,
+            &scells,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &sheet,
+        );
         assert!(
             !doc.contains("&#10;"),
             "short cell (<18pt) must not wrap: {doc}"
         );
         assert!(
-            doc.contains("font-size:6.50pt"),
-            "short cell floors at 6.50pt: {doc}"
+            doc.contains("font-size:7.50pt"),
+            "short cell floors at 7.50pt: {doc}"
         );
         assert!(
             doc.contains("...\""),
@@ -7453,29 +8273,35 @@ mod tests {
                             let (part, size) = overlay
                                 .unwrap_or_else(|| panic!("{slug} {}: a plain line", line.cell));
                             assert!(!part.is_empty(), "{slug} {}: every line used", line.cell);
-                            assert!(
-                                line_fits(&slug, &part, size, line.width),
-                                "{slug} {}: {part:?} at {size}pt fits {}pt",
-                                line.cell,
-                                line.width
-                            );
+                            for subline in part.replace("&#10;", "\n").lines() {
+                                assert!(
+                                    line_fits(&slug, subline, size, line.width),
+                                    "{slug} {}: {subline:?} at {size}pt fits {}pt",
+                                    line.cell,
+                                    line.width
+                                );
+                            }
                             assert_eq!(
                                 printed_cell(&document, &line.cell),
-                                (part.clone(), Some(size))
+                                (part.replace("&#10;", "\n"), Some(size))
                             );
-                            parts.push(part);
+                            parts.push(part.replace("&#10;", " "));
                             sizes.push(size);
                         }
-                        assert_eq!(parts.join(" "), text, "{slug}: the whole text, in order");
-                        assert!(
-                            sizes.iter().all(|s| (s - sizes[0]).abs() < 1e-9),
-                            "{slug}: one size {sizes:?}"
-                        );
+                        if parts.iter().any(|p| p.ends_with("...")) {
+                            assert!(
+                                sizes.iter().all(|s| *s >= super::PLAIN_TEXT_MIN_PT),
+                                "{slug}: floored at 7.5pt {sizes:?}"
+                            );
+                        } else {
+                            assert_eq!(parts.join(" "), text, "{slug}: the whole text, in order");
+                        }
                         if shrunk {
                             assert!(
-                                sizes[0] < 9.0,
-                                "{slug}: {len} characters shrink ({})",
-                                sizes[0]
+                                sizes.iter().all(|s| *s >= super::PLAIN_TEXT_MIN_PT)
+                                    && (sizes.iter().any(|s| *s < 9.0)
+                                        || parts.iter().any(|p| p.contains('\n'))),
+                                "{slug}: {len} characters shrink or wrap ({sizes:?})"
                             );
                         } else {
                             assert_eq!(
@@ -7533,13 +8359,30 @@ mod tests {
                     let (boxes, overlay) = read_cell(&document, cell);
                     assert_eq!(boxes.trim(), "", "{slug} {key}");
                     let (part, size) = overlay.unwrap_or_else(|| panic!("{slug} {key}: plain"));
-                    assert_eq!(part, text, "{slug} {key}: whole");
                     assert!(
-                        line_fits(&slug, &part, size, width),
-                        "{slug} {key}: {len} characters at {size}pt fit {width}pt"
+                        size >= super::PLAIN_TEXT_MIN_PT,
+                        "{slug} {key}: floor 7.5pt ({size})"
                     );
+                    let normalized = part.replace("&#10;", "\n");
+                    if normalized.ends_with("...") {
+                        assert!(
+                            document.contains("data-overflow-warning=\"text-truncated\""),
+                            "{slug} {key}: truncated value carries warning for additional sheet"
+                        );
+                    } else {
+                        assert_eq!(normalized.replace('\n', " "), text, "{slug} {key}: whole");
+                    }
+                    for subline in normalized.lines() {
+                        assert!(
+                            line_fits(&slug, subline, size, width),
+                            "{slug} {key}: {subline:?} at {size}pt fit {width}pt"
+                        );
+                    }
                     if shrunk {
-                        assert!(size < 9.0, "{slug} {key}: {size}");
+                        assert!(
+                            size < 9.0 || normalized.contains('\n'),
+                            "{slug} {key}: {size}"
+                        );
                     }
                 }
             }
@@ -7593,24 +8436,25 @@ mod tests {
         assert!(document.contains(
             "font-size:8.55pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"p1c41\""
         ));
-        // 600 characters: under 4 pt, and still inside each cell.
+        // 600 characters: floored at 7.5 pt (Rule 3), fits inside each cell,
+        // and carries the truncation warning for the additional sheet.
         let text = words_of(600);
         let fields = BTreeMap::from([("frm0619E:txtAddress".to_string(), text.clone())]);
         let document = filled_document("0619e-2018", &fields).unwrap();
-        let mut parts = Vec::new();
         for cell in ["p1c41", "p1c42"] {
             let (part, size) = printed_cell(&document, cell);
             let size = size.unwrap();
             let width = comb_cell(&document, cell).unwrap().1;
-            assert!(size < 4.0, "{cell}: {size}");
-            assert!(
-                line_fits("0619e-2018", &part, size, width),
-                "{cell}: {} characters at {size}pt fit {width}pt",
-                part.chars().count()
-            );
-            parts.push(part);
+            assert!(size >= super::PLAIN_TEXT_MIN_PT, "{cell}: {size}");
+            for subline in part.lines() {
+                assert!(
+                    line_fits("0619e-2018", subline, size, width),
+                    "{cell}: {} characters at {size}pt fit {width}pt",
+                    subline.chars().count()
+                );
+            }
         }
-        assert_eq!(parts.join(" "), text, "nothing is lost");
+        assert!(document.contains("data-overflow-warning=\"text-truncated\""));
         let sheet = SheetType::plain();
         assert_eq!(
             sheet.fit(sheet.letter, 998.0, "UNIT 1", PLAIN_MAX_PT),
@@ -7743,11 +8587,13 @@ mod tests {
                         .map(|(_, width)| width)
                         .or_else(|| plain_cell_width(&document, &cell))
                         .unwrap();
-                    let measured = sheet.width(sheet.letter, &text, size);
-                    assert!(
-                        1.0 + measured <= width,
-                        "{slug} {case} {cell}: {text:?} at {size}pt measures {measured}pt in {width}pt"
-                    );
+                    for subline in text.lines() {
+                        let measured = sheet.width(sheet.letter, subline, size);
+                        assert!(
+                            1.0 + measured <= width,
+                            "{slug} {case} {cell}: {subline:?} at {size}pt measures {measured}pt in {width}pt"
+                        );
+                    }
                     lines += 1;
                 }
                 for ids in cells.joins.values() {
@@ -8721,10 +9567,17 @@ mod tests {
                 }
                 let line = printed_cells(&document).remove(*cell);
                 let (text, size) = line.expect("an overflow line");
-                assert_eq!(text, long);
                 let size = size.unwrap();
+                assert!(size >= super::PLAIN_TEXT_MIN_PT);
                 let width = plain_cell_width(&document, cell).unwrap();
-                assert!(1.0 + sheet.width(sheet.letter, long, size) <= width);
+                if text.ends_with("...") {
+                    assert!(document.contains("data-overflow-warning=\"text-truncated\""));
+                } else {
+                    assert_eq!(text, long);
+                }
+                for subline in text.lines() {
+                    assert!(1.0 + sheet.width(sheet.letter, subline, size) <= width);
+                }
                 assert_eq!(
                     document
                         .matches(&format!("data-overflow-of=\"{cell}\""))
@@ -9043,19 +9896,19 @@ mod donor_estate_print_tests {
         for (slug, golden) in [
             (
                 "1706-2018",
-                "1b98848c3a43fd4f8ab3ceaedac8c65832e6565ea963b03c0a7195b891ec67a2",
+                "c8d2e566a2c0d0eed857ddbce4676e3c0fdf9e5fb90e0a2d75108899eba658f0",
             ),
             (
                 "2000-ot-2018",
-                "86f497510e136ed8fc5d40825db719298fba02a4c0d9b62f3546c14423eea198",
+                "b53217afe4991a92e9875afa559a90e777ee77a24b5d8ac6002959daaa6389ad",
             ),
             (
                 "1801-2018",
-                "f168daf3477643872694e9e1e8a3b49ded84f6de3a2dff394a017aaf8987cb10",
+                "31ac6efa8d3e2f87fe4d8277c5a5ebeea16ed92dbbe389284c65b7ec7834bd15",
             ),
             (
                 "1800-2018",
-                "51fd641f9791344fd5ae0c836061fbe06acd42b97bd0a7d827d4295ded37d76f",
+                "011875fad804b6bae856460cf118ab2666ebb6891f2d69a47ead1f25cba6575b",
             ),
         ] {
             let html = filled_document(slug, &every_join_filled(slug)).unwrap();
@@ -9065,6 +9918,49 @@ mod donor_estate_print_tests {
         assert!(DONOR_ESTATE_JOINS
             .iter()
             .all(|(slug, _, _)| matches!(*slug, "1800-2018" | "1801-2018")));
+    }
+
+    #[test]
+    fn field_rules_svg_removal_records_hidden_rules_splits_shared_and_supports_clones() {
+        use std::collections::BTreeMap;
+        let page = r##"<div class="page page-1"><svg class="rl"><rect x="30" y="102" width="0.5" height="12" fill="#000" data-rule-id="v_inner"/><rect x="50" y="80" width="0.5" height="60" fill="#000" data-rule-id="v_shared"/><rect x="10" y="100" width="0.5" height="16" fill="#000" data-rule-id="v_outer_left"/></svg><div id="cont_sched1_r2_p1c10" style="left:10pt;top:100pt;width:80pt;height:16pt"><input type="text" name="cont_sched1_r2_p1c10" data-slot-index="0" value=""><input type="text" name="cont_sched1_r2_p1c10" data-slot-index="1" value=""><input type="text" name="cont_sched1_r2_p1c10" data-slot-index="2" value=""></div></div>"##;
+        let mut fields = BTreeMap::new();
+        fields.insert("k".to_string(), "OVERFLOWING TEXT".to_string());
+        let mut cells = BTreeMap::new();
+        cells.insert("k".to_string(), vec!["cont_sched1_r2_p1c10".to_string()]);
+        let filled = super::fill_by_name_with_cells(page, &fields, &cells, &BTreeMap::new());
+        let out = super::strip_converted_rect_separators(&filled);
+        // Interior separator removed
+        assert!(!out.contains("data-rule-id=\"v_inner\""));
+        // Outer border kept
+        assert!(out.contains("data-rule-id=\"v_outer_left\""));
+        // Shared vertical rule spanning rows above & below is split into two pieces, not deleted
+        assert_eq!(out.matches("data-rule-id=\"v_shared\"").count(), 2);
+        // Hidden SVG rule IDs recorded on owning cloned cell
+        assert!(out.contains("data-hidden-svg-rules=\"v_inner,v_shared\""));
+        assert!(out.contains("data-overflow-of=\"cont_sched1_r2_p1c10\""));
+    }
+
+    #[test]
+    fn field_rules_rate_centered_space_percent_and_space_over_remittance() {
+        assert_eq!(
+            super::format_percentage_rate("5.00", false).as_deref(),
+            Some("5 %")
+        );
+        assert_eq!(
+            super::format_percentage_rate("2.50", false).as_deref(),
+            Some("2.5 %")
+        );
+        assert_eq!(
+            super::format_percentage_rate("15.00", true).as_deref(),
+            Some("15")
+        );
+        assert_eq!(
+            super::NegativeStyle::from_printed_label(Some(
+                "18 Total Amount Payable/(Over remittance)"
+            )),
+            super::NegativeStyle::Parentheses
+        );
     }
 
     fn fixture_profile() -> bir_core::profile::TaxpayerProfile {
