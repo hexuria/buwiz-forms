@@ -852,10 +852,10 @@ impl Form2000Draft {
     ///   TIN and Taxpayer's Name captions (14 TIN digits, then the name).
     /// - `derived:contact_email`: Items 8 and 9 on their one shared 40-slot
     ///   comb (the number from slot 0, the email as typed from slot 13).
-
-    /// The schedule row a 2000 field key belongs to, for keys that carry one:
-    /// the trailing digits of a `sched<n>:` cell key or an `drpATCCode`/`chk`
-    /// row key.
+    ///
+    /// The schedule row a 2000 field key belongs to, for keys that carry
+    /// one: the trailing digits of a `sched<n>:` cell key or an
+    /// `drpATCCode`/`chk` row key (`row_key_index`).
     fn row_key_index(key: &str) -> Option<usize> {
         let row_key = key.contains(":sched")
             || key.starts_with("drpATCCode")

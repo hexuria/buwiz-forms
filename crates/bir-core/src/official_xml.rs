@@ -244,9 +244,8 @@ pub fn write(
             return false;
         }
         let (stem, digits) = (&key[..digits_at], &key[digits_at..]);
-        (0..3).any(|row| {
-            row.to_string() != digits && known.contains(format!("{stem}{row}").as_str())
-        })
+        (0..3)
+            .any(|row| row.to_string() != digits && known.contains(format!("{stem}{row}").as_str()))
     };
     if let Some(unknown) = values
         .keys()
@@ -316,11 +315,9 @@ pub fn write(
             let carries = values.contains_key(&wanted)
                 || match &entries[at] {
                     Entry::Value { parts, .. } => parts.iter().any(|part| match part {
-                        Part::Source { source, .. } => {
-                            row_digits(source).is_some_and(|at2| {
-                                values.contains_key(&rewrite_key(source, higher, at2))
-                            })
-                        }
+                        Part::Source { source, .. } => row_digits(source).is_some_and(|at2| {
+                            values.contains_key(&rewrite_key(source, higher, at2))
+                        }),
                         _ => false,
                     }),
                     _ => false,
@@ -357,7 +354,7 @@ pub fn write(
                                 source: row_digits(source)
                                     .map(|at2| rewrite_key(source, higher, at2))
                                     .unwrap_or_else(|| source.clone()),
-                                codec: codec.clone(),
+                                codec: *codec,
                                 uppercase: *uppercase,
                             },
                             other => other.clone(),
