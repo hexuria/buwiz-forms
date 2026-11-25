@@ -426,6 +426,14 @@ pub fn amended_copy(kind: AgentFormKind, draft: &Value) -> Result<Value, String>
             kind.form_code()
         ));
     }
+    // A dry run reached nobody: there is no filed return to amend.
+    if crate::forms::dry_run::is_dry_run(&status, crate::forms::dry_run::json_marks_dry_run(draft))
+    {
+        return Err(format!(
+            "this {} return was a dry run: nothing reached the BIR, so it is sent again as the original, not amended",
+            kind.form_code()
+        ));
+    }
     match kind {
         AgentFormKind::Form1601C => amended_1601c(kind, draft),
         AgentFormKind::Form2551Q => amended_2551q(kind, draft),
@@ -2666,6 +2674,59 @@ mod tests {
 
         // Never for a return that did not reach BIR.
         assert!(amended_copy(kind, &serde_json::to_value(&draft).unwrap()).is_err());
+    }
+
+    /// A dry run reached nobody: there is nothing to amend. A real send, one
+    /// with a relay receipt and a Confirmed return can be amended; Paid never.
+    #[test]
+    fn a_dry_run_has_no_amended_copy() {
+        use crate::forms::form_0619e::Form0619EDraft;
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Example Store",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Example Street",
+            "zip_code": "1600",
+            "phone": "09170000000",
+            "email": "store@example.com",
+            "default_form_type": "0619Ev2018",
+            "taxpayer_type": "Corporation"
+        }))
+        .unwrap();
+        let kind = AgentFormKind::from_code("0619E").unwrap();
+        let mut sent = Form0619EDraft::new_from_profile(&profile, 2025, 6);
+        sent.lifecycle.status = FilingStatus::Submitted;
+        sent.lifecycle.submitted_at = Some("2025-07-10T01:02:03+00:00".into());
+        let json = |draft: &Form0619EDraft| serde_json::to_value(draft).unwrap();
+
+        let mut dry = sent.clone();
+        dry.lifecycle.submitted_dry_run = true;
+        let error = amended_copy(kind, &json(&dry)).unwrap_err();
+        assert!(error.contains("dry run"), "{error}");
+        // The mark under `lifecycle` (another build's shape) reads the same.
+        let mut nested = json(&sent);
+        nested.as_object_mut().unwrap().remove("submitted_dry_run");
+        nested["lifecycle"] = serde_json::json!({"submitted_dry_run": true});
+        assert!(amended_copy(kind, &nested).is_err());
+
+        let mut relay = sent.clone();
+        relay.lifecycle.relay_receipt = Some("a.b.c".into());
+        let mut confirmed = sent.clone();
+        confirmed.lifecycle.status = FilingStatus::Confirmed;
+        // A Confirmed return carrying a stale mark reached the BIR all the same.
+        confirmed.lifecycle.submitted_dry_run = true;
+        for filed in [&sent, &relay, &confirmed] {
+            assert!(
+                amended_copy(kind, &json(filed)).is_ok(),
+                "{:?}",
+                filed.lifecycle.status
+            );
+        }
+        let mut paid = sent.clone();
+        paid.lifecycle.status = FilingStatus::Paid;
+        assert!(amended_copy(kind, &json(&paid)).is_err());
     }
 
     /// `apply_penalty_profile` resolves the penalty inputs the Calendar

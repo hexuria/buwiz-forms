@@ -3738,7 +3738,8 @@ mod tests {
         let profile = test_profile();
         let db = test_db();
         let (queued, summary) = queued_test_form(&db);
-        let transport = RecordingSubmissionTransport::dry_run(TestTransportOutcome::Success);
+        // A real send: a BIR email confirms only a return that reached the BIR.
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
         process_queued_queueable::<TestForm, _>(
             &summary,
             &profile,
@@ -3777,6 +3778,57 @@ mod tests {
         );
     }
 
+    /// A dry run reached nobody: a BIR email naming its file (by period or by
+    /// the uploaded filename) confirms nothing, and the receipt is Ignored as
+    /// one with no matching return is.
+    #[tokio::test]
+    async fn a_bir_email_never_confirms_a_dry_run() {
+        let profile = test_profile();
+        let db = test_db();
+        let (queued, summary) = queued_test_form(&db);
+        let transport = RecordingSubmissionTransport::dry_run(TestTransportOutcome::Success);
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &transport,
+            allow_test_form,
+        )
+        .await;
+        let sent = stored_test_form(&db, &queued);
+        assert_eq!(sent.lifecycle.status, FilingStatus::Submitted);
+        assert!(sent.lifecycle.submitted_dry_run);
+        let local_now =
+            chrono::Utc::now() + chrono::Duration::hours(8) + chrono::Duration::minutes(1);
+        let uploaded = queued.submission_filename();
+        let confirmation = crate::receipt::BirReceiptConfirmation {
+            filename: format!("{}.xml", uploaded.split('#').next().unwrap()),
+            date_received: local_now.date_naive(),
+            time_received: local_now.time(),
+            source_from: Some("ebirforms-noreply@bir.gov.ph".to_string()),
+            raw_text: "This confirms receipt".to_string(),
+            raw_html: None,
+        };
+        let guard = db.lock().unwrap();
+        let (saved, _) = guard.save_submission_receipt(&confirmation).unwrap();
+        for receipt in [saved.clone(), {
+            let mut by_name = saved.clone();
+            by_name.period = "03152025_T123456".to_string();
+            by_name
+        }] {
+            assert_eq!(
+                guard.confirm_submission_from_receipt(&receipt).unwrap(),
+                crate::db::ReceiptConfirmationOutcome::Ignored
+            );
+        }
+        drop(guard);
+        let after = stored_test_form(&db, &queued);
+        assert_eq!(after.lifecycle.status, FilingStatus::Submitted);
+        assert!(after.lifecycle.receipt_id.is_none());
+    }
+
+    /// Dev Mode's simulated BIR email (debug builds) confirms a dry run on
+    /// purpose: it is the simulation of the email a dry run never gets.
     #[tokio::test]
     async fn dev_mode_simulated_confirmation_uses_the_email_path() {
         let profile = test_profile();

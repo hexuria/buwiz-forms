@@ -14540,6 +14540,19 @@ mod tests {
                     .clone()
             };
             assert_eq!(offered(), false, "{code}");
+            // A real send of a form with an amended-return answer offers Amend.
+            let amend_offered = || {
+                sample_period(
+                    TIN,
+                    code,
+                    typed_parts(code, 2024, period as u8, 1, period as u8),
+                )["existing"]["actions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|action| action == "amend")
+            };
+            assert!(amend_offered(), "{code}: a real send can be amended");
 
             // The worker's dry-run send, as bir-core stores it.
             let (_, raw) = raw_row(id);
@@ -14558,6 +14571,8 @@ mod tests {
             assert_eq!(dry["submitted_at"], real["submitted_at"], "{code}");
             assert_eq!(dry["submitted_dry_run"], true, "{code}");
             assert_eq!(offered(), true, "{code}");
+            // A dry run reached nobody: there is nothing to amend.
+            assert!(!amend_offered(), "{code}: a dry run is not amended");
         }
     }
 

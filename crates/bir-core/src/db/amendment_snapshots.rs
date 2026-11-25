@@ -167,7 +167,9 @@ impl Database {
     /// save-009's "an original already exists": another return for this TIN,
     /// form, year and period that is Submitted, Confirmed or Paid, or any
     /// amendment snapshot of it. A Draft or Queued return is not an original,
-    /// and the row `exclude_draft_id` (the record being saved) never counts.
+    /// nor is a dry run (a Submitted return the worker only simulated:
+    /// [`crate::forms::dry_run`]), and the row `exclude_draft_id` (the record
+    /// being saved) never counts.
     pub fn has_filed_original(
         &self,
         tin: &str,
@@ -178,12 +180,16 @@ impl Database {
     ) -> Result<bool, DbError> {
         let year = i64::from(taxable_year);
         let filed: bool = self.conn.query_row(
-            "SELECT EXISTS(
+            &format!(
+                "SELECT EXISTS(
                 SELECT 1 FROM form_drafts
                  WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3
                    AND period_key = ?4
                    AND status IN ('Submitted', 'Confirmed', 'Paid')
+                   AND NOT (status = 'Submitted' AND {})
                    AND (?5 IS NULL OR id <> ?5))",
+                crate::forms::dry_run::STORED_DRY_RUN_SQL
+            ),
             params![tin, form_code, year, period_key, exclude_draft_id],
             |row| row.get(0),
         )?;

@@ -5,7 +5,7 @@
 import { expect, test } from "nsh/test";
 import { bir } from "../../bir";
 import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
-import { existingOfferFor, rfc3339, sendWords, sentWords, tryTime } from "./schema";
+import { existingOfferFor, profileChangedNote, rfc3339, sendWords, sentWords, tryTime } from "./schema";
 import type { ScreenFormExisting, SendState } from "../../bir";
 import { FormSession, type FormTarget } from "./session";
 
@@ -49,6 +49,11 @@ test("the words: a real send and a dry run", () => {
   expect(sentWords("2026-11-18T01:02:03+00:00", true)).toBe("Dry run Nov 18, 2026, not sent to BIR");
   expect(sentWords("2026-11-18T01:02:03+00:00", false, true)).toBe("Sent to the mock relay Nov 18, 2026, not to BIR");
   expect(sentWords("2026-11-18T01:02:03+00:00", true, true)).toBe("Dry run Nov 18, 2026, not sent to BIR");
+});
+
+test("a read-only return's profile-changed note: a filed return's, and a dry run's (never filed)", () => {
+  expect(profileChangedNote(false)).toBe("The tax profile changed after this return was filed. This return keeps what was filed.");
+  expect(profileChangedNote(true)).toBe("The tax profile changed after this dry run. This return keeps what the dry run held.");
 });
 
 test("a sample's offer of a stored return: a dry-run send says dry run, a real send says submitted", () => {

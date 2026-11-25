@@ -39,8 +39,12 @@ fn ordinal(period: &FilingPeriod) -> u32 {
 }
 
 /// How far a return got: a filed one wins over a queued one, a queued one
-/// over a draft, within one period.
-fn filed_rank(status: &FilingStatus) -> u8 {
+/// over a draft, within one period. A dry run (Submitted, only simulated:
+/// [`crate::forms::dry_run`]) was never filed: it ranks with the drafts.
+fn filed_rank(status: &FilingStatus, dry_run: bool) -> u8 {
+    if crate::forms::dry_run::is_dry_run(status, dry_run) {
+        return 0;
+    }
     match status {
         FilingStatus::Submitted | FilingStatus::Confirmed | FilingStatus::Paid => 2,
         FilingStatus::Queued => 1,
@@ -63,10 +67,11 @@ impl Database {
         period: u32,
     ) -> Result<Option<PreviousReturn>, DbError> {
         let code = canonical_form_code(form_code);
-        let mut stmt = self.conn.prepare(
-            "SELECT id, form_code, taxable_year, quarter, period_key, status
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT id, form_code, taxable_year, quarter, period_key, status, {}
              FROM form_drafts WHERE tin = ?1 AND taxable_year <= ?2",
-        )?;
+            crate::forms::dry_run::STORED_DRY_RUN_SQL
+        ))?;
         let rows = stmt.query_map(params![tin, i64::from(year)], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
@@ -75,11 +80,12 @@ impl Database {
                 row.get::<_, Option<i64>>(3)?,
                 row.get::<_, Option<String>>(4)?,
                 row.get::<_, String>(5)?,
+                row.get::<_, bool>(6)?,
             ))
         })?;
         let mut best: Option<Candidate> = None;
         for row in rows {
-            let (id, row_code, row_year, quarter, period_key, status) = row?;
+            let (id, row_code, row_year, quarter, period_key, status, dry_run) = row?;
             if canonical_form_code(&row_code) != code {
                 continue;
             }
@@ -99,7 +105,7 @@ impl Database {
                 continue;
             }
             let status = filing_status_from_db(&status);
-            let order = (row_year, row_period, filed_rank(&status), id);
+            let order = (row_year, row_period, filed_rank(&status, dry_run), id);
             if best.as_ref().is_none_or(|(current, _)| order > *current) {
                 best = Some((order, status));
             }
@@ -221,5 +227,106 @@ mod tests {
         let found = db.previous_return(TIN, "1701", 2026, 0).unwrap().unwrap();
         assert_eq!((found.taxable_year, found.period), (2025, 0));
         assert_eq!(found.status, FilingStatus::Submitted);
+    }
+
+    /// Mark the row `id` as a dry run, at the top level or under `lifecycle`.
+    fn mark_dry_run(db: &Database, id: i64, nested: bool) {
+        let path = if nested {
+            "$.lifecycle"
+        } else {
+            "$.submitted_dry_run"
+        };
+        let value = if nested {
+            r#"{"submitted_dry_run":true}"#
+        } else {
+            "true"
+        };
+        db.conn
+            .execute(
+                &format!("UPDATE form_drafts SET data_json = json_set(data_json, '{path}', json('{value}')) WHERE id = ?1"),
+                [id],
+            )
+            .unwrap();
+    }
+
+    /// Within one period, a real filing outranks a dry run; a dry run ranks
+    /// with the drafts (the later row of the two wins, as between drafts) and
+    /// below a Queued return.
+    #[test]
+    fn a_dry_run_ranks_with_drafts_and_a_real_filing_outranks_it() {
+        for nested in [false, true] {
+            // A dry run and a real send of the same period: the real one.
+            let db = Database::open_in_memory_for_tests().unwrap();
+            insert(&db, "1701", 2025, Some(0), "A", "Submitted");
+            let dry = insert(&db, "1701", 2025, None, "A", "Submitted");
+            mark_dry_run(&db, dry, nested);
+            assert_eq!(
+                previous(&db, "1701", 2026, 0).as_deref(),
+                Some("1701 2025 A Submitted"),
+                "{nested}"
+            );
+            assert_ne!(
+                db.previous_return(TIN, "1701", 2026, 0)
+                    .unwrap()
+                    .unwrap()
+                    .id,
+                dry
+            );
+            for (other, status) in [
+                ("Confirmed", "Confirmed"),
+                ("Paid", "Paid"),
+                ("Queued", "Queued"),
+            ] {
+                let db = Database::open_in_memory_for_tests().unwrap();
+                let filed = insert(&db, "1701", 2025, Some(0), "A", status);
+                let dry = insert(&db, "1701", 2025, None, "A", "Submitted");
+                mark_dry_run(&db, dry, nested);
+                assert_eq!(
+                    db.previous_return(TIN, "1701", 2026, 0)
+                        .unwrap()
+                        .unwrap()
+                        .id,
+                    filed,
+                    "{other} wins over a dry run"
+                );
+            }
+            // A dry run and a Draft: they rank together, the later row wins.
+            let db = Database::open_in_memory_for_tests().unwrap();
+            let dry = insert(&db, "1701", 2025, None, "A", "Submitted");
+            mark_dry_run(&db, dry, nested);
+            let draft = insert(&db, "1701", 2025, Some(0), "A", "Draft");
+            assert_eq!(
+                db.previous_return(TIN, "1701", 2026, 0)
+                    .unwrap()
+                    .unwrap()
+                    .id,
+                draft
+            );
+            // Alone, a dry run is still the previous return (its answers carry).
+            let db = Database::open_in_memory_for_tests().unwrap();
+            let dry = insert(&db, "1701", 2025, None, "A", "Submitted");
+            mark_dry_run(&db, dry, nested);
+            let found = db.previous_return(TIN, "1701", 2026, 0).unwrap().unwrap();
+            assert_eq!(found.id, dry);
+            assert_eq!(found.status, FilingStatus::Submitted);
+        }
+        // A real send with a relay receipt is a real filing.
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let relay = insert(&db, "1701", 2025, None, "A", "Submitted");
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET data_json = json_set(data_json, '$.relay_receipt', 'a.b.c', '$.submitted_dry_run', json('false')) WHERE id = ?1",
+                [relay],
+            )
+            .unwrap();
+        let draft = insert(&db, "1701", 2025, Some(0), "A", "Draft");
+        assert_ne!(draft, relay);
+        assert_eq!(
+            db.previous_return(TIN, "1701", 2026, 0)
+                .unwrap()
+                .unwrap()
+                .id,
+            relay
+        );
     }
 }
