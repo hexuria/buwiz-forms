@@ -43,8 +43,9 @@ deleting the app deletes them. Each is written with the file protection "complet
 so a send can run while the phone is locked once it was unlocked after a restart. The app's data folder
 (`Library/Application Support/dev.goldcoders.bir`) is excluded from backups and carries the same protection, set on
 every launch. The Keychain holds one item, the install id, which survives a reinstall; development and test runs
-keep the Keychain off (`BUWIZ_NO_KEYCHAIN=1`), so this check uses its file (`buwiz_install_id.txt`, beside the
-database).
+keep the Keychain off (`BUWIZ_NO_KEYCHAIN=1`); a test run (`EBIR_TEST_ENV=1`) uses a random id in its own file
+beside the database (`buwiz-install-id`). An email sign-in waiting for its code is a file beside the database too
+(`buwiz-pending-sign-in.json`), gone once the code is used, the request ends, or the person signs out.
 
 The database must be named, or a test run gets a new scratch folder in `tmp/` on every launch and always starts
 signed out. Name one under the app container's `Documents/`: the door's guard lets a test run open it
@@ -52,11 +53,14 @@ signed out. Name one under the app container's `Documents/`: the door's guard le
 folder stays refused. No `BIR_AUTH_BYPASS`: with it a test run skips the sign-in gate.
 
 ```sh
-just mock-account --port 3008 --auto-approve                  # in another terminal
+just mock-account --port 3008                                  # in another terminal; every code is 246810
 cd nsh
 export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
 export SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1 \
   SIMCTL_CHILD_BUWIZ_SERVER_URL=http://localhost:3008
+# A development build makes its relay client (and so adds the device after the sign-in) only with a test trust key;
+# the mock serves no trust list, so nothing can be sent.
+export SIMCTL_CHILD_BUWIZ_TRUST_KEYS=dev-test-key-not-production
 unset SIMCTL_CHILD_BIR_SFTP_LIVE SIMCTL_CHILD_BIR_AUTH_BYPASS
 # 1. Install and launch once (scratch database), then quit: the app's container exists now.
 nsh run --target ios
@@ -68,9 +72,9 @@ nsh run --target ios
 
 | Step | What it should show |
 | --- | --- |
-| Sign in through the gate (step 2); the mock approves by itself | Signed in; `buwiz-cloud-account.json` beside the database. |
+| Step 2 opens on the email page: type an address, Continue with email; on the code page type 246810 | Home; `buwiz-cloud-account.json` beside the database; the mock prints `POST /api/devices`. |
 | Relaunch, same variables | Still signed in. |
-| Delete the app (`xcrun simctl uninstall booted dev.goldcoders.bir`), then steps 1 and 2 again | Signed out: the files went with the app. |
+| Delete the app (`xcrun simctl uninstall booted dev.goldcoders.bir`), then steps 1 and 2 again | Signed out, on the email page: the files went with the app. |
 
 The app's log (a test run's is in the container's `tmp/ebirforms-logs-<pid>/logs/`) has, once per launch:
 `App storage at launch: backup exclusion set; file protection set; old Keychain items skipped, the Keychain is off`
