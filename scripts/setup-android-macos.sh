@@ -17,10 +17,11 @@
 # Usage:
 #   scripts/setup-android-macos.sh           # check, then build what is missing
 #   scripts/setup-android-macos.sh --check   # check only, build nothing
+#   scripts/setup-android-macos.sh --rebuild # build the CLI and the runtime again even if they are recorded at the pin
 set -euo pipefail
 
-check_only=0
-[ "${1:-}" = "--check" ] && check_only=1
+check_only=0 rebuild=0
+case "${1:-}" in --check) check_only=1 ;; --rebuild) rebuild=1 ;; esac
 
 repo="$(cd "$(dirname "$0")/.." && pwd -P)"
 checkout="$(dirname "$repo")/nsh"
@@ -69,9 +70,17 @@ if [ "$head" != "$pin" ]; then
 fi
 echo "at $(git -C "$checkout" log --oneline -1)"
 
+# The NSH checkout's own toolchain cargo builds the tool and the runtime, never a cargo ahead of rustup's proxy that
+# shares one build folder between checkouts (a huacnlee/cargo build on the owner's Mac): another NSH checkout's crates
+# could end up in the store tool.
+nsh_cargo="$(cd "$checkout" && rustup which cargo 2>/dev/null)" || fail "rustup cannot name the NSH checkout's cargo"
+export PATH="$(dirname "$nsh_cargo"):$PATH"
+case "$(cargo --version)" in *huacnlee/cargo*) fail "cargo is still $(cargo --version), which shares one build folder between checkouts" ;; esac
+echo "building with $(cargo --version) ($(command -v cargo))"
+
 step "nsh CLI in $tools"
 have="$("$tools/bin/nsh" --version 2>/dev/null || true)"
-if [ "$have" != "" ] && [ "$(cat "$tools/nsh-ref" 2>/dev/null || true)" = "$pin" ] && [[ "$have" == *"(${pin:0:7})"* ]]; then
+if [ "$rebuild" = 0 ] && [ "$have" != "" ] && [ "$(cat "$tools/nsh-ref" 2>/dev/null || true)" = "$pin" ] && [[ "$have" == *"(${pin:0:7})"* ]]; then
     echo "$have: at the pin"
 else
     [ "$check_only" = 0 ] || fail "the nsh CLI in $tools is '${have:-missing}', not the pin ${pin:0:7}"
@@ -82,7 +91,7 @@ fi
 
 step "NSH's Android release runtime in $tools/runtime/android/release"
 runtime="$tools/runtime/android/release"
-if [ -f "$runtime/classes.dex" ] && [ "$(cat "$runtime/nsh-ref" 2>/dev/null || true)" = "$pin" ]; then
+if [ "$rebuild" = 0 ] && [ -f "$runtime/classes.dex" ] && [ "$(cat "$runtime/nsh-ref" 2>/dev/null || true)" = "$pin" ]; then
     echo "at the pin"
 else
     [ "$check_only" = 0 ] || fail "no Android release runtime at the pin in $runtime"
