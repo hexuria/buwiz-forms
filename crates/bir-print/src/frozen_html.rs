@@ -8184,7 +8184,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1458, "band boxes");
+        assert_eq!(total, 1472, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 
