@@ -635,6 +635,7 @@ impl Session {
         let (forgot, kept_answers) = forget_unanswered(kind, &mut draft, args, &fields)?;
         refused.extend(kept_answers);
         let mut chosen = BTreeMap::new();
+        let mut pending: Vec<(String, Value)> = Vec::new();
         for (key, value) in &fields {
             if sources
                 .get(key)
@@ -644,12 +645,45 @@ impl Session {
                 kept.push(key.clone());
                 continue;
             }
-            if let Err(why) = agent::fill(kind, &mut draft, key, value, Some(&from_profile)) {
-                refused.insert(key.clone(), Value::String(why));
-                continue;
+            pending.push((key.clone(), value.clone()));
+        }
+        // Enforce the form page's gates (`screen_form_module::page_gate_refusal`)
+        // using the same reviewed reason a person sees. Defer gated keys until
+        // earlier/sibling answers in the same call have been applied and computed
+        // so opening an answer and filling its dependent box in one call works
+        // regardless of key order.
+        loop {
+            let mut deferred: Vec<(String, Value, String)> = Vec::new();
+            let mut progressed = false;
+            for (key, value) in pending {
+                if let Some(reason) =
+                    crate::screen_form_module::page_gate_refusal(kind, &draft, &key, &value)
+                {
+                    deferred.push((key, value, reason));
+                    continue;
+                }
+                if let Err(why) = agent::fill(kind, &mut draft, &key, &value, Some(&from_profile)) {
+                    refused.insert(key, Value::String(why));
+                    continue;
+                }
+                note_choice(kind, def, &key, &value, &mut chosen);
+                filled.push(key);
+                progressed = true;
             }
-            note_choice(kind, def, key, value, &mut chosen);
-            filled.push(key.clone());
+            if deferred.is_empty() {
+                break;
+            }
+            if !progressed {
+                for (key, _, reason) in deferred {
+                    refused.insert(key, Value::String(reason));
+                }
+                break;
+            }
+            agent::compute(kind, &mut draft)?;
+            pending = deferred
+                .into_iter()
+                .map(|(key, value, _)| (key, value))
+                .collect();
         }
         agent::compute(kind, &mut draft)?;
         let map = agent::field_map(kind, &draft)?;
@@ -4031,5 +4065,149 @@ mod tests {
         let context = call(&mut session, "form.context", json!({})).unwrap();
         assert_eq!(context["profile"]["registered_name"], "TEST");
         assert!(context["past_returns"].as_array().is_some());
+    }
+
+    /// Official rules: `rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json`
+    /// (`txtPg1Pt1I12TotShare` lines 307-318, `txtPg2P4I2Amount..I5Amount` lines 823-906)
+    /// and `rules/forms/2552-v2018/fixtures/source-v796.html` (lines 759, 1327-1357).
+    /// `form.fill` must enforce the same page gates (`screen_form_module::off_boxes`)
+    /// as the form page, refusing gated boxes with the reason a person sees until
+    /// the opening answer is filled.
+    #[test]
+    fn form_fill_2552_refuses_page_gated_boxes_until_opened() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2552", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+
+        // Fresh return: Item 12 total shares and Part IV row 2 are shut on the page.
+        let fresh = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm2552:txtPg1Pt1I12TotShare": "1000000",
+                    "frm2552:txtPg2P4I2Amount": "500000",
+                }
+            }),
+        )
+        .unwrap();
+        assert!(
+            fresh["filled"].as_array().unwrap().is_empty(),
+            "fresh 2552 should refuse both gated boxes: {fresh}"
+        );
+        let share_reason = fresh["refused"]["frm2552:txtPg1Pt1I12TotShare"]
+            .as_str()
+            .unwrap_or("");
+        assert!(
+            share_reason.starts_with("Needs "),
+            "expected page gate reason for Item 12 total shares, got {fresh}"
+        );
+        let row2_reason = fresh["refused"]["frm2552:txtPg2P4I2Amount"]
+            .as_str()
+            .unwrap_or("");
+        assert!(
+            row2_reason.contains("Part IV row 1"),
+            "expected Part IV row 1 gate reason, got {fresh}"
+        );
+
+        // Under LSE, Item 12 total shares stays shut.
+        let under_lse = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm2552:rdoPg1I11Transaction": "LSE",
+                    "frm2552:txtPg1Pt1I12TotShare": "1000000",
+                }
+            }),
+        )
+        .unwrap();
+        assert!(
+            under_lse["refused"]["frm2552:txtPg1Pt1I12TotShare"]
+                .as_str()
+                .is_some_and(|s| s.starts_with("Needs ")),
+            "LSE must keep Item 12 total shares shut: {under_lse}"
+        );
+
+        // Switching to Primary opens Item 12 total shares; filling Part IV row 1 opens row 2.
+        let opened = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm2552:rdoPg1I11Transaction": "Primary",
+                    "frm2552:txtPg1Pt1I12TotShare": "1000000",
+                    "frm2552:txtPg2P4I1TransClass": "Gift",
+                    "frm2552:txtPg2P4I1Amount": "250000",
+                    "frm2552:txtPg2P4I2TransClass": "Swap",
+                    "frm2552:txtPg2P4I2Amount": "500000",
+                }
+            }),
+        )
+        .unwrap();
+        let filled: Vec<&str> = opened["filled"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        assert!(
+            filled.contains(&"frm2552:txtPg1Pt1I12TotShare"),
+            "Primary should open Item 12 total shares: {opened}"
+        );
+        assert!(
+            filled.contains(&"frm2552:txtPg2P4I2Amount"),
+            "Part IV row 1 should open row 2: {opened}"
+        );
+        assert!(
+            opened.get("refused").is_none(),
+            "no refusals expected once opened: {opened}"
+        );
+    }
+
+    #[test]
+    fn form_fill_1701_fresh_return_refuses_page_gated_boxes() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1701", "year": 2025, "period": 0, "tin": TIN}),
+        )
+        .unwrap();
+        let reply = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm1701:txtPg2Sched3AI8A": "1000000",
+                    "frm1701:txtPg2Sched4I3A": "50000",
+                    "frm1701:txtPg3Sched6I6A": "25000"
+                }
+            }),
+        )
+        .unwrap();
+        assert_eq!(
+            reply["filled"],
+            json!([]),
+            "fresh 1701 must refuse gated boxes: {reply}"
+        );
+        for key in [
+            "frm1701:txtPg2Sched3AI8A",
+            "frm1701:txtPg2Sched4I3A",
+            "frm1701:txtPg3Sched6I6A",
+        ] {
+            assert!(
+                reply["refused"][key]
+                    .as_str()
+                    .is_some_and(|s| !s.is_empty()),
+                "fresh 1701 should refuse {key}: {reply}"
+            );
+        }
     }
 }
