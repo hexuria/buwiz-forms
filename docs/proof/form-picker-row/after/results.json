@@ -1,0 +1,9 @@
+{
+  "commit": "72b34f5d068aa86a1524bf4c50a6bbbafd7785c1",
+  "verified_counts": {
+    "1440x900": {"pre": "2 selected", "first": "1 selected", "second": "2 selected"},
+    "834x1112": {"pre": "2 selected", "first": "1 selected", "second": "2 selected"},
+    "390x844": {"pre": "2 selected", "first": "1 selected", "second": "2 selected", "actual_logical_width": 420}
+  },
+  "note": "Counts at desktop are visible in the PNGs; tablet and phone counts were also read from the live semantic tree during capture."
+}
