@@ -958,6 +958,16 @@ impl Form2200ADraft {
     /// Item 7 over both its lines.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
+        // The printed sheet holds the paper's Others rows; rows the filer
+        // added past them stay in the upload (the print table's growth is
+        // the print engine's own change) and off today's paper.
+        fields.retain(|key, _| {
+            let Some(at) = key.find("_others") else {
+                return true;
+            };
+            let digits: String = key[at + 7..].chars().take_while(|c| c.is_ascii_digit()).collect();
+            digits.parse::<usize>().map_or(true, |row| row <= FORM_2200A_OTHER_ROWS)
+        });
         let mut put = |key: &str, value: String| {
             if !value.trim().is_empty() {
                 fields.insert(format!("derived:{key}"), value);
