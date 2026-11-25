@@ -180,7 +180,28 @@
     ]
   },
   "1600wp-v2010": {
-    "computed": [],
+    "computed": [
+      "frm1600WP:dtSched:naturePayment1",
+      "frm1600WP:dtSched:txtRatePercent1",
+      "frm1600WP:dtSched:naturePayment2",
+      "frm1600WP:dtSched:txtRatePercent2",
+      "frm1600WP:dtSched:naturePayment3",
+      "frm1600WP:dtSched:txtRatePercent3",
+      "frm1600WP:dtSched:naturePayment4",
+      "frm1600WP:dtSched:txtRatePercent4",
+      "frm1600WP:dtSched:naturePayment5",
+      "frm1600WP:dtSched:txtRatePercent5",
+      "frm1600WP:dtSched:naturePayment6",
+      "frm1600WP:dtSched:txtRatePercent6",
+      "frm1600WP:dtSched:naturePayment7",
+      "frm1600WP:dtSched:txtRatePercent7",
+      "frm1600WP:dtSched:naturePayment8",
+      "frm1600WP:dtSched:txtRatePercent8",
+      "frm1600WP:dtSched:naturePayment9",
+      "frm1600WP:dtSched:txtRatePercent9",
+      "frm1600WP:dtSched:naturePayment10",
+      "frm1600WP:dtSched:txtRatePercent10"
+    ],
     "dates": [],
     "money": [
       "frm1600WP:txtTax12",
@@ -312,6 +333,11 @@
       "frm1601FQ:txtTaxRate4",
       "frm1601FQ:txtTaxRate5",
       "frm1601FQ:txtTaxRate6",
+      "txtNatIncPayment0",
+      "txtNatIncPayment1",
+      "txtNatIncPayment2",
+      "txtNatIncPayment3",
+      "txtNatIncPayment4",
       "frm1601FQ:txtTaxRate7",
       "frm1601FQ:txtTaxRate8",
       "frm1601FQ:txtTaxRate9",
@@ -719,6 +745,10 @@
       "frm1701:txtPg3IShed4_12B",
       "frm1701:txtPg3IShed4_13A",
       "frm1701:txtPg3IShed4_13B",
+      "frm1701:txtPg3IShed6_4E",
+      "frm1701:txtPg3IShed6_5E",
+      "frm1701:txtPg3IShed6_6E",
+      "frm1701:txtPg3IShed6_7E",
       "frm1701:txtPg4IShed6_9A",
       "frm1701:txtPg4IShed6_9B",
       "frm1701:txtPg4IShed6_10A",
@@ -1911,7 +1941,11 @@
     ]
   },
   "2000-v2018": {
-    "computed": [],
+    "computed": [
+      "frm2000:sched1:txtTaxRate0",
+      "frm2000:sched1:txtTaxRate1",
+      "frm2000:sched1:txtTaxRate2"
+    ],
     "dates": [],
     "money": [
       "frm2000:txtTax14",

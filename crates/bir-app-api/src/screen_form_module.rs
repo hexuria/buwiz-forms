@@ -3625,6 +3625,8 @@ const NOTE_PROFILE: &str = "Comes from the tax profile.";
 const NOTE_IDENTITY: &str = "Set by the return you opened (its taxpayer and period).";
 const NOTE_REPEAT: &str = "Repeats another box on this form; fill it there.";
 const NOTE_NOT_YET: &str = "Can't be filled on this page yet.";
+/// 2553's classification column: the row's ATC decides it.
+const NOTE_FOLLOWS_ATC: &str = "Follows the ATC chosen in this row.";
 /// A box the official page keeps shut from load (PR 7: 1701 Part VIII
 /// column B, probe.rs `SHUT_ON_OFFICIAL_PAGE`).
 const NOTE_SHUT: &str = "The official form keeps this box shut; it files as 0.00.";
@@ -3656,6 +3658,11 @@ fn assigned_to_open(code: &str, key: &str) -> bool {
 fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
     if rows_withholding::preprinted(code, key) {
         return rows_withholding::PREPRINTED;
+    }
+    // A column or box the schema marks computed (the overrides carry each
+    // marking's evidence) never "can't be filled yet": it is the form's own.
+    if schema_computed(code, key) {
+        return NOTE_COMPUTED;
     }
     if let Some(note) = rows_annual_corporate::live_lock_note(reason) {
         return note;
@@ -3704,6 +3711,12 @@ fn lock_note(reason: &str) -> &'static str {
         NOTE_REPEAT
     } else if reason.ends_with(bir_core::forms::agent::probe::SHUT_REASON) {
         NOTE_SHUT
+    } else if reason == bir_core::forms::agent::draft_locks::dst_pt_vat::PRINTED_LOCK {
+        // 2553 rows 14-17: the July 1999 sheet preprints the row's
+        // classification, ATC and rate; only the amounts are typed.
+        rows_withholding::PREPRINTED
+    } else if reason == bir_core::forms::agent::draft_locks::dst_pt_vat::CLASSIFICATION_LOCK {
+        NOTE_FOLLOWS_ATC
     } else {
         // Unmapped, derived, written by the app, or a field this page
         // cannot write: shut until the form's own work opens it.
@@ -7214,6 +7227,7 @@ mod tests {
     // Form fields PR 1 handoff 2: a code off a select's list is refused
     // on every form (bug B17).
     mod sel_lists;
+    mod unfillable;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
