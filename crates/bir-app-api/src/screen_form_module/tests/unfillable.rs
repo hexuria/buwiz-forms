@@ -119,3 +119,64 @@ fn f2_computed_columns_refuse_a_typed_value() {
         typed["rejected"]
     );
 }
+
+/// F3: 1702MX Schedules 7.1 and 8.1 NOLCO rows 1-3 amounts A-D take the
+/// filer's entry once the deduction method is itemized, and the upload
+/// carries them in the official page's own format.
+#[test]
+fn f3_1702mx_nolco_amounts_are_fillable() {
+    setup();
+    let opened = open("1702MX", 0);
+    // Before the fix every one of these keys said not-yet.
+    for key in [
+        "frm1702MX:txtPg3IShed7_4A",
+        "frm1702MX:txtPg3IShed7_4D",
+        "frm1702MX:txtPg4IShed8_6D",
+    ] {
+        assert_ne!(
+            opened["lock_notes"][key].as_str().unwrap_or(""),
+            "Can't be filled on this page yet.",
+            "{key}"
+        );
+    }
+    // Choose itemized deduction, then type row 1 of Schedule 7.1.
+    let itemized = fill(
+        "1702MX",
+        &opened["draft"],
+        json!({"frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized": "true"}),
+    );
+    let row1 = fill(
+        "1702MX",
+        &itemized["draft"],
+        json!({
+            "frm1702MX:txtPg3IShed7_4Year": "2022",
+            "frm1702MX:txtPg3IShed7_4A": "300000",
+            "frm1702MX:txtPg3IShed7_4B": "100000",
+            "frm1702MX:txtPg3IShed7_4C": "0",
+            "frm1702MX:txtPg3IShed7_4D": "50000",
+        }),
+    );
+    assert_eq!(
+        row1["rejected"],
+        json!({}),
+        "NOLCO row entries are accepted: {:?}",
+        row1["rejected"]
+    );
+    let map = agent::field_map(kind_of("1702MX").unwrap(), &row1["draft"]).unwrap();
+    assert_eq!(map["frm1702MX:txtPg3IShed7_4A"], "300,000.00");
+    assert_eq!(map["frm1702MX:txtPg3IShed7_4B"], "100,000.00");
+    assert_eq!(map["frm1702MX:txtPg3IShed7_4D"], "50,000.00");
+    // Column E (unapplied) is computed: 300000 - 100000 - 0 - 50000.
+    assert_eq!(map["frm1702MX:txtPg3IShed7_4E"], "150,000");
+    // Row 4 (item 7) is the form's own current-year row: never an entry.
+    for key in [
+        "frm1702MX:txtPg3IShed7_7Year",
+        "frm1702MX:txtPg4IShed8_7Year",
+    ] {
+        assert_eq!(
+            note("1702MX", 0, key),
+            "Computed by the form.",
+            "{key} stays derived"
+        );
+    }
+}

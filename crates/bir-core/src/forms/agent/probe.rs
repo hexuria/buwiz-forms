@@ -1241,7 +1241,15 @@ fn echoes(kind: ValueKind, probe: &Value, official: &str) -> bool {
                 || value == AMOUNT_PROBE.round()
                 || (value - (AMOUNT_PROBE * 10.0).round() / 10.0).abs() < 0.005
         }),
-        ValueKind::Whole => official.trim().parse::<i64>().ok() == probe.as_i64(),
+        ValueKind::Whole => {
+            official.trim().parse::<i64>().ok() == probe.as_i64()
+                // 1702MX's NOLCO amounts file through the page's two-decimal
+                // formatCurrency (`7.00`): a whole probe still echoes when the
+                // shown number is the probe's integer.
+                || probe.as_i64().is_some_and(|probe_value| {
+                    parse_amount(official).is_some_and(|shown| shown == probe_value as f64)
+                })
+        }
         ValueKind::DatePart(date, part) => date.part_shown_by(official) == Some(part),
     }
 }
@@ -2348,7 +2356,7 @@ fn verify(kind: AgentFormKind, def: &mut AgentFormDef, seeds: &[&Value]) {
                     Binding::Text { .. } => shown.to_ascii_uppercase().contains(expected.as_str()),
                     Binding::Amount { .. } => echoes(ValueKind::Amount, &Value::Null, &shown),
                     Binding::Whole { .. } => {
-                        shown.trim().parse::<i64>().ok() == Some(WHOLE_PROBES[0])
+                        echoes(ValueKind::Whole, &Value::from(WHOLE_PROBES[0]), &shown)
                     }
                     Binding::Choice { .. } => shown == *expected,
                 };
