@@ -1,0 +1,18 @@
+Step 6 — what was logged.
+
+app-log-full.txt is the complete BIR_LOG_DIR file ebirforms.2026-11-25.log (35 lines, under 400,
+copied whole). Its last timestamped application line is the startup burst at 14:17:58 plus one
+background-cron line at 14:23:42 ("Queue explicitly woken up by a wake signal" — the cron engine,
+not a user press; the Queue button was never pressed).
+
+NOTHING was logged at the moments of the presses:
+- Step 3a real click on Save as PDF (14:24-14:26): no line at all.
+- Step 3b agent presses (14:27-14:30): no line at all.
+- Step 4 export/import panels (14:31-14:32): no line at all.
+- Step 5 Print (14:33, and 14:37 in the re-run): no line at all.
+In particular the kit's "the file dialog failed: {e}" warning never appears, consistent with the
+panel opening successfully on this machine; but there is no success logging either — a press that
+does nothing and a press that works are indistinguishable in the log.
+
+The console output (app-console.log) holds only the nsh build/run banner noise of the dev host,
+no application log lines for any press.

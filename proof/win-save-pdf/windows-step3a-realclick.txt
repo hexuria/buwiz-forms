@@ -1,0 +1,17 @@
+Window enumeration (EnumWindows) for app pid 6384, taken ~35 s after the REAL mouse click
+on the preview's "Save as PDF" button (Step 3a), while the save panel was up.
+Order is the enumeration order. hwnd/title/class/visible/rect/owner as reported by user32.
+
+-- top-level windows of the process, grep for the panel and the two app windows --
+hwnd=0xC02B8 title="Save as PDF" class="#32770" visible=True rect=(0,0)-(800,600) owner=0x202D4
+hwnd=0x202D4 title="eBIRForms" class="NshWindow" visible=True rect=(-8,-8)-(1608,1168) owner=0x0
+hwnd=0x902F2 title="BIR Form 2551Q - Q4 2026 - Juana Santos" class="NshWindow" visible=True rect=(234,234)-(1190,1373) owner=0x0
+
+Facts to read from this:
+- the save panel EXISTS, is visible, on-screen at the TOP-LEFT corner (0,0)-(800,600)
+- its owner is 0x202D4 = the MAIN window, NOT the preview window 0x902F2
+- unrelated windows of the same pid seen at the same time (Auto-Suggest Dropdowns, tooltips,
+  ComboLBox, IME windows) omitted here for brevity; nothing else titled like a dialog.
+
+After the file was saved, the panel was gone and only the two NshWindow windows remained;
+the preview window was behind the (maximized) main window in z-order.

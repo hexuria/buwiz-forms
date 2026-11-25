@@ -1,0 +1,13 @@
+Window enumeration for app pid 6384 after the gpui-agent press on print-save-pdf (Step 3b).
+
+-- full grep result, both after 1 s and after 10+ s --
+hwnd=0x202D4 title="eBIRForms" class="NshWindow" visible=True rect=(-8,-8)-(1608,1168) owner=0x0
+hwnd=0x902F2 title="BIR Form 2551Q - Q4 2026 - Juana Santos" class="NshWindow" visible=True rect=(234,234)-(1190,1373) owner=0x0
+
+NO #32770 dialog exists at any time after the agent press. No save panel.
+The agent press returned "changed": false on every try (three tries, including one with the
+preview frontmost in the normal state). The busy state never appeared in the agent snapshot:
+print-note stayed "Saved saved-from-preview.pdf" and print-save-pdf stayed enabled.
+After the press in the normal state, the preview fell behind the main window, consistent with
+the press being delivered as screen coordinates onto the MAIN window instead of the preview
+(the button's snapshot bounds x=713,y=8 are preview-local).
