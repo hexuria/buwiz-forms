@@ -84,28 +84,39 @@ for (const { name, size } of SIZES) {
     await app.waitFor("text:/view=new_taxpayer/");
   }, 60_000);
 
-  test(`${name}: Gmail connects, tracks receipts and disconnects; with no taxpayer it says to add one first`, async () => {
-    const app = await openSettings(size, { google: true, solo: true }, "account");
-    await app.waitFor("id:settings-google-connect");
-    expectTexts(app, ["Google", "Gmail", "Receipt tracking", "Not connected. Reads BIR confirmation mail for Head office."]);
-    expect(app.shows("id:settings-google-disconnect")).toBe(false);
-    await app.press("id:settings-google-tracking-switch");
-    await app.waitFor("text:Automated receipt tracking on.");
-    expect(calls(app)).toContain("set_inbox_tracking true");
-    await app.press("id:settings-google-connect");
-    await app.waitFor("text:Connected as juana.inbox@example.com", { timeout: 15000 });
-    expect(calls(app)).toContain("connect_inbox_oauth");
-    expect(app.texts()).toContain("Reconnect");
-    expect(app.shows("id:settings-google-disconnect")).toBe(true);
-    await app.press("id:settings-google-disconnect");
-    await app.waitFor("text:Not connected. Reads BIR confirmation mail for Head office.");
-    expect(app.shows("id:settings-google-disconnect")).toBe(false);
-    expect(calls(app)).toContain("disconnect_inbox_oauth");
+  // Gmail is desktop only: its sign-in waits on a local web address a phone cannot answer (taxpayer/Inbox.tsx).
+  if (name === "phone") {
+    test("phone: Settings > Account has no Google card, so Gmail cannot be connected", async () => {
+      const app = await openSettings(size, { google: true, solo: true }, "account");
+      await app.waitFor(ready);
+      expect(app.shows("id:settings-google")).toBe(false);
+      expect(app.shows("id:settings-google-connect")).toBe(false);
+      expect(app.texts()).not.toContain("Gmail");
+    }, 60_000);
+  } else {
+    test(`${name}: Gmail connects, tracks receipts and disconnects; with no taxpayer it says to add one first`, async () => {
+      const app = await openSettings(size, { google: true, solo: true }, "account");
+      await app.waitFor("id:settings-google-connect");
+      expectTexts(app, ["Google", "Gmail", "Receipt tracking", "Not connected. Reads BIR confirmation mail for Head office."]);
+      expect(app.shows("id:settings-google-disconnect")).toBe(false);
+      await app.press("id:settings-google-tracking-switch");
+      await app.waitFor("text:Automated receipt tracking on.");
+      expect(calls(app)).toContain("set_inbox_tracking true");
+      await app.press("id:settings-google-connect");
+      await app.waitFor("text:Connected as juana.inbox@example.com", { timeout: 15000 });
+      expect(calls(app)).toContain("connect_inbox_oauth");
+      expect(app.texts()).toContain("Reconnect");
+      expect(app.shows("id:settings-google-disconnect")).toBe(true);
+      await app.press("id:settings-google-disconnect");
+      await app.waitFor("text:Not connected. Reads BIR confirmation mail for Head office.");
+      expect(app.shows("id:settings-google-disconnect")).toBe(false);
+      expect(calls(app)).toContain("disconnect_inbox_oauth");
 
-    const none = await openSettings(size, { demo: false }, "account");
-    await none.waitFor("id:settings-google-empty");
-    expectTexts(none, ["No taxpayer yet", "Add a taxpayer before connecting a Gmail account."]);
-  }, 90_000);
+      const none = await openSettings(size, { demo: false }, "account");
+      await none.waitFor("id:settings-google-empty");
+      expectTexts(none, ["No taxpayer yet", "Add a taxpayer before connecting a Gmail account."]);
+    }, 90_000);
+  }
 }
 
 for (const { name, size } of SIZES) {

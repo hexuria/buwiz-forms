@@ -1,40 +1,50 @@
 // Confirmation inbox (old inboxBody, P2-5): the mailbox this branch's BIR receipts are tracked through. The method, the
 // app password's credentials (masked; the host answers only whether one is stored), Google connect and disconnect,
 // Verify, Check now and the tracking switch, all through bir-core's fetch and confirm path.
+// On a phone or tablet there is no Google connect: its sign-in waits for Google on a local web address (bir-core
+// email/auth_oauth.rs), which iOS cannot answer once the browser is in front. The inbox works there with an app password,
+// checked while the app is open. An inbox already on Google can still be switched to an app password or disconnected.
 import { View } from "nsh";
 import type { InboxAuthMethod } from "../../bir";
 import { shortDate } from "../../lib/dates";
 import { app, store } from "../../shell";
-import { AppButton, Field, FieldCell, FieldGrid, Segmented, Switch, Text, TextField } from "../../ui";
+import { AppButton, Field, FieldCell, FieldGrid, Segmented, Switch, Text, TextField, TOUCH } from "../../ui";
 import { checkInboxNow, connectInbox, disconnectInbox, setTracking, shared, verifyInbox } from "./actions";
 import { trackingLine } from "./logic";
 import type { PageState } from "./page";
+
+/** Whether this device can connect a Google inbox: desktops only. */
+const GOOGLE_CONNECT = !TOUCH;
 
 export function InboxBody(props: { s: PageState }) {
   const s = props.s;
   const tin = () => app.branch()?.tin ?? "";
   const st = () => store.inboxState(app.branch()?.tin);
   const ed = () => s.inbox();
-  const method = (): InboxAuthMethod => ed()?.method ?? st()?.auth_method ?? "AppPassword";
+  // Where Google cannot be connected, the method is an app password unless the inbox is already on Google.
+  const choosable = () => GOOGLE_CONNECT || st()?.auth_method === "GoogleOAuth";
+  const method = (): InboxAuthMethod => (choosable() ? (ed()?.method ?? st()?.auth_method ?? "AppPassword") : "AppPassword");
   const pw = () => method() === "AppPassword";
   return (
     <View testID="tp-inbox" class="w-full">
       <FieldGrid>
-        <FieldCell full>
-          <Field label="Authentication method">
-            <Segmented
-              testID="tp-inbox-method"
-              label="Inbox authentication method"
-              wrap
-              options={[
-                { value: "GoogleOAuth", label: "Google account (OAuth2)" },
-                { value: "AppPassword", label: "App password" },
-              ]}
-              value={method()}
-              onChange={(v) => s.pickInboxMethod(v as InboxAuthMethod)}
-            />
-          </Field>
-        </FieldCell>
+        <If when={choosable()}>
+          <FieldCell full>
+            <Field label="Authentication method">
+              <Segmented
+                testID="tp-inbox-method"
+                label="Inbox authentication method"
+                wrap
+                options={[
+                  { value: "GoogleOAuth", label: "Google account (OAuth2)" },
+                  { value: "AppPassword", label: "App password" },
+                ]}
+                value={method()}
+                onChange={(v) => s.pickInboxMethod(v as InboxAuthMethod)}
+              />
+            </Field>
+          </FieldCell>
+        </If>
         <If
           when={pw()}
           else={
@@ -106,18 +116,22 @@ export function InboxBody(props: { s: PageState }) {
           <If
             when={st()?.oauth_connected}
             else={
-              <AppButton
-                testID="tp-inbox-connect"
-                label="Connect Google"
-                variant="primary"
-                size="sm"
-                icon="key-round"
-                disabled={shared.inboxBusy()}
-                onPress={() => void connectInbox(tin())}
-              />
+              <If when={GOOGLE_CONNECT}>
+                <AppButton
+                  testID="tp-inbox-connect"
+                  label="Connect Google"
+                  variant="primary"
+                  size="sm"
+                  icon="key-round"
+                  disabled={shared.inboxBusy()}
+                  onPress={() => void connectInbox(tin())}
+                />
+              </If>
             }
           >
-            <AppButton testID="tp-inbox-reconnect" label="Re-authorize" size="sm" icon="key-round" disabled={shared.inboxBusy()} onPress={() => void connectInbox(tin())} />
+            <If when={GOOGLE_CONNECT}>
+              <AppButton testID="tp-inbox-reconnect" label="Re-authorize" size="sm" icon="key-round" disabled={shared.inboxBusy()} onPress={() => void connectInbox(tin())} />
+            </If>
             <AppButton testID="tp-inbox-disconnect" label="Disconnect" variant="ghost" size="sm" onPress={() => disconnectInbox(tin())} />
           </If>
         </If>
@@ -130,6 +144,11 @@ export function InboxBody(props: { s: PageState }) {
       </View>
       <If when={shared.inboxMsg()}>
         <Text testID="tp-inbox-msg" tone={shared.inboxMsg()?.ok ? "success" : "danger"} class="mt-2">{shared.inboxMsg()?.text ?? ""}</Text>
+      </If>
+      <If when={!GOOGLE_CONNECT}>
+        <Text testID="tp-inbox-device-note" variant="meta" tone="fg3" class="mt-2">
+          On this device the inbox is checked only while eBIRForms is open, with an app password.
+        </Text>
       </If>
       <Text testID="tp-inbox-status" variant="meta" tone={st()?.tracking_enabled ? "success" : "fg3"} class="mt-2">
         {trackingLine({ tracking_enabled: Boolean(st()?.tracking_enabled), still_pending: Boolean(st()?.still_pending) })}

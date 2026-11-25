@@ -148,3 +148,6 @@ node_modules/
 /nsh/target/
 # Real-window screenshots go to ~/BuwizNsh/evidence/, never into the worktree (nsh test --target writes PNGs into the current directory).
 /nsh/*.png
+
+# The iOS App Store provisioning profile: kept outside the repository and copied in at build time (docs/platforms/ios.md).
+assets/ios/embedded.mobileprovision

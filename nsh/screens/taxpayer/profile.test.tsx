@@ -145,6 +145,7 @@ test("desktop: agent filing grants and revokes, the inbox keeps credentials, and
   await app.waitFor("text:Assistant may no longer file 1601C.");
 
   await app.waitFor("id:tp-inbox-edit");
+  expect(app.shows("id:tp-inbox-device-note")).toBe(false);
   await app.press("id:tp-inbox-edit");
   await app.clear("id:tp-inbox-email");
   await app.type("id:tp-inbox-email", "not-an-email");

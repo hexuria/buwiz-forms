@@ -85,6 +85,8 @@ export interface DashboardData {
   filedMonth: number;
   strip: StripDay[];
   upcoming: DashboardDeadline[];
+  /** With nothing open on the strip: the first open deadline after it (within about 13 months), else null. */
+  later: DashboardDeadline | null;
   anyDeadlines: boolean;
   taxpayers: DashboardTaxpayerRow[];
 }
@@ -99,7 +101,7 @@ export interface HomeView {
 }
 
 /** The part of the dashboard the picked list reads. */
-export type PickedSource = Pick<DashboardData, "overdue" | "week" | "strip" | "upcoming" | "anyDeadlines">;
+export type PickedSource = Pick<DashboardData, "overdue" | "week" | "strip" | "upcoming" | "later" | "anyDeadlines">;
 
 /** The list under the strip: its heading, its rows, and the line shown when it has none. */
 export interface Picked {
@@ -126,6 +128,8 @@ export interface TileSpec {
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const STRIP_DAYS = 30;
+/** How far past the strip Home looks for the next deadline when the strip has none: a quarter's deadline and the annual return. */
+const LATER_DAYS = 400;
 
 /** Still to do: nobody has queued or filed it. A dry run sent nothing, so it is still to do. */
 function isOpen(d: DashboardDeadline): boolean {
@@ -173,6 +177,11 @@ export function loadDashboard(store: DashboardReads, at: Date = new Date()): Das
     strip.push({ iso, date, rows: upcoming.filter((d) => d.due_date === iso) });
   }
 
+  // A taxpayer with forms and nothing in the next 30 days (a business that began late in the year) still has deadlines: name
+  // the next one, so the empty line does not read as if there were no forms at all.
+  const after = upcoming.length ? [] : store.deadlines(isoDate(addDays(now, STRIP_DAYS)), isoDate(addDays(now, LATER_DAYS)));
+  const later = after.filter(isOpen).sort((a, b) => a.due_date.localeCompare(b.due_date))[0] ?? null;
+
   const sinceJan = store.deadlines(`${now.getFullYear()}-01-01`, today).filter((d) => d.due_date < today);
   const ahead = store.deadlines(today, isoDate(addDays(now, 60))).filter(isOpen);
   const taxpayers = store
@@ -198,7 +207,8 @@ export function loadDashboard(store: DashboardReads, at: Date = new Date()): Das
     filedMonth,
     strip,
     upcoming,
-    anyDeadlines: stripAll.length > 0 || near.length > 0,
+    later,
+    anyDeadlines: stripAll.length > 0 || near.length > 0 || after.length > 0,
     taxpayers,
   };
 }
@@ -244,8 +254,18 @@ export function pickedDeadlines(view: HomeView, data: PickedSource): Picked {
   return {
     title: "Open deadlines",
     rows: data.upcoming,
-    empty: data.anyDeadlines ? "Nothing is due in the next 30 days." : "Deadlines show here once a taxpayer has forms for a tax year.",
+    empty: !data.anyDeadlines
+      ? "Deadlines show here once a taxpayer has forms for a tax year."
+      : data.later
+        ? `Nothing is due in the next 30 days. The next is ${data.later.form_code} on ${longDate(data.later.due_date)}.`
+        : "Nothing is due in the next 30 days.",
   };
+}
+
+/** "January 25, 2027" from YYYY-MM-DD. */
+function longDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${MONTHS_LONG[m - 1]} ${d}, ${y}`;
 }
 
 /** "1 of 4 filed this year" once something was due this year; "Nothing was due yet this year" before that. */

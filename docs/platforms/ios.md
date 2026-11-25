@@ -23,8 +23,9 @@ and sends nothing until relay filing ships.
 
 ## Build and upload
 
-Needs, from the owner: an **Apple Distribution** certificate in the keychain, and the **iOS App Store** provisioning
-profile for `dev.goldcoders.bir` at `assets/ios/embedded.mobileprovision`. The App Store Connect API key is the one
+Needs an **Apple Distribution** certificate in the keychain, and the **iOS App Store** provisioning profile for
+`dev.goldcoders.bir` copied to `assets/ios/embedded.mobileprovision` at build time (the profile is kept outside the
+repository; `.gitignore` keeps it out of commits). The App Store Connect API key is the one
 `.env` already names for the Mac uploads (`APP_STORE_KEY_ID`, `APP_STORE_ISSUER_ID`, `APP_STORE_P8_PATH`).
 
 ```sh
