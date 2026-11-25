@@ -31590,11 +31590,11 @@
       "kind": "hidden"
     },
     "Pg2Pt4S2SubTotal": {
-      "label": "Add-more subtotal (row D prints it as OTHERS)",
+      "label": "Additional rows subtotal (printed on row D as OTHERS)",
       "evidence": "agent box label: 'Page 2 Part 4 S 2 Sub Total' | PR 9: the add-more subtotal, which row D prints as OTHERS (form_1707.rs shares_popup_subtotal / expenses_popup_subtotal)"
     },
     "Pg2Pt4S3SubTotal": {
-      "label": "Add-more subtotal (row D prints it as OTHERS)",
+      "label": "Additional rows subtotal (printed on row D as OTHERS)",
       "evidence": "agent box label: 'Page 2 Part 4 S 3 Sub Total' | PR 9: the add-more subtotal, which row D prints as OTHERS (form_1707.rs shares_popup_subtotal / expenses_popup_subtotal)"
     },
     "txtEnroll": {
@@ -32137,7 +32137,7 @@
             {
               "no": "",
               "l": "Tax Agent Accreditation No./Attorney's Roll No., Date of Issue, Date of Expiry",
-              "note": "No box: the official program keeps the tax agent's boxes disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes them."
+              "note": "Filled by hand on the printed return by the tax agent if applicable (not entered in eBIRForms)."
             }
           ]
         },
@@ -32147,22 +32147,22 @@
             {
               "no": "20",
               "l": "Cash/Bank Debit Memo",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "Filled by the bank or BIR upon payment (not entered in eBIRForms)."
             },
             {
               "no": "21",
               "l": "Check",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "Filled by the bank or BIR upon payment (not entered in eBIRForms)."
             },
             {
               "no": "22",
               "l": "Tax Debit Memo",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "Filled by the bank or BIR upon payment (not entered in eBIRForms)."
             },
             {
               "no": "23",
               "l": "Others (specify below)",
-              "note": "No box: the official program keeps Part III disabled (rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load) and this app never writes it; the bank or BIR fills it."
+              "note": "Filled by the bank or BIR upon payment (not entered in eBIRForms)."
             }
           ]
         },
@@ -32294,7 +32294,7 @@
             },
             {
               "no": "",
-              "l": "Schedule 2 add-more subtotal",
+              "l": "Schedule 2 additional rows subtotal",
               "k": [
                 "Pg2Pt4S2SubTotal",
                 "Pg2Pt4S2PopLength"
@@ -32354,7 +32354,7 @@
             },
             {
               "no": "",
-              "l": "Schedule 3 add-more subtotal",
+              "l": "Schedule 3 additional rows subtotal",
               "k": [
                 "Pg2Pt4S3SubTotal",
                 "Pg2Pt4S3PopLength"

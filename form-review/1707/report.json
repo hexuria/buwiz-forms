@@ -1,85 +1,102 @@
 {
   "code": "1707",
   "verdict": "tweak",
-  "summary": "Overall 2-page sheet geometry matches 1707 April 2021 ENCS; targeted fixes needed for Seller/Buyer address left-border collision, TIN formatting, Page 2 Taxpayer's Name comb alignment, Schedule 2 No. of Shares alignment, and leaking internal JSON path in screen Part III.",
+  "summary": "Fixed Part I 6A-6C and 7A-7C name/address shrink-to-fit and border padding, Page 2 Taxpayer's Name comb-tick strike-through, Part III/Part II leaked internal JSON fixture paths, and Schedule 2/3 'add-more subtotal' jargon. Remaining items require shared crate/UI changes (TIN dash formatting in 6A-7C, Schedule 2 No. of Shares formatting/alignment, and 5-digit TIN branch-code box width).",
   "defects": [
     {
       "id": "1707-print-01",
       "surface": "print",
-      "where": "Page 1, Part I Items 6A-6C and 7A-7C (Seller's and Buyer's Registered Address)",
-      "what": "First character of every address collides with / is clipped by the left vertical cell border.",
+      "where": "Page 1, Part I Items 6A-6C and 7A-7C (Seller's/Buyer's Name and Registered Address)",
+      "what": "Long names/addresses clipped or sat flush against cell borders because print-overrides/1707-2021.css forced hardcoded font-size:6.3px/5.2px !important over bir-print's dynamic shrink-to-fit and cells lacked horizontal padding.",
       "before": "form-review/1707/before/print-p1.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1707/after/print-p1.png",
+      "status": "fixed"
     },
     {
       "id": "1707-print-02",
       "surface": "print",
-      "where": "Page 1, Part I Items 6A-6C and 7A-7C (Seller's and Buyer's Name)",
-      "what": "Name text sits flush against the left vertical border with no padding and no overflow clipping for very long names.",
+      "where": "Page 1, Part I Items 6A-6C and 7A-7C (Seller's/Buyer's TIN)",
+      "what": "TINs print as unformatted 14-digit strings (e.g. '00012345300000') without dashes.",
       "before": "form-review/1707/before/print-p1.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1707/after/print-p1.png",
+      "status": "needs shared change"
     },
     {
       "id": "1707-print-03",
       "surface": "print",
-      "where": "Page 1, Part I Items 6A-6C and 7A-7C (TIN)",
-      "what": "TIN prints flush against the left border as unformatted 14 digits ('00012345300000') without dashes.",
-      "before": "form-review/1707/before/print-p1.png",
-      "after": "",
-      "status": "open"
+      "where": "Page 2, Taxpayer's Name comb box (p2c6)",
+      "what": "Long Taxpayer's Name (>26 chars) fell back to plain proportional text rendered over visible vertical comb ticks.",
+      "before": "form-review/1707/before/print-p2.png",
+      "after": "form-review/1707/after/print-p2.png",
+      "status": "fixed"
     },
     {
       "id": "1707-print-04",
       "surface": "print",
-      "where": "Page 2, header Taxpayer's Name comb box",
-      "what": "Name prints as plain proportional text crossing the vertical comb ticks instead of one character per comb slot.",
+      "where": "Page 2, Schedule 2 (Continuation), No. of Shares column",
+      "what": "Empty/zero rows print '0.00' left-aligned in integer comb slots (one char per tick).",
       "before": "form-review/1707/before/print-p2.png",
-      "after": "",
-      "status": "open"
-    },
-    {
-      "id": "1707-print-05",
-      "surface": "print",
-      "where": "Page 2, Schedule 2 Continuation (No. of Shares rows A-D)",
-      "what": "Prints '0.00' left-aligned in the comb slots even when rows are empty, with the decimal point occupying a comb slot.",
-      "before": "form-review/1707/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1707/after/print-p2.png",
+      "status": "needs shared change"
     },
     {
       "id": "1707-screen-01",
       "surface": "screen",
-      "where": "Part III — Details of Payment (Items 20-23)",
-      "what": "Displays internal developer note with raw repository path 'rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json' directly in user-facing UI.",
+      "where": "Part II (Tax Agent note) and Part III (Details of Payment Items 20-23)",
+      "what": "User-facing notes leaked internal repository path 'rules/forms/1707-v2021/fixtures/runtime-control-inventory-v796.json: disabled at load'.",
       "before": "form-review/1707/before/screen-04-part-3.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1707/after/screen-04-part-3.png",
+      "status": "fixed"
     },
     {
       "id": "1707-screen-02",
       "surface": "screen",
-      "where": "Part IV Schedules 2 and 3 ('Schedule 2 add-more subtotal', 'Schedule 3 add-more subtotal')",
-      "what": "Internal jargon 'add-more subtotal' shown as user-facing labels.",
+      "where": "Part IV Schedules 2 and 3",
+      "what": "Used internal jargon 'Schedule 2/3 add-more subtotal' instead of clear user-facing 'Schedule 2/3 additional rows subtotal'.",
       "before": "form-review/1707/before/screen-06-part-5.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1707/after/screen-06-part-5.png",
+      "status": "fixed"
     },
     {
       "id": "1707-screen-03",
       "surface": "screen",
-      "where": "Not on the printed sheet — TIN branch code",
-      "what": "5-digit branch code '00000' truncates to '000...' in the readonly TIN pill.",
-      "before": "form-review/1707/before/screen-08-part-7.png",
-      "after": "",
+      "where": "Part I, Seller's/Buyer's TIN branch code input",
+      "what": "5-digit branch code box clips '00000' horizontally.",
+      "before": "form-review/1707/before/screen-02-part-1.png",
+      "after": "form-review/1707/after/screen-02-part-1.png",
       "status": "needs shared change"
     }
   ],
-  "files_changed": [],
-  "shared_changes_wanted": [
-    "nsh/screens/form/: widen the 5-digit branch code box in the TIN control so '00000' does not truncate to '000...'."
+  "files_changed": [
+    "print-overrides/1707-2021.css",
+    "html-frozen/1707-2021/form.css",
+    "forms/schema-overrides.json"
   ],
-  "tests_run": [],
-  "open_questions": []
+  "shared_changes_wanted": [
+    "crates/bir-print or crates/bir-core: format 6A-6C and 7A-7C TINs with dashes (XXX-XXX-XXX-XXXXX) and format Schedule 2 No. of Shares as right-aligned integer without '.00'.",
+    "nsh/screens/form/: widen the 5-digit branch-code TIN box so '00000' does not clip."
+  ],
+  "tests_run": [
+    "cargo test -p bir-app-api -- 1707 (16 passed, 0 failed)",
+    "just nsh-build (passed)"
+  ],
+  "open_questions": [],
+  "html_frozen_upstream_edits": [
+    {
+      "file": "html-frozen/1707-2021/form.css",
+      "change": "#p1c25-i, #p1c26-i, #p1c27-i, #p1c29-i, #p1c30-i, #p1c31-i, #p1c33-i, #p1c34-i, #p1c35-i, #p1c40-i, #p1c41-i, #p1c42-i, #p1c44-i, #p1c45-i, #p1c46-i, #p1c48-i, #p1c49-i, #p1c50-i { padding-left: 2pt; padding-right: 2pt }",
+      "reason": "Plain text inputs in Part I Items 6A-6C (Sellers) and 7A-7C (Buyers) name, address, and TIN cells have padding:0 from .fi and otherwise collide with the left cell border.",
+      "upstream_buwiz_forms_html": {
+        "per_form_file": "forms-corrected/extra/1707-2021/form.css (synced to html-frozen/1707-2021/form.css)",
+        "generator_rule": "tools/formgen/emit.py: field_css_rules() (~line 4829, .fi currently emits padding:0) or field_input_markup() (~line 4739, slot_index is None plain-field branch)"
+      }
+    }
+  ],
+  "non_html_frozen_print_edits": [
+    {
+      "file": "print-overrides/1707-2021.css",
+      "change": "Removed hardcoded !important font-size overrides on #p1c25-i..#p1c49-i so bir-print dynamic shrink-to-fit sizes long seller/buyer names and addresses.",
+      "upstream_buwiz_forms_html": "None (print-overrides/ lives only in hexuria/buwiz-forms)."
+    }
+  ]
 }
