@@ -64,8 +64,8 @@ test("iPhone: a saved return popped by the system's back keeps what was typed", 
   await app.waitFor("id:home");
   // The return again, from Filings: the amount is there.
   await app.press("id:tab-filings");
-  await app.waitFor("id:filings-list");
-  await app.press("id:filings-list >> role:button >> nth=0");
+  await app.waitFor("id:filings-rows");
+  await app.press("id:filings-rows >> role:button >> nth=0");
   await app.waitFor("id:fp-pill", { timeout: 30_000 });
   await app.press("id:fp-pill-open");
   await app.waitFor("id:fp-section-2", { timeout: 15_000 });
