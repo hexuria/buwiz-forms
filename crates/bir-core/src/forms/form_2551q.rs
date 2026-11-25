@@ -75,7 +75,7 @@ pub fn amount_comb_limit_message(label: Option<&str>) -> String {
     match label {
         Some(label) => format!(
             "{label} exceeds the official 12-digit peso field (at most 999,999,999,999.99); \
-             reduce the amount so it fits."
+             enter a smaller amount."
         ),
         None => "Exceeds the official 12-digit peso field (at most 999,999,999,999.99); \
                  enter a smaller amount."
@@ -2136,9 +2136,8 @@ impl FormValidator for Form2551QDraft {
                 ));
             }
             if row.taxable_amount.is_finite()
-                && row.taxable_amount >= 0.0
                 && has_cent_precision(row.taxable_amount)
-                && !fits_taxable_amount_input(row.taxable_amount)
+                && !fits_taxable_amount_input(row.taxable_amount.abs())
             {
                 errors.push((field.clone(), taxable_amount_limit_message(Some(i + 1))));
             }
@@ -2406,15 +2405,18 @@ impl FormValidator for Form2551QDraft {
                     field.to_string(),
                     format!("{label} must be a finite amount"),
                 ));
-            } else if value < 0.0 {
-                errors.push((field.to_string(), format!("{label} must be non-negative")));
-            } else if !has_cent_precision(value) {
-                errors.push((
-                    field.to_string(),
-                    format!("{label} must have at most two decimal places"),
-                ));
-            } else if !fits_decimal_comb(value, FORM_2551Q_AMOUNT_INTEGER_CELLS) {
-                errors.push((field.to_string(), amount_comb_limit_message(Some(label))));
+            } else {
+                if value < 0.0 {
+                    errors.push((field.to_string(), format!("{label} must be non-negative")));
+                } else if !has_cent_precision(value) {
+                    errors.push((
+                        field.to_string(),
+                        format!("{label} must have at most two decimal places"),
+                    ));
+                }
+                if !fits_decimal_comb(value, FORM_2551Q_AMOUNT_INTEGER_CELLS) {
+                    errors.push((field.to_string(), amount_comb_limit_message(Some(label))));
+                }
             }
         }
 
@@ -5056,5 +5058,87 @@ mod tests {
                 .any(|(field, _)| field == "surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+
+    #[test]
+    fn negative_edges_for_overpayments_and_non_negative_boxes() {
+        // Items 19 and 24 are the only boxes that can legitimately be negative
+        // (overpayment): -999,999,999,999.98 and -999,999,999,999.99 fit the
+        // 12-digit peso comb; -1,000,000,000,000.00 overflows it.
+        for credit in [999_999_999_999.98, 999_999_999_999.99] {
+            let mut draft = make_draft(0.0, 0.0, 2026, 1);
+            draft.auto_compute_penalties = false;
+            draft.surcharge = 0.0;
+            draft.interest = 0.0;
+            draft.compromise = 0.0;
+            draft.creditable_tax_withheld = credit;
+            draft.overpayment_disposition = OverpaymentDisposition::Refund;
+            draft.recompute(None);
+            assert_eq!(draft.tax_payable, -credit);
+            assert_eq!(draft.total_amount_payable, -credit);
+            let errs = draft.validate();
+            assert!(
+                errs.is_empty(),
+                "12-digit negative overpayment -{credit:.2} must pass, got {errs:?}"
+            );
+        }
+
+        let mut over = make_draft(0.0, 0.0, 2026, 1);
+        over.auto_compute_penalties = false;
+        over.surcharge = 0.0;
+        over.interest = 0.0;
+        over.compromise = 0.0;
+        over.creditable_tax_withheld = 999_999_999_999.99;
+        over.other_tax_credit = 0.01;
+        over.other_tax_credit_description = "Prior credit".into();
+        over.overpayment_disposition = OverpaymentDisposition::Refund;
+        over.recompute(None);
+        assert_eq!(over.total_tax_credits, 1_000_000_000_000.00);
+        assert_eq!(over.tax_payable, -1_000_000_000_000.00);
+        assert_eq!(over.total_amount_payable, -1_000_000_000_000.00);
+        let over_errs = over.validate();
+        for f in ["total_tax_credits", "tax_payable", "total_amount_payable"] {
+            let msg = over_errs
+                .iter()
+                .find(|(field, _)| field == f)
+                .map(|(_, m)| m.as_str())
+                .unwrap_or("");
+            assert!(
+                msg.contains("at most 999,999,999,999.99")
+                    && msg.contains("enter a smaller amount"),
+                "expected unified limit wording on {f}, got {over_errs:?}"
+            );
+        }
+
+        // Negative values on non-negative editable boxes are refused, and
+        // over-limit negatives carry the unified limit sentence too.
+        let mut neg_sched = make_draft(0.0, 0.0, 2025, 1);
+        neg_sched.schedule_1[0].taxable_amount = -1_000_000_000.01;
+        let sched_errs = neg_sched.validate();
+        assert!(
+            sched_errs
+                .iter()
+                .any(|(f, m)| { f == "schedule_1_row_1" && m.contains("non-negative") })
+        );
+        assert!(
+            sched_errs
+                .iter()
+                .any(|(f, m)| { f == "schedule_1_row_1" && m.contains("enter a smaller amount") })
+        );
+
+        let mut neg_pen = make_draft(0.0, 0.0, 2025, 1);
+        neg_pen.auto_compute_penalties = false;
+        neg_pen.surcharge = -1_000_000_000_000.00;
+        let pen_errs = neg_pen.validate();
+        assert!(
+            pen_errs
+                .iter()
+                .any(|(f, m)| { f == "surcharge" && m.contains("non-negative") })
+        );
+        assert!(pen_errs.iter().any(|(f, m)| {
+            f == "surcharge"
+                && m.contains("at most 999,999,999,999.99")
+                && m.contains("enter a smaller amount")
+        }));
     }
 }

@@ -11,6 +11,7 @@ Same saved return (demo taxpayer `SANTOS, JUANA`, TIN `000-123-453-00000`, Q1 20
 - `before-return.pdf`, `before-page-1.png`, `before-page-2.png`: Saved PDF and 1400px-wide page renders of the return on `origin/main`.
 - `after-return.pdf`, `after-page-1.png`, `after-page-2.png`: Saved PDF and 1400px-wide page renders of the same return after the fix, showing every digit right-aligned inside the sheet's 12-cell integer combs + 2 centavo combs.
 - `entry-and-check.png`: Summary of entry-time (`screen_form_fill`) refusal parity verified by `form_2551q_entry_check_and_queue_agree_on_amount_limits`.
+- `negative-refusal.png`: Negative over-limit refusal parity (`-1,000,000,000.01` on `txtATCAmt1` and `-1,000,000,000,000` on `frm2551Qv2018:txt15`) showing entry-time refusal as typed, Check result with unified wording, post-#327 row-summary exclusion, and negative overpayment edges on Items 19 & 24 (`form_2551q_negative_amounts_agree_across_entry_check_and_queue` and `negative_edges_for_overpayments_and_non_negative_boxes`).
 - `recording.mp4`: 17-second headless proof reel stepping through Before Check/XML refusal, After entry-time refusal parity, After Check pass + dry-run XML excerpt, and rendered Pages 1–2.
 
 ## What these files do not show
