@@ -7,9 +7,9 @@
 //! verify answer is exactly the device flow's token response.
 //!
 //! The pending request `{server_url, request_id, secret, email, expires_at, resend_at, intent, code_length}` is a
-//! credential. It is kept in the same secure store as the saved sign-in: the OS credential store (the iOS item
-//! [`bir_submit::ios_storage::PENDING_SIGN_IN`], which the fresh-install clearing deletes), and a mode-0600 file beside
-//! the database only when that store is off or refuses (`BUWIZ_NO_KEYCHAIN`, Android). It is never logged.
+//! credential. It is kept where the saved sign-in is kept: on macOS, Windows and Linux the OS credential store, with a
+//! mode-0600 file beside the database when that store is off or refuses (`BUWIZ_NO_KEYCHAIN`); on iPhone, iPad and
+//! Android the file beside the database, which goes with the app. It is never logged.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -555,46 +555,20 @@ fn keyring_delete() {
     }
 }
 
-#[cfg(target_os = "ios")]
-fn keyring_load() -> Option<String> {
-    use bir_submit::ios_storage::{OsKeychain, PENDING_SIGN_IN, get};
-    if crate::platform::keychain_disabled() {
-        return None;
-    }
-    get(&OsKeychain, &PENDING_SIGN_IN).ok().flatten()
-}
+// iPhone, iPad and Android: the file beside the database only, as the saved sign-in there. Deleting the app deletes it.
 
-#[cfg(target_os = "ios")]
-fn keyring_save(raw: &str) -> bool {
-    use bir_submit::ios_storage::{OsKeychain, PENDING_SIGN_IN, set};
-    if crate::platform::keychain_disabled() {
-        return false;
-    }
-    let _ = KEYRING_SERVICE;
-    set(&OsKeychain, &PENDING_SIGN_IN, raw).is_ok()
-}
-
-#[cfg(target_os = "ios")]
-fn keyring_delete() {
-    use bir_submit::ios_storage::{OsKeychain, PENDING_SIGN_IN, delete};
-    if crate::platform::keychain_disabled() {
-        return;
-    }
-    let _ = delete(&OsKeychain, &PENDING_SIGN_IN);
-}
-
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 fn keyring_load() -> Option<String> {
     let _ = KEYRING_SERVICE;
     None
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 fn keyring_save(_raw: &str) -> bool {
     false
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 fn keyring_delete() {}
 
 #[cfg(test)]

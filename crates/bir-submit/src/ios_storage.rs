@@ -55,21 +55,6 @@ pub const SIGN_IN: Item = Item {
     protection: Protection::AfterFirstUnlockThisDeviceOnly,
 };
 
-/// The pending email sign-in (its request id and secret), until it is used, ends or expires.
-pub const PENDING_SIGN_IN: Item = Item {
-    service: "com.buwiz.bir",
-    account: "pending-sign-in",
-    protection: Protection::AfterFirstUnlockThisDeviceOnly,
-};
-
-/// The install id (bir-core `install_id`): made once, kept across sign-out, and left alone by
-/// [`clear_on_fresh_install`], so a delete and reinstall keeps it.
-pub const INSTALL_ID: Item = Item {
-    service: "com.buwiz.bir",
-    account: "install-id",
-    protection: Protection::AfterFirstUnlockThisDeviceOnly,
-};
-
 /// Why a Keychain call did not do what was asked.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum KeychainError {
@@ -187,13 +172,13 @@ pub enum FreshInstall {
     Incomplete(Vec<String>),
 }
 
-/// The items a fresh install deletes: exactly these four (the install id stays).
-pub const CLEARED_ON_FRESH_INSTALL: [Item; 4] = [DEVICE_KEY, DEVICE_ID, SIGN_IN, PENDING_SIGN_IN];
+/// The items a fresh install deletes: exactly these three.
+pub const CLEARED_ON_FRESH_INSTALL: [Item; 3] = [DEVICE_KEY, DEVICE_ID, SIGN_IN];
 
 /// The first launch after an install. Keychain items outlive the app, so
 /// an install would come back signed in with the old device key: with the
 /// marker missing, delete [`CLEARED_ON_FRESH_INSTALL`] (the device key, the
-/// device id, the saved sign-in, a pending email sign-in) and nothing else, then write the marker.
+/// device id, the saved sign-in) and nothing else, then write the marker.
 /// With the Keychain off (`BUWIZ_NO_KEYCHAIN=1`) nothing is called and no
 /// marker is written, so the first launch that uses the Keychain still
 /// clears it.
@@ -525,7 +510,7 @@ mod tests {
 
     #[test]
     fn every_item_stays_on_this_device_and_opens_after_the_first_unlock() {
-        for item in [DEVICE_KEY, DEVICE_ID, SIGN_IN, PENDING_SIGN_IN, INSTALL_ID] {
+        for item in [DEVICE_KEY, DEVICE_ID, SIGN_IN] {
             assert_eq!(
                 item.protection,
                 Protection::AfterFirstUnlockThisDeviceOnly,
@@ -545,19 +530,7 @@ mod tests {
             (SIGN_IN.service, SIGN_IN.account),
             ("com.buwiz.bir", "desktop-refresh")
         );
-        assert_eq!(
-            CLEARED_ON_FRESH_INSTALL,
-            [DEVICE_KEY, DEVICE_ID, SIGN_IN, PENDING_SIGN_IN]
-        );
-        assert_eq!(
-            (PENDING_SIGN_IN.service, PENDING_SIGN_IN.account),
-            ("com.buwiz.bir", "pending-sign-in")
-        );
-        assert_eq!(
-            (INSTALL_ID.service, INSTALL_ID.account),
-            ("com.buwiz.bir", "install-id")
-        );
-        assert!(!CLEARED_ON_FRESH_INSTALL.contains(&INSTALL_ID));
+        assert_eq!(CLEARED_ON_FRESH_INSTALL, [DEVICE_KEY, DEVICE_ID, SIGN_IN]);
     }
 
     #[test]
@@ -662,9 +635,7 @@ mod tests {
             (DEVICE_KEY, "seed", true),
             (DEVICE_ID, "d1", true),
             (SIGN_IN, "token", false),
-            (PENDING_SIGN_IN, "request", true),
             (OTHER_ITEM, "calendar", false),
-            (INSTALL_ID, "install-id-of-this-phone", true),
         ])
     }
 
@@ -705,10 +676,9 @@ mod tests {
                             vec![
                                 "delete device-key",
                                 "delete device-id",
-                                "delete desktop-refresh",
-                                "delete pending-sign-in"
+                                "delete desktop-refresh"
                             ],
-                            "{case}: the four and nothing else"
+                            "{case}: the three and nothing else"
                         );
                     }
                     for item in CLEARED_ON_FRESH_INSTALL {
@@ -717,10 +687,6 @@ mod tests {
                     assert!(
                         fake.entry(&OTHER_ITEM).is_some(),
                         "{case}: other items stay"
-                    );
-                    assert!(
-                        fake.entry(&INSTALL_ID).is_some(),
-                        "{case}: the install id survives a reinstall"
                     );
                     assert_eq!(database.exists(), database_there, "{case}");
                     if database_there {
@@ -756,7 +722,7 @@ mod tests {
         let fake = stored().failing("delete", KeychainError::Locked);
         assert!(matches!(
             clear_on_fresh_install(&fake, true, &marker),
-            FreshInstall::Incomplete(failures) if failures.len() == 4
+            FreshInstall::Incomplete(failures) if failures.len() == 3
         ));
         assert!(!marker.exists());
     }

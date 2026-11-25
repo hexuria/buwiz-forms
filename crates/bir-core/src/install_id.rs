@@ -2,8 +2,10 @@
 //! (`install_id` in `/auth/email/start` and in the browser device flow's start, then in the device registration).
 //!
 //! It is 16–64 URL-safe characters and never a raw hardware value. It stays across sign-out.
-//! - iPhone, iPad: a random id in a Keychain item ([`bir_submit::ios_storage::INSTALL_ID`], this device only, after
-//!   first unlock) that the fresh-install clearing leaves alone, so it survives delete and reinstall.
+//! - iPhone, iPad: a random id, today in the file beside the database. It is the one item meant for the Keychain (so it
+//!   survives a delete and reinstall): `bir_submit::ios_storage` gains that call on the iPhone-storage branch, and it
+//!   goes in [`OsSources::keychain_get`] / [`OsSources::keychain_set`]. Until then the rule is written and tested here,
+//!   and the iOS arm answers "no Keychain".
 //! - Android: a salted SHA-256 of `Settings.Secure.ANDROID_ID`, which the app crate reads through its Java access and
 //!   registers here ([`crate::platform::set_device_id_source`]).
 //! - macOS, Windows, Linux: a salted SHA-256 of the machine's id (IOPlatformUUID, MachineGuid, /etc/machine-id)
@@ -237,22 +239,14 @@ impl Sources for OsSources {
         cfg!(test) || crate::db::test_environment()
     }
 
+    // iPhone and iPad: THE PLACE FOR THE KEYCHAIN CALL (the install-id API `bir_submit::ios_storage` gains on the
+    // iPhone-storage branch: Keychain first, a file beside the database otherwise). Until it lands, no platform has a
+    // Keychain source here, so iOS uses the file beside the database.
     fn keychain_get(&self) -> Option<Result<Option<String>, String>> {
-        #[cfg(target_os = "ios")]
-        if !crate::platform::keychain_disabled() {
-            use bir_submit::ios_storage::{INSTALL_ID, OsKeychain, get};
-            return Some(get(&OsKeychain, &INSTALL_ID).map_err(|error| error.to_string()));
-        }
         None
     }
 
     fn keychain_set(&self, _value: &str) -> Result<(), String> {
-        #[cfg(target_os = "ios")]
-        {
-            use bir_submit::ios_storage::{INSTALL_ID, OsKeychain, set};
-            set(&OsKeychain, &INSTALL_ID, _value).map_err(|error| error.to_string())
-        }
-        #[cfg(not(target_os = "ios"))]
         Err("no Keychain here".into())
     }
 
