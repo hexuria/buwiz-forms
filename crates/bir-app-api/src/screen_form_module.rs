@@ -1276,6 +1276,30 @@ fn apply_layout(form: &mut Value, layout: &Value) {
                     if key == zero || grid_fields.contains_key(key) {
                         continue;
                     }
+                    // Only a row of zero's own family may be grown: the same
+                    // key shape but for the row's digits. Anything else is a
+                    // grid naming a box the form does not have and must fail
+                    // loudly below, not silently grow a clone.
+                    let shape = |k: &str| -> String {
+                        let mut out = String::new();
+                        let mut was_digit = false;
+                        for c in k.chars() {
+                            if c.is_ascii_digit() {
+                                if !was_digit {
+                                    out.push('#');
+                                }
+                                was_digit = true;
+                            } else {
+                                out.push(c);
+                                was_digit = false;
+                            }
+                        }
+                        out
+                    };
+                    let row_of_family = shape(key) == shape(zero) && key != zero;
+                    if !row_of_family {
+                        continue;
+                    }
                     if let Some((field, page)) = grid_fields.get(zero).cloned() {
                         let mut grown = field.clone();
                         grown["k"] = json!(key);
