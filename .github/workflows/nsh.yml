@@ -199,6 +199,15 @@ jobs:
           rustup target add aarch64-apple-ios-sim
           cargo check --manifest-path nsh/Cargo.toml --features agent --target aarch64-apple-ios-sim
 
+      # The app as an iPhone and iPad run it: the device target, which the simulator check above does not compile.
+      # The relay client (its HPKE, signing and WebSocket crates) and the Keychain code must build for it.
+      - name: The app compiles for an iPhone
+        if: matrix.shard == 0
+        working-directory: buwiz-forms
+        run: |
+          rustup target add aarch64-apple-ios
+          cargo check --locked --manifest-path nsh/Cargo.toml --target aarch64-apple-ios
+
       # Every *.test.ts and *.test.tsx, one headless run per file, as `just nsh-test` does (nsh/verify holds real-window
       # verifiers that need the owner's data copy, so it is left out). `just nsh-test <file>` sets the four safety
       # variables again and never sets BIR_DATABASE_PATH.
@@ -367,6 +376,25 @@ jobs:
             echo "::error::the app enables bir-core's direct-bir feature"
             exit 1
           fi
+
+      # The app as an Android phone runs it. Nothing else here compiles the Android target, and the relay client
+      # brings C and assembly (ring) that need the NDK's compiler. The runner image carries the NDK
+      # (ANDROID_NDK_LATEST_HOME); API level 24 is the oldest the toolchain names.
+      - name: The app compiles for Android
+        if: matrix.shard == 0
+        working-directory: buwiz-forms
+        run: |
+          ndk="${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME:-}}"
+          bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          [ -x "$bin/aarch64-linux-android24-clang" ] || { echo "::error::no Android NDK compiler at $bin"; exit 1; }
+          rustup target add aarch64-linux-android
+          export ANDROID_NDK_HOME="$ndk" ANDROID_NDK_ROOT="$ndk"
+          export CC_aarch64_linux_android="$bin/aarch64-linux-android24-clang"
+          export CXX_aarch64_linux_android="$bin/aarch64-linux-android24-clang++"
+          export AR_aarch64_linux_android="$bin/llvm-ar"
+          export RANLIB_aarch64_linux_android="$bin/llvm-ranlib"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$bin/aarch64-linux-android24-clang"
+          cargo check --locked --manifest-path nsh/Cargo.toml --target aarch64-linux-android
 
       # The agent build, which nothing else here compiles. First the window's control plane (hexuria/nsh-gpui-agent)
       # against this NSH: the app's crate and its tests build with `agent`, and the two data-plane tests run. Then
