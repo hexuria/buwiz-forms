@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  IgnorableNamespaces="uap rescap desktop">
+
+  <Identity
+    Name="GOLDCODERSCORP.ebirforms"
+    Publisher="CN=04F86D81-D5D3-4477-A363-0CAE79356A84"
+    Version="0.2.1.0"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>eBIRForms</DisplayName>
+    <PublisherDisplayName>GoldCoders Corp</PublisherDisplayName>
+    <Logo>assets\icon.png</Logo>
+    <Description>Prepare, check, print and file Philippine BIR tax returns. Totals are worked out as you type, returns are checked against the BIR's validation rules, and they print or save as PDF on the official form layout.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application
+      Id="eBIRForms"
+      Executable="eBIRForms.exe"
+      EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="eBIRForms"
+        Description="Philippine BIR tax return filing application"
+        BackgroundColor="#2B2B2B"
+        Square150x150Logo="assets\icon.png"
+        Square44x44Logo="assets\icon.png">
+        <uap:DefaultTile Wide310x150Logo="assets\icon.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+
+</Package>

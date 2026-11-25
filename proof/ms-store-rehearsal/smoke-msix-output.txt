@@ -1,0 +1,175 @@
+Package: C:\Users\Administrator\smoke-work\smoke.msix
+Identity: GOLDCODERSCORP.ebirforms
+Trusted test certificate: 79E9B997A989A6C9719E233D048092B51AFB238B
+Microsoft (R) MakeAppx Tool
+Copyright (C) 2013 Microsoft.  All rights reserved.
+
+The path (/p) parameter is: "\\?\C:\Users\Administrator\smoke-work\smoke.msix"
+The output directory (/d) parameter is: "\\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout"
+Unpacking "\\?\C:\Users\Administrator\smoke-work\smoke.msix" (package name) to "\\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout" (output directory).
+Extracting file AppxManifest.xml to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\AppxManifest.xml
+Extracting file AppxBlockMap.xml to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\AppxBlockMap.xml
+Extracting file AppxSignature.p7x to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\AppxSignature.p7x
+Extracting file AppxMetadata\CodeIntegrity.cat to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\AppxMetadata\CodeIntegrity.cat
+Extracting file assets\icon.png to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\assets\icon.png
+Extracting file assets\icon.targetsize-256_altform-unplated.png to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\assets\icon.targetsize-256_altform-unplated.png
+Extracting file assets\icon.targetsize-44.png to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\assets\icon.targetsize-44.png
+Extracting file assets\icon.targetsize-44_altform-unplated.png to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\assets\icon.targetsize-44_altform-unplated.png
+Extracting file assets\icon.targetsize-48_altform-unplated.png to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\assets\icon.targetsize-48_altform-unplated.png
+Extracting file ebirforms-no-self-update to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\ebirforms-no-self-update
+Extracting file ebirforms-store-package to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\ebirforms-store-package
+Extracting file eBIRForms.exe to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\eBIRForms.exe
+Extracting file nsh\app.json to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\app.json
+Extracting file nsh\assets\assets\icons\archive.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\archive.svg
+Extracting file nsh\assets\assets\icons\arrow-left.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\arrow-left.svg
+Extracting file nsh\assets\assets\icons\arrow-right.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\arrow-right.svg
+Extracting file nsh\assets\assets\icons\bagong-pilipinas.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\bagong-pilipinas.svg
+Extracting file nsh\assets\assets\icons\bell.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\bell.svg
+Extracting file nsh\assets\assets\icons\building.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\building.svg
+Extracting file nsh\assets\assets\icons\calendar.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\calendar.svg
+Extracting file nsh\assets\assets\icons\check.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\check.svg
+Extracting file nsh\assets\assets\icons\chevron-down.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\chevron-down.svg
+Extracting file nsh\assets\assets\icons\chevron-left.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\chevron-left.svg
+Extracting file nsh\assets\assets\icons\chevron-right.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\chevron-right.svg
+Extracting file nsh\assets\assets\icons\chevrons-down-up.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\chevrons-down-up.svg
+Extracting file nsh\assets\assets\icons\chevrons-up-down.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\chevrons-up-down.svg
+Extracting file nsh\assets\assets\icons\circle-check.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\circle-check.svg
+Extracting file nsh\assets\assets\icons\copy.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\copy.svg
+Extracting file nsh\assets\assets\icons\eye-off.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\eye-off.svg
+Extracting file nsh\assets\assets\icons\eye.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\eye.svg
+Extracting file nsh\assets\assets\icons\e_logo.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\e_logo.svg
+Extracting file nsh\assets\assets\icons\file-text.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\file-text.svg
+Extracting file nsh\assets\assets\icons\git-branch.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\git-branch.svg
+Extracting file nsh\assets\assets\icons\hard-drive.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\hard-drive.svg
+Extracting file nsh\assets\assets\icons\hash.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\hash.svg
+Extracting file nsh\assets\assets\icons\history.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\history.svg
+Extracting file nsh\assets\assets\icons\house.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\house.svg
+Extracting file nsh\assets\assets\icons\info.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\info.svg
+Extracting file nsh\assets\assets\icons\key-round.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\key-round.svg
+Extracting file nsh\assets\assets\icons\keyboard.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\keyboard.svg
+Extracting file nsh\assets\assets\icons\laptop.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\laptop.svg
+Extracting file nsh\assets\assets\icons\layout-template.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\layout-template.svg
+Extracting file nsh\assets\assets\icons\list.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\list.svg
+Extracting file nsh\assets\assets\icons\loader.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\loader.svg
+Extracting file nsh\assets\assets\icons\lock.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\lock.svg
+Extracting file nsh\assets\assets\icons\log-out.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\log-out.svg
+Extracting file nsh\assets\assets\icons\map-pin.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\map-pin.svg
+Extracting file nsh\assets\assets\icons\menu.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\menu.svg
+Extracting file nsh\assets\assets\icons\minus.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\minus.svg
+Extracting file nsh\assets\assets\icons\monitor.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\monitor.svg
+Extracting file nsh\assets\assets\icons\moon.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\moon.svg
+Extracting file nsh\assets\assets\icons\panel-left.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\panel-left.svg
+Extracting file nsh\assets\assets\icons\panel-right.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\panel-right.svg
+Extracting file nsh\assets\assets\icons\pencil.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\pencil.svg
+Extracting file nsh\assets\assets\icons\plus.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\plus.svg
+Extracting file nsh\assets\assets\icons\power.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\power.svg
+Extracting file nsh\assets\assets\icons\printer.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\printer.svg
+Extracting file nsh\assets\assets\icons\save.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\save.svg
+Extracting file nsh\assets\assets\icons\search.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\search.svg
+Extracting file nsh\assets\assets\icons\send.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\send.svg
+Extracting file nsh\assets\assets\icons\settings.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\settings.svg
+Extracting file nsh\assets\assets\icons\square-terminal.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\square-terminal.svg
+Extracting file nsh\assets\assets\icons\square.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\square.svg
+Extracting file nsh\assets\assets\icons\sun.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\sun.svg
+Extracting file nsh\assets\assets\icons\trash.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\trash.svg
+Extracting file nsh\assets\assets\icons\triangle-alert.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\triangle-alert.svg
+Extracting file nsh\assets\assets\icons\upload.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\upload.svg
+Extracting file nsh\assets\assets\icons\user.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\user.svg
+Extracting file nsh\assets\assets\icons\users.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\users.svg
+Extracting file nsh\assets\assets\icons\x.svg to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\assets\icons\x.svg
+Extracting file nsh\assets\nsh-updater.json to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\nsh-updater.json
+Extracting file nsh\assets\shell\desktop\tray.png to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\shell\desktop\tray.png
+Extracting file nsh\assets\theme\fonts\Inter-Bold.woff2 to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\theme\fonts\Inter-Bold.woff2
+Extracting file nsh\assets\theme\fonts\Inter-Medium.woff2 to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\theme\fonts\Inter-Medium.woff2
+Extracting file nsh\assets\theme\fonts\Inter-Regular.woff2 to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\theme\fonts\Inter-Regular.woff2
+Extracting file nsh\assets\theme\fonts\Inter-SemiBold.woff2 to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\assets\theme\fonts\Inter-SemiBold.woff2
+Extracting file nsh\bundle.nshc to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\bundle.nshc
+Extracting file nsh\icon.ico to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\nsh\icon.ico
+Extracting file print-overrides\0605-1999.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\0605-1999.css
+Extracting file print-overrides\0619e-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\0619e-2018.css
+Extracting file print-overrides\0619f-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\0619f-2018.css
+Extracting file print-overrides\1600-pt-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1600-pt-2018.css
+Extracting file print-overrides\1600-vt-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1600-vt-2018.css
+Extracting file print-overrides\1600wp-2010.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1600wp-2010.css
+Extracting file print-overrides\1601-fq-2020.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1601-fq-2020.css
+Extracting file print-overrides\1601c-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1601c-2018.css
+Extracting file print-overrides\1601eq-2019.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1601eq-2019.css
+Extracting file print-overrides\1602q-2019.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1602q-2019.css
+Extracting file print-overrides\1603q-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1603q-2018.css
+Extracting file print-overrides\1604c-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1604c-2018.css
+Extracting file print-overrides\1604e-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1604e-2018.css
+Extracting file print-overrides\1604f-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1604f-2018.css
+Extracting file print-overrides\1606-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1606-2018.css
+Extracting file print-overrides\1700-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1700-2018.css
+Extracting file print-overrides\1701-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1701-2018.css
+Extracting file print-overrides\1701a-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1701a-2018.css
+Extracting file print-overrides\1701ms-2024.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1701ms-2024.css
+Extracting file print-overrides\1701q-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1701q-2018.css
+Extracting file print-overrides\1702ex-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1702ex-2018.css
+Extracting file print-overrides\1702mx-2018c.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1702mx-2018c.css
+Extracting file print-overrides\1702q-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1702q-2018.css
+Extracting file print-overrides\1702rt-2018c.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1702rt-2018c.css
+Extracting file print-overrides\1706-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1706-2018.css
+Extracting file print-overrides\1707-2021.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1707-2021.css
+Extracting file print-overrides\1707a-2021.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1707a-2021.css
+Extracting file print-overrides\1800-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1800-2018.css
+Extracting file print-overrides\1801-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\1801-2018.css
+Extracting file print-overrides\2000-dst-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2000-dst-2018.css
+Extracting file print-overrides\2000-ot-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2000-ot-2018.css
+Extracting file print-overrides\2200a-2020.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2200a-2020.css
+Extracting file print-overrides\2200an-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2200an-2018.css
+Extracting file print-overrides\2200c-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2200c-2018.css
+Extracting file print-overrides\2200m-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2200m-2018.css
+Extracting file print-overrides\2200p-2020.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2200p-2020.css
+Extracting file print-overrides\2200s-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2200s-2018.css
+Extracting file print-overrides\2200t-2022.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2200t-2022.css
+Extracting file print-overrides\2550m-2007.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2550m-2007.css
+Extracting file print-overrides\2550q-2024.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2550q-2024.css
+Extracting file print-overrides\2551q-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2551q-2018.css
+Extracting file print-overrides\2552-2018.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2552-2018.css
+Extracting file print-overrides\2553-1999.css to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\print-overrides\2553-1999.css
+Extracting file resources.pri to \\?\C:\Users\Administrator\AppData\Local\Temp\ebirforms-msix-smoke-adf3f5455afb48b8a63741d615c82b29\layout\resources.pri
+Package extraction succeeded.
+Registration: Status=Ok; eBIRForms.exe and 0 packaged VC runtime DLL(s) are present.
+[2m2026-11-25T12:43:19.022270Z[0m [32m INFO[0m [2mbir_core::logging[0m[2m:[0m 🔍 Tracing initialized (developer_mode: false)
+[2m2026-11-25T12:43:19.041839Z[0m [32m INFO[0m [2mnsh_app_ebirforms::door[0m[2m:[0m eBIRForms started
+[2m2026-11-25T12:43:19.091453Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v1
+[2m2026-11-25T12:43:19.127931Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v2
+[2m2026-11-25T12:43:19.128071Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v3
+[2m2026-11-25T12:43:19.128214Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v4
+[2m2026-11-25T12:43:19.128279Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v5
+[2m2026-11-25T12:43:19.128572Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v5 migration: added period_key column to form_drafts
+[2m2026-11-25T12:43:19.128625Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v6
+[2m2026-11-25T12:43:19.128755Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v7
+[2m2026-11-25T12:43:19.129128Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v8
+[2m2026-11-25T12:43:19.129209Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v9
+[2m2026-11-25T12:43:19.129274Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v10
+[2m2026-11-25T12:43:19.129544Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v11
+[2m2026-11-25T12:43:19.129583Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v12
+[2m2026-11-25T12:43:19.129624Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v13
+[2m2026-11-25T12:43:19.129672Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v14
+[2m2026-11-25T12:43:19.129875Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v15
+[2m2026-11-25T12:43:19.131530Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v15 migration: added 6 missing form-rule state columns
+[2m2026-11-25T12:43:19.131587Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v16
+[2m2026-11-25T12:43:19.132058Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v16 migration: added 2 checked Final Copy proof columns
+[2m2026-11-25T12:43:19.132092Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v17
+[2m2026-11-25T12:43:19.135096Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v17 migration: added 12 exact form-rule identity columns
+[2m2026-11-25T12:43:19.135143Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v18
+[2m2026-11-25T12:43:19.135279Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v19
+[2m2026-11-25T12:43:19.135413Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v20
+[2m2026-11-25T12:43:19.136019Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v21
+[2m2026-11-25T12:43:19.136241Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v22
+[2m2026-11-25T12:43:19.136959Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v23
+[2m2026-11-25T12:43:19.137104Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v24
+[2m2026-11-25T12:43:19.138589Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v11 migration: added 5 missing Forms Set provenance columns
+[2m2026-11-25T12:43:19.139900Z[0m [33m WARN[0m [2mbir_core::db::google_calendar[0m[2m:[0m Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred [3mreason[0m[2m=[0m"the background worker is not running yet"
+[2m2026-11-25T12:43:19.141357Z[0m [31mERROR[0m [2mbir_shell::script[0m[2m:[0m taxpayers: Sign in to Buwiz before using eBIRForms.
+[2m2026-11-25T12:43:19.141564Z[0m [31mERROR[0m [2mbir_shell::script[0m[2m:[0m returns:filed: Sign in to Buwiz before using eBIRForms.
+[2m2026-11-25T12:43:19.142041Z[0m [31mERROR[0m [2mbir_shell::script[0m[2m:[0m auth_state: Sign in to Buwiz before using eBIRForms.
+Layout window started: PID 4900, HWND 1180370
+Layout run: window visible and PID 4900 persisted for 10 seconds.
+::warning::Packaged MSIX activation not verifiable on this host: UAC is disabled (EnableLUA=0); registration and layout launch were verified
+Removed smoke-installed package: GOLDCODERSCORP.ebirforms_0.2.1.0_x64__zv27z9x14pzd6
+Removed imported test certificate: 79E9B997A989A6C9719E233D048092B51AFB238B
+Removed smoke temporary directory.
+MSIX smoke summary: registration=passed; layout-run=passed; packaged-activation=skipped (UAC is disabled (EnableLUA=0))
