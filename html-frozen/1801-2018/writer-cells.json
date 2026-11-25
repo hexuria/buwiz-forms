@@ -22,6 +22,24 @@
    "reason": "caption \"Taxpayer's Name (ESTATE of ...)\" directly above"
   },
   {
+   "writer_key": "frm1801v2018:tinA_1",
+   "html_id": "p1c13",
+   "printed": "5 Estate TIN (1-3)",
+   "reason": "the three editable slots at the end of the mixed item-5 label cell align with the first TIN group"
+  },
+  {
+   "writer_key": "frm1801v2018:tinB_1",
+   "html_id": "p1c14",
+   "printed": "5 Estate TIN (4-6)",
+   "reason": "the first slot is the preprinted dash box and has no input; slots 1-3 are the second TIN group"
+  },
+  {
+   "writer_key": "frm1801v2018:tinC_1",
+   "html_id": "p1c15",
+   "printed": "5 Estate TIN (7-9)",
+   "reason": "the first slot is the preprinted dash box and has no input; slots 1-3 are the third TIN group"
+  },
+  {
    "writer_key": "frm1801v2018:branchCode_1",
    "html_id": "p1c17",
    "printed": "5 TIN branch code",
@@ -1164,18 +1182,6 @@
    "reason": "no fillable cell on the frozen sheet for this key (ES 010 ATC is preprinted)"
   },
   {
-   "writer_key": "frm1801v2018:tinA_1",
-   "reason": "TIN row (item 5): mixed cells with printed captions inside; the slot counts (3/4/4/5) do not give a clean 3-3-3 plus branch split"
-  },
-  {
-   "writer_key": "frm1801v2018:tinB_1",
-   "reason": "TIN row (item 5): mixed cells with printed captions inside; the slot counts (3/4/4/5) do not give a clean 3-3-3 plus branch split"
-  },
-  {
-   "writer_key": "frm1801v2018:tinC_1",
-   "reason": "TIN row (item 5): mixed cells with printed captions inside; the slot counts (3/4/4/5) do not give a clean 3-3-3 plus branch split"
-  },
-  {
    "writer_key": "frm1801v2018:txtTINE1",
    "reason": "executor TIN (item 11): one mixed 11-slot comb (p1c31) with printed dashes inside; not split"
   },
@@ -1948,18 +1954,6 @@
   {
    "html_id": "p1c4",
    "reason": "item 1 Date of Death: one 6-slot comb for MMDDYY (see txtDateMonth)"
-  },
-  {
-   "html_id": "p1c13",
-   "reason": "TIN row cell, mixed with the printed TIN caption (see tinA_1)"
-  },
-  {
-   "html_id": "p1c14",
-   "reason": "TIN row cell, 4 slots, not a 3-digit TIN part (see tinB_1)"
-  },
-  {
-   "html_id": "p1c15",
-   "reason": "TIN row cell, 4 slots, not a 3-digit TIN part (see tinC_1)"
   },
   {
    "html_id": "p1c25",

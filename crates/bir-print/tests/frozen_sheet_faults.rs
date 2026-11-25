@@ -26,8 +26,24 @@ fn profile(branch: &str) -> TaxpayerProfile {
 fn form_1801_prints_branch_code_on_both_pages() {
     let draft = Form1801Draft::new_from_profile(&profile("00001"), 2025, 1);
     let doc = filled_document("1801-2018", &draft.print_field_map()).unwrap();
+    assert_eq!(printed_cell(&doc, "p1c13").0, "000");
+    assert_eq!(printed_cell(&doc, "p1c14").0, "123");
+    assert_eq!(printed_cell(&doc, "p1c15").0, "453");
     assert_eq!(printed_cell(&doc, "p1c17").0, "00001");
     assert_eq!(printed_cell(&doc, "p2c5").0, "00012345300001");
+}
+
+#[test]
+fn branch_zero_prints_once_from_the_taxpayer_value() {
+    let estate = Form1801Draft::new_from_profile(&profile("00000"), 2025, 1);
+    let estate_doc = filled_document("1801-2018", &estate.print_field_map()).unwrap();
+    assert_eq!(printed_cell(&estate_doc, "p1c17").0, "00000");
+    assert_eq!(printed_cell(&estate_doc, "p2c5").0, "00012345300000");
+
+    let donor = Form1800Draft::new_from_profile(&profile("00000"), 2025, 1);
+    let donor_doc = filled_document("1800-2018", &donor.print_field_map()).unwrap();
+    assert_eq!(printed_cell(&donor_doc, "p1c18").0, "00000");
+    assert_eq!(printed_cell(&donor_doc, "p2c5").0, "00012345300000");
 }
 
 #[test]
