@@ -731,9 +731,10 @@ fn simulated_receipt(submission_filename: &str) -> crate::receipt::BirReceiptCon
     }
 }
 
-/// Move a Submitted return to Confirmed through the same path the email
+/// Move a Submitted return to Confirmed through the same matching the email
 /// confirmation uses (`save_submission_receipt` +
-/// `confirm_submission_from_receipt`). Debug builds only.
+/// `confirm_simulated_submission_from_receipt`). Debug builds only. Unlike a
+/// real BIR email it may confirm a dry run: that is what it simulates.
 pub fn simulate_bir_confirmation(
     db: &Database,
     submission_filename: &str,
@@ -745,7 +746,7 @@ pub fn simulate_bir_confirmation(
     }
     let receipt = simulated_receipt(submission_filename);
     let (saved, _) = db.save_submission_receipt(&receipt)?;
-    db.confirm_submission_from_receipt(&saved)
+    db.confirm_simulated_submission_from_receipt(&saved)
 }
 
 /// Pure gate for auto-confirm: on, debug, and never a live BIR send.
