@@ -239,6 +239,40 @@ test("nothing to fix and no warning: Queue queues straight away, once, even when
   }
 });
 
+// On a phone or tablet build a real send goes only while the app is on screen, so the Queued toast says so (the host's queue_note,
+// send_state.rs queue_note: phone and not a dry run, which a practice account always is). This runner is a desktop build and a dry run:
+// the host's own answer is "", and what a phone build's host answers is stood in for.
+const KEEP_ON_SCREEN = "Keep eBIRForms open and on screen until it says sent.";
+for (const [name, year, note, toast] of [
+  ["desktop (the host's own answer)", 2019, null, QUEUED],
+  ["phone, a real send", 2018, KEEP_ON_SCREEN, `${QUEUED} ${KEEP_ON_SCREEN}`],
+  ["phone, a dry run or a practice account", 2020, "", QUEUED],
+] as const) {
+  test(`the Queued toast, ${name}`, async () => {
+    const { said, h } = hooks();
+    bir.set_year_facts(DEMO.tin, year, { ...ANSWERED, tax_classification: "Corporation", business_start_date: "2015-01-01" });
+    const s = await opened(at("1702RT", year, 0), h, said);
+    const spy = spyQueue();
+    const fake = bir as unknown as { queue_note: typeof bir.queue_note };
+    const real = fake.queue_note;
+    if (note === null) expect(real()).toBe("");
+    else fake.queue_note = () => note;
+    try {
+      expect(bir.screen_form_queue_check("1702RT", s.draft() as object).warns.length).toBe(0);
+      s.queue();
+      await until(() => said.toasts.length > 0, "the toast");
+      await s.idle();
+      expect(said.toasts).toEqual([toast]);
+      expect(s.overlay()).toBe(null);
+      expect(spy.calls.n).toBe(1);
+    } finally {
+      fake.queue_note = real;
+      spy.restore();
+      s.dispose();
+    }
+  });
+}
+
 test("Check clean and the host still refuses: Continue reveals the host message instead of only a count", async () => {
   const { said, h } = hooks();
   bir.set_year_facts(DEMO.tin, 2024, ANSWERED);

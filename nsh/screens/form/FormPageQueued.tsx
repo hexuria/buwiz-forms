@@ -61,8 +61,8 @@ let send: SendState | null = params.send
 /** What the host's open says (Queued until the worker sends), and what the filed list says. */
 let opened: "Queued" | "Submitted" | "Draft" = params.send === "refused" ? "Draft" : params.send === "sent" || params.send === "test_sent" ? "Submitted" : "Queued";
 let listed: "Queued" | "Submitted" = "Queued";
-/** How the stand-in worker sends: a dry run (nothing reached BIR) or a real send. */
-let dryRun = false;
+/** How the stand-in worker sends: a dry run (nothing reached BIR) or a real send; a "test_sent" return was a dry run. */
+let dryRun = params.send === "test_sent";
 const SENT_AT = "2025-04-10T01:02:03+00:00";
 /** The open that fx-hold holds (answered by fx-release), and whether the next open is to wait. */
 let holding = false;

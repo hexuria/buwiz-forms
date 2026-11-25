@@ -3,6 +3,7 @@
 import { expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
 import { bir } from "../../bir";
+import { tryTime } from "../form/schema";
 import { IDS } from "./seed";
 
 // The submission worker starts once per process, on the first database an engine thread opens. Opening this thread's own
@@ -83,8 +84,10 @@ test("desktop: a card whose send needs a word says it: Held, Retrying, Needs att
   expect(chip(IDS.second, "Retrying")).toBe(true);
   expect(app.shows(`id:return-${IDS.draft}-send >> text:This TIN is not on your Buwiz account.`)).toBe(true);
   expect(app.shows(`id:return-${IDS.queued}-send >> text:The BIR may have received this return. Check for the BIR's confirmation email before sending it again.`)).toBe(true);
-  expect(app.shows(`id:return-${IDS.cebu}-send >> text:Buwiz is holding sends for now.`)).toBe(true);
-  expect(app.shows(`id:return-${IDS.second}-send >> text:Not sent yet: BIR is not accepting returns right now. It tries again by itself.`)).toBe(true);
+  // A held or waiting card says its next time as the form page does (FilingsDemo's stand-in: 07:40 UTC, Nov 24 2026).
+  const next = tryTime(new Date("2026-11-24T07:40:00+00:00"), new Date());
+  expect(app.shows(`id:return-${IDS.cebu}-send >> text:Buwiz is holding sends for now. It goes again ${next}.`)).toBe(true);
+  expect(app.shows(`id:return-${IDS.second}-send >> text:Not sent yet: BIR is not accepting returns right now. It tries again by itself. Next try ${next}.`)).toBe(true);
   // The two held as Queued sit in the Queued column; nothing else changes on the board.
   expect(app.shows(inCol("queued", IDS.cebu))).toBe(true);
   expect(app.shows(inCol("queued", IDS.second))).toBe(true);
@@ -312,6 +315,44 @@ test("phone: a row whose send needs a word has its chip and line", async () => {
   expect(app.shows(`id:return-${IDS.queued}-send-chip >> text:Needs attention`)).toBe(true);
   expect(app.texts()).toContain("This TIN is not on your Buwiz account.");
 });
+
+// Every send stage on the phone's list (FilingsDemo `stage`: the queued 1601C answers it): the chip and the host's whole line on the
+// stages a card calls out, nothing on the others; Cancel queue only where the host would take the return out of the queue.
+const STAGE_ROWS: readonly { stage: string; tab: string; chip: string | null; line: string; cancel: boolean }[] = [
+  { stage: "queued", tab: "Queued", chip: null, line: "", cancel: true },
+  { stage: "sending", tab: "Queued", chip: null, line: "", cancel: true },
+  { stage: "checking", tab: "Queued", chip: "Checking", line: "Checking with Buwiz whether this return was sent. Keep eBIRForms open.", cancel: false },
+  { stage: "held", tab: "Queued", chip: "Held", line: "Buwiz is holding sends for now. It goes again NEXT.", cancel: true },
+  { stage: "waiting", tab: "Queued", chip: "Retrying", line: "Not sent yet: BIR is not accepting returns right now. It tries again by itself. Next try NEXT.", cancel: true },
+  {
+    stage: "needs_attention", tab: "Queued", chip: "Needs attention",
+    line: "The BIR may have received this return. Check for the BIR's confirmation email before sending it again.", cancel: false,
+  },
+  { stage: "refused", tab: "Draft", chip: "Not sent", line: "This TIN is not on your Buwiz account.", cancel: false },
+  { stage: "sent", tab: "Submitted", chip: null, line: "", cancel: false },
+  { stage: "test_sent", tab: "Submitted", chip: null, line: "", cancel: false },
+];
+
+for (const row of STAGE_ROWS) {
+  test(`phone: a ${row.stage} return's row on the list`, async () => {
+    const app = await list({ stage: row.stage });
+    await app.press(tab(row.tab));
+    await app.waitFor(card(IDS.queued), { timeout: 20000 });
+    const id = `id:return-${IDS.queued}`;
+    if (row.chip) {
+      await app.waitFor(`${id}-send-chip >> text:${row.chip}`);
+      const line = row.line.replace("NEXT", tryTime(new Date("2026-11-24T07:40:00+00:00"), new Date()));
+      expect(app.shows(`${id}-send >> text:${line}`)).toBe(true);
+      expect(app.shows(`${id}-send-line`)).toBe(true);
+    } else {
+      expect(app.shows(`${id}-send`)).toBe(false);
+    }
+    expect([row.stage, app.shows(`${id}-cancel`)]).toEqual([row.stage, row.cancel]);
+    // The row still opens its return: nothing on it is drawn over the card.
+    await app.press(`${id}-head`);
+    await app.waitFor("id:form-page", { timeout: 20000 });
+  });
+}
 
 test("phone: a tab keeps the returns of its status; Confirmed holds Paid", async () => {
   const app = await list();

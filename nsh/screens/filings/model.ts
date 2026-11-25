@@ -5,6 +5,7 @@
 import type { ReturnRow } from "../../bir";
 import { MONTHS, shortDate } from "../../lib/dates";
 import { type FormIndexEntry, frequencyOf, periodLabel } from "../../lib/periods";
+import { sendWords } from "../form/schema";
 
 /** The real statuses, in board order. */
 export const STATUSES = ["Draft", "Queued", "Submitted", "Confirmed", "Paid"] as const;
@@ -90,11 +91,16 @@ export const SEND_CHIPS: Readonly<Record<string, { label: string; tone: "neutral
   refused: { label: "Not sent", tone: "danger" },
 };
 
-/** A card's send chip and its line (the host's `send.line`), or null where the card says only its status. */
-export function sendChip(r: ReturnRow): { label: string; tone: "neutral" | "warning" | "danger"; line: string } | null {
+/** A card's send chip and its line (the host's `send.line`, with a held or waiting send's next time as the form page says it), or null
+ * where the card says only its status. */
+export function sendChip(r: ReturnRow, now: Date = new Date()): { label: string; tone: "neutral" | "warning" | "danger"; line: string } | null {
   const chip = r.send ? SEND_CHIPS[r.send.stage] : undefined;
-  return chip && r.send ? { ...chip, line: r.send.line } : null;
+  return chip && r.send ? { ...chip, line: sendWords(r.send, now) } : null;
 }
+
+/** A card offers Cancel queue on a Queued return, as the form page does: not while the worker checks the send with Buwiz, nor while the
+ * person is asked whether the BIR's email came (the host refuses a cancel of either). */
+export const cancellable = (r: ReturnRow): boolean => r.status === "Queued" && r.send?.stage !== "checking" && !r.send?.can_resolve;
 
 /** What a screen reader says of a card. */
 export const cardLabel = (r: ReturnRow): string => `${r.form_code} ${r.period_label}, ${whoLine(r)}, ${r.status}. Open`;

@@ -13,6 +13,8 @@
 //   send   true: bir.list_returns answers the send states the worker leaves (SENDS below) on four seeded returns: the 2551Q draft
 //          refused, the queued 1601C with an unknown outcome, the Cebu 2551Q held and the second taxpayer's 1601C waiting for its next
 //          try (those two as Queued). A worker that leaves them cannot run here (nothing is sent from a test), so a test stands in for it.
+//   stage  one send stage (send_state.rs): bir.list_returns answers it, with the host's line (STAGES below), on the queued 1601C alone,
+//          as Draft for "refused", Submitted for "sent" and "test_sent", else Queued (instead of `send`'s four).
 // It sits at the nsh root because a real-window run serves assets (fonts, icons) from the entry's folder down.
 import { batch, effect, host, mount, untracked, View } from "nsh";
 import "./theme/fonts";
@@ -30,6 +32,7 @@ interface Params {
   generated?: boolean;
   legacy?: "rows" | "second";
   send?: boolean;
+  stage?: SendState["stage"];
 }
 
 const sendOf = (stage: SendState["stage"], line: string, code: string | null = null): SendState => ({
@@ -43,11 +46,32 @@ const SENDS: Record<number, { status: string; send: SendState }> = {
   [IDS.second]: { status: "Queued", send: sendOf("waiting", "Not sent yet: BIR is not accepting returns right now. It tries again by itself.") },
 };
 
-/** bir.list_returns with SENDS on its rows. */
-function answerSends(): void {
+/** Every stage's line as send_state.rs writes it on this (desktop) host, a stand-in reason where the stage keeps one (param `stage`). */
+const STAGES: Record<SendState["stage"], string> = {
+  queued: "Queued to send.",
+  sending: "Sending now. Keep eBIRForms open.",
+  checking: "Checking with Buwiz whether this return was sent. Keep eBIRForms open.",
+  waiting: "Not sent yet: BIR is not accepting returns right now. It tries again by itself.",
+  held: "Buwiz is holding sends for now.",
+  needs_attention: "The BIR may have received this return. Check for the BIR's confirmation email before sending it again.",
+  refused: "This TIN is not on your Buwiz account.",
+  sent: "Sent to the BIR through Buwiz. Waiting for the BIR's confirmation email.",
+  test_sent: "Test send. Nothing reached the BIR.",
+};
+
+/** bir.list_returns with SENDS on its rows, or (param `stage`) that one stage on the queued 1601C. */
+function answerSends(stage?: SendState["stage"]): void {
   const real = bir.list_returns;
   const table = bir as unknown as Record<string, typeof bir.list_returns>;
-  table.list_returns = (which) => real(which).map((r) => (SENDS[r.id] ? { ...r, ...SENDS[r.id] } : r));
+  const sends: Record<number, { status: string; send: SendState }> = stage
+    ? {
+        [IDS.queued]: {
+          status: stage === "refused" ? "Draft" : stage === "sent" || stage === "test_sent" ? "Submitted" : "Queued",
+          send: sendOf(stage, STAGES[stage], stage === "refused" ? "tin_not_active" : null),
+        },
+      }
+    : SENDS;
+  table.list_returns = (which) => real(which).map((r) => (sends[r.id] ? { ...r, ...sends[r.id] } : r));
 }
 
 /** What the host answers for a TIN once the old program's folder was imported (made up: the demo taxpayers, their branch). */
@@ -83,7 +107,7 @@ const QUEUED: ReturnRow = {
 function Demo() {
   const p = host.params as Params;
   if (p.legacy) answerLegacy(p.legacy);
-  if (p.send) answerSends();
+  if (p.send || p.stage) answerSends(p.stage);
   if (p.seed === "none") createDemoTaxpayer();
   else seedFilings();
   if (p.go) {

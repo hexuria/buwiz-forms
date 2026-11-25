@@ -1858,6 +1858,17 @@ fn answer_refused(error: bir_core::db::DbError) -> HostError {
     HostError::new(CHANGED_WHILE_ANSWERING)
 }
 
+/// The sentence the page's "Queued" toast adds (`send_state::queue_note`): on a phone or tablet build, for a send
+/// that reaches the BIR (not a dry run, not a practice account), the person keeps the app on screen; else "".
+fn queue_note() -> HostResult {
+    let dry_run = bir_core::transport::is_sftp_dry_run();
+    Ok(HostValue::Str(
+        crate::send_state::queue_note(crate::send_state::ON_PHONE, dry_run)
+            .unwrap_or_default()
+            .to_string(),
+    ))
+}
+
 /// What a person answered for a Queued return whose send ended with an unknown outcome (`send.stage` is
 /// `needs_attention`): `"received"`, the BIR's confirmation email came, so it becomes Submitted as a real send; or
 /// `"not_received"`, no email came, so it goes back to Draft (the human-confirmed abandoned-claim release) to be
@@ -2898,6 +2909,7 @@ pub fn module() -> HostModule {
         .function("queue_form_draft", queue_form_draft)
         .function("cancel_queued", cancel_queued)
         .function("resolve_unknown_send", resolve_unknown_send)
+        .function("queue_note", |_| queue_note())
         .function("list_deadlines", |_| list_deadlines())
         .async_function("import_archive", import_archive)
         .async_function("export_profile", export_profile)
@@ -3088,6 +3100,8 @@ export function queue_form_draft(tin: string, form_code: string, year: number, q
 export function cancel_queued(tin: string, form_code: string, year: number, quarter: number | null): null;
 /** A queued return whose send has an unknown outcome (`send.stage` "needs_attention"): "received", the BIR's confirmation email came, makes it Submitted; "not_received" puts it back to Draft. `period` is 2551Q's quarter, 1601C's month, else the stored period (null is 0). Refused unless the return is waiting for this answer. */
 export function resolve_unknown_send(tin: string, form_code: string, year: number, period: number | null, answer: "received" | "not_received"): null;
+/** The sentence the form page's "Queued" toast adds: on a phone or tablet build, for a send that reaches the BIR (not a dry run, not a practice account), "Keep eBIRForms open and on screen until it says sent."; else "". */
+export function queue_note(): string;
 export interface TaxDeadline {
     id: number | null;
     form_type: string;

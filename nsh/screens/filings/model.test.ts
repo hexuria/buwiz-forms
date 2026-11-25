@@ -3,7 +3,7 @@
 import { expect, test } from "nsh/test";
 import type { ReturnRow, SendState } from "../../bir";
 import {
-  cardLabel, COLUMNS, dateLine, type FilterValues, filterRows, localMonth, monthLabel, namedBranch, newestFirst, periodKey, periodRank,
+  cancellable, cardLabel, COLUMNS, dateLine, type FilterValues, filterRows, localMonth, monthLabel, namedBranch, newestFirst, periodKey, periodRank,
   plural, presetFilters, presetOf, returnTitle, sendChip, STATUSES, whoLine,
 } from "./model";
 
@@ -168,4 +168,24 @@ test("a card's send chip: Checking, Held, Retrying, Needs attention and Not sent
   expect(sendChip(row({ status: "Draft", send: send("refused") }))).toEqual({ label: "Not sent", tone: "danger", line: "line of refused" });
   for (const stage of ["queued", "sending", "sent", "test_sent"] as const) expect(sendChip(row({ send: send(stage) }))).toBe(null);
   expect(sendChip(row({}))).toBe(null);
+});
+
+test("a held or waiting card says its next time as the form page does; a send without one keeps the host's line", () => {
+  const now = new Date(2026, 10, 24, 9, 0);
+  const at = (h: number, m: number, day = 24) => new Date(2026, 10, day, h, m).toISOString();
+  const send = (stage: SendState["stage"], next: string | null): SendState => ({ stage, line: "Buwiz is holding sends for now.", code: null, next_try_at: next, can_resolve: false });
+  expect(sendChip(row({ status: "Queued", send: send("held", at(15, 40)) }), now)?.line).toBe("Buwiz is holding sends for now. It goes again at 3:40 PM.");
+  expect(sendChip(row({ status: "Queued", send: { ...send("waiting", at(9, 5, 25)), line: "Not sent yet: BIR is busy. It tries again by itself." } }), now)?.line).toBe(
+    "Not sent yet: BIR is busy. It tries again by itself. Next try on Nov 25 at 9:05 AM.",
+  );
+  expect(sendChip(row({ status: "Queued", send: send("held", null) }), now)?.line).toBe("Buwiz is holding sends for now.");
+});
+
+test("a card offers Cancel queue on a Queued return, except one being checked with Buwiz or one whose outcome the person is asked about", () => {
+  const send = (stage: SendState["stage"]): SendState => ({ stage, line: "", code: null, next_try_at: null, can_resolve: stage === "needs_attention" });
+  for (const stage of ["queued", "sending", "held", "waiting"] as const) expect([stage, cancellable(row({ status: "Queued", send: send(stage) }))]).toEqual([stage, true]);
+  expect(cancellable(row({ status: "Queued" }))).toBe(true);
+  expect(cancellable(row({ status: "Queued", send: send("checking") }))).toBe(false);
+  expect(cancellable(row({ status: "Queued", send: send("needs_attention") }))).toBe(false);
+  for (const status of ["Draft", "Submitted", "Confirmed", "Paid"]) expect(cancellable(row({ status }))).toBe(false);
 });

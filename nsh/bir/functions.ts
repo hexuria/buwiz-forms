@@ -203,6 +203,9 @@ export const purge_archived_jobs = (...args: Parameters<typeof Host.purge_archiv
 export const queue_form_draft = (...args: Parameters<typeof Host.queue_form_draft>): ReturnType<typeof Host.queue_form_draft> =>
   Door.call("queue_form_draft", args) as ReturnType<typeof Host.queue_form_draft>;
 
+export const queue_note = (...args: Parameters<typeof Host.queue_note>): ReturnType<typeof Host.queue_note> =>
+  Door.call("queue_note", args) as ReturnType<typeof Host.queue_note>;
+
 export const record_income_tax_election = (...args: Parameters<typeof Host.record_income_tax_election>): ReturnType<typeof Host.record_income_tax_election> =>
   Door.call("record_income_tax_election", args) as ReturnType<typeof Host.record_income_tax_election>;
 
@@ -527,6 +530,7 @@ export const bir = {
   pull_device_filings,
   purge_archived_jobs,
   queue_form_draft,
+  queue_note,
   record_income_tax_election,
   record_screen_log,
   resolve_unknown_send,
@@ -657,6 +661,7 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "pull_device_filings", kind: "sync" },
   { name: "purge_archived_jobs", kind: "sync" },
   { name: "queue_form_draft", kind: "sync" },
+  { name: "queue_note", kind: "sync" },
   { name: "record_income_tax_election", kind: "sync" },
   { name: "record_screen_log", kind: "sync" },
   { name: "resolve_unknown_send", kind: "sync" },

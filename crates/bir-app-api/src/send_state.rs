@@ -24,6 +24,43 @@ pub const SENT_LINE: &str =
 /// The line of a claimed return whose relay send the worker is asking Buwiz about.
 pub const CHECKING_LINE: &str =
     "Checking with Buwiz whether this return was sent. Keep eBIRForms open.";
+/// [`SENDING_LINE`] on a phone or tablet: the app carries the connection, and
+/// the system freezes an app that leaves the screen (no background sending).
+pub const SENDING_LINE_PHONE: &str =
+    "Sending now. Keep eBIRForms open and on screen until it says sent.";
+/// [`CHECKING_LINE`] on a phone or tablet.
+pub const CHECKING_LINE_PHONE: &str =
+    "Checking with Buwiz whether this return was sent. Keep eBIRForms open and on screen.";
+/// The sentence a real send's "Queued" toast gains on a phone or tablet ([`queue_note`]).
+pub const QUEUE_NOTE_PHONE: &str = "Keep eBIRForms open and on screen until it says sent.";
+/// This build runs on a phone or tablet (iOS, iPadOS, Android), not a desktop
+/// (a narrow desktop window is still a desktop).
+pub const ON_PHONE: bool = cfg!(any(target_os = "ios", target_os = "android"));
+
+/// The line of a return being sent now, on a phone or a desktop.
+pub fn sending_line(phone: bool) -> &'static str {
+    if phone {
+        SENDING_LINE_PHONE
+    } else {
+        SENDING_LINE
+    }
+}
+
+/// The line of a send the worker is checking with Buwiz, on a phone or a desktop.
+pub fn checking_line(phone: bool) -> &'static str {
+    if phone {
+        CHECKING_LINE_PHONE
+    } else {
+        CHECKING_LINE
+    }
+}
+
+/// What the "Queued" toast adds: on a phone, for a send that reaches the BIR
+/// (not a dry run, which a practice account always is), [`QUEUE_NOTE_PHONE`];
+/// else nothing.
+pub fn queue_note(phone: bool, dry_run: bool) -> Option<&'static str> {
+    (phone && !dry_run).then_some(QUEUE_NOTE_PHONE)
+}
 
 /// What one stored return says about its send.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,9 +200,9 @@ pub fn send_state(facts: &SendFacts) -> Option<SendState> {
             Some(state)
         }
         FilingStatus::Queued if facts.claimed => Some(if facts.in_flight {
-            SendState::new("sending", SENDING_LINE)
+            SendState::new("sending", sending_line(ON_PHONE))
         } else if facts.relay_pending {
-            SendState::new("checking", CHECKING_LINE)
+            SendState::new("checking", checking_line(ON_PHONE))
         } else if !facts.put_started {
             SendState::new("queued", QUEUED_LINE)
         } else {
@@ -346,6 +383,36 @@ mod tests {
             next_try_at: next.map(str::to_string),
             can_resolve: resolve,
         })
+    }
+
+    #[test]
+    fn a_phone_says_to_keep_the_app_on_screen_and_a_desktop_keeps_its_words() {
+        assert_eq!(sending_line(false), "Sending now. Keep eBIRForms open.");
+        assert_eq!(
+            checking_line(false),
+            "Checking with Buwiz whether this return was sent. Keep eBIRForms open."
+        );
+        assert_eq!(
+            sending_line(true),
+            "Sending now. Keep eBIRForms open and on screen until it says sent."
+        );
+        assert_eq!(
+            checking_line(true),
+            "Checking with Buwiz whether this return was sent. Keep eBIRForms open and on screen."
+        );
+        // This test binary is a desktop build: the screens read the desktop words.
+        assert!(!ON_PHONE);
+    }
+
+    #[test]
+    fn only_a_real_send_queued_on_a_phone_gains_the_on_screen_sentence() {
+        assert_eq!(
+            queue_note(true, false),
+            Some("Keep eBIRForms open and on screen until it says sent.")
+        );
+        assert_eq!(queue_note(true, true), None, "phone, dry run or practice");
+        assert_eq!(queue_note(false, false), None, "desktop, real send");
+        assert_eq!(queue_note(false, true), None, "desktop, dry run");
     }
 
     #[test]

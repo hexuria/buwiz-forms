@@ -17,3 +17,5 @@ screen_form_profile_asked
 
 # Relay filing: a person answers whether the BIR's email came for a send with an unknown outcome (the form page).
 resolve_unknown_send
+# Relay filing on a phone: the sentence the Queued toast adds (keep the app on screen).
+queue_note

@@ -253,3 +253,65 @@ test("phone: a refused return's notice, and an unknown outcome's two answers", a
   const unknown = await open(ENTRY, { host: { params: { send: "needs_attention" } } });
   await unknown.waitUntil(() => unknown.texts().includes("The email came") && unknown.texts().includes("It did not arrive"), { timeout: 15_000 });
 });
+
+// Every send stage at phone size (the default open: an iPhone, 390 x 844, touch): the page says the host's whole line, offers the two
+// answers only where the person is asked, and Cancel queue only where the host would take the return out of the queue.
+const PHONE = (params: Record<string, unknown>) => ({ host: { params } });
+const PHONE_STAGES: readonly { stage: string; line: () => string; answers: boolean; cancel: boolean }[] = [
+  { stage: "queued", line: () => "Queued to send.", answers: false, cancel: true },
+  { stage: "sending", line: () => "Sending now. Keep eBIRForms open.", answers: false, cancel: true },
+  { stage: "checking", line: () => "Checking with Buwiz whether this return was sent. Keep eBIRForms open.", answers: false, cancel: false },
+  { stage: "held", line: () => "Buwiz is holding sends for now. It goes again at 3:40 PM.", answers: false, cancel: true },
+  {
+    stage: "waiting",
+    line: () => "Not sent yet: BIR is not accepting returns right now. It tries again by itself. Next try at 3:40 PM.",
+    answers: false,
+    cancel: true,
+  },
+  {
+    stage: "needs_attention",
+    line: () => "The BIR may have received this return. Check for the BIR's confirmation email before sending it again.",
+    answers: true,
+    cancel: false,
+  },
+  { stage: "sent", line: () => "Sent to BIR Apr 10, 2025. Nothing here can be changed.", answers: false, cancel: false },
+  { stage: "test_sent", line: () => "Dry run Apr 10, 2025, not sent to BIR. Nothing here can be changed.", answers: false, cancel: false },
+];
+
+for (const row of PHONE_STAGES) {
+  test(`phone: a ${row.stage} return's page says its whole line, with the buttons it allows`, async () => {
+    const app = await open(ENTRY, PHONE({ send: row.stage, nextTry: todayAt().toISOString() }));
+    await app.waitFor(`text:${row.line()}`, { timeout: 15_000 });
+    expect(app.shows("id:fp-send-line")).toBe(true);
+    expect([row.stage, app.shows("id:fp-email-came"), app.shows("id:fp-email-missing")]).toEqual([row.stage, row.answers, row.answers]);
+    expect([row.stage, app.shows("id:fp-cancel-queue")]).toEqual([row.stage, row.cancel]);
+  });
+}
+
+test("phone: a refused return's page says the whole reason as a Draft's notice, and Queue is there", async () => {
+  const app = await open(ENTRY, PHONE({ send: "refused" }));
+  await app.waitFor("id:fp-send-notice", { timeout: 15_000 });
+  expect(app.shows("id:fp-send-notice >> text:This TIN is not on your Buwiz account.")).toBe(true);
+  expect(app.shows("id:fp-account-fix")).toBe(true);
+  expect(app.shows("id:fp-send-line")).toBe(false);
+  expect(app.shows("id:fp-queue")).toBe(true);
+});
+
+test("phone: both answers to an unknown outcome are pressable, and each confirm step fits and answers", async () => {
+  const app = await open(ENTRY, PHONE({ send: "needs_attention" }));
+  await app.waitFor("id:fp-email-came", { timeout: 15_000 });
+  // A press is refused (ERR_NSH_TEST_COVERED) where something is drawn over the button: the page's bottom bar, the fixture's row.
+  await app.press("id:fp-email-missing");
+  await app.waitFor("text:Put this return back to Draft so you can send it again?");
+  expect(app.shows("id:resolve-continue >> text:Back to Draft")).toBe(true);
+  // Cancel asks nothing of the host: the question is still there. (The fixture's readouts run off a phone's width: the page says it.)
+  await app.press("id:resolve-cancel");
+  await app.waitFor("text:Put this return back to Draft so you can send it again?", { state: "gone" });
+  expect(app.shows("id:fp-email-came")).toBe(true);
+  expect(app.texts()).toContain("Queued · read-only");
+  await app.press("id:fp-email-came");
+  await app.waitFor("text:Mark this return as sent to the BIR?");
+  await app.press("id:resolve-continue");
+  await app.waitFor("text:Submitted · read-only", { timeout: 10_000 });
+  await app.waitUntil(() => !app.shows("id:fp-email-came"));
+});

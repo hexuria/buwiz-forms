@@ -3435,7 +3435,9 @@ export class FormSession {
       if (this.usesPeriodPath()) bir.queue_form_draft(s.target.tin, s.target.formCode, s.target.year, s.target.period || null);
       else bir.screen_form_queue(s.target.formCode, s.draft!);
       this.wrote(this.usesPeriodPath() ? "queue_form_draft" : "screen_form_queue");
-      this.toast("Queued for background submission.", "send");
+      // On a phone a real send goes only while the app is on screen: the host adds that sentence there (send_state.rs queue_note).
+      const note = bir.queue_note();
+      this.toast(note ? `Queued for background submission. ${note}` : "Queued for background submission.", "send");
       this.hooks.onQueueChanged?.(s.target);
       void this.reload();
     } catch (e) {
