@@ -22,6 +22,7 @@ export interface EmailParams {
 export const SIGNED_IN: CloudAccountStatus = {
   server_url: "http://localhost:3008",
   server_url_source: "build",
+  account_url: "",
   signed_in: true,
   email: "juana@example.com",
   user_id: "demo",

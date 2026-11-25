@@ -6,7 +6,7 @@ import { AppButton, Card, deviceCopy, Line, SettingRow, Text } from "../../ui";
 import { CODE_TITLE, CodeCardBody, EMAIL_TITLE, EmailCardBody } from "../auth/signInCards";
 import { pageOf, signInFlow } from "../auth/signInFlow";
 import { cloud, openAccount, signIn, signOut } from "./cloud";
-import { accountHint, deletionRequestUrl, serverHint, showsServer } from "./logic";
+import { accountHint, deletionPageUrl, serverHint, showsServer } from "./logic";
 
 /** Whether the flow's state draws a page of its own here (not the account row). */
 function inFlow(): boolean {
@@ -69,13 +69,13 @@ function AccountCard() {
         <SettingRow testID="settings-account-practice" title="Practice account" hint="Returns are simulated and never sent to the BIR" />
       </If>
       <If when={status().signed_in}>
-        <SettingRow testID="settings-account-delete" title="Delete account" hint="Writes an email to support asking to delete this Buwiz account">
+        <SettingRow testID="settings-account-delete" title="Delete account" hint="Opens the Buwiz page where you delete this account. You confirm with a code sent to your email.">
           <AppButton
             testID="settings-account-delete-button"
-            label="Request deletion"
+            label="Open deletion page"
             variant="ghost"
             size="sm"
-            onPress={() => void openUrl(deletionRequestUrl(status().email))}
+            onPress={() => void openUrl(deletionPageUrl(status().account_url))}
           />
         </SettingRow>
       </If>

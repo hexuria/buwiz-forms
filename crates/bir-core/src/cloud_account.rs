@@ -9,6 +9,9 @@
 //!
 //! The saved account is also what `bir-mcp` reads. There is one keychain
 //! entry and one private file. `bir-mcp` does not keep a second sign-in.
+//! On Android and on iPhone and iPad there is no keychain entry: the private
+//! file alone holds the sign-in, in the app's own folder (on iOS excluded
+//! from backups and protected "complete until first user authentication").
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -878,6 +881,8 @@ fn write_secret_file(raw: &str) -> Result<(), CloudError> {
     file.write_all(raw.as_bytes()).map_err(|error| {
         CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
     })?;
+    drop(file);
+    bir_submit::ios_storage::protect_file(&path);
     Ok(())
 }
 
@@ -925,59 +930,17 @@ fn keyring_delete() {
     }
 }
 
-// iOS: the same entry through `bir_submit::ios_storage`, stored
-// `AfterFirstUnlockThisDeviceOnly`, so a refresh token the server rotated
-// during a send that outlived the screen is still written, and the sign-in
-// never travels in a backup to another phone. An entry of the old class gets
-// its class in place on the first read.
-
-#[cfg(target_os = "ios")]
-fn keyring_load() -> Option<String> {
-    use bir_submit::ios_storage::{OsKeychain, SIGN_IN, get};
-    if crate::platform::keychain_disabled() {
-        return None;
-    }
-    match get(&OsKeychain, &SIGN_IN) {
-        Ok(Some(value)) if !value.trim().is_empty() => Some(value),
-        Ok(_) => None,
-        Err(error) => {
-            tracing::debug!("Buwiz keychain entry not read: {error}");
-            None
-        }
-    }
-}
-
-#[cfg(target_os = "ios")]
-fn keyring_save(raw: &str) -> bool {
-    use bir_submit::ios_storage::{OsKeychain, SIGN_IN, set};
-    if crate::platform::keychain_disabled() {
-        return false;
-    }
-    set(&OsKeychain, &SIGN_IN, raw).is_ok()
-}
-
-#[cfg(target_os = "ios")]
-fn keyring_delete() {
-    use bir_submit::ios_storage::{OsKeychain, SIGN_IN, delete};
-    if crate::platform::keychain_disabled() {
-        return;
-    }
-    if let Err(error) = delete(&OsKeychain, &SIGN_IN) {
-        tracing::debug!("Buwiz keychain entry not deleted: {error}");
-    }
-}
-
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 fn keyring_load() -> Option<String> {
     None
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 fn keyring_save(_raw: &str) -> bool {
     false
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 fn keyring_delete() {}
 
 pub struct BlockingHttp {
@@ -1830,16 +1793,6 @@ mod tests {
         assert_eq!(
             create,
             "http://localhost:3008/signup?next=%2Fdevice%3Fuser_code%3DABCD-EFGH"
-        );
-    }
-
-    /// The iOS entry is this one, under the names every build used.
-    #[test]
-    fn the_ios_sign_in_entry_is_the_keychain_entry() {
-        let item = bir_submit::ios_storage::SIGN_IN;
-        assert_eq!(
-            (item.service, item.account),
-            (KEYRING_SERVICE, KEYRING_ACCOUNT)
         );
     }
 

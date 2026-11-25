@@ -28,20 +28,32 @@ pub async fn run_shell_command(_cmd: &str) -> Result<std::process::Output, std::
     ))
 }
 
-/// See `super::prepare_app_storage`. The marker sits in [`data_dir`], which
-/// goes when the app is deleted.
-pub(super) fn prepare_ios_storage() {
+/// See `super::prepare_app_storage`. Answers the line to log once logging
+/// exists, and whether it is a warning. The marker sits in [`data_dir`],
+/// which goes when the app is deleted.
+pub(super) fn prepare_ios_storage() -> (bool, String) {
     use bir_submit::ios_storage::{
-        INSTALL_MARKER, OsKeychain, clear_on_fresh_install, exclude_from_backup,
+        OLD_ITEMS_MARKER, OsKeychain, exclude_from_backup, remove_old_items, set_file_protection,
     };
     let dir = data_dir();
-    if let Err(error) = exclude_from_backup(&dir) {
-        tracing::warn!("the app's data folder could not be excluded from backups: {error}");
-    }
-    let outcome = clear_on_fresh_install(
-        &OsKeychain,
-        !super::keychain_disabled(),
-        &dir.join(INSTALL_MARKER),
-    );
-    tracing::info!("Keychain at launch: {outcome:?}");
+    let backup = exclude_from_backup(&dir);
+    let protection = set_file_protection(&dir, true);
+    let keychain = (!super::keychain_disabled())
+        .then_some(&OsKeychain as &dyn bir_submit::ios_storage::Backend);
+    let old_items = remove_old_items(keychain, &dir.join(OLD_ITEMS_MARKER));
+    let warn = backup.is_err() || protection.is_err();
+    let backup = match backup {
+        Ok(()) => "set".to_owned(),
+        Err(error) => format!("NOT set ({error})"),
+    };
+    let protection = match protection {
+        Ok(()) => "set".to_owned(),
+        Err(error) => format!("NOT set ({error})"),
+    };
+    (
+        warn,
+        format!(
+            "App storage at launch: backup exclusion {backup}; file protection {protection}; old Keychain items {old_items}"
+        ),
+    )
 }

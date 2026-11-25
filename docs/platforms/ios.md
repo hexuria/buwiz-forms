@@ -35,54 +35,54 @@ just ios-appstore-upload                                       # nsh publish ios
 `nsh package` needs an iOS Simulator runtime that matches the Xcode SDK installed, even for a device package
 (`actool` refuses without one).
 
-## Simulator check: the Keychain, a relaunch, a reinstall
+## Simulator check: sign in, relaunch, reinstall
 
-Every development, test and agent run keeps the OS Keychain off (`BUWIZ_NO_KEYCHAIN=1`, the owner's standing rule):
-a debug build or `EBIR_TEST_ENV` switches it off in `nsh/src/door.rs` whatever the caller set. This check is the one
-exception. `BUWIZ_KEYCHAIN=1` lets a debug or test run use the Keychain **on iOS only** (the Simulator's own, or a
-test device's); on every other system it does nothing, and `BUWIZ_NO_KEYCHAIN=1` still wins over it. Use it for this
-check and nothing else.
-
-What it proves: the device key, the device id and the saved sign-in are stored "after first unlock, this device
-only" (`kSecAttrAccessible` = `cku`), an older item gets that class in place, a fresh install clears them, and the
-app's data folder is excluded from backups (`bir_submit::ios_storage`).
+On iPhone and iPad the saved sign-in (`buwiz-cloud-account.json`), the device key and the server's device id
+(`buwiz_submit_device_key.txt`, `buwiz_submit_device_id.txt`) are files beside the database, never Keychain items:
+deleting the app deletes them. Each is written with the file protection "complete until first user authentication",
+so a send can run while the phone is locked once it was unlocked after a restart. The app's data folder
+(`Library/Application Support/dev.goldcoders.bir`) is excluded from backups and carries the same protection, set on
+every launch. The Keychain holds one item, the install id, which survives a reinstall; development and test runs
+keep the Keychain off (`BUWIZ_NO_KEYCHAIN=1`), so this check uses its file (`buwiz_install_id.txt`, beside the
+database).
 
 The database must be named, or a test run gets a new scratch folder in `tmp/` on every launch and always starts
 signed out. Name one under the app container's `Documents/`: the door's guard lets a test run open it
 (`nsh/src/guards.rs`, test `a_test_run_may_open_a_database_in_the_containers_documents`), while the app's own data
-folder `Library/Application Support/dev.goldcoders.bir` stays refused. The sign-in file
-(`buwiz-cloud-account.json`) and any device-key fallback file go beside that database. The install marker
-(`keychain-install-marker`) goes in `Library/Application Support/dev.goldcoders.bir`. The logs of a test run are in
-the container's `tmp/ebirforms-logs-<pid>/logs/`.
+folder stays refused. No `BIR_AUTH_BYPASS`: with it a test run skips the sign-in gate.
 
 ```sh
 just mock-account --port 3008 --auto-approve                  # in another terminal
 cd nsh
 export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
-export SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BIR_AUTH_BYPASS=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1 \
-  SIMCTL_CHILD_BUWIZ_KEYCHAIN=1 SIMCTL_CHILD_BUWIZ_SERVER_URL=http://localhost:3008
-unset SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN SIMCTL_CHILD_BIR_SFTP_LIVE
-# 1. Install and launch once (scratch database), then quit. This is the fresh install.
+export SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1 \
+  SIMCTL_CHILD_BUWIZ_SERVER_URL=http://localhost:3008
+unset SIMCTL_CHILD_BIR_SFTP_LIVE SIMCTL_CHILD_BIR_AUTH_BYPASS
+# 1. Install and launch once (scratch database), then quit: the app's container exists now.
 nsh run --target ios
-# 2. The container exists now; name the stable database in it. A reinstall gets a new container: read it again.
+# 2. Name the stable database in it. A reinstall gets a new container: read it again.
 C="$(xcrun simctl get_app_container booted dev.goldcoders.bir data)"
-export SIMCTL_CHILD_BIR_DATABASE_PATH="$C/Documents/buwiz-keychain-check/bir_data.db"
+export SIMCTL_CHILD_BIR_DATABASE_PATH="$C/Documents/buwiz-check/bir_data.db"
 nsh run --target ios
 ```
 
-`BUWIZ_KEYCHAIN=1 just nsh-run-agent ios` passes the same switch through the agent recipe.
-
-The Simulator's Keychain is a file. Read the class of the items with
-`sqlite3 ~/Library/Developer/CoreSimulator/Devices/<udid>/data/Library/Keychains/keychain-2-debug.db "select pdmn, agrp from genp"`.
-Each row of this app should show `pdmn` = `cku` (`ak` is the old "when unlocked" class).
-
 | Step | What it should show |
 | --- | --- |
-| First launch after install (step 1) | Log `Keychain at launch: Cleared`; the marker file exists; the data folder has the excluded-from-backup attribute. |
-| Sign in (step 2), then send a return (a dry run) | Signed in. Rows `cku` for the sign-in, and for the device key and id once the relay registered. |
-| Relaunch, same variables | Still signed in. Log `Keychain at launch: Relaunch`; the rows are unchanged. |
-| Delete the app (`xcrun simctl uninstall booted dev.goldcoders.bir`) and run steps 1 and 2 again | Signed out (new container). Log `Cleared`; the marker is written again; this app's rows are gone until you sign in again. |
-| Upgrade from a build without the marker (or delete the marker file, then relaunch) | Log `Cleared` once: the three Keychain items go and the device key is new. The sign-in can still come back from `buwiz-cloud-account.json` beside the database, which the app always writes as well. |
+| Sign in through the gate (step 2); the mock approves by itself | Signed in; `buwiz-cloud-account.json` beside the database. |
+| Relaunch, same variables | Still signed in. |
+| Delete the app (`xcrun simctl uninstall booted dev.goldcoders.bir`), then steps 1 and 2 again | Signed out: the files went with the app. |
+
+The app's log (a test run's is in the container's `tmp/ebirforms-logs-<pid>/logs/`) has, once per launch:
+`App storage at launch: backup exclusion set; file protection set; old Keychain items skipped, the Keychain is off`
+(with the Keychain on, the last part is `device-key deleted, device-id absent, sign-in absent` once, then
+`removed at an earlier launch`). A failure reads `NOT set (<reason>)` and is a warning.
+
+To read the backup exclusion in the container (on the Mac running the Simulator):
+`xattr -l "$C/Library/Application Support/dev.goldcoders.bir"` should list
+`com.apple.metadata:com_apple_backup_excludeItem`. The file protection cannot be read from the Mac: the Simulator
+keeps its files on the Mac's disk and does not enforce data protection. The launch line above says whether it was
+set; only a device run (for example `FileManager.attributesOfItem(atPath:)[.protectionKey]` in a test build) shows
+the class itself.
 
 ## Screenshots
 

@@ -1,78 +1,93 @@
-//! How the app keeps its secrets and its folder on iOS: the Keychain items
-//! with their protection class set explicitly, the class of an item stored
-//! the old way changed in place, the clean-up after a fresh install, and the
-//! app's data folder kept out of device backups.
+//! What the app keeps where on iPhone and iPad.
 //!
-//! The rules are written against [`Backend`], so they are tested with a fake
-//! on every system; the real Keychain ([`OsKeychain`]) and the backup
-//! exclusion exist on iOS only. bir-core uses this module too (the saved
-//! sign-in, the launch step): it lives in this leaf crate so both crates
-//! reach it without a dependency cycle.
+//! - The saved sign-in, the device key and the server's device id are files
+//!   in the app's own data folder (the [`crate::secrets::FileStore`] and
+//!   bir-core's `buwiz-cloud-account.json`), never Keychain items: deleting
+//!   the app deletes them, and no sign-in or send depends on a Keychain call.
+//!   Each is written with the protection "complete until first user
+//!   authentication" ([`protect_file`]), so a send can run while the phone is
+//!   locked once it has been unlocked after a restart. The data folder is
+//!   excluded from device backups (`exclude_from_backup`).
+//! - The Keychain holds one item: the install id ([`install_id`]), an
+//!   identifier (not a secret) whose only job there is to survive deleting
+//!   and reinstalling the app. "After first unlock, this device only", never
+//!   synchronized. Any Keychain failure falls back to an id kept in a file.
+//! - One build stored the sign-in and the device key in the Keychain; the
+//!   launch step deletes those three items once ([`remove_old_items`]).
 //!
-//! Every item is `AfterFirstUnlockThisDeviceOnly`:
-//! - readable and writable while the phone is locked, once it has been
-//!   unlocked after a restart, so a send that outlives the screen can still
-//!   store the refresh token the server rotated;
-//! - never in a backup and never in iCloud Keychain, so a second phone cannot
-//!   sign as this device.
+//! The rules are written against [`Backend`] and tested with a fake on every
+//! system; the real Keychain (`OsKeychain`) and the file attributes exist on
+//! iOS only. bir-core calls this module too: it lives in this leaf crate so
+//! both crates reach it without a dependency cycle.
 
 use std::path::Path;
 
-/// When a Keychain item can be read and whether it may leave the device.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Protection {
-    /// `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`.
-    AfterFirstUnlockThisDeviceOnly,
-}
-
-/// One generic-password item: its service, its account and its class.
+/// One generic-password item: its service and account, and the name the
+/// log calls it by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Item {
+    pub name: &'static str,
     pub service: &'static str,
     pub account: &'static str,
-    pub protection: Protection,
 }
 
-/// The device's Ed25519 signing key (`secrets` name `device_key`).
-pub const DEVICE_KEY: Item = Item {
+/// The install id: the only item the app stores in the Keychain.
+pub const INSTALL_ID: Item = Item {
+    name: "install-id",
     service: crate::secrets::SERVICE,
-    account: "device-key",
-    protection: Protection::AfterFirstUnlockThisDeviceOnly,
+    account: "install-id",
 };
 
-/// The id the server registered the device key under (`device_id`).
-pub const DEVICE_ID: Item = Item {
-    service: crate::secrets::SERVICE,
-    account: "device-id",
-    protection: Protection::AfterFirstUnlockThisDeviceOnly,
-};
+/// The items one earlier build stored in the Keychain, under these names.
+pub const OLD_ITEMS: [Item; 3] = [
+    Item {
+        name: "device-key",
+        service: crate::secrets::SERVICE,
+        account: "device-key",
+    },
+    Item {
+        name: "device-id",
+        service: crate::secrets::SERVICE,
+        account: "device-id",
+    },
+    Item {
+        name: "sign-in",
+        service: crate::secrets::SERVICE,
+        account: "desktop-refresh",
+    },
+];
 
-/// The saved Buwiz sign-in, with its refresh token
-/// (bir-core `cloud_account::KEYRING_SERVICE` / `KEYRING_ACCOUNT`).
-pub const SIGN_IN: Item = Item {
-    service: "com.buwiz.bir",
-    account: "desktop-refresh",
-    protection: Protection::AfterFirstUnlockThisDeviceOnly,
-};
+/// The symbolic name of a Security framework status the app meets.
+pub fn status_name(status: i32) -> Option<&'static str> {
+    Some(match status {
+        -34018 => "errSecMissingEntitlement",
+        -25308 => "errSecInteractionNotAllowed",
+        -25300 => "errSecItemNotFound",
+        -25299 => "errSecDuplicateItem",
+        -25291 => "errSecNotAvailable",
+        -25292 => "errSecReadOnly",
+        -50 => "errSecParam",
+        _ => return None,
+    })
+}
 
-/// Why a Keychain call did not do what was asked.
+/// `OSStatus -34018 (errSecMissingEntitlement)`.
+fn status_text(status: i32) -> String {
+    match status_name(status) {
+        Some(name) => format!("OSStatus {status} ({name})"),
+        None => format!("OSStatus {status}"),
+    }
+}
+
+/// A Keychain call that did not succeed, with its status.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum KeychainError {
-    #[error("no such Keychain item (OSStatus -25300)")]
+    #[error("not found, {}", status_text(-25300))]
     NotFound,
-    #[error("the Keychain item already exists (OSStatus -25299)")]
+    #[error("already there, {}", status_text(-25299))]
     Duplicate,
-    /// `errSecInteractionNotAllowed`: the item's class does not allow it now
-    /// (locked, or not unlocked since the restart). The item may well exist.
-    #[error("the Keychain cannot be used while the device is locked (OSStatus -25308)")]
-    Locked,
-    /// `errSecNotAvailable`, `errSecReadOnly`: there is no usable Keychain.
-    #[error("the Keychain is not available (OSStatus {0})")]
-    Unavailable(i32),
-    #[error("the Keychain refused (OSStatus {0})")]
+    #[error("{}", status_text(*.0))]
     Failed(i32),
-    #[error("the Keychain item is not UTF-8")]
-    NotUtf8,
 }
 
 impl KeychainError {
@@ -81,147 +96,285 @@ impl KeychainError {
         match status {
             -25300 => Self::NotFound,
             -25299 => Self::Duplicate,
-            -25308 => Self::Locked,
-            -25291 | -25292 => Self::Unavailable(status),
             other => Self::Failed(other),
         }
     }
+
+    pub fn status(&self) -> i32 {
+        match self {
+            Self::NotFound => -25300,
+            Self::Duplicate => -25299,
+            Self::Failed(status) => *status,
+        }
+    }
 }
 
-/// An item as the Keychain holds it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Stored {
-    pub value: Vec<u8>,
-    /// The item's class when it is the one [`Item::protection`] asks for;
-    /// `None` for any other (the old default "when unlocked").
-    pub protection: Option<Protection>,
-}
-
-/// The four Keychain calls the rules below are made of.
+/// The three Keychain calls the rules below are made of.
 pub trait Backend {
-    /// The item, or [`KeychainError::NotFound`].
-    fn read(&self, item: &Item) -> Result<Stored, KeychainError>;
-    /// Add the item with its class; [`KeychainError::Duplicate`] when it
-    /// exists, which is never replaced by this call.
+    /// The item's value, or [`KeychainError::NotFound`].
+    fn read(&self, item: &Item) -> Result<Vec<u8>, KeychainError>;
+    /// Add the item, "after first unlock, this device only" and not
+    /// synchronized; [`KeychainError::Duplicate`] when it exists, which this
+    /// call never replaces.
     fn add(&self, item: &Item, value: &[u8]) -> Result<(), KeychainError>;
-    /// Set the existing item's class, and its value when one is given. In
-    /// place: a failure leaves the item as it was.
-    fn update(&self, item: &Item, value: Option<&[u8]>) -> Result<(), KeychainError>;
     fn delete(&self, item: &Item) -> Result<(), KeychainError>;
 }
 
-/// Read an item. One stored with another class (an older build stored
-/// every item "when unlocked") is given its class in place, its value
-/// untouched; when that fails the item stays exactly as it was, still
-/// readable, and the next read tries again. Nothing here deletes.
-pub fn get(backend: &dyn Backend, item: &Item) -> Result<Option<String>, KeychainError> {
-    let stored = match backend.read(item) {
-        Ok(stored) => stored,
-        Err(KeychainError::NotFound) => return Ok(None),
-        Err(error) => return Err(error),
-    };
-    let value = String::from_utf8(stored.value).map_err(|_| KeychainError::NotUtf8)?;
-    if stored.protection != Some(item.protection) {
-        match backend.update(item, None) {
-            Ok(()) => tracing::info!(
-                "Keychain item {}/{} now has its class",
-                item.service,
-                item.account
-            ),
-            Err(error) => tracing::warn!(
-                "Keychain item {}/{} keeps its old class for now: {error}",
-                item.service,
-                item.account
-            ),
-        }
-    }
-    Ok(Some(value))
+// ------------------------------------------------------------- install id
+
+/// The file beside the database that keeps the install id when the
+/// Keychain cannot (and mirrors the Keychain's, so a later failure answers
+/// the same id).
+pub const INSTALL_ID_FILE: &str = "buwiz_install_id.txt";
+
+/// Where the install id came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstallIdSource {
+    /// It was in the Keychain (it survived a reinstall, or was stored earlier).
+    Keychain,
+    /// The Keychain had none; this one was just stored there.
+    Stored,
+    /// The file: the Keychain is off, or it could not be read or written.
+    File,
 }
 
-/// Create or replace an item, with its class either way.
-pub fn set(backend: &dyn Backend, item: &Item, value: &str) -> Result<(), KeychainError> {
-    match backend.add(item, value.as_bytes()) {
-        Err(KeychainError::Duplicate) => backend.update(item, Some(value.as_bytes())),
-        other => other,
-    }
-}
-
-/// Delete an item; one that is not there counts as deleted.
-pub fn delete(backend: &dyn Backend, item: &Item) -> Result<(), KeychainError> {
-    match backend.delete(item) {
-        Ok(()) | Err(KeychainError::NotFound) => Ok(()),
-        Err(error) => Err(error),
-    }
-}
-
-/// The name of the marker file, in the app's data folder, that tells a
-/// relaunch from the first launch after an install.
-pub const INSTALL_MARKER: &str = "keychain-install-marker";
-
-/// What [`clear_on_fresh_install`] did.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FreshInstall {
-    /// The OS Keychain is switched off: nothing was called or written.
-    KeychainOff,
-    /// The marker is there: not a fresh install, nothing was touched.
-    Relaunch,
-    /// The items of an earlier install were deleted and the marker written.
-    Cleared,
-    /// Something could not be done; the marker was not written, so the next
-    /// launch tries again.
-    Incomplete(Vec<String>),
+pub struct InstallId {
+    pub value: String,
+    pub source: InstallIdSource,
 }
 
-/// The items a fresh install deletes: exactly these three.
-pub const CLEARED_ON_FRESH_INSTALL: [Item; 3] = [DEVICE_KEY, DEVICE_ID, SIGN_IN];
+/// An install id the server takes: 16 to 64 of `[A-Za-z0-9_-]`.
+pub fn is_valid_install_id(value: &str) -> bool {
+    (16..=64).contains(&value.len())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+}
 
-/// The first launch after an install. Keychain items outlive the app, so
-/// an install would come back signed in with the old device key: with the
-/// marker missing, delete [`CLEARED_ON_FRESH_INSTALL`] (the device key, the
-/// device id, the saved sign-in) and nothing else, then write the marker.
-/// With the Keychain off (`BUWIZ_NO_KEYCHAIN=1`) nothing is called and no
-/// marker is written, so the first launch that uses the Keychain still
-/// clears it.
-pub fn clear_on_fresh_install(
-    backend: &dyn Backend,
-    keychain_on: bool,
-    marker: &Path,
-) -> FreshInstall {
-    if !keychain_on {
-        return FreshInstall::KeychainOff;
+/// A new install id: 32 random bytes, base64url without padding (43 characters).
+pub fn new_install_id() -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(rand::random::<[u8; 32]>())
+}
+
+/// The install id of this installation, from the folder `dir` (beside the
+/// database) and, with `use_keychain` on iOS, the Keychain. `offered` is
+/// the id to store when there is none yet (a new one is made when it is
+/// `None` or not a valid id). Never fails and never waits on a person:
+/// any Keychain failure is one logged line and the file's id. Off iOS, and
+/// with `use_keychain` false (`BUWIZ_NO_KEYCHAIN=1`), the file only.
+pub fn install_id(dir: &Path, use_keychain: bool, offered: Option<&str>) -> InstallId {
+    #[cfg(target_os = "ios")]
+    let keychain: Option<&dyn Backend> = use_keychain.then_some(&OsKeychain as &dyn Backend);
+    #[cfg(not(target_os = "ios"))]
+    let keychain: Option<&dyn Backend> = {
+        let _ = use_keychain;
+        None
+    };
+    resolve_install_id(keychain, &dir.join(INSTALL_ID_FILE), offered)
+}
+
+/// [`install_id`] with the Keychain given (`None`: no call is made) and the
+/// file named.
+///
+/// - The Keychain has a valid id: that one (and the file is made to match).
+/// - It has none: the file's id, else `offered`, else a new one, is added;
+///   when the add fails the same id is kept in the file instead.
+/// - The read fails for any reason, or the stored value is not a valid id:
+///   the file's id (made if missing).
+pub fn resolve_install_id(
+    keychain: Option<&dyn Backend>,
+    file: &Path,
+    offered: Option<&str>,
+) -> InstallId {
+    let in_file = read_id_file(file);
+    let candidate = || {
+        in_file
+            .clone()
+            .or_else(|| {
+                offered
+                    .filter(|id| is_valid_install_id(id))
+                    .map(str::to_owned)
+            })
+            .unwrap_or_else(new_install_id)
+    };
+    let Some(keychain) = keychain else {
+        return from_file(file, in_file.clone(), candidate);
+    };
+    let name = INSTALL_ID.name;
+    match keychain.read(&INSTALL_ID) {
+        Ok(bytes) => match String::from_utf8(bytes)
+            .ok()
+            .filter(|id| is_valid_install_id(id))
+        {
+            Some(value) => {
+                tracing::info!("Keychain {name}: read, stored");
+                mirror(file, in_file.as_deref(), &value);
+                InstallId {
+                    value,
+                    source: InstallIdSource::Keychain,
+                }
+            }
+            None => {
+                tracing::warn!(
+                    "Keychain {name}: read, not a valid install id; using the install id in its file"
+                );
+                from_file(file, in_file.clone(), candidate)
+            }
+        },
+        Err(KeychainError::NotFound) => {
+            tracing::info!("Keychain {name}: read, absent");
+            let value = candidate();
+            match keychain.add(&INSTALL_ID, value.as_bytes()) {
+                Ok(()) => {
+                    tracing::info!("Keychain {name}: saved");
+                    mirror(file, in_file.as_deref(), &value);
+                    InstallId {
+                        value,
+                        source: InstallIdSource::Stored,
+                    }
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        "Keychain {name}: save failed, {error}; using the install id in its file"
+                    );
+                    from_file(file, in_file.clone(), || value)
+                }
+            }
+        }
+        Err(error) => {
+            tracing::warn!(
+                "Keychain {name}: read failed, {error}; using the install id in its file"
+            );
+            from_file(file, in_file.clone(), candidate)
+        }
     }
+}
+
+fn read_id_file(file: &Path) -> Option<String> {
+    std::fs::read_to_string(file)
+        .ok()
+        .map(|text| text.trim().to_owned())
+        .filter(|id| is_valid_install_id(id))
+}
+
+/// The file's id, or `candidate()` written there.
+fn from_file(
+    file: &Path,
+    in_file: Option<String>,
+    candidate: impl FnOnce() -> String,
+) -> InstallId {
+    let value = in_file.unwrap_or_else(|| {
+        let value = candidate();
+        write_id_file(file, &value);
+        value
+    });
+    InstallId {
+        value,
+        source: InstallIdSource::File,
+    }
+}
+
+fn mirror(file: &Path, in_file: Option<&str>, value: &str) {
+    if in_file != Some(value) {
+        write_id_file(file, value);
+    }
+}
+
+fn write_id_file(file: &Path, value: &str) {
+    let written = file
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(file, value));
+    match written {
+        Ok(()) => protect_file(file),
+        Err(error) => {
+            tracing::warn!("install id file not written ({error}); kept for this run only")
+        }
+    }
+}
+
+// ------------------------------------------------------ the old items, once
+
+/// The marker file, in the app's data folder, that says the old items are gone.
+pub const OLD_ITEMS_MARKER: &str = "keychain-old-items-removed";
+
+/// What [`remove_old_items`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OldItems {
+    /// The Keychain is off: no call, no marker.
+    KeychainOff,
+    /// An earlier launch did it.
+    AlreadyDone,
+    /// Each old item's delete, as said in the log (`device-key deleted`,
+    /// `device-id absent`, `sign-in not deleted, OSStatus …`).
+    Removed(Vec<String>),
+}
+
+impl std::fmt::Display for OldItems {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::KeychainOff => write!(f, "skipped, the Keychain is off"),
+            Self::AlreadyDone => write!(f, "removed at an earlier launch"),
+            Self::Removed(outcomes) => write!(f, "{}", outcomes.join(", ")),
+        }
+    }
+}
+
+/// Delete [`OLD_ITEMS`] once, best effort: every failure is noted and
+/// ignored, the marker is written whatever happened, and the install id is
+/// never touched. Whether the person is signed in is decided by the files,
+/// not by this. With the Keychain off (`None`) nothing is called and no
+/// marker is written.
+pub fn remove_old_items(keychain: Option<&dyn Backend>, marker: &Path) -> OldItems {
+    let Some(keychain) = keychain else {
+        return OldItems::KeychainOff;
+    };
     if marker.exists() {
-        return FreshInstall::Relaunch;
+        return OldItems::AlreadyDone;
     }
-    let mut failures = Vec::new();
-    for item in &CLEARED_ON_FRESH_INSTALL {
-        if let Err(error) = delete(backend, item) {
-            failures.push(format!("{}/{}: {error}", item.service, item.account));
-        }
+    let mut outcomes: Vec<String> = OLD_ITEMS
+        .iter()
+        .map(|item| match keychain.delete(item) {
+            Ok(()) => format!("{} deleted", item.name),
+            Err(KeychainError::NotFound) => format!("{} absent", item.name),
+            Err(error) => format!("{} not deleted, {error}", item.name),
+        })
+        .collect();
+    let written = marker
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(marker, b"1\n"));
+    if let Err(error) = written {
+        outcomes.push(format!("marker not written ({error})"));
     }
-    if failures.is_empty() {
-        let written = marker
-            .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| std::fs::write(marker, b"1\n"));
-        if let Err(error) = written {
-            failures.push(format!("marker {}: {error}", marker.display()));
-        }
+    OldItems::Removed(outcomes)
+}
+
+// ------------------------------------------------------------ file attributes
+
+/// Give `file` the protection "complete until first user authentication"
+/// (iOS): readable and writable while the phone is locked, once it has been
+/// unlocked after a restart. A failure is a logged warning, never a failure
+/// of the write. Nothing on other systems.
+pub fn protect_file(file: &Path) {
+    #[cfg(target_os = "ios")]
+    if let Err(error) = set_file_protection(file, false) {
+        let name = file.file_name().unwrap_or_default().to_string_lossy();
+        tracing::warn!("file protection not set on {name}: {error}");
     }
-    if failures.is_empty() {
-        FreshInstall::Cleared
-    } else {
-        FreshInstall::Incomplete(failures)
-    }
+    #[cfg(not(target_os = "ios"))]
+    let _ = file;
 }
 
 #[cfg(target_os = "ios")]
-pub use os::{OsKeychain, exclude_from_backup};
+pub use os::{OsKeychain, exclude_from_backup, set_file_protection};
 
-/// The real Keychain (`SecItem*`) and the backup exclusion.
+/// The real Keychain (`SecItem*`) and the file attributes.
 #[cfg(target_os = "ios")]
 mod os {
-    use super::{Backend, Item, KeychainError, Protection, Stored};
+    use super::{Backend, Item, KeychainError};
     use core_foundation::base::{CFType, TCFType};
     use core_foundation::boolean::CFBoolean;
     use core_foundation::data::CFData;
@@ -233,12 +386,9 @@ mod os {
     use security_framework_sys::access_control::kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
     use security_framework_sys::item::{
         kSecAttrAccount, kSecAttrService, kSecAttrSynchronizable, kSecClass,
-        kSecClassGenericPassword, kSecReturnAttributes, kSecReturnData, kSecValueData,
+        kSecClassGenericPassword, kSecReturnData, kSecValueData,
     };
-    use security_framework_sys::keychain_item::{
-        SecItemAdd, SecItemCopyMatching, SecItemDelete, SecItemUpdate,
-    };
-    use std::ffi::c_void;
+    use security_framework_sys::keychain_item::{SecItemAdd, SecItemCopyMatching, SecItemDelete};
 
     // Not declared by security-framework-sys.
     #[link(name = "Security", kind = "framework")]
@@ -246,23 +396,17 @@ mod os {
         static kSecAttrAccessible: CFStringRef;
     }
 
-    // Declared by core-foundation-sys only behind a macOS feature.
+    // Declared by core-foundation-sys only behind a macOS feature, or not at all.
     #[link(name = "CoreFoundation", kind = "framework")]
     unsafe extern "C" {
         static kCFURLIsExcludedFromBackupKey: CFStringRef;
+        static kCFURLFileProtectionKey: CFStringRef;
+        static kCFURLFileProtectionCompleteUntilFirstUserAuthentication: CFStringRef;
     }
 
     fn constant(name: CFStringRef) -> CFString {
-        // SAFETY: a Security framework constant, valid for the process.
+        // SAFETY: a framework constant, valid for the process.
         unsafe { CFString::wrap_under_get_rule(name) }
-    }
-
-    fn class_value(protection: Protection) -> CFString {
-        match protection {
-            Protection::AfterFirstUnlockThisDeviceOnly => {
-                constant(unsafe { kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly })
-            }
-        }
     }
 
     /// Class, service, account: what names one item. No synchronizable
@@ -292,19 +436,15 @@ mod os {
         }
     }
 
-    /// The app's Keychain through `SecItemCopyMatching`, `SecItemAdd`,
-    /// `SecItemUpdate` and `SecItemDelete`.
+    /// The app's Keychain through `SecItemCopyMatching`, `SecItemAdd` and
+    /// `SecItemDelete`.
     pub struct OsKeychain;
 
     impl Backend for OsKeychain {
-        fn read(&self, item: &Item) -> Result<Stored, KeychainError> {
+        fn read(&self, item: &Item) -> Result<Vec<u8>, KeychainError> {
             let mut query = identity(item);
             query.push((
                 constant(unsafe { kSecReturnData }),
-                CFBoolean::true_value().into_CFType(),
-            ));
-            query.push((
-                constant(unsafe { kSecReturnAttributes }),
                 CFBoolean::true_value().into_CFType(),
             ));
             let query = CFDictionary::from_CFType_pairs(&query);
@@ -314,32 +454,17 @@ mod os {
                 return Err(KeychainError::Failed(-50));
             }
             // SAFETY: a Copy call's result, owned by us.
-            let result = unsafe { CFType::wrap_under_create_rule(result) };
-            let attributes = result
-                .downcast_into::<CFDictionary>()
-                .ok_or(KeychainError::Failed(-50))?;
-            let field = |key: CFStringRef| {
-                attributes
-                    .find(key as *const c_void)
-                    // SAFETY: a value the dictionary holds; retained here.
-                    .map(|value| unsafe { CFType::wrap_under_get_rule(*value) })
-            };
-            let value = field(unsafe { kSecValueData })
-                .and_then(|value| value.downcast::<CFData>())
+            unsafe { CFType::wrap_under_create_rule(result) }
+                .downcast_into::<CFData>()
                 .map(|data| data.bytes().to_vec())
-                .ok_or(KeychainError::Failed(-50))?;
-            let class =
-                field(unsafe { kSecAttrAccessible }).and_then(|class| class.downcast::<CFString>());
-            let protection =
-                (class == Some(class_value(item.protection))).then_some(item.protection);
-            Ok(Stored { value, protection })
+                .ok_or(KeychainError::Failed(-50))
         }
 
         fn add(&self, item: &Item, value: &[u8]) -> Result<(), KeychainError> {
             let mut attributes = identity(item);
             attributes.push((
                 constant(unsafe { kSecAttrAccessible }),
-                class_value(item.protection).into_CFType(),
+                constant(unsafe { kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly }).into_CFType(),
             ));
             attributes.push((
                 constant(unsafe { kSecAttrSynchronizable }),
@@ -353,41 +478,27 @@ mod os {
             check(unsafe { SecItemAdd(attributes.as_concrete_TypeRef(), std::ptr::null_mut()) })
         }
 
-        fn update(&self, item: &Item, value: Option<&[u8]>) -> Result<(), KeychainError> {
-            let query = CFDictionary::from_CFType_pairs(&identity(item));
-            let mut changes = vec![(
-                constant(unsafe { kSecAttrAccessible }),
-                class_value(item.protection).into_CFType(),
-            )];
-            if let Some(value) = value {
-                changes.push((
-                    constant(unsafe { kSecValueData }),
-                    CFData::from_buffer(value).into_CFType(),
-                ));
-            }
-            let changes = CFDictionary::from_CFType_pairs(&changes);
-            check(unsafe {
-                SecItemUpdate(query.as_concrete_TypeRef(), changes.as_concrete_TypeRef())
-            })
-        }
-
         fn delete(&self, item: &Item) -> Result<(), KeychainError> {
             let query = CFDictionary::from_CFType_pairs(&identity(item));
             check(unsafe { SecItemDelete(query.as_concrete_TypeRef()) })
         }
     }
 
-    /// Mark a directory "excluded from backup" (`NSURLIsExcludedFromBackupKey`):
-    /// neither iCloud nor a computer backup copies it or what it holds.
-    pub fn exclude_from_backup(directory: &std::path::Path) -> Result<(), String> {
-        let url = CFURL::from_path(directory, true)
-            .ok_or_else(|| format!("{} is not a file URL", directory.display()))?;
+    /// `CFURLSetResourcePropertyForKey(path, key, value)`.
+    fn set_property(
+        path: &std::path::Path,
+        directory: bool,
+        key: CFStringRef,
+        value: CFTypeRef,
+    ) -> Result<(), String> {
+        let url = CFURL::from_path(path, directory)
+            .ok_or_else(|| format!("{} is not a file URL", path.display()))?;
         let mut error = std::ptr::null_mut();
         let done = unsafe {
             core_foundation_sys::url::CFURLSetResourcePropertyForKey(
                 url.as_concrete_TypeRef(),
-                kCFURLIsExcludedFromBackupKey,
-                CFBoolean::true_value().as_CFTypeRef(),
+                key,
+                value,
                 &mut error,
             )
         };
@@ -395,12 +506,36 @@ mod os {
             return Ok(());
         }
         if error.is_null() {
-            return Err("the backup exclusion was not set".into());
+            return Err("the attribute was not set".into());
         }
         // SAFETY: an error the call created and handed to us.
         Err(unsafe { CFError::wrap_under_create_rule(error) }
             .description()
             .to_string())
+    }
+
+    /// Mark a directory "excluded from backup" (`NSURLIsExcludedFromBackupKey`):
+    /// neither iCloud nor a computer backup copies it or what it holds.
+    pub fn exclude_from_backup(directory: &std::path::Path) -> Result<(), String> {
+        set_property(
+            directory,
+            true,
+            unsafe { kCFURLIsExcludedFromBackupKey },
+            CFBoolean::true_value().as_CFTypeRef(),
+        )
+    }
+
+    /// Set `NSURLFileProtectionKey` to
+    /// `NSURLFileProtectionCompleteUntilFirstUserAuthentication` on a file or
+    /// a folder (files made in a folder later take the folder's).
+    pub fn set_file_protection(path: &std::path::Path, directory: bool) -> Result<(), String> {
+        let class = constant(unsafe { kCFURLFileProtectionCompleteUntilFirstUserAuthentication });
+        set_property(
+            path,
+            directory,
+            unsafe { kCFURLFileProtectionKey },
+            class.as_CFTypeRef(),
+        )
     }
 }
 
@@ -410,25 +545,22 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
-    type Key = (&'static str, &'static str);
-
-    /// A Keychain in memory: each item's value and whether it has its class.
-    /// Records every call; a call named in `fail` fails with its error.
+    /// A Keychain in memory. Records every call; a call named in `fail`
+    /// fails with its error.
     #[derive(Default)]
     struct Fake {
-        items: RefCell<HashMap<Key, (Vec<u8>, bool)>>,
+        items: RefCell<HashMap<&'static str, Vec<u8>>>,
         calls: RefCell<Vec<String>>,
         fail: HashMap<&'static str, KeychainError>,
     }
 
     impl Fake {
-        fn holding(entries: &[(Item, &str, bool)]) -> Self {
+        fn holding(entries: &[(Item, &str)]) -> Self {
             let fake = Self::default();
-            for (item, value, has_class) in entries {
-                fake.items.borrow_mut().insert(
-                    (item.service, item.account),
-                    (value.as_bytes().to_vec(), *has_class),
-                );
+            for (item, value) in entries {
+                fake.items
+                    .borrow_mut()
+                    .insert(item.account, value.as_bytes().to_vec());
             }
             fake
         }
@@ -440,16 +572,13 @@ mod tests {
             self.calls
                 .borrow_mut()
                 .push(format!("{call} {}", item.account));
-            match self.fail.get(call) {
-                Some(error) => Err(error.clone()),
-                None => Ok(()),
-            }
+            self.fail.get(call).cloned().map_or(Ok(()), Err)
         }
-        fn entry(&self, item: &Item) -> Option<(String, bool)> {
+        fn value(&self, item: &Item) -> Option<String> {
             self.items
                 .borrow()
-                .get(&(item.service, item.account))
-                .map(|(value, class)| (String::from_utf8(value.clone()).unwrap(), *class))
+                .get(item.account)
+                .map(|value| String::from_utf8(value.clone()).unwrap())
         }
         fn calls(&self) -> Vec<String> {
             self.calls.borrow().clone()
@@ -457,273 +586,376 @@ mod tests {
     }
 
     impl Backend for Fake {
-        fn read(&self, item: &Item) -> Result<Stored, KeychainError> {
+        fn read(&self, item: &Item) -> Result<Vec<u8>, KeychainError> {
             self.record("read", item)?;
-            let items = self.items.borrow();
-            let (value, has_class) = items
-                .get(&(item.service, item.account))
-                .ok_or(KeychainError::NotFound)?;
-            Ok(Stored {
-                value: value.clone(),
-                protection: has_class.then_some(item.protection),
-            })
+            self.items
+                .borrow()
+                .get(item.account)
+                .cloned()
+                .ok_or(KeychainError::NotFound)
         }
         fn add(&self, item: &Item, value: &[u8]) -> Result<(), KeychainError> {
             self.record("add", item)?;
             let mut items = self.items.borrow_mut();
-            let key = (item.service, item.account);
-            if items.contains_key(&key) {
+            if items.contains_key(item.account) {
                 return Err(KeychainError::Duplicate);
             }
-            items.insert(key, (value.to_vec(), true));
-            Ok(())
-        }
-        fn update(&self, item: &Item, value: Option<&[u8]>) -> Result<(), KeychainError> {
-            self.record("update", item)?;
-            let mut items = self.items.borrow_mut();
-            let entry = items
-                .get_mut(&(item.service, item.account))
-                .ok_or(KeychainError::NotFound)?;
-            if let Some(value) = value {
-                entry.0 = value.to_vec();
-            }
-            entry.1 = true;
+            items.insert(item.account, value.to_vec());
             Ok(())
         }
         fn delete(&self, item: &Item) -> Result<(), KeychainError> {
             self.record("delete", item)?;
             self.items
                 .borrow_mut()
-                .remove(&(item.service, item.account))
+                .remove(item.account)
                 .map(drop)
                 .ok_or(KeychainError::NotFound)
         }
     }
 
-    /// Another app item (the calendar tokens, say), which no rule here
-    /// may touch.
-    const OTHER_ITEM: Item = Item {
-        service: "dev.goldcoders.ebirforms.google-calendar",
-        account: "global-oauth",
-        protection: Protection::AfterFirstUnlockThisDeviceOnly,
-    };
+    const KEPT: &str = "kept-install-id-0123456789";
+    const OFFERED: &str = "offered-install-id-abcdef";
 
-    #[test]
-    fn every_item_stays_on_this_device_and_opens_after_the_first_unlock() {
-        for item in [DEVICE_KEY, DEVICE_ID, SIGN_IN] {
-            assert_eq!(
-                item.protection,
-                Protection::AfterFirstUnlockThisDeviceOnly,
-                "{item:?}"
-            );
-        }
-        // The names every earlier build stored them under.
-        assert_eq!(
-            (DEVICE_KEY.service, DEVICE_KEY.account),
-            ("com.buwiz.bir", "device-key")
-        );
-        assert_eq!(
-            (DEVICE_ID.service, DEVICE_ID.account),
-            ("com.buwiz.bir", "device-id")
-        );
-        assert_eq!(
-            (SIGN_IN.service, SIGN_IN.account),
-            ("com.buwiz.bir", "desktop-refresh")
-        );
-        assert_eq!(CLEARED_ON_FRESH_INSTALL, [DEVICE_KEY, DEVICE_ID, SIGN_IN]);
+    /// Every status a Keychain call can fail with in the field.
+    fn failures() -> Vec<KeychainError> {
+        [-34018, -25308, -25291, -25292, -1]
+            .into_iter()
+            .map(KeychainError::from_status)
+            .chain([KeychainError::Duplicate])
+            .collect()
     }
 
-    #[test]
-    fn the_security_statuses_map_to_their_meaning() {
-        assert_eq!(KeychainError::from_status(-25300), KeychainError::NotFound);
-        assert_eq!(KeychainError::from_status(-25299), KeychainError::Duplicate);
-        assert_eq!(KeychainError::from_status(-25308), KeychainError::Locked);
-        assert_eq!(
-            KeychainError::from_status(-25291),
-            KeychainError::Unavailable(-25291)
-        );
-        assert_eq!(
-            KeychainError::from_status(-25292),
-            KeychainError::Unavailable(-25292)
-        );
-        assert_eq!(
-            KeychainError::from_status(-34018),
-            KeychainError::Failed(-34018)
-        );
-    }
-
-    #[test]
-    fn a_new_item_is_added_with_its_class() {
-        let fake = Fake::default();
-        set(&fake, &SIGN_IN, "token").unwrap();
-        assert_eq!(fake.entry(&SIGN_IN), Some(("token".into(), true)));
-        assert_eq!(fake.calls(), vec!["add desktop-refresh"]);
-    }
-
-    /// A rotated refresh token replaces the old one in place, and an item
-    /// still of the old class gets its class in the same call.
-    #[test]
-    fn writing_an_existing_item_replaces_value_and_class_in_place() {
-        let fake = Fake::holding(&[(SIGN_IN, "old token", false)]);
-        set(&fake, &SIGN_IN, "rotated").unwrap();
-        assert_eq!(fake.entry(&SIGN_IN), Some(("rotated".into(), true)));
-        assert_eq!(
-            fake.calls(),
-            vec!["add desktop-refresh", "update desktop-refresh"]
-        );
-    }
-
-    #[test]
-    fn an_old_class_item_gets_its_class_once_and_keeps_its_value() {
-        for item in CLEARED_ON_FRESH_INSTALL {
-            let fake = Fake::holding(&[(item, "value", false)]);
-            assert_eq!(get(&fake, &item).unwrap().as_deref(), Some("value"));
-            assert_eq!(fake.entry(&item), Some(("value".into(), true)));
-            assert_eq!(get(&fake, &item).unwrap().as_deref(), Some("value"));
-            let updates = fake
-                .calls()
-                .iter()
-                .filter(|call| call.starts_with("update"))
-                .count();
-            assert_eq!(updates, 1, "{item:?}: once");
-            assert!(!fake.calls().iter().any(|call| call.starts_with("delete")));
-        }
-    }
-
-    #[test]
-    fn an_item_of_its_class_is_read_without_a_write() {
-        let fake = Fake::holding(&[(DEVICE_ID, "d1", true)]);
-        assert_eq!(get(&fake, &DEVICE_ID).unwrap().as_deref(), Some("d1"));
-        assert_eq!(fake.calls(), vec!["read device-id"]);
-    }
-
-    /// The class change fails (the phone is locked, say): the value is still
-    /// returned, the item is still there as it was, nothing was deleted, and
-    /// the next read tries the change again.
-    #[test]
-    fn a_failed_class_change_never_loses_the_value() {
-        for error in [KeychainError::Locked, KeychainError::Failed(-34018)] {
-            let fake =
-                Fake::holding(&[(DEVICE_KEY, "seed", false)]).failing("update", error.clone());
-            assert_eq!(get(&fake, &DEVICE_KEY).unwrap().as_deref(), Some("seed"));
-            assert_eq!(fake.entry(&DEVICE_KEY), Some(("seed".into(), false)));
-            assert_eq!(get(&fake, &DEVICE_KEY).unwrap().as_deref(), Some("seed"));
-            assert_eq!(
-                fake.calls(),
-                vec![
-                    "read device-key",
-                    "update device-key",
-                    "read device-key",
-                    "update device-key",
-                ],
-                "{error:?}"
-            );
-        }
-    }
-
-    /// A read the Keychain refuses is an error, never "missing".
-    #[test]
-    fn a_locked_read_is_an_error_not_a_missing_item() {
-        let fake =
-            Fake::holding(&[(DEVICE_KEY, "seed", true)]).failing("read", KeychainError::Locked);
-        assert_eq!(get(&fake, &DEVICE_KEY), Err(KeychainError::Locked));
-        assert_eq!(get(&Fake::default(), &DEVICE_KEY), Ok(None));
-    }
-
-    fn stored() -> Fake {
-        Fake::holding(&[
-            (DEVICE_KEY, "seed", true),
-            (DEVICE_ID, "d1", true),
-            (SIGN_IN, "token", false),
-            (OTHER_ITEM, "calendar", false),
-        ])
-    }
-
-    /// Marker missing or there, a database file there or not, Keychain on
-    /// or off: the table of the fresh-install rule.
-    #[test]
-    fn the_fresh_install_rule() {
-        for marker_there in [false, true] {
-            for database_there in [false, true] {
-                for keychain_on in [false, true] {
-                    let case = format!(
-                        "marker {marker_there}, database {database_there}, keychain {keychain_on}"
-                    );
-                    let dir = tempfile::tempdir().unwrap();
-                    let marker = dir.path().join(INSTALL_MARKER);
-                    let database = dir.path().join("bir_data.db");
-                    if marker_there {
-                        std::fs::write(&marker, "1\n").unwrap();
-                    }
-                    if database_there {
-                        std::fs::write(&database, "the returns").unwrap();
-                    }
-                    let fake = stored();
-                    let outcome = clear_on_fresh_install(&fake, keychain_on, &marker);
-                    let cleared = keychain_on && !marker_there;
-                    if !keychain_on {
-                        assert_eq!(outcome, FreshInstall::KeychainOff, "{case}");
-                        assert!(fake.calls().is_empty(), "{case}: no Keychain call");
-                        assert_eq!(marker.exists(), marker_there, "{case}: no marker written");
-                    } else if marker_there {
-                        assert_eq!(outcome, FreshInstall::Relaunch, "{case}");
-                        assert!(fake.calls().is_empty(), "{case}");
-                    } else {
-                        assert_eq!(outcome, FreshInstall::Cleared, "{case}");
-                        assert!(marker.exists(), "{case}");
-                        assert_eq!(
-                            fake.calls(),
-                            vec![
-                                "delete device-key",
-                                "delete device-id",
-                                "delete desktop-refresh"
-                            ],
-                            "{case}: the three and nothing else"
-                        );
-                    }
-                    for item in CLEARED_ON_FRESH_INSTALL {
-                        assert_eq!(fake.entry(&item).is_some(), !cleared, "{case}: {item:?}");
-                    }
-                    assert!(
-                        fake.entry(&OTHER_ITEM).is_some(),
-                        "{case}: other items stay"
-                    );
-                    assert_eq!(database.exists(), database_there, "{case}");
-                    if database_there {
-                        assert_eq!(std::fs::read_to_string(&database).unwrap(), "the returns");
-                    }
-                }
+    /// Log lines of `body`, as the app's subscriber writes them.
+    fn logged(body: impl FnOnce()) -> String {
+        use std::sync::{Arc, Mutex};
+        #[derive(Clone, Default)]
+        struct Lines(Arc<Mutex<Vec<u8>>>);
+        impl std::io::Write for Lines {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
             }
         }
+        let lines = Lines::default();
+        let writer = lines.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || writer.clone())
+            .with_ansi(false)
+            .without_time()
+            .finish();
+        tracing::subscriber::with_default(subscriber, body);
+        String::from_utf8(lines.0.lock().unwrap().clone()).unwrap()
     }
 
     #[test]
-    fn a_fresh_install_with_nothing_stored_still_writes_the_marker() {
+    fn the_install_id_has_the_servers_shape() {
+        let id = new_install_id();
+        assert_eq!(id.len(), 43);
+        assert!(is_valid_install_id(&id), "{id}");
+        assert_ne!(id, new_install_id());
+        assert!(!is_valid_install_id("short"));
+        assert!(!is_valid_install_id(&"a".repeat(65)));
+        assert!(!is_valid_install_id("has spaces in it here"));
+        assert!(!is_valid_install_id("padded-base64-value=="));
+        assert!(is_valid_install_id(&"a".repeat(16)));
+        assert!(is_valid_install_id(&"Z_-9".repeat(16)));
+        assert_eq!(INSTALL_ID.service, "com.buwiz.bir");
+        assert_eq!(INSTALL_ID.account, "install-id");
+    }
+
+    #[test]
+    fn a_keychain_hit_is_the_install_id_and_the_file_follows_it() {
         let dir = tempfile::tempdir().unwrap();
-        let marker = dir.path().join("folder").join(INSTALL_MARKER);
+        let file = dir.path().join(INSTALL_ID_FILE);
+        let fake = Fake::holding(&[(INSTALL_ID, KEPT)]);
+        let text = logged(|| {
+            let id = resolve_install_id(Some(&fake), &file, Some(OFFERED));
+            assert_eq!(id.value, KEPT);
+            assert_eq!(id.source, InstallIdSource::Keychain);
+        });
+        assert_eq!(fake.calls(), ["read install-id"]);
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), KEPT);
+        assert!(
+            text.contains("INFO bir_submit::ios_storage: Keychain install-id: read, stored"),
+            "{text}"
+        );
+        assert!(!text.contains(KEPT), "never the value: {text}");
+    }
+
+    #[test]
+    fn a_miss_stores_the_offered_id_or_a_new_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(INSTALL_ID_FILE);
         let fake = Fake::default();
+        let text = logged(|| {
+            let id = resolve_install_id(Some(&fake), &file, Some(OFFERED));
+            assert_eq!(id.value, OFFERED);
+            assert_eq!(id.source, InstallIdSource::Stored);
+        });
+        assert_eq!(fake.value(&INSTALL_ID).as_deref(), Some(OFFERED));
+        assert_eq!(fake.calls(), ["read install-id", "add install-id"]);
+        assert!(
+            text.contains("INFO bir_submit::ios_storage: Keychain install-id: read, absent"),
+            "{text}"
+        );
+        assert!(
+            text.contains("INFO bir_submit::ios_storage: Keychain install-id: saved"),
+            "{text}"
+        );
+        assert!(!text.contains(OFFERED), "never the value: {text}");
+        // The next launch finds it.
+        let again = resolve_install_id(Some(&fake), &file, None);
         assert_eq!(
-            clear_on_fresh_install(&fake, true, &marker),
-            FreshInstall::Cleared
+            (again.value.as_str(), again.source),
+            (OFFERED, InstallIdSource::Keychain)
+        );
+
+        // Nothing offered (or nothing valid): a new id.
+        for offered in [None, Some("not valid")] {
+            let dir = tempfile::tempdir().unwrap();
+            let fake = Fake::default();
+            let id = resolve_install_id(Some(&fake), &dir.path().join(INSTALL_ID_FILE), offered);
+            assert!(is_valid_install_id(&id.value));
+            assert_eq!(fake.value(&INSTALL_ID), Some(id.value));
+        }
+    }
+
+    /// A file id from a launch whose Keychain failed is the one stored once
+    /// the Keychain works, so the install id does not change.
+    #[test]
+    fn a_miss_stores_the_id_the_file_already_has() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(INSTALL_ID_FILE);
+        std::fs::write(&file, KEPT).unwrap();
+        let fake = Fake::default();
+        let id = resolve_install_id(Some(&fake), &file, Some(OFFERED));
+        assert_eq!(id.value, KEPT);
+        assert_eq!(fake.value(&INSTALL_ID).as_deref(), Some(KEPT));
+    }
+
+    /// Any failure of the read or the write: the file's id (made if
+    /// missing), one warning with the name and the status, never an error.
+    #[test]
+    fn every_keychain_failure_falls_back_to_the_file_with_one_line() {
+        for error in failures() {
+            for call in ["read", "add"] {
+                let dir = tempfile::tempdir().unwrap();
+                let file = dir.path().join(INSTALL_ID_FILE);
+                let fake = Fake::default().failing(call, error.clone());
+                let mut first = None;
+                let text = logged(|| {
+                    let id = resolve_install_id(Some(&fake), &file, Some(OFFERED));
+                    assert_eq!(id.source, InstallIdSource::File, "{call} {error:?}");
+                    assert_eq!(id.value, OFFERED);
+                    first = Some(id.value);
+                });
+                assert_eq!(read_id_file(&file), first, "kept in the file");
+                let warnings: Vec<&str> =
+                    text.lines().filter(|line| line.contains("WARN")).collect();
+                assert_eq!(warnings.len(), 1, "{call} {error:?}: {text}");
+                let action = if call == "read" {
+                    "read failed"
+                } else {
+                    "save failed"
+                };
+                assert!(
+                    warnings[0].contains(&format!(
+                        "Keychain install-id: {action}, {error}; using the install id in its file"
+                    )),
+                    "{text}"
+                );
+                assert!(warnings[0].contains(&format!("OSStatus {}", error.status())));
+                assert!(!text.contains(OFFERED), "never the value: {text}");
+                // The next launch, failing the same way, answers the same id.
+                let again = resolve_install_id(Some(&fake), &file, None);
+                assert_eq!(Some(again.value), first);
+            }
+        }
+        let text = logged(|| {
+            let dir = tempfile::tempdir().unwrap();
+            let fake = Fake::default().failing("read", KeychainError::from_status(-34018));
+            resolve_install_id(Some(&fake), &dir.path().join(INSTALL_ID_FILE), None);
+        });
+        assert!(
+            text.contains(
+                "WARN bir_submit::ios_storage: Keychain install-id: read failed, OSStatus -34018 (errSecMissingEntitlement); using the install id in its file"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_stored_value_that_is_not_an_install_id_is_not_used() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(INSTALL_ID_FILE);
+        let fake = Fake::holding(&[(INSTALL_ID, "bad")]);
+        let id = resolve_install_id(Some(&fake), &file, Some(OFFERED));
+        assert_eq!(
+            (id.value.as_str(), id.source),
+            (OFFERED, InstallIdSource::File)
+        );
+        assert_eq!(
+            fake.value(&INSTALL_ID).as_deref(),
+            Some("bad"),
+            "not overwritten"
+        );
+    }
+
+    /// `BUWIZ_NO_KEYCHAIN=1` (no Keychain given): the file only.
+    #[test]
+    fn with_the_keychain_off_the_install_id_is_the_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(INSTALL_ID_FILE);
+        let text = logged(|| {
+            let id = resolve_install_id(None, &file, Some(OFFERED));
+            assert_eq!(
+                (id.value.as_str(), id.source),
+                (OFFERED, InstallIdSource::File)
+            );
+            let again = resolve_install_id(None, &file, None);
+            assert_eq!(again.value, OFFERED);
+        });
+        assert!(text.is_empty(), "no Keychain, nothing to log: {text}");
+        // The real entry point makes no Keychain call with the switch off (and
+        // none off iOS at all).
+        let id = install_id(dir.path(), false, None);
+        assert_eq!(
+            (id.value.as_str(), id.source),
+            (OFFERED, InstallIdSource::File)
+        );
+    }
+
+    /// An unwritable folder still answers an id for this run.
+    #[test]
+    fn an_unwritable_file_never_stops_the_install_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let blocker = dir.path().join("not-a-folder");
+        std::fs::write(&blocker, "x").unwrap();
+        let file = blocker.join(INSTALL_ID_FILE);
+        let fake = Fake::default().failing("read", KeychainError::from_status(-25308));
+        let id = resolve_install_id(Some(&fake), &file, None);
+        assert!(is_valid_install_id(&id.value));
+        assert_eq!(id.source, InstallIdSource::File);
+    }
+
+    #[test]
+    fn the_old_items_go_once_and_failures_are_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join(OLD_ITEMS_MARKER);
+        let fake = Fake::holding(&[
+            (OLD_ITEMS[0], "seed"),
+            (OLD_ITEMS[2], "token"),
+            (INSTALL_ID, KEPT),
+        ]);
+        let outcome = remove_old_items(Some(&fake), &marker);
+        assert_eq!(
+            outcome.to_string(),
+            "device-key deleted, device-id absent, sign-in deleted"
         );
         assert!(marker.exists());
         assert_eq!(
-            clear_on_fresh_install(&fake, true, &marker),
-            FreshInstall::Relaunch
+            fake.value(&INSTALL_ID).as_deref(),
+            Some(KEPT),
+            "never the install id"
+        );
+        assert_eq!(
+            fake.calls(),
+            [
+                "delete device-key",
+                "delete device-id",
+                "delete desktop-refresh"
+            ]
+        );
+        assert_eq!(
+            remove_old_items(Some(&fake), &marker),
+            OldItems::AlreadyDone
+        );
+        assert_eq!(fake.calls().len(), 3, "once");
+
+        // Every delete failing: noted, ignored, and done all the same.
+        for error in failures() {
+            let dir = tempfile::tempdir().unwrap();
+            let marker = dir.path().join(OLD_ITEMS_MARKER);
+            let fake = Fake::holding(&[(INSTALL_ID, KEPT)]).failing("delete", error.clone());
+            let outcome = remove_old_items(Some(&fake), &marker);
+            assert!(
+                outcome
+                    .to_string()
+                    .starts_with(&format!("device-key not deleted, {error}")),
+                "{outcome}"
+            );
+            assert!(marker.exists(), "{error:?}");
+            assert_eq!(
+                remove_old_items(Some(&fake), &marker),
+                OldItems::AlreadyDone
+            );
+            assert_eq!(fake.value(&INSTALL_ID).as_deref(), Some(KEPT));
+        }
+    }
+
+    #[test]
+    fn with_the_keychain_off_the_old_items_are_left_and_no_marker_is_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join(OLD_ITEMS_MARKER);
+        assert_eq!(remove_old_items(None, &marker), OldItems::KeychainOff);
+        assert!(!marker.exists());
+        assert_eq!(
+            OldItems::KeychainOff.to_string(),
+            "skipped, the Keychain is off"
+        );
+        assert_eq!(
+            OldItems::AlreadyDone.to_string(),
+            "removed at an earlier launch"
         );
     }
 
-    /// A delete that fails leaves the marker unwritten, so the next launch
-    /// clears again.
+    /// The old names, exactly as the build that used them stored them.
     #[test]
-    fn a_failed_delete_is_retried_on_the_next_launch() {
+    fn the_old_items_are_the_three_the_old_build_stored() {
+        let names: Vec<_> = OLD_ITEMS
+            .iter()
+            .map(|item| (item.service, item.account))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                ("com.buwiz.bir", "device-key"),
+                ("com.buwiz.bir", "device-id"),
+                ("com.buwiz.bir", "desktop-refresh"),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_status_and_its_name_travel_in_the_message() {
+        for (status, text) in [
+            (-34018, "OSStatus -34018 (errSecMissingEntitlement)"),
+            (-25308, "OSStatus -25308 (errSecInteractionNotAllowed)"),
+            (-25300, "not found, OSStatus -25300 (errSecItemNotFound)"),
+            (
+                -25299,
+                "already there, OSStatus -25299 (errSecDuplicateItem)",
+            ),
+            (-25291, "OSStatus -25291 (errSecNotAvailable)"),
+            (-25292, "OSStatus -25292 (errSecReadOnly)"),
+            (-1, "OSStatus -1"),
+        ] {
+            let error = KeychainError::from_status(status);
+            assert_eq!(error.to_string(), text);
+            assert_eq!(error.status(), status);
+        }
+    }
+
+    /// Off iOS a file gets no attribute and nothing is logged.
+    #[cfg(not(target_os = "ios"))]
+    #[test]
+    fn file_protection_is_ios_only() {
         let dir = tempfile::tempdir().unwrap();
-        let marker = dir.path().join(INSTALL_MARKER);
-        let fake = stored().failing("delete", KeychainError::Locked);
-        assert!(matches!(
-            clear_on_fresh_install(&fake, true, &marker),
-            FreshInstall::Incomplete(failures) if failures.len() == 3
-        ));
-        assert!(!marker.exists());
+        let file = dir.path().join("f");
+        std::fs::write(&file, "x").unwrap();
+        assert!(logged(|| protect_file(&file)).is_empty());
     }
 }

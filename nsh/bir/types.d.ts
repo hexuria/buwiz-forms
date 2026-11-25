@@ -219,6 +219,8 @@ export function shell_set_chrome(open: boolean): null;
 export interface CloudAccountStatus {
     server_url: string;
     server_url_source: string;
+    /** The account site's address (where sign-in and account pages open). Empty when it is not a valid address. */
+    account_url: string;
     signed_in: boolean;
     email: string | null;
     user_id: string | null;
