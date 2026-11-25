@@ -48,6 +48,22 @@ pub fn url_opener() -> Option<UrlOpener> {
     URL_OPENER.get().copied()
 }
 
+/// Reads the platform's own device id where bir-core cannot: `Settings.Secure.ANDROID_ID` on Android, through the
+/// app's Java access. Only ever hashed ([`crate::install_id`]); `None` when it cannot be read.
+pub type DeviceIdSource = fn() -> Option<String>;
+
+static DEVICE_ID_SOURCE: std::sync::OnceLock<DeviceIdSource> = std::sync::OnceLock::new();
+
+/// Registers the app's device id reader, once. `false` when one was already registered (the first one stays).
+pub fn set_device_id_source(source: DeviceIdSource) -> bool {
+    DEVICE_ID_SOURCE.set(source).is_ok()
+}
+
+/// The registered device id reader, if the app gave one.
+pub fn device_id_source() -> Option<DeviceIdSource> {
+    DEVICE_ID_SOURCE.get().copied()
+}
+
 /// Whether a registered opener may be handed `url`: an `https://` address
 /// with a host, or an `http://` one to this device itself (`localhost`,
 /// `127.0.0.0/8`, `::1`) for a local development server. Nothing else (no

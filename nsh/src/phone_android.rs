@@ -1,5 +1,6 @@
 //! What bir-core needs from Android: the browser for the Buwiz sign-in (an `ACTION_VIEW` intent from the
-//! foreground Activity), and the screen kept on (`FLAG_KEEP_SCREEN_ON` on its window) while a send to the BIR is in
+//! foreground Activity), `Settings.Secure.ANDROID_ID` for the install id (hashed by bir-core, never sent as it is),
+//! and the screen kept on (`FLAG_KEEP_SCREEN_ON` on its window) while a send to the BIR is in
 //! flight. No foreground service: not in this version.
 //!
 //! The `open` crate cannot do the first here: on Android it runs `xdg-open` and the like, which a phone has none of.
@@ -68,6 +69,7 @@ static FLAGGED: Mutex<Option<GlobalRef>> = Mutex::new(None);
 /// Registers both hooks with bir-core. Called once, at process set-up (any thread).
 pub(crate) fn register() {
     bir_core::platform::set_url_opener(open_url);
+    bir_core::platform::set_device_id_source(android_id);
     bir_core::send_in_flight::set_hook(send_in_flight);
 }
 
@@ -202,6 +204,50 @@ fn open_url(url: &str) -> Result<()> {
         Ok(result) => result.map_err(|error| format!("Android did not open the browser: {error}")),
         Err(_) => Err("Android did not open the browser in time.".into()),
     }
+}
+
+/// `Settings.Secure.getString(application.getContentResolver(), "android_id")`, on the calling thread (any thread: no
+/// UI is touched; the application comes from `ActivityThread.currentApplication()`). `None` when it cannot be read.
+fn android_id() -> Option<String> {
+    let read = |env: &mut JNIEnv<'_>| -> Result<Option<String>> {
+        let application = java(env.call_static_method(
+            "android/app/ActivityThread",
+            "currentApplication",
+            "()Landroid/app/Application;",
+            &[],
+        ))?
+        .l()
+        .map_err(|error| error.to_string())?;
+        if application.is_null() {
+            return Ok(None);
+        }
+        let resolver = java(env.call_method(&application, "getContentResolver", "()Landroid/content/ContentResolver;", &[]))?
+            .l()
+            .map_err(|error| error.to_string())?;
+        let name = java(env.new_string("android_id"))?;
+        let id = java(env.call_static_method(
+            "android/provider/Settings$Secure",
+            "getString",
+            "(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;",
+            &[JValue::Object(&resolver), JValue::Object(&name)],
+        ))?
+        .l()
+        .map_err(|error| error.to_string())?;
+        if id.is_null() {
+            return Ok(None);
+        }
+        let id = jni::objects::JString::from(id);
+        let text: String = java(env.get_string(&id))?.into();
+        Ok(Some(text).filter(|id| !id.trim().is_empty()))
+    };
+    let mut env = vm().ok()?.attach_current_thread().ok()?;
+    let found = env.with_local_frame(16, |env| Ok::<_, jni::errors::Error>(read(env))).ok();
+    if env.exception_check().unwrap_or(false) {
+        let _ = env.exception_clear();
+        tracing::warn!("Android: ANDROID_ID could not be read");
+        return None;
+    }
+    found.and_then(|found| found.map_err(|error| tracing::warn!(%error, "Android: ANDROID_ID could not be read")).ok()).flatten()
 }
 
 /// bir-core's "send in flight" hook: records the wish and hands it to the UI thread, which applies the latest one.

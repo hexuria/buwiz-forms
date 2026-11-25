@@ -55,6 +55,21 @@ pub const SIGN_IN: Item = Item {
     protection: Protection::AfterFirstUnlockThisDeviceOnly,
 };
 
+/// The pending email sign-in (its request id and secret), until it is used, ends or expires.
+pub const PENDING_SIGN_IN: Item = Item {
+    service: "com.buwiz.bir",
+    account: "pending-sign-in",
+    protection: Protection::AfterFirstUnlockThisDeviceOnly,
+};
+
+/// The install id (bir-core `install_id`): made once, kept across sign-out, and left alone by
+/// [`clear_on_fresh_install`], so a delete and reinstall keeps it.
+pub const INSTALL_ID: Item = Item {
+    service: "com.buwiz.bir",
+    account: "install-id",
+    protection: Protection::AfterFirstUnlockThisDeviceOnly,
+};
+
 /// Why a Keychain call did not do what was asked.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum KeychainError {
@@ -510,7 +525,7 @@ mod tests {
 
     #[test]
     fn every_item_stays_on_this_device_and_opens_after_the_first_unlock() {
-        for item in [DEVICE_KEY, DEVICE_ID, SIGN_IN] {
+        for item in [DEVICE_KEY, DEVICE_ID, SIGN_IN, INSTALL_ID] {
             assert_eq!(
                 item.protection,
                 Protection::AfterFirstUnlockThisDeviceOnly,
@@ -531,6 +546,11 @@ mod tests {
             ("com.buwiz.bir", "desktop-refresh")
         );
         assert_eq!(CLEARED_ON_FRESH_INSTALL, [DEVICE_KEY, DEVICE_ID, SIGN_IN]);
+        assert_eq!(
+            (INSTALL_ID.service, INSTALL_ID.account),
+            ("com.buwiz.bir", "install-id")
+        );
+        assert!(!CLEARED_ON_FRESH_INSTALL.contains(&INSTALL_ID));
     }
 
     #[test]
@@ -636,6 +656,7 @@ mod tests {
             (DEVICE_ID, "d1", true),
             (SIGN_IN, "token", false),
             (OTHER_ITEM, "calendar", false),
+            (INSTALL_ID, "install-id-of-this-phone", true),
         ])
     }
 
@@ -687,6 +708,10 @@ mod tests {
                     assert!(
                         fake.entry(&OTHER_ITEM).is_some(),
                         "{case}: other items stay"
+                    );
+                    assert!(
+                        fake.entry(&INSTALL_ID).is_some(),
+                        "{case}: the install id survives a reinstall"
                     );
                     assert_eq!(database.exists(), database_there, "{case}");
                     if database_there {

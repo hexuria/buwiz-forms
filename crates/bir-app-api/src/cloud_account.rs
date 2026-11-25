@@ -152,9 +152,13 @@ fn begin_browser(
         let resolved = resolve()?;
         let account = cloud_account::configured_account().map_err(host_error)?;
         let mut http = BlockingHttp::new();
-        let challenge =
-            cloud_account::start_device(&mut http, &resolved.url, cloud_account::unix_now())
-                .map_err(host_error)?;
+        let challenge = cloud_account::start_device(
+            &mut http,
+            &resolved.url,
+            cloud_account::unix_now(),
+            &bir_core::install_id::install_id(),
+        )
+        .map_err(host_error)?;
         let url = cloud_account::account_browser_url(&account.url, entry, &challenge.user_code);
         // The page itself is never shown: only the short address (for typing) and the code are.
         let user_code = challenge.user_code.clone();

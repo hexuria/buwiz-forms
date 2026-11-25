@@ -974,7 +974,8 @@ mod tests {
         let url = server.url();
         tokio::task::spawn_blocking(move || {
             let mut http = BlockingHttp::new();
-            let challenge = cloud::start_device(&mut http, &url, cloud::unix_now()).unwrap();
+            let challenge =
+                cloud::start_device(&mut http, &url, cloud::unix_now(), INSTALL).unwrap();
             browser_decision(&url, &challenge.user_code, "approve");
             let tokens =
                 cloud::poll_until(&mut http, &challenge, &mut cloud::unix_now, &mut |_| {
@@ -1062,7 +1063,8 @@ mod tests {
                 .send()
                 .unwrap();
             assert_eq!(response.status(), 400);
-            let challenge = cloud::start_device(&mut http, &url, cloud::unix_now()).unwrap();
+            let challenge =
+                cloud::start_device(&mut http, &url, cloud::unix_now(), INSTALL).unwrap();
             let body = json!({"client_id":"buwiz-desktop","device_code":challenge.device_code})
                 .to_string();
             let pending = request(&mut http, &url, "/auth/device/poll", body.clone());
@@ -1099,7 +1101,8 @@ mod tests {
         let url = server.url();
         tokio::task::spawn_blocking(move || {
             let mut http = BlockingHttp::new();
-            let challenge = cloud::start_device(&mut http, &url, cloud::unix_now()).unwrap();
+            let challenge =
+                cloud::start_device(&mut http, &url, cloud::unix_now(), INSTALL).unwrap();
             let tokens =
                 cloud::poll_until(&mut http, &challenge, &mut cloud::unix_now, &mut |_| {
                     panic!("auto approved")
@@ -1567,7 +1570,7 @@ mod tests {
                 assert_eq!(status, 404, "{path}");
             }
             // The browser's device flow still works.
-            assert!(cloud::start_device(&mut http, &url, cloud::unix_now()).is_ok());
+            assert!(cloud::start_device(&mut http, &url, cloud::unix_now(), INSTALL).is_ok());
         })
         .await
         .unwrap();

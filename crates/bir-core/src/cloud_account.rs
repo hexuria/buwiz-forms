@@ -523,17 +523,19 @@ pub fn status_from(resolved: &ResolvedServer, secrets: Option<&AccountSecrets>) 
     }
 }
 
+/// Starts the browser's device flow. `install_id` ([`crate::install_id`]) is sent from this first request.
 pub fn start_device(
     http: &mut dyn Http,
     server_url: &str,
     now_unix: i64,
+    install_id: &str,
 ) -> Result<DeviceChallenge, CloudError> {
     let response = http.exchange(&HttpRequest {
         method: "POST",
         url: format!("{server_url}/auth/device/start"),
         content_type: "application/json",
         bearer: None,
-        body: json!({ "client_id": DESKTOP_CLIENT_ID }).to_string(),
+        body: json!({ "client_id": DESKTOP_CLIENT_ID, "install_id": install_id }).to_string(),
     })?;
     let value = expect_json(response.status, &response.body)?;
     if !(200..300).contains(&response.status) {
@@ -1421,6 +1423,7 @@ mod tests {
             },
             "http://localhost:3008",
             1_000,
+            "install-id-of-this-test-0001",
         )
         .unwrap();
         assert_eq!(started.user_code, "ABCD-EFGH");
