@@ -145,7 +145,10 @@ booted API 35 in about two minutes and reached the app's first screen in about 1
    `nsh android release runtime` at the pin. Both are copies with the commit in `nsh-ref`. `nsh package` takes the
    release one even for a development build. Never link a runtime into an NSH checkout's build folder, and never run
    `nsh update`, which replaces the tool with Longbridge's latest release: either one makes every later check a check
-   of another NSH than the pin.
+   of another NSH than the pin. On a Devin machine, whose `~/.gitconfig` sends GitHub through Devin's git proxy, the
+   container fetches with the git CLI and without that file (`CARGO_NET_GIT_FETCH_WITH_CLI=true`,
+   `GIT_CONFIG_GLOBAL=/dev/null`): the proxy's sign-in does not work in the container, and Cargo's first fetch failed
+   there. The script sets this itself; a wrapper patched by hand is replaced when the script runs again.
 5. `emulator -accel-check`, then `emulator -avd buwiz -no-window -no-audio -gpu swiftshader_indirect &` and wait for
    `getprop sys.boot_completed` = 1.
 6. `just mock-account --auto-approve &` for unattended runs: without it a sign-in waits for an approval in a browser.

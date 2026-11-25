@@ -42,6 +42,24 @@ test("desktop: a cancelled save says nothing; a failure says why, in words", asy
   await failing.waitFor("text:Could not save the PDF: the disk is full.");
 });
 
+test("desktop: a wait that never ends has a Cancel that always works and is logged", async () => {
+  const app = await open(DEMO, { width: 940, height: 900, platform: "macos", host: { params: { mode: "hang" } } });
+  await app.waitFor("id:print-window");
+  expect(app.shows("id:print-stop-waiting")).toBe(false);
+  await app.press("id:print-save-pdf");
+  await app.waitFor("text:Preparing the PDF…");
+  expect(app.enabled("id:print-save-pdf")).toBe(false);
+  await app.press("id:print-stop-waiting");
+  await app.waitFor("text:Stopped waiting. Press the button again to try once more.");
+  expect(app.shows("id:print-stop-waiting")).toBe(false);
+  expect(app.enabled("id:print-save-pdf")).toBe(true);
+  expect(app.enabled("id:print-print")).toBe(true);
+  expect(app.texts()).toContain("calls: save 2551Q, stopped Save as PDF");
+  // The buttons work again after it.
+  await app.press("id:print-print");
+  await app.waitFor("text:calls: save 2551Q, stopped Save as PDF, print 2551Q");
+});
+
 test("the least width of the window (560): both buttons are there and press", async () => {
   const app = await open(DEMO, { width: 560, height: 700, platform: "macos" });
   await app.waitFor("id:print-window");

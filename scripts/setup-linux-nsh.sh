@@ -91,6 +91,10 @@ in_image() {  # in_image <workdir> <docker -e args...> -- <cmd...>
     local envs=()
     while [ "$1" != "--" ]; do envs+=("$1"); shift; done
     shift
+    # The same git settings as the wrapper (write_wrapper): a host git proxy does not authenticate in the container.
+    if git config --global --get-regexp '^(url\..*\.insteadof|credential\..*helper)$' >/dev/null 2>&1; then
+        envs+=(-e CARGO_NET_GIT_FETCH_WITH_CLI=true -e GIT_CONFIG_GLOBAL=/dev/null)
+    fi
     docker run --rm -u "$(id -u):$(id -g)" \
         -e HOME="$HOME" -e PATH="$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" \
         -e CARGO_INCREMENTAL=0 "${envs[@]}" \
@@ -158,13 +162,20 @@ RANLIB="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib"
 android=(); case " $* " in *android*) android=(-e CARGO_PROFILE_DEV_DEBUG=0
   -e "BUWIZ_ANDROID_DEV_ENV=EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1");; esac
 uid="$(id -u)"
+# A host git config that rewrites GitHub URLs or names a credential helper (a Devin machine's git proxy) does not
+# authenticate inside the container, and Cargo's first git fetch fails there. Then the container fetches with the git
+# CLI and without the host's global config; NSH's git dependencies are public. Off such a machine nothing changes.
+git_env=()
+if git config --global --get-regexp '^(url\..*\.insteadof|credential\..*helper)$' >/dev/null 2>&1; then
+  git_env=(-e CARGO_NET_GIT_FETCH_WITH_CLI=true -e GIT_CONFIG_GLOBAL=/dev/null)
+fi
 NSH_EOF
     local mounts=("${MOUNTS[@]}") sdk
     # Kept on --no-android runs too, so they don't break an existing Android setup.
     mapfile -t sdk < <(sdk_mount); mounts+=("${sdk[@]}")
     printf 'mounts=(%s)\n' "$(printf '%q ' "${mounts[@]}")" >> "$WORK/nsh2404.sh"
     cat >> "$WORK/nsh2404.sh" <<'NSH_EOF'
-exec docker run --rm -i "${tty[@]}" "${android[@]}" --network host --security-opt apparmor=unconfined -u "$uid:$(id -g)" \
+exec docker run --rm -i "${tty[@]}" "${android[@]}" "${git_env[@]}" --network host --security-opt apparmor=unconfined -u "$uid:$(id -g)" \
   -e HOME="$HOME" \
   -e PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$HOME/.cargo/bin:$android_home/platform-tools:/usr/local/bin:/usr/bin:/bin" \
   -e CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}" \

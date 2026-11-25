@@ -1,0 +1,4 @@
+REFUSED by to_bir_xml_payload():
+  ERROR [schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+  ERROR [schedule_1_row_2]: Schedule 1 row 2 taxable amount does not fit the official 11-cell integer field
+  ERROR [schedule_1_row_2]: Schedule 1 row 2 tax due does not fit the official 7-cell integer field

@@ -152,6 +152,39 @@ bash "$WORK/nsh2404.sh" nsh run --target android
             self.assertIn("BUWIZ_ANDROID_DEV_ENV=EBIR_TEST_ENV=1;"
                           "BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1", args)
 
+    def test_a_host_git_proxy_is_left_outside_the_container(self):
+        # buwiz-forms-linux-6: the Devin git proxy's rewrite in ~/.gitconfig failed Cargo's first fetch in the image.
+        settings = ("CARGO_NET_GIT_FETCH_WITH_CLI=true", "GIT_CONFIG_GLOBAL=/dev/null")
+        for case, config in (("plain", "[user]\n\tname = someone\n"),
+                             ("rewrite", '[url "https://proxy.example/github.com/"]\n\tinsteadOf = https://github.com/\n'),
+                             ("helper", "[credential]\n\thelper = store\n")):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "repo/nsh").mkdir(parents=True)
+                (root / "home").mkdir()
+                (root / "home/.gitconfig").write_text(config)
+                (root / "bin").mkdir()
+                docker = root / "bin/docker"
+                docker.write_text('#!/bin/bash\nprintf "%s\\n" "$@"\n')
+                docker.chmod(0o755)
+                result = self.run_shell(
+                    "\n".join(function(name) for name in
+                              ("outside_home", "sdk_mount", "write_wrapper", "in_image")) + r'''
+unset GIT_CONFIG_GLOBAL
+export HOME="$PWD/home" XDG_CONFIG_HOME="$PWD/xdg" PATH="$PWD/bin:$PATH"
+REPO="$PWD/repo" ANDROID_HOME="$PWD/sdk" NDK_VERSION=27 WORK="$PWD" IMAGE=buwiz-nsh-2404
+MOUNTS=(-v "$HOME:$HOME")
+write_wrapper
+bash "$WORK/nsh2404.sh" nsh check
+echo ---
+in_image "$PWD" -- cargo install
+''', tmp)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                wrapper, setup = (part.splitlines() for part in result.stdout.split("---\n"))
+                for args in (wrapper, setup):
+                    for setting in settings:
+                        self.assertEqual(setting in args, case != "plain", (case, setting))
+
     def test_sdk_selects_java_home_then_path_then_install(self):
         for case in ("home", "path", "old", "missing"):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:

@@ -2,7 +2,7 @@
 // wide), Popover, Menu with MenuItem and MenuSeparator, toasts (toast, undoToast and the Toaster that shows them),
 // SidePanel, Disclosure and DisclosureGroup. Each is nsh/base's own overlay (focus, Escape, dismissal, roles), styled.
 import type { JSX } from "nsh";
-import { cleanup, Overlay, safeArea, Scroll, signal, View, windowSize } from "nsh";
+import { cleanup, keyboardFrame, Overlay, safeArea, Scroll, signal, View, windowSize } from "nsh";
 import {
   Button, Collapsible, Dialog as BaseDialog, Menu as BaseMenu, MenuItem as BaseMenuItem, MenuSeparator as BaseMenuSeparator,
   Popover as BasePopover, Sheet as BaseSheet, Toast, type ToastEntry, ToastManager, ToastStack, Tooltip as BaseTooltip,
@@ -88,6 +88,16 @@ export interface SheetProps {
   children?: JSX.Element;
 }
 
+/**
+ * The tallest a bottom sheet may be: below the status bar, and above the software keyboard while it is up. The kit keeps a sheet
+ * there by itself, but a maxHeight in popupStyle takes the place of that limit (the kit's sheet.md, "The software keyboard"), so
+ * every sheet of ours that sets one sets this: without it a sheet with a field in it rose under the status bar with the keyboard.
+ */
+export function sheetMaxHeight(): number {
+  const keyboard = Math.max(0, keyboardFrame().height - safeArea().bottom);
+  return Math.max(160, windowSize().height - safeArea().top - keyboard - 24);
+}
+
 /** Supplementary work in a panel: a bottom sheet under 600 points wide, a drawer at the right edge from there up. */
 export function Sheet(props: SheetProps) {
   const narrow = () => windowSize().width < BREAK.phone;
@@ -99,15 +109,16 @@ export function Sheet(props: SheetProps) {
       side={narrow() ? "bottom" : "right"}
       closeOnSwipe={narrow()}
       backdropClass="bg-scrim"
+      // The sheet pads by the insets where IT renders (env(), the sheet's own), not the page's: a sheet is a layer of its own.
       popupClass={
         narrow()
-          ? "rounded-t-(--radius-dialog) border border-b-0 border-border bg-card"
-          : "border-l border-border bg-card"
+          ? "rounded-t-(--radius-dialog) border border-b-0 border-border bg-card pb-[env(safe-area-inset-bottom)]"
+          : "border-l border-border bg-card pt-[env(safe-area-inset-top)]"
       }
       popupStyle={
         narrow()
-          ? { maxHeight: windowSize().height * 0.9, paddingBottom: safeArea().bottom }
-          : { width: Math.min(props.width ?? 480, windowSize().width - 48), paddingTop: safeArea().top }
+          ? { maxHeight: Math.min(windowSize().height * 0.9, sheetMaxHeight()) }
+          : { width: Math.min(props.width ?? 480, windowSize().width - 48) }
       }
     >
       <If when={narrow()}>
