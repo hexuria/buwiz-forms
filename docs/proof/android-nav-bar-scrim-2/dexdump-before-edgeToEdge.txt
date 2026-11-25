@@ -1,0 +1,24 @@
+025ea4:                                        |[025ea4] com.longbridge.nsh.DevActivity.edgeToEdge:(Landroid/app/Activity;)V
+025eb4: 6000 6200                              |0000: sget v0, Landroid/os/Build$VERSION;.SDK_INT:I // field@0062
+025eb8: 1301 1e00                              |0002: const/16 v1, #int 30 // #1e
+025ebc: 1202                                   |0004: const/4 v2, #int 0 // #0
+025ebe: 3410 0a00                              |0005: if-lt v0, v1, 000f // +000a
+025ec2: 6e10 1a00 0300                         |0007: invoke-virtual {v3}, Landroid/app/Activity;.getWindow:()Landroid/view/Window; // method@001a
+025ec8: 0c00                                   |000a: move-result-object v0
+025eca: 6e20 b503 2000                         |000b: invoke-virtual {v0, v2}, Landroid/view/Window;.setDecorFitsSystemWindows:(Z)V // method@03b5
+025ed0: 280e                                   |000e: goto 001c // +000e
+025ed2: 6e10 1a00 0300                         |000f: invoke-virtual {v3}, Landroid/app/Activity;.getWindow:()Landroid/view/Window; // method@001a
+025ed8: 0c00                                   |0012: move-result-object v0
+025eda: 6e10 b103 0000                         |0013: invoke-virtual {v0}, Landroid/view/Window;.getDecorView:()Landroid/view/View; // method@03b1
+025ee0: 0c00                                   |0016: move-result-object v0
+025ee2: 1301 0007                              |0017: const/16 v1, #int 1792 // #700
+025ee6: 6e20 6c03 1000                         |0019: invoke-virtual {v0, v1}, Landroid/view/View;.setSystemUiVisibility:(I)V // method@036c
+025eec: 6e10 1a00 0300                         |001c: invoke-virtual {v3}, Landroid/app/Activity;.getWindow:()Landroid/view/Window; // method@001a
+025ef2: 0c00                                   |001f: move-result-object v0
+025ef4: 6e20 ba03 2000                         |0020: invoke-virtual {v0, v2}, Landroid/view/Window;.setStatusBarColor:(I)V // method@03ba
+025efa: 6e10 1a00 0300                         |0023: invoke-virtual {v3}, Landroid/app/Activity;.getWindow:()Landroid/view/Window; // method@001a
+025f00: 0c00                                   |0026: move-result-object v0
+025f02: 6e20 b703 2000                         |0027: invoke-virtual {v0, v2}, Landroid/view/Window;.setNavigationBarColor:(I)V // method@03b7
+025f08: 7110 e506 0300                         |002a: invoke-static {v3}, Lcom/longbridge/nsh/DevActivity;.systemBars:(Landroid/app/Activity;)V // method@06e5
+025f0e: 0e00                                   |002d: return-void
+      catches       : (none)
