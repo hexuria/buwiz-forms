@@ -1,0 +1,18 @@
+2200S draft input values at print time (period 9/2026, manner: payment on actual removal):
+fixed rows: txtSalesValue{i} = volume x 10, txtVolumeRemovals{i} as below.
+row XB010 juice:      sales 1,111.10   volume 111.11   tax due = 111.11 x 6  = 666.66
+row XB020 tea:        sales 2,222.20   volume 222.22   tax due = 222.22 x 6  = 1,333.32
+row XB030 carbonated: sales 3,333.30   volume 333.33   tax due = 333.33 x 6  = 1,999.98
+row XB040 flavored:   sales 4,444.40   volume 444.44   tax due = 444.44 x 6  = 2,666.64
+row XB050 energy:     sales 5,555.50   volume 555.55   tax due = 555.55 x 6  = 3,333.30
+row XB060 powdered:   sales 6,666.60   volume 666.66   tax due = 666.66 x 6  = 3,999.96
+row XB070 cereal:     sales 7,777.70   volume 777.77   tax due = 777.77 x 6  = 4,666.62
+row XB080 other non-alc: sales 8,888.80 volume 888.88  tax due = 888.88 x 6  = 5,333.28
+row XB090 high fructose: sales 9,999.90 volume 999.99  tax due = 999.99 x 12 = 11,999.88
+row XB100 coconut sap:  sales 11,111.10 volume 1,111.11 tax due = 0 (exempt) = 0.00
+my arithmetic, grand total: 666.66+1333.32+1999.98+2666.64+3333.30+3999.96+4666.62+5333.28+11999.88+0.00 = 35,999.64
+item 25A payment: 555,555.55
+The two Others rows were NOT filled: the applicable-rate input of an Others row is
+written only through the form's own GUI row editors; the agent write path refuses it
+("derived by the app: changes with /manner, /others/0/rate"), and validation then
+fails the row (others[n].rate). Fixed-row evidence unaffected.

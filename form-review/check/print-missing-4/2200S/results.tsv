@@ -1,0 +1,11 @@
+case	row	result	detail
+fixed-rows	XB010-XB100	ok	at head every value in its own row and column; sales/volume/tax distinct per row; per-row tax due matches rate x volume exactly (see data-excerpt)
+fixed-rows	XB090	rate-12	ok	999.99 x 12 = 11,999.88 prints correctly
+fixed-rows	XB100	exempt	ok	rate column shows Exempt, tax due 0.00
+grand-total	sched1	ok	35,999.64 = my sum of the ten rows to the centavo; also equals item 18 on page 1
+main-before	all	blank-rows-main	main and pre print every row's sales/volume/tax BLANK but the GRAND TOTAL prints 35,999.64 even there (total cell was already joined)
+items-19A	19A	ok	0 prints at both commits (not filled; amended=no) - prints on main as author says
+items-19B	19B	ok	0 prints at both commits
+items-25A	25A	ok	555,555.55 prints at both commits; identical text extraction
+others-rows	1-2	not-filled	could not fill applicable rate through the agent write path (GUI-only editor); rows print empty at all commits
+others-desc-cells	p2c101/p2c108	blank-by-design	the two Others description cells are not joined in writer-cells.json: a filer's paper misses the description text even when entered
