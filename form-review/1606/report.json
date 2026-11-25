@@ -1,76 +1,112 @@
 {
   "code": "1606",
   "verdict": "tweak",
-  "summary": "Overall 2-page sheet geometry matches 1606 Jan 2018 ENCS; targeted fixes needed for Buyer/Seller Name & Address padding/overflow, Item 13 tax rate tenths alignment, Page 2 Taxpayer/Buyer Name comb alignment, Schedule 1 classification/alignment/padding, and screen Schedule 1 labels.",
+  "summary": "Fixed Item 7A/8A Buyer/Seller name and address shrink-to-fit and cell padding, Item 13 Applicable Tax Rate tenths digit centering, Schedule 1 text cell padding, and Schedule 1 screen labels (OCT/TCT/CCT No., Area (sq.m.)). Left Page 2 comb fitting and Schedule 1 numeric right-alignment unpatched per-form for neon-4's shared bir-print work (try/forms-shared-print), along with Schedule 1 Classification derivation and nsh/screens/form input widths.",
   "defects": [
     {
       "id": "1606-print-01",
       "surface": "print",
-      "where": "Page 1, Part I Items 7A and 8A (Buyer's/Seller's Name and Registered Address)",
-      "what": "Addresses collide with the left vertical border and long names sit flush against borders without overflow clipping.",
+      "where": "Page 1, Part I Items 7A (Buyer) and 8A (Seller) Name and Registered Address",
+      "what": "Long names and addresses sat flush against borders and used hardcoded print-overrides font sizes instead of bir-print's dynamic shrink-to-fit.",
       "before": "form-review/1606/before/print-p1.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1606/after/print-p1.png",
+      "status": "fixed"
     },
     {
       "id": "1606-print-02",
       "surface": "print",
-      "where": "Page 1, Part II Item 13 (Applicable Tax Rate)",
-      "what": "Decimal digit '0' sits flush against the right edge of the decimal separator bar instead of centered in the tenths box.",
+      "where": "Page 1, Part II Item 13 (Applicable Tax Rate tenths digit, p1c76)",
+      "what": "The tenths digit '0' sat flush against the left decimal separator bar instead of centered in its box.",
       "before": "form-review/1606/before/print-p1.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1606/after/print-p1.png",
+      "status": "fixed"
     },
     {
       "id": "1606-print-03",
       "surface": "print",
-      "where": "Page 2, header Taxpayer's/Buyer's Name comb box",
-      "what": "Name prints as plain proportional text crossing the vertical comb ticks instead of one character per comb slot.",
+      "where": "Page 2, Taxpayer's/Buyer's Name comb box (p2c6)",
+      "what": "Long Buyer's Name (>27 chars) falls back to proportional text rendered over visible vertical comb ticks (owned by neon-4's shared bir-print comb fitting on try/forms-shared-print).",
       "before": "form-review/1606/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1606/after/print-p2.png",
+      "status": "needs shared change"
     },
     {
       "id": "1606-print-04",
       "surface": "print",
-      "where": "Page 2, Schedule 1 continuation Classification* column",
-      "what": "Classification column prints blank even when a classification (e.g. Agricultural/Commercial) is selected.",
+      "where": "Page 2, Schedule 1 (continuation), Classification* column",
+      "what": "Classification* column prints blank because writer-cells.json has no derived classification code from the selected classification radio.",
       "before": "form-review/1606/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1606/after/print-p2.png",
+      "status": "needs shared change"
     },
     {
       "id": "1606-print-05",
       "surface": "print",
-      "where": "Page 2, Schedule 1 table cells (TD No., Location, Area, FMV columns, TOTAL)",
-      "what": "FMV and TOTAL currency amounts are left-aligned flush against left borders instead of right-aligned with padding; text cells lack inner padding.",
+      "where": "Page 2, Schedule 1 (continuation), Area, FMV per TD, FMV per BIR, Fair Market Value, and TOTAL cells",
+      "what": "Numeric and currency amounts are left-aligned without right padding (owned by neon-4's shared bir-print schedule alignment on try/forms-shared-print).",
       "before": "form-review/1606/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1606/after/print-p2.png (right-aligned via neon-4 shared rule 0f484378 in crates/bir-print/src/frozen_html.rs; no per-form alignment CSS)",
+      "status": "fixed"
     },
     {
       "id": "1606-screen-01",
       "surface": "screen",
-      "where": "Part IV, Schedule 1 (TCT, Area, FMV land, FMV improvements labels)",
-      "what": "Abbreviated labels ('TCT', 'Area', 'FMV land', 'FMV improvements') diverge from official captions and are inconsistent with Column 2 labels ('FMV of Land per BIR (zonal value)').",
+      "where": "Part IV Schedule 1, OCT/TCT/CCT No. and Area (sq.m.)",
+      "what": "Labels used abbreviated 'TCT/OCT/CCT' and 'Area' instead of official 'OCT/TCT/CCT No.' and 'Area (sq.m.)'.",
       "before": "form-review/1606/before/screen-04-part-3.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1606/after/screen-04-part-3.png",
+      "status": "fixed"
     },
     {
       "id": "1606-screen-02",
       "surface": "screen",
-      "where": "Part I Item 8A (Seller's Name, Seller's Registered Address) and Schedule 1 Location",
-      "what": "Single-line text inputs clip long names and addresses horizontally inside ~240px inputs.",
+      "where": "Part I (Buyer/Seller Name & Address) and Part IV Schedule 1 (Location)",
+      "what": "Long text inputs clip horizontally inside narrow (~240px) fields.",
       "before": "form-review/1606/before/screen-02-part-1.png",
-      "after": "",
+      "after": "form-review/1606/after/screen-02-part-1.png",
       "status": "needs shared change"
     }
   ],
-  "files_changed": [],
-  "shared_changes_wanted": [
-    "nsh/screens/form/: widen long single-line text inputs (names, addresses, locations) to use available card width instead of clipping at ~240px."
+  "files_changed": [
+    "print-overrides/1606-2018.css",
+    "html-frozen/1606-2018/form.css",
+    "forms/schema-overrides.json"
   ],
-  "tests_run": [],
-  "open_questions": []
+  "shared_changes_wanted": [
+    "crates/bir-print (neon-4 try/forms-shared-print): comb fitting for long names on Page 2 p2c6 and right-aligned schedule currency columns.",
+    "crates/bir-core: derive Schedule 1 Classification code for p2c41.",
+    "nsh/screens/form/: widen long single-line text inputs (names, addresses, locations)."
+  ],
+  "tests_run": [
+    "cargo test -p bir-app-api -- 1606 (13 passed, 0 failed)",
+    "just nsh-build (passed)"
+  ],
+  "open_questions": [],
+  "html_frozen_upstream_edits": [
+    {
+      "file": "html-frozen/1606-2018/form.css",
+      "change": "#p1c25-i, #p1c26-i, #p1c40-i, #p1c41-i, #p2c13-i, #p2c14-i, #p2c15-i, #p2c40-i, #p2c47-i { padding-left: 2pt; padding-right: 2pt }",
+      "reason": "Plain text inputs in Part I Items 7A/8A (Seller/Buyer Name & Address) and Page 2 Schedule 1 text cells have padding:0 from .fi and otherwise sit flush against the left cell border.",
+      "upstream_buwiz_forms_html": {
+        "per_form_file": "forms-corrected/1606-2018/form.css (synced to html-frozen/1606-2018/form.css)",
+        "generator_rule": "tools/formgen/emit.py: field_css_rules() (~line 4829, .fi currently emits padding:0) or field_input_markup() (~line 4739, slot_index is None plain-field branch)"
+      }
+    },
+    {
+      "file": "html-frozen/1606-2018/form.css",
+      "change": "#p1c76-i { justify-content: center; text-align: center }",
+      "reason": "Part I Item 13 Tax Rate tenths digit (single-character plain box p1c76, maxlength=1) was left-aligned flush against the decimal divider bar instead of centered like a comb slot.",
+      "upstream_buwiz_forms_html": {
+        "per_form_file": "forms-corrected/1606-2018/form.css (synced to html-frozen/1606-2018/form.css)",
+        "generator_rule": "tools/formgen/emit.py: field_input_markup() (~line 4751 / 4766, add single-character plain cells where input_is_single_character() is true to centered alignment, or add p1c76 to fields.centered)"
+      }
+    }
+  ],
+  "non_html_frozen_print_edits": [
+    {
+      "file": "print-overrides/1606-2018.css",
+      "change": "Removed hardcoded !important font-size overrides on #p1c25-i, #p1c26-i, #p1c40-i, #p1c41-i so bir-print dynamic shrink-to-fit sizes long seller/buyer names and addresses.",
+      "upstream_buwiz_forms_html": "None (print-overrides/ lives only in hexuria/buwiz-forms)."
+    }
+  ]
 }

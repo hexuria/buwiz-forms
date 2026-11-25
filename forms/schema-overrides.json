@@ -11041,6 +11041,14 @@
     }
   },
   "1606": {
+    "frm1606:txtTCT": {
+      "label": "OCT/TCT/CCT No.",
+      "evidence": "Official BIR Form 1606 Jan 2018 ENCS Schedule 1 column header 'OCT/TCT/CCT No.' (html-frozen/1606-2018/writer-cells.json p2c13)"
+    },
+    "frm1606:txtArea": {
+      "label": "Area (sq.m.)",
+      "evidence": "Official BIR Form 1606 Jan 2018 ENCS Schedule 1 column header 'Area (sq.m.)' (html-frozen/1606-2018/writer-cells.json p2c42)"
+    },
     "item:0:3": {
       "label": "Mortgage Assumed",
       "evidence": "item 23: painted view (retired): 'Mortgage Assumed'"
