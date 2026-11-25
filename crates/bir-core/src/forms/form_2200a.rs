@@ -971,14 +971,12 @@ impl Form2200ADraft {
             ("place_of_production", &self.place_of_production),
             ("place_of_removal", &self.place_of_removal),
         ] {
+            let [region, province, city] =
+                super::print_map::place_names(&place.region, &place.province, &place.city);
             put(
                 key,
-                super::excise_places::shared_comb_line(
-                    &[
-                        (0, place.region.trim()),
-                        (10, place.province.trim()),
-                        (24, place.city.trim()),
-                    ],
+                super::excise_places::names_comb_line(
+                    &[(0, &region), (10, &province), (24, &city)],
                     40,
                 ),
             );
@@ -1572,7 +1570,7 @@ mod tests {
         assert_eq!(&line[12..], "Me@Example.ph");
         assert_eq!(
             print["derived:place_of_removal"],
-            "010000000 012800000     012801000"
+            "REGION I  ILOCOS NORTE  ADAMS"
         );
     }
 

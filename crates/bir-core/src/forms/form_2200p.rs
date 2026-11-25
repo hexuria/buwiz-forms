@@ -562,14 +562,12 @@ impl Form2200PDraft {
             ("place_of_production", &self.place_of_production),
             ("place_of_removal", &self.place_of_removal),
         ] {
+            let [region, province, city] =
+                super::print_map::place_names(&place.region, &place.province, &place.city);
             put(
                 key,
-                super::excise_places::shared_comb_line(
-                    &[
-                        (0, place.region.as_str()),
-                        (10, place.province.as_str()),
-                        (24, place.city.as_str()),
-                    ],
+                super::excise_places::names_comb_line(
+                    &[(0, &region), (10, &province), (24, &city)],
                     40,
                 ),
             );
@@ -1309,8 +1307,14 @@ mod tests {
         assert!(line.starts_with(draft.contact_number.trim()));
         assert_eq!(&line[12..], draft.email.trim());
         let place = &print["derived:place_of_production"];
-        assert!(place.starts_with(draft.place_of_production.region.as_str()));
-        assert_eq!(&place[24..], draft.place_of_production.city.as_str());
+        let [region, _, city] = crate::forms::print_map::place_names(
+            &draft.place_of_production.region,
+            &draft.place_of_production.province,
+            &draft.place_of_production.city,
+        );
+        assert!(place.starts_with(&region));
+        assert!(place.contains(&city));
+        assert!(!place.contains(draft.place_of_production.region.as_str()));
     }
 
     #[test]

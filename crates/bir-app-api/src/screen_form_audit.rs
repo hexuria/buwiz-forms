@@ -1834,10 +1834,12 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     // RDO box and is not drawn); plus 2 for 0605's Items 6 and 8
     // (form-fields PR 1, B2: the ATC and tax type picks from the official
     // lists):
-    // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3 + 2. Table cells are counted apart (the 36 2550M
+    // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3 + 2 + 6
+    // (2200T items 10 and 11: their placeholder-only schema lists gave
+    // way to the catalog's regions, provinces and cities). Table cells are counted apart (the 36 2550M
     // Schedule 1 ATC lists, N03; catalog_lists_have_unique_values_across_the_schema
     // checks every one).
-    assert_eq!(supplied, 72, "catalog lists, dependent ones included");
+    assert_eq!(supplied, 78, "catalog lists, dependent ones included");
     // The six 2551Q Schedule 1 ATC lists left the field count because they
     // are table cells now: each is a census control with no field dropdown,
     // sits in the schema's Schedule 1 table under a dropdown column, and
