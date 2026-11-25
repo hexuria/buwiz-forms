@@ -5533,6 +5533,201 @@ mod tests {
         std::fs::write(scratch.join("child-done"), "ok").unwrap();
     }
 
+    // ---------- one engine after another in one process ----------
+    //
+    // An Android process outlives a Back-exit or a swipe from Recents, and the
+    // next launch starts a new engine (a new thread with its own database
+    // slot) in the same process; an iPhone or iPad scene that reconnects does
+    // the same. Each test runs in a child process of its own (the worker slot
+    // is the process's), on a scratch database, with the dry run. An engine
+    // here is a thread that opens the database through the launch the door
+    // uses and is ended by the call the door's guard makes.
+
+    const ENGINE_CHILD: &str = "BIR_ENGINE_LIFECYCLE_CHILD_SCRATCH";
+
+    fn run_engine_child(name: &str) {
+        if std::env::var_os(ENGINE_CHILD).is_some() {
+            return;
+        }
+        let scratch = ScratchDir::new("engines");
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                &format!("bir_module::tests::{name}"),
+                "--nocapture",
+            ])
+            .current_dir(scratch.path())
+            .env(ENGINE_CHILD, scratch.path())
+            .env(
+                "BIR_DATABASE_PATH",
+                scratch.path().join("data").join("bir_data.db"),
+            )
+            .env("EBIR_TEST_ENV", "1")
+            .env("BIR_AUTH_BYPASS", "1")
+            .env("BUWIZ_NO_KEYCHAIN", "1")
+            .env("BIR_SFTP_DRY_RUN", "1")
+            .env_remove("BIR_SFTP_LIVE")
+            .env_remove("BIR_SFTP_HOST")
+            .env_remove("BIR_RELAY_URL")
+            .env_remove("BUWIZ_RELAY_SEND")
+            .status()
+            .unwrap();
+        assert!(status.success(), "{name}: the child failed");
+        assert_eq!(
+            std::fs::read_to_string(scratch.path().join("child-done"))
+                .ok()
+                .as_deref(),
+            Some("ok"),
+            "{name}: the child ran to its end"
+        );
+    }
+
+    /// The child's scratch folder, after the checks that it runs on a scratch
+    /// database, never the live one, and never sends anywhere.
+    fn engine_child() -> Option<std::path::PathBuf> {
+        let scratch = std::path::PathBuf::from(std::env::var_os(ENGINE_CHILD)?);
+        assert_eq!(
+            db::app_database_path(),
+            scratch.join("data").join("bir_data.db"),
+            "the scratch database"
+        );
+        assert!(
+            bir_core::db::test_environment(),
+            "the key stays off the keychain"
+        );
+        assert!(bir_core::transport::is_sftp_dry_run(), "the dry run");
+        Some(scratch)
+    }
+
+    /// What the door's `ShutdownGuard` does when an engine thread ends.
+    struct EngineEnd;
+
+    impl Drop for EngineEnd {
+        fn drop(&mut self) {
+            shutdown_for_quit();
+        }
+    }
+
+    /// Run `body` as one engine: a thread of its own, the launch first (the
+    /// database and the submission worker), its end last.
+    fn engine<R: Send>(body: impl FnOnce() -> R + Send) -> R {
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _end = EngineEnd;
+                    open_database_at_launch();
+                    body()
+                })
+                .join()
+                .expect("the engine thread")
+        })
+    }
+
+    /// Nobody in this process holds the owner lock: a fresh open takes it.
+    fn owner_lock_is_free() -> bool {
+        bir_core::db::try_acquire_live_owner_lock(&db::app_database_path()).is_ok()
+    }
+
+    /// Juana Santos, TIN 000-123-453-00000, the demo taxpayer, email tracking off.
+    fn demo_profile() -> bir_core::profile::TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Juana Santos",
+            "tin": {"segment1": "000", "segment2": "123", "segment3": "453", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Example Street, Pasig",
+            "zip_code": "1600",
+            "phone": "0280000000",
+            "email": "juana@example.com",
+            "default_form_type": "2551Qv2018",
+            "taxpayer_type": "Individual",
+            "business_start_date": "2010-01-01"
+        }))
+        .unwrap()
+    }
+
+    const ENGINE_YEAR: u16 = 2024;
+
+    /// Queue the demo taxpayer's 1601C for `month` in this engine, and wake its worker.
+    fn queue_1601c(month: u8) -> bir_core::forms::form_1601c::Form1601CDraft {
+        let profile = demo_profile();
+        let mut draft = bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(
+            &profile,
+            ENGINE_YEAR,
+            month,
+        );
+        draft.any_taxes_withheld = false;
+        draft.transition_to_queued().expect("the demo 1601C queues");
+        with_database(|db| {
+            if db.list_profiles().map_err(db_error)?.is_empty() {
+                db.save_profile(profile.clone()).map_err(db_error)?;
+            }
+            db.save_queued_1601c_draft(&draft).map_err(db_error)?;
+            Ok(())
+        })
+        .unwrap();
+        wake_submission_worker();
+        draft
+    }
+
+    fn stored_1601c(month: u8) -> bir_core::forms::form_1601c::Form1601CDraft {
+        with_database(|db| {
+            db.get_1601c_draft(&demo_profile().tin.full(), ENGINE_YEAR, month)
+                .map_err(db_error)
+        })
+        .unwrap()
+        .expect("the 1601C row")
+    }
+
+    fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !done() {
+            assert!(std::time::Instant::now() < deadline, "never: {what}");
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+
+    /// Three engines in one process, one after the other: each one's launch
+    /// starts a worker of its own, each queues a return, and each one's worker
+    /// sends it (the dry run). After each end the worker is gone and the owner
+    /// lock is free, so the next engine opens the database. (The second engine
+    /// used to have no worker at all, silently, and the third was refused the
+    /// database.)
+    #[test]
+    fn one_engine_after_another_each_sends_what_it_queued() {
+        run_engine_child("one_engine_after_another_each_sends_what_it_queued");
+        let Some(scratch) = engine_child() else {
+            return;
+        };
+        for month in 1..=3u8 {
+            engine(|| {
+                queue_1601c(month);
+                wait_until(&format!("engine {month} sent its 1601C"), || {
+                    stored_1601c(month).status == bir_core::forms::FilingStatus::Submitted
+                });
+                let sent = stored_1601c(month);
+                assert!(sent.submitted_dry_run, "engine {month}: a dry run");
+                for earlier in 1..month {
+                    assert_eq!(
+                        stored_1601c(earlier).status,
+                        bir_core::forms::FilingStatus::Submitted,
+                        "engine {month}: the earlier engines' returns stay sent"
+                    );
+                }
+            });
+            assert!(
+                owner_lock_released(),
+                "engine {month}: its database was closed"
+            );
+            assert!(
+                owner_lock_is_free(),
+                "engine {month}: the lock is free for the next"
+            );
+        }
+        std::fs::write(scratch.join("child-done"), "ok").unwrap();
+    }
+
     // ---------- export_profile ----------
 
     #[tokio::test]

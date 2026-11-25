@@ -665,6 +665,124 @@ mod tests {
         });
     }
 
+    /// Three engines in one process, one after the other (an Android relaunch in the process that outlived the last one):
+    /// each engine thread opens the database through the door, and its end (the thread going, the door's guard) closes
+    /// it, so the owner lock is free for the next.
+    #[test]
+    fn each_engine_end_frees_the_database_for_the_next() {
+        let (folder, database) = empty();
+        dev_env(Some(&database), Some(folder.path()), || {
+            for engine in 1..=3 {
+                std::thread::scope(|scope| {
+                    scope
+                        .spawn(|| call("list_taxpayers", vec![]).unwrap_or_else(|error| panic!("engine {engine}: {error}")))
+                        .join()
+                        .expect("the engine thread")
+                });
+                let lock = bir_core::db::try_acquire_live_owner_lock(&database);
+                assert!(lock.is_ok(), "engine {engine}: the lock is free after its end");
+            }
+        });
+    }
+
+    /// The same in a process of its own, so its first engine is the process's first (as on a phone, where the
+    /// process outlives a Back on Home and the next launch is a new engine in it): three engines one after the other
+    /// each open the database and free it at their end, and then the locked card's Try again works over an engine
+    /// that held the database and has ended. Before, the first engine's handle stayed held for the life of the
+    /// process (the log-retention thread kept a clone of it, and only the first end of a process was handled).
+    #[test]
+    fn in_a_fresh_process_every_engine_end_frees_the_database() {
+        const CHILD: &str = "NSH_DOOR_FRESH_PROCESS_ENGINES";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "door::tests::in_a_fresh_process_every_engine_end_frees_the_database", "--nocapture"])
+                .env(CHILD, "1")
+                .env("EBIR_TEST_ENV", "1")
+                .env("BIR_AUTH_BYPASS", "1")
+                .env("BUWIZ_NO_KEYCHAIN", "1")
+                .env("BIR_SFTP_DRY_RUN", "1")
+                .env_remove("BIR_SFTP_LIVE")
+                .env_remove("BIR_SFTP_HOST")
+                .env_remove("BIR_RELAY_URL")
+                .env_remove("BUWIZ_RELAY_SEND")
+                .status()
+                .unwrap();
+            assert!(status.success(), "the child process failed");
+            return;
+        }
+        let (folder, database) = empty();
+        dev_env(Some(&database), Some(folder.path()), || {
+            for engine in 1..=3 {
+                std::thread::scope(|scope| {
+                    scope
+                        .spawn(|| call("auth_state", vec![]).unwrap_or_else(|error| panic!("engine {engine}: {error}")))
+                        .join()
+                        .expect("the engine thread")
+                });
+                let lock = bir_core::db::try_acquire_live_owner_lock(&database);
+                assert!(lock.is_ok(), "engine {engine}: the lock is free after its end");
+            }
+            let (opened, wait_for_open) = std::sync::mpsc::channel::<()>();
+            let (end, wait_for_end) = std::sync::mpsc::channel::<()>();
+            std::thread::scope(|scope| {
+                let earlier = scope.spawn(move || {
+                    call("auth_state", vec![]).expect("engine 4 opens the database");
+                    opened.send(()).unwrap();
+                    wait_for_end.recv().unwrap();
+                });
+                scope.spawn(move || {
+                    wait_for_open.recv().unwrap();
+                    assert_eq!(call("auth_state", vec![]).unwrap_err(), SECOND_COPY, "engine 5 while 4 is open");
+                    end.send(()).unwrap();
+                    earlier.join().expect("engine 4 ended");
+                    call("auth_state", vec![]).expect("engine 5: Try again opens the database");
+                });
+            });
+            assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 5");
+        });
+    }
+
+    /// The sign-in lock's card ("eBIRForms is locked", the host's sentence, Try again; `AccessError.tsx`) over a
+    /// database the engine before this one still has open: the sentence while it does, and Try again (the page asks
+    /// `auth_state` again) opens it once that engine has ended.
+    #[test]
+    fn try_again_opens_the_database_once_the_engine_before_has_ended() {
+        let (folder, database) = empty();
+        dev_env(Some(&database), Some(folder.path()), || {
+            let (opened, wait_for_open) = std::sync::mpsc::channel::<()>();
+            let (end, wait_for_end) = std::sync::mpsc::channel::<()>();
+            std::thread::scope(|scope| {
+                let earlier = scope.spawn(move || {
+                    call("auth_state", vec![]).expect("the earlier engine opens the database");
+                    opened.send(()).unwrap();
+                    wait_for_end.recv().unwrap();
+                });
+                wait_for_open.recv().unwrap();
+                assert_eq!(call("auth_state", vec![]).unwrap_err(), SECOND_COPY);
+                end.send(()).unwrap();
+                earlier.join().expect("the earlier engine ended");
+            });
+            call("auth_state", vec![]).expect("Try again opens the database");
+        });
+    }
+
+    /// The same card over a database another copy holds (a lock of its own on the file, as another process takes it):
+    /// the sentence says what to do, Try again says it again while the other copy is open, and opens the database once
+    /// it is closed.
+    #[test]
+    fn a_database_another_copy_holds_says_what_to_do_until_it_is_closed() {
+        let (folder, database) = empty();
+        dev_env(Some(&database), Some(folder.path()), || {
+            let other = bir_core::db::try_acquire_live_owner_lock(&database).expect("the other copy");
+            let said = call("auth_state", vec![]).unwrap_err();
+            assert_eq!(said, SECOND_COPY);
+            assert!(said.ends_with("Close it there, then press Try again."), "{said}");
+            assert_eq!(call("auth_state", vec![]).unwrap_err(), SECOND_COPY, "Try again while it is open");
+            drop(other);
+            call("auth_state", vec![]).expect("Try again once it is closed");
+        });
+    }
+
     /// Only bir-core's sentence for a database another process owns is replaced, whatever path it names; every other
     /// error, even one that says "already open", reaches the page as the host wrote it.
     #[test]
