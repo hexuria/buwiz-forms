@@ -16,7 +16,6 @@ import i_chevrons_down_up from "../assets/icons/chevrons-down-up.svg";
 import i_chevrons_up_down from "../assets/icons/chevrons-up-down.svg";
 import i_circle_check from "../assets/icons/circle-check.svg";
 import i_copy from "../assets/icons/copy.svg";
-import i_e_logo from "../assets/icons/e_logo.svg";
 import i_eye_off from "../assets/icons/eye-off.svg";
 import i_eye from "../assets/icons/eye.svg";
 import i_file_text from "../assets/icons/file-text.svg";
@@ -76,7 +75,6 @@ export const ICONS = {
   "chevrons-up-down": i_chevrons_up_down,
   "circle-check": i_circle_check,
   copy: i_copy,
-  e_logo: i_e_logo,
   "eye-off": i_eye_off,
   eye: i_eye,
   "file-text": i_file_text,
