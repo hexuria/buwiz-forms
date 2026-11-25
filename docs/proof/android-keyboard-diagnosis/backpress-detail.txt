@@ -1,0 +1,7 @@
+
+start: pid=16548
+press 1: pid=16548 fg=Resumed=ActivityRecord{6be0da0 u0 com.google.android.apps.nexuslauncher/.NexusLa screen=Wed, Nov 25 | Gmail
+press 2: pid=16548 fg=Resumed=ActivityRecord{6be0da0 u0 com.google.android.apps.nexuslauncher/.NexusLa screen=Wed, Nov 25 | Gmail
+press 3: pid=16548 fg=Resumed=ActivityRecord{6be0da0 u0 com.google.android.apps.nexuslauncher/.NexusLa screen=Wed, Nov 25 | Gmail
+press 4: pid=16548 fg=Resumed=ActivityRecord{6be0da0 u0 com.google.android.apps.nexuslauncher/.NexusLa screen=Wed, Nov 25 | Gmail
+press 5: pid=16548 fg=Resumed=ActivityRecord{6be0da0 u0 com.google.android.apps.nexuslauncher/.NexusLa screen=Wed, Nov 25 | Gmail

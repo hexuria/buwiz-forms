@@ -56,6 +56,21 @@ Locked-screen screenshot: `partd-lock-back-2.png` (and cycles 3–6 identical);
 logcat grep at first lock in `partd-logcat-back-2.txt` — no app-side owner/lock/shutdown
 lines are logged at this build.
 
+### Cycle-1 anomaly settled (backpress-detail.txt)
+
+One Back press on Home closes the app: after a single press the Nexus launcher is
+already the resumed activity while the app's pid SURVIVES in the background (pid
+16548 before and after every press; presses 2–5 land on the launcher and do nothing).
+So in the Back series every cycle was a real close+relaunch. Cycle 1 reopening on
+"New taxpayer" was session-state restore of engine 2, not a failed exit. The counts
+then line up exactly with the shutdown_for_quit once-per-process guess:
+
+- engine 1 (first launch) → exit releases the lock;
+- engine 2 (cycle-1 relaunch) opens fine, its exit does NOT release (the once-guard
+  already fired in this process);
+- engine 3 (cycle-2 relaunch) finds the database still owned → locked, and every
+  later engine the same.
+
 ### Swipe-away series (swipe the app away in Recents, wait 3 s, relaunch)
 
 | cycle | pid before | pid after | opened |
