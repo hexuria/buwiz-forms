@@ -1,0 +1,310 @@
+{
+  "forms_checked": 43,
+  "total_converted_fields": 1728,
+  "total_separator_stubs": 0,
+  "total_overlaps": 0,
+  "total_unapplied": 0,
+  "forms": [
+    {
+      "slug": "0605-1999",
+      "converted_fields": 3,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "0619e-2018",
+      "converted_fields": 25,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "0619f-2018",
+      "converted_fields": 27,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1600-pt-2018",
+      "converted_fields": 38,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1600-vt-2018",
+      "converted_fields": 38,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1600wp-2010",
+      "converted_fields": 9,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1601-fq-2020",
+      "converted_fields": 58,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1601c-2018",
+      "converted_fields": 59,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1601eq-2019",
+      "converted_fields": 47,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1602q-2019",
+      "converted_fields": 72,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1603q-2018",
+      "converted_fields": 38,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1604c-2018",
+      "converted_fields": 11,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1604e-2018",
+      "converted_fields": 8,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1604f-2018",
+      "converted_fields": 8,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1606-2018",
+      "converted_fields": 23,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1700-2018",
+      "converted_fields": 99,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1701-2018",
+      "converted_fields": 30,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1701a-2018",
+      "converted_fields": 96,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1701ms-2024",
+      "converted_fields": 113,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1701q-2018",
+      "converted_fields": 19,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1702ex-2018",
+      "converted_fields": 107,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1702mx-2018c",
+      "converted_fields": 32,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1702q-2018",
+      "converted_fields": 75,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1702rt-2018c",
+      "converted_fields": 50,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1706-2018",
+      "converted_fields": 25,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1707-2021",
+      "converted_fields": 48,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1707a-2021",
+      "converted_fields": 19,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1800-2018",
+      "converted_fields": 45,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "1801-2018",
+      "converted_fields": 44,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2000-dst-2018",
+      "converted_fields": 69,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2000-ot-2018",
+      "converted_fields": 26,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2200a-2020",
+      "converted_fields": 29,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2200an-2018",
+      "converted_fields": 43,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2200c-2018",
+      "converted_fields": 25,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2200m-2018",
+      "converted_fields": 31,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2200p-2020",
+      "converted_fields": 26,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2200s-2018",
+      "converted_fields": 41,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2200t-2022",
+      "converted_fields": 45,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2550m-2007",
+      "converted_fields": 1,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2550q-2024",
+      "converted_fields": 57,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2551q-2018",
+      "converted_fields": 44,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2552-2018",
+      "converted_fields": 22,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    },
+    {
+      "slug": "2553-1999",
+      "converted_fields": 3,
+      "separator_stubs": [],
+      "overlaps": [],
+      "unapplied": []
+    }
+  ]
+}
