@@ -18,3 +18,4 @@ xml-excerpt.txt — draft payload excerpt carrying "tin":"00123453000000"
 form-tin-escape.txt — step-4 exposure write-up
 cause-analysis.txt — step-5 cause: code citations, empirical elimination, driver-vs-OS input paths, verdict on the redraw hypothesis
 permute-sim.py — proof port of the end-only diff/edit logic: one mid-string caret insertion reproduces the exact observed corruption
+slow-redraw-results.txt / slow-raw.txt / slowmatrix.sh — step-1 extension: 200/250/300ms bursts under CPU saturation and continuous resize redraw, 60/60 correct (negative result)

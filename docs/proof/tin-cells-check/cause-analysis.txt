@@ -53,3 +53,26 @@ WHAT WOULD NOT HAVE PROTECTED ANYWAY
 The official TIN check digit passes digit permutations in these cases (verified by computation: both observed
 corruptions 001234530 and 000234531 satisfy the check digit of their first eight digits) — and taxpayer creation
 validates only length and duplicates anyway. So nothing in the validation chain stops a corrupted TIN.
+
+ADDENDUM — slow redraws and the lost-digit sighting (owner's step-1 extension)
+Empirical: on this machine neither CPU saturation (load average 17-20, 12 yes-workers) nor continuous
+whole-window resize/redraw (~12 relayouts/s) moved corruption into the 200-300ms range: 60/60 runs correct.
+Measured why: the app's input-to-commit latency stays ~20-30ms even at load average 20 — hardware-composited
+macOS keeps the pipeline fast regardless of machine load; the slowdown that matters is the APP'S OWN frame/
+commit latency, which is large on a software-rendered overloaded emulator and small here.
+
+Does the established cause explain a LOST digit as well as a misplaced one? Yes — the same interleaving
+family produces both, by which window the keystroke lands in:
+- Misplacement (every macOS observation): the keystroke IS reported, but at a caret position stale-yanked
+  mid-string; the end-only diff/edit reconstruction permutes the digits. Proven by permute-sim.py.
+- Loss (the Android sighting): the keystroke is consumed while the native field is mid-rewrite — in
+  text_input.rs changed() returns early while input.applying is set, and correction writes in otp_input.rs
+  rewrite the field wholesale in a spawned task. A digit typed into that window is either never reported as
+  an edit or is overwritten by the in-flight rewrite before the engine ever sees it; since the end-only
+  reconstruction only knows what the field reported, the digit simply never enters the code — a clean loss
+  with all other digits in order, exactly the Android shape (123456789 -> 13456789). The slower the frame/
+  commit path, the wider the rewrite window, the slower the keys that still fall inside it — which is why an
+  overloaded emulator loses digits at 300ms spacing while this machine needed <=30ms to even misplace one.
+Both failure shapes share one root: keystrokes interleaving with asynchronous programmatic mutation (text
+rewrites and caret writes) of the one hidden field, with the selection path missing the staleness protection
+the text path has.

@@ -1,0 +1,35 @@
+Slow-redraw extension matrix — can slowing the app's redraw move corruption into human typing speed?
+Same injector (keyinject, real CGEvent digit keys), same field (New taxpayer TIN cells), digits 000123453,
+10 runs per gap per method. Control: 200ms was already 10/10 correct with NO load in the earlier matrix
+(timing-results.txt) — judged sufficient, not redone.
+
+METHODS EXACTLY AS PERFORMED:
+A. CPU load: 12 x `yes > /dev/null` workers on this 12-core machine (sysctl hw.ncpu = 12), kept running
+   during the whole matrix. Load average during runs: 17-20 (saturated).
+B. Redraw pressure: /tmp/resize-loop.sh — an osascript loop alternating the eBIRForms window size between
+   772x620 and 770x618 via System Events, measured ~12 window-size transitions/second during the matrix
+   (continuous relayout+repaint of the whole window for the entire burst).
+
+FRAME SLOWNESS MEASUREMENTS (concrete numbers):
+- gpui-agent snapshot roundtrip: 25-45ms baseline; 44-194ms under CPU load; 42-45ms during resize loop.
+- key->visible latency (inject one digit into empty field, poll view tree until the digit appears,
+  includes the ~45ms snapshot roundtrip): 77ms under load average 20, 67ms with no load.
+  => the app's input-to-commit latency is ~20-30ms (1-2 frames at 60fps) and CPU saturation of the
+  machine adds only ~10ms: the compositor/main thread keeps up. Resize redraw pressure did not slow
+  the query path at all. Frames were NOT meaningfully slow under either method on this machine.
+
+RESULTS TABLE (all values read from the gpui-agent view tree; raw rows in slow-raw.txt):
+method    gap_ms  right/10  wrong values seen        lost vs misplaced
+cpuload    200    10/10     -                        -
+cpuload    250    10/10     -                        -
+cpuload    300    10/10     -                        -
+redraw     200    10/10     -                        -
+redraw     250    10/10     -                        -
+redraw     300    10/10     -                        -
+
+VERDICT: NEGATIVE RESULT. Neither method moved corruption into the 200-300ms range: 60/60 runs correct.
+No digit was ever LOST (missing) on macOS in any run of this whole investigation — all corruption observed
+here is MISPLACEMENT (permutation), never loss. The Android emulator digit loss at 300ms is consistent with
+a much slower frame/commit path there (a software-rendered overloaded emulator), not reproducible on a
+fast native macOS desktop by machine load or redraw pressure alone. Because no failure occurred, no
+slow-fail recording or frame trace exists — there was nothing failing to record.
