@@ -166,7 +166,10 @@ Each checkout builds into its own folder (`CARGO_TARGET_DIR=~/BuwizNsh/target-<c
 evidence. Cargo cannot tell two checkouts of the same package version apart in one shared build folder, so a "before"
 build can link crates compiled from the "after" checkout, form definitions included (they are compiled into
 `bir-core`), with no error. A before and after is two checkouts and two build folders, and the report names the folder
-and the commit for each binary.
+and the commit for each binary. On a machine whose `cargo` is a build that ignores `CARGO_TARGET_DIR` (it says
+"ignoring the configured target directory … this cargo always uses `./target`" and keeps registry crates in a shared
+`~/.cargo/targets/shared-deps`), each workspace still builds in its own checkout's `target`, which keeps the checkouts
+apart; the folder the recipes print is then not where the build went.
 
 ## Windows (Android)
 
