@@ -27,7 +27,10 @@ There is no other screen: no start card and no browser step.
     the countdown going on (nothing sent).
 - Settings > Account (the sign-in pages are the gate's only): `settings-account-signed-in` ("Buwiz account", the email,
   "Sign out of Buwiz"; under it "Profile on this computer"), `settings-account-sign-out-question` (the question before it
-  signs out), `settings-account-signed-out` ("Not signed in to Buwiz" with Sign in, which shows the gate).
+  signs out), `settings-account-signed-out` ("Not signed in to Buwiz" with Sign in, which shows the gate). The six
+  `narrow-*-settings-account-*` pictures were taken again after main's #347 came in (at a194698a): a phone's Settings
+  page now has one Back control, in the header titled "Account" (before, the header said "Settings" and the page had a
+  second "‹ Settings" above a large "Account"). The wide ones came out the same, byte for byte.
 
 What these pictures do not show:
 
