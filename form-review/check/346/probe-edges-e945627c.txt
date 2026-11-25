@@ -1,0 +1,129 @@
+   Compiling bir-core v0.2.1 (/home/ubuntu/repos/bwf-pr346/crates/bir-core)
+warning: variable does not need to be mutable
+   --> crates/bir-core/tests/probe2551.rs:144:9
+    |
+144 |     let mut r = row("PT180", 999_999_999_999.0);
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `bir-core` (test "probe2551") generated 1 warning (run `cargo fix --test "probe2551" -p bir-core` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.83s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests/probe2551.rs (/home/ubuntu/BuwizNsh/target-nsh/debug/deps/probe2551-0359894c219d5185)
+
+running 1 test
+== A1 taxable just under whole-peso limit: 999999999998
+validate errors: 1
+xml: REFUSED (1 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+== A2 taxable AT whole-peso limit: 999999999999
+validate errors: 1
+xml: REFUSED (1 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+== A3 taxable just over: 1000000000000
+validate errors: 2
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.
+xml: REFUSED (2 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.
+== A4 taxable centavos at limit: 999999999.99
+validate errors: 1
+xml: REFUSED (1 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+== A5 taxable centavos over: 1000000000.00-with-cents ie 1000000000.01
+validate errors: 2
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.
+xml: REFUSED (2 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.
+== A6 taxable tenths at limit: 9999999999.9
+validate errors: 1
+xml: REFUSED (1 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+== A7 taxable tenths over: 9999999999.99
+validate errors: 2
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.
+xml: REFUSED (2 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.
+== A8 taxable negative: -1000
+validate errors: 2
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount must be finite and non-negative
+xml: REFUSED (2 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount must be finite and non-negative
+== A9 taxable negative over: -1000000000000
+validate errors: 3
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount must be finite and non-negative
+xml: REFUSED (3 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount must be finite and non-negative
+  XMLERR[overpayment_disposition]: Please select overpayment option.
+== B1 taxdue just under 12 digits: amt 33333333333.30 -> due 9999999999.99ish
+validate errors: 1
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.
+xml: REFUSED (1 errors)
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.
+== B2 taxdue at 12 digits: amt 999999999999 -> due 299999999999.70
+validate errors: 0
+xml: BUILDS
+<?xml version='1.0'?>		<div>frm2551Qv2018:forThe_1=truefrm2551Qv2018:forThe_1=</div>		<div>frm2551Qv2018:forThe_2=falsefrm2551Qv2018:forThe_2=</div>		<div>frm2551Qv2018:rtnMonth=12frm2551Qv2018:rtnMonth=</div>		<div>frm2551Qv2018:txtYear=2026frm2551Qv2018:txtYear=</div>		<div>frm2551Qv2018:qtr_1=truefrm2551Qv2018:qtr_1=</div>		<div>frm2551Qv2018:qtr_2=falsefrm2551Qv2018:qtr_2=</div>		<div>frm2551Qv2018:qtr_3=falsefrm2551Qv2018:qtr_3=</div>		<div>frm2551Qv2018:qtr_4=falsefrm2551Qv2018:qtr_4=</div>		<div>frm2551Qv2018:amendedRtn_1=falsefrm2551Qv2018:amendedRtn_1=</div>		<div>frm2551Qv2018:amendedRtn_2=truefrm2551Qv2018:amendedRtn_2=</div>		<div>frm2551Qv2018:txtSheets=0frm2551Qv2018:txtSheets=</div>		<div>frm2551Qv2018:txtTIN1=000frm2551Qv2018:txtTIN1=</div>		<div>frm2551Qv2018:txtTIN2=123frm2551Qv2018:txtTIN2=</div>		<div>frm2551Qv2018:txtTIN3=453frm2551Qv2018:txtTIN3=</div>		<div>frm2551Qv2018:txtBranchCode=00000frm2551Qv2018:txtBranchCode=</div>		<div>frm2551Qv2018:txtRDOCode=018frm2551Qv2018:txtRDOCode=</div>		<div>frm2551Qv2018:registeredName=SANTOS, JUANAfrm2551Qv2018:registeredName=</div>		<div>frm2551Qv2018:registeredAddress=MANILAfrm2551Qv2018:registeredAddress=</div>		<div>frm2551Qv2018:zipCode=1000frm2551Qv2018:zipCode=</div>		<div>frm2551Qv2018:telNo=09123456789frm2551Qv2018:telNo=</div>		<div>txtEmail=test@example.comtxtEmail=</div>		<div>frm2551Qv2018:taxTreaty_1=falsefrm2551Qv2018:taxTreaty_1=</div>		<div>frm2551Qv2018:taxTreaty_2=truefrm2551Qv2018:taxTreaty_2=</div>		<div>frm2551Qv2018:txtTaxReliefSpecify=0frm2551Qv2018:txtTaxReliefSpecify=</div>		<div>frm2551Qv2018:taxRate1=falsefrm2551Qv2018:taxRate1=</div>		<div>frm2551Qv2018:taxRate2=falsefrm2551Qv2018:taxRate2=</div>		<div>frm2551Qv2018:txt14=299,999,999,999.70frm2551Qv2018:txt14=</div>		<div>frm2551Qv2018:txt15=0.00frm2551Qv2018:txt15=</div>		<div>frm2551Qv2018:txt16=0.00frm2551Qv2018:txt16=</div>		<div>frm2551Qv2018:txt17Specify=frm2551Qv2018:txt17Specify=</div>		<div>frm2551Qv2018:txt17=0.00frm2551Qv2018:txt17=</div>		<div>frm2551Qv2018:txt18=0.00frm2551Qv2018:txt18=</div>		<div>frm2551Qv2018:txt19=299,999,999,999.70frm2551Qv2018:txt19=</div>		<div>frm2551Qv2018:txt20=74,999,999,999.93frm2551Qv2018:txt20=</div>		<div>frm2551Qv2018:txt21=21,106,849,315.05frm2551Qv2018:txt21=</div>		<div>frm2551Qv2018:txt22=50,000.00frm2551Qv2018:txt22=</div>		<div>frm2551Qv2018:txt23=96,106,899,314.98frm2551Qv2018:txt23=</div>		<div>frm2551Qv2018:txt24=396,106,899,314.68frm2551Qv2018:txt24=</div>		<div>frm2551Qv2018:overPayment1=falsefrm2551Qv2018:overPayment1=</div>		<div>frm2551Qv2018:overPayment2=falsefrm2551Qv2018:overPayment2=</div>		<div>txtTaxAgentNo=txtTaxAgentNo=</div>		<div>txtDateIssue=txtDateIssue=</div>		<div>txtDateExpiry=txtDateExpiry=</div>		<div>frm2551Qv2018:txtAgency25=frm2551Qv2018:txtAgency25=</div>		<div>frm2551Qv2018:txtNumber25=frm2551Qv2018:txtNumber25=</div>		<div>frm2551Qv2018:txtDate25=frm2551Qv2018:txtDate25=</div>		<div>frm2551Qv2018:txtAmount25=frm2551Qv2018:txtAmount25=</div>		<div>frm2551Qv2018:txtAgency26=frm2551Qv2018:txtAgency26=</div>		<div>frm2551Qv2018:txtNumber26=frm2551Qv2018:txtNumber26=</div>		<div>frm2551Qv2018:txtDate26=frm2551Qv2018:txtDate26=</div>		<div>frm2551Qv2018:txtAmount26=frm2551Qv2018:txtAmount26=</div>		<div>frm2551Qv2018:txtAgency27=frm2551Qv2018:txtAgency27=</div>		<div>frm2551Qv2018:txtNumber27=frm2551Qv2018:txtNumber27=</div>		<div>frm2551Qv2018:txtDate27=frm2551Qv2018:txtDate27=</div>		<div>frm2551Qv2018:txtAmount27=frm2551Qv2018:txtAmount27=</div>		<div>frm2551Qv2018:txtParticular28=frm2551Qv2018:txtParticular28=</div>		<div>frm2551Qv2018:txtAgency28=frm2551Qv2018:txtAgency28=</div>		<div>frm2551Qv2018:txtNumber28=frm2551Qv2018:txtNumber28=</div>		<div>frm2551Qv2018:txtDate28=frm2551Qv2018:txtDate28=</div>		<div>frm2551Qv2018:txtAmount28=frm2551Qv2018:txtAmount28=</div>		<div>frm2551Qv2018:txtPg2TIN1=000frm2551Qv2018:txtPg2TIN1=</div>		<div>frm2551Qv2018:txtPg2TIN2=123frm2551Qv2018:txtPg2TIN2=</div>		<div>frm2551Qv2018:txtPg2TIN3=453frm2551Qv2018:txtPg2TIN3=</div>		<div>frm2551Qv2018:txtPg2BranchCode=00000frm2551Qv2018:txtPg2BranchCode=</div>		<div>frm2551Qv2018:txtPg2TaxpayerName=SANTOS, JUANAfrm2551Qv2018:txtPg2TaxpayerName=</div>		<div>drpATC1=22drpATC1=</div>		<div>txtATCAmt1=999,999,999,999.00txtATCAmt1=</div>		<div>txtATCRate1=30.0txtATCRate1=</div>		<div>txtATCDue1=299,999,999,999.70txtATCDue1=</div>		<div>drpATC2=0drpATC2=</div>		<div>txtATCAmt2=0.00txtATCAmt2=</div>		<div>txtATCRate2=0.00txtATCRate2=</div>		<div>txtATCDue2=0.00txtATCDue2=</div>		<div>drpATC3=0drpATC3=</div>		<div>txtATCAmt3=0.00txtATCAmt3=</div>		<div>txtATCRate3=0.00txtATCRate3=</div>		<div>txtATCDue3=0.00txtATCDue3=</div>		<div>drpATC4=0drpATC4=</div>		<div>txtATCAmt4=0.00txtATCAmt4=</div>		<div>txtATCRate4=0.00txtATCRate4=</div>		<div>txtATCDue4=0.00txtATCDue4=</div>		<div>drpATC5=0drpATC5=</div>		<div>txtATCAmt5=0.00txtATCAmt5=</div>		<div>txtATCRate5=0.00txtATCRate5=</div>		<div>txtATCDue5=0.00txtATCDue5=</div>		<div>drpATC6=0drpATC6=</div>		<div>txtATCAmt6=0.00txtATCAmt6=</div>		<div>txtATCRate6=0.00txtATCRate6=</div>		<div>txtATCDue6=0.00txtATCDue6=</div>		<div>txtTotalSched1=299,999,999,999.70txtTotalSched1=</div>		<div>frm2551Qv2018:txtCurrentPage=1frm2551Qv2018:txtCurrentPage=</div>		<div>frm2551Qv2018:txtMaxPage=2frm2551Qv2018:txtMaxPage=</div>		<div>txtFinalFlag=1txtFinalFlag=</div>		<div>txtEnroll=YtxtEnroll=</div>		<div>ebirOnlineConfirmUsername=ebirOnlineConfirmUsername=</div>		<div>ebirOnlineUsername=ebirOnlineUsername=</div>		<div>ebirOnlineSecret=ebirOnlineSecret=</div>		<div>driveSelectTPExport=0driveSelectTPExport=</div>				All Rights Reserved BIR 2012.0
+== B3 taxdue forced to 13 digits: 1000000000000.00
+validate errors: 6
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due must equal taxable amount times the official ATC PT180 rate, rounded to two decimals (299999999999.70)
+  ERR[total_tax_due]: Item 14 total tax due exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+  ERR[tax_payable]: Item 19 tax payable exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+  ERR[total_amount_payable]: Item 24 total amount payable exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+  ERR[total_amount_payable]: Item 24 total amount payable/(overpayment) must equal its Rust-derived value (1096106899314.98)
+xml: REFUSED (6 errors)
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due must equal taxable amount times the official ATC PT180 rate, rounded to two decimals (299999999999.70)
+  XMLERR[total_tax_due]: Item 14 total tax due exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+  XMLERR[tax_payable]: Item 19 tax payable exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+== C1 item15 just under: 999999999999.98
+validate errors: 1
+xml: REFUSED (1 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+== C2 item15 at: 999999999999.99
+validate errors: 1
+xml: REFUSED (1 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+== C3 item15 just over: 1000000000000.00
+validate errors: 3
+  ERR[creditable_withheld]: Item 15 creditable tax withheld exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+  ERR[total_tax_credits]: Item 18 total tax credits/payments exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+xml: REFUSED (3 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[creditable_withheld]: Item 15 creditable tax withheld exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+  XMLERR[total_tax_credits]: Item 18 total tax credits/payments exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+== C4 item15 negative (overpayment): -500.00
+validate errors: 3
+  ERR[creditable_withheld]: Creditable percentage tax withheld must be finite and non-negative
+xml: REFUSED (3 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[creditable_withheld]: Creditable percentage tax withheld must be finite and non-negative
+  XMLERR[overpayment_disposition]: Overpayment disposition is only allowed when Item 24 is an overpayment
+== D six rows at 999999999999 (total 1009999999998.99, 13 digits)
+validate errors: 3
+  ERR[total_tax_due]: Item 14 total tax due exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+  ERR[tax_payable]: Item 19 tax payable exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+  ERR[total_amount_payable]: Item 24 total amount payable exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+xml: REFUSED (3 errors)
+  XMLERR[total_tax_due]: Item 14 total tax due exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+  XMLERR[tax_payable]: Item 19 tax payable exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+  XMLERR[total_amount_payable]: Item 24 total amount payable exceeds the official 12-digit peso field (at most 999,999,999,999.99); reduce the amount so it fits.
+E total_tax_due = 400495555555.16 tax_payable = 400495555555.16
+== E full return top-of-range that fits
+validate errors: 0
+xml: BUILDS
+<?xml version='1.0'?>		<div>frm2551Qv2018:forThe_1=truefrm2551Qv2018:forThe_1=</div>		<div>frm2551Qv2018:forThe_2=falsefrm2551Qv2018:forThe_2=</div>		<div>frm2551Qv2018:rtnMonth=12frm2551Qv2018:rtnMonth=</div>		<div>frm2551Qv2018:txtYear=2026frm2551Qv2018:txtYear=</div>		<div>frm2551Qv2018:qtr_1=truefrm2551Qv2018:qtr_1=</div>		<div>frm2551Qv2018:qtr_2=falsefrm2551Qv2018:qtr_2=</div>		<div>frm2551Qv2018:qtr_3=falsefrm2551Qv2018:qtr_3=</div>		<div>frm2551Qv2018:qtr_4=falsefrm2551Qv2018:qtr_4=</div>		<div>frm2551Qv2018:amendedRtn_1=falsefrm2551Qv2018:amendedRtn_1=</div>		<div>frm2551Qv2018:amendedRtn_2=truefrm2551Qv2018:amendedRtn_2=</div>		<div>frm2551Qv2018:txtSheets=0frm2551Qv2018:txtSheets=</div>		<div>frm2551Qv2018:txtTIN1=000frm2551Qv2018:txtTIN1=</div>		<div>frm2551Qv2018:txtTIN2=123frm2551Qv2018:txtTIN2=</div>		<div>frm2551Qv2018:txtTIN3=453frm2551Qv2018:txtTIN3=</div>		<div>frm2551Qv2018:txtBranchCode=00000frm2551Qv2018:txtBranchCode=</div>		<div>frm2551Qv2018:txtRDOCode=018frm2551Qv2018:txtRDOCode=</div>		<div>frm2551Qv2018:registeredName=SANTOS, JUANAfrm2551Qv2018:registeredName=</div>		<div>frm2551Qv2018:registeredAddress=MANILAfrm2551Qv2018:registeredAddress=</div>		<div>frm2551Qv2018:zipCode=1000frm2551Qv2018:zipCode=</div>		<div>frm2551Qv2018:telNo=09123456789frm2551Qv2018:telNo=</div>		<div>txtEmail=test@example.comtxtEmail=</div>		<div>frm2551Qv2018:taxTreaty_1=falsefrm2551Qv2018:taxTreaty_1=</div>		<div>frm2551Qv2018:taxTreaty_2=truefrm2551Qv2018:taxTreaty_2=</div>		<div>frm2551Qv2018:txtTaxReliefSpecify=0frm2551Qv2018:txtTaxReliefSpecify=</div>		<div>frm2551Qv2018:taxRate1=falsefrm2551Qv2018:taxRate1=</div>		<div>frm2551Qv2018:taxRate2=falsefrm2551Qv2018:taxRate2=</div>		<div>frm2551Qv2018:txt14=400,495,555,555.16frm2551Qv2018:txt14=</div>		<div>frm2551Qv2018:txt15=0.00frm2551Qv2018:txt15=</div>		<div>frm2551Qv2018:txt16=0.00frm2551Qv2018:txt16=</div>		<div>frm2551Qv2018:txt17Specify=frm2551Qv2018:txt17Specify=</div>		<div>frm2551Qv2018:txt17=0.00frm2551Qv2018:txt17=</div>		<div>frm2551Qv2018:txt18=0.00frm2551Qv2018:txt18=</div>		<div>frm2551Qv2018:txt19=400,495,555,555.16frm2551Qv2018:txt19=</div>		<div>frm2551Qv2018:txt20=100,123,888,888.79frm2551Qv2018:txt20=</div>		<div>frm2551Qv2018:txt21=28,177,331,141.52frm2551Qv2018:txt21=</div>		<div>frm2551Qv2018:txt22=50,000.00frm2551Qv2018:txt22=</div>		<div>frm2551Qv2018:txt23=128,301,270,030.31frm2551Qv2018:txt23=</div>		<div>frm2551Qv2018:txt24=528,796,825,585.47frm2551Qv2018:txt24=</div>		<div>frm2551Qv2018:overPayment1=falsefrm2551Qv2018:overPayment1=</div>		<div>frm2551Qv2018:overPayment2=falsefrm2551Qv2018:overPayment2=</div>		<div>txtTaxAgentNo=txtTaxAgentNo=</div>		<div>txtDateIssue=txtDateIssue=</div>		<div>txtDateExpiry=txtDateExpiry=</div>		<div>frm2551Qv2018:txtAgency25=frm2551Qv2018:txtAgency25=</div>		<div>frm2551Qv2018:txtNumber25=frm2551Qv2018:txtNumber25=</div>		<div>frm2551Qv2018:txtDate25=frm2551Qv2018:txtDate25=</div>		<div>frm2551Qv2018:txtAmount25=frm2551Qv2018:txtAmount25=</div>		<div>frm2551Qv2018:txtAgency26=frm2551Qv2018:txtAgency26=</div>		<div>frm2551Qv2018:txtNumber26=frm2551Qv2018:txtNumber26=</div>		<div>frm2551Qv2018:txtDate26=frm2551Qv2018:txtDate26=</div>		<div>frm2551Qv2018:txtAmount26=frm2551Qv2018:txtAmount26=</div>		<div>frm2551Qv2018:txtAgency27=frm2551Qv2018:txtAgency27=</div>		<div>frm2551Qv2018:txtNumber27=frm2551Qv2018:txtNumber27=</div>		<div>frm2551Qv2018:txtDate27=frm2551Qv2018:txtDate27=</div>		<div>frm2551Qv2018:txtAmount27=frm2551Qv2018:txtAmount27=</div>		<div>frm2551Qv2018:txtParticular28=frm2551Qv2018:txtParticular28=</div>		<div>frm2551Qv2018:txtAgency28=frm2551Qv2018:txtAgency28=</div>		<div>frm2551Qv2018:txtNumber28=frm2551Qv2018:txtNumber28=</div>		<div>frm2551Qv2018:txtDate28=frm2551Qv2018:txtDate28=</div>		<div>frm2551Qv2018:txtAmount28=frm2551Qv2018:txtAmount28=</div>		<div>frm2551Qv2018:txtPg2TIN1=000frm2551Qv2018:txtPg2TIN1=</div>		<div>frm2551Qv2018:txtPg2TIN2=123frm2551Qv2018:txtPg2TIN2=</div>		<div>frm2551Qv2018:txtPg2TIN3=453frm2551Qv2018:txtPg2TIN3=</div>		<div>frm2551Qv2018:txtPg2BranchCode=00000frm2551Qv2018:txtPg2BranchCode=</div>		<div>frm2551Qv2018:txtPg2TaxpayerName=SANTOS, JUANAfrm2551Qv2018:txtPg2TaxpayerName=</div>		<div>drpATC1=22drpATC1=</div>		<div>txtATCAmt1=999,999,999,999.00txtATCAmt1=</div>		<div>txtATCRate1=30.0txtATCRate1=</div>		<div>txtATCDue1=299,999,999,999.70txtATCDue1=</div>		<div>drpATC2=18drpATC2=</div>		<div>txtATCAmt2=999,999,999.99txtATCAmt2=</div>		<div>txtATCRate2=18.0txtATCRate2=</div>		<div>txtATCDue2=180,000,000.00txtATCDue2=</div>		<div>drpATC3=19drpATC3=</div>		<div>txtATCAmt3=888,888,888.88txtATCAmt3=</div>		<div>txtATCRate3=18.0txtATCRate3=</div>		<div>txtATCDue3=160,000,000.00txtATCDue3=</div>		<div>drpATC4=21drpATC4=</div>		<div>txtATCAmt4=666,666,666.66txtATCAmt4=</div>		<div>txtATCRate4=15.0txtATCRate4=</div>		<div>txtATCDue4=100,000,000.00txtATCDue4=</div>		<div>drpATC5=6drpATC5=</div>		<div>txtATCAmt5=555,555,555.55txtATCAmt5=</div>		<div>txtATCRate5=10.0txtATCRate5=</div>		<div>txtATCDue5=55,555,555.56txtATCDue5=</div>		<div>drpATC6=20drpATC6=</div>		<div>txtATCAmt6=999,999,999,999.00txtATCAmt6=</div>		<div>txtATCRate6=10.0txtATCRate6=</div>		<div>txtATCDue6=99,999,999,999.90txtATCDue6=</div>		<div>txtTotalSched1=400,495,555,555.16txtTotalSched1=</div>		<div>frm2551Qv2018:txtCurrentPage=1frm2551Qv2018:txtCurrentPage=</div>		<div>frm2551Qv2018:txtMaxPage=2frm2551Qv2018:txtMaxPage=</div>		<div>txtFinalFlag=1txtFinalFlag=</div>		<div>txtEnroll=YtxtEnroll=</div>		<div>ebirOnlineConfirmUsername=ebirOnlineConfirmUsername=</div>		<div>ebirOnlineUsername=ebirOnlineUsername=</div>		<div>ebirOnlineSecret=ebirOnlineSecret=</div>		<div>driveSelectTPExport=0driveSelectTPExport=</div>				All Rights Reserved BIR 2012.0
+test probe_edges ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+exit=0

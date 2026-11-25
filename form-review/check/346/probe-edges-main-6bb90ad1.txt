@@ -1,0 +1,184 @@
+
+== A1 taxable just under whole-peso limit: 999999999998
+validate errors: 3
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+xml: REFUSED (3 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+== A2 taxable AT whole-peso limit: 999999999999
+validate errors: 3
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+xml: REFUSED (3 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+== A3 taxable just over: 1000000000000
+validate errors: 3
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+xml: REFUSED (3 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+== A4 taxable centavos at limit: 999999999.99
+validate errors: 2
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+xml: REFUSED (2 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+== A5 taxable centavos over: 1000000000.00-with-cents ie 1000000000.01
+validate errors: 2
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+xml: REFUSED (2 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+== A6 taxable tenths at limit: 9999999999.9
+validate errors: 2
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+xml: REFUSED (2 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+== A7 taxable tenths over: 9999999999.99
+validate errors: 2
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+xml: REFUSED (2 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+== A8 taxable negative: -1000
+validate errors: 2
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount must be finite and non-negative
+xml: REFUSED (2 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount must be finite and non-negative
+== A9 taxable negative over: -1000000000000
+validate errors: 8
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount must be finite and non-negative
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+  ERR[total_tax_due]: Item 14 total tax due does not fit the official 11-cell integer field
+  ERR[tax_payable]: Item 19 tax payable does not fit the official 11-cell integer field
+  ERR[total_amount_payable]: Item 24 total amount payable does not fit the official 11-cell integer field
+xml: REFUSED (8 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount must be finite and non-negative
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+== B1 taxdue just under 12 digits: amt 33333333333.30 -> due 9999999999.99ish
+validate errors: 1
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+xml: REFUSED (1 errors)
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+== B2 taxdue at 12 digits: amt 999999999999 -> due 299999999999.70
+validate errors: 5
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+  ERR[total_tax_due]: Item 14 total tax due does not fit the official 11-cell integer field
+  ERR[tax_payable]: Item 19 tax payable does not fit the official 11-cell integer field
+  ERR[total_amount_payable]: Item 24 total amount payable does not fit the official 11-cell integer field
+xml: REFUSED (5 errors)
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+  XMLERR[total_tax_due]: Item 14 total tax due does not fit the official 11-cell integer field
+  XMLERR[tax_payable]: Item 19 tax payable does not fit the official 11-cell integer field
+== B3 taxdue forced to 13 digits: 1000000000000.00
+validate errors: 7
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due must equal taxable amount times the official ATC PT180 rate, rounded to two decimals (299999999999.70)
+  ERR[total_tax_due]: Item 14 total tax due does not fit the official 11-cell integer field
+  ERR[tax_payable]: Item 19 tax payable does not fit the official 11-cell integer field
+  ERR[total_amount_payable]: Item 24 total amount payable does not fit the official 11-cell integer field
+  ERR[total_amount_payable]: Item 24 total amount payable/(overpayment) must equal its Rust-derived value (1096106899314.98)
+xml: REFUSED (7 errors)
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due must equal taxable amount times the official ATC PT180 rate, rounded to two decimals (299999999999.70)
+  XMLERR[total_tax_due]: Item 14 total tax due does not fit the official 11-cell integer field
+== C1 item15 just under: 999999999999.98
+validate errors: 5
+  ERR[creditable_withheld]: Item 15 creditable tax withheld does not fit the official 11-cell integer field
+  ERR[total_tax_credits]: Item 18 total tax credits/payments does not fit the official 11-cell integer field
+  ERR[tax_payable]: Item 19 tax payable does not fit the official 11-cell integer field
+  ERR[total_amount_payable]: Item 24 total amount payable does not fit the official 11-cell integer field
+xml: REFUSED (5 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[creditable_withheld]: Item 15 creditable tax withheld does not fit the official 11-cell integer field
+  XMLERR[total_tax_credits]: Item 18 total tax credits/payments does not fit the official 11-cell integer field
+  XMLERR[tax_payable]: Item 19 tax payable does not fit the official 11-cell integer field
+== C2 item15 at: 999999999999.99
+validate errors: 5
+  ERR[creditable_withheld]: Item 15 creditable tax withheld does not fit the official 11-cell integer field
+  ERR[total_tax_credits]: Item 18 total tax credits/payments does not fit the official 11-cell integer field
+  ERR[tax_payable]: Item 19 tax payable does not fit the official 11-cell integer field
+  ERR[total_amount_payable]: Item 24 total amount payable does not fit the official 11-cell integer field
+xml: REFUSED (5 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[creditable_withheld]: Item 15 creditable tax withheld does not fit the official 11-cell integer field
+  XMLERR[total_tax_credits]: Item 18 total tax credits/payments does not fit the official 11-cell integer field
+  XMLERR[tax_payable]: Item 19 tax payable does not fit the official 11-cell integer field
+== C3 item15 just over: 1000000000000.00
+validate errors: 5
+  ERR[creditable_withheld]: Item 15 creditable tax withheld does not fit the official 11-cell integer field
+  ERR[total_tax_credits]: Item 18 total tax credits/payments does not fit the official 11-cell integer field
+  ERR[tax_payable]: Item 19 tax payable does not fit the official 11-cell integer field
+  ERR[total_amount_payable]: Item 24 total amount payable does not fit the official 11-cell integer field
+xml: REFUSED (5 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[creditable_withheld]: Item 15 creditable tax withheld does not fit the official 11-cell integer field
+  XMLERR[total_tax_credits]: Item 18 total tax credits/payments does not fit the official 11-cell integer field
+  XMLERR[tax_payable]: Item 19 tax payable does not fit the official 11-cell integer field
+== C4 item15 negative (overpayment): -500.00
+validate errors: 3
+  ERR[creditable_withheld]: Creditable percentage tax withheld must be finite and non-negative
+xml: REFUSED (3 errors)
+  XMLERR[item_13_election]: Item 13 applies to an Individual taxpayer with PT010 activity on the initial-quarter return; choose Graduated or Eight percent
+  XMLERR[creditable_withheld]: Creditable percentage tax withheld must be finite and non-negative
+  XMLERR[overpayment_disposition]: Overpayment disposition is only allowed when Item 24 is an overpayment
+== D six rows at 999999999999 (total 1009999999998.99, 13 digits)
+validate errors: 17
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+  ERR[schedule_1_row_2]: Schedule 1 row 2 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_2]: Schedule 1 row 2 tax due does not fit the official 7-cell integer field
+  ERR[schedule_1_row_3]: Schedule 1 row 3 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_3]: Schedule 1 row 3 tax due does not fit the official 7-cell integer field
+  ERR[schedule_1_row_4]: Schedule 1 row 4 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_4]: Schedule 1 row 4 tax due does not fit the official 7-cell integer field
+  ERR[schedule_1_row_5]: Schedule 1 row 5 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_5]: Schedule 1 row 5 tax due does not fit the official 7-cell integer field
+  ERR[schedule_1_row_6]: Schedule 1 row 6 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_6]: Schedule 1 row 6 tax due does not fit the official 7-cell integer field
+  ERR[surcharge]: Item 20 surcharge does not fit the official 11-cell integer field
+  ERR[total_tax_due]: Item 14 total tax due does not fit the official 11-cell integer field
+  ERR[tax_payable]: Item 19 tax payable does not fit the official 11-cell integer field
+  ERR[total_amount_payable]: Item 24 total amount payable does not fit the official 11-cell integer field
+xml: REFUSED (17 errors)
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+  XMLERR[schedule_1_row_2]: Schedule 1 row 2 taxable amount does not fit the official 11-cell integer field
+  XMLERR[schedule_1_row_2]: Schedule 1 row 2 tax due does not fit the official 7-cell integer field
+E total_tax_due = 400495555555.16 tax_payable = 400495555555.16
+== E full return top-of-range that fits
+validate errors: 13
+  ERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+  ERR[schedule_1_row_2]: Schedule 1 row 2 tax due does not fit the official 7-cell integer field
+  ERR[schedule_1_row_3]: Schedule 1 row 3 tax due does not fit the official 7-cell integer field
+  ERR[schedule_1_row_4]: Schedule 1 row 4 tax due does not fit the official 7-cell integer field
+  ERR[schedule_1_row_5]: Schedule 1 row 5 tax due does not fit the official 7-cell integer field
+  ERR[schedule_1_row_6]: Schedule 1 row 6 taxable amount does not fit the official 11-cell integer field
+  ERR[schedule_1_row_6]: Schedule 1 row 6 tax due does not fit the official 7-cell integer field
+  ERR[surcharge]: Item 20 surcharge does not fit the official 11-cell integer field
+  ERR[total_tax_due]: Item 14 total tax due does not fit the official 11-cell integer field
+  ERR[tax_payable]: Item 19 tax payable does not fit the official 11-cell integer field
+  ERR[total_amount_payable]: Item 24 total amount payable does not fit the official 11-cell integer field
+xml: REFUSED (13 errors)
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 taxable amount does not fit the official 11-cell integer field
+  XMLERR[schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+  XMLERR[schedule_1_row_2]: Schedule 1 row 2 tax due does not fit the official 7-cell integer field
+  XMLERR[schedule_1_row_3]: Schedule 1 row 3 tax due does not fit the official 7-cell integer field
+
+
