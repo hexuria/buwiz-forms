@@ -302,8 +302,10 @@ thread_local! {
     static ARMED: ShutdownGuard = const { ShutdownGuard };
 }
 
-/// Stops the submission worker and closes the database when the engine thread goes (the quit path of the
-/// old host: `shutdown_for_quit`). `Door.shutdown` does the same on request.
+/// Stops this engine's submission worker and closes its database when the engine thread goes (the quit path of the
+/// old host: `shutdown_for_quit`), on every engine's end: an Android process outlives a Back-exit or a swipe from Recents,
+/// and the next engine of the same process starts a worker of its own and opens the database again. `Door.shutdown`
+/// does the same on request.
 struct ShutdownGuard;
 
 impl Drop for ShutdownGuard {
@@ -351,7 +353,7 @@ fn boot_thread() -> Result<Rc<HostModule>, String> {
     bir_app_api::cloud_account::prepare_launch();
     if bir_app_api::account_gate::is_unlocked() {
         if process.send.worker_may_start() {
-            // Opens the database and starts the submission worker, once per process.
+            // Opens the database and starts this engine's submission worker.
             bir_app_api::bir_module::open_database_at_launch();
         } else {
             // The send guard refused: the database opens, the worker does not exist.
@@ -364,6 +366,8 @@ fn boot_thread() -> Result<Rc<HostModule>, String> {
         .validate()
         .map_err(|error| format!("The bir module is inconsistent: {error}"))?;
     let module = Rc::new(module);
+    // The database slots first, then the guard: the guard goes before them at the thread's end.
+    bir_app_api::bir_module::prepare_engine();
     ARMED.with(|_| {});
     BOOTED.with(|slot| {
         *slot.borrow_mut() = Some(Booted {
@@ -411,8 +415,11 @@ fn kind_of(module: &HostModule, name: &str, wanted: FunctionKind) -> Result<(), 
 }
 
 /// What a person reads when another copy of the app holds the database: it happens with the one-copy guard off (a test
-/// environment, `BIR_SINGLE_INSTANCE=0`); with it on, the second copy hands over to the first and never gets here.
-pub const SECOND_COPY: &str = "eBIRForms is already open on this database. Close the other window and try again.";
+/// environment, `BIR_SINGLE_INSTANCE=0`); with it on, the second copy hands over to the first and never gets here. The
+/// sign-in lock's card shows it above its Try again, so its last sentence says what to do there. (An earlier engine of
+/// this same process no longer holds the database once it has ended: its end closes it, and Try again opens it.)
+pub const SECOND_COPY: &str =
+    "eBIRForms is already open on this database somewhere else. Close it there, then press Try again.";
 
 /// Whether `message` is bir-core's own sentence for a database another process owns (`DbError::LiveDatabaseInUse`): the text
 /// is read back from core, with a marker where the path goes, so it follows core if core's words change.
@@ -511,7 +518,7 @@ pub fn database_path() -> PathBuf {
         .unwrap_or_else(bir_core::db::app_database_path)
 }
 
-/// Stop the submission worker and close the database (the old host's quit path). A second call does nothing.
+/// Stop this engine's submission worker and close its database (the old host's quit path). A second call does nothing.
 pub fn shutdown() {
     bir_app_api::bir_module::shutdown_for_quit();
     // The print previews' files (a filled return each) go with the run.
@@ -730,13 +737,15 @@ mod tests {
                     opened.send(()).unwrap();
                     wait_for_end.recv().unwrap();
                 });
-                scope.spawn(move || {
+                let later = scope.spawn(move || {
                     wait_for_open.recv().unwrap();
                     assert_eq!(call("auth_state", vec![]).unwrap_err(), SECOND_COPY, "engine 5 while 4 is open");
                     end.send(()).unwrap();
                     earlier.join().expect("engine 4 ended");
                     call("auth_state", vec![]).expect("engine 5: Try again opens the database");
                 });
+                // `join`, not the scope's end: it waits for the thread's locals, the door's guard among them.
+                later.join().expect("engine 5 ended");
             });
             assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 5");
         });

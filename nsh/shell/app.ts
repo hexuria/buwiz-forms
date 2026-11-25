@@ -246,6 +246,8 @@ function readAccess(): boolean | null {
 function retryAccess(): void {
   if (accessError() === null) return;
   const code = readAccess();
+  // One line per press, on the console (the daily log needs the database this card may be locked out of).
+  console.warn(`Try again on the locked card: ${code === null ? `still locked: ${accessError()}` : "opened"}`);
   if (code !== null) appLocked.set(code);
 }
 
