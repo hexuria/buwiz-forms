@@ -15,6 +15,8 @@ REPO = Path(__file__).resolve().parents[2]
 TOKEN = 'synthetic-token-0123456789abcdef'
 HOST = 'com.longbridge.nsh.host'
 TOKEN_PATH = 'files/nsh/dev.goldcoders.bir/agent-token'
+# The window plane's token (hexuria/nsh-gpui-agent), which the recipe stores for the same launch.
+WINDOW_TOKEN_PATH = 'files/gpui-agent-token'
 
 # The SDK's `adb.exe` is a native program, as the real one is: the token writer starts it directly, with no command
 # interpreter between them, and writes the token to its standard input. This one hands its arguments and that same
@@ -320,9 +322,11 @@ class NshRunAgentWindowsTests(unittest.TestCase):
             self.fail('the recipe did not end on Ctrl+C')
         self.assertNotIn(TOKEN, output)
         self.assertFalse(stored.exists(), 'the unread token is removed from the device: ' + output)
+        # Both planes' tokens go: the data plane's, and the window plane's the recipe stores beside it (#293).
         removals = [call for call in self.adb_calls() if 'rm -f' in call[-1]]
         self.assertEqual(removals, [['-s', 'emulator-5556', 'shell',
-                                     f'run-as {HOST} rm -f {TOKEN_PATH} {TOKEN_PATH}.new']])
+                                     f'run-as {HOST} rm -f {TOKEN_PATH} {TOKEN_PATH}.new'
+                                     f' {WINDOW_TOKEN_PATH} {WINDOW_TOKEN_PATH}.new']])
         self.assert_no_token_left_on_this_machine()
         self.assert_the_writer_has_stopped()
 
