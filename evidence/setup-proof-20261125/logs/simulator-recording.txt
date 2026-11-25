@@ -1,0 +1,10 @@
+command: xcrun simctl io booted recordVideo /Users/devin/BuwizNsh/proof/setup-20261125-053616/simulator-iphone-17-pro-20261125-053616.mov (5 seconds)
+date: 2026-11-25T13:36:35Z
+    iPhone 17 Pro (405F45A9-B471-47B7-A5D9-E545EA624713) (Booted) 
+Note: No display specified. Defaulting to display: ABA615E8-0F6A-42E1-A356-9EF7B69318B8 (screenID: 1, name: LCD)
+Recording started
+Recording completed. Writing to disk.
+
+Wrote video to: /Users/devin/BuwizNsh/proof/setup-20261125-053616/simulator-iphone-17-pro-20261125-053616.mov
+recorder exit: 0
+-rw-r--r--@ 1 devin  staff  120259 Nov 25 05:36 /Users/devin/BuwizNsh/proof/setup-20261125-053616/simulator-iphone-17-pro-20261125-053616.mov

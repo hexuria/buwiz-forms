@@ -1,0 +1,5 @@
+command: PATH=/opt/homebrew/opt/rustup/bin:$HOME/BuwizNsh/tools/bin:$PATH BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 just nsh-check
+date: 2026-11-25T13:38:30Z
+✓ checked nsh-app-ebirforms (1m 1s)
+✓ built the Rust crate nsh-app-ebirforms (1m 20s)
+exit: 0
