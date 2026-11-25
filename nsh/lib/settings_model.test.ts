@@ -40,7 +40,8 @@ describe("settingsView", () => {
     expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer", "jobs", "computer"]);
     expect(rowsOf(view, "general")).toEqual(["theme"]);
     expect(rowsOf(view, "computer")).toEqual(["data", "logs", "setup", "version"]);
-    for (const query of ["keyboard", "hotkey", "shortcut", "sidebar", "compact", "download", "tray", "menu bar", "close window", "launch at login", "file associations"]) {
+    expect(rowsOf(view, "account")).toEqual(["buwiz", "identity", "security"]);
+    for (const query of ["gmail", "oauth", "keyboard", "hotkey", "shortcut", "sidebar", "compact", "download", "tray", "menu bar", "close window", "launch at login", "file associations"]) {
       expect(settingsView(query, true, true)).toEqual([]);
     }
     expect(rowsOf(settingsView("general", true, true), "general")).toEqual(["theme"]);

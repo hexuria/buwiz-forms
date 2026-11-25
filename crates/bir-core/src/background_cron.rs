@@ -1724,11 +1724,115 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
     crate::ipc::post_db_changed();
 }
 
+/// The setting that says the returns queued before this database first met a version that sends through Buwiz
+/// were given back to their owner ([`give_back_returns_queued_before_the_relay`]).
+pub const RELAY_SINCE_SETTING: &str = "relay_filing_since";
+
+/// The reason on a return that was queued before the app could send through Buwiz.
+pub const QUEUED_BEFORE_RELAY: &str = "This return was queued in an earlier version of eBIRForms and was not sent. Check it and queue it again to send it to the BIR through Buwiz.";
+
+/// Once per database, the first time a version that files through Buwiz runs its queue: every return that is
+/// still Queued and unclaimed goes back to Draft with [`QUEUED_BEFORE_RELAY`]. The person queued it for another
+/// way of sending, perhaps long ago; sending it now, unasked, would be filing by accident. A claimed return is
+/// left as it is: its outcome is unknown and the person settles it. Returns queued after this are sent as usual.
+fn give_back_returns_queued_before_the_relay(db: &Arc<Mutex<Database>>) {
+    let queued = {
+        let Ok(db_guard) = lock_timing::lock(db) else {
+            return;
+        };
+        match db_guard.get_setting(RELAY_SINCE_SETTING) {
+            Ok(None) => {}
+            // Done before, or the setting cannot be read: never sweep twice.
+            _ => return,
+        }
+        let queued = db_guard.list_all_queued_submissions().unwrap_or_default();
+        if let Err(error) = db_guard.set_setting(RELAY_SINCE_SETTING, &Utc::now().to_rfc3339()) {
+            warn!("Cron: could not record the first run with relay filing: {error}");
+            return;
+        }
+        queued
+    };
+    for summary in queued
+        .iter()
+        .filter(|summary| summary.status == FilingStatus::Queued)
+    {
+        give_back_one(summary, db);
+    }
+    crate::ipc::post_db_changed();
+}
+
+fn give_back_one(summary: &FormDraftSummary, db: &Arc<Mutex<Database>>) {
+    let note = QUEUED_BEFORE_RELAY.to_string();
+    match summary.form_code.as_str() {
+        "2551Q" => {
+            let Some(quarter) = summary.quarter else {
+                return;
+            };
+            let loaded = lock_timing::lock(db).ok().and_then(|db_guard| {
+                db_guard
+                    .get_2551q_draft(&summary.tin, summary.taxable_year, quarter)
+                    .ok()
+                    .flatten()
+            });
+            if let Some(mut draft) = loaded
+                && let Some(revision) = queued_2551q_revision(&draft)
+            {
+                settle_draft_2551q(&mut draft, &revision, db.clone(), note, NoReceipt::Refused);
+            }
+        }
+        "1601C" => {
+            let Some(month) = summary.month else {
+                return;
+            };
+            let loaded = lock_timing::lock(db).ok().and_then(|db_guard| {
+                db_guard
+                    .get_1601c_draft(&summary.tin, summary.taxable_year, month)
+                    .ok()
+                    .flatten()
+            });
+            if let Some(mut draft) = loaded
+                && let Some(revision) = queued_1601c_revision(&draft)
+            {
+                settle_draft_1601c(&mut draft, &revision, db.clone(), note, NoReceipt::Refused);
+            }
+        }
+        code => {
+            let Some(kind) = QueueableKind::from_form_code(code) else {
+                return;
+            };
+            crate::with_queueable_kind!(kind, F => give_back_queueable::<F>(summary, db, note));
+        }
+    }
+}
+
+fn give_back_queueable<F: QueueableForm>(
+    summary: &FormDraftSummary,
+    db: &Arc<Mutex<Database>>,
+    note: String,
+) {
+    let period = i64::from(summary.month.or(summary.quarter).unwrap_or(0));
+    let loaded = lock_timing::lock(db).ok().and_then(|db_guard| {
+        db_guard
+            .get_queueable_draft::<F>(&summary.tin, summary.taxable_year, period)
+            .ok()
+            .flatten()
+    });
+    if let Some(mut draft) = loaded
+        && let Some(generation) = queue_generation(&draft)
+    {
+        settle_queueable(&mut draft, &generation, db, note, NoReceipt::Refused);
+    }
+}
+
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
     // A build with nowhere to send leaves every queued return as it is: no
     // attempt is counted and none goes back to Draft.
     if crate::transport::sending_unavailable() {
         return;
+    }
+    // The first time this database meets a version that files through Buwiz, what was queued before is given back.
+    if crate::transport::sends_through_buwiz() {
+        give_back_returns_queued_before_the_relay(&db);
     }
     let summaries = {
         let db_guard = match lock_timing::lock(&db) {
@@ -4336,6 +4440,106 @@ mod tests {
         assert!(monthly.queued_submission_fingerprint.is_some());
         assert!(quarterly.queued_submission_fingerprint.is_some());
         assert!(generic.lifecycle.queued_submission_fingerprint.is_some());
+    }
+
+    /// The first run with relay filing gives back what was queued before it: each unclaimed Queued return goes to
+    /// Draft with the reason, on all three storage shapes. It happens once: a return queued afterwards stays
+    /// queued, and a claimed return (an unknown outcome) is never touched.
+    #[test]
+    fn returns_queued_before_relay_filing_go_back_to_draft_once() {
+        let profile = test_profile();
+        let (db, monthly, _) = stored_queued_1601c(&profile);
+        let (quarterly, _) = stored_queued_2551q(&db);
+        let (generic, generic_summary) = queued_test_form(&db);
+        assert_eq!(
+            db.lock().unwrap().get_setting(RELAY_SINCE_SETTING).unwrap(),
+            None
+        );
+
+        give_back_returns_queued_before_the_relay(&db);
+
+        let read_monthly = |db: &Arc<Mutex<Database>>| {
+            db.lock()
+                .unwrap()
+                .get_1601c_draft(&monthly.tin, monthly.taxable_year, monthly.month)
+                .unwrap()
+                .unwrap()
+        };
+        let back = read_monthly(&db);
+        assert_eq!(back.status, FilingStatus::Draft);
+        assert_eq!(back.submission_error.as_deref(), Some(QUEUED_BEFORE_RELAY));
+        assert!(back.queued_submission_fingerprint.is_none());
+        let back = db
+            .lock()
+            .unwrap()
+            .get_2551q_draft(&quarterly.tin, quarterly.taxable_year, quarterly.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(back.status, FilingStatus::Draft);
+        assert_eq!(back.last_error.as_deref(), Some(QUEUED_BEFORE_RELAY));
+        // The test form is no registered kind, so the sweep's own dispatch passes it by; its generic step is the
+        // one every registered form goes through.
+        give_back_queueable::<TestForm>(&generic_summary, &db, QUEUED_BEFORE_RELAY.to_string());
+        let back = stored_test_form(&db, &generic);
+        assert_eq!(back.lifecycle.status, FilingStatus::Draft);
+        assert_eq!(
+            back.lifecycle.submission_error.as_deref(),
+            Some(QUEUED_BEFORE_RELAY)
+        );
+        assert!(
+            db.lock()
+                .unwrap()
+                .get_setting(RELAY_SINCE_SETTING)
+                .unwrap()
+                .is_some()
+        );
+
+        // Once: what is queued after the first run is left to the worker.
+        let (db_again, monthly_again, _) = stored_queued_1601c(&profile);
+        db_again
+            .lock()
+            .unwrap()
+            .set_setting(RELAY_SINCE_SETTING, "2026-11-25T00:00:00Z")
+            .unwrap();
+        give_back_returns_queued_before_the_relay(&db_again);
+        let kept = db_again
+            .lock()
+            .unwrap()
+            .get_1601c_draft(
+                &monthly_again.tin,
+                monthly_again.taxable_year,
+                monthly_again.month,
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(kept.status, FilingStatus::Queued);
+        assert_eq!(kept.submission_error, None);
+    }
+
+    /// A claimed return has an unknown outcome: the sweep leaves it for the person to settle.
+    #[tokio::test]
+    async fn the_first_run_sweep_never_touches_a_return_with_an_unknown_outcome() {
+        let profile = test_profile();
+        let (db, queued, summary) = stored_queued_1601c(&profile);
+        let unknown = RecordingSubmissionTransport::buwiz(TestTransportOutcome::BuwizUnknown);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &unknown).await;
+
+        give_back_returns_queued_before_the_relay(&db);
+
+        let stuck = db
+            .lock()
+            .unwrap()
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(stuck.status, FilingStatus::Queued);
+        assert!(stuck.submission_claim_token.is_some(), "the claim stays");
+        assert!(
+            stuck
+                .submission_error
+                .as_deref()
+                .is_some_and(|reason| reason.starts_with(OUTCOME_UNKNOWN))
+        );
     }
 
     // ===== End to end against a local Buwiz server in dry-run mode =====
