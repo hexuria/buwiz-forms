@@ -1,0 +1,18 @@
+Component users BEFORE (pinned kit) — one fast burst at 20ms each, same injector.
+Readings from the gpui-agent view tree unless noted.
+
+field                                        typed        result       verdict
+New taxpayer TIN (9 cells)                   000123453    001234530    WRONG (covered in matrix)
+Tax profile edit TIN (9 cells)               000123453    001234530    WRONG
+New branch branch code (5 cells)             00001        00010        WRONG — final digit moved one cell left
+Sign-in gate TIN cells (9)                   000123453    001234530    WRONG
+Sign-in gate PIN cells (4)                   1234                       WRONG — black-box proof: the PIN field is
+   masked and auto-submits when full, so digits cannot be read back; used sign-in success as the signal:
+   slow entry (150ms) of correct PIN 1234 with correct TIN 000-000-000 SIGNS IN; fast 20ms burst of the
+   same correct digits fails with "Wrong TIN or PIN. Try again." (pin-fast-burst-screen.png, error confirmed
+   twice). Only a corrupted digit order explains the rejection.
+Six-box sign-in code: NOT in this build — skipped per instructions.
+
+INCIDENTALLY OBSERVED (relevant to the fix): while the TIN was incomplete, digits injected at the PIN cells
+landed in the TIN field instead — the sign-in form gates PIN entry on a complete TIN; those stray digits
+themselves arrived permuted (1234 -> 234-1 in TIN), further confirming burst corruption.

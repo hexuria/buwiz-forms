@@ -1,0 +1,16 @@
+Six-box sign-in code AFTER (PR #345 branch feat/relay-filing-signin @ 9fe51f23, detached worktree
+/Users/devin/fixwork/signin345 sharing ../nsh = fixwork/nsh fixed kit), scratch db /tmp/tin-rig-345.db.
+
+SIGN-IN PATH USED (exactly): the app's own TEST path, no real account, no browser:
+fresh scratch db -> first-run "I help other taxpayers" (admin PIN 1234) -> Home -> account menu ->
+Account settings -> Account -> "Not signed in to Buwiz" Sign in -> gate email page -> juana@example.com ->
+Continue with email -> "Enter the code" page with six boxes. Backend: `just mock-account --port 3008`
+run from the signin345 worktree (loopback only, dev-only, state disappears on exit); the branch pins
+http://localhost:3008 as the dev server (DEV_SERVER_URL in cloud_account.rs). The mock's fixed test code
+is 246810 (its default; log line: "every email sign-in code is 246810").
+
+TEST: clicked the first code box, keyinject 20 246810 (real CGEvent digit keys at 20ms gaps).
+RESULT: CORRECT — the boxes auto-checked on the sixth digit, the gate closed, and the Account page shows
+"juana@example.com — Signed in as juana@example.com / Sign out of Buwiz" (sixbox-after-burst.png shows the
+gate gone right after the burst; signed-in state verified on the Account page). On the pinned kit, the same
+20ms burst deterministically permutes digits — a permuted code would have been rejected as a wrong code.

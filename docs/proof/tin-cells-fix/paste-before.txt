@@ -1,0 +1,2 @@
+Paste BEFORE (pinned kit): clipboard 000123453 via pbcopy, real Cmd+V CGEvent (keypaste) into New taxpayer
+first TIN cell -> view tree value 000123453 CORRECT. Paste is a single atomic input event, never corrupts.

@@ -1,0 +1,18 @@
+AFTER matrix — fixed kit (fixwork/buwiz-forms @ 3aceafe8 app code, sibling nsh branch fix/otp-input-burst),
+real desktop window, fresh scratch db /tmp/tin-rig-after.db, New taxpayer TIN cells.
+Same method as BEFORE: keyinject real CGEvent digit keys, digits 000123453, 10 runs per gap,
+values read from the gpui-agent view tree.
+
+gap_ms   right/10   wrong values seen
+  10     10/10      -
+  20     10/10      -
+  30     10/10      -
+  50     10/10      -
+  70     10/10      -
+
+loaded-machine case: 12 x `yes > /dev/null` CPU workers, gap 20ms x10:
+  20     10/10      -
+
+ZERO corruption in 60 runs — before, the same rig produced 0/10 correct at 10/20/30ms (deterministic
+permutation 001234530 at 20ms). The fix holds at every measured speed and under CPU saturation.
+Raw rows: after-raw.txt. Recordings: after-fast-20ms.mp4, after-edge-70ms.mp4.

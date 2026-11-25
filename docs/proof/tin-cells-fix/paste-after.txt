@@ -1,0 +1,5 @@
+Paste AFTER (fixed kit), New taxpayer TIN cells, pbcopy + real Cmd+V CGEvent:
+paste '000123453'       -> 000123453 CORRECT
+paste '000-123-453'     -> 000123453 CORRECT (dashes stripped)
+paste '000 123 453'     -> 000123453 CORRECT (spaces stripped)
+paste '00012345300000'  -> 000123453 CORRECT (truncated to first 9)

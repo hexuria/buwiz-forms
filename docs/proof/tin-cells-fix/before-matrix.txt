@@ -1,0 +1,18 @@
+BEFORE matrix — pinned kit (repos/buwiz-forms branch try/tin-cells-check @ 3aceafe8, sibling nsh pinned ca39c0e),
+real desktop window, fresh scratch db /tmp/tin-rig-before.db, New taxpayer TIN cells.
+Keys: keyinject — real OS key events via CGEventCreateKeyboardEvent/CGEventPost(.cgSessionEventTap),
+keyDown+keyUp per digit, fixed inter-key gap. Digits 000123453 every run (no Create pressed, so no collision).
+Values read from the gpui-agent view tree (hidden OtpInput textfield value). 10 runs per gap.
+
+gap_ms   right/10   wrong values seen (count)
+  10      0/10      001234530 x8, 001042353 x1, 000124533 x1
+  20      0/10      001234530 x10  (deterministic left-rotation by one)
+  30      0/10      001234530 x5, 000124533 x2, 000134532 x1, 000123435 x1, 000234531 x1
+  50     10/10      -
+  70     10/10      -
+
+loaded-machine case: 12 x `yes > /dev/null` CPU workers, gap 20ms x10:
+  20      0/10      001234530 x10  — same deterministic permutation; NO digit loss even under CPU saturation.
+
+All corruption is MISPLACEMENT (permutation), never loss, consistent with the earlier investigation.
+Raw rows: before-raw.txt. Recordings: before-fast-20ms.mp4 (fail), before-edge-70ms.mp4 (correct).
