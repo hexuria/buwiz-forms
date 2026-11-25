@@ -1,0 +1,1 @@
+hwnd=0x1A0190 title="Print" class="#32770" visible=True rect=(42,42)-(516,472) owner=0x120352

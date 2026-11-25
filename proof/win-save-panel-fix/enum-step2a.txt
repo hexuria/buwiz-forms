@@ -1,0 +1,3 @@
+hwnd=0xC02C2 title="Save as PDF" class="#32770" visible=True rect=(164,187)-(964,787) owner=0x12023C
+hwnd=0x12023C title="BIR Form 2551Q ú Q4 2026 - Juana Santos" class="NshWindow" visible=True rect=(156,156)-(1112,1295) owner=0x0
+hwnd=0x2402E2 title="eBIRForms" class="NshWindow" visible=True rect=(-8,-8)-(1608,1168) owner=0x0

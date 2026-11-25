@@ -1,0 +1,1 @@
+hwnd=0x1603A2 title="Save as PDF" class="#32770" visible=True rect=(164,187)-(964,787) owner=0x12023C
