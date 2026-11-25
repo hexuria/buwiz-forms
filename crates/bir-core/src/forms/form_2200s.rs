@@ -612,7 +612,7 @@ impl Form2200SDraft {
             &[
                 (0, self.contact_number.as_str()),
                 (12, &self.line_of_business.trim().to_uppercase()),
-                (31, self.psic.as_str()),
+                (30, self.psic.trim()),
             ],
             36,
         );
