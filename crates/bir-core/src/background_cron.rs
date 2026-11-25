@@ -98,9 +98,11 @@ pub fn submission_job_key(
 
 /// Stop every [`start_cron_jobs`] / [`run_cron_jobs`] loop running now, after the tick it is already on.
 ///
-/// Wakes a loop that is waiting out its 60 second gap so quit does not sit
-/// there. A second call is a no-op aside from another wake. A loop started after
-/// this call is not stopped by it.
+/// Wakes a loop that is waiting out its 60 second gap. A second call is a
+/// no-op aside from another wake. A loop started after this call is not
+/// stopped by it. The app's quit and an engine's end do not call this: they
+/// stop their own worker through its [`CronStop`], so a later engine's loop is
+/// never stopped by an earlier engine's end.
 pub fn request_shutdown() {
     SHUTDOWN_GENERATION.fetch_add(1, Ordering::SeqCst);
     wake();
@@ -197,6 +199,7 @@ pub fn run_cron_jobs(db: Arc<Mutex<Database>>, stop: CronStop) -> impl Future<Ou
 
 async fn run_cron_loop(db: Arc<Mutex<Database>>, stop: CronStop, born: u64) {
     info!("Background cron engine started");
+    requeue_jobs_left_running(&db);
 
     let stopping = || stop.is_stopped() || SHUTDOWN_GENERATION.load(Ordering::SeqCst) != born;
     let (tx, mut rx) = mpsc::channel(1);
@@ -347,19 +350,29 @@ async fn process_google_calendar_sync(db: Arc<Mutex<Database>>, stop: &CronStop)
     // past the calendar it is on.
     let db_for_sync = Arc::downgrade(&db);
     let stop_for_sync = stop.clone();
-    let results = match tokio::task::spawn_blocking(move || {
+    let run = match tokio::task::spawn_blocking(move || {
         crate::google_calendar::sync_all_profile_calendars_until(db_for_sync, &|| {
             stop_for_sync.is_stopped()
         })
     })
     .await
     {
-        Ok(results) => results,
+        Ok(run) => run,
         Err(error) => {
             warn!("Google Calendar background sync task failed: {error}");
             return;
         }
     };
+    if !run.complete {
+        // Stopped part way (the worker is ending): not a sync. The last sync time and a pending "sync now" stay as
+        // they were, so the next worker syncs every calendar again.
+        info!(
+            "Google Calendar sync stopped after {} of the linked calendars; not recorded",
+            run.results.len()
+        );
+        return;
+    }
+    let results = run.results;
     if results.is_empty() {
         if let Ok(db) = lock_timing::lock(&db) {
             let _ = db.set_setting(
@@ -2229,10 +2242,9 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
 
         let active_jobs = get_active_jobs();
         {
-            let mut jobs = match active_jobs.lock() {
-                Ok(j) => j,
-                Err(_) => continue,
-            };
+            let mut jobs = active_jobs
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if !jobs.insert(job_key.clone()) {
                 continue; // Already running
             }
@@ -2854,10 +2866,9 @@ async fn process_generic_jobs_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
         let job_key = format!("job:{}", job.id.unwrap_or(0));
         let active_jobs = get_active_jobs();
         {
-            let mut active = match active_jobs.lock() {
-                Ok(a) => a,
-                Err(_) => continue,
-            };
+            let mut active = active_jobs
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if !active.insert(job_key.clone()) {
                 continue; // Already running
             }
@@ -2886,11 +2897,14 @@ async fn process_generic_jobs_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
                             &|| job_stop.is_stopped(),
                         );
                     if poll_success {
-                        let log = "Email polling completed successfully.".to_string();
-                        info!(
-                            "Cron: Email polling job '{}' completed successfully.",
-                            job.name
-                        );
+                        // Stopped early (the worker is ending), the poll read only part of the inbox; what is still
+                        // waiting for its email keeps the job queued (`still_pending` is read back from the database).
+                        let log = if job_stop.is_stopped() {
+                            "Email polling stopped early: the queue worker is ending.".to_string()
+                        } else {
+                            "Email polling completed successfully.".to_string()
+                        };
+                        info!("Cron: Email polling job '{}': {}", job.name, log);
                         success = true;
                         job.output_log = Some(log);
                         if !still_pending {
@@ -2993,6 +3007,25 @@ async fn process_generic_jobs_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
     }
 }
 
+/// Put back to Queued every job saved as Running: none can be running as a worker starts (a database has one worker
+/// at a time, and the one before ended with its tasks), so such a job was cut off, by an engine's end that dropped its
+/// task or by the process ending. A one-off job left Running would otherwise never run again.
+fn requeue_jobs_left_running(db: &Arc<Mutex<Database>>) {
+    let Ok(db) = lock_timing::lock(db) else {
+        return;
+    };
+    for mut job in db.list_jobs().unwrap_or_default() {
+        if job.status == "Running" {
+            info!(
+                "Cron: job '{}' was cut off while running; queued again",
+                job.name
+            );
+            job.status = "Queued".to_string();
+            let _ = db.save_job(job);
+        }
+    }
+}
+
 /// Spawn one job on the worker's runtime with its key's `cleanup` inside the task's future: the key leaves
 /// [`get_active_jobs`] however the task ends, finished, panicked, or dropped by a runtime shut down mid-send (an
 /// engine that ended) or before it was ever polled. The next worker then reads the return's own state, never a key a
@@ -3034,6 +3067,36 @@ mod tests {
             created_at: String::new(),
             output_log: None,
         }
+    }
+
+    /// A job saved as Running whose task went with an engine's end (or the process) is queued again when the next
+    /// worker starts: a one-off job (no schedule) left Running would never run again. Other jobs are left as they are.
+    #[test]
+    fn a_job_cut_off_while_running_is_queued_again_as_a_worker_starts() {
+        use std::sync::{Arc, Mutex};
+        let db = crate::db::Database::open_in_memory_for_tests().expect("db");
+        let mut cut_off = shell_job("bir_poll_email juana@example.com");
+        cut_off.cron_expr = None;
+        cut_off.next_run_at = None;
+        cut_off.status = "Running".into();
+        let cut_off = db.save_job(cut_off).expect("save").id.expect("an id");
+        let mut failed = shell_job("echo hi");
+        failed.status = "Failed".into();
+        let failed = db.save_job(failed).expect("save").id.expect("an id");
+        let db = Arc::new(Mutex::new(db));
+
+        super::requeue_jobs_left_running(&db);
+
+        let jobs = db.lock().unwrap().list_jobs().unwrap();
+        let status = |id| {
+            jobs.iter()
+                .find(|job| job.id == Some(id))
+                .unwrap()
+                .status
+                .clone()
+        };
+        assert_eq!(status(cut_off), "Queued");
+        assert_eq!(status(failed), "Failed");
     }
 
     #[test]

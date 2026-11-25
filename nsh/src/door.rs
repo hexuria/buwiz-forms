@@ -311,21 +311,29 @@ struct ShutdownGuard;
 impl Drop for ShutdownGuard {
     fn drop(&mut self) {
         // The thread's locals are going (the logger's among them), so the shutdown's work runs on a thread of its own.
-        let _ = std::panic::catch_unwind(|| end_engine(bir_app_api::bir_module::shutdown_at_engine_end));
+        let _ = std::panic::catch_unwind(|| {
+            bir_app_api::bir_module::shutdown_at_engine_end();
+            let _ = BOOTED.try_with(|slot| slot.borrow_mut().take());
+        });
     }
 }
 
-/// This engine's end: its worker stopped, its database closed (by `shutdown`), and the booted module let go, so a
-/// later call on the same thread (a host that reuses its engine thread) boots and launches again instead of reusing a
-/// module whose launch has ended.
-fn end_engine(shutdown: fn()) {
-    shutdown();
-    let _ = BOOTED.try_with(|slot| slot.borrow_mut().take());
+thread_local! {
+    /// `Door.shutdown` ran on this engine (a quit, an update's restart): every later call on it is refused, so a timer
+    /// that fires between the quit and the process's end cannot boot the app again and start a worker that sends. Only
+    /// a new engine (a new thread: a relaunch in a process that outlived the quit) boots again. No destructor.
+    static QUIT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
+/// What a door call made after `Door.shutdown` on the same engine answers.
+pub const QUITTING: &str = "eBIRForms is closing.";
+
 /// The module of this thread, booted on the first call, with the database guard checked against the
-/// database path as it is now.
+/// database path as it is now. Refused once this engine has quit.
 fn booted() -> Result<Rc<HostModule>, String> {
+    if QUIT.get() {
+        return Err(QUITTING.to_owned());
+    }
     let current = BOOTED.with(|slot| {
         slot.borrow()
             .as_ref()
@@ -427,10 +435,11 @@ fn kind_of(module: &HostModule, name: &str, wanted: FunctionKind) -> Result<(), 
 
 /// What a person reads when another copy of the app holds the database: it happens with the one-copy guard off (a test
 /// environment, `BIR_SINGLE_INSTANCE=0`); with it on, the second copy hands over to the first and never gets here. The
-/// sign-in lock's card shows it above its Try again, so its last sentence says what to do there. (An earlier engine of
-/// this same process no longer holds the database once it has ended: its end closes it, and Try again opens it.)
+/// sign-in lock's card shows it above its Try again, so its last sentence says what to do there. The holder can also be
+/// an earlier engine of this same process that is still ending (a send or a calendar request it waits for), which is
+/// why the sentence offers waiting: its end closes the database, and Try again then opens it.
 pub const SECOND_COPY: &str =
-    "eBIRForms is already open on this database somewhere else. Close it there, then press Try again.";
+    "eBIRForms still has this database open, in another window or one that is closing. Close it or wait a moment, then press Try again.";
 
 /// Whether `message` is bir-core's own sentence for a database another process owns (`DbError::LiveDatabaseInUse`): the text
 /// is read back from core, with a marker where the path goes, so it follows core if core's words change.
@@ -529,9 +538,11 @@ pub fn database_path() -> PathBuf {
         .unwrap_or_else(bir_core::db::app_database_path)
 }
 
-/// Stop this engine's submission worker and close its database (the old host's quit path). A second call does nothing.
+/// Stop the submission worker and close this engine's database (the old host's quit path). A second call does nothing.
+/// Every door call on this engine after it is refused with [`QUITTING`]: the app is ending.
 pub fn shutdown() {
-    end_engine(bir_app_api::bir_module::shutdown_for_quit);
+    QUIT.set(true);
+    bir_app_api::bir_module::shutdown_for_quit();
     // The print previews' files (a filled return each) go with the run.
     crate::print::remove_all();
 }
@@ -760,30 +771,82 @@ mod tests {
             });
             assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 5");
 
-            // Two engines on ONE thread: `shutdown` ends the first, and the next call boots and launches again, with a
-            // worker of its own.
+            // A quit (`Door.shutdown`) ends engine 6 for good. A door call after it on the same thread (a timer that
+            // fires before the process ends: the shell's poll asks for the data token, the updater for its status) is
+            // refused and boots nothing: no worker starts, and a return queued in the database meanwhile stays queued.
+            // Before, that call booted the app again and the new worker's first tick sent the return.
             std::thread::scope(|scope| {
                 scope
                     .spawn(|| {
-                        for engine in [6, 7] {
-                            call("auth_state", vec![]).unwrap_or_else(|error| panic!("engine {engine}: {error}"));
-                            assert!(
-                                bir_app_api::bir_module::submission_worker_runs_for_this_engine(),
-                                "engine {engine}: its own worker"
-                            );
-                            shutdown();
-                            assert!(
-                                !bir_app_api::bir_module::submission_worker_runs_for_this_engine(),
-                                "engine {engine}: the worker stopped"
-                            );
-                            assert!(bir_app_api::bir_module::owner_lock_released(), "engine {engine}: closed");
-                        }
+                        call("auth_state", vec![]).expect("engine 6 boots");
+                        assert!(
+                            bir_app_api::bir_module::submission_worker_runs_for_this_engine(),
+                            "engine 6: its own worker"
+                        );
+                        shutdown();
+                        assert!(
+                            !bir_app_api::bir_module::submission_worker_runs_for_this_engine(),
+                            "engine 6: quit stopped its worker"
+                        );
+                        assert!(bir_app_api::bir_module::owner_lock_released(), "engine 6: quit closed it");
+                        queue_a_1601c();
+                        assert_eq!(call("auth_state", vec![]).unwrap_err(), QUITTING, "a call after quit");
+                        assert_eq!(data_change_token().unwrap_err(), QUITTING, "the poll after quit");
+                        assert!(
+                            !bir_app_api::bir_module::submission_worker_runs_for_this_engine(),
+                            "no worker after quit"
+                        );
+                        // A worker's first tick takes a queued return at once; give one the time it would need.
+                        std::thread::sleep(std::time::Duration::from_secs(3));
+                        assert_eq!(queued_1601c_status(), "Queued", "the return queued after quit was not sent");
                     })
                     .join()
-                    .expect("the thread of engines 6 and 7")
+                    .expect("engine 6's thread")
             });
-            assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 7");
+            assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 6");
         });
+    }
+
+    /// Juana Santos, TIN 000-123-453-00000, the demo taxpayer.
+    fn demo_profile() -> bir_core::profile::TaxpayerProfile {
+        serde_json::from_value(json!({
+            "id": null,
+            "full_name": "Juana Santos",
+            "tin": {"segment1": "000", "segment2": "123", "segment3": "453", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Example Street, Pasig",
+            "zip_code": "1600",
+            "phone": "0280000000",
+            "email": "juana@example.com",
+            "default_form_type": "2551Qv2018",
+            "taxpayer_type": "Individual",
+            "business_start_date": "2010-01-01"
+        }))
+        .expect("the demo profile")
+    }
+
+    /// The demo taxpayer's January 2024 1601C, queued, written straight into the database (no engine has it open).
+    fn queue_a_1601c() {
+        let profile = demo_profile();
+        let mut draft = bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(&profile, 2024, 1);
+        draft.any_taxes_withheld = false;
+        draft.transition_to_queued().expect("the demo 1601C queues");
+        let (db, _, _) = bir_core::db::open_live_database().expect("the database, closed by the quit");
+        db.save_profile(profile).expect("the profile");
+        db.save_queued_1601c_draft(&draft).expect("the queued 1601C");
+        db.close().expect("closed again");
+    }
+
+    fn queued_1601c_status() -> String {
+        let (db, _, _) = bir_core::db::open_live_database().expect("the database");
+        let draft = db
+            .get_1601c_draft(&demo_profile().tin.full(), 2024, 1)
+            .expect("read")
+            .expect("the 1601C row");
+        let status = format!("{:?}", draft.status);
+        db.close().expect("closed again");
+        status
     }
 
     /// The sign-in lock's card ("eBIRForms is locked", the host's sentence, Try again; `AccessError.tsx`) over a
@@ -820,7 +883,7 @@ mod tests {
             let other = bir_core::db::try_acquire_live_owner_lock(&database).expect("the other copy");
             let said = call("auth_state", vec![]).unwrap_err();
             assert_eq!(said, SECOND_COPY);
-            assert!(said.ends_with("Close it there, then press Try again."), "{said}");
+            assert!(said.ends_with("Close it or wait a moment, then press Try again."), "{said}");
             assert_eq!(call("auth_state", vec![]).unwrap_err(), SECOND_COPY, "Try again while it is open");
             drop(other);
             call("auth_state", vec![]).expect("Try again once it is closed");

@@ -51,6 +51,11 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
                     db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
                 install_reader(&mut database);
                 let handle = std::sync::Arc::new(std::sync::Mutex::new(database));
+                // Listed before anything can see it, so the lock never reads free while it is open.
+                LIVE_HANDLES
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .push(std::sync::Arc::downgrade(&handle));
                 *slot = Some(handle);
                 opened = true;
             }
@@ -69,10 +74,6 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
     if opened {
         // A new handle: its own end, its own owner lock.
         ENGINE_SHUT_DOWN.with(|done| done.set(false));
-        LIVE_HANDLES
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .push(std::sync::Arc::downgrade(&handle));
         if LAUNCH_PENDING.with(std::cell::Cell::get) && crate::account_gate::is_unlocked() {
             launch_on(handle.clone());
         }
@@ -316,31 +317,52 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     });
 }
 
-/// Stop `engine`'s submission worker, if it runs one; the slot is empty
-/// afterwards. Another engine's worker is left alone, and the log says so.
-fn stop_worker_of(engine: u64) {
-    let worker = {
-        let mut slot = SUBMISSION_WORKER
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        match slot.as_ref() {
-            None => return,
-            Some(other) if other.engine != engine => {
-                tracing::warn!(
-                    owner = other.engine,
-                    caller = engine,
-                    "quit on a thread that did not start the submission worker: nothing stopped here; its own engine's end stops it"
-                );
-                return;
+/// What an end found in the worker slot.
+enum TakenWorker {
+    None,
+    /// Out of the slot, its loop already told to stop.
+    Taken(SubmissionWorker),
+    /// Another engine's, left running: the owner's number.
+    Others(u64),
+}
+
+/// Take the submission worker out of its slot and tell its loop to stop:
+/// `engine`'s (an engine's end), or with `None` whichever runs (a quit or an
+/// update's restart ends the process's sending, whoever started it). Another
+/// engine's worker stays. Does not log (see [`shutdown_at_engine_end`]).
+fn take_worker(engine: Option<u64>) -> TakenWorker {
+    let mut slot = SUBMISSION_WORKER
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    match (slot.as_ref(), engine) {
+        (None, _) => TakenWorker::None,
+        (Some(other), Some(engine)) if other.engine != engine => TakenWorker::Others(other.engine),
+        _ => match slot.take() {
+            Some(worker) => {
+                worker.stop.stop();
+                TakenWorker::Taken(worker)
             }
-            Some(_) => slot.take(),
+            None => TakenWorker::None,
+        },
+    }
+}
+
+/// Wait for a taken worker to stop and drop it (see [`SubmissionWorker::stop_and_drop`]).
+fn finish_worker(taken: TakenWorker, ended: u64) {
+    match taken {
+        TakenWorker::None => {}
+        TakenWorker::Others(owner) => tracing::info!(
+            owner,
+            ended,
+            "an engine without a submission worker of its own ended; the running one ends with its own engine"
+        ),
+        TakenWorker::Taken(worker) => {
+            if !worker.stop_and_drop() {
+                tracing::warn!(
+                    "submission worker not dropped in time; what it holds goes when it ends"
+                );
+            }
         }
-    };
-    // Out of the slot and its lock before it is stopped.
-    if let Some(worker) = worker
-        && !worker.stop_and_drop()
-    {
-        tracing::warn!("submission worker not dropped in time; what it holds goes when it ends");
     }
 }
 
@@ -355,16 +377,15 @@ pub fn submission_worker_runs_for_this_engine() -> bool {
         .is_some_and(|worker| worker.engine == engine && !worker.loop_ended())
 }
 
-/// Stop this engine's submission worker and release its database (and with it
-/// the owner lock).
+/// Stop the submission worker, whichever engine started it, and release this
+/// engine's database (and with it the owner lock).
 ///
-/// Quit (the menu, Cmd/Ctrl+Q, `process.exit`), an update install and the
-/// end of an engine thread (the NSH door's guard) call this. The worker is
-/// asked to stop and given 5 s; what is left of it is then dropped, a send in
-/// flight with it, and this thread checkpoints and closes. A second call for
-/// the same handle does nothing; an engine that opens the database again (or
-/// the next engine of the same process) gets a call of its own. Safe when the
-/// database was never opened.
+/// Quit (the menu, Cmd/Ctrl+Q, `process.exit`) and an update install call
+/// this; the end of an engine thread calls [`shutdown_at_engine_end`]. The
+/// worker is asked to stop and given 5 s; what is left of it is then dropped,
+/// a send in flight with it, and this thread checkpoints and closes. A second
+/// call for the same handle does nothing. Safe when the database was never
+/// opened.
 ///
 /// An update install calls it before starting the new process, because the
 /// owner lock is a process-wide flock and the replacement cannot open the
@@ -374,7 +395,7 @@ pub fn shutdown_for_quit() {
         return;
     }
     LAUNCH_PENDING.with(|pending| pending.set(false));
-    stop_worker_of(this_engine());
+    finish_worker(take_worker(None), this_engine());
     release_taken(take_database_slot());
 }
 
@@ -392,18 +413,44 @@ pub fn shutdown_at_engine_end() {
     }
     LAUNCH_PENDING.with(|pending| pending.set(false));
     let engine = this_engine();
+    // Taken and told to stop here, before anything can fail: a loop told to
+    // stop ends at its next check, and its tasks end with their sends.
+    let worker = take_worker(Some(engine));
     let slot = take_database_slot();
+    let work = std::sync::Arc::new(std::sync::Mutex::new(Some((worker, slot))));
+    let for_thread = work.clone();
     let ended = std::thread::Builder::new()
         .name("bir-engine-end".into())
         .spawn(move || {
-            stop_worker_of(engine);
-            release_taken(slot);
+            let taken = for_thread
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .take();
+            if let Some((worker, slot)) = taken {
+                finish_worker(worker, engine);
+                release_taken(slot);
+            }
         });
-    // With no thread to run on, the closure is dropped unrun: the handle goes
-    // with it (the owner lock too, when it was the last holder), the worker is
-    // left running, and nothing can say so here.
-    if let Ok(thread) = ended {
-        let _ = thread.join();
+    match ended {
+        Ok(thread) => {
+            let _ = thread.join();
+        }
+        Err(_) => {
+            // No thread to finish on, and nothing can log here. The handle is
+            // dropped (the owner lock goes with it when it was the last
+            // holder). The worker's runtime is not dropped on this thread, which
+            // may not drop one: it is left to its stopped loop and its tasks.
+            let taken = work
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .take();
+            if let Some((worker, slot)) = taken {
+                if let TakenWorker::Taken(worker) = worker {
+                    std::mem::forget(worker.runtime);
+                }
+                drop(slot);
+            }
+        }
     }
 }
 
@@ -486,7 +533,7 @@ fn close_handle(mut handle: std::sync::Arc<std::sync::Mutex<Database>>) {
                     tracing::warn!("database checkpoint failed: {error}");
                 }
                 tracing::warn!(
-                    "database still in use at quit; the owner lock releases when the process exits"
+                    "database still in use at the engine's end; the owner lock goes when the work holding it ends (30 s at most for a calendar request), or with the process"
                 );
                 return;
             }
@@ -508,8 +555,9 @@ pub fn stored_global_hotkey() -> Option<String> {
 
 /// Whether no database handle of this process is open any more, so the
 /// owner lock is free: true once every engine's handle has been closed or its
-/// last holder has let go. An update refuses to relaunch when this is still
-/// false: the new process would lose the race for the encrypted database.
+/// last holder has let go. A handle is listed before its engine can use it.
+/// For the host's checks and tests: nothing refuses on it yet (an update's
+/// relaunch does not wait for it).
 pub fn owner_lock_released() -> bool {
     let mut live = LIVE_HANDLES
         .lock()
@@ -6077,6 +6125,37 @@ mod tests {
         std::fs::write(scratch.join("child-done"), "ok").unwrap();
     }
 
+    /// A quit (or an update's restart) ends the process's sending whoever started the worker: called on a thread that
+    /// did not start it, it stops it all the same. Before, it stopped nothing there, and the worker ran on until its
+    /// own engine ended.
+    #[test]
+    fn a_quit_on_another_thread_stops_the_worker() {
+        run_engine_child("a_quit_on_another_thread_stops_the_worker");
+        let Some(scratch) = engine_child() else {
+            return;
+        };
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _end = EngineEnd;
+                    open_database_at_launch();
+                    assert!(
+                        submission_worker_runs_for_this_engine(),
+                        "the engine's worker"
+                    );
+                    scope
+                        .spawn(shutdown_for_quit)
+                        .join()
+                        .expect("the quit on another thread");
+                    assert!(!submission_worker_started(), "the quit stopped it");
+                })
+                .join()
+                .expect("the engine");
+        });
+        assert!(owner_lock_is_free(), "the engine's end freed the lock");
+        std::fs::write(scratch.join("child-done"), "ok").unwrap();
+    }
+
     /// The door's end guard is a thread local, armed before the engine first
     /// logs, so at the thread's end the logger's own per-thread buffer is
     /// destroyed before the guard runs. Here the end logs (the worker is
@@ -6143,7 +6222,7 @@ mod tests {
             .map(|entry| std::fs::read_to_string(entry.unwrap().path()).unwrap_or_default())
             .collect::<String>();
         assert!(
-            logs.contains("quit on a thread that did not start the submission worker"),
+            logs.contains("an engine without a submission worker of its own ended"),
             "engine B's end said why it stopped nothing"
         );
         std::fs::write(scratch.join("child-done"), "ok").unwrap();
@@ -6316,30 +6395,7 @@ mod tests {
             assert!(owner_lock_is_free());
             holder.join().unwrap();
         });
-
-        // A quit asked on a thread that did not start the worker stops
-        // nothing and says the lock is still held; the engine's own end does.
-        let (asked, wait_for_ask) = std::sync::mpsc::channel::<()>();
-        std::thread::scope(|scope| {
-            let owner = scope.spawn(move || {
-                engine(move || {
-                    assert!(submission_worker_runs_for_this_engine());
-                    wait_for_ask.recv().unwrap();
-                    assert!(
-                        submission_worker_runs_for_this_engine(),
-                        "the other thread's quit left this engine's worker running"
-                    );
-                });
-            });
-            wait_until("the engine started its worker", submission_worker_started);
-            shutdown_for_quit();
-            assert!(submission_worker_started(), "nothing stopped from here");
-            assert!(!owner_lock_released(), "the engine's handle is still open");
-            asked.send(()).unwrap();
-            owner.join().unwrap();
-        });
-        assert!(!submission_worker_started());
-        assert!(owner_lock_released());
+        // A quit on another thread: `a_quit_on_another_thread_stops_the_worker`.
         std::fs::write(scratch.join("child-done"), "ok").unwrap();
     }
 

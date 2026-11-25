@@ -350,7 +350,7 @@ fn refresh_access_token(refresh_token: &str) -> Result<String, anyhow::Error> {
     std::thread::spawn(move || {
         let client_id = get_google_client_id()?;
         let client_secret = get_google_client_secret()?;
-        let client = reqwest::blocking::Client::new();
+        let client = crate::http_timeouts::bounded_blocking_client();
         let resp = client
             .post(TOKEN_URL)
             .form(&[

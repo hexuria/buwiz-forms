@@ -204,8 +204,8 @@ impl Door {
         door::use_database(&path)
     }
 
-    /// The quit path: stops the submission worker and checkpoints the database. Call it once, when the app quits;
-    /// the door is not for use afterwards.
+    /// The quit path: stops the submission worker and closes the database. Call it once, when the app quits; every
+    /// door call on this engine after it is refused.
     pub fn shutdown() {
         door::shutdown();
     }

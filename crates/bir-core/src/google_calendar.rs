@@ -353,9 +353,17 @@ pub fn sync_all_profile_calendars(
     db: Arc<Mutex<Database>>,
 ) -> Vec<(String, Result<CalendarSyncReport, String>)> {
     let weak = Arc::downgrade(&db);
-    let results = sync_all_profile_calendars_until(weak, &|| false);
+    let run = sync_all_profile_calendars_until(weak, &|| false);
     drop(db);
-    results
+    run.results
+}
+
+/// What [`sync_all_profile_calendars_until`] did: each calendar it synced, and whether it reached the end of the list.
+pub struct CalendarSyncRun {
+    pub results: Vec<(String, Result<CalendarSyncReport, String>)>,
+    /// False when `stop` said so, or the database went, before every linked calendar was synced: the run is not a
+    /// sync, and is not recorded as one.
+    pub complete: bool,
 }
 
 /// [`sync_all_profile_calendars`] for the queue worker: it holds the database only while one profile's calendar
@@ -364,9 +372,13 @@ pub fn sync_all_profile_calendars(
 pub fn sync_all_profile_calendars_until(
     db: std::sync::Weak<Mutex<Database>>,
     stop: &dyn Fn() -> bool,
-) -> Vec<(String, Result<CalendarSyncReport, String>)> {
+) -> CalendarSyncRun {
+    let stopped = |results| CalendarSyncRun {
+        results,
+        complete: false,
+    };
     let Some(strong) = db.upgrade() else {
-        return Vec::new();
+        return stopped(Vec::new());
     };
     let tins = match lock_timing::lock(&strong) {
         Ok(db) => db
@@ -375,22 +387,25 @@ pub fn sync_all_profile_calendars_until(
             .into_iter()
             .map(|link| link.profile_tin)
             .collect::<Vec<_>>(),
-        Err(_) => return Vec::new(),
+        Err(_) => return stopped(Vec::new()),
     };
 
     drop(strong);
     let mut results = Vec::new();
     for tin in tins {
         if stop() {
-            break;
+            return stopped(results);
         }
         let Some(db) = db.upgrade() else {
-            break;
+            return stopped(results);
         };
         let result = sync_profile_calendar(db, &tin).map_err(|error| error.to_string());
         results.push((tin, result));
     }
-    results
+    CalendarSyncRun {
+        results,
+        complete: true,
+    }
 }
 
 pub fn sync_profile_calendar(
@@ -789,7 +804,7 @@ struct GoogleCalendarClient {
 impl GoogleCalendarClient {
     fn new() -> Result<Self, anyhow::Error> {
         Ok(Self {
-            http: reqwest::blocking::Client::new(),
+            http: crate::http_timeouts::bounded_blocking_client(),
             credentials: load_credentials()?,
         })
     }
@@ -1555,5 +1570,44 @@ mod tests {
             // Still nothing after the refused save.
             assert!(load_credentials().is_err());
         });
+    }
+
+    /// A sync that `stop` ends before every linked calendar is done says so, so the worker does not record it as a
+    /// sync (the last sync time and a pending "sync now" stay as they were); one with nothing to stop it is complete.
+    #[test]
+    fn a_stopped_calendar_sync_is_not_complete() {
+        let file = NamedTempFile::new().unwrap();
+        let db = Database::open(file.path()).unwrap();
+        db.save_profile(test_profile()).unwrap();
+        db.save_profile_calendar_link(&ProfileCalendarLink {
+            profile_tin: "123456789000".into(),
+            google_calendar_id: "calendar-1".into(),
+            calendar_name: "Deadlines".into(),
+            enabled: true,
+            last_synced_at: None,
+            last_error: None,
+        })
+        .unwrap();
+        let db = Arc::new(Mutex::new(db));
+
+        let stopped = sync_all_profile_calendars_until(Arc::downgrade(&db), &|| true);
+        assert!(!stopped.complete, "stopped before the linked calendar");
+        assert!(stopped.results.is_empty());
+
+        let empty = Arc::new(Mutex::new(
+            Database::open(NamedTempFile::new().unwrap().path()).unwrap(),
+        ));
+        let none_linked = sync_all_profile_calendars_until(Arc::downgrade(&empty), &|| true);
+        assert!(
+            none_linked.complete,
+            "no linked calendar: nothing left undone"
+        );
+
+        let gone = Arc::downgrade(&db);
+        drop(db);
+        assert!(
+            !sync_all_profile_calendars_until(gone, &|| false).complete,
+            "the database went"
+        );
     }
 }
