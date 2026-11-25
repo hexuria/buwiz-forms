@@ -1,0 +1,11 @@
+afterfixed 20 1 [453]
+afterfixed 20 2 [000123453]
+afterfixed 20 3 [000123453]
+afterfixed 20 4 [000123453]
+afterfixed 20 5 [000123453]
+afterfixed 20 6 [000123453]
+afterfixed 20 7 [000123453]
+afterfixed 20 8 [000123453]
+afterfixed 20 9 [000123453]
+afterfixed 20 10 [000123453]
+DONE afterfixed

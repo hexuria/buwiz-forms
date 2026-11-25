@@ -1,0 +1,5 @@
+after-fixed paste '000123453' -> 000123453
+after-fixed paste '000-123-453' -> 000123453
+after-fixed paste '000 123 453' -> 000123453
+after-fixed paste '00012345300000' -> 000123453
+PASTEDONE after-fixed
