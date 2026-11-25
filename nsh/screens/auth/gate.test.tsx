@@ -73,7 +73,7 @@ for (const { name, size, device } of SIZES) {
     await app.press("id:gate-continue");
     await app.waitFor("label:Continue with email…");
     expect(app.texts()).not.toContain("Waiting…");
-    await app.waitFor("text:A sign-in code was already sent to this address. Use it, or try again in 4 minutes.");
+    await app.waitFor("text:A sign-in code was already sent to this address. You can ask for a new one in 4 minutes.");
     expect(app.shows("label:Continue with email…")).toBe(false);
     expect(app.shows("id:gate-card")).toBe(true);
     expect(app.enabled("id:gate-continue")).toBe(true);
@@ -295,14 +295,14 @@ for (const { name, size, device } of SIZES) {
     await app.waitFor("id:gate-card");
     await app.type("id:gate-email", "juana@example.com");
     await app.press("id:gate-continue");
-    await app.waitFor("text:A sign-in code was already sent to this address. Use it, or try again in 4 minutes.");
+    await app.waitFor("text:A sign-in code was already sent to this address. You can ask for a new one in 4 minutes.");
     expect(app.enabled("id:gate-email")).toBe(true);
     expect(app.enabled("id:gate-continue")).toBe(true);
     await app.clear("id:gate-email");
     await app.type("id:gate-email", "pedro@example.com");
     expect(app.value("id:gate-email")).toBe("pedro@example.com");
     // Typing clears the sentence; nothing was sent but the one start.
-    await app.waitFor("text:A sign-in code was already sent to this address. Use it, or try again in 4 minutes.", { state: "gone" });
+    await app.waitFor("text:A sign-in code was already sent to this address. You can ask for a new one in 4 minutes.", { state: "gone" });
     expect(calls(app)).toBe("calls: cloud_account_email_start");
   }, 60_000);
 

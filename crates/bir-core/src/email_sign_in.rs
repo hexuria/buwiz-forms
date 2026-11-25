@@ -194,7 +194,7 @@ pub fn local_sentence(code: &str, retry_after: Option<i64>, attempts_left: Optio
             minutes(retry_after)
         ),
         "code_already_sent" => format!(
-            "A sign-in code was already sent to this address. Use it, or try again {}.",
+            "A sign-in code was already sent to this address. You can ask for a new one {}.",
             wait_words(retry_after)
         ),
         "turnstile_required" | "turnstile_failed" => {
@@ -807,7 +807,7 @@ mod tests {
             (
                 429,
                 r#"code_already_sent","retry_after":240"#,
-                "A sign-in code was already sent to this address. Use it, or try again in 4 minutes.",
+                "A sign-in code was already sent to this address. You can ask for a new one in 4 minutes.",
             ),
             (
                 403,
@@ -871,7 +871,7 @@ mod tests {
         assert_eq!(refused.code(), "code_already_sent");
         assert_eq!(
             refused.sentence(),
-            "A sign-in code was already sent to this address. Use it, or try again in 5 minutes."
+            "A sign-in code was already sent to this address. You can ask for a new one in 5 minutes."
         );
         // On resend and verify too, an answer that is not the contract's says sign-in is not available right now.
         for body in [r#"{"error":"something_new"}"#, "<html>oops</html>", ""] {

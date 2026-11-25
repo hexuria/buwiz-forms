@@ -40,7 +40,7 @@ for (const look of LOOKS) {
 
   test(`gate: the email page refused, not available, no connection, ${look.name}`, async () => {
     for (const [step, email, sentence] of [
-      ["email-refused", "refuse", "A sign-in code was already sent to this address. Use it, or try again in 4 minutes."],
+      ["email-refused", "refuse", "A sign-in code was already sent to this address. You can ask for a new one in 4 minutes."],
       ["email-not-available", "unavailable", "Sign-in is not available right now. Try again in a few minutes."],
       ["email-no-connection", "offline", "No connection. Check your internet and try again."],
     ] as const) {

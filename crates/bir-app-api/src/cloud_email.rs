@@ -468,7 +468,7 @@ mod tests {
             let step = json(start_with(&mut fake, SERVER, "filer@example.test", 1_000));
             assert_eq!(
                 step["message"],
-                "A sign-in code was already sent to this address. Use it, or try again in 3 minutes."
+                "A sign-in code was already sent to this address. You can ask for a new one in 3 minutes."
             );
             assert_eq!(step["retry_after"], 180.0);
             let mut down = Fake::default();
@@ -753,7 +753,7 @@ mod tests {
             // The wait is said even when the message leaves it out.
             assert_eq!(
                 step["message"],
-                "A sign-in code was already sent to this address. Use it, or try again in 4 minutes."
+                "A sign-in code was already sent to this address. You can ask for a new one in 4 minutes."
             );
             assert_eq!(email_sign_in::load_pending(), Some(before));
         });
@@ -805,7 +805,7 @@ mod tests {
             assert_eq!(second["step"], "refused");
             assert_eq!(
                 second["message"],
-                "A sign-in code was already sent to this address. Use it, or try again in 5 minutes."
+                "A sign-in code was already sent to this address. You can ask for a new one in 5 minutes."
             );
             assert!(second["retry_after"].as_f64().unwrap() > 0.0);
             // One code mailed, its time not restarted, and it still signs in.

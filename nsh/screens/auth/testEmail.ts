@@ -40,7 +40,7 @@ export const SIGNED_IN: CloudAccountStatus = {
 };
 
 const REFUSED: Record<string, string> = {
-  refuse: "A sign-in code was already sent to this address. Use it, or try again in 4 minutes.",
+  refuse: "A sign-in code was already sent to this address. You can ask for a new one in 4 minutes.",
   unavailable: "Sign-in is not available right now. Try again in a few minutes.",
   offline: "No connection. Check your internet and try again.",
   throttled: "Too many tries. Wait a moment and try again.",
