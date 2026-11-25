@@ -13,7 +13,7 @@ use super::drafts::{
     AbandonedClaimRelease, abandoned_claim_audit, claim_fields_partial, claim_fields_present,
     filing_status_to_db, require_abandoned_release_reason,
 };
-use super::receipts::ReceiptConfirmationOutcome;
+use super::receipts::{ReceiptConfirmationOutcome, ReceiptSource};
 use super::{Database, DbError, SubmissionReceipt};
 use crate::forms::FilingStatus;
 use crate::forms::dry_run::is_dry_run;
@@ -1151,6 +1151,7 @@ impl Database {
     fn find_submitted_queueable_by_filename<F: QueueableForm>(
         &self,
         receipt_filename: &str,
+        source: ReceiptSource,
     ) -> Result<Option<F>, DbError> {
         fn base(name: &str) -> String {
             let name = name.rsplit(['/', '\\']).next().unwrap_or(name);
@@ -1167,11 +1168,13 @@ impl Database {
         let rows = stmt.query_map(params![F::FORM_CODE], |row| row.get::<_, String>(0))?;
         for raw in rows {
             let draft: F = serde_json::from_str(&raw?)?;
-            if draft
-                .lifecycle()
-                .submission_filename
-                .as_deref()
-                .is_some_and(|name| base(name) == wanted)
+            // A dry run is never matched to a BIR email.
+            if source.may_confirm(draft.lifecycle().submitted_dry_run)
+                && draft
+                    .lifecycle()
+                    .submission_filename
+                    .as_deref()
+                    .is_some_and(|name| base(name) == wanted)
             {
                 return Ok(Some(draft));
             }
@@ -1179,15 +1182,30 @@ impl Database {
         Ok(None)
     }
 
+    /// A BIR email's receipt confirms the Submitted return it names, never a
+    /// dry run (it reached nobody: the receipt is Ignored, as one with no
+    /// return is).
     pub fn confirm_queueable_from_receipt<F: QueueableForm>(
         &self,
         receipt: &SubmissionReceipt,
     ) -> Result<ReceiptConfirmationOutcome, DbError> {
+        self.confirm_queueable_from_receipt_as::<F>(receipt, ReceiptSource::BirEmail)
+    }
+
+    pub(crate) fn confirm_queueable_from_receipt_as<F: QueueableForm>(
+        &self,
+        receipt: &SubmissionReceipt,
+        source: ReceiptSource,
+    ) -> Result<ReceiptConfirmationOutcome, DbError> {
+        let matches = |draft: &F| {
+            matches!(draft.lifecycle().status, FilingStatus::Submitted)
+                && source.may_confirm(draft.lifecycle().submitted_dry_run)
+        };
         let by_period = match F::parse_period_code(&receipt.period) {
             Some((year, period)) => {
                 let column = crate::forms::queueable::period_column(&period);
                 self.get_queueable_draft::<F>(&receipt.tin, year, column)?
-                    .filter(|draft| matches!(draft.lifecycle().status, FilingStatus::Submitted))
+                    .filter(|draft| matches(draft))
             }
             None => None,
         };
@@ -1197,12 +1215,12 @@ impl Database {
         // filename the worker uploaded instead.
         let draft = match by_period {
             Some(draft) => Some(draft),
-            None => self.find_submitted_queueable_by_filename::<F>(&receipt.filename)?,
+            None => self.find_submitted_queueable_by_filename::<F>(&receipt.filename, source)?,
         };
         let Some(mut draft) = draft else {
             return Ok(ReceiptConfirmationOutcome::Ignored);
         };
-        if !matches!(draft.lifecycle().status, FilingStatus::Submitted) {
+        if !matches(&draft) {
             return Ok(ReceiptConfirmationOutcome::Ignored);
         }
         let receipt_id = receipt.id.ok_or_else(|| {
@@ -1581,6 +1599,55 @@ mod tests {
             db.revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
                 .is_err()
         );
+    }
+
+    /// Matched by the uploaded filename (an event-based form's period does
+    /// not key it), a BIR email skips a dry run that shares the filename and
+    /// confirms the real send; with only the dry run, it is Ignored.
+    #[test]
+    fn a_bir_email_by_filename_skips_a_dry_run_and_confirms_the_real_send() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let dry = dry_run();
+        let filename = dry.lifecycle.submission_filename.clone().unwrap();
+        let dry_id = store(&db, &dry);
+        let local_now =
+            chrono::Utc::now() + chrono::Duration::hours(8) + chrono::Duration::minutes(1);
+        let confirmation = crate::receipt::BirReceiptConfirmation {
+            filename: format!("{}.xml", filename.split('#').next().unwrap()),
+            date_received: local_now.date_naive(),
+            time_received: local_now.time(),
+            source_from: Some("ebirforms-noreply@bir.gov.ph".to_string()),
+            raw_text: "This confirms receipt".to_string(),
+            raw_html: None,
+        };
+        let (mut receipt, _) = db.save_submission_receipt(&confirmation).unwrap();
+        receipt.period = "03152025_T123456".to_string();
+        assert_eq!(
+            db.confirm_queueable_from_receipt::<TestForm>(&receipt)
+                .unwrap(),
+            ReceiptConfirmationOutcome::Ignored
+        );
+        // A real send of another period under the same uploaded filename.
+        let mut real = submitted();
+        real.month = 7;
+        real.lifecycle.submission_filename = Some(filename.clone());
+        let real_id = store(&db, &real);
+        assert_eq!(
+            db.confirm_queueable_from_receipt::<TestForm>(&receipt)
+                .unwrap(),
+            ReceiptConfirmationOutcome::Confirmed
+        );
+        let status = |id: i64| -> String {
+            db.conn
+                .query_row(
+                    "SELECT status FROM form_drafts WHERE id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        assert_eq!(status(dry_id), "Submitted");
+        assert_eq!(status(real_id), "Confirmed");
     }
 
     /// save-009's original: a dry run is none; a real send, a relay send,
