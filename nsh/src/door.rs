@@ -110,13 +110,54 @@ pub(crate) fn process_prepared() -> bool {
 /// Debug builds never reach the OS keychain, whatever the caller set: `BUWIZ_NO_KEYCHAIN=1` before anything
 /// in bir-core runs. So does any build running in a test environment (`EBIR_TEST_ENV`, read as bir-core reads
 /// it): a release build under a test must not reach the keychain either. A release build outside a test
-/// environment leaves the variable to the caller.
+/// environment leaves the variable to the caller. The one exception is [`KEYCHAIN_CHECK_ENV`] on iOS (see
+/// [`keychain_used`]): then the variable is not set, and the Simulator's or the device's own Keychain is used.
 #[cfg(not(target_os = "android"))]
 fn switch_off_keychain(debug_build: bool) {
-    if debug_build || test_environment() {
+    let facts = KeychainFacts {
+        debug_build,
+        test_environment: test_environment(),
+        switched_off: bir_core::platform::keychain_disabled(),
+        check_asked: std::env::var(KEYCHAIN_CHECK_ENV).is_ok_and(|value| value.trim() == "1"),
+        ios: cfg!(target_os = "ios"),
+    };
+    if (debug_build || facts.test_environment) && !keychain_used(facts) {
         // SAFETY: called from [`process`], once, before NSH or this crate starts a thread (see there).
         unsafe { std::env::set_var(bir_core::platform::NO_KEYCHAIN_ENV, "1") };
     }
+}
+
+/// `BUWIZ_KEYCHAIN=1`: a development or test run on iOS uses the OS Keychain, for the Simulator check of
+/// `docs/platforms/ios.md`. Nothing on any other system: a development build on a Mac never writes into the
+/// developer's login keychain because of it.
+#[cfg(not(target_os = "android"))]
+const KEYCHAIN_CHECK_ENV: &str = "BUWIZ_KEYCHAIN";
+
+/// What decides whether this process uses the OS Keychain.
+#[cfg(not(target_os = "android"))]
+#[derive(Debug, Clone, Copy)]
+struct KeychainFacts {
+    debug_build: bool,
+    /// `EBIR_TEST_ENV`, read as bir-core reads it.
+    test_environment: bool,
+    /// `BUWIZ_NO_KEYCHAIN` is on (`bir_core::platform::keychain_disabled`).
+    switched_off: bool,
+    /// `BUWIZ_KEYCHAIN=1`.
+    check_asked: bool,
+    ios: bool,
+}
+
+/// Whether the OS Keychain is used: never with `BUWIZ_NO_KEYCHAIN` on; always in a release build outside a test
+/// environment; otherwise (a debug build or a test environment) only with `BUWIZ_KEYCHAIN=1` on iOS.
+#[cfg(not(target_os = "android"))]
+fn keychain_used(facts: KeychainFacts) -> bool {
+    if facts.switched_off {
+        return false;
+    }
+    if !facts.debug_build && !facts.test_environment {
+        return true;
+    }
+    facts.ios && facts.check_asked
 }
 
 /// `EBIR_TEST_ENV` is on: a dev, test or agent run. A database nobody named is a scratch one. Read the way
@@ -949,6 +990,65 @@ mod tests {
                         caller,
                         "release, caller {caller:?}"
                     );
+                },
+            );
+        }
+    }
+
+    /// Every combination of the five facts: `BUWIZ_NO_KEYCHAIN` wins, a release build outside a test environment
+    /// uses the Keychain, and anything else does only on iOS with `BUWIZ_KEYCHAIN=1`.
+    #[test]
+    #[cfg(not(target_os = "android"))]
+    fn the_keychain_precedence_table() {
+        let both = [false, true];
+        for debug_build in both {
+            for test_environment in both {
+                for switched_off in both {
+                    for check_asked in both {
+                        for ios in both {
+                            let facts = KeychainFacts { debug_build, test_environment, switched_off, check_asked, ios };
+                            let expected = if switched_off {
+                                false
+                            } else if !debug_build && !test_environment {
+                                true
+                            } else {
+                                ios && check_asked
+                            };
+                            assert_eq!(keychain_used(facts), expected, "{facts:?}");
+                        }
+                    }
+                }
+            }
+        }
+        // The rows that matter most, spelled out.
+        let facts = |debug_build, test_environment, switched_off, check_asked, ios| KeychainFacts {
+            debug_build,
+            test_environment,
+            switched_off,
+            check_asked,
+            ios,
+        };
+        assert!(!keychain_used(facts(true, true, false, true, false)), "a Mac never, whatever is asked");
+        assert!(keychain_used(facts(true, true, false, true, true)), "the Simulator check");
+        assert!(!keychain_used(facts(true, true, true, true, true)), "BUWIZ_NO_KEYCHAIN wins");
+        assert!(keychain_used(facts(false, false, false, false, false)), "a shipped build, unchanged");
+    }
+
+    /// Off iOS `BUWIZ_KEYCHAIN=1` changes nothing: a debug or test run still switches the Keychain off.
+    #[test]
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    fn the_keychain_check_switch_does_nothing_off_ios() {
+        for (debug_build, test_run) in [(true, None), (false, Some("1")), (true, Some("1"))] {
+            temp_env::with_vars(
+                [
+                    ("BUWIZ_NO_KEYCHAIN", None),
+                    ("EBIR_TEST_ENV", test_run),
+                    (KEYCHAIN_CHECK_ENV, Some("1")),
+                ],
+                || {
+                    switch_off_keychain(debug_build);
+                    assert_eq!(std::env::var("BUWIZ_NO_KEYCHAIN").as_deref(), Ok("1"));
+                    assert!(bir_core::platform::keychain_disabled());
                 },
             );
         }
