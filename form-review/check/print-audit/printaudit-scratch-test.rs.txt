@@ -1,0 +1,233 @@
+//! Dummy-data sample payloads for the queueable forms.
+//!
+//! `tests/sample-payloads/` holds what our serializers produce for a fake
+//! taxpayer: the plaintext BIR pseudo-XML and the encrypted IAF file that is
+//! uploaded (`dump_xml <file>` decrypts it back). No real taxpayer data.
+//!
+//! `<stem>.official.xml` is what the official eBIRForms page submits when a
+//! filer enters `<stem>.steps.json`: `tools/official-xml/runtime.js` runs the
+//! official HTA with its own scripts, so the official handlers compute and
+//! format every derived amount, then its `saveXMLsubmit()` loop writes the
+//! plaintext. Our plaintext must equal it byte for byte, which checks our
+//! calculations, value formatting and serialization together. Regenerating our
+//! samples never changes it.
+//!
+//! Regenerate after an intentional serializer change with
+//! `UPDATE_SAMPLE_PAYLOADS=1 cargo test -p bir-core --test sample_payloads_test`.
+
+use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
+use bir_core::official_xml;
+use bir_core::profile::TaxpayerProfile;
+use sha2::{Digest, Sha256};
+use std::path::PathBuf;
+
+/// One module per form: its dummy draft and its sample test.
+mod sample_payloads;
+
+pub(crate) fn dummy_profile(default_form_type: &str, taxpayer_type: &str) -> TaxpayerProfile {
+    // 123-456-788 passes the official check digit; every value is fictitious.
+    serde_json::from_value(serde_json::json!({
+        "id": null,
+        "full_name": "Sample Dummy Taxpayer",
+        "tin": {
+            "segment1": "123",
+            "segment2": "456",
+            "segment3": "788",
+            "branch": "00000"
+        },
+        "rdo_code": "039",
+        "line_of_business": "Sample Consulting Services",
+        "registered_address": "123 Sample Street, Barangay Example, Quezon City",
+        "zip_code": "1100",
+        "phone": "09170000000",
+        "email": "sample.taxpayer@example.com",
+        "default_form_type": default_form_type,
+        "taxpayer_type": taxpayer_type,
+        "business_start_date": "2020-01-15",
+        "tax_elections": [{
+            "taxable_year": 2025,
+            "election": "GraduatedUnspecified",
+            "elected_at": "2025-01-15T00:00:00",
+            "source_form": "sample"
+        }]
+    }))
+    .expect("dummy profile must deserialize")
+}
+
+pub(crate) fn samples_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/sample-payloads")
+}
+
+/// `official_encrypt_sha256` is the SHA-256 of `<stem>.plain.xml` encrypted by the
+/// official eBIRForms `Encrypt.exe` (sha256 `429337f4…4d2c`, unchanged from
+/// 7.9.6.0 through 7.9.6.2.1) run under emulation; our `compress_and_encrypt`
+/// must match it byte for byte. Regenerating samples can never change it.
+pub(crate) fn check_sample(
+    stem: &str,
+    form_id: &str,
+    plaintext: &str,
+    official_encrypt_sha256: &str,
+) {
+    let layout = official_xml::layout(form_id).expect("official layout");
+    check_sample_with_layout(stem, layout, plaintext, official_encrypt_sha256);
+}
+
+/// [`check_sample`] for a form whose page adds rows at run time: the sample
+/// follows the form's own extension of the generated layout.
+pub(crate) fn check_sample_with_layout(
+    stem: &str,
+    layout: &official_xml::OfficialLayout,
+    plaintext: &str,
+    official_encrypt_sha256: &str,
+) {
+    let fields = official_xml::read(layout, plaintext).expect("sample follows the official layout");
+    assert!(!fields.is_empty());
+
+    let encrypted = compress_and_encrypt(plaintext.as_bytes(), BIR_IAF_PASSPHRASE)
+        .expect("sample payload must encrypt");
+    let decrypted =
+        decrypt_and_decompress(&encrypted, BIR_IAF_PASSPHRASE).expect("sample must decrypt");
+    assert_eq!(
+        decrypted,
+        plaintext.as_bytes(),
+        "encryption must round-trip"
+    );
+
+    let dir = samples_dir();
+    let plain_path = dir.join(format!("{stem}.plain.xml"));
+    let iaf_path = dir.join(format!("{stem}.iaf.xml"));
+    let updating = std::env::var_os("UPDATE_SAMPLE_PAYLOADS").is_some();
+    if updating {
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&plain_path, plaintext).unwrap();
+        std::fs::write(&iaf_path, &encrypted).unwrap();
+    }
+
+    let official_plain_path = dir.join(format!("{stem}.official.xml"));
+    let official_plain = std::fs::read_to_string(&official_plain_path)
+        .unwrap_or_else(|e| panic!("missing {}: {e}", official_plain_path.display()));
+    assert_eq!(
+        plaintext, official_plain,
+        "{stem}: our plaintext differs from the official upload (saveEncryptedProfile) output"
+    );
+
+    let digest: String = Sha256::digest(&encrypted)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    assert_eq!(
+        digest, official_encrypt_sha256,
+        "{stem}: compress_and_encrypt no longer matches the official Encrypt.exe output"
+    );
+
+    if updating {
+        return;
+    }
+    let committed = std::fs::read_to_string(&plain_path)
+        .unwrap_or_else(|e| panic!("missing {}: {e}", plain_path.display()));
+    assert_eq!(
+        committed, plaintext,
+        "{stem}: serializer output changed; rerun with UPDATE_SAMPLE_PAYLOADS=1 if intended"
+    );
+    assert_eq!(
+        std::fs::read(&iaf_path).unwrap(),
+        encrypted,
+        "{stem}: encrypted sample is stale"
+    );
+}
+
+use bir_core::forms::queueable::QueueableForm;
+macro_rules! audit {
+    ($out:expr, $stem:expr, $draft:expr, $mapexpr:expr) => {{
+        let map = $mapexpr;
+        let draft = $draft;
+        let j = serde_json::json!({
+            "stem": $stem,
+            "map": map,
+            
+        });
+        $out.push(j);
+    }};
+}
+
+#[test]
+fn print_audit_dump() {
+    let mut out = Vec::new();
+    { let d = sample_payloads::form_1600pt::sample_1600pt(); audit!(out, "1600PT-062025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1600pt::sample_1600pt_private(); audit!(out, "1600PT-072025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1600pt::sample_1600pt_other_atcs(); audit!(out, "1600PT-082025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1600vt::sample_1600vt(); audit!(out, "1600VT-062025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1600vt::sample_1600vt_private(); audit!(out, "1600VT-072025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1600vt::sample_1600vt_other_atcs(); audit!(out, "1600VT-082025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1601c::sample_1601c(); audit!(out, "1601C-062025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1601eq::sample_1601eq(); audit!(out, "1601EQ-2025Q1", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1601fq::sample_1601fq(); audit!(out, "1601FQ-2025Q2", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1602q::sample_1602q(); audit!(out, "1602Q-2025Q3", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1603q::sample_1603q(); audit!(out, "1603Q-2025Q3", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1604c::sample_1604c(); audit!(out, "1604C-2025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1604e::sample_1604e(); audit!(out, "1604E-2025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1604f::sample_1604f(); audit!(out, "1604F-2025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1606::sample_1606(); audit!(out, "1606-06152025_T123456", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1700::sample_1700(); audit!(out, "1700-2025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1700::sample_1700_joint(); audit!(out, "1700-2025-joint", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1700::sample_1700_others(); audit!(out, "1700-2025-others", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1701a::sample_1701a(); audit!(out, "1701A-122025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1701a::sample_1701a_joint(); audit!(out, "1701A-122025-joint", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1701a::sample_1701a_joint(); audit!(out, "1701A-122025-joint-many", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1701a::sample_1701a_joint_more(); audit!(out, "1701A-122025-joint-more", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1701a::sample_1701a_more(); audit!(out, "1701A-122025-more", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1701ms::sample_1701ms(); audit!(out, "1701MS-122025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1701ms::sample_1701ms_special(); audit!(out, "1701MS-122025-special", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1702ex::sample_1702ex(); audit!(out, "1702EX-122025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1702ex::sample_1702ex_popups(); audit!(out, "1702EX-122025-popups", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1702mx::sample_1702mx_fiscal(); audit!(out, "1702MX-0625-fiscal", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1702mx::sample_1702mx(); audit!(out, "1702MX-1225", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1702mx::sample_1702mx_schedule_6_rows(); audit!(out, "1702MX-1225-sched6", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1702q::sample_1702q(); audit!(out, "1702Q-2025Q2", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1702rt::sample_1702rt_more_rows(); audit!(out, "1702RT-122025-more", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1706::sample_1706(); audit!(out, "1706-03152025_T123456", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1707::sample_1707(); audit!(out, "1707-06302025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1707::sample_1707_with_popups(); audit!(out, "1707-07152025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1707::sample_1707_many_rows(); audit!(out, "1707-08292025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1707a::sample_1707a_many_rows(); audit!(out, "1707A-12312023", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1707a::sample_1707a_with_popup(); audit!(out, "1707A-12312024", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1707a::sample_1707a(); audit!(out, "1707A-12312025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1800::sample_1800(); audit!(out, "1800-03102025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1800::sample_1800_many_rows(); audit!(out, "1800-03112025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1801::sample_1801(); audit!(out, "1801-06052025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1801::sample_1801_with_tax_and_added_rows(); audit!(out, "1801-09152025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1801::sample_1801_many_rows(); audit!(out, "1801-09162025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2000::sample_2000(); audit!(out, "2000-062025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2000ot::sample_2000ot(); audit!(out, "2000OT-06152025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2000ot::sample_2000ot_shares(); audit!(out, "2000OT-06162025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2200a::sample_2200a(); audit!(out, "2200A-03142025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2200an::sample_2200an(); audit!(out, "2200AN-06302025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2200c::sample_2200c(); audit!(out, "2200C-06302025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2200m::sample_2200m_many_rows(); audit!(out, "2200M-03132025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2200m::sample_2200m(); audit!(out, "2200M-03142025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2200p::sample_2200p_many_rows(); audit!(out, "2200P-03132025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2200p::sample_2200p(); audit!(out, "2200P-03142025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2200s::sample_2200s_many_rows(); audit!(out, "2200S-06292025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2200s::sample_2200s(); audit!(out, "2200S-06302025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2200t::sample_2200t(); audit!(out, "2200T-03142025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2550m::sample_2550m(); audit!(out, "2550M-062022", d, d.print_field_map()); }
+    { let d = sample_payloads::form_2551q::sample_2551q(); audit!(out, "2551Q-122025Q1", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2552::sample_2552(); audit!(out, "2552-03142025", d, d.print_field_map()); }
+    { let d = sample_payloads::form_2553::sample_2553(); audit!(out, "2553-122025Q1", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_0605::sample_0605(); audit!(out, "0605-12312025090203", d, d.print_field_map()); }
+    { let d = sample_payloads::form_1701::sample_1701(); audit!(out, "1701-122025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1701::sample_1701_joint(); audit!(out, "1701-122025-joint", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1701q::sample_1701q(); audit!(out, "1701Q-2025Q2", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1702rt::sample_1702rt(); audit!(out, "1702RT-122025", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_1702rt::sample_1702rt_small_loss(); audit!(out, "1702RT-122025-small-loss", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2550m::sample_2550m_schedule_1(); audit!(out, "2550M-072022", d, d.print_field_map()); }
+    { let d = sample_payloads::form_2550m::sample_2550m_capital_goods(); audit!(out, "2550M-082022", d, d.print_field_map()); }
+    { let d = sample_payloads::form_2550m::sample_2550m_credits(); audit!(out, "2550M-092022", d, d.print_field_map()); }
+    { let d = sample_payloads::form_2550q::sample_2550q(); audit!(out, "2550Q-122025Q1", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2550q::sample_2550q_schedules(); audit!(out, "2550Q-122025Q1-schedules", d, d.to_print_field_map()); }
+    { let d = sample_payloads::form_2550q::sample_2550q_specify(); audit!(out, "2550Q-122025Q1-specify", d, d.to_print_field_map()); }
+    let dir = std::path::PathBuf::from(std::env::var("PRINTAUDIT_OUT").unwrap_or_else(|_| "/tmp/printaudit".into()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("audit.json"), serde_json::to_string(&out).unwrap()).unwrap();
+    println!("wrote {} samples", out.len());
+}

@@ -1,0 +1,84 @@
+{
+ "1702mx-2018c": [
+  [
+   "1702MX-0625-fiscal",
+   "frm1702MX:txtPg2Pt4I32CB",
+   "p2c22",
+   "EO 226",
+   "100000",
+   "equals official of frm1702MX:txtPg2Sc2It13D,frm1702MX:txtPg2Sc3It20B"
+  ],
+  [
+   "1702MX-0625-fiscal",
+   "frm1702MX:txtPg2Pt4I33CB",
+   "p2c26",
+   "TOURISM",
+   "-25000",
+   "equals official of frm1702MX:txtPg2Sc3It33B"
+  ],
+  [
+   "1702MX-1225",
+   "frm1702MX:txtPg2Pt4I32CA",
+   "p2c21",
+   "RA 7916",
+   "0",
+   "equals official of frm1702MX:txtPg1Pt2I18,frm1702MX:txtPg1Pt2I19"
+  ],
+  [
+   "1702MX-1225",
+   "frm1702MX:txtPg2Pt4I32CB",
+   "p2c22",
+   "EO 226",
+   "3000",
+   "equals official of frm1702MX:txtPg2Sc3It22B,frm1702MX:txtPg2Sc3It22D"
+  ],
+  [
+   "1702MX-1225",
+   "frm1702MX:txtPg2Pt4I33CA",
+   "p2c25",
+   "EXPORT MFG",
+   "0",
+   "equals official of frm1702MX:txtPg1Pt2I18,frm1702MX:txtPg1Pt2I19"
+  ],
+  [
+   "1702MX-1225",
+   "frm1702MX:txtPg2Pt4I33CB",
+   "p2c26",
+   "TOURISM",
+   "96000",
+   "equals official of frm1702MX:txtPg2Sc3It33B"
+  ],
+  [
+   "1702MX-1225-sched6",
+   "frm1702MX:txtPg2Pt4I32CA",
+   "p2c21",
+   "RA 7916",
+   "0",
+   "equals official of frm1702MX:txtPg1Pt2I18,frm1702MX:txtPg1Pt2I19"
+  ],
+  [
+   "1702MX-1225-sched6",
+   "frm1702MX:txtPg2Pt4I32CB",
+   "p2c22",
+   "EO 226",
+   "3000",
+   "equals official of frm1702MX:txtPg2Sc3It22B,frm1702MX:txtPg2Sc3It22D"
+  ],
+  [
+   "1702MX-1225-sched6",
+   "frm1702MX:txtPg2Pt4I33CA",
+   "p2c25",
+   "EXPORT MFG",
+   "0",
+   "equals official of frm1702MX:txtPg1Pt2I18,frm1702MX:txtPg1Pt2I19"
+  ],
+  [
+   "1702MX-1225-sched6",
+   "frm1702MX:txtPg2Pt4I33CB",
+   "p2c26",
+   "TOURISM",
+   "96000",
+   "equals official of frm1702MX:txtPg2Sc3It33B"
+  ]
+ ]
+}
