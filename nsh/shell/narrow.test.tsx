@@ -4,6 +4,15 @@ import { expect, open, test } from "nsh/test";
 const ENTRY = "../ShellDemo.tsx";
 const asking = (params: Record<string, unknown> = {}) => ({ host: { params } });
 
+test("phone: with no on-screen keyboard the page scroll ends as before (no keyboard room)", async () => {
+  // The room only exists while a software keyboard is up (keyboardFrame().height > 0, ui/keyboardRoom.tsx). A headless run
+  // has no keyboard, so this guards that a desktop, or a phone with the keyboard down, lays out exactly as it did; the room
+  // itself is proven on a phone emulator.
+  const app = await open(ENTRY, asking());
+  await app.waitFor("id:main-scroll");
+  expect(app.shows("id:keyboard-room")).toBe(false);
+});
+
 test("phone: four tabs, no sidebar, the header names the page and back leaves a pushed one", async () => {
   const app = await open(ENTRY, asking()); // 390 x 844, iOS
   await app.waitFor("id:tab-bar");

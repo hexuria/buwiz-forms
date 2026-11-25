@@ -6,7 +6,7 @@ import { cleanup, Scroll, signal, View } from "nsh";
 import { sectionById, settingsView, shownSection } from "../../lib/settings_model";
 import { app } from "../../shell";
 import { masBuild, storeManaged } from "../../shell/desktop/native";
-import { AppButton, GroupLabel, Icon, NavRow, PageTitle, Text, TextField, TOUCH, type IconName } from "../../ui";
+import { AppButton, GroupLabel, Icon, KeyboardRoom, NavRow, PageTitle, Text, TextField, TOUCH, type IconName } from "../../ui";
 import { AccountSection } from "./AccountSection";
 import { ComputerSection } from "./Computer";
 import { GeneralSection } from "./General";
@@ -139,6 +139,7 @@ function Pane(props: { narrow: boolean; back?: () => void }) {
           </Labeled>
         </If>
       </View>
+      <KeyboardRoom />
     </Scroll>
   );
 }
@@ -185,6 +186,7 @@ export function Settings() {
             <Scroll testID="settings-list-scroll" class="min-h-0 flex-1" contentClass="gap-2 px-4 pt-4 pb-14">
               <Search />
               <SectionList narrow onPick={pick} />
+              <KeyboardRoom />
             </Scroll>
           }
         >

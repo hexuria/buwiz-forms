@@ -10,7 +10,7 @@ import { BackHandler, isAvailable as mobileAvailable } from "nsh/mobile";
 import { errorText } from "../lib/errors";
 import { LockedScreen } from "../screens/auth/Locked";
 import { SIZE } from "../theme/tokens";
-import { AppButton, Text, Toaster, TOUCH } from "../ui";
+import { AppButton, KeyboardRoom, Text, Toaster, TOUCH } from "../ui";
 import { app, boot, startPolling, startQueuedWatch, warmLibrary } from "./app";
 import { DevPages } from "./DevPages";
 import { startDevCommandMailbox } from "./devCommand";
@@ -119,6 +119,7 @@ function ViewFrame() {
       <View testID="content-column" class="w-full min-w-0" style={{ maxWidth: box().maxWidth }}>
         <Guarded route={{ ...route, view }} />
       </View>
+      <KeyboardRoom />
     </Scroll>
   );
 }

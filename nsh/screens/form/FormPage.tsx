@@ -32,6 +32,7 @@ import {
   type IconName,
   IconButton,
   ICONS,
+  KeyboardRoom,
   Line,
   ListRow,
   MetaLine,
@@ -313,6 +314,7 @@ export function FormPage(props: FormPageProps) {
               <View testID="fp-pager-clearance" class="shrink-0" style={{ height: NARROW_PILL_HEIGHT + 16 + 16 }} />
             </If>
           </View>
+          <KeyboardRoom />
         </Scroll>
         <If when={schema && !s.header().error && !s.header().loading}>
           <Pill s={s} wide={wide} narrow={narrow} box={() => (wide() ? { left: 22, width: formW() } : null)} />

@@ -29,6 +29,7 @@ export {
   parseTypedDate, shownDate, type Ymd,
 } from "./mask";
 export { Avatar, type AvatarSize, Banner, Chip, ContextPill, type ContextPillProps, StatusChip, StepCircle } from "./status";
+export { KeyboardRoom } from "./keyboardRoom";
 export {
   Code, GroupLabel, Hairline, Icon, type IconProps, Kbd, Line, MetaLine, PageTitle, SectionTitle, Spinner, Text, type TextProps,
   type TypeRole,
