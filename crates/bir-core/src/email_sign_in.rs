@@ -149,9 +149,10 @@ impl EmailError {
 }
 
 impl EmailError {
-    /// The sentence on the code page: as [`EmailError::sentence`], but a `too_many_requests` there is the network's limit
-    /// on code checks (60 an hour), which spends none of the request's tries: "Too many codes were tried from this
-    /// network. Try again in N minutes." (in a minute under 90 seconds).
+    /// The sentence on the code page: as [`EmailError::sentence`], but a `too_many_requests` there is the server's limit
+    /// on code checks (300 an hour from one network, or the shared budget past 100k networks), which spends none of the
+    /// request's tries: "Too many sign-in codes are being checked right now. Try again in N minutes." (in a minute
+    /// under 90 seconds).
     pub fn verify_sentence(&self) -> String {
         match self {
             Self::Refused {
