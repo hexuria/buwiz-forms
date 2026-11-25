@@ -441,7 +441,260 @@ impl Form1702MXDraft {
                 fields.insert(format!("derived:year_end_{name}{}", at + 1), digit.clone());
             }
         }
+        // The upload map leaves the schedule amount columns and Part II
+        // items 14-16 at their empty expected values; the print fills them
+        // with whole pesos shaped to each cell's capacity.
+        for (key, value, width) in self.print_amount_cells() {
+            // Width 0 marks a box the row does not use: it stays blank
+            // even though the upload map carries a defaulted "0".
+            if width == 0 {
+                fields.insert(key, String::new());
+            } else {
+                fields.insert(key, whole_peso_cell(value, width));
+            }
+        }
+        // Tax rates print over an integer comb and a fraction cell beside
+        // the preprinted "." and "%", never as a lone fragment.
+        for (stem, rate) in [
+            ("derived:rate_sc1", &self.relief_basis.special_tax_rate),
+            ("derived:rate_s2b", &self.schedule_2.item_14_special_rate),
+            ("derived:rate_s2c", &self.schedule_2.item_14_regular_rate),
+        ] {
+            if let Some(hundredths) = rate.hundredths {
+                if hundredths / 100 < 100 {
+                    fields.insert(format!("{stem}_int"), format!("{:>2}", hundredths / 100));
+                    let frac = hundredths.unsigned_abs() % 100;
+                    let frac_text = if frac % 10 == 0 {
+                        format!("{}", frac / 10)
+                    } else {
+                        format!("{frac:02}")
+                    };
+                    fields.insert(format!("{stem}_frac"), frac_text);
+                }
+            }
+        }
         fields
+    }
+
+    /// The sheet's whole-peso amount cells, one `(key, value, width)`
+    /// triple each: `width` is the cell's capacity — the comb slot count
+    /// or the text box's character width — so the digits sit right.
+    /// Keys follow the writer-cell joins; a column the sheet does not
+    /// draw a box for keeps its reviewed `not_joined` reason.
+    fn print_amount_cells(&self) -> Vec<(String, i64, usize)> {
+        let mut cells: Vec<(String, i64, usize)> = Vec::new();
+        // Part II items 14-16, each a twelve-slot comb.
+        for (key, value) in [
+            (
+                "txtPg1Pt2I14TotalIncome",
+                self.part_ii.item_14_total_tax_due_or_overpayment,
+            ),
+            (
+                "txtPg1Pt2I15LessTotalTax",
+                self.part_ii.item_15_total_tax_credits,
+            ),
+            (
+                "txtPg1Pt2I16NetTaxPayable",
+                self.part_ii.item_16_net_tax_payable_or_overpayment,
+            ),
+        ] {
+            cells.push((format!("frm1702MX:{key}"), value.0, 12));
+        }
+        // Schedule 2 items 1-19 (rows 10-19 spell their key without the m).
+        for (index, item) in self.schedule_2.items.iter().enumerate() {
+            let n = index + 1;
+            let stem = if n < 10 {
+                format!("txtPg2Sc2Itm{n}")
+            } else {
+                format!("txtPg2Sc2It{n}")
+            };
+            push_regime_cells(&mut cells, stem, item, 12);
+        }
+        // Schedule 3 items 20-33.
+        for (index, item) in self.schedule_3.items_20_to_33.iter().enumerate() {
+            push_regime_cells(&mut cells, format!("txtPg2Sc3It{}", index + 20), item, 12);
+        }
+        // Schedule 4: item 1's boxes sit on the page 3 sheet portion.
+        push_regime_cells(
+            &mut cells,
+            "txtPg3Sc4Itm1".to_string(),
+            &self.schedule_4.items[0],
+            12,
+        );
+        for (index, item) in self.schedule_4.items[1..].iter().enumerate() {
+            push_regime_cells(&mut cells, format!("txtPg2Sc4Itm{}", index + 2), item, 12);
+        }
+        // Schedule 5: items 1-16, the 17a-17i lettered rows, item 18.
+        for (index, item) in self.schedule_5.amounts.iter().enumerate() {
+            let stem = match index {
+                0..=15 => format!("txtPg3Sc5Itm{}", index + 1),
+                16..=24 => format!("txtPg3Sc5Itm17{}", (b'a' + (index - 16) as u8) as char),
+                _ => "txtPg3Sc5Itm18".to_string(),
+            };
+            push_regime_cells(&mut cells, stem, item, 12);
+        }
+        // Schedule 6 rows 1-4 and the item 5 total.
+        for (index, row) in self.schedule_6.rows.iter().enumerate() {
+            let stem = if index < 3 {
+                format!("txtPg6Sc6I{}C", index + 1)
+            } else {
+                "txtPg3Sc6I4C".to_string()
+            };
+            push_regime_cells(&mut cells, stem, &row.amounts, 12);
+        }
+        push_regime_cells(
+            &mut cells,
+            "txtPg6Sc6I5C".to_string(),
+            &self.schedule_6.item_5_total,
+            12,
+        );
+        // Schedule 10 items 1-10; item 10's cells are named like a
+        // Schedule 2 row on the sheet.
+        for (index, item) in self.schedule_10.items.iter().enumerate() {
+            let stem = if index < 9 {
+                format!("txtPg4Sc10Itm{}", index + 1)
+            } else {
+                "txtPg2Sc2Itm10".to_string()
+            };
+            push_regime_cells(&mut cells, stem, item, 12);
+        }
+        // NOLCO computations, Schedules 7 and 8 items 1-3 (twelve slots).
+        for (key, input) in [
+            ("txtPg6Sc7I1", &self.regular_nolco.item_1_gross_income),
+            (
+                "txtPg6Sc7I2",
+                &self.regular_nolco.item_2_ordinary_itemized_deductions,
+            ),
+            ("txtPg6Sc7I3", &self.regular_nolco.item_3_net_operating_loss),
+            ("txtPg4Sc8It1", &self.special_nolco.item_1_gross_income),
+            (
+                "txtPg4Sc8It2",
+                &self.special_nolco.item_2_ordinary_itemized_deductions,
+            ),
+            (
+                "txtPg4Sc8It3",
+                &self.special_nolco.item_3_net_operating_loss,
+            ),
+        ] {
+            if let Some(value) = input.amount {
+                cells.push((format!("frm1702MX:{key}"), value.0, 12));
+            }
+        }
+        // NOLCO tables 7.1 and 8.1, columns A-E (wide text cells) and the
+        // item 8 total.
+        for (schedule, table) in [(7_u8, &self.schedule_7_1), (8, &self.schedule_8_1)] {
+            for (index, row) in table.rows.iter().enumerate() {
+                // A NOLCO year row with no amounts is unused; its boxes stay
+                // blank rather than printing "0".
+                let unused = [
+                    &row.amount,
+                    &row.applied_previous_years,
+                    &row.expired,
+                    &row.applied_current_year,
+                    &row.unapplied,
+                ]
+                .iter()
+                .all(|input| input.amount.is_none_or(|value| value.0 == 0));
+                let item = index + 4;
+                let amount_page = if schedule == 7 { 3 } else { 4 };
+                if unused {
+                    for suffix in ["A", "B", "C", "D", "E"] {
+                        let page = if schedule == 8 && index == 2 && suffix == "C" {
+                            3
+                        } else {
+                            amount_page
+                        };
+                        cells.push((
+                            format!("frm1702MX:txtPg{page}IShed{schedule}_{item}{suffix}"),
+                            0,
+                            0,
+                        ));
+                    }
+                    continue;
+                }
+                for (suffix, input) in [
+                    ("A", &row.amount),
+                    ("B", &row.applied_previous_years),
+                    ("C", &row.expired),
+                    ("D", &row.applied_current_year),
+                    ("E", &row.unapplied),
+                ] {
+                    let page = if schedule == 8 && index == 2 && suffix == "C" {
+                        3
+                    } else {
+                        amount_page
+                    };
+                    if let Some(value) = input.amount {
+                        cells.push((
+                            format!("frm1702MX:txtPg{page}IShed{schedule}_{item}{suffix}"),
+                            value.0,
+                            13,
+                        ));
+                    }
+                }
+            }
+            if let Some(value) = table.item_8_total_applied_current_year.amount {
+                cells.push((format!("frm1702MX:txtPg3IShed{schedule}8D"), value.0, 13));
+            }
+        }
+        // Schedule 9 MCIT rows: columns A-C sit in eleven-slot combs and
+        // D-G in nine-slot combs; the year and the item 4 total print in
+        // their own cells.
+        for (index, row) in self.schedule_9.rows.iter().enumerate() {
+            // A row with no year and no amounts is unused; its boxes stay
+            // blank rather than printing "0".
+            let unused = row.year.trim().is_empty()
+                && [
+                    &row.normal_income_tax,
+                    &row.mcit,
+                    &row.excess_mcit,
+                    &row.applied_previous_years,
+                    &row.expired,
+                    &row.applied_current_year,
+                    &row.balance,
+                ]
+                .iter()
+                .all(|input| input.amount.is_none_or(|value| value.0 == 0));
+            let item = index + 1;
+            if unused {
+                for suffix in ["CA", "CB", "CC", "CD", "CE", "CF", "CG"] {
+                    cells.push((format!("frm1702MX:txtPg7Sc9I{item}{suffix}"), 0, 0));
+                }
+                continue;
+            }
+            for (suffix, input) in [
+                ("CA", &row.normal_income_tax),
+                ("CB", &row.mcit),
+                ("CC", &row.excess_mcit),
+            ] {
+                if let Some(value) = input.amount {
+                    cells.push((format!("frm1702MX:txtPg7Sc9I{item}{suffix}"), value.0, 11));
+                }
+            }
+            for (suffix, input) in [
+                ("CD", &row.applied_previous_years),
+                ("CE", &row.expired),
+                ("CF", &row.applied_current_year),
+                ("CG", &row.balance),
+            ] {
+                if let Some(value) = input.amount {
+                    cells.push((format!("frm1702MX:txtPg7Sc9I{item}{suffix}"), value.0, 9));
+                }
+            }
+        }
+        let schedule_9_all_unused = self
+            .schedule_9
+            .rows
+            .iter()
+            .all(|row| row.year.trim().is_empty());
+        if let Some(value) = self.schedule_9.item_4_total_applied_current_year.amount {
+            if schedule_9_all_unused && value.0 == 0 {
+                cells.push(("frm1702MX:txtPg7Sc9I4".to_string(), 0, 0));
+            } else {
+                cells.push(("frm1702MX:txtPg7Sc9I4".to_string(), value.0, 10));
+            }
+        }
+        cells
     }
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16) -> Self {
@@ -539,6 +792,54 @@ impl TypedBirForm for Form1702MXDraft {
     fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         Form1702MXDraft::to_bir_field_map(self)
     }
+}
+
+/// Pushes the four regime columns of one row, skipping blank inputs.
+fn push_regime_cells(
+    cells: &mut Vec<(String, i64, usize)>,
+    stem: String,
+    amounts: &Form1702MXRegimeAmounts,
+    width: usize,
+) {
+    // An unused write-in row stores null columns and a defaulted 0 total;
+    // its amount boxes stay blank rather than printing "0".
+    if [
+        &amounts.exempt,
+        &amounts.special,
+        &amounts.regular,
+        &amounts.total,
+    ]
+    .iter()
+    .all(|input| input.amount.is_none_or(|value| value.0 == 0))
+    {
+        for column in ["A", "B", "C", "D"] {
+            cells.push((format!("frm1702MX:{stem}{column}"), 0, 0));
+        }
+        return;
+    }
+    for (column, input) in [
+        ("A", &amounts.exempt),
+        ("B", &amounts.special),
+        ("C", &amounts.regular),
+        ("D", &amounts.total),
+    ] {
+        if let Some(value) = input.amount {
+            cells.push((format!("frm1702MX:{stem}{column}"), value.0, width));
+        }
+    }
+}
+
+/// A whole-peso amount as the sheet prints it: negative in parentheses,
+/// padded so the digits sit at the right edge of a `width`-character box.
+/// Comb cells spread one character per slot, so the same padding also
+/// right-aligns inside a `width`-slot comb.
+fn whole_peso_cell(value: i64, width: usize) -> String {
+    let text = if value < 0 {
+        format!("({})", value.unsigned_abs())
+    } else {
+        value.to_string()
+    };
+    format!("{text:>width$}")
 }
 
 fn split_fixed_lines(value: &str) -> [String; 3] {

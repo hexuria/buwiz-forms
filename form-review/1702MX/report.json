@@ -1,0 +1,86 @@
+{
+  "code": "1702MX",
+  "verdict": "tweak",
+  "summary": "Every amount column of Schedules 2-6 and 10 and Part II items 14-16 now prints whole pesos with negatives in parentheses, the Itemized checkbox marks, rates print whole or leave their preprinted text, and unused write-in boxes stay blank; long names/descriptions still overflow their ruled lines and Schedule 6 rows 2-4 cannot be filled on screen.",
+  "defects": [
+    {
+      "id": "MX1",
+      "surface": "print",
+      "where": "Page 1 Part II items 14, 15, 16",
+      "what": "Total Tax Due/(Overpayment), Total Tax Credits/Payments and Net Tax Payable/(Overpayment) print as empty combs. Stored: item_14 = -1,098,765, item_15 = 81,308,631, item_16 = -82,407,396. Item 21 below them prints the same net figure (8 2 4 0 7 3 9 6) correctly, so the data is there - these three combs are never written.",
+      "severity": "high",
+      "picture": "mac/print-p1.png",
+      "status": "fixed",
+      "resolution": "Part II items 14, 15 and 16 print (1098765), 81308631 and (82407396) whole pesos in the same 12-slot combs item 21 uses."
+    },
+    {
+      "id": "MX2",
+      "surface": "print",
+      "where": "Pages 2-3, all A/B/C/D amount columns (Schedules 2, 3, 4, 5, 6 and 10)",
+      "what": "Every money cell of the schedule grids is blank on paper although the stored return carries them (e.g. schedule_3 item 20 = 2,345,678/3,456,789 hand-entered; schedule_5 row 1 = 5,432,109/4,321,098/3,210,987; schedule_6 'OTHERS' row = 55,745,676/88,567,959/75,679,672). Schedule 7.1/8.1 grid cells do print, so the writer covers only part of this form's tables.",
+      "severity": "high",
+      "picture": "mac/print-p2.png",
+      "status": "fixed",
+      "resolution": "print_amount_cells() emits whole-peso cells under the frm1702MX: keys the writer-cells joins already carried; 34 dormant joins added for Schedule 6 items 1-4 columns A-D and Schedule 9 items 1-3 columns D-G; Schedule 10 item 10 prints through its txtPg2Sc2Itm10 alias."
+    },
+    {
+      "id": "MX3",
+      "surface": "print",
+      "where": "Page 2 Item 14 Applicable Income Tax Rate; Item 15 and Page 3 Schedule 4 Item 4",
+      "what": "Tax-rate cells print '0 %', '. %', '. %' - digit fragments plus a stray decimal point with no value. Separately, '0.00' (with centavos) prints in Items 15/16 of Schedule 2 and Schedule 4 Item 4 on a sheet that orders 'DO NOT enter Centavos'.",
+      "severity": "high",
+      "picture": "mac/print-p2.png",
+      "status": "fixed",
+      "resolution": "Rate cells print integer comb digits plus a fraction cell beside the preprinted dot and percent sign, or leave the preprint when no rate is stored; the three preprinted \"0.00\" cells (Schedule 2 items 15/16, Schedule 4 item 4) now read \"0\" and unused amount boxes stay blank."
+    },
+    {
+      "id": "MX4",
+      "surface": "print",
+      "where": "Page 1 Item 8 Registered Name and Item 9 Registered Address",
+      "what": "Continuation lines are joined without a separator and overflow their ruled lines: '...CONCEPCION DELA CRUZSECOND', '...OVERFLOW CHECKINGSECOND', '...METRO MANILASECOND LINE...' - the second/third line values start mid-line where the previous value ended, words fuse, and the text runs past the comb area into neighbouring cells.",
+      "severity": "medium",
+      "picture": "mac/print-p1.png",
+      "status": "open",
+      "resolution": "Name and address lines still spill past their 38-slot comb rows onto the same line; needs the shared overflow rules (RULES.md 1 and 3), deferred to the shared print work."
+    },
+    {
+      "id": "MX5",
+      "surface": "print",
+      "where": "Page 1 Item 13 Method of Deduction",
+      "what": "Stored deduction_method = Itemized but neither checkbox is marked - the filer's choice does not reach the sheet.",
+      "severity": "medium",
+      "picture": "mac/print-p1.png",
+      "status": "fixed",
+      "resolution": "New frozen cell p1c55 joined to frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized prints X in the Itemized Deduction box."
+    },
+    {
+      "id": "MX6",
+      "surface": "print",
+      "where": "Page 3 Schedule 6 rows 1-3",
+      "what": "Row descriptions overflow the Description column into the Legal Basis column ('ROW TXTPG6SC6I1DESCRIPTION - ATTACHED SCHEDULE LINE WITH EX...' runs under 'SEC. 27(C) NIRC 1997 AS AMENDED'); columns are crossed, not clipped.",
+      "severity": "medium",
+      "picture": "mac/print-p3.png",
+      "status": "open",
+      "resolution": "Over-long Schedule 6 descriptions and the specify cells of Schedules 5 and 10 still shrink or spill past their boxes; same shared overflow rule as MX4."
+    },
+    {
+      "id": "MX7",
+      "surface": "screen",
+      "where": "Schedule 6 rows 2-4",
+      "what": "Rows 2-4 render Description/Legal Basis inputs but their four amount inputs are grey and refuse focus (no amount boxes exist for rows 2+ in the form's field list) - a control that cannot be filled; only row 1 and the attached '(Add more...) rows' list accept amounts.",
+      "severity": "medium",
+      "picture": "mac/print-p3.png",
+      "status": "open",
+      "resolution": "Screen defect, not print: Schedule 6 modal rows 2-4 still cannot be filled on screen; handed over to the screen owners."
+    }
+  ],
+  "entered_by_hand": "Schedule 3 item 20 fields A = 2,345,678 and B = 3,456,789 typed on the real page (decimal '2345678.91' was refused with 'type a whole number'); ATC Other = IC 010 picked through the dropdown; Save used the toolbar.",
+  "open_questions": [
+    "Schedule 6 attached rows beyond the printed capacity could not be verified on paper because the whole A-D amount columns are blank; row-count truncation is expected per SHARED-FINDINGS but invisible under MX2.",
+    "provenance names '1702-MX Jan 2018 ENCS Final with OSDv2.pdf'; not obtainable, so mac/official-p*.png are renders of html-frozen/1702mx-2018c/index.html."
+  ],
+  "notes": "The whole-number entry rule is by design ('DO NOT enter Centavos' on the sheet). My first fill pass used decimal strings that the fields refused - refilled with integers. Stored-side rows whose amounts never had a print counterpart were dropped from the defect list (fill error on my side, e.g. money strings in Legal Basis cells on Schedule 1).",
+  "handed_over": [
+    "MX7 rows 2-4 unfillable on screen (screen defect); overflow of long text past ruled boxes (MX4, MX6) belongs to the shared overflow rules; rows beyond the printed Schedule 6 lines and the OTHERS fold go to the continuation-page agent (Schedule 6 prints 3 rows plus the OTHERS fold row)."
+  ]
+}

@@ -2424,6 +2424,210 @@
    "html_id": "p4c89",
    "printed": "Schedule 8.1 item 7, E",
    "reason": "the cell under the Schedule 8.1 E column header on the item 7 row (the table rows 4-7 carry no printed number; row 7 is the 4th printed row, as the layout numbers them)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I1CA",
+   "html_id": "p3c189",
+   "printed": "Schedule 6 item 1, column A",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I1CB",
+   "html_id": "p3c190",
+   "printed": "Schedule 6 item 1, column B",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I1CC",
+   "html_id": "p3c191",
+   "printed": "Schedule 6 item 1, column C",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I1CD",
+   "html_id": "p3c192",
+   "printed": "Schedule 6 item 1, column D",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I2CA",
+   "html_id": "p3c195",
+   "printed": "Schedule 6 item 2, column A",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I2CB",
+   "html_id": "p3c196",
+   "printed": "Schedule 6 item 2, column B",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I2CC",
+   "html_id": "p3c197",
+   "printed": "Schedule 6 item 2, column C",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I2CD",
+   "html_id": "p3c198",
+   "printed": "Schedule 6 item 2, column D",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I3CA",
+   "html_id": "p3c201",
+   "printed": "Schedule 6 item 3, column A",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I3CB",
+   "html_id": "p3c202",
+   "printed": "Schedule 6 item 3, column B",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I3CC",
+   "html_id": "p3c203",
+   "printed": "Schedule 6 item 3, column C",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg6Sc6I3CD",
+   "html_id": "p3c204",
+   "printed": "Schedule 6 item 3, column D",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3Sc6I4CA",
+   "html_id": "p3c207",
+   "printed": "Schedule 6 item 4, column A",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3Sc6I4CB",
+   "html_id": "p3c208",
+   "printed": "Schedule 6 item 4, column B",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3Sc6I4CC",
+   "html_id": "p3c209",
+   "printed": "Schedule 6 item 4, column C",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg3Sc6I4CD",
+   "html_id": "p3c210",
+   "printed": "Schedule 6 item 4, column D",
+   "reason": "amount column cell joined for the print map's whole-peso schedule values (was unjoined; see fix commit on try/forms-macos-fix)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I1CD",
+   "html_id": "p4c120",
+   "printed": "Schedule 9 item 1, column D",
+   "reason": "Schedule 9 continuation-table amount cell joined for the print map (was unjoined; columns D-G carry the excess-MCIT history)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I1CE",
+   "html_id": "p4c121",
+   "printed": "Schedule 9 item 1, column E",
+   "reason": "Schedule 9 continuation-table amount cell joined for the print map (was unjoined; columns D-G carry the excess-MCIT history)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I1CF",
+   "html_id": "p4c122",
+   "printed": "Schedule 9 item 1, column F",
+   "reason": "Schedule 9 continuation-table amount cell joined for the print map (was unjoined; columns D-G carry the excess-MCIT history)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I1CG",
+   "html_id": "p4c123",
+   "printed": "Schedule 9 item 1, column G",
+   "reason": "Schedule 9 continuation-table amount cell joined for the print map (was unjoined; columns D-G carry the excess-MCIT history)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I2CD",
+   "html_id": "p4c125",
+   "printed": "Schedule 9 item 2, column D",
+   "reason": "Schedule 9 continuation-table amount cell joined for the print map (was unjoined; columns D-G carry the excess-MCIT history)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I2CE",
+   "html_id": "p4c126",
+   "printed": "Schedule 9 item 2, column E",
+   "reason": "Schedule 9 continuation-table amount cell joined for the print map (was unjoined; columns D-G carry the excess-MCIT history)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I2CF",
+   "html_id": "p4c127",
+   "printed": "Schedule 9 item 2, column F",
+   "reason": "Schedule 9 continuation-table amount cell joined for the print map (was unjoined; columns D-G carry the excess-MCIT history)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I2CG",
+   "html_id": "p4c128",
+   "printed": "Schedule 9 item 2, column G",
+   "reason": "Schedule 9 continuation-table amount cell joined for the print map (was unjoined; columns D-G carry the excess-MCIT history)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I3CD",
+   "html_id": "p4c130",
+   "printed": "Schedule 9 item 3, column D",
+   "reason": "Schedule 9 continuation-table amount cell joined for the print map (was unjoined; columns D-G carry the excess-MCIT history)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I3CE",
+   "html_id": "p4c131",
+   "printed": "Schedule 9 item 3, column E",
+   "reason": "Schedule 9 continuation-table amount cell joined for the print map (was unjoined; columns D-G carry the excess-MCIT history)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I3CF",
+   "html_id": "p4c132",
+   "printed": "Schedule 9 item 3, column F",
+   "reason": "Schedule 9 continuation-table amount cell joined for the print map (was unjoined; columns D-G carry the excess-MCIT history)"
+  },
+  {
+   "writer_key": "frm1702MX:txtPg7Sc9I3CG",
+   "html_id": "p4c133",
+   "printed": "Schedule 9 item 3, column G",
+   "reason": "Schedule 9 continuation-table amount cell joined for the print map (was unjoined; columns D-G carry the excess-MCIT history)"
+  },
+  {
+   "writer_key": "derived:rate_sc1_int",
+   "html_id": "p2c30",
+   "printed": "Schedule 1 item 4 special tax rate, integer digits",
+   "reason": "rate prints as integer digits over the comb plus fraction digits beside the preprinted '.' and '%'; derived keys come from the print map"
+  },
+  {
+   "writer_key": "derived:rate_sc1_frac",
+   "html_id": "p2c32",
+   "printed": "Schedule 1 item 4 special tax rate, fraction digits",
+   "reason": "rate prints as integer digits over the comb plus fraction digits beside the preprinted '.' and '%'; derived keys come from the print map"
+  },
+  {
+   "writer_key": "derived:rate_s2b_int",
+   "html_id": "p2c146",
+   "printed": "Schedule 2 item 14 column B rate, integer digits",
+   "reason": "rate prints as integer digits over the comb plus fraction digits beside the preprinted '.' and '%'; derived keys come from the print map"
+  },
+  {
+   "writer_key": "derived:rate_s2b_frac",
+   "html_id": "p2c148",
+   "printed": "Schedule 2 item 14 column B rate, fraction digits",
+   "reason": "rate prints as integer digits over the comb plus fraction digits beside the preprinted '.' and '%'; derived keys come from the print map"
+  },
+  {
+   "writer_key": "derived:rate_s2c_int",
+   "html_id": "p2c151",
+   "printed": "Schedule 2 item 14 column C rate, integer digits",
+   "reason": "rate prints as integer digits over the comb plus fraction digits beside the preprinted '.' and '%'; derived keys come from the print map"
+  },
+  {
+   "writer_key": "derived:rate_s2c_frac",
+   "html_id": "p2c153",
+   "printed": "Schedule 2 item 14 column C rate, fraction digits",
+   "reason": "rate prints as integer digits over the comb plus fraction digits beside the preprinted '.' and '%'; derived keys come from the print map"
   }
  ],
  "money_joins": [],
@@ -2463,6 +2667,12 @@
    "html_id": "p1c15",
    "printed": "4 Short Period Return? No",
    "reason": "box immediately left of \"No\""
+  },
+  {
+   "writer_key": "frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized",
+   "html_id": "p1c55",
+   "printed": "13 Itemized Deduction",
+   "reason": "box immediately left of the Itemized Deduction option; added p1c55 to index.html (the frozen sheet drew that box without an input)"
   },
   {
    "writer_key": "frm1702MX:rdoPg1Pt1I13MethodOfDeducOptional",
@@ -2761,10 +2971,6 @@
    "reason": "prints from derived:year_end_mm1/mm2/yy1/yy2 (the print map shapes Item 2 over its four digit boxes for the sheet)"
   },
   {
-   "writer_key": "frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized",
-   "reason": "item 13 Itemized Deduction box: the frozen sheet draws it without an input (only the OSD box p1c56 has one); printing it needs a fillable box in html-frozen/1702mx-2018c/index.html (reported on #113)"
-  },
-  {
    "writer_keys": [
     "attachmentCurrent",
     "attachmentTotal",
@@ -2823,6 +3029,48 @@
     "driveSelectTPExport"
    ],
    "reason": "eBIRForms system field (enrolment flag, final flag, export drive, online-filing credentials), not on the paper form"
+  },
+  {
+   "writer_keys": [
+    "frm1702MX:txtPg2Sc2It10A",
+    "frm1702MX:txtPg2Sc2It12A",
+    "frm1702MX:txtPg2Sc2It12B",
+    "frm1702MX:txtPg2Sc2It15A",
+    "frm1702MX:txtPg2Sc2It16A",
+    "frm1702MX:txtPg2Sc2It16C",
+    "frm1702MX:txtPg2Sc2It17A",
+    "frm1702MX:txtPg2Sc2It18A",
+    "frm1702MX:txtPg2Sc2It18B",
+    "frm1702MX:txtPg2Sc2It19A"
+   ],
+   "reason": "Schedule 2 column cell the sheet does not draw (the row's column is preprinted or merged); the value stays in the return"
+  },
+  {
+   "writer_keys": [
+    "frm1702MX:txtPg2Sc2It14A",
+    "frm1702MX:txtPg2Sc2It14D",
+    "frm1702MX:txtPg2Sc2It14B",
+    "frm1702MX:txtPg2Sc2It14C",
+    "frm1702MX:txtPg2Pt4I34SpecialTaxRate"
+   ],
+   "reason": "Schedule 2 item 14 / Schedule 1 item 4 rate: columns A and D are preprinted text and columns B and C print from derived:rate_s2b_int/frac and derived:rate_s2c_int/frac (integer comb + fraction cell beside the preprinted '.' and '%'); the upload keys stay for the file map only"
+  },
+  {
+   "writer_keys": [
+    "frm1702MX:txtPg2Sc3It21A",
+    "frm1702MX:txtPg2Sc3It21B",
+    "frm1702MX:txtPg2Sc3It23A",
+    "frm1702MX:txtPg2Sc3It23B"
+   ],
+   "reason": "Schedule 3 column cell the sheet does not draw (row 21 column A/B is a preprinted total and row 23 column A/B is preprinted); the value stays in the return"
+  },
+  {
+   "writer_keys": [
+    "frm1702MX:txtPg3Sc4Itm1C",
+    "frm1702MX:txtPg2Sc4Itm4A",
+    "frm1702MX:txtPg2Sc4Itm4C"
+   ],
+   "reason": "Schedule 4 column cell the sheet does not draw; the value stays in the return"
   }
  ],
  "not_joined_cells": [
@@ -2837,14 +3085,6 @@
   {
    "html_id": "p1c82",
    "reason": "attach authorization letter line: no layout key"
-  },
-  {
-   "html_id": "p2c30",
-   "reason": "Applicable rate row (Schedule 1 item 4 and Schedule 2 item 14): a 2-slot and a 15-wide box per column with no single rate key; left blank"
-  },
-  {
-   "html_id": "p2c32",
-   "reason": "Applicable rate row (Schedule 1 item 4 and Schedule 2 item 14): a 2-slot and a 15-wide box per column with no single rate key; left blank"
   },
   {
    "html_id": "p2c36",
@@ -2933,134 +3173,6 @@
   {
    "html_id": "p2c129",
    "reason": "Schedule 2 \"OR\" line under item 11 (Sec 27(A) and 28(A)(1) alternative): no layout key for this line; left blank"
-  },
-  {
-   "html_id": "p2c146",
-   "reason": "Applicable rate row (Schedule 1 item 4 and Schedule 2 item 14): a 2-slot and a 15-wide box per column with no single rate key; left blank"
-  },
-  {
-   "html_id": "p2c148",
-   "reason": "Applicable rate row (Schedule 1 item 4 and Schedule 2 item 14): a 2-slot and a 15-wide box per column with no single rate key; left blank"
-  },
-  {
-   "html_id": "p2c151",
-   "reason": "Applicable rate row (Schedule 1 item 4 and Schedule 2 item 14): a 2-slot and a 15-wide box per column with no single rate key; left blank"
-  },
-  {
-   "html_id": "p2c153",
-   "reason": "Applicable rate row (Schedule 1 item 4 and Schedule 2 item 14): a 2-slot and a 15-wide box per column with no single rate key; left blank"
-  },
-  {
-   "html_id": "p3c189",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c190",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c191",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c192",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c195",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c196",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c197",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c198",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c201",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c202",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c203",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c204",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c207",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c208",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c209",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p3c210",
-   "reason": "Schedule 6 rows 1-4: rows print no item number and the Description/Legal Basis headers sit above row 1 only; row identity is positional, so left blank"
-  },
-  {
-   "html_id": "p4c120",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c121",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c122",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c123",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c125",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c126",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c127",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c128",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c130",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c131",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c132",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
-  },
-  {
-   "html_id": "p4c133",
-   "reason": "money comb with no 2-slot centavo comb beside it (the form says do not enter centavos); left blank"
   }
  ]
 }
