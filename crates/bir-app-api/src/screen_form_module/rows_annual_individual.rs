@@ -442,6 +442,60 @@ const GATED: &[GatedBox] = &[
         Gate::GraduatedItemized { spouse: true },
         C1701_ITEMIZED_B,
     ),
+    // Schedule 3.A items 19-21 (other income): the compute types them
+    // inside `if graduated` exactly like items 8-9, so they take the same
+    // gate; the item 19/20 description boxes with them. The descriptions
+    // are one box for both columns, so they follow column A's gate: on a
+    // joint return whose only graduated column is the spouse's they stay
+    // shut while a write there would be kept; compute never clears them.
+    (
+        "1701",
+        "frm1701:txtPg2IShed3_19A",
+        Gate::GraduatedBusiness { spouse: false },
+        C1701_GRADUATED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg2IShed3_19B",
+        Gate::GraduatedBusiness { spouse: true },
+        C1701_GRADUATED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg2IShed3_19Desc",
+        Gate::GraduatedBusiness { spouse: false },
+        C1701_GRADUATED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg2IShed3_20A",
+        Gate::GraduatedBusiness { spouse: false },
+        C1701_GRADUATED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg2IShed3_20B",
+        Gate::GraduatedBusiness { spouse: true },
+        C1701_GRADUATED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg2IShed3_20Desc",
+        Gate::GraduatedBusiness { spouse: false },
+        C1701_GRADUATED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg2IShed3_21A",
+        Gate::GraduatedBusiness { spouse: false },
+        C1701_GRADUATED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg2IShed3_21B",
+        Gate::GraduatedBusiness { spouse: true },
+        C1701_GRADUATED_B,
+    ),
     // Schedule 4 items 3 and 6-13 (ordinary itemized deductions): open under
     // graduated business/profession/mixed ATC + itemized deduction; column B
     // also requires a joint return.
@@ -553,6 +607,148 @@ const GATED: &[GatedBox] = &[
         Gate::GraduatedItemized { spouse: true },
         C1701_ITEMIZED_B,
     ),
+    // Schedule 4 items 1, 2, 4, 5, 14, 15 and 16 and the 17a-17d rows
+    // (the rest of the itemized deductions), same rule as items 3 and
+    // 6-13; the 17d description is one box for both columns and follows
+    // column A's gate like the Schedule 3.A descriptions.
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_14A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_14B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_15A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_15B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_16A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_16B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_17aA",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_17aB",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_17bA",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_17bB",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_17cA",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_17cB",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_17dA",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_17dB",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_17dDesc",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_1A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_1B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_2A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_2B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_4A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_4B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_5A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_5B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
     // Schedule 6 NOLCO filer-typed boxes (6.A.1 rows 6-7 and 6.A.2 spouse rows
     // 9-12; rows 7Year/7A and 12Year/12A remain computed from items 3A/3B).
     (
@@ -612,6 +808,190 @@ const GATED: &[GatedBox] = &[
     (
         "1701",
         "frm1701:txtPg4IShed6_12B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    // Schedule 6's remaining filer-typed boxes: summary items 1 and 2,
+    // the rest of rows 4-7 for the taxpayer and 9-12 for the spouse,
+    // including the year-incurred text boxes; same itemized rule, spouse
+    // rows on a joint return only.
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_1A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_1B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_2A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_2B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_4A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_4B",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_4C",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_4D",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_4Year",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_5A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_5B",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_5C",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_5D",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_5Year",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_6C",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_6D",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_6Year",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_7C",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_7D",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_10C",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_10D",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_10Year",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_11C",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_11D",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_11Year",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_12C",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_12D",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_9C",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_9D",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_9Year",
         Gate::GraduatedItemized { spouse: true },
         C1701_ITEMIZED_B,
     ),

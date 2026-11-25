@@ -61,3 +61,16 @@ single filer and once joint.
 
 In every disagreeing state a typed value is silently zeroed by compute, as
 the check reported.
+
+## After the fix (same branch)
+
+`gates-branch.tsv` re-evaluates every box and state against the branch's
+`GATED_BOXES` table: **0 disagreeing rows** (was 371). The fix adds no new
+mechanism: the 61 boxes take #337's two gate kinds — items 19–21 of
+Schedule 3.A and their description boxes `GraduatedBusiness` like items 8–9
+(the compute types them in the same `if graduated` block), everything else
+`GraduatedItemized`. One judgment call, documented in the code: the three
+description boxes (3.A items 19/20, Schedule 4 item 17d) are a single box for
+both columns, so they follow column A's gate; compute never clears them, so
+the one shut-but-writable case (joint return, only the spouse graduated)
+loses nothing.
