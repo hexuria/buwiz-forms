@@ -35,5 +35,9 @@ gesture-pass.mp4 — one unbroken take of the pass; it runs LONGER than two minu
 ## Not covered
 Form/filing screens (drafts forbidden), code-page edge swipe, bounce verdict, iPad signed-in strips and landscape, dialogs, keyboard behavior beyond the sign-in pages.
 
-## Late additions
-g-strips-ipad-dark-landscape.png: iPad landscape on the sign-in page — uniform grey RGB(244,244,246) everywhere including all edges (this page has no header or tab bar, so no mismatch is visible on it). iPhone restored afterwards: portrait, light appearance, status-bar override re-applied. iPad signed-in strips remain uncovered: the accessibility driver can only observe the first booted simulator and the iPhone held the signed-in session.
+## Follow-up additions (cut short — PART 2 incomplete)
+- f-two-back-settings-general.png — Settings > General: TWO back controls (top-bar Back + second "‹ Settings" line above the big title).
+- f-two-back-settings-device.png — Settings > Device: TWO.
+- f-two-back-settings-import-export.png — Settings > Import / Export: TWO.
+- f-two-back-settings-jobs.png — Settings > Jobs: TWO.
+(2a inventory of Settings pages complete: every Settings sub-page has TWO. NOT done, cut short: New taxpayer back-control check, draft form, filing detail, 2b form/code-page edge swipes, 2c sheets under the status bar, 2d keyboard on a form, 2e iPad signed-in strips, 2f gesture-pass-short.mp4.)
