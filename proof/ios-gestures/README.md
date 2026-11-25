@@ -34,3 +34,6 @@ gesture-pass.mp4 — one unbroken take of the pass; it runs LONGER than two minu
 
 ## Not covered
 Form/filing screens (drafts forbidden), code-page edge swipe, bounce verdict, iPad signed-in strips and landscape, dialogs, keyboard behavior beyond the sign-in pages.
+
+## Late additions
+g-strips-ipad-dark-landscape.png: iPad landscape on the sign-in page — uniform grey RGB(244,244,246) everywhere including all edges (this page has no header or tab bar, so no mismatch is visible on it). iPhone restored afterwards: portrait, light appearance, status-bar override re-applied. iPad signed-in strips remain uncovered: the accessibility driver can only observe the first booted simulator and the iPhone held the signed-in session.
