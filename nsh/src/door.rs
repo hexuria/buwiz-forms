@@ -310,8 +310,16 @@ struct ShutdownGuard;
 
 impl Drop for ShutdownGuard {
     fn drop(&mut self) {
-        let _ = std::panic::catch_unwind(bir_app_api::bir_module::shutdown_for_quit);
+        let _ = std::panic::catch_unwind(end_engine);
     }
+}
+
+/// This engine's end: its worker stopped, its database closed, and the booted module let go, so a later call on the
+/// same thread (a host that reuses its engine thread) boots and launches again instead of reusing a module whose
+/// launch has ended.
+fn end_engine() {
+    bir_app_api::bir_module::shutdown_for_quit();
+    let _ = BOOTED.try_with(|slot| slot.borrow_mut().take());
 }
 
 /// The module of this thread, booted on the first call, with the database guard checked against the
@@ -349,6 +357,11 @@ fn boot_thread() -> Result<Rc<HostModule>, String> {
     if let Some(why) = guards::database_refusal_here(&path) {
         return Err(why);
     }
+    // The guard is armed before anything opens the database or starts the worker, so a boot that fails after that
+    // point (an inconsistent module, a panic) still stops the worker and closes the database at the thread's end. The
+    // database slots are made first: the guard goes before them at the thread's end.
+    bir_app_api::bir_module::prepare_engine();
+    ARMED.with(|_| {});
     // Pauses filing, then opens the UI only when a saved session qualifies (or the dev bypass is on).
     bir_app_api::cloud_account::prepare_launch();
     if bir_app_api::account_gate::is_unlocked() {
@@ -366,9 +379,6 @@ fn boot_thread() -> Result<Rc<HostModule>, String> {
         .validate()
         .map_err(|error| format!("The bir module is inconsistent: {error}"))?;
     let module = Rc::new(module);
-    // The database slots first, then the guard: the guard goes before them at the thread's end.
-    bir_app_api::bir_module::prepare_engine();
-    ARMED.with(|_| {});
     BOOTED.with(|slot| {
         *slot.borrow_mut() = Some(Booted {
             module: Rc::clone(&module),
@@ -520,7 +530,7 @@ pub fn database_path() -> PathBuf {
 
 /// Stop this engine's submission worker and close its database (the old host's quit path). A second call does nothing.
 pub fn shutdown() {
-    bir_app_api::bir_module::shutdown_for_quit();
+    end_engine();
     // The print previews' files (a filled return each) go with the run.
     crate::print::remove_all();
 }
@@ -748,6 +758,30 @@ mod tests {
                 later.join().expect("engine 5 ended");
             });
             assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 5");
+
+            // Two engines on ONE thread: `shutdown` ends the first, and the next call boots and launches again, with a
+            // worker of its own.
+            std::thread::scope(|scope| {
+                scope
+                    .spawn(|| {
+                        for engine in [6, 7] {
+                            call("auth_state", vec![]).unwrap_or_else(|error| panic!("engine {engine}: {error}"));
+                            assert!(
+                                bir_app_api::bir_module::submission_worker_runs_for_this_engine(),
+                                "engine {engine}: its own worker"
+                            );
+                            shutdown();
+                            assert!(
+                                !bir_app_api::bir_module::submission_worker_runs_for_this_engine(),
+                                "engine {engine}: the worker stopped"
+                            );
+                            assert!(bir_app_api::bir_module::owner_lock_released(), "engine {engine}: closed");
+                        }
+                    })
+                    .join()
+                    .expect("the thread of engines 6 and 7")
+            });
+            assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 7");
         });
     }
 

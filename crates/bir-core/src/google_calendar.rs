@@ -352,7 +352,23 @@ pub fn delete_profile_calendar(db: Arc<Mutex<Database>>, tin: &str) -> Result<()
 pub fn sync_all_profile_calendars(
     db: Arc<Mutex<Database>>,
 ) -> Vec<(String, Result<CalendarSyncReport, String>)> {
-    let tins = match lock_timing::lock(&db) {
+    let weak = Arc::downgrade(&db);
+    let results = sync_all_profile_calendars_until(weak, &|| false);
+    drop(db);
+    results
+}
+
+/// [`sync_all_profile_calendars`] for the queue worker: it holds the database only while one profile's calendar
+/// syncs, and stops before the next one once `stop` says so (or the database is gone), so a worker that is being
+/// dropped lets go of the database after the calendar it is on.
+pub fn sync_all_profile_calendars_until(
+    db: std::sync::Weak<Mutex<Database>>,
+    stop: &dyn Fn() -> bool,
+) -> Vec<(String, Result<CalendarSyncReport, String>)> {
+    let Some(strong) = db.upgrade() else {
+        return Vec::new();
+    };
+    let tins = match lock_timing::lock(&strong) {
         Ok(db) => db
             .list_profile_calendar_links()
             .unwrap_or_default()
@@ -362,12 +378,19 @@ pub fn sync_all_profile_calendars(
         Err(_) => return Vec::new(),
     };
 
-    tins.into_iter()
-        .map(|tin| {
-            let result = sync_profile_calendar(db.clone(), &tin).map_err(|error| error.to_string());
-            (tin, result)
-        })
-        .collect()
+    drop(strong);
+    let mut results = Vec::new();
+    for tin in tins {
+        if stop() {
+            break;
+        }
+        let Some(db) = db.upgrade() else {
+            break;
+        };
+        let result = sync_profile_calendar(db, &tin).map_err(|error| error.to_string());
+        results.push((tin, result));
+    }
+    results
 }
 
 pub fn sync_profile_calendar(

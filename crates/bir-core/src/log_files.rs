@@ -12,7 +12,6 @@ use std::sync::OnceLock;
 use chrono::NaiveDate;
 
 use crate::db::Database;
-use crate::lock_timing;
 
 pub const LOG_FILE_PREFIX: &str = "ebirforms";
 pub const LOG_FILE_SUFFIX: &str = "log";
@@ -181,9 +180,8 @@ pub fn spawn_retention(db: std::sync::Weak<std::sync::Mutex<Database>>) {
                     let Some(db) = target else {
                         continue;
                     };
-                    let days = lock_timing::lock(&db)
-                        .ok()
-                        .map(|guard| retention_days(&guard));
+                    // Never waits on the database while holding it: busy now, the next round prunes.
+                    let days = db.try_lock().ok().map(|guard| retention_days(&guard));
                     drop(db);
                     if let Some(days) = days {
                         let _ = maintain(&log_dir(), days);

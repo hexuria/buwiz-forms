@@ -69,7 +69,10 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
     if opened {
         // A new handle: its own end, its own owner lock.
         ENGINE_SHUT_DOWN.with(|done| done.set(false));
-        OWNER_LOCK_RELEASED.store(false, std::sync::atomic::Ordering::SeqCst);
+        LIVE_HANDLES
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push(std::sync::Arc::downgrade(&handle));
         if LAUNCH_PENDING.with(std::cell::Cell::get) && crate::account_gate::is_unlocked() {
             launch_on(handle.clone());
         }
@@ -109,8 +112,10 @@ pub fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, H
 /// next engine of the same process (an Android relaunch, an iOS scene that
 /// reconnects) starts one of its own.
 static SUBMISSION_WORKER: std::sync::Mutex<Option<SubmissionWorker>> = std::sync::Mutex::new(None);
-static OWNER_LOCK_RELEASED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+/// Every database handle an engine of this process opened; one that is still
+/// alive holds the owner lock ([`owner_lock_released`]).
+static LIVE_HANDLES: std::sync::Mutex<Vec<std::sync::Weak<std::sync::Mutex<Database>>>> =
+    std::sync::Mutex::new(Vec::new());
 static SUBMISSION_WORKER_REFUSED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 static NEXT_ENGINE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -122,6 +127,11 @@ const WORKER_STOP_BOUND: std::time::Duration = std::time::Duration::from_secs(5)
 /// are dropped, not waited for; this only covers a task that is inside a
 /// blocking call at that moment.
 const WORKER_DROP_GRACE: std::time::Duration = std::time::Duration::from_millis(250);
+/// How long an engine's end waits for a holder outside the worker's runtime
+/// (a blocking task that was mid-call when the runtime went) to let go of the
+/// database before it falls back to "the owner lock releases when the process
+/// exits".
+const RELEASE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
 thread_local! {
     /// This engine's number (0 until asked). No destructor, so the engine's
@@ -146,8 +156,12 @@ fn this_engine() -> u64 {
 }
 
 /// One running worker: its loop and every task it spawned live on `runtime`,
-/// and every clone of the engine's database handle the worker holds lives in
-/// those tasks, so shutting the runtime down drops them all.
+/// so shutting the runtime down drops the clones of the engine's database
+/// handle they hold. Not every clone: work inside a blocking call at that
+/// moment (the calendar sync's blocking task, an inbox poll) keeps its clone
+/// until the call returns. Both check the worker's stop between items, the
+/// calendar sync holds only a `Weak` between calendars, and an inbox read or
+/// write gives up after 30 s; [`release_database`] waits a short while for them.
 struct SubmissionWorker {
     engine: u64,
     stop: bir_core::background_cron::CronStop,
@@ -185,18 +199,36 @@ impl SubmissionWorker {
             .max(WORKER_DROP_GRACE);
         // On a thread of its own: a runtime may not be shut down from inside
         // another runtime, and the engine's end can be inside one.
-        let runtime = self.runtime;
+        let runtime = std::sync::Arc::new(std::sync::Mutex::new(Some(self.runtime)));
+        let for_dropper = runtime.clone();
         let (tx, rx) = std::sync::mpsc::channel();
         let dropper = std::thread::Builder::new()
             .name("bir-submission-worker-drop".into())
             .spawn(move || {
-                runtime.shutdown_timeout(grace);
+                let taken = for_dropper
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .take();
+                if let Some(runtime) = taken {
+                    runtime.shutdown_timeout(grace);
+                }
                 let _ = tx.send(());
             });
         match dropper {
             Ok(_) => rx.recv_timeout(grace + WORKER_DROP_GRACE).is_ok(),
             Err(error) => {
-                tracing::warn!("submission worker not dropped: {error}");
+                // Not dropped here: this thread may be inside a runtime, where
+                // dropping one panics. Its tasks are left as they are.
+                let taken = runtime
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .take();
+                if let Some(runtime) = taken {
+                    std::mem::forget(runtime);
+                }
+                tracing::warn!(
+                    "submission worker not dropped: no thread to drop it on ({error}); its runtime is left running"
+                );
                 false
             }
         }
@@ -228,13 +260,21 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
         tracing::warn!("submission worker not started: the host refused sending in this process");
         return;
     }
-    let mut slot = SUBMISSION_WORKER
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if slot.as_ref().is_some_and(|worker| !worker.loop_ended()) {
-        return;
-    }
-    if let Some(ended) = slot.take() {
+    let ended = {
+        let mut slot = SUBMISSION_WORKER
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(live) = slot.as_ref().filter(|worker| !worker.loop_ended()) {
+            tracing::info!(
+                engine = live.engine,
+                "submission worker not started: one runs already (this engine's, or one whose engine has not ended)"
+            );
+            return;
+        }
+        slot.take()
+    };
+    // Out of the slot and its lock before it is stopped.
+    if let Some(ended) = ended {
         ended.stop_and_drop();
     }
     // 16 MiB stacks: the relay client's send future (crates/bir-submit) overflows a default stack in a debug
@@ -252,11 +292,20 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
             return;
         }
     };
+    let mut slot = SUBMISSION_WORKER
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if slot.is_some() {
+        // Another engine started one while this one built its runtime.
+        tracing::info!("submission worker not started: another engine started one meanwhile");
+        runtime.shutdown_background();
+        return;
+    }
     let stop = bir_core::background_cron::CronStop::new();
     let (done, finished) = std::sync::mpsc::channel();
-    let loop_stop = stop.clone();
+    let cron = bir_core::background_cron::run_cron_jobs(db, stop.clone());
     runtime.spawn(async move {
-        bir_core::background_cron::run_cron_jobs(db, loop_stop).await;
+        cron.await;
         let _ = done.send(());
     });
     *slot = Some(SubmissionWorker {
@@ -268,22 +317,43 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
 }
 
 /// Stop this engine's submission worker, if it runs one; the slot is empty
-/// afterwards. Another engine's worker is left alone.
+/// afterwards. Another engine's worker is left alone, and the log says so.
 fn stop_this_engines_worker() {
     let engine = this_engine();
-    let mut slot = SUBMISSION_WORKER
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if !slot.as_ref().is_some_and(|worker| worker.engine == engine) {
-        return;
-    }
-    // Held across the stop, so no other engine starts one meanwhile: at most
-    // one worker per process at any moment.
-    if let Some(worker) = slot.take()
+    let worker = {
+        let mut slot = SUBMISSION_WORKER
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match slot.as_ref() {
+            None => return,
+            Some(other) if other.engine != engine => {
+                tracing::warn!(
+                    owner = other.engine,
+                    caller = engine,
+                    "quit on a thread that did not start the submission worker: nothing stopped here; its own engine's end stops it"
+                );
+                return;
+            }
+            Some(_) => slot.take(),
+        }
+    };
+    // Out of the slot and its lock before it is stopped.
+    if let Some(worker) = worker
         && !worker.stop_and_drop()
     {
         tracing::warn!("submission worker not dropped in time; what it holds goes when it ends");
     }
+}
+
+/// Whether the submission worker that runs now is this engine's (the thread
+/// that asks). For the host's own checks and tests.
+pub fn submission_worker_runs_for_this_engine() -> bool {
+    let engine = this_engine();
+    SUBMISSION_WORKER
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .as_ref()
+        .is_some_and(|worker| worker.engine == engine && !worker.loop_ended())
 }
 
 /// Stop this engine's submission worker and release its database (and with it
@@ -323,40 +393,57 @@ fn release_database() {
     // `try_with`: at an engine thread's end a slot may already be gone (its
     // handle dropped with it), which is not a reason to stop here.
     let _ = READER.try_with(|slot| slot.borrow_mut().take());
-    let released = DATABASE.try_with(|slot| {
-        let Some(handle) = slot.borrow_mut().take() else {
-            OWNER_LOCK_RELEASED.store(true, std::sync::atomic::Ordering::SeqCst);
-            return;
-        };
-        RELEASED.set(false);
+    match DATABASE.try_with(|slot| slot.borrow_mut().take()) {
+        Err(_) => {
+            tracing::warn!(
+                "database slot already gone at the engine's end; its handle went with it"
+            );
+        }
+        Ok(None) => {}
+        Ok(Some(handle)) => {
+            RELEASED.set(false);
+            close_handle(handle);
+        }
+    }
+}
+
+/// Close `handle` once this is its last holder, waiting up to `RELEASE_WAIT`
+/// for any other to let go; past that, checkpoint and leave it to the last
+/// holder (the owner lock goes when it does, at the latest when the process
+/// exits).
+fn close_handle(mut handle: std::sync::Arc<std::sync::Mutex<Database>>) {
+    let deadline = std::time::Instant::now() + RELEASE_WAIT;
+    loop {
         match std::sync::Arc::try_unwrap(handle) {
             Ok(mutex) => {
                 let db = match mutex.into_inner() {
                     Ok(db) => db,
                     Err(poisoned) => poisoned.into_inner(),
                 };
-                if let Err(error) = db.close() {
-                    tracing::warn!("database close failed: {error}");
-                }
                 // `close` drops the owner lock on both success and a failed
                 // checkpoint: the fields were moved out, so the guard drops
                 // when this function returns.
-                OWNER_LOCK_RELEASED.store(true, std::sync::atomic::Ordering::SeqCst);
-            }
-            Err(handle) => match handle.try_lock() {
-                Ok(db) => {
-                    if let Err(error) = db.checkpoint() {
-                        tracing::warn!("database checkpoint failed: {error}");
-                    }
+                if let Err(error) = db.close() {
+                    tracing::warn!("database close failed: {error}");
                 }
-                Err(_) => tracing::warn!(
+                return;
+            }
+            Err(shared) if std::time::Instant::now() < deadline => {
+                handle = shared;
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(shared) => {
+                if let Ok(db) = shared.try_lock()
+                    && let Err(error) = db.checkpoint()
+                {
+                    tracing::warn!("database checkpoint failed: {error}");
+                }
+                tracing::warn!(
                     "database still in use at quit; the owner lock releases when the process exits"
-                ),
-            },
+                );
+                return;
+            }
         }
-    });
-    if released.is_err() {
-        tracing::warn!("database slot already gone at the engine's end; its handle went with it");
     }
 }
 
@@ -372,12 +459,16 @@ pub fn stored_global_hotkey() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-/// Whether the last [`shutdown_for_quit`] dropped the owner lock (false again
-/// once an engine opens the database). An update refuses to relaunch when this
-/// is still false: the new process would lose the race for the encrypted
-/// database.
+/// Whether no database handle of this process is open any more, so the
+/// owner lock is free: true once every engine's handle has been closed or its
+/// last holder has let go. An update refuses to relaunch when this is still
+/// false: the new process would lose the race for the encrypted database.
 pub fn owner_lock_released() -> bool {
-    OWNER_LOCK_RELEASED.load(std::sync::atomic::Ordering::SeqCst)
+    let mut live = LIVE_HANDLES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    live.retain(|handle| handle.strong_count() > 0);
+    live.is_empty()
 }
 
 /// Open the database when the shell launches; `host::run` calls this.
@@ -411,6 +502,8 @@ fn launch_on(handle: std::sync::Arc<std::sync::Mutex<Database>>) {
     if let Some(days) = days {
         let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), days);
     }
+    // Not in test processes: the thread sleeps six hours between rounds.
+    #[cfg(not(test))]
     bir_core::log_files::spawn_retention(std::sync::Arc::downgrade(&handle));
 }
 
@@ -422,17 +515,6 @@ pub(crate) fn submission_worker_started() -> bool {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .as_ref()
         .is_some_and(|worker| !worker.loop_ended())
-}
-
-/// Whether the submission worker that runs is this engine's.
-#[cfg(test)]
-pub(crate) fn submission_worker_is_this_engines() -> bool {
-    let engine = this_engine();
-    SUBMISSION_WORKER
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .as_ref()
-        .is_some_and(|worker| worker.engine == engine && !worker.loop_ended())
 }
 
 #[cfg(test)]
@@ -5877,7 +5959,7 @@ mod tests {
         for month in 1..=3u8 {
             engine(|| {
                 assert!(
-                    submission_worker_is_this_engines(),
+                    submission_worker_runs_for_this_engine(),
                     "engine {month}: the launch started its own worker"
                 );
                 assert!(!owner_lock_released(), "engine {month}: it holds the lock");
@@ -5992,7 +6074,7 @@ mod tests {
 
         engine(|| {
             assert!(
-                submission_worker_is_this_engines(),
+                submission_worker_runs_for_this_engine(),
                 "the next engine has a worker"
             );
             let claimed = stored_1601c(month);
@@ -6033,7 +6115,7 @@ mod tests {
             return;
         };
         engine(|| {
-            assert!(submission_worker_is_this_engines());
+            assert!(submission_worker_runs_for_this_engine());
             let quit = std::time::Instant::now();
             shutdown_for_quit();
             assert!(quit.elapsed() < WORKER_STOP_BOUND, "{:?}", quit.elapsed());
@@ -6057,6 +6139,86 @@ mod tests {
         assert!(!owner_lock_is_free(), "still held");
         drop(held);
         assert!(owner_lock_is_free(), "free once the last holder is gone");
+        assert!(owner_lock_released());
+
+        // A slow holder (a blocking call that outlived the worker's runtime)
+        // that lets go within the wait: the database closes at the quit.
+        engine(|| {
+            let slow = database_handle().unwrap();
+            let holder = std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                drop(slow);
+            });
+            let quit = std::time::Instant::now();
+            shutdown_for_quit();
+            assert!(
+                quit.elapsed() < RELEASE_WAIT + std::time::Duration::from_secs(1),
+                "{:?}",
+                quit.elapsed()
+            );
+            assert!(owner_lock_released(), "closed once the slow holder let go");
+            assert!(owner_lock_is_free());
+            holder.join().unwrap();
+        });
+
+        // A quit asked on a thread that did not start the worker stops
+        // nothing and says the lock is still held; the engine's own end does.
+        let (asked, wait_for_ask) = std::sync::mpsc::channel::<()>();
+        std::thread::scope(|scope| {
+            let owner = scope.spawn(move || {
+                engine(move || {
+                    assert!(submission_worker_runs_for_this_engine());
+                    wait_for_ask.recv().unwrap();
+                    assert!(
+                        submission_worker_runs_for_this_engine(),
+                        "the other thread's quit left this engine's worker running"
+                    );
+                });
+            });
+            wait_until("the engine started its worker", submission_worker_started);
+            shutdown_for_quit();
+            assert!(submission_worker_started(), "nothing stopped from here");
+            assert!(!owner_lock_released(), "the engine's handle is still open");
+            asked.send(()).unwrap();
+            owner.join().unwrap();
+        });
+        assert!(!submission_worker_started());
+        assert!(owner_lock_released());
+        std::fs::write(scratch.join("child-done"), "ok").unwrap();
+    }
+
+    /// Two engines one after the other on ONE thread (a host that reuses its
+    /// engine thread): the first's quit stops its worker and closes the
+    /// database, and the second's launch on the same thread starts a worker of
+    /// its own, which sends what the second queues.
+    #[test]
+    fn two_engines_on_one_thread_each_send_what_they_queued() {
+        run_engine_child("two_engines_on_one_thread_each_send_what_they_queued");
+        let Some(scratch) = engine_child() else {
+            return;
+        };
+        engine(|| {
+            for month in [5u8, 6] {
+                if month == 6 {
+                    open_database_at_launch();
+                }
+                assert!(
+                    submission_worker_runs_for_this_engine(),
+                    "month {month}: this engine's worker"
+                );
+                queue_1601c(month);
+                wait_until(&format!("the 1601C for month {month} was sent"), || {
+                    stored_1601c(month).status == bir_core::forms::FilingStatus::Submitted
+                });
+                shutdown_for_quit();
+                assert!(
+                    !submission_worker_started(),
+                    "month {month}: the worker went"
+                );
+                assert!(owner_lock_released(), "month {month}: closed");
+                assert!(owner_lock_is_free(), "month {month}: the lock is free");
+            }
+        });
         std::fs::write(scratch.join("child-done"), "ok").unwrap();
     }
 
@@ -6076,7 +6238,7 @@ mod tests {
         std::thread::scope(|scope| {
             scope.spawn(move || {
                 engine(move || {
-                    assert!(submission_worker_is_this_engines());
+                    assert!(submission_worker_runs_for_this_engine());
                     first_opened.send(()).unwrap();
                     first_may_end.recv().unwrap();
                 });
@@ -6088,7 +6250,7 @@ mod tests {
                     let refused = profile_names_or_error();
                     assert!(refused.contains("already open"), "{refused}");
                     assert!(
-                        !submission_worker_is_this_engines(),
+                        !submission_worker_runs_for_this_engine(),
                         "no database, no worker"
                     );
                     second_refused.send(()).unwrap();
@@ -6096,7 +6258,7 @@ mod tests {
                     // Try again.
                     assert_eq!(profile_names_or_error(), "[]");
                     assert!(
-                        submission_worker_is_this_engines(),
+                        submission_worker_runs_for_this_engine(),
                         "the launch finished: this engine's worker runs"
                     );
                 });
