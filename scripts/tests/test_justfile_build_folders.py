@@ -67,7 +67,7 @@ class BuildFolderTests(unittest.TestCase):
     def test_the_build_line_names_the_folder_the_build_really_uses(self):
         for version, expected in (("cargo 1.99.0 (abc 2026-01-01)", "folder /tmp/own"),
                                   ("cargo 1.102.0 (d69 2026-11-16) (huacnlee/cargo 0.103.0-1)",
-                                   "nsh/.nsh/rust/target and ")):
+                                   "shared by every checkout (it ignores CARGO_TARGET_DIR=/tmp/own)")):
             with self.subTest(version=version), tempfile.TemporaryDirectory() as tmp:
                 for name, text in (("cargo", f'echo "{version}"'), ("nsh", 'echo "nsh 0.6.1 (8c78cfd)"')):
                     tool = Path(tmp) / name
@@ -79,6 +79,24 @@ class BuildFolderTests(unittest.TestCase):
                 self.assertIn(version, result.stderr)
                 self.assertIn(expected, result.stderr)
                 self.assertIn("tool nsh 0.6.1 (8c78cfd)", result.stderr)
+
+    @unittest.skipUnless(os.name != "nt" and shutil.which("bash"), "bash")
+    def test_evidence_and_packages_refuse_a_cargo_that_shares_one_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cargo = Path(tmp) / "cargo"
+            cargo.write_text('#!/bin/sh\necho "cargo 1.102.0 (d69 2026-11-16) (huacnlee/cargo 0.103.0-1)"\n')
+            cargo.chmod(cargo.stat().st_mode | stat.S_IEXEC)
+            env = {**os.environ, "PATH": f"{tmp}:{os.environ['PATH']}"}
+            result = subprocess.run(["bash", "scripts/build-line.sh", "--strict"], cwd=ROOT, env=env, text=True, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("shares one build folder between checkouts", result.stderr)
+        for recipe in ("play-bundle", "nsh-test", "nsh-run-agent", "nsh-agent-check", "nsh-shots"):
+            start = re.search(rf"^{re.escape(recipe)}\b.*:", JUSTFILE, re.M)
+            body = JUSTFILE[start.end():]
+            end = re.search(r"^\S", body, re.M)
+            body = body[:end.start()] if end else body
+            self.assertIn("scripts/pinned-cargo-path.sh", body, recipe)
+            self.assertIn("scripts/build-line.sh --strict", body, recipe)
 
 
 if __name__ == "__main__":

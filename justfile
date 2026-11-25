@@ -677,7 +677,9 @@ play-bundle build="":
     # checkouts of the same crate version apart in a shared folder, so a bundle could link another worktree's bir-core,
     # form definitions included, with no error.
     export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/play-bundle}"
-    scripts/build-line.sh
+    # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    scripts/build-line.sh --strict
     # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one.
     unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV
     # nsh builds libnsh.so in its generated workspace, which has no [profile.release]: this repository's own profile never
@@ -892,7 +894,9 @@ nsh-test *args="":
     #!/usr/bin/env bash
     set -euo pipefail
     export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
-    scripts/build-line.sh
+    # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    scripts/build-line.sh --strict
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     unset BIR_SFTP_LIVE BIR_DATABASE_PATH
     cd nsh
@@ -1155,7 +1159,9 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     [ -n "${GPUI_AGENT_TOKEN:-}" ] || { echo "nsh-run-agent: set GPUI_AGENT_TOKEN first"; exit 1; }
     root="$(pwd -P)"
     export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
-    scripts/build-line.sh
+    # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    scripts/build-line.sh --strict
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     export GPUI_AGENT=1 GPUI_AGENT_ADDR="${GPUI_AGENT_ADDR:-127.0.0.1:17421}"
     unset BIR_SFTP_LIVE
@@ -1423,7 +1429,9 @@ nsh-agent-check:
     set -euo pipefail
     root="$(pwd -P)"
     export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
-    scripts/build-line.sh
+    # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    scripts/build-line.sh --strict
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     unset BIR_SFTP_LIVE BIR_DATABASE_PATH
     work="$(mktemp -d)"
@@ -1458,7 +1466,9 @@ nsh-shots name="base" *args="":
     #!/usr/bin/env bash
     set -euo pipefail
     export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
-    scripts/build-line.sh
+    # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    scripts/build-line.sh --strict
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     unset BIR_SFTP_LIVE
     {{just_executable()}} _nsh-db-guard "${BIR_DATABASE_PATH:-}"
