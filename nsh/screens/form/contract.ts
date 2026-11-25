@@ -59,6 +59,8 @@ export interface SchemaField {
   slots?: number;
   /** The integer digits the printed sheet's amount boxes hold; past them the amount prints as a plain number. */
   amount_slots?: number;
+  /** The official program's maximum length for the input; the cap where one is recorded. */
+  maxlen?: number;
 }
 
 /** A column of a schedule table. "hidden" columns are not drawn. */
@@ -72,6 +74,8 @@ export interface SchemaColumn {
   slots?: number;
   /** The integer digits the printed sheet's amount boxes hold. */
   amount_slots?: number;
+  /** The official program's maximum length for the input. */
+  maxlen?: number;
 }
 
 /** One numbered item (row) of a part: its boxes (f), or a schedule table (rows, cols, keys[row][col]). */

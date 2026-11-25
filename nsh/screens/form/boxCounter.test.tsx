@@ -19,15 +19,26 @@ test("phone: the sheets box counts what is typed against its two printed boxes",
   expect(app.texts().some((t) => t === "1 of 2 characters")).toBe(true);
 }, 60_000);
 
-test("desktop: past the boxes the line says it prints as a plain line, and saving is not blocked", async () => {
+test("desktop: past the boxes the line says it prints as a plain line, and the official maximum caps typing", async () => {
+  // The sheets box's official maximum is its paper count (2): typing more never lands.
   const app = await open2551Q(1440, "macos");
-  await app.type("id:fp-frm2551Qv2018:txtSheets", "123");
-  await app.wait(700);
-  const line = app.texts().find((t) => t.includes("of 2 characters"));
+  await app.type("id:fp-frm2551Qv2018:txtSheets", "98765");
+  await app.wait(600);
+  const digits = (app.value("id:fp-frm2551Qv2018:txtSheets") ?? "").replace(/\D/g, "");
+  expect(digits.length).toBeLessThanOrEqual(2);
+  // A value past the boxes (arriving seeded, as an import or a carried draft
+  // brings it) shows the plain-line notice; the sheets box prints in 2.
+  const wide = await open("./FormPageAny.tsx", {
+    width: 1440,
+    height: 900,
+    platform: "macos",
+    host: { params: { formCode: "2551Q", year: 2025, period: 1, openParts: "all", setup: [{ edits: { "frm2551Qv2018:txtSheets": "123" } }] } },
+  });
+  await wide.waitFor("text:BIR Form 2551Q", { timeout: 20_000 });
+  await wide.wait(1200);
+  const line = wide.texts().find((t) => t.includes("of 2 characters"));
   expect(line).toBeDefined();
-  // type() may append to the pre-filled 1 or replace it; either way it is past 2.
-  expect(line!).toContain(". This will print as a plain line.");
-  await app.waitFor("text:/✓ Saved|Unsaved changes/", { timeout: 8000 });
+  expect(line!).toContain("3 of 2 characters. This will print as a plain line.");
 }, 60_000);
 
 test("desktop: an amount box warns only past the integer digits", async () => {

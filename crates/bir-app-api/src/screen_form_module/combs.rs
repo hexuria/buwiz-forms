@@ -54,6 +54,26 @@ fn file_cells() -> &'static Value {
     })
 }
 
+/// `forms/official-caps.json`: form code -> key -> the official program's
+/// `maxlength` for the input, from the control inventories. The cap on a box
+/// is this official maximum where one is recorded, never the paper's box
+/// count and never nothing (the owner's rule is about printing: a longer
+/// value prints as a plain line, but the upload cannot carry more than the
+/// official program would accept).
+fn file_caps() -> &'static Value {
+    static CAPS: OnceLock<Value> = OnceLock::new();
+    CAPS.get_or_init(|| {
+        serde_json::from_str(include_str!("../../../../forms/official-caps.json"))
+            .expect("forms/official-caps.json is a JSON object")
+    })
+}
+
+/// The official maximum length of `key` on `code`, where the control
+/// inventory records one.
+pub(super) fn official_cap(code: &str, key: &str) -> Option<u64> {
+    file_caps()[code][key].as_u64()
+}
+
 /// What the page uses: [`file_cells`] plus the comb joins bir-print adds on
 /// the Rust side (`frozen_html::sheet_join_combs`, 2550M's item 4 TIN),
 /// from the one table the print fills them with; html-frozen and the
@@ -200,6 +220,9 @@ pub(super) fn apply_combs(form: &mut Value, code: &str) {
             if let (true, Some((n, _))) = (takes_slots(def, field), slot(field)) {
                 field["slots"] = json!(n);
             }
+            if let Some(max) = field["k"].as_str().and_then(|k| official_cap(code, k)) {
+                field["maxlen"] = json!(max);
+            }
             if matches!(field["t"].as_str(), Some("money" | "num"))
                 && let Some(digits) = field["k"]
                     .as_str()
@@ -283,6 +306,13 @@ pub(super) fn apply_combs(form: &mut Value, code: &str) {
             continue;
         };
         for (c, col) in cols.iter_mut().enumerate() {
+            if let Some(max) = row_keys
+                .iter()
+                .filter_map(|row| row.get(c))
+                .find_map(|key| official_cap(code, key))
+            {
+                col["maxlen"] = json!(max);
+            }
             let Some(cell) = row_keys
                 .iter()
                 .filter_map(|row| row.get(c))
@@ -588,6 +618,135 @@ pub(super) fn write_pool(
 }
 
 #[cfg(test)]
+/// Every input key of `code`'s schema: item fields and schedule-table row
+/// keys alike.
+fn schema_input_keys(code: &str) -> Vec<String> {
+    let mut keys = Vec::new();
+    let Some(form) = super::schema_entry(code) else {
+        return keys;
+    };
+    for item in form["parts"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array().into_iter().flatten())
+    {
+        for field in item["f"].as_array().into_iter().flatten() {
+            if let Some(key) = field["k"].as_str() {
+                keys.push(key.to_string());
+            }
+        }
+        for row in item["keys"].as_array().into_iter().flatten() {
+            for key in row.as_array().into_iter().flatten() {
+                if let Some(key) = key.as_str() {
+                    keys.push(key.to_string());
+                }
+            }
+        }
+    }
+    keys.sort();
+    keys.dedup();
+    keys
+}
+
+/// The control inventory's `maxlength` per control id for `slug`
+/// (`rules/forms/<slug>/fixtures/runtime-control-inventory-*.json`). The
+/// inventories differ in shape only in the controls array's name.
+#[cfg(test)]
+fn inventory_caps(slug: &str) -> BTreeMap<String, u64> {
+    let dir = format!(
+        "{}/../../rules/forms/{slug}/fixtures",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let mut out = BTreeMap::new();
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !name.starts_with("runtime-control-inventory") || !name.ends_with(".json") {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(entry.path()) else {
+            continue;
+        };
+        let Ok(inv) = serde_json::from_str::<Value>(&text) else {
+            continue;
+        };
+        let controls = if inv["static_controls"].is_array() {
+            &inv["static_controls"]
+        } else {
+            &inv["controls"]
+        };
+        for control in controls.as_array().into_iter().flatten() {
+            let id = control["id"].as_str().or(control["name"].as_str());
+            let max = control["maxlength"]
+                .as_str()
+                .or(control["maxlength"].as_u64().map(|_| ""))
+                .and_then(|text| {
+                    if text.is_empty() {
+                        control["maxlength"].as_u64()
+                    } else {
+                        text.parse().ok()
+                    }
+                });
+            if let (Some(id), Some(max)) = (id, max) {
+                out.insert(id.to_string(), max);
+            }
+        }
+    }
+    out
+}
+
+/// The caps as generated: every schema input key the inventory speaks for,
+/// exact id first, then the inventory's only id whose last colon segment is
+/// the key (the namespaced controls of bare row keys).
+#[cfg(test)]
+fn derived_caps() -> Value {
+    let mut out = json!({});
+    for kind in AgentFormKind::all() {
+        let code = kind.form_code();
+        // The rules directories keep their own slug shape (`0619e-v2018`
+        // where the print sheets are `0619e-2018`): match by the form's
+        // lowercased code.
+        let rules_dir = format!("{}/../../rules/forms", env!("CARGO_MANIFEST_DIR"));
+        let prefix = format!("{}-", code.to_lowercase());
+        let rules_slug = std::fs::read_dir(&rules_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .find(|name| name.starts_with(&prefix));
+        let Some(rules_slug) = rules_slug else {
+            continue;
+        };
+        let inventory = inventory_caps(&rules_slug);
+        if inventory.is_empty() {
+            continue;
+        }
+        let mut caps = Map::new();
+        for key in schema_input_keys(code) {
+            let max = inventory.get(&key).copied().or_else(|| {
+                let last = key.rsplit(':').next().unwrap_or(key.as_str());
+                let matches: Vec<u64> = inventory
+                    .iter()
+                    .filter(|(id, _)| id.rsplit(':').next() == Some(last))
+                    .map(|(_, max)| *max)
+                    .collect();
+                (matches.len() == 1).then(|| matches[0])
+            });
+            if let Some(max) = max {
+                caps.insert(key, json!(max));
+            }
+        }
+        if !caps.is_empty() {
+            out[code] = Value::Object(caps);
+        }
+    }
+    out
+}
+
+#[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
@@ -732,6 +891,26 @@ mod tests {
         );
         let text = serde_json::to_string(&derived(false)).expect("json") + "\n";
         std::fs::write(path, text).expect("print-cells.json");
+    }
+
+    #[test]
+    #[ignore = "writes forms/official-caps.json"]
+    fn write_official_caps() {
+        let path = format!(
+            "{}/../../forms/official-caps.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let text = serde_json::to_string(&derived_caps()).expect("json") + "\n";
+        std::fs::write(path, text).expect("official-caps.json");
+    }
+
+    #[test]
+    fn official_caps_match_the_inventories() {
+        assert_eq!(
+            file_caps(),
+            &derived_caps(),
+            "forms/official-caps.json is stale: run `cargo test -p bir-app-api write_official_caps -- --ignored`"
+        );
     }
 
     #[test]

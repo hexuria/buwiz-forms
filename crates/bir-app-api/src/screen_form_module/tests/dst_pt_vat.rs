@@ -1718,3 +1718,42 @@ fn walk_for_slots(value: &Value, texts: &mut usize, amounts: &mut usize) {
         _ => {}
     }
 }
+
+/// Job E: a value at the official maximum uploads in full. 0619E's taxpayer
+/// name carries `maxlength="50"` in the official program; the upload must
+/// carry what the official program would send — all fifty characters.
+#[test]
+fn a_value_at_the_official_maximum_uploads_in_full() {
+    setup();
+    let opened = open("0619E", 1);
+    let name = "SANTOS DELA CRUZ REYES FONTANILLA VICTORIA RAMIREZ".to_string();
+    assert_eq!(name.len(), 50, "the test name is exactly the maximum");
+    // The name comes from the profile, so the draft is seeded the way the
+    // profile fills it; serialization is what must carry it whole.
+    let mut draft = opened["draft"].clone();
+    draft["taxpayer_name"] = json!(name.clone());
+    let map = agent::field_map(kind_of("0619E").unwrap(), &draft).unwrap();
+    assert_eq!(
+        map["frm0619E:txtTaxpayerName"], name,
+        "the upload carries it whole"
+    );
+}
+
+/// Job E: the official maximum reaches the schema of every box the counter
+/// covers where the inventory records one — the cap is the official program's,
+/// never the paper's box count.
+#[test]
+fn official_maxima_reach_the_schema() {
+    setup();
+    let mut capped = 0;
+    let mut total = 0;
+    for form in form_schemas() {
+        let code = form.code.clone().unwrap_or_default();
+        let schema = call("screen_form_schema", vec![code.clone().into()]).unwrap();
+        let raw = serde_json::to_string(&schema).unwrap();
+        capped += raw.matches("\"maxlen\"").count();
+        total += 1;
+    }
+    assert!(capped > 3000, "maxlen on schema boxes: {capped}");
+    println!("maxlen attachments across {total} forms: {capped}");
+}

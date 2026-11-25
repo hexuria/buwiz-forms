@@ -124,7 +124,7 @@ export function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow
       // A table's radio column (1700 Schedule 1's Taxpayer / Spouse) is a tick box in the row's drawer; ticking one
       // unticks the row's other radio columns, as a radio does.
       const radio = col.t === "radio";
-      const f: SchemaField = { k, l: col.l, t: col.t === "hidden" ? "text" : radio ? "chk" : col.t, c: col.c, w: col.w, o: col.o, slots: col.slots, amount_slots: col.amount_slots };
+      const f: SchemaField = { k, l: col.l, t: col.t === "hidden" ? "text" : radio ? "chk" : col.t, c: col.c, w: col.w, o: col.o, slots: col.slots, amount_slots: col.amount_slots, maxlen: col.maxlen };
       const base = fieldProps(s, f, narrow, `${col.l}, row ${rowName(r)}`, controlWidth(f, 320));
       if (!radio) return base;
       return {

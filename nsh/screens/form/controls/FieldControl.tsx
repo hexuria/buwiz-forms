@@ -224,7 +224,7 @@ function TypedBox(props: { p: FieldInput }) {
                       onBlur={() => p.onBlur()}
                       width={widthOf(p)}
                       error={p.box.message?.() || p.box.invalid()}
-                      maxLength={p.field.slots || p.field.pool?.slots?.length ? undefined : p.field.m}
+                      maxLength={p.field.maxlen ?? p.field.m}
                       placeholder={p.placeholder}
                       keyboardType={kind() === "email" ? "email-address" : kind() === "phone" ? "phone-pad" : undefined}
                       autoCapitalize={kind() === "email" ? "none" : undefined}
@@ -257,7 +257,7 @@ function TypedBox(props: { p: FieldInput }) {
                 width={widthOf(p)}
                 align={cellOf(p) ? "center" : undefined}
                 error={p.box.message?.() || p.box.invalid()}
-                maxDigits={p.field.amount_slots || p.field.slots ? 15 : p.field.m}
+                maxDigits={p.field.maxlen ? Math.min(p.field.maxlen, 15) : p.field.m}
                 placeholder={p.placeholder}
                 inputRef={(ref) => giveFocus(p, ref)}
               />
