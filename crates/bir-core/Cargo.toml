@@ -68,6 +68,7 @@ required-features = ["direct-bir"]
 
 [dependencies]
 bir-rules = { path = "../bir-rules", version = "0.2.1" }
+bir-submit = { path = "../bir-submit" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }

@@ -62,9 +62,9 @@ impl std::fmt::Debug for TinKey {
 // the one reader of that code, for live errors and stored reasons alike.
 // Nothing here matches on the English of a message.
 
-/// A refusal because of the TIN's state on the Buwiz account, or a banned
-/// account: nothing reached BIR, and sending again cannot help until the
-/// person fixes it on the account.
+/// A refusal because of the TIN's state on the Buwiz account, or of the
+/// account itself (banned, or a practice account): nothing reached BIR, and
+/// sending again cannot help until the person fixes it on the account.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TinRefusal {
     /// `tin_not_active`: not on this account (or the server says no more).
@@ -82,6 +82,9 @@ pub enum TinRefusal {
     TestOnly,
     /// `account_banned`: the account can send nothing.
     AccountBanned,
+    /// `account_practice`: a practice account (the kind app-store reviewers
+    /// use). It can prepare returns; Buwiz never sends them to the BIR.
+    AccountPractice,
 }
 
 /// What the server's `tin_needs_fix` message begins with, before the fixed
@@ -97,7 +100,7 @@ const SOURCE_PREFIXES: [&str; 3] = [
 ];
 
 impl TinRefusal {
-    pub const ALL: [TinRefusal; 7] = [
+    pub const ALL: [TinRefusal; 8] = [
         TinRefusal::NotActive,
         TinRefusal::Unverified,
         TinRefusal::Pending,
@@ -105,6 +108,7 @@ impl TinRefusal {
         TinRefusal::Paused,
         TinRefusal::TestOnly,
         TinRefusal::AccountBanned,
+        TinRefusal::AccountPractice,
     ];
 
     /// The refusal a server code names, exactly; `None` for any other code.
@@ -122,12 +126,13 @@ impl TinRefusal {
             TinRefusal::Paused => "tin_paused",
             TinRefusal::TestOnly => "tin_test_only",
             TinRefusal::AccountBanned => "account_banned",
+            TinRefusal::AccountPractice => "account_practice",
         }
     }
 
     /// The one decoder: the trailing ` (code)` of a live or stored reason,
     /// matched against the closed set. `None` when the text does not end in
-    /// one of the seven codes.
+    /// one of the eight codes.
     pub fn from_reason(reason: &str) -> Option<Self> {
         trailing_code(reason).and_then(|(_, code)| Self::from_code(code))
     }
@@ -341,7 +346,7 @@ mod tests {
 
     // -------------------------------------------------------- TinRefusal
 
-    const CODES: [&str; 7] = [
+    const CODES: [&str; 8] = [
         "tin_not_active",
         "tin_unverified",
         "tin_pending",
@@ -349,6 +354,7 @@ mod tests {
         "tin_paused",
         "tin_test_only",
         "account_banned",
+        "account_practice",
     ];
 
     #[test]

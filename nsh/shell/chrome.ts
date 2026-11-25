@@ -1,5 +1,5 @@
 // The chrome layout for this window now (chrome_layout.ts over the platform and the window's width). Read inside JSX or a closure.
-import { computed, platform, windowSize } from "nsh";
+import { computed, platform, safeArea, windowSize } from "nsh";
 import { isAvailable, Menu } from "nsh/desktop";
 import { chromeLayout, MENU_ROW, TOOLBAR, type ChromeLayout } from "./chrome_layout";
 import type { Os } from "./desktop/menu_model";
@@ -32,7 +32,7 @@ export function chromeNow(): ChromeLayout {
   return layout();
 }
 
-/** How far the frame's chrome reaches down the window: the toolbar, and the menu row above it when there is one. */
+/** How far the frame's chrome reaches down the window: the toolbar, the menu row above it when there is one, and the status bar's safe area above both (an iPad's; 0 on the desktops). */
 export function chromeHeight(): number {
-  return chromeNow().menuRow ? MENU_ROW + TOOLBAR : TOOLBAR;
+  return safeArea().top + (chromeNow().menuRow ? MENU_ROW + TOOLBAR : TOOLBAR);
 }

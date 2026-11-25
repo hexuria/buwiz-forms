@@ -13,7 +13,7 @@ not ported.
 ## Deviations from the source
 
 1. `src/wire.rs` holds the pieces of the sister's `bir-core` the client used (`TinKey`, `TinRefusal`, `FailureClass`, `Blame`, the hold/limit/final codes, `capped_wait_until`, `parse_time`); every `bir_core::` path is `crate::wire::`.
-2. The seventh TIN refusal, `tin_test_only`: `TinRefusal::TestOnly`, and `TinStatus::TestOnly` (`test_only`) in `tins.rs`.
+2. The seventh TIN refusal, `tin_test_only`: `TinRefusal::TestOnly`, and `TinStatus::TestOnly` (`test_only`) in `tins.rs`. An eighth, `account_practice` (`TinRefusal::AccountPractice`): a practice account never sends.
 3. No BIR "sign" observation: no `SignCell`, `last_sign`, `buwiz-bir` header reading; a `bir` object in a body or relay result is ignored.
 4. No sign-in: the host's `TokenSource` supplies access tokens (`force_refresh` after 401 `invalid_token`), the login, and hears `session_ended`; no `Submission` wrapper.
 5. The device id is its own secret (`device_id`, next to `device_key`); `forget_device()`; `403 device_revoked` forgets the device and ends the host's session; `401 unknown_device` registers a new key once and retries once.

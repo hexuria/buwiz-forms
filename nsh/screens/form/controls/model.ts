@@ -122,13 +122,24 @@ export function splitLabel(label: string): [string, string] {
   return m ? [m[1], m[2]] : [label, ""];
 }
 
-/** The options whose label or code holds every typed word, in any order (the kit's ComboField matches one run of text only). */
+/** The accented letters Philippine place names use, each beside the plain letter people type for it. */
+const PLAIN: Record<string, string> = { ñ: "n", á: "a", é: "e", í: "i", ó: "o", ú: "u", ü: "u" };
+
+/** Text as a search compares it: lower case, an accented letter as its plain one ("Piñahan" and "pinahan" are the same). */
+export function searchText(text: string): string {
+  return text.toLowerCase().replace(/[ñáéíóúü]/g, (c) => PLAIN[c] ?? c);
+}
+
+/**
+ * The options whose label or code holds every typed word, in any order (the kit's ComboField matches one run of text
+ * only). Accents do not count: "paranaque" finds "Parañaque".
+ */
 export function matchWords(options: readonly ChoiceOption[], text: string, limit = Infinity): ChoiceOption[] {
-  const words = text.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const words = searchText(text.trim()).split(/\s+/).filter(Boolean);
   const out: ChoiceOption[] = [];
   for (const o of options) {
     if (out.length >= limit) break;
-    const hay = `${o.value} ${o.label}`.toLowerCase();
+    const hay = searchText(`${o.value} ${o.label}`);
     if (words.every((w) => hay.includes(w))) out.push(o);
   }
   return out;

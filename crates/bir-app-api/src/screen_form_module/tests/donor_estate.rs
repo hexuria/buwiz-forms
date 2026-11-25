@@ -529,7 +529,7 @@ fn pr10_1800_printed_constants_and_disabled_parts_are_notes() {
     }
     // 9B has no box in the official program.
     assert!(sheet.contains("9B RDO Code"));
-    assert!(note("9B").starts_with("No box"));
+    assert!(note("9B").contains("has no box"));
 }
 
 /// 1800 R6.0, R3.4 and preview.0: item 13's Yes and No are the draft's tax

@@ -10,7 +10,7 @@ import { asFrequency, FREQS, type FormScope, type FrequencyFilter, matchingForms
 
 const query = signal("");
 const freq = signal<FrequencyFilter>("All");
-/** null until the person picks a scope: the start route's, else with a taxpayer "owned" (the old default), without one "all". */
+/** null until the person picks a scope: the start route's, else "owned" for a taxpayer who has forms for the year, else "all". */
 const scope = signal<FormScope | null>(null);
 // The next session starts from the defaults (a lock, a sign-out or another taxpayer signing in).
 app.onSessionChange(() => {
@@ -28,8 +28,11 @@ const startScope = (): FormScope | null => {
   const asked = app.startParams().scope;
   return asked === "all" || asked === "owned" ? asked : null;
 };
-/** The scope in effect: with no taxpayer every form shows, as in the old app. */
-const scopeNow = (): FormScope => (app.taxpayer() ? (scope() ?? startScope() ?? "owned") : "all");
+/**
+ * The scope in effect: with no taxpayer every form shows, as in the old app. A taxpayer with no forms chosen for the year
+ * also starts on every form: their own list would be an empty page, which is what a new user saw first.
+ */
+const scopeNow = (): FormScope => (app.taxpayer() ? (scope() ?? startScope() ?? (owned().size > 0 ? "owned" : "all")) : "all");
 const shown = () => matchingForms(forms(), { scope: scopeNow(), owned: owned(), freq: freq(), query: query() });
 
 const year = () => app.year() ?? "this year";

@@ -3,7 +3,7 @@
 // tab bar and the sheets (under 600 points), floats the sidebar and panel as overlays under 860, and mounts the dialogs
 // and the toaster once. Screens are drawn by views.tsx.
 import type { JSX } from "nsh";
-import { cleanup, computed, effect, ErrorBoundary, keymap, platform, Scroll, untracked, View } from "nsh";
+import { cleanup, computed, effect, ErrorBoundary, keymap, platform, safeArea, Scroll, untracked, View } from "nsh";
 import { Button } from "nsh/base";
 import { isAvailable as desktopAvailable, currentWindow, titleBar } from "nsh/desktop";
 import { BackHandler, isAvailable as mobileAvailable } from "nsh/mobile";
@@ -198,7 +198,12 @@ function Frame() {
       <If when={app.layout.narrow()} else={<WideChrome />}>
         <NarrowBar />
       </If>
-      <View class="min-h-0 flex-1 flex-row">
+      {/* Wide on an iPad or a phone turned sideways: keep off the home indicator and the sensor housing (the tab bar does it when narrow). */}
+      <View
+        testID="frame-body"
+        class="min-h-0 flex-1 flex-row"
+        style={app.layout.narrow() ? {} : { paddingLeft: safeArea().left, paddingRight: safeArea().right, paddingBottom: safeArea().bottom }}
+      >
         <If when={app.layout.sidebarDocked() && !app.layout.narrow()}>
           <Sidebar />
         </If>
@@ -235,7 +240,12 @@ function LockedFrame() {
       <If
         when={chromeNow().menuRow}
         else={
-          <View testID="title-bar" desktop={{ windowDrag: true }} class="shrink-0 flex-row items-center" style={{ height: SIZE.titleBar, paddingLeft: 8 + titleBar().left, paddingRight: titleBar().right }}>
+          <View
+            testID="title-bar"
+            desktop={{ windowDrag: true }}
+            class="shrink-0 flex-row items-center"
+            style={{ height: SIZE.titleBar + safeArea().top, paddingTop: safeArea().top, paddingLeft: 8 + titleBar().left, paddingRight: titleBar().right }}
+          >
             <If when={chromeNow().hamburger}>
               <MenuListButton testID="locked-menu" />
             </If>

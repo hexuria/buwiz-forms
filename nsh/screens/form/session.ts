@@ -33,6 +33,7 @@ import {
   type ScreenFormProfilePrerequisite,
   type ScreenFormSamplePeriod,
   type ScreenFormStatus,
+  type SendState,
 } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { cancelQueueMessage } from "../../lib/queue_message";
@@ -42,7 +43,7 @@ import { DATE_ERROR, formatIso, formatLongDate, formatMDY, isTwoDigitDate, oneDa
 import { dateRange } from "./dateRules";
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
-import { choiceLabel, dateParts, dateRanges, isPageNotice, isTinItem, keysOf, listedFields, oneDates, onePeriods, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type DateRange, type OneDate, type OnePeriod } from "./schema";
+import { choiceLabel, dateParts, dateRanges, isPageNotice, isTinItem, keysOf, listedFields, oneDates, onePeriods, optionOf, plainRefusal, RESOLVE_ASK, ACCOUNT_FIX_CODES, sendWords, sentWords, withoutHidden, type DateParts, type DateRange, type OneDate, type OnePeriod } from "./schema";
 import { parsePeriod, periodLong, periodText, PERIOD_ERROR, PERIOD_TWO_DIGIT, periodYear4 } from "./periodRules";
 import { hostSentence, refusalItem, refusalLabel, refusalSentence, unfixableRefusal, type RefusalContext } from "./refusals";
 
@@ -224,8 +225,17 @@ export interface HeaderInfo {
   filedOriginal: boolean;
   /** On the filed original: its strip, or "". */
   filedOriginalView: { status: string; filed_on: string | null } | null;
-  /** "Sent to BIR … Nothing here can be changed." ("Dry run …, not sent to BIR" for a dry-run send), or "". */
+  /**
+   * "Sent to BIR … Nothing here can be changed." ("Dry run …, not sent to BIR" for a dry-run send), or "". Where the host says what the
+   * send is (`send`), its words instead: a Queued return's ("Queued to send.", a held or waiting send with its next time), a sent one's.
+   */
   submittedLine: string;
+  /** A Draft the worker put back (`send` refused): the reason, shown as a notice on opening, or "". */
+  sendNotice: string;
+  /** The refusal is fixed on the person's Buwiz account (its code is one of ACCOUNT_FIX_CODES). */
+  accountFix: boolean;
+  /** The send's outcome is unknown: the page offers "The email came" and "It did not arrive". */
+  canResolve: boolean;
   profileUpdates: string[];
   profileDiffers: string[];
   profileChanged: string[];
@@ -256,6 +266,7 @@ export type Overlay =
   | { kind: "removal"; message: string }
   | { kind: "existing"; existing: ScreenFormExisting }
   | { kind: "queue-confirm"; warns: string[] }
+  | { kind: "resolve-confirm"; answer: "received" | "not_received"; question: string; button: string }
   | { kind: "profile-ask"; ask: ProfileAsk }
   | { kind: "sample-period"; parts: { key: string; part: ScreenFormPeriodPart["part"]; quarter: number | null; value: string }[]; error: string };
 
@@ -319,6 +330,8 @@ interface St {
   submittedDryRun: boolean;
   /** That send went to the local mock relay, as the worker recorded it (the host's `submitted_via_relay`), not to BIR. */
   submittedViaRelay: boolean;
+  /** What the host says about the stored return's send (`send`), or null. */
+  send: SendState | null;
   confirmedAt: string | null;
   amends: ScreenFormStatus | null;
   filedOriginal: { id: number; status: string; filed_on: string | null } | null;
@@ -410,7 +423,7 @@ function freshState(target: FormTarget): St {
     blank: new Set(), needs: {}, whys: {}, waits: {}, off: {}, penalties: [], penaltyOpen: new Set(), poolTexts: {},
     typed: new Set(), typedEdits: {}, periodParts: new Map(), periodSet: false, periodValues: {}, periodHeld: null, periodIncomplete: false, periodAsked: null,
     periodAnswered: null, periodComplete: false, periodSeq: 0, periodToken: 0, periodInFlight: null, opens: null,
-    existing: null, saveAfterAnswer: null, submittedAt: null, submittedDryRun: false, submittedViaRelay: false, confirmedAt: null, amends: null, filedOriginal: null,
+    existing: null, saveAfterAnswer: null, submittedAt: null, submittedDryRun: false, submittedViaRelay: false, send: null, confirmedAt: null, amends: null, filedOriginal: null,
     filedOriginalView: null, profileUpdates: [], profileDiffers: [], profilePrerequisites: [], notes: [], saved: false, quiet: null, kept: {},
     autoStops: [], stopEdits: {}, stopKeys: new Set(), stoppable: new Set(), passed: new Set(), stepAt: null,
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
@@ -854,6 +867,7 @@ export class FormSession {
     s.submittedAt = r.submitted_at || null;
     s.submittedDryRun = Boolean(r.submitted_dry_run);
     s.submittedViaRelay = Boolean(r.submitted_via_relay);
+    s.send = r.send ?? null;
     s.confirmedAt = r.confirmed_at || null;
     s.amends = r.amends || null;
     s.filedOriginal = r.filed_original || null;
@@ -3515,6 +3529,40 @@ export class FormSession {
     }
   }
 
+  /** "The email came" / "It did not arrive" on a send whose outcome is unknown: ask first, saying what the answer does. */
+  askResolve(answer: "received" | "not_received") {
+    const s = this.st;
+    if (!s.send?.can_resolve || s.sample) return;
+    s.overlay = { kind: "resolve-confirm", answer, ...RESOLVE_ASK[answer] };
+    this.publish();
+  }
+
+  cancelResolve() {
+    if (this.st.overlay?.kind !== "resolve-confirm") return;
+    this.st.overlay = null;
+    this.publish();
+  }
+
+  /** The person confirmed the answer: the host marks the return sent or puts it back to Draft; either way the page reads it again. */
+  confirmResolve() {
+    const s = this.st;
+    const o = s.overlay;
+    if (o?.kind !== "resolve-confirm") return;
+    s.overlay = null;
+    this.publish();
+    const t = s.target;
+    const period = this.usesPeriodPath() ? t.period || null : (s.storedPeriod ?? t.period ?? null);
+    try {
+      bir.resolve_unknown_send(t.tin, t.formCode, t.year, period, o.answer);
+      this.toast(o.answer === "received" ? "Marked as sent to the BIR." : "Back to Draft. Queue it again when you are ready.", o.answer === "received" ? "check" : "undo-2");
+      this.hooks.onQueueChanged?.(t);
+    } catch (e) {
+      this.toast(errorText(e), "triangle-alert");
+    }
+    this.wrote("resolve_unknown_send");
+    void this.reload();
+  }
+
   /** Reopen the return as stored (after queueing or cancelling). keep: the page stays drawn while the host answers (a read nobody asked for). */
   reload(keep = false): Promise<string | null> {
     const t = this.st.target;
@@ -4071,6 +4119,12 @@ export class FormSession {
     const sent: string[] = [];
     if (s.submittedAt) sent.push(sentWords(s.submittedAt, s.submittedDryRun, s.submittedViaRelay));
     if (s.confirmedAt) sent.push(`confirmed ${shortIsoDate(s.confirmedAt)}`);
+    // The host's words for the send, where it has them (send_state.rs): a refused Draft's notice, a Queued or sent return's line.
+    const send = s.sample || s.filedOriginalView ? null : s.send;
+    // A sent return keeps the words it always had, with their date ("Sent to BIR <date>", "Dry run <date>, not sent to BIR": F21); the
+    // host's send words are for a return still in the queue.
+    const sendLine = send && s.status === "Queued" && !s.editable ? sendWords(send, new Date()) : "";
+    const sentLine = sent.length ? `${sent.join(", ")}. Nothing here can be changed.` : "";
     this.sHeader.set({
       loading: s.loading,
       error: s.error,
@@ -4082,7 +4136,10 @@ export class FormSession {
       amendUnsaved: Boolean(s.amends && !s.saved && s.editable),
       filedOriginal: Boolean(s.filedOriginal && !s.filedOriginalView),
       filedOriginalView: s.filedOriginalView,
-      submittedLine: !s.editable && !s.filedOriginalView && sent.length ? `${sent.join(", ")}. Nothing here can be changed.` : "",
+      submittedLine: !s.editable && !s.filedOriginalView ? sendLine || sentLine : "",
+      sendNotice: send?.stage === "refused" && s.editable ? send.line : "",
+      accountFix: send?.stage === "refused" && s.editable && ACCOUNT_FIX_CODES.includes(send.code ?? ""),
+      canResolve: Boolean(send?.can_resolve) && s.status === "Queued" && !s.editable,
       profileUpdates: s.profileUpdates,
       profileDiffers: s.editable ? s.profileDiffers : [],
       profileChanged: !s.editable ? s.profileChanged : [],

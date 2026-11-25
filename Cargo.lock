@@ -453,6 +453,7 @@ dependencies = [
  "ammonia",
  "anyhow",
  "bir-rules",
+ "bir-submit",
  "block2",
  "cbc 0.1.2",
  "chrono",

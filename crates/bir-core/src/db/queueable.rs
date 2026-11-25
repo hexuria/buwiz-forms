@@ -753,6 +753,68 @@ impl Database {
         })
     }
 
+    /// A person's answer "The email came" for a claimed queued return whose
+    /// send ended with an unknown outcome: the BIR's confirmation arrived, so
+    /// the return is Submitted as a real send (not a dry run), with its IAF
+    /// filename (the stored one, else the one the worker sends under), the
+    /// claim cleared and no relay receipt. Only a person's answer reaches this
+    /// (the app's `resolve_unknown_send`); the worker finishes its own sends
+    /// with [`Self::finish_claimed_queueable_submission`], which checks its
+    /// token. One transaction, compare-and-swap on the stored JSON; refused
+    /// unless the stored return is Queued with a complete claim.
+    pub fn mark_claimed_queueable_received<F: QueueableForm>(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        period: i64,
+    ) -> Result<F, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) =
+            select_row(&tx, F::FORM_CODE, tin, taxable_year, period)?
+        else {
+            return Err(DbError::Other(format!(
+                "No {} return exists for this period",
+                F::FORM_CODE
+            )));
+        };
+        let mut draft: F = serde_json::from_str(&raw_json)?;
+        let lifecycle = draft.lifecycle();
+        if db_status != "Queued"
+            || !matches!(lifecycle.status, FilingStatus::Queued)
+            || !claim_fields_present(
+                &lifecycle.submission_claim_token,
+                &lifecycle.submission_claimed_at,
+            )
+        {
+            return Err(DbError::Other(format!(
+                "Only a {} whose send has an unknown outcome can be marked as received",
+                F::FORM_CODE
+            )));
+        }
+        let filename = lifecycle
+            .submission_filename
+            .clone()
+            .unwrap_or_else(|| draft.submission_filename());
+        draft
+            .lifecycle_mut()
+            .transition_to_submitted(filename, false);
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts SET status = 'Submitted', data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(format!(
+                "{} changed before it could be marked as received",
+                F::FORM_CODE
+            )));
+        }
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(draft)
+    }
+
     /// Atomically revalidate and claim the exact queued generation right
     /// before PUT. The worker opens the SFTP session first, so a connect or
     /// login failure stays unclaimed.
@@ -851,10 +913,9 @@ impl Database {
         Ok(true)
     }
 
-    /// The relay proved it did not take this claimed queued return (it refused it, or was unavailable): only the worker holding
-    /// the claim lets it go. Refused: back to Draft with the relay's reason (the same file would be refused again).
-    /// Unavailable: still Queued, retried after the usual back-off (the fifth failure returns it to Draft). `false` when
-    /// the claim is no longer this worker's.
+    /// The send of this claimed queued return did not end in a receipt: only the worker holding the claim settles it,
+    /// as `how` says ([`crate::forms::queueable::NoReceipt`]: refused back to Draft with the reason, failed or held and
+    /// still Queued, or unknown with the claim kept). `false` when the claim is no longer this worker's.
     pub(crate) fn release_unaccepted_claimed_queueable<F: QueueableForm>(
         &self,
         tin: &str,
@@ -862,7 +923,7 @@ impl Database {
         period: i64,
         claim_token: &str,
         note: String,
-        refused: bool,
+        how: crate::forms::queueable::NoReceipt,
     ) -> Result<bool, DbError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
         let Some((id, raw_json, db_status)) =
@@ -879,12 +940,7 @@ impl Database {
         {
             return Ok(false);
         }
-        if refused {
-            draft.lifecycle_mut().revert_to_draft();
-            draft.lifecycle_mut().submission_error = Some(note);
-        } else {
-            draft.lifecycle_mut().record_submission_failure(note);
-        }
+        draft.lifecycle_mut().settle_without_receipt(note, how);
         let status = if matches!(draft.lifecycle().status, FilingStatus::Draft) {
             "Draft"
         } else {

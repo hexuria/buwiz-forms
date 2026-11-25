@@ -3,7 +3,7 @@
 import { View } from "nsh";
 import { app } from "../../shell";
 import { AppButton, Text } from "../../ui";
-import { GATE_DEFAULT } from "./logic";
+import { GATE_ABOUT, GATE_DEFAULT } from "./logic";
 import { AuthCard, deviceCopy } from "./parts";
 import { auth } from "./state";
 
@@ -14,6 +14,7 @@ export function AccountGate() {
       <AuthCard testID="gate-card" shadow={false}>
         <Text variant="page" class="text-center">Welcome to eBIRForms</Text>
         <Text variant="meta" tone={app.gateError() ? "danger" : "fg2"} class="text-center" testID="gate-detail">{detail()}</Text>
+        <Text variant="meta" tone="fg3" class="text-center" testID="gate-about">{deviceCopy(GATE_ABOUT)}</Text>
         <AppButton
           testID="gate-sign-in"
           label={auth.gateBusy() ? "Waiting…" : "Sign in"}

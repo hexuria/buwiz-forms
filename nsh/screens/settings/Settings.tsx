@@ -24,6 +24,16 @@ import { TransferSection } from "./Transfer";
 const COLUMN = 680;
 /** The section list's width beside the cards. */
 const RAIL = 220;
+/** The narrowest the cards' pane may be beside the list: its 32-point sides and a row whose words still fit beside a 120-point control
+ * (a 640-point window, the list beside narrow cards, still has room: shots/settings.test.tsx). */
+const PANE_MIN = 380;
+
+/**
+ * The list first and a section as its own page: on a phone, and wherever the main surface is too narrow for the list beside the cards.
+ * The surface, not the window, decides: an iPad (or a desktop window) of 1032 points with the sidebar and the tax profile docked leaves
+ * the page about 460, and the cards beside the list then had room for one letter a line.
+ */
+const settingsStacked = (): boolean => app.layout.narrow() || app.layout.mainWidth() < RAIL + PANE_MIN;
 
 /** The change of who this computer is for has made its recovery key: only the key shows, as the old screen did. */
 const keyOnly = (): boolean => setupChange.step() === "key";
@@ -153,7 +163,7 @@ export function Settings() {
   return (
     <View testID="settings" class="min-h-0 w-full flex-1">
       <If
-        when={app.layout.narrow()}
+        when={settingsStacked()}
         else={
           <View class="min-h-0 flex-1 flex-row">
             <If when={!keyOnly()}>

@@ -519,11 +519,24 @@ pub fn build_desired_events(
         let overrides =
             crate::forms::event_trigger::periodic_overrides(&global_overrides, profile, Some(year));
         let summaries = db.list_draft_summaries(&tin, year).unwrap_or_default();
-        let deadlines = DeadlineResolver::deadlines_for_forms(&form_codes, year as i32, &overrides);
-        let dated_codes = deadlines
+        // The same filter the dashboard feed applies: a period that ended
+        // before the business began is not owed and gets no event, using
+        // the earliest start known for the branch. A form whose periods
+        // are all pre-start is not owed, not undated, so the undated count
+        // below reads the unfiltered list.
+        let facts_start = db
+            .effective_year_facts(&tin, year)
+            .ok()
+            .and_then(|facts| facts.facts.business_start_date);
+        let start = profile.earliest_business_start(facts_start);
+        let all_deadlines =
+            DeadlineResolver::deadlines_for_forms(&form_codes, year as i32, &overrides);
+        let dated_codes = all_deadlines
             .iter()
             .map(|deadline| deadline.form_code.clone())
             .collect::<BTreeSet<_>>();
+        let deadlines =
+            DeadlineResolver::filter_deadlines_for_listing(all_deadlines, start, &summaries);
         excluded_undated += form_codes
             .iter()
             .filter(|code| !dated_codes.contains(code.as_str()))

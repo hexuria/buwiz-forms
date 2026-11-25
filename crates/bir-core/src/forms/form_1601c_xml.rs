@@ -493,6 +493,7 @@ impl Form1601CDraft {
             submitted_at: None,
             submitted_dry_run: false,
             submitted_via_relay: false,
+            relay_receipt: None,
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,

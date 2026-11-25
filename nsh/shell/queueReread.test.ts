@@ -10,9 +10,9 @@ import { QUEUE_FUNCTIONS, QUEUE_REREAD_MS, store } from "./store";
 const peek = () => untracked(() => store.returns("filed"));
 const pause = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 
-test("the re-reads come at once and after 1 s, 3 s and 10 s, for the host functions that queue and cancel", () => {
+test("the re-reads come at once and after 1 s, 3 s and 10 s, for the host functions that queue, cancel and resolve a send", () => {
   expect([...QUEUE_REREAD_MS]).toEqual([1000, 3000, 10000]);
-  expect([...QUEUE_FUNCTIONS].sort()).toEqual(["cancel_queued", "queue_form_draft", "screen_form_cancel_queue", "screen_form_queue"]);
+  expect([...QUEUE_FUNCTIONS].sort()).toEqual(["cancel_queued", "queue_form_draft", "resolve_unknown_send", "screen_form_cancel_queue", "screen_form_queue"]);
 });
 
 // The frame's own reads (the notifications) hold the filed list, so a dropped key is read again by them at once: the counts below are

@@ -42,20 +42,30 @@ function items(code: string): SchemaItem[] {
   return (schema.parts || []).flatMap((p) => p.items || []);
 }
 
-test("PR3: all eighteen month+year pairs are marked one_periods on one item, with the host's two_digit truth", () => {
-  createDemoTaxpayer();
-  for (const pair of PAIRS) {
+// One test per form: building a form's schema is the slow part, and one call into the script has a 2000 ms budget. Eighteen
+// schemas in a single test went over it on slow Windows runners; one schema per test stays far inside it.
+test("PR3: the eighteen month+year pairs are all listed", () => {
+  expect(PAIRS.length).toBe(18);
+});
+
+for (const pair of PAIRS) {
+  test(`PR3: ${pair.code}'s month+year pair is marked one_periods on one item, with the host's two_digit truth`, () => {
+    createDemoTaxpayer();
     const found = items(pair.code).flatMap(onePeriods);
     const period = found.find((p) => p.month.k === pair.month && p.year.k === pair.year);
     expect(`${pair.code}: ${period ? "marked" : "missing"}`).toBe(`${pair.code}: marked`);
     expect(`${pair.code} twoDigit=${period!.twoDigit}`).toBe(`${pair.code} twoDigit=${pair.twoDigit}`);
     expect(period!.periodKey).toBe(`${pair.month}#period`);
-  }
+  });
+}
+
+test("PR3: the six from-to pairs are all listed", () => {
+  expect(RANGES.length).toBe(6);
 });
 
-test("PR3: all six from-to pairs are marked date_ranges on one item; 2551Q's bare keys are whole-date boxes", () => {
-  createDemoTaxpayer();
-  for (const range of RANGES) {
+for (const range of RANGES) {
+  test(`PR3: ${range.code}'s from-to pair ${range.from} is marked date_ranges on one item`, () => {
+    createDemoTaxpayer();
     const formItems = items(range.code);
     const found = formItems.flatMap(dateRanges);
     const hit = found.find((r) => r.from.anchor === range.from && r.to.anchor === range.to);
@@ -64,33 +74,51 @@ test("PR3: all six from-to pairs are marked date_ranges on one item; 2551Q's bar
     const item = formItems.find((it) => (it.date_ranges || []).some(([from, to]) => from === range.from && to === range.to))!;
     if (range.derivedTo) expect(item.derived_to).toEqual([range.derivedTo]);
     else expect(item.derived_to).toBeUndefined();
-  }
+  });
+}
+
+test("PR3: 2551Q's bare keys are whole-date boxes", () => {
+  createDemoTaxpayer();
   const issue = items("2551Q").flatMap(dateRanges)[0];
   expect(issue.from.field?.t).toBe("date");
   expect(issue.to.field?.t).toBe("date");
 });
 
-test("PR3: the year box's own kind says how it stores the year (select code, 20YY two digits, four digits)", () => {
+// The year box's own kind says how it stores the year (select code, 20YY two digits, four digits). One form per test, as above.
+function yearOf(code: string, key: string) {
+  for (const it of items(code)) {
+    const f = (it.f || []).find((x) => x.k === key);
+    if (f) return f;
+  }
+  return null;
+}
+
+test("PR3: 1600PT's year is a select that lists about a hundred years", () => {
   createDemoTaxpayer();
-  const yearOf = (code: string, key: string) => {
-    for (const it of items(code)) {
-      const f = (it.f || []).find((x) => x.k === key);
-      if (f) return f;
-    }
-    return null;
-  };
-  // Two-digit selects carry ~100 listed years; 20YY boxes cap at two digits; the rest take four.
-  expect(yearOf("1600PT", "frm1600PT:txtPg1I1Year")?.t).toBe("sel");
-  expect((yearOf("1600PT", "frm1600PT:txtPg1I1Year")?.o || []).length).toBeGreaterThan(50);
-  for (const code of ["1702EX", "1702MX", "1702RT"]) {
+  const year = yearOf("1600PT", "frm1600PT:txtPg1I1Year");
+  expect(year?.t).toBe("sel");
+  expect((year?.o || []).length).toBeGreaterThan(50);
+});
+
+for (const code of ["1702EX", "1702MX", "1702RT"]) {
+  test(`PR3: ${code}'s 20YY year box caps at two digits`, () => {
+    createDemoTaxpayer();
     const key = code === "1702RT" ? "frm1702RT:txtPg1I2Year" : `frm${code}:txtPg1I2YearEnd`;
     expect(`${code}: m=${yearOf(code, key)?.m}`).toBe(`${code}: m=2`);
-  }
+  });
+}
+
+test("PR3: 1702Q's year box is a number box", () => {
+  createDemoTaxpayer();
   expect(yearOf("1702Q", "frm1702q:txtYrEndYear")?.t).toBe("int");
-  for (const pair of PAIRS.filter((p) => !p.twoDigit)) {
-    expect(`${pair.code}: ${yearOf(pair.code, pair.year)?.t}`).toBe(`${pair.code}: int`);
-  }
 });
+
+for (const pair of PAIRS.filter((p) => !p.twoDigit)) {
+  test(`PR3: ${pair.code}'s four-digit year box is a number box`, () => {
+    createDemoTaxpayer();
+    expect(`${pair.code}: ${yearOf(pair.code, pair.year)?.t}`).toBe(`${pair.code}: int`);
+  });
+}
 
 test("PR3: 1701's month moved onto the year's item and 2000's year joined its month — one item per pair", () => {
   createDemoTaxpayer();

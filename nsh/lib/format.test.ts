@@ -1,5 +1,5 @@
 import { describe, expect, test } from "nsh/test";
-import { displayCode, formatTin } from "./format";
+import { displayCode, formatTin, zipChoices } from "./format";
 
 describe("formatTin", () => {
   test("a 9-digit root is grouped 3-3-3, leading zeros kept", () => {
@@ -61,5 +61,24 @@ describe("displayCode", () => {
   });
   test("a number is its text", () => {
     expect(displayCode(2307)).toBe("2307");
+  });
+});
+
+describe("zipChoices", () => {
+  test("places that share a code become one choice naming them all", () => {
+    expect(zipChoices(["1100 - Central", "1100 - Piñahan", "1101 - Diliman", "1100 - Quezon City CPO"])).toEqual([
+      { value: "1100", label: "1100 - Central, Piñahan, Quezon City CPO" },
+      { value: "1101", label: "1101 - Diliman" },
+    ]);
+  });
+  test("no two choices carry the same code", () => {
+    const codes = zipChoices(["1226 - Bel-Air", "1100 - Central", "1226 - San Lorenzo", "1100 - Central"]).map((c) => c.value);
+    expect(codes).toEqual(["1226", "1100"]);
+  });
+  test("a repeated place is named once, a bare code is its own label, an entry with no code is left out", () => {
+    expect(zipChoices(["1100 - Central", "1100 - Central", "4000", " - Nowhere", ""])).toEqual([
+      { value: "1100", label: "1100 - Central" },
+      { value: "4000", label: "4000" },
+    ]);
   });
 });

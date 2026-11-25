@@ -100,13 +100,66 @@ pub enum TransportError {
     /// The relay could not be reached, or answered 503: it did not take the file, so nothing went on. Safe to retry.
     #[error("the relay is unavailable: {0}")]
     RelayUnavailable(String),
+    /// The Buwiz relay refused the return itself (a TIN the account may not send for, a file that does not match its
+    /// name). Nothing reached the BIR; the same file would be refused again. The text is the server's sentence with
+    /// its code in brackets.
+    #[error("{0}")]
+    Refused(String),
+    /// The Buwiz relay tried and the BIR's way in did not take the return. Nothing reached the BIR. Safe to retry.
+    #[error("{0}")]
+    RelayFailed(String),
+    /// The Buwiz relay did not try: Buwiz held the send, the app is signed out, or Buwiz could not be reached.
+    /// Nothing reached the BIR, and it does not count as a failed try. Not before `wait_until` when there is one.
+    #[error("{reason}")]
+    RelayHeld {
+        reason: String,
+        wait_until: Option<chrono::DateTime<chrono::Utc>>,
+    },
+    /// The Buwiz relay cannot say whether the BIR has the return. Never sent again automatically.
+    #[error("{0}")]
+    RelayUnknown(String),
+}
+
+/// What a finished send says beyond "it went".
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StoreReport {
+    /// The Buwiz relay's signed receipt (a compact JWS), when the send went through it.
+    pub relay_receipt: Option<String>,
+    /// The relay's receipt says nothing reached the BIR: the server ran in its `dry_run` or `lab` mode.
+    pub simulated: bool,
 }
 
 impl TransportError {
     /// The relay proved it did not take the file (refused or unavailable), so the claim on the return can be let go.
     /// Every other failure after the upload started may have delivered it and keeps the claim.
     pub fn relay_did_not_accept(&self) -> bool {
-        matches!(self, Self::RelayRefused(_) | Self::RelayUnavailable(_))
+        !matches!(
+            self.no_receipt(),
+            crate::forms::queueable::NoReceipt::Unknown
+        )
+    }
+
+    /// How this failure of a started send leaves the claimed return. Only what proves that nothing reached the BIR
+    /// lets the claim go; everything else is an unknown outcome and keeps it.
+    pub(crate) fn no_receipt(&self) -> crate::forms::queueable::NoReceipt {
+        use crate::forms::queueable::NoReceipt;
+        match self {
+            Self::RelayRefused(_) | Self::Refused(_) => NoReceipt::Refused,
+            Self::RelayUnavailable(_) => NoReceipt::Failed,
+            Self::RelayFailed(_) => NoReceipt::RelayFailed,
+            Self::RelayHeld { wait_until, .. } => NoReceipt::Held { until: *wait_until },
+            _ => NoReceipt::Unknown,
+        }
+    }
+
+    /// How a failure to open the session, before any claim, leaves the queued return: a hold is not a try; anything
+    /// else is a failed try, as it always was.
+    pub(crate) fn before_claim(&self) -> crate::forms::queueable::NoReceipt {
+        use crate::forms::queueable::NoReceipt;
+        match self {
+            Self::RelayHeld { wait_until, .. } => NoReceipt::Held { until: *wait_until },
+            _ => NoReceipt::Failed,
+        }
     }
 
     /// A short name for logs.
@@ -122,6 +175,10 @@ impl TransportError {
             Self::Rejected => "rejected",
             Self::RelayRefused(_) => "relay_refused",
             Self::RelayUnavailable(_) => "relay_unavailable",
+            Self::Refused(_) => "refused",
+            Self::RelayFailed(_) => "relay_failed",
+            Self::RelayHeld { .. } => "relay_held",
+            Self::RelayUnknown(_) => "relay_unknown",
         }
     }
 }
@@ -174,6 +231,8 @@ pub enum SftpEndpointSource {
     Dispatcher,
     /// The local mock relay ([`RELAY_URL_ENV`], loopback only; docs/relay.md).
     Relay,
+    /// The Buwiz relay ([`crate::relay`]): the return goes to the BIR through Buwiz's server.
+    Buwiz,
 }
 
 impl SftpEndpointSource {
@@ -183,6 +242,7 @@ impl SftpEndpointSource {
             Self::Env => "env",
             Self::Dispatcher => "dispatcher",
             Self::Relay => "relay",
+            Self::Buwiz => "buwiz",
         }
     }
 
@@ -536,6 +596,8 @@ enum Route {
     DryRun,
     /// `BIR_SFTP_HOST` is set.
     LabHost,
+    /// The Buwiz relay ([`buwiz_relay_requested`]).
+    Buwiz,
     /// None of the above: the BIR's own dispatcher.
     Bir,
 }
@@ -555,6 +617,11 @@ fn route() -> Route {
     if let Some(url) = relay_url() {
         return Route::MockRelay(url);
     }
+    // The local Buwiz relay comes before the dry run for the same reason, but never before a practice account:
+    // that one only simulates, and no request for it reaches a relay.
+    if buwiz_relay_requested() && !practice_account() {
+        return Route::Buwiz;
+    }
     if sftp_dry_run_requested() {
         return Route::DryRun;
     }
@@ -562,6 +629,22 @@ fn route() -> Route {
         return Route::LabHost;
     }
     Route::Bir
+}
+
+/// Ask a development build to send through the Buwiz relay: `BUWIZ_RELAY_SEND=1`.
+pub const RELAY_SEND_ENV: &str = "BUWIZ_RELAY_SEND";
+
+/// Sending through the Buwiz relay was asked for. Only a development build honours [`RELAY_SEND_ENV`], and
+/// [`crate::relay`] then sends only through a Buwiz server on this computer whose trust list a test key signed: no
+/// build that ships sends through the relay yet, and a development build can never file through production. Like
+/// the mock relay's URL, it is the ask to send there, so it wins over the dry-run flags and a test environment.
+pub fn buwiz_relay_requested() -> bool {
+    cfg!(debug_assertions) && env_flag_enabled(RELAY_SEND_ENV)
+}
+
+/// The send goes through the Buwiz relay ([`crate::relay`]), not over SFTP. A practice account never does.
+pub(crate) fn sends_through_buwiz() -> bool {
+    matches!(route(), Route::Buwiz)
 }
 
 /// This build has nowhere to send a return: nothing selects a dry run, the
@@ -576,15 +659,28 @@ fn unavailable_for(route: &Route, direct: bool) -> bool {
     matches!(route, Route::Bir) && !direct
 }
 
-/// No return is stored as Queued while [`sending_unavailable`] holds: every
-/// route that queues one (the form page, the agent) ends in a database write
-/// that asks this first. A return queued now would be sent, unasked, by the
-/// first later version that can send.
+/// A release build stores no return as Queued while [`sending_unavailable`]
+/// holds: every route that queues one (the form page, the agent) ends in a
+/// database write that asks this first. A return queued now would be sent,
+/// unasked, by the first later version that can send.
 pub(crate) fn refuse_queue_when_unavailable() -> Result<(), crate::db::DbError> {
-    if sending_unavailable() {
+    if queue_refused(cfg!(debug_assertions), sending_unavailable) {
         return Err(crate::db::DbError::Other(QUEUE_UNAVAILABLE.into()));
     }
     Ok(())
+}
+
+/// Whether Queue is refused. Only a release build refuses: its environment is
+/// read at launch and does not change, so the answer is one answer.
+///
+/// A development build never refuses here (with nowhere to send, its worker
+/// leaves the queued return alone). It must not: the answer depends on the
+/// process environment, tests change that environment for a moment
+/// (`temp_env`) while other tests on other threads queue returns, and a
+/// refusal read through another test's environment failed those at random.
+/// `unavailable` is not even asked in a development build.
+fn queue_refused(development: bool, unavailable: impl FnOnce() -> bool) -> bool {
+    !development && unavailable()
 }
 
 /// A build without `direct-bir` opens SFTP only to a loopback address (the
@@ -697,6 +793,10 @@ pub async fn resolve_sftp_endpoint(
         }
         #[cfg(not(feature = "direct-bir"))]
         Route::Bir => Err(TransportError::Config(SENDING_UNAVAILABLE.into())),
+        // The queue asks `sends_through_buwiz` first and never resolves an SFTP target for this route.
+        Route::Buwiz => Err(TransportError::Config(
+            "This send goes through the Buwiz relay, not over SFTP.".into(),
+        )),
     }
 }
 
@@ -1923,6 +2023,7 @@ mod tests {
             Route::MockRelay(Err(TransportError::Config("refused".into()))),
             Route::DryRun,
             Route::LabHost,
+            Route::Buwiz,
         ] {
             assert!(!unavailable_for(&route, false));
             assert!(!unavailable_for(&route, true));
@@ -1994,14 +2095,26 @@ mod tests {
                     matches!(&refused, Err(TransportError::Config(why)) if why == SENDING_UNAVAILABLE),
                     "{refused:?}"
                 );
-                let queue = refuse_queue_when_unavailable();
-                assert!(
-                    matches!(&queue, Err(crate::db::DbError::Other(why)) if why == QUEUE_UNAVAILABLE),
-                    "{queue:?}"
+                // A release build refuses Queue here; this development build does not ask.
+                assert!(queue_refused(false, sending_unavailable));
+                assert_eq!(
+                    refuse_queue_when_unavailable().is_ok(),
+                    cfg!(debug_assertions)
                 );
             },
         )
         .await;
+    }
+
+    /// Queue is refused only by a release build with nowhere to send. A development build never refuses and never
+    /// reads the environment for it: another test may be changing that environment on another thread.
+    #[test]
+    fn only_a_release_build_with_nowhere_to_send_refuses_queue() {
+        assert!(queue_refused(false, || true));
+        assert!(!queue_refused(false, || false));
+        assert!(!queue_refused(true, || panic!(
+            "a development build does not ask"
+        )));
     }
 
     /// A dry run, the mock relay and a lab host are somewhere to send: the queue runs and Queue is allowed.
@@ -2021,9 +2134,40 @@ mod tests {
         ] {
             isolated_sftp_env(vars, || {
                 assert!(!sending_unavailable(), "{vars:?}");
-                assert!(refuse_queue_when_unavailable().is_ok(), "{vars:?}");
+                assert!(!queue_refused(false, sending_unavailable), "{vars:?}");
             });
         }
+    }
+
+    /// The local Buwiz relay is asked for like the mock relay: it wins over the dry-run flags and a test environment
+    /// (a development build only), and never over a practice account.
+    #[test]
+    fn the_local_buwiz_relay_wins_over_a_dry_run_but_never_over_a_practice_account() {
+        struct ResetPractice;
+        impl Drop for ResetPractice {
+            fn drop(&mut self) {
+                set_practice_account(false);
+            }
+        }
+        isolated_sftp_env(
+            [
+                ("EBIR_TEST_ENV", Some("1")),
+                ("BIR_SFTP_DRY_RUN", Some("1")),
+                (RELAY_SEND_ENV, Some("1")),
+            ],
+            || {
+                assert_eq!(buwiz_relay_requested(), cfg!(debug_assertions));
+                assert_eq!(sends_through_buwiz(), cfg!(debug_assertions));
+                assert!(!sending_unavailable());
+                let _reset = ResetPractice;
+                set_practice_account(true);
+                assert!(!sends_through_buwiz(), "a practice account only simulates");
+                assert!(matches!(route(), Route::DryRun));
+            },
+        );
+        isolated_sftp_env([(RELAY_SEND_ENV, None)], || {
+            assert!(!sends_through_buwiz());
+        });
     }
 
     #[tokio::test]

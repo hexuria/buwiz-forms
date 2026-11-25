@@ -13,6 +13,7 @@
 import { batch, signal, type Signal } from "nsh";
 import { bir } from "../bir";
 import { errorText } from "../lib/errors";
+import { zipChoices } from "../lib/format";
 
 /** A read that failed answers its fallback for this long, then is asked again. */
 export const FAILED_READ_RETRY_MS = 2000;
@@ -31,7 +32,7 @@ export const SAVED_RETURNS_KEY = "saved_returns";
  * The host functions that queue a return or take it out of the queue. The submission worker answers within a second or two (dry-run:
  * "Submitted"), and nothing tells the app, so after one of these the lists are read again at once and then at each of QUEUE_REREAD_MS.
  */
-export const QUEUE_FUNCTIONS: ReadonlySet<string> = new Set(["queue_form_draft", "cancel_queued", "screen_form_queue", "screen_form_cancel_queue"]);
+export const QUEUE_FUNCTIONS: ReadonlySet<string> = new Set(["queue_form_draft", "cancel_queued", "screen_form_queue", "screen_form_cancel_queue", "resolve_unknown_send"]);
 /** How long after a queue or a cancel-queue the lists are read again (and they are read at once as well). */
 export const QUEUE_REREAD_MS = [1000, 3000, 10_000] as const;
 /** What the worker changes behind the app's back: the returns lists, their deadlines and yearly form rows, the jobs, the drafts count, the as-needed forms. */
@@ -350,11 +351,11 @@ export const store = {
     }
     return rdoList;
   },
-  /** ZIP choices as { value, label }. Static, so kept past bump(). */
+  /** ZIP choices as { value, label }, one per code. Static, so kept past bump(). */
   zipOptions(): { value: string; label: string }[] {
     if (!zipList) {
       try {
-        zipList = bir.list_zip_codes().map((z) => ({ value: z.split(" - ")[0].trim(), label: z }));
+        zipList = zipChoices(bir.list_zip_codes());
       } catch {
         return [];
       }
