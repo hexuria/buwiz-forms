@@ -1,0 +1,20 @@
+View hierarchies from the uiautomator dumps (android.widget.ScrollView below is NSH's inner VScroll —
+ScrollBox extends FrameLayout and wraps a platform ScrollView, see ScrollBox.java line 398).
+
+APP, New taxpayer (A2-dump-scroll-limit.xml):
+  EditText ancestors: FrameLayout>ViewGroup x9>ScrollView>FrameLayout>...
+  -> the app's input fields ARE native EditTexts, and they ARE inside the one ScrollView on the page
+     (bounds [0,254][1080,2185], containing all 4 EditTexts).
+  Yet: no bottom padding is ever added (scroll hits a hard limit with Email and the Create button
+  under the keyboard) and revealFocused never fires (positions unchanged after tapping a field).
+
+KIT (B2-dump-fieldc-focused.xml):
+  EditText ancestors: FrameLayout>ViewGroup>ViewGroup>ScrollView>FrameLayout>...
+  Same shape, same runtime, same device, same Android API level — and there everything works:
+  padding added, fields auto-revealed above the keyboard.
+
+So the difference is not the runtime, not the Android version, and not whether the fields sit inside
+a scroll view. What remains different is HOW the app's pages build and focus their inputs
+(re-created nodes, nested scrolls, focus timing or the modal/sheet hosting the pages) — the app
+never gives Mounter.keyboard() a live focused input inside the right ScrollBox, or re-lays the page
+in a way that drops the padding again.
