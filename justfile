@@ -582,14 +582,19 @@ _package-mac-appstore args="": build-frozen-html-identity
     fi
     dirty=""
     git -C "$root" diff --quiet HEAD -- || dirty=" (with uncommitted changes)"
-    # The owner's cargo fork (huacnlee/cargo) ignores CARGO_TARGET_DIR and builds every workspace in its own ./target (the app's:
-    # nsh/.nsh/rust/target): the line names the cargo and the folder really used.
+    # The pinned toolchain's own cargo, first on PATH (the nsh tool and nsh/mas/cargo-with-mas.sh call `cargo`): it honours
+    # CARGO_TARGET_DIR. The owner's cargo fork (huacnlee/cargo) stays everyone's everyday cargo, but it ignores CARGO_TARGET_DIR and
+    # shares one build folder between every checkout, so a store package is refused if it is the cargo found here.
+    toolchain_cargo="$(rustup which cargo 2>/dev/null || true)"
+    if [ -z "$toolchain_cargo" ]; then
+        echo "❌ rustup finds no cargo for this checkout's toolchain (rust-toolchain.toml)." >&2; exit 1
+    fi
+    export PATH="$(dirname "$toolchain_cargo"):$PATH"
     cargo_v="$(cargo --version 2>/dev/null || echo "cargo missing")"
     case "$cargo_v" in
-        *huacnlee/cargo*) folder="$root/nsh/.nsh/rust/target (this cargo ignores CARGO_TARGET_DIR)" ;;
-        *) folder="$CARGO_TARGET_DIR" ;;
+        *huacnlee*) echo "❌ $cargo_v is the cargo fork, which shares one build folder between checkouts: a store package needs the toolchain's own cargo." >&2; exit 1 ;;
     esac
-    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, $cargo_v, folder $folder"
+    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, $cargo_v, folder $CARGO_TARGET_DIR"
     echo "$PROVENANCE" >&2
     echo "Building the NSH app for the Mac App Store ($ARCH, build {{BUILD_NUMBER}}, agent=$NSH_MAS_AGENT)..."
     rm -rf "$OUT"
@@ -775,14 +780,19 @@ ios-appstore: build-frozen-html-identity
     fi
     dirty=""
     git -C "$root" diff --quiet HEAD -- || dirty=" (with uncommitted changes)"
-    # The owner's cargo fork (huacnlee/cargo) ignores CARGO_TARGET_DIR and builds every workspace in its own ./target (the app's:
-    # nsh/.nsh/rust/target): the line names the cargo and the folder really used.
+    # The pinned toolchain's own cargo, first on PATH (the nsh tool and nsh/mas/cargo-with-mas.sh call `cargo`): it honours
+    # CARGO_TARGET_DIR. The owner's cargo fork (huacnlee/cargo) stays everyone's everyday cargo, but it ignores CARGO_TARGET_DIR and
+    # shares one build folder between every checkout, so a store package is refused if it is the cargo found here.
+    toolchain_cargo="$(rustup which cargo 2>/dev/null || true)"
+    if [ -z "$toolchain_cargo" ]; then
+        echo "❌ rustup finds no cargo for this checkout's toolchain (rust-toolchain.toml)." >&2; exit 1
+    fi
+    export PATH="$(dirname "$toolchain_cargo"):$PATH"
     cargo_v="$(cargo --version 2>/dev/null || echo "cargo missing")"
     case "$cargo_v" in
-        *huacnlee/cargo*) folder="$root/nsh/.nsh/rust/target (this cargo ignores CARGO_TARGET_DIR)" ;;
-        *) folder="$CARGO_TARGET_DIR" ;;
+        *huacnlee*) echo "❌ $cargo_v is the cargo fork, which shares one build folder between checkouts: a store package needs the toolchain's own cargo." >&2; exit 1 ;;
     esac
-    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, $cargo_v, folder $folder"
+    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, $cargo_v, folder $CARGO_TARGET_DIR"
     echo "$PROVENANCE" >&2
     OUT="$root/{{RELEASE_DIR}}/ios"
     APP="$OUT/{{APP_NAME}}.app"

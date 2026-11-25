@@ -43,9 +43,9 @@ The shared `~/BuwizNsh/tools` is the everyday tool. It is not rebuilt for a stor
 
 Each package builds in the checkout's own folder (`target/nsh-store`), not the shared `~/BuwizNsh/target-nsh`. Cargo cannot tell two checkouts of the same crate version apart, so a shared folder could put another branch's form data in the package.
 
-The recipe prints `build: app <commit>, nsh <commit> beside it, tool <nsh --version>, <cargo --version>, folder <folder>` (with the owner's cargo fork, which ignores `CARGO_TARGET_DIR`, the folder is the workspace's own `nsh/.nsh/rust/target`) and keeps that line, with the build number, in `eBIRForms-iOS-<version>.provenance.txt` beside the package.
+The recipe builds with the pinned toolchain's own cargo (`rustup which cargo`, put first on PATH), which honours the folder, and refuses when the cargo it finds is the owner's fork (`huacnlee/cargo`): that cargo ignores `CARGO_TARGET_DIR` and shares one build folder between every checkout. The fork stays the everyday cargo. The recipe prints `build: app <commit>, nsh <commit> beside it, tool <nsh --version>, <cargo --version>, folder <folder>` and keeps that line, with the build number, in `eBIRForms-iOS-<version>.provenance.txt` beside the package.
 
-TestFlight build 28 (0.2.1) was made before this rule. Its build record (`nsh/.nsh/rust/target/aarch64-apple-ios/release/*.d` in the worktree that made it) lists `bir-core` and the kit only from that worktree (main d7fc83be) and its `../nsh` at the then pin ca39c0e9, so the cargo fork kept it in its own folder; it was packaged with a shared `nsh` tool at 411a99e, not the pin. It stays internal TestFlight only, and the next phone build, made by these recipes, replaces it.
+TestFlight build 28 (0.2.1) was made before this rule with the cargo fork, whose shared build folder can hand one checkout another's compiled crates, so its form data cannot be certified. It is internal TestFlight only, must not be promoted, and the next phone build, made by these recipes, replaces it.
 
 `nsh package` needs an iOS Simulator runtime that matches the Xcode SDK installed, even for a device package
 (`actool` refuses without one).
