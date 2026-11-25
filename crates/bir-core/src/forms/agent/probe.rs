@@ -1363,19 +1363,6 @@ fn echoes(kind: ValueKind, probe: &Value, official: &str) -> bool {
     }
 }
 
-/// Whether official field text echoes whole-integer probe `expected`,
-/// either as plain digits (`"7"`) or whole-peso display (`"7.00"`, `"1,000.00"`).
-fn echoes_whole(official: &str, expected: i64) -> bool {
-    let trimmed = official.trim();
-    if trimmed.parse::<i64>().ok() == Some(expected) {
-        return true;
-    }
-    trimmed
-        .strip_suffix(".00")
-        .and_then(|whole| whole.replace(',', "").parse::<i64>().ok())
-        == Some(expected)
-}
-
 /// Every leaf of a draft: JSON pointer -> value.
 fn leaves(value: &Value, path: &str, depth: usize, out: &mut Vec<(String, Value)>) {
     match value {
