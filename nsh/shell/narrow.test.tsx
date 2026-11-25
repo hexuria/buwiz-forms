@@ -126,7 +126,8 @@ test("a narrow Windows or Linux window: ☰ before the title lists every menu; t
     await app.waitFor("id:nb-menu");
     expect(app.shows("id:menu-row")).toBe(false);
     expect(app.shows("id:nb-avatar")).toBe(true);
-    expect(app.shows("id:nb-search")).toBe(false);
+    // One narrow header everywhere: New return and Search beside the badge.
+    expect(app.shows("id:nb-search")).toBe(true);
     await app.press("id:nb-menu");
     await app.waitUntil(() => app.menu() !== null);
     const labels = (app.menu() ?? []).map((e) => e.label);
