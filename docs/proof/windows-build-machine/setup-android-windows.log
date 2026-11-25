@@ -1,0 +1,74 @@
+
+==> JDK 17 already installed - skipping
+
+==> Android command-line tools already installed - skipping
+
+==> Accepting SDK licenses
+NOTE: Picked up JDK_JAVA_OPTIONS: -XX:+IgnoreUnrecognizedVMOptions -XX:+UnlockDiagnosticVMOptions -XX:-UseBASE64Intrinsics
+
+==> Installing SDK packages: platform-tools, emulator, platforms;android-35, platforms;android-36, build-tools;35.0.1, build-tools;36.0.0, ndk;27.3.13750724, system-images;android-35;google_apis;x86_64
+NOTE: Picked up JDK_JAVA_OPTIONS: -XX:+IgnoreUnrecognizedVMOptions -XX:+UnlockDiagnosticVMOptions -XX:-UseBASE64Intrinsics
+
+==> AVD buwiz_api35 already exists - skipping
+
+==> LLVM already installed - skipping
+
+==> Adding Rust Android targets
+info: component rust-std for target x86_64-linux-android is up to date
+info: component rust-std for target aarch64-linux-android is up to date
+info: component rust-std for target armv7-linux-androideabi is up to date
+
+==> Setting machine env vars
+
+==> Enabling Windows Hypervisor Platform
+Already enabled.
+accel:
+6
+Hyper-V detected and Windows Hypervisor Platform is available. Please ensure both the "Hyper-V" and "Windows Hypervisor Platform" features enabled in "Turn Windows features on or off".
+accel
+WARNING: Emulator acceleration unavailable; -NoEmulator: continuing CLI and Android runtime provisioning. This machine 
+builds and packages Android but cannot run it.
+
+==> Installing MSYS2 Perl and make for Android vendored OpenSSL
+resolving dependencies...
+looking for conflicting packages...
+
+Packages (2) make-4.4.1-3  perl-5.44.0-1
+
+Total Download Size:    7.74 MiB
+Total Installed Size:  42.10 MiB
+
+:: Proceed with installation? [Y/n] 
+:: Retrieving packages...
+ perl-5.44.0-1-x86_64 downloading...
+ make-4.4.1-3-x86_64 downloading...
+checking keyring...
+checking package integrity...
+loading package files...
+checking for file conflicts...
+checking available disk space...
+:: Processing package changes...
+installing perl...
+Optional dependencies for perl
+    db: for DB_File
+    gdbm: for GDBM_File
+installing make...
+:: Running post-transaction hooks...
+(1/1) Updating the info directory file...
+error: command failed to execute correctly
+
+==> Building Android dev runtime
+✓ built libnsh.so for arm64-v8a (3m 37s)
+✓ built libnsh.so for armeabi-v7a (2m 56s)
+✓ built libnsh.so for x86_64 (2m 59s)
+✓ compiled the Java runtime (26.1s)
+→ target/android\debug-dev
+
+==> Building Android release runtime
+✓ built libnsh.so for arm64-v8a (8m 4s)
+✓ built libnsh.so for armeabi-v7a (6m 51s)
+✓ built libnsh.so for x86_64 (7m 0s)
+✓ compiled the Java runtime (12.2s)
+→ target/android\release
+
+==> Done. Use scripts\run-android-windows.ps1 to launch Android against mock-account.
