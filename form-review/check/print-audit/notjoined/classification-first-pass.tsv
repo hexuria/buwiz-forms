@@ -18,7 +18,7 @@ form	sample	key	official	class	item	note
 1801-2018	1801-06052025	frm1801v2018:tinA_2	123	b		carried by frm1801v2018:registeredAddress_1
 1801-2018	1801-06052025	frm1801v2018:tinB_2	456	b		carried by derived:tin_digits
 1801-2018	1801-06052025	frm1801v2018:tinC_2	788	b		carried by derived:tin_digits
-1801-2018	1801-06052025	frm1801v2018:txtCurrentPage	1	b		carried by frm1801v2018:txtSheets
+1801-2018	1801-06052025	frm1801v2018:txtCurrentPage	1	a		visible input "tCurrentPage" item None page 1; no cell on the sheet
 1801-2018	1801-06052025	frm1801v2018:txtMaxPage	2	a		visible input "tMaxPage" item None page 1; no cell on the sheet
 1801-2018	1801-09152025	frm1801v2018:txtDateMonth	09	a		visible input "tDateMonth" item None page 1; no cell on the sheet
 1801-2018	1801-09152025	frm1801v2018:txtDateDay	15	b		carried by frm1801v2018:txtEstAfterDed_A
@@ -49,7 +49,7 @@ form	sample	key	official	class	item	note
 1801-2018	1801-09152025	frm1801v2018:sched1Conj_3	1,750,000.51	b		carried by frm1801v2018:txtRealProp_B
 1801-2018	1801-09152025	frm1801v2018:sched2AParticulars_3	PAINTINGS	d		control kind unknown, no evidence
 1801-2018	1801-09152025	frm1801v2018:sched2AExc_3	120,000.00	b		carried by frm1801v2018:txtRealProp_A
-1801-2018	1801-09152025	frm1801v2018:txtCurrentPage	1	b		carried by frm1801v2018:txtSheets
+1801-2018	1801-09152025	frm1801v2018:txtCurrentPage	1	a		visible input "tCurrentPage" item None page 1; no cell on the sheet
 1801-2018	1801-09152025	frm1801v2018:txtMaxPage	2	a		visible input "tMaxPage" item None page 1; no cell on the sheet
 1801-2018	1801-09162025	frm1801v2018:txtDateMonth	09	a		visible input "tDateMonth" item None page 1; no cell on the sheet
 1801-2018	1801-09162025	frm1801v2018:txtDateDay	16	b		carried by frm1801v2018:txtGrossEst_A
@@ -169,7 +169,7 @@ form	sample	key	official	class	item	note
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_3	300000	b		carried by frm1801v2018:sched2Exc_1
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_3	300,000.38	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_4	360000	d		control kind unknown, no evidence
-1801-2018	1801-09162025	frm1801v2018:sched1Zonal_4	400000	d		control kind unknown, no evidence
+1801-2018	1801-09162025	frm1801v2018:sched1Zonal_4	400000	b		carried by per-digit comb cells
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_4	400,000.50	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_5	450000	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_5	500000	b		carried by frm1801v2018:txtEstAfterDed_A
@@ -178,19 +178,19 @@ form	sample	key	official	class	item	note
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_6	600000	b		carried by frm1801v2018:txtGrossEst_A
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_6	600,000.75	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_7	630000	d		control kind unknown, no evidence
-1801-2018	1801-09162025	frm1801v2018:sched1Zonal_7	700000	d		control kind unknown, no evidence
+1801-2018	1801-09162025	frm1801v2018:sched1Zonal_7	700000	b		carried by per-digit comb cells
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_7	700,000.88	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_8	720000	b		carried by frm1801v2018:txtGrossEst_A
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_8	800000	b		carried by frm1801v2018:sched1AFmv_1
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_8	800,001.00	d		control kind unknown, no evidence
-1801-2018	1801-09162025	frm1801v2018:sched1Fmv_9	810000	d		control kind unknown, no evidence
+1801-2018	1801-09162025	frm1801v2018:sched1Fmv_9	810000	b		carried by per-digit comb cells
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_9	900000	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_9	900,001.13	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_10	900000	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_10	1000000	b		carried by frm1801v2018:sched1Fmv_1
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_10	1,000,001.25	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_11	990000	d		control kind unknown, no evidence
-1801-2018	1801-09162025	frm1801v2018:sched1Zonal_11	1100000	d		control kind unknown, no evidence
+1801-2018	1801-09162025	frm1801v2018:sched1Zonal_11	1100000	b		carried by per-digit comb cells
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_11	1,100,001.38	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_12	1080000	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_12	1200000	b		carried by frm1801v2018:txtRealProp_A
@@ -201,14 +201,14 @@ form	sample	key	official	class	item	note
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_14	1260000	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_14	1400000	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_14	1,400,001.75	d		control kind unknown, no evidence
-1801-2018	1801-09162025	frm1801v2018:sched1Fmv_15	1350000	d		control kind unknown, no evidence
+1801-2018	1801-09162025	frm1801v2018:sched1Fmv_15	1350000	b		carried by per-digit comb cells
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_15	1500000	b		carried by frm1801v2018:txtEstAfterDed_A
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_15	1,500,001.88	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_16	1440000	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_16	1600000	b		carried by frm1801v2018:txtGrossEst_A
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_16	1,600,002.00	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_17	1530000	d		control kind unknown, no evidence
-1801-2018	1801-09162025	frm1801v2018:sched1Zonal_17	1700000	d		control kind unknown, no evidence
+1801-2018	1801-09162025	frm1801v2018:sched1Zonal_17	1700000	b		carried by per-digit comb cells
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_17	1,700,002.13	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_18	1620000	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_18	1800000	b		carried by frm1801v2018:sched1AFmv_1
@@ -218,7 +218,7 @@ form	sample	key	official	class	item	note
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_19	1,900,002.38	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_20	1800000	b		carried by frm1801v2018:sched1AFmv_1
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_20	2000000	b		carried by frm1801v2018:txtFam_B
-1801-2018	1801-09162025	frm1801v2018:sched1Exc_20	2,000,002.50	d		control kind unknown, no evidence
+1801-2018	1801-09162025	frm1801v2018:sched1Exc_20	2,000,002.50	b		carried by per-digit comb cells
 1801-2018	1801-09162025	frm1801v2018:sched1Fmv_21	1890000	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Zonal_21	2100000	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched1Exc_21	2,100,002.63	d		control kind unknown, no evidence
@@ -327,7 +327,7 @@ form	sample	key	official	class	item	note
 1801-2018	1801-09162025	frm1801v2018:sched4Address_7	STREET 7, TAGUIG CITY	d		control kind unknown, no evidence
 1801-2018	1801-09162025	frm1801v2018:sched4Rdo_7	044	c		radio/checkbox option; group state prints as X marks
 1801-2018	1801-09162025	frm1801v2018:sched4Conj_7	3,500.00	b		carried by frm1801v2018:txtPersonalProp_A
-1801-2018	1801-09162025	frm1801v2018:txtCurrentPage	1	b		carried by frm1801v2018:txtSheets
+1801-2018	1801-09162025	frm1801v2018:txtCurrentPage	1	a		visible input "tCurrentPage" item None page 1; no cell on the sheet
 1801-2018	1801-09162025	frm1801v2018:txtMaxPage	2	a		visible input "tMaxPage" item None page 1; no cell on the sheet
 1701a-2018	1701A-122025	frm1701A:txtAddress	123 SAMPLE STREET, BARANGAY EX	b		carried by derived:address_line1
 1701a-2018	1701A-122025	frm1701A:txtBirthDate	01/15/1980	a		visible input "frm1701A:txtBirthDate" item None page None; no cell on the sheet
@@ -354,12 +354,12 @@ form	sample	key	official	class	item	note
 1701a-2018	1701A-122025	frm1701A:txt46A	94,448.00	b	46	carried by derived:amount_20A
 1701a-2018	1701A-122025	frm1701A:txt57A	1,000.00	b	57	carried by derived:amount_25A
 1701a-2018	1701A-122025	frm1701A:txt58A	30,000.00	b	58	carried by derived:amount_58A
-1701a-2018	1701A-122025	frm1701A:txt59A	5,000.25	a	59	visible input "frm1701A:txt59A" item 59 page None; no cell on the sheet
+1701a-2018	1701A-122025	frm1701A:txt59A	5,000.25	b	59	carried by per-digit comb cells
 1701a-2018	1701A-122025	frm1701A:txt60A	2,500.00	b	60	carried by derived:amount_44A
 1701a-2018	1701A-122025	frm1701A:txt63A	100.00	b	63	carried by frm1701A:txtZipCode
 1701a-2018	1701A-122025	frm1701A:txt64A	38,600.00	b	64	carried by derived:amount_21A
 1701a-2018	1701A-122025	frm1701A:txt65A	55,848.00	b	65	carried by derived:amount_22A
-1701a-2018	1701A-122025	frm1701A:txtCurrentPage	1	b		carried by derived:birth_mm
+1701a-2018	1701A-122025	frm1701A:txtCurrentPage	1	a		visible input "frm1701A:txtCurrentPage" item None page None; no cell on the sheet
 1701a-2018	1701A-122025	frm1701A:txtMaxPage	2	a		visible input "frm1701A:txtMaxPage" item None page None; no cell on the sheet
 1701a-2018	1701A-122025	frm1701A:txtLineBus	SAMPLE CONSULTING SERVICES	a		visible input "frm1701A:txtLineBus" item None page None; no cell on the sheet
 1701a-2018	1701A-122025	frm1701A:txtVersion	11112018	a		visible input "frm1701A:txtVersion" item None page None; no cell on the sheet
@@ -399,7 +399,7 @@ form	sample	key	official	class	item	note
 1701a-2018	1701A-122025-joint	frm1701A:txt56B	52,000.00	b	56	carried by derived:amount_20B
 1701a-2018	1701A-122025-joint	frm1701A:txt57A	1,000.00	b	57	carried by derived:amount_25A
 1701a-2018	1701A-122025-joint	frm1701A:txt58A	30,000.00	b	58	carried by derived:amount_58A
-1701a-2018	1701A-122025-joint	frm1701A:txt59A	5,000.25	a	59	visible input "frm1701A:txt59A" item 59 page None; no cell on the sheet
+1701a-2018	1701A-122025-joint	frm1701A:txt59A	5,000.25	b	59	carried by per-digit comb cells
 1701a-2018	1701A-122025-joint	frm1701A:txt59B	4,500.50	a	59	visible input "frm1701A:txt59B" item 59 page None; no cell on the sheet
 1701a-2018	1701A-122025-joint	frm1701A:txt60A	2,500.00	b	60	carried by derived:amount_44A
 1701a-2018	1701A-122025-joint	frm1701A:txt63A	100.00	b	63	carried by frm1701A:txtZipCode
@@ -408,7 +408,7 @@ form	sample	key	official	class	item	note
 1701a-2018	1701A-122025-joint	frm1701A:txt65A	55,848.00	b	65	carried by derived:amount_22A
 1701a-2018	1701A-122025-joint	frm1701A:txt65B	47,499.00	b	65	carried by derived:amount_22B
 1701a-2018	1701A-122025-joint	frm1701A:txtSpouseRDOCode	039	c		radio/checkbox option; group state prints as X marks
-1701a-2018	1701A-122025-joint	frm1701A:txtCurrentPage	1	b		carried by derived:birth_mm
+1701a-2018	1701A-122025-joint	frm1701A:txtCurrentPage	1	a		visible input "frm1701A:txtCurrentPage" item None page None; no cell on the sheet
 1701a-2018	1701A-122025-joint	frm1701A:txtMaxPage	2	a		visible input "frm1701A:txtMaxPage" item None page None; no cell on the sheet
 1701a-2018	1701A-122025-joint	frm1701A:txtLineBus	SAMPLE CONSULTING SERVICES	a		visible input "frm1701A:txtLineBus" item None page None; no cell on the sheet
 1701a-2018	1701A-122025-joint	frm1701A:txtIsTaxFilerDisabled	FALSE	b		carried by frm1701A:optAmendedReturn_1
@@ -450,7 +450,7 @@ form	sample	key	official	class	item	note
 1701a-2018	1701A-122025-joint-many	frm1701A:txt56B	52,000.00	b	56	carried by derived:amount_20B
 1701a-2018	1701A-122025-joint-many	frm1701A:txt57A	1,000.00	b	57	carried by derived:amount_25A
 1701a-2018	1701A-122025-joint-many	frm1701A:txt58A	30,000.00	b	58	carried by derived:amount_58A
-1701a-2018	1701A-122025-joint-many	frm1701A:txt59A	5,000.25	a	59	visible input "frm1701A:txt59A" item 59 page None; no cell on the sheet
+1701a-2018	1701A-122025-joint-many	frm1701A:txt59A	5,000.25	b	59	carried by per-digit comb cells
 1701a-2018	1701A-122025-joint-many	frm1701A:txt59B	4,500.50	a	59	visible input "frm1701A:txt59B" item 59 page None; no cell on the sheet
 1701a-2018	1701A-122025-joint-many	frm1701A:txt60A	2,500.00	b	60	carried by derived:amount_44A
 1701a-2018	1701A-122025-joint-many	frm1701A:txt63A	100.00	b	63	carried by frm1701A:txtZipCode
@@ -459,7 +459,7 @@ form	sample	key	official	class	item	note
 1701a-2018	1701A-122025-joint-many	frm1701A:txt65A	73,225.00	a	65	visible input "frm1701A:txt65A" item 65 page None; no cell on the sheet
 1701a-2018	1701A-122025-joint-many	frm1701A:txt65B	47,499.00	b	65	carried by derived:amount_22B
 1701a-2018	1701A-122025-joint-many	frm1701A:txtSpouseRDOCode	039	c		radio/checkbox option; group state prints as X marks
-1701a-2018	1701A-122025-joint-many	frm1701A:txtCurrentPage	1	b		carried by derived:birth_mm
+1701a-2018	1701A-122025-joint-many	frm1701A:txtCurrentPage	1	a		visible input "frm1701A:txtCurrentPage" item None page None; no cell on the sheet
 1701a-2018	1701A-122025-joint-many	frm1701A:txtMaxPage	2	a		visible input "frm1701A:txtMaxPage" item None page None; no cell on the sheet
 1701a-2018	1701A-122025-joint-many	frm1701A:txtLineBus	SAMPLE CONSULTING SERVICES	a		visible input "frm1701A:txtLineBus" item None page None; no cell on the sheet
 1701a-2018	1701A-122025-joint-many	frm1701A:txtCtrmodalPartIVA	12	b		carried by frm1701A:txtMonth
@@ -486,7 +486,7 @@ form	sample	key	official	class	item	note
 1701a-2018	1701A-122025-joint-many	frm1701A:txtmodalPartIVADesc_9C1	OTHER INCOME 9	d		control kind unknown, no evidence
 1701a-2018	1701A-122025-joint-many	frm1701A:txtmodalPartIVA_9C2	9,005.90	d		control kind unknown, no evidence
 1701a-2018	1701A-122025-joint-many	frm1701A:txtmodalPartIVADesc_10C1	OTHER INCOME 10	d		control kind unknown, no evidence
-1701a-2018	1701A-122025-joint-many	frm1701A:txtmodalPartIVA_10C2	10,005.00	d		control kind unknown, no evidence
+1701a-2018	1701A-122025-joint-many	frm1701A:txtmodalPartIVA_10C2	10,005.00	b		carried by per-digit comb cells
 1701a-2018	1701A-122025-joint-many	frm1701A:txtmodalPartIVADesc_11C1	OTHER INCOME 11	d		control kind unknown, no evidence
 1701a-2018	1701A-122025-joint-many	frm1701A:txtmodalPartIVA_11C2	11,005.10	d		control kind unknown, no evidence
 1701a-2018	1701A-122025-joint-many	frm1701A:txtmodalPartIVADesc_12C1	OTHER INCOME 12	d		control kind unknown, no evidence
@@ -529,7 +529,7 @@ form	sample	key	official	class	item	note
 1701a-2018	1701A-122025-joint-more	frm1701A:txt56B	52,000.00	b	56	carried by derived:amount_20B
 1701a-2018	1701A-122025-joint-more	frm1701A:txt57A	1,000.00	b	57	carried by derived:amount_25A
 1701a-2018	1701A-122025-joint-more	frm1701A:txt58A	30,000.00	b	58	carried by derived:amount_58A
-1701a-2018	1701A-122025-joint-more	frm1701A:txt59A	5,000.25	a	59	visible input "frm1701A:txt59A" item 59 page None; no cell on the sheet
+1701a-2018	1701A-122025-joint-more	frm1701A:txt59A	5,000.25	b	59	carried by per-digit comb cells
 1701a-2018	1701A-122025-joint-more	frm1701A:txt59B	4,500.50	a	59	visible input "frm1701A:txt59B" item 59 page None; no cell on the sheet
 1701a-2018	1701A-122025-joint-more	frm1701A:txt60A	2,500.00	b	60	carried by derived:amount_44A
 1701a-2018	1701A-122025-joint-more	frm1701A:txt63A	100.00	b	63	carried by frm1701A:txtZipCode
@@ -538,7 +538,7 @@ form	sample	key	official	class	item	note
 1701a-2018	1701A-122025-joint-more	frm1701A:txt65A	58,498.00	b	65	carried by derived:amount_22A
 1701a-2018	1701A-122025-joint-more	frm1701A:txt65B	47,499.00	b	65	carried by derived:amount_22B
 1701a-2018	1701A-122025-joint-more	frm1701A:txtSpouseRDOCode	039	c		radio/checkbox option; group state prints as X marks
-1701a-2018	1701A-122025-joint-more	frm1701A:txtCurrentPage	1	b		carried by derived:birth_mm
+1701a-2018	1701A-122025-joint-more	frm1701A:txtCurrentPage	1	a		visible input "frm1701A:txtCurrentPage" item None page None; no cell on the sheet
 1701a-2018	1701A-122025-joint-more	frm1701A:txtMaxPage	2	a		visible input "frm1701A:txtMaxPage" item None page None; no cell on the sheet
 1701a-2018	1701A-122025-joint-more	frm1701A:txtLineBus	SAMPLE CONSULTING SERVICES	a		visible input "frm1701A:txtLineBus" item None page None; no cell on the sheet
 1701a-2018	1701A-122025-joint-more	frm1701A:txtCtrmodalPartIVA	3	a		visible input "frm1701A:txtCtrmodalPartIVA" item None page None; no cell on the sheet
@@ -577,12 +577,12 @@ form	sample	key	official	class	item	note
 1701a-2018	1701A-122025-more	frm1701A:txt56A	98,525.00	b	56	carried by derived:amount_20A
 1701a-2018	1701A-122025-more	frm1701A:txt57A	1,000.00	b	57	carried by derived:amount_25A
 1701a-2018	1701A-122025-more	frm1701A:txt58A	30,000.00	b	58	carried by derived:amount_58A
-1701a-2018	1701A-122025-more	frm1701A:txt59A	5,000.25	a	59	visible input "frm1701A:txt59A" item 59 page None; no cell on the sheet
+1701a-2018	1701A-122025-more	frm1701A:txt59A	5,000.25	b	59	carried by per-digit comb cells
 1701a-2018	1701A-122025-more	frm1701A:txt60A	2,500.00	b	60	carried by derived:amount_44A
 1701a-2018	1701A-122025-more	frm1701A:txt63A	100.00	b	63	carried by frm1701A:txtZipCode
 1701a-2018	1701A-122025-more	frm1701A:txt64A	38,600.00	b	64	carried by derived:amount_21A
 1701a-2018	1701A-122025-more	frm1701A:txt65A	59,925.00	b	65	carried by derived:amount_22A
-1701a-2018	1701A-122025-more	frm1701A:txtCurrentPage	1	b		carried by derived:birth_mm
+1701a-2018	1701A-122025-more	frm1701A:txtCurrentPage	1	a		visible input "frm1701A:txtCurrentPage" item None page None; no cell on the sheet
 1701a-2018	1701A-122025-more	frm1701A:txtMaxPage	2	a		visible input "frm1701A:txtMaxPage" item None page None; no cell on the sheet
 1701a-2018	1701A-122025-more	frm1701A:txtLineBus	SAMPLE CONSULTING SERVICES	a		visible input "frm1701A:txtLineBus" item None page None; no cell on the sheet
 1701a-2018	1701A-122025-more	frm1701A:txtCtrmodalPartIVB	2	a		visible input "frm1701A:txtCtrmodalPartIVB" item None page None; no cell on the sheet
@@ -598,11 +598,11 @@ form	sample	key	official	class	item	note
 2200p-2020	2200P-03132025	frm2200P:txtPg1Pt1I8ContactNumber	09170000000	b		carried by derived:contact_email
 2200p-2020	2200P-03132025	frm2200P:txtPg1Pt1I9Email	sample.taxpayer@example.com	b		carried by derived:contact_email
 2200p-2020	2200P-03132025	frm2200P:txtPg1Pt1I10Region	130000000	b		carried by derived:place_of_production
-2200p-2020	2200P-03132025	frm2200P:txtPg1Pt1I10Province	137400000	a		visible input "frm2200P:txtPg1Pt1I10Province" item None page 1; no cell on the sheet
-2200p-2020	2200P-03132025	frm2200P:txtPg1Pt1I10City	137403000	a		visible input "frm2200P:txtPg1Pt1I10City" item None page 1; no cell on the sheet
+2200p-2020	2200P-03132025	frm2200P:txtPg1Pt1I10Province	137400000	b		carried by per-digit comb cells
+2200p-2020	2200P-03132025	frm2200P:txtPg1Pt1I10City	137403000	b		carried by per-digit comb cells
 2200p-2020	2200P-03132025	frm2200P:txtPg1Pt1I11Region	040000000	b		carried by derived:place_of_removal
-2200p-2020	2200P-03132025	frm2200P:txtPg1Pt1I11Province	042100000	a		visible input "frm2200P:txtPg1Pt1I11Province" item None page 1; no cell on the sheet
-2200p-2020	2200P-03132025	frm2200P:txtPg1Pt1I11City	042103000	a		visible input "frm2200P:txtPg1Pt1I11City" item None page 1; no cell on the sheet
+2200p-2020	2200P-03132025	frm2200P:txtPg1Pt1I11Province	042100000	b		carried by per-digit comb cells
+2200p-2020	2200P-03132025	frm2200P:txtPg1Pt1I11City	042103000	b		carried by per-digit comb cells
 2200p-2020	2200P-03132025	frm2200P:txtPg2TinC1	123	b		carried by frm2200P:txtPg1TIN1
 2200p-2020	2200P-03132025	frm2200P:txtPg2TinC2	456	b		carried by frm2200P:txtPg1TIN2
 2200p-2020	2200P-03132025	frm2200P:txtPg2TinC3	788	b		carried by frm2200P:txtPg1TIN3
@@ -676,7 +676,7 @@ form	sample	key	official	class	item	note
 2200p-2020	2200P-03132025	frm2200P:txtSched1ATC18	XP160	a	Schedule 1	visible input "frm2200P:txtSched1ATC18" item Schedule 1 page 2; no cell on the sheet
 2200p-2020	2200P-03132025	frm2200P:txtSched1Description18	LPG	a	Schedule 1	visible input "frm2200P:txtSched1Description18" item Schedule 1 page 2; no cell on the sheet
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure18	PER KG	a	Schedule 1	visible input "frm2200P:txtSched1UnitOfMeasure18" item Schedule 1 page 2; no cell on the sheet
-2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate18	3.00	b	Schedule 1	carried by frm2200P:txtPg1I1Month
+2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate18	3.00	a	Schedule 1	visible input "frm2200P:txtSched1ApplicableRate18" item Schedule 1 page 2; no cell on the sheet
 2200p-2020	2200P-03132025	frm2200P:txtSched1ATC19	XP165	a	Schedule 1	visible input "frm2200P:txtSched1ATC19" item Schedule 1 page 2; no cell on the sheet
 2200p-2020	2200P-03132025	frm2200P:txtSched1Description19	LPG USED IN THE PRODUCTION OF 	a	Schedule 1	visible input "frm2200P:txtSched1Description19" item Schedule 1 page 2; no cell on the sheet
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure19	PER KG	a	Schedule 1	visible input "frm2200P:txtSched1UnitOfMeasure19" item Schedule 1 page 2; no cell on the sheet
@@ -709,7 +709,7 @@ form	sample	key	official	class	item	note
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate28	2.80	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1PlaceOfRemoval28	DEPOT 28	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1Imported28	2,800.00	d		control kind unknown, no evidence
-2200p-2020	2200P-03132025	frm2200P:txtSched1Exports28	1.01	d		control kind unknown, no evidence
+2200p-2020	2200P-03132025	frm2200P:txtSched1Exports28	1.01	b		carried by per-digit comb cells
 2200p-2020	2200P-03132025	frm2200P:txtSched1BasicExciseTaxDue28	280.25	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1ATC29	929	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1Description29	ADDED FUEL 29	d		control kind unknown, no evidence
@@ -717,15 +717,15 @@ form	sample	key	official	class	item	note
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate29	2.90	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1PlaceOfRemoval29	DEPOT 29	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1Imported29	2,900.00	d		control kind unknown, no evidence
-2200p-2020	2200P-03132025	frm2200P:txtSched1Exports29	1.01	d		control kind unknown, no evidence
+2200p-2020	2200P-03132025	frm2200P:txtSched1Exports29	1.01	b		carried by per-digit comb cells
 2200p-2020	2200P-03132025	frm2200P:txtSched1BasicExciseTaxDue29	290.25	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1ATC30	930	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1Description30	ADDED FUEL 30	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure30	PER KG	d		control kind unknown, no evidence
-2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate30	3.00	b		carried by frm2200P:txtPg1I1Month
+2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate30	3.00	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1PlaceOfRemoval30	DEPOT 30	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1Imported30	3,000.00	b		carried by derived:place_of_production
-2200p-2020	2200P-03132025	frm2200P:txtSched1Exports30	1.01	d		control kind unknown, no evidence
+2200p-2020	2200P-03132025	frm2200P:txtSched1Exports30	1.01	b		carried by per-digit comb cells
 2200p-2020	2200P-03132025	frm2200P:txtSched1BasicExciseTaxDue30	300.25	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1ATC31	931	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1Description31	ADDED FUEL 31	d		control kind unknown, no evidence
@@ -733,21 +733,21 @@ form	sample	key	official	class	item	note
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate31	3.10	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1PlaceOfRemoval31	DEPOT 31	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:txtSched1Imported31	3,100.00	d		control kind unknown, no evidence
-2200p-2020	2200P-03132025	frm2200P:txtSched1Exports31	1.01	d		control kind unknown, no evidence
+2200p-2020	2200P-03132025	frm2200P:txtSched1Exports31	1.01	b		carried by per-digit comb cells
 2200p-2020	2200P-03132025	frm2200P:txtSched1BasicExciseTaxDue31	310.25	d		control kind unknown, no evidence
 2200p-2020	2200P-03132025	frm2200P:sched1AddedRowCount	4	a	Schedule 1	visible input "frm2200P:sched1AddedRowCount" item Schedule 1 page 2; no cell on the sheet
 2200p-2020	2200P-03132025	frm2200P:txtLOB	SAMPLE CONSULTING SERVICES	a		visible input "frm2200P:txtLOB" item None page 1; no cell on the sheet
 2200p-2020	2200P-03132025	frm2200P:txtCurrentPage	1	a		visible input "frm2200P:txtCurrentPage" item None page 1; no cell on the sheet
-2200p-2020	2200P-03132025	frm2200P:txtMaxPage	2	b		carried by frm2200P:txtPg1I3NoSheets
+2200p-2020	2200P-03132025	frm2200P:txtMaxPage	2	a		visible input "frm2200P:txtMaxPage" item None page 1; no cell on the sheet
 2200p-2020	2200P-03142025	frm2200P:rdoPg1Pt1I6RDO	039	c		radio/checkbox option; group state prints as X marks
 2200p-2020	2200P-03142025	frm2200P:txtPg1Pt1I8ContactNumber	09170000000	b		carried by derived:contact_email
 2200p-2020	2200P-03142025	frm2200P:txtPg1Pt1I9Email	sample.taxpayer@example.com	b		carried by derived:contact_email
 2200p-2020	2200P-03142025	frm2200P:txtPg1Pt1I10Region	130000000	b		carried by derived:place_of_production
-2200p-2020	2200P-03142025	frm2200P:txtPg1Pt1I10Province	137400000	a		visible input "frm2200P:txtPg1Pt1I10Province" item None page 1; no cell on the sheet
-2200p-2020	2200P-03142025	frm2200P:txtPg1Pt1I10City	137403000	a		visible input "frm2200P:txtPg1Pt1I10City" item None page 1; no cell on the sheet
+2200p-2020	2200P-03142025	frm2200P:txtPg1Pt1I10Province	137400000	b		carried by per-digit comb cells
+2200p-2020	2200P-03142025	frm2200P:txtPg1Pt1I10City	137403000	b		carried by per-digit comb cells
 2200p-2020	2200P-03142025	frm2200P:txtPg1Pt1I11Region	040000000	b		carried by derived:place_of_removal
-2200p-2020	2200P-03142025	frm2200P:txtPg1Pt1I11Province	042100000	a		visible input "frm2200P:txtPg1Pt1I11Province" item None page 1; no cell on the sheet
-2200p-2020	2200P-03142025	frm2200P:txtPg1Pt1I11City	042103000	a		visible input "frm2200P:txtPg1Pt1I11City" item None page 1; no cell on the sheet
+2200p-2020	2200P-03142025	frm2200P:txtPg1Pt1I11Province	042100000	b		carried by per-digit comb cells
+2200p-2020	2200P-03142025	frm2200P:txtPg1Pt1I11City	042103000	b		carried by per-digit comb cells
 2200p-2020	2200P-03142025	frm2200P:txtPg2TinC1	123	b		carried by frm2200P:txtPg1TIN1
 2200p-2020	2200P-03142025	frm2200P:txtPg2TinC2	456	b		carried by frm2200P:txtPg1TIN2
 2200p-2020	2200P-03142025	frm2200P:txtPg2TinC3	788	b		carried by frm2200P:txtPg1TIN3
@@ -821,7 +821,7 @@ form	sample	key	official	class	item	note
 2200p-2020	2200P-03142025	frm2200P:txtSched1ATC18	XP160	a	Schedule 1	visible input "frm2200P:txtSched1ATC18" item Schedule 1 page 2; no cell on the sheet
 2200p-2020	2200P-03142025	frm2200P:txtSched1Description18	LPG	a	Schedule 1	visible input "frm2200P:txtSched1Description18" item Schedule 1 page 2; no cell on the sheet
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure18	PER KG	a	Schedule 1	visible input "frm2200P:txtSched1UnitOfMeasure18" item Schedule 1 page 2; no cell on the sheet
-2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate18	3.00	b	Schedule 1	carried by frm2200P:txtPg1I1Month
+2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate18	3.00	a	Schedule 1	visible input "frm2200P:txtSched1ApplicableRate18" item Schedule 1 page 2; no cell on the sheet
 2200p-2020	2200P-03142025	frm2200P:txtSched1ATC19	XP165	a	Schedule 1	visible input "frm2200P:txtSched1ATC19" item Schedule 1 page 2; no cell on the sheet
 2200p-2020	2200P-03142025	frm2200P:txtSched1Description19	LPG USED IN THE PRODUCTION OF 	a	Schedule 1	visible input "frm2200P:txtSched1Description19" item Schedule 1 page 2; no cell on the sheet
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure19	PER KG	a	Schedule 1	visible input "frm2200P:txtSched1UnitOfMeasure19" item Schedule 1 page 2; no cell on the sheet
@@ -850,7 +850,7 @@ form	sample	key	official	class	item	note
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate25	10.00	b	Schedule 1	carried by frm2200P:txPg1I7ZipCode
 2200p-2020	2200P-03142025	frm2200P:txtLOB	SAMPLE CONSULTING SERVICES	a		visible input "frm2200P:txtLOB" item None page 1; no cell on the sheet
 2200p-2020	2200P-03142025	frm2200P:txtCurrentPage	1	a		visible input "frm2200P:txtCurrentPage" item None page 1; no cell on the sheet
-2200p-2020	2200P-03142025	frm2200P:txtMaxPage	2	b		carried by frm2200P:txtPg1I3NoSheets
+2200p-2020	2200P-03142025	frm2200P:txtMaxPage	2	a		visible input "frm2200P:txtMaxPage" item None page 1; no cell on the sheet
 1707a-2021	1707A-12312023	frm1707Av2021:txtI4TCII030	II030	a	030	visible input "tI4TCII030" item 030 page 1; no cell on the sheet
 1707a-2021	1707A-12312023	frm1707Av2021:txtI4ATCIC110	IC110	a	4A	visible input "tI4ATCIC110" item 4A page 1; no cell on the sheet
 1707a-2021	1707A-12312023	frm1707Av2021:hdnRDO	039	c		hidden/flag/control-kind text
@@ -866,7 +866,7 @@ form	sample	key	official	class	item	note
 1707a-2021	1707A-12312023	frm1707Av2021:txtS1I20TotalSellingPrice	1,938,619.75	a	20T	visible input "tS1I20TotalSellingPrice" item 20T page 2; no cell on the sheet
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2I21TotalSellingPrice	88,500.00	a	21T	visible input "tS2I21TotalSellingPrice" item 21T page 2; no cell on the sheet
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2I21TotalCost	137,769.80	a	21T	visible input "tS2I21TotalCost" item 21T page 2; no cell on the sheet
-1707a-2021	1707A-12312023	frm1707Av2021:txtCurrentPage	1	b		carried by frm1707Av2021:txtI3Sheets
+1707a-2021	1707A-12312023	frm1707Av2021:txtCurrentPage	1	a		visible input "tCurrentPage" item None page 1; no cell on the sheet
 1707a-2021	1707A-12312023	frm1707Av2021:txtMaxPage	2	a		visible input "tMaxPage" item None page 1; no cell on the sheet
 1707a-2021	1707A-12312023	frm1707Av2021:txtS1C1DateOfTransaction_1	02/10/2023	d		control kind unknown, no evidence
 1707a-2021	1707A-12312023	frm1707Av2021:txtS1C2NameOfCorporateStock_1	GAIN CO 4	d		control kind unknown, no evidence
@@ -944,7 +944,7 @@ form	sample	key	official	class	item	note
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C4Cost_1	3,001.00	b		carried by frm1707Av2021:txtS1C5CapitalGainsI3
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C5CapitalLoss_1	1,001.00	b		carried by frm1707Av2021:txtI15TaxDue
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C1DateOfTransaction_2	04/20/2023	d		control kind unknown, no evidence
-1707a-2021	1707A-12312023	frm1707Av2021:txtS2C2NameOfCorporateStock_2	LOSS CO 5	d		control kind unknown, no evidence
+1707a-2021	1707A-12312023	frm1707Av2021:txtS2C2NameOfCorporateStock_2	LOSS CO 5	b		carried by per-digit comb cells
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C3SellingPrice_2	2,500.00	d		control kind unknown, no evidence
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C4Cost_2	3,751.25	d		control kind unknown, no evidence
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C5CapitalLoss_2	1,251.25	d		control kind unknown, no evidence
@@ -961,7 +961,7 @@ form	sample	key	official	class	item	note
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C1DateOfTransaction_5	07/20/2023	d		control kind unknown, no evidence
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C2NameOfCorporateStock_5	LOSS CO 8	d		control kind unknown, no evidence
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C3SellingPrice_5	4,000.00	d		control kind unknown, no evidence
-1707a-2021	1707A-12312023	frm1707Av2021:txtS2C4Cost_5	6,002.00	d		control kind unknown, no evidence
+1707a-2021	1707A-12312023	frm1707Av2021:txtS2C4Cost_5	6,002.00	b		carried by per-digit comb cells
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C5CapitalLoss_5	2,002.00	d		control kind unknown, no evidence
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C1DateOfTransaction_6	08/20/2023	d		control kind unknown, no evidence
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C2NameOfCorporateStock_6	LOSS CO 9	d		control kind unknown, no evidence
@@ -975,7 +975,7 @@ form	sample	key	official	class	item	note
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C5CapitalLoss_7	2,502.50	d		control kind unknown, no evidence
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C1DateOfTransaction_8	10/20/2023	d		control kind unknown, no evidence
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C2NameOfCorporateStock_8	LOSS CO 11	d		control kind unknown, no evidence
-1707a-2021	1707A-12312023	frm1707Av2021:txtS2C3SellingPrice_8	5,500.00	d		control kind unknown, no evidence
+1707a-2021	1707A-12312023	frm1707Av2021:txtS2C3SellingPrice_8	5,500.00	b		carried by per-digit comb cells
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C4Cost_8	8,252.75	d		control kind unknown, no evidence
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C5CapitalLoss_8	2,752.75	d		control kind unknown, no evidence
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2C1DateOfTransaction_9	11/20/2023	d		control kind unknown, no evidence
@@ -1001,7 +1001,7 @@ form	sample	key	official	class	item	note
 1707a-2021	1707A-12312024	frm1707Av2021:txtS1I20TotalSellingPrice	2,993,136.53	a	20T	visible input "tS1I20TotalSellingPrice" item 20T page 2; no cell on the sheet
 1707a-2021	1707A-12312024	frm1707Av2021:txtS2I21TotalSellingPrice	66,200.00	a	21T	visible input "tS2I21TotalSellingPrice" item 21T page 2; no cell on the sheet
 1707a-2021	1707A-12312024	frm1707Av2021:txtS2I21TotalCost	98,801.30	a	21T	visible input "tS2I21TotalCost" item 21T page 2; no cell on the sheet
-1707a-2021	1707A-12312024	frm1707Av2021:txtCurrentPage	1	b		carried by frm1707Av2021:txtI3Sheets
+1707a-2021	1707A-12312024	frm1707Av2021:txtCurrentPage	1	a		visible input "tCurrentPage" item None page 1; no cell on the sheet
 1707a-2021	1707A-12312024	frm1707Av2021:txtMaxPage	2	a		visible input "tMaxPage" item None page 1; no cell on the sheet
 1707a-2021	1707A-12312024	frm1707Av2021:txtS1C1DateOfTransaction_1	08/01/2024	d		control kind unknown, no evidence
 1707a-2021	1707A-12312024	frm1707Av2021:txtS1C2NameOfCorporateStock_1	FOURTH CO	d		control kind unknown, no evidence
@@ -1052,7 +1052,7 @@ form	sample	key	official	class	item	note
 1707a-2021	1707A-12312025	frm1707Av2021:txtS1I20TotalSellingPrice	1,734,567.89	a	20T	visible input "tS1I20TotalSellingPrice" item 20T page 2; no cell on the sheet
 1707a-2021	1707A-12312025	frm1707Av2021:txtS2I21TotalSellingPrice	50,000.00	b	21T	carried by frm1707Av2021:txtS1C3SellingPriceI1
 1707a-2021	1707A-12312025	frm1707Av2021:txtS2I21TotalCost	80,000.55	b	21T	carried by frm1707Av2021:txtS2C4CostI1
-1707a-2021	1707A-12312025	frm1707Av2021:txtCurrentPage	1	b		carried by frm1707Av2021:txtI3Sheets
+1707a-2021	1707A-12312025	frm1707Av2021:txtCurrentPage	1	a		visible input "tCurrentPage" item None page 1; no cell on the sheet
 1707a-2021	1707A-12312025	frm1707Av2021:txtMaxPage	2	a		visible input "tMaxPage" item None page 1; no cell on the sheet
 2200m-2018	2200M-03132025	frm2200M:rdoPg1Pt1I6RDO	039	c		radio/checkbox option; group state prints as X marks
 2200m-2018	2200M-03132025	frm2200M:txtPg1Pt1I10Region	130000000	a		visible input "frm2200M:txtPg1Pt1I10Region" item None page 1; no cell on the sheet
@@ -1113,10 +1113,10 @@ form	sample	key	official	class	item	note
 2200m-2018	2200M-03132025	frm2200M:txtSched1_VOMRITaxableA14	21.00	d		control kind unknown, no evidence
 2200m-2018	2200M-03132025	frm2200M:txtSched1_VOMRITaxableA15	22.50	d		control kind unknown, no evidence
 2200m-2018	2200M-03132025	frm2200M:txtSched1_VOMRITaxableA16	24.00	d		control kind unknown, no evidence
-2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE13	4.00	b		carried by frm2200M:txtSched1_LocallyExtractedTaxRateE9
-2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE14	4.00	b		carried by frm2200M:txtSched1_LocallyExtractedTaxRateE9
-2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE15	4.00	b		carried by frm2200M:txtSched1_LocallyExtractedTaxRateE9
-2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE16	4.00	b		carried by frm2200M:txtSched1_LocallyExtractedTaxRateE9
+2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE13	4.00	d		control kind unknown, no evidence
+2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE14	4.00	d		control kind unknown, no evidence
+2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE15	4.00	d		control kind unknown, no evidence
+2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE16	4.00	d		control kind unknown, no evidence
 2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxDueF11	10.00	b		carried by frm2200M:txPg1I7ZipCode
 2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxDueF13	1,300.25	d		control kind unknown, no evidence
 2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxDueF14	1,400.25	d		control kind unknown, no evidence
@@ -1137,15 +1137,15 @@ form	sample	key	official	class	item	note
 2200m-2018	2200M-03132025	frm2200M:txtSched1_descriptionCont15	ADDED MINERAL 15	d		control kind unknown, no evidence
 2200m-2018	2200M-03132025	frm2200M:txtSched1_descriptionCont16	ADDED MINERAL 16	d		control kind unknown, no evidence
 2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxableG11	7.00	d		control kind unknown, no evidence
-2200m-2018	2200M-03132025	frm2200M:txtSched1_TotalTaxDue12	3.00	b		carried by frm2200M:txtPg1I1Month
+2200m-2018	2200M-03132025	frm2200M:txtSched1_TotalTaxDue12	3.00	d		control kind unknown, no evidence
 2200m-2018	2200M-03132025	frm2200M:txtSched1_TotalTaxDue13	1,300.00	d		control kind unknown, no evidence
 2200m-2018	2200M-03132025	frm2200M:txtSched1_TotalTaxDue14	1,400.00	d		control kind unknown, no evidence
 2200m-2018	2200M-03132025	frm2200M:txtSched1_TotalTaxDue15	1,500.00	d		control kind unknown, no evidence
 2200m-2018	2200M-03132025	frm2200M:txtSched1_TotalTaxDue16	1,600.00	d		control kind unknown, no evidence
 2200m-2018	2200M-03132025	frm2200M:sched1AddedRowCount	6	a	Schedule 1	visible input "frm2200M:sched1AddedRowCount" item Schedule 1 page 2; no cell on the sheet
 2200m-2018	2200M-03132025	frm2200M:txtLOB	SAMPLE CONSULTING SERVICES	a		visible input "frm2200M:txtLOB" item None page 1; no cell on the sheet
-2200m-2018	2200M-03132025	frm2200M:txtCurrentPage	1	b		carried by frm2200M:txtSched1_ImportedExemptH4
-2200m-2018	2200M-03132025	frm2200M:txtMaxPage	2	b		carried by frm2200M:txtPg1I3NoSheets
+2200m-2018	2200M-03132025	frm2200M:txtCurrentPage	1	a		visible input "frm2200M:txtCurrentPage" item None page 1; no cell on the sheet
+2200m-2018	2200M-03132025	frm2200M:txtMaxPage	2	a		visible input "frm2200M:txtMaxPage" item None page 1; no cell on the sheet
 2200m-2018	2200M-03142025	frm2200M:rdoPg1Pt1I6RDO	039	c		radio/checkbox option; group state prints as X marks
 2200m-2018	2200M-03142025	frm2200M:txtPg1Pt1I10Region	130000000	a		visible input "frm2200M:txtPg1Pt1I10Region" item None page 1; no cell on the sheet
 2200m-2018	2200M-03142025	frm2200M:txtPg1Pt1I10Province	137400000	a		visible input "frm2200M:txtPg1Pt1I10Province" item None page 1; no cell on the sheet
@@ -1201,11 +1201,11 @@ form	sample	key	official	class	item	note
 2200m-2018	2200M-03142025	frm2200M:txtSched1_descriptionCont11	CLAY X	d		control kind unknown, no evidence
 2200m-2018	2200M-03142025	frm2200M:txtSched1_descriptionCont12	SHALE	d		control kind unknown, no evidence
 2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxableG11	7.00	d		control kind unknown, no evidence
-2200m-2018	2200M-03142025	frm2200M:txtSched1_TotalTaxDue12	3.00	b		carried by frm2200M:txtPg1I1Month
-2200m-2018	2200M-03142025	frm2200M:sched1AddedRowCount	2	b	Schedule 1	carried by frm2200M:txtPg1I3NoSheets
+2200m-2018	2200M-03142025	frm2200M:txtSched1_TotalTaxDue12	3.00	d		control kind unknown, no evidence
+2200m-2018	2200M-03142025	frm2200M:sched1AddedRowCount	2	a	Schedule 1	visible input "frm2200M:sched1AddedRowCount" item Schedule 1 page 2; no cell on the sheet
 2200m-2018	2200M-03142025	frm2200M:txtLOB	SAMPLE CONSULTING SERVICES	a		visible input "frm2200M:txtLOB" item None page 1; no cell on the sheet
-2200m-2018	2200M-03142025	frm2200M:txtCurrentPage	1	b		carried by frm2200M:txtSched1_ImportedExemptH4
-2200m-2018	2200M-03142025	frm2200M:txtMaxPage	2	b		carried by frm2200M:txtPg1I3NoSheets
+2200m-2018	2200M-03142025	frm2200M:txtCurrentPage	1	a		visible input "frm2200M:txtCurrentPage" item None page 1; no cell on the sheet
+2200m-2018	2200M-03142025	frm2200M:txtMaxPage	2	a		visible input "frm2200M:txtMaxPage" item None page 1; no cell on the sheet
 1700-2018	1700-2025	frm1700:txtPg1I3ATC	II011	d		control kind unknown, no evidence
 1700-2018	1700-2025	frm1700:txtPg1I8Address	123 SAMPLE STREET, BARANGAY EX	b		carried by derived:address_line1
 1700-2018	1700-2025	frm1700:txtPg1I9BirthDate	01/15/1980	d		control kind unknown, no evidence
@@ -1237,7 +1237,7 @@ form	sample	key	official	class	item	note
 1700-2018	1700-2025	frm1700:txtPg2ISched1e_1TW	40,000.00	b		carried by derived:amount_54A
 1700-2018	1700-2025	frm1700:txtPg2ISched1c_5AREG	600,001.00	b		carried by derived:amount_42A
 1700-2018	1700-2025	frm1700:txtPg2ISched1e_5ATW	40,000.00	b		carried by derived:amount_54A
-1700-2018	1700-2025	frm1700:txtCurrentPage	1	b		carried by derived:birth_mm
+1700-2018	1700-2025	frm1700:txtCurrentPage	1	d		control kind unknown, no evidence
 1700-2018	1700-2025	frm1700:txtMaxPage	2	d		control kind unknown, no evidence
 1700-2018	1700-2025	frm1700:txtLOB	SAMPLE CONSULTING SERVICES	d		control kind unknown, no evidence
 1700-2018	1700-2025-joint	frm1700:txtPg1I3ATC	II011	d		control kind unknown, no evidence
@@ -1291,7 +1291,7 @@ form	sample	key	official	class	item	note
 1700-2018	1700-2025-joint	frm1700:txtPg2ISched1e_5ATW	40,000.00	b		carried by derived:amount_54A
 1700-2018	1700-2025-joint	frm1700:txtPg2ISched1c_5BREG	400,000.00	b		carried by derived:amount_42B
 1700-2018	1700-2025-joint	frm1700:txtPg2ISched1e_5BTW	20,000.00	b		carried by derived:amount_27B
-1700-2018	1700-2025-joint	frm1700:txtCurrentPage	1	b		carried by derived:birth_mm
+1700-2018	1700-2025-joint	frm1700:txtCurrentPage	1	d		control kind unknown, no evidence
 1700-2018	1700-2025-joint	frm1700:txtMaxPage	2	d		control kind unknown, no evidence
 1700-2018	1700-2025-joint	frm1700:txtLOB	SAMPLE CONSULTING SERVICES	d		control kind unknown, no evidence
 1700-2018	1700-2025-others	frm1700:txtPg1I3ATC	II011	d		control kind unknown, no evidence
@@ -1324,10 +1324,10 @@ form	sample	key	official	class	item	note
 1700-2018	1700-2025-others	frm1700:txtPg2ISched1c_1REG	600,000.50	d		control kind unknown, no evidence
 1700-2018	1700-2025-others	frm1700:txtPg2ISched1e_1TW	40,000.00	b		carried by derived:amount_54A
 1700-2018	1700-2025-others	frm1700:txtPg2ISched1c_4REG	175,000.65	d		control kind unknown, no evidence
-1700-2018	1700-2025-others	frm1700:txtPg2ISched1e_4TW	8,500.10	d		control kind unknown, no evidence
+1700-2018	1700-2025-others	frm1700:txtPg2ISched1e_4TW	8,500.10	b		carried by per-digit comb cells
 1700-2018	1700-2025-others	frm1700:txtPg2ISched1c_5AREG	775,001.00	b		carried by derived:amount_42A
 1700-2018	1700-2025-others	frm1700:txtPg2ISched1e_5ATW	48,500.00	b		carried by derived:amount_54A
-1700-2018	1700-2025-others	frm1700:txtCurrentPage	1	b		carried by derived:birth_mm
+1700-2018	1700-2025-others	frm1700:txtCurrentPage	1	d		control kind unknown, no evidence
 1700-2018	1700-2025-others	frm1700:txtMaxPage	2	d		control kind unknown, no evidence
 1700-2018	1700-2025-others	frm1700:rdoPg2I4_1PartVIEmployeeT	true	c		radio/checkbox option; group state prints as X marks
 1700-2018	1700-2025-others	frm1700:txtPg2I4_1PartVIEmployerName1	FOURTH EMPLOYER CORP	d		control kind unknown, no evidence
@@ -1344,15 +1344,15 @@ form	sample	key	official	class	item	note
 1700-2018	1700-2025-others	frm1700:txtPg2I4_3PartVIEmployerTIN1	123	b		carried by frm1700:txtPg1I4TIN1
 1700-2018	1700-2025-others	frm1700:txtPg2I4_3PartVIEmployerTIN2	456	b		carried by frm1700:txtPg1I4TIN2
 1700-2018	1700-2025-others	frm1700:txtPg2I4_3PartVIEmployerTIN3	788	b		carried by frm1700:txtPg1I4TIN3
-1700-2018	1700-2025-others	frm1700:txtPg2I4_3PartVIEmployerBranchCode	00001	b		carried by derived:birth_mm
+1700-2018	1700-2025-others	frm1700:txtPg2I4_3PartVIEmployerBranchCode	00001	d		control kind unknown, no evidence
 1700-2018	1700-2025-others	frm1700:txtPg2ISched1c_4_1REG	100,000.25	d		control kind unknown, no evidence
 1700-2018	1700-2025-others	frm1700:txtPg2ISched1e_4_1TW	5,000.00	d		control kind unknown, no evidence
 1700-2018	1700-2025-others	frm1700:txtPg2ISched1c_4_2REG	50,000.40	d		control kind unknown, no evidence
-1700-2018	1700-2025-others	frm1700:txtPg2ISched1e_4_2TW	2,500.10	d		control kind unknown, no evidence
+1700-2018	1700-2025-others	frm1700:txtPg2ISched1e_4_2TW	2,500.10	b		carried by per-digit comb cells
 1700-2018	1700-2025-others	frm1700:txtPg2ISched1c_4_3REG	25,000.00	d		control kind unknown, no evidence
 1700-2018	1700-2025-others	frm1700:txtPg2ISched1e_4_3TW	1,000.00	b		carried by derived:amount_31A
 1700-2018	1700-2025-others	frm1700:txtPg2Pt6I4SubtotalC	175,000.65	d		control kind unknown, no evidence
-1700-2018	1700-2025-others	frm1700:txtPg2Pt6I4SubtotalE	8,500.10	d		control kind unknown, no evidence
+1700-2018	1700-2025-others	frm1700:txtPg2Pt6I4SubtotalE	8,500.10	b		carried by per-digit comb cells
 1700-2018	1700-2025-others	frm1700:txtLOB	SAMPLE CONSULTING SERVICES	d		control kind unknown, no evidence
 1702ex-2018	1702EX-122025	frm1702EX:ddlPg1I2Date	12	b		carried by frm1702EX:txtPg1Pt1I6TINC1
 1702ex-2018	1702EX-122025	frm1702EX:txtPg1I2YearEnd	25	d		control kind unknown, no evidence
@@ -1406,8 +1406,8 @@ form	sample	key	official	class	item	note
 1702ex-2018	1702EX-122025	frm1702EX:txtPg3Pt6S3I9Total	20,000.00	b		carried by derived:amount:txtPg2Pt4I31CostOfSalesServ
 1702ex-2018	1702EX-122025	frm1702EX:txtPg3Pt6S3I10NetTaxableIncome	2,400,001.00	b		carried by derived:amount:txtPg2Pt4I39NetTaxable
 1702ex-2018	1702EX-122025	frm1702EX:txtLOB	SAMPLE CONSULTING SERVICES	d		control kind unknown, no evidence
-1702ex-2018	1702EX-122025	frm1702EX:txtCurrentPage	1	b		carried by derived:year_end_mm1
-1702ex-2018	1702EX-122025	frm1702EX:txtMaxPage	3	b		carried by derived:incorporation_mm
+1702ex-2018	1702EX-122025	frm1702EX:txtCurrentPage	1	d		control kind unknown, no evidence
+1702ex-2018	1702EX-122025	frm1702EX:txtMaxPage	3	d		control kind unknown, no evidence
 1702ex-2018	1702EX-122025-popups	frm1702EX:ddlPg1I2Date	12	b		carried by frm1702EX:txtPg1Pt1I6TINC1
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtPg1I2YearEnd	25	d		control kind unknown, no evidence
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtPg1I5ATCR1C1	IC 011	d		control kind unknown, no evidence
@@ -1472,8 +1472,8 @@ form	sample	key	official	class	item	note
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtPg3Pt6S3I9Total	33,000.00	b		carried by derived:amount:txtPg3Pt6S3I9Total
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtPg3Pt6S3I10NetTaxableIncome	2,349,301.00	b		carried by derived:amount:txtPg2Pt4I39NetTaxable
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtLOB	SAMPLE CONSULTING SERVICES	d		control kind unknown, no evidence
-1702ex-2018	1702EX-122025-popups	frm1702EX:txtCurrentPage	1	b		carried by derived:year_end_mm1
-1702ex-2018	1702EX-122025-popups	frm1702EX:txtMaxPage	3	b		carried by derived:incorporation_mm
+1702ex-2018	1702EX-122025-popups	frm1702EX:txtCurrentPage	1	d		control kind unknown, no evidence
+1702ex-2018	1702EX-122025-popups	frm1702EX:txtMaxPage	3	d		control kind unknown, no evidence
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtPg3Pt6S1I17_1Col1	TRANSPORT	d		control kind unknown, no evidence
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtPg3Pt6S1I17_1Col2	3,000.00	b		carried by derived:amount:txtPg3Pt6S3I1NetIncomePerBook
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtPg3Pt6S1I17_2Col1	COURIER	d		control kind unknown, no evidence
@@ -1500,7 +1500,7 @@ form	sample	key	official	class	item	note
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtPg3Pt6S3I8_1Col2	8,000.00	b		carried by derived:amount:txtPg3Pt6I17OthersGAmt
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtPg3Pt6S3I8_2Col1	SPECIAL TWO	d		control kind unknown, no evidence
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtPg3Pt6S3I8_2Col2	9,000.00	b		carried by derived:amount:txtPg2Pt4I30NetSalesReceiptsRevFees
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:ddlPg1I2Date	06	b	2D	carried by derived:year_end_mm2
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:ddlPg1I2Date	06	a	2D	visible input "ddlPg1I2Date" item 2D page 1; no cell on the sheet
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1I2YearEnd	25	b	2Y	carried by frm1702MX:txtPg2Pt4I33CB
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1Pt1I6TINC1	123	b	6T	carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1Pt1I6TINC2	456	b	6T	carried by derived:tin_digits
@@ -1517,7 +1517,7 @@ form	sample	key	official	class	item	note
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg3TIN1	123	b		carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg3TIN2	456	b		carried by derived:tin_digits
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg3TIN3	788	b		carried by derived:tin_digits
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:drpPg3Sc1I11CB	0.075	d	11C	control kind final-copy-only-or-runtime-generated-control, no evidence
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:drpPg3Sc1I11CB	0.075	b	11C	carried by per-digit comb cells
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg4TIN1	123	b		carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg4TIN2	456	b		carried by derived:tin_digits
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg4TIN3	788	b		carried by derived:tin_digits
@@ -1527,7 +1527,7 @@ form	sample	key	official	class	item	note
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg2AttMTIN1	123	b		carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg2AttMTIN2	456	b		carried by derived:tin_digits
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg2AttMTIN3	788	b		carried by derived:tin_digits
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtCurrentPage	1	b		carried by derived:year_end_mm1
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtCurrentPage	1	a		visible input "txtCurrentPage" item None page None; no cell on the sheet
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtMaxPage	4	a		visible input "txtMaxPage" item None page None; no cell on the sheet
 1702mx-2018c	1702MX-1225	frm1702MX:ddlPg1I2Date	12	b	2D	carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg1I2YearEnd	25	b	2Y	carried by frm1702MX:txtPg2Pt4I33CB
@@ -1539,17 +1539,17 @@ form	sample	key	official	class	item	note
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg2TIN1	123	b		carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg2TIN2	456	b		carried by derived:tin_digits
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg2TIN3	788	b		carried by derived:tin_digits
-1702mx-2018c	1702MX-1225	frm1702MX:txtPg2Pt4I34SpecialTaxRate	5.0	b	34S	carried by derived:year_end_yy2
+1702mx-2018c	1702MX-1225	frm1702MX:txtPg2Pt4I34SpecialTaxRate	5.0	a	34S	visible input "txtPg2Pt4I34SpecialTaxRate" item 34S page 2; no cell on the sheet
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg2Pt4I35CA	01/01/2020	a	35C	visible input "txtPg2Pt4I35CA" item 35C page 2; no cell on the sheet
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg2Pt4I35CB	01/01/2021	a	35C	visible input "txtPg2Pt4I35CB" item 35C page 2; no cell on the sheet
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg2Pt4I36CA	12/31/2026	a	36C	visible input "txtPg2Pt4I36CA" item 36C page 2; no cell on the sheet
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg2Pt4I36CB	12/31/2027	a	36C	visible input "txtPg2Pt4I36CB" item 36C page 2; no cell on the sheet
-1702mx-2018c	1702MX-1225	frm1702MX:txtPg2Sc2It14B	5.00	b	14B	carried by derived:year_end_yy2
+1702mx-2018c	1702MX-1225	frm1702MX:txtPg2Sc2It14B	5.00	a	14B	visible input "txtPg2Sc2It14B" item 14B page 2; no cell on the sheet
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg2Sc2It14C	25.00	b	14C	carried by frm1702MX:txtPg2Pt4I33CB
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg3TIN1	123	b		carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg3TIN2	456	b		carried by derived:tin_digits
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg3TIN3	788	b		carried by derived:tin_digits
-1702mx-2018c	1702MX-1225	frm1702MX:drpPg3Sc1I11CB	0.05	d	11C	control kind final-copy-only-or-runtime-generated-control, no evidence
+1702mx-2018c	1702MX-1225	frm1702MX:drpPg3Sc1I11CB	0.05	b	11C	carried by per-digit comb cells
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg6Sc6I1CA	5000	b	1C	carried by frm1702MX:txtPg2Pt4I33CB
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg6Sc6I1CD	5000	b	1C	carried by frm1702MX:txtPg2Pt4I33CB
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg4TIN1	123	b		carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
@@ -1563,7 +1563,7 @@ form	sample	key	official	class	item	note
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg2AttMTIN1	123	b		carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg2AttMTIN2	456	b		carried by derived:tin_digits
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg2AttMTIN3	788	b		carried by derived:tin_digits
-1702mx-2018c	1702MX-1225	frm1702MX:txtCurrentPage	1	b		carried by derived:year_end_mm1
+1702mx-2018c	1702MX-1225	frm1702MX:txtCurrentPage	1	a		visible input "txtCurrentPage" item None page None; no cell on the sheet
 1702mx-2018c	1702MX-1225	frm1702MX:txtMaxPage	4	a		visible input "txtMaxPage" item None page None; no cell on the sheet
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:ddlPg1I2Date	12	b	2D	carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1I2YearEnd	25	b	2Y	carried by frm1702MX:txtPg2Pt4I33CB
@@ -1575,17 +1575,17 @@ form	sample	key	official	class	item	note
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2TIN1	123	b		carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2TIN2	456	b		carried by derived:tin_digits
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2TIN3	788	b		carried by derived:tin_digits
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2Pt4I34SpecialTaxRate	5.0	b	34S	carried by derived:year_end_yy2
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2Pt4I34SpecialTaxRate	5.0	a	34S	visible input "txtPg2Pt4I34SpecialTaxRate" item 34S page 2; no cell on the sheet
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2Pt4I35CA	01/01/2020	a	35C	visible input "txtPg2Pt4I35CA" item 35C page 2; no cell on the sheet
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2Pt4I35CB	01/01/2021	a	35C	visible input "txtPg2Pt4I35CB" item 35C page 2; no cell on the sheet
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2Pt4I36CA	12/31/2026	a	36C	visible input "txtPg2Pt4I36CA" item 36C page 2; no cell on the sheet
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2Pt4I36CB	12/31/2027	a	36C	visible input "txtPg2Pt4I36CB" item 36C page 2; no cell on the sheet
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2Sc2It14B	5.00	b	14B	carried by derived:year_end_yy2
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2Sc2It14B	5.00	a	14B	visible input "txtPg2Sc2It14B" item 14B page 2; no cell on the sheet
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2Sc2It14C	25.00	b	14C	carried by frm1702MX:txtPg2Pt4I33CB
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg3TIN1	123	b		carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg3TIN2	456	b		carried by derived:tin_digits
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg3TIN3	788	b		carried by derived:tin_digits
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:drpPg3Sc1I11CB	0.05	d	11C	control kind final-copy-only-or-runtime-generated-control, no evidence
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:drpPg3Sc1I11CB	0.05	b	11C	carried by per-digit comb cells
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg6Sc6I1CA	5000	b	1C	carried by frm1702MX:txtPg2Pt4I33CB
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg6Sc6I1CD	5000	b	1C	carried by frm1702MX:txtPg2Pt4I33CB
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg6Sc6I2CC	20000	b	2C	carried by frm1702MX:txtPg4IShed8_7A
@@ -1606,7 +1606,7 @@ form	sample	key	official	class	item	note
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2AttMTIN1	123	b		carried by frm1702MX:txtPg1Pt1I10RegisteredAddress
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2AttMTIN2	456	b		carried by derived:tin_digits
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2AttMTIN3	788	b		carried by derived:tin_digits
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtCurrentPage	1	b		carried by derived:year_end_mm1
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtCurrentPage	1	a		visible input "txtCurrentPage" item None page None; no cell on the sheet
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtMaxPage	4	a		visible input "txtMaxPage" item None page None; no cell on the sheet
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtCtrmodalPg6Sc6	7	a		visible input "txtCtrmodalPg6Sc6" item None page 6; no cell on the sheet
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg6Sc6_1Col1	SEMINAR	d		control kind unknown, no evidence
@@ -1655,7 +1655,7 @@ form	sample	key	official	class	item	note
 1707-2021	1707-06302025	frm1707:txtPg2TinC2	456	b		carried by frm1707:txtPg1I6SellerTIN0
 1707-2021	1707-06302025	frm1707:txtPg2TinC3	788	b		carried by frm1707:txtPg1I6SellerTIN0
 1707-2021	1707-06302025	frm1707:txtLOB	SAMPLE CONSULTING SERVICES	a		visible input "txtLOB" item None page None; no cell on the sheet
-1707-2021	1707-06302025	frm1707:txtCurrentPage	1	b		carried by frm1707:txtPg1I4NoOfSheets
+1707-2021	1707-06302025	frm1707:txtCurrentPage	1	a		visible input "txtCurrentPage" item None page None; no cell on the sheet
 1707-2021	1707-06302025	frm1707:txtMaxPage	2	a		visible input "txtMaxPage" item None page None; no cell on the sheet
 1707-2021	1707-07152025	frm1707:txtPg1I3Indiv	II 030	a	3I	visible input "txtPg1I3Indiv" item 3I page 1; no cell on the sheet
 1707-2021	1707-07152025	frm1707:txtPg1I3Corp	IC 110	a	3C	visible input "txtPg1I3Corp" item 3C page 1; no cell on the sheet
@@ -1672,7 +1672,7 @@ form	sample	key	official	class	item	note
 1707-2021	1707-07152025	frm1707:txtPg2TinC2	456	b		carried by frm1707:txtPg1I6SellerTIN0
 1707-2021	1707-07152025	frm1707:txtPg2TinC3	788	b		carried by frm1707:txtPg1I6SellerTIN0
 1707-2021	1707-07152025	frm1707:txtLOB	SAMPLE CONSULTING SERVICES	a		visible input "txtLOB" item None page None; no cell on the sheet
-1707-2021	1707-07152025	frm1707:txtCurrentPage	1	b		carried by frm1707:txtPg1I4NoOfSheets
+1707-2021	1707-07152025	frm1707:txtCurrentPage	1	a		visible input "txtCurrentPage" item None page None; no cell on the sheet
 1707-2021	1707-07152025	frm1707:txtMaxPage	2	a		visible input "txtMaxPage" item None page None; no cell on the sheet
 1707-2021	1707-07152025	frm1707:txtPg2Pt4S2_1Col1	FOURTH CORP	d		control kind unknown, no evidence
 1707-2021	1707-07152025	frm1707:txtPg2Pt4S2_2Col1	FIFTH CO	d		control kind unknown, no evidence
@@ -1705,7 +1705,7 @@ form	sample	key	official	class	item	note
 1707-2021	1707-08292025	frm1707:txtPg2TinC2	456	b		carried by frm1707:txtPg1I6SellerTIN0
 1707-2021	1707-08292025	frm1707:txtPg2TinC3	788	b		carried by frm1707:txtPg1I6SellerTIN0
 1707-2021	1707-08292025	frm1707:txtLOB	SAMPLE CONSULTING SERVICES	a		visible input "txtLOB" item None page None; no cell on the sheet
-1707-2021	1707-08292025	frm1707:txtCurrentPage	1	b		carried by frm1707:txtPg1I4NoOfSheets
+1707-2021	1707-08292025	frm1707:txtCurrentPage	1	a		visible input "txtCurrentPage" item None page None; no cell on the sheet
 1707-2021	1707-08292025	frm1707:txtMaxPage	2	a		visible input "txtMaxPage" item None page None; no cell on the sheet
 1707-2021	1707-08292025	frm1707:txtPg2Pt4S2_1Col1	ROW 4 CORP	d		control kind unknown, no evidence
 1707-2021	1707-08292025	frm1707:txtPg2Pt4S2_2Col1	ROW 5 CORP	d		control kind unknown, no evidence
