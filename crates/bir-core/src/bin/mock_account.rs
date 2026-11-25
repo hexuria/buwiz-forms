@@ -17,6 +17,8 @@ const USAGE: &str = "mock_account: local development accounts (no passwords, no 
   --expired-codes      every code has expired when it is checked
   --no-email           the email sign-in is not offered (404): the app uses the browser
   --ban EMAIL          that address's account is banned (repeatable)
+  --html               the email sign-in answers a challenge page (HTML), as a rule in front of a server can
+  --html-429           the email sign-in answers the outer rate limit's HTML 429
   -h, --help           this text
 Never expose this server publicly or use real credentials.";
 
@@ -54,6 +56,8 @@ fn args() -> Result<Option<(SocketAddr, MockOptions)>, String> {
             "--ban" => options
                 .banned
                 .push(args.next().ok_or("--ban needs an email")?),
+            "--html" => options.html = true,
+            "--html-429" => options.html_429 = true,
             "-h" | "--help" => return Ok(None),
             _ => return Err(format!("unknown option {arg}")),
         }

@@ -5,19 +5,26 @@
 //   expiresIn  seconds the code lives (default 300); resendIn: seconds until Resend unlocks (default: expiresIn)
 //   pending    seconds left of a request kept from before a relaunch (the gate opens on the code page)
 //   resend     "early": Resend is refused as too early (the server's wait, 60 s); "ended": the request has ended
-//   slow       true: Continue and the check take 4 seconds (for a picture of the spinner and "Checking…")
+//   slow       true: Continue, the check, Resend and Send a new code take 4 seconds (the spinner, "Checking…", a double press)
+//   blocked    "html": the check and Resend meet a challenge page; "throttled": the outer limit's HTML 429
 // The code 246810 signs in; 111111 has expired; 999999 is one too many; 555555 belongs to an ended request; any other code is wrong,
 // with 4, 3, 2, 1 tries left and then too many. The address is the one typed (pending: juana@example.com).
 import type { CloudAccountStatus, CloudEmailCheck, CloudEmailStep } from "../../bir";
 
 export interface EmailParams {
-  email?: "code" | "refuse" | "unavailable" | "offline";
+  email?: "code" | "refuse" | "unavailable" | "offline" | "throttled";
   expiresIn?: number;
   resendIn?: number;
   pending?: number;
   resend?: "early" | "ended";
   slow?: boolean;
+  blocked?: "html" | "throttled";
 }
+
+const BLOCKED = {
+  html: "Sign-in is not available right now. Try again in a few minutes.",
+  throttled: "Too many tries. Wait a moment and try again.",
+};
 
 export const SIGNED_IN: CloudAccountStatus = {
   server_url: "http://localhost:3008",
@@ -35,6 +42,7 @@ const REFUSED: Record<string, string> = {
   refuse: "A sign-in code was already sent to this address. Use it, or try again in 4 minutes.",
   unavailable: "Sign-in is not available right now. Try again in a few minutes.",
   offline: "No connection. Check your internet and try again.",
+  throttled: "Too many tries. Wait a moment and try again.",
 };
 
 /** Puts the fake email calls on `host` (the bir module); `called` hears each call's name. */
@@ -75,6 +83,7 @@ export function fakeEmail(host: Record<string, unknown>, p: EmailParams, called:
     called(`cloud_account_email_verify ${code}`);
     // A moment, so "Checking…" can be seen.
     await new Promise((resolve) => setTimeout(resolve, p.slow ? 4000 : 150));
+    if (p.blocked) return check("error", BLOCKED[p.blocked]);
     if (code === "246810") {
       pending = false;
       return check("approved", null);
@@ -91,6 +100,8 @@ export function fakeEmail(host: Record<string, unknown>, p: EmailParams, called:
   };
   host.cloud_account_email_resend = async () => {
     called("cloud_account_email_resend");
+    if (p.slow) await new Promise((resolve) => setTimeout(resolve, 4000));
+    if (p.blocked) return step("refused", { message: BLOCKED[p.blocked], resend_in: 0 });
     if (p.resend === "early") return step("refused", { message: "A new code can be sent once this one has expired.", resend_in: 60, retry_after: 60 });
     if (p.resend === "ended") {
       pending = false;

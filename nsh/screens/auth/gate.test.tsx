@@ -83,6 +83,7 @@ for (const { name, size, device } of SIZES) {
   for (const [kind, sentence] of [
     ["unavailable", "Sign-in is not available right now. Try again in a few minutes."],
     ["offline", "No connection. Check your internet and try again."],
+    ["throttled", "Too many tries. Wait a moment and try again."],
   ] as const) {
     test(`${name}: ${kind}: the email page says so and stays; nothing opens`, async () => {
       const app = await at({ email: kind });
@@ -140,6 +141,8 @@ for (const { name, size, device } of SIZES) {
       const left = 4 - i;
       await app.waitFor(`text:That code is not right. ${left} ${left === 1 ? "try" : "tries"} left.`);
     }
+    // One check per paste, never a burst.
+    expect(calls(app).split(",").filter((c) => c.startsWith("cloud_account_email_verify")).length).toBe(4);
   }, 90_000);
 
   test(`${name}: an expired code says so and Resend unlocks; after too many tries Send a new code starts again at once`, async () => {
@@ -190,6 +193,52 @@ for (const { name, size, device } of SIZES) {
     expect(app.texts().some((t) => /^Resend in (1:00|0:59)$/.test(t))).toBe(true);
     expect(app.enabled("id:gate-resend")).toBe(false);
   }, 60_000);
+
+  for (const [blocked, sentence] of [
+    ["html", "Sign-in is not available right now. Try again in a few minutes."],
+    ["throttled", "Too many tries. Wait a moment and try again."],
+  ] as const) {
+    test(`${name}: ${blocked}: the check and Resend say so, keep what was typed, and stay on the code page`, async () => {
+      const app = await at({ blocked, expiresIn: 1 });
+      await toCode(app);
+      await app.type("id:gate-code-boxes", "123456");
+      await app.waitFor(`text:${sentence}`);
+      expect(app.value("id:gate-code-boxes")).toBe("123456");
+      expect(app.shows("id:gate-code-card")).toBe(true);
+      await app.waitUntil(() => app.enabled("id:gate-resend"), { timeout: 5000 });
+      await app.press("id:gate-resend");
+      await app.waitUntil(() => calls(app).includes("cloud_account_email_resend"));
+      await app.waitFor(`text:${sentence}`);
+      expect(app.shows("id:gate-code-card")).toBe(true);
+      expect(calls(app)).toBe("calls: cloud_account_email_start,cloud_account_email_verify 123456,cloud_account_email_resend");
+    }, 60_000);
+  }
+
+  test(`${name}: no bursts: the boxes check once while a check runs; Resend and Send a new code send once however often pressed`, async () => {
+    const app = await at({ slow: true, expiresIn: 1 });
+    await toCode(app);
+    await app.type("id:gate-code-boxes", "123456");
+    await app.waitFor("text:Checking…");
+    // The boxes are locked while the check runs: more keys do nothing.
+    await app.type("id:gate-code-boxes", "7").catch(() => undefined);
+    await app.waitFor("text:That code is not right. 4 tries left.", { timeout: 10000 });
+    const verifies = () => calls(app).split(",").filter((c) => c.startsWith("cloud_account_email_verify")).length;
+    expect(verifies()).toBe(1);
+    await app.waitUntil(() => app.enabled("id:gate-resend"), { timeout: 5000 });
+    await app.press("id:gate-resend");
+    await app.press("id:gate-resend");
+    await app.press("id:gate-resend");
+    await app.waitFor("text:We sent a new code to juana@example.com.", { timeout: 10000 });
+    expect(calls(app).split(",").filter((c) => c === "cloud_account_email_resend").length).toBe(1);
+    const many = await at({ slow: true });
+    await toCode(many);
+    await many.type("id:gate-code-boxes", "999999");
+    await many.waitFor(`text:${TOO_MANY}`, { timeout: 10000 });
+    await many.press("id:gate-new-code");
+    await many.press("id:gate-new-code");
+    await many.waitFor("text:We sent a new code to juana@example.com.", { timeout: 10000 });
+    expect(calls(many).replace("calls: ", "").split(",").filter((c) => c === "cloud_account_email_start").length).toBe(2);
+  }, 90_000);
 
   test(`${name}: Change email ends the request and the email page comes back with the address`, async () => {
     const app = await at();

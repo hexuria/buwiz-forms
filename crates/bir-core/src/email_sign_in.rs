@@ -91,6 +91,9 @@ pub enum EmailError {
     /// sign-in is not available; the app never switches to the browser by itself.
     NotOffered,
     /// The server said no, with its code (`invalid_code`, `code_expired`, ...) and the sentence to show.
+    /// A 429 that is not the contract's JSON: the network's outer limit (more than 10 requests in 10 seconds). Not
+    /// tried again by itself.
+    Throttled,
     Refused {
         code: String,
         message: String,
@@ -117,6 +120,7 @@ impl EmailError {
             Self::NotOffered => {
                 "Sign-in is not available right now. Try again in a few minutes.".into()
             }
+            Self::Throttled => "Too many tries. Wait a moment and try again.".into(),
             Self::Refused { message, .. } if !message.trim().is_empty() => {
                 message.trim().to_owned()
             }
@@ -202,7 +206,9 @@ pub fn local_sentence(code: &str, retry_after: Option<i64>, attempts_left: Optio
 }
 
 /// Every `error` the contract answers on these paths.
-const CONTRACT_CODES: [&str; 15] = [
+const CONTRACT_CODES: [&str; 17] = [
+    "install_mismatch",
+    "attestation_refused",
     "invalid_request",
     "unknown_client",
     "invalid_email",
@@ -220,9 +226,10 @@ const CONTRACT_CODES: [&str; 15] = [
     "restarting",
 ];
 
-/// Whether an answer to the JSON start says "this server does not offer it": a 404, or anything that is neither a
-/// 200 JSON object nor one of the contract's errors (`{"error": <a contract code>}`). An older server answers the web
-/// form's HTML or a redirect there. `mail_failed` (502) and `restarting` (503) are the contract's: not this.
+/// Whether an answer on any of the three paths is not this contract's: a 404, or anything that is neither a 200 JSON
+/// object nor one of the contract's errors (`{"error": <a contract code>}`): an older server answering the web form, a
+/// challenge page, a proxy's error page, a redirect. The page says sign-in is not available right now and the person
+/// stays where they are. `mail_failed` (502) and `restarting` (503) are the contract's: not this.
 fn not_offered(status: u16, value: &Value) -> bool {
     if status == 404 {
         return true;
@@ -253,7 +260,11 @@ fn post(
             other => EmailError::Unexpected(other.to_string()),
         })?;
     let value: Value = serde_json::from_str(&response.body).unwrap_or(Value::Null);
-    if path == "/auth/email/start" && not_offered(response.status, &value) {
+    if not_offered(response.status, &value) {
+        // An outer rate limit answers its own page, not the server's JSON 429.
+        if response.status == 429 {
+            return Err(EmailError::Throttled);
+        }
         return Err(EmailError::NotOffered);
     }
     if !(200..300).contains(&response.status) || value.get("error").is_some_and(|e| !e.is_null()) {
@@ -843,14 +854,14 @@ mod tests {
             refused.sentence(),
             "A sign-in code was already sent to this address. Use it, or try again in 5 minutes."
         );
-        // On resend and verify, unknown codes and broken bodies say something plain.
+        // On resend and verify too, an answer that is not the contract's says sign-in is not available right now.
         for body in [r#"{"error":"something_new"}"#, "<html>oops</html>", ""] {
             let mut fake = Fake::answering(&[(500, body)]);
             let sentence = resend(&mut fake, "http://127.0.0.1:9", "r1", "s", None)
                 .unwrap_err()
                 .sentence();
             assert_eq!(
-                sentence, "The Buwiz server refused the sign-in. Try again.",
+                sentence, "Sign-in is not available right now. Try again in a few minutes.",
                 "{body}"
             );
         }
@@ -858,6 +869,59 @@ mod tests {
         assert_eq!(
             start_with(&mut down).unwrap_err().sentence(),
             "No connection. Check your internet and try again."
+        );
+    }
+
+    /// A challenge page, a proxy's page or a redirect on any of the three paths is "not available right now"; an HTML
+    /// 429 (the outer limit in front of the server) is "too many tries"; the server's own JSON 429 keeps its sentence.
+    #[test]
+    fn html_answers_are_not_available_and_an_outer_429_is_too_many_tries() {
+        let challenge = "<!doctype html><title>Just a moment...</title>";
+        for (status, body) in [
+            (200, challenge),
+            (403, challenge),
+            (503, challenge),
+            (302, ""),
+        ] {
+            let mut fake = Fake::answering(&[(status, body), (status, body), (status, body)]);
+            assert_eq!(
+                start_with(&mut fake),
+                Err(EmailError::NotOffered),
+                "start {status}"
+            );
+            assert_eq!(
+                resend(&mut fake, "http://127.0.0.1:9", "r1", "s", None),
+                Err(EmailError::NotOffered),
+                "resend {status}"
+            );
+            assert_eq!(
+                verify(&mut fake, "http://127.0.0.1:9", "r1", "s", "123456"),
+                Err(EmailError::NotOffered),
+                "verify {status}"
+            );
+        }
+        for body in [challenge, "", "Too Many Requests"] {
+            let mut fake = Fake::answering(&[(429, body), (429, body), (429, body)]);
+            assert_eq!(start_with(&mut fake), Err(EmailError::Throttled));
+            assert_eq!(
+                resend(&mut fake, "http://127.0.0.1:9", "r1", "s", None),
+                Err(EmailError::Throttled)
+            );
+            assert_eq!(
+                verify(&mut fake, "http://127.0.0.1:9", "r1", "s", "1"),
+                Err(EmailError::Throttled)
+            );
+            assert_eq!(fake.sent.len(), 3, "one request each, never tried again");
+        }
+        assert_eq!(
+            EmailError::Throttled.sentence(),
+            "Too many tries. Wait a moment and try again."
+        );
+        let mut fake =
+            Fake::answering(&[(429, r#"{"error":"too_many_requests","retry_after":600}"#)]);
+        assert_eq!(
+            start_with(&mut fake).unwrap_err().sentence(),
+            "Too many sign-in codes were sent to this address. Try again in 10 minutes."
         );
     }
 

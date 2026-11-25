@@ -58,13 +58,7 @@ fn email_start(
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     let email = arguments.string(0)?.to_owned();
     crate::cloud_account::spawn_account("buwiz-email-start", move || {
-        let server = crate::cloud_account::resolve()?;
-        start_with(
-            &mut BlockingHttp::new(),
-            &server.url,
-            &email,
-            cloud_account::unix_now(),
-        )
+        start_on_the_api(&mut BlockingHttp::new(), &email, cloud_account::unix_now())
     })
 }
 
@@ -132,6 +126,14 @@ fn step_value(
         )
         .field("retry_after", number(retry_after))
         .into())
+}
+
+/// The start on the API host: the configured server (`configured_server`, `https://api.buwiz.com` in a release
+/// build), never the account site (`configured_account`), which answers these paths with a challenge page. Resend and
+/// verify go to the server the pending request was started on.
+pub(crate) fn start_on_the_api(http: &mut dyn Http, email: &str, now: i64) -> HostResult {
+    let server = crate::cloud_account::resolve()?;
+    start_with(http, &server.url, email, now)
 }
 
 /// `cloud_account_email_start`: a new request for `email` (any earlier one ends). A server that does not offer it, a
@@ -306,6 +308,7 @@ mod tests {
     struct Fake {
         answers: Vec<(&'static str, u16, String)>,
         sent: Vec<(String, serde_json::Value)>,
+        urls: Vec<String>,
     }
 
     impl Fake {
@@ -317,6 +320,7 @@ mod tests {
 
     impl Http for Fake {
         fn exchange(&mut self, request: &HttpRequest) -> Result<HttpResponse, CloudError> {
+            self.urls.push(request.url.clone());
             let path = request.url.trim_start_matches(SERVER).to_owned();
             self.sent.push((
                 path.clone(),
@@ -654,6 +658,76 @@ mod tests {
             .unwrap();
             assert_eq!(json(pending_now(1_001)), serde_json::Value::Null);
             assert!(email_sign_in::load_pending().is_none());
+        });
+    }
+
+    /// The three calls go to the API host, never the account site, even when the two differ.
+    #[test]
+    fn the_three_calls_go_to_the_api_host_and_never_the_account_site() {
+        scratch(|| {
+            temp_env::with_var("BUWIZ_ACCOUNT_URL", Some("http://127.0.0.1:7"), || {
+                let mut fake = Fake::default()
+                    .answer("/auth/email/start", 200, STARTED)
+                    .answer("/auth/email/resend", 200, STARTED)
+                    .answer(
+                        "/auth/email/verify",
+                        400,
+                        r#"{"error":"invalid_code","attempts_left":4}"#,
+                    );
+                start_on_the_api(&mut fake, "filer@example.test", 1_000).unwrap();
+                resend_with(&mut fake, 1_400).unwrap();
+                verify_with(&mut fake, "123456", 1_401).unwrap();
+                let urls: Vec<&str> = fake.urls.iter().map(String::as_str).collect();
+                assert_eq!(
+                    urls,
+                    [
+                        "http://127.0.0.1:9/auth/email/start",
+                        "http://127.0.0.1:9/auth/email/resend",
+                        "http://127.0.0.1:9/auth/email/verify",
+                    ]
+                );
+            });
+        });
+    }
+
+    /// A challenge page or an outer 429 leaves the person where they are: the request is kept, nothing ends.
+    #[test]
+    fn an_html_answer_keeps_the_request_and_says_not_available_or_too_many_tries() {
+        scratch(|| {
+            let mut fake = Fake::default().answer("/auth/email/start", 200, STARTED);
+            start_with(&mut fake, SERVER, "filer@example.test", 1_000).unwrap();
+            for (status, sentence) in [
+                (
+                    200,
+                    "Sign-in is not available right now. Try again in a few minutes.",
+                ),
+                (429, "Too many tries. Wait a moment and try again."),
+            ] {
+                let mut html = Fake::default()
+                    .answer("/auth/email/verify", status, "<!doctype html>")
+                    .answer("/auth/email/resend", status, "<!doctype html>");
+                let check = json(verify_with(&mut html, "123456", 1_010));
+                assert_eq!(
+                    (check["outcome"].as_str(), check["message"].as_str()),
+                    (Some("error"), Some(sentence))
+                );
+                let step = json(resend_with(&mut html, 1_400));
+                assert_eq!(
+                    (step["step"].as_str(), step["message"].as_str()),
+                    (Some("refused"), Some(sentence))
+                );
+                assert!(
+                    email_sign_in::load_pending().is_some(),
+                    "the request is kept"
+                );
+                assert_eq!(html.sent.len(), 2, "one request each");
+            }
+            let mut html = Fake::default().answer("/auth/email/start", 200, "<!doctype html>");
+            let step = json(start_with(&mut html, SERVER, "filer@example.test", 2_000));
+            assert_eq!(
+                step["message"],
+                "Sign-in is not available right now. Try again in a few minutes."
+            );
         });
     }
 

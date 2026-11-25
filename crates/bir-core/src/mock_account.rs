@@ -42,6 +42,10 @@ pub struct MockOptions {
     pub no_email: bool,
     /// Addresses whose accounts are banned (`account_banned` at verify).
     pub banned: Vec<String>,
+    /// `/auth/email/*` answer a challenge page (HTML, 200), as a rule in front of a server can.
+    pub html: bool,
+    /// `/auth/email/*` answer the outer rate limit's HTML 429.
+    pub html_429: bool,
 }
 
 impl Default for MockOptions {
@@ -55,6 +59,8 @@ impl Default for MockOptions {
             expired_codes: false,
             no_email: false,
             banned: Vec::new(),
+            html: false,
+            html_429: false,
         }
     }
 }
@@ -624,6 +630,15 @@ fn dispatch(r: &Request, state: &mut State) -> Response {
             if state.options.no_email =>
         {
             oauth(404, "not_found", "no such endpoint")
+        }
+        ("POST", "/auth/email/start" | "/auth/email/resend" | "/auth/email/verify")
+            if state.options.html || state.options.html_429 =>
+        {
+            let mut page = html("<h1>Just a moment...</h1><p>Checking your browser.</p>".into());
+            if state.options.html_429 {
+                page.status = 429;
+            }
+            page
         }
         ("POST", "/auth/email/start") => email_start(state, &value),
         ("POST", "/auth/email/resend") => email_resend(state, &value),
@@ -1829,6 +1844,61 @@ mod tests {
         })
         .await
         .unwrap();
+    }
+
+    /// The switches for what sits in front of a server: a challenge page is "not available right now", the outer
+    /// limit's HTML 429 is "too many tries", on all three paths.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn html_and_an_outer_429_reach_the_client_as_their_sentences() {
+        use crate::email_sign_in::{EmailError, Intent, new_secret, resend, start, verify};
+        for (options, expected) in [
+            (
+                MockOptions {
+                    html: true,
+                    ..MockOptions::default()
+                },
+                EmailError::NotOffered,
+            ),
+            (
+                MockOptions {
+                    html_429: true,
+                    ..MockOptions::default()
+                },
+                EmailError::Throttled,
+            ),
+        ] {
+            let server = mock(options).await;
+            let url = server.url();
+            let expected = expected.clone();
+            tokio::task::spawn_blocking(move || {
+                let mut http = BlockingHttp::new();
+                let secret = new_secret();
+                assert_eq!(
+                    start(
+                        &mut http,
+                        &url,
+                        "h@example.test",
+                        Intent::SignIn,
+                        &secret,
+                        "macos",
+                        INSTALL,
+                        None
+                    ),
+                    Err(expected.clone())
+                );
+                assert_eq!(
+                    resend(&mut http, &url, "r", &secret, None),
+                    Err(expected.clone())
+                );
+                assert_eq!(
+                    verify(&mut http, &url, "r", &secret, "246810"),
+                    Err(expected)
+                );
+                drop(server);
+            })
+            .await
+            .unwrap();
+        }
     }
 
     #[test]

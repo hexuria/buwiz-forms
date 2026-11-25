@@ -162,7 +162,10 @@ function typeCode(digits: string): void {
   if (page.kind === "code" && page.said && digits.length > 0) setState({ ...page, said: page.tooMany ? page.said : null });
 }
 
-/** The sixth digit: the code is checked ("Checking…" while its request runs). Accepted: Home at once. */
+/**
+ * The sixth digit (typed, pasted or autofilled): the code is checked once ("Checking…" while its request runs, the boxes
+ * locked, a second call ignored). Accepted: Home at once.
+ */
 async function checkCode(digits: string): Promise<void> {
   const current = state();
   if (current.kind !== "code" || current.checking || current.tooMany || digits.length !== current.request.length) return;
@@ -184,7 +187,8 @@ async function checkCode(digits: string): Promise<void> {
       setState({ kind: "email", said: said("This sign-in request has ended. Start again.") });
       return;
     }
-    codeText.set("");
+    // An answer the server never gave (no connection, a challenge page, the outer limit) keeps what was typed.
+    if (checked.outcome !== "error") codeText.set("");
     if (checked.outcome === "expired") {
       const at = Date.now();
       const request = { ...page.request, expiresAt: Math.min(page.request.expiresAt, at), resendAt: Math.min(page.request.resendAt, at) };
