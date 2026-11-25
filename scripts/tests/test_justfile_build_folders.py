@@ -26,7 +26,8 @@ class BuildFolderTests(unittest.TestCase):
         windows = [line.strip() for line in JUSTFILE.splitlines()
                    if "$env:CARGO_TARGET_DIR =" in line and "if (-not $env:CARGO_TARGET_DIR)" not in line]
         self.assertEqual(windows, [], "a Windows recipe overrides a CARGO_TARGET_DIR the caller set")
-        self.assertNotIn('"$HOME/BuwizNsh/tools/bin:$PATH"', JUSTFILE, "a recipe ignores NSH_TOOLS")
+        fixed_tools = [line.strip() for line in JUSTFILE.splitlines() if '"$HOME/BuwizNsh/tools/bin:$PATH"' in line]
+        self.assertEqual(fixed_tools, [], "a recipe ignores NSH_TOOLS")
 
     def test_packages_default_to_the_checkouts_own_folder(self):
         for recipe, folder in (("play-bundle", "$root/target/play-bundle"),
