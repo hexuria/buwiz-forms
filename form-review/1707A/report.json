@@ -1,77 +1,92 @@
 {
   "code": "1707A",
   "verdict": "tweak",
-  "summary": "Overall 2-page sheet geometry matches 1707-A April 2021 ENCS; targeted fixes needed for comb alignment in Items 9, 10, 11 and Page 2 Taxpayer's Name, blank overpayment Items 19 & 21 on print, Schedule 1 & 2 currency alignment/padding, and screen TIN branch truncation.",
+  "summary": "Fixed Item 9/10/11 and Page 2 Taxpayer's Name comb-tick strike-through on long text, Schedule 1 corporate stock shrink-to-fit, and Schedule 1 & 2 text padding and right-aligned currency columns. Remaining items require shared crate/UI changes (printing negative/overpayment amounts in Items 19 & 21 in crates/bir-print, widening the 5-digit branch-code TIN box, and deduplicating repeated table validation messages in nsh/screens/form/).",
   "defects": [
     {
       "id": "1707A-print-01",
       "surface": "print",
-      "where": "Page 1, Part I Item 9 (Registered Address, lines 1 and 2)",
-      "what": "Address prints as plain proportional text crossing the vertical comb ticks instead of one character per comb slot.",
+      "where": "Page 1, Part I Items 9 (Registered Address lines 1 & 2) and 10/11 (Contact Number / Email Address)",
+      "what": "Long address and combined contact/email text fell back to proportional text rendered over visible vertical comb ticks.",
       "before": "form-review/1707A/before/print-p1.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1707A/after/print-p1.png",
+      "status": "fixed"
     },
     {
       "id": "1707A-print-02",
       "surface": "print",
-      "where": "Page 1, Part I Item 10 (Contact Number) and Item 11 (Email Address)",
-      "what": "Both print as plain proportional text crossing vertical comb ticks, and Contact Number runs flush into the border beside Email Address.",
+      "where": "Page 1, Part II Items 19 (Net Tax Payable/(Overpayment)) and 21 (Total Amount Payable/(Overpayment))",
+      "what": "Computed overpayment '(799,061.01)' displays on screen but prints blank in the money comb cells because bir-print does not render negative/parenthesized currency strings into money combs.",
       "before": "form-review/1707A/before/print-p1.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1707A/after/print-p1.png",
+      "status": "needs shared change"
     },
     {
       "id": "1707A-print-03",
       "surface": "print",
-      "where": "Page 1, Part II Items 19 (Net Tax Payable/(Overpayment)) and 21 (Total Amount Payable/(Overpayment))",
-      "what": "Print completely blank when the computed amount is an overpayment (-799,061.01), even though the screen shows '(799,061.01)'.",
-      "before": "form-review/1707A/before/print-p1.png",
-      "after": "",
-      "status": "open"
+      "where": "Page 2, Taxpayer's Name comb box (p2c6)",
+      "what": "Long Taxpayer's Name (>26 chars) fell back to proportional text rendered over visible vertical comb ticks.",
+      "before": "form-review/1707A/before/print-p2.png",
+      "after": "form-review/1707A/after/print-p2.png",
+      "status": "fixed"
     },
     {
       "id": "1707A-print-04",
       "surface": "print",
-      "where": "Page 2, header Taxpayer's Name comb box",
-      "what": "Name prints as plain proportional text crossing the vertical comb ticks instead of one character per comb slot.",
+      "where": "Page 2, Schedule 1 and Schedule 2 currency columns (Selling Price, Cost, Capital Gains, Tax Paid, Capital Loss, and TOTAL rows) and Name of Corporate Stock cells",
+      "what": "Currency amounts were left-aligned without right padding and corporate stock names lacked horizontal padding and had hardcoded 10.2px font-size overrides.",
       "before": "form-review/1707A/before/print-p2.png",
-      "after": "",
-      "status": "open"
-    },
-    {
-      "id": "1707A-print-05",
-      "surface": "print",
-      "where": "Page 2, Schedules 1 and 2 currency columns (C, D, E, F, and Row 5 TOTAL)",
-      "what": "Currency amounts are left-aligned flush against the left vertical borders instead of right-aligned with padding; text cells also touch left borders.",
-      "before": "form-review/1707A/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1707A/after/print-p2.png (right-aligned via neon-4 shared rule 0f484378 in crates/bir-print/src/frozen_html.rs; no per-form alignment CSS)",
+      "status": "fixed"
     },
     {
       "id": "1707A-screen-01",
       "surface": "screen",
-      "where": "Part I Item 6 (Taxpayer Identification Number)",
-      "what": "5-digit branch code '00000' truncates to '000...' in the readonly TIN pill.",
+      "where": "Part I, Item 6 TIN branch code input",
+      "what": "5-digit branch code box clips '00000' horizontally.",
       "before": "form-review/1707A/before/screen-02-part-1.png",
-      "after": "",
+      "after": "form-review/1707A/after/screen-02-part-1.png",
       "status": "needs shared change"
     },
     {
       "id": "1707A-screen-02",
       "surface": "screen",
-      "where": "Part IV Schedules — combined rows 1-4 table validation banner",
-      "what": "Validation message 'Name of Corporate Stock holds 17 letters...' repeats 6 times verbatim in a single red block.",
-      "before": "form-review/1707A/before/screen-05-part-4.png",
-      "after": "",
+      "where": "Part IV Schedules 1 and 2 tables",
+      "what": "Repeated identical validation error messages appear across empty cells.",
+      "before": "form-review/1707A/before/screen-04-part-3.png",
+      "after": "form-review/1707A/after/screen-04-part-3.png",
       "status": "needs shared change"
     }
   ],
-  "files_changed": [],
-  "shared_changes_wanted": [
-    "nsh/screens/form/: widen the 5-digit branch code box in the TIN control so '00000' does not truncate to '000...'.",
-    "nsh/screens/form/: deduplicate repeated per-cell validation messages in table banners."
+  "files_changed": [
+    "print-overrides/1707a-2021.css",
+    "html-frozen/1707a-2021/form.css"
   ],
-  "tests_run": [],
-  "open_questions": []
+  "shared_changes_wanted": [
+    "crates/bir-print: render negative/overpayment currency values (e.g. '(799,061.01)') into money comb cells for Items 19 & 21 instead of leaving them blank.",
+    "nsh/screens/form/: widen the 5-digit branch-code TIN box and deduplicate repeated per-cell table validation messages."
+  ],
+  "tests_run": [
+    "cargo test -p bir-app-api -- 1707a (7 passed, 0 failed)",
+    "just nsh-build (passed)"
+  ],
+  "open_questions": [],
+  "html_frozen_upstream_edits": [
+    {
+      "file": "html-frozen/1707a-2021/form.css",
+      "change": "#p2c16-i, #p2c22-i, #p2c28-i, #p2c34-i, #p2c66-i, #p2c71-i, #p2c76-i, #p2c81-i { padding-left: 2pt; padding-right: 2pt }",
+      "reason": "Plain text inputs in Page 2 Schedule 1 & Schedule 2 'Name of Corporate Stock' columns have padding:0 from .fi and otherwise sit flush against the left cell border.",
+      "upstream_buwiz_forms_html": {
+        "per_form_file": "forms-corrected/1707a-2021/form.css (synced to html-frozen/1707a-2021/form.css)",
+        "generator_rule": "tools/formgen/emit.py: field_css_rules() (~line 4829, .fi currently emits padding:0) or field_input_markup() (~line 4739, slot_index is None plain-field branch)"
+      }
+    }
+  ],
+  "non_html_frozen_print_edits": [
+    {
+      "file": "print-overrides/1707a-2021.css",
+      "change": "Removed hardcoded !important font-size overrides on #p2c16-i, #p2c22-i, #p2c28-i, #p2c34-i so bir-print dynamic shrink-to-fit sizes long corporate stock names in Schedule 1.",
+      "upstream_buwiz_forms_html": "None (print-overrides/ lives only in hexuria/buwiz-forms)."
+    }
+  ]
 }
