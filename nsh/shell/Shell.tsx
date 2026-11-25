@@ -15,6 +15,7 @@ import { app, boot, startPolling, startQueuedWatch, warmLibrary } from "./app";
 import { DevPages } from "./DevPages";
 import { startDevCommandMailbox } from "./devCommand";
 import { NarrowBar, PanelSheets, TabBar } from "./Narrow";
+import { NarrowStack } from "./NarrowStack";
 import { NewReturn } from "./NewReturn";
 import { Palette } from "./Palette";
 import { RightPanel } from "./Panels";
@@ -96,9 +97,9 @@ function Guarded(props: { route: Route }): JSX.Element {
 }
 
 /** A view in the main surface, laid out as its route table entry says (page 880, wide 1120, full, or self: the screen sets its own width and scrolls). */
-function ViewFrame() {
-  const route = untracked(app.route);
-  const view = untracked(app.view);
+function ViewFrame(props: { route?: Route }) {
+  const route = props.route ?? untracked(app.route);
+  const view = props.route ? untracked(() => app.viewOf(route)) : untracked(app.view);
   const layout = ROUTES[view].layout;
   if (layout === "self") {
     return (
@@ -123,6 +124,9 @@ function ViewFrame() {
   );
 }
 
+/** The narrow layout on a phone or tablet: its pages are in the platform's navigation stack. A narrow desktop window keeps the one view. */
+const stacked = (): boolean => app.layout.narrow() && (platform.os === "ios" || platform.os === "android");
+
 /** The surface the screens draw on: inset 8 with radius 12 and a hairline when wide, flush when narrow. */
 function MainSurface() {
   return (
@@ -137,6 +141,8 @@ function MainSurface() {
     >
       <View class="min-h-0 flex-1">
         {() => {
+          // A phone: the pages live in the platform's navigation stack, which makes and drops them as the history moves.
+          if (stacked()) return untracked(() => <NarrowStack page={(route) => <ViewFrame route={route} />} />);
           // The view is made again when the person moves (the route's seq) or the view that shows changes; a retarget keeps it.
           void app.route().seq;
           void app.view();
@@ -285,7 +291,13 @@ export function Shell(props: ShellProps) {
   bindKeys();
   bindMenuKeys();
   // Android's back button: the topmost layer closes first, then history goes back; else the app leaves.
-  if (mobileAvailable && platform.os === "android") BackHandler.on("press", () => app.dismiss() || app.back());
+  // It listens only while Back has something the navigation stack cannot do by itself (a layer to close, or a stop of the history
+  // with no page under the top one): a listener turns the system's back preview off, and a pushed page pops with that preview.
+  if (mobileAvailable && platform.os === "android") {
+    effect(() => {
+      if (app.hasLayer() || (app.stack().length <= 1 && app.canBack())) BackHandler.on("press", () => app.dismiss() || app.back());
+    });
+  }
   // The polls end with the root; headless fixtures leave them off unless a test asks.
   if (props.polling !== false) cleanup(startPolling());
   // A queued return is watched where the polls run, and in the dev environment too (the app asks); fixtures leave it off.
