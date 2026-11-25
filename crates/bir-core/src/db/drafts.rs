@@ -3240,6 +3240,24 @@ impl Database {
         Ok(summaries)
     }
 
+    /// Whether `tin` holds a return of `year` that waits for the BIR's
+    /// confirmation email: Submitted (or the legacy "Filed") and not a dry
+    /// run, which reached nobody and is sent no email
+    /// ([`crate::forms::dry_run`]).
+    pub fn has_return_awaiting_bir_email(&self, tin: &str, year: u16) -> Result<bool, DbError> {
+        Ok(self.conn.query_row(
+            &format!(
+                "SELECT EXISTS(SELECT 1 FROM form_drafts
+                  WHERE tin = ?1 AND taxable_year = ?2
+                    AND status IN ('Submitted', 'Filed')
+                    AND NOT {})",
+                crate::forms::dry_run::STORED_DRY_RUN_SQL
+            ),
+            params![tin, i64::from(year)],
+            |row| row.get(0),
+        )?)
+    }
+
     /// Every form draft summary for a TIN, whatever its taxable year.
     pub fn list_draft_summaries_all_years(
         &self,
@@ -5940,6 +5958,69 @@ mod tests {
         assert_eq!(
             persisted.confirmed_at.as_deref(),
             Some("2026-04-25T11:59:00+08:00")
+        );
+    }
+
+    /// A dry run reached nobody: a BIR email naming its file is Ignored (as
+    /// one with no return is); the same return sent for real is confirmed.
+    #[test]
+    fn a_bir_email_never_confirms_a_dry_run_2551q() {
+        let db = test_db();
+        let submitted = submitted_2551q_draft(&db, &test_profile());
+        let mark = |dry: bool| {
+            db.conn
+                .execute(
+                    &format!(
+                        "UPDATE form_drafts SET data_json = json_set(data_json, '$.submitted_dry_run', json('{dry}'))
+                         WHERE form_code = '2551Q'"
+                    ),
+                    [],
+                )
+                .unwrap();
+        };
+        mark(true);
+        let receipt_filename = submitted
+            .submission_filename
+            .clone()
+            .unwrap()
+            .replace("#test@example.com#", "");
+        let receipt_id =
+            insert_2551q_receipt(&db, &submitted, &receipt_filename, "2026-04-25", "12:00:00");
+        let receipt = db
+            .get_submission_receipt_by_id(receipt_id)
+            .unwrap()
+            .unwrap();
+        for outcome in [
+            db.confirm_2551q_from_receipt(&receipt).unwrap(),
+            db.confirm_submission_from_receipt(&receipt).unwrap(),
+        ] {
+            assert_eq!(outcome, crate::db::ReceiptConfirmationOutcome::Ignored);
+        }
+        let kept = db
+            .get_2551q_draft(&submitted.tin, submitted.taxable_year, submitted.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(kept.status, FilingStatus::Submitted);
+        assert_eq!(kept.receipt_id, None);
+        // Dev Mode's simulated email confirms it on purpose.
+        assert_eq!(
+            db.confirm_simulated_submission_from_receipt(&receipt)
+                .unwrap(),
+            crate::db::ReceiptConfirmationOutcome::Confirmed
+        );
+
+        // The same return sent for real: the email confirms it.
+        let db = test_db();
+        let submitted = submitted_2551q_draft(&db, &test_profile());
+        let receipt_id =
+            insert_2551q_receipt(&db, &submitted, &receipt_filename, "2026-04-25", "12:00:00");
+        let receipt = db
+            .get_submission_receipt_by_id(receipt_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            db.confirm_2551q_from_receipt(&receipt).unwrap(),
+            crate::db::ReceiptConfirmationOutcome::Confirmed
         );
     }
 

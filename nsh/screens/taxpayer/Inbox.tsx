@@ -1,28 +1,28 @@
 // Confirmation inbox (old inboxBody, P2-5): the mailbox this branch's BIR receipts are tracked through. The method, the
 // app password's credentials (masked; the host answers only whether one is stored), Google connect and disconnect,
 // Verify, Check now and the tracking switch, all through bir-core's fetch and confirm path.
-// On a phone or tablet there is no Google connect: its sign-in waits for Google on a local web address (bir-core
-// email/auth_oauth.rs), which iOS cannot answer once the browser is in front. The inbox works there with an app password,
-// checked while the app is open. An inbox already on Google can still be switched to an app password or disconnected.
+// Google connect needs a desktop and a build with a Google client id (the host's google_available). On a phone or
+// tablet its sign-in waits for Google on a local web address (bir-core email/auth_oauth.rs), which iOS cannot answer once
+// the browser is in front; a build without a client id could only fail. Either way the inbox is an app password, with one
+// line saying why. An inbox already on Google can still be switched to an app password or disconnected.
 import { View } from "nsh";
 import type { InboxAuthMethod } from "../../bir";
 import { shortDate } from "../../lib/dates";
 import { app, store } from "../../shell";
 import { AppButton, Field, FieldCell, FieldGrid, Segmented, Switch, Text, TextField, TOUCH } from "../../ui";
 import { checkInboxNow, connectInbox, disconnectInbox, setTracking, shared, verifyInbox } from "./actions";
-import { trackingLine } from "./logic";
+import { GOOGLE_UNAVAILABLE, trackingLine } from "./logic";
 import type { PageState } from "./page";
-
-/** Whether this device can connect a Google inbox: desktops only. */
-const GOOGLE_CONNECT = !TOUCH;
 
 export function InboxBody(props: { s: PageState }) {
   const s = props.s;
   const tin = () => app.branch()?.tin ?? "";
   const st = () => store.inboxState(app.branch()?.tin);
   const ed = () => s.inbox();
-  // Where Google cannot be connected, the method is an app password unless the inbox is already on Google.
-  const choosable = () => GOOGLE_CONNECT || st()?.auth_method === "GoogleOAuth";
+  // Google can be connected on a desktop build that has a client id; elsewhere the method is an app password unless
+  // the inbox is already on Google.
+  const canConnect = () => !TOUCH && Boolean(st()?.google_available);
+  const choosable = () => canConnect() || st()?.auth_method === "GoogleOAuth";
   const method = (): InboxAuthMethod => (choosable() ? (ed()?.method ?? st()?.auth_method ?? "AppPassword") : "AppPassword");
   const pw = () => method() === "AppPassword";
   return (
@@ -116,7 +116,7 @@ export function InboxBody(props: { s: PageState }) {
           <If
             when={st()?.oauth_connected}
             else={
-              <If when={GOOGLE_CONNECT}>
+              <If when={canConnect()}>
                 <AppButton
                   testID="tp-inbox-connect"
                   label="Connect Google"
@@ -129,7 +129,7 @@ export function InboxBody(props: { s: PageState }) {
               </If>
             }
           >
-            <If when={GOOGLE_CONNECT}>
+            <If when={canConnect()}>
               <AppButton testID="tp-inbox-reconnect" label="Re-authorize" size="sm" icon="key-round" disabled={shared.inboxBusy()} onPress={() => void connectInbox(tin())} />
             </If>
             <AppButton testID="tp-inbox-disconnect" label="Disconnect" variant="ghost" size="sm" onPress={() => disconnectInbox(tin())} />
@@ -145,9 +145,14 @@ export function InboxBody(props: { s: PageState }) {
       <If when={shared.inboxMsg()}>
         <Text testID="tp-inbox-msg" tone={shared.inboxMsg()?.ok ? "success" : "danger"} class="mt-2">{shared.inboxMsg()?.text ?? ""}</Text>
       </If>
-      <If when={!GOOGLE_CONNECT}>
+      <If when={TOUCH}>
         <Text testID="tp-inbox-device-note" variant="meta" tone="fg3" class="mt-2">
           On this device the inbox is checked only while eBIRForms is open, with an app password.
+        </Text>
+      </If>
+      <If when={!TOUCH && st() && !st()?.google_available}>
+        <Text testID="tp-inbox-google-unavailable" variant="meta" tone="fg3" class="mt-2">
+          {GOOGLE_UNAVAILABLE}
         </Text>
       </If>
       <Text testID="tp-inbox-status" variant="meta" tone={st()?.tracking_enabled ? "success" : "fg3"} class="mt-2">

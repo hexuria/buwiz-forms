@@ -3167,6 +3167,7 @@ fn evaluate_here(
     // whose entry is not the one the sheet prints there).
     if let Value::Array(list) = &mut errors {
         list.extend(rows_dst_pt_vat::notices(kind, draft));
+        list.extend(rows_2550m::notices(kind, draft));
         list.extend(rows_annual_corporate::notices(kind, draft));
         list.extend(rows_annual_individual::notices(kind, draft));
         // PR 9's notices: a stored partial date the page shows blank.
@@ -14539,6 +14540,19 @@ mod tests {
                     .clone()
             };
             assert_eq!(offered(), false, "{code}");
+            // A real send of a form with an amended-return answer offers Amend.
+            let amend_offered = || {
+                sample_period(
+                    TIN,
+                    code,
+                    typed_parts(code, 2024, period as u8, 1, period as u8),
+                )["existing"]["actions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|action| action == "amend")
+            };
+            assert!(amend_offered(), "{code}: a real send can be amended");
 
             // The worker's dry-run send, as bir-core stores it.
             let (_, raw) = raw_row(id);
@@ -14557,6 +14571,8 @@ mod tests {
             assert_eq!(dry["submitted_at"], real["submitted_at"], "{code}");
             assert_eq!(dry["submitted_dry_run"], true, "{code}");
             assert_eq!(offered(), true, "{code}");
+            // A dry run reached nobody: there is nothing to amend.
+            assert!(!amend_offered(), "{code}: a dry run is not amended");
         }
     }
 
@@ -18530,7 +18546,10 @@ mod tests {
                 // column, plus 2 for 1701MS (PR 7 review, round 2): item 16's
                 // rate in each column. At pr0b-push none had an entry.
                 ("1700", 17),
-                ("1701", 35),
+                // Plus 34 for 1701: Schedule 3.A items 8/9/11 A&B (6),
+                // Schedule 4 items 3 and 6-13 A&B (18), and Schedule 6
+                // NOLCO filer cells 6A/6B/7B/9A-11B/12B (10).
+                ("1701", 69),
                 ("1701A", 17),
                 ("1701MS", 52),
                 // 8 for 1706 (PR 9): items 8 and 9, item 11's list,
