@@ -148,7 +148,7 @@ export function refusalSentence(ctx: RefusalContext): string {
   // A value the box's type cannot hold ("= `-5` does not fit this box: … expected u16").
   if (/does not fit this box/i.test(raw)) {
     if (ctx.kind === "int") return `${at} type a whole number, for example 3.`;
-    if (ctx.kind === "money" || ctx.kind === "pct") return `${at} type an amount, for example 1234.50.`;
+    if (ctx.kind === "money" || ctx.kind === "num" || ctx.kind === "pct") return `${at} type an amount, for example 1234.50.`;
   }
 
   // The host's own plain sentence ("Enter the month as MM/YYYY.", "Selecting an ATC is not necessary when item no. 4

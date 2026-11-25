@@ -51,7 +51,7 @@ function ReadBox(props: { p: FieldInput }) {
   const text = () => readText(p);
   const hint = () => (text() ? "" : p.box.hint());
   const right = () => !hint() && (p.field.t === "money" || p.field.t === "pct");
-  const figures = () => p.field.t === "money" || p.field.t === "pct" || p.field.t === "int" || p.field.t === "date" || cellOf(p);
+  const figures = () => p.field.t === "money" || p.field.t === "num" || p.field.t === "pct" || p.field.t === "int" || p.field.t === "date" || cellOf(p);
   const why = () => reasonOf(p);
   // The narrow boxes of a TIN (58, 76 wide) have no room for a lock, and neither has a phone grid's cell: they read centred.
   const small = () => (!p.narrow() && p.width < 100) || cellOf(p);
@@ -204,7 +204,7 @@ function TypedBox(props: { p: FieldInput }) {
   const tin = () => tinKind(p.field);
   return (
     <If
-      when={kind() === "money"}
+      when={kind() === "money" || kind() === "num"}
       else={
         <If
           when={kind() === "pct"}
@@ -289,6 +289,7 @@ function TypedBox(props: { p: FieldInput }) {
         width={widthOf(p)}
         error={p.box.message?.() || p.box.invalid()}
         whole={!!p.field.w}
+        prefix={kind() === "num" ? "" : undefined}
         negative
         placeholder={p.placeholder}
         inputRef={(ref) => giveFocus(p, ref)}

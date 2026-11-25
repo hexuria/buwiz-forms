@@ -12,6 +12,7 @@ const forms = signal<ReadonlySet<string> | null>(null);
 const periods = signal<ReadonlySet<string> | null>(null);
 const statuses = signal<ReadonlySet<string> | null>(null);
 const updatedMonth = signal<string | null>(null);
+const filedOnly = signal(false);
 const tab = signal("all");
 
 function reset(): void {
@@ -21,16 +22,17 @@ function reset(): void {
   periods.set(null);
   statuses.set(null);
   updatedMonth.set(null);
+  filedOnly.set(false);
 }
 
 /** The filters as the pure model takes them (reads every signal: call it inside a closure). */
 function values(): FilterValues {
-  return { query: query(), tps: tps(), forms: forms(), periods: periods(), statuses: statuses(), updatedMonth: updatedMonth() };
+  return { query: query(), tps: tps(), forms: forms(), periods: periods(), statuses: statuses(), updatedMonth: updatedMonth(), filedOnly: filedOnly() };
 }
 
-/** How many of the four filters and the month are narrowed (the Filters button's badge); the search is visible and not counted. */
+/** How many of the four filters, the month and "Filed only" are narrowed (the Filters button's badge); the search is visible and not counted. */
 function narrowed(): number {
-  return [tps(), forms(), periods(), statuses()].filter((s) => s !== null).length + (updatedMonth() !== null ? 1 : 0);
+  return [tps(), forms(), periods(), statuses()].filter((s) => s !== null).length + (updatedMonth() !== null ? 1 : 0) + (filedOnly() ? 1 : 0);
 }
 
 /** True when the search or any filter holds the list back (shows Clear filters). */
@@ -57,6 +59,7 @@ export const filters = {
   periods: () => periods(),
   statuses: () => statuses(),
   updatedMonth: () => updatedMonth(),
+  filedOnly: () => filedOnly(),
   tab: () => tab(),
   setQuery: (v: string) => query.set(v),
   setTps: (v: ReadonlySet<string> | null) => tps.set(v),
@@ -65,6 +68,7 @@ export const filters = {
   setStatuses: (v: ReadonlySet<string> | null) => statuses.set(v),
   setTab: (v: string) => tab.set(v),
   clearMonth: () => updatedMonth.set(null),
+  clearFiledOnly: () => filedOnly.set(false),
   values,
   narrowed,
   active,
@@ -81,6 +85,7 @@ export const filters = {
     const next = presetFilters(preset);
     statuses.set(next.statuses);
     updatedMonth.set(next.updatedMonth);
+    filedOnly.set(next.filedOnly === true);
     tab.set("all");
   },
 };

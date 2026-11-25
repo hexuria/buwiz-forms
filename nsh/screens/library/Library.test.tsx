@@ -33,17 +33,18 @@ test("phone: the Forms tab opens the library on the forms filed this year, and a
   expect(app.texts().some((t) => t.startsWith("A sample from the Form library"))).toBe(true);
 });
 
-test("phone: a taxpayer with no forms filed this year sees the empty Filed in list, and All forms lists every form", async () => {
+test("phone: a taxpayer with no forms for this year opens on All forms, and their own list says how to choose them", async () => {
   const app = await open(ENTRY, asking({ start: "view=library", years: false }));
-  await app.waitFor("id:library-empty");
-  expect(app.texts()).toContain(`${DEMO.name} has no forms for this year yet. Choose them under Forms, or see All forms.`);
-  expect(app.texts()).toContain("Filed in this year (0)");
-  expect(app.texts()).toContain(`0 of ${TOTAL}`);
-
-  await app.press("id:library-scope >> text:/^All forms/");
+  // A new taxpayer's own list is empty: the library starts on every form instead of an empty page.
   await app.waitFor("id:library-grid");
   expect(app.shows("id:library-empty")).toBe(false);
+  expect(app.texts()).toContain("Filed in this year (0)");
   expect(app.texts()).toContain(`${TOTAL} of ${TOTAL}`);
+
+  await app.press("id:library-scope >> text:/^Filed in/");
+  await app.waitFor("id:library-empty");
+  expect(app.texts()).toContain(`${DEMO.name} has no forms for this year yet. Choose them under Forms, or see All forms.`);
+  expect(app.texts()).toContain(`0 of ${TOTAL}`);
 });
 
 test("phone: a search that finds nothing says so, and the count reads 0", async () => {

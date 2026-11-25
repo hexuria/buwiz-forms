@@ -27,6 +27,25 @@ test("phone: the profile's tabs stay, and editing a section opens a sheet that s
   await app.waitFor("id:tp-edit-sheet-body", { state: "gone" });
 });
 
+test("phone: a dry run leaves its periods due (Next: ...); real sends file every period", async () => {
+  const dry = await phone("view=forms", { sent: "dry" });
+  await dry.waitFor("id:tp-form-1601C");
+  expect(dry.shows("id:tp-form-1601C >> text:/^Next: /")).toBe(true);
+  expect(dry.shows("id:tp-form-1601C >> text:Every period filed")).toBe(false);
+  const real = await phone("view=forms", { sent: "real" });
+  await real.waitFor("id:tp-form-1601C");
+  expect(real.shows("id:tp-form-1601C >> text:Every period filed")).toBe(true);
+});
+
+test("phone: the confirmation inbox has no Google connect; it uses an app password, checked while the app is open", async () => {
+  const app = await phone("view=profile");
+  await app.waitFor("id:tp-inbox-edit");
+  expect(app.shows("id:tp-inbox-method")).toBe(false);
+  expect(app.shows("id:tp-inbox-connect")).toBe(false);
+  expect(app.texts()).not.toContain("Google account (OAuth2)");
+  expect(app.texts()).toContain("On this device the inbox is checked only while eBIRForms is open, with an app password.");
+});
+
 test("phone: Forms keeps code, name and template, and edits the list", async () => {
   const app = await phone("view=forms");
   await app.waitFor("id:tp-form-1601C");

@@ -369,9 +369,10 @@ fn pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them() {
                 .unwrap_or_else(|| panic!("{code}: item {no} is a note"));
             assert!(note["l"].as_str().unwrap().starts_with(row), "{code} {no}");
             assert!(
-                note["note"].as_str().unwrap().contains(&format!(
-                    "rules/forms/{form_id}/fixtures/runtime-control-inventory-v796.json"
-                )),
+                note["note"]
+                    .as_str()
+                    .unwrap()
+                    .contains("keeps Part IV switched off"),
                 "{code} {no}"
             );
             // The sheet prints it under that number.
@@ -393,7 +394,7 @@ fn pr11_part_iv_and_tax_agent_are_notes_where_the_program_disables_them() {
             agent_note["note"]
                 .as_str()
                 .unwrap()
-                .contains("disabled at load")
+                .contains("keeps the tax agent's boxes switched off")
         );
     }
 }

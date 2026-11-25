@@ -156,6 +156,8 @@ export function save_form_draft(tin: string, form_code: string, year: number, qu
 export function list_queued(): DraftSummary[];
 export function queue_form_draft(tin: string, form_code: string, year: number, quarter: number | null): number;
 export function cancel_queued(tin: string, form_code: string, year: number, quarter: number | null): null;
+/** A queued return whose send has an unknown outcome (`send.stage` "needs_attention"): "received", the BIR's confirmation email came, makes it Submitted; "not_received" puts it back to Draft. `period` is 2551Q's quarter, 1601C's month, else the stored period (null is 0). Refused unless the return is waiting for this answer. */
+export function resolve_unknown_send(tin: string, form_code: string, year: number, period: number | null, answer: "received" | "not_received"): null;
 export interface TaxDeadline {
     id: number | null;
     form_type: string;
@@ -217,6 +219,8 @@ export function shell_set_chrome(open: boolean): null;
 export interface CloudAccountStatus {
     server_url: string;
     server_url_source: string;
+    /** The account site's address (where sign-in and account pages open). Empty when it is not a valid address. */
+    account_url: string;
     signed_in: boolean;
     email: string | null;
     user_id: string | null;
@@ -565,6 +569,8 @@ export interface ScreenFormOpened {
     /** That send went to the local mock relay (docs/relay.md), not to BIR. False for every other send. */
     submitted_via_relay: boolean;
     confirmed_at: string | null;
+    /** What the page says about the stored return's send (refused, held, waiting, needs attention, sent ...); null for a sample, a new return, and where the status says it all. */
+    send: SendState | null;
     /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
     amends?: ScreenFormStatus;
     /** Boxes another answer turns off right now, each with its tag ("Needs item 13 = Yes"; the page fades them). */
@@ -633,6 +639,8 @@ export interface ScreenFormExisting {
     /** What the page may offer: `load` (a draft), `view` (read-only), `amend` (reached BIR, and the form has an amended-return answer), `keep`. */
     actions: ("load" | "view" | "amend" | "keep")[];
     submitted_at: string | null;
+    /** The send `submitted_at` names was only simulated (a dry run): nothing reached BIR. */
+    submitted_dry_run: boolean;
     confirmed_at: string | null;
 }
 export interface ScreenFormSamplePeriod {
@@ -759,6 +767,8 @@ export interface DeadlineRow {
     due_date: string;
     /** "Not started" | "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid" */
     status: string;
+    /** A Submitted return whose send was only simulated (a dry run, `send.stage` "test_sent"): nothing reached BIR. */
+    submitted_dry_run: boolean;
     draft_id: number | null;
     /** The saved return's stored key (`screen_form_open`'s `key`), null when none is saved. */
     return_key: number | null;
@@ -769,6 +779,8 @@ export interface AsNeededReturn {
     period: number;
     return_key: number | null;
     status: string;
+    /** A Submitted return whose send was only simulated (a dry run): nothing reached BIR. */
+    submitted_dry_run: boolean;
     updated_at: string;
 }
 export interface AsNeededForm {
@@ -807,6 +819,20 @@ export interface ReturnRow {
     return_key: number | null;
     /** The worker sent it to the local mock relay, not to BIR (stored at submission; false for drafts and real sends). */
     submitted_via_relay: boolean;
+    /** What the screens say about its send (refused, held, waiting, needs attention ...); null where they keep the status alone. */
+    send: SendState | null;
+}
+/** What a screen says about a return's send (bir-app-api `send_state.rs`). */
+export interface SendState {
+    stage: "queued" | "sending" | "waiting" | "held" | "needs_attention" | "refused" | "sent" | "test_sent";
+    /** The sentence the person reads. */
+    line: string;
+    /** The code a refusal's reason ended in (`tin_not_active`), else null. */
+    code: string | null;
+    /** When the worker tries again (held and waiting; an RFC 3339 time), else null. */
+    next_try_at: string | null;
+    /** The person may say whether the BIR's email came (`resolve_unknown_send`). */
+    can_resolve: boolean;
 }
 export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
 

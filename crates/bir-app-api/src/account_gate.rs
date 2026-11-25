@@ -16,7 +16,7 @@ thread_local! {
     static FORCE_LOCKED: Cell<bool> = const { Cell::new(false) };
 }
 
-pub const LOCKED_MESSAGE: &str = "Sign in to Buwiz before using this computer.";
+pub const LOCKED_MESSAGE: &str = "Sign in to Buwiz before using eBIRForms.";
 
 /// Both flags are required. Either one alone does nothing, so a test database
 /// (`EBIR_TEST_ENV=1`) does not silently skip the account gate.

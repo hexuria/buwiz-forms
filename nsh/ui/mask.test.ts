@@ -116,6 +116,16 @@ test("percent and integers", () => {
   expect(reconcile("12", "1x2", intMask())).toEqual({ text: "12", caret: 1 });
 });
 
+test("an integer mask keeps the decimal point so the writer can refuse it", () => {
+  // The fault this pins: a pasted "9,876,543.21" whose point was dropped concatenated to
+  // 987654321 — a hundred times the typed amount, stored without a word. The point survives
+  // the mask now, so the text reaches the writer whole and is refused as not a whole number.
+  expect(applyMask("9,876,543.21", intMask())).toBe("9876543.21");
+  expect(applyMask("1234.", intMask())).toBe("1234.");
+  expect(applyMask("1,234.50", intMask())).toBe("1234.50");
+  expect(reconcile("", "1,234.50", intMask())).toEqual({ text: "1234.50", caret: 7 });
+});
+
 test("TIN from root and branch: every digit given is shown, grouped 3-3-3-5", () => {
   expect(formatTin("000123453", "00000")).toBe("000-123-453-00000");
   expect(formatTin("000123453")).toBe("000-123-453");

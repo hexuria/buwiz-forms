@@ -47,6 +47,17 @@ test("desktop: the year's forms show their next period and template; Edit forms 
   expect(app.shows("id:tp-forms-search")).toBe(false);
 });
 
+test("desktop: a dry run leaves its periods due (Next: ...); real sends file every period", async () => {
+  const dry = await desk({ sent: "dry" });
+  await dry.waitFor("id:tp-form-1601C");
+  expect(dry.shows("id:tp-form-1601C >> text:/^Next: /")).toBe(true);
+  expect(dry.shows("id:tp-form-1601C >> text:Every period filed")).toBe(false);
+  const real = await desk({ sent: "real" });
+  await real.waitFor("id:tp-form-1601C");
+  expect(real.shows("id:tp-form-1601C >> text:Every period filed")).toBe(true);
+  expect(real.shows("id:tp-form-1601C >> text:/^Next: /")).toBe(false);
+});
+
 test("desktop: a setup sets the year's forms, asks before replacing, and one of yours can be deleted", async () => {
   const app = await desk({ setup: true });
   await app.waitFor("id:tp-forms-edit");

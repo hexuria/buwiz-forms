@@ -1,8 +1,13 @@
 // Home's row helpers, pure (no UI): how a row names its owner, its list key and its status chip.
 import type { DeadlineRow } from "../../bir";
+import { DRY_RUN_WORD } from "../../lib/statusWord";
 
-/** The chip kind of a return's status: Draft, Queued, filed (Submitted, Confirmed, Paid) or not started. */
-export function statusKind(status: string): "draft" | "queued" | "filed" | "not_started" {
+/**
+ * The chip kind of a return's status: Draft, Queued, filed (Submitted, Confirmed, Paid) or not started. A chip passes the shown word
+ * (`statusWord`), so a simulated send's "Dry run" is its own chip; what a filed return offers reads the stored status.
+ */
+export function statusKind(status: string): "draft" | "queued" | "dry_run" | "filed" | "not_started" {
+  if (status === DRY_RUN_WORD) return "dry_run";
   if (status === "Draft") return "draft";
   if (status === "Queued") return "queued";
   if (status === "Submitted" || status === "Confirmed" || status === "Paid") return "filed";

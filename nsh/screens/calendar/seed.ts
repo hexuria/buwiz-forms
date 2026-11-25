@@ -60,6 +60,21 @@ export async function saveDraft(tin: string, code: string, period: number): Prom
   bir.screen_form_save(code, opened.draft);
 }
 
+/** Whether a deadline falls due in this month (local time). */
+export function dueThisMonth(d: Pick<DeadlineRow, "due_date">, now: Date = new Date()): boolean {
+  return d.due_date.slice(0, 7) === isoDate(now).slice(0, 7);
+}
+
+/**
+ * Makes the deadlines read answer every deadline due this month as Submitted: sent for real, or (`dry`) only simulated (the dry-run
+ * worker's `submitted_dry_run`). A sent return cannot be made without the worker, so only the read changes: nothing is stored.
+ */
+export function readThisMonthAsSent(dry: boolean): void {
+  const real = bir.deadlines_between;
+  (bir as { deadlines_between: typeof real }).deadlines_between = (from, to) =>
+    real(from, to).map((d: DeadlineRow) => (dueThisMonth(d) ? { ...d, status: "Submitted", submitted_dry_run: dry } : d));
+}
+
 /**
  * Makes the deadlines read answer some returns as filed: the past 0619E returns as Submitted, the first half-year of 1601C as
  * Confirmed. A filed return cannot be made without sending something, so only the read changes: nothing is stored.

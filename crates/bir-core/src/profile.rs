@@ -1162,6 +1162,29 @@ impl TaxpayerProfile {
         self.apply_profile_version_confirmation_plan(&plan)
     }
 
+    /// The earliest business start known for the branch: the flat field,
+    /// every certificate version's registration date, and the year's facts
+    /// the user may have corrected. A business that is re-issued a
+    /// certificate mid-life (a transfer or a change of tax types) gets a
+    /// version whose date is the segment's start, not the business's —
+    /// filtering deadlines with anything later than the earliest would
+    /// hide periods the business owes.
+    pub fn earliest_business_start(
+        &self,
+        year_facts_start: Option<NaiveDate>,
+    ) -> Option<NaiveDate> {
+        let mut start = self.business_start_date;
+        for version in &self.profile_versions {
+            if let Some(date) = version.cor.registration_date {
+                start = Some(start.map_or(date, |known| known.min(date)));
+            }
+        }
+        if let Some(date) = year_facts_start {
+            start = Some(start.map_or(date, |known| known.min(date)));
+        }
+        start
+    }
+
     pub fn projection_for_version(&self, version: &TaxProfileVersion) -> TaxpayerProfile {
         let mut projected = self.clone();
         projected.full_name = version.cor.registered_name.clone();

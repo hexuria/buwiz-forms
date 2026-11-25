@@ -23,6 +23,8 @@ pub const DECLARATIONS: &str = r#"
 export interface CloudAccountStatus {
     server_url: string;
     server_url_source: string;
+    /** The account site's address (where sign-in and account pages open). Empty when it is not a valid address. */
+    account_url: string;
     signed_in: boolean;
     email: string | null;
     user_id: string | null;
@@ -400,10 +402,18 @@ fn rejected_origin_text(runtime_name: &str, compiled: Option<&str>) -> String {
         .unwrap_or_default()
 }
 
+/// The account site's address for this build, as the screens open it (Delete account). Empty when it does not resolve.
+fn account_url_text() -> String {
+    bir_core::cloud_account::configured_account()
+        .map(|account| account.url)
+        .unwrap_or_default()
+}
+
 fn status_value(status: &AccountStatus) -> HostValue {
     HostObject::new()
         .field("server_url", status.server_url.clone())
         .field("server_url_source", status.server_url_source.clone())
+        .field("account_url", account_url_text())
         .field("signed_in", status.signed_in)
         .field("email", optional_text(status.email.as_deref()))
         .field("user_id", optional_text(status.user_id.as_deref()))

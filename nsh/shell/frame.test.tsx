@@ -268,6 +268,10 @@ test("desktop: filing events become notifications: an unread dot, the list, Mark
   expect(app.texts()).toContain("Confirmation email received · Juana Santos");
   // A mock-relay send never reaches BIR, so it does not wait for BIR's email.
   expect(app.texts()).toContain("Sent to the mock relay, not to BIR: no BIR email will come · Juana Santos");
+  // A send the worker only simulated (a dry run) is no submission: it finished a dry run and sent nothing.
+  expect(app.texts()).toContain("2551Q for Q2 2025: dry run finished");
+  expect(app.texts()).toContain("Nothing was sent to the BIR · Juana Santos");
+  expect(app.texts()).not.toContain("2551Q for Q2 2025 was submitted");
   expect(app.shows("id:notif-unread-return:9001:submitted")).toBe(true);
   expect(app.shows("id:notif-unread-return:9002:confirmed")).toBe(true);
   expect(app.enabled("id:notif-mark-all")).toBe(true);

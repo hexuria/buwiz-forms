@@ -366,6 +366,21 @@ impl ResolvedTaxDeadline {
         month_match && quarter_match
     }
 
+    /// Whether the period is owed by a business that began on
+    /// `business_start`: a period whose last day precedes the start is
+    /// not owed; one that contains the start, or a later one, is owed
+    /// as usual. With no start date, or a deadline that names no period
+    /// (an as-needed obligation), the answer is today's behaviour: owed.
+    pub fn owed_since(&self, business_start: Option<NaiveDate>) -> bool {
+        if self.period.taxable_year().is_none() {
+            return true;
+        }
+        let (Some(start), Some(end)) = (business_start, self.period_end) else {
+            return true;
+        };
+        end >= start
+    }
+
     fn apply_business_day_calendar(&mut self, calendar: &BusinessDayCalendar) {
         let DeadlineKind::Dated {
             original_deadline,
@@ -780,6 +795,54 @@ impl DeadlineResolver {
             .into_iter()
             .filter(|deadline| wanted.contains(deadline.form_code.as_str()))
             .collect()
+    }
+
+    /// `deadlines_for_forms` for a business that began on
+    /// `business_start_date`: a period whose last day precedes the
+    /// business start is not owed and is not listed. The single
+    /// definition both deadline listings (the dashboard feed and the
+    /// calendar events builder) share. `None` is identical to
+    /// `deadlines_for_forms`.
+    pub fn deadlines_for_forms_since(
+        form_codes: &[String],
+        taxable_year: i32,
+        overrides: &[DeadlineOverride],
+        business_start_date: Option<NaiveDate>,
+    ) -> Vec<ResolvedTaxDeadline> {
+        Self::deadlines_for_forms(form_codes, taxable_year, overrides)
+            .into_iter()
+            .filter(|deadline| deadline.owed_since(business_start_date))
+            .collect()
+    }
+
+    /// The deadlines a branch's listings show: `all` filtered to the
+    /// periods owed since the branch's earliest known business start,
+    /// unless a saved return (draft, queued or filed) already names a
+    /// filtered-out period — the filing is evidence the start date is
+    /// wrong for this branch, and hiding its period is worse than listing
+    /// everything, so nothing is filtered. Both listing sites (the
+    /// dashboard feed and the calendar events builder) share this one
+    /// definition.
+    pub fn filter_deadlines_for_listing(
+        all: Vec<ResolvedTaxDeadline>,
+        earliest_start: Option<NaiveDate>,
+        filings: &[crate::forms::FormDraftSummary],
+    ) -> Vec<ResolvedTaxDeadline> {
+        if earliest_start.is_none() {
+            return all;
+        }
+        let filtered: Vec<ResolvedTaxDeadline> = all
+            .iter()
+            .filter(|deadline| deadline.owed_since(earliest_start))
+            .cloned()
+            .collect();
+        let contradicted = all.iter().any(|deadline| {
+            !deadline.owed_since(earliest_start)
+                && filings
+                    .iter()
+                    .any(|filing| filing_matches_period(filing, deadline))
+        });
+        if contradicted { all } else { filtered }
     }
 
     pub fn resolve_deadline_calendar_year(calendar_year: i32) -> Vec<ResolvedTaxDeadline> {
@@ -1247,6 +1310,23 @@ impl DeadlineResolver {
             (year, month + 1)
         };
         NaiveDate::from_ymd_opt(ny, nm, 1).unwrap() - Duration::days(1)
+    }
+}
+
+/// Whether a saved return names the deadline's period: same form, same
+/// month or quarter, or the annual period (a filing that keys neither).
+fn filing_matches_period(
+    filing: &crate::forms::FormDraftSummary,
+    deadline: &ResolvedTaxDeadline,
+) -> bool {
+    if filing.form_code != deadline.form_code {
+        return false;
+    }
+    match deadline.period {
+        DeadlinePeriod::Monthly { month, .. } => filing.month == Some(month),
+        DeadlinePeriod::Quarterly { quarter, .. } => filing.quarter == Some(quarter),
+        DeadlinePeriod::Annual { .. } => filing.month.is_none() && filing.quarter.is_none(),
+        DeadlinePeriod::EventBased => false,
     }
 }
 

@@ -1,30 +1,33 @@
 use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use crate::{check_sample, dummy_profile, samples_dir};
 use bir_core::crypto::{BIR_IAF_PASSPHRASE, compress_and_encrypt, decrypt_and_decompress};
+use bir_core::forms::agent::{self, AgentFormKind};
 use bir_core::forms::form_2550m::{
     Form2550MAdvancePaymentRow, Form2550MAllocation, Form2550MAmortizedRow,
-    Form2550MCapitalGoodsRow, Form2550MDraft, Form2550MPurchase, Form2550MWithholdingRow,
+    Form2550MCapitalGoodsRow, Form2550MDraft, Form2550MWithholdingRow,
 };
-use bir_core::forms::queueable::QueueableForm as _;
+use bir_core::forms::queueable::{QueueableForm as _, QueueableKind};
 use bir_core::official_xml;
+use serde_json::json;
 use sha2::{Digest, Sha256};
 
-/// No Schedule 1 rows: the plaintext is exactly the fixed official layout.
+fn apply_screen_edits(draft: Form2550MDraft, edits: &[(&str, &str)]) -> Form2550MDraft {
+    let kind = AgentFormKind::Queueable(QueueableKind::Form2550M);
+    let mut value = serde_json::to_value(draft).expect("2550M draft serializes");
+    for (key, text) in edits {
+        agent::fill_as_user(kind, &mut value, key, &json!(text))
+            .unwrap_or_else(|e| panic!("screen fill failed for {key}={text}: {e}"));
+    }
+    agent::compute(kind, &mut value).expect("2550M agent::compute succeeds");
+    serde_json::from_value(value).expect("2550M draft deserializes")
+}
+
+/// No Schedule 1 rows: built through the screen path (only user-typed boxes,
+/// then `agent::compute`) so every computed tax box and downstream total is
+/// derived the same way the form page does.
 fn sample_2550m() -> Form2550MDraft {
     let mut draft =
         Form2550MDraft::new_from_profile(&dummy_profile("2550M", "Corporation"), 2022, 6);
-    draft.is_amended = true;
-    draft.set_sales_to_government(250_000.005);
-    draft.zero_rated_sales = 40_000.0;
-    draft.exempt_sales = 12_345.67;
-    draft.input_tax_carried_over = 1_500.25;
-    draft.transitional_input_tax = 99.99;
-    draft.set_purchase(Form2550MPurchase::DomesticGoods, 20_000.0);
-    draft.set_purchase(Form2550MPurchase::ImportedGoods, 8_888.88);
-    draft.set_purchase(Form2550MPurchase::DomesticServices, 3_333.33);
-    draft.set_purchase(Form2550MPurchase::NonResidentServices, 1_000.0);
-    draft.purchases_not_qualified = 500.0;
-    draft.set_purchase(Form2550MPurchase::Others, 777.77);
     draft.schedule_4 = Some(Form2550MAllocation {
         direct_input_tax: 18_000.0,
         not_direct_input_tax: 1_200.0,
@@ -33,14 +36,29 @@ fn sample_2550m() -> Form2550MDraft {
         direct_input_tax: 100.0,
         not_direct_input_tax: 300.0,
     });
-    draft.vat_refund_claimed = 10.0;
-    draft.vat_paid_previous = 1_000.0;
-    draft.advance_payments = 200.0;
-    draft.surcharge = 25.5;
-    draft.interest = 10.0;
     draft.keep_entered_penalties();
-    draft.recompute();
-    draft
+    apply_screen_edits(
+        draft,
+        &[
+            ("frm2550m:OptAmendedYN1", "true"),
+            ("frm2550m:txtTax13A", "250000.005"),
+            ("frm2550m:txtTax14", "40000"),
+            ("frm2550m:txtTax15", "12345.67"),
+            ("frm2550m:txtTax17A", "1500.25"),
+            ("frm2550m:txtTax17C", "99.99"),
+            ("frm2550m:txtTax18E", "20000"),
+            ("frm2550m:txtTax18G", "8888.88"),
+            ("frm2550m:txtTax18I", "3333.33"),
+            ("frm2550m:txtTax18K", "1000"),
+            ("frm2550m:txtTax18M", "500"),
+            ("frm2550m:txtTax18N", "777.77"),
+            ("frm2550m:txtTax20D", "10"),
+            ("frm2550m:txtTax23D", "1000"),
+            ("frm2550m:txtTax23E", "200"),
+            ("frm2550m:txtTax25A", "25.5"),
+            ("frm2550m:txtTax25B", "10"),
+        ],
+    )
 }
 
 /// Schedule 1 rows (vatable sales per ATC), spliced ahead of the Schedule 1 totals.
@@ -54,12 +72,15 @@ fn sample_2550m_schedule_1() -> Form2550MDraft {
     draft.sales_schedule[0].amount = 2_345.67;
     draft.sales_schedule[1].amount = 100_000.005;
     draft.sales_schedule[2].amount = 55_555.55;
-    draft.zero_rated_sales = 1_000.0;
-    draft.input_tax_carried_over = 300.0;
-    draft.set_purchase(Form2550MPurchase::DomesticGoods, 15_000.0);
-    draft.other_credits = 50.0;
-    draft.recompute();
-    draft
+    apply_screen_edits(
+        draft,
+        &[
+            ("frm2550m:txtTax14", "1000"),
+            ("frm2550m:txtTax17A", "300"),
+            ("frm2550m:txtTax18E", "15000"),
+            ("frm2550m:txtTax23F", "50"),
+        ],
+    )
 }
 
 #[test]
@@ -213,7 +234,6 @@ fn sample_2550m_credits() -> Form2550MDraft {
         Form2550MDraft::new_from_profile(&dummy_profile("2550M", "Corporation"), 2022, 9);
     draft.add_sales_atc("VB010").unwrap();
     draft.sales_schedule[0].amount = 500_000.0;
-    draft.set_sales_to_government(200_000.0);
     draft.schedule_6 = vec![
         Form2550MWithholdingRow {
             period_covered: "09/30/2022".into(),
@@ -245,8 +265,7 @@ fn sample_2550m_credits() -> Form2550MDraft {
         total_withheld: 10_000.0,
         applied_current_month: 10_000.0,
     }];
-    draft.recompute();
-    draft
+    apply_screen_edits(draft, &[("frm2550m:txtTax13A", "200000")])
 }
 
 #[test]
@@ -256,6 +275,86 @@ fn form_2550m_credits_sample_payload_is_current() {
         &payload(sample_2550m_credits()),
         "98c8f3c08bb6f0a5db771793181015b9e07b1558b7f6e3c9ec63f203ed092aca",
     );
+}
+
+#[test]
+fn form_2550m_screen_path_editable_tax_boxes_compute_and_preserve_overrides() {
+    let base = Form2550MDraft::new_from_profile(&dummy_profile("2550M", "Corporation"), 2022, 6);
+    // Untouched 13A keeps the official static 5.00 default for txtlessStdTaxSched4.
+    let untouched = apply_screen_edits(base.clone(), &[("frm2550m:txtTax18E", "15000")]);
+    assert_eq!(untouched.standard_input_tax_government, 5.0);
+    assert_eq!(untouched.domestic_goods_input_tax, 1_800.0);
+    assert_eq!(untouched.total_available_input_tax, 1_800.0);
+
+    // Base edits compute 12% (and 7% for Schedule 4) with official JS half-up rounding.
+    let computed = apply_screen_edits(
+        base,
+        &[
+            ("frm2550m:txtTax13A", "250000.005"),
+            ("frm2550m:txtTax18E", "20000"),
+            ("frm2550m:txtTax18G", "8888.88"),
+            ("frm2550m:txtTax18I", "3333.33"),
+            ("frm2550m:txtTax18K", "1000"),
+            ("frm2550m:txtTax18N", "777.77"),
+        ],
+    );
+    assert_eq!(computed.sales_to_government, 250_000.01);
+    assert_eq!(computed.output_tax_government, 30_000.0);
+    assert_eq!(computed.standard_input_tax_government, 17_500.0);
+    assert_eq!(computed.total_output_tax, 30_000.0);
+    assert_eq!(computed.domestic_goods_input_tax, 2_400.0);
+    assert_eq!(computed.imported_goods_input_tax, 1_066.67);
+    assert_eq!(computed.domestic_services_input_tax, 400.0);
+    assert_eq!(computed.non_resident_services_input_tax, 120.0);
+    assert_eq!(computed.other_purchases_input_tax, 93.33);
+    assert_eq!(computed.total_available_input_tax, 4_080.0);
+
+    // User overrides 13B, txtlessStdTaxSched4, and 18F; an unrelated edit (14) must not overwrite them.
+    let overridden = apply_screen_edits(
+        computed,
+        &[
+            ("frm2550m:txtTax13B", "29500"),
+            ("txtlessStdTaxSched4", "17000"),
+            ("frm2550m:txtTax18F", "2300"),
+            ("frm2550m:txtTax14", "5000"),
+        ],
+    );
+    assert_eq!(overridden.output_tax_government, 29_500.0);
+    assert_eq!(overridden.standard_input_tax_government, 17_000.0);
+    assert_eq!(overridden.domestic_goods_input_tax, 2_300.0);
+    assert_eq!(overridden.total_output_tax, 29_500.0);
+    assert_eq!(overridden.total_available_input_tax, 3_980.0);
+
+    // Re-editing 18E recomputes 18F to 12% of the new base without clobbering 13B.
+    let reedited = apply_screen_edits(overridden, &[("frm2550m:txtTax18E", "10000")]);
+    assert_eq!(reedited.domestic_goods_input_tax, 1_200.0);
+    assert_eq!(reedited.output_tax_government, 29_500.0);
+    assert_eq!(reedited.total_available_input_tax, 2_880.0);
+}
+
+#[test]
+fn form_2550m_screen_path_computed_totals_stay_locked() {
+    let kind = AgentFormKind::Queueable(QueueableKind::Form2550M);
+    let draft = Form2550MDraft::new_from_profile(&dummy_profile("2550M", "Corporation"), 2022, 6);
+    let mut value = serde_json::to_value(draft).expect("2550M draft serializes");
+    for key in [
+        "frm2550m:txtTax16A",
+        "frm2550m:txtTax16B",
+        "frm2550m:txtTax19",
+        "frm2550m:txtTax20B",
+        "frm2550m:txtTax20F",
+        "frm2550m:txtTax21",
+        "frm2550m:txtTax22",
+        "frm2550m:txtTax24",
+        "frm2550m:txtTax26",
+    ] {
+        let err = agent::fill_as_user(kind, &mut value, key, &json!("12345"))
+            .expect_err(&format!("{key} must stay computed/locked"));
+        assert!(
+            err.contains("computed") || err.contains("read-only") || err.contains("cannot"),
+            "unexpected error for {key}: {err}"
+        );
+    }
 }
 
 /// The calendar has no 2550-M rule.
