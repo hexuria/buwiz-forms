@@ -195,7 +195,7 @@ export function choiceLabel(f: SchemaField): string {
 
 /** The width a box gets (old controlWidth). */
 export function controlWidth(f: { t: FieldType | "hidden"; m?: number }, available: number): number {
-  if (f.t === "money") return Math.min(230, available);
+  if (f.t === "money" || f.t === "num") return Math.min(230, available);
   if (f.t === "pct") return 88;
   // "September 30, 1988" is the widest long date: 126 pt of text plus the box's padding, gap and
   // calendar button needs about 174, so the smallest multiple of 4 that holds it is 176 (B14).
@@ -375,7 +375,7 @@ export function keysOf(it: SchemaItem): string[] {
 export function emptyCell(value: string, type: string): boolean {
   const v = String(value ?? "").trim();
   if (v === "") return true;
-  if (type === "money" || type === "pct" || type === "int") return /^[-+]?0*\.?0*$/.test(v.replace(/[,₱%\s]/g, ""));
+  if (type === "money" || type === "num" || type === "pct" || type === "int") return /^[-+]?0*\.?0*$/.test(v.replace(/[,₱%\s]/g, ""));
   if (type === "chk" || type === "radio") return !(v === "true" || v === "1" || v === "Y");
   return false;
 }

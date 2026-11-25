@@ -495,7 +495,10 @@ export const PERCENT_MASK: Mask = {
 /** Whole numbers while typing: digits only, at most `max` of them (none: no limit). Leading zeros stay (codes). */
 export function intMask(max?: number): Mask {
   return {
-    significant: isDigit,
+    // The decimal point is significant so decimal text reaches the writer whole and is
+    // refused there with the box's whole-number message; dropping it would concatenate
+    // the fraction into the integer ("1,234.50" becoming 123450) without a word.
+    significant: (ch) => isDigit(ch) || ch === ".",
     insert: noMinus,
     format(sig) {
       const keep = [...sig].map((_, i) => max === undefined || i < max);

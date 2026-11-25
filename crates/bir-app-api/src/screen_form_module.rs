@@ -654,6 +654,12 @@ fn page_type(
         {
             let whole = matches!(binding, Some(Binding::Whole { .. }));
             match quantity(path, label) {
+                // A count bound to a decimal amount (an excise volume in
+                // metric tons, a number of shares) takes decimals on the
+                // official page: typing it as `int` would drop the point of
+                // a pasted "9,876,543.21" and store 987654321. Only a whole
+                // binding is ever the digits-only box.
+                Quantity::Count if !whole => ("num".into(), false),
                 Quantity::Count => ("int".into(), false),
                 Quantity::TaxRate => ("pct".into(), false),
                 Quantity::Amount if whole && schema_type == "money" => ("money".into(), true),
@@ -7227,6 +7233,9 @@ mod tests {
     // Form fields PR 1 handoff 2: writes to shut boxes are refused with
     // the box's own tag (bug B16).
     mod shut_writes;
+    // The decimal-drop fault: count-labelled decimal amounts are never the
+    // digits-only box, and a whole box refuses a decimal part.
+    mod input_decimal;
     // Form fields PR 1 handoff 2: a code off a select's list is refused
     // on every form (bug B17).
     mod sel_lists;
@@ -16290,9 +16299,11 @@ mod tests {
 
     /// Rule 7: only an amount looks like money. Every form: a text binding is
     /// never money, an amount binding is a peso box unless it holds a count
-    /// (a number box) or a tax rate (a percent box), and a peso box over a
-    /// whole-number binding shows no centavos. The counts, rates and amounts
-    /// the review named are checked against a hand list, not the rule.
+    /// (a decimal number box: the digits-only `int` mask would drop a typed
+    /// decimal point and store a hundred times what was typed) or a tax rate
+    /// (a percent box), and a peso box over a whole-number binding shows no
+    /// centavos. The counts, rates and amounts the review named are checked
+    /// against a hand list, not the rule.
     #[test]
     fn only_an_amount_binding_looks_like_money_on_every_form() {
         let (mut amounts, mut wholes) = (0, 0);
@@ -16304,7 +16315,7 @@ mod tests {
                     Binding::Amount { .. } => {
                         amounts += 1;
                         assert!(
-                            matches!(t.as_str(), "money" | "pct" | "int"),
+                            matches!(t.as_str(), "money" | "pct" | "num"),
                             "{code}: {key} is an amount drawn as {t}"
                         );
                         assert!(!whole, "{code}: {key} takes centavos");
@@ -16343,15 +16354,15 @@ mod tests {
             // Counts: plain numbers.
             ("0605", "frm0605:txtNumOfInstallment", "int"),
             ("1702EX", "frm1702EX:txtPg1P2I23NumOfAttachments", "int"),
-            ("1606", "frm1606:txtTotalN", "int"),
-            ("1706", "frm1706:txtTotalN", "int"),
-            ("1707", "frm1707:txtPg2P4Sch2NoOfShares2", "int"),
-            ("1707", "frm1707:txtPg2Pt4S2_1Col2", "int"),
-            ("1707", "frm1707:txtPg2Pt4S2_10Col2", "int"),
-            ("2552", "frm2552:txtPg2Pt5Sch1NumShares1", "int"),
-            ("2200M", "frm2200M:txtSched1_VOMRITaxableA1", "int"),
-            ("2200M", "frm2200M:txtSched1_VOMRIExemptB1", "int"),
-            ("2200S", "frm2200S:txtVolumeRemovals0", "int"),
+            ("1606", "frm1606:txtTotalN", "num"),
+            ("1706", "frm1706:txtTotalN", "num"),
+            ("1707", "frm1707:txtPg2P4Sch2NoOfShares2", "num"),
+            ("1707", "frm1707:txtPg2Pt4S2_1Col2", "num"),
+            ("1707", "frm1707:txtPg2Pt4S2_10Col2", "num"),
+            ("2552", "frm2552:txtPg2Pt5Sch1NumShares1", "num"),
+            ("2200M", "frm2200M:txtSched1_VOMRITaxableA1", "num"),
+            ("2200M", "frm2200M:txtSched1_VOMRIExemptB1", "num"),
+            ("2200S", "frm2200S:txtVolumeRemovals0", "num"),
             // Tax rates: percent.
             ("1702RT", "frm1702RT:Pg2Pt4I40IncomeTaxRate", "pct"),
             ("1702EX", "frm1702EX:txtPg2Pt4I40TaxRate", "pct"),

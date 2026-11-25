@@ -48,7 +48,7 @@ import { parsePeriod, periodLong, periodText, PERIOD_ERROR, PERIOD_TWO_DIGIT, pe
 import { hostSentence, refusalItem, refusalLabel, refusalSentence, unfixableRefusal, type RefusalContext } from "./refusals";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
-const NUMBER_KINDS = new Set(["money", "pct", "int"]);
+const NUMBER_KINDS = new Set(["money", "num", "pct", "int"]);
 /** What an emptied number box is staged as when the host refuses a blank: the host's cleared value. */
 const CLEARED = "0";
 
@@ -1524,7 +1524,7 @@ export class FormSession {
     const kind = one || period ? "date" : this.kindOf.get(k);
     const v = this.sValue.get(k);
     const raw = untracked(() => v());
-    if (kind === "money" && !this.isShut(k)) v.set(formatMoney(raw, this.wholeKeys.has(k)));
+    if ((kind === "money" || kind === "num") && !this.isShut(k)) v.set(formatMoney(raw, kind === "money" && this.wholeKeys.has(k)));
     else if (kind === "date" && !this.isShut(k)) {
       const date = parseTypedDate(raw);
       if (date && !(baseKey in s.rejected)) {
@@ -1560,7 +1560,7 @@ export class FormSession {
     const s = this.st;
     if (!s.draft || this.reopening) return;
     const kind = this.kindOf.get(k);
-    if (kind === "money" || kind === "pct" || kind === "int" || kind === "sel" || kind === "chk" || kind === "radio" || kind === "date") return;
+    if (kind === "money" || kind === "num" || kind === "pct" || kind === "int" || kind === "sel" || kind === "chk" || kind === "radio" || kind === "date") return;
     if (this.oneDates.has(k) || this.onePeriods.has(k) || this.datePartKeys.has(k) || this.periodPartKeys.has(k) || this.rangeTextKeys.has(k) || this.pools.has(k)) return;
     if (s.rejected[k] !== undefined || s.unfixable.has(k) || this.isShut(k)) return;
     const box = this.sValue.get(k);
@@ -2009,8 +2009,8 @@ export class FormSession {
     if (pool) return String(s.poolTexts[pool.keys[0]] ?? "");
     const kind = this.kindOf.get(k);
     const raw = String(s.values[k] ?? "");
-    if (kind === "money") {
-      const zero = this.isShut(k) && (this.isComputedBox(k) || this.penaltyGroupOf(k) !== null);
+    if (kind === "money" || kind === "num") {
+      const zero = kind === "money" && this.isShut(k) && (this.isComputedBox(k) || this.penaltyGroupOf(k) !== null);
       const v = raw || (zero && !this.reasonFor(k) ? "0" : "");
       return v === "" ? "" : formatMoney(v, this.wholeKeys.has(k));
     }
@@ -2092,7 +2092,7 @@ export class FormSession {
   private hostChanged(k: string, typed: string): boolean {
     const host = String(this.st.values[k] ?? "");
     const kind = this.kindOf.get(k);
-    if (kind === "money" || kind === "pct" || kind === "int") return !sameNumber(typed, host);
+    if (kind === "money" || kind === "num" || kind === "pct" || kind === "int") return !sameNumber(typed, host);
     if (kind === "sel" || kind === "chk" || kind === "radio") return true;
     if (kind === "date") {
       const a = parseTypedDate(typed);
