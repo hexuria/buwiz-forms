@@ -30,6 +30,17 @@ pub(crate) fn keychain_switch_is_on(value: Option<&str>) -> bool {
     })
 }
 
+/// Run once at launch, before the database is opened and before anything
+/// reads a Keychain item. iOS: the data folder is excluded from backups (a
+/// failure is a warning), then the Keychain items an earlier install left
+/// behind are cleared on the first launch after an install
+/// (`bir_submit::ios_storage::clear_on_fresh_install`; no Keychain call with
+/// `BUWIZ_NO_KEYCHAIN=1`). Every other system: nothing.
+pub fn prepare_app_storage() {
+    #[cfg(target_os = "ios")]
+    ios::prepare_ios_storage();
+}
+
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
@@ -70,6 +81,16 @@ mod tests {
         assert!(!keychain_switch_is_on(Some("0")));
         assert!(!keychain_switch_is_on(Some("false")));
         assert!(!keychain_switch_is_on(Some("Off")));
+    }
+
+    /// Off iOS the launch step does nothing: no folder made, no marker
+    /// written, under a home where the data folder would be.
+    #[cfg(not(target_os = "ios"))]
+    #[test]
+    fn the_launch_storage_step_does_nothing_off_ios() {
+        let home = tempfile::tempdir().unwrap();
+        temp_env::with_var("HOME", Some(home.path()), prepare_app_storage);
+        assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
     }
 
     #[test]

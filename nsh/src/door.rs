@@ -84,6 +84,9 @@ pub(crate) fn install_logging() {
 fn set_up(send_guard: impl FnOnce() -> SendMode) -> Process {
     #[cfg(not(target_os = "android"))]
     switch_off_keychain(cfg!(debug_assertions));
+    // iOS: the data folder out of backups and a fresh install's Keychain cleared, after the keychain switch and
+    // before any database or Keychain item is opened. Nothing elsewhere.
+    bir_core::platform::prepare_app_storage();
     let _ = bir_app_api::install_hooks(NshHooks);
     let send = send_guard();
     if !send.worker_may_start() {
