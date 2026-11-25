@@ -3195,14 +3195,6 @@ export class FormSession {
       // A refusal whose text is no longer there (the row was cleared, the drawer discarded it, the
       // agent put the stored value back) must not hold the return dirty: nothing is left unsaved.
       // Only a refusal whose typed text still stands keeps the save line honest.
-      for (const k of Object.keys(s.rejected)) {
-        const v = this.sValue.get(k);
-        if (v && !untracked(() => v()).trim()) {
-          delete s.rejected[k];
-          delete s.boxMessages[k];
-          this.sBoxMsg.get(k).set("");
-        }
-      }
       if (Object.keys(s.rejected).some((k) => !s.unfixable.has(k))) s.dirty = true;
       s.saveState = s.dirty ? this.restingSaveState() : { state: "saved" };
       if (changed) this.hooks.onSaved?.(s.target);
