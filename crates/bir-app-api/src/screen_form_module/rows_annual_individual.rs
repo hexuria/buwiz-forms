@@ -553,6 +553,68 @@ const GATED: &[GatedBox] = &[
         Gate::GraduatedItemized { spouse: true },
         C1701_ITEMIZED_B,
     ),
+    // Schedule 6 NOLCO filer-typed boxes (6.A.1 rows 6-7 and 6.A.2 spouse rows
+    // 9-12; rows 7Year/7A and 12Year/12A remain computed from items 3A/3B).
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_6A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_6B",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed6_7B",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_9A",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_9B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_10A",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_10B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_11A",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_11B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg4IShed6_12B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
     // 1701A items 17-18 and Part V items 66-75.
     (
         "1701A",

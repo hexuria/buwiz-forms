@@ -12165,11 +12165,13 @@
     },
     "frm1701:txtPg3IShed6_6A": {
       "label": "Amount",
-      "evidence": "agent box label: 'Amount'; writer-cells printed caption: 'Amount'"
+      "evidence": "official-hta-runtime#control:L2723 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed6_6B": {
       "label": "NOLCO Applied (Previous Year/s)",
-      "evidence": "agent box label: 'NOLCO Applied (Previous Year/s)'; writer-cells printed caption: 'NOLCO Applied (Previous Year/s)'"
+      "evidence": "official-hta-runtime#control:L2732 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed6_6C": {
       "label": "NOLCO Expired (Unapplied)",
@@ -12193,7 +12195,8 @@
     },
     "frm1701:txtPg3IShed6_7B": {
       "label": "NOLCO Applied (Previous Year/s)",
-      "evidence": "agent box label: 'NOLCO Applied (Previous Year/s)'; writer-cells printed caption: 'NOLCO Applied (Previous Year/s)'"
+      "evidence": "official-hta-runtime#control:L2776 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed6_7C": {
       "label": "NOLCO Expired (Unapplied)",
@@ -12270,7 +12273,8 @@
     },
     "frm1701:txtPg4IShed6_9B": {
       "label": "NOLCO Applied (Previous Year/s)",
-      "evidence": "agent box label: 'NOLCO Applied (Previous Year/s)'; writer-cells printed caption: 'NOLCO Applied (Previous Year/s)'"
+      "evidence": "official-hta-runtime#control:L2924 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_9C": {
       "label": "NOLCO Expired (Unapplied)",
@@ -12286,7 +12290,8 @@
     },
     "frm1701:txtPg4IShed6_9A": {
       "label": "Amount",
-      "evidence": "agent box label: 'Amount'; writer-cells printed caption: 'Amount'"
+      "evidence": "official-hta-runtime#control:L2915 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_10Year": {
       "label": "Year Incurred",
@@ -12294,11 +12299,13 @@
     },
     "frm1701:txtPg4IShed6_10A": {
       "label": "Amount",
-      "evidence": "agent box label: 'Amount'; writer-cells printed caption: 'Amount'"
+      "evidence": "official-hta-runtime#control:L2959 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_10B": {
       "label": "NOLCO Applied (Previous Year/s)",
-      "evidence": "agent box label: 'NOLCO Applied (Previous Year/s)'; writer-cells printed caption: 'NOLCO Applied (Previous Year/s)'"
+      "evidence": "official-hta-runtime#control:L2968 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_10C": {
       "label": "NOLCO Expired (Unapplied)",
@@ -12333,7 +12340,8 @@
     },
     "frm1701:txtPg4IShed6_12B": {
       "label": "NOLCO Applied (Previous Year/s)",
-      "evidence": "agent box label: 'NOLCO Applied (Previous Year/s)'; writer-cells printed caption: 'NOLCO Applied (Previous Year/s)'"
+      "evidence": "official-hta-runtime#control:L3055 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_12C": {
       "label": "NOLCO Expired (Unapplied)",
@@ -12377,11 +12385,13 @@
     },
     "frm1701:txtPg4IShed6_11A": {
       "label": "Amount",
-      "evidence": "agent box label: 'Amount'; writer-cells printed caption: 'Amount'"
+      "evidence": "official-hta-runtime#control:L3003 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_11B": {
       "label": "NOLCO Applied (Previous Year/s)",
-      "evidence": "agent box label: 'NOLCO Applied (Previous Year/s)'; writer-cells printed caption: 'NOLCO Applied (Previous Year/s)'"
+      "evidence": "official-hta-runtime#control:L3012 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_11C": {
       "label": "NOLCO Expired (Unapplied)",
