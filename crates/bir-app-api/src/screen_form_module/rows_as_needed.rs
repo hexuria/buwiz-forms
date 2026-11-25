@@ -1226,7 +1226,10 @@ fn cell_2552(key: &str) -> Option<Cell> {
     }
     if let Some(n) = rest
         .strip_prefix("txtPg2P4I")
-        .and_then(|r| r.strip_suffix("TransClass").or_else(|| r.strip_suffix("Amount")))
+        .and_then(|r| {
+            r.strip_suffix("TransClass")
+                .or_else(|| r.strip_suffix("Amount"))
+        })
         .and_then(|n| n.parse::<usize>().ok())
     {
         return (2..=FORM_2552_ROWS)

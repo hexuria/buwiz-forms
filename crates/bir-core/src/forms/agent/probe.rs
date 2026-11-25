@@ -1019,6 +1019,18 @@ const GATED_ENTRY: &[(&str, &str)] = &[
     ("frm1702MX:txtPg7Sc9I1CA", MX_SCHEDULE_9_ROW_1),
     ("frm1702MX:txtPg7Sc9I1CB", MX_SCHEDULE_9_ROW_1),
     ("frm1702MX:txtPg7Sc9I1CF", MX_SCHEDULE_9_ROW_1),
+    ("frm1702MX:txtPg3IShed7_4A", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_4B", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_4C", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_4D", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_5A", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_5B", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_5C", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_5D", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_6A", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_6B", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_6C", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_6D", MX_NOLCO_SCHED_7_1),
     (
         "frm1702RT:txtPg2Pt4I42MinimumCorporate",
         "Item 42 MCIT Due: an entry (see USER_CHOSEN) that \
@@ -1082,6 +1094,11 @@ const MX_SCHEDULE_9_ROW_1: &str = "1702MX Schedule 9 item 1 (Year, A, B and F): 
      the filer like items 2 and 3; form_1702mx_official.rs recompute clears \
      every Schedule 9 row while the return is not subject to MCIT \
      (enableMCITFields), which the incorporation date decides";
+
+const MX_NOLCO_SCHED_7_1: &str = "1702MX Schedule 7.1 items 4-6 (A-D): enabled at load \
+     (rules/forms/1702mx-v2018c/fixtures/runtime-control-inventory-v796.json L4011-4058); \
+     form_1702mx_official.rs recompute clears Schedule 7.1 rows 4-6 when OSD is chosen \
+     (methodOfDeductionsOptional), which /deduction_method decides";
 
 const RT_ADD_MORE_LINE: &str = "1702RT: the amount of an item with an \"(Add more...)\" \
      table (Part IV item 54, Schedule I item 17i, Schedule II item 4, Schedule V \
@@ -1292,9 +1309,24 @@ fn echoes(kind: ValueKind, probe: &Value, official: &str) -> bool {
                 || value == AMOUNT_PROBE.round()
                 || (value - (AMOUNT_PROBE * 10.0).round() / 10.0).abs() < 0.005
         }),
-        ValueKind::Whole => official.trim().parse::<i64>().ok() == probe.as_i64(),
+        ValueKind::Whole => probe
+            .as_i64()
+            .is_some_and(|expected| echoes_whole(official, expected)),
         ValueKind::DatePart(date, part) => date.part_shown_by(official) == Some(part),
     }
+}
+
+/// Whether official field text echoes whole-integer probe `expected`,
+/// either as plain digits (`"7"`) or whole-peso display (`"7.00"`, `"1,000.00"`).
+fn echoes_whole(official: &str, expected: i64) -> bool {
+    let trimmed = official.trim();
+    if trimmed.parse::<i64>().ok() == Some(expected) {
+        return true;
+    }
+    trimmed
+        .strip_suffix(".00")
+        .and_then(|whole| whole.replace(',', "").parse::<i64>().ok())
+        == Some(expected)
 }
 
 /// Every leaf of a draft: JSON pointer -> value.
@@ -2307,9 +2339,7 @@ fn verify(kind: AgentFormKind, def: &mut AgentFormDef, seeds: &[&Value]) {
                     Binding::Text { date: Some(_), .. } => DateFormatKey::Mdy.echoed_by(&shown),
                     Binding::Text { .. } => shown.to_ascii_uppercase().contains(expected.as_str()),
                     Binding::Amount { .. } => echoes(ValueKind::Amount, &Value::Null, &shown),
-                    Binding::Whole { .. } => {
-                        shown.trim().parse::<i64>().ok() == Some(WHOLE_PROBES[0])
-                    }
+                    Binding::Whole { .. } => echoes_whole(&shown, WHOLE_PROBES[0]),
                     Binding::Choice { .. } => shown == *expected,
                 };
                 if ok {

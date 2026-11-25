@@ -46,14 +46,17 @@ use std::collections::BTreeSet;
 // shut rows — are bir-core's (`agent::draft_locks::annual_corporate`,
 // decision P4-19), so the page and the assistant lock alike. This module
 // reads their keys and reasons from there.
+#[cfg(test)]
+pub(super) use bir_core::forms::agent::draft_locks::annual_corporate::mx_attached_lock;
 use bir_core::forms::agent::draft_locks::annual_corporate::{
     A, EX, EX_ATTACHED_ROWS, EX_FOLDED_LINES, MX, RT, RT_ITEM_57, RT_MCIT_DUE, RT_RATE,
     rt_before_2020_lock, rt_folded_item, rt_item_42_lock, rt_more_rows,
 };
 pub(super) use bir_core::forms::agent::draft_locks::annual_corporate::{
     EX_ATTACHED_LOCK_ITEM_49, EX_ATTACHED_LOCK_SCHED_1, EX_ATTACHED_LOCK_SCHED_2,
-    RT_57_BEFORE_2020, RT_FOLDED_LOCK, RT_MCIT_BEFORE_2020, RT_MCIT_NO_NET, RT_MCIT_REFUSAL,
-    RT_RATE_BEFORE_2020, ex_attached_keys, ex_attached_lock,
+    MX_ATTACHED_LOCK_SCHED_5, MX_ATTACHED_LOCK_SCHED_6, RT_57_BEFORE_2020, RT_FOLDED_LOCK,
+    RT_MCIT_BEFORE_2020, RT_MCIT_NO_NET, RT_MCIT_REFUSAL, RT_RATE_BEFORE_2020, ex_attached_keys,
+    ex_attached_lock,
 };
 use bir_core::forms::agent::{self, AgentFormKind, Binding};
 use bir_core::forms::form_1702rt::{
@@ -452,6 +455,8 @@ pub(super) fn live_lock_note(reason: &str) -> Option<&'static str> {
         (EX_ATTACHED_LOCK_ITEM_49, EX_ATTACHED_NOTE),
         (EX_ATTACHED_LOCK_SCHED_1, EX_ATTACHED_NOTE),
         (EX_ATTACHED_LOCK_SCHED_2, EX_ATTACHED_NOTE),
+        (MX_ATTACHED_LOCK_SCHED_5, EX_ATTACHED_NOTE),
+        (MX_ATTACHED_LOCK_SCHED_6, EX_ATTACHED_NOTE),
         (RT_RATE_BEFORE_2020, RT_RATE_BEFORE_2020_NOTE),
         (RT_57_BEFORE_2020, RT_57_BEFORE_2020_NOTE),
     ]

@@ -385,10 +385,8 @@ pub mod annual_corporate {
     /// schedule to fill on the form page.
     pub const EX_ATTACHED_LOCK_ITEM_49: &str =
         "filled from the Part IV Item 49 attached schedule; BIR's program keeps this row shut";
-    pub const EX_ATTACHED_LOCK_SCHED_1: &str =
-        "filled from the Schedule 1 Item 17i (more...) attached schedule; BIR's program keeps this row shut";
-    pub const EX_ATTACHED_LOCK_SCHED_2: &str =
-        "filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut";
+    pub const EX_ATTACHED_LOCK_SCHED_1: &str = "filled from the Schedule 1 Item 17i (more...) attached schedule; BIR's program keeps this row shut";
+    pub const EX_ATTACHED_LOCK_SCHED_2: &str = "filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut";
 
     /// The schedule-specific lock/refusal for an [`EX_ATTACHED_ROWS`] box,
     /// by official key (`frm1702EX:...`).
@@ -413,6 +411,62 @@ pub mod annual_corporate {
             .iter()
             .flat_map(|(_, stems)| stems.iter())
             .map(|stem| format!("{EX}{stem}"))
+    }
+
+    /// 1702MX's shut attached-schedule rows (maintainer decision P2-3:
+    /// `rules/forms/1702mx-v2018c/fixtures/runtime-control-inventory-v796.json`
+    /// L3377–3592 for Schedule 5 items 17d–17i, L3725–3755 for Schedule 6
+    /// rows 2–4; `calculation-function-inventory-v796.json` `computeToMainScD`,
+    /// `computeToMainScE`). Each is locked with a message naming the schedule.
+    pub const MX_ATTACHED_LOCK_SCHED_5: &str = "filled from the Schedule 5 Item 17d-17i attached schedule; BIR's program keeps this row shut";
+    pub const MX_ATTACHED_LOCK_SCHED_6: &str = "filled from the Schedule 6 (rows 2-4 / more...) attached schedule; BIR's program keeps this row shut";
+
+    const MX_ATTACHED_SCHED_5_LETTERS: [char; 6] = ['d', 'e', 'f', 'g', 'h', 'i'];
+    const MX_ATTACHED_SCHED_6_STEMS: [&str; 9] = [
+        "txtPg6Sc6I2CA",
+        "txtPg3Sc6I2CB",
+        "txtPg6Sc6I2CC",
+        "txtPg6Sc6I3CA",
+        "txtPg4Sc6I3CB",
+        "txtPg6Sc6I3CC",
+        "txtPg3Sc6I4CA",
+        "txtPg3Sc6I4CB",
+        "txtPg3Sc6I4CC",
+    ];
+
+    /// The schedule-specific lock/refusal for a 1702MX shut attached-schedule
+    /// box, by official key (`frm1702MX:...`).
+    pub fn mx_attached_lock(key: &str) -> Option<&'static str> {
+        let stem = key.strip_prefix(MX)?;
+        if let Some(rest) = stem.strip_prefix("txtPg3Sc5Itm17") {
+            let mut chars = rest.chars();
+            if let (Some(letter), Some(col), None) = (chars.next(), chars.next(), chars.next())
+                && MX_ATTACHED_SCHED_5_LETTERS.contains(&letter)
+                && matches!(col, 'A' | 'B' | 'C')
+            {
+                return Some(MX_ATTACHED_LOCK_SCHED_5);
+            }
+        }
+        if MX_ATTACHED_SCHED_6_STEMS.contains(&stem) {
+            return Some(MX_ATTACHED_LOCK_SCHED_6);
+        }
+        None
+    }
+
+    /// Every 1702MX shut attached-schedule box, by official key.
+    pub fn mx_attached_keys() -> impl Iterator<Item = String> {
+        MX_ATTACHED_SCHED_5_LETTERS
+            .into_iter()
+            .flat_map(|letter| {
+                ['A', 'B', 'C']
+                    .into_iter()
+                    .map(move |col| format!("{MX}txtPg3Sc5Itm17{letter}{col}"))
+            })
+            .chain(
+                MX_ATTACHED_SCHED_6_STEMS
+                    .into_iter()
+                    .map(|stem| format!("{MX}{stem}")),
+            )
     }
 
     /// Why 1702RT item 42 is shut, if it is: the official computeP2Pt4I42
@@ -546,9 +600,8 @@ pub mod annual_corporate {
     /// 1702MX's derived boxes the form computes: the MCIT ATC (from the
     /// incorporation date), Schedule 2 item 15's tax due and the Schedule 7.1
     /// and 8.1 item 7 years (this year's loss). Its other derived boxes (the
-    /// tax rates, which the draft keeps as a `PercentInput`, and the Schedule
-    /// 7.1 and 8.1 rows 4 to 6) are the filer's entries the probe could not
-    /// bind; they keep their reason.
+    /// tax rates, which the draft keeps as a `PercentInput`) are the filer's
+    /// entries the probe could not bind; they keep their reason.
     const MX_COMPUTED: [&str; 5] = [
         "frm1702MX:chkPg1I5ATCR1",
         "frm1702MX:txtPg2Sc2It15B",
@@ -612,6 +665,15 @@ pub mod annual_corporate {
         if code == "1702EX" {
             for key in ex_attached_keys() {
                 if let Some(reason) = ex_attached_lock(&key) {
+                    locks.insert(key, json!(reason));
+                }
+            }
+        }
+        // 1702MX's rows BIR's program keeps shut (P2-3): Schedule 5 17d-17i
+        // and Schedule 6 rows 2-4 name the attached schedule to fill.
+        if code == "1702MX" {
+            for key in mx_attached_keys() {
+                if let Some(reason) = mx_attached_lock(&key) {
                     locks.insert(key, json!(reason));
                 }
             }
