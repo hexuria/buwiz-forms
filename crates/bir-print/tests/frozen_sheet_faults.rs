@@ -126,3 +126,12 @@ fn form_2200t_prints_2020_2021_2023_rows_and_item16_sum() {
     assert_eq!(printed_cell(&doc, "p1c900").0, "600");
     assert_eq!(printed_cell(&doc, "p1c901").0, "00");
 }
+
+#[test]
+fn form_2200t_long_registered_name_prints_whole_over_the_comb() {
+    let text = "A".repeat(70);
+    let mut map = std::collections::BTreeMap::new();
+    map.insert("frm2200Tv2020:registeredName".to_string(), text.clone());
+    let doc = filled_document("2200t-2020", &map).unwrap();
+    assert_eq!(printed_cell(&doc, "p1c26").0, text);
+}

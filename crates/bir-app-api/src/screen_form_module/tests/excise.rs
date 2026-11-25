@@ -713,10 +713,10 @@ fn form_2200a_others_due_is_editable_and_reproduces_official_sample() {
 }
 
 /// 2200T R3.3, preview.0, manual-0, manual-1: Schedule 1 is Part V with
-/// the rows the August 2022 sheet prints (the ones writer-cells.json joins),
-/// by ATC, the Tobacco Inspection Fees and the Others rows at its end; the
-/// v2020 program's 2020 and 2021 rows, which the sheet does not print, are
-/// under Not on the printed sheet. No part is named Page 3.
+/// every fixed row the January 2020 sheet prints (the ones writer-cells.json
+/// joins), by ATC, including the 2020-2023 rate rows, the item 6 vapor
+/// brackets, the Tobacco Inspection Fees and the Others rows at its end. No
+/// part is named Page 3.
 #[test]
 fn pr11_2200t_schedule_1_prints_every_fixed_row_on_the_january_2020_sheet() {
     let p = "frm2200Tv2020:";

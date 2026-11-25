@@ -47690,7 +47690,7 @@
       "evidence": "PR 11: page counter of the eBIRForms page, not a box on the paper form"
     },
     "layout": {
-      "evidence": "PR 11: the August 2022 sheet's own items, from html-frozen/2200t-2020/index.html (items 1-3, Part I 4-12A, Part II 13-15, Part III 16-24 with 17A-17C, 21A-21D and 23A-23C, Part IV 25-28, Part V Schedule 1 on pages 2-3 by ATC with the Tobacco Inspection Fees and the Others rows) and html-frozen/2200t-2020/writer-cells.json. The v2020 program's 2020 and 2021 rows, which the 2022 sheet does not print (writer-cells.json has no join for them), are under Not on the printed sheet. Rows, periods and rates are crates/bir-core/src/forms/form_2200t.rs FORM_2200T_FIXED_ROWS. Field keys, values, the official XML and the print map are unchanged.",
+      "evidence": "PR 11: the January 2020 sheet's own items, from html-frozen/2200t-2020/index.html (items 1-3, Part I 4-12A, Part II 13-15, Part III 16-24 with 17A-17C, 21A-21D and 23A-23C, Part IV 25-28, Part V Schedule 1 on pages 2-3 by ATC with the Tobacco Inspection Fees and the Others rows) and html-frozen/2200t-2020/writer-cells.json. Every v2020 fixed row is on the January 2020 sheet: 2020, 2021, 2022 and 2023 rows, the January 23 2020 heated-tobacco rate row, and the item 6 vapor-product bracket rows included. Rows, periods and rates are crates/bir-core/src/forms/form_2200t.rs FORM_2200T_FIXED_ROWS. Field keys, values, the official XML and the print map are unchanged.",
       "parts": [
         {
           "n": "Page 1",
@@ -48014,6 +48014,16 @@
                 ],
                 "keys": [
                   [
+                    "frm2200Tv2020:txtSched1_1A_2020_Export",
+                    "frm2200Tv2020:txtSched1_1A_2020_Taxable",
+                    "frm2200Tv2020:txtSched1_1A_2020_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_1A_2021_Export",
+                    "frm2200Tv2020:txtSched1_1A_2021_Taxable",
+                    "frm2200Tv2020:txtSched1_1A_2021_Due"
+                  ],
+                  [
                     "frm2200Tv2020:txtSched1_1A_2022_Export",
                     "frm2200Tv2020:txtSched1_1A_2022_Taxable",
                     "frm2200Tv2020:txtSched1_1A_2022_Due"
@@ -48027,6 +48037,8 @@
                 "row_labels": {
                   "caption": "Effective · Applicable Tax Rate",
                   "rows": [
+                    "Effective January 1, 2020 · 2.31",
+                    "Effective January 1, 2021 · 2.40",
                     "Effective January 1, 2022 · 2.50",
                     "Effective January 1, 2023 · 2.60"
                   ]
@@ -48044,6 +48056,16 @@
                 ],
                 "keys": [
                   [
+                    "frm2200Tv2020:txtSched1_1B_2020_Export",
+                    "frm2200Tv2020:txtSched1_1B_2020_Taxable",
+                    "frm2200Tv2020:txtSched1_1B_2020_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_1B_2021_Export",
+                    "frm2200Tv2020:txtSched1_1B_2021_Taxable",
+                    "frm2200Tv2020:txtSched1_1B_2021_Due"
+                  ],
+                  [
                     "frm2200Tv2020:txtSched1_1B_2022_Export",
                     "frm2200Tv2020:txtSched1_1B_2022_Taxable",
                     "frm2200Tv2020:txtSched1_1B_2022_Due"
@@ -48057,6 +48079,8 @@
                 "row_labels": {
                   "caption": "Effective · Applicable Tax Rate",
                   "rows": [
+                    "Effective January 1, 2020 · 2.31",
+                    "Effective January 1, 2021 · 2.40",
                     "Effective January 1, 2022 · 2.50",
                     "Effective January 1, 2023 · 2.60"
                   ]
@@ -48074,6 +48098,16 @@
                 ],
                 "keys": [
                   [
+                    "frm2200Tv2020:txtSched1_1C_2020_Export",
+                    "frm2200Tv2020:txtSched1_1C_2020_Taxable",
+                    "frm2200Tv2020:txtSched1_1C_2020_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_1C_2021_Export",
+                    "frm2200Tv2020:txtSched1_1C_2021_Taxable",
+                    "frm2200Tv2020:txtSched1_1C_2021_Due"
+                  ],
+                  [
                     "frm2200Tv2020:txtSched1_1C_2022_Export",
                     "frm2200Tv2020:txtSched1_1C_2022_Taxable",
                     "frm2200Tv2020:txtSched1_1C_2022_Due"
@@ -48087,6 +48121,8 @@
                 "row_labels": {
                   "caption": "Effective · Applicable Tax Rate",
                   "rows": [
+                    "Effective January 1, 2020 · 2.31",
+                    "Effective January 1, 2021 · 2.40",
                     "Effective January 1, 2022 · 2.50",
                     "Effective January 1, 2023 · 2.60"
                   ]
@@ -48104,6 +48140,16 @@
                 ],
                 "keys": [
                   [
+                    "frm2200Tv2020:txtSched1_2_2020_Export",
+                    "frm2200Tv2020:txtSched1_2_2020_Taxable",
+                    "frm2200Tv2020:txtSched1_2_2020_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_2_2021_Export",
+                    "frm2200Tv2020:txtSched1_2_2021_Taxable",
+                    "frm2200Tv2020:txtSched1_2_2021_Due"
+                  ],
+                  [
                     "frm2200Tv2020:txtSched1_2_2022_Export",
                     "frm2200Tv2020:txtSched1_2_2022_Taxable",
                     "frm2200Tv2020:txtSched1_2_2022_Due"
@@ -48117,6 +48163,8 @@
                 "row_labels": {
                   "caption": "Effective · Applicable Tax Rate",
                   "rows": [
+                    "Effective January 1, 2020 · 1.97",
+                    "Effective January 1, 2021 · 2.05",
                     "Effective January 1, 2022 · 2.13",
                     "Effective January 1, 2023 · 2.22"
                   ]
@@ -48134,6 +48182,16 @@
                 ],
                 "keys": [
                   [
+                    "frm2200Tv2020:txtSched1_3A_2020_Export",
+                    "frm2200Tv2020:txtSched1_3A_2020_Taxable",
+                    "frm2200Tv2020:txtSched1_3A_2020_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_3A_2021_Export",
+                    "frm2200Tv2020:txtSched1_3A_2021_Taxable",
+                    "frm2200Tv2020:txtSched1_3A_2021_Due"
+                  ],
+                  [
                     "frm2200Tv2020:txtSched1_3A_2022_Export",
                     "frm2200Tv2020:txtSched1_3A_2022_Taxable",
                     "frm2200Tv2020:txtSched1_3A_2022_Due"
@@ -48147,6 +48205,8 @@
                 "row_labels": {
                   "caption": "Effective · Applicable Tax Rate",
                   "rows": [
+                    "Effective January 1, 2020 · 20%",
+                    "Effective January 1, 2021 · 20%",
                     "Effective January 1, 2022 · 20%",
                     "Effective January 1, 2023 · 20%"
                   ]
@@ -48164,6 +48224,16 @@
                 ],
                 "keys": [
                   [
+                    "frm2200Tv2020:txtSched1_3B_2020_Export",
+                    "frm2200Tv2020:txtSched1_3B_2020_Taxable",
+                    "frm2200Tv2020:txtSched1_3B_2020_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_3B_2021_Export",
+                    "frm2200Tv2020:txtSched1_3B_2021_Taxable",
+                    "frm2200Tv2020:txtSched1_3B_2021_Due"
+                  ],
+                  [
                     "frm2200Tv2020:txtSched1_3B_2022_Export",
                     "frm2200Tv2020:txtSched1_3B_2022_Taxable",
                     "frm2200Tv2020:txtSched1_3B_2022_Due"
@@ -48177,6 +48247,8 @@
                 "row_labels": {
                   "caption": "Effective · Applicable Tax Rate",
                   "rows": [
+                    "Effective January 1, 2020 · 6.57",
+                    "Effective January 1, 2021 · 6.83",
                     "Effective January 1, 2022 · 7.10",
                     "Effective January 1, 2023 · 7.38"
                   ]
@@ -48194,6 +48266,16 @@
                 ],
                 "keys": [
                   [
+                    "frm2200Tv2020:txtSched1_4A_2020_Export",
+                    "frm2200Tv2020:txtSched1_4A_2020_Taxable",
+                    "frm2200Tv2020:txtSched1_4A_2020_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_4A_2021_Export",
+                    "frm2200Tv2020:txtSched1_4A_2021_Taxable",
+                    "frm2200Tv2020:txtSched1_4A_2021_Due"
+                  ],
+                  [
                     "frm2200Tv2020:txtSched1_4A_2022_Export",
                     "frm2200Tv2020:txtSched1_4A_2022_Taxable",
                     "frm2200Tv2020:txtSched1_4A_2022_Due"
@@ -48207,6 +48289,8 @@
                 "row_labels": {
                   "caption": "Effective · Applicable Tax Rate",
                   "rows": [
+                    "Effective January 1, 2020 · 45.00",
+                    "Effective January 1, 2021 · 50.00",
                     "Effective January 1, 2022 · 55.00",
                     "Effective January 1, 2023 · 60.00"
                   ]
@@ -48224,6 +48308,16 @@
                 ],
                 "keys": [
                   [
+                    "frm2200Tv2020:txtSched1_4B_2020_Export",
+                    "frm2200Tv2020:txtSched1_4B_2020_Taxable",
+                    "frm2200Tv2020:txtSched1_4B_2020_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_4B_2021_Export",
+                    "frm2200Tv2020:txtSched1_4B_2021_Taxable",
+                    "frm2200Tv2020:txtSched1_4B_2021_Due"
+                  ],
+                  [
                     "frm2200Tv2020:txtSched1_4B_2022_Export",
                     "frm2200Tv2020:txtSched1_4B_2022_Taxable",
                     "frm2200Tv2020:txtSched1_4B_2022_Due"
@@ -48237,6 +48331,8 @@
                 "row_labels": {
                   "caption": "Effective · Applicable Tax Rate",
                   "rows": [
+                    "Effective January 1, 2020 · 45.00",
+                    "Effective January 1, 2021 · 50.00",
                     "Effective January 1, 2022 · 55.00",
                     "Effective January 1, 2023 · 60.00"
                   ]
@@ -48254,6 +48350,21 @@
                 ],
                 "keys": [
                   [
+                    "frm2200Tv2020:txtSched1_5_2020_Export",
+                    "frm2200Tv2020:txtSched1_5_2020_Taxable",
+                    "frm2200Tv2020:txtSched1_5_2020_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_5_1.23.2020_Export",
+                    "frm2200Tv2020:txtSched1_5_1.23.2020_Taxable",
+                    "frm2200Tv2020:txtSched1_5_1.23.2020_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_5_2021_Export",
+                    "frm2200Tv2020:txtSched1_5_2021_Taxable",
+                    "frm2200Tv2020:txtSched1_5_2021_Due"
+                  ],
+                  [
                     "frm2200Tv2020:txtSched1_5_2022_Export",
                     "frm2200Tv2020:txtSched1_5_2022_Taxable",
                     "frm2200Tv2020:txtSched1_5_2022_Due"
@@ -48267,6 +48378,9 @@
                 "row_labels": {
                   "caption": "Effective · Applicable Tax Rate",
                   "rows": [
+                    "Effective January 1, 2020 · 10.00",
+                    "Effective January 23, 2020 · 25.00",
+                    "Effective January 1, 2021 · 27.50",
                     "Effective January 1, 2022 · 30.00",
                     "Effective January 1, 2023 · 32.50"
                   ]
@@ -48274,7 +48388,61 @@
               }
             },
             {
-              "no": "6a",
+              "no": "6",
+              "l": "XT165 · 6.) Vapor Products (RA No. 11346) Effective January 1-22, 2020",
+              "grid": {
+                "cols": [
+                  "Tax Base: Export/Exempt",
+                  "Tax Base: Taxable",
+                  "Basic Excise Tax Due"
+                ],
+                "keys": [
+                  [
+                    "frm2200Tv2020:txtSched1_6_10ml_Export",
+                    "frm2200Tv2020:txtSched1_6_10ml_Taxable",
+                    "frm2200Tv2020:txtSched1_6_10ml_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_6_20ml_Export",
+                    "frm2200Tv2020:txtSched1_6_20ml_Taxable",
+                    "frm2200Tv2020:txtSched1_6_20ml_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_6_30ml_Export",
+                    "frm2200Tv2020:txtSched1_6_30ml_Taxable",
+                    "frm2200Tv2020:txtSched1_6_30ml_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_6_40ml_Export",
+                    "frm2200Tv2020:txtSched1_6_40ml_Taxable",
+                    "frm2200Tv2020:txtSched1_6_40ml_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_6_50ml_Export",
+                    "frm2200Tv2020:txtSched1_6_50ml_Taxable",
+                    "frm2200Tv2020:txtSched1_6_50ml_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_6_above_50ml_Export",
+                    "frm2200Tv2020:txtSched1_6_above_50ml_Taxable",
+                    "frm2200Tv2020:txtSched1_6_above_50ml_Due"
+                  ]
+                ],
+                "row_labels": {
+                  "caption": "Effective · Applicable Tax Rate",
+                  "rows": [
+                    "0.00 ml to 10.00 ml · 10.00",
+                    "10.01 ml to 20.00 ml · 20.00",
+                    "20.01 ml to 30.00 ml · 30.00",
+                    "30.01 ml to 40.00 ml · 40.00",
+                    "40.01 ml to 50.00 ml · 50.00",
+                    "More than 50.00 ml · 50.00 plus 10.00 for every additional 10.00 ml"
+                  ]
+                }
+              }
+            },
+            {
+              "no": "7a",
               "l": "XT170 · 7.) Vapor Products (RA No. 11467) a.) Nicotine Salt or Salt Nicotine Per Milliliter",
               "grid": {
                 "cols": [
@@ -48283,6 +48451,16 @@
                   "Basic Excise Tax Due"
                 ],
                 "keys": [
+                  [
+                    "frm2200Tv2020:txtSched1_7A_2020_Export",
+                    "frm2200Tv2020:txtSched1_7A_2020_Taxable",
+                    "frm2200Tv2020:txtSched1_7A_2020_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_7A_2021_Export",
+                    "frm2200Tv2020:txtSched1_7A_2021_Taxable",
+                    "frm2200Tv2020:txtSched1_7A_2021_Due"
+                  ],
                   [
                     "frm2200Tv2020:txtSched1_7A_2022_Export",
                     "frm2200Tv2020:txtSched1_7A_2022_Taxable",
@@ -48297,6 +48475,8 @@
                 "row_labels": {
                   "caption": "Effective · Applicable Tax Rate",
                   "rows": [
+                    "Effective January 23, 2020 · 37.00",
+                    "Effective January 1, 2021 · 42.00",
                     "Effective January 1, 2022 · 47.00",
                     "Effective January 1, 2023 · 52.00"
                   ]
@@ -48304,7 +48484,7 @@
               }
             },
             {
-              "no": "6b",
+              "no": "7b",
               "l": "XT180 · 7.) Vapor Products (RA No. 11467) b.) Conventional 'Freebase' or 'Classic' Nicotine Per Ten (10) Milliliters",
               "grid": {
                 "cols": [
@@ -48313,6 +48493,16 @@
                   "Basic Excise Tax Due"
                 ],
                 "keys": [
+                  [
+                    "frm2200Tv2020:txtSched1_7B_2020_Export",
+                    "frm2200Tv2020:txtSched1_7B_2020_Taxable",
+                    "frm2200Tv2020:txtSched1_7B_2020_Due"
+                  ],
+                  [
+                    "frm2200Tv2020:txtSched1_7B_2021_Export",
+                    "frm2200Tv2020:txtSched1_7B_2021_Taxable",
+                    "frm2200Tv2020:txtSched1_7B_2021_Due"
+                  ],
                   [
                     "frm2200Tv2020:txtSched1_7B_2022_Export",
                     "frm2200Tv2020:txtSched1_7B_2022_Taxable",
@@ -48327,6 +48517,8 @@
                 "row_labels": {
                   "caption": "Effective · Applicable Tax Rate",
                   "rows": [
+                    "Effective January 1, 2020 · 45.00",
+                    "Effective January 1, 2021 · 50.00",
                     "Effective January 1, 2022 · 55.00",
                     "Effective January 1, 2023 · 60.00"
                   ]

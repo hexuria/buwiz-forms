@@ -17351,11 +17351,12 @@ mod tests {
         );
         let html = std::fs::read_to_string(path).unwrap();
         let mut cells: Vec<(u32, u32, String)> = html
-            .split("<div id=\"")
+            .split("<div ")
             .skip(1)
             .filter_map(|rest| {
-                let id = &rest[..rest.find('"')?];
                 let tag = &rest[..rest.find('>')?];
+                let id_at = tag.find("id=\"")? + 4;
+                let id = &tag[id_at..id_at + tag[id_at..].find('"')?];
                 if !tag.contains("data-field-kind=\"comb\"") {
                     return None;
                 }
@@ -17379,14 +17380,15 @@ mod tests {
             env!("CARGO_MANIFEST_DIR")
         );
         let html = std::fs::read_to_string(path).unwrap();
-        html.split("<div id=\"")
+        html.split("<div ")
             .skip(1)
             .filter_map(|rest| {
                 let tag = &rest[..rest.find('>')?];
                 if !tag.contains("data-field-kind=\"comb\"") {
                     return None;
                 }
-                let id = &tag[..tag.find('"')?];
+                let id_at = tag.find("id=\"")? + 4;
+                let id = &tag[id_at..id_at + tag[id_at..].find('"')?];
                 let at = tag.find("data-comb-slots=\"")? + "data-comb-slots=\"".len();
                 let slots = tag[at..].split('"').next()?.parse().ok()?;
                 Some((id.to_string(), slots))
