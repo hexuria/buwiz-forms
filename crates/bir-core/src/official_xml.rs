@@ -229,14 +229,158 @@ pub fn write(
     values: &BTreeMap<String, String>,
 ) -> Result<String, OfficialXmlError> {
     let known = layout.keys();
-    if let Some(unknown) = values.keys().find(|key| !known.contains(key.as_str())) {
+    // A row of an expandable table the static layout lists only for its
+    // pre-allocated rows: the key is official when it differs from a known
+    // key only in the row's digits (the official page builds these numbered
+    // rows in script; fields.json carries their `{N>=x}` templates).
+    let is_row_of_known = |key: &str| {
+        let digits_at = key
+            .char_indices()
+            .rev()
+            .find(|(_, c)| !c.is_ascii_digit())
+            .map(|(at, _)| at + 1)
+            .unwrap_or(0);
+        if digits_at >= key.len() {
+            return false;
+        }
+        let (stem, digits) = (&key[..digits_at], &key[digits_at..]);
+        (0..3).any(|row| {
+            row.to_string() != digits && known.contains(format!("{stem}{row}").as_str())
+        })
+    };
+    if let Some(unknown) = values
+        .keys()
+        .find(|key| !known.contains(key.as_str()) && !is_row_of_known(key))
+    {
         return Err(OfficialXmlError::UnknownKey(unknown.clone()));
     }
 
     let mut out = String::with_capacity(8 * 1024);
     out.push_str(&layout.header);
     out.push_str(&layout.lead);
-    for entry in &layout.entries {
+    // Expandable table rows past the static layout's pre-allocated ones
+    // (F4): the official page builds the numbered rows in script, so a
+    // draft carrying row N writes the same entry shape with the row's own
+    // number in every key — emitted only for rows the values carry, right
+    // after the family's last static row.
+    let mut entries: Vec<Entry> = layout.entries.clone();
+    let row_digits = |key: &str| -> Option<(usize, usize)> {
+        let end = key.len();
+        let start = key[..end]
+            .char_indices()
+            .rev()
+            .find(|(_, c)| !c.is_ascii_digit())
+            .map(|(at, _)| at + 1)
+            .unwrap_or(0);
+        (start < end).then_some((start, end))
+    };
+    let rewrite_key = |key: &str, row: usize, at: (usize, usize)| -> String {
+        format!("{}{}{}", &key[..at.0], row, &key[at.1..])
+    };
+    let mut at = 0;
+    while at < entries.len() {
+        let key = match &entries[at] {
+            Entry::Bool { key, .. } => key.clone(),
+            Entry::Value { key, .. } => key.clone(),
+        };
+        let Some(digits_at) = row_digits(&key) else {
+            at += 1;
+            continue;
+        };
+        let Ok(row) = key[digits_at.0..digits_at.1].parse::<usize>() else {
+            at += 1;
+            continue;
+        };
+        // The family's stem: this key without its row digits.
+        let stem = format!("{}{}", &key[..digits_at.0], &key[digits_at.1..]);
+        if stem.contains('{') {
+            at += 1;
+            continue;
+        }
+        // Rows beyond this one the values carry, in order: each is this
+        // entry rewritten, inserted behind it (a family cluster sits in one
+        // place, so re-scanning continues after the inserted copies).
+        let static_keys: std::collections::BTreeSet<String> = layout
+            .entries
+            .iter()
+            .map(|entry| match entry {
+                Entry::Bool { key, .. } | Entry::Value { key, .. } => key.clone(),
+            })
+            .collect();
+        let mut extra = Vec::new();
+        for higher in (row + 1)..500 {
+            let wanted = rewrite_key(&key, higher, digits_at);
+            if static_keys.contains(&wanted) {
+                continue;
+            }
+            let carries = values.contains_key(&wanted)
+                || match &entries[at] {
+                    Entry::Value { parts, .. } => parts.iter().any(|part| match part {
+                        Part::Source { source, .. } => {
+                            row_digits(source).is_some_and(|at2| {
+                                values.contains_key(&rewrite_key(source, higher, at2))
+                            })
+                        }
+                        _ => false,
+                    }),
+                    _ => false,
+                };
+            if !carries {
+                break;
+            }
+            let rewritten = match entries[at].clone() {
+                Entry::Bool {
+                    key,
+                    default,
+                    after,
+                } => Entry::Bool {
+                    key: rewrite_key(&key, higher, digits_at),
+                    default,
+                    after,
+                },
+                Entry::Value {
+                    key,
+                    parts,
+                    default,
+                    number,
+                    after,
+                } => Entry::Value {
+                    key: rewrite_key(&key, higher, digits_at),
+                    parts: parts
+                        .iter()
+                        .map(|part| match part {
+                            Part::Source {
+                                source,
+                                codec,
+                                uppercase,
+                            } => Part::Source {
+                                source: row_digits(source)
+                                    .map(|at2| rewrite_key(source, higher, at2))
+                                    .unwrap_or_else(|| source.clone()),
+                                codec: codec.clone(),
+                                uppercase: *uppercase,
+                            },
+                            other => other.clone(),
+                        })
+                        .collect(),
+                    default,
+                    number,
+                    after,
+                },
+            };
+            extra.push(rewritten);
+        }
+        if !extra.is_empty() {
+            let insert_at = at + 1;
+            for (offset, entry) in extra.into_iter().enumerate() {
+                entries.insert(insert_at + offset, entry);
+            }
+            at = insert_at + 1;
+        } else {
+            at += 1;
+        }
+    }
+    for entry in &entries {
         let (key, body, after) = match entry {
             Entry::Bool {
                 key,

@@ -935,12 +935,25 @@ mod tests {
         let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 4);
         draft.any_taxes_withheld = false;
         draft.auto_compute_penalties = false;
+        // A fourth row is officially fileable (the `{N>=0}` row template of
+        // fields.json): the payload carries it under its own numbered keys.
         draft.schedule_1 = (0..=MAX_SCHEDULE_1_ROWS).map(valid_schedule_row).collect();
         draft.compute();
+        let payload = draft
+            .try_to_bir_xml_payload()
+            .expect("a fourth XML row is the official program's own shape");
+        assert!(payload.contains("frm1601c:sched1:txtMonthYear3="));
+        assert!(payload.contains("frm1601c:sched1:txtTaxPaid3="));
+        assert!(!payload.contains("frm1601c:sched1:txtMonthYear4="));
 
+        // Rows past the expanded capacity are still rejected, not truncated.
+        draft.schedule_1 = (0..=crate::forms::form_1601c::MAX_SCHEDULE_1_EXPANDED_ROWS)
+            .map(valid_schedule_row)
+            .collect();
+        draft.compute();
         let errors = draft
             .try_to_bir_xml_payload()
-            .expect_err("a fourth XML row must be rejected");
+            .expect_err("rows past the expanded capacity must be rejected");
         assert!(errors.iter().any(|(field, _)| field == "schedule_1"));
     }
 
