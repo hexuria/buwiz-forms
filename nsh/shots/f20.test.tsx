@@ -40,7 +40,7 @@ test("f20, the second taxpayer's group, wide-light", async () => {
   const look = LOOKS[0];
   const app = await open(ENTRY, {
     width: look.width, height: look.height, platform: look.platform, colorScheme: look.colorScheme,
-    ...asking({ legacy: "rows", start: "view=filings;tp=000111229" }),
+    ...asking({ legacy: "rows", start: "view=filings;tp=000111225" }),
   });
   await app.waitFor("id:filings-legacy", { timeout: 30000 });
   await app.wait(800);

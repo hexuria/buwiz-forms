@@ -591,12 +591,23 @@ fn revoke_send(arguments: &HostArguments) -> HostResult {
 /// check the form pages run (`official_tin_check_code`), with the dev-mode
 /// escape they use. It catches misread and transposed digits, not every
 /// mistake — a permutation that keeps the digit valid passes it.
+///
+/// The sentence is deliberately not the form pages' "You have entered an
+/// incorrect TIN" (the official program's own alert, kept there because the
+/// form pages mirror the official program). Here the filer is not inside a
+/// form: what they need is what to do next, so the sentence says it.
 fn reject_wrong_check_digit(tin_root: &str) -> Result<(), HostError> {
-    let root = tin_root.replace('-', "");
-    // The reserved admin root fails the digit too, but its own refusal says
-    // why more precisely; leave it to the store.
-    if root.len() != 9
-        || root == "000000000"
+    // Normalized by the store's own rule (`parse_tin_root` drops dashes and
+    // spaces): a wrong digit is refused however it was spaced. What is not
+    // nine digits even then is the store's own error — "A TIN root is
+    // exactly 9 digits" — which says it more precisely; there is no digit
+    // to check. The reserved admin root fails the digit too, but its own
+    // refusal says why more precisely; leave it to the store.
+    let root = match bir_core::tax_profile::parse_tin_root(tin_root) {
+        Ok(root) => root,
+        Err(_) => return Ok(()),
+    };
+    if root == "000000000"
         || bir_core::validation::relaxed_dev_mode()
         || bir_core::validation::official_tin_check_code(&root) == 0
     {
@@ -1704,6 +1715,30 @@ mod tests {
         // check digit valid. Nobody should believe this check catches the
         // burst; it catches misread and transposed digits only.
         assert!(create_with("001-234-530").is_ok());
+    }
+
+    #[test]
+    fn a_wrong_digit_spaced_like_the_store_allows_is_still_refused() {
+        // The store's own normalization drops spaces as well as dashes, so
+        // the check sees the same nine digits however they were spaced.
+        for typed in ["000 123 454", " 000123454 ", "000-123 454"] {
+            let err = create_with(typed).unwrap_err();
+            assert!(err.contains("fails the official check digit"), "{typed}: {err}");
+        }
+    }
+
+    #[test]
+    fn what_is_not_nine_digits_is_the_stores_own_refusal() {
+        // A letter or a wrong length never reaches the digit check: the
+        // store's parse already says what is wrong, more precisely.
+        for typed in ["00012345X", "00012345", "0001234530"] {
+            let err = create_with(typed).unwrap_err();
+            assert!(
+                err.contains("exactly 9 digits"),
+                "{typed}: {err}"
+            );
+            assert!(!err.contains("check digit"), "{typed}: {err}");
+        }
     }
 
     #[test]

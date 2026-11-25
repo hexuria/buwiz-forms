@@ -7,7 +7,7 @@ import { expect, open, test } from "nsh/test";
 const ENTRY = "../../AuthDemo.tsx";
 const WIDE = { width: 1440, height: 900, platform: "macos" as const };
 const A = { tin: "000123453", pin: "4321", name: "Juana Santos" };
-const B = { tin: "000111229", pin: "5555", name: "Sample Trading Corp" };
+const B = { tin: "000111225", pin: "5555", name: "Sample Trading Corp" };
 const PARAMS = { demo: true, second: true, years: true, mode: "helpdesk", adminPin: "1234", pins: { [A.tin]: A.pin, [B.tin]: B.pin }, readout: true };
 
 type App = Awaited<ReturnType<typeof open>>;

@@ -165,9 +165,9 @@ test("desktop: each of the four filters keeps its returns; they combine; Clear f
   const app = await board();
   // Taxpayers: Clear unticks every box, then one taxpayer.
   await app.press("id:filings-taxpayers-trigger");
-  await app.waitFor("id:filings-taxpayers-opt-000111229");
+  await app.waitFor("id:filings-taxpayers-opt-000111225");
   await app.press("id:filings-taxpayers-clear");
-  await app.press("id:filings-taxpayers-opt-000111229");
+  await app.press("id:filings-taxpayers-opt-000111225");
   await app.waitFor(count("1 return"));
   expect(seen(app, IDS.second)).toBe(true);
   expect(unseen(app, IDS.draft, IDS.queued, IDS.cebu)).toBe(true);
@@ -218,9 +218,9 @@ test("desktop: each of the four filters keeps its returns; they combine; Clear f
 
   // Together: Confirmed or Paid, and only the second taxpayer: none.
   await app.press("id:filings-taxpayers-trigger");
-  await app.waitFor("id:filings-taxpayers-opt-000111229");
+  await app.waitFor("id:filings-taxpayers-opt-000111225");
   await app.press("id:filings-taxpayers-clear");
-  await app.press("id:filings-taxpayers-opt-000111229");
+  await app.press("id:filings-taxpayers-opt-000111225");
   await app.waitFor("id:filings-empty");
   expect(app.texts()).toContain("No returns match these filters.");
   await app.press("id:filings-clear-empty");
@@ -399,9 +399,9 @@ test("phone: the Filters sheet holds the four filters; its button counts the nar
   for (const label of ["Taxpayers", "Forms", "Periods", "Statuses"]) expect(app.texts()).toContain(label);
   expect(app.shows("id:filings-sheet-clear")).toBe(false);
   await app.press("id:filings-taxpayers-trigger");
-  await app.waitFor("id:filings-taxpayers-opt-000111229");
+  await app.waitFor("id:filings-taxpayers-opt-000111225");
   await app.press("id:filings-taxpayers-clear");
-  await app.press("id:filings-taxpayers-opt-000111229");
+  await app.press("id:filings-taxpayers-opt-000111225");
   await app.waitFor("text:Show 1 return");
   expect(app.shows("id:filings-sheet-clear")).toBe(true);
   await app.press("id:filings-sheet-done");
