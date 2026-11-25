@@ -32,6 +32,55 @@ file: a second engine in the same process can lock itself out.
 on that file. Logcat grep for owner/lock/shutdown produced no app-side lines — the
 app does not log the lock failure to logcat at this build.
 
-## Part D cycles — six Back exits, six swipe-aways
+## Part D results
 
-(table filled as the cycles run; see report message)
+### Back-exit series (press Back on Home until the app closes, wait 3 s, relaunch)
+
+| cycle | pid before | pid after | opened |
+|---|---|---|---|
+| 1 | 14172 | 14172 | New taxpayer |
+| 2 | 14172 | 14172 | locked |
+| 3 | 14172 | 14172 | locked |
+| 4 | 14172 | 14172 | locked |
+| 5 | 14172 | 14172 | locked |
+| 6 | 14172 | 14172 | locked |
+
+**Lock first appears at cycle 2, and never clears again (cycles 2–6 all locked).**
+The pid is the same (14172) in every cycle — the process never dies on a Back exit,
+so each relaunch starts a new engine in the SAME process, and from the second engine
+on the database is "already open". "Try again" does not clear it. Cycle 1 reopened on
+the New taxpayer screen rather than Home — the first cycle's Back presses navigated
+backward inside the app before exiting, so the exact count of exits per engine is
+blurred by one; the invariant (second engine in one process → locked) is unaffected.
+Locked-screen screenshot: `partd-lock-back-2.png` (and cycles 3–6 identical);
+logcat grep at first lock in `partd-logcat-back-2.txt` — no app-side owner/lock/shutdown
+lines are logged at this build.
+
+### Swipe-away series (swipe the app away in Recents, wait 3 s, relaunch)
+
+| cycle | pid before | pid after | opened |
+|---|---|---|---|
+| 1 | 15931 | 16026 | eBIRForms |
+| 2 | 16026 | 16026 | eBIRForms |
+| 3 | 16026 | 16187 | eBIRForms |
+| 4 | 16187 | 16280 | eBIRForms |
+| 5 | 16280 | 16376 | eBIRForms |
+| 6 | 16376 | 16472 | eBIRForms |
+
+**Never locked in six cycles.** Note the pids: they change in almost every cycle —
+swipe-away kills the process, so each launch is a fresh process and the os releases
+the dead owner's file lock. That is the mechanistic difference: Back-exit keeps the
+process alive (same-process second engine locks itself out); swipe-away ends the
+process (no live owner, no lock).
+
+### D2 — the sender half (partial, honestly reported)
+
+Engine 1: the return was never successfully queued — form 2551Q for Q4 2026 was
+opened and Queue tapped, but the form only auto-saved ("✓ Saved"); validation still
+showed missing required items (business start date was set to 2020-01-15 in the tax
+profile; line of business and period amounts were not filled). So no sender lines
+exist to compare across engines. What the cycles above already show: engines 2+ in
+the back series never got a usable database at all (locked), so a second engine in
+one process cannot even reach the point of having a sender — the lock fault gates
+the sender question entirely in the Back-exit mode.
+

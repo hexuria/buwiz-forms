@@ -1,0 +1,7 @@
+mode=swipe
+cycle 1: pidbefore=15931 pidafter=16026 screen=eBIRForms | Good afternoon | Wednesday, November 25, 2026.
+cycle 2: pidbefore=16026 pidafter=16026 screen=eBIRForms | Good afternoon | Wednesday, November 25, 2026.
+cycle 3: pidbefore=16026 pidafter=16187 screen=eBIRForms | Good afternoon | Wednesday, November 25, 2026.
+cycle 4: pidbefore=16187 pidafter=16280 screen=eBIRForms | Good afternoon | Wednesday, November 25, 2026.
+cycle 5: pidbefore=16280 pidafter=16376 screen=eBIRForms | Good afternoon | Wednesday, November 25, 2026.
+cycle 6: pidbefore=16376 pidafter=16472 screen=eBIRForms | Good afternoon | Wednesday, November 25, 2026.

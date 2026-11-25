@@ -1,0 +1,7 @@
+mode=back
+cycle 1: pidbefore=14172 pidafter=14172 screen=New taxpayer | New taxpayer | TIN
+cycle 2: pidbefore=14172 pidafter=14172 screen=eBIRForms is locked | Try again
+cycle 3: pidbefore=14172 pidafter=14172 screen=eBIRForms is locked | Try again
+cycle 4: pidbefore=14172 pidafter=14172 screen=eBIRForms is locked | Try again
+cycle 5: pidbefore=14172 pidafter=14172 screen=eBIRForms is locked | Try again
+cycle 6: pidbefore=14172 pidafter=14172 screen=eBIRForms is locked | Try again
