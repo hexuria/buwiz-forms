@@ -1,0 +1,10 @@
+Census of segmented-cell fields (burst = keyinject at 10ms gap = real CGEvent key events; paste = real Cmd+V CGEvent).
+Values read from the gpui-agent view tree; screenshots field-<name>-{burst,paste}.png are full-screen captures.
+
+field                            fast burst            paste            verdict
+New taxpayer TIN (9 cells)       000312453  WRONG      000123453  OK    corrupts on burst
+Tax profile edit TIN (9 cells)   000124353  WRONG      000123453  OK    corrupts on burst
+New branch branch code (5)       00010      WRONG      00001      OK    corrupts on burst (typed 00001)
+Sign-in gate TIN cells           untested — ran out of session budget before sign-out/relaunch
+Sign-in PIN cells (4)            untested — not reached in this session
+TinInput in form 1701 (spouse)   untested — ran out of session budget; Part IV not opened

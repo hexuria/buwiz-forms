@@ -1,0 +1,11 @@
+sqlite3 /tmp/tin-check.db 'select * from taxpayers' — scratch db is PLAIN unencrypted SQLite in EBIR_TEST_ENV
+
+schema: tin_root TEXT PRIMARY KEY CHECK (length(tin_root) = 9 AND digits only)
+
+rows (tin_root | name | type | created | updated | data_json):
+000123453|Jose Protacio Rizal|Individual|2026-11-25 09:57:20|2026-11-25 09:57:20|{}||
+001234530|Maria Clara Reyes|Individual|2026-11-25 10:01:55|2026-11-25 10:01:55|{}||
+
+The fast-burst-corrupted TIN 001234530 (typed 000123453) is durably stored as the
+PRIMARY KEY of Maria Clara Reyes. The CHECK constraint only enforces 9 digits — the
+wrong digits pass it trivially. No validation refused the corrupted permutation.

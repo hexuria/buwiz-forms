@@ -1,0 +1,10 @@
+TIN cells timing threshold matrix: nine digits 000123453 injected as real CGEvent key events (keyDown+keyUp per digit, .cgSessionEventTap, 8ms key hold) at fixed inter-key gaps, ten runs per gap, New taxpayer page, desktop app at 3aceafe8. Value read from the OtpInput textfield via the gpui-agent view tree.
+
+gap_ms  right/10  wrong values seen (count)
+  200   10/10      -
+  100   10/10      -
+   70   9/10      '000123534'x1
+   50   10/10      -
+   30   0/10      '000123534'x1, '000124533'x2, '000134532'x1, '001234530'x6
+   20   0/10      '001234530'x10
+   10   0/10      '000124335'x1, '000124353'x2, '001023534'x1, '001042335'x1, '001234530'x5

@@ -1,0 +1,14 @@
+Paste tests — clipboard set with pbcopy, pasted with a real Cmd+V CGEvent (keypaste binary, posts keyDown+keyUp
+of virtual key 9/'v' with .maskCommand at .cgSessionEventTap). Clicked inside first TIN cell (case e: fifth cell).
+Values read from the gpui-agent view tree (the OtpInput hidden native textfield's value).
+
+(a) '000123453'        -> 000123453  CORRECT order
+(b) '000-123-453'      -> 000123453  CORRECT — dashes stripped by the input mask
+(c) '000 123 453'      -> 000123453  CORRECT — spaces stripped
+(d) '00012345300000'   -> 000123453  CORRECT — truncated to first 9 digits (branch digits dropped)
+(e) '000123453' pasted after clicking inside the FIFTH cell -> 000123453 CORRECT, filled from cell 1:
+    the click position inside the cell row is ignored (caret stays at end of the overlay field = empty start),
+    same design-level behavior as case 4 of the earlier four-case study.
+
+KEY FINDING: paste never corrupts. A paste is a single input event replacing the whole value atomically —
+no per-key burst, so the mid-burst redraw race never occurs. Only fast KEY-EVENT bursts corrupt.

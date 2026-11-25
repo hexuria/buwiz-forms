@@ -1,0 +1,23 @@
+Frame-by-frame trace of a 30ms-gap CGEvent burst of 000123453 (timing-fail-30ms.mp4, 60 fps capture,
+frames 26-55 of the recording, the typing window; see burst-frames-grid.png, 5 frames per row left to right).
+One video frame = 16.7ms, so consecutive keystrokes (30ms apart) land about 2 frames apart — individual
+per-key states are partially resolvable, some keystrokes share a frame.
+
+What the frames show:
+1. Frames 26-33 (burst mid-flight): the first digits fill left to right in the CORRECT order — cells 1,2 = 0,0,
+   then 1, 2, ... appear in their proper cells. Nothing anomalous yet; the caret/highlight advances with the fill.
+2. THE FLICKER (around frames 33-35): the cells suddenly go nearly EMPTY — only the first one or two digits
+   remain visible (frames show just "0" or "0 1" with the caret back near cell 2-3) for one to two frames.
+   A full visible redraw of the cell row precedes the corruption: the overlaid text field's content is rebuilt
+   wholesale mid-burst, not appended to.
+3. Frames 36+ (after the flicker): the cells refill ALL AT ONCE, no longer digit-by-digit, and the refilled
+   order is the corrupted one — the sequence ends as 0,0,1-2,3,4-5,3 with the typed FIRST digit 0 in the last
+   cell (final value read from the view tree: 001234530, a left rotation by one of the typed 000123453).
+4. After the refill the caret sits in the last cell; no further rearrangement happens.
+
+Interpretation for the cause analysis (observation, not speculation about code): digits typed before the
+redraw land correctly; the redraw mid-burst rebuilds the field value from a stale/partial state plus the
+digits still arriving, and the first keystroke's digit — already consumed before the rebuild — is the one
+that ends up appended at the end. At slower gaps (100-200ms) the redraw completes between keystrokes and
+every digit survives; at <=30ms keystrokes arrive inside the rebuild window and the value is scrambled
+deterministically (at 20ms: the exact rotation 001234530 in 10/10 runs).

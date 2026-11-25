@@ -1,0 +1,20 @@
+STEP 4 exposure chain — can the wrong value get out? YES, end to end, with zero resistance.
+
+4.1 CREATE: New taxpayer, fast burst (20ms gap, typed 000123453) -> cells showed 001234530.
+    Name "Maria Clara Reyes", Create taxpayer: SAVED. No refusal, no error, no warning.
+    (The corrupted permutation passes the official TIN check digit, as the owner verified.)
+
+4.2 STORAGE: scratch db is PLAIN unencrypted SQLite in EBIR_TEST_ENV. The corrupted TIN is the
+    PRIMARY KEY: taxpayers row tin_root='001234530' (see stored-value.txt). The schema CHECK only
+    enforces 9 digits. Forms page header and profile show 001-234-530-00000 everywhere.
+
+4.3 FORM PROPAGATION: opened BIR Form 1701 TY2026 for this taxpayer. Part I item 4 TIN is
+    AUTO-FILLED AND LOCKED from the profile: 001-234-530-00000 (lock badge "From the tax profile",
+    formpage-tin.png). PRINT PREVIEW prints the corrupted TIN in the official layout
+    (print-tin.png: item 4 boxes read 001-234-530-00000, name MARIA CLARA REYES).
+    The draft row itself persists the corrupted TIN in data_json: "tin":"00123453000000"
+    (xml-excerpt.txt). The upload XML path is unreachable without pressing Queue (standing rule),
+    but the draft payload that feed it already carries the corrupted TIN.
+
+4.4 SPOUSE/BUYER TIN PERSISTENCE INSIDE A FORM: untested — session budget exhausted before
+    reaching Part IV. The TinInput comparison burst test is likewise untested.
