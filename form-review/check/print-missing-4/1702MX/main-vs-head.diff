@@ -1,0 +1,130 @@
+32,34c32,34
+<  14 Total Tax Due/(Overpayment) (From Part IV-Schedule 2 Item 19D)
+<  15 Less: Total Tax Credits/Payments (From Part IV-Schedule 3 Item 32D)
+<  16 Net Tax Payable / (Overpayment) (Item 14 Less Item 15) (From Part IV Item 33D)
+---
+>  14 Total Tax Due/(Overpayment) (From Part IV-Schedule 2 Item 19D)                                                                                                                                              0
+>  15 Less: Total Tax Credits/Payments (From Part IV-Schedule 3 Item 32D)                                                                                                                                         0
+>  16 Net Tax Payable / (Overpayment) (Item 14 Less Item 15) (From Part IV Item 33D)                                                                                                                              0
+36,38c36,38
+<     17 Surcharge
+<     18 Interest
+<     19 Compromise
+---
+>     17 Surcharge                                                                                                                                                                                                0
+>     18 Interest                                                                                                                                                                                                 0
+>     19 Compromise                                                                                                                                                                                               0
+78,84c78,84
+<               Particulars                                                       A. Exempt                     B. Special                                     C. Special Tax Relief
+<                                                                                                                                                               (Under Regular/Normal Rate)
+< 1 Investment Promotion Agency (IPA)/
+<    Implementing Government Entity
+< 2 Legal Basis                            0                                                          0                                                0
+< 3 Registered Activity/Program (Reg. No.) 0                                                          0                                                0
+< 4 Special Tax Rate                                                                                                                 ●          %
+---
+>               Particulars                                                       A. Exempt                        B. Special                                     C. Special Tax Relief
+>                                                                                                                                                                  (Under Regular/Normal Rate)
+> 1 Investment Promotion Agency (IPA)/     1 2 2 . 4 3                                                 1 2 3 . 4 4                                        1 2 4 . 4 5
+>   Implementing Government Entity
+> 2 Legal Basis                            1 2 5 . 4 6                                                 1 2 6 . 4 7                                        1 2 7 . 4 8
+> 3 Registered Activity/Program (Reg. No.) 1 2 8 . 4 9                                                 1 2 9 . 5 0                                        1 3 0 . 5 1
+> 4 Special Tax Rate                                                                                                                      ●        %
+89,91c89,91
+< Schedule 2 – Computation of Income Tax per Tax Regime                                                                (DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)
+<                      Description                      A. Total Exempt                                   B. Total Special                C. Total Regular               D. Total All Columns
+< 1 Sales/Receipts/Revenues/Fees
+---
+> Schedule 2 – Computation of Income Tax per Tax Regime                                                                   (DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)
+>                      Description                      A. Total Exempt                                      B. Total Special                 C. Total Regular               D. Total All Columns
+> 1 Sales/Receipts/Revenues/Fees                     0                                                   0                            0                                  0
+94,95c94,95
+<   (From all of Part V-Sched B Item 2, if letter B of instructions above is marked)
+< 3 Net Sales/Receipts/Revenues/Fees (Item 1 Less Item 2)
+---
+>  (From all of Part V-Sched B Item 2, if letter B of instructions above is marked) 0                    0                            0                                  0
+> 3 Net Sales/Receipts/Revenues/Fees (Item 1 Less Item 2)                             0                  0                            0                                  0
+97,98c97,98
+<   (From all of Part V-Sched B Item 4, if letter B of instructions above is marked)
+< 5 Gross Income from Operation (Item 3 Less Item 4)
+---
+>   (From all of Part V-Sched B Item 4, if letter B of instructions above is marked) 0                   0                            0                                  0
+> 5 Gross Income from Operation (Item 3 Less Item 4)                                  0                  0                            0                                  0
+100,101c100,101
+<    (From all of Part V-Sched B Item 6, if letter B of instructions above is marked)
+< 7 Total Taxable Income (Sum of Items 5 and 6)
+---
+>    (From all of Part V-Sched B Item 6, if letter B of instructions above is marked) 0                  0                            0                                  0
+> 7 Total Taxable Income (Sum of Items 5 and 6)                                       0                  0                            0                                  0
+104c104
+<     (From all of Part V-Sched B Item 8, if letter B of instructions above is marked)
+---
+>     (From all of Part V-Sched B Item 8, if letter B of instructions above is marked) 0                 0                            0                                  0
+106,109c106,109
+<    (From all of Part V-Sched B Item 9, if letter B of instructions above is marked)
+< 10 NOLCO [Only for those taxable under Section 27 (A to C); Section
+<          28(A)(1)(A)(6)(b) of the Tax Code, as amended]
+<  (For Special Rate: If w/ only 1 activity, From Schedule 8.1 Item 8; if with 2 or more
+---
+>    (From all of Part V-Sched B Item 9, if letter B of instructions above is marked) 0                  0                            0                                  0
+> 10 NOLCO [Only          for those taxable under Section 27 (A to C); Section
+>                   28(A)(1)(A)(6)(b) of the Tax Code, as amended]
+>  (For Special Rate: If w/ only 1 activity, From Schedule 8.1 Item 8; if with 2 or more                 0                            0                                  0
+111c111
+< 11 Total Itemized Deductions (Sum of Items 8 to 10)
+---
+> 11 Total Itemized Deductions (Sum of Items 8 to 10)                                      0             0                            0                                  0
+113,114c113,114
+< 12 Optional Standard Deduction (OSD) (40% of Item 7)
+< 13 Net Taxable Income/(Loss)
+---
+> 12 Optional Standard Deduction (OSD) (40% of Item 7)                                                                                0                                  0
+> 13 Net Taxable Income/(Loss)                                                             0             0                            0                                  0
+116,117c116,117
+< 14 Applicable Income Tax Rate                                                               0%                              %                                  %
+<    (i.e. Special or Regular/Normal Rate)                                                                         ●                                   ●
+---
+> 14 Applicable Income Tax Rate                                                                0%                                %                                  %
+>    (i.e. Special or Regular/Normal Rate)                                                                            ●                                   ●
+121c121
+<                                                                                                  0.00
+---
+>                                                                                                   0.00 0                            0                                  0
+123,124c123,124
+<               if remitted directly                                                                                                                       0.00
+< 17 Net Income Tax Due to National Government
+---
+>               if remitted directly                                                                     0                                                    0.00 0
+> 17 Net Income Tax Due to National Government                                                           0                            0                                  0
+126c126
+< 18 MCIT (2% of Gross Income in Item 7)
+---
+> 18 MCIT (2% of Gross Income in Item 7)                                                                                              0                                  0
+128c128
+<     (Item 19B = Item 17B) (Item 19C = Normal Income Tax in Item
+---
+>     (Item 19B = Item 17B) (Item 19C = Normal Income Tax in Item                                        0                            0                                  0
+230,233c230,233
+<  4 2026                                                                                                                    0
+<  5 2026                                                                                                                    0
+<  6 2026                                                                                                                    0
+<  7             0                                                                           0                               0
+---
+>  4 2026        0                         0                         0                       0                               0
+>  5 2026        0                         0                         0                       0                               0
+>  6 2026        0                         0                         0                       0                               0
+>  7             0                         0                         0                       0                               0
+244,247c244,247
+< 4 2026                                                                                                                             0
+< 5 2026                                                                                                                             0
+< 6 2026                                                                                                                             0
+< 7              0                                                                                       0                           0
+---
+> 4 2026         0                           0                                  0                        0                           0
+> 5 2026         0                           0                                  0                        0                           0
+> 6 2026         0                           0                                  0                        0                           0
+> 7              0                           0                                  0                        0                           0
+276c276
+< 10 Net Taxable Income/(Loss) (Item 4 Less Item 9)
+---
+> 10 Net Taxable Income/(Loss) (Item 4 Less Item 9)                0                       0                          0                          0

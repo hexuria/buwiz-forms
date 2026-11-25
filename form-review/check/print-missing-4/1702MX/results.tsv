@@ -1,0 +1,10 @@
+box	case	main	head	verdict
+PartII-14 Total Tax Due	computed zero	blank	prints 0	blank-to-print as claimed
+PartII-15 Less Tax Credits	computed zero	blank	prints 0	blank-to-print as claimed
+PartII-16 Net Tax Payable	computed zero	blank	prints 0	blank-to-print as claimed
+PartII-17/18/19 penalties	computed zero	blank	prints 0	blank-to-print as claimed
+Sched1-r1 IPA	distinct per-column values 122.43/123.44/124.45	blank	each value in own column A/B/C	right, columns not swapped
+Sched1-r2 Legal Basis	distinct 125.46/126.47/127.48	printed numeric 0s (wrong: text held, zeros shown)	held values print, own columns	wrong-on-main now right
+Sched1-r3 Registered Activity	distinct 128.49/129.50/130.51	printed numeric 0s	held values print, own columns	wrong-on-main now right
+Sched2 rows 1-13	computed zeros	mostly blank	print 0 in all four columns	blank-to-print; column placement unverifiable with zeros
+Sched7.1/8.1 rows 4-7	computed zeros	partial zeros	print 0 in more cells	more cells print; no wrong-box evidence

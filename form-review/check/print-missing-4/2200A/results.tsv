@@ -16,3 +16,12 @@ all-rows	25-28	all	partial	see per-row rows above
 empty-part4	25-28	all	ok	all four rows blank when nothing held (2200A-head-empty.pdf)
 main-tell	25-28	all	blank-on-main	main 92b3e201 and pre d1777a31 print all rows blank although draft holds values
 other-boxes	all	all	unchanged	pdftotext diff head-vs-main: only Part IV region lines differ (17 diff lines, all rows 25-28)
+hardA-r25 bank 5ch/num 6/amt 11dig	fits comb	prints whole: BANKX, 123456, 11/20/2026, 12345678901.99	correct
+hardA-r26 bank 6ch BANKXX	too long	blank	held but not printed (by design); main printed nothing at all for the row: better than main
+hardA-r26 num 7dig 1234567	too long	blank	held but not printed; better than main (blank either way, no wrong value)
+hardA-r26 amt 12dig 123456789012.34	too long	blank incl centavos	held but not printed; better than f8dc14c5 which printed wrong 23,456,789,012.34
+hardA-r27 amt 0.05	small	prints 0 / 05	correct
+hardA-r28 bank 20ch/num 12dig	too long	blank; description LONG VALUES CASE prints	held but not printed; bank/num/amt blank by design
+hardA-r28 amt 1234.567	3 nonzero centavos	blank	held but not printed by design
+hardB-r25 amt -500.00	negative	amount blank; bank/num/date print	held but not printed by design; never truncated, minus never dropped
+hardB-r26 control fits	fits	prints whole: BPI, 999999, 11/24/2026, 12345678901.23	correct

@@ -1,0 +1,277 @@
+                                                                                          Republic of the Philippines
+For BIR BCS/                                                                                Department of Finance
+Use Only: Item:                                                                           Bureau of Internal Revenue
+     BIR Form No.                                    Annual Income Tax Return
+1702-MX
+January 2018 (ENCS)
+                                                Corporation, Partnership and Other Non-Individual
+                                           with MIXED Income Subject to Multiple Income Tax Rates or
+                                             with Income Subject to SPECIAL/PREFERENTIAL RATE
+            Page 1                    Enter all required information in CAPITAL LETTERS using BLACK ink. Mark applicable boxes with an “X”.                                       1702-MX 01/18ENCS P1
+                                                          Two copies MUST be filed with the BIR and one held by the taxpayer.
+ 1 For X Calendar Fiscal 3 Amended Return? 4 Short Period Return? 5 Alphanumeric Tax Code (ATC)
+ 2 Year Ended (MM/20YY)                                                                                                IC 055           Minimum Corporate Income Tax (MCIT)
+    1 2 /20 2 6
+                                              Yes          X No                      Yes         X No               IC010
+                                                                      Part I – Background Information
+ 6 Taxpayer Identification Number (TIN)                         0 0 0 - 1 2 3 - 4 5 3 - 0 0 0 0 0 7 RDO Code 0 0 8
+ 8 Registered Name (Enter only 1 letter per box using CAPITAL LETTERS)
+ J U A N A              S A N T O S
+ X T X T P G 1 P T 1 0 8
+ X T X T P G 1 P T 1 0 9
+ 9 Registered Address (Indicate complete address. If the registered address is different from the current address, go to the RDO to update registered address by using BIR Form No. 1905)
+ 1 2 3 4             S O C O R R O                              S T
+ X T X T P G 1 P T 1 1 0
+ X T X T P G 1 P T 1 1 1                                                                                                                                         9A ZIP Code
+ 10 Date of Incorporation/Organization                          /                  /                           11 Contact Number 0 9 1 7 1 2 3 4 5 6 7
+          (MM/DD/YYYY)
+ 12 Email Address        j u a n a @ e x a m p l e . c o m
+ 13 Method of Deduction           Itemized Deduction [Section 34 (A-J), NIRC]                                       Optional Standard Deduction (OSD)–40% of Gross Income
+                                                                                                                     [Section 34(L) NIRC, as amended]
+                                                                           Part II – Total Tax Payable                                   (DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)
+ 14 Total Tax Due/(Overpayment) (From Part IV-Schedule 2 Item 19D)
+ 15 Less: Total Tax Credits/Payments (From Part IV-Schedule 3 Item 32D)
+ 16 Net Tax Payable / (Overpayment) (Item 14 Less Item 15) (From Part IV Item 33D)
+    Add: Penalties
+    17 Surcharge
+    18 Interest
+    19 Compromise
+ 20 Total Penalties (Sum of Items 17 to 19)                                                                                                                                                                     0
+ 21 TOTAL AMOUNT PAYABLE / (Overpayment) (Sum of Items 16 and 20)                                                                                                                                               0
+    If overpayment, mark one (1) box only. (Once the choice is made, the same is irrevocable)
+         To be refunded             To be issued a Tax Credit Certificate (TCC)                                     To be carried over as tax credit for next year/quarter
+       We declare under the penalties of perjury that this return, and all its attachments, have been made in good faith, verified by us, and to the best of our knowledge and belief, are true and
+ correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. (If signed by an Authorized Representative, indicate TIN and
+ attach authorization letter)
+
+                                                                                                                                                                                          22 Number of
+                                                                                                                                                                                            Attachments
+Signature over Printed Name of President/Principal Officer/ Authorized Representative Signature over Printed Name of Treasurer/ Assistant Treasurer                                         120.41
+ Title of Signatory                                 TIN                               Title of Signatory                        TIN
+                                                                                 Part III – Details of Payment
+       Particulars        Drawee Bank/Agency                                    Number                 Date (MM/DD/YYYY)                                                      Amount
+23 Cash/Bank Debit Memo
+24 Check
+25 Tax Debit Memo
+26 Others (specify below)
+
+
+ Machine Validation/Revenue Official Receipt Details [if not filed with an Authorized Agent Bank (AAB)]                                               Stamp
+                                                                                                                                                      Receiptof(RO’s
+                                                                                                                                                                Receiving Office/AABTeller’s
+                                                                                                                                                                     Signature/Bank  and Date    of
+                                                                                                                                                                                             Initial)
+       BIR Form No.
+                                                            Annual Income Tax Return
+1702-MX
+January 2018 (ENCS)
+                                   Corporation, Partnership and Other Non-Individual
+                             with MIXED Income Subject to Multiple Income Tax Rates or
+       Page 2                   with Income Subject to SPECIAL/PREFERENTIAL RATE                                              1702-MX 01/18ENCS P2
+ Taxpayer Identification Number (TIN)                  Registered Name
+ 0 0 0 1 2 3 4 5 3 0 0 0 0 0 J U A N A                                      S A N T O S
+                                                              Part IV – Schedules
+ Instructions: X A. Only one activity/project under EXEMPT and/or SPECIAL Tax Regimes, fill-out the applicable columns below.
+(mark appropriate box)           B. Two or more activities/projects under EXEMPT and/or SPECIAL Tax Regimes, accomplish Part V-Mandatory Attachments per activity
+                                   and reflect consolidated amounts from Part V on the corresponding columns below.
+ Schedule 1 – Basis of Tax Relief
+              Particulars                                                       A. Exempt                     B. Special                                     C. Special Tax Relief
+                                                                                                                                                              (Under Regular/Normal Rate)
+1 Investment Promotion Agency (IPA)/
+   Implementing Government Entity
+2 Legal Basis                            0                                                          0                                                0
+3 Registered Activity/Program (Reg. No.) 0                                                          0                                                0
+4 Special Tax Rate                                                                                                                 ●          %
+5 Effectivity Date of Tax Relief/Exemption
+  FROM (MM/DD/YYYY)
+6 Expiration Date of Tax Relief/Exemption
+   TO (MM/DD/YYYY)
+Schedule 2 – Computation of Income Tax per Tax Regime                                                                (DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)
+                     Description                      A. Total Exempt                                   B. Total Special                C. Total Regular               D. Total All Columns
+1 Sales/Receipts/Revenues/Fees
+  (From all of Part V-Sched B Item 1, if letter B of instructions above is marked)
+2 Less: Sales Returns, Allowances and Discounts
+  (From all of Part V-Sched B Item 2, if letter B of instructions above is marked)
+3 Net Sales/Receipts/Revenues/Fees (Item 1 Less Item 2)
+4 Less: Cost of Sales/Services
+  (From all of Part V-Sched B Item 4, if letter B of instructions above is marked)
+5 Gross Income from Operation (Item 3 Less Item 4)
+6 Add: Other Taxable Income not subjected to Final Tax
+   (From all of Part V-Sched B Item 6, if letter B of instructions above is marked)
+7 Total Taxable Income (Sum of Items 5 and 6)
+Less: Deductions Allowable under Existing Law
+8 Ordinary Allowable Itemized Deductions (From Sched 5 Item 18) &/or
+    (From all of Part V-Sched B Item 8, if letter B of instructions above is marked)
+9 Special Allowable Itemized Deductions (From Sched 6 Item 5) &/or
+   (From all of Part V-Sched B Item 9, if letter B of instructions above is marked)
+10 NOLCO [Only for those taxable under Section 27 (A to C); Section
+         28(A)(1)(A)(6)(b) of the Tax Code, as amended]
+ (For Special Rate: If w/ only 1 activity, From Schedule 8.1 Item 8; if with 2 or more
+ activities, From all of Part V-Sched B Item 10; For Reg. Rate: From Sched 7.1 Item 8)
+11 Total Itemized Deductions (Sum of Items 8 to 10)
+     OR [in case taxable under Sec 27(A) & 28(A)(1)]
+12 Optional Standard Deduction (OSD) (40% of Item 7)
+13 Net Taxable Income/(Loss)
+    (If Itemized: Item 7 Less Item 11; If OSD: Item 7 Less Item 12)
+14 Applicable Income Tax Rate                                                               0%                              %                                  %
+   (i.e. Special or Regular/Normal Rate)                                                                         ●                                   ●
+15 Income Tax Due other than MCIT [For Special Rate: If with
+    only 1 activity, (Item 3 OR Item 7) X Item 14; if with 2 or more activities, from
+    all of Part V-Sched B Item 14; For Regular Rate Item 13 X Item 14 ]
+                                                                                                 0.00
+16 Less: Share of Other Government Agency,
+              if remitted directly                                                                                                                       0.00
+17 Net Income Tax Due to National Government
+     (Item 15 Less Item 16)
+18 MCIT (2% of Gross Income in Item 7)
+19 Total Income Tax Due / (Overpayment)
+    (Item 19B = Item 17B) (Item 19C = Normal Income Tax in Item
+    15C OR MCIT in Item 18C, whichever is higher) (Item 18D =
+     Sum of Items 19B and 19C) (Item 19D to Part II Item 14)
+Schedule 3 - Tax Credits/Payments (attach proof)
+20 Prior Year’s Excess Credits other than MCIT
+21 Income Tax Payment under MCIT from Previous Quarter/s
+22 Income Tax Payment Under Regular Rate from Previous Qtr/s
+23 Excess MCIT Applied this Current Taxable Year
+    (From Schedule 9 Item 4)
+24 Creditable Tax Withheld from Previous Qtr/s per BIR Form No. 2307
+25 Creditable Tax Withheld per BIR Form No. 2307 for the 4th Qtr
+26 Foreign Tax Credits, if applicable
+27 Tax Paid in Return Previously Filed, if this is an Amended Return
+28 Income Tax Payments under Special Rate from Previous Qtr/s
+29 Special Tax Credits (To Part IV-Schedule 4 Item 6)
+Other
+30     Tax Credits/Payments (specify)
+   175.96
+31
+32 Total Tax Credits/Payments
+    (Sum of Items 20 to 31) (Item 32D to Part II Item 15)
+33 Net Tax Payable / (Overpayment)
+    (Item 19 Less Item 32) (Item 33D to Part II Item 16)
+    BIR Form No.
+                                                    Annual Income Tax Return
+1702-MX
+January 2018 (ENCS)
+                                        Corporation, Partnership and Other Non-Individual
+                                   with MIXED Income Subject to Multiple Income Tax Rates or
+        Page 3                       with Income Subject to SPECIAL/PREFERENTIAL RATE                                                   1702-MX 01/18ENCS P3
+Taxpayer Identification Number (TIN)                       Registered Name
+0 0 0 1 2 3 4 5 3 0 0 0 0 0 J U A N A                                         S A N T O S
+Schedule 4 – Tax Relief Availment                                                          (DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)
+                       Description                          A. Total Exempt      B. Total Special           C.Total Regular               D.Total All Columns
+1 Regular Income Tax Otherwise Due (Item 13A/B of
+  Part IV-Schedule 2 X applicable regular income tax rate)
+2 Tax Relief on Special Allowable Itemized Deductions
+   (Item 9A/B/C of Part IV-Sched 2 X applicable regular income tax rate)
+3 Sub-Total – Tax Relief (Sum of Items 1 and 2)
+4 Less: Income Tax Due                                                                     0.00
+  (From Part IV-Schedule 2 Item 15B)
+5 Tax Relief Availment before Special Tax Credit
+   (Item 3 Less Item 4)
+6 Add: Special Tax Credit, if any
+  (From Part IV-Schedule 3 Item 29)
+7 Total Tax Relief Availment (Sum of Items 5 & 6)
+Schedule 5 – Ordinary Allowable Itemized Deductions (attach additional sheet/s, if necessary)
+                     (If with only one activity, fill-out the applicable columns below: if with two or more activities, amount for each expense shall come from all of Part V-Schedule D)
+ 1 Amortizations
+ 2 Bad Debts
+ 3 Charitable and Other Contributions
+ 4 Depletion
+ 5 Depreciation
+ 6 Entertainment, Amusement and Recreation
+ 7 Fringe Benefits
+ 8 Interest
+ 9 Losses
+10 Pension Trusts
+11 Rental
+12 Research and Development
+13 Salaries, Wages and Allowances
+14 SSS, GSIS, Philhealth, HDMF and Other Contributions
+15 Taxes and Licenses
+16 Transportation and Travel
+17 Others (Deductions Subject to Withholding Tax and Other Expenses) [Specify below; Add additional sheet(s), if necessary]
+   a. Janitorial and Messengerial Services
+   b. Professional Fees
+   c. Security Services
+   d. 238.70
+   e.
+   f.
+   g.
+   h.
+   i.
+18 Total Ordinary Allowable Itemized Deductions
+   (Sum of Items 1 to 17i) (To Part IV-Schedule 2 Item 8)
+ Schedule 6 – Special Allowable Itemized Deductions (attach additional sheet/s, if necessary)
+                  (If with only one activity, fill-out the applicable columns below: if with two or more activities, amount for each expense shall come from all of Part V-Schedule E)
+                 Description             Legal Basis                        A. Total Exempt                B. Total Special             C.Total Regular             D.Total All Columns
+1XTXTPG6SC239                          XTXTPG6SC240
+2XTXTPG6SC244                          XTXTPG6SC245
+3XTXTPG6SC246                          XTXTPG6SC247
+4OTHERS                                OTHERS
+5 Total Special Allowable Itemized Deductions
+   (Sum of Items 1 to 4) (To Part IV-Schedule 2 Item 9)
+ Schedule 7 – Computation of Net Operating Loss Carry Over (NOLCO) for Regular Rate (Attach Additional Sheet/s, if necessary)
+ 1 Gross Income (From Part IV-Schedule 2 Item 7C)
+ 2 Less: Ordinary Allowable Itemized Deductions (From Part IV-Schedule 2 Item 8C)
+ 3 Net Operating Loss (Item 1 Less Item 2) (To Part IV-Schedule 7.1, Item 7A)
+    BIR Form No.
+                                             Annual Income Tax Return
+1702-MX
+January 2018 (ENCS)
+                                   Corporation, Partnership and Other Non-Individual
+                              with MIXED Income Subject to Multiple Income Tax Rates or
+       Page 4                    with Income Subject to SPECIAL/PREFERENTIAL RATE                                               1702-MX 01/18ENCS P4
+ Taxpayer Identification Number (TIN)                 Registered Name
+ 0 0 0 1 2 3 4 5 3 0 0 0 0 0 J U A N A                                      S A N T O S
+ Schedule 7.1 - Computation of Available Net Operating Loss Carry Over (NOLCO) for Regular Rate DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)
+          Net Operating Loss               B. NOLCO Applied           C. NOLCO Expired        D. NOLCO Applied                E. Net Operating Loss
+     Year             A.  Amount             Previous Year/s                                     Current  Year                          (Unapplied)
+   Incurred                                                                                                                     [(E) = A – (B+C+D)]
+ 4 2026                                                                                                                    0
+ 5 2026                                                                                                                    0
+ 6 2026                                                                                                                    0
+ 7             0                                                                           0                               0
+ 8 Total NOLCO (Sum of Items 4D to 7D) (To Part IV-Schedule 2 Item 10C)                    0
+ Schedule 8 – Computation of Net Operating Loss Carry Over (NOLCO) for Special Rate (except those availing fiscal incentives)
+                  (Attach Additional Sheet/s, if necessary)
+1 Gross Income (From Part IV-Schedule 2 Item 7B)
+2 Less: Ordinary Allowable Itemized Deductions (From Part IV-Schedule 2 Item 8B)
+3 Net Operating Loss (Item 1 Less Item 2) (To Part IV-Schedule 8.1 Item 7A)
+Schedule 8.1 - Computation of Available Net Operating Loss Carry Over (NOLCO) for Special Rate DO NOT enter Centavos; 49 Centavos or Less drop down; 50 or more round up)
+          Net Operating Loss                  B. NOLCO Applied                   C. NOLCO Expired         D. NOLCO Applied           E. Net Operating Loss
+    Year             A. Amount                   Previous Year/s                                             Current Year                   (Unapplied)
+  Incurred                                                                                                                             [(E) = A – (B+C+D)]
+4 2026                                                                                                                             0
+5 2026                                                                                                                             0
+6 2026                                                                                                                             0
+7              0                                                                                       0                           0
+8 Total NOLCO (Sum of Items 4D to 7D) (To Part IV-Schedule 2 Item 10B)                                 0
+Schedule 9 – Computation of Minimum Corporate Income Tax (MCIT)
+       Year          A) Normal Income Tax as Adjusted                                   B) MCIT                     C) Excess MCIT over Normal Income Tax
+1
+2
+3
+Continuation of Schedule 9 (Item numbers continue from table above)
+       D) Excess MCIT Applied/                E) Expired Portion of                    F) Excess MCIT Applied this        G) Balance of Excess MCIT Allowable
+           Used in Previous Years                   Excess MCIT                           Current Taxable Year              as Tax Credit for Succeeding Year/s
+                                                                                                                                 [ G = C Less (D + E + F) ]
+1
+2
+3
+4 Total Excess MCIT Applied (Sum of Items 1F to 3F) (To Part IV-Schedule 3 Item 23)
+Schedule 10 – Reconciliation of Net Income per Books Against Taxable Income (attach additional sheet/s, if necessary)
+                     Particulars                                A. Total Exempt          B. Total Special       C. Total Regular         D. Total All Columns
+1 Net Income/(Loss) per Books
+  Add: Non-Deductible Expenses/Taxable Other Income (specify below)
+2 277.20
+3
+4 Total (Sum of Items 1 to 3)
+   Less: A) Non-Taxable Income and Income Subjected to Final Tax (specify below)
+5 278.21
+6
+          B) Special Deductions (specify below)
+ 7 279.22
+ 8
+ 9 Total (Sum of Items 5 to 8)
+10 Net Taxable Income/(Loss) (Item 4 Less Item 9)
+

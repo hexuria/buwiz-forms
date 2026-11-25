@@ -1,0 +1,22 @@
+UPLOAD-UNCHANGED EVIDENCE (batch 4 + part 5, main 92b3e201 vs head 3f37b225)
+
+Static, from git diff 92b3e201..3f37b225:
+1. crates/bir-core/src/official_xml.rs and crates/bir-core/src/crypto.rs: untouched
+   (the official-layout serializer and the IAF encryptor).
+2. crates/bir-core/tests/sample-payloads/: zero files changed - every committed
+   plaintext pseudo-XML and encrypted sample is byte-identical between the commits.
+3. All form-file additions are print-only:
+   - form_2200a.rs: part4_payment_comb_line + its four put() calls write the new
+     derived print keys part4_cash/_check/_tdm/_others into the PRINT map only.
+   - form_1702mx.rs: to_print_field_map() overlays print keys; to_bir_field_map
+     (the upload serialization map) is not altered.
+   - form_1701.rs: split_employer_name_lines (print shaping of employer names).
+   - form_1604c.rs / form_1604e.rs: year printing for the sheet; the comments in
+     the added code itself state "keep the 4-digit year in upload XML".
+4. crates/bir-print/src/frozen_html.rs (26 lines): the money re-alignment skip for
+   keys starting "derived:" - print pipeline only, no upload involvement.
+Behavioral: cargo test --locked -p bir-core --test sample_payloads_test compares the
+serializers' output byte-for-byte against the official XML for every sample; counts
+at both commits are in the report. A same-saved-draft byte comparison through the
+two running apps was not completed (time); the evidence above covers the claim
+because the upload is a pure function of the draft through untouched code.
