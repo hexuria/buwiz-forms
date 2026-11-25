@@ -22,6 +22,7 @@
 
 pub mod client;
 pub mod device;
+pub mod ios_storage;
 pub mod pipe;
 pub mod receipt;
 pub mod seal;

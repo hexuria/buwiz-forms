@@ -1041,8 +1041,10 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
         # the window plane's switch and address as GPUI_AGENT / GPUI_AGENT_ADDR and its token into the host's data container
         # (nsh/agent/ios-handoff.sh, in the background until this launcher dies). The data plane listens on the port after
         # the window's (src/agent.rs choose() adds one).
-        unset SIMCTL_CHILD_BIR_SFTP_LIVE SIMCTL_CHILD_BIR_DATABASE_PATH
-        export SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BIR_AUTH_BYPASS=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1
+        unset SIMCTL_CHILD_BIR_SFTP_LIVE SIMCTL_CHILD_BIR_DATABASE_PATH SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN SIMCTL_CHILD_BUWIZ_KEYCHAIN
+        export SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BIR_AUTH_BYPASS=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1
+        # The Keychain stays off, except for the Simulator Keychain check (BUWIZ_KEYCHAIN=1, docs/platforms/ios.md).
+        if [ "${BUWIZ_KEYCHAIN:-}" = 1 ]; then export SIMCTL_CHILD_BUWIZ_KEYCHAIN=1; else export SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1; fi
         export SIMCTL_CHILD_BIR_AGENT_TOKEN="$GPUI_AGENT_TOKEN"
         export SIMCTL_CHILD_GPUI_AGENT=1 SIMCTL_CHILD_GPUI_AGENT_ADDR="127.0.0.1:$port"
         if [ -n "$db" ]; then export SIMCTL_CHILD_BIR_DATABASE_PATH="$db"; fi

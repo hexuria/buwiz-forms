@@ -36,8 +36,12 @@ pub fn platform_store(data_dir: PathBuf, use_keychain: bool) -> Box<dyn SecretSt
         target_os = "linux"
     ))]
     {
+        #[cfg(not(target_os = "ios"))]
+        let keychain: Box<dyn Keychain> = Box::new(OsKeychain);
+        #[cfg(target_os = "ios")]
+        let keychain: Box<dyn Keychain> = Box::new(IosKeychain);
         Box::new(KeyringStore {
-            keychain: Box::new(OsKeychain),
+            keychain,
             fallback: FileStore::new(data_dir),
         })
     }
@@ -66,32 +70,17 @@ trait Keychain: Send + Sync {
 }
 
 /// The real one: entries of [`SERVICE`] named `device-key`, `device-id`.
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 struct OsKeychain;
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 impl OsKeychain {
     fn entry(name: &str) -> Result<keyring::Entry, keyring::Error> {
         keyring::Entry::new(SERVICE, &name.replace('_', "-"))
     }
 }
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 impl Keychain for OsKeychain {
     fn get(&self, name: &str) -> Result<String, keyring::Error> {
         Self::entry(name).and_then(|entry| entry.get_password())
@@ -103,6 +92,73 @@ impl Keychain for OsKeychain {
 
     fn delete(&self, name: &str) -> Result<(), keyring::Error> {
         Self::entry(name).and_then(|entry| entry.delete_credential())
+    }
+}
+
+/// iOS: the same two entries through [`crate::ios_storage`], with their
+/// class set (`AfterFirstUnlockThisDeviceOnly`) and an item of the old class
+/// given it in place. A Keychain that cannot be used while the phone is
+/// locked is a hard error, not "unavailable": a key that may exist must not
+/// be read as missing and replaced by a new one.
+#[cfg(target_os = "ios")]
+struct IosKeychain;
+
+#[cfg(target_os = "ios")]
+impl IosKeychain {
+    fn item(name: &str) -> Result<crate::ios_storage::Item, keyring::Error> {
+        match name {
+            "device_key" => Ok(crate::ios_storage::DEVICE_KEY),
+            "device_id" => Ok(crate::ios_storage::DEVICE_ID),
+            other => Err(keyring::Error::Invalid(
+                "name".into(),
+                format!("{other} is not a Keychain item of this app"),
+            )),
+        }
+    }
+}
+
+/// The `keyring` error [`KeyringStore`] decides by: a missing item, no
+/// Keychain at all (the file store then), or anything else as `keyring`'s
+/// own iOS backend reports it, except a locked Keychain, which stops.
+#[cfg(any(
+    target_os = "ios",
+    all(
+        test,
+        any(target_os = "macos", target_os = "windows", target_os = "linux")
+    )
+))]
+fn keyring_error(error: crate::ios_storage::KeychainError) -> keyring::Error {
+    use crate::ios_storage::KeychainError;
+    match error {
+        KeychainError::NotFound => keyring::Error::NoEntry,
+        KeychainError::Unavailable(_) => keyring::Error::NoStorageAccess(Box::new(error)),
+        KeychainError::Locked | KeychainError::NotUtf8 => {
+            keyring::Error::Invalid("keychain".into(), error.to_string())
+        }
+        KeychainError::Duplicate | KeychainError::Failed(_) => {
+            keyring::Error::PlatformFailure(Box::new(error))
+        }
+    }
+}
+
+#[cfg(target_os = "ios")]
+impl Keychain for IosKeychain {
+    fn get(&self, name: &str) -> Result<String, keyring::Error> {
+        let item = Self::item(name)?;
+        crate::ios_storage::get(&crate::ios_storage::OsKeychain, &item)
+            .map_err(keyring_error)?
+            .ok_or(keyring::Error::NoEntry)
+    }
+
+    fn set(&self, name: &str, value: &str) -> Result<(), keyring::Error> {
+        let item = Self::item(name)?;
+        crate::ios_storage::set(&crate::ios_storage::OsKeychain, &item, value)
+            .map_err(keyring_error)
+    }
+
+    fn delete(&self, name: &str) -> Result<(), keyring::Error> {
+        let item = Self::item(name)?;
+        crate::ios_storage::delete(&crate::ios_storage::OsKeychain, &item).map_err(keyring_error)
     }
 }
 
@@ -409,6 +465,44 @@ mod tests {
             assert_eq!(store.get("device_key").unwrap().as_deref(), Some("seed"));
             store.delete("device_key").unwrap();
             assert_eq!(store.get("device_key").unwrap(), None);
+        }
+
+        /// The iOS Keychain's answers, as [`KeyringStore`] reads them: locked
+        /// is an error (a device key that may exist is never replaced), no
+        /// Keychain means the file, a missing item is missing.
+        #[test]
+        fn a_locked_ios_keychain_stops_and_an_absent_one_uses_the_file() {
+            use crate::ios_storage::KeychainError;
+            struct Answers(KeychainError);
+            impl Keychain for Answers {
+                fn get(&self, _: &str) -> Result<String, keyring::Error> {
+                    Err(keyring_error(self.0.clone()))
+                }
+                fn set(&self, _: &str, _: &str) -> Result<(), keyring::Error> {
+                    Err(keyring_error(self.0.clone()))
+                }
+                fn delete(&self, _: &str) -> Result<(), keyring::Error> {
+                    Err(keyring_error(self.0.clone()))
+                }
+            }
+            let store = |error: KeychainError, dir: &std::path::Path| KeyringStore {
+                keychain: Box::new(Answers(error)),
+                fallback: FileStore::new(dir.to_owned()),
+            };
+            let dir = tempfile::tempdir().unwrap();
+            let locked = store(KeychainError::Locked, dir.path());
+            assert!(locked.get("device_key").is_err());
+            assert!(locked.set("device_key", "seed").is_err());
+            assert!(!dir.path().join("buwiz_submit_device_key.txt").exists());
+
+            let missing = store(KeychainError::NotFound, dir.path());
+            assert_eq!(missing.get("device_key").unwrap(), None);
+            missing.delete("device_key").unwrap();
+
+            let absent = store(KeychainError::Unavailable(-25291), dir.path());
+            assert_eq!(absent.get("device_key").unwrap(), None);
+            absent.set("device_key", "seed").unwrap();
+            assert_eq!(absent.get("device_key").unwrap().as_deref(), Some("seed"));
         }
 
         #[test]
