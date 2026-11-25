@@ -1,0 +1,15 @@
+== 2552-03142025 ==
+txtPg1P2I17TaxPaidInPrevRtrn: ours='100.50' official='100.50' match=True
+txtPg1P2I18CredTaxWthhld: ours='1,000.25' official='1,000.25' match=True
+txtPg1P2I19TotTaxCredPmnt: ours='1,101.00' official='1,101.00' match=True
+txtPg1P2I20TotTaxStllDueOvrPmnt: ours='12,321.00' official='12,321.00' match=True
+txtPg1P2I25TotAmntPyable: ours='12,357.00' official='12,357.00' match=True
+== 2200A-03142025 ==
+txtSched1_xa_others1_Due: ours='11.00' official='11.00' match=True
+txtSched1_TotalDue: ours='87,451.56' official='87,451.56' match=True
+txtExciseDue: ours='87,451.56' official='87,451.56' match=True
+txtAmtPayable: ours='87,252.49' official='87,252.49' match=True
+== 1701MS-122025 ==
+txtLessNonTaxablea: ours='90,000' official='90,000' match=True
+txtLessNonTaxableb: ours='90,000' official='90,000' match=True
+txtTaxableCompensationIncomea: ours='810,001' official='810,001' match=True

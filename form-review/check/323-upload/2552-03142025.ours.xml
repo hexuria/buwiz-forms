@@ -32,15 +32,15 @@
             <div>frm2552:txtPg1P2I15TaxATC=PT 202frm2552:txtPg1P2I15TaxATC=</div>    
             <div>frm2552:txtPg1P2I15TaxDue=0.00frm2552:txtPg1P2I15TaxDue=</div>    
             <div>frm2552:txtPg1P2I16TotTaxDue=13,422.00frm2552:txtPg1P2I16TotTaxDue=</div>    
-            <div>frm2552:txtPg1P2I17TaxPaidInPrevRtrn=0.00frm2552:txtPg1P2I17TaxPaidInPrevRtrn=</div>    
+            <div>frm2552:txtPg1P2I17TaxPaidInPrevRtrn=100.50frm2552:txtPg1P2I17TaxPaidInPrevRtrn=</div>    
             <div>frm2552:txtPg1P2I18CredTaxWthhld=1,000.25frm2552:txtPg1P2I18CredTaxWthhld=</div>    
-            <div>frm2552:txtPg1P2I19TotTaxCredPmnt=1,000.00frm2552:txtPg1P2I19TotTaxCredPmnt=</div>    
-            <div>frm2552:txtPg1P2I20TotTaxStllDueOvrPmnt=12,422.00frm2552:txtPg1P2I20TotTaxStllDueOvrPmnt=</div>    
+            <div>frm2552:txtPg1P2I19TotTaxCredPmnt=1,101.00frm2552:txtPg1P2I19TotTaxCredPmnt=</div>    
+            <div>frm2552:txtPg1P2I20TotTaxStllDueOvrPmnt=12,321.00frm2552:txtPg1P2I20TotTaxStllDueOvrPmnt=</div>    
             <div>frm2552:txtPg1P2I21Surcharge=25.50frm2552:txtPg1P2I21Surcharge=</div>    
             <div>frm2552:txtPg1P2I22Interest=10.00frm2552:txtPg1P2I22Interest=</div>    
             <div>frm2552:txtPg1P2I23Compromise=0.00frm2552:txtPg1P2I23Compromise=</div>    
             <div>frm2552:txtPg1P2I24TotPenalties=36.00frm2552:txtPg1P2I24TotPenalties=</div>    
-            <div>frm2552:txtPg1P2I25TotAmntPyable=12,458.00frm2552:txtPg1P2I25TotAmntPyable=</div>    
+            <div>frm2552:txtPg1P2I25TotAmntPyable=12,357.00frm2552:txtPg1P2I25TotAmntPyable=</div>    
             <div>frm2552:rdoPg1OverpaymentRefund=falsefrm2552:rdoPg1OverpaymentRefund=</div>    
             <div>frm2552:rdoPg1OverpaymentTaxCredCert=falsefrm2552:rdoPg1OverpaymentTaxCredCert=</div>    
             <div>frm2552:txtPg1Pt4Indiv=frm2552:txtPg1Pt4Indiv=</div>    
