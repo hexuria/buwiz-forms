@@ -124,7 +124,7 @@ for (const { name, size } of SIZES) {
     await app.waitFor(ready);
     await app.press("id:settings-account-sign-in");
     await app.waitFor("id:settings-account-wait");
-    expectTexts(app, ["Finish signing in in your browser", `Approve ${device} in the page that opened, then come back here.`, "ABCD-1234", "Open the page again", "Cancel"]);
+    expectTexts(app, ["Continue in your browser", `Approve ${device} in the page that opened, then come back here.`, "ABCD-1234", "Open the page again", "Cancel"]);
     noRawAddress(app.texts());
     await app.press("id:settings-account-code-copy");
     await app.waitFor("text:Copied ABCD-1234");
@@ -150,7 +150,7 @@ for (const { name, size } of SIZES) {
     await app.waitFor("text:Copied buwiz.example.test/device");
     expect(app.clipboard()).toBe("buwiz.example.test/device");
     await app.press("id:settings-account-address-value");
-    await app.waitFor("text:Finish signing in in your browser");
+    await app.waitFor("text:Continue in your browser");
     await app.press("id:demo-approve");
     await app.waitFor("text:juana@example.com", { timeout: 15000 });
     expect(app.shows("id:settings-account-wait")).toBe(false);

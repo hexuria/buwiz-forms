@@ -185,7 +185,7 @@ export function flowCard(now: SignInState): FlowCard | null {
   if (now.kind === "waiting") {
     return {
       kind: now.kind,
-      title: "Finish signing in in your browser",
+      title: "Continue in your browser",
       sentence: "Approve this computer in the page that opened, then come back here.",
       rows: [{ id: "code", label: "Code", value: now.code, opens: false }],
       actions: [

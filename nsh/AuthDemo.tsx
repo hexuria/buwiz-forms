@@ -9,7 +9,7 @@
 //   gate      true: the Buwiz account gate is closed (the host's gate answer is replaced; the dev bypass would open it)
 //   begin     "refuse": Sign in / Create account are refused by the host call (no network in a test); "code": they answer
 //             a device code (browser not opened) and the approval then succeeds
-//   opened    true: the browser opened for the code (the "Finish signing in in your browser" card)
+//   opened    true: the browser opened for the code (the "Continue in your browser" card)
 //   finish    "approve" (default): approved at once; "hold": the wait lasts until Cancel or the buttons "Test: approve" /
 //             "Test: expire"; "expire": the code expires at once
 //   reopen    false: Open the page again / Try opening it again does not open anything (default: it opens)

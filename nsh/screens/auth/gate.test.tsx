@@ -61,7 +61,7 @@ for (const { name, size, device } of SIZES) {
     await app.waitFor("id:gate-card");
     await app.press("id:gate-sign-in");
     await app.waitFor("id:gate-wait-card");
-    expect(app.texts()).toContain("Finish signing in in your browser");
+    expect(app.texts()).toContain("Continue in your browser");
     expect(app.texts()).toContain(`Approve ${device} in the page that opened, then come back here.`);
     expect(app.texts()).toContain("WXYZ-2345");
     expect(app.texts()).toContain("Open the page again");
@@ -100,7 +100,7 @@ for (const { name, size, device } of SIZES) {
     expect(app.clipboard()).toBe("WXYZ-2345");
     // The address is a link: it opens the page, and once it opened the card is the browser's.
     await app.press("id:gate-address-value");
-    await app.waitFor("text:Finish signing in in your browser");
+    await app.waitFor("text:Continue in your browser");
     expect(app.texts()).toContain("calls: cloud_account_begin_sign_up,cloud_account_finish_sign_in,cloud_account_reopen_sign_in");
   }, 60_000);
 
