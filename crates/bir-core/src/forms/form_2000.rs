@@ -852,6 +852,31 @@ impl Form2000Draft {
     ///   TIN and Taxpayer's Name captions (14 TIN digits, then the name).
     /// - `derived:contact_email`: Items 8 and 9 on their one shared 40-slot
     ///   comb (the number from slot 0, the email as typed from slot 13).
+
+    /// The schedule row a 2000 field key belongs to, for keys that carry one:
+    /// the trailing digits of a `sched<n>:` cell key or an `drpATCCode`/`chk`
+    /// row key.
+    fn row_key_index(key: &str) -> Option<usize> {
+        let row_key = key.contains(":sched")
+            || key.starts_with("drpATCCode")
+            || key.starts_with("chkSchedule");
+        if !row_key {
+            return None;
+        }
+        let digits: String = key
+            .chars()
+            .rev()
+            .take_while(char::is_ascii_digit)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect();
+        if digits.is_empty() {
+            return None;
+        }
+        digits.parse().ok()
+    }
+
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
         fields.insert(
@@ -865,6 +890,11 @@ impl Form2000Draft {
             40,
         );
         fields.insert("derived:contact_email".to_string(), contact);
+        // Rows past the paper's print on the engine that grows the printed
+        // tables; until it lands the sheet is the paper's rows, while the
+        // upload carries every row the filer added.
+        let paper_rows = FORM_2000_ROWS;
+        fields.retain(|key, _| Self::row_key_index(key).is_none_or(|row| row < paper_rows));
         fields
     }
 

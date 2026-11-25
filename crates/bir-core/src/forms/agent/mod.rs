@@ -115,6 +115,14 @@ impl AgentFormKind {
     }
 }
 
+/// The `(prefix, suffix, first_index)` of a `{N>=x}` family template key.
+fn family_template(key: &str) -> Option<(String, String, usize)> {
+    let start = key.find("{N>=")?;
+    let end = key[start..].find('}')? + start;
+    let first: usize = key[start + 4..end].parse().ok()?;
+    Some((key[..start].to_string(), key[end + 1..].to_string(), first))
+}
+
 /// Rows the expandable tables grow to in the bindings (the write path's
 /// own [`ROW_LIMIT`] is higher): 2000's own validation names 50, and no
 /// officially expandable family is bounded lower. A table that outgrows it
@@ -306,6 +314,70 @@ fn expand_row_families(def: &mut AgentFormDef) {
                 entry.label = format!("{}, row {}", zero_box.label, row + 1);
                 def.boxes.push(entry);
             }
+        }
+    }
+    // Box-only families: keys the page writes through its own typed path
+    // (1601C's MonthYear, reformatted as the probe watched and so never
+    // bound) still need their rows' box entries for the gate to know them.
+    // The `{N>=x}` template marks the family officially expandable exactly
+    // as the bound families'.
+    let templates: Vec<(String, String, usize)> = def
+        .boxes
+        .iter()
+        .filter_map(|entry| family_template(&entry.key))
+        .collect();
+    let mut seen = std::collections::BTreeSet::new();
+    for (prefix, suffix, _first) in templates {
+        if !seen.insert((prefix.clone(), suffix.clone())) {
+            continue;
+        }
+        if def
+            .bindings
+            .keys()
+            .any(|key| key.starts_with(&prefix) && key.ends_with(&suffix))
+        {
+            continue; // binding-backed families grow above, boxes included
+        }
+        let mut concrete: Vec<(usize, String)> = def
+            .boxes
+            .iter()
+            .filter_map(|entry| {
+                let rest = entry.key.strip_prefix(&prefix)?;
+                let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+                if digits.is_empty() || rest[digits.len()..] != suffix {
+                    return None;
+                }
+                Some((digits.parse().ok()?, entry.key.clone()))
+            })
+            .collect();
+        concrete.sort();
+        let Some((_, zero_key)) = concrete.first() else {
+            continue;
+        };
+        let Some(zero_box) = def
+            .boxes
+            .iter()
+            .find(|entry| &entry.key == zero_key)
+            .cloned()
+        else {
+            continue;
+        };
+        let present: std::collections::BTreeSet<usize> =
+            concrete.iter().map(|(index, _)| *index).collect();
+        let key_offset = concrete[0].0 as isize; // one-based families: first row's digit
+        for row in 0..EXPAND_ROWS {
+            if present.contains(&row) {
+                continue;
+            }
+            let digit = row as isize + if key_offset > 0 { 1 } else { 0 };
+            let key = format!("{prefix}{digit}{suffix}");
+            if def.boxes.iter().any(|entry| entry.key == key) {
+                continue;
+            }
+            let mut entry = zero_box.clone();
+            entry.key = key;
+            entry.label = format!("{}, row {}", zero_box.label, row + 1);
+            def.boxes.push(entry);
         }
     }
 }

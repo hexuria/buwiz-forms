@@ -1254,6 +1254,37 @@ fn apply_layout(form: &mut Value, layout: &Value) {
         }
         Some(item)
     };
+    // Rows the expandable tables grow past the extracted ones (F4): the
+    // bindings carry them, the extractor never saw them. Each takes its
+    // column's row-0 field with its own key, so the grid build below finds
+    // every row a field.
+    for spec in &specs {
+        for entry in spec["items"].as_array().into_iter().flatten() {
+            let Some(rows) = entry["grid"]["keys"].as_array() else {
+                continue;
+            };
+            let Some(first) = rows.first().and_then(|row| row.as_array()) else {
+                continue;
+            };
+            for row in rows.iter().skip(1) {
+                for (c, key) in row.as_array().into_iter().flatten().enumerate() {
+                    let (Some(key), Some(zero)) =
+                        (key.as_str(), first.get(c).and_then(Value::as_str))
+                    else {
+                        continue;
+                    };
+                    if key == zero || grid_fields.contains_key(key) {
+                        continue;
+                    }
+                    if let Some((field, page)) = grid_fields.get(zero).cloned() {
+                        let mut grown = field.clone();
+                        grown["k"] = json!(key);
+                        grid_fields.insert(key.to_string(), (grown, page));
+                    }
+                }
+            }
+        }
+    }
     let mut parts = Vec::new();
     for spec in &specs {
         let mut items = Vec::new();

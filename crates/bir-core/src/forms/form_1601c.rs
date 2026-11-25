@@ -1542,11 +1542,21 @@ mod tests {
     fn validation_rejects_rows_beyond_verified_schedule_capacity() {
         let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
         draft.any_taxes_withheld = false;
-        draft.schedule_1 = vec![schedule_row("05/2026", 1.0, 1.0); 4];
+        // Rows past the printed three file as the official program builds
+        // them; the write path's depth is the cap.
+        draft.schedule_1 = vec![schedule_row("05/2026", 1.0, 1.0); 51];
         draft.compute();
 
         assert!(
             draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "schedule_1")
+        );
+        draft.schedule_1.truncate(50);
+        draft.compute();
+        assert!(
+            !draft
                 .validate()
                 .iter()
                 .any(|(field, _)| field == "schedule_1")

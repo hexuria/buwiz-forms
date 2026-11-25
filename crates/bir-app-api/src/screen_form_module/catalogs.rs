@@ -635,7 +635,7 @@ fn month_year_1601c_row(kind: AgentFormKind, key: &str) -> Option<usize> {
         .strip_prefix("frm1601c:sched1:txtMonthYear")?
         .parse()
         .ok()?;
-    (row < form_1601c::MAX_SCHEDULE_1_ROWS).then_some(row)
+    (row < form_1601c::MAX_SCHEDULE_1_EXPANDED_ROWS).then_some(row)
 }
 
 /// Previous Month/s (`MM/YYYY`, `maxlength="7"`). Like the row's other
