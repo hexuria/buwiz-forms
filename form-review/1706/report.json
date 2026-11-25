@@ -1,103 +1,129 @@
 {
   "code": "1706",
   "verdict": "tweak",
-  "summary": "Overall 2-page sheet geometry matches 1706 Jan 2018 ENCS; targeted fixes needed for long name overflow in Item 7A, Page 2 Taxpayer/Buyer Name comb alignment, Schedule 1 classification/alignment/padding, Schedule 2 Item 6 integer formatting and Item 7 installment date, and screen field labels/kinds.",
+  "summary": "Fixed Item 6A/7A name overflow and cell border collisions, Page 2 Taxpayer/Buyer Name comb-tick strike-through, Schedule 1 right-alignment and padding, and Schedule 1 screen labels (OCT/TCT/CCT No., Area (sq.m.)). Remaining items require shared crate/UI changes (bir-core formatting of txtTotalN and Classification derivation, plus nsh/screens/form input widths).",
   "defects": [
     {
       "id": "1706-print-01",
       "surface": "print",
       "where": "Page 1, Part I Item 7A (Buyer's Name) and Item 6A (Seller's Name)",
-      "what": "Long Buyer's Name overflows its right cell border and collides with Buyer's Registered Address; cells lack overflow clipping and horizontal padding.",
+      "what": "Long Buyer's Name overflowed its right cell border and collided with Buyer's Registered Address because print-overrides/1706-2018.css forced font-size:6.7px !important over bir-print's dynamic shrink-to-fit.",
       "before": "form-review/1706/before/print-p1.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1706/after/print-p1.png",
+      "status": "fixed"
     },
     {
       "id": "1706-print-02",
       "surface": "print",
-      "where": "Page 1, Part I Items 6A and 7A (Registered Address)",
-      "what": "Address text sits flush against the left vertical border with no inner padding.",
+      "where": "Page 1, Part I Item 6A/7A Registered Addresses and Page 2 Schedule 1 text cells",
+      "what": "Address and Schedule 1 text sat flush against left/right cell borders without horizontal padding.",
       "before": "form-review/1706/before/print-p1.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1706/after/print-p1.png",
+      "status": "fixed"
     },
     {
       "id": "1706-print-03",
       "surface": "print",
-      "where": "Page 2, header Taxpayer's/Buyer's Name comb box",
-      "what": "Name prints as plain proportional text crossing the vertical comb ticks instead of one character per comb slot.",
+      "where": "Page 2, Taxpayer's/Buyer's Name comb box (p2c6)",
+      "what": "Long Buyer's Name (>27 chars) fell back to proportional text rendered over visible vertical comb ticks.",
       "before": "form-review/1706/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1706/after/print-p2.png",
+      "status": "fixed"
     },
     {
       "id": "1706-print-04",
       "surface": "print",
-      "where": "Page 2, Schedule 1 continuation Classification* column",
-      "what": "Classification column prints blank even when a classification (e.g. Residential) is selected.",
+      "where": "Page 2, Schedule 1 (continuation), Classification* column",
+      "what": "Classification* column is blank on print even though 'Residential' is selected on screen; html-frozen/1706-2018/writer-cells.json lists j_id391:_1.._8 under not_joined and needs a derived classification code in crates/.",
       "before": "form-review/1706/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1706/after/print-p2.png",
+      "status": "needs shared change"
     },
     {
       "id": "1706-print-05",
       "surface": "print",
-      "where": "Page 2, Schedule 1 table cells (OCT/TCT/CCT No., TD No., Location, Area, FMV columns, TOTAL)",
-      "what": "Currency amounts in FMV and TOTAL columns are left-aligned flush against left borders instead of right-aligned with padding; text cells lack inner padding.",
+      "where": "Page 2, Schedule 1 (continuation), Area, FMV per TD, FMV per BIR, Fair Market Value, and TOTAL cells",
+      "what": "Numeric and currency amounts were left-aligned without right padding instead of right-aligned.",
       "before": "form-review/1706/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1706/after/print-p2.png (right-aligned via neon-4 shared rule 0f484378 in crates/bir-print/src/frozen_html.rs; no per-form alignment CSS)",
+      "status": "fixed"
     },
     {
       "id": "1706-print-06",
       "surface": "print",
       "where": "Page 2, Schedule 2 Item 6 (No. of Installments in the contract)",
-      "what": "Displays '12.00' as plain text crossing the comb tick instead of an integer placed into the two comb slots.",
+      "what": "Prints '12.00' (5 chars) across a 2-slot integer comb box because bir-core stores/formats frm1706:txtTotalN as a 2-decimal number even with schema-overrides kind:'int'.",
       "before": "form-review/1706/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1706/after/print-p2.png",
+      "status": "needs shared change"
     },
     {
       "id": "1706-print-07",
       "surface": "print",
-      "where": "Page 2, Schedule 2 Item 7 (Date of Installment)",
-      "what": "Date of Installment comb prints blank even when installment date components are populated.",
+      "where": "Page 2, Schedule 2 Item 7 (Date of Installment MM/DD/YYYY)",
+      "what": "Date of Installment comb cells are blank when Cash Sale is selected (disabled/cleared by Cash Sale rule on screen as well).",
       "before": "form-review/1706/before/print-p2.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1706/after/print-p2.png",
+      "status": "by design"
     },
     {
       "id": "1706-screen-01",
       "surface": "screen",
-      "where": "Part IV, Schedule 2 Item 6 (No. of Installments in the contract)",
-      "what": "Rendered as decimal money ('12.00') instead of an integer count ('12').",
+      "where": "Part IV Schedule 2, Item 6 (No. of Installments in the contract)",
+      "what": "Field still formats as decimal '12.00' despite schema-overrides kind:'int' because bir-core formats frm1706:txtTotalN as a decimal.",
       "before": "form-review/1706/before/screen-05-part-4.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1706/after/screen-05-part-4.png",
+      "status": "needs shared change"
     },
     {
       "id": "1706-screen-02",
       "surface": "screen",
-      "where": "Part IV, Schedule 1 (TCT, Area labels)",
-      "what": "Shortened labels 'TCT' and 'Area' diverge from official form captions 'OCT/TCT/CCT No.' and 'Area (sq.m.)'.",
+      "where": "Part IV Schedule 1, OCT/TCT/CCT No. and Area (sq.m.)",
+      "what": "Labels used abbreviated 'TCT/OCT/CCT' and 'Area' instead of official 'OCT/TCT/CCT No.' and 'Area (sq.m.)'.",
       "before": "form-review/1706/before/screen-04-part-3.png",
-      "after": "",
-      "status": "open"
+      "after": "form-review/1706/after/screen-04-part-3.png",
+      "status": "fixed"
     },
     {
       "id": "1706-screen-03",
       "surface": "screen",
-      "where": "Part I Items 7A (Buyer's Name, Buyer's Registered Address) and Schedule 1 Location",
-      "what": "Single-line text inputs are narrow (~240px) inside the card so long names and addresses clip horizontally.",
+      "where": "Part I (Seller/Buyer Name & Address) and Part IV Schedule 1 (Location)",
+      "what": "Long text inputs clip horizontally inside narrow (~240px) fields.",
       "before": "form-review/1706/before/screen-02-part-1.png",
-      "after": "",
+      "after": "form-review/1706/after/screen-02-part-1.png",
       "status": "needs shared change"
     }
   ],
-  "files_changed": [],
+  "files_changed": [
+    "print-overrides/1706-2018.css",
+    "html-frozen/1706-2018/form.css",
+    "forms/schema-overrides.json"
+  ],
   "shared_changes_wanted": [
+    "crates/bir-core: store/format frm1706:txtTotalN as integer (not 2-decimal '12.00') and derive Schedule 1 Classification code (RR/RC/CR/CC/A/I/etc.) for p2c41.",
     "nsh/screens/form/: widen long single-line text inputs (names, addresses, locations) to use available card width instead of clipping at ~240px."
   ],
-  "tests_run": [],
-  "open_questions": []
+  "tests_run": [
+    "cargo test -p bir-app-api -- 1706 (7 passed, 0 failed)",
+    "just nsh-build (passed)"
+  ],
+  "open_questions": [],
+  "html_frozen_upstream_edits": [
+    {
+      "file": "html-frozen/1706-2018/form.css",
+      "change": "#p1c24-i, #p1c25-i, #p1c47-i, #p1c48-i, #p2c13-i, #p2c14-i, #p2c15-i, #p2c40-i, #p2c47-i { padding-left: 2pt; padding-right: 2pt }",
+      "reason": "Plain text inputs in Part I (Items 6A/7A seller & buyer name/address) and Page 2 Schedule 1 (OCT/TCT/CCT, TD No., Location, Lot/Improvement) have padding:0 from .fi and otherwise sit flush against their left cell border.",
+      "upstream_buwiz_forms_html": {
+        "per_form_file": "forms-corrected/extra/1706-2018/form.css (synced to html-frozen/1706-2018/form.css)",
+        "generator_rule": "tools/formgen/emit.py: field_css_rules() (~line 4829, .fi currently emits padding:0) or field_input_markup() (~line 4739, slot_index is None plain-field branch)"
+      }
+    }
+  ],
+  "non_html_frozen_print_edits": [
+    {
+      "file": "print-overrides/1706-2018.css",
+      "change": "Removed hardcoded !important font-size overrides on #p1c24-i, #p1c25-i, #p1c47-i, #p1c48-i so bir-print dynamic shrink-to-fit sizes long seller/buyer names and addresses.",
+      "upstream_buwiz_forms_html": "None (print-overrides/ lives only in hexuria/buwiz-forms)."
+    }
+  ]
 }
