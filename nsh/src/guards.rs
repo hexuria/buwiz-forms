@@ -1668,16 +1668,16 @@ mod tests {
         assert_eq!(database_refusal(&home.path("BuwizNsh/agents/door.db"), &in_test), None);
     }
 
-    /// The Simulator Keychain check of `docs/platforms/ios.md`: a database named under the app container's
-    /// `Documents/` survives relaunches and a test-environment run may open it, while the app's own data folder
-    /// (`Library/Application Support/dev.goldcoders.bir`, where the install marker lives) stays refused. On iOS the
-    /// container is HOME and the guard verifies (Unix), so nothing else is asked.
+    /// The Simulator check of `docs/platforms/ios.md`: a database named under the app container's `Documents/`
+    /// survives relaunches and a test-environment run may open it, while the app's own data folder
+    /// (`Library/Application Support/dev.goldcoders.bir`) stays refused. On iOS the container is HOME and the guard
+    /// verifies (Unix), so nothing else is asked.
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     #[test]
     fn a_test_run_may_open_a_database_in_the_containers_documents() {
         let home = Home::new();
         let in_test = protected_folders_for(home.root.path(), true);
-        let stable = home.path("Documents/buwiz-keychain-check/bir_data.db");
+        let stable = home.path("Documents/buwiz-check/bir_data.db");
         assert_eq!(database_refusal(&stable, &in_test), None);
         assert_eq!(unverified_refusal(cfg!(any(unix, windows)), &stable, None), None);
         let own = home.path("Library/Application Support/dev.goldcoders.bir/bir_data.db");

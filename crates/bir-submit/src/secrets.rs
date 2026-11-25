@@ -2,6 +2,12 @@
 //! store (Keychain, Credential Manager, Secret Service) through `keyring`,
 //! or, where there is none (Android, a headless Linux box), a file in the
 //! app's private data dir, as bir-core does for its database key.
+//!
+//! On iPhone and iPad they are always files ([`FileStore`]): the iOS build
+//! has no credential-store type at all (`KeyringStore` and `keyring` exist
+//! only for macOS, Windows and Linux), so they can never be offered to the
+//! Keychain. Each file is written with the protection "complete until first
+//! user authentication" (`crate::ios_storage::protect_file`).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -23,46 +29,27 @@ pub trait SecretStore: Send + Sync {
 
 /// The store for this platform: with `use_keychain`, the OS credential
 /// store, falling back to files in `data_dir` when the OS store cannot be
-/// used; without it (the host's `BUWIZ_NO_KEYCHAIN=1`, Android, tests),
-/// files in `data_dir` only.
+/// used; without it (the host's `BUWIZ_NO_KEYCHAIN=1`, Android, tests), and
+/// always on iOS, files in `data_dir` only.
 pub fn platform_store(data_dir: PathBuf, use_keychain: bool) -> Box<dyn SecretStore> {
     if !use_keychain {
         return Box::new(FileStore::new(data_dir));
     }
-    #[cfg(any(
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "windows",
-        target_os = "linux"
-    ))]
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     {
-        #[cfg(not(target_os = "ios"))]
-        let keychain: Box<dyn Keychain> = Box::new(OsKeychain);
-        #[cfg(target_os = "ios")]
-        let keychain: Box<dyn Keychain> = Box::new(IosKeychain);
         Box::new(KeyringStore {
-            keychain,
+            keychain: Box::new(OsKeychain),
             fallback: FileStore::new(data_dir),
         })
     }
-    #[cfg(not(any(
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "windows",
-        target_os = "linux"
-    )))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         Box::new(FileStore::new(data_dir))
     }
 }
 
 /// The OS credential store's three calls, so a test can stand in for it.
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 trait Keychain: Send + Sync {
     fn get(&self, name: &str) -> Result<String, keyring::Error>;
     fn set(&self, name: &str, value: &str) -> Result<(), keyring::Error>;
@@ -95,93 +82,16 @@ impl Keychain for OsKeychain {
     }
 }
 
-/// iOS: the same two entries through [`crate::ios_storage`], with their
-/// class set (`AfterFirstUnlockThisDeviceOnly`) and an item of the old class
-/// given it in place. A Keychain that cannot be used while the phone is
-/// locked is a hard error, not "unavailable": a key that may exist must not
-/// be read as missing and replaced by a new one.
-#[cfg(target_os = "ios")]
-struct IosKeychain;
-
-#[cfg(target_os = "ios")]
-impl IosKeychain {
-    fn item(name: &str) -> Result<crate::ios_storage::Item, keyring::Error> {
-        match name {
-            "device_key" => Ok(crate::ios_storage::DEVICE_KEY),
-            "device_id" => Ok(crate::ios_storage::DEVICE_ID),
-            other => Err(keyring::Error::Invalid(
-                "name".into(),
-                format!("{other} is not a Keychain item of this app"),
-            )),
-        }
-    }
-}
-
-/// The `keyring` error [`KeyringStore`] decides by: a missing item, no
-/// Keychain at all (the file store then), or anything else as `keyring`'s
-/// own iOS backend reports it, except a locked Keychain, which stops.
-#[cfg(any(
-    target_os = "ios",
-    all(
-        test,
-        any(target_os = "macos", target_os = "windows", target_os = "linux")
-    )
-))]
-fn keyring_error(error: crate::ios_storage::KeychainError) -> keyring::Error {
-    use crate::ios_storage::KeychainError;
-    match error {
-        KeychainError::NotFound => keyring::Error::NoEntry,
-        KeychainError::Unavailable(_) => keyring::Error::NoStorageAccess(Box::new(error)),
-        KeychainError::Locked | KeychainError::NotUtf8 => {
-            keyring::Error::Invalid("keychain".into(), error.to_string())
-        }
-        KeychainError::Duplicate | KeychainError::Failed(_) => {
-            keyring::Error::PlatformFailure(Box::new(error))
-        }
-    }
-}
-
-#[cfg(target_os = "ios")]
-impl Keychain for IosKeychain {
-    fn get(&self, name: &str) -> Result<String, keyring::Error> {
-        let item = Self::item(name)?;
-        crate::ios_storage::get(&crate::ios_storage::OsKeychain, &item)
-            .map_err(keyring_error)?
-            .ok_or(keyring::Error::NoEntry)
-    }
-
-    fn set(&self, name: &str, value: &str) -> Result<(), keyring::Error> {
-        let item = Self::item(name)?;
-        crate::ios_storage::set(&crate::ios_storage::OsKeychain, &item, value)
-            .map_err(keyring_error)
-    }
-
-    fn delete(&self, name: &str) -> Result<(), keyring::Error> {
-        let item = Self::item(name)?;
-        crate::ios_storage::delete(&crate::ios_storage::OsKeychain, &item).map_err(keyring_error)
-    }
-}
-
 /// The OS credential store. When it is unavailable (no Secret Service on
 /// D-Bus, for one), secrets go to the fallback file store, and a secret
 /// already in that file wins, as bir-core does with `bir_key.txt`.
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 pub struct KeyringStore {
     keychain: Box<dyn Keychain>,
     fallback: FileStore,
 }
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 impl KeyringStore {
     fn unavailable(error: &keyring::Error) -> bool {
         matches!(
@@ -191,12 +101,7 @@ impl KeyringStore {
     }
 }
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 impl SecretStore for KeyringStore {
     fn get(&self, name: &str) -> Result<Option<String>, StoreError> {
         if let Some(value) = self.fallback.get(name)? {
@@ -281,7 +186,9 @@ impl SecretStore for FileStore {
         std::io::Write::write_all(&mut file, value.as_bytes())
             .map_err(|error| StoreError(error.to_string()))?;
         drop(file);
-        std::fs::rename(&temporary, &path).map_err(|error| StoreError(error.to_string()))
+        std::fs::rename(&temporary, &path).map_err(|error| StoreError(error.to_string()))?;
+        crate::ios_storage::protect_file(&path);
+        Ok(())
     }
 
     fn delete(&self, name: &str) -> Result<(), StoreError> {
@@ -356,12 +263,7 @@ mod tests {
         assert_eq!(store.get("device_key").unwrap(), None);
     }
 
-    #[cfg(any(
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "windows",
-        target_os = "linux"
-    ))]
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     mod keychain {
         use super::super::*;
 
@@ -465,44 +367,6 @@ mod tests {
             assert_eq!(store.get("device_key").unwrap().as_deref(), Some("seed"));
             store.delete("device_key").unwrap();
             assert_eq!(store.get("device_key").unwrap(), None);
-        }
-
-        /// The iOS Keychain's answers, as [`KeyringStore`] reads them: locked
-        /// is an error (a device key that may exist is never replaced), no
-        /// Keychain means the file, a missing item is missing.
-        #[test]
-        fn a_locked_ios_keychain_stops_and_an_absent_one_uses_the_file() {
-            use crate::ios_storage::KeychainError;
-            struct Answers(KeychainError);
-            impl Keychain for Answers {
-                fn get(&self, _: &str) -> Result<String, keyring::Error> {
-                    Err(keyring_error(self.0.clone()))
-                }
-                fn set(&self, _: &str, _: &str) -> Result<(), keyring::Error> {
-                    Err(keyring_error(self.0.clone()))
-                }
-                fn delete(&self, _: &str) -> Result<(), keyring::Error> {
-                    Err(keyring_error(self.0.clone()))
-                }
-            }
-            let store = |error: KeychainError, dir: &std::path::Path| KeyringStore {
-                keychain: Box::new(Answers(error)),
-                fallback: FileStore::new(dir.to_owned()),
-            };
-            let dir = tempfile::tempdir().unwrap();
-            let locked = store(KeychainError::Locked, dir.path());
-            assert!(locked.get("device_key").is_err());
-            assert!(locked.set("device_key", "seed").is_err());
-            assert!(!dir.path().join("buwiz_submit_device_key.txt").exists());
-
-            let missing = store(KeychainError::NotFound, dir.path());
-            assert_eq!(missing.get("device_key").unwrap(), None);
-            missing.delete("device_key").unwrap();
-
-            let absent = store(KeychainError::Unavailable(-25291), dir.path());
-            assert_eq!(absent.get("device_key").unwrap(), None);
-            absent.set("device_key", "seed").unwrap();
-            assert_eq!(absent.get("device_key").unwrap().as_deref(), Some("seed"));
         }
 
         #[test]
