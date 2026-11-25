@@ -3603,6 +3603,36 @@ fn form_1701_schedules_4_and_6_follow_the_itemized_gate() {
             "{key} must be open for an itemized spouse on a joint return"
         );
     }
+    // The shared description boxes (one box for both columns): open when
+    // EITHER column qualifies — a joint return whose taxpayer is on the 8%
+    // rate with a graduated + itemized spouse types them (the official
+    // joint-many sample does exactly this); shut when neither does.
+    let spouse_only = take(
+        "1701",
+        &jointed["draft"],
+        json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II017": "true",
+        }),
+    );
+    for key in [
+        "frm1701:txtPg3IShed4_17dDesc",
+        "frm1701:txtPg2IShed3_19Desc",
+    ] {
+        let (open, _) = try_write("1701", &spouse_only["draft"], key);
+        assert!(open, "{key} must be open when only the spouse qualifies");
+    }
+    let neither = take("1701", &fresh["draft"], spouse_regime("compensation"));
+    let neither = take(
+        "1701",
+        &neither["draft"],
+        json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II011": "true",
+        }),
+    );
+    let (open, _) = try_write("1701", &neither["draft"], "frm1701:txtPg3IShed4_17dDesc");
+    assert!(!open, "17dDesc must be shut when neither column qualifies");
 }
 
 /// The whole table: every Schedule 3.A/4/6 input box, in every regime, both
