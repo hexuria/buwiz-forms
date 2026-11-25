@@ -86,10 +86,12 @@ The app's Rust toolchain (`rust-toolchain.toml`) needs both Android targets; the
 `rustup target add` for a missing one. The vendored OpenSSL needs the NDK's `llvm-ranlib`, which the recipe passes as
 `RANLIB_<target>`.
 
-First run, 25 November 2026, app `92b3e201` with this pull request's recipe: tool `nsh 0.6.1 (8c78cfd)`, runtime
-`classes.dex` SHA-256 `f70a1b02…`, cargo 1.102.0 from huacnlee/cargo 0.103.0-1 (the owner's Mac's cargo), rustc 1.99.0.
-The unsigned bundle (build 27, never uploaded) was 162.2 MB. `libnsh.so` is 86.5 MB on arm64-v8a and 74.6 MB on
-armeabi-v7a, about 24.3 MB and 22.8 MB compressed. The libraries took 21 and 16 minutes at `nice 15`.
+A run on the owner's Mac, 26 November 2026, app `d1a8c2c4` (this pull request). The store tool and runtime were
+rebuilt by the setup script with rustup's cargo 1.99.1; the bundle was built by the app's pinned cargo 1.99.0 in
+`target/play-bundle`. The tool is `nsh 0.6.1 (8c78cfd)`, and the runtime `classes.dex` SHA-256 is `f70a1b02…`, the same
+bytes inside the bundle. The unsigned bundle (build 27, never uploaded) was 162.3 MB. `libnsh.so` is 86.6 MB on arm64-v8a
+and 74.6 MB on armeabi-v7a; the bundle stores them uncompressed. At `nice 15` the setup's runtime took about 40 minutes
+and the bundle's two libraries 16 and 11 minutes.
 
 Machines never build or sign the store bundle. They build development and test packages with the Android debug key
 that `nsh package` makes on its own.
