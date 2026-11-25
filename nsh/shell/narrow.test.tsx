@@ -23,8 +23,15 @@ test("phone: four tabs, no sidebar, the header names the page and back leaves a 
   await app.waitFor("id:home");
   expect(app.shows("id:nb-back")).toBe(false); // a tab is a root
 
-  // The badge is the header's one button: its menu's first item opens the sheet (the taxpayer, the profile links, Settings, the theme).
-  expect(app.shows("id:nb-search")).toBe(false);
+  // The header has New return (+) and Search; a phone has no room for the taxpayer's name (a tablet has).
+  expect(app.shows("id:nb-new")).toBe(true);
+  expect(app.shows("id:nb-search")).toBe(true);
+  expect(app.shows("id:nb-taxpayer")).toBe(false);
+  await app.press("id:nb-search");
+  await app.waitFor("id:palette-input");
+  await app.back();
+  await app.waitFor("id:palette-input", { state: "gone" });
+  // The badge's menu: its first item opens the sheet (the taxpayer, the profile links, Settings, the theme).
   expect(app.shows("id:nb-notifications")).toBe(false);
   await app.press("id:nb-avatar");
   await app.press("id:nb-menu-profile");

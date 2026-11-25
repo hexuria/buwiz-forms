@@ -16,7 +16,7 @@ import { store } from "./store";
 const NAV: ViewName[] = ["home", "library", "calendar", "filings"];
 
 /** Only returns whose TIN and branch this session can see: another taxpayer's name never shows to a taxpayer. */
-const visibleRecent = computed(() => app.recent().filter((r) => app.branchFor(r.tin)));
+export const visibleRecent = computed(() => app.recent().filter((r) => app.branchFor(r.tin)));
 
 /** The return on screen (a stored return or an amendment): its Recent row is marked where it is; opening never moves it. */
 const openIdentity = computed(() => {
@@ -27,7 +27,8 @@ const openIdentity = computed(() => {
   return { tin: t.tin, code: t.formCode, year: t.year, period: t.period, returnKey: t.key };
 });
 
-function recentLabel(r: RecentEntry): string {
+/** A Recent row's words: the form, its period and whose return it is. */
+export function recentLabel(r: RecentEntry): string {
   const name = app.taxpayers().find((x) => x.tin_root === String(r.tin).slice(0, 9))?.name ?? "";
   const freq = frequencyOf(store.screenIndex() as { c: string; freq: Frequency }[], r.code);
   return `${r.code} ${periodLabel(freq, r.year, r.period, true)} · ${name}`;

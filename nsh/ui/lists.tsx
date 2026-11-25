@@ -3,7 +3,7 @@
 import type { JSX } from "nsh";
 import { View } from "nsh";
 import { Button, Tab, Tabs as BaseTabs } from "nsh/base";
-import { cx, TOUCH } from "./look";
+import { cx, T_H, TOUCH } from "./look";
 import { Line, PageTitle, Text } from "./text";
 
 /** A bordered list (radius 12) whose rows are divided by hairlines. */
@@ -152,7 +152,7 @@ export function Tabs(props: { tabs: TabItem[]; value: string; onChange: (value: 
               props.fill ? "grow justify-center gap-0.5 px-1" : "flex-row gap-1.5 px-2.5",
               // The underline is drawn under the tab: a fill over the chosen tab would hide it (hover and focus beat selected:, so say so).
               "selected:hover:bg-transparent selected:focus-visible:bg-transparent",
-              props.fill ? "h-12" : TOUCH ? "h-11" : "h-9",
+              props.fill ? "h-12" : TOUCH ? T_H : "h-9",
             )}
           >
             <Text variant="control" tone="fg2" lines={props.fill ? 1 : undefined} class="group-selected:text-foreground">{t().label}</Text>

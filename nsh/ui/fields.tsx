@@ -8,7 +8,7 @@ import { effect, signal, Text as NText, untracked, View } from "nsh";
 import { Calendar, type CalendarEntry, DatePicker, Input, OtpInput, type OtpInputRef } from "nsh/base";
 import { AppButton } from "./buttons";
 import type { IconName } from "./icons";
-import { cx, TOUCH } from "./look";
+import { cx, T_H, T_MIN_H, T_MIN_W, T_SIZE, TOUCH } from "./look";
 import {
   DATE_ERROR, digitsOnly, editBase, formatIso, formatLongDate, formatMDY, formatMoney, formatTinDigits, intMask, type Mask, moneyMask, moneyPlain,
   isZeroAmount, parseTypedDate, PERCENT_MASK, reconcile, sameAmount, shownMoney, TIN_LENGTH, TIN_MASK, type TextSelection,
@@ -94,13 +94,13 @@ export function TextField(props: TextFieldProps) {
         class={cx(
           "flex-row items-center gap-1.5",
           props.bare
-            ? TOUCH ? "min-h-11" : "h-8"
+            ? TOUCH ? T_MIN_H : "h-8"
             : cx(
                 "rounded-(--radius-row) border",
                 // A centred box is a cell of the phone TIN grid: 47 pt wide on a 320 pt phone, where 10 pt sides cut
                 // the third digit. It keeps 4 pt, like the locked cell (controls/model.ts readBoxPad).
                 props.align === "center" ? "px-1" : "px-2.5",
-                TOUCH ? "min-h-11" : sm() ? "h-7" : "h-8",
+                TOUCH ? T_MIN_H : sm() ? "h-7" : "h-8",
                 flat() ? "border-border bg-hover" : "bg-card",
                 props.error ? "border-danger" : !flat() && "border-border-strong focus-within:border-accent-blue",
               ),
@@ -561,14 +561,14 @@ function CalendarPicker(props: CalendarPickerProps) {
       itemClass={cx(
         "items-center justify-center rounded-(--radius-ctl) px-1 text-foreground hover:bg-hover focus:bg-hover data-outside:text-subtle-foreground disabled:opacity-40",
         props.value && "selected:bg-primary selected:hover:bg-primary selected:focus:bg-primary selected:text-primary-foreground",
-        TOUCH ? "h-11 min-w-11" : "h-8 min-w-8",
+        TOUCH ? cx(T_H, T_MIN_W) : "h-8 min-w-8",
       )}
       trigger={
         <View
           testID={props.triggerID}
           role="button"
           accessibilityLabel={props.label}
-          class={cx("items-center justify-center rounded-(--radius-ctl) hover:bg-hover active:bg-selected", TOUCH ? "-mr-2 size-11" : "-mr-1.5 size-6")}
+          class={cx("items-center justify-center rounded-(--radius-ctl) hover:bg-hover active:bg-selected", TOUCH ? cx("-mr-2", T_SIZE) : "-mr-1.5 size-6")}
         >
           <Icon name="calendar" size={14} tone="fg3" />
         </View>

@@ -4,7 +4,7 @@ import { bir } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { THEME_OPTIONS, type ThemeOption } from "../../lib/settings_model";
 import { app, store, toast } from "../../shell";
-import { Card, deviceCopy, Dropdown, SettingRow, Switch } from "../../ui";
+import { Card, deviceCopy, Dropdown, SettingRow, Switch, TOUCH } from "../../ui";
 import { Labeled } from "./parts";
 
 /** What the person chose for automatic updates until the poll reports the host's own answer. */
@@ -48,7 +48,7 @@ export function GeneralSection(props: { rows: string[] }) {
             </SettingRow>
           </If>
           <If when={has("recent")}>
-            <SettingRow testID="settings-recent" title="Show recent returns" hint="The last four returns in the sidebar">
+            <SettingRow testID="settings-recent" title="Show recent returns" hint={TOUCH ? "The last returns you opened, on Home" : "The last four returns in the sidebar"}>
               <Switch testID="settings-recent-switch" label="Show recent returns" checked={app.prefs().showRecent} onChange={(v) => app.setPref("showRecent", v)} />
             </SettingRow>
           </If>
