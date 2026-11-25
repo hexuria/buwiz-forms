@@ -166,8 +166,9 @@ NSH_EOF
     cat >> "$WORK/nsh2404.sh" <<'NSH_EOF'
 exec docker run --rm -i "${tty[@]}" "${android[@]}" --network host --security-opt apparmor=unconfined -u "$uid:$(id -g)" \
   -e HOME="$HOME" \
-  -e PATH="$HOME/BuwizNsh/tools/bin:$HOME/.cargo/bin:$android_home/platform-tools:/usr/local/bin:/usr/bin:/bin" \
-  -e CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh" \
+  -e PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$HOME/.cargo/bin:$android_home/platform-tools:/usr/local/bin:/usr/bin:/bin" \
+  -e CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}" \
+  -e NSH_RUNTIME \
   -e CARGO_INCREMENTAL=0 \
   -e ANDROID_HOME="$android_home" -e ANDROID_NDK_HOME="$ndk" \
   -e RANLIB_x86_64_linux_android="$RANLIB" -e RANLIB_aarch64_linux_android="$RANLIB" -e RANLIB_armv7_linux_androideabi="$RANLIB" \

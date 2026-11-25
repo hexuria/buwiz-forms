@@ -29,6 +29,14 @@ class BuildFolderTests(unittest.TestCase):
         fixed_tools = [line.strip() for line in JUSTFILE.splitlines() if '"$HOME/BuwizNsh/tools/bin:$PATH"' in line]
         self.assertEqual(fixed_tools, [], "a recipe ignores NSH_TOOLS")
 
+    def test_the_linux_container_keeps_the_callers_folders(self):
+        # nsh2404.sh runs every Linux NSH command; it used to pin the shared folder whatever the caller set.
+        wrapper = (ROOT / "scripts/setup-linux-nsh.sh").read_text()
+        self.assertIn('-e CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"', wrapper)
+        self.assertIn('-e PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:', wrapper)
+        self.assertIn("-e NSH_RUNTIME \\\n", wrapper)
+        self.assertNotIn('-e CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"', wrapper)
+
     def test_packages_default_to_the_checkouts_own_folder(self):
         for recipe, folder in (("play-bundle", "$root/target/play-bundle"),
                                ("ios-appstore", "$root/target/nsh-store"),
