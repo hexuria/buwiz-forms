@@ -1,0 +1,5 @@
+--------- beginning of main
+11-25 17:08:10.828 25949 25949 I NSHKBD  : inputFocused input=3254 focused=true scroll=2920
+11-25 17:08:10.973 25949 25949 I NSHKBD  : insets ime=883.0 cached=0.0 pans=false h=2400
+11-25 17:08:10.973 25949 25949 I NSHKBD  : keyboard screenTop=1517 focused=3254 scroll=2920 avoided=-1
+11-25 17:08:10.973 25949 25949 I NSHKBD  : setContentPaddingBottom scroll=2920 px=605
