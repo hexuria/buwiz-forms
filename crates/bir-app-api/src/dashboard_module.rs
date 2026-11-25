@@ -100,7 +100,7 @@ export interface ReturnRow {
 }
 /** What a screen says about a return's send (bir-app-api `send_state.rs`). */
 export interface SendState {
-    stage: "queued" | "sending" | "waiting" | "held" | "needs_attention" | "refused" | "sent" | "test_sent";
+    stage: "queued" | "sending" | "checking" | "waiting" | "held" | "needs_attention" | "refused" | "sent" | "test_sent";
     /** The sentence the person reads. */
     line: string;
     /** The code a refusal's reason ended in (`tin_not_active`), else null. */

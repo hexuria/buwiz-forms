@@ -34,8 +34,8 @@ pub mod trust;
 pub mod wire;
 
 pub use client::{
-    CLIENT_HEADER, ClientError, DEFAULT_SERVER_URL, Registered, SendError, Sent, SubmitConfig,
-    Submitter, TokenSource,
+    CLIENT_HEADER, ClientError, DEFAULT_SERVER_URL, Note, PendingSend, Registered, SendError, Sent,
+    Settled, SubmitConfig, Submitter, TokenSource,
 };
 pub use tins::{AccountTin, AccountTins, TinStatus, TinsError, TinsRead};
 pub use wire::{Blame, TinKey, TinRefusal};
