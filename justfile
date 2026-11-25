@@ -1158,6 +1158,19 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     fi
     port="${GPUI_AGENT_ADDR##*:}"
     run_args=()
+    if [ "{{target}}" = android ] && [ "$(uname -s)" = Linux ]; then
+        # The runtimes `nsh run` (dev) and `nsh package` (release) take, checked against the pin: a runtime that is a
+        # link into a checkout's build folder, or was built at another commit, made every test on it a test of another NSH.
+        pin="$(sed -n 's/^ *NSH_PINNED_REF: *//p' "$root/.github/workflows/nsh.yml" | head -1)"
+        for variant in dev release; do
+            dir="${NSH_RUNTIME:-$HOME/BuwizNsh/tools/runtime}/android/$variant"
+            if [ -L "$dir" ] || [ "$(cat "$dir/nsh-ref" 2>/dev/null || true)" != "$pin" ]; then
+                echo "nsh-run-agent: $dir is not a copy recorded as built at the NSH pin ${pin:0:7}: run scripts/setup-linux-nsh.sh" >&2
+                exit 1
+            fi
+            echo "nsh android $variant runtime: ${pin:0:7}, classes.dex sha256 $(sha256sum "$dir/classes.dex" | cut -d' ' -f1)"
+        done
+    fi
     if [ "{{target}}" = android ]; then
         # An Android app process has no launch environment: the dry-run settings and the data plane's switch and address are
         # baked into this development build (nsh/src/dev_env.rs). The token is not (a baked one is readable in the built library):
