@@ -2642,3 +2642,125 @@ fn form_1701_kept_column_says_so_over_its_amounts() {
         );
     }
 }
+
+/// Schedule 3.A items 8, 9, and 11 (A & B) are filer-typed on the page
+/// under the official graduated/itemized/joint gates, never stuck as `"c": 1`.
+#[test]
+fn form_1701_schedule_3a_boxes_follow_official_gates_and_compute_downstream() {
+    setup();
+    let sched3_keys = [
+        "frm1701:txtPg2IShed3_8A",
+        "frm1701:txtPg2IShed3_8B",
+        "frm1701:txtPg2IShed3_9A",
+        "frm1701:txtPg2IShed3_9B",
+        "frm1701:txtPg2IShed3_11A",
+        "frm1701:txtPg2IShed3_11B",
+    ];
+    let form = schema_entry("1701").expect("1701 schema");
+    for part in form["parts"].as_array().into_iter().flatten() {
+        for item in part["items"].as_array().into_iter().flatten() {
+            for field in item["f"].as_array().into_iter().flatten() {
+                if let Some(key) = field["k"].as_str()
+                    && sched3_keys.contains(&key)
+                {
+                    assert!(
+                        field.get("c").is_none(),
+                        "{key} must be filer-typed on the page, not computed"
+                    );
+                }
+            }
+        }
+    }
+
+    // Fresh 1701 (no ATC selected): all 6 boxes refuse direct writes.
+    let fresh = opened("1701");
+    for key in sched3_keys {
+        let refused = fill("1701", &fresh["draft"], json!({ key: "1000" }));
+        assert!(
+            refused["rejected"][key].is_string(),
+            "{key} must be closed before graduated ATC is chosen"
+        );
+    }
+
+    // Graduated + OSD: 8A & 9A open, 11A stays closed until Itemized.
+    let osd = take(
+        "1701",
+        &fresh["draft"],
+        json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II012": "true",
+            "frm1701:rdoPg1I21AMethodDeductionO": "true",
+        }),
+    );
+    let osd_typed = take(
+        "1701",
+        &osd["draft"],
+        json!({
+            "frm1701:txtPg2IShed3_8A": "1250000.50",
+            "frm1701:txtPg2IShed3_9A": "300000.25",
+        }),
+    );
+    let osd_fields = field_map("1701", &osd_typed["draft"]);
+    assert_eq!(osd_fields["frm1701:txtPg2IShed3_10A"], "950,000.00");
+    assert_eq!(osd_fields["frm1701:txtPg2IShed3_12A"], "950,000.00");
+    assert_eq!(osd_fields["frm1701:txtPg2IShed3_17A"], "380,000.00");
+    assert_eq!(osd_fields["frm1701:txtPg2IShed3_18A"], "570,000.00");
+    let refused_11a = fill(
+        "1701",
+        &osd["draft"],
+        json!({ "frm1701:txtPg2IShed3_11A": "10000" }),
+    );
+    assert!(refused_11a["rejected"]["frm1701:txtPg2IShed3_11A"].is_string());
+
+    // Joint return, both Graduated + Itemized: all 6 boxes open and flow to Part II.
+    let joint = take(
+        "1701",
+        &fresh["draft"],
+        json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II012": "true",
+            "frm1701:rdoPg1I21AMethodDeductionI": "true",
+            "frm1701:rdoPg1I16CivilStatusM": "true",
+            "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+            "frm1701:rdoPg1I18FilingStatusJ": "true",
+            "frm1701:rdoPg2I3SpouseTypeS": "true",
+            "frm1701:rdoPg2I4ATC_II012": "true",
+            "frm1701:rdoPg2I12AMethodDeductionI": "true",
+        }),
+    );
+    let filled = take(
+        "1701",
+        &joint["draft"],
+        json!({
+            "frm1701:txtPg2IShed3_8A": "2500000",
+            "frm1701:txtPg2IShed3_9A": "50000",
+            "frm1701:txtPg2IShed3_11A": "900000",
+            "frm1701:txtPg2IShed3_8B": "800000",
+            "frm1701:txtPg2IShed3_9B": "200000.50",
+            "frm1701:txtPg2IShed3_11B": "10000",
+        }),
+    );
+    let fields = field_map("1701", &filled["draft"]);
+    assert_eq!(fields["frm1701:txtPg2IShed3_10A"], "2,450,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_12A"], "1,550,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_18A"], "1,550,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_10B"], "600,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_12B"], "590,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_18B"], "590,000.00");
+    assert_eq!(
+        fields["frm1701:txtPg1I24ATaxPayable"],
+        fields["frm1701:txtPg2IShed3_25A"]
+    );
+    assert_eq!(
+        fields["frm1701:txtPg1I24BTaxPayable"],
+        fields["frm1701:txtPg2IShed3_25B"]
+    );
+    assert_eq!(
+        fields["frm1701:txtPg1I31ATotalAmtPyble"],
+        fields["frm1701:txtPg2IShed3_25A"]
+    );
+    assert_eq!(
+        fields["frm1701:txtPg1I31BTotalAmtPyble"],
+        fields["frm1701:txtPg2IShed3_25B"]
+    );
+}
