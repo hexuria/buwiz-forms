@@ -133,7 +133,7 @@ test("desktop: a fact row sets the year's EOPT tier, and Save as a setup asks fo
 });
 
 test("desktop: agent filing grants and revokes, the inbox keeps credentials, and its network calls are wired", async () => {
-  const app = await desk();
+  const app = await desk({ google: true });
   await app.waitFor("id:tp-sec-agent-toggle");
   expect(app.texts()).toContain("Assistant must ask before filing");
   await app.press("id:tp-sec-agent-toggle");
@@ -146,6 +146,7 @@ test("desktop: agent filing grants and revokes, the inbox keeps credentials, and
 
   await app.waitFor("id:tp-inbox-edit");
   expect(app.shows("id:tp-inbox-device-note")).toBe(false);
+  expect(app.shows("id:tp-inbox-google-unavailable")).toBe(false);
   await app.press("id:tp-inbox-edit");
   await app.clear("id:tp-inbox-email");
   await app.type("id:tp-inbox-email", "not-an-email");
@@ -167,6 +168,16 @@ test("desktop: agent filing grants and revokes, the inbox keeps credentials, and
   await app.press("id:tp-inbox-cancel");
   await app.press("id:tp-inbox-tracking");
   await app.waitFor("text:/^Automated receipt tracking (on|off)\\.$/");
+});
+
+test("desktop: a build with no Google client id offers the inbox's app password only, and says so", async () => {
+  const app = await desk({ google: false });
+  await app.waitFor("id:tp-inbox-edit");
+  expect(app.shows("id:tp-inbox-method")).toBe(false);
+  expect(app.shows("id:tp-inbox-connect")).toBe(false);
+  expect(app.texts()).not.toContain("Google account (OAuth2)");
+  expect(app.texts()).toContain("Google sign-in is not available in this version. Use an app password.");
+  expect(app.shows("id:tp-inbox-device-note")).toBe(false);
 });
 
 test("desktop: archive, unarchive, and delete after a second press", async () => {

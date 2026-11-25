@@ -92,16 +92,36 @@ class AndroidWindowsEnvrcTests(unittest.TestCase):
 
     def test_acceleration_failure_only_defers_for_pending_reboot(self):
         block = SCRIPT[SCRIPT.index('if ($LASTEXITCODE -ne 0 -and $restartNeeded)'):SCRIPT.index('$repo =')]
-        for pending, code, expected in ((True, 1, 0), (False, 1, 1), (False, 0, 0)):
+        # (reboot pending, -NoEmulator, the acceleration check's exit code, the script's)
+        for pending, no_emulator, code, expected in ((True, False, 1, 0), (False, False, 1, 1), (False, False, 0, 0),
+                                                     (False, True, 1, 0), (False, True, 0, 0), (True, True, 1, 0)):
             result = subprocess.run(
                 ['powershell', '-NoProfile', '-NonInteractive', '-Command',
                  "$ErrorActionPreference='Stop'; function Assert-Native($message) { if ($LASTEXITCODE -ne 0) { throw $message } }; "
-                 + f'$restartNeeded=${str(pending).lower()}; $LASTEXITCODE={code}; ' + block + '; exit 0'],
+                 + f'$restartNeeded=${str(pending).lower()}; $NoEmulator=${str(no_emulator).lower()}; $LASTEXITCODE={code}; '
+                 + block + '; exit 0'],
                 text=True, capture_output=True,
             )
             self.assertEqual(result.returncode, expected, result.stderr)
-            if pending:
+            if code and expected == 0:
                 self.assertIn('continuing CLI and Android runtime provisioning', result.stdout)
+                # A pending reboot is said first: the emulator will work after it.
+                self.assertEqual('awaits a reboot' in result.stdout, pending)
+                self.assertEqual('-NoEmulator' in result.stdout, not pending)
+            if code == 0:
+                self.assertNotIn('continuing', result.stdout)
+
+    def test_no_emulator_is_refused_with_run_and_survives_elevation(self):
+        guard = SCRIPT[SCRIPT.index('if ($Run -and $NoEmulator)'):SCRIPT.index('$CmdlineToolsUrl =')]
+        for run, no_emulator, expected in ((True, True, 1), (True, False, 0), (False, True, 0)):
+            result = subprocess.run(
+                ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+                 f'$Run=${str(run).lower()}; $NoEmulator=${str(no_emulator).lower()}; ' + guard + '; exit 0'],
+                text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, expected, result.stderr)
+        self.assertIn("if ($NoEmulator) { $elevationArgs += '-NoEmulator' }", SCRIPT)
+        self.assertIn('[switch]$NoEmulator', SCRIPT)
 
     def run_block(self, envrc, value):
         return subprocess.run(

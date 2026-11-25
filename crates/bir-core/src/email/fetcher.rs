@@ -343,12 +343,11 @@ pub fn fetch_and_process_emails_for_address(
                 let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
                 let profiles = db_guard.list_profiles().unwrap_or_default();
                 for p in profiles {
+                    // A dry run waits for no email: only a real send keeps the poll on.
                     if inbox_emails_match(p.inbox_email(), email_address)
-                        && let Ok(summaries) =
-                            db_guard.list_draft_summaries(&p.tin.full(), current_year)
-                        && summaries
-                            .iter()
-                            .any(|s| s.status == crate::forms::FilingStatus::Submitted)
+                        && db_guard
+                            .has_return_awaiting_bir_email(&p.tin.full(), current_year)
+                            .unwrap_or(false)
                     {
                         remaining_pending = true;
                     }
