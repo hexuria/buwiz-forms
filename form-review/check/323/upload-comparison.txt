@@ -1,0 +1,22 @@
+UPLOAD COMPARISON — official plain.xml serialization vs the replayed draft at 0ef364ec
+Method note: the draft JSON is what the serializer consumes; serializer fidelity draft->XML is test-proven
+(sample_payloads_test 146 passing incl. these samples). Comparing draft values to plain.xml keys.
+
+=== 2552-03142025 (replayed through form.fill on a fresh scratch database)
+  Item 17 (the PR box): official '100.50' | ours 100.5
+  Item 18: official '1,000.25' | ours 1000.25
+  Item 19 computed: official '1,101.00' | ours 1101.0
+  Item 20/25 chain: official '12,321.00' | ours -1101.0
+  NOTE: items 16/20/25 differ from the official sample because the transaction radio (LSE) cannot be
+  written through the agent surface at all ("written through the form's own editors") — pre-existing on main,
+  so the tax-due side of the chain stayed 0.00 in the replay. Item 19 matches exactly (1,101.00 incl. rounding).
+
+=== 1701MS-122025 (joint sample)
+  Item 2A (PR box): official '90,000' | ours 90000.0
+  Item 2B (PR box): official '90,000' | ours 90000.0
+  Item 3A computed: official '810,001' | ours 810001.0
+  Item 3B computed: official '510,000' | ours 510000.0
+
+=== 2200A-03142025
+  Others row 1 Due (PR box): official '11.00' | ours 11.0
+  Schedule 1 total: official '87,451.56' | ours 87451.56
