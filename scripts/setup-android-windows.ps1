@@ -8,8 +8,11 @@
     scripts\setup-windows.ps1 (it needs rustup). Installs:
       * Temurin JDK 17 (sdkmanager, avdmanager and apksigner need Java)
       * Android command-line tools, platform-tools, emulator
-      * platforms;android-35, build-tools;35.0.1 (what `nsh package --target
-        android` asks for), NDK r27 (cross-compiles libnsh.so)
+      * platforms;android-36 (nsh/nsh.json android.targetSdk: what Google Play
+        requires of new apps), build-tools;36.0.0 (which `nsh package --target
+        android` uses, the newest installed), platforms;android-35 and
+        build-tools;35.0.1 (the development host and the x86_64 repack),
+        NDK r27 (cross-compiles libnsh.so)
       * the API 35 Google APIs x86_64 system image and an AVD named buwiz_api35
       * Rust targets x86_64-linux-android and aarch64-linux-android
       * LLVM (bindgen's libclang for QuickJS, as the NSH Windows CI uses)
@@ -35,7 +38,7 @@ $CmdlineToolsUrl = 'https://dl.google.com/android/repository/commandlinetools-wi
 $JdkUrl = 'https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse'
 $Ndk = 'ndk;27.3.13750724'
 $SystemImage = 'system-images;android-35;google_apis;x86_64'
-$Packages = @('platform-tools', 'emulator', 'platforms;android-35', 'build-tools;35.0.1', $Ndk, $SystemImage)
+$Packages = @('platform-tools', 'emulator', 'platforms;android-35', 'platforms;android-36', 'build-tools;35.0.1', 'build-tools;36.0.0', $Ndk, $SystemImage)
 $Avd = 'buwiz_api35'
 
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }

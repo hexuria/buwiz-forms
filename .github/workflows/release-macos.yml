@@ -424,7 +424,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: hexuria/nsh
-          ref: ca39c0e9103a389a31ea280799ef34796d7aac70
+          ref: 22a1b34b78bac0f4419ed9fde124b79a4d3c057a
           path: .ci-nsh
           persist-credentials: false
 

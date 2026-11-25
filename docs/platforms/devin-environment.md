@@ -132,7 +132,8 @@ just mock-account &
 ## Windows (Android)
 
 `scripts/setup-android-windows.ps1` installs JDK 17, the Android command-line tools, `platform-tools`, the emulator,
-`platforms;android-35`, `build-tools;35.0.1`, NDK r27, the API 35 Google APIs x86_64 image, an AVD named
+`platforms;android-35` and `platforms;android-36` (the app targets API 36, `nsh/nsh.json`), `build-tools;35.0.1` and
+`build-tools;36.0.0`, NDK r27, the API 35 Google APIs x86_64 image, an AVD named
 `buwiz_api35`, LLVM (libclang for bindgen), and the Rust targets `x86_64-linux-android` and `aarch64-linux-android`.
 It sets `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `ANDROID_NDK_HOME`, `JAVA_HOME` and `LIBCLANG_PATH` machine-wide and enables
 the Windows Hypervisor Platform feature, which the emulator needs for acceleration. That feature takes effect after a
