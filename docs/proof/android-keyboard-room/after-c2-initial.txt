@@ -1,0 +1,3 @@
+2551q y 1130 1241
+2551Q y 1720 1771
+keyboard-room present: False

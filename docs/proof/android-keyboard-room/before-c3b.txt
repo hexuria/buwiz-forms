@@ -1,0 +1,1 @@
+settings rows after swipe: [('Personal', 475, 526), ('General', 566, 621), ('Account', 682, 737), ('Data', 809, 860), ('Import / Export', 901, 956), ('Jobs', 1016, 1071), ('System', 1144, 1195), ('Device', 1235, 1290)]

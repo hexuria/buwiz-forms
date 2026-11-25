@@ -1,0 +1,2 @@
+after-swipe settings rows: [('Import / Export', 714, 769), ('Jobs', 829, 884), ('System', 957, 1008), ('Device', 1048, 1103)]
+keyboard-room present: True
