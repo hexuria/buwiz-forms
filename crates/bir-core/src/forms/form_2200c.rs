@@ -422,6 +422,14 @@ impl Form2200CDraft {
             "page_header",
             super::print_map::tin_name_header(&self.tin, &self.taxpayer_name),
         );
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm2200C:txtPg1I1Month",
+                "frm2200C:txtPg1I1Day",
+                "frm2200C:txtPg1I1Year",
+            ],
+        );
         fields
     }
 

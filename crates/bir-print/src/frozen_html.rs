@@ -72,7 +72,15 @@ fn fill_by_name_with_cells(
     cells: &BTreeMap<String, Vec<String>>,
     plan: &BTreeMap<String, CellFill>,
 ) -> String {
-    fill_by_name_set(html, fields, cells, plan, &SheetType::plain())
+    let empty_captions = BTreeMap::new();
+    fill_by_name_set(
+        html,
+        fields,
+        cells,
+        &empty_captions,
+        plan,
+        &SheetType::plain(),
+    )
 }
 
 /// [`fill_by_name_with_cells`] with a value longer than its boxes measured
@@ -81,6 +89,7 @@ fn fill_by_name_set(
     html: &str,
     fields: &BTreeMap<String, String>,
     cells: &BTreeMap<String, Vec<String>>,
+    captions: &BTreeMap<String, String>,
     plan: &BTreeMap<String, CellFill>,
     sheet: &SheetType,
 ) -> String {
@@ -113,6 +122,9 @@ fn fill_by_name_set(
                 input_name,
                 value,
                 via_cell,
+                caption: via_cell
+                    .then(|| captions.get(input_name).map(String::as_str))
+                    .flatten(),
                 sheet,
             };
             fill_text_input(html, &tags, indices, &target, &mut replacements);
@@ -132,6 +144,7 @@ fn fill_by_name_set(
                     input_name: cell,
                     value: line,
                     via_cell: true,
+                    caption: captions.get(cell).map(String::as_str),
                     sheet,
                 };
                 fill_text_input(html, &tags, indices, &target, &mut replacements);
@@ -170,6 +183,8 @@ enum CellFill {
 
 /// The type a comb's boxes print in: the largest an overflow line uses.
 const PLAIN_MAX_PT: f64 = 9.0;
+/// Readable floor for an over-wide numeric amount fitted across a comb.
+const AMOUNT_OVERFLOW_MIN_PT: f64 = 5.5;
 /// What the per-character estimate assumed before every sheet's overflow
 /// type was measured (P4-7): about 0.58 em a character. Kept for the tests
 /// that show how it fell short.
@@ -1023,9 +1038,8 @@ fn shrunk_room(room: f64) -> f64 {
     (room - 1.0).max(room.min(1.0))
 }
 
-/// `tag` with `font-size:{size}pt` last in its inline style.
-fn with_font_size(tag: &str, size: f64) -> String {
-    let declaration = format!("font-size:{size:.2}pt");
+/// `tag` with `declaration` appended to its inline `style="..."` attribute.
+fn with_style_declaration(tag: &str, declaration: &str) -> String {
     if let Some(at) = tag.find(" style=\"") {
         let value_at = at + " style=\"".len();
         if let Some(end) = tag[value_at..].find('"') {
@@ -1041,6 +1055,280 @@ fn with_font_size(tag: &str, size: f64) -> String {
         close
     };
     format!("{} style=\"{declaration}\"{}", &tag[..close], &tag[close..])
+}
+
+/// `tag` with `font-size:{size}pt` last in its inline style.
+fn with_font_size(tag: &str, size: f64) -> String {
+    with_style_declaration(tag, &format!("font-size:{size:.2}pt"))
+}
+
+/// Whether `value` is formatted like an official two-decimal currency amount
+/// (`0.00`, `1,234.50`, `-500.00`), as emitted by `official_amount()` /
+/// `formatCurrency()`. Bare integers, TINs, ZIPs, dates, and `%` rates return false.
+fn is_formatted_money_amount(value: &str) -> bool {
+    let s = value.trim();
+    let s = s.strip_prefix('-').unwrap_or(s);
+    let Some((whole, cents)) = s.split_once('.') else {
+        return false;
+    };
+    if cents.len() != 2 || !cents.bytes().all(|b| b.is_ascii_digit()) {
+        return false;
+    }
+    !whole.is_empty()
+        && whole.bytes().any(|b| b.is_ascii_digit())
+        && whole.bytes().all(|b| b.is_ascii_digit() || b == b',')
+}
+
+/// Whether a writer key represents a currency/money amount field (not a rate,
+/// area, quantity, share count, identifier, date, or text caption).
+fn is_amount_typed_key(key: &str) -> bool {
+    let lower = key.to_ascii_lowercase();
+    let tail = lower.rsplit(':').next().unwrap_or(&lower);
+    // Exclude non-money numeric/code/text keys even if they contain substrings
+    // like "tax" (TaxRate, TaxDec, Taxpayer, TaxAgent) or "value".
+    for excluded in [
+        "rate",
+        "percent",
+        "pct",
+        "area",
+        "share",
+        "qty",
+        "quantity",
+        "volume",
+        "metric",
+        "liter",
+        "gram",
+        "kilo",
+        "weight",
+        "ratio",
+        "unit",
+        "count",
+        "taxdec",
+        "taxpayer",
+        "taxagent",
+        "taxableyear",
+        "txttin",
+        "_tin",
+        "tin_",
+        "tin1",
+        "tin2",
+        "tin3",
+        "tin4",
+        "zip",
+        "rdo",
+        "date",
+        "month",
+        "year",
+        "day",
+        "name",
+        "title",
+        "addr",
+        "email",
+        "phone",
+        "tel",
+        "atc",
+        "desc",
+        "particular",
+        "location",
+        "class",
+        "oct",
+        "tct",
+        "cct",
+        "sheet",
+        "page",
+        "seq",
+        "memo",
+        "bank",
+        "check",
+        "ror",
+        "drawee",
+        "num",
+        "no_",
+        "code",
+        "kind",
+        "type",
+        "status",
+        "remarks",
+    ] {
+        if tail.contains(excluded) {
+            return false;
+        }
+    }
+    for money_token in [
+        "_base",
+        "_withheld",
+        "amount",
+        "amt",
+        "fairmarketvalue",
+        "fmv",
+        "zonal",
+        "ftd",
+        "total",
+        "tax",
+        "income",
+        "payment",
+        "payable",
+        "value",
+        "gross",
+        "net",
+        "deduct",
+        "credit",
+        "surcharge",
+        "interest",
+        "compromise",
+        "penalt",
+        "remit",
+        "price",
+        "cost",
+        "sales",
+        "receipt",
+        "purchase",
+        "loss",
+        "claim",
+        "estate",
+        "realprop",
+        "fam_",
+        "personalprop",
+        "business_",
+        "transfer",
+        "gift",
+        "asset",
+        "liab",
+        "equity",
+        "capital",
+        "profit",
+        "expense",
+        "revenue",
+        "allowance",
+        "exemption",
+        "withholding",
+        "withheld",
+        "base",
+        "due",
+        "paid",
+        "overpay",
+        "refund",
+        "balance",
+        "dividend",
+        "royalt",
+        "compensation",
+        "benefit",
+        "gain",
+        "proceed",
+        "consideration",
+    ] {
+        if tail.contains(money_token) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Whether `value` is a formatted numeric quantity (integer or decimal with
+/// optional thousands commas, e.g. `160000`, `1,000`, `12,345.678`, `250.50`).
+fn is_formatted_numeric_quantity(value: &str) -> bool {
+    let s = value.trim();
+    let s = s.strip_prefix('-').unwrap_or(s);
+    if s.is_empty() {
+        return false;
+    }
+    let (whole, frac) = match s.split_once('.') {
+        Some((w, f)) => (w, Some(f)),
+        None => (s, None),
+    };
+    if whole.is_empty()
+        || !whole.bytes().any(|b| b.is_ascii_digit())
+        || !whole.bytes().all(|b| b.is_ascii_digit() || b == b',')
+    {
+        return false;
+    }
+    if let Some(f) = frac {
+        if f.is_empty() || !f.bytes().all(|b| b.is_ascii_digit()) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Whether a writer key represents a numeric quantity column (shares, area,
+/// installment count, volume/weight/units) that should right-align in plain
+/// table cells, excluding rates, identifiers, dates, and text captions.
+fn is_quantity_typed_key(key: &str) -> bool {
+    let lower = key.to_ascii_lowercase();
+    let tail = lower.rsplit(':').next().unwrap_or(&lower);
+    for excluded in [
+        "rate",
+        "percent",
+        "pct",
+        "taxdec",
+        "taxpayer",
+        "taxagent",
+        "taxableyear",
+        "txttin",
+        "_tin",
+        "tin_",
+        "tin1",
+        "tin2",
+        "tin3",
+        "tin4",
+        "zip",
+        "rdo",
+        "date",
+        "month",
+        "year",
+        "day",
+        "name",
+        "title",
+        "addr",
+        "email",
+        "phone",
+        "tel",
+        "atc",
+        "desc",
+        "particular",
+        "location",
+        "class",
+        "oct",
+        "tct",
+        "cct",
+        "sheet",
+        "page",
+        "seq",
+        "memo",
+        "bank",
+        "check",
+        "ror",
+        "drawee",
+        "code",
+        "kind",
+        "type",
+        "status",
+        "remarks",
+        "cert",
+    ] {
+        if tail.contains(excluded) {
+            return false;
+        }
+    }
+    for qty_token in [
+        "area",
+        "share",
+        "qty",
+        "quantity",
+        "volume",
+        "metric",
+        "liter",
+        "gram",
+        "kilo",
+        "weight",
+        "installment",
+        "txttotaln",
+    ] {
+        if tail.contains(qty_token) {
+            return true;
+        }
+    }
+    false
 }
 
 /// One stacked line of a printed item: its cell, the key that fills it,
@@ -1307,8 +1595,273 @@ struct TextTarget<'a> {
     input_name: &'a str,
     value: &'a str,
     via_cell: bool,
+    caption: Option<&'a str>,
     /// The sheet's type, which a value longer than its boxes is measured in.
     sheet: &'a SheetType,
+}
+
+fn is_percentage_rate_cell(writer_key: &str, caption: Option<&str>) -> bool {
+    if writer_key.starts_with("derived:")
+        || writer_key.starts_with("frm2200")
+        || writer_key.starts_with("frm2000")
+    {
+        return false;
+    }
+    let Some(caption) = caption else {
+        return false;
+    };
+    let kl = writer_key.to_ascii_lowercase();
+    let pl = caption.to_ascii_lowercase();
+    if [
+        "export", "taxable", "due", "stock", "payment", "excise", "vat", "amount", "income",
+    ]
+    .iter()
+    .any(|bad| kl.contains(bad))
+    {
+        return false;
+    }
+    if [
+        "amount",
+        "income",
+        "tax due",
+        "payment",
+        "export",
+        "taxable",
+        "stock",
+        "(whole)",
+        "(tenths)",
+        "(decimals)",
+    ]
+    .iter()
+    .any(|bad| pl.contains(bad))
+    {
+        return false;
+    }
+    pl.contains("tax rate")
+        || pl.contains("schedule 2 rate")
+        || pl.contains("schedule 3 rate")
+        || pl.ends_with(" rate")
+}
+
+fn has_preprinted_percent_beside(html: &str, cell: &str) -> bool {
+    let Some(open) = html.find(&format!("<div id=\"{cell}\"")) else {
+        return false;
+    };
+    let Some(end) = html[open..].find('>') else {
+        return false;
+    };
+    let tag = &html[open..open + end];
+    let parse_pt = |s: &str, prop: &str| -> Option<f64> {
+        let needle = format!("{prop}:");
+        let start = s.find(&needle)? + needle.len();
+        s[start..].split("pt").next()?.trim().parse().ok()
+    };
+    let (Some(left), Some(top), Some(width), Some(height)) = (
+        parse_pt(tag, "left"),
+        parse_pt(tag, "top"),
+        parse_pt(tag, "width"),
+        parse_pt(tag, "height"),
+    ) else {
+        return false;
+    };
+    let page_start = html[..open].rfind("<div class=\"page ").unwrap_or(0);
+    let page_end = html[open..]
+        .find("<div class=\"page ")
+        .map(|rel| open + rel)
+        .unwrap_or(html.len());
+    let page = &html[page_start..page_end];
+    let mut cursor = 0;
+    while let Some(rel) = page[cursor..].find("<div class=\"t\"") {
+        let start = cursor + rel;
+        let Some(tag_end_rel) = page[start..].find('>') else {
+            break;
+        };
+        let tag_end = start + tag_end_rel;
+        let Some(close_rel) = page[tag_end + 1..].find("</div>") else {
+            break;
+        };
+        let text = page[tag_end + 1..tag_end + 1 + close_rel].trim();
+        if text == "%" {
+            let t_tag = &page[start..tag_end];
+            if let (Some(tl), Some(tt)) = (parse_pt(t_tag, "left"), parse_pt(t_tag, "top")) {
+                if (tt - top).abs() <= height.max(14.0) && tl >= left && tl <= left + width + 22.0 {
+                    return true;
+                }
+            }
+        }
+        cursor = tag_end + 1 + close_rel + "</div>".len();
+    }
+    false
+}
+
+fn format_percentage_rate(raw: &str, preprinted_percent: bool) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty()
+        || !trimmed.chars().all(|c| c.is_ascii_digit() || c == '.')
+        || !trimmed.chars().any(|c| c.is_ascii_digit())
+        || trimmed.matches('.').count() > 1
+    {
+        return None;
+    }
+    let normalized = if let Some((whole, frac)) = trimmed.split_once('.') {
+        let frac = frac.trim_end_matches('0');
+        let whole = if whole.is_empty() { "0" } else { whole };
+        if frac.is_empty() {
+            whole.to_string()
+        } else {
+            format!("{whole}.{frac}")
+        }
+    } else {
+        trimmed.to_string()
+    };
+    if preprinted_percent {
+        Some(normalized)
+    } else {
+        Some(format!("{normalized}%"))
+    }
+}
+
+fn parse_svg_path_bbox(d: &str) -> Option<(f64, f64, f64, f64)> {
+    let mut nums = Vec::new();
+    let mut cur = String::new();
+    for ch in d.chars() {
+        if ch.is_ascii_digit() || ch == '.' || (ch == '-' && cur.is_empty()) {
+            cur.push(ch);
+        } else {
+            if !cur.is_empty() {
+                if let Ok(v) = cur.parse::<f64>() {
+                    nums.push(v);
+                }
+                cur.clear();
+            }
+            if ch == '-' {
+                cur.push(ch);
+            }
+        }
+    }
+    if !cur.is_empty() {
+        if let Ok(v) = cur.parse::<f64>() {
+            nums.push(v);
+        }
+    }
+    if nums.len() < 4 {
+        return None;
+    }
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for pair in nums.as_chunks::<2>().0 {
+        min_x = min_x.min(pair[0]);
+        max_x = max_x.max(pair[0]);
+        min_y = min_y.min(pair[1]);
+        max_y = max_y.max(pair[1]);
+    }
+    Some((min_x, max_x, min_y, max_y))
+}
+
+/// Detects a preprinted decimal mark drawn inside `cell` on its page using
+/// sheet geometry (SVG dot path/circle/rect or text `.` in the lower-right
+/// centavo zone). Returns `(dot_rel_x, cell_width)` when present.
+fn preprinted_decimal_mark(html: &str, cell: &str) -> Option<(f64, f64)> {
+    let open = html.find(&format!("<div id=\"{cell}\""))?;
+    let end = html[open..].find('>')?;
+    let tag = &html[open..open + end];
+    let parse_pt = |s: &str, prop: &str| -> Option<f64> {
+        let needle = format!("{prop}:");
+        let start = s.find(&needle)? + needle.len();
+        s[start..].split("pt").next()?.trim().parse().ok()
+    };
+    let left = parse_pt(tag, "left")?;
+    let top = parse_pt(tag, "top")?;
+    let width = parse_pt(tag, "width")?;
+    let height = parse_pt(tag, "height")?;
+    if width < 30.0 {
+        return None;
+    }
+    let page_start = html[..open].rfind("<div class=\"page ").unwrap_or(0);
+    let page_end = html[open..]
+        .find("<div class=\"page ")
+        .map(|rel| open + rel)
+        .unwrap_or(html.len());
+    let page = &html[page_start..page_end];
+    let in_decimal_zone = |cx: f64, cy: f64| -> bool {
+        let right_gap = (left + width) - cx;
+        cx >= left + width * 0.5
+            && cx <= left + width - 8.0
+            && (8.0..=38.0).contains(&right_gap)
+            && cy >= top + height * 0.35
+            && cy <= top + height + 1.0
+    };
+
+    let mut cursor = 0;
+    while let Some(rel) = page[cursor..].find("<path ") {
+        let start = cursor + rel;
+        let Some(tag_end_rel) = page[start..].find('>') else {
+            break;
+        };
+        let p_tag = &page[start..start + tag_end_rel];
+        if let Some(d_at) = p_tag.find("d=\"") {
+            let d_rest = &p_tag[d_at + 3..];
+            if let Some(d_end) = d_rest.find('"') {
+                if let Some((x0, x1, y0, y1)) = parse_svg_path_bbox(&d_rest[..d_end]) {
+                    let bw = x1 - x0;
+                    let bh = y1 - y0;
+                    if (0.4..=4.0).contains(&bw) && (0.4..=4.0).contains(&bh) {
+                        let cx = (x0 + x1) * 0.5;
+                        let cy = (y0 + y1) * 0.5;
+                        if in_decimal_zone(cx, cy) {
+                            return Some((cx - left, width));
+                        }
+                    }
+                }
+            }
+        }
+        cursor = start + tag_end_rel + 1;
+    }
+
+    let mut cursor = 0;
+    while let Some(rel) = page[cursor..].find("<circle ") {
+        let start = cursor + rel;
+        let Some(tag_end_rel) = page[start..].find('>') else {
+            break;
+        };
+        let c_tag = &page[start..start + tag_end_rel];
+        let parse_attr = |k: &str| -> Option<f64> {
+            let needle = format!("{k}=\"");
+            let s = c_tag.find(&needle)? + needle.len();
+            c_tag[s..].split('"').next()?.parse().ok()
+        };
+        if let (Some(cx), Some(cy), Some(r)) = (parse_attr("cx"), parse_attr("cy"), parse_attr("r"))
+        {
+            if (0.2..=2.5).contains(&r) && in_decimal_zone(cx, cy) {
+                return Some((cx - left, width));
+            }
+        }
+        cursor = start + tag_end_rel + 1;
+    }
+
+    let mut cursor = 0;
+    while let Some(rel) = page[cursor..].find("<div class=\"t\"") {
+        let start = cursor + rel;
+        let Some(tag_end_rel) = page[start..].find('>') else {
+            break;
+        };
+        let tag_end = start + tag_end_rel;
+        let Some(close_rel) = page[tag_end + 1..].find("</div>") else {
+            break;
+        };
+        if page[tag_end + 1..tag_end + 1 + close_rel].trim() == "." {
+            let t_tag = &page[start..tag_end];
+            if let (Some(tl), Some(tt)) = (parse_pt(t_tag, "left"), parse_pt(t_tag, "top")) {
+                if in_decimal_zone(tl + 1.0, tt + 3.0) {
+                    return Some((tl + 1.0 - left, width));
+                }
+            }
+        }
+        cursor = tag_end + 1 + close_rel + "</div>".len();
+    }
+    None
 }
 
 /// One text value into one cell: a comb gets a character per slot, a plain
@@ -1325,6 +1878,7 @@ fn fill_text_input(
         input_name,
         value,
         via_cell,
+        caption,
         sheet,
     } = *target;
     // Writer-cell text joins print as BIR CAPITAL LETTERS. Stamped
@@ -1375,8 +1929,15 @@ fn fill_text_input(
         // the comb, shrunk to fit, instead of losing the characters past
         // the last box.
         let whole_line = via_cell || is_email_key(name) || name.starts_with("derived:line:");
+        let amount_comb = is_amount_comb_key(name) && is_amount_comb_value(print);
         let overflow = (whole_line && chars.len() > ordered.len())
-            .then(|| comb_overflow_line(html, input_name, print, sheet))
+            .then(|| {
+                if amount_comb {
+                    comb_overflow_amount_line(html, input_name, print.trim(), sheet)
+                } else {
+                    comb_overflow_line(html, input_name, print, sheet)
+                }
+            })
             .flatten();
         let spread = overflow.is_none();
         if let Some((at, line)) = overflow {
@@ -1423,13 +1984,79 @@ fn fill_text_input(
         let width = via_cell
             .then(|| plain_cell_width(html, input_name))
             .flatten();
+        let is_rate_cell = via_cell && !split && is_percentage_rate_cell(name, caption);
+        let preprinted_dot =
+            if !is_rate_cell && via_cell && !split && is_formatted_money_amount(print) {
+                preprinted_decimal_mark(html, input_name)
+            } else {
+                None
+            };
+        if let Some((dot_rel_x, cell_width)) = preprinted_dot {
+            let (neg, raw_peso, raw_cents) = {
+                let s = print.trim();
+                let (neg, body) = match s.strip_prefix('-') {
+                    Some(rest) => (true, rest),
+                    None => (false, s),
+                };
+                let (p, c) = body.split_once('.').unwrap_or((body, "00"));
+                (neg, p, c)
+            };
+            let neg_style = NegativeStyle::from_printed_label(caption);
+            let (peso_text, cents_text) = if neg {
+                match neg_style {
+                    NegativeStyle::Parentheses => (format!("({raw_peso}"), format!("{raw_cents})")),
+                    NegativeStyle::Minus => (format!("-{raw_peso}"), raw_cents.to_string()),
+                    NegativeStyle::Unsigned => (raw_peso.to_string(), raw_cents.to_string()),
+                }
+            } else {
+                (raw_peso.to_string(), raw_cents.to_string())
+            };
+            let peso_right = (cell_width - dot_rel_x + 1.8).max(10.0);
+            let peso_width = (dot_rel_x - 3.0).max(10.0);
+            let cents_left = (dot_rel_x + 1.8).min(cell_width - 8.0);
+            for &index in indices {
+                let orig_tag = tags[index].tag;
+                let base_class = attr(orig_tag, "class").unwrap_or("fi");
+                let peso_size = plain_input_size(sheet, peso_width, orig_tag, &peso_text);
+                let size_css = peso_size
+                    .map(|sz| format!("font-size:{sz:.2}pt;"))
+                    .unwrap_or_default();
+                let blank_orig = set_value(orig_tag, "", Some(print));
+                let split_pair = format!(
+                    "{blank_orig}<input type=\"text\" class=\"{base_class}\" name=\"{input_name}-peso\" readonly value=\"{}\" style=\"position:absolute;top:0.75pt;bottom:0.75pt;left:1pt;right:{peso_right:.2}pt;{size_css}text-align:right;justify-content:flex-end;padding-right:1pt\" data-decimal-of=\"{input_name}\" data-decimal-part=\"peso\"><input type=\"text\" class=\"{base_class}\" name=\"{input_name}-cents\" readonly value=\"{}\" style=\"position:absolute;top:0.75pt;bottom:0.75pt;left:{cents_left:.2}pt;right:1pt;{size_css}text-align:left;justify-content:flex-start;padding-left:1pt\" data-decimal-of=\"{input_name}\" data-decimal-part=\"cents\">",
+                    html_escape(&peso_text),
+                    html_escape(&cents_text),
+                );
+                replacements.push((tags[index].start, tags[index].end, split_pair));
+            }
+            return;
+        }
+        let formatted_rate = is_rate_cell
+            .then(|| format_percentage_rate(print, has_preprinted_percent_beside(html, input_name)))
+            .flatten();
+        let display = formatted_rate.as_deref().unwrap_or(print);
+        let right_align_numeric = !is_rate_cell
+            && via_cell
+            && !split
+            && ((is_amount_typed_key(name) && is_formatted_money_amount(print))
+                || (is_quantity_typed_key(name) && is_formatted_numeric_quantity(print)));
         for &index in indices {
             let writer = via_cell.then_some(print);
-            let tag = set_value(tags[index].tag, print, writer);
+            let tag = set_value(tags[index].tag, display, writer);
             let size = width
                 .filter(|_| !split)
-                .and_then(|width| plain_input_size(sheet, width, tags[index].tag, print));
+                .and_then(|width| plain_input_size(sheet, width, tags[index].tag, display));
             let tag = size.map_or_else(|| tag.clone(), |size| with_font_size(&tag, size));
+            let tag = if is_rate_cell && !display.is_empty() {
+                with_style_declaration(&tag, "text-align:center;justify-content:center")
+            } else if right_align_numeric {
+                with_style_declaration(
+                    &tag,
+                    "text-align:right;justify-content:flex-end;padding-right:2pt",
+                )
+            } else {
+                tag
+            };
             replacements.push((tags[index].start, tags[index].end, tag));
         }
     }
@@ -1497,13 +2124,13 @@ fn money_comb_values(
     if trimmed.is_empty()
         || !trimmed
             .chars()
-            .all(|c| c.is_ascii_digit() || matches!(c, ',' | '.' | '-' | ' '))
+            .all(|c| c.is_ascii_digit() || matches!(c, ',' | '.' | '-' | '(' | ')' | ' '))
         || !trimmed.chars().any(|c| c.is_ascii_digit())
     {
         return None;
     }
     let (negative, peso, cents) = split_writer_money(trimmed)?;
-    let peso = signed_digits(negative, &peso, &cents);
+    let peso = signed_digits(negative, &peso, &cents, NegativeStyle::Minus, false);
     let peso_values = right_aligned_slot_values(*gap, &peso)?;
     let mut out: Vec<(usize, String)> = ordered[..*gap].iter().copied().zip(peso_values).collect();
     out.extend(
@@ -1691,10 +2318,70 @@ struct MoneyCells {
     point_slot: bool,
 }
 
+/// How a negative amount prints on a money or whole-peso comb, derived from
+/// the official paper caption (`printed` in `writer-cells.json`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum NegativeStyle {
+    #[default]
+    Minus,
+    /// Dual-state `/(Overpayment)`, `/(Overremittance)`, `/(Loss)`, `/(Excess ...)`:
+    /// prints `(digits)` in whole-peso combs (matching 1700/1701A) and `-digits`
+    /// left of pesos in split peso+centavo combs.
+    Parentheses,
+    /// Dedicated single-state overremittance/overpayment/loss line (no `/(...)`):
+    /// prints unsigned magnitude.
+    Unsigned,
+}
+
+impl NegativeStyle {
+    fn from_printed_label(label: Option<&str>) -> Self {
+        let Some(raw) = label else {
+            return Self::Minus;
+        };
+        let lower = raw.to_ascii_lowercase();
+        if [
+            "/(overpay",
+            "/(over-pay",
+            "/(overremit",
+            "/(over-remit",
+            "/(loss",
+            "/(deficit",
+            "/(excess",
+            "/(refund",
+            "/ (overpay",
+            "/ (over-pay",
+            "/ (overremit",
+            "/ (over-remit",
+            "/ (loss",
+            "/ (excess",
+        ]
+        .iter()
+        .any(|needle| lower.contains(needle))
+        {
+            Self::Parentheses
+        } else if [
+            "overpayment",
+            "over-payment",
+            "overremittance",
+            "over-remittance",
+            "net operating loss",
+            "excess tax",
+        ]
+        .iter()
+        .any(|needle| lower.contains(needle))
+        {
+            Self::Unsigned
+        } else {
+            Self::Minus
+        }
+    }
+}
+
 /// A `{:.2}` writer amount printed in every listed peso + cents pair.
 struct MoneyJoin {
     writer_key: String,
     cells: Vec<MoneyCells>,
+    negative_style: NegativeStyle,
 }
 
 struct XboxJoin {
@@ -1707,6 +2394,7 @@ struct XboxJoin {
 struct PesoJoin {
     writer_key: String,
     html_ids: Vec<String>,
+    negative_style: NegativeStyle,
 }
 
 /// One writer date printed across the sheet's separate MM / DD / YYYY combs
@@ -1977,6 +2665,7 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
         cells.money_joins.push(MoneyJoin {
             writer_key: key.to_string(),
             cells: pairs,
+            negative_style: NegativeStyle::from_printed_label(required_str(row, "printed")),
         });
     }
 
@@ -1997,6 +2686,7 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
         cells.peso_joins.push(PesoJoin {
             writer_key: key.to_string(),
             html_ids,
+            negative_style: NegativeStyle::from_printed_label(required_str(row, "printed")),
         });
     }
 
@@ -2598,9 +3288,12 @@ fn split_writer_money(value: &str) -> Option<(bool, String, String)> {
         .chars()
         .filter(|ch| *ch != ',' && !ch.is_whitespace())
         .collect();
-    let (negative, cleaned) = match cleaned.strip_prefix('-') {
-        Some(rest) => (true, rest),
-        None => (false, cleaned.as_str()),
+    let (negative, cleaned) = if let Some(rest) = cleaned.strip_prefix('-') {
+        (true, rest)
+    } else if let Some(inner) = cleaned.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
+        (true, inner)
+    } else {
+        (false, cleaned.as_str())
     };
     if cleaned.is_empty() {
         return None;
@@ -2618,14 +3311,23 @@ fn split_writer_money(value: &str) -> Option<(bool, String, String)> {
     Some((negative, peso.to_string(), format!("{cents:0<2}")))
 }
 
-/// Puts the minus sign immediately left of the peso digits; a zero amount
-/// (`-0`, `-0.00`) prints unsigned.
-fn signed_digits(negative: bool, digits: &str, cents: &str) -> String {
+/// Formats the peso digits for a money or whole-peso comb according to the
+/// line's official `NegativeStyle`; a zero amount (`-0`, `-0.00`) prints unsigned.
+fn signed_digits(
+    negative: bool,
+    digits: &str,
+    cents: &str,
+    style: NegativeStyle,
+    whole_peso_comb: bool,
+) -> String {
     let zero = digits.chars().chain(cents.chars()).all(|ch| ch == '0');
-    if negative && !zero {
-        format!("-{digits}")
-    } else {
-        digits.to_string()
+    if !negative || zero {
+        return digits.to_string();
+    }
+    match style {
+        NegativeStyle::Unsigned => digits.to_string(),
+        NegativeStyle::Parentheses if whole_peso_comb => format!("({digits})"),
+        NegativeStyle::Parentheses | NegativeStyle::Minus => format!("-{digits}"),
     }
 }
 
@@ -2641,10 +3343,20 @@ fn right_aligned_slot_values(slots: usize, digits: &str) -> Option<Vec<String>> 
     Some(values)
 }
 
+#[allow(dead_code)]
 fn fill_money_joins(
     html: &str,
     fields: &BTreeMap<String, String>,
     money_joins: &[MoneyJoin],
+) -> String {
+    fill_money_joins_with_sheet(html, fields, money_joins, &SheetType::plain())
+}
+
+fn fill_money_joins_with_sheet(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    money_joins: &[MoneyJoin],
+    sheet: &SheetType,
 ) -> String {
     if money_joins.is_empty() {
         return html.to_string();
@@ -2662,7 +3374,13 @@ fn fill_money_joins(
         let Some((negative, peso, cents)) = split_writer_money(value) else {
             continue;
         };
-        let peso = signed_digits(negative, &peso, &cents);
+        let zero = peso.chars().chain(cents.chars()).all(|ch| ch == '0');
+        let parenthesized = negative && !zero && join.negative_style == NegativeStyle::Parentheses;
+        let peso = if parenthesized {
+            format!("({peso}")
+        } else {
+            signed_digits(negative, &peso, &cents, join.negative_style, false)
+        };
         for cells in &join.cells {
             let Some(peso_indices) = grouped.get(cells.peso_html_id.as_str()) else {
                 continue;
@@ -2704,28 +3422,77 @@ fn fill_money_joins(
             if cent_ordered.len() != 2 {
                 continue;
             }
-            let Some(peso_values) = right_aligned_slot_values(peso_ordered.len(), &peso) else {
-                continue;
-            };
-            for (offset, index) in peso_ordered.into_iter().enumerate() {
-                let writer = (offset == 0).then_some(value.as_str());
-                replacements.push((
-                    tags[index].start,
-                    tags[index].end,
-                    set_value(tags[index].tag, &peso_values[offset], writer),
-                ));
-            }
-            for (offset, index) in cent_ordered.into_iter().enumerate() {
-                let ch = cents
-                    .chars()
-                    .nth(offset)
-                    .map(|ch| ch.to_string())
-                    .unwrap_or_default();
-                replacements.push((
-                    tags[index].start,
-                    tags[index].end,
-                    set_value(tags[index].tag, &ch, None),
-                ));
+            if let Some(peso_values) = right_aligned_slot_values(peso_ordered.len(), &peso) {
+                for (offset, index) in peso_ordered.into_iter().enumerate() {
+                    let writer = (offset == 0).then_some(value.as_str());
+                    replacements.push((
+                        tags[index].start,
+                        tags[index].end,
+                        set_value(tags[index].tag, &peso_values[offset], writer),
+                    ));
+                }
+                for (offset, index) in cent_ordered.into_iter().enumerate() {
+                    let mut ch = cents
+                        .chars()
+                        .nth(offset)
+                        .map(|ch| ch.to_string())
+                        .unwrap_or_default();
+                    if parenthesized && offset == 1 && !ch.is_empty() {
+                        ch.push(')');
+                    }
+                    replacements.push((
+                        tags[index].start,
+                        tags[index].end,
+                        set_value(tags[index].tag, &ch, None),
+                    ));
+                }
+            } else {
+                // Over-wide amount: print as one right-aligned fitted line across the
+                // peso comb (or combined decimal comb) with white knockout band and
+                // overflow warning marker; never leave the comb blank.
+                let overflow_text = if cells.cent_html_id.is_some() {
+                    peso.clone()
+                } else if parenthesized {
+                    format!("{peso}.{cents})")
+                } else {
+                    format!("{peso}.{cents}")
+                };
+                if let Some((at, line)) =
+                    comb_overflow_amount_line(html, &cells.peso_html_id, &overflow_text, sheet)
+                {
+                    replacements.push((at, at, line));
+                    for (offset, index) in peso_ordered.into_iter().enumerate() {
+                        let writer = (offset == 0).then_some(value.as_str());
+                        replacements.push((
+                            tags[index].start,
+                            tags[index].end,
+                            set_value(tags[index].tag, "", writer),
+                        ));
+                    }
+                    for (offset, index) in cent_ordered.into_iter().enumerate() {
+                        let mut ch = if cells.cent_html_id.is_some() {
+                            cents
+                                .chars()
+                                .nth(offset)
+                                .map(|ch| ch.to_string())
+                                .unwrap_or_default()
+                        } else {
+                            String::new()
+                        };
+                        if parenthesized
+                            && cells.cent_html_id.is_some()
+                            && offset == 1
+                            && !ch.is_empty()
+                        {
+                            ch.push(')');
+                        }
+                        replacements.push((
+                            tags[index].start,
+                            tags[index].end,
+                            set_value(tags[index].tag, &ch, None),
+                        ));
+                    }
+                }
             }
         }
     }
@@ -2735,7 +3502,12 @@ fn fill_money_joins(
 /// `1234.49` -> `1234`, `1234.50` -> `1235`: the sheets' "49 centavos or
 /// less drop down; 50 or more round up". Negatives round the absolute value
 /// and keep the sign (`-1234.50` -> `-1235`); `-0` prints as `0`.
+#[cfg(test)]
 fn whole_pesos(value: &str) -> Option<String> {
+    whole_pesos_with_style(value, NegativeStyle::Minus)
+}
+
+fn whole_pesos_with_style(value: &str, style: NegativeStyle) -> Option<String> {
     let (negative, peso, cents) = split_writer_money(value)?;
     let peso = peso.trim_start_matches('0');
     let mut digits: Vec<u8> = if peso.is_empty() {
@@ -2760,13 +3532,23 @@ fn whole_pesos(value: &str) -> Option<String> {
         }
     }
     let digits = String::from_utf8(digits).ok()?;
-    Some(signed_digits(negative, &digits, ""))
+    Some(signed_digits(negative, &digits, "", style, true))
 }
 
+#[allow(dead_code)]
 fn fill_peso_joins(
     html: &str,
     fields: &BTreeMap<String, String>,
     peso_joins: &[PesoJoin],
+) -> String {
+    fill_peso_joins_with_sheet(html, fields, peso_joins, &SheetType::plain())
+}
+
+fn fill_peso_joins_with_sheet(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    peso_joins: &[PesoJoin],
+    sheet: &SheetType,
 ) -> String {
     if peso_joins.is_empty() {
         return html.to_string();
@@ -2778,7 +3560,7 @@ fn fill_peso_joins(
         let Some(value) = fields.get(&join.writer_key) else {
             continue;
         };
-        let Some(pesos) = whole_pesos(value) else {
+        let Some(pesos) = whole_pesos_with_style(value, join.negative_style) else {
             continue;
         };
         for html_id in &join.html_ids {
@@ -2786,16 +3568,26 @@ fn fill_peso_joins(
                 continue;
             };
             let ordered = ordered_comb_indices(&tags, indices);
-            let Some(values) = right_aligned_slot_values(ordered.len(), &pesos) else {
-                continue;
-            };
-            for (offset, index) in ordered.into_iter().enumerate() {
-                let writer = (offset == 0).then_some(value.as_str());
-                replacements.push((
-                    tags[index].start,
-                    tags[index].end,
-                    set_value(tags[index].tag, &values[offset], writer),
-                ));
+            if let Some(values) = right_aligned_slot_values(ordered.len(), &pesos) {
+                for (offset, index) in ordered.into_iter().enumerate() {
+                    let writer = (offset == 0).then_some(value.as_str());
+                    replacements.push((
+                        tags[index].start,
+                        tags[index].end,
+                        set_value(tags[index].tag, &values[offset], writer),
+                    ));
+                }
+            } else if let Some((at, line)) = comb_overflow_amount_line(html, html_id, &pesos, sheet)
+            {
+                replacements.push((at, at, line));
+                for (offset, index) in ordered.into_iter().enumerate() {
+                    let writer = (offset == 0).then_some(value.as_str());
+                    replacements.push((
+                        tags[index].start,
+                        tags[index].end,
+                        set_value(tags[index].tag, "", writer),
+                    ));
+                }
             }
         }
     }
@@ -3090,9 +3882,16 @@ fn fill_bundle(
         SheetType::of_sheet(slug, loaded.css)
     });
     let plan = line_group_plan(&filled, fields, &cells, &sheet);
-    let filled = fill_by_name_set(&filled, fields, &cells.joins, &plan, &sheet);
-    let filled = fill_money_joins(&filled, fields, &cells.money_joins);
-    let filled = fill_peso_joins(&filled, fields, &cells.peso_joins);
+    let filled = fill_by_name_set(
+        &filled,
+        fields,
+        &cells.joins,
+        &cells.captions,
+        &plan,
+        &sheet,
+    );
+    let filled = fill_money_joins_with_sheet(&filled, fields, &cells.money_joins, &sheet);
+    let filled = fill_peso_joins_with_sheet(&filled, fields, &cells.peso_joins, &sheet);
     let filled = fill_date_joins(&filled, fields, &cells.date_joins);
     Ok(split_single_character_cells(
         slug,
@@ -3267,6 +4066,20 @@ pub fn unprinted_keys(
 /// a stamped key), slots in order: what a reader sees in that box.
 pub fn printed_text(document: &str, name: &str) -> String {
     let tags = input_tags(document);
+    let mut decimal_peso: Option<&str> = None;
+    let mut decimal_cents: Option<&str> = None;
+    for tag in &tags {
+        if attr(tag.tag, "data-decimal-of") == Some(name) {
+            match attr(tag.tag, "data-decimal-part") {
+                Some("peso") => decimal_peso = attr(tag.tag, "value"),
+                Some("cents") => decimal_cents = attr(tag.tag, "value"),
+                _ => {}
+            }
+        }
+    }
+    if let (Some(peso), Some(cents)) = (decimal_peso, decimal_cents) {
+        return format!("{peso}.{cents}");
+    }
     let indices: Vec<usize> = tags
         .iter()
         .enumerate()
@@ -3555,6 +4368,117 @@ fn base64_encode(bytes: &[u8]) -> String {
         } else {
             out.push('=');
         }
+    }
+    out
+}
+
+/// True when a writer key represents a numeric amount printed into a comb
+/// (derived whole-peso/money combs on 1700, 1701A, 1701MS, or money-typed keys).
+fn is_amount_comb_key(key: &str) -> bool {
+    is_amount_typed_key(key)
+        || key.starts_with("derived:amount_")
+        || key.starts_with("derived:tp_p")
+        || key.starts_with("derived:sp_p")
+        || key.starts_with("derived:p2_")
+        || key.starts_with("derived:p3_")
+}
+
+/// True when `text` is a formatted numeric amount (optional leading `-` or
+/// surrounding `(...)`, digits, commas, and at most one decimal point).
+fn is_amount_comb_value(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let body = trimmed
+        .strip_prefix('(')
+        .and_then(|s| s.strip_suffix(')'))
+        .or_else(|| trimmed.strip_prefix('-'))
+        .unwrap_or(trimmed);
+    let mut digits = 0usize;
+    let mut dots = 0usize;
+    for ch in body.chars() {
+        match ch {
+            '0'..='9' => digits += 1,
+            ',' => {}
+            '.' => dots += 1,
+            _ => return false,
+        }
+    }
+    digits > 0 && dots <= 1
+}
+
+/// One read-only input laid over a whole comb cell (`<div id="{cell}">`),
+/// holding an over-wide amount right-aligned in a fitted font (floored at
+/// [`AMOUNT_OVERFLOW_MIN_PT`]) with `data-overflow-of` (white knockout band)
+/// and `data-overflow-warning="amount-comb"` for continuation/warning reporting.
+fn comb_overflow_amount_line(
+    html: &str,
+    cell: &str,
+    text: &str,
+    sheet: &SheetType,
+) -> Option<(usize, String)> {
+    let open = html.find(&format!("<div id=\"{cell}\""))?;
+    let tag = &html[open..open + html[open..].find('>')?];
+    let width_at = tag.find(";width:")? + ";width:".len();
+    let width: f64 = tag[width_at..].split("pt").next()?.parse().ok()?;
+    let size = fit_line(sheet, width, text).max(AMOUNT_OVERFLOW_MIN_PT);
+    let close = open + html[open..].find('>')?;
+    Some((
+        close + 1,
+        format!(
+            "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"font-size:{size:.2}pt;text-align:right;justify-content:flex-end;padding-right:1pt;z-index:1\" data-overflow-warning=\"amount-comb\" data-overflow-of=\"{cell}\">",
+            html_escape(text)
+        ),
+    ))
+}
+
+/// One cell whose printed value overflowed its official box (e.g. an amount
+/// wider than its comb slots), exposed for continuation-sheet / UI warnings.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OverflowWarning {
+    pub cell: String,
+    pub kind: String,
+    pub value: String,
+    pub font_size_pt: Option<f64>,
+}
+
+/// Lists every cell in `document` carrying a `data-overflow-warning` marker
+/// (works identically on official cells and cloned continuation cells).
+pub fn overflow_warnings(document: &str) -> Vec<OverflowWarning> {
+    let needle = " data-overflow-warning=\"";
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(at) = document[from..].find(needle) {
+        let at = from + at;
+        let start = document[..at].rfind('<').unwrap_or(0);
+        let end = at + document[at..].find('>').unwrap_or(0);
+        let tag = &document[start..=end];
+        from = end + 1;
+        let Some(kind) = attr(tag, "data-overflow-warning") else {
+            continue;
+        };
+        let cell = attr(tag, "data-overflow-of")
+            .or_else(|| attr(tag, "name"))
+            .or_else(|| attr(tag, "id"))
+            .unwrap_or("")
+            .to_string();
+        let value = attr(tag, "value")
+            .unwrap_or("")
+            .replace("&quot;", "\"")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&amp;", "&");
+        let font_size_pt = tag
+            .find("font-size:")
+            .and_then(|pos| tag[pos + "font-size:".len()..].split("pt").next())
+            .and_then(|s| s.parse::<f64>().ok());
+        out.push(OverflowWarning {
+            cell,
+            kind: kind.to_string(),
+            value,
+            font_size_pt,
+        });
     }
     out
 }
@@ -3890,6 +4814,7 @@ mod tests {
                 cent_html_id: Some("c".into()),
                 point_slot: false,
             }],
+            negative_style: super::NegativeStyle::Minus,
         }];
         let doc = super::fill_money_joins(&html, &fields, &joins);
         assert_eq!(
@@ -3907,6 +4832,33 @@ mod tests {
     }
 
     #[test]
+    fn parenthesized_negative_money_join_puts_parens_around_amount() {
+        use std::collections::BTreeMap;
+        let html = format!("{}{}", comb("p", 8), comb("c", 2));
+        let mut fields = BTreeMap::new();
+        fields.insert("k".to_string(), "(799,061.01)".to_string());
+        let joins = [super::MoneyJoin {
+            writer_key: "k".into(),
+            cells: vec![super::MoneyCells {
+                peso_html_id: "p".into(),
+                cent_html_id: Some("c".into()),
+                point_slot: false,
+            }],
+            negative_style: super::NegativeStyle::Parentheses,
+        }];
+        let doc = super::fill_money_joins(&html, &fields, &joins);
+        assert_eq!(
+            comb_values(&doc, "p"),
+            ["", "(", "7", "9", "9", "0", "6", "1"]
+        );
+        assert_eq!(comb_values(&doc, "c"), ["0", "1)"]);
+        fields.insert("k".to_string(), "(0.00)".to_string());
+        let doc = super::fill_money_joins(&html, &fields, &joins);
+        assert_eq!(comb_values(&doc, "p"), ["", "", "", "", "", "", "", "0"]);
+        assert_eq!(comb_values(&doc, "c"), ["0", "0"]);
+    }
+
+    #[test]
     fn decimal_comb_money_puts_cents_in_the_last_two_slots() {
         use std::collections::BTreeMap;
         let html = comb("p", 8);
@@ -3919,6 +4871,7 @@ mod tests {
                 cent_html_id: None,
                 point_slot: true,
             }],
+            negative_style: super::NegativeStyle::Minus,
         }];
         let doc = super::fill_money_joins(&html, &fields, &joins);
         assert_eq!(
@@ -4057,9 +5010,167 @@ mod tests {
         let joins = [super::PesoJoin {
             writer_key: "k".into(),
             html_ids: vec!["p".into()],
+            negative_style: super::NegativeStyle::Minus,
         }];
         let doc = super::fill_peso_joins(&html, &fields, &joins);
         assert_eq!(comb_values(&doc, "p"), ["", "-", "1", "2", "3"]);
+    }
+
+    #[test]
+    fn negative_style_follows_official_line_wording() {
+        use std::collections::BTreeMap;
+        assert_eq!(
+            super::NegativeStyle::from_printed_label(Some("24 Tax Payable/(Overpayment)")),
+            super::NegativeStyle::Parentheses
+        );
+        assert_eq!(
+            super::NegativeStyle::from_printed_label(Some("22 Tax Still Due/(Overremittance)")),
+            super::NegativeStyle::Parentheses
+        );
+        assert_eq!(
+            super::NegativeStyle::from_printed_label(Some("27 Tax Still Due/(Over-remittance)")),
+            super::NegativeStyle::Parentheses
+        );
+        assert_eq!(
+            super::NegativeStyle::from_printed_label(Some(
+                "23 Over-remittance from Previous Quarter"
+            )),
+            super::NegativeStyle::Unsigned
+        );
+        // Split peso+centavo combs on 1600PT, 1600VT, and 1601FQ print negative
+        // (Overremittance)/(Over-remittance) values in parentheses, not with '-'.
+        for (slug, key, peso_id, cent_id) in [
+            (
+                "1600-pt-2018",
+                "frm1600PT:txtPg1P2I22TaxStillDueOverremit",
+                "p1c116",
+                "p1c118",
+            ),
+            (
+                "1600-vt-2018",
+                "frm1600VT:txtPg1P2I27TotAmtStillDueOverremit",
+                "p1c136",
+                "p1c138",
+            ),
+            ("1601-fq-2020", "frm1601FQ:txtTax27", "p1c161", "p1c163"),
+            ("1601-fq-2020", "frm1601FQ:txtTax32", "p1c181", "p1c183"),
+        ] {
+            let mut m = BTreeMap::new();
+            m.insert(key.to_string(), "-1,234.56".to_string());
+            let doc = super::filled_document(slug, &m).unwrap();
+            let pesos = comb_values(&doc, peso_id);
+            let cents = comb_values(&doc, cent_id);
+            assert_eq!(
+                &pesos[pesos.len() - 5..],
+                ["(", "1", "2", "3", "4"],
+                "{slug} {key} pesos should start with '(': {pesos:?}"
+            );
+            assert_eq!(cents, ["5", "6)"], "{slug} {key} cents should end with ')'");
+        }
+        assert_eq!(
+            super::NegativeStyle::from_printed_label(Some("12 Total Amount of Overremittance")),
+            super::NegativeStyle::Unsigned
+        );
+        assert_eq!(
+            super::NegativeStyle::from_printed_label(Some(
+                "3 Net Operating Loss (Item 1 Less Item 2)"
+            )),
+            super::NegativeStyle::Unsigned
+        );
+        assert_eq!(
+            super::NegativeStyle::from_printed_label(Some("22 Tax Payable, 1st installment")),
+            super::NegativeStyle::Minus
+        );
+
+        let html = comb("p", 8);
+        let mut fields = BTreeMap::new();
+        fields.insert("k".to_string(), "-122.50".to_string());
+        let paren = [super::PesoJoin {
+            writer_key: "k".into(),
+            html_ids: vec!["p".into()],
+            negative_style: super::NegativeStyle::Parentheses,
+        }];
+        let doc = super::fill_peso_joins(&html, &fields, &paren);
+        assert_eq!(
+            comb_values(&doc, "p"),
+            ["", "", "", "(", "1", "2", "3", ")"]
+        );
+
+        let unsigned = [super::PesoJoin {
+            writer_key: "k".into(),
+            html_ids: vec!["p".into()],
+            negative_style: super::NegativeStyle::Unsigned,
+        }];
+        let doc = super::fill_peso_joins(&html, &fields, &unsigned);
+        assert_eq!(comb_values(&doc, "p"), ["", "", "", "", "", "1", "2", "3"]);
+    }
+
+    #[test]
+    fn overwide_comb_amounts_print_right_aligned_with_warning_on_official_and_cloned_cells() {
+        use std::collections::BTreeMap;
+        let comb_div = |id: &str, width: f64, slots: usize| {
+            format!(
+                "<div id=\"{id}\" style=\"left:10pt;top:10pt;width:{width}pt;height:14pt\">{}</div>",
+                comb(id, slots)
+            )
+        };
+        // 1. MoneyJoin with separate peso + centavo combs (e.g. 2000OT / 1801)
+        let html = format!(
+            "{}{}",
+            comb_div("p1c56", 90.0, 8),
+            comb_div("p1c57", 24.0, 2)
+        );
+        let mut fields = BTreeMap::new();
+        fields.insert("k".to_string(), "-1,134,107,265.03".to_string());
+        let joins = [super::MoneyJoin {
+            writer_key: "k".into(),
+            cells: vec![super::MoneyCells {
+                peso_html_id: "p1c56".into(),
+                cent_html_id: Some("p1c57".into()),
+                point_slot: false,
+            }],
+            negative_style: super::NegativeStyle::Minus,
+        }];
+        let doc = super::fill_money_joins(&html, &fields, &joins);
+        let (printed, size) = super::printed_cell(&doc, "p1c56");
+        assert_eq!(printed, "-1134107265");
+        assert!(size.unwrap() >= super::AMOUNT_OVERFLOW_MIN_PT);
+        assert!(doc.contains("text-align:right;justify-content:flex-end;padding-right:1pt"));
+        assert_eq!(comb_values(&doc, "p1c57"), ["0", "3"]);
+        let warnings = super::overflow_warnings(&doc);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].cell, "p1c56");
+        assert_eq!(warnings[0].kind, "amount-comb");
+        assert_eq!(warnings[0].value, "-1134107265");
+
+        // 2. PesoJoin (e.g. 1701)
+        let html = comb_div("cont2-p1c80", 72.0, 8);
+        fields.insert("k".to_string(), "-199,914,152.00".to_string());
+        let pjoins = [super::PesoJoin {
+            writer_key: "k".into(),
+            html_ids: vec!["cont2-p1c80".into()],
+            negative_style: super::NegativeStyle::Parentheses,
+        }];
+        let doc = super::fill_peso_joins(&html, &fields, &pjoins);
+        let (printed, size) = super::printed_cell(&doc, "cont2-p1c80");
+        assert_eq!(printed, "(199914152)");
+        assert!(size.unwrap() >= super::AMOUNT_OVERFLOW_MIN_PT);
+        let warnings = super::overflow_warnings(&doc);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].cell, "cont2-p1c80");
+        assert_eq!(warnings[0].kind, "amount-comb");
+
+        // 3. Derived amount comb via fill_by_name_with_cells (1700 / 1701A / 1701MS)
+        let html = comb_div("p1c90", 72.0, 8);
+        let mut dfields = BTreeMap::new();
+        dfields.insert("derived:amount_22A".to_string(), "(199914152)".to_string());
+        let mut cells = BTreeMap::new();
+        cells.insert("derived:amount_22A".to_string(), vec!["p1c90".to_string()]);
+        let doc = super::fill_by_name_with_cells(&html, &dfields, &cells, &BTreeMap::new());
+        let (printed, _) = super::printed_cell(&doc, "p1c90");
+        assert_eq!(printed, "(199914152)");
+        assert!(doc.contains("text-align:right;justify-content:flex-end;padding-right:1pt"));
+        assert_eq!(super::overflow_warnings(&doc).len(), 1);
     }
 
     #[test]
@@ -5678,8 +6789,16 @@ mod tests {
         assert_eq!(comb_text(&html, "p1c32"), "");
         assert_eq!(comb_text(&html, "p1c51"), "250.00");
         assert_eq!(comb_text(&html, "p1c96"), "WINNER FIXTURE");
+        assert_eq!(comb_text(&html, "p1c241"), "2,500.00");
+        assert_eq!(comb_text(&html, "p1c243"), "250.00");
         assert_eq!(comb_text(&html, "p1c74"), "00000");
         assert!(!html.contains("name=\"frm1600WP:"));
+        // Zero Schedule 1.1 totals still print as 0.00, matching Part II items 14-16.
+        draft.schedule.clear();
+        draft.recompute();
+        let zero_html = filled_document("1600wp-2010", &draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&zero_html, "p1c241"), "0.00");
+        assert_eq!(comb_text(&zero_html, "p1c243"), "0.00");
     }
 
     #[test]
@@ -5894,6 +7013,14 @@ mod tests {
         assert_eq!(comb_text(&html, "p1c141"), aggregate);
         assert_eq!(comb_text(&html, "p2c5"), "123456788");
         assert_eq!(comb_text(&html, "p2c6"), "SAMPLE DUMMY TAXPAYER");
+        // Comma-formatted taxpayer name prints only the last name on page 2,
+        // and a joint return with an empty spouse TIN prints blank (not "---00000").
+        let mut c9_draft = draft.clone();
+        c9_draft.taxpayer_name = "Santos, Juana".to_string();
+        c9_draft.spouse_info.tin.clear();
+        let c9_html = filled_document("1701ms-2024", &c9_draft.to_print_field_map()).unwrap();
+        assert_eq!(comb_text(&c9_html, "p2c6"), "SANTOS");
+        assert_eq!(comb_text(&c9_html, "p1c24"), "");
         for x in [
             "p1c9", "p1c11", "p1c15", "p1c44", "p1c46", "p1c52", "p1c81", "p1c153",
         ] {
@@ -6099,7 +7226,7 @@ mod tests {
     }
 
     /// Every frozen sheet slug with a writer-cells file.
-    fn sheet_slugs() -> Vec<String> {
+    pub(super) fn sheet_slugs() -> Vec<String> {
         let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../html-frozen");
         let mut slugs: Vec<String> = std::fs::read_dir(root)
             .unwrap()
@@ -7830,7 +8957,7 @@ mod donor_estate_print_tests {
         for (slug, golden) in [
             (
                 "1706-2018",
-                "99f6a45573ad85d627f9632165d5c78f70af88c63e651cd79756dad2cf7d46a3",
+                "1b98848c3a43fd4f8ab3ceaedac8c65832e6565ea963b03c0a7195b891ec67a2",
             ),
             (
                 "2000-ot-2018",
@@ -7906,8 +9033,10 @@ mod donor_estate_print_tests {
         blank.death_month = 0;
         blank.death_day = 0;
         blank.death_year = 0;
+        let upload = blank.to_bir_field_map();
+        assert_eq!(upload["frm1801v2018:txtDateMonth"], "00");
         let fields = blank.to_print_field_map();
-        assert_eq!(fields["frm1801v2018:txtDateMonth"], "00");
+        assert_eq!(fields["frm1801v2018:txtDateMonth"], "");
         let html = filled_document("1801-2018", &fields).unwrap();
         assert_eq!(comb_text(&html, "p1c4"), "");
     }
@@ -8008,7 +9137,7 @@ mod donor_estate_print_tests {
                 &fresh["frm1800v2018:txtDate"],
                 &fresh["frm1800v2018:txtYear"]
             ],
-            ["00", "00", "0"]
+            ["", "", ""]
         );
         assert_eq!(parts(&fresh), ["", "", ""]);
         assert_eq!(parts(&donor(6, 0, 0)), ["06", "", ""]);
@@ -8059,5 +9188,249 @@ mod donor_estate_print_tests {
         assert_eq!(draft.to_bir_field_map()["frm1801v2018:txtBranchCodeE"], "1");
         let html = filled_document("1801-2018", &fields).unwrap();
         assert_eq!(comb_text(&html, "p1c32"), "00001");
+    }
+
+    #[test]
+    fn plain_money_inputs_right_align_with_inset_while_non_money_stays_left() {
+        // 1800 Schedule A Fair Market Value (money) vs Schedule B2 Area (non-money)
+        let mut fields = donor(6, 15, 2025);
+        fields.insert(
+            "frm1800v2018:schedA:txtFairMarketValue0".into(),
+            "150,000.00".into(),
+        );
+        fields.insert("frm1800v2018:schedB2:txtArea0".into(), "250.00".into());
+        fields.insert("frm1800v2018:schedB2:txtFTD0".into(), "1,200,000.00".into());
+        let html = filled_document("1800-2018", &fields).unwrap();
+        let fmv_tag = super::input_tags(&html)
+            .into_iter()
+            .find(|t| t.name == "p2c76")
+            .expect("p2c76 input")
+            .tag
+            .to_string();
+        assert!(
+            fmv_tag.contains("text-align:right;justify-content:flex-end;padding-right:2pt"),
+            "Schedule A FMV should right-align: {fmv_tag}"
+        );
+        let ftd_tag = super::input_tags(&html)
+            .into_iter()
+            .find(|t| t.name == "p2c179")
+            .expect("p2c179 input")
+            .tag
+            .to_string();
+        assert!(
+            ftd_tag.contains("text-align:right;justify-content:flex-end;padding-right:2pt"),
+            "Schedule B2 FMV per TD should right-align: {ftd_tag}"
+        );
+        let area_tag = super::input_tags(&html)
+            .into_iter()
+            .find(|t| t.name == "p2c178")
+            .expect("p2c178 input")
+            .tag
+            .to_string();
+        assert!(
+            area_tag.contains("text-align:right;justify-content:flex-end;padding-right:2pt"),
+            "Schedule B2 Area (numeric quantity) should right-align: {area_tag}"
+        );
+
+        // 2552 Schedule 1 & Part VI Number of Shares and 1706 Schedule 1 Area
+        let mut f2552 = BTreeMap::new();
+        f2552.insert("frm2552:txtPg2Pt5Sch1NumShares1".into(), "150000".into());
+        f2552.insert("frm2552:txtPg2Pt6NumShares1".into(), "25,000".into());
+        f2552.insert("frm2552:txtPg2Pt5Sch1Seller1".into(), "SELLER CORP".into());
+        let html_2552 = filled_document("2552-2018", &f2552).unwrap();
+        let sch1_shares = super::input_tags(&html_2552)
+            .into_iter()
+            .find(|t| t.name == "p2c48")
+            .expect("p2c48 input")
+            .tag
+            .to_string();
+        assert!(
+            sch1_shares.contains("text-align:right;justify-content:flex-end;padding-right:2pt"),
+            "2552 Schedule 1 Number of Shares should right-align: {sch1_shares}"
+        );
+        let seller_tag = super::input_tags(&html_2552)
+            .into_iter()
+            .find(|t| t.name == "p2c23")
+            .expect("p2c23 input")
+            .tag
+            .to_string();
+        assert!(
+            !seller_tag.contains("text-align:right"),
+            "2552 Schedule 1 Seller (text) must stay left-aligned: {seller_tag}"
+        );
+
+        let mut f1706 = BTreeMap::new();
+        f1706.insert("frm1706:txtArea".into(), "1,250.50".into());
+        let html_1706 = filled_document("1706-2018", &f1706).unwrap();
+        let area_1706 = super::input_tags(&html_1706)
+            .into_iter()
+            .find(|t| t.name == "p2c42")
+            .expect("p2c42 input")
+            .tag
+            .to_string();
+        assert!(
+            area_1706.contains("text-align:right;justify-content:flex-end;padding-right:2pt"),
+            "1706 Schedule 1 Area should right-align: {area_1706}"
+        );
+
+        // 1600WP Part II tax base (money) vs Schedule 1.1 rate (non-money)
+        let mut f1600 = BTreeMap::new();
+        f1600.insert("derived:WB191_base".into(), "500,000.00".into());
+        f1600.insert("frm1600WP:dtSched:txtRatePercent1".into(), "20.00".into());
+        f1600.insert("frm1600WP:txtTaxpayerName".into(), "SAMPLE CORP".into());
+        let html_wp = filled_document("1600wp-2010", &f1600).unwrap();
+        let base_tag = super::input_tags(&html_wp)
+            .into_iter()
+            .find(|t| t.name == "p1c32")
+            .expect("p1c32 input")
+            .tag
+            .to_string();
+        assert!(
+            base_tag.contains("text-align:right;justify-content:flex-end;padding-right:2pt"),
+            "1600WP tax base should right-align: {base_tag}"
+        );
+        let rate_tag = super::input_tags(&html_wp)
+            .into_iter()
+            .find(|t| t.name == "p1c64")
+            .expect("p1c64 input")
+            .tag
+            .to_string();
+        assert!(
+            !rate_tag.contains("text-align:right"),
+            "1600WP tax rate (non-money) must stay left-aligned: {rate_tag}"
+        );
+    }
+
+    #[test]
+    fn c13_percentage_rate_formatting_and_centering() {
+        assert_eq!(
+            super::format_percentage_rate("5.00", false).as_deref(),
+            Some("5%")
+        );
+        assert_eq!(
+            super::format_percentage_rate(" 10.0", false).as_deref(),
+            Some("10%")
+        );
+        assert_eq!(
+            super::format_percentage_rate("15.00", false).as_deref(),
+            Some("15%")
+        );
+        assert_eq!(
+            super::format_percentage_rate("2.50", false).as_deref(),
+            Some("2.5%")
+        );
+        assert_eq!(
+            super::format_percentage_rate("0.75", false).as_deref(),
+            Some("0.75%")
+        );
+        assert_eq!(
+            super::format_percentage_rate("5.00", true).as_deref(),
+            Some("5")
+        );
+        assert_eq!(super::format_percentage_rate("6/10 of 1%", false), None);
+
+        for (slug, key, cell, raw, expected) in [
+            ("2553-1999", "frm2553:txt17D", "p1c54", "3.00", "3%"),
+            (
+                "1600-pt-2018",
+                "frm1600PT:Pg2Sc1TaxRate1",
+                "p2c20",
+                "5.00",
+                "5%",
+            ),
+            (
+                "1600-vt-2018",
+                "frm1600VT:Pg2Sc1TaxRate1",
+                "p2c20",
+                "5.00",
+                "5%",
+            ),
+            ("1601-fq-2020", "txtRate0", "p2c21", "15.00", "15%"),
+            (
+                "1602q-2019",
+                "frm1602Q:txtSched2TaxRate1",
+                "p2c166",
+                "10.00",
+                "10%",
+            ),
+        ] {
+            let mut fields = BTreeMap::new();
+            fields.insert(key.to_string(), raw.to_string());
+            let html = filled_document(slug, &fields).unwrap();
+            let tag = super::input_tags(&html)
+                .into_iter()
+                .find(|t| t.name == cell)
+                .expect("rate cell input")
+                .tag
+                .to_string();
+            assert!(
+                tag.contains(&format!("value=\"{expected}\"")),
+                "{slug} {cell}: expected value=\"{expected}\" in {tag}"
+            );
+            assert!(
+                tag.contains("text-align:center;justify-content:center"),
+                "{slug} {cell}: expected centered style in {tag}"
+            );
+        }
+    }
+
+    #[test]
+    fn c13_rate_classifier_never_matches_amount_cells() {
+        for slug in super::tests::sheet_slugs() {
+            let cells = super::writer_cells(&slug).unwrap();
+            for (key, ids) in &cells.joins {
+                for id in ids {
+                    let cap = cells.captions.get(id).map(String::as_str);
+                    if super::is_percentage_rate_cell(key, cap) {
+                        assert!(
+                            !super::is_amount_typed_key(key),
+                            "{slug} {id} ({key}) classified as both rate and amount"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn c12_preprinted_decimal_splits_pesos_and_centavos_without_second_dot() {
+        let mut f0605 = BTreeMap::new();
+        f0605.insert("frm0605:txtTax19".into(), "12,345.67".into());
+        f0605.insert("frm0605:txtTax20A".into(), "500.00".into());
+        f0605.insert("frm0605:txtTax21".into(), "12,845.67".into());
+        let html_0605 = filled_document("0605-1999", &f0605).unwrap();
+        assert!(html_0605.contains("value=\"12,345\""));
+        assert!(html_0605.contains("data-decimal-part=\"peso\""));
+        assert!(html_0605.contains("value=\"67\""));
+        assert!(html_0605.contains("data-decimal-part=\"cents\""));
+        assert!(!html_0605.contains(" value=\"12,345.67\""));
+
+        let mut f2553 = BTreeMap::new();
+        f2553.insert("frm2553:txt17C".into(), "100,000.00".into());
+        f2553.insert("frm2553:txt21".into(), "-2,500.50".into());
+        let html_2553 = filled_document("2553-1999", &f2553).unwrap();
+        assert!(html_2553.contains(" value=\"100,000\""));
+        assert!(!html_2553.contains(" value=\"100,000.00\""));
+        assert!(html_2553.contains("value=\"(2,500\""));
+        assert!(html_2553.contains("value=\"50)\""));
+
+        let mut f1601fq = BTreeMap::new();
+        f1601fq.insert("txtAmtIncomePay0".into(), "45,000,000.00".into());
+        f1601fq.insert("txtReqWithheld0".into(), "6,750,000.00".into());
+        let html_fq = filled_document("1601-fq-2020", &f1601fq).unwrap();
+        let col_e = super::input_tags(&html_fq)
+            .into_iter()
+            .find(|t| t.name == "p2c20")
+            .unwrap()
+            .tag
+            .to_string();
+        let col_g = super::input_tags(&html_fq)
+            .into_iter()
+            .find(|t| t.name == "p2c22")
+            .unwrap()
+            .tag
+            .to_string();
+        assert!(col_e.contains("text-align:right"), "1601FQ col E: {col_e}");
+        assert!(col_g.contains("text-align:right"), "1601FQ col G: {col_g}");
     }
 }

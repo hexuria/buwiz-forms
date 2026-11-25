@@ -520,6 +520,14 @@ impl Form2200ANDraft {
                 fields.insert(format!("derived:line:item{item}_{level}"), name);
             }
         }
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm2200ANv2018:txtMonth",
+                "frm2200ANv2018:txtDate",
+                "frm2200ANv2018:txtYear",
+            ],
+        );
         fields
     }
 

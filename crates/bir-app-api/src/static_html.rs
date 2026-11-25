@@ -12,7 +12,9 @@
 /// CSS for the span stand-ins. `.fi` already gives position:absolute;inset:0
 /// plus the font; `fhN` gives size/line-height.
 pub const STATIC_CSS: &str = ".fi.fs{display:flex;align-items:center;justify-content:flex-start;\
-white-space:pre;overflow:hidden;box-sizing:border-box}.fi.fs.fc{justify-content:center}";
+white-space:pre;overflow:hidden;box-sizing:border-box}.fi.fs.fc{justify-content:center}\
+.fi.fs[data-overflow-of]{inset:1pt 1pt 2.5pt 1pt;background:#fff;\
+-webkit-print-color-adjust:exact;print-color-adjust:exact}";
 
 pub fn staticize(html: &str) -> String {
     let html = strip_scripts(html);
@@ -66,7 +68,13 @@ fn inputs_to_spans(html: &str) -> String {
         out.push_str("<span class=\"");
         out.push_str(class);
         out.push_str(" fs\"");
-        for a in ["id", "style", "data-slot-index"] {
+        for a in [
+            "id",
+            "style",
+            "data-slot-index",
+            "data-overflow-warning",
+            "data-overflow-of",
+        ] {
             if let Some(v) = attr(tag, a) {
                 out.push_str(&format!(" {a}=\"{v}\""));
             }
@@ -190,5 +198,14 @@ mod tests {
         // Balanced: every sheet closes before </body>.
         let body = &out[out.find("<body>").unwrap()..out.find("</body>").unwrap()];
         assert_eq!(body.matches("<div").count(), body.matches("</div>").count());
+    }
+
+    #[test]
+    fn overflow_spans_keep_marker_and_white_knockout_rule() {
+        let doc = r##"<html><head></head><body><div class="page page-1"><input type="text" class="fi" readonly value="LONG TEXT" style="font-size:7.50pt;text-align:left;padding-left:1pt;z-index:1" data-overflow-of="p1c10"><input type="text" class="fi" readonly value="CLONED LONG TEXT" style="font-size:7.50pt;text-align:left;padding-left:1pt;z-index:1" data-overflow-of="cont2-p1c10"></div></body></html>"##;
+        let out = super::staticize(doc);
+        assert!(out.contains(r#"data-overflow-of="p1c10""#));
+        assert!(out.contains(r#"data-overflow-of="cont2-p1c10""#));
+        assert!(out.contains(".fi.fs[data-overflow-of]{inset:1pt 1pt 2.5pt 1pt;background:#fff;"));
     }
 }

@@ -1470,15 +1470,27 @@ impl Form1701MsDraft {
         let (a, b, c, branch) = split_tin(&self.tin);
         // Page 2's TIN comb has nine inputs; the branch `00000` is preprinted.
         put("tin_digits", format!("{a}{b}{c}"));
-        put("page2_name", self.taxpayer_name.trim().to_uppercase());
-        put("tp_tin", format!("{a}-{b}-{c}-{branch}"));
+        put(
+            "page2_name",
+            self.taxpayer_name
+                .split(',')
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .to_uppercase(),
+        );
+        if !self.tin.trim().is_empty() {
+            put("tp_tin", format!("{a}-{b}-{c}-{branch}"));
+        }
         put("tp_rdo", self.rdo_code.trim().to_string());
         put("tp_email", self.email.trim().to_string());
         put("tp_contact", self.contact_number.trim().to_string());
         if self.is_joint() {
             let spouse = &self.spouse_info;
-            let (a, b, c, branch) = split_tin(&spouse.tin);
-            put("sp_tin", format!("{a}-{b}-{c}-{branch}"));
+            if !spouse.tin.trim().is_empty() {
+                let (a, b, c, branch) = split_tin(&spouse.tin);
+                put("sp_tin", format!("{a}-{b}-{c}-{branch}"));
+            }
             put("sp_rdo", spouse.rdo_code.trim().to_string());
             put("sp_name", spouse.name.trim().to_uppercase());
             put("sp_email", spouse.email.trim().to_string());
@@ -2714,6 +2726,20 @@ mod tests {
                 .iter()
                 .any(|(field, _)| field == "refund_amount"),
             "a three-decimal amount must still be refused"
+        );
+    }
+
+    #[test]
+    fn print_map_uses_last_name_before_comma_and_omits_empty_spouse_tin() {
+        let mut draft = sample();
+        draft.taxpayer_name = "Santos, Juana".into();
+        draft.filing = Form1701MsFiling::Jointly;
+        draft.spouse_info.tin = "   ".into();
+        let fields = draft.to_print_field_map();
+        assert_eq!(fields["derived:page2_name"], "SANTOS");
+        assert!(
+            !fields.contains_key("derived:sp_tin"),
+            "empty spouse TIN must not format as ---00000"
         );
     }
 }
