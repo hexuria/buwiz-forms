@@ -74,6 +74,30 @@ test("iPhone: a saved return popped by the system's back keeps what was typed", 
   expect(app.value("id:fp-frm2551Qv2018:txt15")).toMatch(/^100(\.00)?$/);
 }, 90_000);
 
+// The same return left by the header's Back (the app's own move, which waits for the page's save): if this keeps the amount and the
+// system's back does not, the loss is the stack's; if neither keeps it, it is how the fixture reopens the return.
+test("iPhone: a saved return left by the header's Back keeps what was typed", async () => {
+  const app = await open(ENTRY, asking({ start: "form=2551Q/2026/3" }));
+  await app.waitFor("id:fp-pill", { timeout: 30_000 });
+  await app.press("id:fp-pill-open");
+  await app.waitFor("id:fp-section-2", { timeout: 15_000 });
+  await app.press("id:fp-section-2");
+  await app.wait(800);
+  await app.type("id:fp-frm2551Qv2018:txt15", "100");
+  await app.waitFor("text:✓ Saved", { timeout: 5000 });
+  await app.press("id:nb-back");
+  await app.waitFor("id:home");
+  await app.press("id:tab-filings");
+  await app.waitFor("id:filings-rows");
+  await app.press("id:filings-rows >> role:button >> nth=0");
+  await app.waitFor("id:fp-pill", { timeout: 30_000 });
+  await app.press("id:fp-pill-open");
+  await app.waitFor("id:fp-section-2", { timeout: 15_000 });
+  await app.press("id:fp-section-2");
+  await app.wait(800);
+  expect(app.value("id:fp-frm2551Qv2018:txt15")).toMatch(/^100(\.00)?$/);
+}, 90_000);
+
 test("a desktop window under 600 points keeps the one view: no navigation stack", async () => {
   const app = await open(ENTRY, { width: 480, height: 800, platform: "macos", ...asking() });
   await app.waitFor("id:tab-bar");
