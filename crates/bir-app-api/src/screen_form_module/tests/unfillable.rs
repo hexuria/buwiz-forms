@@ -169,8 +169,8 @@ fn f3_1702mx_nolco_amounts_are_fillable() {
     // Column E (unapplied) is computed: 300000 - 100000 - 0 - 50000.
     assert_eq!(map["frm1702MX:txtPg3IShed7_4E"], "150,000");
 
-    // Official BIR XML upload payload (to_bir_xml_payload -> insert_money)
-    // must carry every typed NOLCO value (not blank `raw: ""`).
+    // Print/legacy XML map (to_bir_xml_payload / to_print_field_map) must also
+    // carry every typed NOLCO value and comma-formatted computed Col E / Row 8.
     let typed_draft: bir_core::forms::form_1702mx::Form1702MXDraft =
         serde_json::from_value(row1["draft"].clone()).unwrap();
     let typed_xml = typed_draft.to_bir_xml_payload();
@@ -179,7 +179,8 @@ fn f3_1702mx_nolco_amounts_are_fillable() {
     assert_eq!(typed_fields["frm1702MX:txtPg3IShed7_4B"], "100,000.00");
     assert_eq!(typed_fields["frm1702MX:txtPg3IShed7_4C"], "0");
     assert_eq!(typed_fields["frm1702MX:txtPg3IShed7_4D"], "50,000.00");
-    assert_eq!(typed_fields["frm1702MX:txtPg3IShed7_4E"], "150000");
+    assert_eq!(typed_fields["frm1702MX:txtPg3IShed7_4E"], "150,000");
+    assert_eq!(typed_fields["frm1702MX:txtPg3IShed78D"], "50,000");
     // Row 4 (item 7) is the form's own current-year row: never an entry.
     for key in [
         "frm1702MX:txtPg3IShed7_7Year",
@@ -191,4 +192,84 @@ fn f3_1702mx_nolco_amounts_are_fillable() {
             "{key} stays derived"
         );
     }
+}
+
+/// Reproduces the official sample `1702MX-1225-sched6.official.xml` Schedule 7.1
+/// & 8.1 block byte for byte through the page's own write path (typed boxes,
+/// untouched boxes, a typed-then-cleared box, Col E, and Row 8 totals) and
+/// verifies comma-formatted computed totals on `to_print_field_map`.
+#[test]
+fn f3_1702mx_nolco_matches_official_sample_xml_byte_for_byte() {
+    use bir_core::forms::form_1702mx::Form1702MXDraft;
+
+    setup();
+    let opened = open("1702MX", 0);
+    let itemized = fill(
+        "1702MX",
+        &opened["draft"],
+        json!({"frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized": "true"}),
+    );
+    // Type the exact Schedule 7.1 values from 1702MX-1225-sched6.steps.json,
+    // plus type and then clear 4C to verify clearing returns to official "0".
+    let typed = fill(
+        "1702MX",
+        &itemized["draft"],
+        json!({
+            "frm1702MX:txtPg3IShed7_4Year": "2022",
+            "frm1702MX:txtPg3IShed7_4A": "300000",
+            "frm1702MX:txtPg3IShed7_4B": "100000",
+            "frm1702MX:txtPg3IShed7_4C": "25000",
+            "frm1702MX:txtPg3IShed7_4D": "50000",
+        }),
+    );
+    assert_eq!(typed["rejected"], json!({}));
+    let cleared = fill(
+        "1702MX",
+        &typed["draft"],
+        json!({"frm1702MX:txtPg3IShed7_4C": "0"}),
+    );
+    assert_eq!(cleared["rejected"], json!({}));
+
+    let draft: Form1702MXDraft = serde_json::from_value(cleared["draft"].clone()).unwrap();
+    let layout = draft.official_layout().unwrap();
+    let ours_xml = bir_core::official_xml::write(&layout, &draft.to_official_field_map()).unwrap();
+
+    let official_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../bir-core/tests/sample-payloads/1702MX-1225-sched6.official.xml");
+    let official_xml = std::fs::read_to_string(&official_path).unwrap();
+
+    let nolco_block = |xml: &str| -> String {
+        xml.lines()
+            .filter(|line| {
+                line.contains("IShed7_")
+                    || line.contains("IShed78D")
+                    || line.contains("IShed8_")
+                    || line.contains("IShed88D")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    let want_block = nolco_block(&official_xml);
+    let got_block = nolco_block(&ours_xml);
+    assert_eq!(
+        want_block.lines().count(),
+        50,
+        "Schedule 7.1 + 8.1 block has 50 XML entries"
+    );
+    assert_eq!(
+        got_block, want_block,
+        "page-path official upload XML Schedule 7.1 & 8.1 block must match official sample byte for byte"
+    );
+
+    // Print map also carries comma-formatted computed Col E and Row 8 total.
+    let print_map = draft.to_print_field_map();
+    assert_eq!(print_map["frm1702MX:txtPg3IShed7_4A"], "300,000.00");
+    assert_eq!(print_map["frm1702MX:txtPg3IShed7_4B"], "100,000.00");
+    assert_eq!(print_map["frm1702MX:txtPg3IShed7_4C"], "0");
+    assert_eq!(print_map["frm1702MX:txtPg3IShed7_4D"], "50,000.00");
+    assert_eq!(print_map["frm1702MX:txtPg3IShed7_4E"], "150,000");
+    assert_eq!(print_map["frm1702MX:txtPg3IShed78D"], "50,000");
+    // Untouched box (row 5 col A) uploads as "0" and stays blank on print.
+    assert_eq!(print_map["frm1702MX:txtPg3IShed7_5A"], "");
 }

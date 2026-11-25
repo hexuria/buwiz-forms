@@ -3037,17 +3037,46 @@ mod tests {
 
         let typed: crate::forms::form_1702mx::Form1702MXDraft =
             serde_json::from_value(draft.clone()).unwrap();
-        let xml = typed.to_bir_xml_payload();
-        let parsed = crate::bir_xml::parse_bir_xml_checked(&xml).unwrap();
+        let layout = typed.official_layout().unwrap();
+        let official_xml =
+            crate::official_xml::write(&layout, &typed.to_official_field_map()).unwrap();
+        let official_parsed = crate::bir_xml::parse_bir_xml_checked(&official_xml).unwrap();
+        let print_map = typed.to_print_field_map();
         for (key, _, expected) in cases {
             assert_eq!(
-                parsed.get(key).map(String::as_str),
+                official_parsed.get(key).map(String::as_str),
                 Some(expected),
-                "official XML missing or mismatched for {key}"
+                "official upload XML missing or mismatched for {key}"
+            );
+            assert_eq!(
+                print_map.get(key).map(String::as_str),
+                Some(expected),
+                "print field map missing or mismatched for {key}"
+            );
+        }
+        // Computed Col E and Row 8 totals carry thousands commas in BOTH
+        // the official upload XML and the print/raw map.
+        for (key, expected) in [
+            ("frm1702MX:txtPg3IShed7_4E", "150,000"),
+            ("frm1702MX:txtPg3IShed78D", "145,000"),
+            ("frm1702MX:txtPg4IShed8_4E", "225,000"),
+            ("frm1702MX:txtPg3IShed88D", "165,000"),
+        ] {
+            assert_eq!(
+                official_parsed.get(key).map(String::as_str),
+                Some(expected),
+                "official upload XML computed {key}"
+            );
+            assert_eq!(
+                print_map.get(key).map(String::as_str),
+                Some(expected),
+                "print field map computed {key}"
             );
         }
 
-        // Clearing back to 0 keeps amount and raw synchronized.
+        // Clearing back to 0 (what the form page's CLEARED = "0" sends when
+        // emptying a non-nullable number box) keeps amount/raw synchronized and
+        // files "0".
         fill(
             kind,
             &mut draft,
@@ -3063,5 +3092,9 @@ mod tests {
             Some(crate::forms::form_1702mx::WholePeso(0))
         );
         assert_eq!(zeroed.schedule_7_1.rows[0].amount.raw, "0");
+        let zeroed_off = zeroed.to_official_field_map();
+        assert_eq!(zeroed_off["frm1702MX:txtPg3IShed7_4A"], "0");
+        // Untouched current-year row also uploads as "0".
+        assert_eq!(zeroed_off["frm1702MX:txtPg3IShed7_7A"], "0");
     }
 }
