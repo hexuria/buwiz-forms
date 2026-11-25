@@ -140,7 +140,8 @@ booted API 35 in about two minutes and reached the app's first screen in about 1
    through.
 3. Bring the checkout's `main` up to date (`git fetch && git merge --ff-only origin/main`) first: the setup script reads
    the NSH pin from the checkout.
-4. `scripts/setup-linux-nsh.sh`. It ends with every line green, including `nsh android dev runtime` and
+4. `scripts/setup-linux-nsh.sh`. A machine set up before this script passed the caller's `CARGO_TARGET_DIR`, `NSH_TOOLS`
+   and `NSH_RUNTIME` into its container must run it again: until then every NSH command there builds in the shared folder. It ends with every line green, including `nsh android dev runtime` and
    `nsh android release runtime` at the pin. Both are copies with the commit in `nsh-ref`. `nsh package` takes the
    release one even for a development build. Never link a runtime into an NSH checkout's build folder, and never run
    `nsh update`, which replaces the tool with Longbridge's latest release: either one makes every later check a check

@@ -677,7 +677,7 @@ play-bundle build="":
     # checkouts of the same crate version apart in a shared folder, so a bundle could link another worktree's bir-core,
     # form definitions included, with no error.
     export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/play-bundle}"
-    echo "build: app $(git rev-parse --short=8 HEAD 2>/dev/null || echo ?), nsh $(git -C ../nsh rev-parse --short=8 HEAD 2>/dev/null || echo ?) beside it, tool $(nsh --version 2>/dev/null || echo missing), folder $CARGO_TARGET_DIR" >&2
+    scripts/build-line.sh
     # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one.
     unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV
     # nsh builds libnsh.so in its generated workspace, which has no [profile.release]: this repository's own profile never
@@ -892,7 +892,7 @@ nsh-test *args="":
     #!/usr/bin/env bash
     set -euo pipefail
     export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
-    echo "build: app $(git rev-parse --short=8 HEAD 2>/dev/null || echo ?), nsh $(git -C ../nsh rev-parse --short=8 HEAD 2>/dev/null || echo ?) beside it, tool $(nsh --version 2>/dev/null || echo missing), folder $CARGO_TARGET_DIR" >&2
+    scripts/build-line.sh
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     unset BIR_SFTP_LIVE BIR_DATABASE_PATH
     cd nsh
@@ -933,8 +933,8 @@ nsh-test *args="":
     $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
     $env:PATH = "$tools\bin;$env:PATH"
     if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
-    $app = git rev-parse --short=8 HEAD; $kit = git -C ..\nsh rev-parse --short=8 HEAD; $tool = (nsh --version) 2>$null
-    [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, folder $env:CARGO_TARGET_DIR")
+    $app = git rev-parse --short=8 HEAD; $kit = git -C ..\nsh rev-parse --short=8 HEAD; $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
+    [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, $cargoVersion, folder $env:CARGO_TARGET_DIR")
     $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_AUTH_BYPASS = '1'; $env:BIR_SFTP_DRY_RUN = '1'
     Remove-Item Env:BIR_SFTP_LIVE -ErrorAction SilentlyContinue
     Remove-Item Env:BIR_DATABASE_PATH -ErrorAction SilentlyContinue
@@ -1155,7 +1155,7 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     [ -n "${GPUI_AGENT_TOKEN:-}" ] || { echo "nsh-run-agent: set GPUI_AGENT_TOKEN first"; exit 1; }
     root="$(pwd -P)"
     export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
-    echo "build: app $(git rev-parse --short=8 HEAD 2>/dev/null || echo ?), nsh $(git -C ../nsh rev-parse --short=8 HEAD 2>/dev/null || echo ?) beside it, tool $(nsh --version 2>/dev/null || echo missing), folder $CARGO_TARGET_DIR" >&2
+    scripts/build-line.sh
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     export GPUI_AGENT=1 GPUI_AGENT_ADDR="${GPUI_AGENT_ADDR:-127.0.0.1:17421}"
     unset BIR_SFTP_LIVE
@@ -1241,8 +1241,8 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
     $env:PATH = "$tools\bin;$env:PATH"
     if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
-    $app = git rev-parse --short=8 HEAD; $kit = git -C ..\nsh rev-parse --short=8 HEAD; $tool = (nsh --version) 2>$null
-    [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, folder $env:CARGO_TARGET_DIR")
+    $app = git rev-parse --short=8 HEAD; $kit = git -C ..\nsh rev-parse --short=8 HEAD; $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
+    [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, $cargoVersion, folder $env:CARGO_TARGET_DIR")
     if (-not $env:GPUI_AGENT_TOKEN) { "nsh-run-agent: set GPUI_AGENT_TOKEN first"; exit 1 }
     $root = (Get-Location).ProviderPath
     $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_AUTH_BYPASS = '1'; $env:BIR_SFTP_DRY_RUN = '1'
@@ -1423,7 +1423,7 @@ nsh-agent-check:
     set -euo pipefail
     root="$(pwd -P)"
     export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
-    echo "build: app $(git rev-parse --short=8 HEAD 2>/dev/null || echo ?), nsh $(git -C ../nsh rev-parse --short=8 HEAD 2>/dev/null || echo ?) beside it, tool $(nsh --version 2>/dev/null || echo missing), folder $CARGO_TARGET_DIR" >&2
+    scripts/build-line.sh
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     unset BIR_SFTP_LIVE BIR_DATABASE_PATH
     work="$(mktemp -d)"
@@ -1458,7 +1458,7 @@ nsh-shots name="base" *args="":
     #!/usr/bin/env bash
     set -euo pipefail
     export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
-    echo "build: app $(git rev-parse --short=8 HEAD 2>/dev/null || echo ?), nsh $(git -C ../nsh rev-parse --short=8 HEAD 2>/dev/null || echo ?) beside it, tool $(nsh --version 2>/dev/null || echo missing), folder $CARGO_TARGET_DIR" >&2
+    scripts/build-line.sh
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     unset BIR_SFTP_LIVE
     {{just_executable()}} _nsh-db-guard "${BIR_DATABASE_PATH:-}"

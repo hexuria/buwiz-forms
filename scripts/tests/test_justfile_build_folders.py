@@ -63,6 +63,23 @@ class BuildFolderTests(unittest.TestCase):
             result = subprocess.run(["just", "nsh-check"], cwd=ROOT, env=env, text=True, capture_output=True)
             self.assertIn(f"folder={Path.home() / 'BuwizNsh' / 'target-nsh'}", result.stdout)
 
+    @unittest.skipUnless(os.name != "nt" and shutil.which("bash"), "bash")
+    def test_the_build_line_names_the_folder_the_build_really_uses(self):
+        for version, expected in (("cargo 1.99.0 (abc 2026-01-01)", "folder /tmp/own"),
+                                  ("cargo 1.102.0 (d69 2026-11-16) (huacnlee/cargo 0.103.0-1)",
+                                   "nsh/.nsh/rust/target and ")):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as tmp:
+                for name, text in (("cargo", f'echo "{version}"'), ("nsh", 'echo "nsh 0.6.1 (8c78cfd)"')):
+                    tool = Path(tmp) / name
+                    tool.write_text(f"#!/bin/sh\n{text}\n")
+                    tool.chmod(tool.stat().st_mode | stat.S_IEXEC)
+                env = {**os.environ, "PATH": f"{tmp}:{os.environ['PATH']}", "CARGO_TARGET_DIR": "/tmp/own"}
+                result = subprocess.run(["bash", "scripts/build-line.sh"], cwd=ROOT, env=env, text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(version, result.stderr)
+                self.assertIn(expected, result.stderr)
+                self.assertIn("tool nsh 0.6.1 (8c78cfd)", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
