@@ -1,0 +1,6 @@
+$ git diff --stat origin/buwiz-next...HEAD
+ .../java/com/longbridge/nsh/DevActivity.java           | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+$ git log --oneline origin/buwiz-next..HEAD
+0c7a8433f android: Leave the navigation bar and the cutout's side to the app
