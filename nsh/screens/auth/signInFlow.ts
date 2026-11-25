@@ -1,9 +1,10 @@
-// The Buwiz sign-in, one flow for the account gate and Settings > Account. One owner: this module's signals. The screens draw
-// its state (signInCards.tsx) and call its actions; neither keeps a copy.
+// The Buwiz sign-in, drawn on the account gate only (Settings > Account's Sign in shows the gate). One owner: this module's
+// signals. The gate draws its state (signInCards.tsx) and calls its actions; it keeps no copy.
 //
 // The flow is: the email page (one page for signing in and creating an account), the code page (six boxes that check by
-// themselves), Home. Nothing else, and nothing switches to a browser. The first tokens come through EmailPath (the address,
-// then the emailed code; the host keeps the pending request, so a relaunch opens on the code page). TokenPath is the seam
+// themselves), Home (or, on a first run, the app's first-run setup). Nothing else, and nothing switches to a browser. The first
+// tokens come through EmailPath (the address, then the emailed code; the host keeps the pending request, so a gate made anew,
+// after a relaunch or a new engine, opens on the code page). TokenPath is the seam
 // for a second way to the first tokens (a later change); nothing implements or draws one now. Every way ends in `approve`.
 import { batch, signal } from "nsh";
 import type { CloudAccountStatus, CloudEmailCheck, CloudEmailStep } from "../../bir";
@@ -25,11 +26,11 @@ export interface CodeRequest {
 }
 
 /**
- * Every state of the sign-in. `idle` is the email page before anything happened (on the gate; in Settings the account row);
- * `email` is the email page asked for (Settings' Sign in, Change email, a request that ended) with a sentence or none;
+ * Every state of the sign-in. `idle` is the email page before anything happened; `email` is the email page again (Change
+ * email, a request that ended, a refusal) with a sentence or none;
  * `sending` is its button's request. `code` is the code page: `checking` while its request runs, `resending` while Resend's
  * does, `said` a wrong code, expiry or the like, `tooMany` when the boxes are spent until Resend. `approved` lasts no longer
- * than the screen takes to move on (Home, or the account in Settings).
+ * than the screen takes to move on (Home, or the first-run setup on a first run).
  */
 export type SignInState =
   | { kind: "idle" }
@@ -43,9 +44,7 @@ export interface EmailPath {
   start(email: string): Promise<CloudEmailStep>;
   verify(code: string): Promise<CloudEmailCheck>;
   resend(): Promise<CloudEmailStep>;
-  /** Ends the pending request (Change email). */
-  cancel(): void;
-  /** The request kept from before a relaunch, or null. */
+  /** The request the host keeps (from before a relaunch, or of another engine), or null. Local: never the server. */
   pending(): CloudEmailStep | null;
 }
 
@@ -54,7 +53,6 @@ export const hostEmailPath: EmailPath = {
   start: (email) => store.call("cloud_account_email_start", email) as Promise<CloudEmailStep>,
   verify: (code) => store.call("cloud_account_email_verify", code) as Promise<CloudEmailCheck>,
   resend: () => store.call("cloud_account_email_resend") as Promise<CloudEmailStep>,
-  cancel: () => void store.call("cloud_account_email_cancel"),
   pending: () => store.call("cloud_account_email_pending") as CloudEmailStep | null,
 };
 
@@ -78,12 +76,19 @@ const now = signal(Date.now());
 /** Each request is a new run; an answer of an older run (after Change email, a reset) changes nothing. */
 let run = 0;
 let email: EmailPath = hostEmailPath;
-let restored = false;
+/**
+ * The code page last shown, kept while the email page is up again (Change email): the same address continues on it, with no
+ * request and no new mail. Replaced once a new request is accepted (the host replaces its own then); gone on success, an ended
+ * request and sign-out (reset).
+ */
+let held: { request: CodeRequest; tooMany: boolean } | null = null;
 let ticker: ReturnType<typeof setInterval> | null = null;
 const approvedHooks: ((status: CloudAccountStatus) => void)[] = [];
 
 /** The state, with the code page's clock running only while it shows. */
 function setState(next: SignInState): void {
+  if (next.kind === "code") held = { request: next.request, tooMany: next.tooMany };
+  else if (next.kind === "approved" || next.kind === "idle") held = null;
   state.set(next);
   if (next.kind === "code") now.set(Date.now());
   if (next.kind === "code" && !ticker) {
@@ -132,12 +137,32 @@ function codePage(request: CodeRequest, said: Said | null = null, tooMany = fals
   return { kind: "code", request, checking: false, resending: false, said, tooMany };
 }
 
-/** Continue on the email page: the code is sent and the code page opens, or the page says why not (and stays). */
+/** The same address, as a person types it again: trimmed, any case. */
+export function sameAddress(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+const TOO_MANY = "Too many wrong codes. Send a new code to try again.";
+
+/**
+ * Continue on the email page. The address of the code page left with Change email, while its code still works: that code page
+ * again, its countdown going on, nothing sent. Any other address: a code is sent and the code page opens (the request before
+ * it is then gone for good, here and in the host), or the page says why not and stays (the request before it is kept).
+ */
 async function sendCode(): Promise<void> {
   const current = state().kind;
   if (current === "sending" || current === "code") return;
   const problem = emailProblem(emailText());
   if (problem) return setState({ kind: "email", said: { text: problem, danger: true } });
+  const kept = held;
+  if (kept && sameAddress(kept.request.email, emailText()) && Date.now() < kept.request.expiresAt) {
+    batch(() => {
+      codeText.set("");
+      app.setGateError(null);
+      setState(codePage(kept.request, kept.tooMany ? { text: TOO_MANY, danger: true } : null, kept.tooMany));
+    });
+    return;
+  }
   const mine = ++run;
   batch(() => {
     setState({ kind: "sending" });
@@ -184,6 +209,7 @@ async function checkCode(digits: string): Promise<void> {
       return;
     }
     if (checked.outcome === "restart") {
+      held = null;
       setState({ kind: "email", said: said("This sign-in request has ended. Start again.") });
       return;
     }
@@ -193,7 +219,7 @@ async function checkCode(digits: string): Promise<void> {
       const at = Date.now();
       const request = { ...page.request, expiresAt: Math.min(page.request.expiresAt, at), resendAt: Math.min(page.request.resendAt, at) };
       setState(codePage(request, said("This code has expired. Press Resend for a new one.")));
-    } else if (checked.outcome === "too-many") setState(codePage(page.request, said("Too many wrong codes. Send a new code to try again."), true));
+    } else if (checked.outcome === "too-many") setState(codePage(page.request, said(TOO_MANY), true));
     else setState(codePage(page.request, said(checked.outcome === "wrong" ? "That code is not right. Try again." : "No connection. Check your internet and try again.")));
   } catch (error) {
     const page = state();
@@ -213,7 +239,10 @@ async function resendCode(): Promise<void> {
     if (step.step === "code") {
       codeText.set("");
       setState(codePage(requestFrom(step), { text: `We sent a new code to ${step.email}.`, danger: false }));
-    } else if (step.step === "restart") setState({ kind: "email", said: { text: step.message ?? "This sign-in request has ended. Start again.", danger: true } });
+    } else if (step.step === "restart") {
+      held = null;
+      setState({ kind: "email", said: { text: step.message ?? "This sign-in request has ended. Start again.", danger: true } });
+    }
     else {
       const page = state();
       if (page.kind !== "code") return;
@@ -247,18 +276,21 @@ async function newCode(): Promise<void> {
   }
 }
 
-/** Change email: the request ends and the email page comes back with the address to correct. */
+/**
+ * Change email: the email page comes back with the address, to correct or to keep. The request is kept (the host's and the
+ * code page in `held`): the same address continues on it; a request for another address replaces it.
+ */
 function changeEmail(): void {
   run++;
-  email.cancel();
   codeText.set("");
   setState({ kind: "email", said: null });
 }
 
-/** Once per run of the app: a request kept from before a relaunch opens the code page, with what is left of its countdowns. */
+/**
+ * Whenever the gate stands at its start (made anew: a relaunch, a new engine, the flow's state dropped): a request the host
+ * keeps opens the code page, with what is left of its countdowns. A local host call; nothing reaches the server.
+ */
 function restore(): void {
-  if (restored) return;
-  restored = true;
   if (state().kind !== "idle") return;
   try {
     const step = email.pending();
@@ -271,10 +303,14 @@ function restore(): void {
   }
 }
 
-/** "Resend in 4:59" while locked; "Resend" once the code has expired. */
-export function resendLabel(request: CodeRequest, at: number): string {
+/**
+ * The one "get a new code" control's label: "Resend in 4:59" while locked, "Resend code" once the code has expired, "Send a new
+ * code" after too many wrong tries.
+ */
+export function resendLabel(request: CodeRequest, at: number, tooMany = false): string {
+  if (tooMany) return "Send a new code";
   const left = Math.ceil((request.resendAt - at) / 1000);
-  if (left <= 0) return "Resend";
+  if (left <= 0) return "Resend code";
   return `Resend in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
 }
 
@@ -297,10 +333,6 @@ export const signInFlow = {
   },
   codeText: (): string => codeText(),
   now: (): number => now(),
-  /** The email page asked for (Settings' Sign in). */
-  openEmail: (): void => {
-    if (state().kind === "idle") setState({ kind: "email", said: null });
-  },
   sendCode,
   typeCode,
   checkCode,
@@ -309,11 +341,11 @@ export const signInFlow = {
   changeEmail,
   restore,
   signInWith,
-  /** Hears every approval (Settings shows the account). */
+  /** Hears every approval (Settings > Account shows the account). */
   onApproved: (hook: (status: CloudAccountStatus) => void): void => {
     approvedHooks.push(hook);
   },
-  /** Back to the email page before anything happened (a signed-out session, a test). */
+  /** Back to the email page before anything happened, forgetting the code page kept for Change email (sign-out, a test). */
   reset: (): void => {
     run++;
     codeText.set("");

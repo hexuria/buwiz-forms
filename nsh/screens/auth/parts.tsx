@@ -8,10 +8,20 @@ import { deviceCopy, Icon, Text, TOUCH, type IconName } from "../../ui";
 
 export { deviceCopy };
 
-/** The 400-wide card centred in the window (the full width less 16 on each side when narrower), scrolling when short. */
+/**
+ * The card scroll content of every locked page: centred in the window with a pointer; on touch anchored near the top of what is
+ * visible, so the keyboard comes up under it and a sentence appearing in the card never moves a field. Touch layout only.
+ */
+export const AUTH_SCROLL_CONTENT = TOUCH ? "grow items-center px-4 pt-6 pb-6" : "grow items-center justify-center px-4 py-6";
+
+/**
+ * The 400-wide card (the full width less 16 on each side when narrower) in a scroll view: centred in the window with a pointer,
+ * near the top on touch. Being a scroll view, it is what NSH pads and scrolls when the keyboard covers its focused field
+ * (nsh docs, Forms and the keyboard: "Inside scroll views: automatic"); a tap on a button while the keyboard is up presses it.
+ */
 export function AuthCard(props: { testID: string; shadow?: boolean; children?: JSX.Element }) {
   return (
-    <Scroll testID="auth-scroll" class="min-h-0 flex-1" contentClass="grow items-center justify-center px-4 py-6">
+    <Scroll testID="auth-scroll" keyboardShouldPersistTaps="handled" class="min-h-0 flex-1" contentClass={AUTH_SCROLL_CONTENT}>
       <View
         testID={props.testID}
         class={`w-full gap-4 rounded-(--radius-dialog) border border-border bg-card p-6 wide:p-8 ${props.shadow === false ? "" : "shadow-lg"}`}

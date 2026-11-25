@@ -3,7 +3,8 @@
 //   email      "code" (default): Continue sends a code; "refuse": the server's sentence for an address it refuses; "unavailable":
 //              the server does not offer it; "offline": no connection
 //   expiresIn  seconds the code lives (default 300); resendIn: seconds until Resend unlocks (default: expiresIn)
-//   pending    seconds left of a request kept from before a relaunch (the gate opens on the code page)
+//   pending    seconds left of a request kept from before a relaunch (the gate opens on the code page). Without it, the request a
+//              start made is kept as the host keeps it (cloud_account_email_pending answers it, with what is left of its time)
 //   resend     "early": Resend is refused as too early (the server's wait, 60 s); "ended": the request has ended
 //   slow       true: Continue, the check, Resend and Send a new code take 4 seconds (the spinner, "Checking…", a double press)
 //   blocked    "html": the check and Resend meet a challenge page; "throttled": the outer limit's HTML 429
@@ -46,11 +47,21 @@ const REFUSED: Record<string, string> = {
 };
 
 /** Puts the fake email calls on `host` (the bir module); `called` hears each call's name. */
-export function fakeEmail(host: Record<string, unknown>, p: EmailParams, called: (name: string) => void, signedIn: CloudAccountStatus = SIGNED_IN): void {
+export function fakeEmail(
+  host: Record<string, unknown>,
+  p: EmailParams,
+  called: (name: string) => void,
+  signedIn: CloudAccountStatus = SIGNED_IN,
+  /** Hears each read of the kept request (cloud_account_email_pending: local, never the server). */
+  read: () => void = () => undefined,
+): void {
   const life = p.expiresIn ?? 300;
   let address = "";
   let wrong = 0;
   let pending = p.pending !== undefined;
+  /** When the kept request's code was sent (ms), 0 for the one of `pending`; its address. */
+  let sentAt = 0;
+  let kept = "juana@example.com";
   const step = (kind: CloudEmailStep["step"], extra: Partial<CloudEmailStep> = {}): CloudEmailStep => ({
     step: kind,
     email: address,
@@ -72,11 +83,14 @@ export function fakeEmail(host: Record<string, unknown>, p: EmailParams, called:
     called("cloud_account_email_start");
     // A moment, so the button's spinner can be seen.
     await new Promise((resolve) => setTimeout(resolve, p.slow ? 4000 : 300));
+    const kind = p.email ?? "code";
+    // A refusal keeps the request before it (the host replaces it only with one the server accepted).
+    if (kind !== "code") return step("refused", { email, message: REFUSED[kind], expires_in: 0, resend_in: 0 });
     address = email;
     wrong = 0;
-    const kind = p.email ?? "code";
-    if (kind !== "code") return step("refused", { message: REFUSED[kind], expires_in: 0, resend_in: 0 });
     pending = true;
+    sentAt = Date.now();
+    kept = email.trim();
     return step("code");
   };
   host.cloud_account_email_verify = async (code: string) => {
@@ -108,6 +122,7 @@ export function fakeEmail(host: Record<string, unknown>, p: EmailParams, called:
       return step("restart", { message: "This sign-in request has ended. Start again." });
     }
     wrong = 0;
+    sentAt = Date.now();
     return step("code");
   };
   host.cloud_account_email_cancel = () => {
@@ -116,8 +131,16 @@ export function fakeEmail(host: Record<string, unknown>, p: EmailParams, called:
     return null;
   };
   host.cloud_account_email_pending = () => {
-    if (!pending || p.pending === undefined) return null;
-    address = "juana@example.com";
-    return step("code", { expires_in: p.pending, resend_in: Math.min(p.pending, p.resendIn ?? p.pending) });
+    read();
+    if (!pending) return null;
+    address = kept;
+    if (sentAt === 0) {
+      const left = p.pending ?? 0;
+      return step("code", { expires_in: left, resend_in: Math.min(left, p.resendIn ?? left) });
+    }
+    const gone = (Date.now() - sentAt) / 1000;
+    // The host clears a request whose code has expired.
+    if (gone >= life) return null;
+    return step("code", { expires_in: Math.ceil(life - gone), resend_in: Math.max(0, Math.ceil((p.resendIn ?? life) - gone)) });
   };
 }

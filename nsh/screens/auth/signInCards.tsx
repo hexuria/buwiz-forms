@@ -1,24 +1,48 @@
-// The pieces of the sign-in flow's two pages (signInFlow.ts), drawn the same on the account gate and in Settings > Account: the
-// email page (the address and "Continue with email") and the code page (six boxes that check by themselves, Resend with its
-// countdown, Change email, the line about the mail's button).
+// The pieces of the sign-in flow's two pages (signInFlow.ts), drawn on the account gate: the email page (the address and
+// "Continue with email") and the code page (six boxes that check by themselves, one "get a new code" control, Change email).
+//
+// Nothing moves when a sentence comes or goes: the line under the field and the line under the boxes keep one line's room in
+// every state (a sentence that wraps grows the card downward only on a phone, where the card is anchored at its top). Sizes are
+// the kit's (nsh/ui look.ts CTL, fields.tsx TextField and PinCells): 32 points with a pointer, 44 on touch (the boxes 48).
 import { View } from "nsh";
+import { app } from "../../shell";
 import { AppButton, deviceCopy, PinCells, Spinner, Text, TextField, TOUCH } from "../../ui";
-import { codeSaid, emailSaid, resendLabel, signInFlow, type SignInState } from "./signInFlow";
+import { codeSaid, emailSaid, resendLabel, type Said, signInFlow, type SignInState } from "./signInFlow";
+import { codeActionsClass, SAID_SLOT } from "./signInLook";
 
 /** The email page's title, its sentence and its one button. */
 export const EMAIL_TITLE = "Sign in to eBIRForms";
 export const EMAIL_SENTENCE = "Enter your email and we will send you a 6-digit code to sign in, or to create your Buwiz account if you are new.";
 export const EMAIL_BUTTON = "Continue with email";
-/** The code page's title and its line about the mail's button. */
+/** The code page's title. */
 export const CODE_TITLE = "Enter the code";
 
-/** The email page under its title: the sentence, the address, what is wrong with it, "Continue with email" (its spinner while it sends). */
-export function EmailCardBody(props: { prefix: string; centred?: boolean }) {
-  const said = () => emailSaid(signInFlow.state());
+/** The sentence in a reserved slot: the state's, else nothing (the slot keeps its room). */
+function SaidLine(props: { said: Said | null; testID: string }) {
+  return (
+    <If when={props.said}>
+      <Text variant="meta" tone={props.said!.danger ? "danger" : "fg2"} class="text-center" testID={props.testID}>
+        {deviceCopy(props.said!.text)}
+      </Text>
+    </If>
+  );
+}
+
+/**
+ * The email page under its title: the sentence, the address, what is wrong with it (or why the gate could not open), "Continue
+ * with email" (its spinner while it sends).
+ */
+export function EmailCardBody(props: { prefix: string }) {
+  const said = (): Said | null => {
+    const own = emailSaid(signInFlow.state());
+    if (own) return own;
+    const gate = app.gateError();
+    return gate ? { text: gate, danger: true } : null;
+  };
   const sending = () => signInFlow.state().kind === "sending";
   return (
     <View class="w-full gap-4">
-      <Text variant="meta" tone="fg2" class={props.centred ? "text-center" : ""} testID={`${props.prefix}-email-sentence`}>
+      <Text variant="meta" tone="fg2" class="text-center" testID={`${props.prefix}-email-sentence`}>
         {EMAIL_SENTENCE}
       </Text>
       <View class="w-full gap-2">
@@ -35,76 +59,59 @@ export function EmailCardBody(props: { prefix: string; centred?: boolean }) {
           onSubmit={() => void signInFlow.sendCode()}
           error={said()?.danger === true}
         />
-        <If when={said()}>
-          <Text variant="meta" tone={said()!.danger ? "danger" : "fg2"} testID={`${props.prefix}-email-said`}>
-            {deviceCopy(said()!.text)}
-          </Text>
-        </If>
+        <View class={SAID_SLOT} testID={`${props.prefix}-email-slot`}>
+          <SaidLine said={said()} testID={`${props.prefix}-email-said`} />
+        </View>
       </View>
       <FlowButton testID={`${props.prefix}-continue`} label={EMAIL_BUTTON} primary block busy={sending()} onPress={() => void signInFlow.sendCode()} />
     </View>
   );
 }
 
-/** The code page under its title: where the code went, the boxes, what they said ("Checking…" while the request runs), Resend, Change email. */
-export function CodeCardBody(props: { prefix: string; centred?: boolean }) {
+/**
+ * The code page under its title: where the code went, the boxes (spent and dimmed after too many wrong tries), the line under
+ * them ("Checking…" while the check runs, or what the check said), then the one "get a new code" control and Change email.
+ */
+export function CodeCardBody(props: { prefix: string }) {
   const page = () => signInFlow.state() as Extract<SignInState, { kind: "code" }>;
   const said = () => codeSaid(page(), signInFlow.now());
-  const locked = () => signInFlow.now() < page().request.resendAt;
+  const locked = () => !page().tooMany && signInFlow.now() < page().request.resendAt;
   return (
     <View class="w-full gap-4">
-      <Text variant="meta" tone="fg2" class={props.centred ? "text-center" : ""} testID={`${props.prefix}-code-sentence`}>
+      <Text variant="meta" tone="fg2" class="text-center" testID={`${props.prefix}-code-sentence`}>
         {`We sent a ${page().request.length}-digit code to ${page().request.email}.`}
       </Text>
-      <If when={!page().tooMany}>
-        <View class={props.centred ? "items-center" : ""}>
-          <PinCells
-            testID={`${props.prefix}-code-boxes`}
-            label="Sign-in code"
-            length={page().request.length}
-            value={signInFlow.codeText()}
-            onChange={signInFlow.typeCode}
-            onComplete={(digits) => void signInFlow.checkCode(digits)}
-            error={said()?.danger === true}
-            disabled={page().checking}
-          />
-        </View>
-      </If>
-      <If when={page().checking}>
-        <View class={`flex-row items-center gap-2 ${props.centred ? "justify-center" : ""}`} testID={`${props.prefix}-checking`}>
-          <Spinner size={14} tone="fg2" label="Checking the code" />
-          <Text variant="meta" tone="fg2">Checking…</Text>
-        </View>
-      </If>
-      <If when={!page().checking && said()}>
-        <Text variant="meta" tone={said()!.danger ? "danger" : "fg2"} class={props.centred ? "text-center" : ""} testID={`${props.prefix}-code-said`}>
-          {deviceCopy(said()!.text)}
-        </Text>
-      </If>
-      <If
-        when={!page().tooMany}
-        else={
-          <FlowButton testID={`${props.prefix}-new-code`} label="Send a new code" primary block busy={page().resending} onPress={() => void signInFlow.newCode()} />
-        }
-      >
-        <View class={TOUCH ? "w-full gap-2" : "w-full flex-row flex-wrap justify-end gap-2"}>
-          <If when={!TOUCH}>
-            <FlowButton testID={`${props.prefix}-change-email`} label="Change email" onPress={signInFlow.changeEmail} />
-          </If>
-          <AppButton
-            testID={`${props.prefix}-resend`}
-            label={resendLabel(page().request, signInFlow.now())}
-            variant={locked() ? "secondary" : "primary"}
-            block={TOUCH}
-            disabled={locked()}
-            leading={page().resending ? <Spinner size={14} tone="primaryFg" label="Sending a new code" /> : undefined}
-            onPress={() => void signInFlow.resendCode()}
-          />
-          <If when={TOUCH}>
-            <FlowButton testID={`${props.prefix}-change-email`} label="Change email" onPress={signInFlow.changeEmail} />
+      <View class="w-full items-center gap-2">
+        <PinCells
+          testID={`${props.prefix}-code-boxes`}
+          label="Sign-in code"
+          length={page().request.length}
+          value={signInFlow.codeText()}
+          onChange={signInFlow.typeCode}
+          onComplete={(digits) => void signInFlow.checkCode(digits)}
+          error={said()?.danger === true}
+          disabled={page().checking || page().tooMany}
+        />
+        <View class={`${SAID_SLOT} items-center`} testID={`${props.prefix}-code-slot`}>
+          <If when={page().checking} else={<SaidLine said={said()} testID={`${props.prefix}-code-said`} />}>
+            <View class="flex-row items-center justify-center gap-2" testID={`${props.prefix}-checking`}>
+              <Spinner size={14} tone="fg2" label="Checking the code" />
+              <Text variant="meta" tone="fg2">Checking…</Text>
+            </View>
           </If>
         </View>
-      </If>
+      </View>
+      <View class={codeActionsClass(TOUCH)} testID={`${props.prefix}-code-actions`}>
+        <AppButton
+          testID={`${props.prefix}-resend`}
+          label={resendLabel(page().request, signInFlow.now(), page().tooMany)}
+          block={TOUCH}
+          disabled={locked()}
+          leading={page().resending ? <Spinner size={14} tone="fg2" label="Sending a new code" /> : undefined}
+          onPress={() => void (page().tooMany ? signInFlow.newCode() : signInFlow.resendCode())}
+        />
+        <FlowButton testID={`${props.prefix}-change-email`} label="Change email" onPress={signInFlow.changeEmail} />
+      </View>
     </View>
   );
 }

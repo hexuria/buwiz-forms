@@ -7,7 +7,10 @@
 //   pins      { "<tin root>": "<pin>" } taxpayer PINs          totps  { "<tin root>": "<secret>" } taxpayer authenticators
 //   recent    true: once the frame is up, Recent lists one return of each taxpayer
 //   gate      true: the Buwiz account gate is closed (the host's gate answer is replaced; the dev bypass would open it)
-//   email, expiresIn, resendIn, pending, resend: the email-and-code sign-in, which the gate opens on (screens/auth/testEmail.ts)
+//   email, expiresIn, resendIn, pending, resend: the email-and-code sign-in, which the gate opens on (screens/auth/testEmail.ts);
+//             the readout counts the reads of the kept request ("pending reads: N")
+//   drop      true: the button "Test: drop the sign-in" forgets the sign-in flow's state in memory (signInFlow.reset), as an
+//             engine made anew starts without it
 //   lock      true: the sign-in screen once the frame is up, whatever the codes (to show "Open without signing in")
 //   readout   true: print the session and what the session can see (returns, deadlines by TIN root) at the top right
 //   start     the dev route            firstRun  default true
@@ -20,6 +23,7 @@ import { effect, host, mount, signal, Text, untracked, View } from "nsh";
 import "./theme/fonts";
 import { bir } from "./bir";
 import { createDemoTaxpayer } from "./bir/testing";
+import { signInFlow } from "./screens/auth/signInFlow";
 import { type EmailParams, fakeEmail } from "./screens/auth/testEmail";
 import { totpCode } from "./screens/auth/testTotp";
 import { app, pollSteps } from "./shell/app";
@@ -42,6 +46,7 @@ interface Params extends EmailParams {
   lock?: boolean;
   authFails?: string;
   polls?: boolean;
+  drop?: boolean;
   start?: string;
   firstRun?: boolean;
 }
@@ -52,6 +57,8 @@ const SECOND = { root: "000111229", name: "Sample Trading Corp" };
 /** The host functions the app called that this fixture answers (the readout lists them). */
 const calls = signal<string[]>([]);
 const called = (name: string) => calls.set([...calls(), name]);
+/** How often the kept email request was read (cloud_account_email_pending). */
+const pendingReads = signal(0);
 /** The help desk's recovery key, as setup_helpdesk answered it (the readout shows it). */
 let recoveryKey = "";
 
@@ -94,7 +101,7 @@ function fakeAccount(p: Params): void {
       return realOpened();
     };
   }
-  if (p.gate) fakeEmail(h, p, called);
+  if (p.gate) fakeEmail(h, p, called, undefined, () => pendingReads.set(pendingReads() + 1));
 }
 
 function Readout() {
@@ -105,6 +112,7 @@ function Readout() {
       <Text testID="demo-session">{`session: ${app.session().kind}${app.session().kind === "taxpayer" ? ` ${(app.session() as { root: string }).root}` : ""}`}</Text>
       <Text testID="demo-visible">{`returns: ${roots(store.savedReturns())} | deadlines: ${roots(store.deadlines(`${year}-01-01`, `${year + 1}-12-31`))} | taxpayers: ${roots(store.taxpayers())}`}</Text>
       <Text testID="demo-calls">{`calls: ${calls().join(",") || "none"}`}</Text>
+      <Text testID="demo-pending-reads">{`pending reads: ${pendingReads()}`}</Text>
       <Text testID="demo-key">{`key: ${recoveryKey}`}</Text>
     </View>
   );
@@ -185,6 +193,9 @@ function Demo() {
       <View class="absolute bottom-0 right-0 flex-row gap-1">
         <If when={Boolean(p.authFails)}>
           <AppButton testID="demo-auth-heal" label="Test: heal auth" size="sm" onPress={() => authBroken.set(false)} />
+        </If>
+        <If when={p.drop === true}>
+          <AppButton testID="demo-drop-sign-in" label="Test: drop the sign-in" size="sm" onPress={() => signInFlow.reset()} />
         </If>
         <If when={p.polls === true}>
           <AppButton testID="demo-toast" label="Test: toast" size="sm" onPress={() => app.toast("A note for the person at the keyboard.")} />
