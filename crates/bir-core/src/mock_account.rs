@@ -21,6 +21,11 @@ const DEFAULT_EMAIL: &str = "dev@buwiz.local";
 pub const DEFAULT_CODE: &str = "246810";
 /// Wrong codes a request takes before it answers `too_many_attempts`.
 const ATTEMPTS: u32 = 5;
+/// Codes mailed to one address in an hour (start and resend together) before `too_many_requests` (the contract's shared
+/// per-address limit).
+const PER_ADDRESS_HOURLY: usize = 5;
+/// The clients the email sign-in serves (a `CLIENTS` entry with scope `app`): the contract's, and the one this app sends.
+const APP_CLIENTS: [&str; 2] = ["buwiz-ebirforms", "buwiz-desktop"];
 const PLATFORMS: [&str; 6] = ["ios", "ipados", "android", "macos", "windows", "linux"];
 
 /// How the mock answers the email sign-in.
@@ -119,6 +124,8 @@ struct State {
     sessions: HashMap<String, User>,
     grants: Vec<Grant>,
     email_requests: HashMap<String, EmailRequest>,
+    /// When a code was mailed, per address (the per-address limit, and what a test counts).
+    mailed: HashMap<String, Vec<Instant>>,
     /// By (account, install id); a registration without an install id gets a row of its own.
     registered: HashMap<(String, String), DeviceRow>,
     /// The sign-ins (grant sessions) that have registered their device: one each.
@@ -186,6 +193,14 @@ impl MockAccount {
     pub fn code_for(&self, email: &str) -> Option<String> {
         let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         newest_request(&state, email).map(|(_, request)| request.code.clone())
+    }
+    /// How many codes were mailed to `email` (starts and resends), as the mock prints them.
+    pub fn codes_mailed(&self, email: &str) -> usize {
+        let state = self.state.lock().unwrap();
+        state
+            .mailed
+            .get(&email.to_ascii_lowercase())
+            .map_or(0, Vec::len)
     }
     /// The link token of the newest live email request for `email`.
     pub fn link_for(&self, email: &str) -> Option<String> {
@@ -648,7 +663,8 @@ fn dispatch(r: &Request, state: &mut State) -> Response {
     }
 }
 
-/// The contract's error: `{"error": code, "message": sentence}` and whatever else the code carries.
+/// The contract's error: `{"error": code, "message": sentence}` and whatever else the code carries; a `retry_after` is
+/// also the `Retry-After` header.
 fn failure(status: u16, code: &str, message: &str, extra: Value) -> Response {
     let mut body = json!({"error": code, "message": message});
     if let (Some(body), Some(extra)) = (body.as_object_mut(), extra.as_object()) {
@@ -656,7 +672,40 @@ fn failure(status: u16, code: &str, message: &str, extra: Value) -> Response {
             body.insert(key.clone(), value.clone());
         }
     }
-    json_response(status, body)
+    let retry = body.get("retry_after").and_then(Value::as_u64);
+    let mut response = json_response(status, body);
+    if let Some(seconds) = retry {
+        response.headers.push(("retry-after", seconds.to_string()));
+    }
+    response
+}
+
+/// The per-address limit: `too_many_requests` with the wait once an hour holds [`PER_ADDRESS_HOURLY`] mailed codes.
+fn over_the_limit(state: &mut State, email: &str) -> Option<Response> {
+    let hour = Duration::from_secs(3600);
+    let mailed = state.mailed.entry(email.to_owned()).or_default();
+    mailed.retain(|at| at.elapsed() < hour);
+    if mailed.len() < PER_ADDRESS_HOURLY {
+        return None;
+    }
+    let wait = mailed
+        .first()
+        .map_or(3600, |first| seconds_until(*first + hour).max(1));
+    Some(failure(
+        429,
+        "too_many_requests",
+        "Too many sign-in codes were sent to this address. Try again later.",
+        json!({"retry_after": wait}),
+    ))
+}
+
+/// A code went out to `email` (counted for the limit and for tests).
+fn mailed(state: &mut State, email: &str) {
+    state
+        .mailed
+        .entry(email.to_owned())
+        .or_default()
+        .push(Instant::now());
 }
 
 fn secret_hash(secret: &str) -> String {
@@ -724,7 +773,7 @@ fn email_answer(options: &MockOptions, request_id: &str, request: &EmailRequest)
 
 fn email_start(state: &mut State, value: &Value) -> Response {
     let get = |k: &str| value.get(k).and_then(Value::as_str).unwrap_or_default();
-    if get("client_id") != "buwiz-desktop" {
+    if !APP_CLIENTS.contains(&get("client_id")) {
         return failure(
             400,
             "unknown_client",
@@ -785,6 +834,9 @@ fn email_start(state: &mut State, value: &Value) -> Response {
             json!({"retry_after": wait}),
         );
     }
+    if let Some(refused) = over_the_limit(state, &email) {
+        return refused;
+    }
     let options = state.options.clone();
     let request_id = token();
     let request = EmailRequest {
@@ -801,6 +853,7 @@ fn email_start(state: &mut State, value: &Value) -> Response {
         install,
     };
     let answer = email_answer(&options, &request_id, &request);
+    mailed(state, &request.email);
     state.email_requests.insert(request_id, request);
     answer
 }
@@ -847,8 +900,22 @@ fn email_resend(state: &mut State, value: &Value) -> Response {
             json!({"retry_after": wait}),
         );
     }
+    let email = request.email.clone();
+    if let Some(refused) = over_the_limit(state, &email) {
+        return refused;
+    }
+    let Some(request) = state.email_requests.get_mut(&id) else {
+        return failure(
+            400,
+            "invalid_request",
+            "This sign-in request is no longer valid. Start again.",
+            json!({}),
+        );
+    };
     reissue(&options, request);
-    email_answer(&options, &id, request)
+    let answer = email_answer(&options, &id, request);
+    mailed(state, &email);
+    answer
 }
 
 fn email_verify(state: &mut State, value: &Value) -> Response {
@@ -905,7 +972,7 @@ fn email_verify(state: &mut State, value: &Value) -> Response {
             json!({"attempts_left": request.attempts_left}),
         );
     }
-    request.spent = true;
+    // The ban is checked last; only a sign-in that goes through spends the request (one transaction).
     let email = request.email.clone();
     let install = request.install.clone();
     if options
@@ -915,6 +982,7 @@ fn email_verify(state: &mut State, value: &Value) -> Response {
     {
         return failure(403, "account_banned", "This account is closed.", json!({}));
     }
+    request.spent = true;
     let u = user(state, &email);
     issue(state, u, None, install)
 }
@@ -1312,6 +1380,50 @@ mod tests {
         for bad in ["", "a", "a@b", "@b.co", "a@b.", "a b@c.co", "a@b@c.co"] {
             assert!(!valid_email(bad), "{bad}");
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_contract_s_clients_limit_and_retry_after() {
+        let server = mock(MockOptions::default()).await;
+        let url = server.url();
+        tokio::task::spawn_blocking(move || {
+            let mut http = BlockingHttp::new();
+            // The contract's client id and this app's are both served.
+            let mut body = start_body("limit@example.test", "s0");
+            body["client_id"] = json!("buwiz-ebirforms");
+            body.as_object_mut().unwrap().remove("install_id");
+            let (status, _) = post(&mut http, &url, "/auth/email/start", body.clone());
+            assert_eq!(status, 200);
+            // No install id is never held; the per-address limit is 5 codes an hour.
+            for _ in 1..PER_ADDRESS_HOURLY {
+                assert_eq!(
+                    post(&mut http, &url, "/auth/email/start", body.clone()).0,
+                    200
+                );
+            }
+            let (status, refused) = post(&mut http, &url, "/auth/email/start", body.clone());
+            assert_eq!(
+                (status, refused["error"].as_str()),
+                (429, Some("too_many_requests"))
+            );
+            assert!(refused["retry_after"].as_u64().unwrap() > 0);
+            assert!(refused["message"].as_str().is_some_and(|m| !m.is_empty()));
+            assert_eq!(
+                server.codes_mailed("limit@example.test"),
+                PER_ADDRESS_HOURLY
+            );
+            // A retry_after is also the Retry-After header.
+            let raw = failure(
+                429,
+                "code_already_sent",
+                "Wait.",
+                json!({"retry_after": 42}),
+            )
+            .wire();
+            assert!(raw.contains("retry-after: 42\r\n"), "{raw}");
+        })
+        .await
+        .unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

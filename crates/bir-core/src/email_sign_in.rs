@@ -114,13 +114,23 @@ impl EmailError {
     }
 
     /// The sentence the app shows: the server's message when it gave one, else this app's own for the code. Never a
-    /// raw code or JSON.
+    /// raw code or JSON. Where the answer carries the number the person acts on (the tries left of `invalid_code`, the
+    /// wait of `code_already_sent` and `restarting`), this app's own sentence says it, whatever the message: the
+    /// contract's messages need not name it ("That code is not right." alone left a phone without its count).
     pub fn sentence(&self) -> String {
         match self {
             Self::NotOffered => {
                 "Sign-in is not available right now. Try again in a few minutes.".into()
             }
             Self::Throttled => "Too many tries. Wait a moment and try again.".into(),
+            Self::Refused {
+                code,
+                retry_after,
+                attempts_left,
+                ..
+            } if says_a_number(code, *retry_after, *attempts_left) => {
+                local_sentence(code, *retry_after, *attempts_left)
+            }
             Self::Refused { message, .. } if !message.trim().is_empty() => {
                 message.trim().to_owned()
             }
@@ -145,6 +155,15 @@ impl std::fmt::Display for EmailError {
 }
 
 impl std::error::Error for EmailError {}
+
+/// Whether this app's sentence for `code` carries a number the answer gave (see [`EmailError::sentence`]).
+fn says_a_number(code: &str, retry_after: Option<i64>, attempts_left: Option<i64>) -> bool {
+    match code {
+        "invalid_code" => attempts_left.is_some_and(|n| n > 0),
+        "code_already_sent" | "restarting" => retry_after.is_some_and(|s| s > 0),
+        _ => false,
+    }
+}
 
 /// "in 3 minutes", "in a minute", "in 40 seconds".
 fn wait_words(seconds: Option<i64>) -> String {
@@ -975,6 +994,12 @@ mod tests {
                 r#"{"error":"invalid_code","attempts_left":1}"#,
                 "invalid_code",
                 "That code is not right. 1 try left.",
+            ),
+            // The contract's refusals carry a message; the count is said all the same.
+            (
+                r#"{"error":"invalid_code","message":"That code is not right.","attempts_left":4}"#,
+                "invalid_code",
+                "That code is not right. 4 tries left.",
             ),
             (
                 r#"{"error":"invalid_code"}"#,

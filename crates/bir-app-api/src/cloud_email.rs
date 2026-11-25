@@ -79,7 +79,7 @@ fn email_resend(
     })
 }
 
-/// Ends the pending request (Change email, the browser link, sign-out). Nothing pending: nothing to do.
+/// Ends the pending request (sign-out; Change email keeps it). Nothing pending: nothing to do.
 pub fn cancel() {
     let _one = step_lock();
     email_sign_in::clear_pending();
@@ -136,8 +136,10 @@ pub(crate) fn start_on_the_api(http: &mut dyn Http, email: &str, now: i64) -> Ho
     start_with(http, &server.url, email, now)
 }
 
-/// `cloud_account_email_start`: a new request for `email` (any earlier one ends). A server that does not offer it, a
-/// refusal or no connection: `refused` with the sentence. The page stays; it never switches to the browser.
+/// `cloud_account_email_start`: a new request for `email`; once the server accepted it, it replaces any earlier one. A
+/// server that does not offer it, a refusal or no connection: `refused` with the sentence, and the earlier request is
+/// kept (a `code_already_sent` for its own address leaves its code usable). The page stays; it never switches to the
+/// browser.
 pub(crate) fn start_with(
     http: &mut dyn Http,
     server_url: &str,
@@ -145,7 +147,6 @@ pub(crate) fn start_with(
     now: i64,
 ) -> HostResult {
     let _one = step_lock();
-    email_sign_in::clear_pending();
     let email = clean_email(email);
     let secret = email_sign_in::new_secret();
     let answer = email_sign_in::start(
@@ -728,6 +729,94 @@ mod tests {
                 step["message"],
                 "Sign-in is not available right now. Try again in a few minutes."
             );
+        });
+    }
+
+    #[test]
+    fn a_refused_start_keeps_the_request_before_it() {
+        scratch(|| {
+            let mut fake = Fake::default().answer("/auth/email/start", 200, STARTED);
+            json(start_with(&mut fake, SERVER, "filer@example.test", 1_000));
+            let before = email_sign_in::load_pending().expect("kept");
+            let mut refused = Fake::default().answer(
+                "/auth/email/start",
+                429,
+                r#"{"error":"code_already_sent","message":"A sign-in code was already sent to this address.","retry_after":240}"#,
+            );
+            let step = json(start_with(
+                &mut refused,
+                SERVER,
+                "filer@example.test",
+                1_060,
+            ));
+            assert_eq!(step["step"], "refused");
+            // The wait is said even when the message leaves it out.
+            assert_eq!(
+                step["message"],
+                "A sign-in code was already sent to this address. Use it, or try again in 4 minutes."
+            );
+            assert_eq!(email_sign_in::load_pending(), Some(before));
+        });
+    }
+
+    /// The in-repo mock account server (`bir_core::mock_account`, what `just mock-account` runs) on a runtime of its own,
+    /// so the host's own calls (blocking HTTP) reach it as they reach a real server.
+    fn against_the_mock<R>(
+        options: bir_core::mock_account::MockOptions,
+        body: impl FnOnce(&bir_core::mock_account::MockAccount, &str) -> R,
+    ) -> R {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let mock = runtime
+            .block_on(bir_core::mock_account::MockAccount::start_with(
+                "127.0.0.1:0".parse().unwrap(),
+                options,
+            ))
+            .unwrap();
+        let url = mock.url();
+        scratch(|| temp_env::with_var("BUWIZ_SERVER_URL", Some(&url), || body(&mock, &url)))
+    }
+
+    #[test]
+    fn against_the_mock_a_wrong_code_says_the_tries_left() {
+        against_the_mock(Default::default(), |_, url| {
+            let mut http = BlockingHttp::new();
+            let now = cloud_account::unix_now();
+            assert_eq!(
+                json(start_with(&mut http, url, "filer@example.test", now))["step"],
+                "code"
+            );
+            let check = json(verify_with(&mut http, "123456", now));
+            assert_eq!(check["outcome"], "wrong");
+            assert_eq!(check["message"], "That code is not right. 4 tries left.");
+            assert_eq!(check["attempts_left"], 4.0);
+            let check = json(verify_with(&mut http, "123457", now));
+            assert_eq!(check["message"], "That code is not right. 3 tries left.");
+        });
+    }
+
+    #[test]
+    fn against_the_mock_a_second_start_sends_no_code_and_the_first_still_works() {
+        against_the_mock(Default::default(), |mock, url| {
+            let mut http = BlockingHttp::new();
+            let now = cloud_account::unix_now();
+            let first = json(start_with(&mut http, url, "filer@example.test", now));
+            assert_eq!(first["step"], "code");
+            let second = json(start_with(&mut http, url, " Filer@Example.test", now + 20));
+            assert_eq!(second["step"], "refused");
+            assert_eq!(
+                second["message"],
+                "A sign-in code was already sent to this address. Use it, or try again in 5 minutes."
+            );
+            assert!(second["retry_after"].as_f64().unwrap() > 0.0);
+            // One code mailed, its time not restarted, and it still signs in.
+            assert_eq!(mock.codes_mailed("filer@example.test"), 1);
+            assert_eq!(json(pending_now(now + 20))["expires_in"], 280.0);
+            let check = json(verify_with(
+                &mut http,
+                bir_core::mock_account::DEFAULT_CODE,
+                now + 30,
+            ));
+            assert_eq!(check["outcome"], "approved");
         });
     }
 
