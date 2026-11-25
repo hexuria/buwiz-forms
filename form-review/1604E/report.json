@@ -1,0 +1,46 @@
+{
+  "form": "1604E",
+  "title": "Annual Information Return of Creditable Income Taxes Withheld (Expanded)/Income Payments Exempt from Withholding Tax",
+  "revision": "January 2018 (ENCS)",
+  "branch": "try/forms-neon-3-b",
+  "verdict": "tweak",
+  "worst_finding": "Page 1 Item 7 Registered Address truncates our 126-character address at '...1258 PASEO DE' (dropping the last 55 characters: 'ROXAS COR AYALA AVE BRGY SAN LORENZO MAKATI CITY') instead of overflowing with the shared white band.",
+  "test_return": {
+    "taxpayer": "SANTOS, JUANA MARIE DELA CRUZ-VILLANUEVA",
+    "tin": "000-123-453-00000",
+    "rdo": "039",
+    "year": 2025,
+    "schedules": "All 4 quarterly rows of Schedule 1 (1601-EQ) and all 12 monthly rows of Schedule 2 (1606) filled with large amounts; Page 2 Part III Schedules 3 & 4 are format-only on the official BIR form (no writer keys). Saved and reloaded from Filings."
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "area": "Page 1 — Item 7 Registered Address (p1c24 / p1c25)",
+      "detail": "The 126-character address is split across the 40-slot line 1 and 31-slot line 2 combs and hard-truncated at 'UNIT 1408 TOWER B RESIDENCIAS DE SAN LOR / ENZO CONDOMINIUM 1258 PASEO DE', dropping the remaining 55 characters ('ROXAS COR AYALA AVE BRGY SAN LORENZO MAKATI CITY'). By contrast, 1604C prints the full address across both lines."
+    },
+    {
+      "severity": "low",
+      "area": "Page 1 — Item 1 For the Year (20YY)",
+      "detail": "Official PDF has a 4-slot comb with pre-printed '2 0' and two empty year slots. Frozen sheet uses a plain text cell and prints '2025' left-aligned with no comb ticks."
+    },
+    {
+      "severity": "low",
+      "area": "Page 2 — Bottom ~55%",
+      "detail": "Official 'Guidelines and Instructions for BIR Form No. 1604-E' block is omitted from the frozen sheet, leaving the bottom half of Page 2 blank."
+    }
+  ],
+  "verified_ok": [
+    "Part II Schedule 1 (Q1-Q4 + TOTAL: 192,995,672.50) and Schedule 2 (Jan-Dec + TOTAL: 299,652,075.96) all print cleanly with right-aligned Taxes Withheld, Penalties, and Total Amount Remitted.",
+    "Page 1 Item 4 TIN, Item 5 RDO (039), Item 6 Name (full 40-char name), Item 7A ZIP (1100), Items 8/8A, Item 9 Contact Number, Item 10 Email, and Page 2 header TIN and Withholding Agent's Name all print cleanly without truncation."
+  ],
+  "artifacts": [
+    "official-p1.png",
+    "official-p2.png",
+    "screen-p1.png",
+    "screen-p2.png",
+    "screen-p3.png",
+    "screen-p4.png",
+    "print-p1.png",
+    "print-p2.png"
+  ]
+}
