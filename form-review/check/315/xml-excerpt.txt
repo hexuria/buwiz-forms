@@ -1,0 +1,19 @@
+Upload-XML excerpt (dry, never sent): a June-2022 2550M draft filled through the
+screen write path (agent::fill_as_user — the same path the form page saves with),
+then Form2550MDraft::official_payload(). Values: Schedule 1 row VB010 100,000.00;
+13A typed 250,000; 13B typed over with 29,999.99 (the computed value would be
+30,000.00); 18E typed 40,000.
+
+<div>frm2550m:txtTax12A=100,000.00frm2550m:txtTax12A=</div>
+<div>frm2550m:txtTax12B=12,000.00frm2550m:txtTax12B=</div>
+<div>frm2550m:txtTax13A=250,000.00frm2550m:txtTax13A=</div>
+<div>frm2550m:txtTax13B=29,999.99frm2550m:txtTax13B=</div>
+<div>frm2550m:txtTax16B=41,999.99frm2550m:txtTax16B=</div>
+<div>frm2550m:txtTax18E=40,000.00frm2550m:txtTax18E=</div>
+<div>frm2550m:txtTax18F=4,800.00frm2550m:txtTax18F=</div>
+<div>frm2550m:txtTax19=4,800.00frm2550m:txtTax19=</div>
+
+What it shows: the typed-over 13B (29,999.99) is what uploads, not the computed
+30,000.00; the locked total 16B recomputes from it (12,000.00 + 29,999.99 =
+41,999.99); 18F carries the 12% fill (4,800.00). Totals in the XML are consistent
+with the values on paper.
