@@ -1,0 +1,26 @@
+check	commit	result	evidence
+a-sheets-byte-identical-2200t	302c26c4-vs-00dc1894	PASS	html-frozen/2200t-2020 byte-identical between repos (900982 bytes)
+a-sheets-byte-identical-1800-1801-2200s	302c26c4-vs-00dc1894	PARTLY	differ only in input-slot name= attributes (upstream frm-keys vs app cell-ids, the whole product corpus's convention); identical modulo that attribute
+a-no-other-sheet-differs	both-repos	PASS	html repo #6 touches only 1800/1801/2200s/2200t-2020(new)/2200t-2022(removed)/assets/inventory; #362 the same plus keys/
+b-pdf-sha256	archive.org-capture	PASS	6c7ff78db4348d57139d417995832294e489cf869d807e4c254f3a00513cce4a exact match
+b-pdf-identity	-	PASS	BIR Form 2200-T January 2020 (ENCS), footer 2200-T 01/20ENCS P1, 3 pages 612x936
+b-page-comparison	-	PASS	page layouts match (sidebyside-p1..3.png); page 3 differs by design (guidelines moved to guide.html per provenance)
+claim1-1801-branch00001-page1	302c26c4	HOLDS	p1c17 prints 00001; main prints nothing in TIN comb, pre-printed zeros only (1801-p1c17-before-after.png)
+claim1-1801-branch00001-page2	302c26c4	HOLDS	p2c5 prints 00012345300001; main prints 9 digits then pre-printed zeros (1801-p2c5-before-after.png)
+claim1-1800-branch00001-both-pages	302c26c4	HOLDS	p1c18 00001, p2c5 full 14 digits; main as 1801
+claim1-branch00000-once-not-twice	302c26c4	HOLDS	00000 prints once per strip (cells files; zero layers removed)
+claim2-1800-item14-centavos	302c26c4	HOLDS	p1c64 is a 2-slot comb at head, 05/50/99 each print in own slots; at main the cell is a malformed two-input text cell and nothing prints (worse than the claimed divider fault)
+claim3-2200s-others-descriptions	302c26c4	HOLDS	p2c101/p2c108 print both 41/42-char descriptions; main has no input there (empty)
+claim4-2200t-rows-2020-2023	302c26c4	VALUES-HOLD-PRINT-PIPELINE-BROKEN	all four rows print correct amounts in cells (111/222/333/444, total 1,110.00 = item16); BUT see fault F1: the print html is unusable in the app
+claim4-item16-equals-rows	302c26c4	HOLDS	item16 1110.00 = 111+222+333+444 (own arithmetic)
+claim4-2024-transaction-date	302c26c4	HOLDS-WITH-NOTE	item 1 date prints 01/31/2024 fine; there is no 2024 schedule row on paper (rows end at 2023), nothing prints for one
+d-upload-byte-identical	head-vs-main	PASS	2200t-upload.xml byte-identical (24263 bytes) both commits
+d-unchanged-boxes	head-vs-main	PASS-WITH-NOTES	1801 diff = exactly the fix; 1800 additionally prints -250,000.00 at p1c62 (correct computed value, a join the branch adds); 2200S diff = exactly the two descriptions; 2200T sheets are different paper by design
+e-other-38-sheets	302c26c4	PASS	inventory.json digest changes only for the four forms; agent-forms data unchanged except 2200s/2200t rows; golden/parity tests pass in battery
+f-battery-fmt	302c26c4	PASS	cargo fmt --all -- --check clean
+f-battery-clippy	302c26c4	PASS	cargo clippy --locked --workspace -D warnings clean
+f-battery-corelib	302c26c4	PASS	1663 passed 0 failed 12 ignored
+f-battery-payloads	302c26c4	PASS	146 passed 0 failed 1 ignored
+f-battery-print	302c26c4	PASS	125+2+3+7 passed 0 failed (7 = new frozen_sheet_faults)
+f-battery-apilib	302c26c4	PASS	788 passed 0 failed 7 ignored; with agent feature 843 passed
+F1-2200t-css-inlining	302c26c4	FAULT	html-frozen/2200t-2020/index.html uses <link href=... rel=stylesheet/> (attribute order flipped); inline_local_assets only rewrites the canonical order, so filled_document leaves external links; app print preview writes bare html to temp dir with no css -> page renders unstyled/mashed (9 letter pages instead of 3 correct ones)

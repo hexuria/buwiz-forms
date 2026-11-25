@@ -1,0 +1,52 @@
+p1c10-s0	00
+p1c100-s0	0.00
+p1c104-s0	0.00
+p1c108-s0	0.00
+p1c112-s0	-15,000.00
+p1c13-s0	000
+p1c15-s0	123
+p1c16-s0	453
+p1c20-s0	044
+p1c22-s0	SANTOS, JUANA
+p1c24-s0	456 MABINI ST, QUEZON CITY
+p1c26-s0	1101
+p1c28-s0	456 MABINI ST, QUEZON CITY
+p1c31-s0	1101
+p1c36-s0	09181234567
+p1c37-s0	juana.santos@example.test
+p1c59	true
+p1c70-s0	-15,000.00
+p1c75-s0	0.00
+p1c79-s0	0.00
+p1c83-s0	0.00
+p1c87-s0	0.00
+p1c9	true
+p1c91-s0	-15,000.00
+p1c96-s0	0.00
+p2c105	0.00
+p2c13-s0	0.00
+p2c17-s0	0.00
+p2c181	0.00
+p2c186	0.00
+p2c191	0.00
+p2c196	0.00
+p2c201	0.00
+p2c228	0.00
+p2c23-s0	0.00
+p2c28-s0	0.00
+p2c33-s0	0.00
+p2c38-s0	0.00
+p2c43-s0	0.00
+p2c47-s0	0.00
+p2c5-s0	000123453
+p2c51-s0	0.00
+p2c55-s0	0.00
+p2c59-s0	0.00
+p2c6-s0	SANTOS, JUANA
+p2c67-s0	-250,000.00
+p2c76	0.00
+p2c79	0.00
+p2c82	0.00
+p2c85	0.00
+p2c88	0.00
+p2c9-s0	0.00
