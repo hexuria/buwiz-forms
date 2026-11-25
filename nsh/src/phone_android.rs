@@ -1,28 +1,32 @@
 //! What bir-core needs from Android: the browser for the Buwiz sign-in (an `ACTION_VIEW` intent from the
-//! foreground Activity).
+//! foreground Activity), and the screen kept on (`FLAG_KEEP_SCREEN_ON` on its window) while a send to the BIR is in
+//! flight. No foreground service: not in this version.
 //!
-//! The `open` crate cannot do it here: on Android it runs `xdg-open` and the like, which a phone has none of.
+//! The `open` crate cannot do the first here: on Android it runs `xdg-open` and the like, which a phone has none of.
 //!
-//! bir-core calls it from its own threads, and the foreground Activity is looked up on the UI thread, which NSH's
+//! bir-core calls both from its own threads, and window flags may only change on the UI thread, which NSH's
 //! `run_on_main_thread` reaches from the engine thread only. So the UI thread's own looper is given a pipe once
 //! ([`install`], from the engine thread): any thread queues a job and writes a byte, and the looper runs the queued
 //! jobs on the UI thread.
 
 use std::collections::VecDeque;
 use std::ffi::{c_int, c_void};
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::mpsc;
 use std::sync::{Mutex, Once};
 use std::time::Duration;
 
 use jni::JNIEnv;
-use jni::objects::JValue;
+use jni::objects::{GlobalRef, JObject, JValue};
 
 use crate::print_android::{foreground_activity, java, vm};
 
 type Result<T> = std::result::Result<T, String>;
 type Work = Box<dyn FnOnce(&mut JNIEnv<'_>) -> Result<()> + Send>;
 type Done = Box<dyn FnOnce(Result<()>) + Send>;
+
+/// `WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON`.
+const FLAG_KEEP_SCREEN_ON: i32 = 0x0000_0080;
 
 /// How long the sign-in waits for the UI thread to start the browser.
 const OPEN_WAIT: Duration = Duration::from_secs(10);
@@ -56,10 +60,15 @@ unsafe extern "C" {
 static JOBS: Mutex<VecDeque<(Work, Done)>> = Mutex::new(VecDeque::new());
 /// The pipe's writing end once the UI thread's looper watches it; -1 before.
 static WAKE: AtomicI32 = AtomicI32::new(-1);
+/// Whether a send is in flight, as bir-core said last. The UI thread applies the latest value.
+static AWAKE: AtomicBool = AtomicBool::new(false);
+/// The window the flag was set on (UI thread only), so it is cleared there even when another Activity is in front.
+static FLAGGED: Mutex<Option<GlobalRef>> = Mutex::new(None);
 
-/// Registers the browser opener with bir-core. Called once, at process set-up (any thread).
+/// Registers both hooks with bir-core. Called once, at process set-up (any thread).
 pub(crate) fn register() {
     bir_core::platform::set_url_opener(open_url);
+    bir_core::send_in_flight::set_hook(send_in_flight);
 }
 
 /// Gives the UI thread's looper the pipe, once. Must run on the engine thread (NSH's `run_on_main_thread`); jobs
@@ -193,4 +202,40 @@ fn open_url(url: &str) -> Result<()> {
         Ok(result) => result.map_err(|error| format!("Android did not open the browser: {error}")),
         Err(_) => Err("Android did not open the browser in time.".into()),
     }
+}
+
+/// bir-core's "send in flight" hook: records the wish and hands it to the UI thread, which applies the latest one.
+fn send_in_flight(on: bool) {
+    AWAKE.store(on, Ordering::SeqCst);
+    post(keep_screen_on, |result| {
+        if let Err(error) = result {
+            tracing::warn!(%error, "send in flight: the screen flag did not change");
+        }
+    });
+}
+
+/// On: `activity.getWindow().addFlags(FLAG_KEEP_SCREEN_ON)` on the foreground Activity, and that window is kept. Off:
+/// `clearFlags(FLAG_KEEP_SCREEN_ON)` on the kept window. UI thread only.
+fn keep_screen_on(env: &mut JNIEnv<'_>) -> Result<()> {
+    let on = AWAKE.load(Ordering::SeqCst);
+    let mut flagged = FLAGGED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if on {
+        if flagged.is_some() {
+            return Ok(());
+        }
+        let activity = foreground_activity(env)?;
+        let window = java(env.call_method(activity, "getWindow", "()Landroid/view/Window;", &[]))?
+            .l()
+            .map_err(|error| error.to_string())?;
+        set_flag(env, &window, "addFlags")?;
+        *flagged = Some(java(env.new_global_ref(window))?);
+    } else if let Some(window) = flagged.take() {
+        set_flag(env, window.as_obj(), "clearFlags")?;
+    }
+    Ok(())
+}
+
+fn set_flag(env: &mut JNIEnv<'_>, window: &JObject<'_>, method: &str) -> Result<()> {
+    java(env.call_method(window, method, "(I)V", &[JValue::Int(FLAG_KEEP_SCREEN_ON)]))?;
+    Ok(())
 }

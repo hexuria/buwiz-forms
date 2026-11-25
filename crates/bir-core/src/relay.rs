@@ -194,6 +194,8 @@ impl RelaySession {
         xml: &[u8],
     ) -> Result<StoreReport, TransportError> {
         let name = crate::transport::iaf_basename(filename);
+        // This device carries the upload: a phone stays awake and asks for time until the send ends, however it ends.
+        let _in_flight = crate::send_in_flight::begin();
         match tokio::time::timeout(SEND_LIMIT, self.submitter.send(name, xml)).await {
             Ok(sent) => send_outcome(sent),
             Err(_) => Err(TransportError::RelayUnknown(

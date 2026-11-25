@@ -60,6 +60,7 @@ pub mod receipt;
 pub mod reference;
 pub mod relay;
 pub mod schema;
+pub mod send_in_flight;
 pub mod tax_profile;
 pub mod time_utils;
 pub mod transport;
