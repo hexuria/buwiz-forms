@@ -2501,22 +2501,22 @@ pub(crate) mod tests {
         let fields_15 = sample_2000ot_15_rows();
         let filled =
             frozen_html::filled_document_with_report("2000-ot-2018", &fields_15, None).unwrap();
-        assert!(filled.html.contains("page-continuation"));
+        assert!(filled.html.contains("bf_p2_"));
         assert_eq!(
             filled.warning_lines(),
             vec!["Schedule 1.A: 10 rows are on an additional sheet"]
         );
 
-        // The official portion before `<div class="page page-continuation"` must
-        // be byte-for-byte identical to the document with no overflow rows!
-        let split_at = filled
+        // Page 1 (before `<div class="page page-2"`) must be byte-for-byte identical
+        // to the document with no overflow rows!
+        let p2_with = filled
             .html
-            .find("<div class=\"page page-continuation")
-            .expect("continuation page inserted");
-        let official_with_overflow = &filled.html[..split_at];
-        let body_end = doc_no_overflow.rfind("</body>").unwrap();
-        let official_without_overflow = &doc_no_overflow[..body_end];
-        assert_eq!(official_with_overflow, official_without_overflow);
+            .find("<div class=\"page page-2\"")
+            .expect("page 2 present");
+        let p2_without = doc_no_overflow
+            .find("<div class=\"page page-2\"")
+            .expect("page 2 present");
+        assert_eq!(&filled.html[..p2_with], &doc_no_overflow[..p2_without]);
     }
 
     #[test]
@@ -3046,6 +3046,7 @@ pub(crate) mod tests {
     /// that every filled row's values appear somewhere in the printed document
     /// (official pages or continuation pages). No allow-list: any failing form
     /// is reported in the test output.
+    #[allow(clippy::type_complexity)]
     pub(crate) fn build_sweep_fields_for_slug(
         slug: &str,
         extra_rows: usize,

@@ -2016,31 +2016,36 @@ mod tests {
 
         let doc = frozen_html::filled_document_with_report("2000-ot-2018", &fields, None).unwrap();
         assert_eq!(doc.overflow.schedules.len(), 1);
-        assert!(doc.html.contains("page-continuation-band"));
+        // With explicit `formgen-page-layout`, 2000-OT flows in place via band_flow.
+        assert!(doc.html.contains("bf_p2_"));
         assert!(!doc.html.contains("class=\"page page-continuation\""));
+        assert!(doc.html.contains("120000000.00"));
+
+        // Verify the continuation-sheet fallback builder directly (used when a page
+        // has no `formgen-page-layout`).
+        let loaded = frozen_html::raw_bundle_html("2000-ot-2018").unwrap();
+        let fallback = build_continuation_pages(
+            "2000-ot-2018",
+            loaded,
+            &fields,
+            &doc.overflow,
+            "612pt",
+            "936pt",
+        )
+        .unwrap();
+        assert!(fallback.pages_html.contains("page-continuation-band"));
         assert!(
-            doc.html.contains("(as on page 2)"),
+            fallback.pages_html.contains("(as on page 2)"),
             "cloned TOTAL row should mark `(as on page 2)`"
         );
-
-        // Official pages (everything before the continuation page) must retain
-        // the official grand total AND match a 5-row-only fill with the same total.
-        let cont_pos = doc
-            .html
-            .find("<div class=\"page page-continuation-band\"")
-            .unwrap();
-        let official_prefix = &doc.html[..cont_pos];
         assert!(
-            official_prefix.contains("120000000.00"),
-            "official page 2 must keep the grand total untouched"
-        );
-        let cont_slice = &doc.html[cont_pos..];
-        assert!(
-            cont_slice.contains("120000000.00"),
+            fallback.pages_html.contains("120000000.00"),
             "cloned TOTAL row on continuation page must show the same grand total"
         );
         assert!(
-            cont_slice.contains("text-align:right;justify-content:flex-end;padding-right:2pt"),
+            fallback
+                .pages_html
+                .contains("text-align:right;justify-content:flex-end;padding-right:2pt"),
             "cloned numeric cells must use frozen_html right-alignment"
         );
     }
@@ -2074,11 +2079,10 @@ mod tests {
 
         let doc = frozen_html::filled_document_with_report("2552-2018", &fields, None).unwrap();
         assert_eq!(doc.overflow.schedules.len(), 2);
-        assert!(doc.html.contains("page-continuation-s0-p0"));
-        assert!(doc.html.contains("page-continuation-s1-p0"));
+        assert!(doc.html.contains("bf_p2_"));
+        assert!(doc.html.contains("S1-8") && doc.html.contains("S2-8"));
         assert!(doc.html.contains("3600.00"));
         assert!(doc.html.contains("18000.00"));
-        assert!(doc.html.contains("(as on page 2)"));
     }
 
     #[test]
@@ -2120,29 +2124,13 @@ mod tests {
         );
         let doc = frozen_html::filled_document_with_report("1600wp-2010", &fields, None).unwrap();
         assert_eq!(doc.overflow.schedules.len(), 1);
-        let cont_pos = doc
-            .html
-            .find("<div class=\"page page-continuation-band\"")
-            .unwrap();
-        let official = &doc.html[..cont_pos];
-        let cont = &doc.html[cont_pos..];
-        // Official Page 1 gets "Page 1 of 2" when continuation exists
-        assert!(official.contains(">1</div>") && official.contains(">2</div>"));
-        // Continuation Page 2 uses attachment header (NOT return top Items 1-4 / DLN / PSIC)
-        assert!(cont.contains("ATTACHMENT TO BIR FORM 1600-WP"));
-        assert!(cont.contains("PAYEE DETAILS"));
-        assert!(cont.contains("NATURE OF PAYMENT"));
-        assert!(cont.contains("TOTAL (as on page 1)"));
-        assert!(cont.contains("55000.00") && cont.contains("5500.00"));
-        assert!(cont.contains("JUANA SANTOS"));
-        assert!(!cont.contains("Amended Return"));
-        assert!(!cont.contains("TIN: "));
+        assert!(doc.html.contains("bf_p1_"));
+        assert!(doc.html.contains("55000.00") && doc.html.contains("5500.00"));
         for n in 7..=10 {
             assert!(
-                cont.contains(&format!("value=\"{n}\"")),
-                "1600WP continuation must populate sequence number {n}"
+                doc.html.contains(&format!("PAYEE {n}")),
+                "1600WP band-flow must populate PAYEE {n}"
             );
-            assert!(cont.contains(&format!("PAYEE {n}")));
         }
     }
 
@@ -2166,33 +2154,29 @@ mod tests {
         fields.insert("frm1801v2018:sched1Conj_Total".into(), "600000.00".into());
         let doc = frozen_html::filled_document_with_report("1801-2018", &fields, None).unwrap();
         assert_eq!(doc.overflow.schedules.len(), 1);
-        let cont_pos = doc
-            .html
-            .find("<div class=\"page page-continuation-band\"")
-            .unwrap();
-        let cont = &doc.html[cont_pos..];
-        assert!(cont.contains("TCT-003"));
-        assert!(cont.contains("TCT-004"));
+        assert!(doc.html.contains("bf_p2_"));
+        assert!(doc.html.contains("TCT-003"));
+        assert!(doc.html.contains("TCT-004"));
         assert!(
-            cont.contains("value=\"RR\""),
-            "1801 continuation row 3 must print classification RR"
+            doc.html.contains("value=\"RR\""),
+            "1801 row 3 must print classification RR"
         );
         assert!(
-            cont.contains("value=\"CR\""),
-            "1801 continuation row 4 must print classification CR"
+            doc.html.contains("value=\"CR\""),
+            "1801 row 4 must print classification CR"
         );
         assert!(
-            cont.contains("400000.00"),
-            "1801 continuation must repeat Exclusive total"
+            doc.html.contains("400000.00"),
+            "1801 must print Exclusive total"
         );
         assert!(
-            cont.contains("600000.00"),
-            "1801 continuation must repeat Conjugal total"
+            doc.html.contains("600000.00"),
+            "1801 must print Conjugal total"
         );
         assert!(
-            !cont.contains("continuation) (continued)")
-                && !cont.contains("Continuation) (continued)"),
-            "1801 Schedule 1 continuation heading must not duplicate (continued)"
+            !doc.html.contains("continuation) (continued)")
+                && !doc.html.contains("Continuation) (continued)"),
+            "1801 Schedule 1 heading must not duplicate (continued)"
         );
     }
 
@@ -2259,8 +2243,8 @@ mod tests {
             frozen_html::filled_document_with_report("1701a-2018", &f1701a, None).unwrap();
         assert_eq!(doc1701a.overflow.schedules.len(), 2);
         assert!(
-            doc1701a.html.contains("page-continuation-band"),
-            "1701A uses cloned bands"
+            doc1701a.html.contains("bf_p2_"),
+            "1701A grows in place via band flow"
         );
         assert!(!doc1701a.html.contains("class=\"page page-continuation\""));
         assert!(doc1701a.html.contains("OTHER INC A 1") && doc1701a.html.contains("OTHER INC B 3"));

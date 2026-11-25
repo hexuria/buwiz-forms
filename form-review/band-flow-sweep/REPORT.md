@@ -1,344 +1,139 @@
-# Band-Flow Engine Sweep Report (`try/forms-band-flow` @ `446da0e5`)
+# Band-Flow Engine Sweep Report (Sweep 2 vs `origin/try/forms-band-flow` @ `0d3fa1fb`)
 
-Tested every growable form at **capacity** (`cap`), **capacity + 3** (`cap_p3`), and **capacity + 40** (`cap_p40`) with our `formgen-page-layout` v1 metadata merged into a scratch copy of `origin/try/forms-band-flow` (`446da0e5`).
-
-## Summary of Findings
-
-### 1. Generator / Layout-Data Bugs Found and Fixed (`buwiz-forms-html` `forms-layout-fixes` @ `a2779b4`)
-1. **SVG index off-by-1 (`SVG_TOKEN_RE`):** `emit_page_layout.py` counted `<image>` and `<text>` inside `<svg>`, whereas `band_flow.rs` only indexes `<rect|path|line|polygon|polyline|circle|ellipse>`. Fixed in `emit_page_layout.py` — resolved the `1707` conservation failures (`page_header svg v143 expected 1, got 2`).
-2. **Page 1 `page_header` too tall + split `table_head` (`1600WP`):** Page 1 `page_header` swallowed Items 1–4 (`For the Period / Amended Return / ...`), and `1600WP` Schedule 1.1's two-row column header was split in half so `table_head` overlapped `From/To/Yes/No` on Page 2. Fixed in `emit_page_layout.py` (stop p1 `page_header` at first field slice; merge adjacent multi-row non-field header sub-bands into one `table_head`).
-3. **Missing `table_head` when leading rows precede `row_template` (`1800`, `1600PT`, `1600VT`):** Fixed in `emit_page_layout.py` to walk past up to 4 leading fixed rows when tagging `table_head` (plus tightened cell-straddle tolerance from `2.0pt` to `1.5pt` for `1707A` p1 checkboxes; 90/90 pages pass strict self-check).
-
-### 2. Engine Defects Found in `crates/bir-print/src/band_flow.rs`
-1. **CRITICAL — `<div class="band">` wrapper wipes all existing & extra rows on 19 of 24 active band-flow forms** (`2000OT`, `1800`, `2552`, `2551Q`, `1601C`, `2000`, `2200C`, `2550M`, `1600PT`, `1600VT`, `1601FQ`, `1601EQ`, `1602Q`, `1700`, `1702EX`, `1702MX`, `1702RT`, `1706`, `1707A`): `parse_flow_page_dom()` only parses `<div class="t">` inside `layer-text` and direct `<div class="c">` children of `layer-cells`, skipping `<div class="band" id="band-content-...">`. Only the 5 newer flat-DOM forms (`1707`, `1801`, `1600WP`, `2550Q`, `1701A`) preserve their filled values.
-2. **Borders lost above/below growth (known fault + shrunk elastic box):** Outer left/right vertical rails (`spanning_svg_ids`) are lost on blocks above and below growth across `1801`, `1600WP`, `2550Q`, `1701A`, `1707`, `1601EQ`, `1602Q`, `1702RT`, `2552`, `1800`, `2000OT`; on `1600WP` `cap_p3`, the shrunk `Machine Validation` elastic box also loses its bottom horizontal border.
-3. **Band overlap & paper overflow (`2550M`):** On `2550M` `cap_p3`, `C) Total Input Tax Deferred` overlaps `Schedule 4`, and Schedule 7 vertical dividers extend to `1039.0pt` (past `content_bottom_y=990pt` and `1008pt` paper height).
-4. **Extra-row amount alignment & row-number collisions (`1801`, `1600WP`, `2550Q`, `1701A`):** Cloned extra-row amounts print left-aligned instead of right-aligned (`1801`, `1600WP`, `2550Q`); on `1701A`, extra rows reuse item numbers `43` and `52` directly above existing Items `43` and `52`.
-5. **Gapped `table_head` not repeated on break (`1800`):** When a schedule has leading fixed rows between `table_head` and `row_template`, `pack_page` does not repeat `table_head` on `Page 2 (continued)` even when `table_group` matches.
+- **Engine head tested:** `origin/try/forms-band-flow` @ `0d3fa1fb` (carrying refreshed `formgen-page-layout` metadata from `feat/forms-page-layout-data` @ `ab797ea5`, generator `buwiz-forms-html` `forms-layout-fixes` @ `d7f359a`)
+- **Cases tested per growable form:** `cap` (capacity), `cap_p3` (capacity + 3 rows), `cap_p40` (capacity + 40 rows)
+- **Rendered evidence:** `287` PNGs across `27` active growable forms under `form-review/band-flow-sweep/<CODE>/` (all pages visually inspected; `0` conservation errors, `0` missing values, `0` paper-edge overflows across all 81 HTMLs)
 
 ---
 
-## Per-Form Results (in Requested Order)
+## 1. Status of the Five Defects from Sweep 1 (`446da0e5` -> `0d3fa1fb`)
 
-### 1801 (`1801-2018`, `formgen-bands`: 7)
+| # | Sweep 1 Defect | Sweep 2 Status | Exact Forms |
+| --- | --- | --- | --- |
+| 1 | `<div class="band">` wrapper wipes filled rows on 19 active forms | **GONE (19/19 fixed)** | All 19 wrapped-band forms now render filled rows with `0` missing values and `0` conservation errors. |
+| 2 | Lost outer side borders + shrunk elastic-box bottom border | **MOSTLY GONE (11/12 fixed)** | Fixed on `1801`, `1600WP` (including shrunk `Machine Validation` bottom border), `2550Q`, `1701A`, `1707`, `1601EQ`, `1602Q`, `1702RT`, `2552`, `1800`, and `2000OT` (`cap+3`). **1 edge case remains:** `2000OT/cap_p40-p-3.png` bottom row (`1.B` row 1) loses outer side/bottom borders at the page break. |
+| 3 | `2550M` Sch. 3C/Sch. 4 overlap + `1039pt` paper overflow | **GONE** | `2550M/cap_p3-p-2.png` breaks cleanly with `Continued on the next page`; `0` paper-edge overflows across all 81 HTMLs. |
+| 4 | Left-aligned amounts + `1701A` row-number collisions | **PARTIAL** | **Amounts:** fixed on `1600WP`, `2550Q`, `2000OT`, `1800`, `2552`, `2200C`, `2550M`, `1600PT`, `1600VT`; **still left-aligned** on `1801` (`EXCLUSIVE` & `CONJUGAL/COMMUNAL`) and `1601FQ` (`Amount of Tax Withheld (G)`). **Item numbers:** fixed on `1701A` (`42a-c`, `51a-c`) and `1601C` (`3a-3an`); **still colliding/wrong** on `1601EQ` (`7, 8, 9` after `18`), `1602Q` (`1, 2, 3, 3, 4, 5` before `4 Total`), `1702RT` (`5, 6, 7` before `5 Total`), `1800` (`6..8` duplicated after `10`). |
+| 5 | Gapped `table_head` + `section_title` not repeated on break | **NOT FIXED** | `1800/cap_p3-p-3.png` (`Schedule B – Continuation`) still omits `table_head` and `section_title`; `1602Q/cap_p3-p-3.png` (`Schedule 4`) breaks mid-table without header; `section_title` (`repeat_on_break: true` in metadata) is **not repeated** on any band-flow continuation page (`1600WP`, `2550Q`, `2551Q`, `1601C`, `2000`, `2200C`, `2550M`, `1707`, `1702RT`). |
 
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+## 2. Two New Visual Defects Found on `0d3fa1fb`
+
+1. **`(continued)` stamped over column headers / vertical dividers on repeated `table_head`:**
+   - **Direct text collision (broken):** `2550Q/cap_p3-p-3.png` (`(continued)` overwrites `(E) Amount Paid`), `2550M/cap_p3-p-3.png` (`(continued)` overwrites `Name of Miller`; page label also stays `Page 2` instead of `Page 2 (continued)`).
+   - **Crosses column divider (tweak):** `2551Q/cap_p40-p-3.png`, `2200C/cap_p40-p-3.png`, `2000/cap_p40-p-3.png`.
+2. **Row `5` pushed after extra rows (`1, 2, 3, 4, 6, 7, 8, 5`):**
+   - `2000OT/cap_p3-p-2.png` (`1.A - Real Property`) and `2552/cap_p3-p-2.png` / `cap_p3-p-3.png` (`Schedules 1–3` upper halves, `Part VI`): extra rows `6, 7, 8` insert after row `4` (inside `<div class="band">`), leaving printed row `5` below row `8`.
+
+---
+
+## 3. Per-Form Verdicts & Tables (Priority Order)
+
+### `1801` (`1801-2018`) — Verdict: `tweak`
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | PASS | 0 | `1801/cap-p-1.png`, `1801/cap-p-2.png` |
-| Capacity + 3 | 3 | Yes | PASS | 0 | `1801/cap_p3-p-1.png`, `1801/cap_p3-p-2.png`, `1801/cap_p3-p-3.png` |
-| Capacity + 40 | 6 | Yes | PASS | 0 | `1801/cap_p40-p-1.png`, `1801/cap_p40-p-2.png`, `1801/cap_p40-p-3.png` (+3 more) |
+| `cap` | 2 | Band-flow (no growth) | PASS | 0 | Clean baseline (`1801/cap-p-2.png`). |
+| `cap_p3` | 3 | Band-flow | PASS | 0 | Outer borders restored; `EXCLUSIVE` and `CONJUGAL/COMMUNAL` amounts are left-aligned across Sch. 1 cont., 1A, 2, 2A, 3, 4 (`1801/cap_p3-p-2.png`, `1801/cap_p3-p-3.png`). |
+| `cap_p40` | 6 | Band-flow | PASS | 0 | Same left-aligned `EXCLUSIVE`/`CONJUGAL` amounts; clean breaks otherwise (`1801/cap_p40-p-2.png`). |
 
-- **Verdict:** All 7 schedules grow cleanly in place and break to Page 2 (continued); 0 missing values, conservation passes.
-- **Defects:** 1) Known engine fault: Part IV (above growth) and Schedule 5 (below growth) lose outer left/right borders and column dividers. 2) Engine fault: extra-row amount columns print left-aligned while original rows print right-aligned. 3) Page 6 of cap+40 holds only Schedule 5 (not a growable table), so no table head needed.
-
-### 1600WP (`1600wp-2010`, `formgen-bands`: 1)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+### `1600WP` (`1600wp-2010`) — Verdict: `clean`
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 1 | No (static) | PASS | 0 | `1600WP/cap-p-1.png` |
-| Capacity + 3 | 1 | Yes | PASS | 0 | `1600WP/cap_p3-p-1.png` |
-| Capacity + 40 | 2 | Yes | PASS | 0 | `1600WP/cap_p40-p-1.png`, `1600WP/cap_p40-p-2.png` |
+| `cap` | 1 | Band-flow (no growth) | PASS | 0 | Clean baseline (`1600WP/cap-p-1.png`). |
+| `cap_p3` | 1 | Band-flow | PASS | 0 | Grows in place cleanly; outer borders & shrunk `Machine Validation` bottom border restored; amounts right-aligned (`1600WP/cap_p3-p-1.png`). |
+| `cap_p40` | 2 | Band-flow | PASS | 0 | Breaks cleanly to page 2 with `PAYEE DETAILS (continued)` header, Part III + Machine Validation below TOTAL (`1600WP/cap_p40-p-2.png`). Note: `Schedule 1.1` section title bar not repeated above `table_head`. |
 
-- **Verdict:** Grows in place on Page 1 for cap+3 (shrinking the Machine Validation elastic box cleanly) and breaks to Page 2 for cap+40; 0 missing values, conservation passes.
-- **Defects:** 1) Fixed layout-data bug (`a2779b4`): p1 `page_header` previously swallowed Items 1–4 and `table_head` was cut in half, overlapping `From/To/Yes/No` on Page 2; now Page 2 repeats only the title banner + full two-row table head cleanly. 2) Engine fault: bottom horizontal border of the shrunk Machine Validation elastic box is missing on cap+3, and outer side borders are missing on Part III/Machine Validation below the table. 3) Engine fault: extra-row amounts print left-aligned instead of right-aligned.
-
-### 2550Q (`2550q-2024`, `formgen-bands`: 3)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+### `2550Q` (`2550q-2024`) — Verdict: `broken`
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | PASS | 0 | `2550Q/cap-p-1.png`, `2550Q/cap-p-2.png` |
-| Capacity + 3 | 3 | Yes | PASS | 0 | `2550Q/cap_p3-p-1.png`, `2550Q/cap_p3-p-2.png`, `2550Q/cap_p3-p-3.png` |
-| Capacity + 40 | 4 | Yes | PASS | 0 | `2550Q/cap_p40-p-1.png`, `2550Q/cap_p40-p-2.png`, `2550Q/cap_p40-p-3.png` (+1 more) |
+| `cap` | 2 | Band-flow (no growth) | PASS | 0 | Clean baseline (`2550Q/cap-p-2.png`). |
+| `cap_p3` | 3 | Band-flow | PASS | 0 | Page 2 clean (borders restored, amounts right-aligned); **Page 2 (continued) broken:** `(continued)` is stamped directly on top of `(E) Amount Paid` (unreadable collision) and `Schedule 4` section title is not repeated (`2550Q/cap_p3-p-2.png`, `2550Q/cap_p3-p-3.png`). |
+| `cap_p40` | 4 | Band-flow | PASS | 0 | Same `(continued)` collision over repeated header on continuation pages (`2550Q/cap_p40-p-3.png`). |
 
-- **Verdict:** Schedules 1, 3, and 4 grow cleanly in place and break to Page 2 (continued) with repeated column headers; 0 missing values, conservation passes.
-- **Defects:** 1) Known engine fault: Part IV (above growth) and Schedule 2 (between Schedule 1 and Schedule 3) lose outer left/right borders. 2) Engine fault: extra-row amounts print left-aligned instead of right-aligned. 3) Schedule 1 grey column-header band above `(A)..(I)` renders blank grey; Schedule 4 continuation rows 4–5 leave `(A) Period Covered` blank.
-
-### 1701A (`1701a-2018`, `formgen-bands`: 2)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+### `1701A` (`1701a-2018`) — Verdict: `tweak`
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | PASS | 0 | `1701A/cap-p-1.png`, `1701A/cap-p-2.png` |
-| Capacity + 3 | 3 | Yes | PASS | 0 | `1701A/cap_p3-p-1.png`, `1701A/cap_p3-p-2.png`, `1701A/cap_p3-p-3.png` |
-| Capacity + 40 | 4 | Yes | PASS | 0 | `1701A/cap_p40-p-1.png`, `1701A/cap_p40-p-2.png`, `1701A/cap_p40-p-3.png` (+1 more) |
+| `cap` | 2 | Band-flow (no growth) | PASS | 0 | Clean baseline (`1701A/cap-p-2.png`). |
+| `cap_p3` | 3 | Band-flow | PASS | 0 | Borders restored; row numbers fixed to `42a-c` / `51a-c` (no collision with `43`/`52`); tiny tweak: `a/b/c` slightly touches the vertical border / first char of `P0R43C0` (`1701A/cap_p3-p-2.png`, `1701A/cap_p3-p-3.png`). |
+| `cap_p40` | 4 | Band-flow | PASS | 0 | Clean breaks; same tight `42a..`/`51a..` label spacing (`1701A/cap_p40-p-2.png`). |
 
-- **Verdict:** Part IV.A and IV.B Other Non-Operating Income grow in place with full comb boxes (`structural_rects`) and break Part V cleanly to Page 2 (continued); 0 missing values, conservation passes.
-- **Defects:** 1) Known engine fault: outer left/right borders lost on Part IV.A, Part IV.C, and Part V (both pages). 2) Engine fault: extra rows in Part IV.A are numbered `43, 44, 45` (colliding with existing Item 43 right below) and in Part IV.B `52, 53, 54` (colliding with Item 52 Total).
-
-### 2000OT (`2000-ot-2018`, `formgen-bands`: 2)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+### `2000OT` (`2000-ot-2018`) — Verdict: `broken`
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p2: assertion `left == right` failed: 2000-ot-2018 (cap): non-repeating tex) | 0 | `2000OT/cap-p-1.png`, `2000OT/cap-p-2.png` |
-| Capacity + 3 | 3 | No (static) | FAIL (p2: assertion `left == right` failed: 2000-ot-2018 (cap_p3): non-repeating ) | 8+ (e.g. `Schedule 1.A r1 [OCT/TCT/CCT No.]=S0R1C0`) | `2000OT/cap_p3-p-1.png`, `2000OT/cap_p3-p-2.png`, `2000OT/cap_p3-p-3.png` |
-| Capacity + 40 | 7 | Yes | FAIL (p2: assertion `left == right` failed: 2000-ot-2018 (cap_p40): non-repeating) | 8+ (e.g. `Schedule 1.A r1 [OCT/TCT/CCT No.]=S0R1C0`) | `2000OT/cap_p40-p-1.png`, `2000OT/cap_p40-p-2.png`, `2000OT/cap_p40-p-3.png` (+4 more) |
+| `cap` | 2 | Band-flow (no growth) | PASS | 0 | Clean baseline (`2000OT/cap-p-2.png`). |
+| `cap_p3` | 3 | Band-flow | PASS | 0 | Rows restored (Defect 1 fixed), borders restored, amounts right-aligned; **broken:** `1.A - Real Property` rows print in order `1, 2, 3, 4, 6, 7, 8, 5` (row 5 stranded at bottom) (`2000OT/cap_p3-p-2.png`). |
+| `cap_p40` | 7 | Band-flow | PASS | 0 | Same row-5 ordering bug; plus bottom row (`1.B` row 1) on `2000OT/cap_p40-p-3.png` loses outer side and bottom borders at the page break. |
 
-- **Verdict:** CRITICAL ENGINE FAULT: `<div class="band">` wrapper inside `layer-cells` causes `parse_flow_page_dom` to drop all existing cells and `.t` row numbers (`1..4`), leaving Schedule 1.A completely blank except row number `5`.
-- **Defects:** 1) Engine fault (`<div class="band">`): all filled rows 1..cap and extra rows are wiped blank; conservation fails on `p2t19` even at cap. 2) Known engine fault: outer side borders missing on Schedule 2 below growth.
-
-### 1800 (`1800-2018`, `formgen-bands`: 4)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+### `1800` (`1800-2018`) — Verdict: `broken`
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p2: assertion `left == right` failed: 1800-2018 (cap): non-repeating text p) | 0 | `1800/cap-p-1.png`, `1800/cap-p-2.png` |
-| Capacity + 3 | 3 | Yes | FAIL (p2: assertion `left == right` failed: 1800-2018 (cap_p3): non-repeating tex) | 8+ (e.g. `Schedule A r1 [Particulars]=S0R1C0`) | `1800/cap_p3-p-1.png`, `1800/cap_p3-p-2.png`, `1800/cap_p3-p-3.png` |
-| Capacity + 40 | 4 | Yes | FAIL (p2: assertion `left == right` failed: 1800-2018 (cap_p40): non-repeating te) | 8+ (e.g. `Schedule A r1 [Particulars]=S0R1C0`) | `1800/cap_p40-p-1.png`, `1800/cap_p40-p-2.png`, `1800/cap_p40-p-3.png` (+1 more) |
+| `cap` | 2 | Band-flow (no growth) | PASS | 0 | Clean baseline (`1800/cap-p-2.png`). |
+| `cap_p3` | 3 | Band-flow | PASS | 0 | Rows & borders restored; **broken:** (1) `Schedule B – Continuation` breaks to `Page 2 (continued)` with **no repeated `table_head` and no `section_title`** (`1800/cap_p3-p-3.png`); (2) extra rows `6, 7, 8` duplicate printed blank rows `6..10` (`1800/cap_p3-p-2.png`). |
+| `cap_p40` | 4 | Band-flow | PASS | 0 | Same missing repeated header on continuation and duplicate numbering (`1800/cap_p40-p-3.png`). |
 
-- **Verdict:** CRITICAL ENGINE FAULT: `<div class="band">` wrapper wipes all filled rows in Deductions, Schedule A, and Schedule B; plus Schedule B Continuation breaks to Page 2 (continued) without repeating its table head.
-- **Defects:** 1) Engine fault (`<div class="band">`): all filled rows wiped blank; conservation fails on `p2t23`. 2) Fixed layout-data bug (`a2779b4`): generator now tags `table_head` for `p2g1`/`p2g2`/`p2g3` even when rows 1–3 sit above `row_template`, but engine `pack_page` still only repeats a `table_head` immediately adjacent (`i-1`) to `row_template`, so Page 2 (continued) still has no repeated table head. 3) Known engine fault: outer borders missing above/below growth.
-
-### 2552 (`2552-2018`, `formgen-bands`: 7)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+### `2552` (`2552-2018`) — Verdict: `broken`
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p2: assertion `left == right` failed: 2552-2018 (cap): non-repeating text p) | 0 | `2552/cap-p-1.png`, `2552/cap-p-2.png` |
-| Capacity + 3 | 3 | Yes | FAIL (p2: assertion `left == right` failed: 2552-2018 (cap_p3): non-repeating tex) | 8+ (e.g. `Part VI r1 [Seller]=S3R1C1`) | `2552/cap_p3-p-1.png`, `2552/cap_p3-p-2.png`, `2552/cap_p3-p-3.png` |
-| Capacity + 40 | 6 | Yes | FAIL (p2: assertion `left == right` failed: 2552-2018 (cap_p40): non-repeating te) | 8+ (e.g. `Part VI r1 [Seller]=S3R1C1`) | `2552/cap_p40-p-1.png`, `2552/cap_p40-p-2.png`, `2552/cap_p40-p-3.png` (+3 more) |
+| `cap` | 2 | Band-flow (no growth) | PASS | 0 | Clean baseline (`2552/cap-p-2.png`). |
+| `cap_p3` | 3 | Band-flow | PASS | 0 | Rows & Part IV borders restored, amounts right-aligned; **broken:** Schedules 1–3 upper halves and Part VI print rows out of order `1, 2, 3, 4, 6, 7, 8, 5` (`2552/cap_p3-p-2.png`, `2552/cap_p3-p-3.png`). |
+| `cap_p40` | 6 | Band-flow | PASS | 0 | Same row-5 out-of-order defect (`2552/cap_p40-p-2.png`). |
 
-- **Verdict:** CRITICAL ENGINE FAULT: `<div class="band">` wrapper wipes all filled rows in Schedules 1–3 (only row `5` label survives outside the wrapper).
-- **Defects:** 1) Engine fault (`<div class="band">`): all filled cells and row numbers 1..4 wiped blank; conservation fails on `p2t24`. 2) Known engine fault: Part IV (above growth) loses outer side borders.
-
-### 2551Q (`2551q-2018`, `formgen-bands`: 1)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+### `2551Q` (`2551q-2018`) — Verdict: `tweak`
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p2: assertion `left == right` failed: 2551q-2018 (cap): non-repeating text ) | 0 | `2551Q/cap-p-1.png`, `2551Q/cap-p-2.png` |
-| Capacity + 3 | 2 | No (static) | FAIL (p2: assertion `left == right` failed: 2551q-2018 (cap_p3): non-repeating te) | 8+ (e.g. `Schedule 1 r1 [Taxable Amount]=10017.00`) | `2551Q/cap_p3-p-1.png`, `2551Q/cap_p3-p-2.png` |
-| Capacity + 40 | 3 | Yes | FAIL (p2: assertion `left == right` failed: 2551q-2018 (cap_p40): non-repeating t) | 8+ (e.g. `Schedule 1 r1 [Taxable Amount]=10017.00`) | `2551Q/cap_p40-p-1.png`, `2551Q/cap_p40-p-2.png`, `2551Q/cap_p40-p-3.png` |
+| `cap` | 2 | Band-flow (no growth) | PASS | 0 | Clean baseline (`2551Q/cap-p-2.png`). |
+| `cap_p3` | 2 | Band-flow | PASS | 0 | Clean in-place growth (`1..9`), comb digits & borders intact (`2551Q/cap_p3-p-2.png`). |
+| `cap_p40` | 3 | Band-flow | PASS | 0 | Tweak: `Schedule 1` section title not repeated on `Page 2 (continued)`, and `(continued)` spills across the vertical divider between `ATC` and `Taxable Amount` (`2551Q/cap_p40-p-3.png`). |
 
-- **Verdict:** CRITICAL ENGINE FAULT: `<div class="band">` wrapper wipes all 6 original + 3/40 extra rows blank; comb geometry and continuation page header repeat cleanly.
-- **Defects:** 1) Engine fault (`<div class="band">`): all filled rows wiped blank (`band_flow_rows: false`); conservation fails on `p2t20`. 2) Engine fault: extra rows' left row-number column border is missing/shifted; top border of first row on Page 2 (continued) missing.
-
-### 1601C (`1601c-2018`, `formgen-bands`: 2)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+### `1601C` (`1601c-2018`) — Verdict: `tweak`
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p2: assertion `left == right` failed: 1601c-2018 (cap): non-repeating text ) | 0 | `1601C/cap-p-1.png`, `1601C/cap-p-2.png` |
-| Capacity + 3 | 2 | No (static) | FAIL (p2: assertion `left == right` failed: 1601c-2018 (cap_p3): non-repeating te) | 8+ (e.g. `Schedule I r1 [3 Drawee Bank/Bank Code/Agency]=S0R1C0`) | `1601C/cap_p3-p-1.png`, `1601C/cap_p3-p-2.png` |
-| Capacity + 40 | 3 | Yes | FAIL (p2: assertion `left == right` failed: 1601c-2018 (cap_p40): non-repeating t) | 8+ (e.g. `Schedule I r1 [3 Drawee Bank/Bank Code/Agency]=S0R1C0`) | `1601C/cap_p40-p-1.png`, `1601C/cap_p40-p-2.png`, `1601C/cap_p40-p-3.png` |
+| `cap` | 2 | Band-flow (no growth) | PASS | 0 | Clean baseline (`1601C/cap-p-2.png`). |
+| `cap_p3` | 2 | Band-flow | PASS | 0 | Clean in-place growth (`1..3, 3a-3c`), comb digits & borders intact (`1601C/cap_p3-p-2.png`). |
+| `cap_p40` | 3 | Band-flow | PASS | 0 | Very clean break (`1..3, 3a..3an`); tiny tweak: 3-char labels `3aa..3an` slightly touch the vertical divider and `Schedule I` section title does not repeat (`1601C/cap_p40-p-3.png`). |
 
-- **Verdict:** CRITICAL ENGINE FAULT: `<div class="band">` wrapper wipes all Schedule I upper & lower half rows blank.
-- **Defects:** 1) Engine fault (`<div class="band">`): all filled rows wiped blank; conservation fails on `p2t28`. 2) Engine fault: extra rows' outer left border missing on Schedule I upper half.
-
-### 2000 (`2000-dst-2018`, `formgen-bands`: 4)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+### `2000` (`2000-dst-2018`) — Verdict: `tweak`
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p2: assertion `left == right` failed: 2000-dst-2018 (cap): non-repeating te) | 0 | `2000/cap-p-1.png`, `2000/cap-p-2.png` |
-| Capacity + 3 | 3 | No (static) | FAIL (p2: assertion `left == right` failed: 2000-dst-2018 (cap_p3): non-repeating) | 8+ (e.g. `Schedule 2 r1 [Revenue Official Receipt No.]=S0R1C0`) | `2000/cap_p3-p-1.png`, `2000/cap_p3-p-2.png`, `2000/cap_p3-p-3.png` |
-| Capacity + 40 | 8 | Yes | FAIL (p2: assertion `left == right` failed: 2000-dst-2018 (cap_p40): non-repeatin) | 8+ (e.g. `Schedule 2 r1 [Revenue Official Receipt No.]=S0R1C0`) | `2000/cap_p40-p-1.png`, `2000/cap_p40-p-2.png`, `2000/cap_p40-p-3.png` (+5 more) |
+| `cap` | 2 | Band-flow (no growth) | PASS | 0 | Clean baseline (`2000/cap-p-2.png`). |
+| `cap_p3` | 3 | Band-flow | PASS | 0 | Clean in-place growth on Schedules 1–4 (`2000/cap_p3-p-2.png`). |
+| `cap_p40` | 8 | Band-flow | PASS | 0 | Tweak: `Schedule 1` section title not repeated on `Page 2 (continued)` and `ATC (continued)` crosses the vertical column divider into `Tax Base` (`2000/cap_p40-p-3.png`). |
 
-- **Verdict:** CRITICAL ENGINE FAULT: `<div class="band">` wrapper wipes all Schedules 1–4 rows blank (comb geometry grows cleanly in place).
-- **Defects:** 1) Engine fault (`<div class="band">`): all filled rows wiped blank across Schedules 1–4; conservation fails on `p2t15`.
-
-### 2200M (`2200m-2018`, `formgen-bands`: 0)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+### `2200M` (`2200m-2018`) — Verdict: `clean` (legacy fallback)
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | PASS | 0 | `2200M/cap-p-1.png`, `2200M/cap-p-2.png` |
-| Capacity + 3 | 3 | Fallback | PASS | 0 | `2200M/cap_p3-p-1.png`, `2200M/cap_p3-p-2.png`, `2200M/cap_p3-p-3.png` |
-| Capacity + 40 | 5 | Fallback | PASS | 0 | `2200M/cap_p40-p-1.png`, `2200M/cap_p40-p-2.png`, `2200M/cap_p40-p-3.png` (+2 more) |
+| `cap` / `cap_p3` / `cap_p40` | 2 / 3 / 5 | Legacy `ADDITIONAL SHEET` (`fb=0`) | PASS | 0 | Clean legacy continuation with right-aligned amounts and subtotals (`2200M/cap_p3-p-3.png`). |
 
-- **Verdict:** No `formgen-bands` metadata (`fb=0`); engine does not run band-flow and falls back cleanly to legacy `ADDITIONAL SHEET` continuation pages (0 missing values).
-- **Defects:** Not yet on band-flow (`formgen-bands` is empty). Legacy continuation prints all rows cleanly.
-
-### 2200C (`2200c-2018`, `formgen-bands`: 1)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+### `2200C` (`2200c-2018`) — Verdict: `tweak`
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p2: 2200c-2018 (cap): repeating cell p2c10 expected 1..=1, got 0) | 0 | `2200C/cap-p-1.png`, `2200C/cap-p-2.png` |
-| Capacity + 3 | 2 | No (static) | FAIL (p2: 2200c-2018 (cap_p3): repeating cell p2c10 expected 1..=1, got 0) | 8+ (e.g. `Schedule 1 r1 [column A: cosmetic procedures performed, exempt]=S0R1C0`) | `2200C/cap_p3-p-1.png`, `2200C/cap_p3-p-2.png` |
-| Capacity + 40 | 3 | Yes | FAIL (p2: 2200c-2018 (cap_p40): repeating cell p2c10 expected 1..=2, got 0) | 8+ (e.g. `Schedule 1 r1 [column A: cosmetic procedures performed, exempt]=S0R1C0`) | `2200C/cap_p40-p-1.png`, `2200C/cap_p40-p-2.png`, `2200C/cap_p40-p-3.png` |
+| `cap` | 2 | Band-flow (no growth) | PASS | 0 | Clean baseline (`2200C/cap-p-2.png`). |
+| `cap_p3` | 2 | Band-flow | PASS | 0 | Clean in-place growth (13 rows), borders intact, Col (J) right-aligned (`2200C/cap_p3-p-2.png`). |
+| `cap_p40` | 3 | Band-flow | PASS | 0 | Tweak: `Schedule 1` section title not repeated on `Page 2 (continued)` and `COSMETIC PROCEDURES (continued)` spills across the vertical divider into `GROSS RECEIPTS` (`2200C/cap_p40-p-3.png`). |
 
-- **Verdict:** CRITICAL ENGINE FAULT: `<div class="band">` wrapper wipes all 10 original + 3/40 extra Schedule 1 rows blank.
-- **Defects:** 1) Engine fault (`<div class="band">`): all filled rows wiped blank; conservation fails on `p2c10`. 2) Known engine fault: top horizontal border of Schedule 1 header missing on outer edges.
-
-### 2550M (`2550m-2007`, `formgen-bands`: 7)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
+### `2550M` (`2550m-2007`) — Verdict: `broken`
+| Case | Pages | Engine | Conservation | Missing | Visual Findings & Pictures |
 | --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p2: assertion `left == right` failed: 2550m-2007 (cap): non-repeating cell ) | 0 | `2550M/cap-p-1.png`, `2550M/cap-p-2.png` |
-| Capacity + 3 | 3 | Yes | FAIL (p2: 2550m-2007 (cap_p3) page idx 0: svg None [198..1038.96] outside [0, 990) | 8+ (e.g. `Schedule 1 r1 [ATC]=S0R1C0`) | `2550M/cap_p3-p-1.png`, `2550M/cap_p3-p-2.png`, `2550M/cap_p3-p-3.png` |
-| Capacity + 40 | 6 | Yes | FAIL (p2: 2550m-2007 (cap_p40) page idx 1: svg None [-11.76..179.76000000000002] ) | 8+ (e.g. `Schedule 1 r1 [ATC]=S0R1C0`) | `2550M/cap_p40-p-1.png`, `2550M/cap_p40-p-2.png`, `2550M/cap_p40-p-3.png` (+3 more) |
+| `cap` | 2 | Band-flow (no growth) | PASS | 0 | Clean baseline (`2550M/cap-p-2.png`). |
+| `cap_p3` | 3 | Band-flow | PASS | 0 | Page 2 fixed (all 7 schedules filled, Sch. 3C/Sch. 4 overlap gone, `1039pt` overflow gone, `Continued on the next page` clean); **Page 2 (continued) broken:** `(continued)` overwrites `Name of Miller`, `Schedule 7` section title not repeated, page label says `Page 2` instead of `Page 2 (continued)` (`2550M/cap_p3-p-2.png`, `2550M/cap_p3-p-3.png`). |
+| `cap_p40` | 6 | Band-flow | PASS | 0 | Same `(continued)` collision over column headers and missing `Page 2 (continued)` label (`2550M/cap_p40-p-3.png`). |
 
-- **Verdict:** CRITICAL ENGINE FAULTS: `<div class="band">` wipes all 7 schedules blank, Schedule 3C/Schedule 4 bands OVERLAP each other, and Schedule 7 vertical rules OVERFLOW the 1008pt paper height (`max_y=1039.0pt > 1008.0pt`).
-- **Defects:** 1) Engine fault (`<div class="band">`): all filled rows wiped blank; conservation fails on `p2c153`. 2) Engine fault (overlap): `C) Total Input Tax Deferred` overlaps `Schedule 4` header and first line. 3) Engine fault (paper overflow): Schedule 7 vertical column dividers shoot past the bottom border to `1039.0pt` (past `content_bottom_y=990pt` and `1008pt` paper), colliding with `Continued on the next page`.
+### Remaining 14 Active Forms
 
-### 1600PT (`1600-pt-2018`, `formgen-bands`: 2)
+| Form | Verdict | cap / +3 / +40 pgs | Engine | Visual Findings & Pictures |
+| --- | --- | --- | --- | --- |
+| **`1600PT`** | `clean` | 2 / 2 / 2 | Band-flow | All rows (`1..8` / `1..45`) render cleanly on Page 2, borders intact, amounts right-aligned (`1600PT/cap_p3-p-2.png`). |
+| **`1600VT`** | `clean` | 2 / 2 / 2 | Band-flow | All rows (`1..8` / `1..45`) render cleanly on Page 2, borders intact, amounts right-aligned (`1600VT/cap_p3-p-2.png`). |
+| **`1601FQ`** | `tweak` | 2 / 2 / 2 | Band-flow | All rows (`1..8`) and borders clean, but `Amount of Tax Withheld (G)` is **left-aligned** (`1601FQ/cap_p3-p-2.png`). |
+| **`1601EQ`** | `broken` | 2 / 3 / 3 | Band-flow | Outer borders & `Machine Validation` move to Page 1 cont. are clean, but extra rows after Item `18` are numbered **`7, 8, 9`** (colliding with Part I items) (`1601EQ/cap_p3-p-1.png`, `1601EQ/cap_p3-p-2.png`). |
+| **`1602Q`** | `broken` | 3 / 4 / 5 | Band-flow | Sch. 2 & 3 rows numbered **`1, 2, 3 (blank), 3, 4, 5`** (duplicate `3` + collides with `4 Total`); `Schedule 4` breaks to `Page 2 (continued)` with **no repeated title or column header** (`1602Q/cap_p3-p-2.png`, `1602Q/cap_p3-p-3.png`). |
+| **`1707`** | `tweak` | 2 / 3 / 6 | Band-flow | `cap_p3` is `clean` (borders fully restored); `cap_p40` breaks cleanly with `Particulars (continued)`, only missing repeated `Schedule 3` section title (`1707/cap_p3-p-2.png`, `1707/cap_p40-p-3.png`). |
+| **`1702RT`** | `broken` | 4 / 6 / 17 | Band-flow | Outer borders restored and comb rows clean, but Sch. II extra rows are numbered **`5, 6, 7`** directly above **`5 Total`** (duplicate `5`), and `Schedule II` section title not repeated on `Page 3 (continued)` (`1702RT/cap_p3-p-3.png`, `1702RT/cap_p40-p-04.png`). |
+| **`1603Q`** | `clean` | 2 / 3 / 5 | Legacy (`fb=0`) | Clean `ADDITIONAL SHEET` (`1603Q/cap_p3-p-3.png`). |
+| **`1700`** | `clean` | 2 / 3 / 5 | Legacy (popup) | Clean `ADDITIONAL SHEET` (`1700/cap_p3-p-3.png`). |
+| **`1702EX`** | `clean` | 3 / 5 / 15 | Legacy (popup) | Clean `ADDITIONAL SHEET` (`1702EX/cap_p3-p-4.png`). |
+| **`1702MX`** | `clean` | 4 / 5 / 7 | Legacy (popup) | Clean `ADDITIONAL SHEET` (`1702MX/cap_p3-p-5.png`). |
+| **`1707A`** | `clean` | 2 / 3 / 7 | Legacy (popup) | Clean `ADDITIONAL SHEET` (`1707A/cap_p3-p-3.png`). |
+| **`2200AN`** | `clean` | 2 / 3 / 5 | Legacy (`fb=0`) | Clean `ADDITIONAL SHEET` (`2200AN/cap_p3-p-3.png`). |
+| **`2200P`** | `clean` | 2 / 3 / 5 | Legacy (`fb=0`) | Clean `ADDITIONAL SHEET` (`2200P/cap_p3-p-3.png`). |
 
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p1: assertion `left == right` failed: 1600-pt-2018 (cap): non-repeating tex) | 0 | `1600PT/cap-p-1.png`, `1600PT/cap-p-2.png` |
-| Capacity + 3 | 2 | No (static) | FAIL (p1: assertion `left == right` failed: 1600-pt-2018 (cap_p3): non-repeating ) | 8+ (e.g. `Schedule 1 r2 [TIN]=S0R2C0`) | `1600PT/cap_p3-p-1.png`, `1600PT/cap_p3-p-2.png` |
-| Capacity + 40 | 2 | No (static) | FAIL (p1: assertion `left == right` failed: 1600-pt-2018 (cap_p40): non-repeating) | 8+ (e.g. `Schedule 1 r2 [TIN]=S0R2C0`) | `1600PT/cap_p40-p-1.png`, `1600PT/cap_p40-p-2.png` |
-
-- **Verdict:** CRITICAL ENGINE FAULT (`<div class="band">` wrapper): filled rows inside `<div class="band">` are wiped blank (`8+` missing values, conservation fails on `p1: assertion `left == right` failed: 1600-pt-2018 (cap): non-repeatin`); outer side borders also lost above/below growth.
-
-### 1600VT (`1600-vt-2018`, `formgen-bands`: 2)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p1: assertion `left == right` failed: 1600-vt-2018 (cap): non-repeating tex) | 0 | `1600VT/cap-p-1.png`, `1600VT/cap-p-2.png` |
-| Capacity + 3 | 2 | No (static) | FAIL (p1: assertion `left == right` failed: 1600-vt-2018 (cap_p3): non-repeating ) | 8+ (e.g. `Schedule 1 r2 [TIN]=S0R2C0`) | `1600VT/cap_p3-p-1.png`, `1600VT/cap_p3-p-2.png` |
-| Capacity + 40 | 2 | No (static) | FAIL (p1: assertion `left == right` failed: 1600-vt-2018 (cap_p40): non-repeating) | 8+ (e.g. `Schedule 1 r2 [TIN]=S0R2C0`) | `1600VT/cap_p40-p-1.png`, `1600VT/cap_p40-p-2.png` |
-
-- **Verdict:** CRITICAL ENGINE FAULT (`<div class="band">` wrapper): filled rows inside `<div class="band">` are wiped blank (`8+` missing values, conservation fails on `p1: assertion `left == right` failed: 1600-vt-2018 (cap): non-repeatin`); outer side borders also lost above/below growth.
-
-### 1601FQ (`1601-fq-2020`, `formgen-bands`: 2)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p1: assertion `left == right` failed: 1601-fq-2020 (cap): non-repeating tex) | 0 | `1601FQ/cap-p-1.png`, `1601FQ/cap-p-2.png` |
-| Capacity + 3 | 2 | No (static) | FAIL (p1: assertion `left == right` failed: 1601-fq-2020 (cap_p3): non-repeating ) | 8+ (e.g. `Schedule 1 r1 [Nature of Income Payment]=S0R1C0`) | `1601FQ/cap_p3-p-1.png`, `1601FQ/cap_p3-p-2.png` |
-| Capacity + 40 | 2 | No (static) | FAIL (p1: assertion `left == right` failed: 1601-fq-2020 (cap_p40): non-repeating) | 8+ (e.g. `Schedule 1 r1 [Nature of Income Payment]=S0R1C0`) | `1601FQ/cap_p40-p-1.png`, `1601FQ/cap_p40-p-2.png` |
-
-- **Verdict:** CRITICAL ENGINE FAULT (`<div class="band">` wrapper): filled rows inside `<div class="band">` are wiped blank (`8+` missing values, conservation fails on `p1: assertion `left == right` failed: 1601-fq-2020 (cap): non-repeatin`); outer side borders also lost above/below growth.
-
-### 1601EQ (`1601eq-2019`, `formgen-bands`: 1)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p1: assertion `left == right` failed: 1601eq-2019 (cap): non-repeating text) | 0 | `1601EQ/cap-p-1.png`, `1601EQ/cap-p-2.png` |
-| Capacity + 3 | 3 | Yes | FAIL (p1: assertion `left == right` failed: 1601eq-2019 (cap_p3): non-repeating t) | 8+ (e.g. `ATC, Part II r1 [(item 13)]=S0R1C0`) | `1601EQ/cap_p3-p-1.png`, `1601EQ/cap_p3-p-2.png`, `1601EQ/cap_p3-p-3.png` |
-| Capacity + 40 | 3 | Yes | FAIL (p1: assertion `left == right` failed: 1601eq-2019 (cap_p40): non-repeating ) | 8+ (e.g. `ATC, Part II r1 [(item 13)]=S0R1C0`) | `1601EQ/cap_p40-p-1.png`, `1601EQ/cap_p40-p-2.png`, `1601EQ/cap_p40-p-3.png` |
-
-- **Verdict:** CRITICAL ENGINE FAULT (`<div class="band">` wrapper): filled rows inside `<div class="band">` are wiped blank (`8+` missing values, conservation fails on `p1: assertion `left == right` failed: 1601eq-2019 (cap): non-repeating`); outer side borders also lost above/below growth.
-
-### 1602Q (`1602q-2019`, `formgen-bands`: 2)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 3 | No (static) | FAIL (p2: assertion `left == right` failed: 1602q-2019 (cap): non-repeating text ) | 0 | `1602Q/cap-p-1.png`, `1602Q/cap-p-2.png`, `1602Q/cap-p-3.png` |
-| Capacity + 3 | 4 | Yes | FAIL (p2: assertion `left == right` failed: 1602q-2019 (cap_p3): non-repeating te) | 8+ (e.g. `Schedule 2 r1 [Total Interest]=10017.00`) | `1602Q/cap_p3-p-1.png`, `1602Q/cap_p3-p-2.png`, `1602Q/cap_p3-p-3.png` (+1 more) |
-| Capacity + 40 | 5 | Yes | FAIL (p2: assertion `left == right` failed: 1602q-2019 (cap_p40): non-repeating t) | 8+ (e.g. `Schedule 2 r1 [Total Interest]=10017.00`) | `1602Q/cap_p40-p-1.png`, `1602Q/cap_p40-p-2.png`, `1602Q/cap_p40-p-3.png` (+2 more) |
-
-- **Verdict:** CRITICAL ENGINE FAULT (`<div class="band">` wrapper): filled rows inside `<div class="band">` are wiped blank (`8+` missing values, conservation fails on `p2: assertion `left == right` failed: 1602q-2019 (cap): non-repeating `); outer side borders also lost above/below growth.
-
-### 1603Q (`1603q-2018`, `formgen-bands`: 0)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | PASS | 0 | `1603Q/cap-p-1.png`, `1603Q/cap-p-2.png` |
-| Capacity + 3 | 3 | Fallback | PASS | 0 | `1603Q/cap_p3-p-1.png`, `1603Q/cap_p3-p-2.png`, `1603Q/cap_p3-p-3.png` |
-| Capacity + 40 | 5 | Fallback | PASS | 0 | `1603Q/cap_p40-p-1.png`, `1603Q/cap_p40-p-2.png`, `1603Q/cap_p40-p-3.png` (+2 more) |
-
-- **Verdict:** No `formgen-bands` (`fb=0`); falls back to legacy continuation sheet with 0 missing values.
-
-### 1700 (`1700-2018`, `formgen-bands`: 1)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p2: assertion `left == right` failed: 1700-2018 (cap): non-repeating text p) | 0 | `1700/cap-p-1.png`, `1700/cap-p-2.png` |
-| Capacity + 3 | 3 | No (static) | FAIL (p2: assertion `left == right` failed: 1700-2018 (cap_p3): non-repeating tex) | 0 | `1700/cap_p3-p-1.png`, `1700/cap_p3-p-2.png`, `1700/cap_p3-p-3.png` |
-| Capacity + 40 | 5 | No (static) | FAIL (p2: assertion `left == right` failed: 1700-2018 (cap_p40): non-repeating te) | 0 | `1700/cap_p40-p-1.png`, `1700/cap_p40-p-2.png`, `1700/cap_p40-p-3.png` (+2 more) |
-
-- **Verdict:** Popup-only schedules fall back to legacy continuation sheet (0 missing values), while conservation fails on `<div class="band">` text/cell parsing (`p2: assertion `left == right` failed: 1700-2018 (cap): non-repeating t`).
-
-### 1702EX (`1702ex-2018`, `formgen-bands`: 1)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 3 | No (static) | FAIL (p3: assertion `left == right` failed: 1702ex-2018 (cap): non-repeating text) | 0 | `1702EX/cap-p-1.png`, `1702EX/cap-p-2.png`, `1702EX/cap-p-3.png` |
-| Capacity + 3 | 5 | No (static) | FAIL (p3: assertion `left == right` failed: 1702ex-2018 (cap_p3): non-repeating t) | 0 | `1702EX/cap_p3-p-1.png`, `1702EX/cap_p3-p-2.png`, `1702EX/cap_p3-p-3.png` (+2 more) |
-| Capacity + 40 | 15 | No (static) | FAIL (p3: assertion `left == right` failed: 1702ex-2018 (cap_p40): non-repeating ) | 0 | `1702EX/cap_p40-p-01.png`, `1702EX/cap_p40-p-02.png`, `1702EX/cap_p40-p-03.png` (+12 more) |
-
-- **Verdict:** Popup-only schedules fall back to legacy continuation sheet (0 missing values), while conservation fails on `<div class="band">` text/cell parsing (`p3: assertion `left == right` failed: 1702ex-2018 (cap): non-repeating`).
-
-### 1702MX (`1702mx-2018c`, `formgen-bands`: 4)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 4 | No (static) | FAIL (p3: assertion `left == right` failed: 1702mx-2018c (cap): non-repeating tex) | 0 | `1702MX/cap-p-1.png`, `1702MX/cap-p-2.png`, `1702MX/cap-p-3.png` (+1 more) |
-| Capacity + 3 | 5 | No (static) | FAIL (p3: assertion `left == right` failed: 1702mx-2018c (cap_p3): non-repeating ) | 0 | `1702MX/cap_p3-p-1.png`, `1702MX/cap_p3-p-2.png`, `1702MX/cap_p3-p-3.png` (+2 more) |
-| Capacity + 40 | 7 | No (static) | FAIL (p3: assertion `left == right` failed: 1702mx-2018c (cap_p40): non-repeating) | 0 | `1702MX/cap_p40-p-1.png`, `1702MX/cap_p40-p-2.png`, `1702MX/cap_p40-p-3.png` (+4 more) |
-
-- **Verdict:** Popup-only schedules fall back to legacy continuation sheet (0 missing values), while conservation fails on `<div class="band">` text/cell parsing (`p3: assertion `left == right` failed: 1702mx-2018c (cap): non-repeatin`).
-
-### 1702RT (`1702rt-2018c`, `formgen-bands`: 4)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 4 | No (static) | FAIL (p3: assertion `left == right` failed: 1702rt-2018c (cap): non-repeating tex) | 0 | `1702RT/cap-p-1.png`, `1702RT/cap-p-2.png`, `1702RT/cap-p-3.png` (+1 more) |
-| Capacity + 3 | 6 | No (static) | FAIL (p3: assertion `left == right` failed: 1702rt-2018c (cap_p3): non-repeating ) | 8+ (e.g. `Schedule II r5 [Description]=P2R5C0`) | `1702RT/cap_p3-p-1.png`, `1702RT/cap_p3-p-2.png`, `1702RT/cap_p3-p-3.png` (+3 more) |
-| Capacity + 40 | 17 | Yes | FAIL (p3: assertion `left == right` failed: 1702rt-2018c (cap_p40): non-repeating) | 8+ (e.g. `Schedule II r5 [Description]=P2R5C0`) | `1702RT/cap_p40-p-01.png`, `1702RT/cap_p40-p-02.png`, `1702RT/cap_p40-p-03.png` (+14 more) |
-
-- **Verdict:** CRITICAL ENGINE FAULT (`<div class="band">` wrapper): filled rows inside `<div class="band">` are wiped blank (`8+` missing values, conservation fails on `p3: assertion `left == right` failed: 1702rt-2018c (cap): non-repeatin`); outer side borders also lost above/below growth.
-
-### 1706 (`1706-2018`, `formgen-bands`: 2)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | — | skipped (`no_schedules` in safety test) | — | — | — |
-| Capacity + 3 | — | skipped (`no_schedules` in safety test) | — | — | — |
-| Capacity + 40 | — | skipped (`no_schedules` in safety test) | — | — | — |
-
-- **Verdict:** Skipped by `discover_schedules` (no repeatable writer-cell stem on `try/forms-band-flow`; `formgen-bands=2`).
-
-### 1707 (`1707-2021`, `formgen-bands`: 2)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | PASS | 0 | `1707/cap-p-1.png`, `1707/cap-p-2.png` |
-| Capacity + 3 | 3 | Yes | PASS | 0 | `1707/cap_p3-p-1.png`, `1707/cap_p3-p-2.png`, `1707/cap_p3-p-3.png` |
-| Capacity + 40 | 6 | Yes | PASS | 0 | `1707/cap_p40-p-1.png`, `1707/cap_p40-p-2.png`, `1707/cap_p40-p-3.png` (+3 more) |
-
-- **Verdict:** Schedules 2 & 3 grow cleanly in place (`cap+3`) and break cleanly to `Page 2 (continued)` (`cap+40`); 0 missing values, conservation passes. Only defect: known engine fault (Schedule 1 above growth loses outer left/right borders).
-
-### 1707A (`1707a-2021`, `formgen-bands`: 2)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | FAIL (p2: assertion `left == right` failed: 1707a-2021 (cap): non-repeating text ) | 0 | `1707A/cap-p-1.png`, `1707A/cap-p-2.png` |
-| Capacity + 3 | 3 | No (static) | FAIL (p2: assertion `left == right` failed: 1707a-2021 (cap_p3): non-repeating te) | 0 | `1707A/cap_p3-p-1.png`, `1707A/cap_p3-p-2.png`, `1707A/cap_p3-p-3.png` |
-| Capacity + 40 | 7 | No (static) | FAIL (p2: assertion `left == right` failed: 1707a-2021 (cap_p40): non-repeating t) | 0 | `1707A/cap_p40-p-1.png`, `1707A/cap_p40-p-2.png`, `1707A/cap_p40-p-3.png` (+4 more) |
-
-- **Verdict:** Popup-only schedules fall back to legacy continuation sheet (0 missing values), while conservation fails on `<div class="band">` text/cell parsing (`p2: assertion `left == right` failed: 1707a-2021 (cap): non-repeating `).
-
-### 2200A (`2200a-2020`, `formgen-bands`: 0)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | — | skipped (`no_schedules` in safety test) | — | — | — |
-| Capacity + 3 | — | skipped (`no_schedules` in safety test) | — | — | — |
-| Capacity + 40 | — | skipped (`no_schedules` in safety test) | — | — | — |
-
-- **Verdict:** Skipped by `discover_schedules` (no repeatable writer-cell stem on `try/forms-band-flow`; `formgen-bands=0`).
-
-### 2200AN (`2200an-2018`, `formgen-bands`: 0)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | PASS | 0 | `2200AN/cap-p-1.png`, `2200AN/cap-p-2.png` |
-| Capacity + 3 | 3 | Fallback | PASS | 0 | `2200AN/cap_p3-p-1.png`, `2200AN/cap_p3-p-2.png`, `2200AN/cap_p3-p-3.png` |
-| Capacity + 40 | 5 | Fallback | PASS | 0 | `2200AN/cap_p40-p-1.png`, `2200AN/cap_p40-p-2.png`, `2200AN/cap_p40-p-3.png` (+2 more) |
-
-- **Verdict:** No `formgen-bands` (`fb=0`); falls back to legacy continuation sheet with 0 missing values.
-
-### 2200P (`2200p-2020`, `formgen-bands`: 0)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | 2 | No (static) | PASS | 0 | `2200P/cap-p-1.png`, `2200P/cap-p-2.png` |
-| Capacity + 3 | 3 | Fallback | PASS | 0 | `2200P/cap_p3-p-1.png`, `2200P/cap_p3-p-2.png`, `2200P/cap_p3-p-3.png` |
-| Capacity + 40 | 5 | Fallback | PASS | 0 | `2200P/cap_p40-p-1.png`, `2200P/cap_p40-p-2.png`, `2200P/cap_p40-p-3.png` (+2 more) |
-
-- **Verdict:** No `formgen-bands` (`fb=0`); falls back to legacy continuation sheet with 0 missing values.
-
-### 2200S (`2200s-2018`, `formgen-bands`: 0)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | — | skipped (`no_schedules` in safety test) | — | — | — |
-| Capacity + 3 | — | skipped (`no_schedules` in safety test) | — | — | — |
-| Capacity + 40 | — | skipped (`no_schedules` in safety test) | — | — | — |
-
-- **Verdict:** Skipped by `discover_schedules` (no repeatable writer-cell stem on `try/forms-band-flow`; `formgen-bands=0`).
-
-### 2200T (`2200t-2022`, `formgen-bands`: 0)
-
-| Case | Pages | Band-Flow? | Conservation | Missing Values | Picture(s) |
-| --- | --- | --- | --- | --- | --- |
-| Capacity | — | skipped (`no_schedules` in safety test) | — | — | — |
-| Capacity + 3 | — | skipped (`no_schedules` in safety test) | — | — | — |
-| Capacity + 40 | — | skipped (`no_schedules` in safety test) | — | — | — |
-
-- **Verdict:** Skipped by `discover_schedules` (no repeatable writer-cell stem on `try/forms-band-flow`; `formgen-bands=0`).
+*(16 forms without repeatable schedules in `writer-cells.json` — `0605`, `0619E`, `0619F`, `1604C`, `1604E`, `1604F`, `1606`, `1701`, `1701MS`, `1701Q`, `1702Q`, `1706`, `2200A`, `2200S`, `2200T`, `2553` — have no growable-table overflow cases.)*
