@@ -3366,6 +3366,37 @@ mod tests {
         }
     }
 
+    /// While the worker asks Buwiz how the send went (`checking`), neither answer is taken and nothing moves.
+    #[test]
+    fn a_send_being_checked_with_buwiz_takes_no_answer() {
+        setup();
+        for (code, period, reason_key) in SHAPES {
+            let id = unknown_outcome(code, period, reason_key);
+            with_database(|db| {
+                db.conn_for_tests()
+                    .execute(
+                        "UPDATE form_drafts SET data_json = json_set(data_json, '$.relay_pending', ?1) WHERE id = ?2",
+                        (r#"{"submission_id":"s1"}"#, id),
+                    )
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(send_of(id)["stage"], "checking", "{code}");
+            assert_eq!(send_of(id)["can_resolve"], false, "{code}");
+            let before = stored_row(id);
+            for answer in ["received", "not_received"] {
+                let refused = resolve(code, period, answer).unwrap_err();
+                assert_eq!(
+                    refused.message(),
+                    NOT_WAITING_FOR_AN_ANSWER,
+                    "{code} {answer}"
+                );
+            }
+            assert_eq!(stored_row(id), before, "{code}");
+        }
+    }
+
     #[test]
     fn it_did_not_arrive_puts_each_shape_back_to_draft() {
         setup();
@@ -3451,7 +3482,10 @@ mod tests {
                 })
                 .unwrap();
             }
-            // This process's worker is sending it now.
+            // This process's worker is sending it now. The set of jobs in flight is one per process, and the other
+            // tests here answer for the same taxpayer and periods on their own threads: a period no other test uses,
+            // so marking this one in flight can never make their returns read as being sent.
+            let period = period + SHAPES.len() as i64;
             let id = unknown_outcome(code, period, reason_key);
             let before = stored_row(id);
             let (summary, _) =

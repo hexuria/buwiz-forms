@@ -569,6 +569,149 @@ fn pr11_2200a_schedule_1_is_by_atc_with_every_fixed_row_once() {
     );
 }
 
+/// 2200A Schedule 1 Others rows 1-3 Basic Excise Tax Due: enabled at load in
+/// the official program (runtime-control-inventory-v796.json L2200/2226/2252),
+/// not marked computed in the page schema, and typing Others row 1 Due = 11.00
+/// flows into all six downstream totals and reproduces 2200A-03142025.official.xml
+/// across every upload key with no known differences.
+#[test]
+fn form_2200a_others_due_is_editable_and_reproduces_official_sample() {
+    setup();
+    for n in 1..=3 {
+        let key = format!("frm2200Av2020:txtSched1_xa_others{n}_Due");
+        assert!(!schema_computed("2200A", &key), "{key} must be editable");
+    }
+
+    let xml =
+        include_str!("../../../../bir-core/tests/sample-payloads/2200A-03142025.official.xml");
+    let mut official = BTreeMap::new();
+    for chunk in xml.split("<div>").skip(1) {
+        let Some((inner, _)) = chunk.split_once("</div>") else {
+            continue;
+        };
+        let Some((k, rest)) = inner.split_once('=') else {
+            continue;
+        };
+        let suffix = format!("{k}=");
+        let v = rest.strip_suffix(&suffix).unwrap_or(rest);
+        official.insert(k.to_string(), v.to_string());
+    }
+    assert!(!official.is_empty());
+
+    let profile: TaxpayerProfile = serde_json::from_value(json!({
+        "id": null,
+        "full_name": "Sample Dummy Taxpayer",
+        "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+        "rdo_code": "039",
+        "line_of_business": "GENERAL SERVICES",
+        "registered_address": "123 Sample Street, Barangay Example, Quezon City",
+        "zip_code": "1100",
+        "phone": "09170000000",
+        "email": "sample.taxpayer@example.com",
+        "default_form_type": "2200A",
+        "taxpayer_type": "Individual",
+        "is_vat_registered": false,
+        "has_employees": false,
+        "withholds_compensation": false,
+        "withholds_expanded": false,
+        "birth_date": "1985-05-15",
+    }))
+    .unwrap();
+    let mut draft =
+        bir_core::forms::form_2200a::Form2200ADraft::new_from_profile(&profile, 2025, 3);
+    draft.day = 14;
+    let draft_json = serde_json::to_value(&draft).unwrap();
+
+    let filled = fill_unlocked(
+        "2200A",
+        &draft_json,
+        json!({
+            "frm2200Av2020:txtSheets": "1",
+            "frm2200Av2020:prodRegion": "130000000",
+            "frm2200Av2020:prodProvince": "137400000",
+            "frm2200Av2020:prodCity": "137403000",
+            "frm2200Av2020:remRegion": "040000000",
+            "frm2200Av2020:remProvince": "042100000",
+            "frm2200Av2020:remCity": "042103000",
+            "frm2200Av2020:optTreaty_1": "true",
+            "frm2200Av2020:optTreaty_2": "false",
+            "frm2200Av2020:treatyY": "Sample relief law",
+            "frm2200Av2020:optPayment_3": "true",
+            "frm2200Av2020:paymentOther": "Sample scheme",
+            "frm2200Av2020:txtLess_Balance": "1000.00",
+            "frm2200Av2020:txtLess_Excise": "234.57",
+            "frm2200Av2020:txtPen_Surcharge": "25.50",
+            "frm2200Av2020:txtPen_Interest": "10.00",
+            "frm2200Av2020:txtPen_Compromise": "1000.00",
+            "frm2200Av2020:txtPay_TaxPayment": "86316.99",
+            "frm2200Av2020:txtSched1_1A_2020B_Taxable": "1234.56",
+            "frm2200Av2020:txtSched1_1A_2024_Export": "50.00",
+            "frm2200Av2020:txtSched1_1A_2024_Taxable": "10000.13",
+            "frm2200Av2020:txtSched1_1B_2024_Taxable": "1234.57",
+            "frm2200Av2020:txtSched1_3B_2020B2_Taxable": "99.99",
+            "frm2200Av2020:txtSched1_xa_others1_Atc": "999",
+            "frm2200Av2020:txtSched1_xa_others1_Desc": "Sample other product",
+            "frm2200Av2020:txtSched1_xa_others1_Bracket": "Per Liter",
+            "frm2200Av2020:txtSched1_xa_others1_Rate": "5.5",
+            "frm2200Av2020:txtSched1_xa_others1_Taxable": "2.00",
+            "frm2200Av2020:txtSched1_xa_others1_Due": "11.00",
+        }),
+        &[
+            "frm2200Av2020:txtPen_Surcharge",
+            "frm2200Av2020:txtPen_Interest",
+            "frm2200Av2020:txtPen_Compromise",
+        ],
+    );
+    assert!(
+        filled["rejected"].as_object().unwrap().is_empty(),
+        "2200A rejected: {}",
+        filled["rejected"]
+    );
+
+    let final_draft: bir_core::forms::form_2200a::Form2200ADraft =
+        serde_json::from_value(filled["draft"].clone()).unwrap();
+    let payload = final_draft
+        .to_bir_xml_payload()
+        .expect("screen-filled 2200A must validate");
+    let mut actual = BTreeMap::new();
+    for chunk in payload.split("<div>").skip(1) {
+        let Some((inner, _)) = chunk.split_once("</div>") else {
+            continue;
+        };
+        let Some((k, rest)) = inner.split_once('=') else {
+            continue;
+        };
+        let suffix = format!("{k}=");
+        let v = rest.strip_suffix(&suffix).unwrap_or(rest);
+        actual.insert(k.to_string(), v.to_string());
+    }
+    assert_eq!(actual["frm2200Av2020:txtSched1_xa_others1_Due"], "11.00");
+    assert_eq!(actual["frm2200Av2020:txtSched1_TotalDue"], "87,451.56");
+    assert_eq!(actual["frm2200Av2020:txtExciseDue"], "87,451.56");
+    assert_eq!(actual["frm2200Av2020:txtNetTaxDue"], "86,216.99");
+    assert_eq!(actual["frm2200Av2020:txtStillDue"], "86,216.99");
+    assert_eq!(actual["frm2200Av2020:txtAmtPayable"], "87,252.49");
+    assert_eq!(actual["frm2200Av2020:txtBalance"], "-100.00");
+
+    let mut diffs = Vec::new();
+    for (k, want) in &official {
+        let got = actual.get(k).map(String::as_str).unwrap_or("<missing>");
+        if got != want {
+            diffs.push(format!("{k}: official={want:?} ours={got:?}"));
+        }
+    }
+    for (k, got) in &actual {
+        if !official.contains_key(k) {
+            diffs.push(format!("{k}: extra ours={got:?}"));
+        }
+    }
+    assert!(
+        diffs.is_empty(),
+        "2200A screen-path sample diffs:\n{}",
+        diffs.join("\n")
+    );
+}
+
 /// 2200T R3.3, preview.0, manual-0, manual-1: Schedule 1 is Part V with
 /// the rows the August 2022 sheet prints (the ones writer-cells.json joins),
 /// by ATC, the Tobacco Inspection Fees and the Others rows at its end; the
