@@ -1,0 +1,31 @@
+point	case	head_29654be0	main_92b3e201	notes
+1	new-taxpayer-create	checked-create_taxpayer-tax_profile_module.rs	checked-create_taxpayer	n/a: main lacks the check
+1	profile-tin-edit	checked-move_taxpayer_tin	checked-move_taxpayer_tin	same two functions both commits; head adds the digit check inside
+1	new-branch	goes-through-create_taxpayer	goes-through-create_taxpayer	branch creation reuses taxpayer creation path
+1	account-sync-import	unchecked-sync_taxpayer_rows-db/taxpayers.rs:166	unchecked	correct for existing data: import of existing taxpayer must not be refused
+1	legacy-ebirforms-import	unchecked-legacy_migration.rs	unchecked	correct: old profiles with legacy TINs must import
+1	archive-import	unchecked-bir_module.rs:2407	unchecked	correct: archive restore must not be blocked
+1	test-helpers-seeds	bypass-via-direct-store-calls	bypass	tests use store fns directly; listed in census
+2	valid-000123453	pass-code0	pass	same validation.rs both commits
+2	one-digit-wrong-000123454	refuse-code1	accept	create refused with exact sentence at head
+2	neighbours-swapped-000123543	refuse-code1	accept	swap detected
+2	dummy-000000000	passes-digit-check-store-refuses-reserved	same	store: "TIN 000-000-000 is reserved for the help desk admin."
+2	dummy-222222222	refuse-code1	accept	refused by check digit sentence
+2	dummy-999999999	refuse-code1	accept	refused by check digit sentence
+2	eight-digits	passthrough-unchecked-len-gate	same	len!=9 returns Ok before check; store then rejects malformed length
+2	ten-digits	passthrough-unchecked	same	same len gate
+2	letter-in-tin	passthrough-unchecked	same	len gate; store parse rejects non-digits
+2	space-containing-000-123-454-wrong	passthrough-UNCHECKED-len-after-dash-strip	accept	edge finding: strip removes dashes not spaces; len!=9 skips check; store strips spaces and parses clean 9 digits
+2	dashes-normal	pass	when-valid	dashes stripped by wrapper
+2	legacy-900-000-005	pass-code0	pass	legacy block accepts either of two digits
+2	legacy-900-000-006	refuse-code1	accept	other legacy digit wrong here
+2	legacy-905-180-008	accepts-either-digit	pass	upper block edge
+2	dryrun-111-111-114	pass-code0	pass	reserved dry-run TIN passes as required
+2	relaxed-debug	EBIR_RELAXED_VALIDATION=1-lets-wrong-digit-through	n/a	relaxed_dev_mode true in debug build
+2	relaxed-release	cannot-relax	cannot-relax	relaxed_dev_mode = cfg!(debug_assertions) && ... compile-time false in release
+4	existing-wrong-tin-open	works	works	bir-core tests use wrong-TIN 123456789 throughout; store has no digit check
+4	existing-wrong-tin-list	works	works	list_taxpayers never validates digit
+4	existing-wrong-tin-returns	works	works	returns/filing paths never call the two checked functions
+4	existing-wrong-tin-dryrun-file	works	works	dry-run filing unchanged; head lib tests 781/781 incl filing coverage
+4	existing-wrong-tin-edit-other-details	works	works	update_taxpayer has no digit check; only move_taxpayer_tin is checked
+4	existing-wrong-tin-correct-tin	works	works	move to valid TIN passes the check by design; GUI correction flow demonstrated

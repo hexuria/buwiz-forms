@@ -1,0 +1,61 @@
+// SCRATCH PROBE - never committed to the PR. Point 4 of the audit: a taxpayer
+// that already has a wrong-check-digit TIN (created on main) must not be locked
+// out at the head commit. Store-level operations are what the app's read/edit
+// paths use; the check digit lives only in the app-api create/move wrappers.
+use bir_core::db::taxpayers::{BranchFacts, NewTaxpayer, TaxpayerUpdate};
+use bir_core::db::Database;
+use bir_core::tax_profile::TaxpayerType;
+
+const WRONG: &str = "000-123-454"; // one digit wrong vs the demo TIN
+
+#[test]
+fn legacy_wrong_tin_taxpayer_is_not_locked_out() {
+    let db = Database::open_in_memory_for_tests().unwrap();
+    // Exactly what main's UI ended up doing through the unchecked store layer.
+    db.create_taxpayer(NewTaxpayer {
+        tin_root: WRONG.into(),
+        name: "Juana Santos".into(),
+        taxpayer_type: TaxpayerType::Individual,
+        birth_date: None,
+        head_office: BranchFacts::default(),
+    })
+    .expect("store create (simulating a pre-existing wrong-TIN taxpayer)");
+    let root = "000123454";
+    // 1. opens and reads back
+    let tp = db.get_taxpayer(root).unwrap();
+    assert!(tp.is_some(), "READ: taxpayer with wrong TIN still opens");
+    // 2. appears in listings
+    let list = db.list_taxpayers().unwrap();
+    assert!(!list.is_empty(), "LIST: taxpayer appears in list");
+    // 3. other details editable without touching the TIN
+    let updated = db
+        .update_taxpayer(
+            root,
+            TaxpayerUpdate {
+                name: Some("Juana M. Santos".into()),
+                ..TaxpayerUpdate::default()
+            },
+        )
+        .expect("EDIT-OTHER: editing name must not force a TIN change");
+    assert_eq!(updated.name, "Juana M. Santos");
+    println!("LOCKOUT-PROBE-OK read+list+edit-other all pass with wrong TIN present");
+}
+
+#[test]
+fn move_to_valid_tin_path_at_store_level() {
+    let db = Database::open_in_memory_for_tests().unwrap();
+    db.create_taxpayer(NewTaxpayer {
+        tin_root: WRONG.into(),
+        name: "Juana Santos".into(),
+        taxpayer_type: TaxpayerType::Individual,
+        birth_date: None,
+        head_office: BranchFacts::default(),
+    })
+    .unwrap();
+    // Correcting to the valid demo TIN must be possible (the checked wrapper
+    // lets valid TINs through; verified end-to-end in the GUI evidence).
+    db.move_taxpayer_tin("000123454", "000123453")
+        .expect("CORRECT: move to valid TIN works");
+    assert!(db.get_taxpayer("000123453").unwrap().is_some());
+    println!("MOVE-PROBE-OK correction to valid TIN succeeds");
+}

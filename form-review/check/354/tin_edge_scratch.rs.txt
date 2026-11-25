@@ -1,0 +1,32 @@
+// Scratch edge probe for PR #354 — never committed to the pull request.
+use bir_core::validation::{official_tin_check_code, relaxed_dev_mode};
+
+fn code(tin: &str) -> u8 {
+    official_tin_check_code(&tin.replace('-', ""))
+}
+
+#[test]
+fn edge_cases() {
+    eprintln!("valid 000123453 = {}", code("000-123-453"));
+    eprintln!("one wrong 000123454 = {}", code("000-123-454"));
+    eprintln!("swapped 000123543 = {}", code("000-123-543"));
+    eprintln!("dummy 000000000 = {}", code("000-000-000"));
+    eprintln!("dummy 222222222 = {}", code("222-222-222"));
+    eprintln!("dummy 999999999 = {}", code("999-999-999"));
+    eprintln!("eight 00012345 = {}", code("00012345"));
+    eprintln!("ten 0001234530 = {}", code("0001234530"));
+    eprintln!("letter 00012345a = {}", code("00012345a"));
+    eprintln!("spaces raw fn '000 123 453' = {}", official_tin_check_code("000 123 453"));
+    eprintln!("dash-permuted 001234530 = {}", code("001-234-530"));
+    eprintln!("legacy9xx 900000005 = {}", code("900-000-005"));
+    eprintln!("legacy9xx-alt 900000006 = {}", code("900-000-006"));
+    eprintln!("legacy9xx-end 905180008 = {}", code("905-180-008"));
+    eprintln!("dryrun 111111114 = {}", code("111-111-114"));
+    eprintln!("pr-old 987654320 = {}", code("987-654-320"));
+    eprintln!("pr-new 987654321 = {}", code("987-654-321"));
+    eprintln!("relaxed_dev_mode now = {}", relaxed_dev_mode());
+
+    for t in ["123456789","123456788","111222333","444555666","555555555","666666666","333333333","111111111","000111229","130000000","137400000","137403000","137404000","261708015","020000000","012801000","009123456","000123461","000111245"] {
+        eprintln!("testtin {} = {}", t, official_tin_check_code(t));
+    }
+}

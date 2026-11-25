@@ -1,0 +1,7 @@
+#[test]
+fn probe2() {
+    for t in ["000111253","000111245","111111114","000126789"] {
+        eprintln!("{} = {}", t, bir_core::validation::official_tin_check_code(t));
+    }
+    eprintln!("relaxed = {}", bir_core::validation::relaxed_dev_mode());
+}
