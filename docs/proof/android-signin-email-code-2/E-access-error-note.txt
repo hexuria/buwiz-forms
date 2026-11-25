@@ -1,0 +1,1 @@
+ACCESS ERROR CARD — reached later by accident during job 11 setup: after a force-stop while the mock account server had been killed and restarted, the boot access check failed and the card showed 'eBIRForms is locked' with 'Try again' (E-access-error-real.png). So the card IS reachable; the earlier dead-mock boot had raced the restart.

@@ -1,0 +1,9 @@
+pid before swipe: 3382
+countdown before: Resend in 4:31
+pid after swipe: 3382
+text="Enter the code"
+text="Resend in 4:31"
+countdown pre-force: Resend in 4:31
+pid after force-stop + reopen: 6045
+text="Enter the code"
+text="Resend in 2:01"

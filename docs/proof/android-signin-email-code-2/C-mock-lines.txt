@@ -1,0 +1,3 @@
+[mock-account] sign-in code for juana@example.com: 246810
+[mock-account] sign-in code for maria@example.com: 246810
+[mock-account] sign-in code for juana@example.com: 246810
