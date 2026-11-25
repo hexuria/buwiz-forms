@@ -1,0 +1,199 @@
+{
+  "2552_fresh_gated_refusal": {
+    "v": 2,
+    "id": "1",
+    "ok": true,
+    "result": {
+      "applied": [],
+      "filled": [],
+      "form": "2552",
+      "kept_user_boxes": [],
+      "refused": {
+        "frm2552:txtPg1Pt1I12TotShare": "Needs item 11 = Initial Public Offering (Primary or Secondary)",
+        "frm2552:txtPg2P4I2Amount": "Needs Part IV row 1"
+      },
+      "source": "ai"
+    },
+    "delivery_status": "delivered_unverified"
+  },
+  "2552_lse_refusal": {
+    "v": 2,
+    "id": "1",
+    "ok": true,
+    "result": {
+      "applied": [
+        "frm2552:rdoPg1I11Transaction"
+      ],
+      "filled": [
+        "frm2552:rdoPg1I11Transaction"
+      ],
+      "form": "2552",
+      "kept_user_boxes": [],
+      "refused": {
+        "frm2552:txtPg1Pt1I12TotShare": "Needs item 11 = Initial Public Offering (Primary or Secondary)"
+      },
+      "source": "ai"
+    },
+    "delivery_status": "delivered_unverified"
+  },
+  "2552_primary_and_part4_open": {
+    "v": 2,
+    "id": "1",
+    "ok": true,
+    "result": {
+      "applied": [
+        "frm2552:rdoPg1I11Transaction",
+        "frm2552:txtPg1Pt1I12TotShare",
+        "frm2552:txtPg2P4I1Amount",
+        "frm2552:txtPg2P4I2Amount",
+        "frm2552:txtPg2P4I3Amount"
+      ],
+      "filled": [
+        "frm2552:rdoPg1I11Transaction",
+        "frm2552:txtPg1Pt1I12TotShare",
+        "frm2552:txtPg2P4I1Amount",
+        "frm2552:txtPg2P4I2Amount",
+        "frm2552:txtPg2P4I3Amount"
+      ],
+      "form": "2552",
+      "kept_user_boxes": [],
+      "refused": {
+        "frm2552:txtPg1Pt1I12ShareSold": "`frm2552:txtPg1Pt1I12ShareSold` is not a box on Form 2552; use the keys bir_form_fields lists",
+        "frm2552:txtPg2P4I1Buyer": "`frm2552:txtPg2P4I1Buyer` is not a box on Form 2552; use the keys bir_form_fields lists",
+        "frm2552:txtPg2P4I1TIN": "`frm2552:txtPg2P4I1TIN` is not a box on Form 2552; use the keys bir_form_fields lists",
+        "frm2552:txtPg2P4I2Buyer": "`frm2552:txtPg2P4I2Buyer` is not a box on Form 2552; use the keys bir_form_fields lists",
+        "frm2552:txtPg2P4I2TIN": "`frm2552:txtPg2P4I2TIN` is not a box on Form 2552; use the keys bir_form_fields lists",
+        "frm2552:txtPg2P4I3Buyer": "`frm2552:txtPg2P4I3Buyer` is not a box on Form 2552; use the keys bir_form_fields lists",
+        "frm2552:txtPg2P4I3TIN": "`frm2552:txtPg2P4I3TIN` is not a box on Form 2552; use the keys bir_form_fields lists"
+      },
+      "source": "ai"
+    },
+    "delivery_status": "delivered_unverified"
+  },
+  "1702ex_attached_schedule_refusals": {
+    "v": 2,
+    "id": "1",
+    "ok": true,
+    "result": {
+      "applied": [],
+      "filled": [],
+      "form": "1702EX",
+      "kept_user_boxes": [],
+      "refused": {
+        "frm1702EX:txtPg2Pt4I49OtherTaxCrPmtAmt": "`frm1702EX:txtPg2Pt4I49OtherTaxCrPmtAmt` filled from the Part IV Item 49 attached schedule; BIR's program keeps this row shut",
+        "frm1702EX:txtPg2Pt4I49OtherTaxCrPmtDesc": "`frm1702EX:txtPg2Pt4I49OtherTaxCrPmtDesc` filled from the Part IV Item 49 attached schedule; BIR's program keeps this row shut",
+        "frm1702EX:txtPg3Pt6I17OthersIAmt": "`frm1702EX:txtPg3Pt6I17OthersIAmt` filled from the Schedule 1 Item 17i (more...) attached schedule; BIR's program keeps this row shut",
+        "frm1702EX:txtPg3Pt6I17OthersIDesc": "`frm1702EX:txtPg3Pt6I17OthersIDesc` filled from the Schedule 1 Item 17i (more...) attached schedule; BIR's program keeps this row shut",
+        "frm1702EX:txtPg3Pt6S2I4Amount": "`frm1702EX:txtPg3Pt6S2I4Amount` filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut",
+        "frm1702EX:txtPg3Pt6S2I4Description": "`frm1702EX:txtPg3Pt6S2I4Description` filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut",
+        "frm1702EX:txtPg3Pt6S2I4LegalBasis": "`frm1702EX:txtPg3Pt6S2I4LegalBasis` filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut"
+      },
+      "source": "ai"
+    },
+    "delivery_status": "delivered_unverified"
+  },
+  "1702mx_nolco_and_popup_refusal": {
+    "v": 2,
+    "id": "1",
+    "ok": true,
+    "result": {
+      "applied": [
+        "frm1702MX:txtPg3IShed7_4A",
+        "frm1702MX:txtPg3IShed7_4B",
+        "frm1702MX:txtPg3IShed7_4C",
+        "frm1702MX:txtPg3IShed7_4D",
+        "frm1702MX:txtPg3IShed7_4Year",
+        "frm1702MX:txtPg3IShed7_5A",
+        "frm1702MX:txtPg3IShed7_5B",
+        "frm1702MX:txtPg3IShed7_5C",
+        "frm1702MX:txtPg3IShed7_5D",
+        "frm1702MX:txtPg3IShed7_5Year",
+        "frm1702MX:txtPg3IShed7_6A",
+        "frm1702MX:txtPg3IShed7_6B",
+        "frm1702MX:txtPg3IShed7_6C",
+        "frm1702MX:txtPg3IShed7_6D",
+        "frm1702MX:txtPg3IShed7_6Year",
+        "frm1702MX:txtPg3IShed8_4Year",
+        "frm1702MX:txtPg3IShed8_5Year",
+        "frm1702MX:txtPg3IShed8_6C",
+        "frm1702MX:txtPg3IShed8_6Year",
+        "frm1702MX:txtPg4IShed8_4A",
+        "frm1702MX:txtPg4IShed8_4B",
+        "frm1702MX:txtPg4IShed8_4C",
+        "frm1702MX:txtPg4IShed8_4D",
+        "frm1702MX:txtPg4IShed8_5A",
+        "frm1702MX:txtPg4IShed8_5B",
+        "frm1702MX:txtPg4IShed8_5C",
+        "frm1702MX:txtPg4IShed8_5D",
+        "frm1702MX:txtPg4IShed8_6A",
+        "frm1702MX:txtPg4IShed8_6B",
+        "frm1702MX:txtPg4IShed8_6D"
+      ],
+      "filled": [
+        "frm1702MX:txtPg3IShed7_4A",
+        "frm1702MX:txtPg3IShed7_4B",
+        "frm1702MX:txtPg3IShed7_4C",
+        "frm1702MX:txtPg3IShed7_4D",
+        "frm1702MX:txtPg3IShed7_4Year",
+        "frm1702MX:txtPg3IShed7_5A",
+        "frm1702MX:txtPg3IShed7_5B",
+        "frm1702MX:txtPg3IShed7_5C",
+        "frm1702MX:txtPg3IShed7_5D",
+        "frm1702MX:txtPg3IShed7_5Year",
+        "frm1702MX:txtPg3IShed7_6A",
+        "frm1702MX:txtPg3IShed7_6B",
+        "frm1702MX:txtPg3IShed7_6C",
+        "frm1702MX:txtPg3IShed7_6D",
+        "frm1702MX:txtPg3IShed7_6Year",
+        "frm1702MX:txtPg3IShed8_4Year",
+        "frm1702MX:txtPg3IShed8_5Year",
+        "frm1702MX:txtPg3IShed8_6C",
+        "frm1702MX:txtPg3IShed8_6Year",
+        "frm1702MX:txtPg4IShed8_4A",
+        "frm1702MX:txtPg4IShed8_4B",
+        "frm1702MX:txtPg4IShed8_4C",
+        "frm1702MX:txtPg4IShed8_4D",
+        "frm1702MX:txtPg4IShed8_5A",
+        "frm1702MX:txtPg4IShed8_5B",
+        "frm1702MX:txtPg4IShed8_5C",
+        "frm1702MX:txtPg4IShed8_5D",
+        "frm1702MX:txtPg4IShed8_6A",
+        "frm1702MX:txtPg4IShed8_6B",
+        "frm1702MX:txtPg4IShed8_6D"
+      ],
+      "form": "1702MX",
+      "kept_user_boxes": [],
+      "not_shown": [
+        "frm1702MX:txtPg3IShed7_4A",
+        "frm1702MX:txtPg3IShed7_4B",
+        "frm1702MX:txtPg3IShed7_4C",
+        "frm1702MX:txtPg3IShed7_4D",
+        "frm1702MX:txtPg3IShed7_5A",
+        "frm1702MX:txtPg3IShed7_5B",
+        "frm1702MX:txtPg3IShed7_5C",
+        "frm1702MX:txtPg3IShed7_5D",
+        "frm1702MX:txtPg3IShed7_6A",
+        "frm1702MX:txtPg3IShed7_6B",
+        "frm1702MX:txtPg3IShed7_6C",
+        "frm1702MX:txtPg3IShed7_6D",
+        "frm1702MX:txtPg3IShed8_6C",
+        "frm1702MX:txtPg4IShed8_4A",
+        "frm1702MX:txtPg4IShed8_4B",
+        "frm1702MX:txtPg4IShed8_4C",
+        "frm1702MX:txtPg4IShed8_4D",
+        "frm1702MX:txtPg4IShed8_5A",
+        "frm1702MX:txtPg4IShed8_5B",
+        "frm1702MX:txtPg4IShed8_5C",
+        "frm1702MX:txtPg4IShed8_5D",
+        "frm1702MX:txtPg4IShed8_6A",
+        "frm1702MX:txtPg4IShed8_6B",
+        "frm1702MX:txtPg4IShed8_6D"
+      ],
+      "refused": {
+        "frm1702MX:txtPg6Sc6I2CA": "`frm1702MX:txtPg6Sc6I2CA` filled from the Schedule 6 (rows 2-4 / more...) attached schedule; BIR's program keeps this row shut"
+      },
+      "source": "ai"
+    },
+    "delivery_status": "delivered_unverified"
+  }
+}

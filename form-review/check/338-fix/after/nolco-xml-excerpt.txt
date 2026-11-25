@@ -1,0 +1,36 @@
+# Official BIR XML excerpt for 1702MX NOLCO at #338 head afe7bc34
+# NOTE: Per instructions, F1 was fixed on #326 (13e6abe4) and #338's 1702MX commit was left untouched until rebase onto main.
+
+<div>frm1702MX:txtPg3IShed7_4A=frm1702MX:txtPg3IShed7_4A=</div>  <!-- amount=300000, raw='' -->
+<div>frm1702MX:txtPg3IShed7_4B=frm1702MX:txtPg3IShed7_4B=</div>  <!-- amount=50000, raw='' -->
+<div>frm1702MX:txtPg3IShed7_4C=frm1702MX:txtPg3IShed7_4C=</div>  <!-- amount=20000, raw='' -->
+<div>frm1702MX:txtPg3IShed7_4D=frm1702MX:txtPg3IShed7_4D=</div>  <!-- amount=80000, raw='' -->
+<div>frm1702MX:txtPg3IShed7_4E=150000frm1702MX:txtPg3IShed7_4E=</div>  <!-- amount=150000, raw='150000' -->
+<div>frm1702MX:txtPg3IShed7_5A=frm1702MX:txtPg3IShed7_5A=</div>  <!-- amount=200000, raw='' -->
+<div>frm1702MX:txtPg3IShed7_5B=frm1702MX:txtPg3IShed7_5B=</div>  <!-- amount=30000, raw='' -->
+<div>frm1702MX:txtPg3IShed7_5C=frm1702MX:txtPg3IShed7_5C=</div>  <!-- amount=10000, raw='' -->
+<div>frm1702MX:txtPg3IShed7_5D=frm1702MX:txtPg3IShed7_5D=</div>  <!-- amount=40000, raw='' -->
+<div>frm1702MX:txtPg3IShed7_5E=120000frm1702MX:txtPg3IShed7_5E=</div>  <!-- amount=120000, raw='120000' -->
+<div>frm1702MX:txtPg3IShed7_6A=frm1702MX:txtPg3IShed7_6A=</div>  <!-- amount=100000, raw='' -->
+<div>frm1702MX:txtPg3IShed7_6B=frm1702MX:txtPg3IShed7_6B=</div>  <!-- amount=15000, raw='' -->
+<div>frm1702MX:txtPg3IShed7_6C=frm1702MX:txtPg3IShed7_6C=</div>  <!-- amount=5000, raw='' -->
+<div>frm1702MX:txtPg3IShed7_6D=frm1702MX:txtPg3IShed7_6D=</div>  <!-- amount=25000, raw='' -->
+<div>frm1702MX:txtPg3IShed7_6E=55000frm1702MX:txtPg3IShed7_6E=</div>  <!-- amount=55000, raw='55000' -->
+<div>frm1702MX:txtPg3IShed78D=145000frm1702MX:txtPg3IShed78D=</div>  <!-- amount=145000, raw='145000' -->
+
+<div>frm1702MX:txtPg4IShed8_4A=frm1702MX:txtPg4IShed8_4A=</div>  <!-- amount=400000, raw='' -->
+<div>frm1702MX:txtPg4IShed8_4B=frm1702MX:txtPg4IShed8_4B=</div>  <!-- amount=60000, raw='' -->
+<div>frm1702MX:txtPg4IShed8_4C=frm1702MX:txtPg4IShed8_4C=</div>  <!-- amount=25000, raw='' -->
+<div>frm1702MX:txtPg4IShed8_4D=frm1702MX:txtPg4IShed8_4D=</div>  <!-- amount=90000, raw='' -->
+<div>frm1702MX:txtPg4IShed8_4E=225000frm1702MX:txtPg4IShed8_4E=</div>  <!-- amount=225000, raw='225000' -->
+<div>frm1702MX:txtPg4IShed8_5A=frm1702MX:txtPg4IShed8_5A=</div>  <!-- amount=250000, raw='' -->
+<div>frm1702MX:txtPg4IShed8_5B=frm1702MX:txtPg4IShed8_5B=</div>  <!-- amount=35000, raw='' -->
+<div>frm1702MX:txtPg4IShed8_5C=frm1702MX:txtPg4IShed8_5C=</div>  <!-- amount=15000, raw='' -->
+<div>frm1702MX:txtPg4IShed8_5D=frm1702MX:txtPg4IShed8_5D=</div>  <!-- amount=45000, raw='' -->
+<div>frm1702MX:txtPg4IShed8_5E=155000frm1702MX:txtPg4IShed8_5E=</div>  <!-- amount=155000, raw='155000' -->
+<div>frm1702MX:txtPg4IShed8_6A=frm1702MX:txtPg4IShed8_6A=</div>  <!-- amount=150000, raw='' -->
+<div>frm1702MX:txtPg4IShed8_6B=frm1702MX:txtPg4IShed8_6B=</div>  <!-- amount=20000, raw='' -->
+<div>frm1702MX:txtPg3IShed8_6C=frm1702MX:txtPg3IShed8_6C=</div>  <!-- amount=10000, raw='' -->
+<div>frm1702MX:txtPg4IShed8_6D=frm1702MX:txtPg4IShed8_6D=</div>  <!-- amount=30000, raw='' -->
+<div>frm1702MX:txtPg4IShed8_6E=90000frm1702MX:txtPg4IShed8_6E=</div>  <!-- amount=90000, raw='90000' -->
+<div>frm1702MX:txtPg3IShed88D=165000frm1702MX:txtPg3IShed88D=</div>  <!-- amount=165000, raw='165000' -->

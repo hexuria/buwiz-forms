@@ -1,0 +1,37 @@
+# Official BIR XML excerpt for the 24 1702MX NOLCO boxes (Schedule 7.1 & 8.1 rows 4-6 cols A-D)
+# Generated from saved form_drafts.data_json after typing on the form page at #326 head 80d880e4 (no form.fill)
+# Format matches crates/bir-core/src/forms/form_1702mx_xml.rs::insert_nolco_table -> insert_money(value.raw)
+
+<div>frm1702MX:txtPg3IShed7_4A=frm1702MX:txtPg3IShed7_4A=</div>  <!-- draft.amount=300000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed7_4B=frm1702MX:txtPg3IShed7_4B=</div>  <!-- draft.amount=50000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed7_4C=frm1702MX:txtPg3IShed7_4C=</div>  <!-- draft.amount=20000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed7_4D=frm1702MX:txtPg3IShed7_4D=</div>  <!-- draft.amount=80000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed7_4E=150000frm1702MX:txtPg3IShed7_4E=</div>  <!-- computed Col E: amount=150000, raw='150000' -->
+<div>frm1702MX:txtPg3IShed7_5A=frm1702MX:txtPg3IShed7_5A=</div>  <!-- draft.amount=200000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed7_5B=frm1702MX:txtPg3IShed7_5B=</div>  <!-- draft.amount=30000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed7_5C=frm1702MX:txtPg3IShed7_5C=</div>  <!-- draft.amount=10000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed7_5D=frm1702MX:txtPg3IShed7_5D=</div>  <!-- draft.amount=40000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed7_5E=120000frm1702MX:txtPg3IShed7_5E=</div>  <!-- computed Col E: amount=120000, raw='120000' -->
+<div>frm1702MX:txtPg3IShed7_6A=frm1702MX:txtPg3IShed7_6A=</div>  <!-- draft.amount=100000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed7_6B=frm1702MX:txtPg3IShed7_6B=</div>  <!-- draft.amount=15000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed7_6C=frm1702MX:txtPg3IShed7_6C=</div>  <!-- draft.amount=5000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed7_6D=frm1702MX:txtPg3IShed7_6D=</div>  <!-- draft.amount=25000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed7_6E=55000frm1702MX:txtPg3IShed7_6E=</div>  <!-- computed Col E: amount=55000, raw='55000' -->
+<div>frm1702MX:txtPg3IShed78D=145000frm1702MX:txtPg3IShed78D=</div>  <!-- computed Row 8 total: amount=145000, raw='145000' -->
+
+<div>frm1702MX:txtPg4IShed8_4A=frm1702MX:txtPg4IShed8_4A=</div>  <!-- draft.amount=400000, draft.raw='' -->
+<div>frm1702MX:txtPg4IShed8_4B=frm1702MX:txtPg4IShed8_4B=</div>  <!-- draft.amount=60000, draft.raw='' -->
+<div>frm1702MX:txtPg4IShed8_4C=frm1702MX:txtPg4IShed8_4C=</div>  <!-- draft.amount=25000, draft.raw='' -->
+<div>frm1702MX:txtPg4IShed8_4D=frm1702MX:txtPg4IShed8_4D=</div>  <!-- draft.amount=90000, draft.raw='' -->
+<div>frm1702MX:txtPg4IShed8_4E=225000frm1702MX:txtPg4IShed8_4E=</div>  <!-- computed Col E: amount=225000, raw='225000' -->
+<div>frm1702MX:txtPg4IShed8_5A=frm1702MX:txtPg4IShed8_5A=</div>  <!-- draft.amount=250000, draft.raw='' -->
+<div>frm1702MX:txtPg4IShed8_5B=frm1702MX:txtPg4IShed8_5B=</div>  <!-- draft.amount=35000, draft.raw='' -->
+<div>frm1702MX:txtPg4IShed8_5C=frm1702MX:txtPg4IShed8_5C=</div>  <!-- draft.amount=15000, draft.raw='' -->
+<div>frm1702MX:txtPg4IShed8_5D=frm1702MX:txtPg4IShed8_5D=</div>  <!-- draft.amount=45000, draft.raw='' -->
+<div>frm1702MX:txtPg4IShed8_5E=155000frm1702MX:txtPg4IShed8_5E=</div>  <!-- computed Col E: amount=155000, raw='155000' -->
+<div>frm1702MX:txtPg4IShed8_6A=frm1702MX:txtPg4IShed8_6A=</div>  <!-- draft.amount=150000, draft.raw='' -->
+<div>frm1702MX:txtPg4IShed8_6B=frm1702MX:txtPg4IShed8_6B=</div>  <!-- draft.amount=20000, draft.raw='' -->
+<div>frm1702MX:txtPg3IShed8_6C=frm1702MX:txtPg3IShed8_6C=</div>  <!-- draft.amount=10000, draft.raw='' -->
+<div>frm1702MX:txtPg4IShed8_6D=frm1702MX:txtPg4IShed8_6D=</div>  <!-- draft.amount=30000, draft.raw='' -->
+<div>frm1702MX:txtPg4IShed8_6E=90000frm1702MX:txtPg4IShed8_6E=</div>  <!-- computed Col E: amount=90000, raw='90000' -->
+<div>frm1702MX:txtPg3IShed88D=165000frm1702MX:txtPg3IShed88D=</div>  <!-- computed Row 8 total: amount=165000, raw='165000' -->

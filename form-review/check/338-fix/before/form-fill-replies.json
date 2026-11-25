@@ -1,0 +1,283 @@
+{
+  "2552": {
+    "lse_tot": {
+      "applied": [
+        "frm2552:txtPg1Pt1I12TotShare"
+      ],
+      "filled": [
+        "frm2552:txtPg1Pt1I12TotShare"
+      ],
+      "form": "2552",
+      "kept_user_boxes": [],
+      "not_shown": [
+        "frm2552:txtPg1Pt1I12TotShare"
+      ],
+      "source": "ai"
+    },
+    "fill_12": {
+      "applied": [
+        "frm2552:txtPg1Pt1I12NumOfShare",
+        "frm2552:txtPg1Pt1I12TotShare"
+      ],
+      "filled": [
+        "frm2552:txtPg1Pt1I12NumOfShare",
+        "frm2552:txtPg1Pt1I12TotShare"
+      ],
+      "form": "2552",
+      "kept_user_boxes": [],
+      "source": "ai"
+    },
+    "fill_p4": {
+      "applied": [
+        "frm2552:txtPg2P4I1Amount",
+        "frm2552:txtPg2P4I1TransClass",
+        "frm2552:txtPg2P4I2Amount",
+        "frm2552:txtPg2P4I2TransClass",
+        "frm2552:txtPg2P4I3Amount",
+        "frm2552:txtPg2P4I3TransClass",
+        "frm2552:txtPg2P4I4Amount",
+        "frm2552:txtPg2P4I4TransClass",
+        "frm2552:txtPg2P4I5Amount",
+        "frm2552:txtPg2P4I5TransClass"
+      ],
+      "filled": [
+        "frm2552:txtPg2P4I1Amount",
+        "frm2552:txtPg2P4I1TransClass",
+        "frm2552:txtPg2P4I2Amount",
+        "frm2552:txtPg2P4I2TransClass",
+        "frm2552:txtPg2P4I3Amount",
+        "frm2552:txtPg2P4I3TransClass",
+        "frm2552:txtPg2P4I4Amount",
+        "frm2552:txtPg2P4I4TransClass",
+        "frm2552:txtPg2P4I5Amount",
+        "frm2552:txtPg2P4I5TransClass"
+      ],
+      "form": "2552",
+      "kept_user_boxes": [],
+      "source": "ai"
+    },
+    "survived": {
+      "frm2552:txtPg1Pt1I12NumOfShare": [
+        "2500000",
+        "2500000",
+        true
+      ],
+      "frm2552:txtPg1Pt1I12TotShare": [
+        "10000000",
+        "10000000",
+        true
+      ],
+      "frm2552:txtPg2P4I1TransClass": [
+        "EXEMPT COMMON A",
+        "EXEMPT COMMON A",
+        true
+      ],
+      "frm2552:txtPg2P4I1Amount": [
+        "101,234,567.89",
+        "101,234,567.89",
+        true
+      ],
+      "frm2552:txtPg2P4I2TransClass": [
+        "EXEMPT COMMON B",
+        "EXEMPT COMMON B",
+        true
+      ],
+      "frm2552:txtPg2P4I2Amount": [
+        "202,345,678.90",
+        "202,345,678.90",
+        true
+      ],
+      "frm2552:txtPg2P4I3TransClass": [
+        "EXEMPT PREFERRED C",
+        "EXEMPT PREFERRED C",
+        true
+      ],
+      "frm2552:txtPg2P4I3Amount": [
+        "303,456,789.12",
+        "303,456,789.12",
+        true
+      ],
+      "frm2552:txtPg2P4I4TransClass": [
+        "EXEMPT PREFERRED D",
+        "EXEMPT PREFERRED D",
+        true
+      ],
+      "frm2552:txtPg2P4I4Amount": [
+        "404,567,890.34",
+        "404,567,890.34",
+        true
+      ],
+      "frm2552:txtPg2P4I5TransClass": [
+        "EXEMPT FOUNDER E",
+        "EXEMPT FOUNDER E",
+        true
+      ],
+      "frm2552:txtPg2P4I5Amount": [
+        "505,678,901.56",
+        "505,678,901.56",
+        true
+      ]
+    }
+  },
+  "1702EX": {
+    "refusals": {
+      "frm1702EX:txtPg2Pt4I49OtherTaxCrPmtDesc": {
+        "applied": [],
+        "filled": [],
+        "form": "1702EX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702EX:txtPg2Pt4I49OtherTaxCrPmtDesc": "`frm1702EX:txtPg2Pt4I49OtherTaxCrPmtDesc` filled from the Part IV Item 49 attached schedule; BIR's program keeps this row shut"
+        },
+        "source": "ai"
+      },
+      "frm1702EX:txtPg2Pt4I49OtherTaxCrPmtAmt": {
+        "applied": [],
+        "filled": [],
+        "form": "1702EX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702EX:txtPg2Pt4I49OtherTaxCrPmtAmt": "`frm1702EX:txtPg2Pt4I49OtherTaxCrPmtAmt` filled from the Part IV Item 49 attached schedule; BIR's program keeps this row shut"
+        },
+        "source": "ai"
+      },
+      "frm1702EX:txtPg3Pt6I17OthersEDesc": {
+        "applied": [],
+        "filled": [],
+        "form": "1702EX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702EX:txtPg3Pt6I17OthersEDesc": "`frm1702EX:txtPg3Pt6I17OthersEDesc` filled from the Schedule 1 Item 17i (more...) attached schedule; BIR's program keeps this row shut"
+        },
+        "source": "ai"
+      },
+      "frm1702EX:txtPg3Pt6I17OthersEAmt": {
+        "applied": [],
+        "filled": [],
+        "form": "1702EX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702EX:txtPg3Pt6I17OthersEAmt": "`frm1702EX:txtPg3Pt6I17OthersEAmt` filled from the Schedule 1 Item 17i (more...) attached schedule; BIR's program keeps this row shut"
+        },
+        "source": "ai"
+      },
+      "frm1702EX:txtPg3Pt6I17OthersIDesc": {
+        "applied": [],
+        "filled": [],
+        "form": "1702EX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702EX:txtPg3Pt6I17OthersIDesc": "`frm1702EX:txtPg3Pt6I17OthersIDesc` computed by BIR's own formulas"
+        },
+        "source": "ai"
+      },
+      "frm1702EX:txtPg3Pt6I17OthersIAmt": {
+        "applied": [],
+        "filled": [],
+        "form": "1702EX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702EX:txtPg3Pt6I17OthersIAmt": "`frm1702EX:txtPg3Pt6I17OthersIAmt` is computed by BIR's own formulas"
+        },
+        "source": "ai"
+      },
+      "frm1702EX:txtPg3Pt6S2I2Description": {
+        "applied": [],
+        "filled": [],
+        "form": "1702EX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702EX:txtPg3Pt6S2I2Description": "`frm1702EX:txtPg3Pt6S2I2Description` filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut"
+        },
+        "source": "ai"
+      },
+      "frm1702EX:txtPg3Pt6S2I2Amount": {
+        "applied": [],
+        "filled": [],
+        "form": "1702EX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702EX:txtPg3Pt6S2I2Amount": "`frm1702EX:txtPg3Pt6S2I2Amount` filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut"
+        },
+        "source": "ai"
+      },
+      "frm1702EX:txtPg3Pt6S2I4Description": {
+        "applied": [],
+        "filled": [],
+        "form": "1702EX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702EX:txtPg3Pt6S2I4Description": "`frm1702EX:txtPg3Pt6S2I4Description` computed by BIR's own formulas"
+        },
+        "source": "ai"
+      },
+      "frm1702EX:txtPg3Pt6S2I4LegalBasis": {
+        "applied": [
+          "frm1702EX:txtPg3Pt6S2I4LegalBasis"
+        ],
+        "filled": [
+          "frm1702EX:txtPg3Pt6S2I4LegalBasis"
+        ],
+        "form": "1702EX",
+        "kept_user_boxes": [],
+        "source": "ai"
+      },
+      "frm1702EX:txtPg3Pt6S2I4Amount": {
+        "applied": [],
+        "filled": [],
+        "form": "1702EX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702EX:txtPg3Pt6S2I4Amount": "`frm1702EX:txtPg3Pt6S2I4Amount` is computed by BIR's own formulas"
+        },
+        "source": "ai"
+      }
+    }
+  },
+  "1702MX": {
+    "refusals": {
+      "frm1702MX:txtPg3Sc5Itm17dA": {
+        "applied": [],
+        "filled": [],
+        "form": "1702MX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702MX:txtPg3Sc5Itm17dA": "`frm1702MX:txtPg3Sc5Itm17dA` filled from the Schedule 5 Item 17d-17i attached schedule; BIR's program keeps this row shut"
+        },
+        "source": "ai"
+      },
+      "frm1702MX:txtPg3Sc5Itm17iC": {
+        "applied": [],
+        "filled": [],
+        "form": "1702MX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702MX:txtPg3Sc5Itm17iC": "`frm1702MX:txtPg3Sc5Itm17iC` filled from the Schedule 5 Item 17d-17i attached schedule; BIR's program keeps this row shut"
+        },
+        "source": "ai"
+      },
+      "frm1702MX:txtPg6Sc6I2CA": {
+        "applied": [],
+        "filled": [],
+        "form": "1702MX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702MX:txtPg6Sc6I2CA": "`frm1702MX:txtPg6Sc6I2CA` filled from the Schedule 6 (rows 2-4 / more...) attached schedule; BIR's program keeps this row shut"
+        },
+        "source": "ai"
+      },
+      "frm1702MX:txtPg3Sc6I4CC": {
+        "applied": [],
+        "filled": [],
+        "form": "1702MX",
+        "kept_user_boxes": [],
+        "refused": {
+          "frm1702MX:txtPg3Sc6I4CC": "`frm1702MX:txtPg3Sc6I4CC` filled from the Schedule 6 (rows 2-4 / more...) attached schedule; BIR's program keeps this row shut"
+        },
+        "source": "ai"
+      }
+    },
+    "nolco_survived_count": 30,
+    "nolco_total": 30
+  }
+}
