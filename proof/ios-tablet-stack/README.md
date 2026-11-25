@@ -36,6 +36,15 @@ One line per file; all are full-screen simctl captures. ipad13 portrait/landscap
 - ipad13-swipe-back.mp4 (10s) — Settings > Account swiped back to Settings and Home; NOT a real edge drag (gpui-agent swipe).
 - iphone-swipe-back.mp4 (23s) — draft opened from Filings, swipe back, reopened; Settings > Account swiped back twice; assembled from rapid screenshots (see above); NOT a real edge drag. The amount-typing part of the script was not done (the row-editor/keyboard wedge makes it unrecoverable in one session).
 
+## Added: 44 pt targets at feat/ios-store-tablet 14dc0edf (iPhone + iPad 13)
+
+App commit 14dc0edf05d33f0ca1f6f86c4279f0494683db50 (T). Same nsh CLI 0.6.1 (ca39c0e), same ../nsh ca39c0e9103a389a31ea280799ef34796d7aac70, cargo 1.99.0 (5f94df478 2026-08-27); built into per-commit evidence folder ~/BuwizNsh/target-14dc0edf. Same driving (gpui-agent; no injected input exists on this Mac), same scratch demo data, never queued. iPhone shots on iPhone 17 Pro iOS 26.5, iPad shot on iPad Pro 13-inch (M5) iOS 27.0, light appearance, 9:41 override, no hardware keyboard.
+
+- iphone-home-daystrip.png — iPhone Home with the day strip: tiles in two columns, "Next 30 days" strip with 44x80 day cells (Nov 25 today → Dec 24); nothing clipped, nothing under the status bar or home indicator.
+- iphone-daystrip-scroll.mp4 — the day strip dragged sideways twice through gpui-agent (~15 s, assembled from rapid simctl screenshots at 4 fps because iOS 26.5 video recording is broken on this Mac — content real, timing approximate). The strip scrolls and earlier days leave the screen left.
+- iphone-form-quarter.png — the draft 2551Q's item 3 Quarter segmented control on the iPhone: 1st/2nd/3rd/4th segments at 44 pt, 4th selected (matches the Q4 draft); item 4 Amended Return segmented below; nothing overlapping the floating pill.
+- ipad13-home-portrait.png — iPad 13 Home upright at T: phone layout at tablet width — header with + search and the taxpayer's name over TIN and branch, tiles in one row, day strip, Open deadlines, taxpayer-at-a-glance, Recently filed, tab bar at the bottom. Same live database as the iPhone shots (single-owner db: the iPhone app was quit first — the lock screen "eBIRForms is already open on this database" appears if both run at once, which is the intended single-owner behavior).
+
 ## Not covered
 - Real left-edge drags (needs another Mac, see above).
 - The tax profile tab-switch swipe-back sequence from the iphone script.
