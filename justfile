@@ -624,7 +624,7 @@ _package-mac-appstore args="": build-frozen-html-identity
 # Google Play bundle (docs/platforms/android.md): an Android App Bundle for phones and tablets with the Play application
 # id com.buwiz.ebirforms (nsh.json keeps dev.goldcoders.bir for every other system and for development builds), the
 # target API level and backup switch of nsh.json's "android", and versionCode = the build number (App Store Connect's
-# next, as `just app` uses, or `build=N`). Needs no secret: the bundle comes out UNSIGNED, and the owner signs it with the
+# next, as `just app` uses, or the number given: `just play-bundle 28`). Needs no secret: the bundle comes out UNSIGNED, and the owner signs it with the
 # upload key (`just play-sign`). nsh package always signs, with the debug key here; `android_bundle.py prepare` takes that
 # signature off with the updater's source (Google Play updates the app; the updater never starts on a phone).
 [macos]

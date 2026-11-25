@@ -30,7 +30,7 @@ be 0. So for Windows the version itself is the only thing that can go up.
 Google Play's `versionCode` is the Apple build number, so that one counter serves every store that has one:
 `just play-bundle` takes App Store Connect's next number, as the Apple recipes do. Google Play does not know App Store
 Connect, so two Google Play uploads with no Apple upload between them would get the same number, and Google Play
-refuses the second. Then pass the number yourself, one higher: `just play-bundle build=28`
+refuses the second. Then pass the number yourself, one higher: `just play-bundle 28`
 ([platforms/android.md](platforms/android.md)).
 
 ## Raising the version
