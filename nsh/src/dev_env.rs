@@ -22,7 +22,15 @@ const ALLOWED: &[&str] = &[
     "BUWIZ_SERVER_URL",
     "BUWIZ_ACCOUNT_URL",
     "BUWIZ_TRUST_KEYS",
+    // A test run's database that outlives its process (an emulator check of a sign-in kept across the app being swiped
+    // away): without it a test environment opens a fresh scratch database per engine. A relative value is taken under the
+    // engine's data folder; the guard accepts only a path inside its `test-data` folder in a test run
+    // (`guards::android_test_database_refusal`), never the app's own database.
+    "BIR_DATABASE_PATH",
 ];
+
+/// The dev list's key whose relative value is taken under the engine's data folder.
+const DATABASE_PATH: &str = "BIR_DATABASE_PATH";
 
 pub(crate) const ENABLED: bool = enabled(cfg!(debug_assertions), option_env!("BUWIZ_ANDROID_DEV"));
 
@@ -44,8 +52,25 @@ const fn honoured(enabled: bool, baked: Option<&'static str>) -> Option<&'static
 
 pub(crate) fn load(path: &Path) -> Result<(), String> {
     let values = read(path)?;
+    let data_dir = path.parent().unwrap_or(Path::new("."));
+    let values = under_data_dir(values, data_dir);
     bir_core::config::set_many(values.into_iter().map(|(key, value)| (key, Some(value))));
     Ok(())
+}
+
+/// `BIR_DATABASE_PATH` given relative (`test-data/bir_data.db`, the same in every install) is taken under `data_dir`.
+fn under_data_dir(values: Vec<(String, String)>, data_dir: &Path) -> Vec<(String, String)> {
+    values
+        .into_iter()
+        .map(|(key, value)| {
+            if key == DATABASE_PATH && !value.is_empty() && Path::new(&value).is_relative() {
+                let joined = data_dir.join(&value).to_string_lossy().into_owned();
+                (key, joined)
+            } else {
+                (key, value)
+            }
+        })
+        .collect()
 }
 
 pub(crate) fn read(path: &Path) -> Result<Vec<(String, String)>, String> {
@@ -120,6 +145,26 @@ fn parse(text: &str) -> Result<Vec<(String, String)>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_relative_database_path_is_taken_under_the_data_folder() {
+        let dir = Path::new("/data/user/0/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir");
+        let values = under_data_dir(
+            vec![
+                ("BIR_DATABASE_PATH".into(), "test-data/bir_data.db".into()),
+                ("EBIR_TEST_ENV".into(), "1".into()),
+            ],
+            dir,
+        );
+        assert_eq!(
+            values[0].1,
+            "/data/user/0/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir/test-data/bir_data.db"
+        );
+        assert_eq!(values[1].1, "1");
+        let absolute = under_data_dir(vec![("BIR_DATABASE_PATH".into(), "/x/bir_data.db".into())], dir);
+        assert_eq!(absolute[0].1, "/x/bir_data.db");
+        assert!(parse("BIR_DATABASE_PATH=test-data/bir_data.db").is_ok());
+    }
 
     #[test]
     fn android_load_reaches_core_and_account_gate_without_changing_the_environment() {

@@ -204,7 +204,8 @@ fn fresh_scratch_folder(root: &Path, pid: u32, sequence: u32) -> std::io::Result
 /// whose caller named none (`BIR_DATABASE_PATH` unset or empty). A test's [`use_database`] names one later, per thread.
 /// The one-copy guard asks this at registration, before any thread has named anything.
 pub(crate) fn scratch_database_wanted() -> bool {
-    test_environment() && !std::env::var_os(DATABASE_PATH).is_some_and(|value| !value.is_empty())
+    // The configuration store (Android's dev list) first, then the launch environment.
+    test_environment() && !bir_core::config::var(DATABASE_PATH).is_ok_and(|value| !value.is_empty())
 }
 
 /// How long a scratch folder lives after its last change.
