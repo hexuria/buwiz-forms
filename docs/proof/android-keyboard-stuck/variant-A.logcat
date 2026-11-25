@@ -1,0 +1,15 @@
+--------- beginning of main
+11-25 13:54:30.931 30516 30516 I NSHKBD  : insets ime=883.0 cached=883.0 pans=false h=2400
+11-25 13:54:31.018 30516 30516 I NSHKBD  : windowFocus false
+11-25 13:54:31.527 30516 30516 I NSHKBD  : insets ime=0.0 cached=883.0 pans=false h=2400
+11-25 13:54:31.527 30516 30516 I NSHKBD  : keyboard screenTop=2147483647 focused=2238 scroll=1904 avoided=1904
+11-25 13:54:31.527 30516 30516 I NSHKBD  : setContentPaddingBottom scroll=1904 px=0
+11-25 13:54:31.941 30516 30516 I NSHKBD  : insets ime=0.0 cached=0.0 pans=false h=2400
+11-25 13:55:06.007 30516 30516 I NSHKBD  : insets ime=0.0 cached=0.0 pans=false h=2400
+11-25 13:55:06.011 30516 30516 I NSHKBD  : insets ime=0.0 cached=0.0 pans=false h=2400
+11-25 13:55:06.235 30516 30516 I NSHKBD  : windowFocus true
+11-25 13:55:06.382 30516 30516 I NSHKBD  : insets ime=883.0 cached=0.0 pans=false h=2400
+11-25 13:55:06.382 30516 30516 I NSHKBD  : keyboard screenTop=1517 focused=2238 scroll=1904 avoided=-1
+11-25 13:55:06.382 30516 30516 I NSHKBD  : setContentPaddingBottom scroll=1904 px=668
+2551q y 1130 1241
+2551Q y 1720 1771
