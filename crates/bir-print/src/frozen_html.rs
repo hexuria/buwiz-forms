@@ -8522,7 +8522,7 @@ mod donor_estate_print_tests {
         for (slug, golden) in [
             (
                 "1706-2018",
-                "1b98848c3a43fd4f8ab3ceaedac8c65832e6565ea963b03c0a7195b891ec67a2",
+                "e627da2bc774aaa08f169a9614ecbac6357473f245d7a8b5cece8b609d0ad5ef",
             ),
             (
                 "2000-ot-2018",
