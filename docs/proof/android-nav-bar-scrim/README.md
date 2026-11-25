@@ -76,3 +76,20 @@ screen costs a full taxpayer creation) — marked as gaps, not measured.
   chevron; it abandons the New taxpayer form.
 - ZIP/RDO sheets: swipe-down inside them dismisses them; type the query immediately after
   opening (the search autofocuses), tap the row at ~y489.
+
+## Amendment — API 34, three-button, correct overlay switching (job 7 follow-up)
+
+Method per the follow-up order: nav mode with `cmd overlay enable-exclusive com.android.internal.systemui.navbar.threebutton` only, verified by the visible three buttons in the shots; themes with `cmd uimode night yes/no`. Emulator buwiz34 (emulator-5564, API 34 google_apis x86_64). BEFORE = target-8c78cfd6 build, AFTER = target-0c7a8433 build, same install measured both ways (`install -r`, dex re-verified: before a5365288…, after 83ec0256…). Screen: Home with the tab bar, taxpayer created fresh in each install.
+
+Pixel colours at screen centre x=540 (1080x2400), identical in BEFORE and AFTER in both themes:
+
+| y | light (both) | dark (both) | what |
+|---|---|---|---|
+| 2360 | #fefefe | #121518 | three-button band |
+| 2300 | #fefefe | #121518 | three-button band |
+| 2270 | #f4f4f6 | #0e0e10 | tab bar |
+| 2240–2150 | #f4f4f6 | #0e0e10 | tab bar |
+
+Off-center samples (x=200/900) identical too. So on API 34 the band keeps its own surface colour — slightly whiter than the tab bar in light (#fefefe vs #f4f4f6), slightly lighter in dark (#121518 vs #0e0e10) — in BOTH builds: the contrast scrim is present in the BEFORE build as expected, but it is equally present in the AFTER build. nsh#38's two flags (`setNavigationBarContrastEnforced(false)`, cutout short-edges) produce NO measurable change on API 34: they only take effect once the app actually lays out edge-to-edge behind the system bars, which nothing in the chain does for API 29–34. Together with the API-35 result (identical because the platform forces edge-to-edge for targetSdk-35 apps), the honest summary: the strips never differ — on API 35 because both are edge-to-edge already, on API 34 because neither is. Deciding #38 on rendering evidence: the PR as written does not change what the phone draws; the edge-to-edge opt-in itself is what's missing.
+
+Method honesty: `install -r` wipes the scratch database (new engine), so the taxpayer was recreated per install; the scripted creation sequence is in ~/j34setup.py on the machine. Screenshots: before/after-threebutton-light/dark-home.png in this folder.
