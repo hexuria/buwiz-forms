@@ -1,0 +1,17 @@
+Captured from `adb logcat -d` at 14:13:31 UTC, BEFORE logcat was cleared for the re-run.
+The crash happened during the first automated paste-after run (which is why that run's
+screenshots were discarded and the paste test was re-run).
+
+11-25 14:13:01.966 18142 18142 E AndroidRuntime: FATAL EXCEPTION: main
+11-25 14:13:01.966 18142 18142 E AndroidRuntime: Process: com.longbridge.nsh.host, PID: 18142
+11-25 14:13:01.966 18142 18142 E AndroidRuntime: java.nio.BufferUnderflowException
+11-25 14:13:01.966 18142 18142 E AndroidRuntime: 	at java.nio.Buffer.nextGetIndex(Buffer.java:719)
+11-25 14:13:01.966 18142 18142 E AndroidRuntime: 	at java.nio.HeapByteBuffer.getInt(HeapByteBuffer.java:654)
+11-25 14:13:01.966 18142 18142 E AndroidRuntime: 	at com.longbridge.nsh.Mounter.command(Mounter.java:2521)
+11-25 14:13:01.966 18142 18142 E AndroidRuntime: 	at com.longbridge.nsh.Mounter.apply(Mounter.java:640)
+11-25 14:13:01.966 18142 18142 E AndroidRuntime: 	at com.longbridge.nsh.NshView.lambda$submit$8(NshView.java:1197)
+11-25 14:13:01.966 18142 18142 E AndroidRuntime: 	at com.longbridge.nsh.NshView.$r8$lambda$c-nRMnEH-gss9JRpcqauxFl0oes(Unknown Source:0)
+11-25 14:13:02.029   599 25202 I DropBoxManagerService: add tag=data_app_crash isTagEnabled=true flags=0x2
+
+Not reproduced since: not in a step-by-step manual replay of the same interactions
+(clipboard load, long-press x2), not in a full re-run of the same automated paste script.
