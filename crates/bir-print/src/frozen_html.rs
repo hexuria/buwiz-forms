@@ -1729,7 +1729,6 @@ fn format_percentage_rate(raw: &str, preprinted_percent: bool) -> Option<String>
     }
 }
 
-
 fn parse_svg_path_bbox(d: &str) -> Option<(f64, f64, f64, f64)> {
     let mut nums = Vec::new();
     let mut cur = String::new();
@@ -8590,7 +8589,7 @@ mod tests {
         boxes
     }
 
-    /// Every band box of every sheet ([`band_boxes`], 1,474 of them) holds
+    /// Every band box of every sheet ([`band_boxes`], 1,492 of them) holds
     /// a value in its 1 pt band and prints byte for byte as at dcc6386a:
     /// `fixtures/fitting-band-box-goldens.json` holds, per sheet, the
     /// SHA-256 of the document dcc6386a's fill printed for that sheet's
@@ -8650,7 +8649,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1474, "band boxes");
+        assert_eq!(total, 1492, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 
