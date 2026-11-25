@@ -32302,7 +32302,7 @@
             },
             {
               "no": "",
-              "l": "Schedule 2 additional rows subtotal",
+              "l": "Subtotal of the rows added below the printed ones",
               "k": [
                 "Pg2Pt4S2SubTotal",
                 "Pg2Pt4S2PopLength"
@@ -32362,7 +32362,7 @@
             },
             {
               "no": "",
-              "l": "Schedule 3 additional rows subtotal",
+              "l": "Subtotal of the rows added below the printed ones",
               "k": [
                 "Pg2Pt4S3SubTotal",
                 "Pg2Pt4S3PopLength"
