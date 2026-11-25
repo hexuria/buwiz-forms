@@ -85,6 +85,11 @@ fn set_up(send_guard: impl FnOnce() -> SendMode) -> Process {
     #[cfg(not(target_os = "android"))]
     switch_off_keychain(cfg!(debug_assertions));
     let _ = bir_app_api::install_hooks(NshHooks);
+    // Phones: the browser for the sign-in. Desktops register nothing: bir-core opens the browser itself there.
+    #[cfg(target_os = "ios")]
+    crate::phone_ios::install();
+    #[cfg(target_os = "android")]
+    crate::phone_android::register();
     let send = send_guard();
     if !send.worker_may_start() {
         bir_app_api::bir_module::refuse_submission_worker();

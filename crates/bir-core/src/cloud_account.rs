@@ -143,7 +143,10 @@ impl std::fmt::Display for CloudError {
                 "The Buwiz server is unreachable ({message}). Filing on this computer still works."
             ),
             Self::InvalidGrant => write!(f, "This sign-in is no longer valid. Sign in again."),
-            Self::TimedOut => write!(f, "Sign-in timed out before it was approved. Start again."),
+            Self::TimedOut => write!(
+                f,
+                "The sign-in code expired before it was approved. Press Sign in again for a new code."
+            ),
             Self::Server { description } => write!(f, "{description}"),
             Self::Unexpected(message) => write!(f, "{message}"),
             Self::Url(error) => write!(f, "{error}"),
@@ -737,7 +740,21 @@ pub fn revoke_session(http: &mut dyn Http, secrets: &AccountSecrets) {
     });
 }
 
+/// Opens the account site in the system browser. On a phone the app's
+/// registered opener does it ([`crate::platform::set_url_opener`]), and only
+/// for an address [`crate::platform::browser_url_allowed`] accepts: the
+/// `open` crate starts a helper program there (`xdg-open` on Android,
+/// `uiopen` on iOS), which a phone app has none of and may not start.
 pub fn open_browser(url: &str) -> Result<(), String> {
+    if let Some(open) = crate::platform::url_opener() {
+        if !crate::platform::browser_url_allowed(url) {
+            return Err(format!("This address is not opened in the browser: {url}"));
+        }
+        return open(url);
+    }
+    if cfg!(any(target_os = "ios", target_os = "android")) {
+        return Err("This app cannot open the browser here.".into());
+    }
     open::that(url).map_err(|error| error.to_string())
 }
 
@@ -1361,6 +1378,79 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error, CloudError::TimedOut);
+    }
+
+    /// A phone freezes the app while the person is in the browser: the wall clock jumps, and the first poll after
+    /// the app comes back can fail on a dead connection. That poll is tried again, and the sign-in finishes.
+    #[test]
+    fn a_network_error_after_a_frozen_gap_is_tried_again() {
+        let mut http = Scripted {
+            // Popped from the end: pending, then a dead connection after the gap, then approved.
+            steps: vec![
+                Ok(HttpResponse {
+                    status: 200,
+                    body: r#"{"access_token":"access-secret","refresh_token":"refresh-secret","expires_in":900}"#
+                        .into(),
+                }),
+                Err(CloudError::Network("connection reset by peer".into())),
+                Ok(HttpResponse {
+                    status: 400,
+                    body: r#"{"error":"authorization_pending"}"#.into(),
+                }),
+            ],
+            seen: Vec::new(),
+        };
+        let now = Cell::new(9_000i64);
+        let mut sleeps = 0;
+        let tokens = poll_until(&mut http, &challenge(), &mut || now.get(), &mut |delay| {
+            sleeps += 1;
+            // The first wait is the frozen one: four minutes pass on the wall clock.
+            let gap = if sleeps == 1 {
+                240
+            } else {
+                delay.as_secs() as i64
+            };
+            now.set(now.get() + gap);
+        })
+        .unwrap();
+        assert_eq!(tokens.access_token, "access-secret");
+        assert_eq!(http.seen.len(), 3);
+    }
+
+    /// A gap that outlasts the code's expiry (by the wall clock) ends with the expired message, without another poll.
+    #[test]
+    fn a_frozen_gap_past_the_codes_expiry_ends_as_expired() {
+        let mut http = Scripted {
+            steps: vec![Ok(HttpResponse {
+                status: 400,
+                body: r#"{"error":"authorization_pending"}"#.into(),
+            })],
+            seen: Vec::new(),
+        };
+        let now = Cell::new(9_000i64);
+        let error = poll_until(&mut http, &challenge(), &mut || now.get(), &mut |_| {
+            now.set(now.get() + 2_000)
+        })
+        .unwrap_err();
+        assert_eq!(error, CloudError::TimedOut);
+        assert_eq!(http.seen.len(), 1);
+        assert!(error.to_string().contains("code expired"));
+    }
+
+    /// A clock that never moves and a server that is never reached still end: the wait has a bound of its own.
+    #[test]
+    fn endless_network_errors_with_a_stuck_clock_still_end() {
+        struct Unreachable(usize);
+        impl Http for Unreachable {
+            fn exchange(&mut self, _: &HttpRequest) -> Result<HttpResponse, CloudError> {
+                self.0 += 1;
+                Err(CloudError::Network("no route to host".into()))
+            }
+        }
+        let mut http = Unreachable(0);
+        let error = poll_until(&mut http, &challenge(), &mut || 1_000, &mut |_| {}).unwrap_err();
+        assert_eq!(error, CloudError::TimedOut);
+        assert_eq!(http.0, 1000);
     }
 
     #[test]

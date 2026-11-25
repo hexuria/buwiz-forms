@@ -30,6 +30,56 @@ pub(crate) fn keychain_switch_is_on(value: Option<&str>) -> bool {
     })
 }
 
+/// Opens a web address in the system browser. The embedding app registers
+/// one on phones ([`set_url_opener`]), where bir-core cannot reach the
+/// browser itself: UIKit on iOS, an `ACTION_VIEW` intent on Android.
+pub type UrlOpener = fn(&str) -> Result<(), String>;
+
+static URL_OPENER: std::sync::OnceLock<UrlOpener> = std::sync::OnceLock::new();
+
+/// Registers the app's browser opener, once. `false` when one was already
+/// registered (the first one stays).
+pub fn set_url_opener(opener: UrlOpener) -> bool {
+    URL_OPENER.set(opener).is_ok()
+}
+
+/// The registered browser opener, if the app gave one.
+pub fn url_opener() -> Option<UrlOpener> {
+    URL_OPENER.get().copied()
+}
+
+/// Whether a registered opener may be handed `url`: an `https://` address
+/// with a host, or an `http://` one to this device itself (`localhost`,
+/// `127.0.0.0/8`, `::1`) for a local development server. Nothing else (no
+/// other scheme, no plain `http://` to the network, no credentials in the
+/// address) leaves the app this way.
+pub fn browser_url_allowed(url: &str) -> bool {
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return false;
+    }
+    let Ok(parsed) = reqwest::Url::parse(url) else {
+        return false;
+    };
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return false;
+    }
+    let Some(host) = parsed.host_str().filter(|host| !host.is_empty()) else {
+        return false;
+    };
+    match parsed.scheme() {
+        "https" => true,
+        "http" => {
+            host.eq_ignore_ascii_case("localhost")
+                || host
+                    .trim_start_matches('[')
+                    .trim_end_matches(']')
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|address| address.is_loopback())
+        }
+        _ => false,
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
@@ -70,6 +120,40 @@ mod tests {
         assert!(!keychain_switch_is_on(Some("0")));
         assert!(!keychain_switch_is_on(Some("false")));
         assert!(!keychain_switch_is_on(Some("Off")));
+    }
+
+    #[test]
+    fn a_phone_opens_only_https_or_loopback_http_in_the_browser() {
+        for allowed in [
+            "https://account.buwiz.com/login/device?user_code=ABCD-EFGH",
+            "HTTPS://Account.Buwiz.com/",
+            "https://203.0.113.7/login",
+            "http://localhost:3008/login/device",
+            "http://LOCALHOST/",
+            "http://127.0.0.1:3008/",
+            "http://127.1/",
+            "http://[::1]:3008/",
+        ] {
+            assert!(browser_url_allowed(allowed), "{allowed}");
+        }
+        for refused in [
+            "http://account.buwiz.com/login",
+            "http://10.0.2.2:3008/login",
+            "http://localhost.evil.example/",
+            "https://user:secret@account.buwiz.com/",
+            "https://user@account.buwiz.com/",
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+            "intent://scan/#Intent;scheme=zxing;end",
+            "mailto:support@buwiz.com",
+            "tel:123",
+            "https://account.buwiz.com/a b",
+            "https://account.buwiz.com/\n",
+            "not a url",
+            "",
+        ] {
+            assert!(!browser_url_allowed(refused), "{refused}");
+        }
     }
 
     #[test]
