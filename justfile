@@ -643,6 +643,10 @@ play-bundle build="":
     export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
     # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one.
     unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV
+    # nsh builds libnsh.so in its generated workspace, which has no [profile.release]: this repository's own profile never
+    # applies there, and Cargo's defaults make a 116 MB library. These make it 84 MB (24 MB to download) on arm64.
+    # Not opt-level z and not panic=abort until such a build has been used on a real phone (docs/platforms/android.md).
+    export CARGO_PROFILE_RELEASE_LTO=fat CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 CARGO_PROFILE_RELEASE_OPT_LEVEL=s
     OUT="$root/{{RELEASE_DIR}}/android"
     AAB="$root/{{RELEASE_DIR}}/{{APP_NAME}}-Android-{{VERSION}}-$BUILD.aab"
     rm -rf "$OUT" "$AAB"

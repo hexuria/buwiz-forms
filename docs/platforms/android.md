@@ -16,6 +16,28 @@ and signed, and what the Play Console needs.
 | Version | `versionName` = the version, `versionCode` = the build number | [VERSIONING.md](../VERSIONING.md). |
 | No updater | `scripts/android_bundle.py prepare` removes `nsh-updater.json` | Google Play updates the app. The updater never starts on a phone (`DesktopHost` mounts only on a desktop); its source goes too, as in the iOS package. |
 
+### Size
+
+`libnsh.so` is nearly all of the package. NSH builds it in the workspace it generates under `nsh/.nsh/`, and that
+workspace has no `[profile.release]`: the release profile in this repository's `Cargo.toml` (LTO, one codegen unit,
+`opt-level = "z"`, `panic = "abort"`, strip) never applies to it, so Cargo's defaults do. That is very likely true of
+every NSH package, not only Android's. `just play-bundle` therefore sets the profile through Cargo's environment
+variables. Measured on `main` at `d7fc83be`, arm64-v8a, stripped as NSH ships it:
+
+| Settings | `libnsh.so` | Deflated (about the download) |
+| --- | --- | --- |
+| Cargo's defaults (opt-level 3, no LTO, 16 codegen units) | 115.6 MB | 32.2 MB |
+| Fat LTO, one codegen unit | 100.7 MB | 30.7 MB |
+| **The same with `opt-level = "s"`: what `play-bundle` sets** | **84.5 MB** | **23.6 MB** |
+| The same with `opt-level = "z"` | 77.5 MB | 22.3 MB |
+| `opt-level = "z"` and `panic = "abort"` | 72.2 MB | 19.6 MB |
+
+`z` and `panic = "abort"` wait until such a build has been used on a real phone (`z` trades speed in layout and
+drawing for size) and until the dependencies' use of `catch_unwind` is known: the app and NSH's Android crates have
+none, but with `abort` a panic that a dependency would have caught ends the app. Google Play's limits are far away
+either way: 500 MB for the base module's compressed download, and a notice to users on mobile data above 200 MB
+([Google's page](https://support.google.com/googleplay/android-developer/answer/9859372)).
+
 Not in the package yet: the per-form print fixes (`print-overrides/`). `bir-app-api` reads them from a folder beside
 the executable on the desktop (`packaged.rs`), and an Android app has no such folder. Until the app reads them from its
 own assets, a printed return on Android has no per-form fixes.
