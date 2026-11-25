@@ -1,0 +1,64 @@
+{
+  "args": {
+    "name": "Juana Santos",
+    "rdo_code": "039",
+    "tin": "00012345300000"
+  },
+  "error": null,
+  "invoke": "profile.save",
+  "label": "profile.save",
+  "ok": true,
+  "result": {
+    "created": true,
+    "name": "Juana Santos",
+    "status": "ok",
+    "tin": "00012345300000"
+  }
+}
+---
+{
+  "args": {
+    "code": "2552",
+    "period": 1,
+    "tin": "00012345300000",
+    "year": 2026
+  },
+  "error": null,
+  "invoke": "form.open",
+  "label": "open",
+  "ok": true,
+  "result": {
+    "form": "2552",
+    "period": 1,
+    "tin": "00012345300000",
+    "year": 2026
+  }
+}
+---
+{
+  "args": {
+    "fields": {
+      "frm2552:rdoPg1I11Transaction": "LSE",
+      "frm2552:txtPg1Pt1I12TotShare": "1000000"
+    }
+  },
+  "error": null,
+  "invoke": "form.fill",
+  "label": "lse-plus-item12-one-call",
+  "ok": true,
+  "result": {
+    "applied": [
+      "frm2552:rdoPg1I11Transaction"
+    ],
+    "filled": [
+      "frm2552:rdoPg1I11Transaction"
+    ],
+    "form": "2552",
+    "kept_user_boxes": [],
+    "refused": {
+      "frm2552:txtPg1Pt1I12TotShare": "Needs item 11 = Initial Public Offering (Primary or Secondary)"
+    },
+    "source": "ai"
+  }
+}
+---

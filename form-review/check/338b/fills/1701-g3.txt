@@ -1,0 +1,73 @@
+{
+  "args": {
+    "name": "Juana Santos",
+    "rdo_code": "039",
+    "tin": "00012345300000"
+  },
+  "error": null,
+  "invoke": "profile.save",
+  "label": "profile.save",
+  "ok": true,
+  "result": {
+    "created": true,
+    "name": "Juana Santos",
+    "status": "ok",
+    "tin": "00012345300000"
+  }
+}
+---
+{
+  "args": {
+    "code": "1701",
+    "period": 0,
+    "tin": "00012345300000",
+    "year": 2025
+  },
+  "error": null,
+  "invoke": "form.open",
+  "label": "open",
+  "ok": true,
+  "result": {
+    "form": "1701",
+    "period": 0,
+    "tin": "00012345300000",
+    "year": 2025
+  }
+}
+---
+{
+  "args": {
+    "fields": {
+      "frm1701:rdoPg1I16CivilStatus": "Married",
+      "frm1701:rdoPg1I17SpouseIncome": "Yes",
+      "frm1701:rdoPg1I18FilingStatus": "J",
+      "frm1701:txtPg2I1TIN1": "123",
+      "frm1701:txtPg2I7Citizenship": "Filipino"
+    }
+  },
+  "error": null,
+  "invoke": "form.fill",
+  "label": "deep-chain-values-first",
+  "ok": true,
+  "result": {
+    "applied": [
+      "frm1701:rdoPg1I16CivilStatus",
+      "frm1701:rdoPg1I17SpouseIncome",
+      "frm1701:rdoPg1I18FilingStatus",
+      "frm1701:txtPg2I7Citizenship"
+    ],
+    "filled": [
+      "frm1701:rdoPg1I16CivilStatus",
+      "frm1701:rdoPg1I17SpouseIncome",
+      "frm1701:rdoPg1I18FilingStatus",
+      "frm1701:txtPg2I7Citizenship"
+    ],
+    "form": "1701",
+    "kept_user_boxes": [],
+    "refused": {
+      "frm1701:txtPg2I1TIN1": "`frm1701:txtPg2I1TIN1` cannot be filled from here: it is written through the form's own editors: derived by the app: changes with /civil_status, /joint_filing_status, /spouse/tin, ... but never shows one field's value"
+    },
+    "source": "ai"
+  }
+}
+---

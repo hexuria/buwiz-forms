@@ -1,0 +1,148 @@
+form.fill comparison for 2550Q: one call per commit, identical input (values from the official sample payload)
+fill request keys (46):
+  frm2550qv2024:OptShortPrd = 2
+  frm2550qv2024:addInputVat = 0.00
+  frm2550qv2024:addSpecifyNo19 = 
+  frm2550qv2024:addSpecifyNo42 = 
+  frm2550qv2024:addSpecifyNo47 = 
+  frm2550qv2024:addSpecifyNo56 = 
+  frm2550qv2024:amendedReturn = No5
+  frm2550qv2024:compromise = 0.00
+  frm2550qv2024:domesticPurchase = 400,000.00
+  frm2550qv2024:domesticPurchaseNoTax = 0.00
+  frm2550qv2024:exemptSales = 50,000.00
+  frm2550qv2024:importPurchase = 0.00
+  frm2550qv2024:inputTaxCarried = 0.00
+  frm2550qv2024:inputVatUnpaid = 0.00
+  frm2550qv2024:interest = 0.00
+  frm2550qv2024:internationalTreatyYn = true
+  frm2550qv2024:presumptiveInputTax = 0.00
+  frm2550qv2024:sched2AmountInputTax = 0.00
+  frm2550qv2024:sched2InputTaxDirect = 0.00
+  frm2550qv2024:sched2VatExemptSale = 50,000.00
+  frm2550qv2024:selectedMonthNo2 = 12
+  frm2550qv2024:servicesPurchase = 0.00
+  frm2550qv2024:specialRateYn = true
+  frm2550qv2024:specifyInternationalTreaty = 
+  frm2550qv2024:surcharge = 0.00
+  frm2550qv2024:taxPayerClassification = 2
+  frm2550qv2024:transitionalInputTax = 0.00
+  frm2550qv2024:vatExemptImports = 0.00
+  frm2550qv2024:vatPaidReturn = 0.00
+  frm2550qv2024:vatRefund = 0.00
+  frm2550qv2024:vatableSales = 1,250,000.00
+  frm2550qv2024:zeroRatedSales = 200,000.00
+  txtAmountPaid41 = 0.00
+  txtAmountPurchase11 = 0.00
+  txtDescription11 = 
+  txtEstimatedLife11 = 0.00
+  txtIncomePayment31 = 0.00
+  txtInputTax11 = 0.00
+  txtNameOfMiller41 = 
+  txtNameOfTaxpayer41 = 
+  txtNameWithHoldingAgent31 = 
+  txtOfficialReceiptNumber41 = 0.00
+  txtRecognizedLife11 = 0.00
+  txtSourceCode11 = 
+  txtTotalTaxWithHeld30 = 0.00
+  txtTotalTaxWithHeld31 = 0.00
+
+[origin/main (3aceafe8)] filled 32:
+  frm2550qv2024:OptShortPrd
+  frm2550qv2024:addInputVat
+  frm2550qv2024:addSpecifyNo19
+  frm2550qv2024:addSpecifyNo42
+  frm2550qv2024:addSpecifyNo47
+  frm2550qv2024:addSpecifyNo56
+  frm2550qv2024:amendedReturn
+  frm2550qv2024:compromise
+  frm2550qv2024:domesticPurchase
+  frm2550qv2024:domesticPurchaseNoTax
+  frm2550qv2024:exemptSales
+  frm2550qv2024:importPurchase
+  frm2550qv2024:inputTaxCarried
+  frm2550qv2024:inputVatUnpaid
+  frm2550qv2024:interest
+  frm2550qv2024:internationalTreatyYn
+  frm2550qv2024:presumptiveInputTax
+  frm2550qv2024:sched2AmountInputTax
+  frm2550qv2024:sched2InputTaxDirect
+  frm2550qv2024:sched2VatExemptSale
+  frm2550qv2024:selectedMonthNo2
+  frm2550qv2024:servicesPurchase
+  frm2550qv2024:specialRateYn
+  frm2550qv2024:specifyInternationalTreaty
+  frm2550qv2024:surcharge
+  frm2550qv2024:taxPayerClassification
+  frm2550qv2024:transitionalInputTax
+  frm2550qv2024:vatExemptImports
+  frm2550qv2024:vatPaidReturn
+  frm2550qv2024:vatRefund
+  frm2550qv2024:vatableSales
+  frm2550qv2024:zeroRatedSales
+[origin/main (3aceafe8)] refused 14:
+  txtAmountPaid41 => `txtAmountPaid41` cannot be filled from here: it is written through the form's own editors
+  txtAmountPurchase11 => `txtAmountPurchase11` cannot be filled from here: it is written through the form's own editors
+  txtDescription11 => `txtDescription11` cannot be filled from here: it is written through the form's own editors
+  txtEstimatedLife11 => `txtEstimatedLife11` cannot be filled from here: it is written through the form's own editors
+  txtIncomePayment31 => `txtIncomePayment31` cannot be filled from here: it is written through the form's own editors
+  txtInputTax11 => `txtInputTax11` cannot be filled from here: it is written through the form's own editors
+  txtNameOfMiller41 => `txtNameOfMiller41` cannot be filled from here: it is written through the form's own editors
+  txtNameOfTaxpayer41 => `txtNameOfTaxpayer41` cannot be filled from here: it is written through the form's own editors
+  txtNameWithHoldingAgent31 => `txtNameWithHoldingAgent31` cannot be filled from here: it is written through the form's own editors
+  txtOfficialReceiptNumber41 => `txtOfficialReceiptNumber41` cannot be filled from here: it is written through the form's own editors
+  txtRecognizedLife11 => `txtRecognizedLife11` cannot be filled from here: it is written through the form's own editors
+  txtSourceCode11 => `txtSourceCode11` cannot be filled from here: it is written through the form's own editors
+  txtTotalTaxWithHeld30 => `txtTotalTaxWithHeld30` cannot be filled from here: it is written through the form's own editors
+  txtTotalTaxWithHeld31 => `txtTotalTaxWithHeld31` cannot be filled from here: it is written through the form's own editors
+
+[afe7bc34] filled 32:
+  frm2550qv2024:OptShortPrd
+  frm2550qv2024:addInputVat
+  frm2550qv2024:addSpecifyNo19
+  frm2550qv2024:addSpecifyNo42
+  frm2550qv2024:addSpecifyNo47
+  frm2550qv2024:addSpecifyNo56
+  frm2550qv2024:amendedReturn
+  frm2550qv2024:compromise
+  frm2550qv2024:domesticPurchase
+  frm2550qv2024:domesticPurchaseNoTax
+  frm2550qv2024:exemptSales
+  frm2550qv2024:importPurchase
+  frm2550qv2024:inputTaxCarried
+  frm2550qv2024:inputVatUnpaid
+  frm2550qv2024:interest
+  frm2550qv2024:internationalTreatyYn
+  frm2550qv2024:presumptiveInputTax
+  frm2550qv2024:sched2AmountInputTax
+  frm2550qv2024:sched2InputTaxDirect
+  frm2550qv2024:sched2VatExemptSale
+  frm2550qv2024:selectedMonthNo2
+  frm2550qv2024:servicesPurchase
+  frm2550qv2024:specialRateYn
+  frm2550qv2024:specifyInternationalTreaty
+  frm2550qv2024:surcharge
+  frm2550qv2024:taxPayerClassification
+  frm2550qv2024:transitionalInputTax
+  frm2550qv2024:vatExemptImports
+  frm2550qv2024:vatPaidReturn
+  frm2550qv2024:vatRefund
+  frm2550qv2024:vatableSales
+  frm2550qv2024:zeroRatedSales
+[afe7bc34] refused 14:
+  txtAmountPaid41 => `txtAmountPaid41` cannot be filled from here: it is written through the form's own editors
+  txtAmountPurchase11 => `txtAmountPurchase11` cannot be filled from here: it is written through the form's own editors
+  txtDescription11 => `txtDescription11` cannot be filled from here: it is written through the form's own editors
+  txtEstimatedLife11 => `txtEstimatedLife11` cannot be filled from here: it is written through the form's own editors
+  txtIncomePayment31 => `txtIncomePayment31` cannot be filled from here: it is written through the form's own editors
+  txtInputTax11 => `txtInputTax11` cannot be filled from here: it is written through the form's own editors
+  txtNameOfMiller41 => `txtNameOfMiller41` cannot be filled from here: it is written through the form's own editors
+  txtNameOfTaxpayer41 => `txtNameOfTaxpayer41` cannot be filled from here: it is written through the form's own editors
+  txtNameWithHoldingAgent31 => `txtNameWithHoldingAgent31` cannot be filled from here: it is written through the form's own editors
+  txtOfficialReceiptNumber41 => `txtOfficialReceiptNumber41` cannot be filled from here: it is written through the form's own editors
+  txtRecognizedLife11 => `txtRecognizedLife11` cannot be filled from here: it is written through the form's own editors
+  txtSourceCode11 => `txtSourceCode11` cannot be filled from here: it is written through the form's own editors
+  txtTotalTaxWithHeld30 => `txtTotalTaxWithHeld30` cannot be filled from here: it is written through the form's own editors
+  txtTotalTaxWithHeld31 => `txtTotalTaxWithHeld31` cannot be filled from here: it is written through the form's own editors
+
+validate errors: afe7bc34 4 / main 4

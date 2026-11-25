@@ -1,0 +1,67 @@
+form.fill comparison for 2551Q: one call per commit, identical input (values from the official sample payload)
+fill request keys (19):
+  frm2551Qv2018:amendedRtn = 2
+  frm2551Qv2018:forThe = 1
+  frm2551Qv2018:rtnMonth = 12
+  frm2551Qv2018:taxTreaty = 2
+  frm2551Qv2018:txt15 = 500.00
+  frm2551Qv2018:txt16 = 0.00
+  frm2551Qv2018:txt17 = 0.00
+  frm2551Qv2018:txt17Specify = 
+  frm2551Qv2018:txt20 = 0.00
+  frm2551Qv2018:txt21 = 0.00
+  frm2551Qv2018:txt22 = 0.00
+  frm2551Qv2018:txtSheets = 0
+  frm2551Qv2018:txtTaxReliefSpecify = 0
+  txtATCAmt1 = 180,000.00
+  txtATCAmt2 = 0.00
+  txtATCAmt3 = 0.00
+  txtATCAmt4 = 0.00
+  txtATCAmt5 = 0.00
+  txtATCAmt6 = 0.00
+
+[origin/main (3aceafe8)] filled 16:
+  frm2551Qv2018:amendedRtn
+  frm2551Qv2018:forThe
+  frm2551Qv2018:rtnMonth
+  frm2551Qv2018:taxTreaty
+  frm2551Qv2018:txt15
+  frm2551Qv2018:txt16
+  frm2551Qv2018:txt17
+  frm2551Qv2018:txt17Specify
+  frm2551Qv2018:txtSheets
+  frm2551Qv2018:txtTaxReliefSpecify
+  txtATCAmt1
+  txtATCAmt2
+  txtATCAmt3
+  txtATCAmt4
+  txtATCAmt5
+  txtATCAmt6
+[origin/main (3aceafe8)] refused 3:
+  frm2551Qv2018:txt20 => `frm2551Qv2018:txt20` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm2551Qv2018:txt21 => `frm2551Qv2018:txt21` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm2551Qv2018:txt22 => `frm2551Qv2018:txt22` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+
+[afe7bc34] filled 16:
+  frm2551Qv2018:amendedRtn
+  frm2551Qv2018:forThe
+  frm2551Qv2018:rtnMonth
+  frm2551Qv2018:taxTreaty
+  frm2551Qv2018:txt15
+  frm2551Qv2018:txt16
+  frm2551Qv2018:txt17
+  frm2551Qv2018:txt17Specify
+  frm2551Qv2018:txtSheets
+  frm2551Qv2018:txtTaxReliefSpecify
+  txtATCAmt1
+  txtATCAmt2
+  txtATCAmt3
+  txtATCAmt4
+  txtATCAmt5
+  txtATCAmt6
+[afe7bc34] refused 3:
+  frm2551Qv2018:txt20 => `frm2551Qv2018:txt20` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm2551Qv2018:txt21 => `frm2551Qv2018:txt21` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm2551Qv2018:txt22 => `frm2551Qv2018:txt22` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+
+validate errors: afe7bc34 5 / main 5

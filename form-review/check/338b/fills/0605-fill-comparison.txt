@@ -1,0 +1,58 @@
+form.fill comparison for 0605: one call per commit, identical input (values from the official sample payload)
+fill request keys (16):
+  frm0605:itemMannerOfPayment = B:_1
+  frm0605:itemYearEndMonth = 12
+  frm0605:txtDueDateDay = 25
+  frm0605:txtDueDateMonth = 01
+  frm0605:txtDueDateYear = 2026
+  frm0605:txtNoOfSheets = 2
+  frm0605:txtNumOfInstallment = 3
+  frm0605:txtReturnPeriodDay = 31
+  frm0605:txtReturnPeriodMonth = 12
+  frm0605:txtReturnPeriodYear = 2025
+  frm0605:txtTax19 = 12,345.68
+  frm0605:txtTax20A = 1,234.50
+  frm0605:txtTax20B = 100.00
+  frm0605:txtTax20C = 1,000.00
+  txtATCCode = II011
+  txtTaxTypeCode = IT
+
+[origin/main (3aceafe8)] filled 16:
+  frm0605:itemMannerOfPayment
+  frm0605:itemYearEndMonth
+  frm0605:txtDueDateDay
+  frm0605:txtDueDateMonth
+  frm0605:txtDueDateYear
+  frm0605:txtNoOfSheets
+  frm0605:txtNumOfInstallment
+  frm0605:txtReturnPeriodDay
+  frm0605:txtReturnPeriodMonth
+  frm0605:txtReturnPeriodYear
+  frm0605:txtTax19
+  frm0605:txtTax20A
+  frm0605:txtTax20B
+  frm0605:txtTax20C
+  txtATCCode
+  txtTaxTypeCode
+[origin/main (3aceafe8)] refused 0:
+
+[afe7bc34] filled 15:
+  frm0605:itemMannerOfPayment
+  frm0605:itemYearEndMonth
+  frm0605:txtDueDateDay
+  frm0605:txtDueDateMonth
+  frm0605:txtDueDateYear
+  frm0605:txtNoOfSheets
+  frm0605:txtReturnPeriodDay
+  frm0605:txtReturnPeriodMonth
+  frm0605:txtReturnPeriodYear
+  frm0605:txtTax19
+  frm0605:txtTax20A
+  frm0605:txtTax20B
+  frm0605:txtTax20C
+  txtATCCode
+  txtTaxTypeCode
+[afe7bc34] refused 1:
+  frm0605:txtNumOfInstallment => Needs item 18 = Installment
+
+validate errors: afe7bc34 7 / main 7

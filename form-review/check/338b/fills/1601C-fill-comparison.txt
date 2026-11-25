@@ -1,0 +1,124 @@
+form.fill comparison for 1601C: one call per commit, identical input (values from the official sample payload)
+fill request keys (38):
+  frm1601c:AmendedRtn = 2
+  frm1601c:SpecialTax = 2
+  frm1601c:TaxWithheld = 1
+  frm1601c:sched1:txtBankCode0 = SAMPLE BANK
+  frm1601c:sched1:txtBankCode1 = 
+  frm1601c:sched1:txtBankCode2 = 
+  frm1601c:sched1:txtDatePaid0 = 05/09/2025
+  frm1601c:sched1:txtDatePaid1 = 
+  frm1601c:sched1:txtDatePaid2 = 
+  frm1601c:sched1:txtNumber0 = REF-0001
+  frm1601c:sched1:txtNumber1 = 
+  frm1601c:sched1:txtNumber2 = 
+  frm1601c:sched1:txtShouldTaxDue0 = 15,250.00
+  frm1601c:sched1:txtShouldTaxDue1 = 0.00
+  frm1601c:sched1:txtShouldTaxDue2 = 0.00
+  frm1601c:sched1:txtTaxPaid0 = 15,000.00
+  frm1601c:sched1:txtTaxPaid1 = 0.00
+  frm1601c:sched1:txtTaxPaid2 = 0.00
+  frm1601c:selTreaty = 0
+  frm1601c:txt20Other = 
+  frm1601c:txt29Other = 
+  frm1601c:txtATC = WW010
+  frm1601c:txtAddress2 = 
+  frm1601c:txtSheets = 0
+  frm1601c:txtTax14 = 250,000.00
+  frm1601c:txtTax15 = 0.00
+  frm1601c:txtTax16 = 0.00
+  frm1601c:txtTax17 = 20,000.00
+  frm1601c:txtTax18 = 5,000.00
+  frm1601c:txtTax19 = 12,500.00
+  frm1601c:txtTax20 = 0.00
+  frm1601c:txtTax23 = 0.00
+  frm1601c:txtTax25 = 18,750.00
+  frm1601c:txtTax28 = 0.00
+  frm1601c:txtTax29 = 0.00
+  frm1601c:txtTax32 = 0.00
+  frm1601c:txtTax33 = 0.00
+  frm1601c:txtTax34 = 0.00
+
+[origin/main (3aceafe8)] filled 33:
+  frm1601c:AmendedRtn
+  frm1601c:SpecialTax
+  frm1601c:TaxWithheld
+  frm1601c:sched1:txtBankCode0
+  frm1601c:sched1:txtBankCode1
+  frm1601c:sched1:txtBankCode2
+  frm1601c:sched1:txtDatePaid0
+  frm1601c:sched1:txtNumber0
+  frm1601c:sched1:txtNumber1
+  frm1601c:sched1:txtNumber2
+  frm1601c:sched1:txtShouldTaxDue0
+  frm1601c:sched1:txtShouldTaxDue1
+  frm1601c:sched1:txtShouldTaxDue2
+  frm1601c:sched1:txtTaxPaid0
+  frm1601c:sched1:txtTaxPaid1
+  frm1601c:sched1:txtTaxPaid2
+  frm1601c:selTreaty
+  frm1601c:txt20Other
+  frm1601c:txt29Other
+  frm1601c:txtATC
+  frm1601c:txtAddress2
+  frm1601c:txtSheets
+  frm1601c:txtTax14
+  frm1601c:txtTax15
+  frm1601c:txtTax16
+  frm1601c:txtTax17
+  frm1601c:txtTax18
+  frm1601c:txtTax19
+  frm1601c:txtTax20
+  frm1601c:txtTax23
+  frm1601c:txtTax25
+  frm1601c:txtTax28
+  frm1601c:txtTax29
+[origin/main (3aceafe8)] refused 5:
+  frm1601c:sched1:txtDatePaid1 => `frm1601c:sched1:txtDatePaid1` must be a date as MM/DD/YYYY (got ``)
+  frm1601c:sched1:txtDatePaid2 => `frm1601c:sched1:txtDatePaid2` must be a date as MM/DD/YYYY (got ``)
+  frm1601c:txtTax32 => `frm1601c:txtTax32` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1601c:txtTax33 => `frm1601c:txtTax33` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1601c:txtTax34 => `frm1601c:txtTax34` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+
+[afe7bc34] filled 33:
+  frm1601c:AmendedRtn
+  frm1601c:SpecialTax
+  frm1601c:TaxWithheld
+  frm1601c:sched1:txtBankCode0
+  frm1601c:sched1:txtBankCode1
+  frm1601c:sched1:txtBankCode2
+  frm1601c:sched1:txtDatePaid0
+  frm1601c:sched1:txtNumber0
+  frm1601c:sched1:txtNumber1
+  frm1601c:sched1:txtNumber2
+  frm1601c:sched1:txtShouldTaxDue0
+  frm1601c:sched1:txtShouldTaxDue1
+  frm1601c:sched1:txtShouldTaxDue2
+  frm1601c:sched1:txtTaxPaid0
+  frm1601c:sched1:txtTaxPaid1
+  frm1601c:sched1:txtTaxPaid2
+  frm1601c:selTreaty
+  frm1601c:txt20Other
+  frm1601c:txt29Other
+  frm1601c:txtATC
+  frm1601c:txtAddress2
+  frm1601c:txtSheets
+  frm1601c:txtTax14
+  frm1601c:txtTax15
+  frm1601c:txtTax16
+  frm1601c:txtTax17
+  frm1601c:txtTax18
+  frm1601c:txtTax19
+  frm1601c:txtTax20
+  frm1601c:txtTax23
+  frm1601c:txtTax25
+  frm1601c:txtTax28
+  frm1601c:txtTax29
+[afe7bc34] refused 5:
+  frm1601c:sched1:txtDatePaid1 => `frm1601c:sched1:txtDatePaid1` must be a date as MM/DD/YYYY (got ``)
+  frm1601c:sched1:txtDatePaid2 => `frm1601c:sched1:txtDatePaid2` must be a date as MM/DD/YYYY (got ``)
+  frm1601c:txtTax32 => `frm1601c:txtTax32` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1601c:txtTax33 => `frm1601c:txtTax33` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1601c:txtTax34 => `frm1601c:txtTax34` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+
+validate errors: afe7bc34 6 / main 6

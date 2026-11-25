@@ -1,0 +1,106 @@
+form.fill comparison for 2550M: one call per commit, identical input (values from the official sample payload)
+fill request keys (32):
+  AtcCode1 = false
+  AtcCode34 = false
+  frm2550m:OptAmendedYN = 1
+  frm2550m:OptSpecialTax = 2
+  frm2550m:lstSpecialTax = 0
+  frm2550m:txtSheets = 0
+  frm2550m:txtTax13A = 250,000.01
+  frm2550m:txtTax14 = 40,000.00
+  frm2550m:txtTax15 = 12,345.67
+  frm2550m:txtTax17A = 1,500.25
+  frm2550m:txtTax17B = 0.00
+  frm2550m:txtTax17C = 99.99
+  frm2550m:txtTax17D = 0.00
+  frm2550m:txtTax17E = 0.00
+  frm2550m:txtTax18E = 20,000.00
+  frm2550m:txtTax18G = 8,888.88
+  frm2550m:txtTax18I = 3,333.33
+  frm2550m:txtTax18K = 1,000.00
+  frm2550m:txtTax18M = 500.00
+  frm2550m:txtTax18N = 777.77
+  frm2550m:txtTax20D = 10.00
+  frm2550m:txtTax20E = 0.00
+  frm2550m:txtTax23D = 1,000.00
+  frm2550m:txtTax23E = 200.00
+  frm2550m:txtTax23F = 0.00
+  frm2550m:txtTax25A = 25.50
+  frm2550m:txtTax25B = 10.00
+  frm2550m:txtTax25C = 0.00
+  txtAmountInputnotDirectSched5 = 300.00
+  txtTaxableSaleSched4 = 250,000.01
+  txtTotSaleSched5 = 12,345.67
+  txtlessStdTaxSched4 = 17,500.00
+
+[origin/main (3aceafe8)] filled 28:
+  AtcCode1
+  AtcCode34
+  frm2550m:OptAmendedYN
+  frm2550m:OptSpecialTax
+  frm2550m:lstSpecialTax
+  frm2550m:txtSheets
+  frm2550m:txtTax13A
+  frm2550m:txtTax14
+  frm2550m:txtTax15
+  frm2550m:txtTax17A
+  frm2550m:txtTax17B
+  frm2550m:txtTax17C
+  frm2550m:txtTax17D
+  frm2550m:txtTax17E
+  frm2550m:txtTax18E
+  frm2550m:txtTax18G
+  frm2550m:txtTax18I
+  frm2550m:txtTax18K
+  frm2550m:txtTax18M
+  frm2550m:txtTax18N
+  frm2550m:txtTax20D
+  frm2550m:txtTax20E
+  frm2550m:txtTax23D
+  frm2550m:txtTax23E
+  frm2550m:txtTax23F
+  txtTaxableSaleSched4
+  txtTotSaleSched5
+  txtlessStdTaxSched4
+[origin/main (3aceafe8)] refused 4:
+  frm2550m:txtTax25A => `frm2550m:txtTax25A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm2550m:txtTax25B => `frm2550m:txtTax25B` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm2550m:txtTax25C => `frm2550m:txtTax25C` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  txtAmountInputnotDirectSched5 => draft has no `/schedule_5/not_direct_input_tax`
+
+[afe7bc34] filled 28:
+  AtcCode1
+  AtcCode34
+  frm2550m:OptAmendedYN
+  frm2550m:OptSpecialTax
+  frm2550m:lstSpecialTax
+  frm2550m:txtSheets
+  frm2550m:txtTax13A
+  frm2550m:txtTax14
+  frm2550m:txtTax15
+  frm2550m:txtTax17A
+  frm2550m:txtTax17B
+  frm2550m:txtTax17C
+  frm2550m:txtTax17D
+  frm2550m:txtTax17E
+  frm2550m:txtTax18E
+  frm2550m:txtTax18G
+  frm2550m:txtTax18I
+  frm2550m:txtTax18K
+  frm2550m:txtTax18M
+  frm2550m:txtTax18N
+  frm2550m:txtTax20D
+  frm2550m:txtTax20E
+  frm2550m:txtTax23D
+  frm2550m:txtTax23E
+  frm2550m:txtTax23F
+  txtTaxableSaleSched4
+  txtTotSaleSched5
+  txtlessStdTaxSched4
+[afe7bc34] refused 4:
+  frm2550m:txtTax25A => `frm2550m:txtTax25A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm2550m:txtTax25B => `frm2550m:txtTax25B` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm2550m:txtTax25C => `frm2550m:txtTax25C` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  txtAmountInputnotDirectSched5 => draft has no `/schedule_5/not_direct_input_tax`
+
+validate errors: afe7bc34 5 / main 5

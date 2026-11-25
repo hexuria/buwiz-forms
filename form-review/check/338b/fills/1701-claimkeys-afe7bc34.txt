@@ -1,0 +1,63 @@
+{
+  "args": {
+    "name": "Juana Santos",
+    "rdo_code": "039",
+    "tin": "00012345300000"
+  },
+  "error": null,
+  "invoke": "profile.save",
+  "label": "profile.save",
+  "ok": true,
+  "result": {
+    "created": true,
+    "name": "Juana Santos",
+    "status": "ok",
+    "tin": "00012345300000"
+  }
+}
+---
+{
+  "args": {
+    "code": "1701",
+    "period": 0,
+    "tin": "00012345300000",
+    "year": 2025
+  },
+  "error": null,
+  "invoke": "form.open",
+  "label": "open",
+  "ok": true,
+  "result": {
+    "form": "1701",
+    "period": 0,
+    "tin": "00012345300000",
+    "year": 2025
+  }
+}
+---
+{
+  "args": {
+    "fields": {
+      "frm1701:txtPg2Sched3AI8A": "1000000",
+      "frm1701:txtPg2Sched4I3A": "50000",
+      "frm1701:txtPg3Sched6I6A": "25000"
+    }
+  },
+  "error": null,
+  "invoke": "form.fill",
+  "label": "claim-keys-fresh",
+  "ok": true,
+  "result": {
+    "applied": [],
+    "filled": [],
+    "form": "1701",
+    "kept_user_boxes": [],
+    "refused": {
+      "frm1701:txtPg2Sched3AI8A": "`frm1701:txtPg2Sched3AI8A` is not a box on Form 1701; use the keys bir_form_fields lists",
+      "frm1701:txtPg2Sched4I3A": "`frm1701:txtPg2Sched4I3A` is not a box on Form 1701; use the keys bir_form_fields lists",
+      "frm1701:txtPg3Sched6I6A": "`frm1701:txtPg3Sched6I6A` is not a box on Form 1701; use the keys bir_form_fields lists"
+    },
+    "source": "ai"
+  }
+}
+---

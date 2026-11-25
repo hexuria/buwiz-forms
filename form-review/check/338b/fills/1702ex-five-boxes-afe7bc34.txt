@@ -1,0 +1,67 @@
+{
+  "args": {
+    "name": "Juana Santos",
+    "rdo_code": "039",
+    "tin": "00012345300000"
+  },
+  "error": null,
+  "invoke": "profile.save",
+  "label": "profile.save",
+  "ok": true,
+  "result": {
+    "created": true,
+    "name": "Juana Santos",
+    "status": "ok",
+    "tin": "00012345300000"
+  }
+}
+---
+{
+  "args": {
+    "code": "1702EX",
+    "period": 0,
+    "tin": "00012345300000",
+    "year": 2025
+  },
+  "error": null,
+  "invoke": "form.open",
+  "label": "open",
+  "ok": true,
+  "result": {
+    "form": "1702EX",
+    "period": 0,
+    "tin": "00012345300000",
+    "year": 2025
+  }
+}
+---
+{
+  "args": {
+    "fields": {
+      "frm1702EX:txtPg3Pt6I17OthersIAmt": "50000",
+      "frm1702EX:txtPg3Pt6I17OthersIDesc": "Other expense",
+      "frm1702EX:txtPg3Pt6S2I4Amount": "75000",
+      "frm1702EX:txtPg3Pt6S2I4Description": "Special deduction",
+      "frm1702EX:txtPg3Pt6S2I4LegalBasis": "RA 9999"
+    }
+  },
+  "error": null,
+  "invoke": "form.fill",
+  "label": "five-popup-boxes",
+  "ok": true,
+  "result": {
+    "applied": [],
+    "filled": [],
+    "form": "1702EX",
+    "kept_user_boxes": [],
+    "refused": {
+      "frm1702EX:txtPg3Pt6I17OthersIAmt": "`frm1702EX:txtPg3Pt6I17OthersIAmt` filled from the Schedule 1 Item 17i (more...) attached schedule; BIR's program keeps this row shut",
+      "frm1702EX:txtPg3Pt6I17OthersIDesc": "`frm1702EX:txtPg3Pt6I17OthersIDesc` filled from the Schedule 1 Item 17i (more...) attached schedule; BIR's program keeps this row shut",
+      "frm1702EX:txtPg3Pt6S2I4Amount": "`frm1702EX:txtPg3Pt6S2I4Amount` filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut",
+      "frm1702EX:txtPg3Pt6S2I4Description": "`frm1702EX:txtPg3Pt6S2I4Description` filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut",
+      "frm1702EX:txtPg3Pt6S2I4LegalBasis": "`frm1702EX:txtPg3Pt6S2I4LegalBasis` filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut"
+    },
+    "source": "ai"
+  }
+}
+---

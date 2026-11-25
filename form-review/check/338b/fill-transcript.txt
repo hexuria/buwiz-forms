@@ -1,0 +1,3641 @@
+{
+  "args": {
+    "code": "2552",
+    "period": 1,
+    "tin": "00012345300000",
+    "year": 2026
+  },
+  "error": null,
+  "invoke": "form.open",
+  "label": "open 2552 2026 period 1",
+  "ok": true,
+  "result": {
+    "form": "2552",
+    "period": 1,
+    "tin": "00012345300000",
+    "year": 2026
+  }
+}
+---
+{
+  "args": {},
+  "error": null,
+  "invoke": "form.fields",
+  "label": "fields after open",
+  "ok": true,
+  "result": {
+    "boxes": [
+      {
+        "field": "frm2552:rdoPg1I10TaxRelief",
+        "item": "10T",
+        "key": "frm2552:rdoPg1I10TaxRelief",
+        "kind": "radio",
+        "label": "rdoPg1I10TaxReliefNo",
+        "options": [
+          {
+            "label": "rdoPg1I10TaxReliefNo",
+            "value": "No"
+          },
+          {
+            "label": "rdoPg1I10TaxReliefYes",
+            "value": "Yes"
+          }
+        ],
+        "required": false,
+        "value": "No"
+      },
+      {
+        "field": "frm2552:rdoPg1I11Transaction",
+        "item": "11T",
+        "key": "frm2552:rdoPg1I11Transaction",
+        "kind": "radio",
+        "label": "rdoPg1I11TransactionLSE",
+        "options": [
+          {
+            "label": "rdoPg1I11TransactionLSE",
+            "value": "LSE"
+          },
+          {
+            "label": "rdoPg1I11TransactionPrimary",
+            "value": "Primary"
+          },
+          {
+            "label": "rdoPg1I11TransactionSecondary",
+            "value": "Secondary"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:rdoPg1I2Amended",
+        "item": "2A",
+        "key": "frm2552:rdoPg1I2Amended",
+        "kind": "radio",
+        "label": "rdoPg1I2AmendedNo",
+        "options": [
+          {
+            "label": "rdoPg1I2AmendedNo",
+            "value": "No"
+          },
+          {
+            "label": "rdoPg1I2AmendedYes",
+            "value": "Yes"
+          }
+        ],
+        "required": false,
+        "value": "No"
+      },
+      {
+        "field": "frm2552:rdoPg1Overpayment",
+        "item": "",
+        "key": "frm2552:rdoPg1Overpayment",
+        "kind": "radio",
+        "label": "rdoPg1OverpaymentRefund",
+        "options": [
+          {
+            "label": "rdoPg1OverpaymentRefund",
+            "value": "Refund"
+          },
+          {
+            "label": "rdoPg1OverpaymentTaxCredCert",
+            "value": "TaxCredCert"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg1I3NoOfSheets",
+        "item": "3N",
+        "key": "frm2552:txtPg1I3NoOfSheets",
+        "kind": "text",
+        "label": "txtPg1I3NoOfSheets",
+        "required": false,
+        "value": "0"
+      },
+      {
+        "field": "frm2552:txtPg1P2I18CredTaxWthhld",
+        "item": "18C",
+        "key": "frm2552:txtPg1P2I18CredTaxWthhld",
+        "kind": "text",
+        "label": "txtPg1P2I18CredTaxWthhld",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg1P2I21Surcharge",
+        "item": "21S",
+        "key": "frm2552:txtPg1P2I21Surcharge",
+        "kind": "text",
+        "label": "txtPg1P2I21Surcharge",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg1P2I22Interest",
+        "item": "22I",
+        "key": "frm2552:txtPg1P2I22Interest",
+        "kind": "text",
+        "label": "txtPg1P2I22Interest",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg1P2I23Compromise",
+        "item": "23C",
+        "key": "frm2552:txtPg1P2I23Compromise",
+        "kind": "text",
+        "label": "txtPg1P2I23Compromise",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg1Pt1I10TaxReliefSpec",
+        "item": "10T",
+        "key": "frm2552:txtPg1Pt1I10TaxReliefSpec",
+        "kind": "text",
+        "label": "txtPg1Pt1I10TaxReliefSpec",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg1Pt1I12NumOfShare",
+        "item": "12N",
+        "key": "frm2552:txtPg1Pt1I12NumOfShare",
+        "kind": "text",
+        "label": "txtPg1Pt1I12NumOfShare",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg1Pt1I12TotShare",
+        "item": "12T",
+        "key": "frm2552:txtPg1Pt1I12TotShare",
+        "kind": "text",
+        "label": "txtPg1Pt1I12TotShare",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2P4I1Amount",
+        "item": "1A",
+        "key": "frm2552:txtPg2P4I1Amount",
+        "kind": "text",
+        "label": "txtPg2P4I1Amount",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2P4I1TransClass",
+        "item": "1T",
+        "key": "frm2552:txtPg2P4I1TransClass",
+        "kind": "text",
+        "label": "txtPg2P4I1TransClass",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2P4I2Amount",
+        "item": "2A",
+        "key": "frm2552:txtPg2P4I2Amount",
+        "kind": "text",
+        "label": "txtPg2P4I2Amount",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2P4I2TransClass",
+        "item": "2T",
+        "key": "frm2552:txtPg2P4I2TransClass",
+        "kind": "text",
+        "label": "txtPg2P4I2TransClass",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2P4I3Amount",
+        "item": "3A",
+        "key": "frm2552:txtPg2P4I3Amount",
+        "kind": "text",
+        "label": "txtPg2P4I3Amount",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2P4I3TransClass",
+        "item": "3T",
+        "key": "frm2552:txtPg2P4I3TransClass",
+        "kind": "text",
+        "label": "txtPg2P4I3TransClass",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2P4I4Amount",
+        "item": "4A",
+        "key": "frm2552:txtPg2P4I4Amount",
+        "kind": "text",
+        "label": "txtPg2P4I4Amount",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2P4I4TransClass",
+        "item": "4T",
+        "key": "frm2552:txtPg2P4I4TransClass",
+        "kind": "text",
+        "label": "txtPg2P4I4TransClass",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2P4I5Amount",
+        "item": "5A",
+        "key": "frm2552:txtPg2P4I5Amount",
+        "kind": "text",
+        "label": "txtPg2P4I5Amount",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2P4I5TransClass",
+        "item": "5T",
+        "key": "frm2552:txtPg2P4I5TransClass",
+        "kind": "text",
+        "label": "txtPg2P4I5TransClass",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Buyer1",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Buyer1",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Buyer1",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Buyer2",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Buyer2",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Buyer2",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Buyer3",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Buyer3",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Buyer3",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Buyer4",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Buyer4",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Buyer4",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Corp1",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Corp1",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Corp1",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Corp2",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Corp2",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Corp2",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Corp3",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Corp3",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Corp3",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Corp4",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Corp4",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Corp4",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Date1",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Date1",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Date1",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Date2",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Date2",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Date2",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Date3",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Date3",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Date3",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Date4",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Date4",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Date4",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1NumShares1",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1NumShares1",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1NumShares1",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1NumShares2",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1NumShares2",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1NumShares2",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1NumShares3",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1NumShares3",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1NumShares3",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1NumShares4",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1NumShares4",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1NumShares4",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Seller1",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Seller1",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Seller1",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Seller2",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Seller2",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Seller2",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Seller3",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Seller3",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Seller3",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1Seller4",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1Seller4",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1Seller4",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1TaxBase1",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1TaxBase1",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1TaxBase1",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1TaxBase2",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1TaxBase2",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1TaxBase2",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1TaxBase3",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1TaxBase3",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1TaxBase3",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch1TaxBase4",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch1TaxBase4",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch1TaxBase4",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2Buyer1",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2Buyer1",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2Buyer1",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2Buyer2",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2Buyer2",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2Buyer2",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2Buyer3",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2Buyer3",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2Buyer3",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2Buyer4",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2Buyer4",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2Buyer4",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2Corp1",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2Corp1",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2Corp1",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2Corp2",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2Corp2",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2Corp2",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2Corp3",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2Corp3",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2Corp3",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2Corp4",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2Corp4",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2Corp4",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2Date1",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2Date1",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2Date1",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2Date2",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2Date2",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2Date2",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2Date3",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2Date3",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2Date3",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2Date4",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2Date4",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2Date4",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2NumShares1",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2NumShares1",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2NumShares1",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2NumShares2",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2NumShares2",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2NumShares2",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2NumShares3",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2NumShares3",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2NumShares3",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm2552:txtPg2Pt5Sch2NumShares4",
+        "item": "",
+        "key": "frm2552:txtPg2Pt5Sch2NumShares4",
+        "kind": "text",
+        "label": "txtPg2Pt5Sch2NumShares4",
+        "required":{
+  "args": {
+    "fields": {
+      "frm2552:txtPg1Pt1I12TotShare": "1000000"
+    }
+  },
+  "error": null,
+  "invoke": "form.fill",
+  "label": "2552 item12 shut refusal",
+  "ok": true,
+  "result": {
+    "applied": [],
+    "filled": [],
+    "form": "2552",
+    "kept_user_boxes": [],
+    "refused": {
+      "frm2552:txtPg1Pt1I12TotShare": "Needs item 11 = Initial Public Offering (Primary or Secondary)"
+    },
+    "source": "ai"
+  }
+}
+---
+{
+  "args": {
+    "fields": {
+      "frm2552:rdoPg1I11Transaction": "Primary"
+    }
+  },
+  "error": null,
+  "invoke": "form.fill",
+  "label": "2552 choose Primary",
+  "ok": true,
+  "result": {
+    "applied": [
+      "frm2552:rdoPg1I11Transaction"
+    ],
+    "filled": [
+      "frm2552:rdoPg1I11Transaction"
+    ],
+    "form": "2552",
+    "kept_user_boxes": [],
+    "source": "ai"
+  }
+}
+---
+{
+  "args": {
+    "fields": {
+      "frm2552:txtPg1Pt1I12TotShare": "1000000"
+    }
+  },
+  "error": null,
+  "invoke": "form.fill",
+  "label": "2552 item12 accepted",
+  "ok": true,
+  "result": {
+    "applied": [
+      "frm2552:txtPg1Pt1I12TotShare"
+    ],
+    "filled": [
+      "frm2552:txtPg1Pt1I12TotShare"
+    ],
+    "form": "2552",
+    "kept_user_boxes": [],
+    "source": "ai"
+  }
+}
+---
+{
+  "args": {
+    "discard": true
+  },
+  "error": null,
+  "invoke": "form.dismiss",
+  "label": "dismiss 2552",
+  "ok": true,
+  "result": {
+    "discarded": true,
+    "dismissed": true,
+    "form": "2552"
+  }
+}
+---
+{
+  "args": {
+    "code": "1702EX",
+    "period": 0,
+    "tin": "00012345300000",
+    "year": 2025
+  },
+  "error": null,
+  "invoke": "form.open",
+  "label": "open 1702EX 2025",
+  "ok": true,
+  "result": {
+    "form": "1702EX",
+    "period": 0,
+    "tin": "00012345300000",
+    "year": 2025
+  }
+}
+---
+{
+  "args": {},
+  "error": null,
+  "invoke": "form.fields",
+  "label": "fields after 1702EX open",
+  "ok": true,
+  "result": {
+    "boxes": [
+      {
+        "field": "frm1702EX:ddlPg1I2Date",
+        "item": "2D",
+        "key": "frm1702EX:ddlPg1I2Date",
+        "kind": "select",
+        "label": "ddlPg1I2Date",
+        "required": false,
+        "value": "12"
+      },
+      {
+        "field": "frm1702EX:rdoPg1I1Calendar",
+        "item": "1C",
+        "key": "frm1702EX:rdoPg1I1Calendar",
+        "kind": "radio",
+        "label": "rdoPg1I1Calendar",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "true"
+      },
+      {
+        "field": "frm1702EX:rdoPg1I1Fiscal",
+        "item": "1F",
+        "key": "frm1702EX:rdoPg1I1Fiscal",
+        "kind": "radio",
+        "label": "rdoPg1I1Fiscal",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1702EX:rdoPg1I3Amended",
+        "item": "3A",
+        "key": "frm1702EX:rdoPg1I3Amended",
+        "kind": "radio",
+        "label": "rdoPg1I3AmendedNo",
+        "options": [
+          {
+            "label": "rdoPg1I3AmendedNo",
+            "value": "No"
+          },
+          {
+            "label": "rdoPg1I3AmendedYes",
+            "value": "Yes"
+          }
+        ],
+        "required": false,
+        "value": "No"
+      },
+      {
+        "field": "frm1702EX:rdoPg1I4ShortPeriod",
+        "item": "4S",
+        "key": "frm1702EX:rdoPg1I4ShortPeriod",
+        "kind": "radio",
+        "label": "rdoPg1I4ShortPeriodNo",
+        "options": [
+          {
+            "label": "rdoPg1I4ShortPeriodNo",
+            "value": "No"
+          },
+          {
+            "label": "rdoPg1I4ShortPeriodYes",
+            "value": "Yes"
+          }
+        ],
+        "required": false,
+        "value": "No"
+      },
+      {
+        "field": "frm1702EX:rdoPg1I5ATCR",
+        "item": "5A",
+        "key": "frm1702EX:rdoPg1I5ATCR",
+        "kind": "radio",
+        "label": "rdoPg1I5ATCR1C3",
+        "options": [
+          {
+            "label": "rdoPg1I5ATCR1C3",
+            "value": "1C3"
+          },
+          {
+            "label": "rdoPg1I5ATCR2C3",
+            "value": "2C3"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1702EX:rdoPg1Overpayment",
+        "item": "",
+        "key": "frm1702EX:rdoPg1Overpayment",
+        "kind": "radio",
+        "label": "rdoPg1OverpaymentCarryOver",
+        "options": [
+          {
+            "label": "rdoPg1OverpaymentCarryOver",
+            "value": "CarryOver"
+          },
+          {
+            "label": "rdoPg1OverpaymentRefund",
+            "value": "Refund"
+          },
+          {
+            "label": "rdoPg1OverpaymentTCC",
+            "value": "TCC"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1702EX:rdoPg1Pt1I13MethodOfDeduc",
+        "item": "13M",
+        "key": "frm1702EX:rdoPg1Pt1I13MethodOfDeduc",
+        "kind": "radio",
+        "label": "rdoPg1Pt1I13MethodOfDeducItemized",
+        "options": [
+          {
+            "label": "rdoPg1Pt1I13MethodOfDeducItemized",
+            "value": "Itemized"
+          },
+          {
+            "label": "rdoPg1Pt1I13MethodOfDeducOptional",
+            "value": "Optional"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1702EX:txtPg1P2I23NumOfAttachments",
+        "item": "23N",
+        "key": "frm1702EX:txtPg1P2I23NumOfAttachments",
+        "kind": "text",
+        "label": "txtPg1P2I23NumOfAttachments",
+        "required": false,
+        "value": "00"
+      },
+      {
+        "field": "frm1702EX:txtPg1Pt1I10DateofIncorporation",
+        "item": "10D",
+        "key": "frm1702EX:txtPg1Pt1I10DateofIncorporation",
+        "kind": "text",
+        "label": "txtPg1Pt1I10DateofIncorporation",
+        "required": true,
+        "value": ""
+      },
+      {
+        "field": "frm1702EX:txtPg1Pt1I14LegalBasis",
+        "item": "14L",
+        "key": "frm1702EX:txtPg1Pt1I14LegalBasis",
+        "kind": "text",
+        "label": "txtPg1Pt1I14LegalBasis",
+        "required": true,
+        "value": ""
+      },
+      {
+        "field": "frm1702EX:txtPg1Pt1I15Investment",
+        "item": "15I",
+        "key": "frm1702EX:txtPg1Pt1I15Investment",
+        "kind": "text",
+        "label": "txtPg1Pt1I15Investment",
+        "required": true,
+        "value": ""
+      },
+      {
+        "field": "frm1702EX:txtPg1Pt1I16RegisteredActivity",
+        "item": "16R",
+        "key": "frm1702EX:txtPg1Pt1I16RegisteredActivity",
+        "kind": "text",
+        "label": "txtPg1Pt1I16RegisteredActivity",
+        "required": true,
+        "value": ""
+      },
+      {
+        "field": "frm1702EX:txtPg1Pt1I17EffectivityFrom",
+        "item": "17E",
+        "key": "frm1702EX:txtPg1Pt1I17EffectivityFrom",
+        "kind": "text",
+        "label": "txtPg1Pt1I17EffectivityFrom",
+        "required": true,
+        "value": ""
+      },
+      {
+        "field": "frm1702EX:txtPg1Pt1I17EffectivityTo",
+        "item": "17E",
+        "key": "frm1702EX:txtPg1Pt1I17EffectivityTo",
+        "kind": "text",
+        "label": "txtPg1Pt1I17EffectivityTo",
+        "required": true,
+        "value": ""
+      },
+      {
+        "field": "frm1702EX:txtPg1Pt1I8RegisteredName",
+        "item": "8R",
+        "key": "frm1702EX:txtPg1Pt1I8RegisteredName",
+        "kind": "text",
+        "label": "txtPg1Pt1I8RegisteredName",
+        "required": true,
+        "value": "JUANA SANTOS"
+      },
+      {
+        "field": "frm1702EX:txtPg1Pt2I21PenaltyCompromise",
+        "item": "21P",
+        "key": "frm1702EX:txtPg1Pt2I21PenaltyCompromise",
+        "kind": "text",
+        "label": "txtPg1Pt2I21PenaltyCompromise",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1702EX:txtPg2Pt4I28SalesReceiptsRevFees",
+        "item": "28S",
+        "key": "frm1702EX:txtPg2Pt4I28SalesReceiptsRevFees",
+        "kind": "text",
+        "label": "txtPg2Pt4I28SalesReceiptsRevFees",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1702EX:txtPg2Pt4I29SalesRetAllowanceDisc",
+        "item": "29S",
+        "key": "frm1702EX:txtPg2Pt4I29SalesRetAllowanceDisc",
+        "kind": "text",
+        "label": "txtPg2Pt4I29SalesRetAllowanceDisc",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1702EX:txtPg2Pt4I31CostOfSalesServ",
+        "item": "31C",
+        "key": "frm1702EX:txtPg2Pt4I31CostOfSalesServ",
+        "kind": "text",
+        "label": "txtPg2Pt4I31CostOfSalesServ",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1702EX:txtPg2Pt4I33AddOther",
+        "item": "33A",
+        "key": "frm1702EX:txtPg2Pt4I33AddOther",
+        "kind": "text",
+        "label": "txtPg2Pt4I33AddOther",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1702EX:txtPg2Pt4I40TaxRate",
+        "item": "40T",
+        "key": "frm1702EX:txtPg2Pt4I40TaxRate",
+        "kind": "text",
+        "label": "txtPg2Pt4I40TaxRate",
+        "required": false,
+        "value": "0"
+      },
+      {
+        "field": "frm1702EX:txtPg2Pt4I42PriorYearExcessCr",
+        "item": "42P",
+        "key": "frm1702EX:txtPg2Pt4I42PriorYearExcessCr",
+        "kind": "text",
+        "label": "txtPg2Pt4I42PriorYearExcessCr",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1702EX:txtPg2Pt4I43IncomeTaxPmtFromPreviousQrt",
+        "item": "43I",
+        "key": "frm1702EX:txtPg2Pt4I43IncomeTaxPmtFromPreviousQrt",
+        "kind": "text",
+        "label": "txtPg2Pt4I43IncomeTaxPmtFromPreviousQrt",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1702EX:txtPg2Pt4I44CreditableTaxWithheldFromPrevQrt",
+        "item": "44C",
+        "key": "frm1702{
+  "args": {
+    "fields": {
+      "frm1702EX:txtPg3Pt6I17OthersIAmt": "50000"
+    }
+  },
+  "error": null,
+  "invoke": "form.fill",
+  "label": "1702EX schedule1 17i amount refusal",
+  "ok": true,
+  "result": {
+    "applied": [],
+    "filled": [],
+    "form": "1702EX",
+    "kept_user_boxes": [],
+    "refused": {
+      "frm1702EX:txtPg3Pt6I17OthersIAmt": "`frm1702EX:txtPg3Pt6I17OthersIAmt` filled from the Schedule 1 Item 17i (more...) attached schedule; BIR's program keeps this row shut"
+    },
+    "source": "ai"
+  }
+}
+---
+{
+  "args": {
+    "fields": {
+      "frm1702EX:txtPg3Pt6I17OthersIDesc": "Other expense",
+      "frm1702EX:txtPg3Pt6S2I4Amount": "75000",
+      "frm1702EX:txtPg3Pt6S2I4Description": "Special deduction",
+      "frm1702EX:txtPg3Pt6S2I4LegalBasis": "RA 9999"
+    }
+  },
+  "error": null,
+  "invoke": "form.fill",
+  "label": "1702EX all popup-owned refusals",
+  "ok": true,
+  "result": {
+    "applied": [],
+    "filled": [],
+    "form": "1702EX",
+    "kept_user_boxes": [],
+    "refused": {
+      "frm1702EX:txtPg3Pt6I17OthersIDesc": "`frm1702EX:txtPg3Pt6I17OthersIDesc` filled from the Schedule 1 Item 17i (more...) attached schedule; BIR's program keeps this row shut",
+      "frm1702EX:txtPg3Pt6S2I4Amount": "`frm1702EX:txtPg3Pt6S2I4Amount` filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut",
+      "frm1702EX:txtPg3Pt6S2I4Description": "`frm1702EX:txtPg3Pt6S2I4Description` filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut",
+      "frm1702EX:txtPg3Pt6S2I4LegalBasis": "`frm1702EX:txtPg3Pt6S2I4LegalBasis` filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut"
+    },
+    "source": "ai"
+  }
+}
+---
+{
+  "args": {
+    "discard": true
+  },
+  "error": null,
+  "invoke": "form.dismiss",
+  "label": "dismiss 1702EX",
+  "ok": true,
+  "result": {
+    "discarded": true,
+    "dismissed": true,
+    "form": "1702EX"
+  }
+}
+---
+{
+  "args": {
+    "code": "1701",
+    "period": 0,
+    "tin": "00012345300000",
+    "year": 2025
+  },
+  "error": null,
+  "invoke": "form.open",
+  "label": "open 1701 2025",
+  "ok": true,
+  "result": {
+    "form": "1701",
+    "period": 0,
+    "tin": "00012345300000",
+    "year": 2025
+  }
+}
+---
+{
+  "args": {},
+  "error": null,
+  "invoke": "form.fields",
+  "label": "fields after 1701 open",
+  "ok": true,
+  "result": {
+    "boxes": [
+      {
+        "field": "frm1701:rdoPg1I2Amended",
+        "item": "",
+        "key": "frm1701:rdoPg1I2Amended",
+        "kind": "radio",
+        "label": "2 Amended Return?",
+        "options": [
+          {
+            "label": "Yes",
+            "value": "Yes"
+          },
+          {
+            "label": "No",
+            "value": "No"
+          }
+        ],
+        "required": false,
+        "value": "No"
+      },
+      {
+        "field": "frm1701:rdoPg1I3ShortPeriod",
+        "item": "",
+        "key": "frm1701:rdoPg1I3ShortPeriod",
+        "kind": "radio",
+        "label": "3 Short Period Return?",
+        "options": [
+          {
+            "label": "Yes",
+            "value": "Yes"
+          },
+          {
+            "label": "No",
+            "value": "No"
+          }
+        ],
+        "required": false,
+        "value": "No"
+      },
+      {
+        "field": "frm1701:rdoPg1I6TaxpayerType",
+        "item": "",
+        "key": "frm1701:rdoPg1I6TaxpayerType",
+        "kind": "radio",
+        "label": "6 Taxpayer Type",
+        "options": [
+          {
+            "label": "Single Proprietor",
+            "value": "S"
+          },
+          {
+            "label": "Professional",
+            "value": "P"
+          },
+          {
+            "label": "Estate",
+            "value": "E"
+          },
+          {
+            "label": "Trust",
+            "value": "T"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg1I6TaxpayerTypeC",
+        "item": "",
+        "key": "frm1701:rdoPg1I6TaxpayerTypeC",
+        "kind": "checkbox",
+        "label": "6 Taxpayer Type Compensation Earner",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg1I7ATC_II012",
+        "item": "",
+        "key": "frm1701:rdoPg1I7ATC_II012",
+        "kind": "radio",
+        "label": "7 ATC II012 Business Income-Graduated IT Rates",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg1I7ATC_II014",
+        "item": "",
+        "key": "frm1701:rdoPg1I7ATC_II014",
+        "kind": "radio",
+        "label": "7 ATC II014 Income from Profession-Graduated IT Rates",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg1I7ATC_II013",
+        "item": "",
+        "key": "frm1701:rdoPg1I7ATC_II013",
+        "kind": "radio",
+        "label": "7 ATC II013 Mixed Income-Graduated IT Rates",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg1I7ATC_II011",
+        "item": "",
+        "key": "frm1701:rdoPg1I7ATC_II011",
+        "kind": "radio",
+        "label": "7 ATC II011 Compensation Income",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg1I7ATC_II015",
+        "item": "",
+        "key": "frm1701:rdoPg1I7ATC_II015",
+        "kind": "radio",
+        "label": "7 ATC II015 Business Income - 8% IT Rate",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg1I7ATC_II017",
+        "item": "",
+        "key": "frm1701:rdoPg1I7ATC_II017",
+        "kind": "radio",
+        "label": "7 ATC II017 Income from Profession - 8% IT Rate",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg1I7ATC_II016",
+        "item": "",
+        "key": "frm1701:rdoPg1I7ATC_II016",
+        "kind": "radio",
+        "label": "7 ATC II016 Mixed Income - 8% IT Rate",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:txtPg1I10BirthDate",
+        "item": "",
+        "key": "frm1701:txtPg1I10BirthDate",
+        "kind": "text",
+        "label": "Page 1 Item 10 Birth Date",
+        "required": true,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg1I12Citizenship",
+        "item": "",
+        "key": "frm1701:txtPg1I12Citizenship",
+        "kind": "text",
+        "label": "12 Citizenship",
+        "required": true,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg1I13ForeignTaxCredits",
+        "item": "",
+        "key": "frm1701:rdoPg1I13ForeignTaxCredits",
+        "kind": "radio",
+        "label": "13 Claiming Foreign Tax Credits?",
+        "options": [
+          {
+            "label": "Yes",
+            "value": "Yes"
+          },
+          {
+            "label": "No",
+            "value": "No"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg1I14ForeignTaxNumber",
+        "item": "",
+        "key": "frm1701:txtPg1I14ForeignTaxNumber",
+        "kind": "text",
+        "label": "14 Foreign Tax Number, if applicable",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg1I16CivilStatus",
+        "item": "",
+        "key": "frm1701:rdoPg1I16CivilStatus",
+        "kind": "radio",
+        "label": "16 Civil Status",
+        "options": [
+          {
+            "label": "Single",
+            "value": "S"
+          },
+          {
+            "label": "Married",
+            "value": "M"
+          },
+          {
+            "label": "Legally Separated",
+            "value": "LS"
+          },
+          {
+            "label": "Widow/er",
+            "value": "W"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg1I17SpouseIncome",
+        "item": "",
+        "key": "frm1701:rdoPg1I17SpouseIncome",
+        "kind": "radio",
+        "label": "17 If married, spouse has income?",
+        "options": [
+          {
+            "label": "Yes",
+            "value": "Yes"
+          },
+          {
+            "label": "No",
+            "value": "No"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg1I18FilingStatus",
+        "item": "",
+        "key": "frm1701:rdoPg1I18FilingStatus",
+        "kind": "radio",
+        "label": "18 Filing Status",
+        "options": [
+          {
+            "label": "Joint Filing",
+            "value": "J"
+          },
+          {
+            "label": "Separate Filing",
+            "value": "S"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg1I19IncomeExempt",
+        "item": "",
+        "key": "frm1701:rdoPg1I19IncomeExempt",
+        "kind": "radio",
+        "label": "19 Income EXEMPT from Income Tax?",
+        "options": [
+          {
+            "label": "Yes",
+            "value": "Yes"
+          },
+          {
+            "label": "No",
+            "value": "No"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg1I20IncomeSpecial",
+        "item": "",
+        "key": "frm1701:rdoPg1I20IncomeSpecial",
+        "kind": "radio",
+        "label": "20 Income subject to SPECIAL/PREFERENTIAL RATE?",
+        "options": [
+          {
+            "label": "Yes",
+            "value": "Yes"
+          },
+          {
+            "label": "No",
+            "value": "No"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg1I21TaxRateG",
+        "item": "",
+        "key": "frm1701:rdoPg1I21TaxRateG",
+        "kind": "radio",
+        "label": "21 Tax Rate Graduated Rates",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg1I21AMethodDeduction",
+        "item": "",
+        "key": "frm1701:rdoPg1I21AMethodDeduction",
+        "kind": "radio",
+        "label": "21A Method of Deduction",
+        "options": [
+          {
+            "label": "Itemized Deduction",
+            "value": "I"
+          },
+          {
+            "label": "Optional Standard Deduction",
+            "value": "O"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg1I21TaxRateP",
+        "item": "",
+        "key": "frm1701:rdoPg1I21TaxRateP",
+        "kind": "radio",
+        "label": "21 Tax Rate 8% in lieu of Graduated Rates",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:txtPg1I25A",
+        "item": "",
+        "key": "frm1701:txtPg1I25A",
+        "kind": "text",
+        "label": "Page 1 Item 25 A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg1I25B",
+        "item": "",
+        "key": "frm1701:txtPg1I25B",
+        "kind": "text",
+        "label": "Page 1 Item 25 B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg1I27A",
+        "item": "",
+        "key": "frm1701:txtPg1I27A",
+        "kind": "text",
+        "label": "Page 1 Item 27 A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg1I27B",
+        "item": "",
+        "key": "frm1701:txtPg1I27B",
+        "kind": "text",
+        "label": "Page 1 Item 27 B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg1I28A",
+        "item": "",
+        "key": "frm1701:txtPg1I28A",
+        "kind": "text",
+        "label": "Page 1 Item 28 A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg1I28B",
+        "item": "",
+        "key": "frm1701:txtPg1I28B",
+        "kind": "text",
+        "label": "Page 1 Item 28 B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg1I29A",
+        "item": "",
+        "key": "frm1701:txtPg1I29A",
+        "kind": "text",
+        "label": "Page 1 Item 29 A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg1I29B",
+        "item": "",
+        "key": "frm1701:txtPg1I29B",
+        "kind": "text",
+        "label": "Page 1 Item 29 B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:rdoPg1Overpayment",
+        "item": "",
+        "key": "frm1701:rdoPg1Overpayment",
+        "kind": "radio",
+        "label": "Overpayment: To be",
+        "options": [
+          {
+            "label": "refunded",
+            "value": "Refund"
+          },
+          {
+            "label": "issued a Tax Credit Certificate (TCC)",
+            "value": "TCC"
+          },
+          {
+            "label": "carried over as a tax credit",
+            "value": "CarryOver"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg1I33NumberOfAttachments",
+        "item": "",
+        "key": "frm1701:txtPg1I33NumberOfAttachments",
+        "kind": "text",
+        "label": "Page 1 Item 33 Number Of Attachments",
+        "required": false,
+        "value": "00"
+      },
+      {
+        "field": "frm1701:txtPg2I2SpouseRDOCode",
+        "item": "",
+        "key": "frm1701:txtPg2I2SpouseRDOCode",
+        "kind": "runtime-injected-control",
+        "label": "2 RDO Code (Part IV)",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "000"
+      },
+      {
+        "field": "frm1701:rdoPg2I3SpouseType",
+        "item": "",
+        "key": "frm1701:rdoPg2I3SpouseType",
+        "kind": "radio",
+        "label": "3 Filer's Spouse Type",
+        "options": [
+          {
+            "label": "Single Proprietor",
+            "value": "S"
+          },
+          {
+            "label": "Professional",
+            "value": "P"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg2I3SpouseTypeC",
+        "item": "",
+        "key": "frm1701:rdoPg2I3SpouseTypeC",
+        "kind": "checkbox",
+        "label": "3 Filer's Spouse Type Compensation Earner",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg2I4ATC_II012",
+        "item": "",
+        "key": "frm1701:rdoPg2I4ATC_II012",
+        "kind": "radio",
+        "label": "4 ATC II012 Business Income-Graduated IT Rates",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg2I4ATC_II014",
+        "item": "",
+        "key": "frm1701:rdoPg2I4ATC_II014",
+        "kind": "radio",
+        "label": "4 ATC II014 Income from Profession-Graduated IT Rates",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg2I4ATC_II013",
+        "item": "",
+        "key": "frm1701:rdoPg2I4ATC_II013",
+        "kind": "radio",
+        "label": "4 ATC II013 Mixed Income-Graduated IT Rates",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg2I4ATC_II011",
+        "item": "",
+        "key": "frm1701:rdoPg2I4ATC_II011",
+        "kind": "radio",
+        "label": "4 ATC II011 Compensation Income",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg2I4ATC_II015",
+        "item": "",
+        "key": "frm1701:rdoPg2I4ATC_II015",
+        "kind": "radio",
+        "label": "4 ATC II015 Business Income - 8% IT Rate",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg2I4ATC_II017",
+        "item": "",
+        "key": "frm1701:rdoPg2I4ATC_II017",
+        "kind": "radio",
+        "label": "4 ATC II017 Income from Profession - 8% IT Rate",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg2I4ATC_II016",
+        "item": "",
+        "key": "frm1701:rdoPg2I4ATC_II016",
+        "kind": "radio",
+        "label": "4 ATC II016 Mixed Income - 8% IT Rate",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:txtPg2I5SpouseName",
+        "item": "",
+        "key": "frm1701:txtPg2I5SpouseName",
+        "kind": "text",
+        "label": "5 Spouse's Name",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg2I6TelNum",
+        "item": "",
+        "key": "frm1701:txtPg2I6TelNum",
+        "kind": "text",
+        "label": "6 Contact Number",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg2I7Citizenship",
+        "item": "",
+        "key": "frm1701:txtPg2I7Citizenship",
+        "kind": "text",
+        "label": "7 Citizenship",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg2I8ForeignTaxCredits",
+        "item": "",
+        "key": "frm1701:rdoPg2I8ForeignTaxCredits",
+        "kind": "radio",
+        "label": "8 Claiming Foreign Tax Credits?",
+        "options": [
+          {
+            "label": "Yes",
+            "value": "Yes"
+          },
+          {
+            "label": "No",
+            "value": "No"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg2I9ForeignTaxNumber",
+        "item": "",
+        "key": "frm1701:txtPg2I9ForeignTaxNumber",
+        "kind": "text",
+        "label": "9 Foreign Tax Number",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg2I10IncomeExempt",
+        "item": "",
+        "key": "frm1701:rdoPg2I10IncomeExempt",
+        "kind": "radio",
+        "label": "10 Income EXEMPT from Income Tax?",
+        "options": [
+          {
+            "label": "Yes",
+            "value": "Yes"
+          },
+          {
+            "label": "No",
+            "value": "No"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg2I11IncomeSpecial",
+        "item": "",
+        "key": "frm1701:rdoPg2I11IncomeSpecial",
+        "kind": "radio",
+        "label": "11 Income subject to SPECIAL/PREFERENTIAL RATE?",
+        "options": [
+          {
+            "label": "Yes",
+            "value": "Yes"
+          },
+          {
+            "label": "No",
+            "value": "No"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg2I12TaxRateG",
+        "item": "",
+        "key": "frm1701:rdoPg2I12TaxRateG",
+        "kind": "radio",
+        "label": "12 Tax Rate Graduated Rates",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:rdoPg2I12AMethodDeduction",
+        "item": "",
+        "key": "frm1701:rdoPg2I12AMethodDeduction",
+        "kind": "radio",
+        "label": "12A Method of Deduction",
+        "options": [
+          {
+            "label": "Itemized Deduction",
+            "value": "I"
+          },
+          {
+            "label": "Optional Standard Deduction",
+            "value": "O"
+          }
+        ],
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:rdoPg2I12TaxRateP",
+        "item": "",
+        "key": "frm1701:rdoPg2I12TaxRateP",
+        "kind": "radio",
+        "label": "12 Tax Rate 8% in lieu of Graduated Rates",
+        "options": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:chkPg2IShed1a_1Taxpayer",
+        "item": "1T",
+        "key": "frm1701:chkPg2IShed1a_1Taxpayer",
+        "kind": "radio",
+        "label": "Schedule 1 row: Taxpayer",
+        "options": [
+          {
+            "value": "false"
+          },
+          {
+            "value": "true"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:txtPg2IShed1a_1TPName",
+        "item": "1T",
+        "key": "frm1701:txtPg2IShed1a_1TPName",
+        "kind": "text",
+        "label": "Item 1T",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:chkPg2IShed1a_1Spouse",
+        "item": "1S",
+        "key": "frm1701:chkPg2IShed1a_1Spouse",
+        "kind": "radio",
+        "label": "Schedule 1 row: Spouse",
+        "options": [
+          {
+            "value": "false"
+          },
+          {
+            "value": "true"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:txtPg2IShed1a_1SName",
+        "item": "1S",
+        "key": "frm1701:txtPg2IShed1a_1SName",
+        "kind": "text",
+        "label": "Item 1S",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:chkPg2IShed2a_2Taxpayer",
+        "item": "2T",
+        "key": "frm1701:chkPg2IShed2a_2Taxpayer",
+        "kind": "radio",
+        "label": "Schedule 2 row: Taxpayer",
+        "options": [
+          {
+            "value": "false"
+          },
+          {
+            "value": "true"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:txtPg2IShed2a_2TPName",
+        "item": "2T",
+        "key": "frm1701:txtPg2IShed2a_2TPName",
+        "kind": "text",
+        "label": "Item 2T",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:chkPg2IShed2a_2Spouse",
+        "item": "2S",
+        "key": "frm1701:chkPg2IShed2a_2Spouse",
+        "kind": "radio",
+        "label": "Schedule 2 row: Spouse",
+        "options": [
+          {
+            "value": "false"
+          },
+          {
+            "value": "true"
+          }
+        ],
+        "required": false,
+        "value": "false"
+      },
+      {
+        "field": "frm1701:txtPg2IShed2a_2SName",
+        "item": "2S",
+        "key": "frm1701:txtPg2IShed2a_2SName",
+        "kind": "text",
+        "label": "Item 2S",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg2IShed1c_1CI",
+        "item": "1C",
+        "key": "frm1701:txtPg2IShed1c_1CI",
+        "kind": "text",
+        "label": "Item 1C",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed1c_1TW",
+        "item": "1T",
+        "key": "frm1701:txtPg2IShed1c_1TW",
+        "kind": "text",
+        "label": "Item 1T",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed1c_2CI",
+        "item": "2C",
+        "key": "frm1701:txtPg2IShed1c_2CI",
+        "kind": "text",
+        "label": "Item 2C",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed1c_2TW",
+        "item": "2T",
+        "key": "frm1701:txtPg2IShed1c_2TW",
+        "kind": "text",
+        "label": "Item 2T",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed2_5A",
+        "item": "5A",
+        "key": "frm1701:txtPg2IShed2_5A",
+        "kind": "text",
+        "label": "Item 5A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed2_5B",
+        "item": "5B",
+        "key": "frm1701:txtPg2IShed2_5B",
+        "kind": "text",
+        "label": "Item 5B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_8A",
+        "item": "8A",
+        "key": "frm1701:txtPg2IShed3_8A",
+        "kind": "text",
+        "label": "Item 8A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_8B",
+        "item": "8B",
+        "key": "frm1701:txtPg2IShed3_8B",
+        "kind": "text",
+        "label": "Item 8B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_9A",
+        "item": "9A",
+        "key": "frm1701:txtPg2IShed3_9A",
+        "kind": "text",
+        "label": "Item 9A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_9B",
+        "item": "9B",
+        "key": "frm1701:txtPg2IShed3_9B",
+        "kind": "text",
+        "label": "Item 9B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_11A",
+        "item": "11A",
+        "key": "frm1701:txtPg2IShed3_11A",
+        "kind": "text",
+        "label": "Item 11A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_11B",
+        "item": "11B",
+        "key": "frm1701:txtPg2IShed3_11B",
+        "kind": "text",
+        "label": "Item 11B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_19Desc",
+        "item": "19D",
+        "key": "frm1701:txtPg2IShed3_19Desc",
+        "kind": "text",
+        "label": "19 Add: Other Non-Operating Income (specify below)",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_19A",
+        "item": "19A",
+        "key": "frm1701:txtPg2IShed3_19A",
+        "kind": "text",
+        "label": "Item 19A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_19B",
+        "item": "19B",
+        "key": "frm1701:txtPg2IShed3_19B",
+        "kind": "text",
+        "label": "Item 19B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_20Desc",
+        "item": "20D",
+        "key": "frm1701:txtPg2IShed3_20Desc",
+        "kind": "text",
+        "label": "20 (specify below)",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_20A",
+        "item": "20A",
+        "key": "frm1701:txtPg2IShed3_20A",
+        "kind": "text",
+        "label": "Item 20A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_20B",
+        "item": "20B",
+        "key": "frm1701:txtPg2IShed3_20B",
+        "kind": "text",
+        "label": "Item 20B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_21A",
+        "item": "21A",
+        "key": "frm1701:txtPg2IShed3_21A",
+        "kind": "text",
+        "label": "Item 21A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg2IShed3_21B",
+        "item": "21B",
+        "key": "frm1701:txtPg2IShed3_21B",
+        "kind": "text",
+        "label": "Item 21B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed3_26A",
+        "item": "26A",
+        "key": "frm1701:txtPg3IShed3_26A",
+        "kind": "text",
+        "label": "Item 26A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed3_26B",
+        "item": "26B",
+        "key": "frm1701:txtPg3IShed3_26B",
+        "kind": "text",
+        "label": "Item 26B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed3_27Desc",
+        "item": "27D",
+        "key": "frm1701:txtPg3IShed3_27Desc",
+        "kind": "text",
+        "label": "27 Add: Other Non-Operating Income (specify below)",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed3_27A",
+        "item": "27A",
+        "key": "frm1701:txtPg3IShed3_27A",
+        "kind": "text",
+        "label": "Item 27A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed3_27B",
+        "item": "27B",
+        "key": "frm1701:txtPg3IShed3_27B",
+        "kind": "text",
+        "label": "Item 27B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed3_29A",
+        "item": "29A",
+        "key": "frm1701:txtPg3IShed3_29A",
+        "kind": "text",
+        "label": "Item 29A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed3_29B",
+        "item": "29B",
+        "key": "frm1701:txtPg3IShed3_29B",
+        "kind": "text",
+        "label": "Item 29B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_1A",
+        "item": "1A",
+        "key": "frm1701:txtPg3IShed4_1A",
+        "kind": "text",
+        "label": "Item 1A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_1B",
+        "item": "1B",
+        "key": "frm1701:txtPg3IShed4_1B",
+        "kind": "text",
+        "label": "Item 1B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_2A",
+        "item": "2A",
+        "key": "frm1701:txtPg3IShed4_2A",
+        "kind": "text",
+        "label": "Item 2A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_2B",
+        "item": "2B",
+        "key": "frm1701:txtPg3IShed4_2B",
+        "kind": "text",
+        "label": "Item 2B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_3A",
+        "item": "3A",
+        "key": "frm1701:txtPg3IShed4_3A",
+        "kind": "text",
+        "label": "Item 3A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_3B",
+        "item": "3B",
+        "key": "frm1701:txtPg3IShed4_3B",
+        "kind": "text",
+        "label": "Item 3B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_4A",
+        "item": "4A",
+        "key": "frm1701:txtPg3IShed4_4A",
+        "kind": "text",
+        "label": "Item 4A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_4B",
+        "item": "4B",
+        "key": "frm1701:txtPg3IShed4_4B",
+        "kind": "text",
+        "label": "Item 4B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_5A",
+        "item": "5A",
+        "key": "frm1701:txtPg3IShed4_5A",
+        "kind": "text",
+        "label": "Item 5A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_5B",
+        "item": "5B",
+        "key": "frm1701:txtPg3IShed4_5B",
+        "kind": "text",
+        "label": "Item 5B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_6A",
+        "item": "6A",
+        "key": "frm1701:txtPg3IShed4_6A",
+        "kind": "text",
+        "label": "Item 6A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_6B",
+        "item": "6B",
+        "key": "frm1701:txtPg3IShed4_6B",
+        "kind": "text",
+        "label": "Item 6B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_7A",
+        "item": "7A",
+        "key": "frm1701:txtPg3IShed4_7A",
+        "kind": "text",
+        "label": "Item 7A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_7B",
+        "item": "7B",
+        "key": "frm1701:txtPg3IShed4_7B",
+        "kind": "text",
+        "label": "Item 7B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_8A",
+        "item": "8A",
+        "key": "frm1701:txtPg3IShed4_8A",
+        "kind": "text",
+        "label": "Item 8A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_8B",
+        "item": "8B",
+        "key": "frm1701:txtPg3IShed4_8B",
+        "kind": "text",
+        "label": "Item 8B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_9A",
+        "item": "9A",
+        "key": "frm1701:txtPg3IShed4_9A",
+        "kind": "text",
+        "label": "Item 9A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_9B",
+        "item": "9B",
+        "key": "frm1701:txtPg3IShed4_9B",
+        "kind": "text",
+        "label": "Item 9B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_10A",
+        "item": "10A",
+        "key": "frm1701:txtPg3IShed4_10A",
+        "kind": "text",
+        "label": "Item 10A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_10B",
+        "item": "10B",
+        "key": "frm1701:txtPg3IShed4_10B",
+        "kind": "text",
+        "label": "Item 10B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_11A",
+        "item": "11A",
+        "key": "frm1701:txtPg3IShed4_11A",
+        "kind": "text",
+        "label": "Item 11A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_11B",
+        "item": "11B",
+        "key": "frm1701:txtPg3IShed4_11B",
+        "kind": "text",
+        "label": "Item 11B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_12A",
+        "item": "12A",
+        "key": "frm1701:txtPg3IShed4_12A",
+        "kind": "text",
+        "label": "Item 12A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_12B",
+        "item": "12B",
+        "key": "frm1701:txtPg3IShed4_12B",
+        "kind": "text",
+        "label": "Item 12B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_13A",
+        "item": "13A",
+        "key": "frm1701:txtPg3IShed4_13A",
+        "kind": "text",
+        "label": "Item 13A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_13B",
+        "item": "13B",
+        "key": "frm1701:txtPg3IShed4_13B",
+        "kind": "text",
+        "label": "Item 13B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_14A",
+        "item": "14A",
+        "key": "frm1701:txtPg3IShed4_14A",
+        "kind": "text",
+        "label": "Item 14A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_14B",
+        "item": "14B",
+        "key": "frm1701:txtPg3IShed4_14B",
+        "kind": "text",
+        "label": "Item 14B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_15A",
+        "item": "15A",
+        "key": "frm1701:txtPg3IShed4_15A",
+        "kind": "text",
+        "label": "Item 15A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_15B",
+        "item": "15B",
+        "key": "frm1701:txtPg3IShed4_15B",
+        "kind": "text",
+        "label": "Item 15B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_16A",
+        "item": "16A",
+        "key": "frm1701:txtPg3IShed4_16A",
+        "kind": "text",
+        "label": "Item 16A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_16B",
+        "item": "16B",
+        "key": "frm1701:txtPg3IShed4_16B",
+        "kind": "text",
+        "label": "Item 16B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_17aA",
+        "item": "17a",
+        "key": "frm1701:txtPg3IShed4_17aA",
+        "kind": "text",
+        "label": "Item 17a",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_17aB",
+        "item": "17a",
+        "key": "frm1701:txtPg3IShed4_17aB",
+        "kind": "text",
+        "label": "Item 17a",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_17bA",
+        "item": "17b",
+        "key": "frm1701:txtPg3IShed4_17bA",
+        "kind": "text",
+        "label": "Item 17b",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_17bB",
+        "item": "17b",
+        "key": "frm1701:txtPg3IShed4_17bB",
+        "kind": "text",
+        "label": "Item 17b",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_17cA",
+        "item": "17c",
+        "key": "frm1701:txtPg3IShed4_17cA",
+        "kind": "text",
+        "label": "Item 17c",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_17cB",
+        "item": "17c",
+        "key": "frm1701:txtPg3IShed4_17cB",
+        "kind": "text",
+        "label": "Item 17c",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_17dDesc",
+        "item": "17d",
+        "key": "frm1701:txtPg3IShed4_17dDesc",
+        "kind": "text",
+        "label": "17d (description)",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_17dA",
+        "item": "17d",
+        "key": "frm1701:txtPg3IShed4_17dA",
+        "kind": "text",
+        "label": "Item 17d",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed4_17dB",
+        "item": "17d",
+        "key": "frm1701:txtPg3IShed4_17dB",
+        "kind": "text",
+        "label": "Item 17d",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed5_1Desc",
+        "item": "1D",
+        "key": "frm1701:txtPg3IShed5_1Desc",
+        "kind": "text",
+        "label": "5.A item 1, Description",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed5_1Legal",
+        "item": "1L",
+        "key": "frm1701:txtPg3IShed5_1Legal",
+        "kind": "text",
+        "label": "5.A item 1, Legal Basis",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed5_1Amt",
+        "item": "1A",
+        "key": "frm1701:txtPg3IShed5_1Amt",
+        "kind": "text",
+        "label": "Item 1A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed5_2Desc",
+        "item": "2D",
+        "key": "frm1701:txtPg3IShed5_2Desc",
+        "kind": "text",
+        "label": "5.A item 2, Description",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed5_2Legal",
+        "item": "2L",
+        "key": "frm1701:txtPg3IShed5_2Legal",
+        "kind": "text",
+        "label": "5.A item 2, Legal Basis",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed5_2Amt",
+        "item": "2A",
+        "key": "frm1701:txtPg3IShed5_2Amt",
+        "kind": "text",
+        "label": "Item 2A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed5_4Desc",
+        "item": "4D",
+        "key": "frm1701:txtPg3IShed5_4Desc",
+        "kind": "text",
+        "label": "5.B item 4, Description",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed5_4Legal",
+        "item": "4L",
+        "key": "frm1701:txtPg3IShed5_4Legal",
+        "kind": "text",
+        "label": "5.B item 4, Legal Basis",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed5_4Amt",
+        "item": "4A",
+        "key": "frm1701:txtPg3IShed5_4Amt",
+        "kind": "text",
+        "label": "Item 4A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed5_5Desc",
+        "item": "5D",
+        "key": "frm1701:txtPg3IShed5_5Desc",
+        "kind": "text",
+        "label": "5.B item 5, Description",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed5_5Legal",
+        "item": "5L",
+        "key": "frm1701:txtPg3IShed5_5Legal",
+        "kind": "text",
+        "label": "5.B item 5, Legal Basis",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed5_5Amt",
+        "item": "5A",
+        "key": "frm1701:txtPg3IShed5_5Amt",
+        "kind": "text",
+        "label": "Item 5A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_1A",
+        "item": "1A",
+        "key": "frm1701:txtPg3IShed6_1A",
+        "kind": "text",
+        "label": "Item 1A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_1B",
+        "item": "1B",
+        "key": "frm1701:txtPg3IShed6_1B",
+        "kind": "text",
+        "label": "Item 1B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_2A",
+        "item": "2A",
+        "key": "frm1701:txtPg3IShed6_2A",
+        "kind": "text",
+        "label": "Item 2A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_2B",
+        "item": "2B",
+        "key": "frm1701:txtPg3IShed6_2B",
+        "kind": "text",
+        "label": "Item 2B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_4Year",
+        "item": "4Y",
+        "key": "frm1701:txtPg3IShed6_4Year",
+        "kind": "text",
+        "label": "4 Year Incurred",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_4A",
+        "item": "4A",
+        "key": "frm1701:txtPg3IShed6_4A",
+        "kind": "text",
+        "label": "4 A. Amount",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_4B",
+        "item": "4B",
+        "key": "frm1701:txtPg3IShed6_4B",
+        "kind": "text",
+        "label": "4 B. NOLCO Applied (Previous Year/s)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_4C",
+        "item": "4C",
+        "key": "frm1701:txtPg3IShed6_4C",
+        "kind": "text",
+        "label": "4 C. NOLCO Expired (Unapplied)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_4D",
+        "item": "4D",
+        "key": "frm1701:txtPg3IShed6_4D",
+        "kind": "text",
+        "label": "4 D. NOLCO Applied (Current Year)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_5Year",
+        "item": "5Y",
+        "key": "frm1701:txtPg3IShed6_5Year",
+        "kind": "text",
+        "label": "5 Year Incurred",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_5A",
+        "item": "5A",
+        "key": "frm1701:txtPg3IShed6_5A",
+        "kind": "text",
+        "label": "5 A. Amount",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_5B",
+        "item": "5B",
+        "key": "frm1701:txtPg3IShed6_5B",
+        "kind": "text",
+        "label": "5 B. NOLCO Applied (Previous Year/s)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_5C",
+        "item": "5C",
+        "key": "frm1701:txtPg3IShed6_5C",
+        "kind": "text",
+        "label": "5 C. NOLCO Expired (Unapplied)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_5D",
+        "item": "5D",
+        "key": "frm1701:txtPg3IShed6_5D",
+        "kind": "text",
+        "label": "5 D. NOLCO Applied (Current Year)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_6Year",
+        "item": "6Y",
+        "key": "frm1701:txtPg3IShed6_6Year",
+        "kind": "text",
+        "label": "6 Year Incurred",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_6A",
+        "item": "6A",
+        "key": "frm1701:txtPg3IShed6_6A",
+        "kind": "text",
+        "label": "6 A. Amount",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_6B",
+        "item": "6B",
+        "key": "frm1701:txtPg3IShed6_6B",
+        "kind": "text",
+        "label": "6 B. NOLCO Applied (Previous Year/s)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_6C",
+        "item": "6C",
+        "key": "frm1701:txtPg3IShed6_6C",
+        "kind": "text",
+        "label": "6 C. NOLCO Expired (Unapplied)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_6D",
+        "item": "6D",
+        "key": "frm1701:txtPg3IShed6_6D",
+        "kind": "text",
+        "label": "6 D. NOLCO Applied (Current Year)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_7B",
+        "item": "7B",
+        "key": "frm1701:txtPg3IShed6_7B",
+        "kind": "text",
+        "label": "7 B. NOLCO Applied (Previous Year/s)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_7C",
+        "item": "7C",
+        "key": "frm1701:txtPg3IShed6_7C",
+        "kind": "text",
+        "label": "7 C. NOLCO Expired (Unapplied)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg3IShed6_7D",
+        "item": "7D",
+        "key": "frm1701:txtPg3IShed6_7D",
+        "kind": "text",
+        "label": "7 D. NOLCO Applied (Current Year)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_9Year",
+        "item": "9Y",
+        "key": "frm1701:txtPg4IShed6_9Year",
+        "kind": "text",
+        "label": "9 Year Incurred",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_9A",
+        "item": "9A",
+        "key": "frm1701:txtPg4IShed6_9A",
+        "kind": "text",
+        "label": "9 A. Amount",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_9B",
+        "item": "9B",
+        "key": "frm1701:txtPg4IShed6_9B",
+        "kind": "text",
+        "label": "9 B. NOLCO Applied (Previous Year/s)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_9C",
+        "item": "9C",
+        "key": "frm1701:txtPg4IShed6_9C",
+        "kind": "text",
+        "label": "9 C. NOLCO Expired (Unapplied)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_9D",
+        "item": "9D",
+        "key": "frm1701:txtPg4IShed6_9D",
+        "kind": "text",
+        "label": "9 D. NOLCO Applied (Current Year)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_10Year",
+        "item": "10Y",
+        "key": "frm1701:txtPg4IShed6_10Year",
+        "kind": "text",
+        "label": "10 Year Incurred",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_10A",
+        "item": "10A",
+        "key": "frm1701:txtPg4IShed6_10A",
+        "kind": "text",
+        "label": "10 A. Amount",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_10B",
+        "item": "10B",
+        "key": "frm1701:txtPg4IShed6_10B",
+        "kind": "text",
+        "label": "10 B. NOLCO Applied (Previous Year/s)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_10C",
+        "item": "10C",
+        "key": "frm1701:txtPg4IShed6_10C",
+        "kind": "text",
+        "label": "10 C. NOLCO Expired (Unapplied)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_10D",
+        "item": "10D",
+        "key": "frm1701:txtPg4IShed6_10D",
+        "kind": "text",
+        "label": "10 D. NOLCO Applied (Current Year)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_11Year",
+        "item": "11Y",
+        "key": "frm1701:txtPg4IShed6_11Year",
+        "kind": "text",
+        "label": "11 Year Incurred",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_11A",
+        "item": "11A",
+        "key": "frm1701:txtPg4IShed6_11A",
+        "kind": "text",
+        "label": "11 A. Amount",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_11B",
+        "item": "11B",
+        "key": "frm1701:txtPg4IShed6_11B",
+        "kind": "text",
+        "label": "11 B. NOLCO Applied (Previous Year/s)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_11C",
+        "item": "11C",
+        "key": "frm1701:txtPg4IShed6_11C",
+        "kind": "text",
+        "label": "11 C. NOLCO Expired (Unapplied)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_11D",
+        "item": "11D",
+        "key": "frm1701:txtPg4IShed6_11D",
+        "kind": "text",
+        "label": "11 D. NOLCO Applied (Current Year)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_12B",
+        "item": "12B",
+        "key": "frm1701:txtPg4IShed6_12B",
+        "kind": "text",
+        "label": "12 B. NOLCO Applied (Previous Year/s)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_12C",
+        "item": "12C",
+        "key": "frm1701:txtPg4IShed6_12C",
+        "kind": "text",
+        "label": "12 C. NOLCO Expired (Unapplied)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IShed6_12D",
+        "item": "12D",
+        "key": "frm1701:txtPg4IShed6_12D",
+        "kind": "text",
+        "label": "12 D. NOLCO Applied (Current Year)",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4ISc6_2A",
+        "item": "2A",
+        "key": "frm1701:txtPg4ISc6_2A",
+        "kind": "text",
+        "label": "Item 2A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4ISc6_2B",
+        "item": "2B",
+        "key": "frm1701:txtPg4ISc6_2B",
+        "kind": "text",
+        "label": "Item 2B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4ISc6_3A",
+        "item": "3A",
+        "key": "frm1701:txtPg4ISc6_3A",
+        "kind": "text",
+        "label": "Item 3A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4ISc6_3B",
+        "item": "3B",
+        "key": "frm1701:txtPg4ISc6_3B",
+        "kind": "text",
+        "label": "Item 3B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_1A",
+        "item": "1A",
+        "key": "frm1701:txtPg4IPart7_1A",
+        "kind": "text",
+        "label": "Item 1A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_1B",
+        "item": "1B",
+        "key": "frm1701:txtPg4IPart7_1B",
+        "kind": "text",
+        "label": "Item 1B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_2A",
+        "item": "2A",
+        "key": "frm1701:txtPg4IPart7_2A",
+        "kind": "text",
+        "label": "Item 2A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_2B",
+        "item": "2B",
+        "key": "frm1701:txtPg4IPart7_2B",
+        "kind": "text",
+        "label": "Item 2B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_3A",
+        "item": "3A",
+        "key": "frm1701:txtPg4IPart7_3A",
+        "kind": "text",
+        "label": "Item 3A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_3B",
+        "item": "3B",
+        "key": "frm1701:txtPg4IPart7_3B",
+        "kind": "text",
+        "label": "Item 3B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_4A",
+        "item": "4A",
+        "key": "frm1701:txtPg4IPart7_4A",
+        "kind": "text",
+        "label": "Item 4A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_4B",
+        "item": "4B",
+        "key": "frm1701:txtPg4IPart7_4B",
+        "kind": "text",
+        "label": "Item 4B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_6A",
+        "item": "6A",
+        "key": "frm1701:txtPg4IPart7_6A",
+        "kind": "text",
+        "label": "Item 6A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_6B",
+        "item": "6B",
+        "key": "frm1701:txtPg4IPart7_6B",
+        "kind": "text",
+        "label": "Item 6B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_7A",
+        "item": "7A",
+        "key": "frm1701:txtPg4IPart7_7A",
+        "kind": "text",
+        "label": "Item 7A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_7B",
+        "item": "7B",
+        "key": "frm1701:txtPg4IPart7_7B",
+        "kind": "text",
+        "label": "Item 7B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_8A",
+        "item": "8A",
+        "key": "frm1701:txtPg4IPart7_8A",
+        "kind": "text",
+        "label": "Item 8A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_8B",
+        "item": "8B",
+        "key": "frm1701:txtPg4IPart7_8B",
+        "kind": "text",
+        "label": "Item 8B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_9Specify",
+        "item": "9S",
+        "key": "frm1701:txtPg4IPart7_9Specify",
+        "kind": "text",
+        "label": "Part VII item 9 (specify)",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_9A",
+        "item": "9A",
+        "key": "frm1701:txtPg4IPart7_9A",
+        "kind": "text",
+        "label": "Item 9A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart7_9B",
+        "item": "9B",
+        "key": "frm1701:txtPg4IPart7_9B",
+        "kind": "text",
+        "label": "Item 9B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart8_1A",
+        "item": "1A",
+        "key": "frm1701:txtPg4IPart8_1A",
+        "kind": "text",
+        "label": "Item 1A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart8_2A",
+        "item": "2A",
+        "key": "frm1701:txtPg4IPart8_2A",
+        "kind": "text",
+        "label": "Item 2A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart8_4A",
+        "item": "4A",
+        "key": "frm1701:txtPg4IPart8_4A",
+        "kind": "text",
+        "label": "Item 4A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart8_6A",
+        "item": "6A",
+        "key": "frm1701:txtPg4IPart8_6A",
+        "kind": "text",
+        "label": "Item 6A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart8_8A",
+        "item": "8A",
+        "key": "frm1701:txtPg4IPart8_8A",
+        "kind": "text",
+        "label": "Item 8A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart8_9A",
+        "item": "9A",
+        "key": "frm1701:txtPg4IPart8_9A",
+        "kind": "text",
+        "label": "Item 9A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_1A",
+        "item": "1A",
+        "key": "frm1701:txtPg4IPart9_1A",
+        "kind": "text",
+        "label": "Item 1A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_1B",
+        "item": "1B",
+        "key": "frm1701:txtPg4IPart9_1B",
+        "kind": "text",
+        "label": "Item 1B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_2Particulars",
+        "item": "2P",
+        "key": "frm1701:txtPg4IPart9_2Particulars",
+        "kind": "text",
+        "label": "2 Add: Non-Deductible Expenses/Taxable Other Income (particulars)",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_2A",
+        "item": "2A",
+        "key": "frm1701:txtPg4IPart9_2A",
+        "kind": "text",
+        "label": "Item 2A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_2B",
+        "item": "2B",
+        "key": "frm1701:txtPg4IPart9_2B",
+        "kind": "text",
+        "label": "Item 2B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_3Particulars",
+        "item": "3P",
+        "key": "frm1701:txtPg4IPart9_3Particulars",
+        "kind": "text",
+        "label": "3 Add: Non-Deductible Expenses/Taxable Other Income (particulars)",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_3A",
+        "item": "3A",
+        "key": "frm1701:txtPg4IPart9_3A",
+        "kind": "text",
+        "label": "Item 3A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_3B",
+        "item": "3B",
+        "key": "frm1701:txtPg4IPart9_3B",
+        "kind": "text",
+        "label": "Item 3B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_4Particulars",
+        "item": "4P",
+        "key": "frm1701:txtPg4IPart9_4Particulars",
+        "kind": "text",
+        "label": "4 Add: Non-Deductible Expenses/Taxable Other Income (particulars)",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_4A",
+        "item": "4A",
+        "key": "frm1701:txtPg4IPart9_4A",
+        "kind": "text",
+        "label": "Item 4A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_4B",
+        "item": "4B",
+        "key": "frm1701:txtPg4IPart9_4B",
+        "kind": "text",
+        "label": "Item 4B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_6Particulars",
+        "item": "6P",
+        "key": "frm1701:txtPg4IPart9_6Particulars",
+        "kind": "text",
+        "label": "6 Less: A) Non-Taxable Income and Income Subjected to Final Tax (particulars)",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_6A",
+        "item": "6A",
+        "key": "frm1701:txtPg4IPart9_6A",
+        "kind": "text",
+        "label": "Item 6A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_6B",
+        "item": "6B",
+        "key": "frm1701:txtPg4IPart9_6B",
+        "kind": "text",
+        "label": "Item 6B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_7Particulars",
+        "item": "7P",
+        "key": "frm1701:txtPg4IPart9_7Particulars",
+        "kind": "text",
+        "label": "7 (particulars)",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_7A",
+        "item": "7A",
+        "key": "frm1701:txtPg4IPart9_7A",
+        "kind": "text",
+        "label": "Item 7A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_7B",
+        "item": "7B",
+        "key": "frm1701:txtPg4IPart9_7B",
+        "kind": "text",
+        "label": "Item 7B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_8Particulars",
+        "item": "8P",
+        "key": "frm1701:txtPg4IPart9_8Particulars",
+        "kind": "text",
+        "label": "8 B) Special/Other Allowable Deductions (particulars)",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_8A",
+        "item": "8A",
+        "key": "frm1701:txtPg4IPart9_8A",
+        "kind": "text",
+        "label": "Item 8A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_8B",
+        "item": "8B",
+        "key": "frm1701:txtPg4IPart9_8B",
+        "kind": "text",
+        "label": "Item 8B",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_9Particulars",
+        "item": "9P",
+        "key": "frm1701:txtPg4IPart9_9Particulars",
+        "kind": "text",
+        "label": "9 (particulars)",
+        "required": false,
+        "value": ""
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_9A",
+        "item": "9A",
+        "key": "frm1701:txtPg4IPart9_9A",
+        "kind": "text",
+        "label": "Item 9A",
+        "required": false,
+        "value": "0.00"
+      },
+      {
+        "field": "frm1701:txtPg4IPart9_9B",
+        "item": "9B",
+        "key": "frm1701:txtPg4IPart9_9B",
+        "kind": "text",
+        "label": "Item 9B",
+        "required": false,
+        "value": "0.00"
+      }
+    ],
+    "computed": 57,
+    "form": "1701",
+    "id": 3,
+    "read_only": 525,
+    "status": "Draft"
+  }
+}
+---
+{
+  "args": {
+    "discard": true
+  },
+  "error": null,
+  "invoke": "form.dismiss",
+  "label": "dismiss 1701",
+  "ok": true,
+  "result": {
+    "discarded": true,
+    "dismissed": true,
+    "form": "1701"
+  }
+}
+---
+{
+  "args": {
+    "code": "2552",
+    "period": 1,
+    "tin": "00012345300000",
+    "year": 2026
+  },
+  "error": null,
+  "invoke": "form.open",
+  "label": "reopen 2552 for part4",
+  "ok": true,
+  "result": {
+    "form": "2552",
+    "period": 1,
+    "tin": "00012345300000",
+    "year": 2026
+  }
+}
+---
+{
+  "args": {
+    "fields": {
+      "frm2552:txtPg2P4I2Amount": "500000"
+    }
+  },
+  "error": null,
+  "invoke": "form.fill",
+  "label": "2552 part4 row2 amount refusal",
+  "ok": true,
+  "result": {
+    "applied": [],
+    "filled": [],
+    "form": "2552",
+    "kept_user_boxes": [],
+    "refused": {
+      "frm2552:txtPg2P4I2Amount": "Needs Part IV row 1"
+    },
+    "source": "ai"
+  }
+}
+---

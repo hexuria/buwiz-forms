@@ -1,0 +1,196 @@
+form.fill comparison for 1701Q: one call per commit, identical input (values from the official sample payload)
+fill request keys (62):
+  frm1701q:AmendedRtn = Y
+  frm1701q:optATC = II014
+  frm1701q:optForeignTaxCredits = N
+  frm1701q:optSpouseATC = II015
+  frm1701q:optSpouseForeignTaxCred = Y
+  frm1701q:optSpouseTaxRate = Percentage
+  frm1701q:optSpouseType = Single
+  frm1701q:optTaxRate = Graduated
+  frm1701q:optType = Professional
+  frm1701q:txt36A = 1,234,567.00
+  frm1701q:txt36B = 0.00
+  frm1701q:txt37A = 345,678.00
+  frm1701q:txt37B = 0.00
+  frm1701q:txt39A = 123,456.00
+  frm1701q:txt39B = 0.00
+  frm1701q:txt42A = -1,000.51
+  frm1701q:txt42B = 0.00
+  frm1701q:txt43A = 50,000.00
+  frm1701q:txt43B = 0.00
+  frm1701q:txt43Desc = RENTAL INCOME
+  frm1701q:txt44A = 7,000.00
+  frm1701q:txt44B = 0.00
+  frm1701q:txt47A = 0.00
+  frm1701q:txt47B = 900,000.00
+  frm1701q:txt48A = 0.00
+  frm1701q:txt48B = 12,345.00
+  frm1701q:txt48Desc = INTEREST
+  frm1701q:txt50A = 0.00
+  frm1701q:txt50B = 15,000.51
+  frm1701q:txt52A = 0.00
+  frm1701q:txt52B = 250,000.00
+  frm1701q:txt55A = 10,000.00
+  frm1701q:txt55B = 0.00
+  frm1701q:txt56A = 0.00
+  frm1701q:txt56B = 4,000.00
+  frm1701q:txt57A = 0.00
+  frm1701q:txt57B = 0.00
+  frm1701q:txt58A = 0.00
+  frm1701q:txt58B = 0.00
+  frm1701q:txt59A = 2,500.00
+  frm1701q:txt59B = 0.00
+  frm1701q:txt60A = 0.00
+  frm1701q:txt60B = 0.00
+  frm1701q:txt61A = 300.00
+  frm1701q:txt61B = 0.00
+  frm1701q:txt61Desc = OTHER CREDIT
+  frm1701q:txt64A = 1,000.00
+  frm1701q:txt64B = 0.00
+  frm1701q:txt65A = 250.00
+  frm1701q:txt65B = 0.00
+  frm1701q:txt66A = 0.00
+  frm1701q:txt66B = 500.00
+  frm1701q:txtBirthDay = 17
+  frm1701q:txtBirthMonth = 05
+  frm1701q:txtBirthYear = 1985
+  frm1701q:txtCitizenship = FILIPINO
+  frm1701q:txtForeignTaxNumber = 
+  frm1701q:txtSheets = 0
+  frm1701q:txtSpouseCitizenship = FILIPINO
+  frm1701q:txtSpouseForeignTaxNum = X12345
+  frm1701q:txtSpouseName = DUMMY SPOUSE SAMPLE
+  frm1701q:txtSpouseRDOCode = 040
+
+[origin/main (3aceafe8)] filled 59:
+  frm1701q:AmendedRtn
+  frm1701q:optATC
+  frm1701q:optForeignTaxCredits
+  frm1701q:optSpouseATC
+  frm1701q:optSpouseForeignTaxCred
+  frm1701q:optSpouseTaxRate
+  frm1701q:optSpouseType
+  frm1701q:optTaxRate
+  frm1701q:optType
+  frm1701q:txt36A
+  frm1701q:txt36B
+  frm1701q:txt37A
+  frm1701q:txt37B
+  frm1701q:txt39A
+  frm1701q:txt39B
+  frm1701q:txt42A
+  frm1701q:txt42B
+  frm1701q:txt43A
+  frm1701q:txt43B
+  frm1701q:txt43Desc
+  frm1701q:txt44A
+  frm1701q:txt44B
+  frm1701q:txt47A
+  frm1701q:txt47B
+  frm1701q:txt48A
+  frm1701q:txt48B
+  frm1701q:txt48Desc
+  frm1701q:txt50A
+  frm1701q:txt50B
+  frm1701q:txt52A
+  frm1701q:txt52B
+  frm1701q:txt55A
+  frm1701q:txt55B
+  frm1701q:txt56A
+  frm1701q:txt56B
+  frm1701q:txt57A
+  frm1701q:txt57B
+  frm1701q:txt58A
+  frm1701q:txt58B
+  frm1701q:txt59A
+  frm1701q:txt59B
+  frm1701q:txt60A
+  frm1701q:txt60B
+  frm1701q:txt61A
+  frm1701q:txt61B
+  frm1701q:txt61Desc
+  frm1701q:txt64B
+  frm1701q:txt65B
+  frm1701q:txt66B
+  frm1701q:txtBirthDay
+  frm1701q:txtBirthMonth
+  frm1701q:txtBirthYear
+  frm1701q:txtCitizenship
+  frm1701q:txtForeignTaxNumber
+  frm1701q:txtSheets
+  frm1701q:txtSpouseCitizenship
+  frm1701q:txtSpouseForeignTaxNum
+  frm1701q:txtSpouseName
+  frm1701q:txtSpouseRDOCode
+[origin/main (3aceafe8)] refused 3:
+  frm1701q:txt64A => `frm1701q:txt64A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701q:txt65A => `frm1701q:txt65A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701q:txt66A => `frm1701q:txt66A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+
+[afe7bc34] filled 42:
+  frm1701q:AmendedRtn
+  frm1701q:optATC
+  frm1701q:optForeignTaxCredits
+  frm1701q:optTaxRate
+  frm1701q:optType
+  frm1701q:txt36A
+  frm1701q:txt36B
+  frm1701q:txt37B
+  frm1701q:txt39B
+  frm1701q:txt42A
+  frm1701q:txt42B
+  frm1701q:txt43A
+  frm1701q:txt43B
+  frm1701q:txt43Desc
+  frm1701q:txt44A
+  frm1701q:txt44B
+  frm1701q:txt47A
+  frm1701q:txt48A
+  frm1701q:txt50A
+  frm1701q:txt52A
+  frm1701q:txt55A
+  frm1701q:txt55B
+  frm1701q:txt56A
+  frm1701q:txt57A
+  frm1701q:txt57B
+  frm1701q:txt58A
+  frm1701q:txt58B
+  frm1701q:txt59A
+  frm1701q:txt59B
+  frm1701q:txt60A
+  frm1701q:txt60B
+  frm1701q:txt61A
+  frm1701q:txt61B
+  frm1701q:txt61Desc
+  frm1701q:txt64B
+  frm1701q:txt65B
+  frm1701q:txtBirthDay
+  frm1701q:txtBirthMonth
+  frm1701q:txtBirthYear
+  frm1701q:txtCitizenship
+  frm1701q:txtForeignTaxNumber
+  frm1701q:txtSheets
+[afe7bc34] refused 20:
+  frm1701q:optSpouseATC => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:optSpouseForeignTaxCred => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:optSpouseTaxRate => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:optSpouseType => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:txt37A => Needs the graduated income tax rate and itemized deductions
+  frm1701q:txt39A => Needs the graduated income tax rate and itemized deductions
+  frm1701q:txt47B => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:txt48B => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:txt48Desc => Item 48 is Schedule II's: choose the 8% rate at item 16 (or item 25 for the spouse) first.
+  frm1701q:txt50B => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:txt52B => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:txt56B => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:txt64A => `frm1701q:txt64A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701q:txt65A => `frm1701q:txt65A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701q:txt66A => `frm1701q:txt66A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701q:txt66B => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:txtSpouseCitizenship => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:txtSpouseForeignTaxNum => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:txtSpouseName => Part II and column B are for a married filer: choose Married at Civil Status first.
+  frm1701q:txtSpouseRDOCode => Part II and column B are for a married filer: choose Married at Civil Status first.
+
+validate errors: afe7bc34 4 / main 4

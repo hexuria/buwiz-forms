@@ -1,0 +1,46 @@
+form.fill comparison for 1601EQ: one call per commit, identical input (values from the official sample payload)
+fill request keys (12):
+  frm1601EQ:optAmend = N
+  frm1601EQ:optCategory = P
+  frm1601EQ:optWithheld = Y
+  frm1601EQ:txtAtcCd8 = WC160
+  frm1601EQ:txtNoSheets = 0
+  frm1601EQ:txtTax20 = 1,000.00
+  frm1601EQ:txtTax21 = 2,000.51
+  frm1601EQ:txtTax22 = 0.00
+  frm1601EQ:txtTax23 = 0.00
+  frm1601EQ:txtTax26 = 25.50
+  frm1601EQ:txtTax27 = 10.00
+  frm1601EQ:txtTax28 = 0.00
+
+[origin/main (3aceafe8)] filled 8:
+  frm1601EQ:optAmend
+  frm1601EQ:optCategory
+  frm1601EQ:optWithheld
+  frm1601EQ:txtNoSheets
+  frm1601EQ:txtTax20
+  frm1601EQ:txtTax21
+  frm1601EQ:txtTax22
+  frm1601EQ:txtTax23
+[origin/main (3aceafe8)] refused 4:
+  frm1601EQ:txtAtcCd8 => `frm1601EQ:txtAtcCd8` cannot be filled from here: it is written through the form's own editors
+  frm1601EQ:txtTax26 => `frm1601EQ:txtTax26` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1601EQ:txtTax27 => `frm1601EQ:txtTax27` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1601EQ:txtTax28 => `frm1601EQ:txtTax28` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+
+[afe7bc34] filled 8:
+  frm1601EQ:optAmend
+  frm1601EQ:optCategory
+  frm1601EQ:optWithheld
+  frm1601EQ:txtNoSheets
+  frm1601EQ:txtTax20
+  frm1601EQ:txtTax21
+  frm1601EQ:txtTax22
+  frm1601EQ:txtTax23
+[afe7bc34] refused 4:
+  frm1601EQ:txtAtcCd8 => `frm1601EQ:txtAtcCd8` cannot be filled from here: it is written through the form's own editors
+  frm1601EQ:txtTax26 => `frm1601EQ:txtTax26` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1601EQ:txtTax27 => `frm1601EQ:txtTax27` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1601EQ:txtTax28 => `frm1601EQ:txtTax28` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+
+validate errors: afe7bc34 6 / main 6

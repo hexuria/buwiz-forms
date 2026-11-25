@@ -1,0 +1,235 @@
+form.fill comparison for 1701A: one call per commit, identical input (values from the official sample payload)
+fill request keys (75):
+  frm1701A:optATC_1 = true
+  frm1701A:optATC_2 = true
+  frm1701A:optATC_3 = true
+  frm1701A:optATC_4 = true
+  frm1701A:optAmendedReturn = 2
+  frm1701A:optCivilStatus = 1
+  frm1701A:optForeignTaxCredits = 2
+  frm1701A:optShortPeriod = 2
+  frm1701A:optSpouseATC_1 = true
+  frm1701A:optSpouseATC_2 = true
+  frm1701A:optSpouseATC_3 = true
+  frm1701A:optSpouseATC_4 = true
+  frm1701A:optSpouseTaxRate_1 = true
+  frm1701A:optSpouseTaxRate_2 = true
+  frm1701A:optTaxRate_1 = true
+  frm1701A:optTaxRate_2 = true
+  frm1701A:optTaxType = 1
+  frm1701A:txt23A = 0.00
+  frm1701A:txt23B = 0
+  frm1701A:txt25A = 1,000.00
+  frm1701A:txt25B = 0
+  frm1701A:txt26A = 0.00
+  frm1701A:txt26B = 0
+  frm1701A:txt27A = 0.00
+  frm1701A:txt27B = 0
+  frm1701A:txt36A = 1,234,567.89
+  frm1701A:txt36B = 0.00
+  frm1701A:txt37A = 10,000.50
+  frm1701A:txt37B = 0.00
+  frm1701A:txt41A = 5,000.55
+  frm1701A:txt41B = 0.00
+  frm1701A:txt41Desc = Interest income
+  frm1701A:txt42B = 0.00
+  frm1701A:txt42Desc = 
+  frm1701A:txt43A = 20,000.00
+  frm1701A:txt43B = 0.00
+  frm1701A:txt47A = 0
+  frm1701A:txt47B = 0.00
+  frm1701A:txt48A = 0
+  frm1701A:txt48B = 0.00
+  frm1701A:txt50A = 0
+  frm1701A:txt50B = 0.00
+  frm1701A:txt50Desc = 
+  frm1701A:txt51B = 0.00
+  frm1701A:txt51Desc = 
+  frm1701A:txt54A = 0
+  frm1701A:txt54B = 0.00
+  frm1701A:txt57A = 1,000.00
+  frm1701A:txt57B = 0
+  frm1701A:txt58A = 30,000.00
+  frm1701A:txt58B = 0
+  frm1701A:txt59A = 5,000.25
+  frm1701A:txt59B = 0
+  frm1701A:txt60A = 2,500.00
+  frm1701A:txt60B = 0
+  frm1701A:txt61A = 0
+  frm1701A:txt61B = 0
+  frm1701A:txt62A = 0
+  frm1701A:txt62B = 0.00
+  frm1701A:txt63A = 100.00
+  frm1701A:txt63B = 0
+  frm1701A:txt63Desc = Sample credit
+  frm1701A:txtBirthDate = 01/15/1980
+  frm1701A:txtCitizenship = Filipino
+  frm1701A:txtForeignTaxNumber = 
+  frm1701A:txtMonth = 12
+  frm1701A:txtNumberAttachments = 0
+  frm1701A:txtPg2TaxpayerName = DUMMY
+  frm1701A:txtSpouseCitizenship = 
+  frm1701A:txtSpouseFTN = 
+  frm1701A:txtSpouseName = 
+  frm1701A:txtSpouseRDOCode = 000
+  frm1701A:txtSpouseTelNum = 
+  frm1701A:txtTaxpayerName = DUMMY, SAMPLE TAXPAYER
+  frm1701A:txtmodalPartIVA_C2 = 0.00
+
+[origin/main (3aceafe8)] filled 67:
+  frm1701A:optATC_1
+  frm1701A:optATC_2
+  frm1701A:optATC_3
+  frm1701A:optATC_4
+  frm1701A:optAmendedReturn
+  frm1701A:optCivilStatus
+  frm1701A:optForeignTaxCredits
+  frm1701A:optShortPeriod
+  frm1701A:optSpouseATC_1
+  frm1701A:optSpouseATC_2
+  frm1701A:optSpouseATC_3
+  frm1701A:optSpouseATC_4
+  frm1701A:optSpouseTaxRate_1
+  frm1701A:optSpouseTaxRate_2
+  frm1701A:optTaxRate_1
+  frm1701A:optTaxRate_2
+  frm1701A:optTaxType
+  frm1701A:txt23A
+  frm1701A:txt23B
+  frm1701A:txt36A
+  frm1701A:txt36B
+  frm1701A:txt37A
+  frm1701A:txt37B
+  frm1701A:txt41A
+  frm1701A:txt41B
+  frm1701A:txt41Desc
+  frm1701A:txt42B
+  frm1701A:txt42Desc
+  frm1701A:txt43A
+  frm1701A:txt43B
+  frm1701A:txt47A
+  frm1701A:txt47B
+  frm1701A:txt48A
+  frm1701A:txt48B
+  frm1701A:txt50A
+  frm1701A:txt50B
+  frm1701A:txt50Desc
+  frm1701A:txt51B
+  frm1701A:txt51Desc
+  frm1701A:txt54A
+  frm1701A:txt54B
+  frm1701A:txt57A
+  frm1701A:txt57B
+  frm1701A:txt58A
+  frm1701A:txt58B
+  frm1701A:txt59A
+  frm1701A:txt59B
+  frm1701A:txt60A
+  frm1701A:txt60B
+  frm1701A:txt61A
+  frm1701A:txt61B
+  frm1701A:txt62A
+  frm1701A:txt62B
+  frm1701A:txt63A
+  frm1701A:txt63B
+  frm1701A:txt63Desc
+  frm1701A:txtBirthDate
+  frm1701A:txtCitizenship
+  frm1701A:txtForeignTaxNumber
+  frm1701A:txtMonth
+  frm1701A:txtNumberAttachments
+  frm1701A:txtSpouseCitizenship
+  frm1701A:txtSpouseFTN
+  frm1701A:txtSpouseName
+  frm1701A:txtSpouseRDOCode
+  frm1701A:txtSpouseTelNum
+  frm1701A:txtmodalPartIVA_C2
+[origin/main (3aceafe8)] refused 8:
+  frm1701A:txt25A => `frm1701A:txt25A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701A:txt25B => `frm1701A:txt25B` computed; not part of this return as it stands
+  frm1701A:txt26A => `frm1701A:txt26A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701A:txt26B => `frm1701A:txt26B` computed; not part of this return as it stands
+  frm1701A:txt27A => `frm1701A:txt27A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701A:txt27B => `frm1701A:txt27B` computed; not part of this return as it stands
+  frm1701A:txtPg2TaxpayerName => `frm1701A:txtPg2TaxpayerName` comes from the taxpayer profile; change it in the profile
+  frm1701A:txtTaxpayerName => `frm1701A:txtTaxpayerName` comes from the taxpayer profile; change it in the profile
+
+[afe7bc34] filled 67:
+  frm1701A:optATC_1
+  frm1701A:optATC_2
+  frm1701A:optATC_3
+  frm1701A:optATC_4
+  frm1701A:optAmendedReturn
+  frm1701A:optCivilStatus
+  frm1701A:optForeignTaxCredits
+  frm1701A:optShortPeriod
+  frm1701A:optSpouseATC_1
+  frm1701A:optSpouseATC_2
+  frm1701A:optSpouseATC_3
+  frm1701A:optSpouseATC_4
+  frm1701A:optSpouseTaxRate_1
+  frm1701A:optSpouseTaxRate_2
+  frm1701A:optTaxRate_1
+  frm1701A:optTaxRate_2
+  frm1701A:optTaxType
+  frm1701A:txt23A
+  frm1701A:txt23B
+  frm1701A:txt36A
+  frm1701A:txt36B
+  frm1701A:txt37A
+  frm1701A:txt37B
+  frm1701A:txt41A
+  frm1701A:txt41B
+  frm1701A:txt41Desc
+  frm1701A:txt42B
+  frm1701A:txt42Desc
+  frm1701A:txt43A
+  frm1701A:txt43B
+  frm1701A:txt47A
+  frm1701A:txt47B
+  frm1701A:txt48A
+  frm1701A:txt48B
+  frm1701A:txt50A
+  frm1701A:txt50B
+  frm1701A:txt50Desc
+  frm1701A:txt51B
+  frm1701A:txt51Desc
+  frm1701A:txt54A
+  frm1701A:txt54B
+  frm1701A:txt57A
+  frm1701A:txt57B
+  frm1701A:txt58A
+  frm1701A:txt58B
+  frm1701A:txt59A
+  frm1701A:txt59B
+  frm1701A:txt60A
+  frm1701A:txt60B
+  frm1701A:txt61A
+  frm1701A:txt61B
+  frm1701A:txt62A
+  frm1701A:txt62B
+  frm1701A:txt63A
+  frm1701A:txt63B
+  frm1701A:txt63Desc
+  frm1701A:txtBirthDate
+  frm1701A:txtCitizenship
+  frm1701A:txtForeignTaxNumber
+  frm1701A:txtMonth
+  frm1701A:txtNumberAttachments
+  frm1701A:txtSpouseCitizenship
+  frm1701A:txtSpouseFTN
+  frm1701A:txtSpouseName
+  frm1701A:txtSpouseRDOCode
+  frm1701A:txtSpouseTelNum
+  frm1701A:txtmodalPartIVA_C2
+[afe7bc34] refused 8:
+  frm1701A:txt25A => `frm1701A:txt25A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701A:txt25B => `frm1701A:txt25B` computed; not part of this return as it stands
+  frm1701A:txt26A => `frm1701A:txt26A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701A:txt26B => `frm1701A:txt26B` computed; not part of this return as it stands
+  frm1701A:txt27A => `frm1701A:txt27A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701A:txt27B => `frm1701A:txt27B` computed; not part of this return as it stands
+  frm1701A:txtPg2TaxpayerName => `frm1701A:txtPg2TaxpayerName` comes from the taxpayer profile; change it in the profile
+  frm1701A:txtTaxpayerName => `frm1701A:txtTaxpayerName` comes from the taxpayer profile; change it in the profile
+
+validate errors: afe7bc34 4 / main 4

@@ -1,0 +1,34 @@
+form.fill comparison for 0619E: one call per commit, identical input (values from the official sample payload)
+fill request keys (8):
+  frm0619E:optAmend = Y
+  frm0619E:optWithheld = Y
+  frm0619E:txtDueDay = 10
+  frm0619E:txtTax14 = 123,456.79
+  frm0619E:txtTax15 = 1,000.01
+  frm0619E:txtTax17A = 25.50
+  frm0619E:txtTax17B = 10.00
+  frm0619E:txtTax17C = 1,000.00
+
+[origin/main (3aceafe8)] filled 5:
+  frm0619E:optAmend
+  frm0619E:optWithheld
+  frm0619E:txtDueDay
+  frm0619E:txtTax14
+  frm0619E:txtTax15
+[origin/main (3aceafe8)] refused 3:
+  frm0619E:txtTax17A => `frm0619E:txtTax17A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm0619E:txtTax17B => `frm0619E:txtTax17B` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm0619E:txtTax17C => `frm0619E:txtTax17C` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+
+[afe7bc34] filled 5:
+  frm0619E:optAmend
+  frm0619E:optWithheld
+  frm0619E:txtDueDay
+  frm0619E:txtTax14
+  frm0619E:txtTax15
+[afe7bc34] refused 3:
+  frm0619E:txtTax17A => `frm0619E:txtTax17A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm0619E:txtTax17B => `frm0619E:txtTax17B` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm0619E:txtTax17C => `frm0619E:txtTax17C` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+
+validate errors: afe7bc34 4 / main 4

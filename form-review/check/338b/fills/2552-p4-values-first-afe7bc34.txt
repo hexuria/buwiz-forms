@@ -1,0 +1,75 @@
+{
+  "args": {
+    "name": "Juana Santos",
+    "rdo_code": "039",
+    "tin": "00012345300000"
+  },
+  "error": null,
+  "invoke": "profile.save",
+  "label": "profile.save",
+  "ok": true,
+  "result": {
+    "created": true,
+    "name": "Juana Santos",
+    "status": "ok",
+    "tin": "00012345300000"
+  }
+}
+---
+{
+  "args": {
+    "code": "2552",
+    "period": 1,
+    "tin": "00012345300000",
+    "year": 2026
+  },
+  "error": null,
+  "invoke": "form.open",
+  "label": "open",
+  "ok": true,
+  "result": {
+    "form": "2552",
+    "period": 1,
+    "tin": "00012345300000",
+    "year": 2026
+  }
+}
+---
+{
+  "args": {
+    "fields": {
+      "frm2552:rdoPg1I11Transaction": "Primary",
+      "frm2552:txtPg1Pt1I12TotShare": "1000000",
+      "frm2552:txtPg2P4I1Amount": "250000",
+      "frm2552:txtPg2P4I1TransClass": "Gift",
+      "frm2552:txtPg2P4I2Amount": "500000",
+      "frm2552:txtPg2P4I2TransClass": "Swap"
+    }
+  },
+  "error": null,
+  "invoke": "form.fill",
+  "label": "one-call-values-first",
+  "ok": true,
+  "result": {
+    "applied": [
+      "frm2552:rdoPg1I11Transaction",
+      "frm2552:txtPg1Pt1I12TotShare",
+      "frm2552:txtPg2P4I1Amount",
+      "frm2552:txtPg2P4I1TransClass",
+      "frm2552:txtPg2P4I2Amount",
+      "frm2552:txtPg2P4I2TransClass"
+    ],
+    "filled": [
+      "frm2552:rdoPg1I11Transaction",
+      "frm2552:txtPg1Pt1I12TotShare",
+      "frm2552:txtPg2P4I1Amount",
+      "frm2552:txtPg2P4I1TransClass",
+      "frm2552:txtPg2P4I2Amount",
+      "frm2552:txtPg2P4I2TransClass"
+    ],
+    "form": "2552",
+    "kept_user_boxes": [],
+    "source": "ai"
+  }
+}
+---

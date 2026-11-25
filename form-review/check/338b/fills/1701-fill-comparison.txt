@@ -1,0 +1,691 @@
+form.fill comparison for 1701: one call per commit, identical input (values from the official sample payload)
+fill request keys (227):
+  frm1701:chkPg2IShed1a_1Spouse = false
+  frm1701:chkPg2IShed1a_1Taxpayer = false
+  frm1701:chkPg2IShed2a_2Spouse = false
+  frm1701:chkPg2IShed2a_2Taxpayer = false
+  frm1701:rdoPg1I13ForeignTaxCredits = No
+  frm1701:rdoPg1I16CivilStatus = S
+  frm1701:rdoPg1I17SpouseIncome = No
+  frm1701:rdoPg1I19IncomeExempt = No
+  frm1701:rdoPg1I20IncomeSpecial = No
+  frm1701:rdoPg1I21AMethodDeduction = O
+  frm1701:rdoPg1I21TaxRateG = true
+  frm1701:rdoPg1I21TaxRateP = true
+  frm1701:rdoPg1I2Amended = No
+  frm1701:rdoPg1I3ShortPeriod = No
+  frm1701:rdoPg1I6TaxpayerType = S
+  frm1701:rdoPg1I6TaxpayerTypeC = true
+  frm1701:rdoPg1I7ATC_II011 = true
+  frm1701:rdoPg1I7ATC_II012 = true
+  frm1701:rdoPg1I7ATC_II013 = true
+  frm1701:rdoPg1I7ATC_II014 = true
+  frm1701:rdoPg1I7ATC_II015 = true
+  frm1701:rdoPg1I7ATC_II016 = true
+  frm1701:rdoPg1I7ATC_II017 = true
+  frm1701:rdoPg2I10IncomeExempt = No
+  frm1701:rdoPg2I11IncomeSpecial = No
+  frm1701:rdoPg2I12TaxRateG = true
+  frm1701:rdoPg2I12TaxRateP = true
+  frm1701:rdoPg2I3SpouseTypeC = false
+  frm1701:rdoPg2I4ATC_II011 = true
+  frm1701:rdoPg2I4ATC_II012 = true
+  frm1701:rdoPg2I4ATC_II013 = true
+  frm1701:rdoPg2I4ATC_II014 = true
+  frm1701:rdoPg2I4ATC_II015 = true
+  frm1701:rdoPg2I4ATC_II016 = true
+  frm1701:rdoPg2I4ATC_II017 = true
+  frm1701:rdoPg2I8ForeignTaxCredits = No
+  frm1701:txtPg1I10BirthDate = 01/15/1980
+  frm1701:txtPg1I12Citizenship = FILIPINO
+  frm1701:txtPg1I14ForeignTaxNumber = 
+  frm1701:txtPg1I25A = 0.00
+  frm1701:txtPg1I25B = 0.00
+  frm1701:txtPg1I27A = 500.00
+  frm1701:txtPg1I27B = 0.00
+  frm1701:txtPg1I28A = 250.25
+  frm1701:txtPg1I28B = 0.00
+  frm1701:txtPg1I29A = 0.00
+  frm1701:txtPg1I29B = 0.00
+  frm1701:txtPg1I33NumberOfAttachments = 00
+  frm1701:txtPg2I2SpouseRDOCode = 000
+  frm1701:txtPg2I5SpouseName = 
+  frm1701:txtPg2I6TelNum = 
+  frm1701:txtPg2I7Citizenship = 
+  frm1701:txtPg2I9ForeignTaxNumber = 
+  frm1701:txtPg2IShed1a_1SName = 
+  frm1701:txtPg2IShed1a_1TPName = SAMPLE EMPLOYER, INC.
+  frm1701:txtPg2IShed1c_1CI = 480,000.01
+  frm1701:txtPg2IShed1c_1TW = 25,000.00
+  frm1701:txtPg2IShed1c_2CI = 0.00
+  frm1701:txtPg2IShed1c_2TW = 0.00
+  frm1701:txtPg2IShed2_5A = 90,000.00
+  frm1701:txtPg2IShed2_5B = 0.00
+  frm1701:txtPg2IShed2a_2SName = 
+  frm1701:txtPg2IShed2a_2TPName = 
+  frm1701:txtPg2IShed3_11A = 0.00
+  frm1701:txtPg2IShed3_11B = 0.00
+  frm1701:txtPg2IShed3_19A = 12,345.67
+  frm1701:txtPg2IShed3_19B = 0.00
+  frm1701:txtPg2IShed3_19Desc = RENTAL INCOME
+  frm1701:txtPg2IShed3_20A = 0.00
+  frm1701:txtPg2IShed3_20B = 0.00
+  frm1701:txtPg2IShed3_20Desc = 
+  frm1701:txtPg2IShed3_21A = 0.00
+  frm1701:txtPg2IShed3_21B = 0.00
+  frm1701:txtPg2IShed3_8A = 1,250,000.50
+  frm1701:txtPg2IShed3_8B = 0.00
+  frm1701:txtPg2IShed3_9A = 300,000.25
+  frm1701:txtPg2IShed3_9B = 0.00
+  frm1701:txtPg3IShed3_26A = 0.00
+  frm1701:txtPg3IShed3_26B = 0.00
+  frm1701:txtPg3IShed3_27A = 0.00
+  frm1701:txtPg3IShed3_27B = 0.00
+  frm1701:txtPg3IShed3_27Desc = 
+  frm1701:txtPg3IShed3_29A = 0.00
+  frm1701:txtPg3IShed3_29B = 0.00
+  frm1701:txtPg3IShed4_10A = 0.00
+  frm1701:txtPg3IShed4_10B = 0.00
+  frm1701:txtPg3IShed4_11A = 0.00
+  frm1701:txtPg3IShed4_11B = 0.00
+  frm1701:txtPg3IShed4_12A = 0.00
+  frm1701:txtPg3IShed4_12B = 0.00
+  frm1701:txtPg3IShed4_13A = 0.00
+  frm1701:txtPg3IShed4_13B = 0.00
+  frm1701:txtPg3IShed4_14A = 0.00
+  frm1701:txtPg3IShed4_14B = 0.00
+  frm1701:txtPg3IShed4_15A = 0.00
+  frm1701:txtPg3IShed4_15B = 0.00
+  frm1701:txtPg3IShed4_16A = 0.00
+  frm1701:txtPg3IShed4_16B = 0.00
+  frm1701:txtPg3IShed4_17aA = 0.00
+  frm1701:txtPg3IShed4_17aB = 0.00
+  frm1701:txtPg3IShed4_17bA = 0.00
+  frm1701:txtPg3IShed4_17bB = 0.00
+  frm1701:txtPg3IShed4_17cA = 0.00
+  frm1701:txtPg3IShed4_17cB = 0.00
+  frm1701:txtPg3IShed4_17dA = 0.00
+  frm1701:txtPg3IShed4_17dB = 0.00
+  frm1701:txtPg3IShed4_17dDesc = 
+  frm1701:txtPg3IShed4_1A = 0.00
+  frm1701:txtPg3IShed4_1B = 0.00
+  frm1701:txtPg3IShed4_2A = 0.00
+  frm1701:txtPg3IShed4_2B = 0.00
+  frm1701:txtPg3IShed4_3A = 0.00
+  frm1701:txtPg3IShed4_3B = 0.00
+  frm1701:txtPg3IShed4_4A = 0.00
+  frm1701:txtPg3IShed4_4B = 0.00
+  frm1701:txtPg3IShed4_5A = 0.00
+  frm1701:txtPg3IShed4_5B = 0.00
+  frm1701:txtPg3IShed4_6A = 0.00
+  frm1701:txtPg3IShed4_6B = 0.00
+  frm1701:txtPg3IShed4_7A = 0.00
+  frm1701:txtPg3IShed4_7B = 0.00
+  frm1701:txtPg3IShed4_8A = 0.00
+  frm1701:txtPg3IShed4_8B = 0.00
+  frm1701:txtPg3IShed4_9A = 0.00
+  frm1701:txtPg3IShed4_9B = 0.00
+  frm1701:txtPg3IShed5_1Amt = 0.00
+  frm1701:txtPg3IShed5_1Desc = 
+  frm1701:txtPg3IShed5_1Legal = 
+  frm1701:txtPg3IShed5_2Amt = 0.00
+  frm1701:txtPg3IShed5_2Desc = 
+  frm1701:txtPg3IShed5_2Legal = 
+  frm1701:txtPg3IShed5_4Amt = 0.00
+  frm1701:txtPg3IShed5_4Desc = 
+  frm1701:txtPg3IShed5_4Legal = 
+  frm1701:txtPg3IShed5_5Amt = 0.00
+  frm1701:txtPg3IShed5_5Desc = 
+  frm1701:txtPg3IShed5_5Legal = 
+  frm1701:txtPg3IShed6_1A = 0.00
+  frm1701:txtPg3IShed6_1B = 0.00
+  frm1701:txtPg3IShed6_2A = 0.00
+  frm1701:txtPg3IShed6_2B = 0.00
+  frm1701:txtPg3IShed6_4A = 0.00
+  frm1701:txtPg3IShed6_4B = 0.00
+  frm1701:txtPg3IShed6_4C = 0.00
+  frm1701:txtPg3IShed6_4D = 0.00
+  frm1701:txtPg3IShed6_4Year = 
+  frm1701:txtPg3IShed6_5A = 0.00
+  frm1701:txtPg3IShed6_5B = 0.00
+  frm1701:txtPg3IShed6_5C = 0.00
+  frm1701:txtPg3IShed6_5D = 0.00
+  frm1701:txtPg3IShed6_5Year = 
+  frm1701:txtPg3IShed6_6A = 0.00
+  frm1701:txtPg3IShed6_6B = 0.00
+  frm1701:txtPg3IShed6_6C = 0.00
+  frm1701:txtPg3IShed6_6D = 0.00
+  frm1701:txtPg3IShed6_6Year = 
+  frm1701:txtPg3IShed6_7B = 0.00
+  frm1701:txtPg3IShed6_7C = 0.00
+  frm1701:txtPg3IShed6_7D = 0.00
+  frm1701:txtPg4IPart7_1A = 10,000.00
+  frm1701:txtPg4IPart7_1B = 0.00
+  frm1701:txtPg4IPart7_2A = 20,000.50
+  frm1701:txtPg4IPart7_2B = 0.00
+  frm1701:txtPg4IPart7_3A = 0.00
+  frm1701:txtPg4IPart7_3B = 0.00
+  frm1701:txtPg4IPart7_4A = 0.00
+  frm1701:txtPg4IPart7_4B = 0.00
+  frm1701:txtPg4IPart7_6A = 0.00
+  frm1701:txtPg4IPart7_6B = 0.00
+  frm1701:txtPg4IPart7_7A = 0.00
+  frm1701:txtPg4IPart7_7B = 0.00
+  frm1701:txtPg4IPart7_8A = 0.00
+  frm1701:txtPg4IPart7_8B = 0.00
+  frm1701:txtPg4IPart7_9A = 0.00
+  frm1701:txtPg4IPart7_9B = 0.00
+  frm1701:txtPg4IPart7_9Specify = 
+  frm1701:txtPg4IPart8_1A = 0.00
+  frm1701:txtPg4IPart8_2A = 0.00
+  frm1701:txtPg4IPart8_4A = 0.00
+  frm1701:txtPg4IPart8_6A = 0.00
+  frm1701:txtPg4IPart8_8A = 0.00
+  frm1701:txtPg4IPart8_9A = 0.00
+  frm1701:txtPg4IPart9_1A = 0.00
+  frm1701:txtPg4IPart9_1B = 0.00
+  frm1701:txtPg4IPart9_2A = 0.00
+  frm1701:txtPg4IPart9_2B = 0.00
+  frm1701:txtPg4IPart9_2Particulars = 
+  frm1701:txtPg4IPart9_3A = 0.00
+  frm1701:txtPg4IPart9_3B = 0.00
+  frm1701:txtPg4IPart9_3Particulars = 
+  frm1701:txtPg4IPart9_4A = 0.00
+  frm1701:txtPg4IPart9_4B = 0.00
+  frm1701:txtPg4IPart9_4Particulars = 
+  frm1701:txtPg4IPart9_6A = 0.00
+  frm1701:txtPg4IPart9_6B = 0.00
+  frm1701:txtPg4IPart9_6Particulars = 
+  frm1701:txtPg4IPart9_7A = 0.00
+  frm1701:txtPg4IPart9_7B = 0.00
+  frm1701:txtPg4IPart9_7Particulars = 
+  frm1701:txtPg4IPart9_8A = 0.00
+  frm1701:txtPg4IPart9_8B = 0.00
+  frm1701:txtPg4IPart9_8Particulars = 
+  frm1701:txtPg4IPart9_9A = 0.00
+  frm1701:txtPg4IPart9_9B = 0.00
+  frm1701:txtPg4IPart9_9Particulars = 
+  frm1701:txtPg4ISc6_2A = 0.00
+  frm1701:txtPg4ISc6_2B = 0.00
+  frm1701:txtPg4ISc6_3A = 0.00
+  frm1701:txtPg4ISc6_3B = 0.00
+  frm1701:txtPg4IShed6_10A = 0.00
+  frm1701:txtPg4IShed6_10B = 0.00
+  frm1701:txtPg4IShed6_10C = 0.00
+  frm1701:txtPg4IShed6_10D = 0.00
+  frm1701:txtPg4IShed6_10Year = 
+  frm1701:txtPg4IShed6_11A = 0.00
+  frm1701:txtPg4IShed6_11B = 0.00
+  frm1701:txtPg4IShed6_11C = 0.00
+  frm1701:txtPg4IShed6_11D = 0.00
+  frm1701:txtPg4IShed6_11Year = 
+  frm1701:txtPg4IShed6_12B = 0.00
+  frm1701:txtPg4IShed6_12C = 0.00
+  frm1701:txtPg4IShed6_12D = 0.00
+  frm1701:txtPg4IShed6_9A = 0.00
+  frm1701:txtPg4IShed6_9B = 0.00
+  frm1701:txtPg4IShed6_9C = 0.00
+  frm1701:txtPg4IShed6_9D = 0.00
+  frm1701:txtPg4IShed6_9Year = 
+
+[origin/main (3aceafe8)] filled 221:
+  frm1701:chkPg2IShed1a_1Spouse
+  frm1701:chkPg2IShed1a_1Taxpayer
+  frm1701:chkPg2IShed2a_2Spouse
+  frm1701:chkPg2IShed2a_2Taxpayer
+  frm1701:rdoPg1I13ForeignTaxCredits
+  frm1701:rdoPg1I16CivilStatus
+  frm1701:rdoPg1I17SpouseIncome
+  frm1701:rdoPg1I19IncomeExempt
+  frm1701:rdoPg1I20IncomeSpecial
+  frm1701:rdoPg1I21AMethodDeduction
+  frm1701:rdoPg1I21TaxRateG
+  frm1701:rdoPg1I21TaxRateP
+  frm1701:rdoPg1I2Amended
+  frm1701:rdoPg1I3ShortPeriod
+  frm1701:rdoPg1I6TaxpayerType
+  frm1701:rdoPg1I6TaxpayerTypeC
+  frm1701:rdoPg1I7ATC_II011
+  frm1701:rdoPg1I7ATC_II012
+  frm1701:rdoPg1I7ATC_II013
+  frm1701:rdoPg1I7ATC_II014
+  frm1701:rdoPg1I7ATC_II015
+  frm1701:rdoPg1I7ATC_II016
+  frm1701:rdoPg1I7ATC_II017
+  frm1701:rdoPg2I10IncomeExempt
+  frm1701:rdoPg2I11IncomeSpecial
+  frm1701:rdoPg2I12TaxRateG
+  frm1701:rdoPg2I12TaxRateP
+  frm1701:rdoPg2I3SpouseTypeC
+  frm1701:rdoPg2I4ATC_II011
+  frm1701:rdoPg2I4ATC_II012
+  frm1701:rdoPg2I4ATC_II013
+  frm1701:rdoPg2I4ATC_II014
+  frm1701:rdoPg2I4ATC_II015
+  frm1701:rdoPg2I4ATC_II016
+  frm1701:rdoPg2I4ATC_II017
+  frm1701:rdoPg2I8ForeignTaxCredits
+  frm1701:txtPg1I10BirthDate
+  frm1701:txtPg1I12Citizenship
+  frm1701:txtPg1I14ForeignTaxNumber
+  frm1701:txtPg1I25A
+  frm1701:txtPg1I25B
+  frm1701:txtPg1I33NumberOfAttachments
+  frm1701:txtPg2I2SpouseRDOCode
+  frm1701:txtPg2I5SpouseName
+  frm1701:txtPg2I6TelNum
+  frm1701:txtPg2I7Citizenship
+  frm1701:txtPg2I9ForeignTaxNumber
+  frm1701:txtPg2IShed1a_1SName
+  frm1701:txtPg2IShed1a_1TPName
+  frm1701:txtPg2IShed1c_1CI
+  frm1701:txtPg2IShed1c_1TW
+  frm1701:txtPg2IShed1c_2CI
+  frm1701:txtPg2IShed1c_2TW
+  frm1701:txtPg2IShed2_5A
+  frm1701:txtPg2IShed2_5B
+  frm1701:txtPg2IShed2a_2SName
+  frm1701:txtPg2IShed2a_2TPName
+  frm1701:txtPg2IShed3_11A
+  frm1701:txtPg2IShed3_11B
+  frm1701:txtPg2IShed3_19A
+  frm1701:txtPg2IShed3_19B
+  frm1701:txtPg2IShed3_19Desc
+  frm1701:txtPg2IShed3_20A
+  frm1701:txtPg2IShed3_20B
+  frm1701:txtPg2IShed3_20Desc
+  frm1701:txtPg2IShed3_21A
+  frm1701:txtPg2IShed3_21B
+  frm1701:txtPg2IShed3_8A
+  frm1701:txtPg2IShed3_8B
+  frm1701:txtPg2IShed3_9A
+  frm1701:txtPg2IShed3_9B
+  frm1701:txtPg3IShed3_26A
+  frm1701:txtPg3IShed3_26B
+  frm1701:txtPg3IShed3_27A
+  frm1701:txtPg3IShed3_27B
+  frm1701:txtPg3IShed3_27Desc
+  frm1701:txtPg3IShed3_29A
+  frm1701:txtPg3IShed3_29B
+  frm1701:txtPg3IShed4_10A
+  frm1701:txtPg3IShed4_10B
+  frm1701:txtPg3IShed4_11A
+  frm1701:txtPg3IShed4_11B
+  frm1701:txtPg3IShed4_12A
+  frm1701:txtPg3IShed4_12B
+  frm1701:txtPg3IShed4_13A
+  frm1701:txtPg3IShed4_13B
+  frm1701:txtPg3IShed4_14A
+  frm1701:txtPg3IShed4_14B
+  frm1701:txtPg3IShed4_15A
+  frm1701:txtPg3IShed4_15B
+  frm1701:txtPg3IShed4_16A
+  frm1701:txtPg3IShed4_16B
+  frm1701:txtPg3IShed4_17aA
+  frm1701:txtPg3IShed4_17aB
+  frm1701:txtPg3IShed4_17bA
+  frm1701:txtPg3IShed4_17bB
+  frm1701:txtPg3IShed4_17cA
+  frm1701:txtPg3IShed4_17cB
+  frm1701:txtPg3IShed4_17dA
+  frm1701:txtPg3IShed4_17dB
+  frm1701:txtPg3IShed4_17dDesc
+  frm1701:txtPg3IShed4_1A
+  frm1701:txtPg3IShed4_1B
+  frm1701:txtPg3IShed4_2A
+  frm1701:txtPg3IShed4_2B
+  frm1701:txtPg3IShed4_3A
+  frm1701:txtPg3IShed4_3B
+  frm1701:txtPg3IShed4_4A
+  frm1701:txtPg3IShed4_4B
+  frm1701:txtPg3IShed4_5A
+  frm1701:txtPg3IShed4_5B
+  frm1701:txtPg3IShed4_6A
+  frm1701:txtPg3IShed4_6B
+  frm1701:txtPg3IShed4_7A
+  frm1701:txtPg3IShed4_7B
+  frm1701:txtPg3IShed4_8A
+  frm1701:txtPg3IShed4_8B
+  frm1701:txtPg3IShed4_9A
+  frm1701:txtPg3IShed4_9B
+  frm1701:txtPg3IShed5_1Amt
+  frm1701:txtPg3IShed5_1Desc
+  frm1701:txtPg3IShed5_1Legal
+  frm1701:txtPg3IShed5_2Amt
+  frm1701:txtPg3IShed5_2Desc
+  frm1701:txtPg3IShed5_2Legal
+  frm1701:txtPg3IShed5_4Amt
+  frm1701:txtPg3IShed5_4Desc
+  frm1701:txtPg3IShed5_4Legal
+  frm1701:txtPg3IShed5_5Amt
+  frm1701:txtPg3IShed5_5Desc
+  frm1701:txtPg3IShed5_5Legal
+  frm1701:txtPg3IShed6_1A
+  frm1701:txtPg3IShed6_1B
+  frm1701:txtPg3IShed6_2A
+  frm1701:txtPg3IShed6_2B
+  frm1701:txtPg3IShed6_4A
+  frm1701:txtPg3IShed6_4B
+  frm1701:txtPg3IShed6_4C
+  frm1701:txtPg3IShed6_4D
+  frm1701:txtPg3IShed6_4Year
+  frm1701:txtPg3IShed6_5A
+  frm1701:txtPg3IShed6_5B
+  frm1701:txtPg3IShed6_5C
+  frm1701:txtPg3IShed6_5D
+  frm1701:txtPg3IShed6_5Year
+  frm1701:txtPg3IShed6_6A
+  frm1701:txtPg3IShed6_6B
+  frm1701:txtPg3IShed6_6C
+  frm1701:txtPg3IShed6_6D
+  frm1701:txtPg3IShed6_6Year
+  frm1701:txtPg3IShed6_7B
+  frm1701:txtPg3IShed6_7C
+  frm1701:txtPg3IShed6_7D
+  frm1701:txtPg4IPart7_1A
+  frm1701:txtPg4IPart7_1B
+  frm1701:txtPg4IPart7_2A
+  frm1701:txtPg4IPart7_2B
+  frm1701:txtPg4IPart7_3A
+  frm1701:txtPg4IPart7_3B
+  frm1701:txtPg4IPart7_4A
+  frm1701:txtPg4IPart7_4B
+  frm1701:txtPg4IPart7_6A
+  frm1701:txtPg4IPart7_6B
+  frm1701:txtPg4IPart7_7A
+  frm1701:txtPg4IPart7_7B
+  frm1701:txtPg4IPart7_8A
+  frm1701:txtPg4IPart7_8B
+  frm1701:txtPg4IPart7_9A
+  frm1701:txtPg4IPart7_9B
+  frm1701:txtPg4IPart7_9Specify
+  frm1701:txtPg4IPart8_1A
+  frm1701:txtPg4IPart8_2A
+  frm1701:txtPg4IPart8_4A
+  frm1701:txtPg4IPart8_6A
+  frm1701:txtPg4IPart8_8A
+  frm1701:txtPg4IPart8_9A
+  frm1701:txtPg4IPart9_1A
+  frm1701:txtPg4IPart9_1B
+  frm1701:txtPg4IPart9_2A
+  frm1701:txtPg4IPart9_2B
+  frm1701:txtPg4IPart9_2Particulars
+  frm1701:txtPg4IPart9_3A
+  frm1701:txtPg4IPart9_3B
+  frm1701:txtPg4IPart9_3Particulars
+  frm1701:txtPg4IPart9_4A
+  frm1701:txtPg4IPart9_4B
+  frm1701:txtPg4IPart9_4Particulars
+  frm1701:txtPg4IPart9_6A
+  frm1701:txtPg4IPart9_6B
+  frm1701:txtPg4IPart9_6Particulars
+  frm1701:txtPg4IPart9_7A
+  frm1701:txtPg4IPart9_7B
+  frm1701:txtPg4IPart9_7Particulars
+  frm1701:txtPg4IPart9_8A
+  frm1701:txtPg4IPart9_8B
+  frm1701:txtPg4IPart9_8Particulars
+  frm1701:txtPg4IPart9_9A
+  frm1701:txtPg4IPart9_9B
+  frm1701:txtPg4IPart9_9Particulars
+  frm1701:txtPg4ISc6_2A
+  frm1701:txtPg4ISc6_2B
+  frm1701:txtPg4ISc6_3A
+  frm1701:txtPg4ISc6_3B
+  frm1701:txtPg4IShed6_10A
+  frm1701:txtPg4IShed6_10B
+  frm1701:txtPg4IShed6_10C
+  frm1701:txtPg4IShed6_10D
+  frm1701:txtPg4IShed6_10Year
+  frm1701:txtPg4IShed6_11A
+  frm1701:txtPg4IShed6_11B
+  frm1701:txtPg4IShed6_11C
+  frm1701:txtPg4IShed6_11D
+  frm1701:txtPg4IShed6_11Year
+  frm1701:txtPg4IShed6_12B
+  frm1701:txtPg4IShed6_12C
+  frm1701:txtPg4IShed6_12D
+  frm1701:txtPg4IShed6_9A
+  frm1701:txtPg4IShed6_9B
+  frm1701:txtPg4IShed6_9C
+  frm1701:txtPg4IShed6_9D
+  frm1701:txtPg4IShed6_9Year
+[origin/main (3aceafe8)] refused 6:
+  frm1701:txtPg1I27A => `frm1701:txtPg1I27A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701:txtPg1I27B => `frm1701:txtPg1I27B` computed; not part of this return as it stands
+  frm1701:txtPg1I28A => `frm1701:txtPg1I28A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701:txtPg1I28B => `frm1701:txtPg1I28B` computed; not part of this return as it stands
+  frm1701:txtPg1I29A => `frm1701:txtPg1I29A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701:txtPg1I29B => `frm1701:txtPg1I29B` computed; not part of this return as it stands
+
+[afe7bc34] filled 208:
+  frm1701:chkPg2IShed1a_1Spouse
+  frm1701:chkPg2IShed1a_1Taxpayer
+  frm1701:chkPg2IShed2a_2Spouse
+  frm1701:chkPg2IShed2a_2Taxpayer
+  frm1701:rdoPg1I13ForeignTaxCredits
+  frm1701:rdoPg1I16CivilStatus
+  frm1701:rdoPg1I19IncomeExempt
+  frm1701:rdoPg1I20IncomeSpecial
+  frm1701:rdoPg1I21AMethodDeduction
+  frm1701:rdoPg1I21TaxRateG
+  frm1701:rdoPg1I21TaxRateP
+  frm1701:rdoPg1I2Amended
+  frm1701:rdoPg1I3ShortPeriod
+  frm1701:rdoPg1I6TaxpayerType
+  frm1701:rdoPg1I6TaxpayerTypeC
+  frm1701:rdoPg1I7ATC_II011
+  frm1701:rdoPg1I7ATC_II012
+  frm1701:rdoPg1I7ATC_II013
+  frm1701:rdoPg1I7ATC_II014
+  frm1701:rdoPg1I7ATC_II015
+  frm1701:rdoPg1I7ATC_II016
+  frm1701:rdoPg1I7ATC_II017
+  frm1701:rdoPg2I3SpouseTypeC
+  frm1701:txtPg1I10BirthDate
+  frm1701:txtPg1I12Citizenship
+  frm1701:txtPg1I14ForeignTaxNumber
+  frm1701:txtPg1I25A
+  frm1701:txtPg1I25B
+  frm1701:txtPg1I33NumberOfAttachments
+  frm1701:txtPg2I2SpouseRDOCode
+  frm1701:txtPg2I5SpouseName
+  frm1701:txtPg2I6TelNum
+  frm1701:txtPg2I7Citizenship
+  frm1701:txtPg2I9ForeignTaxNumber
+  frm1701:txtPg2IShed1a_1SName
+  frm1701:txtPg2IShed1a_1TPName
+  frm1701:txtPg2IShed1c_1CI
+  frm1701:txtPg2IShed1c_1TW
+  frm1701:txtPg2IShed1c_2CI
+  frm1701:txtPg2IShed1c_2TW
+  frm1701:txtPg2IShed2_5A
+  frm1701:txtPg2IShed2_5B
+  frm1701:txtPg2IShed2a_2SName
+  frm1701:txtPg2IShed2a_2TPName
+  frm1701:txtPg2IShed3_11A
+  frm1701:txtPg2IShed3_11B
+  frm1701:txtPg2IShed3_19A
+  frm1701:txtPg2IShed3_19B
+  frm1701:txtPg2IShed3_19Desc
+  frm1701:txtPg2IShed3_20A
+  frm1701:txtPg2IShed3_20B
+  frm1701:txtPg2IShed3_20Desc
+  frm1701:txtPg2IShed3_21A
+  frm1701:txtPg2IShed3_21B
+  frm1701:txtPg2IShed3_8A
+  frm1701:txtPg2IShed3_8B
+  frm1701:txtPg2IShed3_9A
+  frm1701:txtPg2IShed3_9B
+  frm1701:txtPg3IShed3_26A
+  frm1701:txtPg3IShed3_26B
+  frm1701:txtPg3IShed3_27A
+  frm1701:txtPg3IShed3_27B
+  frm1701:txtPg3IShed3_27Desc
+  frm1701:txtPg3IShed3_29A
+  frm1701:txtPg3IShed3_29B
+  frm1701:txtPg3IShed4_10A
+  frm1701:txtPg3IShed4_10B
+  frm1701:txtPg3IShed4_11A
+  frm1701:txtPg3IShed4_11B
+  frm1701:txtPg3IShed4_12A
+  frm1701:txtPg3IShed4_12B
+  frm1701:txtPg3IShed4_13A
+  frm1701:txtPg3IShed4_13B
+  frm1701:txtPg3IShed4_14A
+  frm1701:txtPg3IShed4_14B
+  frm1701:txtPg3IShed4_15A
+  frm1701:txtPg3IShed4_15B
+  frm1701:txtPg3IShed4_16A
+  frm1701:txtPg3IShed4_16B
+  frm1701:txtPg3IShed4_17aA
+  frm1701:txtPg3IShed4_17aB
+  frm1701:txtPg3IShed4_17bA
+  frm1701:txtPg3IShed4_17bB
+  frm1701:txtPg3IShed4_17cA
+  frm1701:txtPg3IShed4_17cB
+  frm1701:txtPg3IShed4_17dA
+  frm1701:txtPg3IShed4_17dB
+  frm1701:txtPg3IShed4_17dDesc
+  frm1701:txtPg3IShed4_1A
+  frm1701:txtPg3IShed4_1B
+  frm1701:txtPg3IShed4_2A
+  frm1701:txtPg3IShed4_2B
+  frm1701:txtPg3IShed4_3A
+  frm1701:txtPg3IShed4_3B
+  frm1701:txtPg3IShed4_4A
+  frm1701:txtPg3IShed4_4B
+  frm1701:txtPg3IShed4_5A
+  frm1701:txtPg3IShed4_5B
+  frm1701:txtPg3IShed4_6A
+  frm1701:txtPg3IShed4_6B
+  frm1701:txtPg3IShed4_7A
+  frm1701:txtPg3IShed4_7B
+  frm1701:txtPg3IShed4_8A
+  frm1701:txtPg3IShed4_8B
+  frm1701:txtPg3IShed4_9A
+  frm1701:txtPg3IShed4_9B
+  frm1701:txtPg3IShed5_1Amt
+  frm1701:txtPg3IShed5_1Desc
+  frm1701:txtPg3IShed5_1Legal
+  frm1701:txtPg3IShed5_2Amt
+  frm1701:txtPg3IShed5_2Desc
+  frm1701:txtPg3IShed5_2Legal
+  frm1701:txtPg3IShed5_4Amt
+  frm1701:txtPg3IShed5_4Desc
+  frm1701:txtPg3IShed5_4Legal
+  frm1701:txtPg3IShed5_5Amt
+  frm1701:txtPg3IShed5_5Desc
+  frm1701:txtPg3IShed5_5Legal
+  frm1701:txtPg3IShed6_1A
+  frm1701:txtPg3IShed6_1B
+  frm1701:txtPg3IShed6_2A
+  frm1701:txtPg3IShed6_2B
+  frm1701:txtPg3IShed6_4A
+  frm1701:txtPg3IShed6_4B
+  frm1701:txtPg3IShed6_4C
+  frm1701:txtPg3IShed6_4D
+  frm1701:txtPg3IShed6_4Year
+  frm1701:txtPg3IShed6_5A
+  frm1701:txtPg3IShed6_5B
+  frm1701:txtPg3IShed6_5C
+  frm1701:txtPg3IShed6_5D
+  frm1701:txtPg3IShed6_5Year
+  frm1701:txtPg3IShed6_6A
+  frm1701:txtPg3IShed6_6B
+  frm1701:txtPg3IShed6_6C
+  frm1701:txtPg3IShed6_6D
+  frm1701:txtPg3IShed6_6Year
+  frm1701:txtPg3IShed6_7B
+  frm1701:txtPg3IShed6_7C
+  frm1701:txtPg3IShed6_7D
+  frm1701:txtPg4IPart7_1A
+  frm1701:txtPg4IPart7_1B
+  frm1701:txtPg4IPart7_2A
+  frm1701:txtPg4IPart7_2B
+  frm1701:txtPg4IPart7_3A
+  frm1701:txtPg4IPart7_3B
+  frm1701:txtPg4IPart7_4A
+  frm1701:txtPg4IPart7_4B
+  frm1701:txtPg4IPart7_6A
+  frm1701:txtPg4IPart7_6B
+  frm1701:txtPg4IPart7_7A
+  frm1701:txtPg4IPart7_7B
+  frm1701:txtPg4IPart7_8A
+  frm1701:txtPg4IPart7_8B
+  frm1701:txtPg4IPart7_9A
+  frm1701:txtPg4IPart7_9B
+  frm1701:txtPg4IPart7_9Specify
+  frm1701:txtPg4IPart8_1A
+  frm1701:txtPg4IPart8_2A
+  frm1701:txtPg4IPart8_4A
+  frm1701:txtPg4IPart8_6A
+  frm1701:txtPg4IPart8_8A
+  frm1701:txtPg4IPart8_9A
+  frm1701:txtPg4IPart9_1A
+  frm1701:txtPg4IPart9_1B
+  frm1701:txtPg4IPart9_2A
+  frm1701:txtPg4IPart9_2B
+  frm1701:txtPg4IPart9_2Particulars
+  frm1701:txtPg4IPart9_3A
+  frm1701:txtPg4IPart9_3B
+  frm1701:txtPg4IPart9_3Particulars
+  frm1701:txtPg4IPart9_4A
+  frm1701:txtPg4IPart9_4B
+  frm1701:txtPg4IPart9_4Particulars
+  frm1701:txtPg4IPart9_6A
+  frm1701:txtPg4IPart9_6B
+  frm1701:txtPg4IPart9_6Particulars
+  frm1701:txtPg4IPart9_7A
+  frm1701:txtPg4IPart9_7B
+  frm1701:txtPg4IPart9_7Particulars
+  frm1701:txtPg4IPart9_8A
+  frm1701:txtPg4IPart9_8B
+  frm1701:txtPg4IPart9_8Particulars
+  frm1701:txtPg4IPart9_9A
+  frm1701:txtPg4IPart9_9B
+  frm1701:txtPg4IPart9_9Particulars
+  frm1701:txtPg4ISc6_2A
+  frm1701:txtPg4ISc6_2B
+  frm1701:txtPg4ISc6_3A
+  frm1701:txtPg4ISc6_3B
+  frm1701:txtPg4IShed6_10A
+  frm1701:txtPg4IShed6_10B
+  frm1701:txtPg4IShed6_10C
+  frm1701:txtPg4IShed6_10D
+  frm1701:txtPg4IShed6_10Year
+  frm1701:txtPg4IShed6_11A
+  frm1701:txtPg4IShed6_11B
+  frm1701:txtPg4IShed6_11C
+  frm1701:txtPg4IShed6_11D
+  frm1701:txtPg4IShed6_11Year
+  frm1701:txtPg4IShed6_12B
+  frm1701:txtPg4IShed6_12C
+  frm1701:txtPg4IShed6_12D
+  frm1701:txtPg4IShed6_9A
+  frm1701:txtPg4IShed6_9B
+  frm1701:txtPg4IShed6_9C
+  frm1701:txtPg4IShed6_9D
+  frm1701:txtPg4IShed6_9Year
+[afe7bc34] refused 19:
+  frm1701:rdoPg1I17SpouseIncome => This item is for a married filer: choose Married at item 16 first.
+  frm1701:rdoPg2I10IncomeExempt => Part IV is for a joint return: choose Married at item 16, Yes at item 17 and Joint Filing at item 18 first.
+  frm1701:rdoPg2I11IncomeSpecial => Part IV is for a joint return: choose Married at item 16, Yes at item 17 and Joint Filing at item 18 first.
+  frm1701:rdoPg2I12TaxRateG => Part IV is for a joint return: choose Married at item 16, Yes at item 17 and Joint Filing at item 18 first.
+  frm1701:rdoPg2I12TaxRateP => Part IV is for a joint return: choose Married at item 16, Yes at item 17 and Joint Filing at item 18 first.
+  frm1701:rdoPg2I4ATC_II011 => Part IV is for a joint return: choose Married at item 16, Yes at item 17 and Joint Filing at item 18 first.
+  frm1701:rdoPg2I4ATC_II012 => Part IV is for a joint return: choose Married at item 16, Yes at item 17 and Joint Filing at item 18 first.
+  frm1701:rdoPg2I4ATC_II013 => Part IV is for a joint return: choose Married at item 16, Yes at item 17 and Joint Filing at item 18 first.
+  frm1701:rdoPg2I4ATC_II014 => Part IV is for a joint return: choose Married at item 16, Yes at item 17 and Joint Filing at item 18 first.
+  frm1701:rdoPg2I4ATC_II015 => Part IV is for a joint return: choose Married at item 16, Yes at item 17 and Joint Filing at item 18 first.
+  frm1701:rdoPg2I4ATC_II016 => Part IV is for a joint return: choose Married at item 16, Yes at item 17 and Joint Filing at item 18 first.
+  frm1701:rdoPg2I4ATC_II017 => Part IV is for a joint return: choose Married at item 16, Yes at item 17 and Joint Filing at item 18 first.
+  frm1701:rdoPg2I8ForeignTaxCredits => Part IV is for a joint return: choose Married at item 16, Yes at item 17 and Joint Filing at item 18 first.
+  frm1701:txtPg1I27A => `frm1701:txtPg1I27A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701:txtPg1I27B => `frm1701:txtPg1I27B` computed; not part of this return as it stands
+  frm1701:txtPg1I28A => `frm1701:txtPg1I28A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701:txtPg1I28B => `frm1701:txtPg1I28B` computed; not part of this return as it stands
+  frm1701:txtPg1I29A => `frm1701:txtPg1I29A` computed from the due date; choose Edit penalties to enter the amounts BIR agreed to
+  frm1701:txtPg1I29B => `frm1701:txtPg1I29B` computed; not part of this return as it stands
+
+validate errors: afe7bc34 4 / main 4
