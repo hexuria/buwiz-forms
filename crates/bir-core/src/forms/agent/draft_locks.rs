@@ -381,9 +381,31 @@ pub mod annual_corporate {
         ),
     ];
 
-    /// The lock and refusal of an [`EX_ATTACHED_ROWS`] box.
-    pub const EX_ATTACHED_LOCK: &str =
-        "filled from the attached schedule; BIR's program keeps this row shut";
+    /// The lock and refusal of an [`EX_ATTACHED_ROWS`] box, naming the
+    /// schedule to fill on the form page.
+    pub const EX_ATTACHED_LOCK_ITEM_49: &str =
+        "filled from the Part IV Item 49 attached schedule; BIR's program keeps this row shut";
+    pub const EX_ATTACHED_LOCK_SCHED_1: &str =
+        "filled from the Schedule 1 Item 17i (more...) attached schedule; BIR's program keeps this row shut";
+    pub const EX_ATTACHED_LOCK_SCHED_2: &str =
+        "filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut";
+
+    /// The schedule-specific lock/refusal for an [`EX_ATTACHED_ROWS`] box,
+    /// by official key (`frm1702EX:...`).
+    pub fn ex_attached_lock(key: &str) -> Option<&'static str> {
+        let stem = key.strip_prefix(EX)?;
+        EX_ATTACHED_ROWS.iter().find_map(|(label, stems)| {
+            stems.contains(&stem).then(|| {
+                if *label == "Item 49" {
+                    EX_ATTACHED_LOCK_ITEM_49
+                } else if label.starts_with("Schedule 1") {
+                    EX_ATTACHED_LOCK_SCHED_1
+                } else {
+                    EX_ATTACHED_LOCK_SCHED_2
+                }
+            })
+        })
+    }
 
     /// Every [`EX_ATTACHED_ROWS`] box, by official key.
     pub fn ex_attached_keys() -> impl Iterator<Item = String> {
@@ -589,7 +611,9 @@ pub mod annual_corporate {
         // 1702EX's rows BIR's program keeps shut, each box (P4-8).
         if code == "1702EX" {
             for key in ex_attached_keys() {
-                locks.insert(key, json!(EX_ATTACHED_LOCK));
+                if let Some(reason) = ex_attached_lock(&key) {
+                    locks.insert(key, json!(reason));
+                }
             }
         }
     }

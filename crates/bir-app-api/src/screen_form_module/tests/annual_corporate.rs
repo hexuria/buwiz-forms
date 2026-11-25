@@ -1302,11 +1302,8 @@ fn pr8_form_1702ex_other_credits_and_schedule_rows_take_entries() {
     let noted = strings(&opened["notes_always"]);
     for key in &attached {
         assert_eq!(inventory.get(key), Some(&true), "{key} is shut at load");
-        assert_eq!(
-            opened["locks"][key],
-            rows_annual_corporate::EX_ATTACHED_LOCK,
-            "{key}"
-        );
+        let expected_lock = rows_annual_corporate::ex_attached_lock(key).expect(key);
+        assert_eq!(opened["locks"][key], expected_lock, "{key}");
         assert_eq!(
             opened["lock_notes"][key], "Filled from the attached schedule.",
             "{key}"
@@ -1322,10 +1319,25 @@ fn pr8_form_1702ex_other_credits_and_schedule_rows_take_entries() {
         let refused = fill("1702EX", &opened["draft"], json!({ key: "100" }));
         assert_eq!(
             refused["rejected"][key],
-            format!("`{key}` is {}", rows_annual_corporate::EX_ATTACHED_LOCK),
+            format!("`{key}` is {expected_lock}"),
             "{key}"
         );
         assert_eq!(refused["draft"], opened["draft"], "{key}");
+        // Assistant `form.fill` refuses with the same schedule-naming reason,
+        // never silently leaving 0.00.
+        let mut agent_draft = opened["draft"].clone();
+        let agent_err = bir_core::forms::agent::fill(
+            bir_core::forms::agent::AgentFormKind::from_code("1702EX").unwrap(),
+            &mut agent_draft,
+            key,
+            &json!("100"),
+            None,
+        )
+        .expect_err(key);
+        assert!(
+            agent_err.contains(expected_lock),
+            "{key}: expected `{expected_lock}` in `{agent_err}`"
+        );
     }
     let filled = fill(
         "1702EX",
