@@ -1,0 +1,38 @@
+machine: buwiz-forms-win
+commit: 93820d0f8cfe31a7dee13875b3ff40f3afb4d641
+command: python -m unittest scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_ctrl_c_after_the_token_was_stored_removes_it_and_stops_the_writer -v
+
+test_ctrl_c_after_the_token_was_stored_removes_it_and_stops_the_writer (scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_ctrl_c_after_the_token_was_stored_removes_it_and_stops_the_writer) ... FAIL
+
+======================================================================
+FAIL: test_ctrl_c_after_the_token_was_stored_removes_it_and_stops_the_writer (scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_ctrl_c_after_the_token_was_stored_removes_it_and_stops_the_writer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\nsh-probe-store\bf-main-check\scripts\tests\test_nsh_run_agent_windows.py", line 324, in test_ctrl_c_after_the_token_was_stored_removes_it_and_stops_the_writer
+    self.assertEqual(removals, [['-s', 'emulator-5556', 'shell',
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                 f'run-as {HOST} rm -f {TOKEN_PATH} {TOKEN_PATH}.new']])
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [['-s[142 chars]-token.new files/gpui-agent-token files/gpui-agent-token.new']] != [['-s[142 chars]-token.new']]
+
+First differing element 0:
+['-s'[140 chars]t-token.new files/gpui-agent-token files/gpui-agent-token.new']
+['-s'[140 chars]t-token.new']
+
+  [['-s',
+    'emulator-5556',
+    'shell',
+    'run-as com.longbridge.nsh.host rm -f '
+    'files/nsh/dev.goldcoders.bir/agent-token '
+-   'files/nsh/dev.goldcoders.bir/agent-token.new files/gpui-agent-token '
+?                                                ------------------------
+
++   'files/nsh/dev.goldcoders.bir/agent-token.new']]
+?                                                 ++
+
+-   'files/gpui-agent-token.new']]
+
+----------------------------------------------------------------------
+Ran 1 test in 7.084s
+
+FAILED (failures=1)

@@ -1,0 +1,19 @@
+machine: buwiz-forms-win
+commit: d9edfc36f183b6b1a8df5303c8ac7c0e09258cb5
+command: python -m unittest scripts.tests.test_nsh_run_agent_windows -v
+
+test_a_cancelled_launch_stops_the_token_writer (scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_a_cancelled_launch_stops_the_token_writer) ... ok
+test_a_failed_launch_stops_the_token_writer (scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_a_failed_launch_stops_the_token_writer) ... ok
+test_a_launch_that_fails_after_the_token_was_stored_removes_it (scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_a_launch_that_fails_after_the_token_was_stored_removes_it) ... ok
+test_a_missing_sdk_or_adb_is_reported_before_the_launch (scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_a_missing_sdk_or_adb_is_reported_before_the_launch) ... ok
+test_android_sdk_root_is_used_when_android_home_is_unset (scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_android_sdk_root_is_used_when_android_home_is_unset) ... ok
+test_android_serial_must_name_the_device_nsh_launches (scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_android_serial_must_name_the_device_nsh_launches) ... ok
+test_android_studios_default_sdk_is_found_without_variables_or_path (scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_android_studios_default_sdk_is_found_without_variables_or_path) ... ok
+test_ctrl_c_after_the_token_was_stored_removes_it_and_stops_the_writer (scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_ctrl_c_after_the_token_was_stored_removes_it_and_stops_the_writer) ... ok
+test_no_online_device_is_refused_before_the_launch (scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_no_online_device_is_refused_before_the_launch) ... ok
+test_with_two_devices_the_token_goes_to_the_one_nsh_launches (scripts.tests.test_nsh_run_agent_windows.NshRunAgentWindowsTests.test_with_two_devices_the_token_goes_to_the_one_nsh_launches) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 62.578s
+
+OK
