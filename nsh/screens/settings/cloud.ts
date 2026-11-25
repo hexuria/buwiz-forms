@@ -12,7 +12,7 @@ const failure = signal<string | null>(null);
 let freshStarted = false;
 
 function offlineStatus(detail: string): CloudAccountStatus {
-  return { server_url: "", server_url_source: "", signed_in: false, email: null, user_id: null, offline: false, practice: false, detail };
+  return { server_url: "", server_url_source: "", account_url: "", signed_in: false, email: null, user_id: null, offline: false, practice: false, detail };
 }
 
 /** The local status (no network): the saved sign-in and the server address. */

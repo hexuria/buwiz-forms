@@ -5,7 +5,6 @@
 //! refresh token in the poll path forever.
 
 use crate::db::{Database, InboxOAuthTokens};
-use crate::forms::FilingStatus;
 use crate::profile::{TaxpayerProfile, inbox_emails_match};
 
 /// Which profile to authenticate as, and whether any sibling still has a
@@ -107,10 +106,10 @@ pub fn plan_email_poll_for_address(
             continue;
         }
         matching_tins.push(profile.tin.full());
-        if let Ok(summaries) = db.list_draft_summaries(&profile.tin.full(), current_year)
-            && summaries
-                .iter()
-                .any(|summary| summary.status == FilingStatus::Submitted)
+        // A dry run waits for no email: only a real send keeps the poll on.
+        if db
+            .has_return_awaiting_bir_email(&profile.tin.full(), current_year)
+            .unwrap_or(false)
         {
             still_pending = true;
         }
@@ -133,6 +132,7 @@ mod tests {
     use super::*;
     use crate::db::{Database, ReceiptConfirmationOutcome, alert_kinds};
     use crate::filing_queue::mandatory_lab_1601c_draft;
+    use crate::forms::FilingStatus;
     use crate::forms::form_1601c::Form1601CDraft;
     use crate::profile::{EmailAuthMethod, TaxpayerProfile};
     use crate::receipt::BirReceiptConfirmation;
@@ -360,7 +360,16 @@ mod tests {
         assert!(inbox_emails_match(auth.inbox_email(), SHARED_INBOX));
     }
 
-    fn submit_lab_1601c(db: &Database, mut queued: Form1601CDraft) -> Form1601CDraft {
+    fn submit_lab_1601c(db: &Database, queued: Form1601CDraft) -> Form1601CDraft {
+        submit_lab_1601c_as(db, queued, false)
+    }
+
+    /// The lab 1601C sent by the worker: for real, or only simulated (`dry_run`).
+    fn submit_lab_1601c_as(
+        db: &Database,
+        mut queued: Form1601CDraft,
+        dry_run: bool,
+    ) -> Form1601CDraft {
         queued.transition_to_queued().unwrap();
         db.save_queued_1601c_draft(&queued).unwrap();
         let fingerprint = queued.queued_submission_fingerprint.clone();
@@ -379,7 +388,7 @@ mod tests {
             panic!("expected claim");
         };
         let filename = queued.default_submission_filename();
-        draft.transition_to_submitted(filename, false);
+        draft.transition_to_submitted(filename, dry_run);
         db.finish_claimed_1601c_submission(&draft, &token).unwrap();
         db.get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
             .unwrap()
@@ -440,6 +449,78 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(confirmed.status, FilingStatus::Confirmed);
+    }
+
+    /// A dry run reached nobody: it keeps no inbox poll running, and a BIR
+    /// email naming its file is Ignored (as one with no return is), while the
+    /// same month's real send of the sibling branch is confirmed.
+    #[test]
+    fn a_bir_email_never_confirms_a_dry_run_and_a_dry_run_waits_for_no_email() {
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        let mut juan = profile("000", "Juan");
+        juan.oauth_refresh_token = Some("refresh-juan".to_string());
+        save(&db, juan);
+        let mut jane = crate::filing_queue::mandatory_lab_1601c_profile();
+        jane.tin.branch = "00001".to_string();
+        jane.full_name = "Jane".to_string();
+        jane.email = SHARED_INBOX.to_string();
+        jane.imap_email = Some(SHARED_INBOX.to_string());
+        jane.email_auth_method = EmailAuthMethod::GoogleOAuth;
+        jane.email_tracking_enabled = true;
+        save(&db, jane);
+
+        // Jane's September 1601C was only a dry run.
+        let mut queued = mandatory_lab_1601c_draft();
+        queued.tin = "00000000000001".to_string();
+        let dry = submit_lab_1601c_as(&db, queued, true);
+        assert_eq!(dry.status, FilingStatus::Submitted);
+        assert!(dry.submitted_dry_run);
+        assert!(
+            !plan_email_poll_for_address(&db, SHARED_INBOX, 2026).still_pending,
+            "a dry run waits for no BIR email"
+        );
+        let email = |tin: &str| BirReceiptConfirmation {
+            filename: format!("{tin}-1601Cv2018-092026.xml"),
+            date_received: chrono::NaiveDate::from_ymd_opt(2099, 12, 31).unwrap(),
+            time_received: chrono::NaiveTime::from_hms_opt(15, 0, 0).unwrap(),
+            source_from: Some("ebirforms-noreply@bir.gov.ph".to_string()),
+            raw_text: "test".to_string(),
+            raw_html: None,
+        };
+        let (saved, _) = db
+            .save_submission_receipt(&email("00000000000001"))
+            .unwrap();
+        assert_eq!(
+            db.confirm_submission_from_receipt(&saved).unwrap(),
+            ReceiptConfirmationOutcome::Ignored
+        );
+        let still = db
+            .get_1601c_draft("00000000000001", dry.taxable_year, dry.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(still.status, FilingStatus::Submitted);
+        assert_eq!(still.receipt_id, None);
+        // The receipt is kept, unmatched, as any receipt with no return is.
+        assert!(
+            db.get_submission_receipt_by_id(saved.id.unwrap())
+                .unwrap()
+                .is_some()
+        );
+
+        // Juan's head office sent the same month for real: that one is confirmed.
+        let real = submit_lab_1601c(&db, mandatory_lab_1601c_draft());
+        assert!(!real.submitted_dry_run);
+        assert!(plan_email_poll_for_address(&db, SHARED_INBOX, 2026).still_pending);
+        let (saved, _) = db.save_submission_receipt(&email(&real.tin)).unwrap();
+        assert_eq!(
+            db.confirm_submission_from_receipt(&saved).unwrap(),
+            ReceiptConfirmationOutcome::Confirmed
+        );
+        let dry_after = db
+            .get_1601c_draft("00000000000001", dry.taxable_year, dry.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(dry_after.status, FilingStatus::Submitted);
     }
 
     #[test]

@@ -2,7 +2,7 @@
 import { expect, test } from "nsh/test";
 import type { BackgroundJob } from "../../bir";
 import {
-  deletionRequestUrl, filterJobs, groupSections, jobActions, jobKey, jobSub, jobTone, levelTone, LOG_LINES, logHeadline, logLineLevel,
+  deletionPageUrl, filterJobs, groupSections, jobActions, jobKey, jobSub, jobTone, levelTone, LOG_LINES, logHeadline, logLineLevel,
   logView, retentionChoices, accountHint, serverHint, showsServer,
 } from "./logic";
 
@@ -79,13 +79,12 @@ test("the server hint says where the address came from", () => {
   expect(serverHint(undefined)).toBe("Chosen for this build.");
 });
 
-test("a request to delete the account is an email to support that names the account when it is known", () => {
-  const url = deletionRequestUrl("juana+tax@example.com");
-  expect(url.startsWith("mailto:support@buwiz.com?subject=Delete%20my%20Buwiz%20account&body=")).toBe(true);
-  expect(decodeURIComponent(url.split("&body=")[1])).toBe(
-    "Please delete my Buwiz account for juana+tax@example.com and the email address held with it.",
-  );
-  expect(decodeURIComponent(deletionRequestUrl(null).split("&body=")[1])).toBe("Please delete my Buwiz account and the email address held with it.");
+test("Delete account opens /delete on the account site the host resolved, and production's when there is none", () => {
+  expect(deletionPageUrl("https://account.buwiz.com")).toBe("https://account.buwiz.com/delete");
+  expect(deletionPageUrl("https://account.buwiz.com/")).toBe("https://account.buwiz.com/delete");
+  expect(deletionPageUrl("http://account.localhost:3008")).toBe("http://account.localhost:3008/delete");
+  expect(deletionPageUrl(null)).toBe("https://account.buwiz.com/delete");
+  expect(deletionPageUrl("")).toBe("https://account.buwiz.com/delete");
 });
 
 test("the server row shows only for a server that is not Buwiz's own, an address from the run, or a rejected one", () => {

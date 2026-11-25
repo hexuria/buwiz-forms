@@ -219,6 +219,8 @@ export function shell_set_chrome(open: boolean): null;
 export interface CloudAccountStatus {
     server_url: string;
     server_url_source: string;
+    /** The account site's address (where sign-in and account pages open). Empty when it is not a valid address. */
+    account_url: string;
     signed_in: boolean;
     email: string | null;
     user_id: string | null;
@@ -455,6 +457,8 @@ export interface InboxState {
     has_app_password: boolean;
     /** A usable Google refresh token exists on the profile or the inbox row. */
     oauth_connected: boolean;
+    /** This build can start Google's sign-in for mail (a client id and secret exist); false: offer the app password only. */
+    google_available: boolean;
     oauth_inbox_email: string | null;
     oauth_updated_at: string | null;
     /** A sibling on this inbox still has a Submitted return awaiting its BIR receipt. */

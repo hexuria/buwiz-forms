@@ -7,9 +7,11 @@ export type { DoorStatus, HostFunction };
 
 /**
  * How sending stands and which database file is named, without opening it. `sending` is "dry_run" (nothing
- * leaves this computer), "mock" (the local mock BIR server), "relay" (the local mock relay, docs/relay.md), "off" (this
- * build cannot send a return and refuses to queue one; everything else works) or "refused" (the submission worker did
- * not start). "live" is a build that files with the BIR itself, which no build that ships is.
+ * leaves this computer), "mock" (the local mock BIR server), "relay" (the local mock relay, docs/relay.md), "buwiz"
+ * (returns go to the BIR through the Buwiz server: every release build on a desktop, and a development build asked to
+ * use one on this computer), "off" (this build cannot send a return and refuses to queue one; everything else works) or
+ * "refused" (the submission worker did not start). "live" is a build that files with the BIR itself, which no build
+ * that ships is.
  * `databasePath` is the file this thread has open, or the file the environment names while none is open.
  */
 export function doorStatus(): DoorStatus {

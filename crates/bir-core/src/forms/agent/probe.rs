@@ -270,6 +270,30 @@ const FILER_TYPED: &[(&str, &str)] = &[
         "Part IV item 2B Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered while Schedule A (Part IV.A) is open and clears it when Schedule A closes",
     ),
     (
+        "frm2550m:txtTax13B",
+        "Item 13B Output Tax on Sales to Government: enabled at load (rules/forms/2550m-v2007/fixtures/runtime-control-inventory-v796.json source line 738, disabled=false, readonly=false); compute13B fills 12% on blur of 13A and leaves 13B editable",
+    ),
+    (
+        "frm2550m:txtTax18F",
+        "Item 18F Input Tax on Domestic Purchases of Goods Other than Capital Goods: enabled at load (inventory source line 857, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18E and leaves 18F editable",
+    ),
+    (
+        "frm2550m:txtTax18H",
+        "Item 18H Input Tax on Importation of Goods Other than Capital Goods: enabled at load (inventory source line 866, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18G and leaves 18H editable",
+    ),
+    (
+        "frm2550m:txtTax18J",
+        "Item 18J Input Tax on Domestic Purchase of Services: enabled at load (inventory source line 876, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18I and leaves 18J editable",
+    ),
+    (
+        "frm2550m:txtTax18L",
+        "Item 18L Input Tax on Services Rendered by Non-residents: enabled at load (inventory source line 886, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18K and leaves 18L editable",
+    ),
+    (
+        "frm2550m:txtTax18O",
+        "Item 18O Input Tax on Others: enabled at load (inventory source line 903, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18N and leaves 18O editable",
+    ),
+    (
         "txtTotalTaxWithHeld30",
         "2550Q Schedule 3 row 0 tax withheld: static placeholder is disabled at load in rules/forms/2550q-v2024/fixtures/runtime-control-inventory-v796.json (L3020) before the Schedule 3 modal opens, while txtTotalTaxWithHeld3{N>=0} is a user-typed input for rows 0 onward",
     ),

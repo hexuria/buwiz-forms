@@ -90,6 +90,26 @@ test("desktop: New taxpayer on an empty database lands on Forms with the Add yea
   expect(app.texts()).toContain(`Add ${YEAR}`);
 });
 
+test("desktop: Back after creating a taxpayer leaves the finished New taxpayer form behind", async () => {
+  const app = await desk({ demo: false, start: "view=home" });
+  await app.waitFor("id:sidebar");
+  await app.press("id:context-pill");
+  await app.waitFor("id:panel-new-taxpayer");
+  await app.press("id:panel-new-taxpayer");
+  await app.waitFor("id:new-tp-card");
+  await app.type("id:new-tp-tin", "000-123-453");
+  await app.type("id:new-tp-name", "Juana Santos");
+  await app.press("id:new-tp-save");
+  await app.waitFor("id:tp-add-year");
+  // The taxpayer exists now: Back goes to where the person was before the form, never to the form they finished.
+  await app.press("id:tb-back");
+  await app.waitFor("id:tp-add-year", { state: "gone" });
+  expect(app.shows("id:new-tp-card")).toBe(false);
+  // Forward returns to the taxpayer's Forms.
+  await app.press("id:tb-forward");
+  await app.waitFor("id:tp-add-year");
+});
+
 test("desktop: New branch suggests the next code, follows the head office, and opens the branch's profile", async () => {
   const app = await open(ENTRY, { ...WIDE, host: { params: { start: "view=new_branch" } } });
   await app.waitFor("id:new-branch-card");
@@ -111,6 +131,10 @@ test("desktop: New branch suggests the next code, follows the head office, and o
   await app.waitFor("id:tp-page-profile");
   expect(app.texts()).toContain("000-123-453-00001");
   expect(app.texts()).toContain("3 of 4 from head office");
+  // The finished form is no stop in the history: Back leaves the branch's profile for what came before the form.
+  await app.press("id:tb-back");
+  await app.waitFor("id:tp-page-profile", { state: "gone" });
+  expect(app.shows("id:new-branch-card")).toBe(false);
 });
 
 test("desktop: Export this profile asks for the PIN first, then calls the host's save dialog", async () => {

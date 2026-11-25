@@ -210,6 +210,29 @@ describe("pickedDeadlines", () => {
       "Deadlines show here once a taxpayer has forms for a tax year.",
     );
   });
+  test("forms with nothing due in the next 30 days: the empty line names the next deadline, not a missing tax year", () => {
+    // A business that began on October 1: its first deadlines are the fourth quarter's, in January.
+    const late = loadDashboard(
+      fakeStore({
+        deadlines: [
+          deadline("T1", "1701", "2027-04-15", "Not started"),
+          deadline("T1", "2551Q", "2027-01-25", "Draft"),
+          deadline("T1", "1601C", "2026-12-10", "Submitted"),
+        ],
+      }),
+      NOW,
+    );
+    expect(late.upcoming).toEqual([]);
+    expect(late.later?.form_code).toBe("2551Q");
+    expect(late.anyDeadlines).toBe(true);
+    expect(pickedDeadlines({ homePick: null, homeDay: null }, late).empty).toBe(
+      "Nothing is due in the next 30 days. The next is 2551Q on January 25, 2027.",
+    );
+    // Everything later already filed: still deadlines, so not the fresh line, and no next one to name.
+    const filed = loadDashboard(fakeStore({ deadlines: [deadline("T1", "2551Q", "2027-01-25", "Submitted")] }), NOW);
+    expect(filed.later).toBe(null);
+    expect(pickedDeadlines({ homePick: null, homeDay: null }, filed).empty).toBe("Nothing is due in the next 30 days.");
+  });
   test("overdue and due-in-7-days pick their own lists", () => {
     const overdue = pickedDeadlines({ homePick: "overdue", homeDay: null }, data);
     expect(overdue).toMatchObject({ title: "Overdue", empty: "Nothing is overdue." });

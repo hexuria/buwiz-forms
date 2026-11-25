@@ -105,7 +105,7 @@ function fakeAccount(p: Params): void {
     h.cloud_account_begin_sign_up = begin("cloud_account_begin_sign_up");
     h.cloud_account_finish_sign_in = async () => {
       called("cloud_account_finish_sign_in");
-      return { server_url: "http://localhost:3008", server_url_source: "build", signed_in: true, email: "demo@example.com", user_id: "demo", offline: false, detail: "" };
+      return { server_url: "http://localhost:3008", server_url_source: "build", account_url: "", signed_in: true, email: "demo@example.com", user_id: "demo", offline: false, detail: "" };
     };
   }
 }

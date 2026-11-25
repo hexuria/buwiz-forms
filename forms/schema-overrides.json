@@ -12165,11 +12165,13 @@
     },
     "frm1701:txtPg3IShed6_6A": {
       "label": "Amount",
-      "evidence": "agent box label: 'Amount'; writer-cells printed caption: 'Amount'"
+      "evidence": "official-hta-runtime#control:L2723 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed6_6B": {
       "label": "NOLCO Applied (Previous Year/s)",
-      "evidence": "agent box label: 'NOLCO Applied (Previous Year/s)'; writer-cells printed caption: 'NOLCO Applied (Previous Year/s)'"
+      "evidence": "official-hta-runtime#control:L2732 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed6_6C": {
       "label": "NOLCO Expired (Unapplied)",
@@ -12193,7 +12195,8 @@
     },
     "frm1701:txtPg3IShed6_7B": {
       "label": "NOLCO Applied (Previous Year/s)",
-      "evidence": "agent box label: 'NOLCO Applied (Previous Year/s)'; writer-cells printed caption: 'NOLCO Applied (Previous Year/s)'"
+      "evidence": "official-hta-runtime#control:L2776 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed6_7C": {
       "label": "NOLCO Expired (Unapplied)",
@@ -12270,7 +12273,8 @@
     },
     "frm1701:txtPg4IShed6_9B": {
       "label": "NOLCO Applied (Previous Year/s)",
-      "evidence": "agent box label: 'NOLCO Applied (Previous Year/s)'; writer-cells printed caption: 'NOLCO Applied (Previous Year/s)'"
+      "evidence": "official-hta-runtime#control:L2924 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_9C": {
       "label": "NOLCO Expired (Unapplied)",
@@ -12286,7 +12290,8 @@
     },
     "frm1701:txtPg4IShed6_9A": {
       "label": "Amount",
-      "evidence": "agent box label: 'Amount'; writer-cells printed caption: 'Amount'"
+      "evidence": "official-hta-runtime#control:L2915 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_10Year": {
       "label": "Year Incurred",
@@ -12294,11 +12299,13 @@
     },
     "frm1701:txtPg4IShed6_10A": {
       "label": "Amount",
-      "evidence": "agent box label: 'Amount'; writer-cells printed caption: 'Amount'"
+      "evidence": "official-hta-runtime#control:L2959 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_10B": {
       "label": "NOLCO Applied (Previous Year/s)",
-      "evidence": "agent box label: 'NOLCO Applied (Previous Year/s)'; writer-cells printed caption: 'NOLCO Applied (Previous Year/s)'"
+      "evidence": "official-hta-runtime#control:L2968 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_10C": {
       "label": "NOLCO Expired (Unapplied)",
@@ -12333,7 +12340,8 @@
     },
     "frm1701:txtPg4IShed6_12B": {
       "label": "NOLCO Applied (Previous Year/s)",
-      "evidence": "agent box label: 'NOLCO Applied (Previous Year/s)'; writer-cells printed caption: 'NOLCO Applied (Previous Year/s)'"
+      "evidence": "official-hta-runtime#control:L3055 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_12C": {
       "label": "NOLCO Expired (Unapplied)",
@@ -12377,11 +12385,13 @@
     },
     "frm1701:txtPg4IShed6_11A": {
       "label": "Amount",
-      "evidence": "agent box label: 'Amount'; writer-cells printed caption: 'Amount'"
+      "evidence": "official-hta-runtime#control:L3003 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_11B": {
       "label": "NOLCO Applied (Previous Year/s)",
-      "evidence": "agent box label: 'NOLCO Applied (Previous Year/s)'; writer-cells printed caption: 'NOLCO Applied (Previous Year/s)'"
+      "evidence": "official-hta-runtime#control:L3012 (filer-typed Schedule 6 NOLCO box under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg4IShed6_11C": {
       "label": "NOLCO Expired (Unapplied)",
@@ -12609,19 +12619,23 @@
     },
     "frm1701:txtPg2IShed3_8A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 8 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L1588; taxRateEnableDisableFields:L11195-L11223 (filer-typed under Graduated business/profession/mixed ATC II012/II013/II014)",
+      "computed": false
     },
     "frm1701:txtPg2IShed3_8B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 8 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L1592; taxRateEnableDisableFields:L11195-L11223 (filer-typed on joint return under spouse Graduated business/profession/mixed ATC)",
+      "computed": false
     },
     "frm1701:txtPg2IShed3_9B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 9 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L1604; taxRateEnableDisableFields:L11195-L11223 (filer-typed on joint return under spouse Graduated business/profession/mixed ATC)",
+      "computed": false
     },
     "frm1701:txtPg2IShed3_9A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 9 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L1600; taxRateEnableDisableFields:L11195-L11223 (filer-typed under Graduated business/profession/mixed ATC II012/II013/II014)",
+      "computed": false
     },
     "frm1701:txtPg2IShed3_10A": {
       "label": "A. Taxpayer/Filer",
@@ -12633,11 +12647,13 @@
     },
     "frm1701:txtPg2IShed3_11A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 11 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L1624; taxRateEnableDisableFields:L11195-L11223 (filer-typed under Graduated business/profession/mixed ATC and Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg2IShed3_11B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 11 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L1628; taxRateEnableDisableFields:L11195-L11223 (filer-typed on joint return under spouse Graduated business/profession/mixed ATC and Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg2IShed3_12B": {
       "label": "B. Spouse",
@@ -12829,11 +12845,13 @@
     },
     "frm1701:txtPg3IShed4_3A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 3 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2153 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_3B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 3 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2157 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_4A": {
       "label": "A. Taxpayer/Filer",
@@ -12853,67 +12871,83 @@
     },
     "frm1701:txtPg3IShed4_6A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 6 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2189 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_6B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 6 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2193 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_7A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 7 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2201 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_7B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 7 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2205 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_8A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 8 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2213 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_8B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 8 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2217 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_9B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 9 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2229 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_9A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 9 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2225 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_10A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 10 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2237 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_10B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 10 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2241 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_11A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 11 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2249 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_11B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 11 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2253 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_12B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 12 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2265 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_12A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 12 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2261 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_13A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 13 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2273 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_13B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 13 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2277 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_14A": {
       "label": "A. Taxpayer/Filer",
@@ -48780,6 +48814,30 @@
     }
   },
   "2550M": {
+    "frm2550m:txtTax13B": {
+      "evidence": "Official HTA runtime enables Item 13B at load (rules/forms/2550m-v2007/fixtures/runtime-control-inventory-v796.json source line 738, disabled=false, readonly=false); compute13B fills 12% on blur of 13A and leaves 13B editable (probe.rs FILER_TYPED).",
+      "computed": false
+    },
+    "frm2550m:txtTax18F": {
+      "evidence": "Official HTA runtime enables Item 18F at load (inventory source line 857, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18E and leaves 18F editable (probe.rs FILER_TYPED).",
+      "computed": false
+    },
+    "frm2550m:txtTax18H": {
+      "evidence": "Official HTA runtime enables Item 18H at load (inventory source line 866, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18G and leaves 18H editable (probe.rs FILER_TYPED).",
+      "computed": false
+    },
+    "frm2550m:txtTax18J": {
+      "evidence": "Official HTA runtime enables Item 18J at load (inventory source line 876, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18I and leaves 18J editable (probe.rs FILER_TYPED).",
+      "computed": false
+    },
+    "frm2550m:txtTax18L": {
+      "evidence": "Official HTA runtime enables Item 18L at load (inventory source line 886, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18K and leaves 18L editable (probe.rs FILER_TYPED).",
+      "computed": false
+    },
+    "frm2550m:txtTax18O": {
+      "evidence": "Official HTA runtime enables Item 18O at load (inventory source line 903, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18N and leaves 18O editable (probe.rs FILER_TYPED).",
+      "computed": false
+    },
     "item:2:0": {
       "label": "Vatable sales/receipts, private",
       "evidence": "item 12A: painted view (retired): 'Vatable sales/receipts, private'"

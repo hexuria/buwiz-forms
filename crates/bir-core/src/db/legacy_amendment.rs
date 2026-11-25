@@ -18,6 +18,7 @@ use serde::de::DeserializeOwned;
 use super::amendment_snapshots::{NewAmendmentSnapshot, insert_amendment_snapshot};
 use super::drafts::filing_status_to_db;
 use super::{AmendmentBase, Database, DbError, RevertedForAmendment, SnapshotPayloadSource};
+use crate::forms::dry_run::is_dry_run;
 use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_1601c_xml::FORM_1601C_FORM_ID;
 use crate::forms::form_2551q::Form2551QDraft;
@@ -39,6 +40,8 @@ trait LegacyAmendable: Clone + Serialize + DeserializeOwned {
     fn receipt_id(&self) -> Option<i64>;
     fn submission_filename(&self) -> Option<&str>;
     fn submitted_payload(&self) -> Option<&str>;
+    /// The worker only simulated the send (`submitted_dry_run`).
+    fn submitted_dry_run(&self) -> bool;
     fn field_map(&self) -> std::collections::BTreeMap<String, String>;
     fn revert_to_draft(&mut self);
     /// Set "Amended Return?" to Yes the way the form's editor does.
@@ -81,6 +84,9 @@ impl LegacyAmendable for Form1601CDraft {
     }
     fn submitted_payload(&self) -> Option<&str> {
         self.submitted_payload.as_deref()
+    }
+    fn submitted_dry_run(&self) -> bool {
+        self.submitted_dry_run
     }
     fn field_map(&self) -> std::collections::BTreeMap<String, String> {
         self.to_bir_field_map()
@@ -131,6 +137,9 @@ impl LegacyAmendable for Form2551QDraft {
     }
     fn submitted_payload(&self) -> Option<&str> {
         self.submitted_payload.as_deref()
+    }
+    fn submitted_dry_run(&self) -> bool {
+        self.submitted_dry_run
     }
     fn field_map(&self) -> std::collections::BTreeMap<String, String> {
         self.to_bir_field_map()
@@ -284,10 +293,22 @@ impl Database {
         let mut draft = current.clone();
         let mut snapshot_id = None;
         let mut marked_amended = false;
-        if matches!(
-            previous_status,
-            FilingStatus::Submitted | FilingStatus::Confirmed
-        ) {
+        // A dry run reached nobody: it is no original to amend. It goes back
+        // to a plain Draft, as a cancelled queue does (no snapshot, no
+        // amended mark), and is sent again as the original.
+        let dry_run = is_dry_run(&previous_status, current.submitted_dry_run());
+        if dry_run && replacement.is_some() {
+            return Err(DbError::Other(format!(
+                "This {} return was a dry run: nothing reached the BIR, so there is no filed return to amend",
+                F::FORM_CODE
+            )));
+        }
+        if !dry_run
+            && matches!(
+                previous_status,
+                FilingStatus::Submitted | FilingStatus::Confirmed
+            )
+        {
             let (xml, source) = sent_payload(&current);
             let period_key = current.filing_period().to_period_key();
             snapshot_id = Some(insert_amendment_snapshot(
@@ -562,6 +583,164 @@ mod tests {
             assert_eq!(snap.payload_source, SnapshotPayloadSource::Stored);
             let stored: Form2551QDraft = serde_json::from_str(&row(&db, "2551Q").1).unwrap();
             assert!(stored.is_amended);
+        }
+    }
+
+    fn dry_run_1601c() -> Form1601CDraft {
+        let mut draft = queued_1601c();
+        let filename = draft.default_submission_filename();
+        draft.transition_to_submitted(filename, true);
+        draft
+    }
+
+    fn dry_run_2551q() -> Form2551QDraft {
+        let mut draft = queued_2551q();
+        let filename = draft.default_submission_filename();
+        draft.transition_to_submitted(filename, true);
+        draft
+    }
+
+    /// A dry run reached nobody: Revert to Draft gives back a plain Draft (no
+    /// snapshot, no amended mark, no sent payload), and it is no original.
+    #[test]
+    fn a_dry_run_1601c_and_2551q_revert_plainly_and_leave_no_original() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        store(&db, &dry_run_1601c(), &FilingStatus::Submitted, 5);
+        let period = FilingPeriod::Monthly(5).to_period_key();
+        assert!(
+            !db.has_filed_original(TIN, "1601C", 2026, &period, None)
+                .unwrap()
+        );
+        let out = db.revert_1601c_for_amendment(TIN, 2026, 5).unwrap();
+        assert_eq!(out.previous_status, FilingStatus::Submitted);
+        assert!(out.snapshot_id.is_none());
+        assert!(!out.marked_amended);
+        assert!(!out.draft.is_amended);
+        assert!(!out.draft.submitted_dry_run);
+        assert!(out.draft.submitted_payload.is_none());
+        let (status, json) = row(&db, "1601C");
+        assert_eq!(status, "Draft");
+        let stored: Form1601CDraft = serde_json::from_str(&json).unwrap();
+        assert!(!stored.is_amended);
+        assert_eq!(snapshot_count(&db), 0);
+        assert!(
+            !db.has_filed_original(TIN, "1601C", 2026, &period, None)
+                .unwrap()
+        );
+
+        let db = Database::open_in_memory_for_tests().unwrap();
+        store(&db, &dry_run_2551q(), &FilingStatus::Submitted, 1);
+        assert!(
+            !db.has_filed_original(TIN, "2551Q", 2026, "Q1", None)
+                .unwrap()
+        );
+        let out = db.revert_2551q_for_amendment(TIN, 2026, 1).unwrap();
+        assert!(out.snapshot_id.is_none());
+        assert!(!out.marked_amended);
+        assert!(!out.draft.is_amended);
+        assert!(!out.draft.submitted_dry_run);
+        let stored: Form2551QDraft = serde_json::from_str(&row(&db, "2551Q").1).unwrap();
+        assert!(!stored.is_amended);
+        assert_eq!(snapshot_count(&db), 0);
+    }
+
+    /// An amendment's first save over a dry run is refused and changes nothing.
+    #[test]
+    fn an_amendment_saved_over_a_dry_run_1601c_or_2551q_is_refused() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let sent = dry_run_1601c();
+        let id = store(&db, &sent, &FilingStatus::Submitted, 5);
+        let before = row(&db, "1601C");
+        let mut amended = sent.clone();
+        amended.revert_to_draft();
+        amended.is_amended = true;
+        amended.id = Some(id);
+        let base = AmendmentBase {
+            status: FilingStatus::Submitted,
+            updated_at: sent.updated_at.clone(),
+        };
+        let error = db
+            .save_1601c_amendment(&amended, &base)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("dry run"), "{error}");
+        assert_eq!(row(&db, "1601C"), before);
+
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let sent = dry_run_2551q();
+        let id = store(&db, &sent, &FilingStatus::Submitted, 1);
+        let before = row(&db, "2551Q");
+        let mut amended = sent.clone();
+        amended.revert_to_draft();
+        amended.is_amended = true;
+        amended.id = Some(id);
+        let base = AmendmentBase {
+            status: FilingStatus::Submitted,
+            updated_at: sent.updated_at.clone(),
+        };
+        let error = db
+            .save_2551q_amendment(&amended, &base)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("dry run"), "{error}");
+        assert_eq!(row(&db, "2551Q"), before);
+        assert_eq!(snapshot_count(&db), 0);
+    }
+
+    /// A real send, a relay-receipt send, Confirmed and Paid are originals; the
+    /// sends and Confirmed still revert as amendments.
+    #[test]
+    fn real_relay_confirmed_and_paid_1601c_and_2551q_are_originals() {
+        let mut relay_1601c = submitted_1601c(false);
+        relay_1601c.relay_receipt = Some("a.b.c".into());
+        let mut paid_1601c = submitted_1601c(true);
+        paid_1601c.status = FilingStatus::Paid;
+        let period = FilingPeriod::Monthly(5).to_period_key();
+        for sent in [
+            submitted_1601c(false),
+            relay_1601c,
+            submitted_1601c(true),
+            paid_1601c,
+        ] {
+            let db = Database::open_in_memory_for_tests().unwrap();
+            let status = sent.status.clone();
+            store(&db, &sent, &status, 5);
+            assert!(
+                db.has_filed_original(TIN, "1601C", 2026, &period, None)
+                    .unwrap(),
+                "{status:?}"
+            );
+            let out = db.revert_1601c_for_amendment(TIN, 2026, 5);
+            if status == FilingStatus::Paid {
+                assert!(out.is_err());
+            } else {
+                assert!(out.unwrap().marked_amended, "{status:?}");
+            }
+        }
+        let mut relay_2551q = submitted_2551q(false);
+        relay_2551q.relay_receipt = Some("a.b.c".into());
+        let mut paid_2551q = submitted_2551q(true);
+        paid_2551q.transition_to_paid();
+        for sent in [
+            submitted_2551q(false),
+            relay_2551q,
+            submitted_2551q(true),
+            paid_2551q,
+        ] {
+            let db = Database::open_in_memory_for_tests().unwrap();
+            let status = sent.status.clone();
+            store(&db, &sent, &status, 1);
+            assert!(
+                db.has_filed_original(TIN, "2551Q", 2026, "Q1", None)
+                    .unwrap(),
+                "{status:?}"
+            );
+            let out = db.revert_2551q_for_amendment(TIN, 2026, 1);
+            if status == FilingStatus::Paid {
+                assert!(out.is_err());
+            } else {
+                assert!(out.unwrap().marked_amended, "{status:?}");
+            }
         }
     }
 

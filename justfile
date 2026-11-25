@@ -621,6 +621,91 @@ _package-mac-appstore args="": build-frozen-html-identity
         echo "⚠️  Note: You must also codesign the .pkg with an 'Apple Distribution' certificate before submitting."
     fi
 
+# Google Play bundle (docs/platforms/android.md): an Android App Bundle for phones and tablets with the Play application
+# id com.buwiz.ebirforms (nsh.json keeps dev.goldcoders.bir for every other system and for development builds), the
+# target API level and backup switch of nsh.json's "android", and versionCode = the build number (App Store Connect's
+# next, as `just app` uses, or `build=N`). Needs no secret: the bundle comes out UNSIGNED, and the owner signs it with the
+# upload key (`just play-sign`). nsh package always signs, with the debug key here; `android_bundle.py prepare` takes that
+# signature off with the updater's source (Google Play updates the app; the updater never starts on a phone).
+[macos]
+play-bundle build="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    umask 022
+    root="$(pwd)"
+    BUILD="{{build}}"
+    if [ -z "$BUILD" ]; then
+        set -a && source .env && set +a
+        BUILD="$(uv run scripts/bump_build.py --print-next)"
+    fi
+    case "$BUILD" in ''|*[!0-9]*) echo "Invalid build number: $BUILD" >&2; exit 1 ;; esac
+    TARGET_SDK="$({{PYTHON}} -c 'import json; print(json.load(open("nsh/nsh.json"))["android"]["targetSdk"])')"
+    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one.
+    unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV
+    # nsh builds libnsh.so in its generated workspace, which has no [profile.release]: this repository's own profile never
+    # applies there, and Cargo's defaults make a 116 MB library. These make it 84 MB (24 MB to download) on arm64.
+    # Not opt-level z and not panic=abort until such a build has been used on a real phone (docs/platforms/android.md).
+    export CARGO_PROFILE_RELEASE_LTO=fat CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 CARGO_PROFILE_RELEASE_OPT_LEVEL=s
+    OUT="$root/{{RELEASE_DIR}}/android"
+    AAB="$root/{{RELEASE_DIR}}/{{APP_NAME}}-Android-{{VERSION}}-$BUILD.aab"
+    rm -rf "$OUT" "$AAB"
+    mkdir -p "$OUT"
+    (cd nsh && nsh package --target android --format aab --abi arm64-v8a,armeabi-v7a --id com.buwiz.ebirforms \
+        --build "$BUILD" --app-version "{{VERSION}}" -o "$OUT")
+    {{PYTHON}} scripts/android_bundle.py prepare "$OUT/{{APP_NAME}}.aab" "$AAB"
+    {{PYTHON}} scripts/android_bundle.py check "$AAB" --package com.buwiz.ebirforms --version-code "$BUILD" --target-sdk "$TARGET_SDK"
+    echo "✅ $AAB ({{VERSION}}, versionCode $BUILD, unsigned): the owner signs it with just play-sign"
+
+# Once, by the owner: the Google Play upload key (docs/platforms/android.md, "The upload key"). keytool asks for the
+# password on the keyboard; it goes into the password manager with the file, and nowhere else.
+[macos]
+play-upload-key:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    KEYSTORE="${PLAY_UPLOAD_KEYSTORE:-$HOME/Keys/ebirforms-android/upload.jks}"
+    [ ! -e "$KEYSTORE" ] || { echo "❌ $KEYSTORE exists: the upload key is made once." >&2; exit 1; }
+    JDK="$(just _play-jdk)"
+    mkdir -p "$(dirname "$KEYSTORE")" && chmod 700 "$(dirname "$KEYSTORE")"
+    "$JDK/keytool" -genkeypair -v -keystore "$KEYSTORE" -storetype PKCS12 -alias upload -keyalg RSA -keysize 2048 \
+        -validity 10000 -dname "CN=eBIRForms upload, O=Buwiz, C=PH"
+    chmod 600 "$KEYSTORE"
+    echo "✅ $KEYSTORE: attach it to the password manager entry that holds its password."
+
+# The owner signs the bundle `just play-bundle` made with the upload key; jarsigner asks for the password on the keyboard.
+# Writes <bundle>-signed.aab beside it and shows it in Finder, ready to drag into the Play Console.
+[macos]
+play-sign bundle="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    KEYSTORE="${PLAY_UPLOAD_KEYSTORE:-$HOME/Keys/ebirforms-android/upload.jks}"
+    [ -f "$KEYSTORE" ] || { echo "❌ No upload key at $KEYSTORE (just play-upload-key, once)." >&2; exit 1; }
+    AAB="{{bundle}}"
+    if [ -z "$AAB" ]; then
+        AAB="$(ls -t {{RELEASE_DIR}}/{{APP_NAME}}-Android-*.aab 2>/dev/null | grep -v -- '-signed\.aab$' | head -1 || true)"
+    fi
+    [ -f "$AAB" ] || { echo "❌ No bundle to sign: run just play-bundle first." >&2; exit 1; }
+    if unzip -l "$AAB" | grep -q ' META-INF/'; then
+        echo "❌ $AAB is already signed: sign the unsigned bundle play-bundle wrote." >&2; exit 1
+    fi
+    JDK="$(just _play-jdk)"
+    SIGNED="${AAB%.aab}-signed.aab"
+    cp "$AAB" "$SIGNED"
+    "$JDK/jarsigner" -sigalg SHA256withRSA -digestalg SHA-256 -keystore "$KEYSTORE" "$SIGNED" upload
+    "$JDK/jarsigner" -verify "$SIGNED" | grep -q "jar verified" || { echo "❌ $SIGNED does not verify." >&2; exit 1; }
+    echo "✅ $SIGNED: drag it into the Play Console (Test and release > the track > Create new release)."
+    open -R "$SIGNED"
+
+# The JDK's bin folder: JAVA_HOME's, Homebrew's or Android Studio's. Never /usr/bin's, which is macOS's stub.
+[macos]
+_play-jdk:
+    #!/usr/bin/env bash
+    for bin in "${JAVA_HOME:+$JAVA_HOME/bin}" /opt/homebrew/opt/openjdk/bin "/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin"; do
+        if [ -n "$bin" ] && [ -x "$bin/jarsigner" ] && "$bin/jarsigner" -help >/dev/null 2>&1; then echo "$bin"; exit 0; fi
+    done
+    echo "❌ No JDK: brew install openjdk" >&2
+    exit 1
+
 # App Store iOS package (the devices are nsh.json's ios.infoPlist.UIDeviceFamily): nsh signs it with the App Store profile,
 # then the store's additions go in and the bundle is signed again with the same entitlements. CODESIGN_IDENTITY is the
 # "Apple Distribution: …" identity; the profile is the iOS App Store profile for dev.goldcoders.bir (docs/platforms/ios.md).

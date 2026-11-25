@@ -116,13 +116,17 @@ arrive in the
 inbox you configured, the status moves to Confirmed and then to Paid. A
 submitted return is read-only.
 
-**Sending is switched off.** This version cannot send a return to the BIR.
-Submit says so and the return stays a draft; a return queued by an earlier
-version stays queued and is not sent. Sending comes back in a later version.
-To simulate a submission, start the app with `BIR_SFTP_DRY_RUN=1`; nothing is
-sent. Debug builds are dry by default; their Dev Mode panel defaults to dry
-run. The code that files with the BIR itself is compiled only with bir-core's
-`direct-bir` cargo feature, which no build that ships enables.
+**Sending goes through Buwiz.** When you queue a return, the app sends it to
+the BIR through Buwiz's server: the return is sealed for that server on your
+computer, the BIR's own servers are reached from your computer, and the app
+keeps Buwiz's signed receipt. It needs your Buwiz sign-in and a TIN that is
+approved on your Buwiz account; a return for any other TIN comes back to Draft
+with the reason. A return queued by an earlier version is not sent: it goes
+back to Draft once, to be checked and queued again. To simulate a submission,
+start the app with `BIR_SFTP_DRY_RUN=1`; nothing is sent. Debug builds are dry
+by default, and never send through Buwiz's production server. The code that
+files with the BIR itself is compiled only with bir-core's `direct-bir` cargo
+feature, which no build that ships enables.
 
 **Revert to Draft as an amendment.** Queued, Submitted and Confirmed returns
 can be reverted to Draft. Paid returns cannot. Reverting a Submitted or
