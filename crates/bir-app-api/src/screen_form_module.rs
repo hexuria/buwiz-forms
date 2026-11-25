@@ -9336,7 +9336,9 @@ mod tests {
             .iter()
             .find(|it| it["keys"][0][0] == "frm1601c:sched1:txtMonthYear0")
             .expect("Schedule I table");
-        assert_eq!(table["rows"], 3);
+        // Expandable as the official program builds it (F4): rows to the
+        // bindings' depth, revealed on the page as they fill.
+        assert_eq!(table["rows"], 50);
         assert_eq!(table["cols"][0]["l"], "1 Previous Month/s (MM/YYYY)");
         assert_eq!(table["cols"][4]["t"], "money");
         assert!(table["cols"][6].get("c").is_some());

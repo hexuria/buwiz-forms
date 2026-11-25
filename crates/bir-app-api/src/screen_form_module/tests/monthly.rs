@@ -601,7 +601,10 @@ fn form_1601c_schedule_i_is_its_own_part() {
     let at = |name: &str| items.iter().position(|n| n == name).unwrap();
     assert!(at("Part III · Details of Payment") < at("Part IV · Schedule"));
     let schedule = &schema_entry("1601C").unwrap()["parts"][at("Part IV · Schedule")]["items"];
-    assert_eq!(schedule[0]["rows"], 3);
+    // Schedule I is expandable in the official program (F4): the schema
+    // carries the rows the bindings carry, the page revealing them as they
+    // fill (first empty row).
+    assert_eq!(schedule[0]["rows"], 50);
     assert_eq!(schedule[0]["keys"][0][0], "frm1601c:sched1:txtMonthYear0");
     assert_eq!(schedule[1]["no"], "4");
     assert_eq!(schedule[1]["f"][0]["k"], "frm1601c:sched1:txtTotal1");
