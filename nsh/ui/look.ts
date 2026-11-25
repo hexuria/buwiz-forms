@@ -25,6 +25,8 @@ export function tabletRoom(): boolean {
 }
 
 const ANDROID = platform.os === "android";
+/** A touch target's least size in points: 44 on iOS, 48 dp on Android (each platform's own guideline). */
+export const T_PX = ANDROID ? 48 : 44;
 /** A touch target's height: 44 points on iOS, 48 dp on Android (each platform's own guideline). */
 export const T_MIN_H = ANDROID ? "min-h-12" : "min-h-11";
 /** A touch target's fixed height. */

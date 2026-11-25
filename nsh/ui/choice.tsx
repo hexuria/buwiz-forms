@@ -12,7 +12,7 @@ import type { IconName } from "./icons";
 import { Popover, sheetMaxHeight, sheetSides } from "./layers";
 import { NameCell } from "./lists";
 import { matchOptions, multiComboLabel, type MultiComboWords, normalizeSelection, type PickOption } from "./logic";
-import { CTL, cx, FOCUS_RING, SMALL_HIT, T_MIN_H, TOUCH } from "./look";
+import { CTL, cx, FOCUS_RING, SMALL_HIT, T_MIN_H, T_MIN_W, TOUCH } from "./look";
 import { Icon, Line, Text } from "./text";
 
 // ---------------------------------------------------------------- switch
@@ -252,12 +252,12 @@ export function Segmented(props: SegmentedProps) {
             checked={o().value === props.value}
             disabled={off(o().disabled)}
             accessibilityLabel={o().label}
-            hitSlop={TOUCH ? { top: 10, bottom: 10 } : 0}
             onChange={() => props.onChange(o().value)}
             class={cx(
               "group flex-row items-center gap-1.5 rounded-(--radius-ctl) px-2.5 checked:bg-raised checked:shadow-xs disabled:opacity-50",
               // A stacked segment grows with its words: a long choice wraps inside the bar instead of running off its edge.
-              props.stacked ? cx("w-full py-1", TOUCH ? T_MIN_H : "min-h-8") : "h-6",
+              // On touch every segment is a whole target (44 points, 48 dp on Android), not a 24-point chip with reach around it.
+              props.stacked ? cx("w-full py-1", TOUCH ? T_MIN_H : "min-h-8") : TOUCH ? cx(T_MIN_H, T_MIN_W, "justify-center") : "h-6",
               FOCUS_RING,
             )}
           >
