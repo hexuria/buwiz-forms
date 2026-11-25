@@ -21,3 +21,10 @@ resolve_unknown_send
 # The sign-in flow: Cancel stops the wait; Open the page again reopens the same page for the same code.
 cloud_account_cancel_sign_in
 cloud_account_reopen_sign_in
+
+# The email-and-code sign-in: start with an address, check the code, Resend, end the request, and the request after a relaunch.
+cloud_account_email_start
+cloud_account_email_verify
+cloud_account_email_resend
+cloud_account_email_cancel
+cloud_account_email_pending

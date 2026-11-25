@@ -47,6 +47,21 @@ export const cloud_account_begin_sign_up = (...args: Parameters<typeof Host.clou
 export const cloud_account_cancel_sign_in = (...args: Parameters<typeof Host.cloud_account_cancel_sign_in>): ReturnType<typeof Host.cloud_account_cancel_sign_in> =>
   Door.call("cloud_account_cancel_sign_in", args) as ReturnType<typeof Host.cloud_account_cancel_sign_in>;
 
+export const cloud_account_email_cancel = (...args: Parameters<typeof Host.cloud_account_email_cancel>): ReturnType<typeof Host.cloud_account_email_cancel> =>
+  Door.call("cloud_account_email_cancel", args) as ReturnType<typeof Host.cloud_account_email_cancel>;
+
+export const cloud_account_email_pending = (...args: Parameters<typeof Host.cloud_account_email_pending>): ReturnType<typeof Host.cloud_account_email_pending> =>
+  Door.call("cloud_account_email_pending", args) as ReturnType<typeof Host.cloud_account_email_pending>;
+
+export const cloud_account_email_resend = (...args: Parameters<typeof Host.cloud_account_email_resend>): ReturnType<typeof Host.cloud_account_email_resend> =>
+  Door.callAsync("cloud_account_email_resend", args) as ReturnType<typeof Host.cloud_account_email_resend>;
+
+export const cloud_account_email_start = (...args: Parameters<typeof Host.cloud_account_email_start>): ReturnType<typeof Host.cloud_account_email_start> =>
+  Door.callAsync("cloud_account_email_start", args) as ReturnType<typeof Host.cloud_account_email_start>;
+
+export const cloud_account_email_verify = (...args: Parameters<typeof Host.cloud_account_email_verify>): ReturnType<typeof Host.cloud_account_email_verify> =>
+  Door.callAsync("cloud_account_email_verify", args) as ReturnType<typeof Host.cloud_account_email_verify>;
+
 export const cloud_account_finish_sign_in = (...args: Parameters<typeof Host.cloud_account_finish_sign_in>): ReturnType<typeof Host.cloud_account_finish_sign_in> =>
   Door.callAsync("cloud_account_finish_sign_in", args) as ReturnType<typeof Host.cloud_account_finish_sign_in>;
 
@@ -410,6 +425,8 @@ export type {
   CloudSignInStart,
   CloudSignInFinish,
   CloudAccountGate,
+  CloudEmailStep,
+  CloudEmailCheck,
   BranchFieldName,
   BranchFacts,
   Branch,
@@ -482,6 +499,11 @@ export const bir = {
   cloud_account_begin_sign_in,
   cloud_account_begin_sign_up,
   cloud_account_cancel_sign_in,
+  cloud_account_email_cancel,
+  cloud_account_email_pending,
+  cloud_account_email_resend,
+  cloud_account_email_start,
+  cloud_account_email_verify,
   cloud_account_finish_sign_in,
   cloud_account_gate,
   cloud_account_refresh,
@@ -614,6 +636,11 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "cloud_account_begin_sign_in", kind: "async" },
   { name: "cloud_account_begin_sign_up", kind: "async" },
   { name: "cloud_account_cancel_sign_in", kind: "sync" },
+  { name: "cloud_account_email_cancel", kind: "sync" },
+  { name: "cloud_account_email_pending", kind: "sync" },
+  { name: "cloud_account_email_resend", kind: "async" },
+  { name: "cloud_account_email_start", kind: "async" },
+  { name: "cloud_account_email_verify", kind: "async" },
   { name: "cloud_account_finish_sign_in", kind: "async" },
   { name: "cloud_account_gate", kind: "sync" },
   { name: "cloud_account_refresh", kind: "async" },

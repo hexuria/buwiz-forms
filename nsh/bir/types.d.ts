@@ -255,6 +255,27 @@ export function cloud_account_sign_out(): Promise<CloudAccountStatus>;
 export function cloud_account_session_opened(): null;
 export function cloud_account_session_closed(): null;
 
+export interface CloudEmailStep {
+    step: "code" | "refused" | "restart";
+    email: string;
+    code_length: number;
+    expires_in: number;
+    resend_in: number;
+    message: string | null;
+    retry_after: number | null;
+}
+export interface CloudEmailCheck {
+    outcome: "approved" | "wrong" | "expired" | "too-many" | "restart" | "error";
+    message: string | null;
+    attempts_left: number | null;
+    status: CloudAccountStatus;
+}
+export function cloud_account_email_start(email: string): Promise<CloudEmailStep>;
+export function cloud_account_email_verify(code: string): Promise<CloudEmailCheck>;
+export function cloud_account_email_resend(): Promise<CloudEmailStep>;
+export function cloud_account_email_cancel(): null;
+export function cloud_account_email_pending(): CloudEmailStep | null;
+
 export type BranchFieldName = "rdo_code" | "registered_address" | "zip_code" | "phone" | "email";
 export interface BranchFacts {
     rdo_code: string;

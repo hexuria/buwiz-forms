@@ -106,7 +106,7 @@ pub fn prepare_launch() {
     crate::account_gate::set_unlocked(unlocked);
 }
 
-fn status_now() -> HostResult {
+pub(crate) fn status_now() -> HostResult {
     let resolved = match resolve() {
         Ok(resolved) => resolved,
         Err(error) => {
@@ -231,34 +231,49 @@ fn finish_pending<H: cloud_account::Http + Send + 'static>(
             Err(CloudError::TimedOut) => return finish_value("expired"),
             Err(error) => return Err(host_error(error)),
         };
-        if tokens.refresh_token.is_empty() {
-            return Err(HostError::new(
-                "The server did not return a refresh token. Sign in again.",
-            ));
-        }
-        let (user_id, email, practice) =
-            cloud_account::load_profile(&mut http, &challenge.server_url, &tokens.access_token)
-                .map_err(host_error)?;
-        let now = cloud_account::unix_now();
-        let secrets = AccountSecrets {
-            server_url: challenge.server_url.clone(),
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-            access_expires_at_unix: now.saturating_add(tokens.expires_in),
-            user_id,
-            email,
-            offline: false,
-            practice,
-        };
-        {
-            let _one = bir_core::account_session::lock();
-            bir_core::transport::set_practice_account(practice);
-            save_stored(&stored_from(secrets, now))?;
-        }
-        // A new sign-in registers a new device key with the relay (the old one belonged to the old sign-in).
-        bir_core::relay::forget_device();
+        save_signed_in(
+            &mut http,
+            &challenge.server_url,
+            tokens,
+            cloud_account::unix_now(),
+        )?;
         finish_value("approved")
     })
+}
+
+/// The first tokens of a sign-in, from either path (the browser's device flow, the email code): the profile is
+/// read, the sign-in saved under the account-session lock, and the device key of an earlier sign-in forgotten.
+pub(crate) fn save_signed_in(
+    http: &mut dyn cloud_account::Http,
+    server_url: &str,
+    tokens: cloud_account::TokenSet,
+    now: i64,
+) -> Result<(), HostError> {
+    if tokens.refresh_token.is_empty() {
+        return Err(HostError::new(
+            "The server did not return a refresh token. Sign in again.",
+        ));
+    }
+    let (user_id, email, practice) =
+        cloud_account::load_profile(http, server_url, &tokens.access_token).map_err(host_error)?;
+    let secrets = AccountSecrets {
+        server_url: server_url.to_owned(),
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        access_expires_at_unix: now.saturating_add(tokens.expires_in),
+        user_id,
+        email,
+        offline: false,
+        practice,
+    };
+    {
+        let _one = bir_core::account_session::lock();
+        bir_core::transport::set_practice_account(practice);
+        save_stored(&stored_from(secrets, now))?;
+    }
+    // A new sign-in registers a new device key with the relay (the old one belonged to the old sign-in).
+    bir_core::relay::forget_device();
+    Ok(())
 }
 
 fn finish_value(outcome: &str) -> HostResult {
@@ -344,6 +359,7 @@ fn sign_out(
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     spawn_account("buwiz-account-sign-out", || {
         clear_pending();
+        crate::cloud_email::cancel();
         {
             let _one = bir_core::account_session::lock();
             if let Some(stored) = load_stored()? {
@@ -464,7 +480,7 @@ fn gate_value() -> HostResult {
         .into())
 }
 
-fn spawn_account(
+pub(crate) fn spawn_account(
     name: &str,
     work: impl FnOnce() -> HostResult + Send + 'static,
 ) -> Result<std::pin::Pin<Box<dyn std::future::Future<Output = HostResult> + Send>>, HostError> {
@@ -485,7 +501,7 @@ fn spawn_account(
     }))
 }
 
-fn resolve() -> Result<cloud_account::ResolvedServer, HostError> {
+pub(crate) fn resolve() -> Result<cloud_account::ResolvedServer, HostError> {
     cloud_account::configured_server().map_err(host_error)
 }
 

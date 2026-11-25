@@ -65,6 +65,7 @@ struct User {
     email: String,
 }
 struct Device {
+    install: Option<String>,
     code: String,
     expires: Instant,
     decision: Option<Option<User>>,
@@ -74,6 +75,8 @@ struct Grant {
     user: User,
     /// The sign-in this grant belongs to; a refresh keeps it.
     session: String,
+    /// The install the sign-in was asked from (`install_id` at its start), if it said one.
+    install: Option<String>,
     access: String,
     access_expires: Instant,
     refresh: String,
@@ -87,15 +90,16 @@ struct EmailRequest {
     link: String,
     /// Links of earlier codes of this request (after a Resend): `link_used`.
     old_links: Vec<String>,
+    started: Instant,
     expires: Instant,
     resend_at: Instant,
     attempts_left: u32,
     spent: bool,
+    install: Option<String>,
 }
-/// A registered device: one row per install id.
+/// A registered device: one row per account and install.
 struct DeviceRow {
     id: String,
-    session: String,
     platform: String,
     name: String,
 }
@@ -107,7 +111,10 @@ struct State {
     sessions: HashMap<String, User>,
     grants: Vec<Grant>,
     email_requests: HashMap<String, EmailRequest>,
-    registered: HashMap<String, DeviceRow>,
+    /// By (account, install id); a registration without an install id gets a row of its own.
+    registered: HashMap<(String, String), DeviceRow>,
+    /// The sign-ins (grant sessions) that have registered their device: one each.
+    registered_sessions: std::collections::HashSet<String>,
 }
 
 /// A running account server. Dropping it closes the listener.
@@ -177,7 +184,7 @@ impl MockAccount {
         let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         newest_request(&state, email).map(|(_, request)| request.link.clone())
     }
-    /// How many devices are registered (one row per install id).
+    /// How many devices are registered (one row per account and install).
     pub fn registered_devices(&self) -> usize {
         self.state
             .lock()
@@ -185,14 +192,15 @@ impl MockAccount {
             .registered
             .len()
     }
-    /// The platform and name a device registered with, by install id.
-    pub fn registered(&self, install_id: &str) -> Option<(String, String)> {
+    /// The id, platform and name a device registered with, by install id.
+    pub fn registered(&self, install_id: &str) -> Option<(String, String, String)> {
         self.state
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .registered
-            .get(install_id)
-            .map(|row| (row.platform.clone(), row.name.clone()))
+            .iter()
+            .find(|((_, install), _)| install == install_id)
+            .map(|(_, row)| (row.id.clone(), row.platform.clone(), row.name.clone()))
     }
 }
 impl Drop for MockAccount {
@@ -390,12 +398,18 @@ fn user(state: &mut State, email: &str) -> User {
         })
         .clone()
 }
-fn issue(state: &mut State, user: User, session: Option<String>) -> Response {
+fn issue(
+    state: &mut State,
+    user: User,
+    session: Option<String>,
+    install: Option<String>,
+) -> Response {
     let access = token();
     let refresh = token();
     state.grants.push(Grant {
         user,
         session: session.unwrap_or_else(token),
+        install,
         access: access.clone(),
         access_expires: Instant::now() + TTL,
         refresh: refresh.clone(),
@@ -430,6 +444,13 @@ fn dispatch(r: &Request, state: &mut State) -> Response {
             if get("client_id") != "buwiz-desktop" {
                 return oauth(401, "invalid_client", "unknown client_id");
             }
+            let install = value
+                .get("install_id")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            if install.as_deref().is_some_and(|id| !valid_install_id(id)) {
+                return oauth(400, "bad_install_id", "malformed install_id");
+            }
             let device = token();
             let code = token()[..8].to_ascii_uppercase();
             let code = format!("{}-{}", &code[..4], &code[4..]);
@@ -441,6 +462,7 @@ fn dispatch(r: &Request, state: &mut State) -> Response {
             state.devices.insert(
                 device.clone(),
                 Device {
+                    install,
                     code: code.clone(),
                     expires: Instant::now() + TTL,
                     decision,
@@ -477,7 +499,8 @@ fn dispatch(r: &Request, state: &mut State) -> Response {
                 Some(None) => oauth(400, "access_denied", "sign-in declined"),
                 Some(Some(user)) => {
                     d.consumed = true;
-                    issue(state, user, None)
+                    let install = d.install.clone();
+                    issue(state, user, None, install)
                 }
             }
         }
@@ -515,7 +538,7 @@ fn dispatch(r: &Request, state: &mut State) -> Response {
                 return oauth(400, "invalid_grant", "invalid refresh token");
             };
             let old = state.grants.remove(i);
-            issue(state, old.user, Some(old.session))
+            issue(state, old.user, Some(old.session), old.install)
         }
         ("GET", "/login" | "/signup") => {
             let next = safe_next(query.get("next").map(String::as_str).unwrap_or("/device"));
@@ -701,11 +724,20 @@ fn email_start(state: &mut State, value: &Value) -> Response {
             json!({}),
         );
     }
-    if !matches!(get("intent"), "sign_in" | "create")
-        || get("secret_hash").len() != 43
-        || !PLATFORMS.contains(&get("platform"))
-        || !valid_install_id(get("install_id"))
-    {
+    let install = value
+        .get("install_id")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    if install.as_deref().is_some_and(|id| !valid_install_id(id)) {
+        return failure(
+            400,
+            "bad_install_id",
+            "The install id is malformed.",
+            json!({}),
+        );
+    }
+    // `intent` only picks the mail's words and an unknown `platform` is stored as nothing: neither is an error.
+    if get("secret_hash").len() != 43 {
         return failure(
             400,
             "invalid_request",
@@ -713,9 +745,15 @@ fn email_start(state: &mut State, value: &Value) -> Response {
             json!({}),
         );
     }
-    if let Some((_, live)) = newest_request(state, &email)
-        && live.expires > Instant::now()
-    {
+    // One wait: the same address from the same install while its code still works.
+    let held = install.as_deref().and_then(|install| {
+        state
+            .email_requests
+            .values()
+            .filter(|r| r.email == email && !r.spent && r.expires > Instant::now())
+            .find(|r| r.install.as_deref() == Some(install))
+    });
+    if let Some(live) = held {
         let wait = seconds_until(live.expires);
         return failure(
             429,
@@ -735,10 +773,12 @@ fn email_start(state: &mut State, value: &Value) -> Response {
         code: new_code(&options),
         link: token(),
         old_links: Vec::new(),
+        started: Instant::now(),
         expires: Instant::now() + options.code_ttl,
         resend_at: Instant::now() + options.resend_wait,
         attempts_left: ATTEMPTS,
         spent: false,
+        install,
     };
     let answer = email_answer(&options, &request_id, &request);
     state.email_requests.insert(request_id, request);
@@ -770,15 +810,20 @@ fn email_resend(state: &mut State, value: &Value) -> Response {
         Ok(found) => found,
         Err(response) => return response,
     };
+    if request.started.elapsed() > Duration::from_secs(3600) {
+        return failure(
+            400,
+            "invalid_request",
+            "This sign-in request has ended. Start again.",
+            json!({}),
+        );
+    }
     if request.resend_at > Instant::now() {
         let wait = seconds_until(request.resend_at);
         return failure(
             429,
-            "code_already_sent",
-            &format!(
-                "A sign-in code was already sent to this address. Use it, or try again in {} minutes.",
-                wait.div_ceil(60).max(1)
-            ),
+            "too_many_requests",
+            "A new code can be sent once this one has expired.",
             json!({"retry_after": wait}),
         );
     }
@@ -842,6 +887,7 @@ fn email_verify(state: &mut State, value: &Value) -> Response {
     }
     request.spent = true;
     let email = request.email.clone();
+    let install = request.install.clone();
     if options
         .banned
         .iter()
@@ -850,11 +896,12 @@ fn email_verify(state: &mut State, value: &Value) -> Response {
         return failure(403, "account_banned", "This account is closed.", json!({}));
     }
     let u = user(state, &email);
-    issue(state, u, None)
+    issue(state, u, None, install)
 }
 
-/// `POST /api/devices` with the bearer token: one row per install id; a second registration in the same sign-in is
-/// `409 device_registered` (with the id it has).
+/// `POST /api/devices` with the bearer token. One registration per sign-in (`409 device_registered`); with an install
+/// id one row per account and install, updated in place (same id) by a later sign-in; `install_mismatch` when the
+/// sign-in named another install.
 fn register_device(r: &Request, state: &mut State, value: &Value) -> Response {
     let bearer = r
         .headers
@@ -868,13 +915,17 @@ fn register_device(r: &Request, state: &mut State, value: &Value) -> Response {
     else {
         return oauth(401, "invalid_token", "invalid access token");
     };
-    let session = grant.session.clone();
+    let (session, user_id, granted) = (
+        grant.session.clone(),
+        grant.user.id.clone(),
+        grant.install.clone(),
+    );
     let get = |k: &str| value.get(k).and_then(Value::as_str).unwrap_or_default();
-    let install_id = get("install_id").to_owned();
-    if get("public_key").is_empty()
-        || !valid_install_id(&install_id)
-        || !PLATFORMS.contains(&get("platform"))
-    {
+    let install = value
+        .get("install_id")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    if get("public_key").is_empty() {
         return failure(
             400,
             "invalid_request",
@@ -882,23 +933,46 @@ fn register_device(r: &Request, state: &mut State, value: &Value) -> Response {
             json!({}),
         );
     }
-    if let Some(row) = state.registered.get(&install_id)
-        && row.session == session
-    {
+    if install.as_deref().is_some_and(|id| !valid_install_id(id)) {
+        return failure(
+            400,
+            "bad_install_id",
+            "The install id is malformed.",
+            json!({}),
+        );
+    }
+    if granted.is_some() && granted != install {
+        return failure(
+            400,
+            "install_mismatch",
+            "This sign-in was made on another install.",
+            json!({}),
+        );
+    }
+    if state.registered_sessions.contains(&session) {
         return failure(
             409,
             "device_registered",
-            "This device is already registered.",
-            json!({"id": row.id}),
+            "This sign-in has already added its device.",
+            json!({}),
         );
     }
-    let id = token();
+    state.registered_sessions.insert(session);
+    let platform = Some(get("platform"))
+        .filter(|p| PLATFORMS.contains(p))
+        .unwrap_or_default()
+        .to_owned();
+    let key = (user_id, install.unwrap_or_else(token));
+    let id = state
+        .registered
+        .get(&key)
+        .map(|row| row.id.clone())
+        .unwrap_or_else(token);
     state.registered.insert(
-        install_id,
+        key,
         DeviceRow {
             id: id.clone(),
-            session,
-            platform: get("platform").to_owned(),
+            platform,
             name: get("name").to_owned(),
         },
     );
@@ -1360,7 +1434,7 @@ mod tests {
             );
             assert_eq!(
                 (status, early["error"].as_str()),
-                (429, Some("code_already_sent"))
+                (429, Some("too_many_requests"))
             );
             assert!(early["retry_after"].as_u64().unwrap() <= 1);
             // The same address again while its code lives: already sent.
@@ -1485,7 +1559,26 @@ mod tests {
             let (status, bad) = post(&mut http, &url, "/auth/email/start", body);
             assert_eq!(
                 (status, bad["error"].as_str()),
-                (400, Some("invalid_request"))
+                (400, Some("bad_install_id"))
+            );
+            // Another install asking for the same address gets its own request; no install id is never held.
+            let (status, _) = post(
+                &mut http,
+                &url,
+                "/auth/email/start",
+                start_body("t@example.test", "s"),
+            );
+            assert_eq!(status, 429);
+            let mut other = start_body("t@example.test", "s2");
+            other["install_id"] = json!("install-id-of-another-0002");
+            assert_eq!(post(&mut http, &url, "/auth/email/start", other).0, 200);
+            let mut none = start_body("t@example.test", "s3");
+            none.as_object_mut().unwrap().remove("install_id");
+            none["platform"] = json!("toaster");
+            assert_eq!(
+                post(&mut http, &url, "/auth/email/start", none).0,
+                200,
+                "an unknown platform is no error"
             );
             let (status, bad) = post(
                 &mut http,
@@ -1583,41 +1676,87 @@ mod tests {
         tokio::task::spawn_blocking(move || {
             let mut http = BlockingHttp::new();
             let sign_in = |http: &mut BlockingHttp, secret: &str| {
-                let (_, started) = post(http, &url, "/auth/email/start", start_body(&format!("{secret}@example.test"), secret));
-                let (_, tokens) = post(http, &url, "/auth/email/verify", json!({"request_id":started["request_id"],"secret":secret,"code":DEFAULT_CODE}));
+                let (_, started) = post(
+                    http,
+                    &url,
+                    "/auth/email/start",
+                    start_body("one@example.test", secret),
+                );
+                let (_, tokens) = post(
+                    http,
+                    &url,
+                    "/auth/email/verify",
+                    json!({"request_id":started["request_id"],"secret":secret,"code":DEFAULT_CODE}),
+                );
                 tokens
             };
-            let register = |http: &mut BlockingHttp, access: Option<&str>, install: &str| {
-                let answer = http
-                    .exchange(&HttpRequest {
-                        method: "POST",
-                        url: format!("{url}/api/devices"),
-                        content_type: "application/json",
-                        bearer: access.map(str::to_owned),
-                        body: json!({"public_key":"pk","name":"eBIRForms on macos","install_id":install,"platform":"macos"}).to_string(),
-                    })
-                    .unwrap();
-                (answer.status, serde_json::from_str::<Value>(&answer.body).unwrap())
-            };
+            let register =
+                |http: &mut BlockingHttp, access: Option<&str>, install: Option<&str>| {
+                    let mut body =
+                        json!({"public_key":"pk","name":"eBIRForms on macos","platform":"macos"});
+                    if let Some(install) = install {
+                        body["install_id"] = json!(install);
+                    }
+                    let answer = http
+                        .exchange(&HttpRequest {
+                            method: "POST",
+                            url: format!("{url}/api/devices"),
+                            content_type: "application/json",
+                            bearer: access.map(str::to_owned),
+                            body: body.to_string(),
+                        })
+                        .unwrap();
+                    (
+                        answer.status,
+                        serde_json::from_str::<Value>(&answer.body).unwrap(),
+                    )
+                };
             let first = sign_in(&mut http, "one");
             let access = first["access_token"].as_str().unwrap();
-            let (status, made) = register(&mut http, Some(access), INSTALL);
+            // The sign-in was asked from INSTALL: another install, or none, is a mismatch.
+            assert_eq!(
+                register(&mut http, Some(access), Some("install-id-of-another-0002")).1["error"],
+                "install_mismatch"
+            );
+            assert_eq!(
+                register(&mut http, Some(access), None).1["error"],
+                "install_mismatch"
+            );
+            assert_eq!(
+                register(&mut http, Some(access), Some("bad")).1["error"],
+                "bad_install_id"
+            );
+            let (status, made) = register(&mut http, Some(access), Some(INSTALL));
             assert_eq!(status, 200);
-            let (status, again) = register(&mut http, Some(access), INSTALL);
-            assert_eq!((status, again["error"].as_str()), (409, Some("device_registered")));
-            assert_eq!(again["id"], made["id"]);
+            let (status, again) = register(&mut http, Some(access), Some(INSTALL));
+            assert_eq!(
+                (status, again["error"].as_str()),
+                (409, Some("device_registered"))
+            );
             // A refresh is the same sign-in.
-            let refreshed = cloud::refresh_tokens(&mut http, &url, first["refresh_token"].as_str().unwrap()).unwrap();
-            assert_eq!(register(&mut http, Some(&refreshed.access_token), INSTALL).0, 409);
-            // A new sign-in on the same install replaces the row.
+            let refreshed =
+                cloud::refresh_tokens(&mut http, &url, first["refresh_token"].as_str().unwrap())
+                    .unwrap();
+            assert_eq!(
+                register(&mut http, Some(&refreshed.access_token), Some(INSTALL)).0,
+                409
+            );
+            // A new sign-in on the same install updates its row in place: the same id.
             let second = sign_in(&mut http, "two");
-            let (status, replaced) = register(&mut http, second["access_token"].as_str(), INSTALL);
+            let (status, updated) =
+                register(&mut http, second["access_token"].as_str(), Some(INSTALL));
             assert_eq!(status, 200);
-            assert_ne!(replaced["id"], made["id"]);
+            assert_eq!(updated["id"], made["id"]);
             assert_eq!(server.registered_devices(), 1);
-            assert_eq!(server.registered(INSTALL), Some(("macos".into(), "eBIRForms on macos".into())));
-            assert_eq!(register(&mut http, None, INSTALL).0, 401);
-            assert_eq!(register(&mut http, second["access_token"].as_str(), "bad").0, 400);
+            assert_eq!(
+                server.registered(INSTALL),
+                Some((
+                    made["id"].as_str().unwrap().to_owned(),
+                    "macos".into(),
+                    "eBIRForms on macos".into()
+                ))
+            );
+            assert_eq!(register(&mut http, None, Some(INSTALL)).0, 401);
         })
         .await
         .unwrap();
@@ -1629,6 +1768,7 @@ mod tests {
         state.devices.insert(
             "expired".into(),
             Device {
+                install: None,
                 code: "ABCD-EFGH".into(),
                 expires: Instant::now() - TTL,
                 decision: None,
