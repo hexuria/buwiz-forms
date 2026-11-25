@@ -1325,7 +1325,12 @@ pub(crate) fn overlay_profile_for_year(
 }
 
 /// Decision 7: the year's election is locked once a 2551Q, 1701Q or 1701
-/// of any branch of the taxpayer is past Queued for the year.
+/// of any branch of the taxpayer is past Queued for the year. A Submitted
+/// return the worker only simulated (`submitted_dry_run`, top level or
+/// under `lifecycle`, read as [`super::Database::draft_submitted_via_relay`]
+/// reads its flag) reached nobody: it locks nothing. The JSON is read inside
+/// `CASE WHEN json_valid(..)`: SQLite does not promise to stop an `AND` early,
+/// and `json_type` on a row that is not JSON fails the whole query.
 pub(crate) fn election_locked_on(
     conn: &Connection,
     tin: &str,
@@ -1339,7 +1344,12 @@ pub(crate) fn election_locked_on(
             "SELECT count(*) FROM form_drafts
              WHERE {} AND taxable_year = ?2
                AND form_code IN ('2551Q', '1701Q', '1701')
-               AND status IN ('Submitted', 'Filed', 'Confirmed', 'Paid')",
+               AND status IN ('Submitted', 'Filed', 'Confirmed', 'Paid')
+               AND NOT (status IN ('Submitted', 'Filed')
+                        AND (CASE WHEN json_valid(data_json)
+                                  THEN COALESCE(NULLIF(json_type(data_json, '$.submitted_dry_run'), 'null'),
+                                                json_type(data_json, '$.lifecycle.submitted_dry_run'), 'false') = 'true'
+                                  ELSE 0 END))",
             root_matches("tin")
         ),
         params![root, i64::from(year)],

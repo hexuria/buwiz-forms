@@ -137,7 +137,8 @@ fn size_name(width: f32, height: f32) -> &'static str {
 
 /// The paper, the form page's own size and the scale of one on the other, as the document says them: the
 /// sheet's own `@page` is the first rule of the page, the paper is the rule `print_sheet::prepare_html` added
-/// (`<style id="preview-paper">`), whose `zoom` is the scale. A document with no such style prints on A4 at scale 1.
+/// (`<style id="preview-paper">`), whose `.sheet>.page` rule holds the scale — `transform:scale` on
+/// WebKit hosts, `zoom` on Chromium ones. A document with no such style prints on A4 at scale 1.
 pub(crate) fn page_info(html: &str) -> PageInfo {
     let marker = html.find("id=\"preview-paper\"");
     let (head, paper_css) = match marker {
@@ -146,11 +147,15 @@ pub(crate) fn page_info(html: &str) -> PageInfo {
     };
     let paper = page_size_in(paper_css).unwrap_or((PAPER_WIDTH_PT, PAPER_HEIGHT_PT));
     let native = page_size_in(head).unwrap_or(paper);
-    let zoom = paper_css
-        .find(".sheet>.page{zoom:")
-        .and_then(|at| {
-            let rest = &paper_css[at + ".sheet>.page{zoom:".len()..];
-            rest[..rest.find([';', '}'])?].trim().parse::<f64>().ok()
+    let zoom = [".sheet>.page{transform:scale(", ".sheet>.page{zoom:"]
+        .iter()
+        .find_map(|rule| {
+            let at = paper_css.find(rule)?;
+            let rest = &paper_css[at + rule.len()..];
+            rest[..rest.find([';', '}', ')'])?]
+                .trim()
+                .parse::<f64>()
+                .ok()
         })
         .unwrap_or(1.0);
     PageInfo {

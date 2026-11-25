@@ -209,6 +209,9 @@ export const record_income_tax_election = (...args: Parameters<typeof Host.recor
 export const record_screen_log = (...args: Parameters<typeof Host.record_screen_log>): ReturnType<typeof Host.record_screen_log> =>
   Door.call("record_screen_log", args) as ReturnType<typeof Host.record_screen_log>;
 
+export const resolve_unknown_send = (...args: Parameters<typeof Host.resolve_unknown_send>): ReturnType<typeof Host.resolve_unknown_send> =>
+  Door.call("resolve_unknown_send", args) as ReturnType<typeof Host.resolve_unknown_send>;
+
 export const revoke_send = (...args: Parameters<typeof Host.revoke_send>): ReturnType<typeof Host.revoke_send> =>
   Door.call("revoke_send", args) as ReturnType<typeof Host.revoke_send>;
 
@@ -447,6 +450,7 @@ export type {
   AsNeededReturn,
   AsNeededForm,
   ReturnRow,
+  SendState,
   LegacySkippedFile,
   LegacyScanSummary,
   LegacyScanAnswer,
@@ -525,6 +529,7 @@ export const bir = {
   queue_form_draft,
   record_income_tax_election,
   record_screen_log,
+  resolve_unknown_send,
   revoke_send,
   save_form_draft,
   save_setup,
@@ -654,6 +659,7 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "queue_form_draft", kind: "sync" },
   { name: "record_income_tax_election", kind: "sync" },
   { name: "record_screen_log", kind: "sync" },
+  { name: "resolve_unknown_send", kind: "sync" },
   { name: "revoke_send", kind: "sync" },
   { name: "save_form_draft", kind: "sync" },
   { name: "save_setup", kind: "sync" },

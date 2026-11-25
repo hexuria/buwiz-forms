@@ -135,6 +135,8 @@ export interface ScreenFormOpened {
     /** That send went to the local mock relay (docs/relay.md), not to BIR. False for every other send. */
     submitted_via_relay: boolean;
     confirmed_at: string | null;
+    /** What the page says about the stored return's send (refused, held, waiting, needs attention, sent ...); null for a sample, a new return, and where the status says it all. */
+    send: SendState | null;
     /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
     amends?: ScreenFormStatus;
     /** Boxes another answer turns off right now, each with its tag ("Needs item 13 = Yes"; the page fades them). */
@@ -203,6 +205,8 @@ export interface ScreenFormExisting {
     /** What the page may offer: `load` (a draft), `view` (read-only), `amend` (reached BIR, and the form has an amended-return answer), `keep`. */
     actions: ("load" | "view" | "amend" | "keep")[];
     submitted_at: string | null;
+    /** The send `submitted_at` names was only simulated (a dry run): nothing reached BIR. */
+    submitted_dry_run: boolean;
     confirmed_at: string | null;
 }
 export interface ScreenFormSamplePeriod {
@@ -652,6 +656,12 @@ fn page_type(
         {
             let whole = matches!(binding, Some(Binding::Whole { .. }));
             match quantity(path, label) {
+                // A count bound to a decimal amount (an excise volume in
+                // metric tons, a number of shares) takes decimals on the
+                // official page: typing it as `int` would drop the point of
+                // a pasted "9,876,543.21" and store 987654321. Only a whole
+                // binding is ever the digits-only box.
+                Quantity::Count if !whole => ("num".into(), false),
                 Quantity::Count => ("int".into(), false),
                 Quantity::TaxRate => ("pct".into(), false),
                 Quantity::Amount if whole && schema_type == "money" => ("money".into(), true),
@@ -3157,6 +3167,7 @@ fn evaluate_here(
     // whose entry is not the one the sheet prints there).
     if let Value::Array(list) = &mut errors {
         list.extend(rows_dst_pt_vat::notices(kind, draft));
+        list.extend(rows_2550m::notices(kind, draft));
         list.extend(rows_annual_corporate::notices(kind, draft));
         list.extend(rows_annual_individual::notices(kind, draft));
         // PR 9's notices: a stored partial date the page shows blank.
@@ -3541,6 +3552,18 @@ fn open_screen_form(
             (None, Vec::new(), true)
         })
     };
+    // What the page says about the stored return's send (send_state.rs),
+    // read apart and never in the way of opening.
+    let send = match draft["id"].as_i64() {
+        Some(id) if !sample => with_database(|db| {
+            crate::send_state::stored_send(db, id).map_err(|error| host_error(error.to_string()))
+        })
+        .unwrap_or_else(|error| {
+            tracing::warn!("{code}: reading the send state failed: {}", error.message());
+            Value::Null
+        }),
+        _ => Value::Null,
+    };
     Ok(async move {
         let mut opened = on_large_stack(move || {
             opened_json(kind, year, period, draft, from_profile, build, checked)
@@ -3554,6 +3577,7 @@ fn open_screen_form(
         opened["filed_original"] = filed_original;
         opened["profile_updates"] = json!(followed);
         opened["notes"] = json!(notes);
+        opened["send"] = send;
         for (field, value) in carried {
             opened[field] = value;
         }
@@ -4724,6 +4748,7 @@ fn existing_return(db: &Database, kind: AgentFormKind, stored: &Value) -> Result
     Ok(json!({
         "actions": actions,
         "submitted_at": stamp("submitted_at"),
+        "submitted_dry_run": lifecycle_flag(stored, "submitted_dry_run"),
         "confirmed_at": stamp("confirmed_at"),
         "form_code": kind.form_code(),
         "year": identity.taxable_year,
@@ -7211,6 +7236,9 @@ mod tests {
     // Form fields PR 1 handoff 2: writes to shut boxes are refused with
     // the box's own tag (bug B16).
     mod shut_writes;
+    // The decimal-drop fault: count-labelled decimal amounts are never the
+    // digits-only box, and a whole box refuses a decimal part.
+    mod input_decimal;
     // Form fields PR 1 handoff 2: a code off a select's list is refused
     // on every form (bug B17).
     mod sel_lists;
@@ -14502,6 +14530,16 @@ mod tests {
             assert!(real["submitted_at"].is_string(), "{code}");
             assert_eq!(real["submitted_dry_run"], false, "{code}");
             assert!(!raw_row(id).1.contains("submitted_dry_run"), "{code}");
+            // The sample's offer of the stored return says it too.
+            let offered = || {
+                sample_period(
+                    TIN,
+                    code,
+                    typed_parts(code, 2024, period as u8, 1, period as u8),
+                )["existing"]["submitted_dry_run"]
+                    .clone()
+            };
+            assert_eq!(offered(), false, "{code}");
 
             // The worker's dry-run send, as bir-core stores it.
             let (_, raw) = raw_row(id);
@@ -14519,6 +14557,88 @@ mod tests {
             assert_eq!(dry["status"], "Submitted", "{code}");
             assert_eq!(dry["submitted_at"], real["submitted_at"], "{code}");
             assert_eq!(dry["submitted_dry_run"], true, "{code}");
+            assert_eq!(offered(), true, "{code}");
+        }
+    }
+
+    /// `send` in the open's answer is the stored return's send state
+    /// (send_state.rs), for each storage shape: null on a plain Draft and a
+    /// Submitted return without a relay receipt, `refused` on a Draft the
+    /// worker put back with the server's sentence, `held` and
+    /// `needs_attention` on Queued ones, `sent` with a receipt.
+    #[test]
+    fn open_says_what_the_send_is() {
+        setup();
+        for (code, period) in [("0619E", 5i64), ("1601C", 5), ("2551Q", 3)] {
+            let reason_key = if code == "2551Q" {
+                "last_error"
+            } else {
+                "submission_error"
+            };
+            let opened = open_for(TIN, code, 2024, period);
+            assert!(opened["send"].is_null(), "{code}: a new return");
+            let id = store_filed(code, &opened["draft"], "Submitted");
+            assert!(
+                open_for(TIN, code, 2024, period)["send"].is_null(),
+                "{code}: sent without a receipt"
+            );
+            let restore = |status: &str, set: &[(&str, Value)]| {
+                let (_, raw) = raw_row(id);
+                let mut stored = with_status(&serde_json::from_str(&raw).unwrap(), status);
+                let at = if stored["lifecycle"].is_object() {
+                    &mut stored["lifecycle"]
+                } else {
+                    &mut stored
+                };
+                for (key, value) in set {
+                    at[*key] = value.clone();
+                }
+                raw_exec(
+                    &format!("UPDATE form_drafts SET status = ?1, data_json = ?2 WHERE id = {id}"),
+                    &[status, &serde_json::to_string(&stored).unwrap()],
+                );
+                open_for(TIN, code, 2024, period)["send"].clone()
+            };
+            let sent = restore("Submitted", &[("relay_receipt", json!("a.b.c"))]);
+            assert_eq!(sent["stage"], "sent", "{code}: {sent}");
+            let held = restore(
+                "Queued",
+                &[
+                    ("relay_receipt", Value::Null),
+                    ("submitted_at", Value::Null),
+                    (reason_key, json!("Buwiz is holding sends for now.")),
+                    ("next_retry_at", json!("2026-11-24T07:40:00+00:00")),
+                ],
+            );
+            assert_eq!(held["stage"], "held", "{code}: {held}");
+            assert_eq!(held["line"], "Buwiz is holding sends for now.", "{code}");
+            assert_eq!(held["next_try_at"], "2026-11-24T07:40:00+00:00", "{code}");
+            let unknown = restore(
+                "Queued",
+                &[
+                    ("submission_claim_token", json!("token")),
+                    ("submission_claimed_at", json!("2026-11-24T07:00:00+00:00")),
+                    (
+                        "submission_put_started_at",
+                        json!("2026-11-24T07:00:01+00:00"),
+                    ),
+                ],
+            );
+            assert_eq!(unknown["stage"], "needs_attention", "{code}: {unknown}");
+            assert_eq!(unknown["can_resolve"], true, "{code}");
+            let refused = restore(
+                "Draft",
+                &[
+                    ("submission_claim_token", Value::Null),
+                    ("submission_claimed_at", Value::Null),
+                    ("submission_put_started_at", Value::Null),
+                    ("next_retry_at", Value::Null),
+                    (reason_key, json!("Not on your account. (tin_not_active)")),
+                ],
+            );
+            assert_eq!(refused["stage"], "refused", "{code}: {refused}");
+            assert_eq!(refused["line"], "Not on your account.", "{code}");
+            assert_eq!(refused["code"], "tin_not_active", "{code}");
         }
     }
 
@@ -16193,9 +16313,11 @@ mod tests {
 
     /// Rule 7: only an amount looks like money. Every form: a text binding is
     /// never money, an amount binding is a peso box unless it holds a count
-    /// (a number box) or a tax rate (a percent box), and a peso box over a
-    /// whole-number binding shows no centavos. The counts, rates and amounts
-    /// the review named are checked against a hand list, not the rule.
+    /// (a decimal number box: the digits-only `int` mask would drop a typed
+    /// decimal point and store a hundred times what was typed) or a tax rate
+    /// (a percent box), and a peso box over a whole-number binding shows no
+    /// centavos. The counts, rates and amounts the review named are checked
+    /// against a hand list, not the rule.
     #[test]
     fn only_an_amount_binding_looks_like_money_on_every_form() {
         let (mut amounts, mut wholes) = (0, 0);
@@ -16207,7 +16329,7 @@ mod tests {
                     Binding::Amount { .. } => {
                         amounts += 1;
                         assert!(
-                            matches!(t.as_str(), "money" | "pct" | "int"),
+                            matches!(t.as_str(), "money" | "pct" | "num"),
                             "{code}: {key} is an amount drawn as {t}"
                         );
                         assert!(!whole, "{code}: {key} takes centavos");
@@ -16246,15 +16368,15 @@ mod tests {
             // Counts: plain numbers.
             ("0605", "frm0605:txtNumOfInstallment", "int"),
             ("1702EX", "frm1702EX:txtPg1P2I23NumOfAttachments", "int"),
-            ("1606", "frm1606:txtTotalN", "int"),
-            ("1706", "frm1706:txtTotalN", "int"),
-            ("1707", "frm1707:txtPg2P4Sch2NoOfShares2", "int"),
-            ("1707", "frm1707:txtPg2Pt4S2_1Col2", "int"),
-            ("1707", "frm1707:txtPg2Pt4S2_10Col2", "int"),
-            ("2552", "frm2552:txtPg2Pt5Sch1NumShares1", "int"),
-            ("2200M", "frm2200M:txtSched1_VOMRITaxableA1", "int"),
-            ("2200M", "frm2200M:txtSched1_VOMRIExemptB1", "int"),
-            ("2200S", "frm2200S:txtVolumeRemovals0", "int"),
+            ("1606", "frm1606:txtTotalN", "num"),
+            ("1706", "frm1706:txtTotalN", "num"),
+            ("1707", "frm1707:txtPg2P4Sch2NoOfShares2", "num"),
+            ("1707", "frm1707:txtPg2Pt4S2_1Col2", "num"),
+            ("1707", "frm1707:txtPg2Pt4S2_10Col2", "num"),
+            ("2552", "frm2552:txtPg2Pt5Sch1NumShares1", "num"),
+            ("2200M", "frm2200M:txtSched1_VOMRITaxableA1", "num"),
+            ("2200M", "frm2200M:txtSched1_VOMRIExemptB1", "num"),
+            ("2200S", "frm2200S:txtVolumeRemovals0", "num"),
             // Tax rates: percent.
             ("1702RT", "frm1702RT:Pg2Pt4I40IncomeTaxRate", "pct"),
             ("1702EX", "frm1702EX:txtPg2Pt4I40TaxRate", "pct"),
@@ -18414,7 +18536,10 @@ mod tests {
                 // column, plus 2 for 1701MS (PR 7 review, round 2): item 16's
                 // rate in each column. At pr0b-push none had an entry.
                 ("1700", 17),
-                ("1701", 35),
+                // Plus 34 for 1701: Schedule 3.A items 8/9/11 A&B (6),
+                // Schedule 4 items 3 and 6-13 A&B (18), and Schedule 6
+                // NOLCO filer cells 6A/6B/7B/9A-11B/12B (10).
+                ("1701", 69),
                 ("1701A", 17),
                 ("1701MS", 52),
                 // 8 for 1706 (PR 9): items 8 and 9, item 11's list,

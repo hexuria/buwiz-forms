@@ -88,6 +88,23 @@ export function jobKey(job: BackgroundJob): string {
   return `${job.kind}-${job.id}`;
 }
 
+const PRODUCTION_SERVER = "https://api.buwiz.com";
+
+/**
+ * Whether Settings shows the account server's address. The ordinary build talks to Buwiz's own server, and naming it
+ * reads like a developer setting; the row is for a build or a run that points somewhere else, or at a rejected address.
+ */
+export function showsServer(status: { server_url: string; server_url_source: string } | null | undefined): boolean {
+  if (!status) return false;
+  if (status.server_url_source === "invalid" || status.server_url_source === "env") return true;
+  return status.server_url.trim().replace(/\/+$/, "") !== PRODUCTION_SERVER;
+}
+
+/** The line under who is signed in: the host's detail, unless it only repeats the title ("Not signed in" / "Not signed in."). */
+export function accountHint(who: string, detail: string): string {
+  return detail.trim().replace(/\.$/, "") === who.trim() ? "" : detail;
+}
+
 /** The words under the cloud account's server row. */
 export function serverHint(source: string | null | undefined): string {
   if (source === "env") return "From BUWIZ_SERVER_URL for this run.";
@@ -116,9 +133,15 @@ export function groupSections(view: readonly SettingsViewSection[]): { group: st
   return out;
 }
 
-/** Where a request to delete the account goes: an email to support, naming the account when it is known. */
-export function deletionRequestUrl(email: string | null | undefined): string {
-  const who = email ? " for " + email : "";
-  const body = "Please delete my Buwiz account" + who + " and the email address held with it.";
-  return "mailto:support@buwiz.com?subject=" + encodeURIComponent("Delete my Buwiz account") + "&body=" + encodeURIComponent(body);
+const PRODUCTION_ACCOUNT = "https://account.buwiz.com";
+
+/**
+ * The page where the signed-in person deletes their Buwiz account (they confirm with a code sent to their email):
+ * `/delete` on the account site. `account` is the account site's address as the host resolved it for this build
+ * (production's, a development server's `account.localhost`, or a self-hosted one); it is never derived from the API
+ * address, because the two live on different hosts. Without one, production's.
+ */
+export function deletionPageUrl(account: string | null | undefined): string {
+  const origin = (account ?? "").trim().replace(/\/+$/, "");
+  return (origin || PRODUCTION_ACCOUNT) + "/delete";
 }

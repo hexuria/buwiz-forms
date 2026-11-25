@@ -43,6 +43,8 @@ export interface DeadlineRow {
     due_date: string;
     /** "Not started" | "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid" */
     status: string;
+    /** A Submitted return whose send was only simulated (a dry run, `send.stage` "test_sent"): nothing reached BIR. */
+    submitted_dry_run: boolean;
     draft_id: number | null;
     /** The saved return's stored key (`screen_form_open`'s `key`), null when none is saved. */
     return_key: number | null;
@@ -53,6 +55,8 @@ export interface AsNeededReturn {
     period: number;
     return_key: number | null;
     status: string;
+    /** A Submitted return whose send was only simulated (a dry run): nothing reached BIR. */
+    submitted_dry_run: boolean;
     updated_at: string;
 }
 export interface AsNeededForm {
@@ -91,6 +95,20 @@ export interface ReturnRow {
     return_key: number | null;
     /** The worker sent it to the local mock relay, not to BIR (stored at submission; false for drafts and real sends). */
     submitted_via_relay: boolean;
+    /** What the screens say about its send (refused, held, waiting, needs attention ...); null where they keep the status alone. */
+    send: SendState | null;
+}
+/** What a screen says about a return's send (bir-app-api `send_state.rs`). */
+export interface SendState {
+    stage: "queued" | "sending" | "waiting" | "held" | "needs_attention" | "refused" | "sent" | "test_sent";
+    /** The sentence the person reads. */
+    line: string;
+    /** The code a refusal's reason ended in (`tin_not_active`), else null. */
+    code: string | null;
+    /** When the worker tries again (held and waiting; an RFC 3339 time), else null. */
+    next_try_at: string | null;
+    /** The person may say whether the BIR's email came (`resolve_unknown_send`). */
+    can_resolve: boolean;
 }
 export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
 "#;
@@ -272,7 +290,24 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
                 ),
                 None => global.clone(),
             };
-            for deadline in DeadlineResolver::deadlines_for_forms(&codes, year, &overrides) {
+            // A period that ended before the branch's business began is
+            // not owed. The start is the EARLIEST known for the branch —
+            // a certificate re-issued mid-life carries the re-issue
+            // segment's date, never the first registration's. An
+            // unreadable profile or facts record lists everything.
+            let facts_start = db
+                .effective_year_facts(&branch.tin, year16)
+                .ok()
+                .and_then(|facts| facts.facts.business_start_date);
+            let start = profile
+                .as_ref()
+                .and_then(|profile| profile.earliest_business_start(facts_start));
+            let deadlines = DeadlineResolver::filter_deadlines_for_listing(
+                DeadlineResolver::deadlines_for_forms(&codes, year, &overrides),
+                start,
+                &drafts,
+            );
+            for deadline in deadlines {
                 let Some(due) = deadline.final_deadline_date() else {
                     continue;
                 };
@@ -302,6 +337,13 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
                         draft.map_or_else(|| "Not started".to_string(), |d| status_name(&d.status))
                     ),
                 );
+                row.insert(
+                    "submitted_dry_run".into(),
+                    json!(match draft {
+                        Some(draft) => dry_run(db, draft)?,
+                        None => false,
+                    }),
+                );
                 row.insert("draft_id".into(), json!(draft.map(|d| d.id)));
                 let key = match draft {
                     Some(draft) => db.draft_period_column(draft.id).map_err(error)?,
@@ -324,6 +366,16 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
             .then(a["form_code"].as_str().cmp(&b["form_code"].as_str()))
     });
     Ok(rows)
+}
+
+/// A Submitted return whose send was only simulated: its send state is
+/// `test_sent` (`send_state.rs`, from the worker's `submitted_dry_run`).
+fn dry_run(db: &Database, summary: &FormDraftSummary) -> Result<bool, HostError> {
+    if summary.status != FilingStatus::Submitted {
+        return Ok(false);
+    }
+    let send = crate::send_state::stored_send(db, summary.id).map_err(error)?;
+    Ok(send["stage"] == "test_sent")
 }
 
 /// The dated rows of a branch's saved as-needed returns, any taxable year,
@@ -366,6 +418,7 @@ fn as_needed_rows(
         );
         row.insert("due_date".into(), json!(due.format("%Y-%m-%d").to_string()));
         row.insert("status".into(), json!(status_name(&summary.status)));
+        row.insert("submitted_dry_run".into(), json!(dry_run(db, summary)?));
         row.insert("draft_id".into(), json!(summary.id));
         row.insert(
             "return_key".into(),
@@ -405,6 +458,7 @@ fn as_needed_form_rows(db: &Database, year: u16) -> Result<Vec<Value>, HostError
                     "period": summary_period(summary),
                     "return_key": db.draft_period_column(summary.id).map_err(error)?,
                     "status": status_name(&summary.status),
+                    "submitted_dry_run": dry_run(db, summary)?,
                     "updated_at": summary.updated_at,
                 }));
             }
@@ -492,6 +546,10 @@ fn return_rows(db: &Database, which: &str) -> Result<Vec<Value>, HostError> {
         row.insert(
             "submitted_via_relay".into(),
             json!(db.draft_submitted_via_relay(summary.id).map_err(error)?),
+        );
+        row.insert(
+            "send".into(),
+            crate::send_state::stored_send(db, summary.id).map_err(error)?,
         );
         rows.push(Value::Object(row));
     }
@@ -585,6 +643,111 @@ mod tests {
         let mut sorted = dates.clone();
         sorted.sort_unstable();
         assert_eq!(dates, sorted, "rows come oldest deadline first");
+    }
+
+    /// The iPad fault: a business that began 2026-10-01 owes no quarterly
+    /// return for a quarter that ended before it began; the start year's
+    /// annual return it does owe.
+    #[test]
+    fn deadlines_between_omits_periods_ended_before_the_business_started() {
+        setup();
+        with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["1701", "1701Q", "2550Q", "2551Q"])
+                .unwrap();
+            db.set_year_facts(
+                HEAD,
+                2026,
+                &bir_core::tax_profile::YearFactsPatch {
+                    business_start_date: Some(Some(
+                        chrono::NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
+                    )),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            Ok(())
+        })
+        .unwrap();
+        // Q4's due dates land in early 2027, so the window runs past the
+        // year; every 2026 row is what Home and Calendar would list.
+        let rows = to_json(&deadlines_between(&args(&["2026-01-01", "2027-12-31"])).unwrap());
+        let rows: Vec<_> = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["taxable_year"] == 2026)
+            .collect();
+        let dump: Vec<_> = rows
+            .iter()
+            .map(|r| {
+                (
+                    r["form_code"].as_str().unwrap_or("?").to_string(),
+                    r["period"].clone(),
+                )
+            })
+            .collect();
+        for code in ["2550Q", "2551Q"] {
+            let quarters: Vec<i64> = rows
+                .iter()
+                .filter(|r| r["form_code"] == code)
+                .map(|r| r["period"].as_i64().unwrap())
+                .collect();
+            assert_eq!(
+                quarters,
+                [4],
+                "{code}: only the quarter containing the start is owed; all rows {dump:?}"
+            );
+        }
+        assert!(
+            rows.iter().all(|r| r["form_code"] != "1701Q"),
+            "1701Q has only Q1-Q3, all ended before the start; rows {dump:?}"
+        );
+        assert!(
+            rows.iter()
+                .any(|r| r["form_code"] == "1701" && r["frequency"] == "Annual"),
+            "the start year's annual return is owed"
+        );
+    }
+
+    /// A return already saved for a period before the start date is
+    /// evidence the start is wrong: nothing is filtered for the branch.
+    #[test]
+    fn deadlines_between_lists_everything_when_a_saved_return_predates_the_start() {
+        setup();
+        with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["1701", "1701Q", "2550Q", "2551Q"])
+                .unwrap();
+            db.set_year_facts(
+                HEAD,
+                2026,
+                &bir_core::tax_profile::YearFactsPatch {
+                    business_start_date: Some(Some(
+                        chrono::NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
+                    )),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            let first_quarter =
+                bir_core::forms::form_2551q::Form2551QDraft::new_from_profile(&profile, 2026, 1);
+            db.save_2551q_draft(&first_quarter).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&args(&["2026-01-01", "2027-12-31"])).unwrap());
+        let rows: Vec<_> = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["taxable_year"] == 2026 && r["form_code"] == "2551Q")
+            .collect();
+        let quarters: Vec<i64> = rows.iter().map(|r| r["period"].as_i64().unwrap()).collect();
+        assert_eq!(
+            quarters,
+            [1, 2, 3, 4],
+            "the saved Q1 return proves the business ran before October"
+        );
     }
 
     #[test]
@@ -736,6 +899,7 @@ mod tests {
         let undated = rows[0]["undated"].as_array().unwrap();
         assert_eq!(undated.len(), 1);
         assert_eq!(undated[0]["status"], "Draft");
+        assert_eq!(undated[0]["submitted_dry_run"], false, "a draft");
         assert!(undated[0]["draft_id"].is_number());
         let calendar = to_json(&deadlines_between(&args(&["2026-01-01", "2027-12-31"])).unwrap());
         assert!(
@@ -1176,6 +1340,7 @@ mod tests {
             "period_label",
             "return_key",
             "status",
+            "submitted_dry_run",
             "taxable_year",
             "taxpayer_name",
             "tin",
@@ -1221,7 +1386,14 @@ mod tests {
         );
         assert_eq!(
             keys(&with_undated["undated"][0]),
-            ["draft_id", "period", "return_key", "status", "updated_at"]
+            [
+                "draft_id",
+                "period",
+                "return_key",
+                "status",
+                "submitted_dry_run",
+                "updated_at"
+            ]
         );
         // And each TypeScript interface declares exactly those fields.
         assert_eq!(declared_fields("DeadlineRow"), keys(dated));
@@ -1291,6 +1463,110 @@ mod tests {
         );
         assert_eq!(relayed(3), false, "a real send keeps BIR's wording");
         assert_eq!(relayed(1), false, "a draft was never sent");
+    }
+
+    /// Each row says what the screens say about its send (send_state.rs):
+    /// a Queued return the worker holds, one that waits for its next try, a
+    /// Draft the server refused; a plain Draft and a Confirmed return say
+    /// nothing; stored JSON its shape cannot read says nothing too.
+    #[test]
+    fn list_returns_says_what_each_send_is() {
+        setup();
+        with_database(|db| {
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            for (month, status, set) in [
+                (2u8, "Queued", r#"json_set(data_json, '$.submission_error', 'Sign in to send returns.', '$.next_retry_at', '2026-11-24T07:40:00+00:00')"#),
+                (3, "Queued", r#"json_set(data_json, '$.submission_error', 'BIR did not answer', '$.submission_attempts', 2, '$.next_retry_at', '2026-11-24T07:40:00+00:00')"#),
+                (4, "Draft", r#"json_set(data_json, '$.submission_error', 'Not on your account. (tin_not_active)')"#),
+                (5, "Confirmed", r#"json_set(data_json, '$.relay_receipt', 'a.b.c')"#),
+                (6, "Queued", r#"'{broken'"#),
+            ] {
+                let draft = bir_core::forms::Form1601CDraft::new_from_profile(&profile, 2026, month);
+                let id = db.save_1601c_draft(&draft).unwrap();
+                db.conn_for_tests()
+                    .execute(
+                        &format!(
+                            "UPDATE form_drafts SET status = '{status}', data_json = {set} WHERE id = ?1"
+                        ),
+                        [id],
+                    )
+                    .unwrap();
+                if status != "Draft" && month != 6 {
+                    db.conn_for_tests()
+                        .execute(
+                            &format!(
+                                "UPDATE form_drafts SET data_json = json_set(data_json, '$.status', '{status}') WHERE id = ?1"
+                            ),
+                            [id],
+                        )
+                        .unwrap();
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&list_returns(&args(&["all"])).unwrap());
+        let send = |month: u64| {
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["period"] == month)
+                .unwrap()["send"]
+                .clone()
+        };
+        assert!(send(1).is_null(), "a plain draft");
+        assert_eq!(send(2)["stage"], "held");
+        assert_eq!(send(2)["line"], "Sign in to send returns.");
+        assert_eq!(send(2)["next_try_at"], "2026-11-24T07:40:00+00:00");
+        assert_eq!(send(3)["stage"], "waiting");
+        assert_eq!(
+            send(3)["line"],
+            "Not sent yet: BIR did not answer. It tries again by itself."
+        );
+        assert_eq!(send(4)["stage"], "refused");
+        assert_eq!(send(4)["code"], "tin_not_active");
+        assert!(send(5).is_null(), "confirmed");
+        assert!(send(6).is_null(), "unreadable stored JSON");
+    }
+
+    /// A deadline row says whether its Submitted send was only simulated
+    /// (the screens show "Dry run"); a real send, a Draft and a deadline
+    /// with no return say no.
+    #[test]
+    fn deadline_rows_say_which_submitted_send_was_a_dry_run() {
+        setup();
+        with_database(|db| {
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            for (month, dry) in [(2u8, true), (3, false)] {
+                let draft = bir_core::forms::Form1601CDraft::new_from_profile(&profile, 2026, month);
+                let id = db.save_1601c_draft(&draft).unwrap();
+                db.conn_for_tests()
+                    .execute(
+                        &format!(
+                            "UPDATE form_drafts SET status = 'Submitted',
+                                    data_json = json_set(data_json, '$.status', 'Submitted', '$.submitted_dry_run', json('{dry}'))
+                             WHERE id = ?1"
+                        ),
+                        [id],
+                    )
+                    .unwrap();
+            }
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&args(&["2026-01-01", "2026-12-31"])).unwrap());
+        let dry = |month: u64| {
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["taxable_year"] == 2026 && r["period"] == month)
+                .unwrap()["submitted_dry_run"]
+                .clone()
+        };
+        assert_eq!(dry(1), false, "a draft");
+        assert_eq!(dry(2), true, "a dry-run send");
+        assert_eq!(dry(3), false, "a real send");
+        assert_eq!(dry(4), false, "no return saved");
     }
 
     #[test]

@@ -100,6 +100,39 @@ describe("loadDashboard", () => {
   });
 });
 
+describe("loadDashboard: a dry run sent nothing, so it is not filed and its deadline stays open", () => {
+  const dryD = (due: string): DashboardDeadline => ({ ...deadline("T1", "1601C", due, "Submitted"), submitted_dry_run: true });
+  const realD = (due: string): DashboardDeadline => ({ ...deadline("T1", "0619E", due, "Submitted"), submitted_dry_run: false });
+  const send = (stage: string) => ({ stage });
+  const data = loadDashboard(
+    fakeStore({
+      // Past and still due this year, due within a week, and later on the strip: each as a dry run and as a real send.
+      deadlines: [dryD("2026-10-10"), realD("2026-10-10"), dryD("2026-10-17"), realD("2026-10-17"), dryD("2026-10-30"), realD("2026-10-30")],
+      filed: [
+        { tin_root: "T1", status: "Submitted", send: send("test_sent"), updated_at: "2026-10-05 12:00:00" },
+        { tin_root: "T1", status: "Submitted", send: null, updated_at: "2026-10-05 12:00:00" },
+        { tin_root: "T1", status: "Submitted", send: send("sent"), updated_at: "2026-10-05 12:00:00" },
+        { tin_root: "T1", status: "Confirmed", updated_at: "2026-10-05 12:00:00" },
+        { tin_root: "T1", status: "Paid", updated_at: "2026-10-05 12:00:00" },
+      ],
+      taxpayers: [{ tin_root: "T1", name: "Example One" }],
+    }),
+    NOW,
+  );
+  test("the dry run is overdue, due in 7 days and on the strip; the real send is none of them", () => {
+    expect(data.overdue.map((d) => d.form_code)).toEqual(["1601C"]);
+    expect(data.week.map((d) => d.form_code)).toEqual(["1601C"]);
+    expect(data.upcoming.map((d) => `${d.form_code} ${d.due_date}`)).toEqual(["1601C 2026-10-17", "1601C 2026-10-30"]);
+  });
+  test("Filed this month leaves the dry run out; a real send, a relay send, Confirmed and Paid count", () => {
+    expect(data.filedMonth).toBe(4);
+  });
+  test("the taxpayer's progress: the dry run's past deadline is due and not done; its next deadline is the dry run", () => {
+    expect(data.taxpayers[0]).toMatchObject({ due: 2, done: 1 });
+    expect(data.taxpayers[0].next?.form_code).toBe("1601C");
+  });
+});
+
 describe("loadDashboard edges", () => {
   test("no deadlines, no returns, no taxpayers: everything is empty and nothing is due", () => {
     const data = loadDashboard(fakeStore({}), NOW);
@@ -176,6 +209,29 @@ describe("pickedDeadlines", () => {
     expect(pickedDeadlines({ homePick: null, homeDay: null }, empty).empty).toBe(
       "Deadlines show here once a taxpayer has forms for a tax year.",
     );
+  });
+  test("forms with nothing due in the next 30 days: the empty line names the next deadline, not a missing tax year", () => {
+    // A business that began on October 1: its first deadlines are the fourth quarter's, in January.
+    const late = loadDashboard(
+      fakeStore({
+        deadlines: [
+          deadline("T1", "1701", "2027-04-15", "Not started"),
+          deadline("T1", "2551Q", "2027-01-25", "Draft"),
+          deadline("T1", "1601C", "2026-12-10", "Submitted"),
+        ],
+      }),
+      NOW,
+    );
+    expect(late.upcoming).toEqual([]);
+    expect(late.later?.form_code).toBe("2551Q");
+    expect(late.anyDeadlines).toBe(true);
+    expect(pickedDeadlines({ homePick: null, homeDay: null }, late).empty).toBe(
+      "Nothing is due in the next 30 days. The next is 2551Q on January 25, 2027.",
+    );
+    // Everything later already filed: still deadlines, so not the fresh line, and no next one to name.
+    const filed = loadDashboard(fakeStore({ deadlines: [deadline("T1", "2551Q", "2027-01-25", "Submitted")] }), NOW);
+    expect(filed.later).toBe(null);
+    expect(pickedDeadlines({ homePick: null, homeDay: null }, filed).empty).toBe("Nothing is due in the next 30 days.");
   });
   test("overdue and due-in-7-days pick their own lists", () => {
     const overdue = pickedDeadlines({ homePick: "overdue", homeDay: null }, data);

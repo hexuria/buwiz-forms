@@ -159,6 +159,21 @@ pub fn try_start_config(
             say(&format!(
                 "gpui-agent listening on {addr} (platform=desktop, app={APP})"
             ));
+            // The serve thread publishes its own record for this same
+            // `hosts/<pid>-<port>.json` path (naming the binary it runs in)
+            // at a time it chooses; a record published here before it lands
+            // is overwritten by it. Wait for that record first — the host's
+            // record must be the last write, or a late serve-thread write
+            // names the executable of the binary instead of the app's.
+            let serve_record = discovery::runtime_root().join("hosts").join(format!(
+                "{}-{}.json",
+                std::process::id(),
+                addr.port()
+            ));
+            let until = std::time::Instant::now() + Duration::from_secs(2);
+            while !serve_record.exists() && std::time::Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(5));
+            }
             let discovery = match discovery::publish_current(addr, APP) {
                 Ok(published) => Some(published),
                 Err(error) => {

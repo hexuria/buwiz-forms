@@ -59,7 +59,8 @@ for (const { name, size } of SIZES) {
     await app.waitFor("id:settings-nav-account");
     if (name === "phone") await goSection(app, "account", "id:settings-security");
     expect(app.shows("id:settings-account")).toBe(true);
-    expect(app.shows("id:settings-google")).toBe(true);
+    // Google (Gmail connect) is desktop only (settings_model.ts).
+    expect(app.shows("id:settings-google")).toBe(name === "desktop");
     expect(app.shows("id:settings-security")).toBe(true);
 
     if (name === "phone") await app.press("id:settings-back");

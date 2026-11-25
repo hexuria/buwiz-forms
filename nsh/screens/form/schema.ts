@@ -1,8 +1,9 @@
 // Pure helpers over the form schema, ported from the old shell's form_page.js (no door, no signals).
 import type { ChoiceOption, FieldType, FormSchema, SchemaField, SchemaItem, SchemaPart } from "./contract";
 import { tinSegment } from "./controls/model";
-import { shortIsoDate } from "../../lib/dates";
-import type { ScreenFormExisting } from "../../bir";
+import { MONTHS, shortIsoDate } from "../../lib/dates";
+import { isDryRun } from "../../lib/statusWord";
+import type { ScreenFormExisting, SendState } from "../../bir";
 import { stripOtherError } from "./refusals";
 
 /**
@@ -195,7 +196,7 @@ export function choiceLabel(f: SchemaField): string {
 
 /** The width a box gets (old controlWidth). */
 export function controlWidth(f: { t: FieldType | "hidden"; m?: number }, available: number): number {
-  if (f.t === "money") return Math.min(230, available);
+  if (f.t === "money" || f.t === "num") return Math.min(230, available);
   if (f.t === "pct") return 88;
   // "September 30, 1988" is the widest long date: 126 pt of text plus the box's padding, gap and
   // calendar button needs about 174, so the smallest multiple of 4 that holds it is 176 (B14).
@@ -215,6 +216,52 @@ export function sentWords(submittedAt: string, dryRun: boolean, viaRelay = false
   if (dryRun) return `Dry run ${when}, not sent to BIR`;
   return viaRelay ? `Sent to the mock relay ${when}, not to BIR` : `Sent to BIR ${when}`;
 }
+
+/** An RFC 3339 time (the host's `next_try_at`, fractions and an offset allowed) as a Date; null when it does not read as one. */
+export function rfc3339(text: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/i.exec(text.trim());
+  if (!m) return null;
+  const utc = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], m[6] ? +m[6] : 0);
+  const zone = m[7] && m[7].toUpperCase() !== "Z" ? /^([+-])(\d{2}):?(\d{2})$/.exec(m[7]) : null;
+  const offset = zone ? (zone[1] === "-" ? -1 : 1) * (Number(zone[2]) * 60 + Number(zone[3])) : 0;
+  const at = new Date(utc - offset * 60_000);
+  return Number.isNaN(at.getTime()) ? null : at;
+}
+
+/** "3:40 PM" on today's date (local time), "on Nov 25 at 3:40 PM" on another day this year, "on Jan 2, 2027 at 3:40 PM" in another year. */
+export function tryTime(at: Date, now: Date): string {
+  const hours = at.getHours();
+  const time = `${hours % 12 || 12}:${String(at.getMinutes()).padStart(2, "0")} ${hours < 12 ? "AM" : "PM"}`;
+  const sameDay = at.getFullYear() === now.getFullYear() && at.getMonth() === now.getMonth() && at.getDate() === now.getDate();
+  if (sameDay) return `at ${time}`;
+  const day = `${MONTHS[at.getMonth()]} ${at.getDate()}${at.getFullYear() === now.getFullYear() ? "" : `, ${at.getFullYear()}`}`;
+  return `on ${day} at ${time}`;
+}
+
+/** A sentence that ends in a full stop (or its own ! or ?). */
+const stopped = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`);
+
+/**
+ * What the page says about the return's send (the host's `send`): its line, and for a held send or one waiting for its next try, when
+ * it goes again in local time ("It goes again at 3:40 PM." / "Next try at 3:40 PM."; the date too when it is not today).
+ */
+export function sendWords(send: SendState, now: Date): string {
+  const at = send.next_try_at ? rfc3339(send.next_try_at) : null;
+  if (!at || (send.stage !== "held" && send.stage !== "waiting")) return send.line;
+  return `${stopped(send.line)} ${send.stage === "held" ? "It goes again" : "Next try"} ${tryTime(at, now)}.`;
+}
+
+/** The codes of a refusal the person fixes on their Buwiz account. */
+export const ACCOUNT_FIX_CODES: readonly string[] = ["tin_not_active", "tin_unverified", "tin_needs_fix"];
+
+/** Said under a refusal the person fixes on their Buwiz account (plain text, no link). */
+export const ACCOUNT_FIX = "Open your Buwiz account to fix this: https://account.buwiz.com";
+
+/** The confirm step of each answer to a send whose outcome is unknown: the question, and its button. */
+export const RESOLVE_ASK = {
+  received: { question: "Mark this return as sent to the BIR?", button: "Mark as sent" },
+  not_received: { question: "Put this return back to Draft so you can send it again?", button: "Back to Draft" },
+} as const;
 
 /** The strip on an amended return's filed version, opened from its history. */
 export function filedOriginalStrip(view: { filed_on: string | null }): string {
@@ -278,11 +325,14 @@ export function existingOfferFor(existing: ScreenFormExisting): { title: string;
       fastLane: false,
     };
   }
+  // A send the worker only simulated is no submission: it says "dry run", the form page's word (`statusWord`).
+  const dry = isDryRun(existing);
   const filed = existing.status === "Submitted" ? "submitted" : "filed";
-  const choices: OfferChoice[] = [{ id: "view", label: "View read-only", hint: `See exactly what was ${filed}.`, variant: "primary" }];
+  const hint = dry ? "See exactly what was in the dry run." : `See exactly what was ${filed}.`;
+  const choices: OfferChoice[] = [{ id: "view", label: "View read-only", hint, variant: "primary" }];
   if (has("amend")) choices.push({ id: "amend", label: "Amend this return", hint: `New amended return. ${FILED_KEPT}`, variant: "danger" });
   choices.push(keep);
-  return { title: `${label} was ${filed}`, subtitle: "", choices, fastLane: false };
+  return { title: dry ? `${label} was a dry run, not sent to BIR` : `${label} was ${filed}`, subtitle: "", choices, fastLane: false };
 }
 
 /** A host refusal in plain words: bir-core's "Other error: " prefix is not for the filer. */
@@ -329,7 +379,7 @@ export function keysOf(it: SchemaItem): string[] {
 export function emptyCell(value: string, type: string): boolean {
   const v = String(value ?? "").trim();
   if (v === "") return true;
-  if (type === "money" || type === "pct" || type === "int") return /^[-+]?0*\.?0*$/.test(v.replace(/[,₱%\s]/g, ""));
+  if (type === "money" || type === "num" || type === "pct" || type === "int") return /^[-+]?0*\.?0*$/.test(v.replace(/[,₱%\s]/g, ""));
   if (type === "chk" || type === "radio") return !(v === "true" || v === "1" || v === "Y");
   return false;
 }

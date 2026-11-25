@@ -1814,6 +1814,158 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
     Ok(cancelled)
 }
 
+/// The sentence for an answer to a return that is not waiting for one.
+const NOT_WAITING_FOR_AN_ANSWER: &str =
+    "This return is not waiting for your answer about the BIR's email.";
+/// The sentence while this process's worker is sending the return.
+const SENDING_NOW: &str = "eBIRForms is sending this return now. Wait until it finishes.";
+/// The sentence when the stored return moved on while the person answered.
+const CHANGED_WHILE_ANSWERING: &str =
+    "This return changed while you answered. Open it again to see where it is.";
+
+/// The person's answer for a Queued return whose send ended with an unknown outcome: allowed only while the stored
+/// return is Queued, claimed, and not being sent by this process's worker now.
+fn refuse_unless_waiting_for_an_answer(
+    db: &Database,
+    id: Option<i64>,
+    status: &bir_core::forms::FilingStatus,
+    claimed: bool,
+) -> Result<(), HostError> {
+    if !matches!(status, bir_core::forms::FilingStatus::Queued) || !claimed {
+        return Err(HostError::new(NOT_WAITING_FOR_AN_ANSWER));
+    }
+    let stored = match id {
+        Some(id) => db
+            .draft_summary_and_json(id)
+            .map_err(|error| HostError::new(error.to_string()))?,
+        None => None,
+    };
+    let Some((summary, json)) = stored else {
+        return Err(HostError::new(CHANGED_WHILE_ANSWERING));
+    };
+    // The same rule the screens read: only a return they offer the two answers on takes one. A claimed return
+    // whose upload never started has nothing to answer (nothing left this computer).
+    match crate::send_state::send_of_stored(&summary, &json) {
+        Some(state) if state.can_resolve => Ok(()),
+        Some(state) if state.stage == "sending" => Err(HostError::new(SENDING_NOW)),
+        _ => Err(HostError::new(NOT_WAITING_FOR_AN_ANSWER)),
+    }
+}
+
+/// A core refusal of the person's answer, said plainly (the core sentence is logged).
+fn answer_refused(error: bir_core::db::DbError) -> HostError {
+    tracing::warn!("resolve_unknown_send: {error}");
+    HostError::new(CHANGED_WHILE_ANSWERING)
+}
+
+/// What a person answered for a Queued return whose send ended with an unknown outcome (`send.stage` is
+/// `needs_attention`): `"received"`, the BIR's confirmation email came, so it becomes Submitted as a real send; or
+/// `"not_received"`, no email came, so it goes back to Draft (the human-confirmed abandoned-claim release) to be
+/// queued again when the person is ready. The three storage shapes are picked as `cancel_queued` picks them; the
+/// period is 2551Q's quarter, 1601C's month, or a generic form's stored period (`stored_period`; null is 0).
+fn resolve_unknown_send(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let form_code = arguments.string(1)?.to_owned();
+    let year =
+        u16::try_from(arguments.integer(2)?).map_err(|_| HostError::new("year is out of range"))?;
+    let period = match arguments.get(3) {
+        Some(HostValue::Null) | None => None,
+        Some(HostValue::Number(n)) if n.fract() == 0.0 && *n >= 0.0 => Some(*n as i64),
+        Some(other) => {
+            return Err(HostError::new(format!(
+                "period must be a whole number or null, got {}",
+                other.describe()
+            )));
+        }
+    };
+    let received = match arguments.string(4)? {
+        "received" => true,
+        "not_received" => false,
+        other => {
+            return Err(HostError::new(format!(
+                "answer must be \"received\" or \"not_received\", got {other:?}"
+            )));
+        }
+    };
+    let slot = |what: &str, most: i64| -> Result<u8, HostError> {
+        period
+            .filter(|p| (1..=most).contains(p))
+            .map(|p| p as u8)
+            .ok_or_else(|| HostError::new(what.to_string()))
+    };
+    let reason = bir_core::db::ABANDONED_CLAIM_RELEASE_REASON;
+    with_database(|db| {
+        let result: Result<(), HostError> = (|| match form_code.as_str() {
+            "2551Q" => crate::screen_form_module::out_of_line(|| {
+                let quarter = slot("2551Q drafts are quarterly: pass quarter 1-4", 4)?;
+                let draft = db
+                    .get_2551q_draft(&tin, year, quarter)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .ok_or_else(|| HostError::new("No saved 2551Q return for that period"))?;
+                let claimed =
+                    draft.submission_claim_token.is_some() || draft.submission_claimed_at.is_some();
+                refuse_unless_waiting_for_an_answer(db, draft.id, &draft.status, claimed)?;
+                if received {
+                    db.mark_claimed_2551q_received(&tin, year, quarter)
+                        .map(|_| ())
+                } else {
+                    db.release_abandoned_claimed_2551q_submission(&tin, year, quarter, reason)
+                        .map(|_| ())
+                }
+                .map_err(answer_refused)
+            }),
+            "1601C" => crate::screen_form_module::out_of_line(|| {
+                let month = slot("1601C drafts are monthly: pass the month", 12)?;
+                let draft = db
+                    .get_1601c_draft(&tin, year, month)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                    .ok_or_else(|| HostError::new("No saved 1601C return for that period"))?;
+                let claimed =
+                    draft.submission_claim_token.is_some() || draft.submission_claimed_at.is_some();
+                refuse_unless_waiting_for_an_answer(db, draft.id, &draft.status, claimed)?;
+                if received {
+                    db.mark_claimed_1601c_received(&tin, year, month)
+                        .map(|_| ())
+                } else {
+                    db.release_abandoned_claimed_1601c_submission(&tin, year, month, reason)
+                        .map(|_| ())
+                }
+                .map_err(answer_refused)
+            }),
+            _ => {
+                use bir_core::forms::queueable::QueueableKind;
+                let kind = QueueableKind::from_form_code(&form_code)
+                    .ok_or_else(|| HostError::new(format!("Form {form_code} is not queueable")))?;
+                let period = period.unwrap_or(0);
+                bir_core::with_queueable_kind!(kind, F => crate::screen_form_module::out_of_line(|| {
+                    let draft: F = db
+                        .get_queueable_draft(&tin, year, period)
+                        .map_err(|error| HostError::new(error.to_string()))?
+                        .ok_or_else(|| {
+                            HostError::new(format!("No saved {form_code} return for that period"))
+                        })?;
+                    let lifecycle = draft.lifecycle();
+                    refuse_unless_waiting_for_an_answer(
+                        db,
+                        draft.draft_id(),
+                        &lifecycle.status,
+                        !lifecycle.is_unclaimed(),
+                    )?;
+                    if received {
+                        db.mark_claimed_queueable_received::<F>(&tin, year, period)
+                            .map(|_| ())
+                    } else {
+                        db.release_abandoned_claimed_queueable::<F>(&tin, year, period, reason)
+                            .map(|_| ())
+                    }
+                    .map_err(answer_refused)
+                }))
+            }
+        })();
+        result.map(|()| HostValue::Null)
+    })
+}
+
 /// The painted Background Tasks page merges `job_queue` rows with every
 /// queued filing submission — same two sources, same label via
 /// `FilingJobLabel`.
@@ -2745,6 +2897,7 @@ pub fn module() -> HostModule {
         .function("list_queued", |_| list_queued())
         .function("queue_form_draft", queue_form_draft)
         .function("cancel_queued", cancel_queued)
+        .function("resolve_unknown_send", resolve_unknown_send)
         .function("list_deadlines", |_| list_deadlines())
         .async_function("import_archive", import_archive)
         .async_function("export_profile", export_profile)
@@ -2933,6 +3086,8 @@ export function save_form_draft(tin: string, form_code: string, year: number, qu
 export function list_queued(): DraftSummary[];
 export function queue_form_draft(tin: string, form_code: string, year: number, quarter: number | null): number;
 export function cancel_queued(tin: string, form_code: string, year: number, quarter: number | null): null;
+/** A queued return whose send has an unknown outcome (`send.stage` "needs_attention"): "received", the BIR's confirmation email came, makes it Submitted; "not_received" puts it back to Draft. `period` is 2551Q's quarter, 1601C's month, else the stored period (null is 0). Refused unless the return is waiting for this answer. */
+export function resolve_unknown_send(tin: string, form_code: string, year: number, period: number | null, answer: "received" | "not_received"): null;
 export interface TaxDeadline {
     id: number | null;
     form_type: string;
@@ -3040,6 +3195,310 @@ mod tests {
 
     fn args(values: Vec<HostValue>) -> HostArguments {
         HostArguments::new(values)
+    }
+
+    /// The three storage shapes `resolve_unknown_send` handles, each with a
+    /// period of its own, and the key its reason is kept under.
+    const SHAPES: [(&str, i64, &str); 3] = [
+        ("2551Q", 1, "last_error"),
+        ("1601C", 2, "submission_error"),
+        ("0619E", 3, "submission_error"),
+    ];
+    const RESOLVE_YEAR: u16 = 2024;
+
+    /// A saved Draft of `code`, its row turned into `status` with `set` written
+    /// into the stored JSON (as the worker writes them). Returns the row id.
+    fn stored_return(
+        code: &str,
+        period: i64,
+        status: &str,
+        set: &[(&str, serde_json::Value)],
+    ) -> i64 {
+        with_database(|db| {
+            let profile = db.get_profile(TIN).unwrap().unwrap();
+            let id = match code {
+                "2551Q" => db.save_2551q_draft(
+                    &bir_core::forms::form_2551q::Form2551QDraft::new_from_profile(
+                        &profile,
+                        RESOLVE_YEAR,
+                        period as u8,
+                    ),
+                ),
+                "1601C" => db.save_1601c_draft(&bir_core::forms::Form1601CDraft::new_from_profile(
+                    &profile,
+                    RESOLVE_YEAR,
+                    period as u8,
+                )),
+                _ => db.save_queueable_draft(
+                    &bir_core::forms::form_0619e::Form0619EDraft::new_from_profile(
+                        &profile,
+                        RESOLVE_YEAR,
+                        period as u8,
+                    ),
+                ),
+            }
+            .unwrap();
+            let raw: String = db
+                .conn_for_tests()
+                .query_row(
+                    "SELECT data_json FROM form_drafts WHERE id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            let mut stored: serde_json::Value = serde_json::from_str(&raw).unwrap();
+            stored["status"] = serde_json::json!(status);
+            for (key, value) in set {
+                stored[*key] = value.clone();
+            }
+            db.conn_for_tests()
+                .execute(
+                    "UPDATE form_drafts SET status = ?1, data_json = ?2 WHERE id = ?3",
+                    (status, serde_json::to_string(&stored).unwrap(), id),
+                )
+                .unwrap();
+            Ok(id)
+        })
+        .unwrap()
+    }
+
+    /// A Queued return whose send ended with an unknown outcome, as the worker leaves it.
+    fn unknown_outcome(code: &str, period: i64, reason_key: &str) -> i64 {
+        stored_return(
+            code,
+            period,
+            "Queued",
+            &[
+                ("submission_claim_token", serde_json::json!("worker-token")),
+                (
+                    "submission_claimed_at",
+                    serde_json::json!("2024-04-10T01:00:00+00:00"),
+                ),
+                (
+                    "submission_claim_lease_until",
+                    serde_json::json!("2024-04-10T01:10:00+00:00"),
+                ),
+                (
+                    "submission_put_started_at",
+                    serde_json::json!("2024-04-10T01:00:01+00:00"),
+                ),
+                (
+                    reason_key,
+                    serde_json::json!(format!(
+                        "{} (the upload timed out)",
+                        bir_core::background_cron::OUTCOME_UNKNOWN
+                    )),
+                ),
+            ],
+        )
+    }
+
+    fn resolve(code: &str, period: i64, answer: &str) -> HostResult {
+        resolve_unknown_send(&args(vec![
+            TIN.into(),
+            code.into(),
+            (RESOLVE_YEAR as i64).into(),
+            period.into(),
+            answer.into(),
+        ]))
+    }
+
+    /// The stored row: its status column and its JSON.
+    fn stored_row(id: i64) -> (String, serde_json::Value) {
+        with_database(|db| {
+            Ok(db
+                .conn_for_tests()
+                .query_row(
+                    "SELECT status, data_json FROM form_drafts WHERE id = ?1",
+                    [id],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                )
+                .map(|(status, json)| (status, serde_json::from_str(&json).unwrap()))
+                .unwrap())
+        })
+        .unwrap()
+    }
+
+    fn send_of(id: i64) -> serde_json::Value {
+        with_database(|db| Ok(crate::send_state::stored_send(db, id).unwrap())).unwrap()
+    }
+
+    #[test]
+    fn the_email_came_makes_each_shape_submitted_as_a_real_send() {
+        setup();
+        for (code, period, reason_key) in SHAPES {
+            let id = unknown_outcome(code, period, reason_key);
+            assert_eq!(send_of(id)["stage"], "needs_attention", "{code}");
+            assert_eq!(
+                resolve(code, period, "received").unwrap(),
+                HostValue::Null,
+                "{code}"
+            );
+            let (status, stored) = stored_row(id);
+            assert_eq!(status, "Submitted", "{code}");
+            assert_eq!(stored["status"], "Submitted", "{code}");
+            assert!(stored["submitted_at"].is_string(), "{code}: {stored}");
+            let filename = stored["submission_filename"].as_str().unwrap_or_default();
+            assert!(
+                filename.ends_with(".xml") && filename.contains(code),
+                "{code}: {filename}"
+            );
+            for gone in [
+                "submitted_dry_run",
+                "relay_receipt",
+                "submission_claim_token",
+                "submission_claimed_at",
+                "submission_claim_lease_until",
+                "submission_put_started_at",
+                "next_retry_at",
+            ] {
+                assert!(
+                    stored.get(gone).is_none_or(serde_json::Value::is_null),
+                    "{code}: {gone} in {stored}"
+                );
+            }
+            assert!(stored[reason_key].is_null(), "{code}: {stored}");
+            // Submitted with no receipt: the screens keep what they say today.
+            assert!(send_of(id).is_null(), "{code}");
+            // Asked again, it is no longer waiting for an answer.
+            let again = resolve(code, period, "received").unwrap_err();
+            assert_eq!(again.message(), NOT_WAITING_FOR_AN_ANSWER, "{code}");
+        }
+    }
+
+    #[test]
+    fn it_did_not_arrive_puts_each_shape_back_to_draft() {
+        setup();
+        for (code, period, reason_key) in SHAPES {
+            let id = unknown_outcome(code, period, reason_key);
+            assert_eq!(
+                resolve(code, period, "not_received").unwrap(),
+                HostValue::Null,
+                "{code}"
+            );
+            let (status, stored) = stored_row(id);
+            assert_eq!(status, "Draft", "{code}");
+            assert_eq!(stored["status"], "Draft", "{code}");
+            assert!(
+                stored
+                    .get("submission_claim_token")
+                    .is_none_or(serde_json::Value::is_null),
+                "{code}"
+            );
+            assert!(
+                stored
+                    .get("submitted_at")
+                    .is_none_or(serde_json::Value::is_null),
+                "{code}"
+            );
+            assert_eq!(
+                stored[reason_key],
+                bir_core::db::abandoned_claim_audit(bir_core::db::ABANDONED_CLAIM_RELEASE_REASON),
+                "{code}: the release keeps its audit sentence"
+            );
+            // A Draft the person put back is no refusal: nothing to say.
+            assert!(send_of(id).is_null(), "{code}");
+            let again = resolve(code, period, "not_received").unwrap_err();
+            assert_eq!(again.message(), NOT_WAITING_FOR_AN_ANSWER, "{code}");
+        }
+    }
+
+    #[test]
+    fn an_answer_is_refused_unless_the_return_waits_for_one() {
+        setup();
+        for (code, period, reason_key) in SHAPES {
+            // Not saved at all.
+            let missing = resolve(code, period, "received").unwrap_err();
+            assert!(
+                missing.message().starts_with("No saved"),
+                "{code}: {}",
+                missing.message()
+            );
+            let unchanged = |id: i64, before: &(String, serde_json::Value)| {
+                assert_eq!(&stored_row(id), before, "{code}: a refusal changes nothing");
+            };
+            for (status, set) in [
+                (
+                    "Draft",
+                    vec![(reason_key, serde_json::json!("Refused. (tin_not_active)"))],
+                ),
+                ("Queued", vec![]),
+                ("Queued", vec![(reason_key, serde_json::json!("Held."))]),
+                (
+                    "Submitted",
+                    vec![(
+                        "submitted_at",
+                        serde_json::json!("2024-04-10T01:00:00+00:00"),
+                    )],
+                ),
+            ] {
+                let id = stored_return(code, period, status, &set);
+                let before = stored_row(id);
+                for answer in ["received", "not_received"] {
+                    let error = resolve(code, period, answer).unwrap_err();
+                    assert_eq!(
+                        error.message(),
+                        NOT_WAITING_FOR_AN_ANSWER,
+                        "{code} {status}"
+                    );
+                }
+                unchanged(id, &before);
+                with_database(|db| {
+                    db.conn_for_tests()
+                        .execute("DELETE FROM form_drafts WHERE id = ?1", [id])
+                        .unwrap();
+                    Ok(())
+                })
+                .unwrap();
+            }
+            // This process's worker is sending it now.
+            let id = unknown_outcome(code, period, reason_key);
+            let before = stored_row(id);
+            let (summary, _) =
+                with_database(|db| Ok(db.draft_summary_and_json(id).unwrap().unwrap())).unwrap();
+            let key = bir_core::background_cron::submission_job_key(
+                &summary.form_code,
+                &summary.tin,
+                summary.taxable_year,
+                summary.month,
+                summary.quarter,
+            );
+            assert_eq!(
+                key,
+                format!("form:{code}:{TIN}:{RESOLVE_YEAR}:{period}"),
+                "the worker's key"
+            );
+            bir_core::background_cron::get_active_jobs()
+                .lock()
+                .unwrap()
+                .insert(key.clone());
+            let sending = send_of(id);
+            let refusals: Vec<_> = ["received", "not_received"]
+                .into_iter()
+                .map(|answer| {
+                    resolve(code, period, answer)
+                        .unwrap_err()
+                        .message()
+                        .to_string()
+                })
+                .collect();
+            bir_core::background_cron::get_active_jobs()
+                .lock()
+                .unwrap()
+                .remove(&key);
+            assert_eq!(sending["stage"], "sending", "{code}");
+            assert_eq!(refusals, [SENDING_NOW, SENDING_NOW], "{code}");
+            unchanged(id, &before);
+            // An answer that is neither.
+            let odd = resolve(code, period, "maybe").unwrap_err();
+            assert!(odd.message().contains("received"), "{code}");
+            unchanged(id, &before);
+        }
+        // 2551Q and 1601C need their quarter and month.
+        let error = resolve("2551Q", 5, "received").unwrap_err();
+        assert!(error.message().contains("quarter"), "{}", error.message());
+        let error = resolve("1601C", 13, "received").unwrap_err();
+        assert!(error.message().contains("month"), "{}", error.message());
     }
 
     /// `submitted_dry_run` is the worker's: a save never stores a client's.

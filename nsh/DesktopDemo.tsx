@@ -135,7 +135,7 @@ function Demo() {
     let signedOut = false;
     h.cloud_account_sign_out = async () => {
       signedOut = true;
-      return { server_url: "http://localhost:3008", server_url_source: "build", signed_in: false, email: null, user_id: null, offline: false, detail: "" };
+      return { server_url: "http://localhost:3008", server_url_source: "build", account_url: "", signed_in: false, email: null, user_id: null, offline: false, detail: "" };
     };
     const realGate = bir.cloud_account_gate;
     h.cloud_account_gate = () => (signedOut ? { unlocked: false, offline: false, server_url: "http://localhost:3008", email: null, detail: "" } : realGate());

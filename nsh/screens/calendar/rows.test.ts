@@ -1,6 +1,7 @@
 // The Calendar's pure side: what each filter keeps, how the List groups, the grid's days and the tones of a chip and a dot.
 import { expect, test } from "nsh/test";
 import type { DeadlineRow } from "../../bir";
+import { statusWord } from "../../lib/statusWord";
 import {
   byWhoAndHowOften, calendarRows, countText, dayTone, filtersActive, type Filters, gridCells, groupRows, inMonthCount, kindOf, longDay,
   monthGridStart, rowKey, toneOf, upcomingRange, upcomingRows, whoLine,
@@ -21,6 +22,7 @@ function row(over: Partial<DeadlineRow> & Pick<DeadlineRow, "form_code" | "due_d
     period: 1,
     period_label: "January 2026",
     status: "Not started",
+    submitted_dry_run: false,
     draft_id: null,
     return_key: next++,
     ...over,
@@ -98,6 +100,9 @@ test("a row's status, who and key", () => {
   expect(kindOf("Confirmed")).toBe("filed");
   expect(kindOf("Paid")).toBe("filed");
   expect(kindOf("Not started")).toBe("not_started");
+  // A chip passes the shown word: a simulated send is "Dry run", a real one keeps Submitted's "filed".
+  expect(kindOf(statusWord(row({ form_code: "0619E", due_date: "2026-02-10", status: "Submitted", submitted_dry_run: true })))).toBe("dry_run");
+  expect(kindOf(statusWord(row({ form_code: "0619E", due_date: "2026-02-10", status: "Submitted" })))).toBe("filed");
   expect(whoLine(rows[0])).toBe("Juana Santos");
   expect(whoLine({ ...rows[0], branch_count: 2 })).toBe("Juana Santos · Head office");
   expect(rowKey(rows[1])).toBe("00012345300000-1601C-2026-1");
@@ -115,6 +120,11 @@ test("a chip's tone: overdue, due within 14 days, filed, in progress, else neutr
   expect(toneOf({ status: "Queued", due_date: "2026-06-01" }, now)).toBe("accent");
   expect(toneOf({ status: "Submitted", due_date: "2026-06-01" }, now)).toBe("success");
   expect(toneOf({ status: "Paid", due_date: "2026-08-01" }, now)).toBe("success");
+  // A real send (no dry-run fact) is filed; a dry run sent nothing: late, soon or in progress as a Draft is, never success.
+  expect(toneOf({ status: "Submitted", submitted_dry_run: false, due_date: "2026-06-01" }, now)).toBe("success");
+  expect(toneOf({ status: "Submitted", submitted_dry_run: true, due_date: "2026-06-01" }, now)).toBe("danger");
+  expect(toneOf({ status: "Submitted", submitted_dry_run: true, due_date: "2026-06-24" }, now)).toBe("warning");
+  expect(toneOf({ status: "Submitted", submitted_dry_run: true, due_date: "2026-07-25" }, now)).toBe("accent");
 });
 
 test("a day's dot takes the most urgent tone (late first, filed last)", () => {
@@ -127,6 +137,9 @@ test("a day's dot takes the most urgent tone (late first, filed last)", () => {
   expect(dayTone([filed], now)).toBe("success");
   expect(dayTone([filed, { status: "Not started", due_date: "2026-09-01" }], now)).toBe("neutral");
   expect(dayTone([], now)).toBe("neutral");
+  // A dry run is not filed: its day reads late (or soon) as a Draft's would.
+  expect(dayTone([{ status: "Submitted", submitted_dry_run: true, due_date: "2026-06-01" }], now)).toBe("danger");
+  expect(dayTone([{ status: "Submitted", submitted_dry_run: true, due_date: "2026-06-12" }], now)).toBe("warning");
 });
 
 test("the grid is six weeks from the Sunday on or before the first", () => {
@@ -161,7 +174,10 @@ test("Upcoming: what is still to do, the late ones first, then from today on", (
     row({ form_code: "D", due_date: "2026-04-10", status: "Submitted" }),
     row({ form_code: "E", due_date: "2026-06-01" }),
     row({ form_code: "F", due_date: "2026-06-15", status: "Queued" }),
+    // A dry run sent nothing: still to do. A real send is not.
+    row({ form_code: "G", due_date: "2026-05-20", status: "Submitted", submitted_dry_run: true }),
+    row({ form_code: "H", due_date: "2026-05-21", status: "Submitted", submitted_dry_run: false }),
   ];
-  expect(upcomingRows(list, now).map((d) => d.form_code)).toEqual(["B", "E", "C", "A"]);
+  expect(upcomingRows(list, now).map((d) => d.form_code)).toEqual(["B", "G", "E", "C", "A"]);
   expect(upcomingRange(now)).toEqual(["2025-06-09", "2026-08-09"]);
 });

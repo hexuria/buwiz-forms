@@ -2,6 +2,7 @@
 // No UI and no host calls; the clock comes in as a parameter where a rule needs today.
 import type { BranchFieldName, FormTemplateSummary, InboxState, SendGrant, SetupApplied, Taxpayer } from "../../bir";
 import { FACT_LABELS, joinNames, type FactName } from "../../lib/facts";
+import { isOpenDeadline } from "../../lib/statusWord";
 
 /** The taxpayer types the Taxpayer type dropdown offers. */
 export const TAXPAYER_TYPES: readonly Taxpayer["taxpayer_type"][] = ["Individual", "Corporation", "Partnership", "Cooperative", "Estate", "Trust"];
@@ -228,6 +229,8 @@ export function defaultAddYear(allowed: readonly number[], have: readonly number
 /** A deadline as the Forms tab reads it. */
 export interface DeadlineLike {
   status: string;
+  /** Its Submitted return was only a dry run: the period is still open. */
+  submitted_dry_run?: boolean | null;
   due_date: string;
   period_label: string;
 }
@@ -235,7 +238,8 @@ export interface DeadlineLike {
 /** The next open period of a form in the year and its due date, from its deadlines (`daysUntil` given). */
 export function schedule(rows: readonly DeadlineLike[], daysUntil: (iso: string) => number, shortDate: (iso: string) => string): { next: string | null; due: string; none?: boolean } {
   if (!rows.length) return { next: null, due: "", none: true };
-  const open = rows.filter((d) => d.status === "Not started" || d.status === "Draft");
+  // Still to do: no return, a Draft, or a dry run (it sent nothing).
+  const open = rows.filter(isOpenDeadline);
   const upcoming = open.find((d) => daysUntil(d.due_date) >= 0) || open[open.length - 1];
   if (!upcoming) return { next: null, due: "" };
   return { next: upcoming.period_label, due: shortDate(upcoming.due_date) };

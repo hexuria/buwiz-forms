@@ -80,6 +80,14 @@ test("years, schedules and counts", () => {
   ];
   expect(schedule(rows, days, (d) => d)).toEqual({ next: "Q4 2026", due: "2027-01-25" });
   expect(schedule([], days, (d) => d)).toEqual({ next: null, due: "", none: true });
+  // A dry run sent nothing: its period stays the next one due. A real send closes it.
+  const sent = (dry: boolean) => [
+    { status: "Submitted", submitted_dry_run: dry, due_date: "2027-01-25", period_label: "Q4 2026" },
+    { status: "Not started", due_date: "2027-04-25", period_label: "Q1 2027" },
+  ];
+  expect(schedule(sent(true), days, (d) => d)).toEqual({ next: "Q4 2026", due: "2027-01-25" });
+  expect(schedule(sent(false), days, (d) => d)).toEqual({ next: "Q1 2027", due: "2027-04-25" });
+  expect(schedule([{ status: "Submitted", submitted_dry_run: false, due_date: "2026-04-25", period_label: "Q1 2026" }], days, (d) => d)).toEqual({ next: null, due: "" });
   expect(formSub(false, true, { next: null }, 2026)).toBe("Not filed this year");
   expect(formSub(true, false, { next: null, none: true }, 2026)).toBe("Filed in 2026");
   expect(formSub(true, false, { next: null }, 2026)).toBe("Every period filed");

@@ -18,6 +18,7 @@ import { Application } from "nsh/desktop";
 import { bir, dataChangeToken, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
 import { errorText } from "../lib/errors";
+import { isDryRun } from "../lib/statusWord";
 import { POLL, startPolls } from "../lib/poll";
 import { addRecent, bumpRecent, loadRecent, recentEntry, recentOpenOptions, type RecentEntry, type RecentInput } from "../lib/recent";
 import type { FormTarget } from "../screens/form/FormPage";
@@ -959,7 +960,10 @@ function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
 
 // ---------------------------------------------------------------- notifications
 
-/** Submissions sent and confirmation emails received, newest first: the return's own status is the record. */
+/**
+ * Submissions sent and confirmation emails received, newest first: the return's own status is the record. A send the worker only
+ * simulated (`isDryRun`: a dry run, a practice account, a phone build) is a finished dry run, not a submission.
+ */
 const notifications = computed<Notification[]>(() => {
   const seen = readIds();
   const items: Notification[] = [];
@@ -968,15 +972,22 @@ const notifications = computed<Notification[]>(() => {
     if (!confirmed && r.status !== "Submitted") continue;
     const id = `return:${r.id}:${confirmed ? "confirmed" : "submitted"}`;
     const who = r.branch_count > 1 ? `${r.taxpayer_name} · ${r.branch_name}` : r.taxpayer_name;
+    const dry = !confirmed && isDryRun(r);
     items.push({
       id,
-      title: confirmed ? `BIR confirmed ${r.form_code} for ${r.period_label}` : `${r.form_code} for ${r.period_label} was submitted`,
+      title: confirmed
+        ? `BIR confirmed ${r.form_code} for ${r.period_label}`
+        : dry
+          ? `${r.form_code} for ${r.period_label}: dry run finished`
+          : `${r.form_code} for ${r.period_label} was submitted`,
       sub: confirmed
         ? `Confirmation email received · ${who}`
-        : r.submitted_via_relay
-          ? `Sent to the mock relay, not to BIR: no BIR email will come · ${who}`
-          : `Waiting for BIR's confirmation email · ${who}`,
-      icon: confirmed ? "circle-check" : "send",
+        : dry
+          ? `Nothing was sent to the BIR · ${who}`
+          : r.submitted_via_relay
+            ? `Sent to the mock relay, not to BIR: no BIR email will come · ${who}`
+            : `Waiting for BIR's confirmation email · ${who}`,
+      icon: confirmed ? "circle-check" : dry ? "info" : "send",
       tone: confirmed ? "success" : "neutral",
       when: r.updated_at,
       unread: !seen.has(id),

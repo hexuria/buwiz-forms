@@ -628,22 +628,45 @@ fn route() -> Route {
     if env_nonempty("BIR_SFTP_HOST").is_some() {
         return Route::LabHost;
     }
-    Route::Bir
+    default_route(
+        direct_filing_built_in(),
+        cfg!(debug_assertions),
+        cfg!(any(
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "linux"
+        )),
+    )
+}
+
+/// Where a send goes when nothing asked for anything else (no dry run, no mock, no lab host).
+///
+/// A release build on a desktop files through the Buwiz relay: that is the only way a build that ships sends a
+/// return. A development build has nowhere to send by default (with no flag it is a dry run and never gets here),
+/// and neither has a phone build, whose guard forces a dry run until phones are proven. `direct-bir`, which no
+/// build that ships has, keeps the BIR's own dispatcher.
+fn default_route(direct: bool, development: bool, desktop: bool) -> Route {
+    if !direct && !development && desktop {
+        Route::Buwiz
+    } else {
+        Route::Bir
+    }
 }
 
 /// Ask a development build to send through the Buwiz relay: `BUWIZ_RELAY_SEND=1`.
 pub const RELAY_SEND_ENV: &str = "BUWIZ_RELAY_SEND";
 
-/// Sending through the Buwiz relay was asked for. Only a development build honours [`RELAY_SEND_ENV`], and
-/// [`crate::relay`] then sends only through a Buwiz server on this computer whose trust list a test key signed: no
-/// build that ships sends through the relay yet, and a development build can never file through production. Like
-/// the mock relay's URL, it is the ask to send there, so it wins over the dry-run flags and a test environment.
+/// A development build was asked to send through the Buwiz relay. Only a development build honours
+/// [`RELAY_SEND_ENV`], and [`crate::relay`] then sends only through a Buwiz server on this computer whose trust list
+/// a test key signed: a development build can never file through production. Like the mock relay's URL, it is the
+/// ask to send there, so it wins over the dry-run flags and a test environment. A release build needs no asking
+/// ([`default_route`]) and its dry-run flags come first.
 pub fn buwiz_relay_requested() -> bool {
     cfg!(debug_assertions) && env_flag_enabled(RELAY_SEND_ENV)
 }
 
 /// The send goes through the Buwiz relay ([`crate::relay`]), not over SFTP. A practice account never does.
-pub(crate) fn sends_through_buwiz() -> bool {
+pub fn sends_through_buwiz() -> bool {
     matches!(route(), Route::Buwiz)
 }
 
@@ -2030,6 +2053,61 @@ mod tests {
         }
         assert!(unavailable_for(&Route::Bir, false));
         assert!(!unavailable_for(&Route::Bir, true));
+    }
+
+    /// The switch-on: with nothing else asked for, only a release build on a desktop goes through the Buwiz relay.
+    /// A development build and a phone build have nowhere to send, and `direct-bir` keeps the dispatcher.
+    #[test]
+    fn only_a_release_desktop_build_files_through_buwiz_by_default() {
+        assert!(matches!(default_route(false, false, true), Route::Buwiz));
+        for (direct, development, desktop) in [
+            (false, true, true),
+            (false, false, false),
+            (false, true, false),
+            (true, false, true),
+            (true, true, true),
+        ] {
+            assert!(
+                matches!(default_route(direct, development, desktop), Route::Bir),
+                "{direct} {development} {desktop}"
+            );
+        }
+        // So a release desktop build has somewhere to send, and every other default build has not.
+        assert!(!unavailable_for(&default_route(false, false, true), false));
+        assert!(unavailable_for(&default_route(false, true, true), false));
+        assert!(unavailable_for(&default_route(false, false, false), false));
+    }
+
+    /// In a release build the relay is the fall-through, not an override: every dry-run flag, a test environment
+    /// and a practice account still come first (here a development build shows the same order holds).
+    #[test]
+    fn a_dry_run_flag_a_test_environment_and_a_practice_account_come_before_the_default_route() {
+        for vars in [
+            [("EBIR_TEST_ENV", Some("1")), ("BIR_SFTP_LIVE", Some("1"))],
+            [("EBIR_TEST_ENV", None), ("BIR_SFTP_DRY_RUN", Some("1"))],
+            [("EBIR_TEST_ENV", None), ("BIR_SFTP_LIVE", Some("0"))],
+        ] {
+            isolated_sftp_env(vars, || {
+                assert!(matches!(route(), Route::DryRun), "{vars:?}")
+            });
+        }
+        struct ResetPractice;
+        impl Drop for ResetPractice {
+            fn drop(&mut self) {
+                set_practice_account(false);
+            }
+        }
+        isolated_sftp_env(
+            [("EBIR_TEST_ENV", None), ("BIR_SFTP_LIVE", Some("1"))],
+            || {
+                let _reset = ResetPractice;
+                set_practice_account(true);
+                assert!(
+                    matches!(route(), Route::DryRun),
+                    "a practice account only simulates"
+                );
+            },
+        );
     }
 
     #[test]

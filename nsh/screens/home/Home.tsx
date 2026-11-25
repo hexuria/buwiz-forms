@@ -98,7 +98,8 @@ function pressTile(spec: TileSpec, today: string): void {
   if (spec.key === "overdue" || spec.key === "week") homePick.toggleTile(spec.key);
   else if (spec.key === "drafts") openFilings({ statuses: ["Draft"] });
   else if (spec.key === "waiting") openFilings({ statuses: ["Queued"] });
-  else openFilings({ statuses: [...FILED_STATUSES], updatedMonth: today.slice(0, 7) });
+  // The tile counts what counts as filed (no dry run), and the list it opens keeps exactly those.
+  else openFilings({ statuses: [...FILED_STATUSES], updatedMonth: today.slice(0, 7), filedOnly: true });
 }
 
 function Dashboard(props: { width: () => number }) {

@@ -14,3 +14,6 @@ list_legacy_filed_returns
 
 # PR 4: the "Save to profile?" ask-once answer, remembered per TIN + year + field.
 screen_form_profile_asked
+
+# Relay filing: a person answers whether the BIR's email came for a send with an unknown outcome (the form page).
+resolve_unknown_send

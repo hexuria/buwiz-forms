@@ -28,7 +28,7 @@ export interface ControlsModule {
 // ---------------------------------------------------------------- the schema (forms/forms-schema.json, via bir.screen_form_schema)
 
 /** A box's kind. "radio" and "chk" are tick boxes; every other kind takes typing or a pick. */
-export type FieldType = "text" | "money" | "radio" | "chk" | "date" | "sel" | "pct" | "int" | "email" | "phone";
+export type FieldType = "text" | "money" | "num" | "radio" | "chk" | "date" | "sel" | "pct" | "int" | "email" | "phone";
 
 /** One box of an item. Flags are 1 when set (the schema writes 1, not true). */
 export interface SchemaField {
@@ -155,6 +155,9 @@ export interface BoxState {
   invalid: Accessor<boolean>;
   /** The box's own sentence (a refused edit or a one-box validation error), "" none (B3/B4). */
   message?: Accessor<string>;
+  /** The refusal the box carries, wherever it is drawn: `message` is blanked for the kinds whose sentence
+   *  prints at the row (sel, chk, radio, date), so anything that needs to KNOW about the refusal reads this. */
+  refusal?: Accessor<string>;
   /** A computed or penalty amount: a locked blank money box shows "0.00", never an empty box. */
   zeroWhenBlank: boolean;
 }

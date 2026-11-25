@@ -248,7 +248,11 @@ fn pr4_part_iii_shows_each_printed_item_without_a_box() {
             .collect();
         assert_eq!(numbers, items, "{code}");
         for item in part["items"].as_array().unwrap() {
-            assert!(item["note"].as_str().is_some_and(|n| n.contains("no box")));
+            assert!(
+                item["note"]
+                    .as_str()
+                    .is_some_and(|n| n.contains("no box") || n.contains("cannot be filled here"))
+            );
             assert!(
                 item["f"]
                     .as_array()
@@ -327,7 +331,11 @@ fn pr4_form_2000_tax_agent_boxes_show_their_caption_and_a_note() {
             .unwrap()
             .starts_with("Tax Agent Accreditation No.")
     );
-    assert!(last["note"].as_str().is_some_and(|n| n.contains("no box")));
+    assert!(
+        last["note"]
+            .as_str()
+            .is_some_and(|n| n.contains("cannot be filled here"))
+    );
     assert!(
         sheet_text("2000-dst-2018")
             .contains("Tax Agent Accreditation No./ Date of Issue Date of Expiry")
