@@ -1,0 +1,21 @@
+# Not-joined classification — analysis
+
+## 1801-2018: 23 keys class (a)
+- txtDateMonth x3 — e.g. frm1801v2018:txtDateMonth = "06"
+- txtDateDay x3 — e.g. frm1801v2018:txtDateDay = "05"
+- txtDateYear x3 — e.g. frm1801v2018:txtDateYear = "2025"
+- txtAtc x3 — e.g. frm1801v2018:txtAtc = "ES 010"
+- telephoneNumber x3 — e.g. frm1801v2018:telephoneNumber = "09170000000"
+- txtTaxRate x3 — e.g. frm1801v2018:txtTaxRate = "6.0%"
+- txtInstallmentYear x3 — e.g. frm1801v2018:txtInstallmentYear = "2026"
+- txtTotPayable x2 — e.g. frm1801v2018:txtTotPayable = "33,350.30"
+
+## 1701a-2018: 5 keys class (a)
+- txtLineBus x5 — e.g. frm1701A:txtLineBus = "SAMPLE CONSULTING SERVICES"
+
+## 2200p-2020: 136 keys class (a)
+- txtSchedNATCN x50 — e.g. frm2200P:txtSched1ATC1 = "XP010"
+- txtSchedNDescriptionN x50 — e.g. frm2200P:txtSched1Description1 = "LUBRICATING OILS"
+- txtSchedNUnitOfMeasureN x18 — e.g. frm2200P:txtSched1UnitOfMeasure2 = "PER KG"
+- txtSchedNApplicableRateN x16 — e.g. frm2200P:txtSched1ApplicableRate12 = "4.00"
+- txtLOB x2 — e.g. frm2200P:txtLOB = "SAMPLE CONSULTING SERVICES"
