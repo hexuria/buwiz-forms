@@ -1,7 +1,7 @@
 {
   "code": "1707A",
   "verdict": "tweak",
-  "summary": "Fixed Item 9/10/11 and Page 2 Taxpayer's Name comb-tick strike-through on long text, Schedule 1 corporate stock shrink-to-fit, and Schedule 1 & 2 text padding and right-aligned currency columns. Remaining items require shared crate/UI changes (printing negative/overpayment amounts in Items 19 & 21 in crates/bir-print, widening the 5-digit branch-code TIN box, and deduplicating repeated table validation messages in nsh/screens/form/).",
+  "summary": "Fixed Item 9/10/11 and Page 2 Taxpayer's Name comb-tick strike-through on long text (via shared [data-overflow-of] white band at 8835479d; per-form comb masks removed), Items 19 & 21 overpayment printing (8835479d), Schedule 1 corporate stock shrink-to-fit, and Schedule 1 & 2 text padding and right-aligned currency columns. Remaining items are screen-only (5-digit branch-code TIN box width and repeated table validation messages in nsh/screens/form/).",
   "defects": [
     {
       "id": "1707A-print-01",
@@ -9,7 +9,7 @@
       "where": "Page 1, Part I Items 9 (Registered Address lines 1 & 2) and 10/11 (Contact Number / Email Address)",
       "what": "Long address and combined contact/email text fell back to proportional text rendered over visible vertical comb ticks.",
       "before": "form-review/1707A/before/print-p1.png",
-      "after": "form-review/1707A/after/print-p1.png",
+      "after": "form-review/1707A/after/print-p1.png (fixed via shared [data-overflow-of] white band at 8835479d; per-form comb masks removed)",
       "status": "fixed"
     },
     {
@@ -18,8 +18,8 @@
       "where": "Page 1, Part II Items 19 (Net Tax Payable/(Overpayment)) and 21 (Total Amount Payable/(Overpayment))",
       "what": "Computed overpayment '(799,061.01)' displays on screen but prints blank in the money comb cells because bir-print does not render negative/parenthesized currency strings into money combs.",
       "before": "form-review/1707A/before/print-p1.png",
-      "after": "form-review/1707A/after/print-p1.png",
-      "status": "needs shared change"
+      "after": "form-review/1707A/after/print-p1.png (fixed via shared branch 8835479d; prints '- 7 9 9 0 6 1 . 0 1')",
+      "status": "fixed"
     },
     {
       "id": "1707A-print-03",
@@ -27,7 +27,7 @@
       "where": "Page 2, Taxpayer's Name comb box (p2c6)",
       "what": "Long Taxpayer's Name (>26 chars) fell back to proportional text rendered over visible vertical comb ticks.",
       "before": "form-review/1707A/before/print-p2.png",
-      "after": "form-review/1707A/after/print-p2.png",
+      "after": "form-review/1707A/after/print-p2.png (fixed via shared [data-overflow-of] white band at 8835479d; per-form comb mask removed)",
       "status": "fixed"
     },
     {
@@ -63,7 +63,6 @@
     "html-frozen/1707a-2021/form.css"
   ],
   "shared_changes_wanted": [
-    "crates/bir-print: render negative/overpayment currency values (e.g. '(799,061.01)') into money comb cells for Items 19 & 21 instead of leaving them blank.",
     "nsh/screens/form/: widen the 5-digit branch-code TIN box and deduplicate repeated per-cell table validation messages."
   ],
   "tests_run": [

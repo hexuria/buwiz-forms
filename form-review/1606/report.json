@@ -1,7 +1,7 @@
 {
   "code": "1606",
   "verdict": "tweak",
-  "summary": "Fixed Item 7A/8A Buyer/Seller name and address shrink-to-fit and cell padding, Item 13 Applicable Tax Rate tenths digit centering, Schedule 1 text cell padding, and Schedule 1 screen labels (OCT/TCT/CCT No., Area (sq.m.)). Left Page 2 comb fitting and Schedule 1 numeric right-alignment unpatched per-form for neon-4's shared bir-print work (try/forms-shared-print), along with Schedule 1 Classification derivation and nsh/screens/form input widths.",
+  "summary": "Fixed Item 7A/8A Buyer/Seller name and address shrink-to-fit and cell padding, Item 13 Applicable Tax Rate tenths digit centering, Schedule 1 text cell padding and screen labels (OCT/TCT/CCT No., Area (sq.m.)), plus Page 2 comb-tick white band, Schedule 1 Classification code, and numeric right-alignment via shared print (8835479d). Remaining item is screen-only (nsh/screens/form input widths).",
   "defects": [
     {
       "id": "1606-print-01",
@@ -27,8 +27,8 @@
       "where": "Page 2, Taxpayer's/Buyer's Name comb box (p2c6)",
       "what": "Long Buyer's Name (>27 chars) falls back to proportional text rendered over visible vertical comb ticks (owned by neon-4's shared bir-print comb fitting on try/forms-shared-print).",
       "before": "form-review/1606/before/print-p2.png",
-      "after": "form-review/1606/after/print-p2.png",
-      "status": "needs shared change"
+      "after": "form-review/1606/after/print-p2.png (fixed via shared [data-overflow-of] white band at 8835479d)",
+      "status": "fixed"
     },
     {
       "id": "1606-print-04",
@@ -36,8 +36,8 @@
       "where": "Page 2, Schedule 1 (continuation), Classification* column",
       "what": "Classification* column prints blank because writer-cells.json has no derived classification code from the selected classification radio.",
       "before": "form-review/1606/before/print-p2.png",
-      "after": "form-review/1606/after/print-p2.png",
-      "status": "needs shared change"
+      "after": "form-review/1606/after/print-p2.png (fixed via shared branch 8835479d; prints 'A')",
+      "status": "fixed"
     },
     {
       "id": "1606-print-05",
@@ -73,8 +73,6 @@
     "forms/schema-overrides.json"
   ],
   "shared_changes_wanted": [
-    "crates/bir-print (neon-4 try/forms-shared-print): comb fitting for long names on Page 2 p2c6 and right-aligned schedule currency columns.",
-    "crates/bir-core: derive Schedule 1 Classification code for p2c41.",
     "nsh/screens/form/: widen long single-line text inputs (names, addresses, locations)."
   ],
   "tests_run": [

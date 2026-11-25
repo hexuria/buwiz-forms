@@ -1,7 +1,7 @@
 {
   "code": "1707",
   "verdict": "tweak",
-  "summary": "Fixed Part I 6A-6C and 7A-7C name/address shrink-to-fit and border padding, Page 2 Taxpayer's Name comb-tick strike-through, Part III/Part II leaked internal JSON fixture paths, and Schedule 2/3 'add-more subtotal' jargon. Remaining items require shared crate/UI changes (TIN dash formatting in 6A-7C, Schedule 2 No. of Shares formatting/alignment, and 5-digit TIN branch-code box width).",
+  "summary": "Fixed Part I 6A-6C and 7A-7C name/address shrink-to-fit and border padding, dashed TINs (8835479d), Item 1 blank unset date parts (8835479d), Page 2 Taxpayer's Name comb-tick strike-through (shared [data-overflow-of] white band at 8835479d; per-form comb mask removed), Schedule 2 No. of Shares count formatting (8835479d), Part III/Part II leaked internal JSON fixture paths, and Schedule 2/3 subtotal wording. Remaining item is screen-only (5-digit TIN branch-code box width in nsh/screens/form/).",
   "defects": [
     {
       "id": "1707-print-01",
@@ -18,8 +18,8 @@
       "where": "Page 1, Part I Items 6A-6C and 7A-7C (Seller's/Buyer's TIN)",
       "what": "TINs print as unformatted 14-digit strings (e.g. '00012345300000') without dashes.",
       "before": "form-review/1707/before/print-p1.png",
-      "after": "form-review/1707/after/print-p1.png",
-      "status": "needs shared change"
+      "after": "form-review/1707/after/print-p1.png (fixed via shared branch 8835479d; prints dashed TINs)",
+      "status": "fixed"
     },
     {
       "id": "1707-print-03",
@@ -27,7 +27,7 @@
       "where": "Page 2, Taxpayer's Name comb box (p2c6)",
       "what": "Long Taxpayer's Name (>26 chars) fell back to plain proportional text rendered over visible vertical comb ticks.",
       "before": "form-review/1707/before/print-p2.png",
-      "after": "form-review/1707/after/print-p2.png",
+      "after": "form-review/1707/after/print-p2.png (fixed via shared [data-overflow-of] white band at 8835479d; per-form comb mask removed)",
       "status": "fixed"
     },
     {
@@ -36,8 +36,8 @@
       "where": "Page 2, Schedule 2 (Continuation), No. of Shares column",
       "what": "Empty/zero rows print '0.00' left-aligned in integer comb slots (one char per tick).",
       "before": "form-review/1707/before/print-p2.png",
-      "after": "form-review/1707/after/print-p2.png",
-      "status": "needs shared change"
+      "after": "form-review/1707/after/print-p2.png (fixed via shared branch 8835479d; no '0.00' in integer comb slots)",
+      "status": "fixed"
     },
     {
       "id": "1707-screen-01",
@@ -52,7 +52,7 @@
       "id": "1707-screen-02",
       "surface": "screen",
       "where": "Part IV Schedules 2 and 3",
-      "what": "Used internal jargon 'Schedule 2/3 add-more subtotal' instead of clear user-facing 'Schedule 2/3 additional rows subtotal'.",
+      "what": "Used internal jargon 'Schedule 2/3 add-more subtotal' instead of plain user-facing 'Subtotal of the rows added below the printed ones'.",
       "before": "form-review/1707/before/screen-06-part-5.png",
       "after": "form-review/1707/after/screen-06-part-5.png",
       "status": "fixed"
@@ -73,7 +73,6 @@
     "forms/schema-overrides.json"
   ],
   "shared_changes_wanted": [
-    "crates/bir-print or crates/bir-core: format 6A-6C and 7A-7C TINs with dashes (XXX-XXX-XXX-XXXXX) and format Schedule 2 No. of Shares as right-aligned integer without '.00'.",
     "nsh/screens/form/: widen the 5-digit branch-code TIN box so '00000' does not clip."
   ],
   "tests_run": [

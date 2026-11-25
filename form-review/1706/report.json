@@ -1,7 +1,7 @@
 {
   "code": "1706",
   "verdict": "tweak",
-  "summary": "Fixed Item 6A/7A name overflow and cell border collisions, Page 2 Taxpayer/Buyer Name comb-tick strike-through, Schedule 1 right-alignment and padding, and Schedule 1 screen labels (OCT/TCT/CCT No., Area (sq.m.)). Remaining items require shared crate/UI changes (bir-core formatting of txtTotalN and Classification derivation, plus nsh/screens/form input widths).",
+  "summary": "Fixed Item 6A/7A name overflow and cell border collisions, Page 2 Taxpayer/Buyer Name comb-tick strike-through (via shared [data-overflow-of] white band at 8835479d; per-form comb mask removed), Schedule 1 Classification code, right-alignment, and padding, Schedule 2 Item 6 integer count, and Schedule 1 screen labels (OCT/TCT/CCT No., Area (sq.m.)). Remaining items are screen-only (bir-core screen formatting of txtTotalN and nsh/screens/form input widths).",
   "defects": [
     {
       "id": "1706-print-01",
@@ -27,7 +27,7 @@
       "where": "Page 2, Taxpayer's/Buyer's Name comb box (p2c6)",
       "what": "Long Buyer's Name (>27 chars) fell back to proportional text rendered over visible vertical comb ticks.",
       "before": "form-review/1706/before/print-p2.png",
-      "after": "form-review/1706/after/print-p2.png",
+      "after": "form-review/1706/after/print-p2.png (fixed via shared [data-overflow-of] white band at 8835479d; per-form comb mask removed)",
       "status": "fixed"
     },
     {
@@ -36,8 +36,8 @@
       "where": "Page 2, Schedule 1 (continuation), Classification* column",
       "what": "Classification* column is blank on print even though 'Residential' is selected on screen; html-frozen/1706-2018/writer-cells.json lists j_id391:_1.._8 under not_joined and needs a derived classification code in crates/.",
       "before": "form-review/1706/before/print-p2.png",
-      "after": "form-review/1706/after/print-p2.png",
-      "status": "needs shared change"
+      "after": "form-review/1706/after/print-p2.png (fixed via shared branch 8835479d; prints 'RR')",
+      "status": "fixed"
     },
     {
       "id": "1706-print-05",
@@ -54,8 +54,8 @@
       "where": "Page 2, Schedule 2 Item 6 (No. of Installments in the contract)",
       "what": "Prints '12.00' (5 chars) across a 2-slot integer comb box because bir-core stores/formats frm1706:txtTotalN as a 2-decimal number even with schema-overrides kind:'int'.",
       "before": "form-review/1706/before/print-p2.png",
-      "after": "form-review/1706/after/print-p2.png",
-      "status": "needs shared change"
+      "after": "form-review/1706/after/print-p2.png (fixed via shared branch 8835479d; prints '1 2' without '.00')",
+      "status": "fixed"
     },
     {
       "id": "1706-print-07",
@@ -100,7 +100,7 @@
     "forms/schema-overrides.json"
   ],
   "shared_changes_wanted": [
-    "crates/bir-core: store/format frm1706:txtTotalN as integer (not 2-decimal '12.00') and derive Schedule 1 Classification code (RR/RC/CR/CC/A/I/etc.) for p2c41.",
+    "crates/bir-core: store/format frm1706:txtTotalN on screen as integer (not 2-decimal '12.00').",
     "nsh/screens/form/: widen long single-line text inputs (names, addresses, locations) to use available card width instead of clipping at ~240px."
   ],
   "tests_run": [
