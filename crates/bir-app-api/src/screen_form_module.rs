@@ -15877,9 +15877,10 @@ mod tests {
         // it is derived, but its row still is the family's row. The family
         // offset (2200A's Others rows are one-based in the key, zero-based in
         // the path) comes from the sibling pair itself.
-        let found = def.bindings.get(key).map(|bound| {
-            (bound.binding.path().to_string(), key.to_string())
-        });
+        let found = def
+            .bindings
+            .get(key)
+            .map(|bound| (bound.binding.path().to_string(), key.to_string()));
         let found = found.or_else(|| {
             let wanted = shape(key);
             def.bindings
@@ -15890,7 +15891,10 @@ mod tests {
         let Some((path, rowed_key)) = found else {
             return false;
         };
-        let segments: Vec<&str> = path.split('/').filter(|segment| !segment.is_empty()).collect();
+        let segments: Vec<&str> = path
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .collect();
         // The row index is the path's first numeric segment; its list is
         // every segment before it (nested arrays included). Only the
         // expandable tables have a frontier at all: a fixed table's rows
@@ -16091,7 +16095,9 @@ mod tests {
                     .flatten()
                     .filter_map(|key| key.as_str())
                     .collect();
-                let beyond = keys.iter().any(|key| past_frontier(code, &opened["draft"], key));
+                let beyond = keys
+                    .iter()
+                    .any(|key| past_frontier(code, &opened["draft"], key));
                 if beyond {
                     continue;
                 }

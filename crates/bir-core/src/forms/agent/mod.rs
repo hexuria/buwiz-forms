@@ -150,9 +150,9 @@ const EXPANDABLE_TABLES: [(&str, &str); 6] = [
 /// Whether `list` is an expandable table's draft path in `package` (the
 /// screen's frontier rules apply to these and to no fixed table).
 pub fn is_expandable_list(package: &str, list: &str) -> bool {
-    EXPANDABLE_TABLES
-        .iter()
-        .any(|(form, path)| *form == package && list.trim_start_matches('/') == path.trim_start_matches('/'))
+    EXPANDABLE_TABLES.iter().any(|(form, path)| {
+        *form == package && list.trim_start_matches('/') == path.trim_start_matches('/')
+    })
 }
 
 /// Grow the bindings of an expandable table past the pre-allocated rows, as
@@ -1884,14 +1884,20 @@ fn blanked_clone(value: &Value) -> Value {
 /// the family's shape first. Rows further ahead stay unwritable (a draft
 /// never carries row 7 without rows 3 to 6, as the official page cannot).
 fn grow_arrays_to_frontier(draft: &mut Value, path: &str) {
-    let mut segments: Vec<&str> = path.split('/').filter(|segment| !segment.is_empty()).collect();
+    let mut segments: Vec<&str> = path
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect();
     segments.pop();
     let mut current = String::new();
     for segment in segments {
         current.push('/');
         current.push_str(segment);
         if let Ok(index) = segment.parse::<usize>() {
-            let parent = current.rsplit_once('/').map(|(parent, _)| parent).unwrap_or("");
+            let parent = current
+                .rsplit_once('/')
+                .map(|(parent, _)| parent)
+                .unwrap_or("");
             if let Some(Value::Array(rows)) =
                 draft.pointer_mut(if parent.is_empty() { "" } else { parent })
                 && index == rows.len()

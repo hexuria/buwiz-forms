@@ -965,8 +965,13 @@ impl Form2200ADraft {
             let Some(at) = key.find("_others") else {
                 return true;
             };
-            let digits: String = key[at + 7..].chars().take_while(|c| c.is_ascii_digit()).collect();
-            digits.parse::<usize>().map_or(true, |row| row <= FORM_2200A_OTHER_ROWS)
+            let digits: String = key[at + 7..]
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            digits
+                .parse::<usize>()
+                .map_or(true, |row| row <= FORM_2200A_OTHER_ROWS)
         });
         let mut put = |key: &str, value: String| {
             if !value.trim().is_empty() {
