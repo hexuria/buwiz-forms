@@ -1,0 +1,36 @@
+{
+  "item": "2200T Schedule 1 rows 7-8 (Novel Tobacco Products, XT210 and XT220): money cells blank while every other fixed row prints",
+  "fault_class": "novel-tobacco fixed rows have no layout fields",
+  "same_saved_return": "excise.db draft id=2 (2200T year 2025 period 1), demo taxpayer 000-123-453-00000; Others rows declare ATC 210 (export 0.00, taxable 1,000.00, due 2,600.00) and ATC 220 (0.00, 2,000.00, 60.00); TOTAL TAX DUE 2,660.00",
+  "cause": "the paper's items 7.) and 8.) are fixed rows with no matching screen/layout fields: the web form can only declare novel tobacco on an Others (specify) line, and writer-cells.json had no joins for the nine XT210 money cells (three dated rate rows x Export/Taxable/Due) or the three XT220 cells",
+  "fix": "print-only routing in Form2200T::to_print_field_map (crates/bir-core/src/forms/form_2200t.rs): the first Others row whose ATC digits are 210 prints its money on the XT210 dated row that matches the return's year (<=2022 -> 'Aug 10 2022', 2023 -> 'Jan 1 2023', >=2024 -> '2024 Onwards') as derived:sched1_xt210_{a,b,c}_{export,taxable,due}; the first row whose ATC digits are 220 prints as derived:sched1_xt220_*. A routed row's seven Others cells are blanked in the print map only. html-frozen/2200t-2022/writer-cells.json joins the 12 cells (p3c24-26, p3c29-31, p3c34-36, p3c105-107) to the derived keys.",
+  "upload_unchanged": "to_bir_field_map untouched; Others fields still serialize to the payload (asserted in the new unit test). cargo test -p bir-core --test sample_payloads_test passes before and after.",
+  "before": {
+    "print-p3.png": "headless render of the reconstructed pre-fix print map on the same draft (fixed XT210/XT220 rows blank, the declared money sitting on Others lines). The live before-preview could not be re-captured: the nsh dev-server rebuilt and relaunched the app with the fix mid-work; the reconstruction drops the new derived: keys and restores the Others fields exactly as to_print_field_map emitted them before the change.",
+    "pdf-p-3-unfilled-save.png + 2200t-app-save-1644.pdf": "a real saved PDF from before the fix (saved 16:44, before the Others data was entered): the fixed rows are already blank there; the auditor's filled repro is form-review/2200T/ on try/forms-macos-b"
+  },
+  "after": {
+    "print-p3.png": "live print preview of the same saved draft: XT210 '2024 Onwards' prints 0.00 | 1,000.00 | 2,600.00; XT220 prints 0.00 | 2,000.00 | 60.00; the two routed Others lines print blank; TOTAL TAX DUE 2,660.00 unchanged",
+    "pdf-p-3.png + 2200t-after.pdf": "the PDF saved from that preview shows the identical layout"
+  },
+  "notes": [
+    "only the first Others row per ATC routes; a second '210' row stays on the Others line (mirrors 'first match' semantics elsewhere)",
+    "an unrouted empty Others row still prints the pre-existing 0.00 defaults; routed rows print fully blank, matching how fixed rows suppress empty money",
+    "other 37 not_joined_cells on this page are the unrelated '2024 onwards has no layout key' class - out of scope"
+  ],
+  "goldens_touched": [
+    "crates/bir-print/src/fixtures/fitting-plain-goldens.json (2200t-2022)",
+    "crates/bir-print/src/fixtures/fitting-band-goldens.json (2200t-2022)",
+    "crates/bir-print/src/fixtures/fitting-band-box-goldens.json (2200t-2022) + band-box total 1472 -> 1476 in frozen_html.rs",
+    "crates/bir-print/src/fixtures/overflow-goldens.json (2200t-2022, BIR_PRINT_BLESS_OVERFLOW=1)",
+    "fitting-goldens.json unchanged (the new joins are plain boxes, not combs)"
+  ],
+  "suites": {
+    "cargo test -p bir-core --lib": "1617 passed",
+    "cargo test -p bir-core --test sample_payloads_test": "142 passed (upload unchanged)",
+    "cargo test -p bir-print": "131 passed",
+    "cargo test -p bir-app-api --lib": "751 passed",
+    "cargo fmt --all -- --check": "clean",
+    "cargo clippy --locked --workspace -- -D warnings": "clean"
+  }
+}

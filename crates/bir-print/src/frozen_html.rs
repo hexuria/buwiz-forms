@@ -8361,7 +8361,7 @@ mod tests {
         boxes
     }
 
-    /// Every band box of every sheet ([`band_boxes`], 1,472 of them) holds
+    /// Every band box of every sheet ([`band_boxes`], 1,476 of them) holds
     /// a value in its 1 pt band and prints byte for byte as at dcc6386a:
     /// `fixtures/fitting-band-box-goldens.json` holds, per sheet, the
     /// SHA-256 of the document dcc6386a's fill printed for that sheet's
@@ -8412,7 +8412,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1472, "band boxes");
+        assert_eq!(total, 1476, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 

@@ -886,6 +886,47 @@ impl Form2200TDraft {
                 fields.insert(format!("derived:line:item{item}_{level}"), name);
             }
         }
+        // Novel tobacco has no layout fields: the paper prints fixed rows
+        // "7.) Novel Tobacco Products XT210" (three dated rate rows) and
+        // "8.) XT220", while the web form can only declare them on an
+        // Others (specify) line. An Others row whose ATC is 210 or 220
+        // prints its money on the matching fixed row instead of on the
+        // Others line; the XT210 rate row follows the return's year.
+        // The upload keeps the Others fields untouched.
+        let mut xt210_routed = false;
+        let mut xt220_routed = false;
+        for index in 0..FORM_2200T_OTHER_ROWS {
+            let row = self.other(index);
+            let target = match row.atc_digits.trim() {
+                "210" if !xt210_routed => {
+                    xt210_routed = true;
+                    let row_year = if self.year <= 2022 {
+                        "a"
+                    } else if self.year == 2023 {
+                        "b"
+                    } else {
+                        "c"
+                    };
+                    format!("sched1_xt210_{row_year}")
+                }
+                "220" if !xt220_routed => {
+                    xt220_routed = true;
+                    "sched1_xt220".to_string()
+                }
+                _ => continue,
+            };
+            for (column, value) in [
+                ("export", row.amounts.export_exempt),
+                ("taxable", row.amounts.taxable),
+                ("due", row.amounts.tax_due),
+            ] {
+                fields.insert(format!("derived:{target}_{column}"), official_amount(value));
+            }
+            let base = format!("{PREFIX}:txtSched1_xt_others{}", index + 1);
+            for suffix in ["Atc", "Desc", "Bracket", "Rate", "Export", "Taxable", "Due"] {
+                fields.insert(format!("{base}_{suffix}"), String::new());
+            }
+        }
         super::print_map::blank_unset_date_parts(
             &mut fields,
             &[
@@ -1463,6 +1504,46 @@ mod tests {
             "12345678800000-2200Tv2020-03152025#sample.taxpayer@example.com#.xml"
         );
         assert!(draft.to_bir_xml_payload().is_ok());
+    }
+
+    #[test]
+    fn novel_tobacco_others_rows_print_on_their_fixed_rows() {
+        let mut draft = sample();
+        let novel = draft.other_mut(0).unwrap();
+        novel.atc_digits = "210".into();
+        novel.description = "NOVEL TOBACCO".into();
+        novel.bracket = "PER KILOGRAM".into();
+        novel.rate = "2.60".into();
+        novel.amounts.taxable = 1_000.0;
+        novel.amounts.tax_due = 2_600.0;
+        let cigarette = draft.other_mut(1).unwrap();
+        cigarette.atc_digits = "220".into();
+        cigarette.amounts.tax_due = 33.0;
+
+        let fields = draft.to_print_field_map();
+        // 2025 picks the "2024 Onwards" rate row.
+        assert_eq!(fields["derived:sched1_xt210_c_taxable"], "1,000.00");
+        assert_eq!(fields["derived:sched1_xt210_c_due"], "2,600.00");
+        assert!(!fields.contains_key("derived:sched1_xt210_a_due"));
+        assert!(!fields.contains_key("derived:sched1_xt210_b_due"));
+        assert_eq!(fields["derived:sched1_xt220_due"], "33.00");
+        // The routed rows leave their Others lines blank on paper.
+        for suffix in ["Atc", "Desc", "Bracket", "Rate", "Export", "Taxable", "Due"] {
+            let key = format!("{PREFIX}:txtSched1_xt_others1_{suffix}");
+            assert_eq!(fields[key.as_str()], "");
+            let key = format!("{PREFIX}:txtSched1_xt_others2_{suffix}");
+            assert_eq!(fields[key.as_str()], "");
+        }
+        // The upload still carries the Others fields.
+        let upload = draft.to_bir_field_map();
+        assert_eq!(upload["frm2200Tv2020:txtSched1_xt_others1_Atc"], "210");
+        assert_eq!(upload["frm2200Tv2020:txtSched1_xt_others1_Due"], "2,600.00");
+
+        // An earlier year routes XT210 to its own dated row.
+        draft.year = 2023;
+        let fields = draft.to_print_field_map();
+        assert_eq!(fields["derived:sched1_xt210_b_due"], "2,600.00");
+        assert!(!fields.contains_key("derived:sched1_xt210_c_due"));
     }
 
     #[test]
