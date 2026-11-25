@@ -3,7 +3,7 @@
 // the store and hands them here. The clock is a parameter (the system's by default).
 import type { DeadlineRow } from "../../bir";
 import { addDays, daysUntil, isoDate, MONTHS, MONTHS_LONG } from "../../lib/dates";
-import { DRY_RUN_WORD } from "../../lib/statusWord";
+import { DRY_RUN_WORD, isOpenDeadline, statusWord } from "../../lib/statusWord";
 import type { ChipTone } from "../../ui";
 
 /** How often: every frequency, or one of three. */
@@ -125,22 +125,25 @@ export function kindOf(status: string): RowKind {
   return "not_started";
 }
 
-/** Still to do: nobody has queued or filed it. */
-export const isOpenStatus = (d: Pick<DeadlineRow, "status">): boolean => d.status === "Not started" || d.status === "Draft";
+/** Still to do: nobody has queued or filed it, or its return was only a dry run (`isOpenDeadline`: it sent nothing). */
+export const isOpenStatus = (d: Pick<DeadlineRow, "status"> & { submitted_dry_run?: boolean | null }): boolean => isOpenDeadline(d);
 
-/** A chip's tone: overdue (danger), due within 14 days (warning), filed (success), in progress (accent), else neutral. */
-export function toneOf(d: Pick<DeadlineRow, "status" | "due_date">, now: Date = new Date()): ChipTone {
+/**
+ * A chip's tone: overdue (danger), due within 14 days (warning), filed (success), in progress (accent), else neutral. A dry run
+ * is open, so it is late or soon as a Draft is, and in progress (accent) before that: never filed.
+ */
+export function toneOf(d: Pick<DeadlineRow, "status" | "due_date"> & { submitted_dry_run?: boolean | null }, now: Date = new Date()): ChipTone {
   const n = daysUntil(d.due_date, now);
   if (isOpenStatus(d) && n < 0) return "danger";
   if (isOpenStatus(d) && n <= 14) return "warning";
-  const kind = kindOf(d.status);
+  const kind = kindOf(statusWord(d));
   if (kind === "filed") return "success";
-  if (kind === "draft" || kind === "queued") return "accent";
+  if (kind === "draft" || kind === "queued" || kind === "dry_run") return "accent";
   return "neutral";
 }
 
 /** The tone of a day's dot: the most urgent of its deadlines (late, soon, in progress, to do, filed). */
-export function dayTone(items: readonly Pick<DeadlineRow, "status" | "due_date">[], now: Date = new Date()): ChipTone {
+export function dayTone(items: readonly (Pick<DeadlineRow, "status" | "due_date"> & { submitted_dry_run?: boolean | null })[], now: Date = new Date()): ChipTone {
   const order: ChipTone[] = ["danger", "warning", "accent", "neutral", "success"];
   let best = order.length;
   for (const d of items) best = Math.min(best, order.indexOf(toneOf(d, now)));

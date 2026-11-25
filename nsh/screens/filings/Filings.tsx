@@ -5,7 +5,8 @@
 //
 // Reads: the two cached lists Home also makes, bir.list_returns("filed") and ("saved"), through the store. Writes: bir.cancel_queued.
 // Under them, "Filed in BIR eBIRForms" (LegacyGroup): what the import brought in from the old program, for the taxpayer in view.
-// A Home tile arrives with params { statuses, updatedMonth } (the old FilingsPreset's names): they replace every filter, once.
+// A Home tile arrives with params { statuses, updatedMonth } (the old FilingsPreset's names), and "Filed this month" with filedOnly
+// (a dry run is not filed, so its list leaves them out as its count does): they replace every filter, once.
 import type { JSX } from "nsh";
 import { computed, signal, untracked, View } from "nsh";
 import type { ReturnRow } from "../../bir";
@@ -32,6 +33,20 @@ function MonthChip() {
       size="sm"
       trailing={<Icon name="x" size={14} tone="fg3" />}
       onPress={filters.clearMonth}
+    />
+  );
+}
+
+/** "Filed only", from Home's "Filed this month": only returns that count as filed (a dry run is left out). A press removes it. */
+function FiledOnlyChip() {
+  return (
+    <AppButton
+      testID="filings-filed-only-chip"
+      label="Filed only"
+      accessibilityLabel="Filed only. Remove"
+      size="sm"
+      trailing={<Icon name="x" size={14} tone="fg3" />}
+      onPress={filters.clearFiledOnly}
     />
   );
 }
@@ -89,6 +104,9 @@ function WideBar(props: { all: ReturnRow[]; index: FormIndex; count: number }) {
       <If when={filters.updatedMonth() !== null}>
         <MonthChip />
       </If>
+      <If when={filters.filedOnly()}>
+        <FiledOnlyChip />
+      </If>
       <If when={filters.active()}>
         <ClearFilters />
       </If>
@@ -118,9 +136,14 @@ function NarrowBar(props: { onFilters: () => void }) {
           onPress={props.onFilters}
         />
       </View>
-      <If when={filters.updatedMonth() !== null}>
-        <View class="flex-row">
-          <MonthChip />
+      <If when={filters.updatedMonth() !== null || filters.filedOnly()}>
+        <View class="flex-row flex-wrap gap-2">
+          <If when={filters.updatedMonth() !== null}>
+            <MonthChip />
+          </If>
+          <If when={filters.filedOnly()}>
+            <FiledOnlyChip />
+          </If>
         </View>
       </If>
     </View>

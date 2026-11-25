@@ -43,7 +43,7 @@ test("the List groups every deadline of the year by due month, under the filter 
   expect(app.shows(`id:calendar-row-${rowKey(headOffice("1601C", 1))}`)).toBe(true);
 }, 60_000);
 
-test("a dry-run send's row says Dry run; a real send's says Filed", async () => {
+test("a dry-run send's row says Dry run and stays due (a late or soon chip); a real send's says Filed and is done", async () => {
   // A row of the List (this tax year) due this month: the fixture answers those as sent.
   const row = yearRows.find((d) => dueThisMonth(d))!;
   expect(row).toBeTruthy();
@@ -52,10 +52,14 @@ test("a dry-run send's row says Dry run; a real send's says Filed", async () => 
   await dry.waitFor(id);
   expect(dry.shows(`${id} >> text:Dry run`)).toBe(true);
   expect(dry.shows(`${id} >> text:Filed`)).toBe(false);
+  // This month's deadline is past or within 14 days: a dry run sent nothing, so it says how late or soon it is.
+  expect(dry.shows(`${id} >> text:/^(\\d+ days? overdue|Due today|In \\d+ days?)$/`)).toBe(true);
   const real = await open(ENTRY, asking({ branch: true, second: true, sent: "real" }));
   await real.waitFor(id);
   expect(real.shows(`${id} >> text:Filed`)).toBe(true);
   expect(real.shows(`${id} >> text:Dry run`)).toBe(false);
+  // Done: no chip of lateness (a later day's plain "In N days" is its date, not a chip, so only a past one is checked).
+  if (row.due_date < isoDate(new Date())) expect(real.shows(`${id} >> text:/overdue$/`)).toBe(false);
 }, 90_000);
 
 test("a row opens its return, and back returns to the Calendar as it was", async () => {

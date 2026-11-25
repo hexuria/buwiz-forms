@@ -3,7 +3,7 @@
 import { View } from "nsh";
 import type { DeadlineRow } from "../../bir";
 import { daysUntil, MONTHS } from "../../lib/dates";
-import { statusWord } from "../../lib/statusWord";
+import { isDryRun, statusWord } from "../../lib/statusWord";
 import { openReturn, today } from "../../shell";
 import { Code, ListRow, NameCell, StatusChip, Text } from "../../ui";
 import { isOpenStatus, kindOf, rowKey, whoLine } from "./rows";
@@ -49,7 +49,8 @@ export function DueRow(props: DueRowProps) {
   const day = () => String(Number(props.d.due_date.split("-")[2]));
   const open = () => isOpenStatus(props.d);
   const timed = () => open() && n() <= 14;
-  const sub = () => (props.compact && timed() && props.d.status === "Draft" ? `${whoLine(props.d)} · Draft` : whoLine(props.d));
+  // Where the one chip says the time, a started return says where it stands after the taxpayer: "· Draft", "· Dry run".
+  const sub = () => (props.compact && timed() && props.d.status !== "Not started" ? `${whoLine(props.d)} · ${statusWord(props.d)}` : whoLine(props.d));
   return (
     <ListRow testID={props.testID ?? `calendar-row-${rowKey(props.d)}`} onPress={() => openDeadline(props.d)}>
       <View class="w-11 shrink-0 items-center">
@@ -81,12 +82,18 @@ export function DueRow(props: DueRowProps) {
   );
 }
 
+/** A day-panel row's line under the period: the taxpayer, and "· Dry run" while its one chip says how late or soon it is. */
+function dayRowSub(d: DeadlineRow): string {
+  const n = daysUntil(d.due_date, today());
+  return isDryRun(d) && n <= 14 ? `${whoLine(d)} · ${statusWord(d)}` : whoLine(d);
+}
+
 /** The Month view's day-panel row: code, period over the taxpayer, then when or status. */
 export function DayRow(props: { d: DeadlineRow }) {
   return (
     <ListRow testID={`calendar-day-row-${rowKey(props.d)}`} onPress={() => openDeadline(props.d)}>
       <Code class="w-13 shrink-0">{props.d.form_code}</Code>
-      <NameCell title={props.d.period_label} sub={whoLine(props.d)} />
+      <NameCell title={props.d.period_label} sub={dayRowSub(props.d)} />
       <View class="shrink-0">
         <RowChip d={props.d} />
       </View>

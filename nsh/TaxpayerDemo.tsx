@@ -5,6 +5,8 @@
 //   branch  a second branch (00001, Cebu branch)          peer   a second individual (generated: Sample Person, 1701Q)
 //   setup   a setup of the user's ("Bookkeeping clients") conflict  1701 and 1701A on the year's list too
 //   pin     the demo taxpayer has the profile PIN 1234    start  the dev route ("view=profile")
+//   sent    "dry": every 1601C deadline of the year reads as a Submitted dry run (only simulated: still due); "real": as real sends
+//           (every period filed). Generated reads: nothing is stored
 //   card    "export": only the Export this profile card and a toaster (Settings draws it)
 // It sits at the nsh root because a real-window run serves assets (fonts, icons) from the entry's folder down.
 import { host, mount, signal, View } from "nsh";
@@ -26,6 +28,7 @@ interface Params {
   pin?: boolean;
   start?: string;
   card?: "export";
+  sent?: "dry" | "real";
   exportDownload?: { name?: string; error?: string; cancelled?: boolean };
   exportLayout?: boolean;
   year?: number;
@@ -58,9 +61,17 @@ function seed(p: Params) {
   if (p.pin) bir.set_taxpayer_pin(taxpayer.tin_root, "1234");
 }
 
+/** bir.deadlines_between with every 1601C deadline read as Submitted: only simulated (`dry`) or sent for real. */
+function show1601CAsSent(dry: boolean): void {
+  const fake = bir as { deadlines_between: typeof bir.deadlines_between };
+  const real = fake.deadlines_between;
+  fake.deadlines_between = (from, to) => real(from, to).map((d) => (d.form_code === "1601C" ? { ...d, status: "Submitted", submitted_dry_run: dry } : d));
+}
+
 function Demo() {
   const p = host.params as Params;
   if (p.demo !== false) seed(p);
+  if (p.sent) show1601CAsSent(p.sent === "dry");
   const ready = signal(!p.savedReturn);
   if (p.savedReturn) {
     const target = p.savedReturn;

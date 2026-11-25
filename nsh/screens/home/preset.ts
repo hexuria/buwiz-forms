@@ -5,17 +5,22 @@ import { go } from "../../shell";
 
 /**
  * `statuses` are return statuses ("Draft", "Queued", "Submitted", "Confirmed", "Paid"); `updatedMonth` ("YYYY-MM") keeps the
- * returns updated in that month.
+ * returns updated in that month; `filedOnly` keeps only the returns that count as filed (`countsAsFiled`: a dry run does not).
  */
 export interface FilingsPreset {
   statuses: string[];
   updatedMonth?: string;
+  filedOnly?: boolean;
 }
 
-/** The statuses that count as filed. */
+/** The stored statuses a filed return can have (a Submitted dry run is one of them but not filed: pair it with `filedOnly`). */
 export const FILED_STATUSES = ["Submitted", "Confirmed", "Paid"] as const;
 
 /** Opens Filings with the preset. */
 export function openFilings(preset: FilingsPreset): void {
-  go("filings", preset.updatedMonth === undefined ? { statuses: preset.statuses } : { statuses: preset.statuses, updatedMonth: preset.updatedMonth });
+  go("filings", {
+    statuses: preset.statuses,
+    ...(preset.updatedMonth === undefined ? {} : { updatedMonth: preset.updatedMonth }),
+    ...(preset.filedOnly ? { filedOnly: true } : {}),
+  });
 }

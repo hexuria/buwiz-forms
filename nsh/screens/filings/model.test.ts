@@ -122,6 +122,30 @@ test("the month filter keeps what changed in that local month", () => {
   expect(ids(filterRows(R, INDEX, { ...ALL, updatedMonth: "2019-01" }))).toEqual([]);
 });
 
+test("Filed only keeps what counts as filed: a real send, a relay send, Confirmed and Paid; never a dry run, a Draft or a Queued one", () => {
+  const send = (stage: SendState["stage"]): SendState => ({ stage, line: "", code: null, next_try_at: null, can_resolve: false });
+  const rows = [
+    row({ id: 11, status: "Submitted", send: send("test_sent") }),
+    row({ id: 12, status: "Submitted" }),
+    row({ id: 13, status: "Submitted", send: send("sent") }),
+    row({ id: 14, status: "Confirmed" }),
+    row({ id: 15, status: "Paid" }),
+    row({ id: 16, status: "Draft" }),
+    row({ id: 17, status: "Queued" }),
+  ];
+  expect(ids(filterRows(rows, INDEX, { ...ALL, filedOnly: true }))).toEqual([12, 13, 14, 15]);
+  expect(ids(filterRows(rows, INDEX, ALL))).toEqual([11, 12, 13, 14, 15, 16, 17]);
+  // Home's "Filed this month" asks for it; a preset carries it only when set.
+  expect(presetOf({ statuses: ["Submitted", "Confirmed", "Paid"], updatedMonth: "2026-11", filedOnly: true })).toEqual({
+    statuses: ["Submitted", "Confirmed", "Paid"],
+    updatedMonth: "2026-11",
+    filedOnly: true,
+  });
+  expect(presetOf({ filedOnly: true })).toEqual({ statuses: undefined, updatedMonth: undefined, filedOnly: true });
+  expect(presetOf({ filedOnly: "yes" })).toBeNull();
+  expect(presetFilters({ updatedMonth: "2026-11", filedOnly: true })).toEqual({ statuses: null, updatedMonth: "2026-11", filedOnly: true });
+});
+
 test("the board's columns hold every status once, with Paid in Confirmed", () => {
   expect(COLUMNS.map((c) => c.title)).toEqual(["Draft", "Queued", "Submitted", "Confirmed"]);
   expect(COLUMNS.flatMap((c) => [...c.statuses])).toEqual([...STATUSES]);

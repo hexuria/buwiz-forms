@@ -4,14 +4,16 @@
 //   Overdue, Due in 7 days   deadlines(today - 366 days, today + 7 days)
 //   Drafts                   savedReturns()
 //   Waiting to send          returns("filed"), status Queued
-//   Filed this month         returns("filed"), Submitted, Confirmed or Paid, updated this calendar month
+//   Filed this month         returns("filed") that count as filed (countsAsFiled: a dry run does not), updated this calendar month
 //   30-day strip             deadlines(today, today + 29 days)
-//   Taxpayer progress        deadlines(January 1, today): filed of due
+//   Taxpayer progress        deadlines(January 1, today): filed of due (a dry run's deadline is due and not filed)
+// A deadline is open while nobody queued or filed it, and while its return was only a dry run (it sent nothing).
 //   Taxpayer next deadline   deadlines(today, today + 60 days): the first open one
 //   Taxpayer rows            taxpayers()
 // The clock is a parameter (the system's by default); the clock given is not changed.
 
 import { MONTHS, MONTHS_LONG, addDays, isoDate } from "./dates";
+import { countsAsFiled, isOpenDeadline } from "./statusWord";
 
 /** A deadline as the host lists it (deadlines_between). */
 export interface DashboardDeadline {
@@ -24,6 +26,8 @@ export interface DashboardDeadline {
   /** ISO date, YYYY-MM-DD. */
   due_date: string;
   status: string;
+  /** The Submitted return was only a dry run (deadlines_between): the deadline stays open. */
+  submitted_dry_run?: boolean | null;
   return_key?: number | string | null;
 }
 
@@ -31,6 +35,8 @@ export interface DashboardDeadline {
 export interface DashboardReturn {
   tin_root: string;
   status: string;
+  /** Its send state (list_returns): "test_sent" is a dry run, which is not filed. */
+  send?: { stage: string } | null;
   /** A SQLite timestamp (UTC) or an ISO date. */
   updated_at?: string | null;
 }
@@ -119,13 +125,11 @@ export interface TileSpec {
 }
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-/** Return statuses that count as filed. */
-const FILED = new Set(["Submitted", "Confirmed", "Paid"]);
 const STRIP_DAYS = 30;
 
-/** Still to do: nobody has queued or filed it. */
+/** Still to do: nobody has queued or filed it. A dry run sent nothing, so it is still to do. */
 function isOpen(d: DashboardDeadline): boolean {
-  return d.status === "Not started" || d.status === "Draft";
+  return isOpenDeadline(d);
 }
 
 /** [year, month 1-12] of a return's update, in local time (SQLite timestamps are UTC). */
@@ -155,7 +159,7 @@ export function loadDashboard(store: DashboardReads, at: Date = new Date()): Das
   const waiting = filed.filter((r) => r.status === "Queued").length;
   const month = [now.getFullYear(), now.getMonth() + 1];
   const filedMonth = filed.filter((r) => {
-    if (!FILED.has(r.status)) return false;
+    if (!countsAsFiled(r)) return false;
     const [y, m] = localMonth(r.updated_at);
     return y === month[0] && m === month[1];
   }).length;
@@ -179,7 +183,7 @@ export function loadDashboard(store: DashboardReads, at: Date = new Date()): Das
       return {
         taxpayer: t,
         due: past.length,
-        done: past.filter((d) => FILED.has(d.status)).length,
+        done: past.filter((d) => countsAsFiled(d)).length,
         next: ahead.find((d) => d.tin_root === t.tin_root) || null,
       };
     });
