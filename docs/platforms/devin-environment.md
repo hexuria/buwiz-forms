@@ -162,6 +162,12 @@ pin. A build that mixes commits can fail far from the cause: when the Rust side 
 fields, the host stops with `BufferUnderflowException` in `Mounter.command`. Every report names the app commit, the
 sibling NSH commit, the NSH commit of the `nsh` tool and the SHA-256 of the runtime `classes.dex` the package used.
 
+Each checkout builds into its own folder (`CARGO_TARGET_DIR=~/BuwizNsh/target-<commit>`) for anything reported as
+evidence. Cargo cannot tell two checkouts of the same package version apart in one shared build folder, so a "before"
+build can link crates compiled from the "after" checkout, form definitions included (they are compiled into
+`bir-core`), with no error. A before and after is two checkouts and two build folders, and the report names the folder
+and the commit for each binary.
+
 ## Windows (Android)
 
 `scripts/setup-android-windows.ps1` installs JDK 17, the Android command-line tools, `platform-tools`, the emulator,
