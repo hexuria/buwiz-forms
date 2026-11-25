@@ -101,9 +101,10 @@ impl AgentFormKind {
             PACKAGES
                 .iter()
                 .map(|(package, raw)| {
-                    let def: AgentFormDef = serde_json::from_str(raw).unwrap_or_else(|error| {
+                    let mut def: AgentFormDef = serde_json::from_str(raw).unwrap_or_else(|error| {
                         panic!("invalid data/agent-forms/{package}.json: {error}")
                     });
+                    expand_row_families(&mut def);
                     (*package, def)
                 })
                 .collect()
@@ -111,6 +112,201 @@ impl AgentFormKind {
         parsed
             .get(self.package())
             .expect("every agent form kind has a pinned data/agent-forms file")
+    }
+}
+
+/// Rows the expandable tables grow to in the bindings (the write path's
+/// own [`ROW_LIMIT`] is higher): 2000's own validation names 50, and no
+/// officially expandable family is bounded lower. A table that outgrows it
+/// is a data fix, not a wall the filer hits silently.
+const EXPAND_ROWS: usize = 50;
+
+/// The officially expandable tables this job opens (F4), each proven by the
+/// official program's own artifacts: 1601C's Schedule I rows carry the
+/// `{N>=0}` row-template keys of the official `fields.json` and its page
+/// script builds further numbered rows; form 2000's four schedules each
+/// carry the official `btnSched1Add`..`btnSched4Add` controls of the
+/// runtime-control inventory; 2200A's Others rows carry the official
+/// `{N>=4}` template keys. The write path, the serialization and the
+/// bindings all key rows by the same number, so growing the numbered rows
+/// here is exactly what the official program builds.
+const EXPANDABLE_TABLES: [(&str, &str); 6] = [
+    ("1601c-v2018", "/schedule_1"),
+    ("2000-v2018", "/schedule1"),
+    ("2000-v2018", "/schedule2"),
+    ("2000-v2018", "/schedule3"),
+    ("2000-v2018", "/schedule4"),
+    ("2200a-v2020", "/others"),
+];
+
+/// Grow the bindings of an expandable table past the pre-allocated rows, as
+/// the official program builds them in script: every row of a family is the
+/// same binding with the row's own index in the one path segment the rows
+/// differ in and in the key's trailing number. Rows already bound — by pin
+/// or probe — stay as they are.
+fn expand_row_families(def: &mut AgentFormDef) {
+    let lists: Vec<&str> = EXPANDABLE_TABLES
+        .iter()
+        .filter(|(package, _)| *package == def.package)
+        .map(|(_, list)| *list)
+        .collect();
+    if lists.is_empty() {
+        return;
+    }
+    for list in lists {
+        if !def.rows.contains_key(list) {
+            continue;
+        }
+        // Group the family's bound rows by leaf: path `<list>/<row>/<leaf>`.
+        let mut families: std::collections::BTreeMap<String, Vec<(usize, String)>> =
+            std::collections::BTreeMap::new();
+        for (key, bound) in &def.bindings {
+            let path = bound.binding.path();
+            let Some(rest) = path.strip_prefix(&format!("{list}/")) else {
+                continue;
+            };
+            let mut parts = rest.splitn(2, '/');
+            let (Some(row), Some(leaf)) = (parts.next(), parts.next()) else {
+                continue;
+            };
+            let Ok(row) = row.parse::<usize>() else {
+                continue;
+            };
+            families
+                .entry(leaf.to_string())
+                .or_default()
+                .push((row, key.clone()));
+        }
+        for (_leaf, mut members) in families {
+            members.sort();
+            let Some((_, zero_key)) = members.first().cloned() else {
+                continue;
+            };
+            let Some(zero_binding) = def.bindings.get(&zero_key).cloned() else {
+                continue;
+            };
+            let Some(zero_box) = def
+                .boxes
+                .iter()
+                .find(|entry| entry.key == zero_key)
+                .cloned()
+            else {
+                continue;
+            };
+            // The path segment the row index lives in: where two rows differ,
+            // or the segment holding the row's own index with a single row.
+            let segment_at = {
+                let paths: Vec<Vec<String>> = members
+                    .iter()
+                    .filter_map(|(_, key)| def.bindings.get(key))
+                    .map(|bound| {
+                        bound
+                            .binding
+                            .path()
+                            .split('/')
+                            .map(str::to_string)
+                            .collect()
+                    })
+                    .collect();
+                let mut at = None;
+                if paths.len() > 1 && paths.iter().all(|row| row.len() == paths[0].len()) {
+                    for position in 0..paths[0].len() {
+                        if paths
+                            .iter()
+                            .map(|row| &row[position])
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .len()
+                            > 1
+                        {
+                            at = Some(position);
+                            break;
+                        }
+                    }
+                }
+                at.or_else(|| {
+                    paths.first().and_then(|row| {
+                        let index_text = members[0].0.to_string();
+                        row.iter().position(|segment| *segment == index_text)
+                    })
+                })
+            };
+            let Some(segment_at) = segment_at else {
+                continue;
+            };
+            // The key shape: the rows' keys differ only in the row digits
+            // (common prefix and suffix across two rows; the digits may be
+            // the row index itself or, as in 2200A's one-based naming, the
+            // index shifted by a fixed offset).
+            let shape = if members.len() > 1 {
+                let (_, first_key) = &members[0];
+                let (_, second_key) = &members[1];
+                let first_bytes = first_key.as_bytes();
+                let second_bytes = second_key.as_bytes();
+                let prefix_len = first_bytes
+                    .iter()
+                    .zip(second_bytes.iter())
+                    .take_while(|(a, b)| a == b)
+                    .count();
+                let suffix_len = first_bytes
+                    .iter()
+                    .rev()
+                    .zip(second_bytes.iter().rev())
+                    .take_while(|(a, b)| a == b)
+                    .count()
+                    .min(first_key.len() - prefix_len)
+                    .min(second_key.len() - prefix_len);
+                let first_middle = &first_key[prefix_len..first_key.len() - suffix_len];
+                let second_middle = &second_key[prefix_len..second_key.len() - suffix_len];
+                match (
+                    first_middle.parse::<usize>(),
+                    second_middle.parse::<usize>(),
+                ) {
+                    (Ok(first_digit), Ok(_)) if !first_middle.is_empty() => Some((
+                        first_key[..prefix_len].to_string(),
+                        first_key[first_key.len() - suffix_len..].to_string(),
+                        first_digit as isize - members[0].0 as isize,
+                    )),
+                    _ => None,
+                }
+            } else {
+                // A single bound row: the digits are the trailing run or the
+                // row number's first occurrence.
+                let (row, key) = &members[0];
+                let row_text = row.to_string();
+                key.find(&row_text).map(|at| {
+                    (
+                        key[..at].to_string(),
+                        key[at + row_text.len()..].to_string(),
+                        0isize,
+                    )
+                })
+            };
+            let Some((prefix, suffix, offset)) = shape else {
+                continue;
+            };
+            let bound_rows: std::collections::BTreeSet<usize> =
+                members.iter().map(|(row, _)| *row).collect();
+            for row in 0..EXPAND_ROWS {
+                if bound_rows.contains(&row) {
+                    continue;
+                }
+                let digit = row as isize + offset;
+                if digit < 0 {
+                    continue;
+                }
+                let key = format!("{prefix}{digit}{suffix}");
+                if def.bindings.contains_key(&key) {
+                    continue;
+                }
+                let mut binding = zero_binding.clone();
+                binding.binding = binding.binding.with_row_segment(segment_at, row);
+                def.bindings.insert(key.clone(), binding);
+                let mut entry = zero_box.clone();
+                entry.key = key;
+                entry.label = format!("{}, row {}", zero_box.label, row + 1);
+                def.boxes.push(entry);
+            }
+        }
     }
 }
 
@@ -754,6 +950,65 @@ pub enum Binding {
     },
     /// A radio, checkbox or select: each official value sets these fields.
     Choice { options: Vec<ChoiceOption> },
+}
+
+impl Binding {
+    /// The draft path of a single-path binding (text, amount, whole);
+    /// choice bindings have no one path.
+    pub fn path(&self) -> &str {
+        match self {
+            Binding::Text { path, .. }
+            | Binding::Amount { path, .. }
+            | Binding::Whole { path, .. } => path,
+            Binding::Choice { .. } => "",
+        }
+    }
+
+    /// The binding with the draft path's segment at `position` replaced by
+    /// `index` — the same cell of a row further down its table.
+    pub fn with_row_segment(self, position: usize, index: usize) -> Binding {
+        let rewrite = |path: &str| -> String {
+            let mut segments: Vec<String> = path.split('/').map(str::to_string).collect();
+            if position < segments.len() {
+                segments[position] = index.to_string();
+            }
+            segments.join("/")
+        };
+        match self {
+            Binding::Text {
+                path,
+                nullable,
+                date,
+                part,
+            } => Binding::Text {
+                path: rewrite(&path),
+                nullable,
+                date,
+                part,
+            },
+            Binding::Amount { path, nullable } => Binding::Amount {
+                path: rewrite(&path),
+                nullable,
+            },
+            Binding::Whole { path, nullable } => Binding::Whole {
+                path: rewrite(&path),
+                nullable,
+            },
+            Binding::Choice { options } => Binding::Choice {
+                options: options
+                    .into_iter()
+                    .map(|mut option| {
+                        option.set = option
+                            .set
+                            .into_iter()
+                            .map(|(path, value)| (rewrite(&path), value))
+                            .collect();
+                        option
+                    })
+                    .collect(),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

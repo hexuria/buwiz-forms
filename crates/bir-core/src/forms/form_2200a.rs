@@ -527,6 +527,11 @@ pub const FORM_2200A_FIXED_ROW_COUNT: usize = FORM_2200A_FIXED_ROWS.len();
 /// "Others (specify)" rows at the end of Schedule 1.
 pub const FORM_2200A_OTHER_ROWS: usize = 3;
 
+/// The Others table grows past the three pre-allocated rows the way the
+/// official page does: its script builds `txtSched1_xa_others<N>_*` rows
+/// without a stated cap; the bindings carry them to form 2000's row count.
+pub const FORM_2200A_OTHER_EXPANDED_ROWS: usize = 50;
+
 /// Items 10 and 11: region, province and city codes from the official
 /// dropdowns. Blank means the `(Select …)` placeholder, `00`.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -877,7 +882,7 @@ impl Form2200ADraft {
 
     /// "Others" row `index`, growing the list to reach it.
     pub fn other_mut(&mut self, index: usize) -> Option<&mut Form2200AOtherRow> {
-        if index >= FORM_2200A_OTHER_ROWS {
+        if index >= FORM_2200A_OTHER_EXPANDED_ROWS {
             return None;
         }
         if self.others.len() <= index {
@@ -1083,7 +1088,11 @@ impl Form2200ADraft {
                 official_amount(row.tax_due),
             );
         }
-        for index in 0..FORM_2200A_OTHER_ROWS {
+        // Rows past the pre-allocated three exist only when the filer added
+        // them; the first three always emit, blank or not, exactly as the
+        // official program emits its pre-allocated rows.
+        let other_rows = self.others.len().max(FORM_2200A_OTHER_ROWS);
+        for index in 0..other_rows {
             let row = self.other(index);
             let base = format!("txtSched1_xa_others{}", index + 1);
             put(&format!("{base}_Check"), flag(!row.is_blank()));
@@ -1260,7 +1269,7 @@ impl Form2200ADraft {
         if self.schedule.len() > FORM_2200A_FIXED_ROW_COUNT {
             err("schedule", "Schedule 1 has 60 fixed rows.");
         }
-        if self.others.len() > FORM_2200A_OTHER_ROWS {
+        if self.others.len() > FORM_2200A_OTHER_EXPANDED_ROWS {
             err("others", "Schedule 1 has 3 \"Others\" rows.");
         }
         for (index, row) in self.schedule.iter().enumerate() {

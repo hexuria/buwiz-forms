@@ -34,6 +34,11 @@ use sha2::{Digest, Sha256};
 /// The 1601-C January 2018 XML contract exposes exactly three Schedule I rows.
 pub const MAX_SCHEDULE_1_ROWS: usize = 3;
 
+/// Schedule I grows past the three printed rows the way the official page
+/// does: its script builds further numbered rows without a stated cap, and
+/// the bindings carry them to the same row count form 2000 validates.
+pub const MAX_SCHEDULE_1_EXPANDED_ROWS: usize = 50;
+
 /// Hash-locked source evidence for the exact January 2018 revision.
 pub const OFFICIAL_FORM_SHA256: &str =
     "c8faaa71015337a73b4ceb96bfb265c539589ab5e10eb27899bb81f87f417397";
@@ -1107,11 +1112,11 @@ impl FormValidator for Form1601CDraft {
             ));
         }
 
-        if self.schedule_1.len() > MAX_SCHEDULE_1_ROWS {
+        if self.schedule_1.len() > MAX_SCHEDULE_1_EXPANDED_ROWS {
             errors.push((
                 "schedule_1".to_string(),
                 format!(
-                    "Schedule I supports at most {MAX_SCHEDULE_1_ROWS} rows in the verified 1601-C XML contract"
+                    "Schedule I supports at most {MAX_SCHEDULE_1_EXPANDED_ROWS} rows in the verified 1601-C XML contract"
                 ),
             ));
         }
