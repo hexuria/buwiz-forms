@@ -16562,7 +16562,9 @@ mod tests {
             "{refused} date boxes refused for another rule"
         );
         closed.sort();
-        let mut schedule_dates: Vec<String> = (0..3)
+        // Rows 0 to 49: the schedules grow to the rows the official
+        // program builds, and every one waits for item 13 the same way.
+        let mut schedule_dates: Vec<String> = (0..50)
             .flat_map(|row| {
                 [
                     format!("frm2000:sched2:txtPaymentDate{row}"),

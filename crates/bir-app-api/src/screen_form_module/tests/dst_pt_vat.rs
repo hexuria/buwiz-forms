@@ -712,7 +712,9 @@ fn pr4_form_2000_schedule_dates_take_typed_dates_once_item_13_opens_them() {
         .filter(|(part, _, _, _, t)| part.starts_with("Schedule") && t == "date")
         .map(|(_, _, _, k, _)| k)
         .collect();
-    assert_eq!(dates.len(), 9, "{dates:?}");
+    // Fifty rows a schedule, three dated schedules: the tables grow to
+    // the rows the official program builds.
+    assert_eq!(dates.len(), 150, "{dates:?}");
     // Their tables give each date box a calendar (form_page.js reads
     // `calendar`); no other form's table is marked (lesson 9) but 2552's
     // and 1707's tables with a date column (PR 9,
