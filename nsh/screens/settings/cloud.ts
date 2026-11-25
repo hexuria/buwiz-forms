@@ -51,16 +51,18 @@ export async function refresh(): Promise<void> {
   }
 }
 
-/**
- * Sign in from Settings: the shared flow (screens/auth/signInFlow.ts) does it, the same as on the gate; once it is approved the card
- * shows the account. An expiry or a failure is said by the card from the flow's state.
- */
-export async function signIn(): Promise<void> {
+// Every approval of the shared flow (the email code, or the browser path from its link) shows the account here.
+signInFlow.onApproved((approved) => {
+  status.set(approved);
+  failure.set(null);
+});
+
+/** Sign in from Settings: the shared flow's email page (screens/auth/signInFlow.ts), the same as on the gate. */
+export function signIn(): void {
   if (busy()) return;
   failure.set(null);
-  const ended = await signInFlow.begin("sign-in");
-  if (ended.kind === "approved") status.set(ended.status);
-  else load();
+  signInFlow.restore();
+  signInFlow.openEmail();
 }
 
 export async function signOut(): Promise<void> {

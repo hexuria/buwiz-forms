@@ -1,115 +1,128 @@
-// The pieces of the sign-in flow's cards (signInFlow.ts), drawn the same on the account gate and in Settings > Account: a value
-// with Copy (the code, the short address), the card's actions (full width on a phone, a row with a pointer), and a waiting
-// card's body. A later card (an email page, a code page) is built from the same pieces.
-import { Clipboard, View } from "nsh";
-import { toast } from "../../shell";
-import { AppButton, Code, deviceCopy, Spinner, Text, TOUCH } from "../../ui";
-import { TextLink } from "./parts";
-import { type CardAction, type CardRow, type FlowCard, signInFlow, type SignInEntry } from "./signInFlow";
+// The pieces of the sign-in flow's two pages (signInFlow.ts), drawn the same on the account gate and in Settings > Account: the
+// email page (the address and "Continue with email") and the code page (six boxes that check by themselves, Resend with its
+// countdown, Change email, the line about the mail's button).
+import { View } from "nsh";
+import { AppButton, deviceCopy, PinCells, Spinner, Text, TextField, TOUCH } from "../../ui";
+import { codeSaid, emailSaid, resendLabel, signInFlow, type SignInState } from "./signInFlow";
 
-/** Copies `value` and says so (the Copy TIN pattern of the taxpayer page). */
-function copy(value: string, what: string): void {
-  Clipboard.writeText(value).then(
-    () => toast(`Copied ${value}`, "copy"),
-    () => toast(`The ${what} could not be copied.`, "triangle-alert"),
+/** The email page's title, its sentence and its one button. */
+export const EMAIL_TITLE = "Sign in to eBIRForms";
+export const EMAIL_SENTENCE = "Enter your email and we will send you a 6-digit code to sign in, or to create your Buwiz account if you are new.";
+export const EMAIL_BUTTON = "Continue with email";
+/** The code page's title and its line about the mail's button. */
+export const CODE_TITLE = "Enter the code";
+export const MAIL_BUTTON_LINE = "The button in the email also signs you in on this computer.";
+
+/** The email page under its title: the sentence, the address, what is wrong with it, "Continue with email" (its spinner while it sends). */
+export function EmailCardBody(props: { prefix: string; centred?: boolean }) {
+  const said = () => emailSaid(signInFlow.state());
+  const sending = () => signInFlow.state().kind === "sending";
+  return (
+    <View class="w-full gap-4">
+      <Text variant="meta" tone="fg2" class={props.centred ? "text-center" : ""} testID={`${props.prefix}-email-sentence`}>
+        {EMAIL_SENTENCE}
+      </Text>
+      <View class="w-full gap-2">
+        <TextField
+          testID={`${props.prefix}-email`}
+          label="Email"
+          placeholder="you@example.com"
+          keyboardType="email-address"
+          autoComplete="email"
+          autoCapitalize="none"
+          returnKeyType="go"
+          value={signInFlow.emailText()}
+          onChange={signInFlow.setEmail}
+          onSubmit={() => void signInFlow.sendCode()}
+          error={said()?.danger === true}
+        />
+        <If when={said()}>
+          <Text variant="meta" tone={said()!.danger ? "danger" : "fg2"} testID={`${props.prefix}-email-said`}>
+            {deviceCopy(said()!.text)}
+          </Text>
+        </If>
+      </View>
+      <FlowButton testID={`${props.prefix}-continue`} label={EMAIL_BUTTON} primary block busy={sending()} onPress={() => void signInFlow.sendCode()} />
+    </View>
   );
 }
 
-/** A labelled value with Copy. The address is a link that opens the page (the same page, for the same code). */
-export function CopyRow(props: { row: CardRow; testID: string }) {
+/** The code page under its title: where the code went, the boxes, what they said ("Checking…" while the request runs), Resend, Change email. */
+export function CodeCardBody(props: { prefix: string; centred?: boolean }) {
+  const page = () => signInFlow.state() as Extract<SignInState, { kind: "code" }>;
+  const said = () => codeSaid(page(), signInFlow.now());
+  const locked = () => signInFlow.now() < page().request.resendAt;
   return (
-    <View testID={props.testID} class="w-full flex-row items-center gap-3 rounded-(--radius-ctl) border border-border px-3 py-2">
-      <View class="min-w-0 flex-1 gap-0.5">
-        <Text variant="meta" tone="fg3">{props.row.label}</Text>
-        <If
-          when={props.row.opens}
-          else={
-            <Code testID={`${props.testID}-value`} class="text-base font-semibold tracking-widest">
-              {props.row.value}
-            </Code>
-          }
-        >
-          <TextLink testID={`${props.testID}-value`} label={props.row.value} onPress={() => void signInFlow.reopen()} />
-        </If>
-      </View>
-      <AppButton
-        testID={`${props.testID}-copy`}
-        label="Copy"
-        icon="copy"
-        size="sm"
-        accessibilityLabel={`Copy the ${props.row.label.toLowerCase()}`}
-        onPress={() => copy(props.row.value, props.row.label.toLowerCase())}
-      />
+    <View class="w-full gap-4">
+      <Text variant="meta" tone="fg2" class={props.centred ? "text-center" : ""} testID={`${props.prefix}-code-sentence`}>
+        {`We sent a ${page().request.length}-digit code to ${page().request.email}.`}
+      </Text>
+      <If when={!page().tooMany}>
+        <View class={props.centred ? "items-center" : ""}>
+          <PinCells
+            testID={`${props.prefix}-code-boxes`}
+            label="Sign-in code"
+            length={page().request.length}
+            value={signInFlow.codeText()}
+            onChange={signInFlow.typeCode}
+            onComplete={(digits) => void signInFlow.checkCode(digits)}
+            error={said()?.danger === true}
+            disabled={page().checking}
+          />
+        </View>
+      </If>
+      <If when={page().checking}>
+        <View class={`flex-row items-center gap-2 ${props.centred ? "justify-center" : ""}`} testID={`${props.prefix}-checking`}>
+          <Spinner size={14} tone="fg2" label="Checking the code" />
+          <Text variant="meta" tone="fg2">Checking…</Text>
+        </View>
+      </If>
+      <If when={!page().checking && said()}>
+        <Text variant="meta" tone={said()!.danger ? "danger" : "fg2"} class={props.centred ? "text-center" : ""} testID={`${props.prefix}-code-said`}>
+          {deviceCopy(said()!.text)}
+        </Text>
+      </If>
+      <If
+        when={!page().tooMany}
+        else={
+          <FlowButton testID={`${props.prefix}-new-code`} label="Send a new code" primary block busy={page().resending} onPress={() => void signInFlow.newCode()} />
+        }
+      >
+        <View class={TOUCH ? "w-full gap-2" : "w-full flex-row flex-wrap justify-end gap-2"}>
+          <If when={!TOUCH}>
+            <FlowButton testID={`${props.prefix}-change-email`} label="Change email" onPress={signInFlow.changeEmail} />
+          </If>
+          <AppButton
+            testID={`${props.prefix}-resend`}
+            label={resendLabel(page().request, signInFlow.now())}
+            variant={locked() ? "secondary" : "primary"}
+            block={TOUCH}
+            disabled={locked()}
+            leading={page().resending ? <Spinner size={14} tone="primaryFg" label="Sending a new code" /> : undefined}
+            onPress={() => void signInFlow.resendCode()}
+          />
+          <If when={TOUCH}>
+            <FlowButton testID={`${props.prefix}-change-email`} label="Change email" onPress={signInFlow.changeEmail} />
+          </If>
+        </View>
+        <Text variant="meta" tone="fg3" class={props.centred ? "text-center" : ""} testID={`${props.prefix}-mail-line`}>
+          {deviceCopy(MAIL_BUTTON_LINE)}
+        </Text>
+      </If>
     </View>
   );
 }
 
 /** A button that shows a spinner while its own request runs (never disabled for the wait on the person). */
-export function FlowButton(props: { testID: string; label: string; primary?: boolean; busy?: boolean; onPress: () => void }) {
+export function FlowButton(props: { testID: string; label: string; primary?: boolean; busy?: boolean; block?: boolean; onPress: () => void }) {
   return (
     <AppButton
       testID={props.testID}
       label={props.label}
       variant={props.primary ? "primary" : "secondary"}
-      block={TOUCH}
+      block={props.block || TOUCH}
       leading={props.busy ? <Spinner size={14} tone={props.primary ? "primaryFg" : "fg2"} label={`${props.label}…`} /> : undefined}
       onPress={props.onPress}
-    />
-  );
-}
-
-/** A card's actions: stacked full width on a phone, a row (main one last, on the right) with a pointer. */
-export function FlowActions(props: { actions: CardAction[]; prefix: string }) {
-  const press = (action: CardAction) => (action.id === "cancel" ? signInFlow.cancel() : void signInFlow.reopen());
-  const shown = () => {
-    const marked = props.actions.map((action, i) => ({ ...action, primary: i === 0 }));
-    return TOUCH ? marked : marked.reverse();
-  };
-  return (
-    <View class={TOUCH ? "w-full gap-2" : "w-full flex-row flex-wrap justify-end gap-2"}>
-      <Each of={shown()} key={(action) => action.id}>
-        {(action) => (
-          <FlowButton
-            testID={`${props.prefix}-${action().id}`}
-            label={action().label}
-            primary={action().primary}
-            busy={action().id === "reopen" && signInFlow.reopening()}
-            onPress={() => press(action())}
-          />
-        )}
-      </Each>
-    </View>
-  );
-}
-
-/** A waiting card's body under its title: the sentence, the rows with Copy, the actions. */
-export function FlowCardBody(props: { card: FlowCard; prefix: string; centred?: boolean }) {
-  return (
-    <View class="w-full gap-4">
-      <Text variant="meta" tone="fg2" class={props.centred ? "text-center" : ""} testID={`${props.prefix}-sentence`}>
-        {deviceCopy(props.card.sentence)}
-      </Text>
-      <View class="w-full gap-2">
-        <Each of={props.card.rows} key={(row) => row.id}>
-          {(row) => <CopyRow row={row()} testID={`${props.prefix}-${row().id}`} />}
-        </Each>
-      </View>
-      <FlowActions actions={props.card.actions} prefix={props.prefix} />
-    </View>
-  );
-}
-
-/** Sign in or Create account on a start card: its spinner while its own request runs. */
-export function StartButton(props: { entry: SignInEntry; testID: string; label: string; primary?: boolean; block?: boolean; onStart?: () => void }) {
-  return (
-    <AppButton
-      testID={props.testID}
-      label={props.label}
-      variant={props.primary ? "primary" : "secondary"}
-      block={props.block}
-      size={props.block ? "md" : "sm"}
-      leading={signInFlow.opening(props.entry) ? <Spinner size={14} tone={props.primary ? "primaryFg" : "fg2"} label="Opening the sign-in page" /> : undefined}
-      onPress={() => (props.onStart ? props.onStart() : void signInFlow.begin(props.entry))}
     />
   );
 }

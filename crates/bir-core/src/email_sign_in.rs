@@ -152,13 +152,23 @@ fn wait_words(seconds: Option<i64>) -> String {
     }
 }
 
+/// "5 minutes", "1 minute": the server's wait in whole minutes, rounded up (a minute when it named none).
+fn minutes(seconds: Option<i64>) -> String {
+    let n = seconds.map_or(1, |s| ((s.max(1) + 59) / 60).max(1));
+    if n == 1 {
+        "1 minute".into()
+    } else {
+        format!("{n} minutes")
+    }
+}
+
 /// This app's sentence for each code of the contract, for an answer without a `message`.
 pub fn local_sentence(code: &str, retry_after: Option<i64>, attempts_left: Option<i64>) -> String {
     match code {
         "invalid_email" => "That email address does not look right. Check it and try again.".into(),
         "too_many_requests" => format!(
-            "Too many sign-in requests. Try again {}.",
-            wait_words(retry_after)
+            "Too many sign-in codes were sent to this address. Try again in {}.",
+            minutes(retry_after)
         ),
         "code_already_sent" => format!(
             "A sign-in code was already sent to this address. Use it, or try again {}.",
@@ -182,9 +192,7 @@ pub fn local_sentence(code: &str, retry_after: Option<i64>, attempts_left: Optio
             _ => "That code is not right. Check the email and try again.".into(),
         },
         "code_expired" => "This code has expired. Press Resend for a new one.".into(),
-        "too_many_attempts" => {
-            "Too many wrong codes. Press Resend once it unlocks for a new code.".into()
-        }
+        "too_many_attempts" => "Too many wrong codes. Send a new code to try again.".into(),
         "link_used" => "That sign-in link was already used. Start again.".into(),
         "invalid_request" => "This sign-in request has ended. Start again.".into(),
         "install_mismatch" => "This code was requested on another device. Start again here.".into(),
@@ -764,7 +772,7 @@ mod tests {
             (
                 429,
                 r#"too_many_requests","retry_after":120"#,
-                "Too many sign-in requests. Try again in 2 minutes.",
+                "Too many sign-in codes were sent to this address. Try again in 2 minutes.",
             ),
             (
                 429,
@@ -854,6 +862,22 @@ mod tests {
     }
 
     #[test]
+    fn too_many_codes_says_the_wait_in_minutes_rounded_up() {
+        for (retry, words) in [
+            (Some(3600), "60 minutes"),
+            (Some(61), "2 minutes"),
+            (Some(60), "1 minute"),
+            (Some(5), "1 minute"),
+            (None, "1 minute"),
+        ] {
+            assert_eq!(
+                local_sentence("too_many_requests", retry, None),
+                format!("Too many sign-in codes were sent to this address. Try again in {words}.")
+            );
+        }
+    }
+
+    #[test]
     fn verify_sends_this_requests_id_and_secret_and_reads_the_token_answer() {
         let mut fake = Fake::answering(&[(
             200,
@@ -901,7 +925,7 @@ mod tests {
             (
                 r#"{"error":"too_many_attempts"}"#,
                 "too_many_attempts",
-                "Too many wrong codes. Press Resend once it unlocks for a new code.",
+                "Too many wrong codes. Send a new code to try again.",
             ),
             (
                 r#"{"error":"link_used"}"#,

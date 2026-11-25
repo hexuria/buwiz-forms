@@ -1,213 +1,332 @@
-// The Buwiz sign-in, one flow for the account gate and Settings > Account: Sign in and Create account both start it. One
-// owner: this module's signals. The screens draw its state (signInCards.tsx) and call its actions; neither keeps a copy.
+// The Buwiz sign-in, one flow for the account gate and Settings > Account. One owner: this module's signals. The screens draw
+// its state (signInCards.tsx) and call its actions; neither keeps a copy.
 //
-// How the first tokens are obtained sits behind one seam, TokenPath: today the device flow (the browser approves this
-// device while the host polls). A later path (an email, then a six-digit code, inside the app) is another TokenPath with
-// cards of its own as more state kinds; it ends the same way, in `approved`, and everything after that is shared here.
+// The flow is: the email page (one page for signing in and creating an account), the code page (six boxes that check by
+// themselves), Home. Nothing else, and nothing switches to a browser. The first tokens come through EmailPath (the address,
+// then the emailed code; the host keeps the pending request, so a relaunch opens on the code page). TokenPath is the seam
+// for a second way to the first tokens (a later change); nothing implements or draws one now. Every way ends in `approve`.
 import { batch, signal } from "nsh";
-import type { CloudAccountStatus, CloudSignInFinish, CloudSignInStart } from "../../bir";
+import type { CloudAccountStatus, CloudEmailCheck, CloudEmailStep } from "../../bir";
 import { errorText } from "../../lib/errors";
-import { app, store, toast } from "../../shell";
+import { app, store } from "../../shell";
 
-/** Which button started it: the account site's sign-in page or its sign-up page. */
-export type SignInEntry = "sign-in" | "create";
+/** A sentence under the email field or the code boxes. */
+export interface Said {
+  text: string;
+  danger: boolean;
+}
+
+/** The code page's request: the address, the code's length, and when the code expires and Resend unlocks (ms, Date.now). */
+export interface CodeRequest {
+  email: string;
+  length: number;
+  expiresAt: number;
+  resendAt: number;
+}
 
 /**
- * Every state of the sign-in. `idle` is the start card before anything happened; `cancelled`, `expired` and `failed` are the
- * start card again (with nothing, the expiry sentence, or the reason). `approved` lasts no longer than the screen takes to
- * move on (Home, or the account in Settings).
+ * Every state of the sign-in. `idle` is the email page before anything happened (on the gate; in Settings the account row);
+ * `email` is the email page asked for (Settings' Sign in, Change email, a request that ended) with a sentence or none;
+ * `sending` is its button's request. `code` is the code page: `checking` while its request runs, `resending` while Resend's
+ * does, `said` a wrong code, expiry or the like, `tooMany` when the boxes are spent until Resend. `approved` lasts no longer
+ * than the screen takes to move on (Home, or the account in Settings).
  */
 export type SignInState =
   | { kind: "idle" }
-  | { kind: "opening"; entry: SignInEntry }
-  | { kind: "waiting"; entry: SignInEntry; code: string }
-  | { kind: "waiting-no-browser"; entry: SignInEntry; code: string; address: string }
-  | { kind: "approved"; status: CloudAccountStatus }
-  | { kind: "cancelled" }
-  | { kind: "expired" }
-  | { kind: "failed"; message: string };
+  | { kind: "email"; said: Said | null }
+  | { kind: "sending" }
+  | { kind: "code"; request: CodeRequest; checking: boolean; resending: boolean; said: Said | null; tooMany: boolean }
+  | { kind: "approved"; status: CloudAccountStatus };
 
-/** What a path's start answers: the code to show, the short address to type, and whether a page opened by itself. */
-export interface PathStart {
-  code: string;
-  address: string;
-  opened: boolean;
-}
-
-/** How the first tokens are obtained. The host saves the sign-in when `finish` answers `approved`. */
-export interface TokenPath {
-  start(entry: SignInEntry): Promise<PathStart>;
-  finish(): Promise<CloudSignInFinish>;
+/** The email-and-code path: what the host's calls answer (crates/bir-app-api/src/cloud_email.rs). */
+export interface EmailPath {
+  start(email: string): Promise<CloudEmailStep>;
+  verify(code: string): Promise<CloudEmailCheck>;
+  resend(): Promise<CloudEmailStep>;
+  /** Ends the pending request (Change email). */
   cancel(): void;
-  /** Opens the same page for the same code again; whether it opened. */
-  reopen(): Promise<boolean>;
+  /** The request kept from before a relaunch, or null. */
+  pending(): CloudEmailStep | null;
 }
 
-/** The device flow through the host (crates/bir-app-api/src/cloud_account.rs). */
-export const devicePath: TokenPath = {
-  async start(entry) {
-    const started = (await store.call(entry === "create" ? "cloud_account_begin_sign_up" : "cloud_account_begin_sign_in")) as CloudSignInStart;
-    return { code: started.user_code, address: started.short_uri, opened: started.browser_opened };
-  },
-  finish: () => store.call("cloud_account_finish_sign_in") as Promise<CloudSignInFinish>,
-  cancel: () => void store.call("cloud_account_cancel_sign_in"),
-  reopen: () => store.call("cloud_account_reopen_sign_in") as Promise<boolean>,
+/** The email path through the host. */
+export const hostEmailPath: EmailPath = {
+  start: (email) => store.call("cloud_account_email_start", email) as Promise<CloudEmailStep>,
+  verify: (code) => store.call("cloud_account_email_verify", code) as Promise<CloudEmailCheck>,
+  resend: () => store.call("cloud_account_email_resend") as Promise<CloudEmailStep>,
+  cancel: () => void store.call("cloud_account_email_cancel"),
+  pending: () => store.call("cloud_account_email_pending") as CloudEmailStep | null,
 };
 
-/** The sentence when the code ran out. */
-export const EXPIRED = "The sign-in code expired before it was approved. Press Sign in again for a new code.";
-
-const state = signal<SignInState>({ kind: "idle" });
-const reopening = signal(false);
-/** Each start is a new run; an answer of an older run (after a Cancel, or a second start) changes nothing. */
-let run = 0;
-let path: TokenPath = devicePath;
-
-function waitingState(entry: SignInEntry, started: PathStart): SignInState {
-  return started.opened
-    ? { kind: "waiting", entry, code: started.code }
-    : { kind: "waiting-no-browser", entry, code: started.code, address: started.address };
+/**
+ * The seam for a second way to the first tokens (a later change: a sign-in in the browser that comes back by itself, with no
+ * code). It answers once the host has saved them; `signInWith` then ends it as the email path ends. Nothing implements or draws
+ * one in this version.
+ */
+export interface TokenPath {
+  obtain(): Promise<{ outcome: "approved" | "cancelled" | "expired"; status: CloudAccountStatus }>;
+  cancel(): void;
 }
 
-/**
- * Sign in or Create account: start the path, show what to do while the person approves, and once approved open the session
- * (the gate goes to Home; Settings shows the account). Resolves when this run ends, however it ends.
- */
-async function begin(entry: SignInEntry): Promise<SignInState> {
-  const current = state().kind;
-  if (current === "opening" || current === "waiting" || current === "waiting-no-browser") return state();
-  const mine = ++run;
-  batch(() => {
-    state.set({ kind: "opening", entry });
-    app.setGateError(null);
-  });
-  try {
-    const started = await path.start(entry);
-    if (mine !== run) return state();
-    state.set(waitingState(entry, started));
-    const finished = await path.finish();
-    if (mine !== run) return state();
-    if (finished.outcome === "cancelled") state.set({ kind: "cancelled" });
-    else if (finished.outcome === "expired") state.set({ kind: "expired" });
-    else if (await app.finishUnlock()) state.set({ kind: "approved", status: finished.status });
-    else state.set({ kind: "failed", message: app.gateError() ?? "The sign-in could not be opened. Try again." });
-  } catch (error) {
-    if (mine === run) state.set({ kind: "failed", message: errorText(error) });
+const state = signal<SignInState>({ kind: "idle" });
+/** The address as typed on the email page (kept for Change email). */
+const emailText = signal("");
+/** The code as typed in the boxes. */
+const codeText = signal("");
+/** The clock the code page counts down by (ms), moved each second while the code page shows. */
+const now = signal(Date.now());
+/** Each request is a new run; an answer of an older run (after Change email, a reset) changes nothing. */
+let run = 0;
+let email: EmailPath = hostEmailPath;
+let restored = false;
+let ticker: ReturnType<typeof setInterval> | null = null;
+const approvedHooks: ((status: CloudAccountStatus) => void)[] = [];
+
+/** The state, with the code page's clock running only while it shows. */
+function setState(next: SignInState): void {
+  state.set(next);
+  if (next.kind === "code") now.set(Date.now());
+  if (next.kind === "code" && !ticker) {
+    ticker = setInterval(() => now.set(Date.now()), 1000);
+  } else if (next.kind !== "code" && ticker) {
+    clearInterval(ticker);
+    ticker = null;
   }
+}
+
+/** Signed in: the session opens (the gate goes Home) and whoever listens hears the account. */
+function approve(status: CloudAccountStatus): void {
+  setState({ kind: "approved", status });
+  for (const hook of approvedHooks) hook(status);
+}
+
+/** The seam's end (see TokenPath): another way's tokens open the session as the email path's do. */
+async function signInWith(path: TokenPath): Promise<SignInState> {
+  const mine = ++run;
+  const got = await path.obtain();
+  if (mine !== run) return state();
+  if (got.outcome === "approved" && (await app.finishUnlock())) approve(got.status);
+  else setState({ kind: "email", said: got.outcome === "expired" ? { text: "The sign-in expired. Try again.", danger: false } : null });
   return state();
 }
 
-/** Cancel: the wait stops (the host forgets the code) and the start card comes back with nothing to say. */
-function cancel(): void {
-  run++;
-  path.cancel();
-  batch(() => {
-    reopening.set(false);
-    state.set({ kind: "cancelled" });
-  });
+/** Why the address as typed is not worth a request, or null. The server has the last word (`invalid_email`). */
+export function emailProblem(text: string): string | null {
+  const t = text.trim();
+  if (!t) return "Enter your email address.";
+  const at = t.indexOf("@");
+  const domain = t.slice(at + 1);
+  if (at < 1 || t.includes(" ") || domain.includes("@") || !domain.includes(".") || domain.startsWith(".") || domain.endsWith(".")) {
+    return "That email address does not look right. Check it and try again.";
+  }
+  return null;
 }
 
-/** Open the page again (or try opening it, when nothing opened): the same page for the same code. */
-async function reopen(): Promise<void> {
-  const now = state();
-  if (reopening() || (now.kind !== "waiting" && now.kind !== "waiting-no-browser")) return;
-  const mine = run;
-  reopening.set(true);
+/** The code page's request from a host answer, counted from now. */
+function requestFrom(step: CloudEmailStep): CodeRequest {
+  const at = Date.now();
+  return { email: step.email, length: step.code_length || 6, expiresAt: at + step.expires_in * 1000, resendAt: at + step.resend_in * 1000 };
+}
+
+function codePage(request: CodeRequest, said: Said | null = null, tooMany = false): SignInState {
+  return { kind: "code", request, checking: false, resending: false, said, tooMany };
+}
+
+/** Continue on the email page: the code is sent and the code page opens, or the page says why not (and stays). */
+async function sendCode(): Promise<void> {
+  const current = state().kind;
+  if (current === "sending" || current === "code") return;
+  const problem = emailProblem(emailText());
+  if (problem) return setState({ kind: "email", said: { text: problem, danger: true } });
+  const mine = ++run;
+  batch(() => {
+    setState({ kind: "sending" });
+    app.setGateError(null);
+  });
   try {
-    const opened = await path.reopen();
+    const step = await email.start(emailText().trim());
     if (mine !== run) return;
-    const current = state();
-    if (opened && current.kind === "waiting-no-browser") state.set({ kind: "waiting", entry: current.entry, code: current.code });
-    if (!opened) toast("The browser did not open. Go to the address shown instead.", "triangle-alert");
+    if (step.step === "code") {
+      codeText.set("");
+      setState(codePage(requestFrom(step)));
+    } else setState({ kind: "email", said: { text: step.message ?? "Sign-in is not available right now. Try again in a few minutes.", danger: true } });
   } catch (error) {
-    if (mine === run) toast(errorText(error), "triangle-alert");
+    if (mine === run) setState({ kind: "email", said: { text: errorText(error), danger: true } });
   }
-  reopening.set(false);
+}
+
+/** The code as typed; the last box checks it by itself. */
+function typeCode(digits: string): void {
+  codeText.set(digits);
+  const page = state();
+  if (page.kind === "code" && page.said && digits.length > 0) setState({ ...page, said: page.tooMany ? page.said : null });
+}
+
+/** The sixth digit: the code is checked ("Checking…" while its request runs). Accepted: Home at once. */
+async function checkCode(digits: string): Promise<void> {
+  const current = state();
+  if (current.kind !== "code" || current.checking || current.tooMany || digits.length !== current.request.length) return;
+  const mine = run;
+  codeText.set(digits);
+  setState({ ...current, checking: true, said: null });
+  try {
+    const checked = await email.verify(digits);
+    if (mine !== run) return;
+    const page = state();
+    if (page.kind !== "code") return;
+    const said = (fallback: string): Said => ({ text: checked.message ?? fallback, danger: true });
+    if (checked.outcome === "approved") {
+      if (await app.finishUnlock()) approve(checked.status);
+      else setState({ kind: "email", said: { text: app.gateError() ?? "The sign-in could not be opened. Try again.", danger: true } });
+      return;
+    }
+    if (checked.outcome === "restart") {
+      setState({ kind: "email", said: said("This sign-in request has ended. Start again.") });
+      return;
+    }
+    codeText.set("");
+    if (checked.outcome === "expired") {
+      const at = Date.now();
+      const request = { ...page.request, expiresAt: Math.min(page.request.expiresAt, at), resendAt: Math.min(page.request.resendAt, at) };
+      setState(codePage(request, said("This code has expired. Press Resend for a new one.")));
+    } else if (checked.outcome === "too-many") setState(codePage(page.request, said("Too many wrong codes. Send a new code to try again."), true));
+    else setState(codePage(page.request, said(checked.outcome === "wrong" ? "That code is not right. Try again." : "No connection. Check your internet and try again.")));
+  } catch (error) {
+    const page = state();
+    if (mine === run && page.kind === "code") setState(codePage(page.request, { text: errorText(error), danger: true }, page.tooMany));
+  }
+}
+
+/** Resend, once the code has expired: a new code for the same request, the countdown again. */
+async function resendCode(): Promise<void> {
+  const current = state();
+  if (current.kind !== "code" || current.resending || current.checking || now() < current.request.resendAt) return;
+  const mine = run;
+  setState({ ...current, resending: true });
+  try {
+    const step = await email.resend();
+    if (mine !== run) return;
+    if (step.step === "code") {
+      codeText.set("");
+      setState(codePage(requestFrom(step), { text: `We sent a new code to ${step.email}.`, danger: false }));
+    } else if (step.step === "restart") setState({ kind: "email", said: { text: step.message ?? "This sign-in request has ended. Start again.", danger: true } });
+    else {
+      const page = state();
+      if (page.kind !== "code") return;
+      const resendAt = step.resend_in > 0 ? Date.now() + step.resend_in * 1000 : page.request.resendAt;
+      setState(codePage({ ...page.request, resendAt }, { text: step.message ?? "No connection. Check your internet and try again.", danger: true }, page.tooMany));
+    }
+  } catch (error) {
+    const page = state();
+    if (mine === run && page.kind === "code") setState(codePage(page.request, { text: errorText(error), danger: true }, page.tooMany));
+  }
+}
+
+/**
+ * "Send a new code", after too many wrong tries: the old code is dead, so a new request for the same address starts at once (no
+ * countdown to wait for) and a fresh code page opens; a refusal is said on the page.
+ */
+async function newCode(): Promise<void> {
+  const current = state();
+  if (current.kind !== "code" || !current.tooMany || current.resending) return;
+  const mine = ++run;
+  setState({ ...current, resending: true });
+  try {
+    const step = await email.start(current.request.email);
+    if (mine !== run) return;
+    if (step.step === "code") {
+      codeText.set("");
+      setState(codePage(requestFrom(step), { text: `We sent a new code to ${step.email}.`, danger: false }));
+    } else setState({ ...current, resending: false, said: { text: step.message ?? "No connection. Check your internet and try again.", danger: true } });
+  } catch (error) {
+    if (mine === run) setState({ ...current, resending: false, said: { text: errorText(error), danger: true } });
+  }
+}
+
+/** Change email: the request ends and the email page comes back with the address to correct. */
+function changeEmail(): void {
+  run++;
+  email.cancel();
+  codeText.set("");
+  setState({ kind: "email", said: null });
+}
+
+/** Once per run of the app: a request kept from before a relaunch opens the code page, with what is left of its countdowns. */
+function restore(): void {
+  if (restored) return;
+  restored = true;
+  if (state().kind !== "idle") return;
+  try {
+    const step = email.pending();
+    if (step && step.step === "code") {
+      emailText.set(step.email);
+      setState(codePage(requestFrom(step)));
+    }
+  } catch {
+    // Nothing kept, or it cannot be read: the email page.
+  }
+}
+
+/** "Resend in 4:59" while locked; "Resend" once the code has expired. */
+export function resendLabel(request: CodeRequest, at: number): string {
+  const left = Math.ceil((request.resendAt - at) / 1000);
+  if (left <= 0) return "Resend";
+  return `Resend in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+}
+
+/** The code page's sentence under the boxes: what the state says, or the expiry once the clock passes it. */
+export function codeSaid(page: Extract<SignInState, { kind: "code" }>, at: number): Said | null {
+  if (page.said) return page.said;
+  if (at >= page.request.expiresAt) return { text: "This code has expired. Press Resend for a new one.", danger: true };
+  return null;
 }
 
 /** The flow's state and actions. */
 export const signInFlow = {
   state: (): SignInState => state(),
-  reopening: (): boolean => reopening(),
-  /** The start button that is waiting for its own request (its spinner), if any. */
-  opening: (entry: SignInEntry): boolean => {
-    const now = state();
-    return now.kind === "opening" && now.entry === entry;
+  /** The email page's address and the code boxes' digits. */
+  emailText: (): string => emailText(),
+  setEmail: (text: string): void => {
+    emailText.set(text);
+    const current = state();
+    if (current.kind === "email" && current.said) setState({ kind: "email", said: null });
   },
-  /** Whether the person is approving now (a waiting card, not the start card). */
-  waiting: (): boolean => state().kind === "waiting" || state().kind === "waiting-no-browser",
-  begin,
-  cancel,
-  reopen,
-  /** Back to the start card (a signed-out session, a test). */
+  codeText: (): string => codeText(),
+  now: (): number => now(),
+  /** The email page asked for (Settings' Sign in). */
+  openEmail: (): void => {
+    if (state().kind === "idle") setState({ kind: "email", said: null });
+  },
+  sendCode,
+  typeCode,
+  checkCode,
+  resendCode,
+  newCode,
+  changeEmail,
+  restore,
+  signInWith,
+  /** Hears every approval (Settings shows the account). */
+  onApproved: (hook: (status: CloudAccountStatus) => void): void => {
+    approvedHooks.push(hook);
+  },
+  /** Back to the email page before anything happened (a signed-out session, a test). */
   reset: (): void => {
     run++;
-    state.set({ kind: "idle" });
+    codeText.set("");
+    setState({ kind: "idle" });
   },
-  /** Another way to the tokens (a test, or the next path). */
-  usePath: (next: TokenPath): void => {
-    path = next;
+  /** Another email path (a test). */
+  useEmailPath: (next: EmailPath): void => {
+    email = next;
   },
 };
 
-/** The start card's line under the title, for the state: the expiry sentence, the reason, or nothing. */
-export function startMessage(now: SignInState): { text: string; danger: boolean } | null {
-  if (now.kind === "expired") return { text: EXPIRED, danger: false };
-  if (now.kind === "failed") return { text: now.message, danger: true };
-  return null;
+/** The email page's sentence under the field, for the state: a refusal or a bad address, or nothing. */
+export function emailSaid(now: SignInState): Said | null {
+  return now.kind === "email" ? now.said : null;
 }
 
-/** One row of a waiting card: a value with Copy; `opens` when pressing the value opens the page. */
-export interface CardRow {
-  id: "address" | "code";
-  label: string;
-  value: string;
-  opens: boolean;
-}
-
-/** One action of a card, in order; the first is the main one. */
-export interface CardAction {
-  id: "reopen" | "cancel";
-  label: string;
-}
-
-/** A card of the flow beside the start card: its title, one sentence, its rows and its actions. */
-export interface FlowCard {
-  kind: SignInState["kind"];
-  title: string;
-  sentence: string;
-  rows: CardRow[];
-  actions: CardAction[];
-}
-
-/** The card the state draws instead of the start card; null when the start card is drawn. Pure. Copy says "this computer". */
-export function flowCard(now: SignInState): FlowCard | null {
-  if (now.kind === "waiting") {
-    return {
-      kind: now.kind,
-      title: "Finish signing in in your browser",
-      sentence: "Approve this computer in the page that opened, then come back here.",
-      rows: [{ id: "code", label: "Code", value: now.code, opens: false }],
-      actions: [
-        { id: "reopen", label: "Open the page again" },
-        { id: "cancel", label: "Cancel" },
-      ],
-    };
-  }
-  if (now.kind === "waiting-no-browser") {
-    return {
-      kind: now.kind,
-      title: "Open the sign-in page",
-      sentence: "Go to this address in a browser, sign in, and enter the code to approve this computer.",
-      rows: [
-        { id: "address", label: "Address", value: now.address, opens: true },
-        { id: "code", label: "Code", value: now.code, opens: false },
-      ],
-      actions: [
-        { id: "reopen", label: "Try opening it again" },
-        { id: "cancel", label: "Cancel" },
-      ],
-    };
-  }
-  return null;
+/** Which page the state draws. */
+export function pageOf(now: SignInState): "email" | "code" {
+  return now.kind === "code" ? "code" : "email";
 }

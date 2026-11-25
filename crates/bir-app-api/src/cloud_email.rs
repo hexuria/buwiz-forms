@@ -495,7 +495,7 @@ mod tests {
                 (
                     r#"{"error":"too_many_attempts"}"#,
                     "too-many",
-                    "Too many wrong codes. Press Resend once it unlocks for a new code.",
+                    "Too many wrong codes. Send a new code to try again.",
                     true,
                 ),
                 (
