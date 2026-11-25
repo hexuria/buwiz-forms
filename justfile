@@ -689,6 +689,15 @@ play-bundle build="":
         *"(${PIN:0:7})"*) ;;
         *) echo "❌ $TOOLS/bin/nsh is '${HAVE:-missing}', not the NSH pin ${PIN:0:7}: run scripts/setup-android-macos.sh (NSH_TOOLS=<folder> for one beside the shared tool)." >&2; exit 1 ;;
     esac
+    # `nsh package` takes the Android RELEASE runtime next to the CLI (or under $NSH_RUNTIME), whatever built it. The setup
+    # script records the NSH commit beside it (nsh-ref); a runtime without that record, or from another commit, is refused.
+    RUNTIME="${NSH_RUNTIME:-$TOOLS/runtime}/android/release"
+    RUNTIME_REF="$(cat "$RUNTIME/nsh-ref" 2>/dev/null || true)"
+    if [ ! -f "$RUNTIME/classes.dex" ] || [ "$RUNTIME_REF" != "$PIN" ]; then
+        echo "❌ The Android release runtime in $RUNTIME is ${RUNTIME_REF:+from $RUNTIME_REF, }not recorded as built at the NSH pin $PIN: run scripts/setup-android-macos.sh." >&2
+        exit 1
+    fi
+    echo "nsh: $HAVE; Android release runtime at $PIN, classes.dex sha256 $(shasum -a 256 "$RUNTIME/classes.dex" | cut -d' ' -f1)"
     # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one.
     unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV
     # nsh builds libnsh.so in its generated workspace, which has no [profile.release]: this repository's own profile never

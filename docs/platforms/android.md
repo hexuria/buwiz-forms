@@ -69,8 +69,10 @@ Three steps on the owner's Mac. The first needs no secret; the second is the onl
 the command for anything missing; then it moves the NSH checkout beside this repository to the pin, and builds the `nsh`
 CLI and NSH's Android release runtime at the pin into `$NSH_TOOLS` (default `~/BuwizNsh/tools`). `--check` only checks.
 
-`just play-bundle` uses the same `$NSH_TOOLS` and refuses to build when its `nsh` is not at the NSH pin, so a bundle is
-never made with another NSH than CI tested. On a Mac whose shared tool must stay as it is, keep the pinned one beside it
+`just play-bundle` uses the same `$NSH_TOOLS` and refuses to build when its `nsh` is not at the NSH pin, or when the
+Android release runtime beside it is not recorded as built at the pin (`runtime/android/release/nsh-ref`, written by the
+setup script), so a bundle is never made with another NSH than CI tested. `nsh package` takes that release runtime even
+for a development build. The recipe prints the runtime's `classes.dex` SHA-256 with the CLI's version. On a Mac whose shared tool must stay as it is, keep the pinned one beside it
 and point both at it, with a build folder of its own:
 
 ```sh
