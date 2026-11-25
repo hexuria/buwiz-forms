@@ -30,13 +30,27 @@ Not reached in either build within the job's time: after setup, these commits' H
 - **Three-button, portrait**: AFTER case 1 scrolls (positions move freely with swipes, evidence after-tb-c1.txt) — recording `room-after-threebutton.mp4` covers the mode switch and navigation; the case-2 threebutton re-measurement was cut short by navigation cost (the back stack unwound to Home) — honest gap; the mechanism is nav-mode-independent (the spacer is layout, not system-inset driven), but it is not measured here.
 - **Landscape**: on this phone image Gboard uses fullscreen extract mode in landscape (the keyboard covers the whole app; job 10 evidence) — there is no visible page/keyboard split to measure; the cases are portrait-meaningful only on a phone. Tablet landscape is different (docked keyboard) — see the tablet section.
 
-## Tablet
+## Tablet (Pixel Tablet image, 2560x1600, gesture mode) — partial, honest state
 
-(pending — being captured; see report message)
+AFTER build only, dev build same as phone. Taxpayer/year/forms created on the tablet.
+**Landscape** (the tablet's natural orientation): the layout is the desktop-like one
+(sidebar + wide card). With the keyboard up (docked, top edge ~y887 of 1600), the 2551Q
+row initially sat at y871–910 — straddling the keyboard edge (`tablet-land-c2.png`).
+Swipes in the results area did not produce a stable measurable end state in the time
+available (the row left the visible/dumped hierarchy after scrolling; `keyboard-room`
+was not exposed in this dump). Honest verdict: not proven either way on tablet
+landscape; on the phone evidence the spacer is what carries the row clear.
+**Portrait**: not reached — the rotation did not take within the job's time
+(`user_rotation 0` left the tablet in landscape). Case 1 on tablet: the New taxpayer
+form in landscape is a centered card and every field stayed reachable during creation
+(screenshots in evidence); no formal bounds table. These gaps are stated, not hidden.
 
 ## Stuck-state reproduction (owner's item b)
 
-(pending — captured in job 15 with the instrumented runtime; cross-referenced here when done)
+Run as job 15 on the instrumented runtime — see branch `try/android-keyboard-stuck-1`:
+no reproduction in any of variants A–E; the padding re-applies reliably after return.
+The chooser immovability is a nested-scroll/layout fault (what this PR's spacer fixes),
+not primarily padding loss.
 
 ## File index
 - `before-c1-*.txt`, `before-c2-*.txt`, `before-c3*.txt` — uiautomator bounds before/after swipes, BEFORE build
