@@ -470,6 +470,17 @@ impl Database {
         self.get_form_draft_v2(tin, form_code, year, &period)
     }
 
+    /// The stored draft row's JSON by its row id, whatever the form: how a
+    /// print reads the worker-owned lifecycle facts of the return it was
+    /// asked for, since a page-held draft is client input.
+    pub fn form_draft_json_by_id(&self, id: i64) -> Result<Option<String>, DbError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT data_json FROM form_drafts WHERE id = ?1")?;
+        let mut rows = stmt.query(params![id])?;
+        Ok(rows.next()?.map(|row| row.get(0)).transpose()?)
+    }
+
     /// Load a generic form draft for a specific (tin, form_code, year, quarter).
     pub fn get_form_draft<T: serde::de::DeserializeOwned>(
         &self,

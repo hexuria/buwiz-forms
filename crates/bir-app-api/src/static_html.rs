@@ -15,9 +15,31 @@ pub const STATIC_CSS: &str = ".fi.fs{display:flex;align-items:center;justify-con
 white-space:pre;overflow:hidden;box-sizing:border-box}.fi.fs.fc{justify-content:center}";
 
 pub fn staticize(html: &str) -> String {
+    staticize_with_furniture(html, None)
+}
+
+/// What every printed page carries outside the official drawing: the footer
+/// line (form, TIN, period, filing state) and, while the return is unfiled,
+/// the diagonal DRAFT mark. Built once per print from the stored return's
+/// own fields; `left` is plain text and is escaped here.
+pub struct SheetFurniture {
+    pub left: String,
+    pub draft_mark: bool,
+}
+
+/// The mark's exact wording, decided by the owner.
+pub const DRAFT_MARK_TEXT: &str = "DRAFT – not filed";
+
+fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+pub fn staticize_with_furniture(html: &str, furniture: Option<&SheetFurniture>) -> String {
     let html = strip_scripts(html);
     let html = inputs_to_spans(&html);
-    let html = wrap_sheets(&html);
+    let html = wrap_sheets(&html, furniture);
     let tag = format!("<style id=\"static-fields\">{STATIC_CSS}</style>");
     match html.rfind("</head>") {
         Some(at) => format!("{}{}{}", &html[..at], tag, &html[at..]),
@@ -96,7 +118,7 @@ fn page_starts(html: &str) -> Vec<(usize, bool)> {
     v
 }
 
-fn wrap_sheets(html: &str) -> String {
+fn wrap_sheets(html: &str, furniture: Option<&SheetFurniture>) -> String {
     let starts = page_starts(html);
     let n = starts.len();
     if n == 0 {
@@ -119,6 +141,20 @@ fn wrap_sheets(html: &str) -> String {
             i + 1,
             n
         ));
+        if let Some(furniture) = furniture {
+            out.push_str(&format!(
+                "<div class=\"print-foot\"><span class=\"pf-left\">{}</span>\
+<span class=\"pf-page\">Page {} of {}</span></div>",
+                escape_html(&furniture.left),
+                i + 1,
+                n
+            ));
+            if furniture.draft_mark {
+                out.push_str("<div class=\"print-draft\">");
+                out.push_str(DRAFT_MARK_TEXT);
+                out.push_str("</div>");
+            }
+        }
         cur = *at;
     }
     out.push_str(&html[cur..body_end]);
@@ -190,5 +226,47 @@ mod tests {
         // Balanced: every sheet closes before </body>.
         let body = &out[out.find("<body>").unwrap()..out.find("</body>").unwrap()];
         assert_eq!(body.matches("<div").count(), body.matches("</div>").count());
+    }
+
+    #[test]
+    fn furniture_lands_inside_every_sheet_with_its_page_of_pages() {
+        let furniture = super::SheetFurniture {
+            left: "BIR Form 2551Q · TIN 000-123-453-00000 · Q3 2025".to_string(),
+            draft_mark: true,
+        };
+        let out = super::staticize_with_furniture(DOC, Some(&furniture));
+        assert_eq!(out.matches(r#"<div class="print-foot">"#).count(), 2);
+        assert_eq!(out.matches(r#"<div class="print-draft">"#).count(), 2);
+        assert!(out.contains(">DRAFT – not filed</div>"));
+        assert!(out.contains(r#"<span class="pf-page">Page 1 of 2</span>"#));
+        assert!(out.contains(r#"<span class="pf-page">Page 2 of 2</span>"#));
+        // The furniture sits inside its sheet, before the official page.
+        let first = out.find(r#"data-preview-label="Page 1 of 2">"#).unwrap();
+        let foot = out.find(r#"<div class="print-foot">"#).unwrap();
+        let page = out.find(r#"<div class="page page-1">"#).unwrap();
+        assert!(first < foot && foot < page);
+        // Balanced: furniture adds two divs per sheet, each closed inline.
+        let body = &out[out.find("<body>").unwrap()..out.find("</body>").unwrap()];
+        assert_eq!(body.matches("<div").count(), body.matches("</div>").count());
+    }
+
+    #[test]
+    fn furniture_escapes_text_and_a_filed_return_marks_nothing() {
+        let furniture = super::SheetFurniture {
+            left: "BIR Form 1701 · TIN 000-123-453-00000 · 2025 · Filed 11/20/2025 · Ref a&b<.xml"
+                .to_string(),
+            draft_mark: false,
+        };
+        let out = super::staticize_with_furniture(DOC, Some(&furniture));
+        assert!(out.contains("Ref a&amp;b&lt;.xml"));
+        assert!(!out.contains("print-draft"));
+        assert_eq!(out.matches(r#"<div class="print-foot">"#).count(), 2);
+    }
+
+    #[test]
+    fn no_furniture_keeps_the_sheet_bare() {
+        let out = super::staticize(DOC);
+        assert!(!out.contains("print-foot"));
+        assert!(!out.contains("print-draft"));
     }
 }

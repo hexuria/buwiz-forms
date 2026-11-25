@@ -48,7 +48,15 @@ body>:not(.sheet){{display:none !important}}\
 .sheet{{position:relative;width:{w:.2}pt;height:{sheet_h:.2}pt;overflow:hidden;background:#fff;padding-top:{safety:.0}pt;break-after:page;page-break-after:always}}\
 .sheet:last-of-type{{break-after:auto;page-break-after:auto}}\
 .sheet-flow{{height:auto;min-height:{sheet_h:.2}pt;overflow:visible}}\
-.sheet>.page{{transform:scale({scale:.4});transform-origin:0 0;margin:0 0 -{bottom:.4}pt {left:.4}pt;break-after:auto;page-break-after:auto}}",
+.sheet>.page{{transform:scale({scale:.4});transform-origin:0 0;margin:0 0 -{bottom:.4}pt {left:.4}pt;break-after:auto;page-break-after:auto}}\
+.print-foot{{position:absolute;left:10pt;right:10pt;bottom:2.5pt;display:flex;\
+justify-content:space-between;font:6.5pt 'Helvetica Neue',Arial,sans-serif;\
+color:#555;pointer-events:none;white-space:nowrap;z-index:6}}\
+.print-foot .pf-left{{overflow:hidden;text-overflow:ellipsis;padding-right:8pt}}\
+.print-draft{{position:absolute;left:-25%;right:-25%;top:50%;text-align:center;\
+transform:translateY(-50%) rotate(-32deg);\
+font:700 40pt 'Helvetica Neue',Arial,sans-serif;color:rgba(20,20,20,0.09);\
+letter-spacing:6pt;pointer-events:none;white-space:nowrap;z-index:5}}",
         w = PAPER_WIDTH_PT,
         h = PAPER_HEIGHT_PT,
         sheet_h = PAPER_HEIGHT_PT - 1.0,

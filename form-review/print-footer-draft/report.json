@@ -1,0 +1,21 @@
+{
+  "feature": "shared print footer and DRAFT mark (rule 7), all 43 forms, never per form",
+  "branch_base": "origin/feat/store-launch-print-zoom (PR #320 transform scaling)",
+  "design": {
+    "footer": "small text in the bottom margin of every printed page, outside the official drawing: form number, dashed TIN, the return period as the form states it (transaction date on one-time forms), filing state when there is one, and Page i of n counting every page including the receipt page",
+    "mark": "diagonal, centered across the page, rotated -32 degrees, rgba(20,20,20,0.09), 40pt 'DRAFT – not filed'; the top margin is about 10pt, too thin for a margin banner, and the diagonal is the standard unfiled watermark",
+    "truth": "footer state comes from the stored return's own lifecycle fields (status, submitted_at, submitted_dry_run, submission_filename). On the form-page print path the page-held draft is client input and drop_client_dry_run strips the dry-run facts from it, so screen_form_print/print_sample/preview_sync read those facts from the stored row the draft's own id names (furniture_truth). print_fields reads the stored draft directly. A return with no lifecycle facts is unfiled and wears the mark."
+  },
+  "proofs": {
+    "2551Q": "Q3 2025 quarterly. print-p1/2.png preview render, pdf-p1/2.png saved PDF. Footer: BIR Form 2551Q · TIN 000-123-453-00000 · Q3 2025 · Page i of 2; DRAFT mark on both pages",
+    "1701": "TY 2025 annual, four pages. Page 1 of 4 … Page 4 of 4, footer BIR Form 1701 · TIN 000-123-453-00000 · 2025, mark on every page; preview and saved PDF",
+    "2000OT": "one-time form, no period: footer states the transaction date 06/15/2025; preview and saved PDF",
+    "2551Q-dry-run": "same return with the worker's dry-run facts (status Submitted, submitted_dry_run true): footer adds 'Dry run 11/20/2025, not sent to BIR' and the DRAFT mark stays, matching the app's own 'Dry run Nov 20, 2025, not sent to BIR' banner",
+    "2551Q-filed": "same return filed (submitted_dry_run false): no mark anywhere, footer adds 'Filed 11/20/2025 · Ref 00012345300000-2551Qv2018-122025Q3#juana.santos@example.com#.xml'"
+  },
+  "parity": "preview render and saved PDF carry the identical footer and mark on every page of all three forms; the saved PDF is what paper printing uses",
+  "unit_tests": [
+    "static_html: furniture lands inside every sheet with its Page i of n, escapes footer text, filed returns print no mark, no furniture keeps the sheet bare",
+    "screen_form_module: draft/queued unfiled without a state line, dry run is not filed and says so, filed adds date and reference, nested lifecycle shape read too, Philippine date conversion, period text annual/quarterly/monthly/transaction-date"
+  ]
+}

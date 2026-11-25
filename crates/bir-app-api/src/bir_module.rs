@@ -2028,19 +2028,26 @@ pub(crate) fn receipt_page(
 /// The stored draft's print field map (writer key -> value) and, for a
 /// confirmed return, its receipt page: what `form_print_html` fills the
 /// frozen sheet with.
+/// What [`print_fields`] answers: the print field map, the receipt page for
+/// a confirmed return, and the page furniture the stored draft's own
+/// lifecycle facts decide.
+pub(crate) type PrintFields = (
+    std::collections::BTreeMap<String, String>,
+    Option<bir_print::frozen_html::ReceiptPage>,
+    crate::static_html::SheetFurniture,
+);
+
 pub(crate) fn print_fields(
     db: &Database,
     tin: &str,
     form_code: &str,
     year: u16,
     quarter: Option<u8>,
-) -> Result<
-    (
-        std::collections::BTreeMap<String, String>,
-        Option<bir_print::frozen_html::ReceiptPage>,
-    ),
-    HostError,
-> {
+) -> Result<PrintFields, HostError> {
+    use bir_core::forms::agent::AgentFormKind;
+    let furniture_of = |kind: AgentFormKind, value: serde_json::Value| {
+        crate::screen_form_module::print_furniture(kind, form_code, &value)
+    };
     match form_code {
         "2551Q" => crate::screen_form_module::out_of_line(|| {
             let q = quarter.ok_or_else(|| HostError::new("2551Q drafts are quarterly"))?;
@@ -2049,7 +2056,9 @@ pub(crate) fn print_fields(
                 .map_err(|error| HostError::new(error.to_string()))?
                 .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
             let page = receipt_page(db, draft.receipt_id, &draft.email);
-            Ok((draft.to_print_field_map(), page))
+            let value = serde_json::to_value(&draft).unwrap_or_default();
+            let furniture = furniture_of(AgentFormKind::Form2551Q, value);
+            Ok((draft.to_print_field_map(), page, furniture))
         }),
         "1601C" => crate::screen_form_module::out_of_line(|| {
             let month = quarter.ok_or_else(|| HostError::new("1601C drafts are monthly"))?;
@@ -2058,7 +2067,9 @@ pub(crate) fn print_fields(
                 .map_err(|error| HostError::new(error.to_string()))?
                 .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
             let page = receipt_page(db, draft.receipt_id, &draft.email_address);
-            Ok((draft.to_print_field_map(), page))
+            let value = serde_json::to_value(&draft).unwrap_or_default();
+            let furniture = furniture_of(AgentFormKind::Form1601C, value);
+            Ok((draft.to_print_field_map(), page, furniture))
         }),
         _ => {
             use bir_core::forms::queueable::QueueableKind;
@@ -2076,7 +2087,9 @@ pub(crate) fn print_fields(
                     draft.lifecycle().receipt_id,
                     draft.submission_email(),
                 );
-                Ok((draft.print_field_map(), page))
+                let value = serde_json::to_value(&draft).unwrap_or_default();
+                let furniture = furniture_of(AgentFormKind::Queueable(kind), value);
+                Ok((draft.print_field_map(), page, furniture))
             }))
         }
     }
@@ -2094,13 +2107,21 @@ fn form_print_html(arguments: &gpui_shell::HostArguments) -> HostResult {
     let slug = print_slug_for(&form_code)
         .ok_or_else(|| HostError::new(format!("Form {form_code} has no print sheet")))?;
     with_database(|db| {
-        let (fields, receipt) = print_fields(db, &tin, &form_code, year, quarter)?;
+        let (fields, receipt, furniture) = print_fields(db, &tin, &form_code, year, quarter)?;
         let profile = db
             .get_profile_by_tin(&tin)
             .ok()
             .flatten()
             .map(|p| p.full_name.clone());
-        open_print_preview(slug, &form_code, year, &fields, receipt.as_ref(), profile)
+        open_print_preview(
+            slug,
+            &form_code,
+            year,
+            &fields,
+            receipt.as_ref(),
+            profile,
+            Some(&furniture),
+        )
     })
 }
 
@@ -2113,13 +2134,16 @@ pub(crate) fn open_print_preview(
     fields: &std::collections::BTreeMap<String, String>,
     receipt: Option<&bir_print::frozen_html::ReceiptPage>,
     profile_name: Option<String>,
+    furniture: Option<&crate::static_html::SheetFurniture>,
 ) -> HostResult {
     let html = bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)
         .map_err(HostError::new)?;
     // A4 layout + static markup (no scripts, values as text): prints one A4
     // page per form page from any engine; `print-overrides/<slug>.css` on top.
-    let html =
-        crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &html, true));
+    let html = crate::static_html::staticize_with_furniture(
+        &crate::print_sheet::prepare_html_for(slug, &html, true),
+        furniture,
+    );
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())

@@ -1707,7 +1707,7 @@ fn screen_forms_index() -> HostResult {
 
 // ----------------------------------------------------------- open drafts
 
-fn kind_of(form_code: &str) -> Result<AgentFormKind, HostError> {
+pub(crate) fn kind_of(form_code: &str) -> Result<AgentFormKind, HostError> {
     AgentFormKind::from_code(form_code).ok_or_else(|| {
         host_error(format!(
             "unknown form `{form_code}`; use one of the 43 BIR form codes, e.g. 1601C"
@@ -6514,6 +6514,182 @@ fn screen_form_filed_original(
     })
 }
 
+/// One lifecycle field of a draft JSON: flattened (queueable forms, 2551Q,
+/// 1601C) or under a `lifecycle` object (older shapes).
+fn draft_lifecycle_str<'a>(draft: &'a Value, key: &str) -> Option<&'a str> {
+    if let Some(text) = draft.get(key).and_then(Value::as_str) {
+        return Some(text);
+    }
+    draft
+        .get("lifecycle")
+        .and_then(Value::as_object)
+        .and_then(|lifecycle| lifecycle.get(key))
+        .and_then(Value::as_str)
+}
+
+fn draft_lifecycle_bool(draft: &Value, key: &str) -> bool {
+    draft
+        .get(key)
+        .and_then(Value::as_bool)
+        .or_else(|| {
+            draft
+                .get("lifecycle")
+                .and_then(Value::as_object)
+                .and_then(|lifecycle| lifecycle.get(key))
+                .and_then(Value::as_bool)
+        })
+        .unwrap_or(false)
+}
+
+/// `submitted_at` (RFC3339, UTC) as the Philippine calendar date MM/DD/YYYY.
+fn ph_date(rfc3339: &str) -> Option<String> {
+    use chrono::Datelike;
+    let at = chrono::DateTime::parse_from_rfc3339(rfc3339).ok()?;
+    let ph = chrono::FixedOffset::east_opt(8 * 3600)?;
+    let local = at.with_timezone(&ph);
+    Some(format!(
+        "{:02}/{:02}/{}",
+        local.month(),
+        local.day(),
+        local.year()
+    ))
+}
+
+/// The footer state line and whether the return counts as filed, from the
+/// draft's own lifecycle fields and nothing else. A dry run is not filed.
+fn footer_state(draft: &Value) -> (Option<String>, bool) {
+    let submitted_at = draft_lifecycle_str(draft, "submitted_at");
+    if draft_lifecycle_bool(draft, "submitted_dry_run") {
+        let when = submitted_at.and_then(ph_date).unwrap_or_default();
+        return (Some(format!("Dry run {when}, not sent to BIR")), false);
+    }
+    let filed = draft
+        .get("status")
+        .and_then(Value::as_str)
+        .is_some_and(|status| matches!(status, "Submitted" | "Confirmed" | "Paid"));
+    if !filed {
+        return (None, false);
+    }
+    let mut line = String::from("Filed");
+    if let Some(when) = submitted_at.and_then(ph_date) {
+        line.push_str(&format!(" {when}"));
+    }
+    if let Some(reference) = draft_lifecycle_str(draft, "submission_filename") {
+        line.push_str(&format!(" · Ref {reference}"));
+    }
+    (Some(line), true)
+}
+
+const MONTH_NAMES: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+
+/// The return period as the form states it: the transaction (trigger) date
+/// on a one-time form, else the year/quarter/month of the filing period.
+/// `None` when the return holds no date yet.
+fn footer_period(
+    form_code: &str,
+    draft: &Value,
+    identity: &agent::DraftIdentity,
+) -> Option<String> {
+    use chrono::Datelike;
+    if bir_core::calendar_rules::DeadlineResolver::is_as_needed(form_code) {
+        return bir_core::forms::event_trigger::held_trigger_date(form_code, draft)
+            .map(|date| format!("{:02}/{:02}/{}", date.month(), date.day(), date.year()));
+    }
+    match identity.period {
+        FilingPeriod::Annual => Some(identity.taxable_year.to_string()),
+        FilingPeriod::Quarterly(q) => Some(format!("Q{q} {}", identity.taxable_year)),
+        FilingPeriod::Monthly(m) if (1..=12).contains(&m) => Some(format!(
+            "{} {}",
+            MONTH_NAMES[usize::from(m - 1)],
+            identity.taxable_year
+        )),
+        _ => bir_core::forms::event_trigger::held_trigger_date(form_code, draft)
+            .map(|date| format!("{:02}/{:02}/{}", date.month(), date.day(), date.year())),
+    }
+}
+
+/// The lifecycle facts a print's footer trusts. A page-held draft is client
+/// input, and `draft_argument` strips the worker-owned dry-run facts from
+/// it (`drop_client_dry_run`), so the print reads the return's lifecycle
+/// from its stored row and nothing else: the row the draft's own `id`
+/// names. A draft with no stored row (a Form library sample, a return
+/// never saved) is unfiled, which is what the absent facts already say.
+fn furniture_truth(db: &Database, draft: &Value) -> Value {
+    let mut truth = draft.clone();
+    let keys = [
+        "status",
+        "submitted_at",
+        "submitted_dry_run",
+        "submission_filename",
+        "lifecycle",
+    ];
+    let Some(object) = truth.as_object_mut() else {
+        return truth;
+    };
+    // Never the page's own say, stored row or not.
+    for key in keys {
+        object.remove(key);
+    }
+    let Some(id) = draft.get("id").and_then(Value::as_i64) else {
+        return truth;
+    };
+    let stored = db
+        .form_draft_json_by_id(id)
+        .ok()
+        .flatten()
+        .and_then(|json| serde_json::from_str::<Value>(&json).ok());
+    let Some(stored) = stored else {
+        return truth;
+    };
+    for key in keys {
+        if let Some(value) = stored.get(key) {
+            object.insert(key.to_string(), value.clone());
+        }
+    }
+    truth
+}
+
+/// What every printed page of this return carries: the footer's left line
+/// (form, dashed TIN, period, filing state) and whether the DRAFT mark
+/// shows. Built from the draft the print was asked for, never per form.
+pub(crate) fn print_furniture(
+    kind: AgentFormKind,
+    form_code: &str,
+    draft: &Value,
+) -> crate::static_html::SheetFurniture {
+    let mut left = format!("BIR Form {form_code}");
+    if let Ok(identity) = agent::identity(kind, draft) {
+        left.push_str(&format!(
+            " · TIN {}",
+            bir_core::naming::Tin::dashed_display(&identity.tin)
+        ));
+        if let Some(period) = footer_period(form_code, draft, &identity) {
+            left.push_str(&format!(" · {period}"));
+        }
+    }
+    let (state, filed) = footer_state(draft);
+    if let Some(state) = state {
+        left.push_str(&format!(" · {state}"));
+    }
+    crate::static_html::SheetFurniture {
+        left,
+        draft_mark: !filed,
+    }
+}
+
 /// The print sheet's field map and receipt page for a draft as saved.
 pub(crate) fn print_map(
     db: &Database,
@@ -6573,6 +6749,7 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
             .ok()
             .flatten()
             .map(|p| p.full_name.clone());
+        let furniture = print_furniture(kind, kind.form_code(), &furniture_truth(db, &draft));
         crate::bir_module::open_print_preview(
             slug,
             kind.form_code(),
@@ -6580,6 +6757,7 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
             &fields,
             receipt.as_ref(),
             profile,
+            Some(&furniture),
         )
     })
 }
@@ -6659,6 +6837,7 @@ fn screen_form_print_sample(arguments: &HostArguments) -> HostResult {
             .ok()
             .flatten()
             .map(|p| p.full_name.clone());
+        let furniture = print_furniture(kind, kind.form_code(), &furniture_truth(db, &draft));
         crate::bir_module::open_print_preview(
             slug,
             kind.form_code(),
@@ -6666,6 +6845,7 @@ fn screen_form_print_sample(arguments: &HostArguments) -> HostResult {
             &fields,
             receipt.as_ref(),
             profile,
+            Some(&furniture),
         )
     })
 }
@@ -6687,6 +6867,7 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
     with_database(|db| {
         let (fields, receipt) = page_print_map(db, kind, &draft, sample.as_ref())?;
         let slug = slug.to_string();
+        let furniture = print_furniture(kind, kind.form_code(), &furniture_truth(db, &draft));
         // Template fill + prepare + staticize run off the UI thread.
         let produce = Box::new(move || {
             let html = bir_print::frozen_html::filled_document_with_receipt(
@@ -6695,7 +6876,10 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
                 receipt.as_ref(),
             )
             .unwrap_or_default();
-            crate::static_html::staticize(&crate::print_sheet::prepare_html_for(&slug, &html, true))
+            crate::static_html::staticize_with_furniture(
+                &crate::print_sheet::prepare_html_for(&slug, &html, true),
+                Some(&furniture),
+            )
         });
         crate::hooks::hooks().print_preview_live_update(kind.form_code(), produce, started);
         Ok(HostValue::Bool(true))
@@ -7175,6 +7359,113 @@ mod tests {
 
     use super::*;
     use crate::bir_module::{module, use_ephemeral_database};
+
+    #[test]
+    fn footer_state_marks_a_draft_unfiled_without_a_line() {
+        let (state, filed) = footer_state(&json!({"status": "Draft"}));
+        assert!(!filed);
+        assert_eq!(state, None);
+        let (state, filed) = footer_state(&json!({"status": "Queued"}));
+        assert!(!filed);
+        assert_eq!(state, None);
+    }
+
+    #[test]
+    fn footer_state_a_dry_run_is_not_filed_and_says_so() {
+        let (state, filed) = footer_state(&json!({
+            "status": "Submitted",
+            "submitted_at": "2025-11-20T02:30:00Z",
+            "submitted_dry_run": true
+        }));
+        assert!(!filed, "a dry run keeps the draft mark");
+        assert_eq!(
+            state.as_deref(),
+            Some("Dry run 11/20/2025, not sent to BIR")
+        );
+    }
+
+    #[test]
+    fn footer_state_a_filed_return_adds_date_and_reference() {
+        let (state, filed) = footer_state(&json!({
+            "status": "Confirmed",
+            "submitted_at": "2025-11-20T02:30:00Z",
+            "submission_filename": "00012345300000-2551Qv2018-122025Q3#x@y.ph#.xml"
+        }));
+        assert!(filed, "filed prints no mark");
+        assert_eq!(
+            state.as_deref(),
+            Some("Filed 11/20/2025 · Ref 00012345300000-2551Qv2018-122025Q3#x@y.ph#.xml")
+        );
+    }
+
+    #[test]
+    fn footer_state_reads_a_nested_lifecycle_too() {
+        let (state, filed) = footer_state(&json!({
+            "status": "Submitted",
+            "lifecycle": {
+                "submitted_at": "2025-11-20T02:30:00Z",
+                "submitted_dry_run": true
+            }
+        }));
+        assert!(!filed);
+        assert_eq!(
+            state.as_deref(),
+            Some("Dry run 11/20/2025, not sent to BIR")
+        );
+    }
+
+    #[test]
+    fn footer_state_the_philippine_date_turns_after_midnight_local() {
+        // 2025-11-20T16:30Z is 11/21 in the Philippines, 11/20 in UTC.
+        assert_eq!(
+            ph_date("2025-11-20T16:30:00Z").as_deref(),
+            Some("11/21/2025")
+        );
+        assert_eq!(
+            ph_date("2025-11-20T02:30:00Z").as_deref(),
+            Some("11/20/2025")
+        );
+    }
+
+    #[test]
+    fn footer_period_states_the_filing_period_or_the_transaction_date() {
+        let annual = agent::DraftIdentity {
+            tin: "00012345300000".to_string(),
+            taxable_year: 2025,
+            period: FilingPeriod::Annual,
+            status: FilingStatus::Draft,
+        };
+        assert_eq!(
+            footer_period("1701", &json!({}), &annual).as_deref(),
+            Some("2025")
+        );
+        let quarterly = agent::DraftIdentity {
+            period: FilingPeriod::Quarterly(3),
+            ..annual.clone()
+        };
+        assert_eq!(
+            footer_period("2551Q", &json!({}), &quarterly).as_deref(),
+            Some("Q3 2025")
+        );
+        let monthly = agent::DraftIdentity {
+            period: FilingPeriod::Monthly(6),
+            ..annual.clone()
+        };
+        assert_eq!(
+            footer_period("1601C", &json!({}), &monthly).as_deref(),
+            Some("June 2025")
+        );
+        // A one-time form states its transaction date, whatever the period key.
+        let open = agent::DraftIdentity {
+            period: FilingPeriod::OpenEnded(615),
+            ..annual.clone()
+        };
+        let draft = json!({"transaction_date": "06/15/2025"});
+        assert_eq!(
+            footer_period("2000OT", &draft, &open).as_deref(),
+            Some("06/15/2025")
+        );
+    }
 
     // PR 4: 2000, 2553 and 2550M against their printed sheets.
     mod dst_pt_vat;
