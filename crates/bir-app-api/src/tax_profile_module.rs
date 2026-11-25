@@ -1690,7 +1690,11 @@ mod tests {
 
     #[test]
     fn a_tin_that_passes_the_official_check_digit_is_created() {
-        assert!(create_with("000-123-453").is_ok(), "{:?}", create_with("000-123-453"));
+        assert!(
+            create_with("000-123-453").is_ok(),
+            "{:?}",
+            create_with("000-123-453")
+        );
     }
 
     #[test]
@@ -1723,7 +1727,10 @@ mod tests {
         // the check sees the same nine digits however they were spaced.
         for typed in ["000 123 454", " 000123454 ", "000-123 454"] {
             let err = create_with(typed).unwrap_err();
-            assert!(err.contains("fails the official check digit"), "{typed}: {err}");
+            assert!(
+                err.contains("fails the official check digit"),
+                "{typed}: {err}"
+            );
         }
     }
 
@@ -1733,10 +1740,7 @@ mod tests {
         // store's parse already says what is wrong, more precisely.
         for typed in ["00012345X", "00012345", "0001234530"] {
             let err = create_with(typed).unwrap_err();
-            assert!(
-                err.contains("exactly 9 digits"),
-                "{typed}: {err}"
-            );
+            assert!(err.contains("exactly 9 digits"), "{typed}: {err}");
             assert!(!err.contains("check digit"), "{typed}: {err}");
         }
     }
@@ -1745,7 +1749,11 @@ mod tests {
     fn a_tin_correction_checks_the_check_digit_too() {
         setup();
         let wrong = call(move_taxpayer_tin, vec![json!(ROOT), json!("000123454")]);
-        assert!(wrong.unwrap_err().contains("fails the official check digit"));
+        assert!(
+            wrong
+                .unwrap_err()
+                .contains("fails the official check digit")
+        );
         let right = ok(move_taxpayer_tin, vec![json!(ROOT), json!("000123453")]);
         assert_eq!(right["tin_root"], "000123453");
     }
