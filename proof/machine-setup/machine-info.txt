@@ -1,0 +1,11 @@
+machine_name=Apple Virtual Machine 1
+hostname=ip-172-16-5-2.us-west-2.compute.internal
+macos=26.6.2 (25G83)
+xcode=Xcode 26.6 Build version 17F113
+disk_free=17Gi
+nsh_version=nsh 0.6.1 (8c78cfd)
+nsh_pinned_ref=8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf
+rust=rustc 1.99.0 (b940084d7 2026-09-28)
+cargo=cargo 1.99.0 (5f94df478 2026-08-27)
+just=just 1.59.0
+xcode_select=/Applications/Xcode.app/Contents/Developer

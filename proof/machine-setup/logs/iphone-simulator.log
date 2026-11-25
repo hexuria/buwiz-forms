@@ -1,0 +1,52 @@
+shutdown any booted simulators
+boot iPhone 17 Pro 405F45A9-B471-47B7-A5D9-E545EA624713
+Monitoring boot status for iPhone 17 Pro (405F45A9-B471-47B7-A5D9-E545EA624713).
+[2026-11-25 13:44:07 +0000] Status=1, isTerminal=NO, Elapsed=00:01.
+	Waiting on BackBoard
+
+[2026-11-25 13:44:26 +0000] Status=2, isTerminal=NO, Elapsed=00:20.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:00 seconds
+
+[2026-11-25 13:44:26 +0000] Status=2, isTerminal=NO, Elapsed=00:20.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.MobileSafari.migrator (MobileSafari.migrator)
+		Migration Elapsed:00:00 seconds
+
+[2026-11-25 13:44:27 +0000] Status=2, isTerminal=NO, Elapsed=00:21.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.vibration.migrator (Vibrations.migrator)
+		Migration Elapsed:00:01 seconds
+
+[2026-11-25 13:44:28 +0000] Status=4, isTerminal=NO, Elapsed=00:22.
+	Waiting on System App
+
+[2026-11-25 13:44:29 +0000] Status=4, isTerminal=NO, Elapsed=00:23.
+	Waiting on System App
+
+[2026-11-25 13:44:30 +0000] Status=4, isTerminal=NO, Elapsed=00:24.
+	Waiting on System App
+
+[2026-11-25 13:44:32 +0000] Status=4, isTerminal=NO, Elapsed=00:25.
+	Waiting on System App
+
+[2026-11-25 13:44:32 +0000] Status=4, isTerminal=NO, Elapsed=00:26.
+	Waiting on System App
+
+[2026-11-25 13:44:33 +0000] Status=4294967295, isTerminal=YES, Elapsed=00:27.
+	Finished
+
+start screen recording
+Note: No display specified. Defaulting to display: D087177F-5430-4E5F-AF73-993CDD0FD41B (screenID: 1, name: LCD)
+Recording started
+Recording completed. Writing to disk.
+
+Wrote video to: /Users/devin/repos/buwiz-forms/proof/machine-setup/iphone-17-pro-recording.mov
+take screenshot with xcrun simctl io booted screenshot
+Detected file type from extension: PNG
+Note: No display specified. Defaulting to display: D087177F-5430-4E5F-AF73-993CDD0FD41B (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/devin/repos/buwiz-forms/proof/machine-setup/iphone-17-pro-screenshot.png
+screenshot saved
+-rw-r--r--@ 1 devin  staff   2.8M Nov 25 05:44 proof/machine-setup/iphone-17-pro-recording.mov
+-rw-r--r--@ 1 devin  staff   2.8M Nov 25 05:44 proof/machine-setup/iphone-17-pro-screenshot.png

@@ -1,0 +1,1515 @@
+== brew install just ==
+==> Auto-updating Homebrew...
+Adjust how often this is run with `$HOMEBREW_AUTO_UPDATE_SECS` or disable with
+`$HOMEBREW_NO_AUTO_UPDATE=1`. Hide these hints with `$HOMEBREW_NO_ENV_HINTS=1` (see `man brew`).
+==> Downloading https://ghcr.io/v2/homebrew/core/portable-ruby/blobs/sha256:832729e175b3c0864c8417ebc2bdcf1509e3856a08bd866c8bb0de806da6964e
+#=#=#                                                                          ###############                                                           22.0%######################################################################## 100.0%
+==> Pouring portable-ruby-4.0.10.arm64_big_sur.bottle.tar.gz
+==> Homebrew's analytics have entirely moved to our InfluxDB instance in the EU.
+We gather less data than before and have destroyed all Google Analytics data:
+  https://docs.brew.sh/Analytics
+Please reconsider re-enabling analytics to help our volunteer maintainers with:
+  brew analytics on
+==> Homebrew is run entirely by unpaid volunteers. Please consider donating:
+  https://github.com/Homebrew/brew#-donations
+
+==> Downloading bottle manifests
+✔︎ Bottle Manifest just (1.59.0)
+==> Fetching downloads for: just
+✔︎ Bottle just (1.59.0)
+==> Pouring just--1.59.0.arm64_tahoe.bottle.tar.gz
+🍺  /opt/homebrew/Cellar/just/1.59.0: 13 files, 5.6MB
+==> Caveats
+zsh completions have been installed to:
+  /opt/homebrew/share/zsh/site-functions
+== scripts/setup-macos.sh ==
+[1;34m==>[0m Xcode Command Line Tools present: /Applications/Xcode.app/Contents/Developer
+[1;34m==>[0m Homebrew already installed: Homebrew 7.0.16
+[1;34m==>[0m Installing brew packages: uv python@3.13 create-dmg
+==> Downloading bottle manifests
+✔︎ Bottle Manifest uv (0.13.10)
+✔︎ Bottle Manifest create-dmg (1.3.0)
+✔︎ Bottle Manifest python@3.13 (3.13.18)
+==> Would install 3 formulae:
+uv           0.13.10  (15.6MB)
+python@3.13  3.13.18  (18.5MB)
+create-dmg   1.3.0    (47.9KB)
+==> Would upgrade 3 dependencies for python@3.13:
+ca-certificates  2026-09-25 -> 2026-11-05
+openssl@3        3.6.5      -> 3.5.9
+sqlite           3.53.4     -> 3.54.1
+==> Fetching downloads for: uv, python@3.13 and create-dmg
+✔︎ Bottle Manifest sqlite (3.54.1)
+✔︎ Bottle Manifest ca-certificates (2026-11-05)
+✔︎ Bottle Manifest openssl@3 (3.5.9)
+✔︎ Bottle ca-certificates (2026-11-05)
+✔︎ Bottle create-dmg (1.3.0)
+✔︎ Bottle sqlite (3.54.1)
+✔︎ Bottle uv (0.13.10)
+✔︎ Bottle python@3.13 (3.13.18)
+✔︎ Bottle openssl@3 (3.5.9)
+==> Pouring uv--0.13.10.arm64_tahoe.bottle.tar.gz
+🍺  /opt/homebrew/Cellar/uv/0.13.10: 17 files, 34.5MB
+==> Installing dependencies for python@3.13: ca-certificates and sqlite
+==> Upgrading python@3.13 dependency: ca-certificates (2026-09-25 -> 2026-11-05)
+==> Pouring ca-certificates--2026-11-05.all.bottle.tar.gz
+🍺  /opt/homebrew/Cellar/ca-certificates/2026-11-05: 5 files, 196.1KB
+==> Upgrading python@3.13 dependency: sqlite (3.53.4 -> 3.54.1)
+==> Pouring sqlite--3.54.1.arm64_tahoe.bottle.tar.gz
+🍺  /opt/homebrew/Cellar/sqlite/3.54.1: 13 files, 5.4MB
+==> Installing python@3.13
+==> Pouring python@3.13--3.13.18.arm64_tahoe.bottle.tar.gz
+🍺  /opt/homebrew/Cellar/python@3.13/3.13.18: 3,643 files, 71.5MB
+==> Pouring create-dmg--1.3.0.all.bottle.tar.gz
+🍺  /opt/homebrew/Cellar/create-dmg/1.3.0: 13 files, 75.5KB
+==> Caveats
+zsh completions have been installed to:
+  /opt/homebrew/share/zsh/site-functions
+==> python@3.13
+Python is installed as
+  /opt/homebrew/bin/python3.13
+
+Unversioned and major-versioned symlinks `python`, `python3`, `python-config`, `python3-config`, `pip`, `pip3`, etc. pointing to
+`python3.13`, `python3.13-config`, `pip3.13` etc., respectively, are installed into
+  /opt/homebrew/opt/python@3.13/libexec/bin
+
+If you do not need a specific version of Python, and always want Homebrew's `python3` in your PATH:
+  brew install python3
+
+`idle3.13` requires tkinter, which is available separately:
+  brew install python-tk@3.13
+
+`dbm.gnu` is available separately:
+  brew install python-gdbm@3.13
+
+For more information about Homebrew and Python, see: https://docs.brew.sh/Homebrew-and-Python
+[1;33mwarning:[0m python3 is 3.9 (Xcode's); freeze/stamp CI scripts expect 3.13.
+[1;33mwarning:[0m   To make python3.13 the default, add to your PATH:
+[1;33mwarning:[0m     export PATH="/opt/homebrew/opt/python@3.13/libexec/bin:$PATH"
+info: syncing channel updates for 1.99.0-aarch64-apple-darwin
+info: latest update on 2026-10-01 for version 1.99.0 (b940084d7 2026-09-28)
+info: downloading 6 components
+warn: the missing active toolchain `1.99.0-aarch64-apple-darwin` has been auto-installed
+warn: this might cause rustup commands to take longer time to finish than expected
+info: you may opt out with `RUSTUP_AUTO_INSTALL=0` or `rustup set auto-install disable`
+[1;34m==>[0m Rust already installed: cargo 1.99.0 (5f94df478 2026-08-27)
+[1;34m==>[0m Adding macOS targets for universal builds
+info: component rust-std is up to date
+info: downloading component rust-std
+[1;34m==>[0m Installing gpui-agent CLI at pinned version 0.4.0
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded gpui-agent-cli v0.4.0
+  Installing gpui-agent-cli v0.4.0
+warning: default toolchain implicitly overridden with `1.99.0-aarch64-apple-darwin` by rustup toolchain file
+  |
+  = help: use `cargo +stable install` if you meant to use the stable toolchain
+  = note: rustup selects the toolchain based on the parent environment and not the environment of the package being installed
+    Updating crates.io index
+     Locking 74 packages to highest compatible versions
+      Adding generic-array v0.14.7 (available: v0.14.9)
+ Downloading crates ...
+  Downloaded adler2 v2.0.1
+  Downloaded anstream v1.0.0
+  Downloaded version_check v0.9.5
+  Downloaded heck v0.5.0
+  Downloaded clap v4.6.10
+  Downloaded anstyle v1.0.14
+  Downloaded clap_lex v1.1.2
+  Downloaded clap_builder v4.6.10
+  Downloaded cpufeatures v0.2.17
+  Downloaded is_terminal_polyfill v1.70.2
+  Downloaded anstyle-parse v1.0.0
+  Downloaded miniz_oxide v0.8.9
+  Downloaded find-msvc-tools v0.1.15
+  Downloaded flate2 v1.1.11
+  Downloaded digest v0.10.7
+  Downloaded fdeflate v0.3.7
+  Downloaded arrayvec v0.7.8
+  Downloaded sha2 v0.10.9
+  Downloaded zmij v1.0.23
+  Downloaded generic-array v0.14.7
+  Downloaded instinct-core v0.1.0
+  Downloaded shlex v2.0.1
+  Downloaded cfg-if v1.0.5
+  Downloaded colorchoice v1.0.5
+  Downloaded constant_time_eq v0.4.2
+  Downloaded gpui-agent-recipe v0.4.0
+  Downloaded regex-lite v0.1.9
+  Downloaded strsim v0.11.1
+  Downloaded anyhow v1.0.105
+  Downloaded block-buffer v0.10.4
+  Downloaded subtle v2.6.1
+  Downloaded anstyle-query v1.1.5
+  Downloaded crypto-common v0.1.7
+  Downloaded utf8parse v0.2.2
+  Downloaded itoa v1.0.19
+  Downloaded simd-adler32 v0.3.10
+  Downloaded thiserror v2.0.21
+  Downloaded bitflags v1.3.2
+  Downloaded clap_derive v4.6.9
+  Downloaded instinct-text v0.1.0
+  Downloaded quote v1.0.47
+  Downloaded thiserror-impl v2.0.21
+  Downloaded hmac v0.12.1
+  Downloaded instinct-lexicon v0.1.0
+  Downloaded log v0.4.35
+  Downloaded proc-macro2 v1.0.107
+  Downloaded serde_core v1.0.229
+  Downloaded serde_derive v1.0.229
+  Downloaded unicode-ident v1.0.27
+  Downloaded unicode-script v0.5.9
+  Downloaded crc32fast v1.5.6
+  Downloaded miniz_oxide v0.9.1
+  Downloaded tinyvec v1.13.3
+  Downloaded base64 v0.22.1
+  Downloaded serde v1.0.229
+  Downloaded png v0.17.16
+  Downloaded unicode-segmentation v1.13.3
+  Downloaded gpui-agent-policy v0.4.0
+  Downloaded memchr v2.8.3
+  Downloaded typenum v1.20.1
+  Downloaded unicode-normalization v0.1.26
+  Downloaded unicode-security v0.1.3
+  Downloaded gpui-agent v0.4.0
+  Downloaded zlib-rs v0.6.9
+  Downloaded cc v1.11.3
+  Downloaded serde_json v1.0.154
+  Downloaded blake3 v1.8.7
+  Downloaded syn v3.0.10
+  Downloaded libc v0.2.191
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling cfg-if v1.0.5
+   Compiling version_check v0.9.5
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.15
+   Compiling typenum v1.20.1
+   Compiling simd-adler32 v0.3.10
+   Compiling libc v0.2.191
+   Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.6
+   Compiling serde_core v1.0.229
+   Compiling tinyvec v1.13.3
+   Compiling cc v1.11.3
+   Compiling zmij v1.0.23
+   Compiling subtle v2.6.1
+   Compiling arrayvec v0.7.8
+   Compiling generic-array v0.14.7
+   Compiling constant_time_eq v0.4.2
+   Compiling miniz_oxide v0.9.1
+   Compiling unicode-normalization v0.1.26
+   Compiling thiserror v2.0.21
+   Compiling unicode-script v0.5.9
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.154
+   Compiling blake3 v1.8.7
+   Compiling unicode-security v0.1.3
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling unicode-segmentation v1.13.3
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.19
+   Compiling bitflags v1.3.2
+   Compiling utf8parse v0.2.2
+   Compiling instinct-core v0.1.0
+   Compiling anstyle-parse v1.0.0
+   Compiling log v0.4.35
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling colorchoice v1.0.5
+   Compiling anstyle-query v1.1.5
+   Compiling base64 v0.22.1
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling anstyle v1.0.14
+   Compiling anyhow v1.0.105
+   Compiling digest v0.10.7
+   Compiling instinct-text v0.1.0
+   Compiling cpufeatures v0.2.17
+   Compiling anstream v1.0.0
+   Compiling heck v0.5.0
+   Compiling sha2 v0.10.9
+   Compiling hmac v0.12.1
+   Compiling strsim v0.11.1
+   Compiling syn v3.0.10
+   Compiling flate2 v1.1.11
+   Compiling instinct-lexicon v0.1.0
+   Compiling clap_lex v1.1.2
+   Compiling regex-lite v0.1.9
+   Compiling gpui-agent-cli v0.4.0
+   Compiling clap_builder v4.6.10
+   Compiling png v0.17.16
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling clap_derive v4.6.9
+   Compiling clap v4.6.10
+   Compiling gpui-agent v0.4.0
+   Compiling gpui-agent-policy v0.4.0
+   Compiling gpui-agent-recipe v0.4.0
+    Finished `release` profile [optimized] target(s) in 17.81s
+  Installing /Users/devin/.cargo/bin/gpui-agent
+   Installed package `gpui-agent-cli v0.4.0` (executable `gpui-agent`)
+[1;34m==>[0m Adding iOS targets: aarch64-apple-ios aarch64-apple-ios-sim
+info: downloading 2 components
+[1;34m==>[0m Cloning hexuria/nsh into /Users/devin/repos/nsh
+Cloning into '/Users/devin/repos/nsh'...
+[1;34m==>[0m Checking out NSH at the CI pin 8c78cfd
+From https://git-manager.devin.ai/proxy/github.com/hexuria/nsh
+ * branch                8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf -> FETCH_HEAD
+HEAD is now at 8c78cfd6d cli: Commit an App Store Connect upload with the file's MD5 (#37)
+[1;34m==>[0m Building the nsh CLI into /Users/devin/BuwizNsh/tools with Rust stable (about 10 minutes cold)
+info: syncing channel updates for stable-aarch64-apple-darwin
+info: latest update on 2026-11-12 for version 1.100.0 (0ef1bc386 2026-11-09)
+info: removing previous version of component cargo
+info: removing previous version of component clippy
+info: removing previous version of component rust-docs
+info: removing previous version of component rust-std
+info: removing previous version of component rustc
+info: removing previous version of component rustfmt
+info: downloading 6 components
+
+  stable-aarch64-apple-darwin updated - rustc 1.100.0 (0ef1bc386 2026-11-09) (from rustc 1.99.0 (b940084d7 2026-09-28))
+
+info: self-update is disabled for this build of rustup
+info: any updates to rustup will need to be fetched with your system package manager
+  Installing nsh-cli v0.6.1 (/Users/devin/repos/nsh/crates/nsh-cli)
+warning: default toolchain implicitly overridden with `stable-aarch64-apple-darwin` by environment variable
+  |
+  = help: use `cargo +stable install` if you meant to use the stable toolchain
+  = note: rustup selects the toolchain based on the parent environment and not the environment of the package being installed
+    Updating crates.io index
+warning: package `crypto-bigint v0.7.5` in Cargo.lock is yanked in registry `crates-io`
+ Downloading crates ...
+  Downloaded aead v0.6.1
+  Downloaded svgtypes v0.16.1
+  Downloaded sugar_path v3.0.0
+  Downloaded sync_wrapper v1.0.2
+  Downloaded idna_adapter v1.2.2
+  Downloaded termcolor v1.4.1
+  Downloaded ambient-authority v0.0.2
+  Downloaded thread_local v1.1.10
+  Downloaded synstructure v0.14.0
+  Downloaded tinystr v0.8.4
+  Downloaded aes-kw v0.3.1
+  Downloaded tendril v0.4.3
+  Downloaded time-core v0.1.9
+  Downloaded alloc-no-stdlib v2.0.4
+  Downloaded base16ct v1.0.0
+  Downloaded arcstr v1.2.0
+  Downloaded arraydeque v0.5.1
+  Downloaded autocfg v1.5.1
+  Downloaded color_quant v1.1.0
+  Downloaded core_maths v0.1.1
+  Downloaded cow-utils v0.1.3
+  Downloaded crc32c v0.6.8
+  Downloaded time-macros v0.2.32
+  Downloaded textwrap v0.16.4
+  Downloaded arrayref v0.3.9
+  Downloaded idna v1.1.0
+  Downloaded crossbeam-channel v0.5.17
+  Downloaded imagesize v0.15.0
+  Downloaded base64-simd v0.8.0
+  Downloaded block-buffer v0.12.1
+  Downloaded cpubits v0.1.1
+  Downloaded alloc-no-stdlib v3.0.0
+  Downloaded castaway v0.2.4
+  Downloaded cfg_aliases v0.2.2
+  Downloaded tar v0.4.46
+  Downloaded axum-core v0.5.6
+  Downloaded md-5 v0.10.6
+  Downloaded image-webp v0.2.4
+  Downloaded async-scoped v0.9.0
+  Downloaded bit-set v0.8.0
+  Downloaded itoa v1.0.18
+  Downloaded alloc-stdlib v0.3.0
+  Downloaded append-only-vec v0.1.8
+  Downloaded block-padding v0.4.2
+  Downloaded byteorder-lite v0.1.0
+  Downloaded clap_lex v1.1.1
+  Downloaded cpufeatures v0.3.1
+  Downloaded litemap v0.8.3
+  Downloaded base-encode v0.3.1
+  Downloaded cipher v0.5.2
+  Downloaded cobs v0.3.0
+  Downloaded concurrent_lru v0.2.0
+  Downloaded lazy-regex v3.6.2
+  Downloaded rolldown_tracing v1.2.13
+  Downloaded rustc_version v0.4.1
+  Downloaded atomic-waker v1.1.2
+  Downloaded base64ct v1.8.3
+  Downloaded bincode v1.3.3
+  Downloaded aes v0.9.3
+  Downloaded allocator-api2 v0.2.21
+  Downloaded anyhow v1.0.104
+  Downloaded base62 v2.2.6
+  Downloaded bit-set v0.9.1
+  Downloaded bit-vec v0.8.0
+  Downloaded bytecount v0.6.9
+  Downloaded bytemuck v1.25.2
+  Downloaded cap-std v4.0.3
+  Downloaded cbc v0.2.1
+  Downloaded cexpr v0.6.0
+  Downloaded cmov v0.5.4
+  Downloaded core-foundation v0.10.1
+  Downloaded indexmap v2.14.2
+  Downloaded signature v2.2.0
+  Downloaded ignore v0.4.34
+  Downloaded jobserver v0.1.35
+  Downloaded nonmax v0.5.5
+  Downloaded tiny-skia-path v0.11.4
+  Downloaded annotate-snippets v0.12.17
+  Downloaded async-lock v3.4.2
+  Downloaded bit-vec v0.9.1
+  Downloaded byteorder v1.5.0
+  Downloaded chacha20 v0.10.2
+  Downloaded clang-sys v1.9.1
+  Downloaded clap_derive v4.6.7
+  Downloaded convert_case v0.12.0
+  Downloaded crc32fast v1.5.2
+  Downloaded icu_locale_fallback_data v2.3.0
+  Downloaded icu_provider v2.3.1
+  Downloaded imara-diff v0.2.0
+  Downloaded infer v0.22.0
+  Downloaded io-extras v0.19.0
+  Downloaded json-escape-simd v3.1.2
+  Downloaded lazy-regex-proc_macros v3.6.2
+  Downloaded lazy_static v1.5.1
+  Downloaded mac v0.1.1
+  Downloaded markup5ever_rcdom v0.3.0
+  Downloaded oxc v0.153.0
+  Downloaded rust-i18n v4.2.4
+  Downloaded semver v1.0.28
+  Downloaded serde_path_to_error v0.1.20
+  Downloaded sha2 v0.11.1
+  Downloaded simplecss v0.2.2
+  Downloaded bitflags v2.13.2
+  Downloaded clap v4.6.7
+  Downloaded codespan-reporting v0.13.1
+  Downloaded const-oid v0.9.6
+  Downloaded core-foundation-sys v0.8.7
+  Downloaded io-lifetimes v3.0.1
+  Downloaded mime v0.3.17
+  Downloaded new_debug_unreachable v1.0.6
+  Downloaded nohash-hasher v0.2.0
+  Downloaded static_assertions v1.1.0
+  Downloaded crossbeam-deque v0.8.8
+  Downloaded ctr v0.10.1
+  Downloaded base64 v0.23.1
+  Downloaded bytes v1.12.1
+  Downloaded chacha20poly1305 v0.11.0
+  Downloaded const-oid v0.10.2
+  Downloaded num-conv v0.2.2
+  Downloaded socket2 v0.6.5
+  Downloaded string_wizard v1.2.13
+  Downloaded arc-swap v1.9.3
+  Downloaded keccak v0.2.2
+  Downloaded nu-ansi-term v0.50.3
+  Downloaded bumpalo v3.20.3
+  Downloaded cap-primitives v4.0.3
+  Downloaded der_derive v0.8.0
+  Downloaded deranged v0.5.9
+  Downloaded event-listener v5.4.2
+  Downloaded fnv v1.0.7
+  Downloaded foldhash v0.1.5
+  Downloaded compact_str v0.10.0
+  Downloaded digest v0.11.3
+  Downloaded hmac-sha1-compact v1.1.8
+  Downloaded toml_datetime v0.6.11
+  Downloaded aes-gcm v0.11.1
+  Downloaded der v0.7.10
+  Downloaded aho-corasick v1.1.5
+  Downloaded markup5ever v0.12.1
+  Downloaded cc v1.8.0
+  Downloaded unicode-vo v0.1.0
+  Downloaded derive_more v2.1.1
+  Downloaded toml_datetime v1.1.2+spec-1.1.0
+  Downloaded axum v0.8.9
+  Downloaded derive_more-impl v2.1.1
+  Downloaded tiny-skia v0.11.4
+  Downloaded brotli-decompressor v5.0.3
+  Downloaded group v0.14.0
+  Downloaded syn v3.0.9
+  Downloaded taffy v0.15.0
+  Downloaded yoke-derive v0.8.4
+  Downloaded clap_builder v4.6.7
+  Downloaded matchit v0.8.4
+  Downloaded der v0.8.2
+  Downloaded half v2.7.1
+  Downloaded universal-hash v0.6.1
+  Downloaded unicode-xid v0.2.6
+  Downloaded time v0.3.55
+  Downloaded html5ever v0.27.0
+  Downloaded tungstenite v0.30.0
+  Downloaded untrusted v0.9.0
+  Downloaded maybe-owned v0.3.4
+  Downloaded tungstenite v0.29.0
+  Downloaded http v1.5.0
+  Downloaded bindgen v0.72.1
+  Downloaded brotli-decompressor v6.0.1
+  Downloaded precomputed-hash v0.1.1
+  Downloaded pathdiff v0.2.3
+  Downloaded potential_utf v0.1.6
+  Downloaded chrono v0.4.45
+  Downloaded multiversion_no_op v1.0.0
+  Downloaded nodejs-built-in-modules v1.0.0
+  Downloaded num-integer v0.1.47
+  Downloaded outref v0.5.2
+  Downloaded oxc_compat v0.153.0
+  Downloaded scopeguard v1.2.0
+  Downloaded pbkdf2 v0.13.0
+  Downloaded polycool v0.4.0
+  Downloaded polyval v0.7.3
+  Downloaded powerfmt v0.2.1
+  Downloaded yoke v0.8.3
+  Downloaded pkg-config v0.3.34
+  Downloaded zerofrom v0.1.8
+  Downloaded parking_lot_core v0.9.12
+  Downloaded plist v1.10.1
+  Downloaded poly1305 v0.9.1
+  Downloaded postcard v1.1.3
+  Downloaded serde_spanned v1.1.2
+  Downloaded sha1 v0.10.7
+  Downloaded syn v2.0.119
+  Downloaded inout v0.2.5
+  Downloaded nibble_vec v0.1.0
+  Downloaded bstr v1.13.1
+  Downloaded libloading v0.8.9
+  Downloaded log v0.4.34
+  Downloaded oxc_mangler v0.153.0
+  Downloaded rustix v1.1.5
+  Downloaded granit-parser v1.3.0
+  Downloaded ureq v3.4.2
+  Downloaded yansi v1.0.1
+  Downloaded zerocopy-derive v0.8.63
+  Downloaded pkcs8 v0.10.2
+  Downloaded pkcs8 v0.11.0
+  Downloaded png v0.18.1
+  Downloaded ppv-lite86 v0.2.21
+  Downloaded sha1 v0.11.0
+  Downloaded siphasher v1.0.4
+  Downloaded tokio-macros v2.7.2
+  Downloaded tokio-tungstenite v0.29.0
+  Downloaded toml v0.8.23
+  Downloaded p256 v0.14.0
+  Downloaded rolldown_ecmascript v1.2.13
+  Downloaded rolldown_plugin v1.2.13
+  Downloaded ed25519 v2.2.3
+  Downloaded futures-channel v0.3.34
+  Downloaded json-strip-comments v3.1.2
+  Downloaded futures-core v0.3.34
+  Downloaded unicode-width v0.2.2
+  Downloaded zerofrom-derive v0.1.8
+  Downloaded simdutf8 v0.1.5
+  Downloaded futures-task v0.3.34
+  Downloaded simd-json v0.18.1
+  Downloaded slab v0.4.12
+  Downloaded tokio-rustls v0.26.6
+  Downloaded rand_chacha v0.9.0
+  Downloaded serde_spanned v0.6.9
+  Downloaded slotmap v1.1.1
+  Downloaded tokio-tungstenite v0.28.0
+  Downloaded oxc_str v0.153.0
+  Downloaded oxc_transformer_plugins v0.153.0
+  Downloaded rolldown_fs v1.2.13
+  Downloaded form_urlencoded v1.2.2
+  Downloaded icu_locale_fallback v2.3.0
+  Downloaded onig v6.5.3
+  Downloaded oxc_index v5.0.0
+  Downloaded zerocopy v0.8.63
+  Downloaded serdect v0.4.3
+  Downloaded shlex v1.3.0
+  Downloaded toml v1.1.8+spec-1.1.0
+  Downloaded rolldown_devtools_action v1.2.13
+  Downloaded rolldown_ecmascript_utils v1.2.13
+  Downloaded self_cell v1.3.0
+  Downloaded gif v0.14.2
+  Downloaded equivalent v1.0.3
+  Downloaded sponge-cursor v0.1.0
+  Downloaded tower-layer v0.3.3
+  Downloaded security-framework-sys v2.17.0
+  Downloaded ed25519 v3.0.0
+  Downloaded signature v3.0.0
+  Downloaded strict-num v0.1.1
+  Downloaded oxc_traverse v0.153.0
+  Downloaded http-body v1.1.0
+  Downloaded stable_deref_trait v1.2.1
+  Downloaded io-lifetimes v2.0.4
+  Downloaded string_cache_codegen v0.5.4
+  Downloaded find-msvc-tools v0.1.14
+  Downloaded sharded-slab v0.1.7
+  Downloaded toml_edit v0.25.17+spec-1.1.0
+  Downloaded oxc_syntax v0.153.0
+  Downloaded ghash v0.6.0
+  Downloaded pnp v0.12.12
+  Downloaded sha3 v0.12.0
+  Downloaded toml_parser v1.1.5+spec-1.1.0
+  Downloaded security-framework v3.7.0
+  Downloaded sec1 v0.8.1
+  Downloaded rolldown_plugin_asset_module v1.2.13
+  Downloaded futures v0.3.34
+  Downloaded syntect v5.3.0
+  Downloaded tracing-serde v0.2.0
+  Downloaded unicode-linebreak v0.1.5
+  Downloaded phf_shared v0.11.3
+  Downloaded md-5 v0.11.0
+  Downloaded objc2-io-surface v0.3.2
+  Downloaded oxc_estree v0.153.0
+  Downloaded hmac v0.13.0
+  Downloaded fs-set-times v0.20.3
+  Downloaded fsevent-sys v4.1.0
+  Downloaded futf v0.1.5
+  Downloaded brotli v9.0.0
+  Downloaded imagesize v0.14.0
+  Downloaded lock_api v0.4.14
+  Downloaded normpath v1.5.2
+  Downloaded notify v8.2.0
+  Downloaded objc2-encode v4.1.0
+  Downloaded once_cell v1.21.4
+  Downloaded shake v0.1.0
+  Downloaded smawk v0.3.3
+  Downloaded spki v0.8.1
+  Downloaded str_indices v0.4.4
+  Downloaded toml_write v0.1.2
+  Downloaded oxc_transformer v0.153.0
+  Downloaded rfc6979 v0.6.0
+  Downloaded rolldown_error v1.2.13
+  Downloaded errno v0.3.14
+  Downloaded ts-rs v12.0.1
+  Downloaded unicode-id-start v1.5.0
+  Downloaded unicode-properties v0.1.5
+  Downloaded zerotrie v0.2.5
+  Downloaded phf_codegen v0.11.3
+  Downloaded pkcs1 v0.8.0-rc.5
+  Downloaded rand_core v0.9.5
+  Downloaded rand_core v0.10.1
+  Downloaded rolldown_dev_common v1.2.13
+  Downloaded rolldown_std_utils v1.2.13
+  Downloaded ecdsa v0.17.0
+  Downloaded ipnet v2.12.2
+  Downloaded memmap2 v0.9.12
+  Downloaded notify-types v2.1.0
+  Downloaded ordered-float v5.5.1
+  Downloaded oxc_ast_macros v0.153.0
+  Downloaded oxc_data_structures v0.153.0
+  Downloaded oxc_diagnostics v0.153.0
+  Downloaded oxc_ecmascript v0.153.0
+  Downloaded oxc_isolated_declarations v0.153.0
+  Downloaded rolldown_plugin_utils v1.2.13
+  Downloaded rolldown_sourcemap v1.2.13
+  Downloaded spki v0.7.3
+  Downloaded string_cache v0.8.9
+  Downloaded toml_writer v1.1.3+spec-1.1.0
+  Downloaded rgb v0.8.53
+  Downloaded hkdf v0.13.0
+  Downloaded tracing-subscriber v0.3.23
+  Downloaded winnow v1.0.4
+  Downloaded zlib-rs v0.6.8
+  Downloaded zune-jpeg v0.5.15
+  Downloaded oxc_minifier v0.153.0
+  Downloaded oxc_parser v0.153.0
+  Downloaded quick-error v2.0.1
+  Downloaded quick-xml v0.42.0
+  Downloaded rolldown_common v1.2.13
+  Downloaded rolldown_plugin_copy_module v1.2.13
+  Downloaded rolldown_plugin_lazy_compilation v1.2.13
+  Downloaded ed25519-dalek v2.2.0
+  Downloaded float-cmp v0.9.0
+  Downloaded foldhash v0.2.0
+  Downloaded typedmap v0.6.0
+  Downloaded vfs v0.13.0
+  Downloaded webpki-roots v0.26.11
+  Downloaded icu_collections v2.3.0
+  Downloaded icu_locale_core v2.3.0
+  Downloaded num-bigint v0.5.1
+  Downloaded num-traits v0.2.19
+  Downloaded oxc_codegen v0.153.0
+  Downloaded triomphe v0.1.17
+  Downloaded rolldown_resolver v1.2.13
+  Downloaded smallvec v1.16.3
+  Downloaded crossbeam-epoch v0.9.21
+  Downloaded quickjs-jit v0.14.2
+  Downloaded rolldown_devtools v1.2.13
+  Downloaded rolldown_plugin_chunk_import_map v1.2.13
+  Downloaded rolldown_plugin_data_url v1.2.13
+  Downloaded rolldown_plugin_hmr v1.2.13
+  Downloaded float-cmp v0.10.0
+  Downloaded hyper v1.12.0
+  Downloaded value-trait v0.12.2
+  Downloaded vsimd v0.8.0
+  Downloaded vte v0.15.0
+  Downloaded walkdir v2.5.0
+  Downloaded wnaf v0.14.1
+  Downloaded wuff v0.2.9
+  Downloaded x25519-dalek v3.0.0
+  Downloaded xmlwriter v0.1.0
+  Downloaded hashbrown v0.17.1
+  Downloaded hex-simd v0.8.0
+  Downloaded rand v0.10.3
+  Downloaded getrandom v0.2.17
+  Downloaded tracing-attributes v0.1.31
+  Downloaded pin-project-internal v1.1.13
+  Downloaded rolldown-ariadne v0.6.0
+  Downloaded serde_ignored v0.1.14
+  Downloaded fontdb v0.23.0
+  Downloaded utf8_iter v1.0.4
+  Downloaded uuid v1.28.0
+  Downloaded weezl v0.1.12
+  Downloaded writeable v0.6.4
+  Downloaded xml5ever v0.18.1
+  Downloaded xxhash-rust v0.8.19
+  Downloaded zeroize v1.9.1
+  Downloaded ctutils v0.4.3
+  Downloaded hexf-parse v0.2.1
+  Downloaded zopfli v0.8.4
+  Downloaded zstd v0.14.3
+  Downloaded zstd-safe v8.2.0
+  Downloaded zune-core v0.5.3
+  Downloaded oxc_regular_expression v0.153.0
+  Downloaded rand_core v0.6.4
+  Downloaded endian-type v0.2.0
+  Downloaded futures-sink v0.3.34
+  Downloaded tracing-core v0.1.36
+  Downloaded fast-glob v1.1.2
+  Downloaded futures-executor v0.3.34
+  Downloaded tower-service v0.3.3
+  Downloaded hashbrown v0.16.1
+  Downloaded oxc_resolver v11.24.3
+  Downloaded crossbeam-utils v0.8.23
+  Downloaded crypto-common v0.2.2
+  Downloaded icu_normalizer_data v2.3.0
+  Downloaded minimal-lexical v0.2.1
+  Downloaded oxc_ast_visit v0.153.0
+  Downloaded toml_edit v0.22.27
+  Downloaded ureq-proto v0.6.4
+  Downloaded p384 v0.14.0
+  Downloaded rolldown_utils v1.2.13
+  Downloaded unicode-bidi v0.3.18
+  Downloaded winnow v0.7.15
+  Downloaded flate2 v1.1.10
+  Downloaded same-file v1.0.6
+  Downloaded seq-macro v0.3.6
+  Downloaded icu_properties v2.3.0
+  Downloaded icu_properties_data v2.3.0
+  Downloaded itertools v0.11.0
+  Downloaded itertools v0.13.0
+  Downloaded mio v1.2.4
+  Downloaded nom v7.1.3
+  Downloaded nom v8.0.0
+  Downloaded oxc-browserslist v5.0.1
+  Downloaded oxc_allocator v0.153.0
+  Downloaded prettyplease v0.2.37
+  Downloaded tower v0.5.3
+  Downloaded url v2.5.8
+  Downloaded rolldown_plugin_oxc_runtime v1.2.13
+  Downloaded rand v0.8.8
+  Downloaded rand v0.9.5
+  Downloaded rayon-core v1.13.0
+  Downloaded regex v1.13.1
+  Downloaded oxc_span v0.153.0
+  Downloaded rustversion v1.0.23
+  Downloaded ryu v1.0.23
+  Downloaded data-encoding v2.11.1
+  Downloaded data-url v0.3.2
+  Downloaded dispatch2 v0.3.1
+  Downloaded displaydoc v0.2.7
+  Downloaded itertools v0.15.0
+  Downloaded kurbo v0.13.1
+  Downloaded libm v0.2.16
+  Downloaded moxcms v0.8.1
+  Downloaded objc2-core-foundation v0.3.2
+  Downloaded futures-util v0.3.34
+  Downloaded webpki-roots v1.0.9
+  Downloaded zerovec-derive v0.11.6
+  Downloaded dashmap v6.2.1
+  Downloaded http-body-util v0.1.5
+  Downloaded rayon v1.12.0
+  Downloaded ts-rs-macros v12.0.1
+  Downloaded pin-project-lite v0.2.17
+  Downloaded primefield v0.14.0
+  Downloaded ropey v1.6.1
+  Downloaded hashbrown v0.14.5
+  Downloaded ttf-parser v0.25.1
+  Downloaded oxc_sourcemap v9.0.0
+  Downloaded parking_lot v0.12.5
+  Downloaded rustls-platform-verifier v0.7.1
+  Downloaded rustls-webpki v0.103.15
+  Downloaded oxc_ast v0.153.0
+  Downloaded radix_trie v0.3.0
+  Downloaded getrandom v0.3.4
+  Downloaded getrandom v0.4.3
+  Downloaded crypto-bigint v0.7.5
+  Downloaded p521 v0.14.0
+  Downloaded event-listener-strategy v0.5.4
+  Downloaded markdown v1.0.0
+  Downloaded objc2 v0.6.5
+  Downloaded wasmparser v0.262.0
+  Downloaded zerovec v0.11.8
+  Downloaded cshake v0.2.1
+  Downloaded pem-rfc7468 v1.0.0
+  Downloaded percent-encoding v2.3.2
+  Downloaded crypto-primes v0.7.2
+  Downloaded dunce v1.0.5
+  Downloaded embedded-io v0.6.1
+  Downloaded encoding_rs_io v0.1.8
+  Downloaded image v0.25.10
+  Downloaded nix v0.31.3
+  Downloaded tracing v0.1.44
+  Downloaded phf v0.11.3
+  Downloaded rustybuzz v0.20.1
+  Downloaded dragonbox_ecma v0.1.12
+  Downloaded embedded-io v0.4.0
+  Downloaded env_filter v2.0.0
+  Downloaded euclid v0.22.14
+  Downloaded pin-project v1.1.13
+  Downloaded either v1.19.0
+  Downloaded escape-simd v0.1.0
+  Downloaded roxmltree v0.21.1
+  Downloaded serde-saphyr v1.3.0
+  Downloaded phf_macros v0.14.0
+  Downloaded proc-macro-crate v3.5.0
+  Downloaded elliptic-curve v0.14.1
+  Downloaded fancy-regex v0.16.2
+  Downloaded pico-args v0.5.0
+  Downloaded phf_generator v0.14.0
+  Downloaded relative-path v2.0.2
+  Downloaded zip v9.4.1
+  Downloaded phf_shared v0.14.0
+  Downloaded primeorder v0.14.0
+  Downloaded httpdate v1.0.3
+  Downloaded ed25519-dalek v3.0.0
+  Downloaded quickjs-jit-macro v0.14.2
+  Downloaded zstd-sys v2.1.2+zstd.1.5.7
+  Downloaded resvg v0.46.0
+  Downloaded rsa v0.10.0-rc.19
+  Downloaded curve25519-dalek v4.1.3
+  Downloaded rustc-hash v1.1.0
+  Downloaded rustc-hash v2.1.3
+  Downloaded futures-io v0.3.34
+  Downloaded futures-macro v0.3.34
+  Downloaded globwalk v0.8.1
+  Downloaded regex-syntax v0.8.11
+  Downloaded rust-i18n-macro v4.2.4
+  Downloaded fastrand v2.5.0
+  Downloaded filetime v0.2.29
+  Downloaded fixedbitset v0.5.7
+  Downloaded glob v0.3.4
+  Downloaded globset v0.4.21
+  Downloaded rust-i18n-support v4.2.4
+  Downloaded ff v0.14.0
+  Downloaded rustls-pki-types v1.15.1
+  Downloaded halfbrown v0.4.0
+  Downloaded regress v0.12.0
+  Downloaded curve25519-dalek v5.0.0
+  Downloaded httparse v1.10.1
+  Downloaded icu_normalizer v2.3.0
+  Downloaded tokio v1.53.3
+  Downloaded quickjs-jit-stdlib v0.14.2
+  Downloaded hybrid-array v0.4.15
+  Downloaded quickjs-jit-core v0.14.2
+  Downloaded rolldown v1.2.13
+  Downloaded hashbrown v0.15.5
+  Downloaded ring v0.17.14
+  Downloaded pxfm v0.1.30
+  Downloaded unicode-bidi-mirroring v0.4.0
+  Downloaded unicode-id v0.3.7
+  Downloaded utf-8 v0.7.6
+  Downloaded utf8-zero v0.8.1
+  Downloaded phf v0.14.0
+  Downloaded phf_generator v0.11.3
+  Downloaded iana-time-zone v0.1.65
+  Downloaded unicode-ccc v0.4.0
+  Downloaded onig_sys v69.9.3
+  Downloaded tungstenite v0.28.0
+  Downloaded oxc_semantic v0.153.0
+  Downloaded hyper-util v0.1.21
+  Downloaded typed-path v0.13.0
+  Downloaded usvg v0.46.0
+  Downloaded regex-automata v0.4.18
+  Downloaded rustls v0.23.45
+  Downloaded libc v0.2.190
+  Downloaded naga v29.0.4
+  Downloaded encoding_rs v0.8.44
+  Downloaded petgraph v0.8.3
+  Downloaded quickjs-jit-sys v0.14.2
+  Downloaded icu_segmenter_data v2.3.0
+  Downloaded two-face v0.4.5
+  Downloaded icu_segmenter v2.3.0
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling serde_core v1.0.229
+   Compiling cfg-if v1.0.5
+   Compiling libc v0.2.190
+   Compiling serde v1.0.229
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling autocfg v1.5.1
+   Compiling libm v0.2.16
+   Compiling foldhash v0.2.0
+   Compiling allocator-api2 v0.2.21
+   Compiling zeroize v1.9.1
+   Compiling equivalent v1.0.3
+   Compiling rand_core v0.10.1
+   Compiling typenum v1.20.1
+   Compiling num-traits v0.2.19
+   Compiling zmij v1.0.23
+   Compiling hashbrown v0.17.1
+   Compiling subtle v2.6.1
+   Compiling rustversion v1.0.23
+   Compiling siphasher v1.0.4
+   Compiling crossbeam-epoch v0.9.21
+   Compiling stable_deref_trait v1.2.1
+   Compiling simd-adler32 v0.3.10
+   Compiling crossbeam-deque v0.8.8
+   Compiling thiserror v2.0.21
+   Compiling adler2 v2.0.1
+   Compiling crossbeam-utils v0.8.23
+   Compiling find-msvc-tools v0.1.14
+   Compiling shlex v2.0.1
+   Compiling miniz_oxide v0.9.1
+   Compiling jobserver v0.1.35
+   Compiling writeable v0.6.4
+   Compiling hybrid-array v0.4.15
+   Compiling rustc-hash v2.1.3
+   Compiling litemap v0.8.3
+   Compiling aho-corasick v1.1.5
+   Compiling regex-syntax v0.8.11
+   Compiling once_cell v1.21.4
+   Compiling cc v1.8.0
+   Compiling utf8_iter v1.0.4
+   Compiling bitflags v2.13.2
+   Compiling syn v3.0.9
+   Compiling syn v2.0.119
+   Compiling pin-project-lite v0.2.17
+   Compiling unicode-width v0.2.2
+   Compiling indexmap v2.14.2
+   Compiling either v1.19.0
+   Compiling percent-encoding v2.3.2
+   Compiling crypto-common v0.2.2
+   Compiling phf_shared v0.14.0
+   Compiling crc32fast v1.5.2
+   Compiling serde_json v1.0.154
+   Compiling str_indices v0.4.4
+   Compiling dragonbox_ecma v0.1.12
+   Compiling bytes v1.12.1
+   Compiling castaway v0.2.4
+   Compiling fastrand v2.5.0
+   Compiling zlib-rs v0.6.8
+   Compiling static_assertions v1.1.0
+   Compiling cmov v0.5.4
+   Compiling phf_generator v0.14.0
+   Compiling regex-automata v0.4.18
+   Compiling ctutils v0.4.3
+   Compiling scopeguard v1.2.0
+   Compiling log v0.4.34
+   Compiling rayon-core v1.13.0
+   Compiling icu_locale_fallback_data v2.3.0
+   Compiling phf v0.14.0
+   Compiling block-buffer v0.12.1
+   Compiling icu_segmenter_data v2.3.0
+   Compiling arrayvec v0.7.8
+   Compiling nonmax v0.5.5
+   Compiling synstructure v0.14.0
+   Compiling cow-utils v0.1.3
+   Compiling futures-core v0.3.34
+   Compiling rayon v1.12.0
+   Compiling smawk v0.3.3
+   Compiling unicode-id-start v1.5.0
+   Compiling const-oid v0.10.2
+   Compiling base64 v0.23.1
+   Compiling unicode-segmentation v1.13.3
+   Compiling bytecount v0.6.9
+   Compiling simdutf8 v0.1.5
+   Compiling mio v1.2.4
+   Compiling regex v1.13.1
+   Compiling socket2 v0.6.5
+   Compiling serde_derive v1.0.229
+   Compiling zerofrom-derive v0.1.8
+   Compiling yoke-derive v0.8.4
+   Compiling thiserror-impl v2.0.21
+   Compiling zerovec-derive v0.11.6
+   Compiling displaydoc v0.2.7
+   Compiling flate2 v1.1.10
+   Compiling phf_macros v0.14.0
+   Compiling oxc_ast_macros v0.153.0
+   Compiling tokio-macros v2.7.2
+   Compiling zerofrom v0.1.8
+   Compiling num-integer v0.1.47
+   Compiling hashbrown v0.16.1
+   Compiling yoke v0.8.3
+   Compiling rustix v1.1.5
+   Compiling futures-sink v0.3.34
+   Compiling futures-channel v0.3.34
+   Compiling zerotrie v0.2.5
+   Compiling num-bigint v0.5.1
+   Compiling futures-macro v0.3.34
+   Compiling errno v0.3.14
+   Compiling slab v0.4.12
+   Compiling zerovec v0.11.8
+   Compiling tokio v1.53.3
+   Compiling futures-io v0.3.34
+   Compiling cobs v0.3.0
+   Compiling futures-task v0.3.34
+   Compiling version_check v0.9.5
+   Compiling getrandom v0.4.3
+   Compiling parking_lot_core v0.9.12
+   Compiling self_cell v1.3.0
+   Compiling futures-util v0.3.34
+   Compiling digest v0.11.3
+   Compiling lock_api v0.4.14
+   Compiling tracing-core v0.1.36
+   Compiling outref v0.5.2
+   Compiling vsimd v0.8.0
+   Compiling itertools v0.15.0
+   Compiling tracing-attributes v0.1.31
+   Compiling halfbrown v0.4.0
+   Compiling tinystr v0.8.4
+   Compiling potential_utf v0.1.6
+   Compiling base64-simd v0.8.0
+   Compiling icu_locale_core v2.3.0
+   Compiling icu_collections v2.3.0
+   Compiling smallvec v1.16.3
+   Compiling compact_str v0.10.0
+   Compiling ropey v1.6.1
+   Compiling oxc_index v5.0.0
+   Compiling postcard v1.1.3
+   Compiling tracing v0.1.44
+   Compiling oxc-browserslist v5.0.1
+   Compiling float-cmp v0.10.0
+   Compiling filetime v0.2.29
+   Compiling oxc_sourcemap v9.0.0
+   Compiling ryu v1.0.23
+   Compiling escape-simd v0.1.0
+   Compiling icu_provider v2.3.1
+   Compiling oxc_data_structures v0.153.0
+   Compiling form_urlencoded v1.2.2
+   Compiling glob v0.3.4
+   Compiling value-trait v0.12.2
+   Compiling json-escape-simd v3.1.2
+   Compiling generic-array v0.14.7
+   Compiling oxc_estree v0.153.0
+   Compiling icu_locale_fallback v2.3.0
+   Compiling simd-json v0.18.1
+   Compiling oxc_allocator v0.153.0
+   Compiling icu_segmenter v2.3.0
+   Compiling seq-macro v0.3.6
+   Compiling nibble_vec v0.1.0
+   Compiling lazy-regex-proc_macros v3.6.2
+   Compiling cpufeatures v0.3.1
+   Compiling zerocopy v0.8.63
+   Compiling textwrap v0.16.4
+   Compiling oxc_str v0.153.0
+   Compiling hmac-sha1-compact v1.1.8
+   Compiling endian-type v0.2.0
+   Compiling semver v1.0.28
+   Compiling radix_trie v0.3.0
+   Compiling oxc_span v0.153.0
+   Compiling lazy-regex v3.6.2
+   Compiling rustc_version v0.4.1
+   Compiling oxc_syntax v0.153.0
+   Compiling oxc_diagnostics v0.153.0
+   Compiling zerocopy-derive v0.8.63
+   Compiling concurrent_lru v0.2.0
+   Compiling regress v0.12.0
+   Compiling nodejs-built-in-modules v1.0.0
+   Compiling pathdiff v0.2.3
+   Compiling hashbrown v0.14.5
+   Compiling byteorder v1.5.0
+   Compiling cpubits v0.1.1
+   Compiling oxc_regular_expression v0.153.0
+   Compiling oxc_compat v0.153.0
+   Compiling dashmap v6.2.1
+   Compiling fast-glob v1.1.2
+   Compiling http v1.5.0
+   Compiling encoding_rs v0.8.44
+   Compiling pnp v0.12.12
+   Compiling json-strip-comments v3.1.2
+   Compiling unicode-xid v0.2.6
+   Compiling anyhow v1.0.104
+   Compiling derive_more-impl v2.1.1
+   Compiling oxc_resolver v11.24.3
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling oxc_ast v0.153.0
+   Compiling sugar_path v3.0.0
+   Compiling yansi v1.0.1
+   Compiling httparse v1.10.1
+   Compiling mime v0.3.17
+   Compiling base64ct v1.8.3
+   Compiling derive_more v2.1.1
+   Compiling pem-rfc7468 v1.0.0
+   Compiling rolldown-ariadne v0.6.0
+   Compiling digest v0.10.7
+   Compiling futures-executor v0.3.34
+   Compiling der_derive v0.8.0
+   Compiling pin-project-internal v1.1.13
+   Compiling ring v0.17.14
+   Compiling arcstr v1.2.0
+   Compiling multiversion_no_op v1.0.0
+   Compiling heck v0.5.0
+   Compiling futures v0.3.34
+   Compiling clang-sys v1.9.1
+   Compiling block-padding v0.4.2
+   Compiling der v0.8.2
+   Compiling pin-project v1.1.13
+   Compiling prettyplease v0.2.37
+   Compiling getrandom v0.3.4
+   Compiling pkg-config v0.3.34
+   Compiling async-scoped v0.9.0
+   Compiling inout v0.2.5
+   Compiling rolldown_std_utils v1.2.13
+   Compiling vfs v0.13.0
+   Compiling uuid v1.28.0
+   Compiling cpufeatures v0.2.17
+   Compiling rustls-pki-types v1.15.1
+   Compiling nom v8.0.0
+   Compiling minimal-lexical v0.2.1
+   Compiling same-file v1.0.6
+   Compiling base-encode v0.3.1
+   Compiling infer v0.22.0
+   Compiling xxhash-rust v0.8.19
+   Compiling walkdir v2.5.0
+   Compiling nom v7.1.3
+   Compiling rolldown_fs v1.2.13
+   Compiling spki v0.8.1
+   Compiling string_wizard v1.2.13
+   Compiling crypto-bigint v0.7.5
+   Compiling libloading v0.8.9
+   Compiling bstr v1.13.1
+   Compiling getrandom v0.2.17
+   Compiling termcolor v1.4.1
+   Compiling cfg_aliases v0.2.2
+   Compiling lazy_static v1.5.1
+   Compiling icu_properties_data v2.3.0
+   Compiling icu_normalizer_data v2.3.0
+   Compiling bindgen v0.72.1
+   Compiling anstyle v1.0.14
+   Compiling untrusted v0.9.0
+   Compiling cexpr v0.6.0
+   Compiling ts-rs-macros v12.0.1
+   Compiling sharded-slab v0.1.7
+   Compiling globset v0.4.21
+   Compiling rand_core v0.9.5
+   Compiling ppv-lite86 v0.2.21
+   Compiling cipher v0.5.2
+   Compiling oxc_ecmascript v0.153.0
+   Compiling oxc_ast_visit v0.153.0
+   Compiling itertools v0.13.0
+   Compiling tracing-serde v0.2.0
+   Compiling blake3 v1.8.7
+   Compiling thread_local v1.1.10
+   Compiling rustls v0.23.45
+   Compiling utf-8 v0.7.6
+   Compiling core-foundation-sys v0.8.7
+   Compiling bytemuck v1.25.2
+   Compiling shlex v1.3.0
+   Compiling nu-ansi-term v0.50.3
+   Compiling bitflags v1.3.2
+   Compiling oxc_parser v0.153.0
+   Compiling ts-rs v12.0.1
+   Compiling oxc_semantic v0.153.0
+   Compiling oxc_isolated_declarations v0.153.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling rand_chacha v0.9.0
+   Compiling ignore v0.4.34
+   Compiling oxc_traverse v0.153.0
+   Compiling oxc_mangler v0.153.0
+   Compiling oxc_codegen v0.153.0
+   Compiling pkcs8 v0.11.0
+   Compiling ff v0.14.0
+   Compiling oxc_transformer v0.153.0
+   Compiling oxc_minifier v0.153.0
+   Compiling data-encoding v2.11.1
+   Compiling constant_time_eq v0.4.2
+   Compiling globwalk v0.8.1
+   Compiling icu_properties v2.3.0
+   Compiling icu_normalizer v2.3.0
+   Compiling rand v0.9.5
+   Compiling quickjs-jit-sys v0.14.2
+   Compiling rolldown_devtools_action v1.2.13
+   Compiling toml_datetime v0.6.11
+   Compiling serde_spanned v0.6.9
+   Compiling sha1 v0.10.7
+   Compiling hmac v0.13.0
+   Compiling slotmap v1.1.1
+   Compiling core_maths v0.1.1
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling toml_write v0.1.2
+   Compiling io-lifetimes v3.0.1
+   Compiling arraydeque v0.5.1
+   Compiling winnow v0.7.15
+   Compiling io-lifetimes v2.0.4
+   Compiling float-cmp v0.9.0
+   Compiling rand_core v0.6.4
+   Compiling rand v0.8.8
+   Compiling strict-num v0.1.1
+   Compiling granit-parser v1.3.0
+   Compiling annotate-snippets v0.12.17
+   Compiling ttf-parser v0.25.1
+   Compiling oxc_transformer_plugins v0.153.0
+   Compiling encoding_rs_io v0.1.8
+   Compiling rustls-webpki v0.103.15
+   Compiling idna_adapter v1.2.2
+   Compiling toml_edit v0.22.27
+   Compiling rolldown_devtools v1.2.13
+   Compiling oxc v0.153.0
+   Compiling rolldown_error v1.2.13
+   Compiling rolldown_sourcemap v1.2.13
+   Compiling group v0.14.0
+   Compiling rolldown_utils v1.2.13
+   Compiling rolldown_ecmascript v1.2.13
+   Compiling nix v0.31.3
+   Compiling half v2.7.1
+   Compiling curve25519-dalek v4.1.3
+   Compiling rolldown_common v1.2.13
+   Compiling signature v3.0.0
+   Compiling polycool v0.4.0
+   Compiling arc-swap v1.9.3
+   Compiling phf_shared v0.11.3
+   Compiling base64 v0.22.1
+   Compiling io-extras v0.19.0
+   Compiling nohash-hasher v0.2.0
+   Compiling arrayref v0.3.9
+   Compiling typedmap v0.6.0
+   Compiling base16ct v1.0.0
+   Compiling tiny-skia-path v0.11.4
+   Compiling triomphe v0.1.17
+   Compiling serde-saphyr v1.3.0
+   Compiling sec1 v0.8.1
+   Compiling phf_generator v0.11.3
+   Compiling kurbo v0.13.1
+   Compiling toml v0.8.23
+   Compiling idna v1.1.0
+   Compiling rolldown_resolver v1.2.13
+   Compiling hkdf v0.13.0
+   Compiling security-framework-sys v2.17.0
+   Compiling rolldown_plugin v1.2.13
+   Compiling core-foundation v0.10.1
+   Compiling webpki-roots v1.0.9
+   Compiling itertools v0.11.0
+   Compiling memmap2 v0.9.12
+   Compiling unicode-ccc v0.4.0
+   Compiling httpdate v1.0.3
+   Compiling normpath v1.5.2
+   Compiling signature v2.2.0
+   Compiling byteorder-lite v0.1.0
+   Compiling bumpalo v3.20.3
+   Compiling alloc-no-stdlib v2.0.4
+   Compiling cap-primitives v4.0.3
+   Compiling unicode-properties v0.1.5
+   Compiling tinyvec v1.13.3
+   Compiling unicode-bidi-mirroring v0.4.0
+   Compiling unicode-script v0.5.9
+   Compiling base62 v2.2.6
+   Compiling brotli-decompressor v5.0.3
+   Compiling fontdb v0.23.0
+   Compiling rust-i18n-support v4.2.4
+   Compiling rustybuzz v0.20.1
+   Compiling zopfli v0.8.4
+   Compiling ed25519 v2.2.3
+   Compiling security-framework v3.7.0
+   Compiling elliptic-curve v0.14.1
+   Compiling fs-set-times v0.20.3
+   Compiling svgtypes v0.16.1
+   Compiling url v2.5.8
+   Compiling png v0.17.16
+   Compiling rust-i18n v4.2.4
+   Compiling primefield v0.14.0
+   Compiling naga v29.0.4
+   Compiling zstd-sys v2.1.2+zstd.1.5.7
+   Compiling sha2 v0.10.9
+   Compiling sha2 v0.11.1
+   Compiling universal-hash v0.6.1
+   Compiling simplecss v0.2.2
+   Compiling roxmltree v0.21.1
+   Compiling maybe-owned v0.3.4
+   Compiling cap-std v4.0.3
+   Compiling bit-vec v0.9.1
+   Compiling data-url v0.3.2
+   Compiling unicode-vo v0.1.0
+   Compiling weezl v0.1.12
+   Compiling zune-core v0.5.3
+   Compiling new_debug_unreachable v1.0.6
+   Compiling ambient-authority v0.0.2
+   Compiling xmlwriter v0.1.0
+   Compiling ipnet v2.12.2
+   Compiling pico-args v0.5.0
+   Compiling typed-path v0.13.0
+   Compiling winnow v1.0.4
+   Compiling unicode-bidi v0.3.18
+   Compiling imagesize v0.14.0
+   Compiling color_quant v1.1.0
+   Compiling quick-error v2.0.1
+   Compiling usvg v0.46.0
+   Compiling image-webp v0.2.4
+   Compiling gif v0.14.2
+   Compiling wuff v0.2.9
+   Compiling zip v9.4.1
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling zune-jpeg v0.5.15
+   Compiling bit-set v0.9.1
+   Compiling ed25519-dalek v2.2.0
+   Compiling wnaf v0.14.1
+   Compiling tiny-skia v0.11.4
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling rust-i18n-macro v4.2.4
+   Compiling webpki-roots v0.26.11
+   Compiling phf_codegen v0.11.3
+   Compiling string_cache_codegen v0.5.4
+   Compiling tungstenite v0.28.0
+   Compiling tokio-rustls v0.26.6
+   Compiling rfc6979 v0.6.0
+   Compiling rgb v0.8.53
+   Compiling iana-time-zone v0.1.65
+   Compiling chacha20 v0.10.2
+   Compiling ureq-proto v0.6.4
+   Compiling curve25519-dalek v5.0.0
+   Compiling tar v0.4.46
+   Compiling codespan-reporting v0.13.1
+   Compiling event-listener v5.4.2
+   Compiling rustc-hash v1.1.0
+   Compiling toml_datetime v1.1.2+spec-1.1.0
+   Compiling utf8-zero v0.8.1
+   Compiling mac v0.1.1
+   Compiling imagesize v0.15.0
+   Compiling hexf-parse v0.2.1
+   Compiling futf v0.1.5
+   Compiling ureq v3.4.2
+   Compiling nsh-updater v0.6.1 (/Users/devin/repos/nsh/crates/nsh-updater)
+   Compiling toml_edit v0.25.17+spec-1.1.0
+   Compiling tokio-tungstenite v0.28.0
+   Compiling event-listener-strategy v0.5.4
+   Compiling resvg v0.46.0
+   Compiling chrono v0.4.45
+   Compiling markup5ever v0.12.1
+   Compiling ecdsa v0.17.0
+   Compiling primeorder v0.14.0
+   Compiling nsh-macros v0.6.1 (/Users/devin/repos/nsh/crates/nsh-macros)
+   Compiling onig_sys v69.9.3
+   Compiling keccak v0.2.2
+   Compiling parking_lot v0.12.5
+   Compiling taffy v0.15.0
+   Compiling ordered-float v5.5.1
+   Compiling relative-path v2.0.2
+   Compiling sponge-cursor v0.1.0
+   Compiling unicode-linebreak v0.1.5
+   Compiling alloc-no-stdlib v3.0.0
+   Compiling zstd-safe v8.2.0
+   Compiling precomputed-hash v0.1.1
+   Compiling string_cache v0.8.9
+   Compiling alloc-stdlib v0.3.0
+   Compiling convert_case v0.12.0
+   Compiling quickjs-jit-core v0.14.2
+   Compiling async-lock v3.4.2
+   Compiling proc-macro-crate v3.5.0
+   Compiling tendril v0.4.3
+   Compiling phf v0.11.3
+   Compiling rand v0.10.3
+   Compiling polyval v0.7.3
+   Compiling aead v0.6.1
+   Compiling http-body v1.1.0
+   Compiling crc32c v0.6.8
+   Compiling sha1 v0.11.0
+   Compiling bit-vec v0.8.0
+   Compiling foldhash v0.1.5
+   Compiling bit-set v0.8.0
+   Compiling ghash v0.6.0
+   Compiling brotli-decompressor v6.0.1
+   Compiling hashbrown v0.15.5
+   Compiling poly1305 v0.9.1
+   Compiling ed25519 v3.0.0
+   Compiling crypto-primes v0.7.2
+   Compiling ctr v0.10.1
+   Compiling aes v0.9.3
+   Compiling pkcs1 v0.8.0-rc.5
+   Compiling quickjs-jit-macro v0.14.2
+   Compiling nsh-core v0.6.1 (/Users/devin/repos/nsh/crates/nsh-core)
+   Compiling html5ever v0.27.0
+   Compiling tower-service v0.3.3
+   Compiling objc2 v0.6.5
+   Compiling aes-kw v0.3.1
+   Compiling brotli v9.0.0
+   Compiling aes-gcm v0.11.1
+   Compiling ed25519-dalek v3.0.0
+   Compiling chacha20poly1305 v0.11.0
+   Compiling fancy-regex v0.16.2
+   Compiling rsa v0.10.0-rc.19
+   Compiling x25519-dalek v3.0.0
+   Compiling sha3 v0.12.0
+   Compiling shake v0.1.0
+   Compiling cshake v0.2.1
+   Compiling p256 v0.14.0
+   Compiling p384 v0.14.0
+   Compiling p521 v0.14.0
+   Compiling rolldown_plugin_utils v1.2.13
+   Compiling cbc v0.2.1
+   Compiling bincode v1.3.3
+   Compiling hex-simd v0.8.0
+   Compiling pbkdf2 v0.13.0
+   Compiling md-5 v0.11.0
+   Compiling fnv v1.0.7
+   Compiling sync_wrapper v1.0.2
+   Compiling objc2-encode v4.1.0
+   Compiling tower-layer v0.3.3
+   Compiling atomic-waker v1.1.2
+   Compiling hyper v1.12.0
+   Compiling xml5ever v0.18.1
+   Compiling http-body-util v0.1.5
+   Compiling nsh-i18n v0.6.1 (/Users/devin/repos/nsh/crates/nsh-i18n)
+   Compiling tungstenite v0.29.0
+   Compiling unicode-id v0.3.7
+   Compiling utf8parse v0.2.2
+   Compiling fixedbitset v0.5.7
+   Compiling anstyle-parse v1.0.0
+   Compiling tokio-tungstenite v0.29.0
+   Compiling petgraph v0.8.3
+   Compiling onig v6.5.3
+   Compiling markdown v1.0.0
+   Compiling objc2-core-foundation v0.3.2
+   Compiling axum-core v0.5.6
+   Compiling hyper-util v0.1.21
+   Compiling syntect v5.3.0
+   Compiling markup5ever_rcdom v0.3.0
+   Compiling tower v0.5.3
+   Compiling rolldown_plugin_copy_module v1.2.13
+   Compiling rolldown_plugin_asset_module v1.2.13
+   Compiling imara-diff v0.2.0
+   Compiling rolldown_plugin_oxc_runtime v1.2.13
+   Compiling rolldown_plugin_chunk_import_map v1.2.13
+   Compiling zstd v0.14.3
+   Compiling rolldown_plugin_hmr v1.2.13
+   Compiling rolldown_plugin_lazy_compilation v1.2.13
+   Compiling rolldown_plugin_data_url v1.2.13
+   Compiling rolldown_dev_common v1.2.13
+   Compiling rolldown_ecmascript_utils v1.2.13
+   Compiling rolldown_tracing v1.2.13
+   Compiling vte v0.15.0
+   Compiling matchit v0.8.4
+   Compiling anstyle-query v1.1.5
+   Compiling two-face v0.4.5
+   Compiling colorchoice v1.0.5
+   Compiling append-only-vec v0.1.8
+   Compiling dunce v1.0.5
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling axum v0.8.9
+   Compiling objc2-io-surface v0.3.2
+   Compiling anstream v1.0.0
+   Compiling rolldown v1.2.13
+   Compiling tungstenite v0.30.0
+   Compiling env_filter v2.0.0
+   Compiling crossbeam-channel v0.5.17
+   Compiling pxfm v0.1.30
+   Compiling powerfmt v0.2.1
+   Compiling strsim v0.11.1
+   Compiling deranged v0.5.9
+   Compiling time-core v0.1.9
+   Compiling num-conv v0.2.2
+   Compiling clap_lex v1.1.1
+   Compiling clap_derive v4.6.7
+   Compiling clap_builder v4.6.7
+   Compiling time v0.3.55
+   Compiling png v0.18.1
+   Compiling nsh-cli v0.6.1 (/Users/devin/repos/nsh/crates/nsh-cli)
+   Compiling notify-types v2.1.0
+   Compiling serde_spanned v1.1.2
+   Compiling fsevent-sys v4.1.0
+   Compiling quick-xml v0.42.0
+   Compiling moxcms v0.8.1
+   Compiling notify v8.2.0
+   Compiling toml v1.1.8+spec-1.1.0
+   Compiling md-5 v0.10.6
+   Compiling wasmparser v0.262.0
+   Compiling serde_path_to_error v0.1.20
+   Compiling clap v4.6.7
+   Compiling plist v1.10.1
+   Compiling serde_ignored v0.1.14
+   Compiling quickjs-jit v0.14.2
+   Compiling quickjs-jit-stdlib v0.14.2
+   Compiling image v0.25.10
+   Compiling nsh-js v0.6.1 (/Users/devin/repos/nsh/crates/nsh-js)
+   Compiling nsh-package v0.6.1 (/Users/devin/repos/nsh/crates/nsh-package)
+   Compiling nsh-base v0.6.1 (/Users/devin/repos/nsh/crates/nsh-base)
+   Compiling nsh-dev v0.6.1 (/Users/devin/repos/nsh/crates/nsh-dev)
+   Compiling nsh-engine v0.6.1 (/Users/devin/repos/nsh/crates/nsh-engine)
+   Compiling nsh-bundler v0.6.1 (/Users/devin/repos/nsh/crates/nsh-bundler)
+   Compiling nsh-testing v0.6.1 (/Users/devin/repos/nsh/crates/nsh-testing)
+    Finished `release` profile [optimized] target(s) in 8m 43s
+  Installing /Users/devin/BuwizNsh/tools/bin/nsh
+   Installed package `nsh-cli v0.6.1 (/Users/devin/repos/nsh/crates/nsh-cli)` (executable `nsh`)
+warning: be sure to add `/Users/devin/BuwizNsh/tools/bin` to your PATH to be able to run the installed binaries
+[1;34m==>[0m Installing impeccable CLI 0.2.1 (pinned in scripts/impeccable.pin)
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded impeccable v0.2.1
+  Installing impeccable v0.2.1
+warning: default toolchain implicitly overridden with `1.99.0-aarch64-apple-darwin` by rustup toolchain file
+  |
+  = help: use `cargo +stable install` if you meant to use the stable toolchain
+  = note: rustup selects the toolchain based on the parent environment and not the environment of the package being installed
+    Updating crates.io index
+    Updating crates.io index
+   Compiling impeccable v0.2.1
+    Finished `release` profile [optimized] target(s) in 4.00s
+  Installing /Users/devin/.cargo/bin/impeccable
+   Installed package `impeccable v0.2.1` (executable `impeccable`)
+[1;34m==>[0m Downloading the impeccable-rust skill at 6c52a01 into .agents/skills/impeccable-rust
+[1;34m==>[0m Verifying toolchain
+  xcode-clt      /Applications/Xcode.app/Contents/Developer
+  cc             Apple clang version 21.0.0 (clang-2100.1.1.101)
+  cargo          cargo 1.99.0 (5f94df478 2026-08-27)
+  rustc          rustc 1.99.0 (b940084d7 2026-09-28)
+  just           just 1.59.0
+  uv             uv 0.13.10 (Homebrew 2026-11-24 aarch64-apple-darwin)
+  perl           v5.34.1
+  lipo           /usr/bin/lipo
+  codesign       /usr/bin/codesign
+  python3        Python 3.9.6 (/usr/bin/python3)
+[1;33mwarning:[0m python3 < 3.13 — freeze/stamp scripts expect 3.13 (brew python@3.13 ships python3.13)
+  rust-targets   aarch64 + x86_64 apple-darwin
+  create-dmg     /opt/homebrew/bin/create-dmg
+  gpui-agent     /Users/devin/.cargo/bin/gpui-agent
+  nsh-source     /Users/devin/repos/nsh at 8c78cfd
+  nsh            nsh 0.6.1 (8c78cfd)
+  ios-targets    aarch64-apple-ios aarch64-apple-ios-sim
+  ios-runtime    iOS 27.0
+  impeccable     impeccable 0.2.1
+  impeccable-skill .agents/skills/impeccable-rust at 6c52a01
+[1;34m==>[0m All required tooling present
+
+Done. Next steps:
+
+    just run      # build + launch the desktop app (dev-tools feature)
+    just check    # fmt + cargo check + clippy
+    just test     # workspace tests
+    just app      # universal .app + DMG (ad-hoc signed; needs App Store
+                  # Connect creds in .env for the build-number lookup)
+
+NSH app (nsh/), with the CLI built at the CI pin:
+
+    just nsh-check && just nsh-build && just nsh-test
+    just nsh-run                       # the NSH app on macOS
+
+Packaging tools already on macOS: lipo, codesign, PlistBuddy, productbuild.
+OpenSSL is vendored — no brew openssl needed; system perl + cc build it.
+
+To drive the app from the CLI (gpui-agent was installed at the Cargo.lock
+rev): build the host with the agent feature and launch with env vars —
+
+    cargo build --locked -p bir-cli
+    export GPUI_AGENT=1 GPUI_AGENT_TOKEN=dev-secret
+    ./target/debug/bir serve &        # then, another shell:
+    gpui-agent hello            # protocol, app, platform, ready
+    gpui-agent keybindings      # {id, chord, scope, dangerous}
+
+Full contract: docs/agent.md
+
+The NSH app on the iOS Simulator (Apple Silicon), from nsh/:
+
+    just mock-bir & just mock-relay &
+    PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh" \
+      SIMCTL_CHILD_BIR_RELAY_URL=http://127.0.0.1:8787 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 \
+      SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BIR_AUTH_BYPASS=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1 \
+      nsh run --target ios
+
