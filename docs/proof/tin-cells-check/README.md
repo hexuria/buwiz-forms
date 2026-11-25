@@ -16,3 +16,5 @@ formpage-tin.png — form 1701 Part I: TIN auto-filled+locked from profile as 00
 print-tin.png — print preview: corrupted TIN prints in the official form layout
 xml-excerpt.txt — draft payload excerpt carrying "tin":"00123453000000"
 form-tin-escape.txt — step-4 exposure write-up
+cause-analysis.txt — step-5 cause: code citations, empirical elimination, driver-vs-OS input paths, verdict on the redraw hypothesis
+permute-sim.py — proof port of the end-only diff/edit logic: one mid-string caret insertion reproduces the exact observed corruption

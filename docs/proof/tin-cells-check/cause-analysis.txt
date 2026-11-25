@@ -1,0 +1,55 @@
+CAUSE ANALYSIS (step 5) — reading + experiment, no code changed. nsh pin ca39c0e, app 3aceafe8.
+
+WHAT IS PROVEN EMPIRICALLY
+- Corruption needs fast, discrete OS key events: clean at >=100ms (10/10) and 50ms (10/10), noisy at 70ms (9/10),
+  always wrong at <=30ms (0/10). The threshold is the roundtrip latency of the input pipeline, not a rendering frame.
+- Paste (one atomic input event) never corrupts, any formatting. Slow keys never corrupt.
+- Every wrong result is a PERMUTATION of the typed digits — never a wrong digit, never a duplicate, never a loss.
+- Frame trace: digits first fill correctly, then mid-burst the cells visibly blank for 1-2 frames and refill at
+  once in rotated order — the overlaid native field's content is being rebuilt while keystrokes continue to land.
+
+WHAT THE CODE SHOWS (nsh-base/src/otp_input.rs + nsh-platform-macos/src/text_input.rs, quoted by line)
+- OtpInput is one transparent native text field over the cells. Edits are reconstructed END-ONLY: diff() (line 599)
+  takes the common prefix of the binding's last value and the reported text and treats everything after it as
+  deleted+inserted at the end; edit() (line 614) rebuilds the code from that. The design assumes the caret is
+  always at the end ("The caret stays at the end, as in gpui-base, so nothing is edited in the middle", module doc).
+- The caret is forced to the end on every selection-change event (otp_input.rs:454-461) using the length of the
+  BINDING (field.get_untracked()), not the text the native field actually holds. The module doc itself states the
+  controlled echo "comes back a JS turn later" — the machinery is built around the binding lagging the field.
+- Programmatic selection writes have NO staleness protection: set_selection (text_input.rs:3305) applies the range
+  unconditionally. Text writes ARE protected — apply_value (text_input.rs:1929) drops a write whose edit count is
+  older than the field's ("a value from JS based on an older count is stale and dropped, so fast typing is never
+  overwritten", text_input.rs:35). The same protection was never extended to selection writes.
+- Therefore, whenever the selection machinery acts on a stale length during a fast burst, the caret is yanked
+  backward into the typed text with nothing to stop it; the next keystroke inserts mid-string; and the end-only
+  diff/edit reconstruction converts that into a permanent digit permutation.
+
+MECHANISM PROOF BY SIMULATION (permute-sim.py in this folder)
+A faithful Python port of diff()+edit() shows: keys 0,0,0,1 landed, then ONE insertion of the next key '2' at
+caret position 0 produces exactly the observed 5-digit-probe corruption "20001" — digit-permutation, locked in by
+the end-only reconstruction. All observed wrong values (001234530, 000124533, 000123534, 20001, ...) are
+permutations consistent with one or more mid-string insertions at stale caret positions.
+
+THE REDRAW HYPOTHESIS, refined: the visible mid-burst blanking/redraw is real (frame trace) but it is a symptom,
+not the cause — the cells redraw because the reconstructed code is rewritten wholesale. The cause is the caret
+being moved into the middle of the field by stale programmatic selection writes while keystrokes are in flight.
+"A redraw resets the insert position" is therefore half-right: something does reset the insert position, but it is
+the selection machinery, not the redraw.
+
+WHY THE TEST DRIVER NEVER SEES IT (nsh test --target macos)
+The driver synthesizes NSEvents IN PROCESS and delivers them synchronously — synth.rs key_event() (line 309) calls
+app.sendEvent/window.sendEvent directly rather than posting to the OS event queue — inside a serialized step of the
+test harness, so no two keystrokes are ever in flight inside the input pipeline at once and the pipeline settles
+per step even when the requested spacing is 0 ms. Real OS key events (CGEventPost .cgSessionEventTap, a scanner, a
+text expander, a fast typist's hardware keyboard) arrive asynchronously in the runloop back-to-back, faster than
+the engine roundtrip — the interleaving the design cannot survive. Headless tests have no native field at all.
+
+CLICK-POSITION-IGNORED IS INTENDED UPSTREAM DESIGN, not part of this fault: the module doc says "A press anywhere
+on it focuses it" and "The caret stays at the end ... nothing is edited in the middle" — one hidden field owns all
+cells, digits always append at the end, so clicking the fifth empty cell correctly starts filling at cell 1.
+Nothing in the app UI tells the user this, but it is written as intended in the component's documentation.
+
+WHAT WOULD NOT HAVE PROTECTED ANYWAY
+The official TIN check digit passes digit permutations in these cases (verified by computation: both observed
+corruptions 001234530 and 000234531 satisfy the check digit of their first eight digits) — and taxpayer creation
+validates only length and duplicates anyway. So nothing in the validation chain stops a corrupted TIN.
