@@ -965,8 +965,7 @@ const FIT_EPSILON_PT: f64 = 0.02;
 
 /// The width (pt) of plain (`data-field-kind="text"`) box `cell` of `html`.
 fn plain_cell_width(html: &str, cell: &str) -> Option<f64> {
-    let open = html.find(&format!("<div id=\"{cell}\""))?;
-    let tag = &html[open..open + html[open..].find('>')?];
+    let (_, tag) = cell_tag(html, cell)?;
     if attr(tag, "data-field-kind") != Some("text") {
         return None;
     }
@@ -1081,8 +1080,7 @@ fn caption_line(caption: &str) -> (String, usize) {
 
 /// A comb cell's boxes and width (pt), read from its `<div id>`.
 fn comb_cell(html: &str, cell: &str) -> Option<(usize, f64)> {
-    let open = html.find(&format!("<div id=\"{cell}\""))?;
-    let tag = &html[open..open + html[open..].find('>')?];
+    let (_, tag) = cell_tag(html, cell)?;
     if attr(tag, "data-field-kind") != Some("comb") {
         return None;
     }
@@ -1641,8 +1639,8 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "2200s-2018" => Some(include_str!(
             "../../../html-frozen/2200s-2018/writer-cells.json"
         )),
-        "2200t-2022" => Some(include_str!(
-            "../../../html-frozen/2200t-2022/writer-cells.json"
+        "2200t-2020" => Some(include_str!(
+            "../../../html-frozen/2200t-2020/writer-cells.json"
         )),
         "2550m-2007" => Some(include_str!(
             "../../../html-frozen/2550m-2007/writer-cells.json"
@@ -3562,14 +3560,23 @@ fn base64_encode(bytes: &[u8]) -> String {
 /// One read-only input laid over a whole comb cell (`<div id="{cell}">`),
 /// holding `text` left-aligned in a font small enough to fit. Returns the
 /// insert position just inside the cell and the input tag.
+fn cell_tag<'a>(html: &'a str, cell: &str) -> Option<(usize, &'a str)> {
+    let id = html.find(&format!("id=\"{cell}\""))?;
+    let open = html[..id].rfind("<div")?;
+    let end = open + html[open..].find('>')?;
+    if html[open..id].contains('>') {
+        return None;
+    }
+    Some((open, &html[open..end]))
+}
+
 fn comb_overflow_line(
     html: &str,
     cell: &str,
     text: &str,
     sheet: &SheetType,
 ) -> Option<(usize, String)> {
-    let open = html.find(&format!("<div id=\"{cell}\""))?;
-    let tag = &html[open..open + html[open..].find('>')?];
+    let (_, tag) = cell_tag(html, cell)?;
     let width_at = tag.find(";width:")? + ";width:".len();
     let width: f64 = tag[width_at..].split("pt").next()?.parse().ok()?;
     overflow_input(html, cell, text, fit_line(sheet, width, text))
@@ -3578,8 +3585,8 @@ fn comb_overflow_line(
 /// [`comb_overflow_line`] at type `size` (pt). The input names the cell
 /// it lies over (`data-overflow-of`).
 fn overflow_input(html: &str, cell: &str, text: &str, size: f64) -> Option<(usize, String)> {
-    let open = html.find(&format!("<div id=\"{cell}\""))?;
-    let close = open + html[open..].find('>')?;
+    let (open, tag) = cell_tag(html, cell)?;
+    let close = open + tag.len();
     Some((
         close + 1,
         format!(
@@ -6071,7 +6078,7 @@ mod tests {
         let Some(width) = plain_cell_width(html, cell) else {
             return Vec::new();
         };
-        let open = html.find(&format!("<div id=\"{cell}\"")).unwrap();
+        let (open, _) = cell_tag(html, cell).unwrap();
         let inner = &html[open..open + html[open..].find("</div>").unwrap()];
         let mut out = Vec::new();
         let mut from = 0;
@@ -6664,7 +6671,7 @@ mod tests {
         "2200m-2018",
         "2200p-2020",
         "2200s-2018",
-        "2200t-2022",
+        "2200t-2020",
         "2550m-2007",
         "2550q-2024",
         "2551q-2018",
@@ -6717,7 +6724,7 @@ mod tests {
     /// with the size); no `.fi` sets a letter-spacing, the size classes do.
     #[test]
     fn each_sheet_measures_in_its_own_face_and_spacing() {
-        const TINOS: [&str; 11] = [
+        const TINOS: [&str; 10] = [
             "0605-1999",
             "1601c-2018",
             "1602q-2019",
@@ -6726,7 +6733,6 @@ mod tests {
             "1604f-2018",
             "2200c-2018",
             "2200p-2020",
-            "2200t-2022",
             "2550m-2007",
             "2553-1999",
         ];
@@ -6743,7 +6749,7 @@ mod tests {
         }
         for (slug, pt) in [
             ("1604f-2018", 0.3238),
-            ("2200t-2022", 0.4092),
+            ("2200t-2020", 0.0),
             ("1600-pt-2018", 0.2778),
             ("1604e-2018", 0.1518),
             ("1600wp-2010", 0.0546),
@@ -7424,7 +7430,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1458, "band boxes");
+        assert_eq!(total, 1419, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 
