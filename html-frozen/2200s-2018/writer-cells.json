@@ -200,6 +200,18 @@
    "html_id": "p2c6",
    "printed": "Page 2 Taxpayer's Name",
    "reason": "the 26-slot comb under the page 2 name caption: the taxpayer name, whether or not Schedule 1 is opened"
+  },
+  {
+   "writer_key": "frm2200S:txtsched1Desc0",
+   "html_id": "p2c101",
+   "printed": "Schedule 1 Others row 1 description",
+   "reason": "Others row 1 description column, after the printed row number"
+  },
+  {
+   "writer_key": "frm2200S:txtsched1Desc1",
+   "html_id": "p2c108",
+   "printed": "Schedule 1 Others row 2 description",
+   "reason": "Others row 2 description column, after the printed row number"
   }
  ],
  "money_joins": [

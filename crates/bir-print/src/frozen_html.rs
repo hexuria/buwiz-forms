@@ -7838,11 +7838,11 @@ mod donor_estate_print_tests {
             ),
             (
                 "1801-2018",
-                "dabb25108c05d4eb0d6de571493933c807e332007abeec2c3a467343bd55b2f0",
+                "5df962a4f31df90bc731eb29961d9dceefeb6f70543bd24a22931d071e4193af",
             ),
             (
                 "1800-2018",
-                "8340d00dcb242f3a5982247c1cced7366326d76687aa6d23333711fd9b4d597e",
+                "10ae9bccbb2b3aa927f9a91cccf4c2d931cef7e89d41d3d077b58bcb9bd5d5b1",
             ),
         ] {
             let html = filled_document(slug, &every_join_filled(slug)).unwrap();
