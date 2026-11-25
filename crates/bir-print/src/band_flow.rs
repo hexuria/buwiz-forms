@@ -2849,4 +2849,141 @@ mod tests {
         assert_eq!(ov.schedules.len(), 1);
         assert_eq!(ov.schedules[0].rows.len(), 3);
     }
+
+    #[test]
+    #[ignore]
+    fn band_flow_sweep_all_forms() {
+        let out_root = std::path::PathBuf::from("/tmp/band-flow-sweep");
+        let _ = std::fs::create_dir_all(&out_root);
+        let order = [
+            "1801-2018",
+            "1600wp-2010",
+            "2550q-2024",
+            "1701a-2018",
+            "2000-ot-2018",
+            "1800-2018",
+            "2552-2018",
+            "2551q-2018",
+            "1601c-2018",
+            "2000-dst-2018",
+            "2200m-2018",
+            "2200c-2018",
+            "2550m-2007",
+            "1600-pt-2018",
+            "1600-vt-2018",
+            "1601-fq-2020",
+            "1601eq-2019",
+            "1602q-2019",
+            "1603q-2018",
+            "1700-2018",
+            "1702ex-2018",
+            "1702mx-2018c",
+            "1702rt-2018c",
+            "1706-2018",
+            "1707-2021",
+            "1707a-2021",
+            "2200a-2020",
+            "2200an-2018",
+            "2200p-2020",
+            "2200s-2018",
+            "2200t-2022",
+        ];
+        let mut results: Vec<serde_json::Value> = Vec::new();
+        for slug in order {
+            let Some(raw) = frozen_html::raw_bundle_html(slug) else {
+                continue;
+            };
+            let fb = parse_formgen_bands(raw);
+            let fb_pages: BTreeSet<usize> = fb.iter().map(|b| b.page).collect();
+            let slug_dir = out_root.join(slug);
+            let _ = std::fs::create_dir_all(&slug_dir);
+
+            let mut form_cases = serde_json::Map::new();
+            for (tag, extra) in [("cap", 0usize), ("cap_p3", 3usize), ("cap_p40", 40usize)] {
+                let Some((fields, expected)) =
+                    crate::continuation::tests::build_sweep_fields_for_slug(slug, extra)
+                else {
+                    form_cases.insert(tag.into(), serde_json::json!({"skipped": "no_schedules"}));
+                    continue;
+                };
+                match frozen_html::filled_document(slug, &fields) {
+                    Err(e) => {
+                        form_cases.insert(tag.into(), serde_json::json!({"error": e}));
+                    }
+                    Ok(doc) => {
+                        let html_path = slug_dir.join(format!("{tag}.html"));
+                        let _ = std::fs::write(&html_path, &doc);
+                        let has_bf_cont = doc.contains("-cont-1\"");
+                        let has_old_cont = doc.contains("continuation-page");
+                        let has_bf_rows = doc.contains("bf_");
+                        let page_count = doc.matches("class=\"page ").count();
+
+                        // Missing expected values check
+                        let corpus_up = doc.to_ascii_uppercase();
+                        let corpus_nc = corpus_up.replace(',', "");
+                        let mut missing = Vec::new();
+                        for (sh, rn, ch, val, is_amt) in &expected {
+                            let up = val.trim().to_ascii_uppercase();
+                            let found = up.is_empty()
+                                || corpus_up.contains(&up)
+                                || (*is_amt && {
+                                    let st = up.replace(',', "");
+                                    let w = st.split('.').next().unwrap_or(&st);
+                                    !w.is_empty() && corpus_nc.contains(w)
+                                });
+                            if !found && missing.len() < 8 {
+                                missing.push(format!("{sh} r{rn} [{ch}]={val}"));
+                            }
+                        }
+
+                        // Conservation check on every page with formgen-bands
+                        let mut cons_errs = Vec::new();
+                        for &pnum in &fb_pages {
+                            let res =
+                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    assert_conservation(slug, raw, &doc, pnum, tag);
+                                }));
+                            if let Err(payload) = res {
+                                let msg = if let Some(s) = payload.downcast_ref::<String>() {
+                                    s.clone()
+                                } else if let Some(s) = payload.downcast_ref::<&str>() {
+                                    (*s).to_string()
+                                } else {
+                                    "panic".to_string()
+                                };
+                                cons_errs.push(format!("p{pnum}: {msg}"));
+                            }
+                        }
+                        form_cases.insert(
+                            tag.into(),
+                            serde_json::json!({
+                                "page_count": page_count,
+                                "band_flow_rows": has_bf_rows,
+                                "band_flow_cont": has_bf_cont,
+                                "fallback_cont": has_old_cont,
+                                "missing_count": missing.len(),
+                                "missing_sample": missing,
+                                "conservation_errors": cons_errs,
+                            }),
+                        );
+                    }
+                }
+            }
+            println!(
+                "SWEEP {slug:14} fb={} | {}",
+                fb.len(),
+                serde_json::to_string(&form_cases).unwrap()
+            );
+            results.push(serde_json::json!({
+                "slug": slug,
+                "formgen_bands_count": fb.len(),
+                "fb_pages": fb_pages.into_iter().collect::<Vec<_>>(),
+                "cases": form_cases,
+            }));
+        }
+        let _ = std::fs::write(
+            out_root.join("summary.json"),
+            serde_json::to_string_pretty(&results).unwrap(),
+        );
+    }
 }

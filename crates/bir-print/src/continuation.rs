@@ -2225,7 +2225,7 @@ fn first_matching_field(fields: &BTreeMap<String, String>, suffixes: &[&str]) ->
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     fn sample_2000ot_15_rows() -> BTreeMap<String, String> {
@@ -3046,6 +3046,89 @@ mod tests {
     /// that every filled row's values appear somewhere in the printed document
     /// (official pages or continuation pages). No allow-list: any failing form
     /// is reported in the test output.
+    pub(crate) fn build_sweep_fields_for_slug(
+        slug: &str,
+        extra_rows: usize,
+    ) -> Option<(
+        BTreeMap<String, String>,
+        Vec<(String, usize, String, String, bool)>,
+    )> {
+        let wc_json = frozen_html::writer_cells_json(slug)?;
+        let parsed: Value = serde_json::from_str(wc_json).ok()?;
+        let stem_specs = discover_schedules(&parsed);
+        let popup_defs: Vec<&PopupScheduleDef> =
+            POPUP_SCHEDULES.iter().filter(|d| d.slug == slug).collect();
+        if stem_specs.is_empty() && popup_defs.is_empty() {
+            return None;
+        }
+        let mut fields: BTreeMap<String, String> = BTreeMap::new();
+        let mut expected: Vec<(String, usize, String, String, bool)> = Vec::new();
+        for (si, spec) in stem_specs.iter().enumerate() {
+            if popup_defs
+                .iter()
+                .any(|p| p.heading.eq_ignore_ascii_case(&spec.heading))
+            {
+                continue;
+            }
+            let min_idx = spec.columns.iter().map(|c| c.start_idx).min().unwrap_or(1);
+            let max_idx = spec.columns.iter().map(|c| c.end_idx).max().unwrap_or(1);
+            let extra_start = max_idx + 1;
+            let extra_end = max_idx + extra_rows;
+            for raw_idx in min_idx..=extra_end {
+                let row_num = if min_idx == 0 { raw_idx + 1 } else { raw_idx };
+                for (ci, col) in spec.columns.iter().enumerate() {
+                    if raw_idx < extra_start && (raw_idx < col.start_idx || raw_idx > col.end_idx) {
+                        continue;
+                    }
+                    let key = format!("{}{}{}", col.stem, raw_idx, col.suffix);
+                    let is_date = col.heading.to_ascii_lowercase().contains("date");
+                    let val = if col.is_amount {
+                        format!("{}.00", 10_000 + si * 1000 + row_num * 17 + ci)
+                    } else if is_date {
+                        format!("01/{:02}/2026", ((row_num + ci) % 28) + 1)
+                    } else {
+                        format!("S{si}R{row_num}C{ci}")
+                    };
+                    fields.insert(key, val.clone());
+                    if raw_idx >= extra_start || !is_date {
+                        expected.push((
+                            spec.heading.clone(),
+                            row_num,
+                            col.heading.clone(),
+                            val,
+                            col.is_amount,
+                        ));
+                    }
+                }
+            }
+        }
+        for (pi, def) in popup_defs.iter().enumerate() {
+            for n in 1..=extra_rows {
+                let row_num = def.row_num_base + n;
+                for (ci, col) in def.columns.iter().enumerate() {
+                    let key = col.key_template.replace("{n}", &n.to_string());
+                    let is_date = col.heading.to_ascii_lowercase().contains("date");
+                    let val = if col.is_amount {
+                        format!("{}.00", 50_000 + pi * 1000 + n * 19 + ci)
+                    } else if is_date {
+                        format!("02/{:02}/2026", (n % 28) + 1)
+                    } else {
+                        format!("P{pi}R{row_num}C{ci}")
+                    };
+                    fields.insert(key, val.clone());
+                    expected.push((
+                        def.heading.to_string(),
+                        row_num,
+                        col.heading.to_string(),
+                        val,
+                        col.is_amount,
+                    ));
+                }
+            }
+        }
+        Some((fields, expected))
+    }
+
     #[test]
     fn every_form_repeatable_schedule_prints_all_filled_rows() {
         let root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../html-frozen"));
