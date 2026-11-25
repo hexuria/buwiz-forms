@@ -1,0 +1,41 @@
+{
+  "item": 5,
+  "scope": "print only; upload (to_bir_field_map) unchanged — sample_payloads_test green before and after",
+  "fixes": [
+    {
+      "form": "2200AN",
+      "fault": "doubled 'XG' in the Others (specify) ATC box: the cell's pre-printed 'XG' was followed by the stored value 'XG999', printing 'XGXG999'",
+      "fix": "crates/bir-core/src/forms/form_2200an.rs to_print_field_map strips a leading XG/xg from other.atc for frm2200ANv2018:txtXGOthers{1,2}; upload still sends 'XG999'",
+      "evidence": "form-review/2200AN/others-atc/ (before XGXG999/XGXG, after XG999/XG)"
+    },
+    {
+      "form": "2200M",
+      "fault": "Schedule 1 continuation Tax Rate cells (rows 9+) rendered as slivers: raw '4.00'/'7.75'/'6.50'/'2.50' left-aligned in a cell sized for the percentage style",
+      "fix": "crates/bir-core/src/forms/form_2200m.rs to_print_field_map emits the bare rate number for txtSched1_LocallyExtractedTaxRateE{n}/txtSched1_ImportedTaxRate{n} (n>=9); crates/bir-print/src/frozen_html.rs is_percentage_rate_cell allowlists those key prefixes so format_percentage_rate prints '6.5%'/'4%' centered; upload still sends '4.00'",
+      "evidence": "form-review/2200M/continuation-rates/ (before 6.50/2.50/4.00/7.75 slivers, after 6.5%/2.5%/4%/7.75% centered)"
+    },
+    {
+      "form": "2200P",
+      "fault": "Others (specify) rows printed the raw stored unit 'LITERS'/'PACKS' and the raw rate '24.00'/'12.50', unlike the fixed rows' 'Per Liter'/'P10.00' column style",
+      "fix": "crates/bir-core/src/forms/form_2200p.rs to_print_field_map restyles the official keys for rows n>25: unit 'LITERS' -> 'Per liters' and rate 24.00 -> 'P24.00' (matching the fixed-row style); upload unchanged; restyled official keys exempted from print_map_adds_only_the_shared_comb_lines via restyled_others_key()",
+      "evidence": "form-review/2200P/others/ (before LITERS/PACKS + 24.00/12.50, after PER LITERS/PER PACKS + P24.00/P12.50)"
+    }
+  ],
+  "goldens_updated": {
+    "scope": "2200m-2018 only",
+    "files": [
+      "crates/bir-print/src/fixtures/fitting-band-goldens.json",
+      "crates/bir-print/src/fixtures/fitting-band-box-goldens.json",
+      "crates/bir-print/src/fixtures/fitting-plain-goldens.json",
+      "crates/bir-print/src/fixtures/overflow-goldens.json"
+    ],
+    "unchanged": "crates/bir-print/src/fixtures/fitting-goldens.json"
+  },
+  "known_gap": "2200P Others description cell (p2c377) still renders at 7.02pt, under the 7.5pt floor; that is the shared long-text engine's sizing, not item 5's scope",
+  "left_alone_per_order": [
+    "notes with file paths",
+    "rows beyond the paper's capacity",
+    "2200M decimal fault (#321)",
+    "2200A Others rows' tax due"
+  ]
+}

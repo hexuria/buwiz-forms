@@ -1588,6 +1588,14 @@ struct TextTarget<'a> {
 }
 
 fn is_percentage_rate_cell(writer_key: &str, caption: Option<&str>) -> bool {
+    // The 2200M rows-9-10 ad-valorem rate columns (E locally extracted,
+    // I imported) print "4%"-style rates like the sheet's fixed rows;
+    // other excise rate cells are peso rates or codes, not percentages.
+    if writer_key.starts_with("frm2200M:txtSched1_LocallyExtractedTaxRateE")
+        || writer_key.starts_with("frm2200M:txtSched1_ImportedTaxRate")
+    {
+        return true;
+    }
     if writer_key.starts_with("derived:")
         || writer_key.starts_with("frm2200")
         || writer_key.starts_with("frm2000")
@@ -8389,8 +8397,15 @@ mod tests {
                 .map(|band| (band.key.clone(), band.value.clone()))
                 .collect();
             assert_eq!(fields.len(), boxes.len(), "{slug}: one key per box");
+            let cells = writer_cells(&slug).unwrap();
             let document = filled_document(&slug, &fields).unwrap();
             for band in &boxes {
+                // A cell that prints as a rate ("5%", centred) is styled
+                // and sized by that path, not by its class size.
+                let rate_cell = is_percentage_rate_cell(
+                    &band.key,
+                    cells.captions.get(&band.cell).map(String::as_str),
+                );
                 assert!(
                     band.room - 1.0 < band.width && band.width <= band.room,
                     "{slug} {}: {:?} measures {} in {}",
@@ -8404,7 +8419,7 @@ mod tests {
                     panic!("{slug} {}: one input", band.cell);
                 };
                 assert!(
-                    !tag.contains("font-size"),
+                    rate_cell || !tag.contains("font-size"),
                     "{slug} {}: {:?} keeps its class size: {tag}",
                     band.cell,
                     band.value
