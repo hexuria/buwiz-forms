@@ -2642,3 +2642,525 @@ fn form_1701_kept_column_says_so_over_its_amounts() {
         );
     }
 }
+
+/// Schedule 3.A items 8, 9, and 11 (A & B) are filer-typed on the page
+/// under the official graduated/itemized/joint gates, never stuck as `"c": 1`.
+#[test]
+fn form_1701_schedule_3a_boxes_follow_official_gates_and_compute_downstream() {
+    setup();
+    let sched3_keys = [
+        "frm1701:txtPg2IShed3_8A",
+        "frm1701:txtPg2IShed3_8B",
+        "frm1701:txtPg2IShed3_9A",
+        "frm1701:txtPg2IShed3_9B",
+        "frm1701:txtPg2IShed3_11A",
+        "frm1701:txtPg2IShed3_11B",
+    ];
+    let form = schema_entry("1701").expect("1701 schema");
+    for part in form["parts"].as_array().into_iter().flatten() {
+        for item in part["items"].as_array().into_iter().flatten() {
+            for field in item["f"].as_array().into_iter().flatten() {
+                if let Some(key) = field["k"].as_str()
+                    && sched3_keys.contains(&key)
+                {
+                    assert!(
+                        field.get("c").is_none(),
+                        "{key} must be filer-typed on the page, not computed"
+                    );
+                }
+            }
+        }
+    }
+
+    // Fresh 1701 (no ATC selected): all 6 boxes refuse direct writes.
+    let fresh = opened("1701");
+    for key in sched3_keys {
+        let refused = fill("1701", &fresh["draft"], json!({ key: "1000" }));
+        assert!(
+            refused["rejected"][key].is_string(),
+            "{key} must be closed before graduated ATC is chosen"
+        );
+    }
+
+    // Graduated + OSD: 8A & 9A open, 11A stays closed until Itemized.
+    let osd = take(
+        "1701",
+        &fresh["draft"],
+        json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II012": "true",
+            "frm1701:rdoPg1I21AMethodDeductionO": "true",
+        }),
+    );
+    let osd_typed = take(
+        "1701",
+        &osd["draft"],
+        json!({
+            "frm1701:txtPg2IShed3_8A": "1250000.50",
+            "frm1701:txtPg2IShed3_9A": "300000.25",
+        }),
+    );
+    let osd_fields = field_map("1701", &osd_typed["draft"]);
+    assert_eq!(osd_fields["frm1701:txtPg2IShed3_10A"], "950,000.00");
+    assert_eq!(osd_fields["frm1701:txtPg2IShed3_12A"], "950,000.00");
+    assert_eq!(osd_fields["frm1701:txtPg2IShed3_17A"], "380,000.00");
+    assert_eq!(osd_fields["frm1701:txtPg2IShed3_18A"], "570,000.00");
+    let refused_11a = fill(
+        "1701",
+        &osd["draft"],
+        json!({ "frm1701:txtPg2IShed3_11A": "10000" }),
+    );
+    assert!(refused_11a["rejected"]["frm1701:txtPg2IShed3_11A"].is_string());
+
+    // Joint return, both Graduated + Itemized: all 6 boxes open and flow to Part II.
+    let joint = take(
+        "1701",
+        &fresh["draft"],
+        json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II012": "true",
+            "frm1701:rdoPg1I21AMethodDeductionI": "true",
+            "frm1701:rdoPg1I16CivilStatusM": "true",
+            "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+            "frm1701:rdoPg1I18FilingStatusJ": "true",
+            "frm1701:rdoPg2I3SpouseTypeS": "true",
+            "frm1701:rdoPg2I4ATC_II012": "true",
+            "frm1701:rdoPg2I12AMethodDeductionI": "true",
+        }),
+    );
+    let filled = take(
+        "1701",
+        &joint["draft"],
+        json!({
+            "frm1701:txtPg2IShed3_8A": "2500000",
+            "frm1701:txtPg2IShed3_9A": "50000",
+            "frm1701:txtPg2IShed3_11A": "900000",
+            "frm1701:txtPg2IShed3_8B": "800000",
+            "frm1701:txtPg2IShed3_9B": "200000.50",
+            "frm1701:txtPg2IShed3_11B": "10000",
+        }),
+    );
+    let fields = field_map("1701", &filled["draft"]);
+    assert_eq!(fields["frm1701:txtPg2IShed3_10A"], "2,450,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_12A"], "1,550,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_18A"], "1,550,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_10B"], "600,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_12B"], "590,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_18B"], "590,000.00");
+    assert_eq!(
+        fields["frm1701:txtPg1I24ATaxPayable"],
+        fields["frm1701:txtPg2IShed3_25A"]
+    );
+    assert_eq!(
+        fields["frm1701:txtPg1I24BTaxPayable"],
+        fields["frm1701:txtPg2IShed3_25B"]
+    );
+    assert_eq!(
+        fields["frm1701:txtPg1I31ATotalAmtPyble"],
+        fields["frm1701:txtPg2IShed3_25A"]
+    );
+    assert_eq!(
+        fields["frm1701:txtPg1I31BTotalAmtPyble"],
+        fields["frm1701:txtPg2IShed3_25B"]
+    );
+}
+
+/// Schedule 4 items 3 and 6-13 (A & B) are filer-typed under the official
+/// graduated + itemized (+ joint for B) gates. Neither official 1701 sample
+/// populates these 18 lines, so expected values are derived directly from
+/// `rules/forms/1701-v2018/calculations.json` (`computePg3Sc4I18:L11738-L11749`,
+/// `computeTxtPg2I10`, `computeTxtPg2I12`, `computeTxtPg2I16`, `computeTxtPg2I23`,
+/// `computeTxtPg2I24`, `computeTxtPg2I25`).
+#[test]
+fn form_1701_schedule_4_locked_lines_open_under_itemized_and_match_official_formulas() {
+    setup();
+    let sched4_keys = [
+        "frm1701:txtPg3IShed4_3A",
+        "frm1701:txtPg3IShed4_3B",
+        "frm1701:txtPg3IShed4_6A",
+        "frm1701:txtPg3IShed4_6B",
+        "frm1701:txtPg3IShed4_7A",
+        "frm1701:txtPg3IShed4_7B",
+        "frm1701:txtPg3IShed4_8A",
+        "frm1701:txtPg3IShed4_8B",
+        "frm1701:txtPg3IShed4_9A",
+        "frm1701:txtPg3IShed4_9B",
+        "frm1701:txtPg3IShed4_10A",
+        "frm1701:txtPg3IShed4_10B",
+        "frm1701:txtPg3IShed4_11A",
+        "frm1701:txtPg3IShed4_11B",
+        "frm1701:txtPg3IShed4_12A",
+        "frm1701:txtPg3IShed4_12B",
+        "frm1701:txtPg3IShed4_13A",
+        "frm1701:txtPg3IShed4_13B",
+    ];
+    let form = schema_entry("1701").expect("1701 schema");
+    for part in form["parts"].as_array().into_iter().flatten() {
+        for item in part["items"].as_array().into_iter().flatten() {
+            for field in item["f"].as_array().into_iter().flatten() {
+                if let Some(key) = field["k"].as_str()
+                    && sched4_keys.contains(&key)
+                {
+                    assert!(
+                        field.get("c").is_none(),
+                        "{key} must be filer-typed on the page, not computed"
+                    );
+                }
+            }
+        }
+    }
+
+    // Closed under OSD (not itemized).
+    let fresh = opened("1701");
+    let osd = take(
+        "1701",
+        &fresh["draft"],
+        json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II012": "true",
+            "frm1701:rdoPg1I21AMethodDeductionO": "true",
+        }),
+    );
+    for key in sched4_keys {
+        let refused = fill("1701", &osd["draft"], json!({ key: "1000" }));
+        assert!(
+            refused["rejected"][key].is_string(),
+            "{key} must be closed under OSD"
+        );
+    }
+
+    // Joint return, both Graduated + Itemized: 6 newly unlocked lines per column.
+    let joint = take(
+        "1701",
+        &fresh["draft"],
+        json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II012": "true",
+            "frm1701:rdoPg1I21AMethodDeductionI": "true",
+            "frm1701:rdoPg1I16CivilStatusM": "true",
+            "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+            "frm1701:rdoPg1I18FilingStatusJ": "true",
+            "frm1701:rdoPg2I3SpouseTypeS": "true",
+            "frm1701:rdoPg2I4ATC_II012": "true",
+            "frm1701:rdoPg2I12AMethodDeductionI": "true",
+        }),
+    );
+    let filled = take(
+        "1701",
+        &joint["draft"],
+        json!({
+            "frm1701:txtPg2IShed3_8A": "2500000",
+            "frm1701:txtPg2IShed3_9A": "50000",
+            "frm1701:txtPg2IShed3_11A": "900000",
+            "frm1701:txtPg3IShed4_3A": "25000",
+            "frm1701:txtPg3IShed4_6A": "15000",
+            "frm1701:txtPg3IShed4_8A": "40000",
+            "frm1701:txtPg3IShed4_11A": "120000",
+            "frm1701:txtPg3IShed4_12A": "50000",
+            "frm1701:txtPg3IShed4_13A": "300000",
+            "frm1701:txtPg2IShed3_8B": "1200000",
+            "frm1701:txtPg2IShed3_9B": "20000",
+            "frm1701:txtPg2IShed3_11B": "400000",
+            "frm1701:txtPg3IShed4_3B": "10000",
+            "frm1701:txtPg3IShed4_6B": "5000",
+            "frm1701:txtPg3IShed4_7B": "15000",
+            "frm1701:txtPg3IShed4_9B": "20000",
+            "frm1701:txtPg3IShed4_10B": "30000",
+            "frm1701:txtPg3IShed4_13B": "100000",
+        }),
+    );
+    let fields = field_map("1701", &filled["draft"]);
+    // Taxpayer A: 18A = 550,000; Sched 3.A 12A = 1,550,000; 13A = 16A = 550,000; 18A = 1,000,000; tax = 152,500.
+    assert_eq!(fields["frm1701:txtPg3IShed4_18A"], "550,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_13A"], "550,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_16A"], "550,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_18A"], "1,000,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_25A"], "152,500.00");
+    assert_eq!(fields["frm1701:txtPg1I24ATaxPayable"], "152,500.00");
+    assert_eq!(fields["frm1701:txtPg1I31ATotalAmtPyble"], "152,500.00");
+    // Spouse B: 18B = 180,000; Sched 3.A 12B = 780,000; 13B = 16B = 180,000; 18B = 600,000; tax = 62,500.
+    assert_eq!(fields["frm1701:txtPg3IShed4_18B"], "180,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_13B"], "180,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_16B"], "180,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_18B"], "600,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_25B"], "62,500.00");
+    assert_eq!(fields["frm1701:txtPg1I24BTaxPayable"], "62,500.00");
+    assert_eq!(fields["frm1701:txtPg1I31BTotalAmtPyble"], "62,500.00");
+    assert_eq!(fields["frm1701:txtPg1I32AggregateAmtPyble"], "215,000.00");
+}
+
+/// Schedule 6.A.1 (rows 6-7) and Schedule 6.A.2 (spouse rows 9-12) filer-typed
+/// NOLCO boxes are unlocked on the page under Graduated + Itemized (+ Joint for
+/// spouse), while rows 7Year/7A and 12Year/12A remain computed from items 3A/3B.
+#[test]
+fn form_1701_schedule_6_nolco_rows_open_under_itemized_and_keep_current_year_computed() {
+    setup();
+    let unlocked_keys = [
+        "frm1701:txtPg3IShed6_6A",
+        "frm1701:txtPg3IShed6_6B",
+        "frm1701:txtPg3IShed6_7B",
+        "frm1701:txtPg4IShed6_9A",
+        "frm1701:txtPg4IShed6_9B",
+        "frm1701:txtPg4IShed6_10A",
+        "frm1701:txtPg4IShed6_10B",
+        "frm1701:txtPg4IShed6_11A",
+        "frm1701:txtPg4IShed6_11B",
+        "frm1701:txtPg4IShed6_12B",
+    ];
+    let form = schema_entry("1701").expect("1701 schema");
+    for part in form["parts"].as_array().into_iter().flatten() {
+        for item in part["items"].as_array().into_iter().flatten() {
+            for field in item["f"].as_array().into_iter().flatten() {
+                if let Some(key) = field["k"].as_str()
+                    && unlocked_keys.contains(&key)
+                {
+                    assert!(
+                        field.get("c").is_none(),
+                        "{key} must be filer-typed on the page, not computed"
+                    );
+                }
+            }
+        }
+    }
+
+    // Joint + Graduated + Itemized for both Taxpayer and Spouse.
+    let fresh = opened("1701");
+    let joint = take(
+        "1701",
+        &fresh["draft"],
+        json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II012": "true",
+            "frm1701:rdoPg1I21AMethodDeductionI": "true",
+            "frm1701:rdoPg1I16CivilStatusM": "true",
+            "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+            "frm1701:rdoPg1I18FilingStatusJ": "true",
+            "frm1701:rdoPg2I3SpouseTypeS": "true",
+            "frm1701:rdoPg2I4ATC_II012": "true",
+            "frm1701:rdoPg2I12AMethodDeductionI": "true",
+        }),
+    );
+    let filled = take(
+        "1701",
+        &joint["draft"],
+        json!({
+            "frm1701:txtPg2IShed3_8A": "2500000",
+            "frm1701:txtPg2IShed3_9A": "50000",
+            "frm1701:txtPg2IShed3_11A": "900000",
+            "frm1701:txtPg3IShed6_6Year": "2023",
+            "frm1701:txtPg3IShed6_6A": "50000",
+            "frm1701:txtPg3IShed6_6B": "10000",
+            "frm1701:txtPg3IShed6_6C": "5000",
+            "frm1701:txtPg3IShed6_6D": "20000",
+            "frm1701:txtPg2IShed3_8B": "800000",
+            "frm1701:txtPg2IShed3_9B": "200000.50",
+            "frm1701:txtPg2IShed3_11B": "10000",
+            "frm1701:txtPg4IShed6_9Year": "2023",
+            "frm1701:txtPg4IShed6_9A": "30000",
+            "frm1701:txtPg4IShed6_9B": "10000",
+            "frm1701:txtPg4IShed6_9C": "0",
+            "frm1701:txtPg4IShed6_9D": "15000",
+        }),
+    );
+    let fields = field_map("1701", &filled["draft"]);
+    // 6.A.1: 6E = 50,000 - 10,000 - 5,000 - 20,000 = 15,000; 8D = 20,000 -> Sched 3.A 15A = 20,000.
+    assert_eq!(fields["frm1701:txtPg3IShed6_6E"], "15,000.00");
+    assert_eq!(fields["frm1701:txtPg3IShed6_8D"], "20,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_15A"], "20,000.00");
+    // 6.A.2: 9E = 30,000 - 10,000 - 0 - 15,000 = 5,000; 13D = 15,000 -> Sched 3.A 15B = 15,000.
+    assert_eq!(fields["frm1701:txtPg4IShed6_9E"], "5,000.00");
+    assert_eq!(fields["frm1701:txtPg4IShed6_13D"], "15,000.00");
+    assert_eq!(fields["frm1701:txtPg2IShed3_15B"], "15,000.00");
+    // Current-year loss row 12Year/12A stays computed from Item 3B.
+    assert_eq!(
+        fresh["waits"]["frm1701:txtPg4IShed6_12Year"],
+        "Filled from item 3B when it is a loss"
+    );
+    let refused_12a = fill(
+        "1701",
+        &joint["draft"],
+        json!({ "frm1701:txtPg4IShed6_12A": "5000" }),
+    );
+    assert!(refused_12a["rejected"]["frm1701:txtPg4IShed6_12A"].is_string());
+}
+
+/// Screen-path reproduction of EVERY official Form 1701 sample under
+/// `crates/bir-core/tests/sample-payloads/` (`1701-122025` and
+/// `1701-122025-joint`), verifying all Schedule 3.A, Schedule 4, Schedule 6,
+/// Part II tax due, and amount payable outputs with zero differences.
+#[test]
+fn form_1701_screen_path_reproduces_all_official_samples_without_differences() {
+    setup();
+    let parse_official = |xml: &str| -> BTreeMap<String, String> {
+        let mut out = BTreeMap::new();
+        for segment in xml.split("<div>") {
+            let Some(body) = segment.split("</div>").next() else {
+                continue;
+            };
+            let Some((key, rest)) = body.split_once('=') else {
+                continue;
+            };
+            if !key.starts_with("frm1701:") {
+                continue;
+            }
+            let suffix = format!("{key}=");
+            let value = rest.strip_suffix(&suffix).unwrap_or(rest).to_string();
+            out.insert(key.to_string(), value);
+        }
+        out
+    };
+
+    // Sample 1: 1701-122025 (Taxpayer Graduated + OSD; Schedule 3.A non-zero).
+    let s1 = parse_official(include_str!(
+        "../../../../bir-core/tests/sample-payloads/1701-122025.official.xml"
+    ));
+    let fresh = opened("1701");
+    let step1 = fill_unlocked(
+        "1701",
+        &fresh["draft"],
+        json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II013": "true",
+            "frm1701:rdoPg1I21AMethodDeductionO": "true",
+            "frm1701:chkPg2IShed1a_1Taxpayer": "true",
+            "frm1701:txtPg2IShed1a_1TPName": s1["frm1701:txtPg2IShed1a_1TPName"],
+            "frm1701:txtPg2IShed1c_1CI": s1["frm1701:txtPg2IShed1c_1CI"],
+            "frm1701:txtPg2IShed1c_1TW": s1["frm1701:txtPg2IShed1c_1TW"],
+            "frm1701:txtPg2IShed2_5A": s1["frm1701:txtPg2IShed2_5A"],
+            "frm1701:txtPg2IShed3_8A": s1["frm1701:txtPg2IShed3_8A"],
+            "frm1701:txtPg2IShed3_9A": s1["frm1701:txtPg2IShed3_9A"],
+            "frm1701:txtPg2IShed3_19Desc": s1["frm1701:txtPg2IShed3_19Desc"],
+            "frm1701:txtPg2IShed3_19A": s1["frm1701:txtPg2IShed3_19A"],
+            "frm1701:txtPg2IShed3_20A": s1["frm1701:txtPg2IShed3_20A"],
+            "frm1701:txtPg2IShed3_21A": s1["frm1701:txtPg2IShed3_21A"],
+            "frm1701:txtPg4IPart7_1A": s1["frm1701:txtPg4IPart7_1A"],
+            "frm1701:txtPg4IPart7_2A": s1["frm1701:txtPg4IPart7_2A"],
+            "frm1701:txtPg4IPart7_3A": s1["frm1701:txtPg4IPart7_3A"],
+            "frm1701:txtPg4IPart7_4A": s1["frm1701:txtPg4IPart7_4A"],
+            "frm1701:txtPg4IPart7_7A": s1["frm1701:txtPg4IPart7_7A"],
+            "frm1701:txtPg1I27A": s1["frm1701:txtPg1I27A"],
+            "frm1701:txtPg1I28A": s1["frm1701:txtPg1I28A"],
+        }),
+        &[
+            "frm1701:txtPg1I27A",
+            "frm1701:txtPg1I28A",
+            "frm1701:txtPg1I29A",
+        ],
+    );
+    assert_eq!(step1["rejected"], json!({}));
+    let f1 = field_map("1701", &step1["draft"]);
+    for key in [
+        "frm1701:txtPg2IShed3_8A",
+        "frm1701:txtPg2IShed3_9A",
+        "frm1701:txtPg2IShed3_10A",
+        "frm1701:txtPg2IShed3_11A",
+        "frm1701:txtPg2IShed3_12A",
+        "frm1701:txtPg2IShed3_13A",
+        "frm1701:txtPg2IShed3_17A",
+        "frm1701:txtPg2IShed3_18A",
+        "frm1701:txtPg2IShed3_22A",
+        "frm1701:txtPg2IShed3_23A",
+        "frm1701:txtPg2IShed3_24A",
+        "frm1701:txtPg2IShed3_25A",
+        "frm1701:txtPg1I24ATaxPayable",
+        "frm1701:txtPg1I25A",
+        "frm1701:txtPg1I26A",
+        "frm1701:txtPg1I31ATotalAmtPyble",
+        "frm1701:txtPg1I32AggregateAmtPyble",
+    ] {
+        assert_eq!(f1[key], s1[key], "1701-122025 mismatch at {key}");
+    }
+
+    // Sample 2: 1701-122025-joint (Spouse Graduated + Itemized; Schedule 3.A,
+    // Schedule 4, and Schedule 6.A.2 non-zero).
+    let s2 = parse_official(include_str!(
+        "../../../../bir-core/tests/sample-payloads/1701-122025-joint.official.xml"
+    ));
+    let mut s2_edits = serde_json::Map::new();
+    for (k, v) in [
+        ("frm1701:rdoPg1I6TaxpayerTypeP", "true"),
+        ("frm1701:rdoPg1I7ATC_II017", "true"),
+        ("frm1701:rdoPg1I21TaxRateP", "true"),
+        ("frm1701:rdoPg1I16CivilStatusM", "true"),
+        ("frm1701:rdoPg1I17SpouseIncomeYes", "true"),
+        ("frm1701:rdoPg1I18FilingStatusJ", "true"),
+        ("frm1701:rdoPg2I3SpouseTypeS", "true"),
+        ("frm1701:rdoPg2I4ATC_II013", "true"),
+        ("frm1701:rdoPg2I12TaxRateG", "true"),
+        ("frm1701:rdoPg2I12AMethodDeductionI", "true"),
+        ("frm1701:chkPg2IShed2a_2Spouse", "true"),
+    ] {
+        s2_edits.insert(k.to_string(), Value::String(v.to_string()));
+    }
+    for k in [
+        "frm1701:txtPg3IShed3_26A",
+        "frm1701:txtPg3IShed3_27Desc",
+        "frm1701:txtPg3IShed3_27A",
+        "frm1701:txtPg3IShed3_29A",
+        "frm1701:txtPg2IShed2a_2SName",
+        "frm1701:txtPg2IShed1c_2CI",
+        "frm1701:txtPg2IShed1c_2TW",
+        "frm1701:txtPg2IShed2_5B",
+        "frm1701:txtPg2IShed3_8B",
+        "frm1701:txtPg2IShed3_9B",
+        "frm1701:txtPg2IShed3_11B",
+        "frm1701:txtPg3IShed4_1B",
+        "frm1701:txtPg3IShed4_2B",
+        "frm1701:txtPg3IShed4_17dDesc",
+        "frm1701:txtPg3IShed4_17dB",
+        "frm1701:txtPg3IShed5_4Desc",
+        "frm1701:txtPg3IShed5_4Legal",
+        "frm1701:txtPg3IShed5_4Amt",
+        "frm1701:txtPg4IShed6_9Year",
+        "frm1701:txtPg4IShed6_9A",
+        "frm1701:txtPg4IShed6_9B",
+        "frm1701:txtPg4IShed6_9C",
+        "frm1701:txtPg4IShed6_9D",
+        "frm1701:txtPg4IPart7_1A",
+        "frm1701:txtPg4IPart7_1B",
+        "frm1701:txtPg4IPart7_2A",
+        "frm1701:txtPg4IPart7_2B",
+        "frm1701:txtPg4IPart7_3A",
+        "frm1701:txtPg4IPart7_3B",
+        "frm1701:txtPg4IPart7_4A",
+        "frm1701:txtPg4IPart7_4B",
+        "frm1701:txtPg4IPart7_7A",
+        "frm1701:txtPg4IPart7_7B",
+    ] {
+        s2_edits.insert(k.to_string(), Value::String(s2[k].clone()));
+    }
+    let step2 = take("1701", &fresh["draft"], Value::Object(s2_edits));
+    let f2 = field_map("1701", &step2["draft"]);
+    for key in [
+        "frm1701:txtPg2IShed3_8B",
+        "frm1701:txtPg2IShed3_9B",
+        "frm1701:txtPg2IShed3_10B",
+        "frm1701:txtPg2IShed3_11B",
+        "frm1701:txtPg2IShed3_12B",
+        "frm1701:txtPg2IShed3_13B",
+        "frm1701:txtPg2IShed3_14B",
+        "frm1701:txtPg2IShed3_15B",
+        "frm1701:txtPg2IShed3_16B",
+        "frm1701:txtPg2IShed3_18B",
+        "frm1701:txtPg2IShed3_23B",
+        "frm1701:txtPg2IShed3_24B",
+        "frm1701:txtPg2IShed3_25B",
+        "frm1701:txtPg3IShed4_18B",
+        "frm1701:txtPg4IShed6_9A",
+        "frm1701:txtPg4IShed6_9B",
+        "frm1701:txtPg4IShed6_9D",
+        "frm1701:txtPg4IShed6_9E",
+        "frm1701:txtPg4IShed6_13D",
+        "frm1701:txtPg1I24ATaxPayable",
+        "frm1701:txtPg1I24BTaxPayable",
+        "frm1701:txtPg1I25A",
+        "frm1701:txtPg1I25B",
+        "frm1701:txtPg1I26A",
+        "frm1701:txtPg1I26B",
+        "frm1701:txtPg1I31ATotalAmtPyble",
+        "frm1701:txtPg1I31BTotalAmtPyble",
+        "frm1701:txtPg1I32AggregateAmtPyble",
+    ] {
+        assert_eq!(f2[key], s2[key], "1701-122025-joint mismatch at {key}");
+    }
+}
