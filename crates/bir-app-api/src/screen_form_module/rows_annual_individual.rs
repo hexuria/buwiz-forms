@@ -442,6 +442,117 @@ const GATED: &[GatedBox] = &[
         Gate::GraduatedItemized { spouse: true },
         C1701_ITEMIZED_B,
     ),
+    // Schedule 4 items 3 and 6-13 (ordinary itemized deductions): open under
+    // graduated business/profession/mixed ATC + itemized deduction; column B
+    // also requires a joint return.
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_3A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_3B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_6A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_6B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_7A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_7B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_8A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_8B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_9A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_9B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_10A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_10B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_11A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_11B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_12A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_12B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_13A",
+        Gate::GraduatedItemized { spouse: false },
+        C1701_ITEMIZED_A,
+    ),
+    (
+        "1701",
+        "frm1701:txtPg3IShed4_13B",
+        Gate::GraduatedItemized { spouse: true },
+        C1701_ITEMIZED_B,
+    ),
     // 1701A items 17-18 and Part V items 66-75.
     (
         "1701A",

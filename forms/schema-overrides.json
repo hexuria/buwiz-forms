@@ -12835,11 +12835,13 @@
     },
     "frm1701:txtPg3IShed4_3A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 3 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2153 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_3B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 3 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2157 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_4A": {
       "label": "A. Taxpayer/Filer",
@@ -12859,67 +12861,83 @@
     },
     "frm1701:txtPg3IShed4_6A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 6 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2189 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_6B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 6 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2193 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_7A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 7 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2201 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_7B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 7 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2205 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_8A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 8 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2213 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_8B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 8 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2217 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_9B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 9 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2229 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_9A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 9 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2225 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_10A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 10 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2237 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_10B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 10 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2241 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_11A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 11 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2249 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_11B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 11 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2253 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_12B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 12 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2265 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_12A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 12 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2261 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_13A": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.9): column A of item 13 (html-frozen/1701-2018/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "evidence": "official-hta-runtime#control:L2273 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_13B": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.9): column B of item 13 (html-frozen/1701-2018/writer-cells.json caption \"... B. Spouse\")"
+      "evidence": "official-hta-runtime#control:L2277 (filer-typed Schedule 4 ordinary itemized deduction under Graduated + Itemized Deduction)",
+      "computed": false
     },
     "frm1701:txtPg3IShed4_14A": {
       "label": "A. Taxpayer/Filer",
