@@ -1,0 +1,57 @@
+# 1702MX-1225-sched6 Schedule 7.1 & 8.1 (50 XML lines): Official vs Before (13e6abe4) vs After (2555a2d8)
+# Generated through the page write path (and identically through form.fill).
+
+Key                                | Official     | Before (13e6abe4) | After (2555a2d8) | Status
+--------------------------------------------------------------------------------------------------
+frm1702MX:txtPg3IShed7_4Year       | 2022         | 2022              | 2022             | match
+frm1702MX:txtPg3IShed7_4A          | 300,000.00   | 300,000.00        | 300,000.00       | match
+frm1702MX:txtPg3IShed7_4B          | 100,000.00   | 100,000.00        | 100,000.00       | match
+frm1702MX:txtPg3IShed7_4C          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_4D          | 50,000.00    | 50,000.00         | 50,000.00        | match
+frm1702MX:txtPg3IShed7_4E          | 150,000      | 150000            | 150,000          | FIXED (was missing comma)
+frm1702MX:txtPg3IShed7_5Year       |              |                   |                  | match
+frm1702MX:txtPg3IShed7_5A          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_5B          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_5C          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_5D          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_5E          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_6Year       |              |                   |                  | match
+frm1702MX:txtPg3IShed7_6A          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_6B          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_6C          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_6D          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_6E          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_7Year       |              |                   |                  | match
+frm1702MX:txtPg3IShed7_7A          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_7B          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_7C          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_7D          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed7_7E          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed78D           | 50,000       | 50000             | 50,000           | FIXED (was missing comma)
+frm1702MX:txtPg3IShed8_4Year       |              |                   |                  | match
+frm1702MX:txtPg4IShed8_4A          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_4B          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_4C          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_4D          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_4E          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed8_5Year       |              |                   |                  | match
+frm1702MX:txtPg4IShed8_5A          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_5B          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_5C          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_5D          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_5E          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed8_6Year       |              |                   |                  | match
+frm1702MX:txtPg4IShed8_6A          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_6B          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed8_6C          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_6D          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_6E          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_7Year       |              |                   |                  | match
+frm1702MX:txtPg4IShed8_7A          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_7B          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_7C          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_7D          | 0            | 0                 | 0                | match
+frm1702MX:txtPg4IShed8_7E          | 0            | 0                 | 0                | match
+frm1702MX:txtPg3IShed88D           | 0            | 0                 | 0                | match
+
+Summary: 50/50 lines match official byte-for-byte after 2555a2d8 (2 computed lines fixed from 13e6abe4).
