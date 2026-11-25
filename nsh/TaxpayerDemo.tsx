@@ -6,6 +6,7 @@
 //   setup   a setup of the user's ("Bookkeeping clients") conflict  1701 and 1701A on the year's list too
 //   pin     the demo taxpayer has the profile PIN 1234    start  the dev route ("view=profile")
 //   card    "export": only the Export this profile card and a toaster (Settings draws it)
+//   google  true or false: whether this build can start Google's sign-in for mail (else the test process's environment decides)
 // It sits at the nsh root because a real-window run serves assets (fonts, icons) from the entry's folder down.
 import { host, mount, signal, View } from "nsh";
 import "./theme/fonts";
@@ -26,6 +27,7 @@ interface Params {
   pin?: boolean;
   start?: string;
   card?: "export";
+  google?: boolean;
   exportDownload?: { name?: string; error?: string; cancelled?: boolean };
   exportLayout?: boolean;
   year?: number;
@@ -58,9 +60,17 @@ function seed(p: Params) {
   if (p.pin) bir.set_taxpayer_pin(taxpayer.tin_root, "1234");
 }
 
+/** The inbox state as a build with or without a Google client id answers it. */
+function fixGoogle(available: boolean) {
+  const table = bir as unknown as Record<string, unknown>;
+  const real = bir.inbox_state;
+  table.inbox_state = (tin: string) => ({ ...real(tin), google_available: available });
+}
+
 function Demo() {
   const p = host.params as Params;
   if (p.demo !== false) seed(p);
+  if (typeof p.google === "boolean") fixGoogle(p.google);
   const ready = signal(!p.savedReturn);
   if (p.savedReturn) {
     const target = p.savedReturn;

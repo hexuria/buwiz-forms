@@ -22,7 +22,8 @@
 //             (the scan throws), "importfail" (the import throws), "slow" (the scan answers after 1.5 s), "foundonce" (the first folder dialog finds the folder,
 //             every later one is dismissed). The taxpayer count shows as
 //             demo-taxpayers.
-//   google    true: a fake Gmail inbox for the demo taxpayer (connect, disconnect and tracking change it; the browser sign-in is not opened)
+//   google    true: a fake Gmail inbox for the demo taxpayer (connect, disconnect and tracking change it; the browser sign-in is not opened);
+//             "unavailable": the same inbox in a build with no Google client id
 //   hotkey    "refuse": set_global_hotkey is refused, as the host does for a chord it cannot register; "note": it is listed in the calls
 //             readout (noise) and then done by the real host, so the box shows what was stored
 //   status    "refused" | "invalid": where the desktop host says the global hotkey stands (there is no desktop host in this fixture)
@@ -51,7 +52,7 @@ interface Params {
   pin?: string;
   totpSecret?: string;
   signin?: boolean | "taxpayer";
-  google?: boolean;
+  google?: boolean | "unavailable";
   hotkey?: "refuse" | "note";
   readout?: boolean;
   jobs?: boolean;
@@ -247,10 +248,10 @@ function fakeUpdate(): void {
   });
 }
 
-function fakeGoogle(): void {
+function fakeGoogle(available: boolean): void {
   let state: InboxState = {
     tin: "00012345300000", inbox_email: "juana@example.com", auth_method: "AppPassword", tracking_enabled: false, imap_login: "", imap_host: "imap.gmail.com",
-    has_app_password: false, oauth_connected: false, oauth_inbox_email: null, oauth_updated_at: null, still_pending: false, matching_tins: ["00012345300000"],
+    has_app_password: false, oauth_connected: false, google_available: available, oauth_inbox_email: null, oauth_updated_at: null, still_pending: false, matching_tins: ["00012345300000"],
     last_check_at: null, last_check_status: null, last_check_log: null,
   };
   swap("inbox_state", () => () => state);
@@ -315,7 +316,7 @@ function Demo() {
   if (p.import) fakeImport(p.import);
   if (p.ebir) fakeEbir(p.ebir);
   if (p.update) fakeUpdate();
-  if (p.google) fakeGoogle();
+  if (p.google) fakeGoogle(p.google === true);
   if (p.hotkey === "refuse") fakeHotkeyRefusal();
   if (p.hotkey === "note") noteHotkey();
   if (p.status) setHotkeyStatus(p.status);
