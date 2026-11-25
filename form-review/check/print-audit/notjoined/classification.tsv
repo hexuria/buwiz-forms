@@ -2,7 +2,7 @@ form	sample	key	official	class	item	note
 1801-2018	1801-06052025	frm1801v2018:txtDateMonth	06	a		visible input, item None, nowhere in the printed output
 1801-2018	1801-06052025	frm1801v2018:txtDateDay	05	a		visible input, item None, nowhere in the printed output
 1801-2018	1801-06052025	frm1801v2018:txtDateYear	2025	a		visible input, item None, nowhere in the printed output
-1801-2018	1801-06052025	frm1801v2018:txtAtc	ES 010	a		visible input, item None, nowhere in the printed output
+1801-2018	1801-06052025	frm1801v2018:txtAtc	ES 010	e		pre-printed on the sheet: ...urn?No3No. of Sheet/s AttachedES 010 YesTax Code (ATC)(MM/DD/YY)Pa
 1801-2018	1801-06052025	frm1801v2018:tinA_1	123	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1801-2018	1801-06052025	frm1801v2018:tinB_1	456	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1801-2018	1801-06052025	frm1801v2018:tinC_1	788	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
@@ -21,9 +21,9 @@ form	sample	key	official	class	item	note
 1801-2018	1801-06052025	frm1801v2018:txtCurrentPage	1	c		control metadata / hidden / pagination-state, not a printed box
 1801-2018	1801-06052025	frm1801v2018:txtMaxPage	2	c		control metadata / hidden / pagination-state, not a printed box
 1801-2018	1801-09152025	frm1801v2018:txtDateMonth	09	a		visible input, item None, nowhere in the printed output
-1801-2018	1801-09152025	frm1801v2018:txtDateDay	15	a		visible input, item None, nowhere in the printed output
+1801-2018	1801-09152025	frm1801v2018:txtDateDay	15	e		pre-printed on the sheet: ... Law/International Tax Treaty?15Mark Applicable BoxYesYesNoNo1
 1801-2018	1801-09152025	frm1801v2018:txtDateYear	2025	a		visible input, item None, nowhere in the printed output
-1801-2018	1801-09152025	frm1801v2018:txtAtc	ES 010	a		visible input, item None, nowhere in the printed output
+1801-2018	1801-09152025	frm1801v2018:txtAtc	ES 010	e		pre-printed on the sheet: ...urn?No3No. of Sheet/s AttachedES 010 YesTax Code (ATC)(MM/DD/YY)Pa
 1801-2018	1801-09152025	frm1801v2018:tinA_1	123	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1801-2018	1801-09152025	frm1801v2018:tinB_1	456	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1801-2018	1801-09152025	frm1801v2018:tinC_1	788	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
@@ -52,9 +52,9 @@ form	sample	key	official	class	item	note
 1801-2018	1801-09152025	frm1801v2018:txtCurrentPage	1	c		control metadata / hidden / pagination-state, not a printed box
 1801-2018	1801-09152025	frm1801v2018:txtMaxPage	2	c		control metadata / hidden / pagination-state, not a printed box
 1801-2018	1801-09162025	frm1801v2018:txtDateMonth	09	a		visible input, item None, nowhere in the printed output
-1801-2018	1801-09162025	frm1801v2018:txtDateDay	16	a		visible input, item None, nowhere in the printed output
+1801-2018	1801-09162025	frm1801v2018:txtDateDay	16	e		pre-printed on the sheet: ...y)Part II – Total Tax Payable.16NET TAXABLE ESTATE (From Part 
 1801-2018	1801-09162025	frm1801v2018:txtDateYear	2025	a		visible input, item None, nowhere in the printed output
-1801-2018	1801-09162025	frm1801v2018:txtAtc	ES 010	a		visible input, item None, nowhere in the printed output
+1801-2018	1801-09162025	frm1801v2018:txtAtc	ES 010	e		pre-printed on the sheet: ...urn?No3No. of Sheet/s AttachedES 010 YesTax Code (ATC)(MM/DD/YY)Pa
 1801-2018	1801-09162025	frm1801v2018:tinA_1	123	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1801-2018	1801-09162025	frm1801v2018:tinB_1	456	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1801-2018	1801-09162025	frm1801v2018:tinC_1	788	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
@@ -607,100 +607,100 @@ form	sample	key	official	class	item	note
 2200p-2020	2200P-03132025	frm2200P:txtPg2TinC2	456	b		carried by frm2200P:txtPg1TIN2
 2200p-2020	2200P-03132025	frm2200P:txtPg2TinC3	788	b		carried by frm2200P:txtPg1TIN3
 2200p-2020	2200P-03132025	frm2200P:txtPg2RegisteredName	SAMPLE DUMMY TAXPAYER	b		carried by frm2200P:txtPg1Pt1I6RegisteredName
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC1	XP010	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description1	LUBRICATING OILS	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC1	XP010	e	Schedule 1	pre-printed on the sheet: ...tionalRemovalsAgreement)P10.00XP010 Lubricating Oils Per Liter P1
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description1	LUBRICATING OILS	e	Schedule 1	pre-printed on the sheet: ...RemovalsAgreement)P10.00XP010 Lubricating Oils Per Liter P10.00XP020GreasesP
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure1	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate1	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC2	XP020	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description2	GREASES	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure2	PER KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC2	XP020	e	Schedule 1	pre-printed on the sheet: ...ricating Oils Per Liter P10.00XP020GreasesPer Kg P10.00XP030Proce
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description2	GREASES	e	Schedule 1	pre-printed on the sheet: ...ing Oils Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Ga
+2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure2	PER KG	e	Schedule 1	pre-printed on the sheet: ...s Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per 
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate2	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC3	XP030	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description3	PROCESSED GAS	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC3	XP030	e	Schedule 1	pre-printed on the sheet: ...10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per Liter P10.00
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description3	PROCESSED GAS	e	Schedule 1	pre-printed on the sheet: ...XP020GreasesPer Kg P10.00XP030Processed Gas Per Liter P10.00XP040Waxes an
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure3	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate3	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC4	XP040	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description4	WAXES AND PETROLEUM	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure4	PER KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC4	XP040	e	Schedule 1	pre-printed on the sheet: ...Processed Gas Per Liter P10.00XP040Waxes and Petrolatum Per Kg De
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description4	WAXES AND PETROLEUM	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure4	PER KG	e	Schedule 1	pre-printed on the sheet: ...s Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per 
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate4	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC5	XP050	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description5	DENATURED ALCOHOL USED FOR MOT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC5	XP050	e	Schedule 1	pre-printed on the sheet: ...atured Alcohol used for P10.00XP050Per Litermotive power Unleaded
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description5	DENATURED ALCOHOL USED FOR MOT	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure5	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate5	10.0	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC6	XP060	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description6	UNLEADED PREMIUM GASOLINE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC6	XP060	e	Schedule 1	pre-printed on the sheet: ... power Unleaded Premium P10.00XP060Per LiterGasolineP10.00XP080Re
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description6	UNLEADED PREMIUM GASOLINE	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure6	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate6	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC7	XP080	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description7	REGULAR GASOLINE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC7	XP080	e	Schedule 1	pre-printed on the sheet: ...00XP060Per LiterGasolineP10.00XP080Regular Gasoline Per LiterP10.
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description7	REGULAR GASOLINE	e	Schedule 1	pre-printed on the sheet: ...60Per LiterGasolineP10.00XP080Regular Gasoline Per LiterP10.00XP085Pyrolysis
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure7	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate7	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC8	XP085	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description8	PYROLYSIS GASOLINE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC8	XP085	e	Schedule 1	pre-printed on the sheet: ...gular Gasoline Per LiterP10.00XP085Pyrolysis Gasoline Per LiterP1
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description8	PYROLYSIS GASOLINE	e	Schedule 1	pre-printed on the sheet: ... Gasoline Per LiterP10.00XP085Pyrolysis Gasoline Per LiterP10.00XP090NaphthaPe
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure8	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate8	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC9	XP090	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description9	NAPHTHA	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC9	XP090	e	Schedule 1	pre-printed on the sheet: ...lysis Gasoline Per LiterP10.00XP090NaphthaPer LiterNaphtha to be 
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description9	NAPHTHA	e	Schedule 1	pre-printed on the sheet: ... Gasoline Per LiterP10.00XP090NaphthaPer LiterNaphtha to be used P 
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure9	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate9	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC10	XP100	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description10	NAPHTHA TO BE USED FOR PETRO-C	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC10	XP100	e	Schedule 1	pre-printed on the sheet: ...iterNaphtha to be used P 0.00 XP100Per Literfor petro-chemicals N
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description10	NAPHTHA TO BE USED FOR PETRO-C	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure10	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC11	XP105	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description11	NAPHTHA AND PYROLYSIS GASOLINE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC11	XP105	e	Schedule 1	pre-printed on the sheet: ...rochemical products or P 0.00 XP105Per Literin the refining of pe
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description11	NAPHTHA AND PYROLYSIS GASOLINE	e	Schedule 1	pre-printed on the sheet: ...0Per Literfor petro-chemicals Naphtha and Pyrolysis gasoline, when used as a raw
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure11	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC12	XP110	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description12	AVIATION GASOLINE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC12	XP110	e	Schedule 1	pre-printed on the sheet: ...ined cycle power plant P 4.00 XP110Aviation Gasoline Per LiterAvi
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description12	AVIATION GASOLINE	e	Schedule 1	pre-printed on the sheet: ...cycle power plant P 4.00 XP110Aviation Gasoline Per LiterAviation Turbo Jet F
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure12	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate12	4.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC13	XP120	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description13	AVIATION TURBO JET FUEL	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate12	4.00	e	Schedule 1	pre-printed on the sheet: ... combined cycle power plant P 4.00 XP110Aviation Gasoline Per Li
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC13	XP120	e	Schedule 1	pre-printed on the sheet: ...viation Turbo Jet Fuel P 4.00 XP120Per LiterP 5.00 XP130KeroseneP
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description13	AVIATION TURBO JET FUEL	e	Schedule 1	pre-printed on the sheet: ...110Aviation Gasoline Per LiterAviation Turbo Jet Fuel P 4.00 XP120Per LiterP 5.0
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure13	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate13	4.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC14	XP130	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description14	KEROSENE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate13	4.00	e	Schedule 1	pre-printed on the sheet: ... combined cycle power plant P 4.00 XP110Aviation Gasoline Per Li
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC14	XP130	e	Schedule 1	pre-printed on the sheet: ...l P 4.00 XP120Per LiterP 5.00 XP130KerosenePer LiterKerosene used
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description14	KEROSENE	e	Schedule 1	pre-printed on the sheet: ....00 XP120Per LiterP 5.00 XP130KerosenePer LiterKerosene used as P 4.
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure14	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate14	5.00"	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC15	XP131	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description15	KEROSENE USED AS AVIATION FUEL	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate14	5.00"	e	Schedule 1	pre-printed on the sheet: ...(alnum-normalized match)
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC15	XP131	e	Schedule 1	pre-printed on the sheet: ... LiterKerosene used as P 4.00 XP131Per Literaviation fuel P 6.00X
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description15	KEROSENE USED AS AVIATION FUEL	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure15	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate15	4.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC16	XP140	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description16	DIESEL FUEL OIL	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate15	4.00	e	Schedule 1	pre-printed on the sheet: ... combined cycle power plant P 4.00 XP110Aviation Gasoline Per Li
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC16	XP140	e	Schedule 1	pre-printed on the sheet: ...1Per Literaviation fuel P 6.00XP140Diesel Fuel Oil Per LiterLPG u
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description16	DIESEL FUEL OIL	e	Schedule 1	pre-printed on the sheet: ...Literaviation fuel P 6.00XP140Diesel Fuel Oil Per LiterLPG used as Motive P
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure16	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate16	6.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC17	XP150	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description17	LPG USED AS MOTIVE POWER	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure17	PER KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate17	6.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC18	XP160	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description18	LPG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure18	PER KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate16	6.00	e	Schedule 1	pre-printed on the sheet: ...XP131Per Literaviation fuel P 6.00XP140Diesel Fuel Oil Per Liter
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC17	XP150	e	Schedule 1	pre-printed on the sheet: ...PG used as Motive Power P 6.00XP150Per Kg P 3.00 XP160LPGPer Kg L
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description17	LPG USED AS MOTIVE POWER	e	Schedule 1	pre-printed on the sheet: ...XP140Diesel Fuel Oil Per LiterLPG used as Motive Power P 6.00XP150Per Kg P 3.00 
+2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure17	PER KG	e	Schedule 1	pre-printed on the sheet: ...s Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per 
+2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate17	6.00	e	Schedule 1	pre-printed on the sheet: ...XP131Per Literaviation fuel P 6.00XP140Diesel Fuel Oil Per Liter
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC18	XP160	e	Schedule 1	pre-printed on the sheet: ...ower P 6.00XP150Per Kg P 3.00 XP160LPGPer Kg LPG used in the prod
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description18	LPG	e	Schedule 1	pre-printed on the sheet: ...XP140Diesel Fuel Oil Per LiterLPG used as Motive Power P 6.00XP
+2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure18	PER KG	e	Schedule 1	pre-printed on the sheet: ...s Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per 
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate18	3.00	b	Schedule 1	carried by frm2200P:txtPg1I1Month
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC19	XP165	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description19	LPG USED IN THE PRODUCTION OF 	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure19	PER KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC20	XP170	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description20	ASPHALT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure20	PER KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC19	XP165	e	Schedule 1	pre-printed on the sheet: ...used in the production P 0.00 XP165Per Kg of petro-chemical produ
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description19	LPG USED IN THE PRODUCTION OF 	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure19	PER KG	e	Schedule 1	pre-printed on the sheet: ...s Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per 
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC20	XP170	e	Schedule 1	pre-printed on the sheet: ...petro-chemical products P10.00XP170AsphaltPer Kg Bunker Fuel Oil 
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description20	ASPHALT	e	Schedule 1	pre-printed on the sheet: ...-chemical products P10.00XP170AsphaltPer Kg Bunker Fuel Oil and P 6
+2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure20	PER KG	e	Schedule 1	pre-printed on the sheet: ...s Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per 
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate20	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC21	XP180	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description21	BUNKER FUEL OIL AND SIMILAR FU	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC21	XP180	e	Schedule 1	pre-printed on the sheet: ...Kg Bunker Fuel Oil and P 6.00 XP180Per Litersimilar fuel Base Sto
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description21	BUNKER FUEL OIL AND SIMILAR FU	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure21	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate21	6.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC22	XP190	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description22	BASE STOCKS FOR TUBE OILS AND 	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate21	6.00	e	Schedule 1	pre-printed on the sheet: ...XP131Per Literaviation fuel P 6.00XP140Diesel Fuel Oil Per Liter
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC22	XP190	e	Schedule 1	pre-printed on the sheet: ... oils and greases, HVD, P10.00XP190Per Literaromatic extracts, et
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description22	BASE STOCKS FOR TUBE OILS AND 	e	Schedule 1	pre-printed on the sheet: ...00 XP180Per Litersimilar fuel Base Stocks for tube oils and greases, HVD, P10.00
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure22	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate22	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC23	XP200	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description23	PETROLEUM COKE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure23	PER MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate23	6.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC24	XP210	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description24	PETROLEUM COKE FOR MOTIVE POWE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure24	PER MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1ATC25	XP220	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03132025	frm2200P:txtSched1Description25	ADDITIVES FOR LUBRICATING OILS	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC23	XP200	e	Schedule 1	pre-printed on the sheet: ...romatic extracts, etc. P 6.00 XP200Petroleum Coke Per MT Petroleu
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description23	PETROLEUM COKE	e	Schedule 1	pre-printed on the sheet: ...ic extracts, etc. P 6.00 XP200Petroleum Coke Per MT Petroleum Coke for P 0
+2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure23	PER MT	e	Schedule 1	pre-printed on the sheet: ...c. P 6.00 XP200Petroleum Coke Per MT Petroleum Coke for P 0.00 XP2
+2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate23	6.00	e	Schedule 1	pre-printed on the sheet: ...XP131Per Literaviation fuel P 6.00XP140Diesel Fuel Oil Per Liter
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC24	XP210	e	Schedule 1	pre-printed on the sheet: ... MT Petroleum Coke for P 0.00 XP210Per MT motive power Additives 
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description24	PETROLEUM COKE FOR MOTIVE POWE	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure24	PER MT	e	Schedule 1	pre-printed on the sheet: ...c. P 6.00 XP200Petroleum Coke Per MT Petroleum Coke for P 0.00 XP2
+2200p-2020	2200P-03132025	frm2200P:txtSched1ATC25	XP220	e	Schedule 1	pre-printed on the sheet: ...ives for lubricating PerP10.00XP220oils and greases Liter/KgOther
+2200p-2020	2200P-03132025	frm2200P:txtSched1Description25	ADDITIVES FOR LUBRICATING OILS	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200p-2020	2200P-03132025	frm2200P:txtSched1UnitOfMeasure25	PER LITER/KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
 2200p-2020	2200P-03132025	frm2200P:txtSched1ApplicableRate25	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
 2200p-2020	2200P-03132025	frm2200P:txtSched1ATC28	928	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
@@ -752,113 +752,113 @@ form	sample	key	official	class	item	note
 2200p-2020	2200P-03142025	frm2200P:txtPg2TinC2	456	b		carried by frm2200P:txtPg1TIN2
 2200p-2020	2200P-03142025	frm2200P:txtPg2TinC3	788	b		carried by frm2200P:txtPg1TIN3
 2200p-2020	2200P-03142025	frm2200P:txtPg2RegisteredName	SAMPLE DUMMY TAXPAYER	b		carried by frm2200P:txtPg1Pt1I6RegisteredName
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC1	XP010	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description1	LUBRICATING OILS	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC1	XP010	e	Schedule 1	pre-printed on the sheet: ...tionalRemovalsAgreement)P10.00XP010 Lubricating Oils Per Liter P1
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description1	LUBRICATING OILS	e	Schedule 1	pre-printed on the sheet: ...RemovalsAgreement)P10.00XP010 Lubricating Oils Per Liter P10.00XP020GreasesP
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure1	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate1	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC2	XP020	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description2	GREASES	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure2	PER KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC2	XP020	e	Schedule 1	pre-printed on the sheet: ...ricating Oils Per Liter P10.00XP020GreasesPer Kg P10.00XP030Proce
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description2	GREASES	e	Schedule 1	pre-printed on the sheet: ...ing Oils Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Ga
+2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure2	PER KG	e	Schedule 1	pre-printed on the sheet: ...s Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per 
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate2	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC3	XP030	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description3	PROCESSED GAS	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC3	XP030	e	Schedule 1	pre-printed on the sheet: ...10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per Liter P10.00
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description3	PROCESSED GAS	e	Schedule 1	pre-printed on the sheet: ...XP020GreasesPer Kg P10.00XP030Processed Gas Per Liter P10.00XP040Waxes an
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure3	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate3	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC4	XP040	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description4	WAXES AND PETROLEUM	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure4	PER KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC4	XP040	e	Schedule 1	pre-printed on the sheet: ...Processed Gas Per Liter P10.00XP040Waxes and Petrolatum Per Kg De
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description4	WAXES AND PETROLEUM	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure4	PER KG	e	Schedule 1	pre-printed on the sheet: ...s Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per 
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate4	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC5	XP050	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description5	DENATURED ALCOHOL USED FOR MOT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC5	XP050	e	Schedule 1	pre-printed on the sheet: ...atured Alcohol used for P10.00XP050Per Litermotive power Unleaded
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description5	DENATURED ALCOHOL USED FOR MOT	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure5	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate5	10.0	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC6	XP060	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description6	UNLEADED PREMIUM GASOLINE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC6	XP060	e	Schedule 1	pre-printed on the sheet: ... power Unleaded Premium P10.00XP060Per LiterGasolineP10.00XP080Re
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description6	UNLEADED PREMIUM GASOLINE	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure6	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate6	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC7	XP080	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description7	REGULAR GASOLINE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC7	XP080	e	Schedule 1	pre-printed on the sheet: ...00XP060Per LiterGasolineP10.00XP080Regular Gasoline Per LiterP10.
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description7	REGULAR GASOLINE	e	Schedule 1	pre-printed on the sheet: ...60Per LiterGasolineP10.00XP080Regular Gasoline Per LiterP10.00XP085Pyrolysis
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure7	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate7	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC8	XP085	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description8	PYROLYSIS GASOLINE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC8	XP085	e	Schedule 1	pre-printed on the sheet: ...gular Gasoline Per LiterP10.00XP085Pyrolysis Gasoline Per LiterP1
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description8	PYROLYSIS GASOLINE	e	Schedule 1	pre-printed on the sheet: ... Gasoline Per LiterP10.00XP085Pyrolysis Gasoline Per LiterP10.00XP090NaphthaPe
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure8	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate8	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC9	XP090	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description9	NAPHTHA	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC9	XP090	e	Schedule 1	pre-printed on the sheet: ...lysis Gasoline Per LiterP10.00XP090NaphthaPer LiterNaphtha to be 
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description9	NAPHTHA	e	Schedule 1	pre-printed on the sheet: ... Gasoline Per LiterP10.00XP090NaphthaPer LiterNaphtha to be used P 
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure9	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate9	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC10	XP100	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description10	NAPHTHA TO BE USED FOR PETRO-C	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC10	XP100	e	Schedule 1	pre-printed on the sheet: ...iterNaphtha to be used P 0.00 XP100Per Literfor petro-chemicals N
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description10	NAPHTHA TO BE USED FOR PETRO-C	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure10	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC11	XP105	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description11	NAPHTHA AND PYROLYSIS GASOLINE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC11	XP105	e	Schedule 1	pre-printed on the sheet: ...rochemical products or P 0.00 XP105Per Literin the refining of pe
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description11	NAPHTHA AND PYROLYSIS GASOLINE	e	Schedule 1	pre-printed on the sheet: ...0Per Literfor petro-chemicals Naphtha and Pyrolysis gasoline, when used as a raw
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure11	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC12	XP110	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description12	AVIATION GASOLINE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC12	XP110	e	Schedule 1	pre-printed on the sheet: ...ined cycle power plant P 4.00 XP110Aviation Gasoline Per LiterAvi
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description12	AVIATION GASOLINE	e	Schedule 1	pre-printed on the sheet: ...cycle power plant P 4.00 XP110Aviation Gasoline Per LiterAviation Turbo Jet F
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure12	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate12	4.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC13	XP120	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description13	AVIATION TURBO JET FUEL	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate12	4.00	e	Schedule 1	pre-printed on the sheet: ... combined cycle power plant P 4.00 XP110Aviation Gasoline Per Li
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC13	XP120	e	Schedule 1	pre-printed on the sheet: ...viation Turbo Jet Fuel P 4.00 XP120Per LiterP 5.00 XP130KeroseneP
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description13	AVIATION TURBO JET FUEL	e	Schedule 1	pre-printed on the sheet: ...110Aviation Gasoline Per LiterAviation Turbo Jet Fuel P 4.00 XP120Per LiterP 5.0
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure13	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate13	4.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC14	XP130	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description14	KEROSENE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate13	4.00	e	Schedule 1	pre-printed on the sheet: ... combined cycle power plant P 4.00 XP110Aviation Gasoline Per Li
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC14	XP130	e	Schedule 1	pre-printed on the sheet: ...l P 4.00 XP120Per LiterP 5.00 XP130KerosenePer LiterKerosene used
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description14	KEROSENE	e	Schedule 1	pre-printed on the sheet: ....00 XP120Per LiterP 5.00 XP130KerosenePer LiterKerosene used as P 4.
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure14	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate14	5.00"	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC15	XP131	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description15	KEROSENE USED AS AVIATION FUEL	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate14	5.00"	e	Schedule 1	pre-printed on the sheet: ...(alnum-normalized match)
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC15	XP131	e	Schedule 1	pre-printed on the sheet: ... LiterKerosene used as P 4.00 XP131Per Literaviation fuel P 6.00X
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description15	KEROSENE USED AS AVIATION FUEL	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure15	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate15	4.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC16	XP140	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description16	DIESEL FUEL OIL	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate15	4.00	e	Schedule 1	pre-printed on the sheet: ... combined cycle power plant P 4.00 XP110Aviation Gasoline Per Li
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC16	XP140	e	Schedule 1	pre-printed on the sheet: ...1Per Literaviation fuel P 6.00XP140Diesel Fuel Oil Per LiterLPG u
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description16	DIESEL FUEL OIL	e	Schedule 1	pre-printed on the sheet: ...Literaviation fuel P 6.00XP140Diesel Fuel Oil Per LiterLPG used as Motive P
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure16	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate16	6.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC17	XP150	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description17	LPG USED AS MOTIVE POWER	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure17	PER KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate17	6.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC18	XP160	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description18	LPG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure18	PER KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate16	6.00	e	Schedule 1	pre-printed on the sheet: ...XP131Per Literaviation fuel P 6.00XP140Diesel Fuel Oil Per Liter
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC17	XP150	e	Schedule 1	pre-printed on the sheet: ...PG used as Motive Power P 6.00XP150Per Kg P 3.00 XP160LPGPer Kg L
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description17	LPG USED AS MOTIVE POWER	e	Schedule 1	pre-printed on the sheet: ...XP140Diesel Fuel Oil Per LiterLPG used as Motive Power P 6.00XP150Per Kg P 3.00 
+2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure17	PER KG	e	Schedule 1	pre-printed on the sheet: ...s Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per 
+2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate17	6.00	e	Schedule 1	pre-printed on the sheet: ...XP131Per Literaviation fuel P 6.00XP140Diesel Fuel Oil Per Liter
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC18	XP160	e	Schedule 1	pre-printed on the sheet: ...ower P 6.00XP150Per Kg P 3.00 XP160LPGPer Kg LPG used in the prod
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description18	LPG	e	Schedule 1	pre-printed on the sheet: ...XP140Diesel Fuel Oil Per LiterLPG used as Motive Power P 6.00XP
+2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure18	PER KG	e	Schedule 1	pre-printed on the sheet: ...s Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per 
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate18	3.00	b	Schedule 1	carried by frm2200P:txtPg1I1Month
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC19	XP165	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description19	LPG USED IN THE PRODUCTION OF 	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure19	PER KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC20	XP170	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description20	ASPHALT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure20	PER KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC19	XP165	e	Schedule 1	pre-printed on the sheet: ...used in the production P 0.00 XP165Per Kg of petro-chemical produ
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description19	LPG USED IN THE PRODUCTION OF 	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure19	PER KG	e	Schedule 1	pre-printed on the sheet: ...s Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per 
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC20	XP170	e	Schedule 1	pre-printed on the sheet: ...petro-chemical products P10.00XP170AsphaltPer Kg Bunker Fuel Oil 
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description20	ASPHALT	e	Schedule 1	pre-printed on the sheet: ...-chemical products P10.00XP170AsphaltPer Kg Bunker Fuel Oil and P 6
+2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure20	PER KG	e	Schedule 1	pre-printed on the sheet: ...s Per Liter P10.00XP020GreasesPer Kg P10.00XP030Processed Gas Per 
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate20	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC21	XP180	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description21	BUNKER FUEL OIL AND SIMILAR FU	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC21	XP180	e	Schedule 1	pre-printed on the sheet: ...Kg Bunker Fuel Oil and P 6.00 XP180Per Litersimilar fuel Base Sto
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description21	BUNKER FUEL OIL AND SIMILAR FU	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure21	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
-2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate21	6.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC22	XP190	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description22	BASE STOCKS FOR TUBE OILS AND 	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate21	6.00	e	Schedule 1	pre-printed on the sheet: ...XP131Per Literaviation fuel P 6.00XP140Diesel Fuel Oil Per Liter
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC22	XP190	e	Schedule 1	pre-printed on the sheet: ... oils and greases, HVD, P10.00XP190Per Literaromatic extracts, et
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description22	BASE STOCKS FOR TUBE OILS AND 	e	Schedule 1	pre-printed on the sheet: ...00 XP180Per Litersimilar fuel Base Stocks for tube oils and greases, HVD, P10.00
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure22	PER LITER	b	Schedule 1	carried by frm2200P:txtSched1UnitOfMeasure26
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate22	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC23	XP200	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description23	PETROLEUM COKE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure23	PER MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate23	6.00	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC24	XP210	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description24	PETROLEUM COKE FOR MOTIVE POWE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure24	PER MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1ATC25	XP220	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200p-2020	2200P-03142025	frm2200P:txtSched1Description25	ADDITIVES FOR LUBRICATING OILS	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC23	XP200	e	Schedule 1	pre-printed on the sheet: ...romatic extracts, etc. P 6.00 XP200Petroleum Coke Per MT Petroleu
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description23	PETROLEUM COKE	e	Schedule 1	pre-printed on the sheet: ...ic extracts, etc. P 6.00 XP200Petroleum Coke Per MT Petroleum Coke for P 0
+2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure23	PER MT	e	Schedule 1	pre-printed on the sheet: ...c. P 6.00 XP200Petroleum Coke Per MT Petroleum Coke for P 0.00 XP2
+2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate23	6.00	e	Schedule 1	pre-printed on the sheet: ...XP131Per Literaviation fuel P 6.00XP140Diesel Fuel Oil Per Liter
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC24	XP210	e	Schedule 1	pre-printed on the sheet: ... MT Petroleum Coke for P 0.00 XP210Per MT motive power Additives 
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description24	PETROLEUM COKE FOR MOTIVE POWE	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure24	PER MT	e	Schedule 1	pre-printed on the sheet: ...c. P 6.00 XP200Petroleum Coke Per MT Petroleum Coke for P 0.00 XP2
+2200p-2020	2200P-03142025	frm2200P:txtSched1ATC25	XP220	e	Schedule 1	pre-printed on the sheet: ...ives for lubricating PerP10.00XP220oils and greases Liter/KgOther
+2200p-2020	2200P-03142025	frm2200P:txtSched1Description25	ADDITIVES FOR LUBRICATING OILS	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200p-2020	2200P-03142025	frm2200P:txtSched1UnitOfMeasure25	PER LITER/KG	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
 2200p-2020	2200P-03142025	frm2200P:txtSched1ApplicableRate25	10.00	b	Schedule 1	carried by frm2200P:txtPg1P3I21BInterest
 2200p-2020	2200P-03142025	frm2200P:txtLOB	SAMPLE CONSULTING SERVICES	a		visible input, item None, nowhere in the printed output
 2200p-2020	2200P-03142025	frm2200P:txtCurrentPage	1	c		control metadata / hidden / pagination-state, not a printed box
 2200p-2020	2200P-03142025	frm2200P:txtMaxPage	2	c		control metadata / hidden / pagination-state, not a printed box
-1707a-2021	1707A-12312023	frm1707Av2021:txtI4TCII030	II030	a	030	visible input, item 030, nowhere in the printed output
-1707a-2021	1707A-12312023	frm1707Av2021:txtI4ATCIC110	IC110	a	4A	visible input, item 4A, nowhere in the printed output
+1707a-2021	1707A-12312023	frm1707Av2021:txtI4TCII030	II030	e	030	pre-printed on the sheet: ...d (MM/DD/YYYY)YesNoCorporationII030IC110IndividualPart I – Backgr
+1707a-2021	1707A-12312023	frm1707Av2021:txtI4ATCIC110	IC110	e	4A	pre-printed on the sheet: .../DD/YYYY)YesNoCorporationII030IC110IndividualPart I – Background 
 1707a-2021	1707A-12312023	frm1707Av2021:hdnRDO	039	c		control metadata / hidden / pagination-state, not a printed box
 1707a-2021	1707A-12312023	frm1707Av2021:txtLineOfBusiness	SAMPLE CONSULTING SERVICES	a		visible input, item None, nowhere in the printed output
 1707a-2021	1707A-12312023	frm1707Av2021:txtI9RegisteredAddress	123 SAMPLE STREET, BARANGAY EX	b	9R	carried by derived:address_line1 (text substring)
 1707a-2021	1707A-12312023	frm1707Av2021:txtI7TelNo	09170000000	b	7T	carried by comb digits (text substring)
-1707a-2021	1707A-12312023	frm1707Av2021:txtI11ASpecify	TREATY RELIEF	a	11A	visible input, item 11A, nowhere in the printed output
-1707a-2021	1707A-12312023	frm1707Av2021:txtI16ApplicableTaxRate	15	a	16A	visible input, item 16A, nowhere in the printed output
+1707a-2021	1707A-12312023	frm1707Av2021:txtI11ASpecify	TREATY RELIEF	e	11A	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+1707a-2021	1707A-12312023	frm1707Av2021:txtI16ApplicableTaxRate	15	e	16A	pre-printed on the sheet: ... Schedule 2, Item 5 Column E)●15Net Capital Gain/(Loss) (Item 
 1707a-2021	1707A-12312023	frm1707Av2021:txtI5TIN1P2	123	b	5T	carried by frm1707Av2021:txtI5TIN1
 1707a-2021	1707A-12312023	frm1707Av2021:txtI5TIN2P2	456	b	5T	carried by frm1707Av2021:txtI5TIN2
 1707a-2021	1707A-12312023	frm1707Av2021:txtI5TIN3P2	456	b	5T	carried by frm1707Av2021:txtI5TIN2
@@ -986,14 +986,14 @@ form	sample	key	official	class	item	note
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2ModalTotalSellingPrice	36,000.00	c		row-entry modal input, not itself a sheet cell
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2ModalTotalCost	54,018.00	c		row-entry modal input, not itself a sheet cell
 1707a-2021	1707A-12312023	frm1707Av2021:txtS2ModalTotalCapitalLoss	18,018.00	c		row-entry modal input, not itself a sheet cell
-1707a-2021	1707A-12312024	frm1707Av2021:txtI4TCII030	II030	a	030	visible input, item 030, nowhere in the printed output
-1707a-2021	1707A-12312024	frm1707Av2021:txtI4ATCIC110	IC110	a	4A	visible input, item 4A, nowhere in the printed output
+1707a-2021	1707A-12312024	frm1707Av2021:txtI4TCII030	II030	e	030	pre-printed on the sheet: ...d (MM/DD/YYYY)YesNoCorporationII030IC110IndividualPart I – Backgr
+1707a-2021	1707A-12312024	frm1707Av2021:txtI4ATCIC110	IC110	e	4A	pre-printed on the sheet: .../DD/YYYY)YesNoCorporationII030IC110IndividualPart I – Background 
 1707a-2021	1707A-12312024	frm1707Av2021:hdnRDO	039	c		control metadata / hidden / pagination-state, not a printed box
 1707a-2021	1707A-12312024	frm1707Av2021:txtLineOfBusiness	SAMPLE CONSULTING SERVICES	a		visible input, item None, nowhere in the printed output
 1707a-2021	1707A-12312024	frm1707Av2021:txtI9RegisteredAddress	123 SAMPLE STREET, BARANGAY EX	b	9R	carried by derived:address_line1 (text substring)
 1707a-2021	1707A-12312024	frm1707Av2021:txtI7TelNo	09170000000	b	7T	carried by comb digits (text substring)
-1707a-2021	1707A-12312024	frm1707Av2021:txtI11ASpecify	TREATY RELIEF	a	11A	visible input, item 11A, nowhere in the printed output
-1707a-2021	1707A-12312024	frm1707Av2021:txtI16ApplicableTaxRate	15	a	16A	visible input, item 16A, nowhere in the printed output
+1707a-2021	1707A-12312024	frm1707Av2021:txtI11ASpecify	TREATY RELIEF	e	11A	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+1707a-2021	1707A-12312024	frm1707Av2021:txtI16ApplicableTaxRate	15	e	16A	pre-printed on the sheet: ... Schedule 2, Item 5 Column E)●15Net Capital Gain/(Loss) (Item 
 1707a-2021	1707A-12312024	frm1707Av2021:txtI5TIN1P2	123	b	5T	carried by frm1707Av2021:txtI5TIN1
 1707a-2021	1707A-12312024	frm1707Av2021:txtI5TIN2P2	456	b	5T	carried by frm1707Av2021:txtI5TIN2
 1707a-2021	1707A-12312024	frm1707Av2021:txtI5TIN3P2	456	b	5T	carried by frm1707Av2021:txtI5TIN2
@@ -1037,14 +1037,14 @@ form	sample	key	official	class	item	note
 1707a-2021	1707A-12312024	frm1707Av2021:txtS2ModalTotalSellingPrice	1,200.00	c		row-entry modal input, not itself a sheet cell
 1707a-2021	1707A-12312024	frm1707Av2021:txtS2ModalTotalCost	1,800.25	c		row-entry modal input, not itself a sheet cell
 1707a-2021	1707A-12312024	frm1707Av2021:txtS2ModalTotalCapitalLoss	600.25	c		row-entry modal input, not itself a sheet cell
-1707a-2021	1707A-12312025	frm1707Av2021:txtI4TCII030	II030	a	030	visible input, item 030, nowhere in the printed output
-1707a-2021	1707A-12312025	frm1707Av2021:txtI4ATCIC110	IC110	a	4A	visible input, item 4A, nowhere in the printed output
+1707a-2021	1707A-12312025	frm1707Av2021:txtI4TCII030	II030	e	030	pre-printed on the sheet: ...d (MM/DD/YYYY)YesNoCorporationII030IC110IndividualPart I – Backgr
+1707a-2021	1707A-12312025	frm1707Av2021:txtI4ATCIC110	IC110	e	4A	pre-printed on the sheet: .../DD/YYYY)YesNoCorporationII030IC110IndividualPart I – Background 
 1707a-2021	1707A-12312025	frm1707Av2021:hdnRDO	039	c		control metadata / hidden / pagination-state, not a printed box
 1707a-2021	1707A-12312025	frm1707Av2021:txtLineOfBusiness	SAMPLE CONSULTING SERVICES	a		visible input, item None, nowhere in the printed output
 1707a-2021	1707A-12312025	frm1707Av2021:txtI9RegisteredAddress	123 SAMPLE STREET, BARANGAY EX	b	9R	carried by derived:address_line1 (text substring)
 1707a-2021	1707A-12312025	frm1707Av2021:txtI7TelNo	09170000000	b	7T	carried by comb digits (text substring)
-1707a-2021	1707A-12312025	frm1707Av2021:txtI11ASpecify	TREATY RELIEF	a	11A	visible input, item 11A, nowhere in the printed output
-1707a-2021	1707A-12312025	frm1707Av2021:txtI16ApplicableTaxRate	15	a	16A	visible input, item 16A, nowhere in the printed output
+1707a-2021	1707A-12312025	frm1707Av2021:txtI11ASpecify	TREATY RELIEF	e	11A	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+1707a-2021	1707A-12312025	frm1707Av2021:txtI16ApplicableTaxRate	15	e	16A	pre-printed on the sheet: ... Schedule 2, Item 5 Column E)●15Net Capital Gain/(Loss) (Item 
 1707a-2021	1707A-12312025	frm1707Av2021:txtI5TIN1P2	123	b	5T	carried by frm1707Av2021:txtI5TIN1
 1707a-2021	1707A-12312025	frm1707Av2021:txtI5TIN2P2	456	b	5T	carried by frm1707Av2021:txtI5TIN2
 1707a-2021	1707A-12312025	frm1707Av2021:txtI5TIN3P2	456	b	5T	carried by frm1707Av2021:txtI5TIN2
@@ -1064,33 +1064,33 @@ form	sample	key	official	class	item	note
 2200m-2018	2200M-03132025	frm2200M:txtPg2TinC1	123	b		carried by frm2200M:txtPg1TIN1
 2200m-2018	2200M-03132025	frm2200M:txtPg2TinC2	456	b		carried by frm2200M:txtPg1TIN2
 2200m-2018	2200M-03132025	frm2200M:txtPg2TinC3	788	b		carried by frm2200M:txtPg1TIN3
-2200m-2018	2200M-03132025	frm2200M:txtSched1ATC1	XM010	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1ATC2	XM010	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1ATC3	XM010	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1Description1	COAL AND COKE - JANUARY 1, 201	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1Description2	COAL AND COKE - JANUARY 1, 201	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1Description3	COAL AND COKE - JANUARY 1, 202	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200m-2018	2200M-03132025	frm2200M:txtSched1ATC1	XM010	e	Schedule 1	pre-printed on the sheet: ... Coke January 1, 2018 P 50/MT XM010January 1, 2019 P 100/MT Janua
+2200m-2018	2200M-03132025	frm2200M:txtSched1ATC2	XM010	e	Schedule 1	pre-printed on the sheet: ... Coke January 1, 2018 P 50/MT XM010January 1, 2019 P 100/MT Janua
+2200m-2018	2200M-03132025	frm2200M:txtSched1ATC3	XM010	e	Schedule 1	pre-printed on the sheet: ... Coke January 1, 2018 P 50/MT XM010January 1, 2019 P 100/MT Janua
+2200m-2018	2200M-03132025	frm2200M:txtSched1Description1	COAL AND COKE - JANUARY 1, 201	e	Schedule 1	pre-printed on the sheet: ...(alnum-normalized match)
+2200m-2018	2200M-03132025	frm2200M:txtSched1Description2	COAL AND COKE - JANUARY 1, 201	e	Schedule 1	pre-printed on the sheet: ...(alnum-normalized match)
+2200m-2018	2200M-03132025	frm2200M:txtSched1Description3	COAL AND COKE - JANUARY 1, 202	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200m-2018	2200M-03132025	frm2200M:LocallyExtractedRate1	250,000.00	a		visible input, item None, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE1	P 50/MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE2	P 100/MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE3	P 150/MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1ATC4	XM020	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1Description4	NON-METALLIC MINERALS AND QUAR	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE4	4%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1ATC5	XM030	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1Description5	COPPER AND OTHER METALLIC MINE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE5	4%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1ATC6	XM040	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1Description6	GOLD AND CHROMITE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE6	4%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1ATC7	XM050	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE1	P 50/MT	e	Schedule 1	pre-printed on the sheet: ...Coal and Coke January 1, 2018 P 50/MT XM010January 1, 2019 P 100/MT
+2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE2	P 100/MT	e	Schedule 1	pre-printed on the sheet: ... P 50/MT XM010January 1, 2019 P 100/MT January 1, 2020 P 150/MT and 
+2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE3	P 150/MT	e	Schedule 1	pre-printed on the sheet: ...2019 P 100/MT January 1, 2020 P 150/MT and onwards Non-metallic mine
+2200m-2018	2200M-03132025	frm2200M:txtSched1ATC4	XM020	e	Schedule 1	pre-printed on the sheet: ...onwards Non-metallic minerals XM0204%and quarry resources Copper 
+2200m-2018	2200M-03132025	frm2200M:txtSched1Description4	NON-METALLIC MINERALS AND QUAR	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE4	4%	e	Schedule 1	pre-printed on the sheet: ...ds Non-metallic minerals XM0204%and quarry resources Copper an
+2200m-2018	2200M-03132025	frm2200M:txtSched1ATC5	XM030	e	Schedule 1	pre-printed on the sheet: ...ry resources Copper and Other XM0304%Metallic Minerals XM040Gold 
+2200m-2018	2200M-03132025	frm2200M:txtSched1Description5	COPPER AND OTHER METALLIC MINE	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE5	4%	e	Schedule 1	pre-printed on the sheet: ...ds Non-metallic minerals XM0204%and quarry resources Copper an
+2200m-2018	2200M-03132025	frm2200M:txtSched1ATC6	XM040	e	Schedule 1	pre-printed on the sheet: ...ther XM0304%Metallic Minerals XM040Gold and Chromite 4%XM050Indig
+2200m-2018	2200M-03132025	frm2200M:txtSched1Description6	GOLD AND CHROMITE	e	Schedule 1	pre-printed on the sheet: ...XM0304%Metallic Minerals XM040Gold and Chromite 4%XM050Indigenous Petroleum 6
+2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE6	4%	e	Schedule 1	pre-printed on the sheet: ...ds Non-metallic minerals XM0204%and quarry resources Copper an
+2200m-2018	2200M-03132025	frm2200M:txtSched1ATC7	XM050	e	Schedule 1	pre-printed on the sheet: ...rals XM040Gold and Chromite 4%XM050Indigenous Petroleum 6%Natural
 2200m-2018	2200M-03132025	frm2200M:txtSched1Description7	INDEGENOUS PETROLEUM	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE7	6%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1ATC8	XM051	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1Description8	NATURAL GAS OR LIQUIFIED NATUR	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE8	0%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1ATC9	XM060	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1ATC10	XM060	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE7	6%	e	Schedule 1	pre-printed on the sheet: ...e 4%XM050Indigenous Petroleum 6%Natural Gas or Liquefied Natur
+2200m-2018	2200M-03132025	frm2200M:txtSched1ATC8	XM051	e	Schedule 1	pre-printed on the sheet: ...iquefied Natural Gas (locally XM0510%extracted)Other Metallic Min
+2200m-2018	2200M-03132025	frm2200M:txtSched1Description8	NATURAL GAS OR LIQUIFIED NATUR	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxRateE8	0%	e	Schedule 1	pre-printed on the sheet: ...ied Natural Gas (locally XM0510%extracted)Other Metallic Miner
+2200m-2018	2200M-03132025	frm2200M:txtSched1ATC9	XM060	e	Schedule 1	pre-printed on the sheet: ...acted)Other Metallic Minerals XM060(specify)12Schedule 1 – contin
+2200m-2018	2200M-03132025	frm2200M:txtSched1ATC10	XM060	e	Schedule 1	pre-printed on the sheet: ...acted)Other Metallic Minerals XM060(specify)12Schedule 1 – contin
 2200m-2018	2200M-03132025	frm2200M:txtSched1ATC11	XM060	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 2200m-2018	2200M-03132025	frm2200M:txtSched1ATC12	XM060	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 2200m-2018	2200M-03132025	frm2200M:txtSched1ATC13	XM060	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
@@ -1122,14 +1122,14 @@ form	sample	key	official	class	item	note
 2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxDueF14	1,400.25	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxDueF15	1,500.25	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 2200m-2018	2200M-03132025	frm2200M:txtSched1_LocallyExtractedTaxDueF16	1,600.25	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
-2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate1	P 50/MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate2	P 100/MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate3	P 150/MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate4	4%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate5	4%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate6	4%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate7	6%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate8	0%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate1	P 50/MT	e	Schedule 1	pre-printed on the sheet: ...Coal and Coke January 1, 2018 P 50/MT XM010January 1, 2019 P 100/MT
+2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate2	P 100/MT	e	Schedule 1	pre-printed on the sheet: ... P 50/MT XM010January 1, 2019 P 100/MT January 1, 2020 P 150/MT and 
+2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate3	P 150/MT	e	Schedule 1	pre-printed on the sheet: ...2019 P 100/MT January 1, 2020 P 150/MT and onwards Non-metallic mine
+2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate4	4%	e	Schedule 1	pre-printed on the sheet: ...ds Non-metallic minerals XM0204%and quarry resources Copper an
+2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate5	4%	e	Schedule 1	pre-printed on the sheet: ...ds Non-metallic minerals XM0204%and quarry resources Copper an
+2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate6	4%	e	Schedule 1	pre-printed on the sheet: ...ds Non-metallic minerals XM0204%and quarry resources Copper an
+2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate7	6%	e	Schedule 1	pre-printed on the sheet: ...e 4%XM050Indigenous Petroleum 6%Natural Gas or Liquefied Natur
+2200m-2018	2200M-03132025	frm2200M:txtSched1_ImportedTaxRate8	0%	e	Schedule 1	pre-printed on the sheet: ...ied Natural Gas (locally XM0510%extracted)Other Metallic Miner
 2200m-2018	2200M-03132025	frm2200M:txtSched1_descriptionCont11	CLAY X	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 2200m-2018	2200M-03132025	frm2200M:txtSched1_descriptionCont12	SHALE	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 2200m-2018	2200M-03132025	frm2200M:txtSched1_descriptionCont13	ADDED MINERAL 13	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
@@ -1156,33 +1156,33 @@ form	sample	key	official	class	item	note
 2200m-2018	2200M-03142025	frm2200M:txtPg2TinC1	123	b		carried by frm2200M:txtPg1TIN1
 2200m-2018	2200M-03142025	frm2200M:txtPg2TinC2	456	b		carried by frm2200M:txtPg1TIN2
 2200m-2018	2200M-03142025	frm2200M:txtPg2TinC3	788	b		carried by frm2200M:txtPg1TIN3
-2200m-2018	2200M-03142025	frm2200M:txtSched1ATC1	XM010	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1ATC2	XM010	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1ATC3	XM010	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1Description1	COAL AND COKE - JANUARY 1, 201	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1Description2	COAL AND COKE - JANUARY 1, 201	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1Description3	COAL AND COKE - JANUARY 1, 202	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200m-2018	2200M-03142025	frm2200M:txtSched1ATC1	XM010	e	Schedule 1	pre-printed on the sheet: ... Coke January 1, 2018 P 50/MT XM010January 1, 2019 P 100/MT Janua
+2200m-2018	2200M-03142025	frm2200M:txtSched1ATC2	XM010	e	Schedule 1	pre-printed on the sheet: ... Coke January 1, 2018 P 50/MT XM010January 1, 2019 P 100/MT Janua
+2200m-2018	2200M-03142025	frm2200M:txtSched1ATC3	XM010	e	Schedule 1	pre-printed on the sheet: ... Coke January 1, 2018 P 50/MT XM010January 1, 2019 P 100/MT Janua
+2200m-2018	2200M-03142025	frm2200M:txtSched1Description1	COAL AND COKE - JANUARY 1, 201	e	Schedule 1	pre-printed on the sheet: ...(alnum-normalized match)
+2200m-2018	2200M-03142025	frm2200M:txtSched1Description2	COAL AND COKE - JANUARY 1, 201	e	Schedule 1	pre-printed on the sheet: ...(alnum-normalized match)
+2200m-2018	2200M-03142025	frm2200M:txtSched1Description3	COAL AND COKE - JANUARY 1, 202	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
 2200m-2018	2200M-03142025	frm2200M:LocallyExtractedRate1	250,000.00	a		visible input, item None, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE1	P 50/MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE2	P 100/MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE3	P 150/MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1ATC4	XM020	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1Description4	NON-METALLIC MINERALS AND QUAR	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE4	4%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1ATC5	XM030	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1Description5	COPPER AND OTHER METALLIC MINE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE5	4%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1ATC6	XM040	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1Description6	GOLD AND CHROMITE	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE6	4%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1ATC7	XM050	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE1	P 50/MT	e	Schedule 1	pre-printed on the sheet: ...Coal and Coke January 1, 2018 P 50/MT XM010January 1, 2019 P 100/MT
+2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE2	P 100/MT	e	Schedule 1	pre-printed on the sheet: ... P 50/MT XM010January 1, 2019 P 100/MT January 1, 2020 P 150/MT and 
+2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE3	P 150/MT	e	Schedule 1	pre-printed on the sheet: ...2019 P 100/MT January 1, 2020 P 150/MT and onwards Non-metallic mine
+2200m-2018	2200M-03142025	frm2200M:txtSched1ATC4	XM020	e	Schedule 1	pre-printed on the sheet: ...onwards Non-metallic minerals XM0204%and quarry resources Copper 
+2200m-2018	2200M-03142025	frm2200M:txtSched1Description4	NON-METALLIC MINERALS AND QUAR	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE4	4%	e	Schedule 1	pre-printed on the sheet: ...ds Non-metallic minerals XM0204%and quarry resources Copper an
+2200m-2018	2200M-03142025	frm2200M:txtSched1ATC5	XM030	e	Schedule 1	pre-printed on the sheet: ...ry resources Copper and Other XM0304%Metallic Minerals XM040Gold 
+2200m-2018	2200M-03142025	frm2200M:txtSched1Description5	COPPER AND OTHER METALLIC MINE	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE5	4%	e	Schedule 1	pre-printed on the sheet: ...ds Non-metallic minerals XM0204%and quarry resources Copper an
+2200m-2018	2200M-03142025	frm2200M:txtSched1ATC6	XM040	e	Schedule 1	pre-printed on the sheet: ...ther XM0304%Metallic Minerals XM040Gold and Chromite 4%XM050Indig
+2200m-2018	2200M-03142025	frm2200M:txtSched1Description6	GOLD AND CHROMITE	e	Schedule 1	pre-printed on the sheet: ...XM0304%Metallic Minerals XM040Gold and Chromite 4%XM050Indigenous Petroleum 6
+2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE6	4%	e	Schedule 1	pre-printed on the sheet: ...ds Non-metallic minerals XM0204%and quarry resources Copper an
+2200m-2018	2200M-03142025	frm2200M:txtSched1ATC7	XM050	e	Schedule 1	pre-printed on the sheet: ...rals XM040Gold and Chromite 4%XM050Indigenous Petroleum 6%Natural
 2200m-2018	2200M-03142025	frm2200M:txtSched1Description7	INDEGENOUS PETROLEUM	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE7	6%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1ATC8	XM051	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1Description8	NATURAL GAS OR LIQUIFIED NATUR	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE8	0%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1ATC9	XM060	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1ATC10	XM060	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE7	6%	e	Schedule 1	pre-printed on the sheet: ...e 4%XM050Indigenous Petroleum 6%Natural Gas or Liquefied Natur
+2200m-2018	2200M-03142025	frm2200M:txtSched1ATC8	XM051	e	Schedule 1	pre-printed on the sheet: ...iquefied Natural Gas (locally XM0510%extracted)Other Metallic Min
+2200m-2018	2200M-03142025	frm2200M:txtSched1Description8	NATURAL GAS OR LIQUIFIED NATUR	e	Schedule 1	pre-printed on the sheet (word-overlap match; row text interleaves with cells)
+2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxRateE8	0%	e	Schedule 1	pre-printed on the sheet: ...ied Natural Gas (locally XM0510%extracted)Other Metallic Miner
+2200m-2018	2200M-03142025	frm2200M:txtSched1ATC9	XM060	e	Schedule 1	pre-printed on the sheet: ...acted)Other Metallic Minerals XM060(specify)12Schedule 1 – contin
+2200m-2018	2200M-03142025	frm2200M:txtSched1ATC10	XM060	e	Schedule 1	pre-printed on the sheet: ...acted)Other Metallic Minerals XM060(specify)12Schedule 1 – contin
 2200m-2018	2200M-03142025	frm2200M:txtSched1ATC11	XM060	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 2200m-2018	2200M-03142025	frm2200M:txtSched1ATC12	XM060	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 2200m-2018	2200M-03142025	frm2200M:txtSched1_description11	CLAY X	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
@@ -1190,14 +1190,14 @@ form	sample	key	official	class	item	note
 2200m-2018	2200M-03142025	frm2200M:txtSched1_PlaceOfRemoval11	RIZAL	b		carried by frm2200M:txtSched1_PlaceOfRemoval4 (text substring)
 2200m-2018	2200M-03142025	frm2200M:txtSched1_PlaceOfRemoval12	BULACAN	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 2200m-2018	2200M-03142025	frm2200M:txtSched1_LocallyExtractedTaxDueF11	10.00	b		carried by frm2200M:txtSched1_VOMRIExemptB1
-2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate1	P 50/MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate2	P 100/MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate3	P 150/MT	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate4	4%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate5	4%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate6	4%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate7	6%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
-2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate8	0%	a	Schedule 1	visible input, item Schedule 1, nowhere in the printed output
+2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate1	P 50/MT	e	Schedule 1	pre-printed on the sheet: ...Coal and Coke January 1, 2018 P 50/MT XM010January 1, 2019 P 100/MT
+2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate2	P 100/MT	e	Schedule 1	pre-printed on the sheet: ... P 50/MT XM010January 1, 2019 P 100/MT January 1, 2020 P 150/MT and 
+2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate3	P 150/MT	e	Schedule 1	pre-printed on the sheet: ...2019 P 100/MT January 1, 2020 P 150/MT and onwards Non-metallic mine
+2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate4	4%	e	Schedule 1	pre-printed on the sheet: ...ds Non-metallic minerals XM0204%and quarry resources Copper an
+2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate5	4%	e	Schedule 1	pre-printed on the sheet: ...ds Non-metallic minerals XM0204%and quarry resources Copper an
+2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate6	4%	e	Schedule 1	pre-printed on the sheet: ...ds Non-metallic minerals XM0204%and quarry resources Copper an
+2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate7	6%	e	Schedule 1	pre-printed on the sheet: ...e 4%XM050Indigenous Petroleum 6%Natural Gas or Liquefied Natur
+2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxRate8	0%	e	Schedule 1	pre-printed on the sheet: ...ied Natural Gas (locally XM0510%extracted)Other Metallic Miner
 2200m-2018	2200M-03142025	frm2200M:txtSched1_descriptionCont11	CLAY X	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 2200m-2018	2200M-03142025	frm2200M:txtSched1_descriptionCont12	SHALE	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 2200m-2018	2200M-03142025	frm2200M:txtSched1_ImportedTaxableG11	7.00	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
@@ -1501,10 +1501,10 @@ form	sample	key	official	class	item	note
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtPg3Pt6S3I8_2Col1	SPECIAL TWO	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 1702ex-2018	1702EX-122025-popups	frm1702EX:txtPg3Pt6S3I8_2Col2	9,000.00	b		carried by derived:amount:txtPg3Pt6I17OthersHAmt
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:ddlPg1I2Date	06	b	2D	carried by derived:year_end_mm2
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1I2YearEnd	25	a	2Y	visible input, item 2Y, nowhere in the printed output
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1Pt1I6TINC1	123	a	6T	visible input, item 6T, nowhere in the printed output
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1Pt1I6TINC2	456	a	6T	visible input, item 6T, nowhere in the printed output
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1Pt1I6TINC3	788	a	6T	visible input, item 6T, nowhere in the printed output
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1I2YearEnd	25	e	2Y	pre-printed on the sheet: ...3 Cash/Bank Debit Memo 24Check25 Tax Debit Memo 26Others(speci
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1Pt1I6TINC1	123	e	6T	pre-printed on the sheet: ...Part IV-Schedule 7.1, Item 7A)1234 BIR Form No.Annual Income Ta
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1Pt1I6TINC2	456	e	6T	pre-printed on the sheet: ...me/(Loss) (Item 4 Less Item 9)45674567123 
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1Pt1I6TINC3	788	b	6T	TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1Pt1I7RDO	039	c	7R	radio/checkbox option input; the sheet marks the choice with X
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg2TIN1	123	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg2TIN2	456	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
@@ -1521,19 +1521,19 @@ form	sample	key	official	class	item	note
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg4TIN1	123	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg4TIN2	456	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg4TIN3	788	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1AttMTIN1	123	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1AttMTIN2	456	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1AttMTIN3	788	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg2AttMTIN1	123	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg2AttMTIN2	456	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg2AttMTIN3	788	a		visible input, item None, nowhere in the printed output
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1AttMTIN1	123	e		pre-printed on the sheet: ...Part IV-Schedule 7.1, Item 7A)1234 BIR Form No.Annual Income Ta
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1AttMTIN2	456	e		pre-printed on the sheet: ...me/(Loss) (Item 4 Less Item 9)45674567123 
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg1AttMTIN3	788	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg2AttMTIN1	123	e		pre-printed on the sheet: ...Part IV-Schedule 7.1, Item 7A)1234 BIR Form No.Annual Income Ta
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg2AttMTIN2	456	e		pre-printed on the sheet: ...me/(Loss) (Item 4 Less Item 9)45674567123 
+1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtPg2AttMTIN3	788	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtCurrentPage	1	c		control metadata / hidden / pagination-state, not a printed box
 1702mx-2018c	1702MX-0625-fiscal	frm1702MX:txtMaxPage	4	c		control metadata / hidden / pagination-state, not a printed box
-1702mx-2018c	1702MX-1225	frm1702MX:ddlPg1I2Date	12	a	2D	visible input, item 2D, nowhere in the printed output
-1702mx-2018c	1702MX-1225	frm1702MX:txtPg1I2YearEnd	25	a	2Y	visible input, item 2Y, nowhere in the printed output
-1702mx-2018c	1702MX-1225	frm1702MX:txtPg1Pt1I6TINC1	123	a	6T	visible input, item 6T, nowhere in the printed output
-1702mx-2018c	1702MX-1225	frm1702MX:txtPg1Pt1I6TINC2	456	a	6T	visible input, item 6T, nowhere in the printed output
-1702mx-2018c	1702MX-1225	frm1702MX:txtPg1Pt1I6TINC3	788	a	6T	visible input, item 6T, nowhere in the printed output
+1702mx-2018c	1702MX-1225	frm1702MX:ddlPg1I2Date	12	e	2D	pre-printed on the sheet: ...11 Contact Number (MM/DD/YYYY)12 Email Address Optional Standa
+1702mx-2018c	1702MX-1225	frm1702MX:txtPg1I2YearEnd	25	e	2Y	pre-printed on the sheet: ...3 Cash/Bank Debit Memo 24Check25 Tax Debit Memo 26Others(speci
+1702mx-2018c	1702MX-1225	frm1702MX:txtPg1Pt1I6TINC1	123	e	6T	pre-printed on the sheet: ...Part IV-Schedule 7.1, Item 7A)1234 BIR Form No.Annual Income Ta
+1702mx-2018c	1702MX-1225	frm1702MX:txtPg1Pt1I6TINC2	456	e	6T	pre-printed on the sheet: ...me/(Loss) (Item 4 Less Item 9)45674567123 
+1702mx-2018c	1702MX-1225	frm1702MX:txtPg1Pt1I6TINC3	788	b	6T	TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg1Pt1I7RDO	039	c	7R	radio/checkbox option input; the sheet marks the choice with X
 1702mx-2018c	1702MX-1225	frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized	true	c	13M	radio/checkbox option input; the sheet marks the choice with X
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg2TIN1	123	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
@@ -1557,19 +1557,19 @@ form	sample	key	official	class	item	note
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg4TIN3	788	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg7Sc9I1CF	5000	a	1C	visible input, item 1C, nowhere in the printed output
 1702mx-2018c	1702MX-1225	frm1702MX:txtPg7Sc9I1CG	15000	b	1C	carried by comb digits (text substring)
-1702mx-2018c	1702MX-1225	frm1702MX:txtPg1AttMTIN1	123	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-1225	frm1702MX:txtPg1AttMTIN2	456	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-1225	frm1702MX:txtPg1AttMTIN3	788	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-1225	frm1702MX:txtPg2AttMTIN1	123	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-1225	frm1702MX:txtPg2AttMTIN2	456	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-1225	frm1702MX:txtPg2AttMTIN3	788	a		visible input, item None, nowhere in the printed output
+1702mx-2018c	1702MX-1225	frm1702MX:txtPg1AttMTIN1	123	e		pre-printed on the sheet: ...Part IV-Schedule 7.1, Item 7A)1234 BIR Form No.Annual Income Ta
+1702mx-2018c	1702MX-1225	frm1702MX:txtPg1AttMTIN2	456	e		pre-printed on the sheet: ...me/(Loss) (Item 4 Less Item 9)45674567123 
+1702mx-2018c	1702MX-1225	frm1702MX:txtPg1AttMTIN3	788	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
+1702mx-2018c	1702MX-1225	frm1702MX:txtPg2AttMTIN1	123	e		pre-printed on the sheet: ...Part IV-Schedule 7.1, Item 7A)1234 BIR Form No.Annual Income Ta
+1702mx-2018c	1702MX-1225	frm1702MX:txtPg2AttMTIN2	456	e		pre-printed on the sheet: ...me/(Loss) (Item 4 Less Item 9)45674567123 
+1702mx-2018c	1702MX-1225	frm1702MX:txtPg2AttMTIN3	788	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
 1702mx-2018c	1702MX-1225	frm1702MX:txtCurrentPage	1	c		control metadata / hidden / pagination-state, not a printed box
 1702mx-2018c	1702MX-1225	frm1702MX:txtMaxPage	4	c		control metadata / hidden / pagination-state, not a printed box
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:ddlPg1I2Date	12	a	2D	visible input, item 2D, nowhere in the printed output
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1I2YearEnd	25	a	2Y	visible input, item 2Y, nowhere in the printed output
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1Pt1I6TINC1	123	a	6T	visible input, item 6T, nowhere in the printed output
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1Pt1I6TINC2	456	a	6T	visible input, item 6T, nowhere in the printed output
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1Pt1I6TINC3	788	a	6T	visible input, item 6T, nowhere in the printed output
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:ddlPg1I2Date	12	e	2D	pre-printed on the sheet: ...11 Contact Number (MM/DD/YYYY)12 Email Address Optional Standa
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1I2YearEnd	25	e	2Y	pre-printed on the sheet: ...3 Cash/Bank Debit Memo 24Check25 Tax Debit Memo 26Others(speci
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1Pt1I6TINC1	123	e	6T	pre-printed on the sheet: ...Part IV-Schedule 7.1, Item 7A)1234 BIR Form No.Annual Income Ta
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1Pt1I6TINC2	456	e	6T	pre-printed on the sheet: ...me/(Loss) (Item 4 Less Item 9)45674567123 
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1Pt1I6TINC3	788	b	6T	TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1Pt1I7RDO	039	c	7R	radio/checkbox option input; the sheet marks the choice with X
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized	true	c	13M	radio/checkbox option input; the sheet marks the choice with X
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2TIN1	123	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
@@ -1600,12 +1600,12 @@ form	sample	key	official	class	item	note
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg4TIN3	788	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg7Sc9I1CF	5000	a	1C	visible input, item 1C, nowhere in the printed output
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg7Sc9I1CG	15000	b	1C	carried by comb digits (text substring)
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1AttMTIN1	123	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1AttMTIN2	456	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1AttMTIN3	788	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2AttMTIN1	123	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2AttMTIN2	456	a		visible input, item None, nowhere in the printed output
-1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2AttMTIN3	788	a		visible input, item None, nowhere in the printed output
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1AttMTIN1	123	e		pre-printed on the sheet: ...Part IV-Schedule 7.1, Item 7A)1234 BIR Form No.Annual Income Ta
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1AttMTIN2	456	e		pre-printed on the sheet: ...me/(Loss) (Item 4 Less Item 9)45674567123 
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg1AttMTIN3	788	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2AttMTIN1	123	e		pre-printed on the sheet: ...Part IV-Schedule 7.1, Item 7A)1234 BIR Form No.Annual Income Ta
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2AttMTIN2	456	e		pre-printed on the sheet: ...me/(Loss) (Item 4 Less Item 9)45674567123 
+1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg2AttMTIN3	788	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtCurrentPage	1	c		control metadata / hidden / pagination-state, not a printed box
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtMaxPage	4	c		control metadata / hidden / pagination-state, not a printed box
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtCtrmodalPg6Sc6	7	c		row-entry modal input, not itself a sheet cell
@@ -1640,8 +1640,8 @@ form	sample	key	official	class	item	note
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg6Sc6_SubTotalCA	12750	a		visible input, item None, nowhere in the printed output
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg6Sc6_SubTotalCC	19750	a		visible input, item None, nowhere in the printed output
 1702mx-2018c	1702MX-1225-sched6	frm1702MX:txtPg6Sc6_SubTotalCD	32500	a		visible input, item None, nowhere in the printed output
-1707-2021	1707-06302025	frm1707:txtPg1I3Indiv	II 030	a	3I	visible input, item 3I, nowhere in the printed output
-1707-2021	1707-06302025	frm1707:txtPg1I3Corp	IC 110	a	3C	visible input, item 3C, nowhere in the printed output
+1707-2021	1707-06302025	frm1707:txtPg1I3Indiv	II 030	e	3I	pre-printed on the sheet: ...(alnum-normalized match)
+1707-2021	1707-06302025	frm1707:txtPg1I3Corp	IC 110	e	3C	pre-printed on the sheet: ...(alnum-normalized match)
 1707-2021	1707-06302025	frm1707:txtPg1TIN1	123	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1707-2021	1707-06302025	frm1707:txtPg1TIN2	456	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1707-2021	1707-06302025	frm1707:txtPg1TIN3	788	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
@@ -1650,15 +1650,15 @@ form	sample	key	official	class	item	note
 1707-2021	1707-06302025	frm1707:ProfileZipCode	1100	a		visible input, item None, nowhere in the printed output
 1707-2021	1707-06302025	frm1707:ProfileContactNum	09170000000	a		visible input, item None, nowhere in the printed output
 1707-2021	1707-06302025	frm1707:ProfileEmailAddr	sample.taxpayer@example.com	a		visible input, item None, nowhere in the printed output
-1707-2021	1707-06302025	frm1707:txtPg1P2I13AppTaxRate	15	a	13A	visible input, item 13A, nowhere in the printed output
-1707-2021	1707-06302025	frm1707:txtPg2TinC1	123	a		visible input, item None, nowhere in the printed output
-1707-2021	1707-06302025	frm1707:txtPg2TinC2	456	a		visible input, item None, nowhere in the printed output
-1707-2021	1707-06302025	frm1707:txtPg2TinC3	788	a		visible input, item None, nowhere in the printed output
+1707-2021	1707-06302025	frm1707:txtPg1P2I13AppTaxRate	15	e	13A	pre-printed on the sheet: ...(Loss) (Item 10 Less Item 11)●15%13Applicable Tax Rate 14Tax D
+1707-2021	1707-06302025	frm1707:txtPg2TinC1	123	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
+1707-2021	1707-06302025	frm1707:txtPg2TinC2	456	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
+1707-2021	1707-06302025	frm1707:txtPg2TinC3	788	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
 1707-2021	1707-06302025	frm1707:txtLOB	SAMPLE CONSULTING SERVICES	a		visible input, item None, nowhere in the printed output
 1707-2021	1707-06302025	frm1707:txtCurrentPage	1	c		control metadata / hidden / pagination-state, not a printed box
 1707-2021	1707-06302025	frm1707:txtMaxPage	2	c		control metadata / hidden / pagination-state, not a printed box
-1707-2021	1707-07152025	frm1707:txtPg1I3Indiv	II 030	a	3I	visible input, item 3I, nowhere in the printed output
-1707-2021	1707-07152025	frm1707:txtPg1I3Corp	IC 110	a	3C	visible input, item 3C, nowhere in the printed output
+1707-2021	1707-07152025	frm1707:txtPg1I3Indiv	II 030	e	3I	pre-printed on the sheet: ...(alnum-normalized match)
+1707-2021	1707-07152025	frm1707:txtPg1I3Corp	IC 110	e	3C	pre-printed on the sheet: ...(alnum-normalized match)
 1707-2021	1707-07152025	frm1707:txtPg1TIN1	123	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1707-2021	1707-07152025	frm1707:txtPg1TIN2	456	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1707-2021	1707-07152025	frm1707:txtPg1TIN3	788	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
@@ -1668,9 +1668,9 @@ form	sample	key	official	class	item	note
 1707-2021	1707-07152025	frm1707:ProfileContactNum	09170000000	a		visible input, item None, nowhere in the printed output
 1707-2021	1707-07152025	frm1707:ProfileEmailAddr	sample.taxpayer@example.com	a		visible input, item None, nowhere in the printed output
 1707-2021	1707-07152025	frm1707:txtPg1P2I13AppTaxRate	15	b	13A	carried by frm1707:txtPg1I1Day
-1707-2021	1707-07152025	frm1707:txtPg2TinC1	123	a		visible input, item None, nowhere in the printed output
-1707-2021	1707-07152025	frm1707:txtPg2TinC2	456	a		visible input, item None, nowhere in the printed output
-1707-2021	1707-07152025	frm1707:txtPg2TinC3	788	a		visible input, item None, nowhere in the printed output
+1707-2021	1707-07152025	frm1707:txtPg2TinC1	123	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
+1707-2021	1707-07152025	frm1707:txtPg2TinC2	456	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
+1707-2021	1707-07152025	frm1707:txtPg2TinC3	788	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
 1707-2021	1707-07152025	frm1707:txtLOB	SAMPLE CONSULTING SERVICES	a		visible input, item None, nowhere in the printed output
 1707-2021	1707-07152025	frm1707:txtCurrentPage	1	c		control metadata / hidden / pagination-state, not a printed box
 1707-2021	1707-07152025	frm1707:txtMaxPage	2	c		control metadata / hidden / pagination-state, not a printed box
@@ -1690,8 +1690,8 @@ form	sample	key	official	class	item	note
 1707-2021	1707-07152025	frm1707:txtPg2Pt4S3_1Col2	200.50	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 1707-2021	1707-07152025	frm1707:txtPg2Pt4S3_2Col1	TRANSFER TAX	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
 1707-2021	1707-07152025	frm1707:txtPg2Pt4S3_2Col2	300.26	d		key absent from fields.json - likely a legacy/duplicate serialization key, unconfirmed
-1707-2021	1707-08292025	frm1707:txtPg1I3Indiv	II 030	a	3I	visible input, item 3I, nowhere in the printed output
-1707-2021	1707-08292025	frm1707:txtPg1I3Corp	IC 110	a	3C	visible input, item 3C, nowhere in the printed output
+1707-2021	1707-08292025	frm1707:txtPg1I3Indiv	II 030	e	3I	pre-printed on the sheet: ...(alnum-normalized match)
+1707-2021	1707-08292025	frm1707:txtPg1I3Corp	IC 110	e	3C	pre-printed on the sheet: ...(alnum-normalized match)
 1707-2021	1707-08292025	frm1707:txtPg1TIN1	123	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1707-2021	1707-08292025	frm1707:txtPg1TIN2	456	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
 1707-2021	1707-08292025	frm1707:txtPg1TIN3	788	b		TIN fragment; the sheet prints the full TIN via the TIN comb (verified in per-key rows)
@@ -1700,10 +1700,10 @@ form	sample	key	official	class	item	note
 1707-2021	1707-08292025	frm1707:ProfileZipCode	1100	a		visible input, item None, nowhere in the printed output
 1707-2021	1707-08292025	frm1707:ProfileContactNum	09170000000	a		visible input, item None, nowhere in the printed output
 1707-2021	1707-08292025	frm1707:ProfileEmailAddr	sample.taxpayer@example.com	a		visible input, item None, nowhere in the printed output
-1707-2021	1707-08292025	frm1707:txtPg1P2I13AppTaxRate	15	a	13A	visible input, item 13A, nowhere in the printed output
-1707-2021	1707-08292025	frm1707:txtPg2TinC1	123	a		visible input, item None, nowhere in the printed output
-1707-2021	1707-08292025	frm1707:txtPg2TinC2	456	a		visible input, item None, nowhere in the printed output
-1707-2021	1707-08292025	frm1707:txtPg2TinC3	788	a		visible input, item None, nowhere in the printed output
+1707-2021	1707-08292025	frm1707:txtPg1P2I13AppTaxRate	15	e	13A	pre-printed on the sheet: ...(Loss) (Item 10 Less Item 11)●15%13Applicable Tax Rate 14Tax D
+1707-2021	1707-08292025	frm1707:txtPg2TinC1	123	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
+1707-2021	1707-08292025	frm1707:txtPg2TinC2	456	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
+1707-2021	1707-08292025	frm1707:txtPg2TinC3	788	b		TIN segment; the sheet prints the full TIN through the TIN comb (per-digit cells defeat exact matching; verified in per-key rows)
 1707-2021	1707-08292025	frm1707:txtLOB	SAMPLE CONSULTING SERVICES	a		visible input, item None, nowhere in the printed output
 1707-2021	1707-08292025	frm1707:txtCurrentPage	1	c		control metadata / hidden / pagination-state, not a printed box
 1707-2021	1707-08292025	frm1707:txtMaxPage	2	c		control metadata / hidden / pagination-state, not a printed box
