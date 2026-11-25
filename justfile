@@ -675,11 +675,20 @@ play-bundle build="":
     TARGET_SDK="$({{PYTHON}} -c 'import json; print(json.load(open("nsh/nsh.json"))["android"]["targetSdk"])')"
     # The build folder is this checkout's own (target/play-bundle) unless CARGO_TARGET_DIR is set: Cargo cannot tell two
     # checkouts of the same crate version apart in a shared folder, so a bundle could link another worktree's bir-core,
-    # form definitions included, with no error.
-    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/play-bundle}"
+    # form definitions included, with no error. The nsh CLI is $NSH_TOOLS's (default the shared ~/BuwizNsh/tools): a Mac
+    # whose shared tool must stay as it is builds with the pinned one beside it (scripts/setup-android-macos.sh). Either way
+    # the CLI must be at the NSH pin, or the bundle is not what CI tested.
+    TOOLS="${NSH_TOOLS:-$HOME/BuwizNsh/tools}"
+    export PATH="$TOOLS/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/play-bundle}"
     # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
     PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
     scripts/build-line.sh --strict
+    PIN="$(sed -n 's/^ *NSH_PINNED_REF: *//p' .github/workflows/nsh.yml | head -1)"
+    HAVE="$(nsh --version 2>/dev/null || true)"
+    case "$HAVE" in
+        *"(${PIN:0:7})"*) ;;
+        *) echo "❌ $TOOLS/bin/nsh is '${HAVE:-missing}', not the NSH pin ${PIN:0:7}: run scripts/setup-android-macos.sh (NSH_TOOLS=<folder> for one beside the shared tool)." >&2; exit 1 ;;
+    esac
     # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one.
     unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV
     # nsh builds libnsh.so in its generated workspace, which has no [profile.release]: this repository's own profile never

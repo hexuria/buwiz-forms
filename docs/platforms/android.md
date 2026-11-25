@@ -62,6 +62,23 @@ Three steps on the owner's Mac. The first needs no secret; the second is the onl
    app signing key** (Play App Signing). Google then signs what users install, and our key only proves the upload is
    ours.
 
+### On a Mac, once
+
+`scripts/setup-android-macos.sh` makes this Mac ready for `just play-bundle`: it checks the Android SDK (the
+`platforms;android-<targetSdk>` of `nsh/nsh.json`, build-tools, an NDK), a JDK and the Rust Android targets, and reports
+the command for anything missing; then it moves the NSH checkout beside this repository to the pin, and builds the `nsh`
+CLI and NSH's Android release runtime at the pin into `$NSH_TOOLS` (default `~/BuwizNsh/tools`). `--check` only checks.
+
+`just play-bundle` uses the same `$NSH_TOOLS` and refuses to build when its `nsh` is not at the NSH pin, so a bundle is
+never made with another NSH than CI tested. On a Mac whose shared tool must stay as it is, keep the pinned one beside it
+and point both at it, with a build folder of its own:
+
+```sh
+export NSH_TOOLS=~/BuwizNsh/play-android/tools CARGO_TARGET_DIR=~/BuwizNsh/play-android/target
+scripts/setup-android-macos.sh
+just play-bundle
+```
+
 Machines never build or sign the store bundle. They build development and test packages with the Android debug key
 that `nsh package` makes on its own.
 
