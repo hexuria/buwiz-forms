@@ -3482,7 +3482,10 @@ mod tests {
                 })
                 .unwrap();
             }
-            // This process's worker is sending it now.
+            // This process's worker is sending it now. The set of jobs in flight is one per process, and the other
+            // tests here answer for the same taxpayer and periods on their own threads: a period no other test uses,
+            // so marking this one in flight can never make their returns read as being sent.
+            let period = period + SHAPES.len() as i64;
             let id = unknown_outcome(code, period, reason_key);
             let before = stored_row(id);
             let (summary, _) =
