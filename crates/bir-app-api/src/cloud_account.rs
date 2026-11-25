@@ -128,7 +128,22 @@ pub(crate) fn save_signed_in(
     }
     // A new sign-in registers a new device key with the relay (the old one belonged to the old sign-in).
     bir_core::relay::forget_device();
+    register_device_soon();
     Ok(())
+}
+
+/// Adds this device to the account (bir-core `relay::register_after_sign_in`) on a thread of its own, so signing in never
+/// waits for it: a failure is logged there and the first send registers as it always did; a practice account adds none.
+fn register_device_soon() {
+    let database = bir_core::db::capture_database_path_override();
+    let started = std::thread::Builder::new()
+        .name("buwiz-device-register".into())
+        .spawn(move || {
+            database.run(bir_core::relay::register_after_sign_in);
+        });
+    if let Err(error) = started {
+        tracing::warn!("device registration not started ({error}); the first send registers");
+    }
 }
 
 fn refresh_account(

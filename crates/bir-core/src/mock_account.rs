@@ -100,6 +100,8 @@ struct EmailRequest {
 /// A registered device: one row per account and install.
 struct DeviceRow {
     id: String,
+    /// The sign-in that registered it.
+    session: String,
     platform: String,
     name: String,
 }
@@ -750,7 +752,10 @@ fn email_start(state: &mut State, value: &Value) -> Response {
         state
             .email_requests
             .values()
-            .filter(|r| r.email == email && !r.spent && r.expires > Instant::now())
+            // Only while a usable code exists: one whose tries are used up is no reason to wait.
+            .filter(|r| {
+                r.email == email && !r.spent && r.expires > Instant::now() && r.attempts_left > 0
+            })
             .find(|r| r.install.as_deref() == Some(install))
     });
     if let Some(live) = held {
@@ -851,7 +856,7 @@ fn email_verify(state: &mut State, value: &Value) -> Response {
         return failure(
             400,
             "too_many_attempts",
-            "Too many wrong codes. Wait for a new code.",
+            "Too many wrong codes. Send a new code to try again.",
             json!({}),
         );
     }
@@ -874,7 +879,7 @@ fn email_verify(state: &mut State, value: &Value) -> Response {
             return failure(
                 400,
                 "too_many_attempts",
-                "Too many wrong codes. Wait for a new code.",
+                "Too many wrong codes. Send a new code to try again.",
                 json!({}),
             );
         }
@@ -949,6 +954,23 @@ fn register_device(r: &Request, state: &mut State, value: &Value) -> Response {
             json!({}),
         );
     }
+    // A sign-in without an install id may not take an install whose device belongs to another live sign-in.
+    if granted.is_none()
+        && let Some(install) = &install
+        && let Some(row) = state.registered.get(&(user_id.clone(), install.clone()))
+        && row.session != session
+        && state
+            .grants
+            .iter()
+            .any(|g| g.session == row.session && g.refresh_expires > Instant::now())
+    {
+        return failure(
+            409,
+            "install_in_use",
+            "This device belongs to another sign-in.",
+            json!({}),
+        );
+    }
     if state.registered_sessions.contains(&session) {
         return failure(
             409,
@@ -957,7 +979,7 @@ fn register_device(r: &Request, state: &mut State, value: &Value) -> Response {
             json!({}),
         );
     }
-    state.registered_sessions.insert(session);
+    state.registered_sessions.insert(session.clone());
     let platform = Some(get("platform"))
         .filter(|p| PLATFORMS.contains(p))
         .unwrap_or_default()
@@ -972,6 +994,7 @@ fn register_device(r: &Request, state: &mut State, value: &Value) -> Response {
         key,
         DeviceRow {
             id: id.clone(),
+            session: session.clone(),
             platform,
             name: get("name").to_owned(),
         },
@@ -1535,6 +1558,17 @@ mod tests {
                 "/auth/email/verify",
                 json!({"request_id":id,"secret":"s","code":DEFAULT_CODE}),
             );
+            // The dead code holds nothing back: a new start for the same address and install is accepted at once.
+            assert_eq!(
+                post(
+                    &mut http,
+                    &url,
+                    "/auth/email/start",
+                    start_body("t@example.test", "s9")
+                )
+                .0,
+                200
+            );
             assert_eq!(right["error"], "too_many_attempts");
 
             let (status, bad) = post(
@@ -1757,6 +1791,41 @@ mod tests {
                 ))
             );
             assert_eq!(register(&mut http, None, Some(INSTALL)).0, 401);
+        })
+        .await
+        .unwrap();
+    }
+
+    /// A sign-in that named no install (an older client's browser flow) may not take an install whose device belongs to
+    /// another live sign-in of the account: `409 install_in_use`.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_sign_in_without_an_install_cannot_take_one_in_use() {
+        let server = mock(MockOptions::default()).await;
+        let url = server.url();
+        tokio::task::spawn_blocking(move || {
+            let mut http = BlockingHttp::new();
+            let register = |http: &mut BlockingHttp, access: &str| {
+                http.exchange(&HttpRequest {
+                    method: "POST",
+                    url: format!("{url}/api/devices"),
+                    content_type: "application/json",
+                    bearer: Some(access.to_owned()),
+                    body: json!({"public_key":"pk","name":"n","platform":"macos","install_id":INSTALL}).to_string(),
+                })
+                .unwrap()
+            };
+            // The browser account is tester@buwiz.local; its email sign-in from INSTALL registers first.
+            let (_, started) = post(&mut http, &url, "/auth/email/start", start_body("tester@buwiz.local", "e"));
+            let (_, tokens) = post(&mut http, &url, "/auth/email/verify", json!({"request_id":started["request_id"],"secret":"e","code":DEFAULT_CODE}));
+            assert_eq!(register(&mut http, tokens["access_token"].as_str().unwrap()).status, 200);
+            let started = request(&mut http, &url, "/auth/device/start", json!({"client_id":"buwiz-desktop"}).to_string());
+            let started: Value = serde_json::from_str(&started.body).unwrap();
+            browser_decision(&url, started["user_code"].as_str().unwrap(), "approve");
+            let polled = request(&mut http, &url, "/auth/device/poll", json!({"client_id":"buwiz-desktop","device_code":started["device_code"]}).to_string());
+            let polled: Value = serde_json::from_str(&polled.body).unwrap();
+            let answer = register(&mut http, polled["access_token"].as_str().unwrap());
+            assert_eq!(answer.status, 409);
+            assert_eq!(serde_json::from_str::<Value>(&answer.body).unwrap()["error"], "install_in_use");
         })
         .await
         .unwrap();

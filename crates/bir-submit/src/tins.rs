@@ -442,6 +442,10 @@ impl Submitter {
 fn tins_error(error: ClientError) -> TinsError {
     match error {
         ClientError::SignedOut | ClientError::DeviceRevoked => TinsError::SignedOut,
+        error @ (ClientError::DeviceKeyMissing | ClientError::InstallInUse) => TinsError::Server {
+            code: "device_not_registered".to_owned(),
+            message: error.to_string(),
+        },
         ClientError::Network(_) => TinsError::Offline,
         ClientError::Server { code, .. } if code == "account_banned" => TinsError::Banned,
         ClientError::Server { code, message, .. } | ClientError::NotATry { code, message, .. } => {
@@ -553,6 +557,8 @@ mod tests {
             server_url: url.to_owned(),
             device_name: "test".into(),
             trust_keys,
+            install_id: None,
+            platform: None,
         };
         Submitter::new(config, Box::new(store), tokens)
     }
