@@ -1155,6 +1155,7 @@ fn skipped(top: &str) -> bool {
             submission_claimed_at: Some(String::new()),
             submission_claim_lease_until: Some(String::new()),
             submission_put_started_at: Some(String::new()),
+            relay_pending: Some(String::new()),
             submission_error: Some(String::new()),
             next_retry_at: Some(String::new()),
             trigger_date_entered: true,

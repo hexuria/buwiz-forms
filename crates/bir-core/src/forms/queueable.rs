@@ -99,6 +99,16 @@ pub struct SubmissionLifecycle {
     /// printed or part of the queued fingerprint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relay_receipt: Option<String>,
+    /// The Buwiz relay send of this claimed return that may still be under
+    /// way, or whose end this app did not see: the client's
+    /// `bir_submit::PendingSend` as JSON (a submission id, a ticket id, the
+    /// XML's hash; never a token, a key or the return). Written by the worker
+    /// alone, on its own claim, before anything could reach the BIR; cleared
+    /// whenever the return leaves the claim. The worker asks the server how
+    /// such a send ended. Never filed, printed or part of the queued
+    /// fingerprint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay_pending: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirmed_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -196,6 +206,7 @@ impl Default for SubmissionLifecycle {
             submitted_dry_run: false,
             submitted_via_relay: false,
             relay_receipt: None,
+            relay_pending: None,
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
@@ -235,6 +246,7 @@ impl SubmissionLifecycle {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
     }
 
     fn touch(&mut self) {
@@ -429,6 +441,7 @@ impl SubmissionLifecycle {
         self.submission_claim_lease_until =
             Some(crate::filing_queue::claim_lease_until(claimed_at));
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.submission_error = Some(
             "Submission outcome pending. Automatic retry is disabled unless the claim lease expires before PUT starts; keep any BIR confirmation or receipt and contact support for manual reconciliation before taking another submission action."
                 .to_string(),
