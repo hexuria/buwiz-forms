@@ -12,6 +12,26 @@ use super::fetcher::ImapAuthenticator;
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
 
+/// Whether this build can start Google's sign-in for mail: a client id and a client secret exist, from the
+/// environment or compiled in (the lookups below). The screens offer Gmail only when this holds; without it a
+/// person would only meet "GOOGLE_CLIENT_ID must be set".
+pub fn google_sign_in_available() -> bool {
+    configured(
+        std::env::var("GOOGLE_CLIENT_ID").ok(),
+        option_env!("GOOGLE_CLIENT_ID"),
+    ) && configured(
+        std::env::var("GOOGLE_CLIENT_SECRET").ok(),
+        option_env!("GOOGLE_CLIENT_SECRET"),
+    )
+}
+
+/// A runtime value, else the compiled one, and not blank.
+fn configured(runtime: Option<String>, compiled: Option<&str>) -> bool {
+    runtime
+        .or_else(|| compiled.map(String::from))
+        .is_some_and(|value| !value.trim().is_empty())
+}
+
 fn get_google_client_id() -> Result<String, anyhow::Error> {
     std::env::var("GOOGLE_CLIENT_ID")
         .ok()
@@ -564,5 +584,20 @@ mod token_endpoint_failure_tests {
         let (access, refresh) = super::access_and_refresh_from_token_body(&body).unwrap();
         assert_eq!(access, "access");
         assert_eq!(refresh, "refresh");
+    }
+}
+
+#[cfg(test)]
+mod availability_tests {
+    use super::configured;
+
+    #[test]
+    fn a_client_value_counts_from_the_environment_or_the_build_and_never_when_blank() {
+        assert!(configured(Some("id".into()), None));
+        assert!(configured(None, Some("id")));
+        assert!(configured(Some("runtime".into()), Some("compiled")));
+        assert!(!configured(None, None));
+        assert!(!configured(Some("  ".into()), None));
+        assert!(!configured(None, Some("")));
     }
 }
