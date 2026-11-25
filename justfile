@@ -567,13 +567,23 @@ _package-mac-appstore args="": build-frozen-html-identity
     # A store package is built in this checkout's own folder, never the shared ~/BuwizNsh/target-nsh: Cargo cannot tell two
     # checkouts of the same crate version apart, so a shared folder can link another worktree's bir-core (its forms) with no
     # error, and the package would carry another branch's form data. A CARGO_TARGET_DIR set by the caller still wins.
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/nsh-store}"
-    # What the package is built from, printed and kept beside it (the app commit, the kit commit, the folder).
-    APP_COMMIT="$(git -C "$root" rev-parse HEAD)"
-    git -C "$root" diff --quiet HEAD -- || APP_COMMIT="$APP_COMMIT (with uncommitted changes)"
-    KIT_COMMIT="$(git -C "$root/../nsh" rev-parse HEAD 2>/dev/null || echo "unknown: no ../nsh checkout")"
-    PROVENANCE="app $APP_COMMIT; kit ../nsh $KIT_COMMIT; tool $(nsh --version 2>/dev/null || echo unknown); build folder $CARGO_TARGET_DIR"
-    echo "Building from: $PROVENANCE"
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$(pwd -P)/target/mac-appstore}"
+    # A store package comes only from the pinned NSH: the nsh tool built at NSH_PINNED_REF (NSH_TOOLS names its folder,
+    # docs/platforms/ios.md) and the ../nsh checkout beside this one at that commit. Anything else is refused.
+    pin="$(sed -n 's/^ *NSH_PINNED_REF: *//p' "$root/.github/workflows/nsh.yml" | head -1)"
+    tool="$(nsh --version 2>/dev/null || echo missing)"
+    tool_ref="$(printf '%s' "$tool" | sed -n 's/.*(\([0-9a-f]\{7,\}\)).*/\1/p')"
+    kit="$(git -C "$root/../nsh" rev-parse HEAD 2>/dev/null || true)"
+    if [ -z "$pin" ] || [ -z "$tool_ref" ] || [ "${pin#"$tool_ref"}" = "$pin" ]; then
+        echo "❌ The nsh tool ($tool) is not built at the NSH pin ${pin:0:8}: set NSH_TOOLS to a tools folder built at the pin (docs/platforms/ios.md)." >&2; exit 1
+    fi
+    if [ "$kit" != "$pin" ]; then
+        echo "❌ ../nsh beside this checkout is at ${kit:-nothing}, not the NSH pin $pin: check it out there first." >&2; exit 1
+    fi
+    dirty=""
+    git -C "$root" diff --quiet HEAD -- || dirty=" (with uncommitted changes)"
+    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, folder $CARGO_TARGET_DIR"
+    echo "$PROVENANCE" >&2
     echo "Building the NSH app for the Mac App Store ($ARCH, build {{BUILD_NUMBER}}, agent=$NSH_MAS_AGENT)..."
     rm -rf "$OUT"
     mkdir -p "$OUT"
@@ -629,8 +639,8 @@ _package-mac-appstore args="": build-frozen-html-identity
         echo "✅ Unsigned PKG created: $PKG_PATH"
         echo "⚠️  Note: You must also codesign the .pkg with an 'Apple Distribution' certificate before submitting."
     fi
-    echo "$PROVENANCE; build {{BUILD_NUMBER}}" > "${PKG_PATH%.pkg}.provenance.txt"
-    echo "   built from: $PROVENANCE"
+    echo "$PROVENANCE, build {{BUILD_NUMBER}}" > "${PKG_PATH%.pkg}.provenance.txt"
+    echo "   $PROVENANCE"
 
 # Google Play bundle (docs/platforms/android.md): an Android App Bundle for phones and tablets with the Play application
 # id com.buwiz.ebirforms (nsh.json keeps dev.goldcoders.bir for every other system and for development builds), the
@@ -743,13 +753,23 @@ ios-appstore: build-frozen-html-identity
     # A store package is built in this checkout's own folder, never the shared ~/BuwizNsh/target-nsh: Cargo cannot tell two
     # checkouts of the same crate version apart, so a shared folder can link another worktree's bir-core (its forms) with no
     # error, and the package would carry another branch's form data. A CARGO_TARGET_DIR set by the caller still wins.
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/nsh-store}"
-    # What the package is built from, printed and kept beside it (the app commit, the kit commit, the folder).
-    APP_COMMIT="$(git -C "$root" rev-parse HEAD)"
-    git -C "$root" diff --quiet HEAD -- || APP_COMMIT="$APP_COMMIT (with uncommitted changes)"
-    KIT_COMMIT="$(git -C "$root/../nsh" rev-parse HEAD 2>/dev/null || echo "unknown: no ../nsh checkout")"
-    PROVENANCE="app $APP_COMMIT; kit ../nsh $KIT_COMMIT; tool $(nsh --version 2>/dev/null || echo unknown); build folder $CARGO_TARGET_DIR"
-    echo "Building from: $PROVENANCE"
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$(pwd -P)/target/ios-appstore}"
+    # A store package comes only from the pinned NSH: the nsh tool built at NSH_PINNED_REF (NSH_TOOLS names its folder,
+    # docs/platforms/ios.md) and the ../nsh checkout beside this one at that commit. Anything else is refused.
+    pin="$(sed -n 's/^ *NSH_PINNED_REF: *//p' "$root/.github/workflows/nsh.yml" | head -1)"
+    tool="$(nsh --version 2>/dev/null || echo missing)"
+    tool_ref="$(printf '%s' "$tool" | sed -n 's/.*(\([0-9a-f]\{7,\}\)).*/\1/p')"
+    kit="$(git -C "$root/../nsh" rev-parse HEAD 2>/dev/null || true)"
+    if [ -z "$pin" ] || [ -z "$tool_ref" ] || [ "${pin#"$tool_ref"}" = "$pin" ]; then
+        echo "❌ The nsh tool ($tool) is not built at the NSH pin ${pin:0:8}: set NSH_TOOLS to a tools folder built at the pin (docs/platforms/ios.md)." >&2; exit 1
+    fi
+    if [ "$kit" != "$pin" ]; then
+        echo "❌ ../nsh beside this checkout is at ${kit:-nothing}, not the NSH pin $pin: check it out there first." >&2; exit 1
+    fi
+    dirty=""
+    git -C "$root" diff --quiet HEAD -- || dirty=" (with uncommitted changes)"
+    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, folder $CARGO_TARGET_DIR"
+    echo "$PROVENANCE" >&2
     OUT="$root/{{RELEASE_DIR}}/ios"
     APP="$OUT/{{APP_NAME}}.app"
     IPA="$root/{{RELEASE_DIR}}/{{APP_NAME}}-iOS-{{VERSION}}.ipa"
@@ -776,9 +796,9 @@ ios-appstore: build-frozen-html-identity
     ditto "$APP" "$STAGE/Payload/{{APP_NAME}}.app"
     (cd "$STAGE" && zip -qry "$IPA" Payload)
     rm -rf "$STAGE"
-    echo "$PROVENANCE; build $BUILD" > "${IPA%.ipa}.provenance.txt"
+    echo "$PROVENANCE, build $BUILD" > "${IPA%.ipa}.provenance.txt"
     echo "✅ $IPA ({{VERSION}}, build $BUILD)"
-    echo "   built from: $PROVENANCE"
+    echo "   $PROVENANCE"
 
 # Uploads the iOS package `just ios-appstore` made, with the App Store Connect key in .env (as testflight-upload does).
 [macos]
@@ -788,7 +808,7 @@ ios-appstore-upload:
     set -a && source .env && set +a
     IPA="{{RELEASE_DIR}}/{{APP_NAME}}-iOS-{{VERSION}}.ipa"
     [ -f "$IPA" ] || { echo "❌ No $IPA: run just ios-appstore first." >&2; exit 1; }
-    ~/BuwizNsh/tools/bin/nsh publish ios "$IPA" --app-id 6767850225 \
+    "${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin/nsh" publish ios "$IPA" --app-id 6767850225 \
         --issuer-id "$APP_STORE_ISSUER_ID" --key-id "$APP_STORE_KEY_ID" --private-key "$APP_STORE_P8_PATH"
 
 [unix]
