@@ -153,10 +153,14 @@ booted API 35 in about two minutes and reached the app's first screen in about 1
 8. For recordings: `adb shell settings put system show_touches 1` (and `pointer_location 1` when coordinates matter).
    `adb shell input text` takes `%s` for a space.
 
-A check that builds an older app commit uses that commit's own `NSH_PINNED_REF`: build the CLI and both runtimes at
-that pin into a separate tools folder (`~/BuwizNsh/tools-<pin>`, with `nsh-ref`), and point the build at it with
-`PATH` and `NSH_RUNTIME`, leaving `~/BuwizNsh/tools` at the current pin. Every report names the app commit, the
-NSH commit of the `nsh` tool and the SHA-256 of the runtime `classes.dex` the package used.
+A check that builds an older app commit, or a branch of NSH, uses one NSH commit for three things: the NSH checkout
+beside the app checkout (the app's Rust compiles NSH's crates from `../../nsh` relative to `nsh/`), the `nsh` tool,
+and both Android runtimes. Build the tool and runtimes at that commit into a separate tools folder
+(`~/BuwizNsh/tools-<commit>`, with `nsh-ref`), use a separate pair of checkouts whose `nsh` is at that commit, and point
+the build at the folder with `PATH` and `NSH_RUNTIME`, leaving `~/BuwizNsh/tools` and the shared checkouts at the current
+pin. A build that mixes commits can fail far from the cause: when the Rust side and the Java host disagree on a command's
+fields, the host stops with `BufferUnderflowException` in `Mounter.command`. Every report names the app commit, the
+sibling NSH commit, the NSH commit of the `nsh` tool and the SHA-256 of the runtime `classes.dex` the package used.
 
 ## Windows (Android)
 
