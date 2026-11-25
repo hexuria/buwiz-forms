@@ -58,7 +58,10 @@ test("iPhone: a saved return popped by the system's back keeps what was typed", 
   await app.waitFor("id:fp-section-2", { timeout: 15_000 });
   await app.press("id:fp-section-2");
   await app.wait(800);
+  // The box opens holding "0.00": typed keys go after it ("0.00100", refused as more than two decimals, so nothing is saved). Clear it first.
+  await app.clear("id:fp-frm2551Qv2018:txt15");
   await app.type("id:fp-frm2551Qv2018:txt15", "100");
+  await app.waitUntil(() => /^100(\.00)?$/.test(app.value("id:fp-frm2551Qv2018:txt15") ?? ""));
   await app.waitFor("text:✓ Saved", { timeout: 5000 });
   await app.back();
   await app.waitFor("id:home");
@@ -74,8 +77,8 @@ test("iPhone: a saved return popped by the system's back keeps what was typed", 
   expect(app.value("id:fp-frm2551Qv2018:txt15")).toMatch(/^100(\.00)?$/);
 }, 90_000);
 
-// The same return left by the header's Back (the app's own move, which waits for the page's save): if this keeps the amount and the
-// system's back does not, the loss is the stack's; if neither keeps it, it is how the fixture reopens the return.
+// The same return left by the header's Back (the app's own move, which waits for the page's save): the two together tell a loss in
+// the stack from one in the app.
 test("iPhone: a saved return left by the header's Back keeps what was typed", async () => {
   const app = await open(ENTRY, asking({ start: "form=2551Q/2026/3" }));
   await app.waitFor("id:fp-pill", { timeout: 30_000 });
@@ -83,7 +86,10 @@ test("iPhone: a saved return left by the header's Back keeps what was typed", as
   await app.waitFor("id:fp-section-2", { timeout: 15_000 });
   await app.press("id:fp-section-2");
   await app.wait(800);
+  // The box opens holding "0.00": typed keys go after it ("0.00100", refused as more than two decimals, so nothing is saved). Clear it first.
+  await app.clear("id:fp-frm2551Qv2018:txt15");
   await app.type("id:fp-frm2551Qv2018:txt15", "100");
+  await app.waitUntil(() => /^100(\.00)?$/.test(app.value("id:fp-frm2551Qv2018:txt15") ?? ""));
   await app.waitFor("text:✓ Saved", { timeout: 5000 });
   await app.press("id:nb-back");
   await app.waitFor("id:home");
