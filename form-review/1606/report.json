@@ -1,0 +1,76 @@
+{
+  "code": "1606",
+  "verdict": "tweak",
+  "summary": "Overall 2-page sheet geometry matches 1606 Jan 2018 ENCS; targeted fixes needed for Buyer/Seller Name & Address padding/overflow, Item 13 tax rate tenths alignment, Page 2 Taxpayer/Buyer Name comb alignment, Schedule 1 classification/alignment/padding, and screen Schedule 1 labels.",
+  "defects": [
+    {
+      "id": "1606-print-01",
+      "surface": "print",
+      "where": "Page 1, Part I Items 7A and 8A (Buyer's/Seller's Name and Registered Address)",
+      "what": "Addresses collide with the left vertical border and long names sit flush against borders without overflow clipping.",
+      "before": "form-review/1606/before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1606-print-02",
+      "surface": "print",
+      "where": "Page 1, Part II Item 13 (Applicable Tax Rate)",
+      "what": "Decimal digit '0' sits flush against the right edge of the decimal separator bar instead of centered in the tenths box.",
+      "before": "form-review/1606/before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1606-print-03",
+      "surface": "print",
+      "where": "Page 2, header Taxpayer's/Buyer's Name comb box",
+      "what": "Name prints as plain proportional text crossing the vertical comb ticks instead of one character per comb slot.",
+      "before": "form-review/1606/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1606-print-04",
+      "surface": "print",
+      "where": "Page 2, Schedule 1 continuation Classification* column",
+      "what": "Classification column prints blank even when a classification (e.g. Agricultural/Commercial) is selected.",
+      "before": "form-review/1606/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1606-print-05",
+      "surface": "print",
+      "where": "Page 2, Schedule 1 table cells (TD No., Location, Area, FMV columns, TOTAL)",
+      "what": "FMV and TOTAL currency amounts are left-aligned flush against left borders instead of right-aligned with padding; text cells lack inner padding.",
+      "before": "form-review/1606/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1606-screen-01",
+      "surface": "screen",
+      "where": "Part IV, Schedule 1 (TCT, Area, FMV land, FMV improvements labels)",
+      "what": "Abbreviated labels ('TCT', 'Area', 'FMV land', 'FMV improvements') diverge from official captions and are inconsistent with Column 2 labels ('FMV of Land per BIR (zonal value)').",
+      "before": "form-review/1606/before/screen-04-part-3.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1606-screen-02",
+      "surface": "screen",
+      "where": "Part I Item 8A (Seller's Name, Seller's Registered Address) and Schedule 1 Location",
+      "what": "Single-line text inputs clip long names and addresses horizontally inside ~240px inputs.",
+      "before": "form-review/1606/before/screen-02-part-1.png",
+      "after": "",
+      "status": "needs shared change"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "nsh/screens/form/: widen long single-line text inputs (names, addresses, locations) to use available card width instead of clipping at ~240px."
+  ],
+  "tests_run": [],
+  "open_questions": []
+}

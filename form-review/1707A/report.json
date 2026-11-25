@@ -1,0 +1,77 @@
+{
+  "code": "1707A",
+  "verdict": "tweak",
+  "summary": "Overall 2-page sheet geometry matches 1707-A April 2021 ENCS; targeted fixes needed for comb alignment in Items 9, 10, 11 and Page 2 Taxpayer's Name, blank overpayment Items 19 & 21 on print, Schedule 1 & 2 currency alignment/padding, and screen TIN branch truncation.",
+  "defects": [
+    {
+      "id": "1707A-print-01",
+      "surface": "print",
+      "where": "Page 1, Part I Item 9 (Registered Address, lines 1 and 2)",
+      "what": "Address prints as plain proportional text crossing the vertical comb ticks instead of one character per comb slot.",
+      "before": "form-review/1707A/before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1707A-print-02",
+      "surface": "print",
+      "where": "Page 1, Part I Item 10 (Contact Number) and Item 11 (Email Address)",
+      "what": "Both print as plain proportional text crossing vertical comb ticks, and Contact Number runs flush into the border beside Email Address.",
+      "before": "form-review/1707A/before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1707A-print-03",
+      "surface": "print",
+      "where": "Page 1, Part II Items 19 (Net Tax Payable/(Overpayment)) and 21 (Total Amount Payable/(Overpayment))",
+      "what": "Print completely blank when the computed amount is an overpayment (-799,061.01), even though the screen shows '(799,061.01)'.",
+      "before": "form-review/1707A/before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1707A-print-04",
+      "surface": "print",
+      "where": "Page 2, header Taxpayer's Name comb box",
+      "what": "Name prints as plain proportional text crossing the vertical comb ticks instead of one character per comb slot.",
+      "before": "form-review/1707A/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1707A-print-05",
+      "surface": "print",
+      "where": "Page 2, Schedules 1 and 2 currency columns (C, D, E, F, and Row 5 TOTAL)",
+      "what": "Currency amounts are left-aligned flush against the left vertical borders instead of right-aligned with padding; text cells also touch left borders.",
+      "before": "form-review/1707A/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1707A-screen-01",
+      "surface": "screen",
+      "where": "Part I Item 6 (Taxpayer Identification Number)",
+      "what": "5-digit branch code '00000' truncates to '000...' in the readonly TIN pill.",
+      "before": "form-review/1707A/before/screen-02-part-1.png",
+      "after": "",
+      "status": "needs shared change"
+    },
+    {
+      "id": "1707A-screen-02",
+      "surface": "screen",
+      "where": "Part IV Schedules — combined rows 1-4 table validation banner",
+      "what": "Validation message 'Name of Corporate Stock holds 17 letters...' repeats 6 times verbatim in a single red block.",
+      "before": "form-review/1707A/before/screen-05-part-4.png",
+      "after": "",
+      "status": "needs shared change"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "nsh/screens/form/: widen the 5-digit branch code box in the TIN control so '00000' does not truncate to '000...'.",
+    "nsh/screens/form/: deduplicate repeated per-cell validation messages in table banners."
+  ],
+  "tests_run": [],
+  "open_questions": []
+}

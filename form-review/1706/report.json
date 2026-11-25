@@ -1,0 +1,103 @@
+{
+  "code": "1706",
+  "verdict": "tweak",
+  "summary": "Overall 2-page sheet geometry matches 1706 Jan 2018 ENCS; targeted fixes needed for long name overflow in Item 7A, Page 2 Taxpayer/Buyer Name comb alignment, Schedule 1 classification/alignment/padding, Schedule 2 Item 6 integer formatting and Item 7 installment date, and screen field labels/kinds.",
+  "defects": [
+    {
+      "id": "1706-print-01",
+      "surface": "print",
+      "where": "Page 1, Part I Item 7A (Buyer's Name) and Item 6A (Seller's Name)",
+      "what": "Long Buyer's Name overflows its right cell border and collides with Buyer's Registered Address; cells lack overflow clipping and horizontal padding.",
+      "before": "form-review/1706/before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1706-print-02",
+      "surface": "print",
+      "where": "Page 1, Part I Items 6A and 7A (Registered Address)",
+      "what": "Address text sits flush against the left vertical border with no inner padding.",
+      "before": "form-review/1706/before/print-p1.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1706-print-03",
+      "surface": "print",
+      "where": "Page 2, header Taxpayer's/Buyer's Name comb box",
+      "what": "Name prints as plain proportional text crossing the vertical comb ticks instead of one character per comb slot.",
+      "before": "form-review/1706/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1706-print-04",
+      "surface": "print",
+      "where": "Page 2, Schedule 1 continuation Classification* column",
+      "what": "Classification column prints blank even when a classification (e.g. Residential) is selected.",
+      "before": "form-review/1706/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1706-print-05",
+      "surface": "print",
+      "where": "Page 2, Schedule 1 table cells (OCT/TCT/CCT No., TD No., Location, Area, FMV columns, TOTAL)",
+      "what": "Currency amounts in FMV and TOTAL columns are left-aligned flush against left borders instead of right-aligned with padding; text cells lack inner padding.",
+      "before": "form-review/1706/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1706-print-06",
+      "surface": "print",
+      "where": "Page 2, Schedule 2 Item 6 (No. of Installments in the contract)",
+      "what": "Displays '12.00' as plain text crossing the comb tick instead of an integer placed into the two comb slots.",
+      "before": "form-review/1706/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1706-print-07",
+      "surface": "print",
+      "where": "Page 2, Schedule 2 Item 7 (Date of Installment)",
+      "what": "Date of Installment comb prints blank even when installment date components are populated.",
+      "before": "form-review/1706/before/print-p2.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1706-screen-01",
+      "surface": "screen",
+      "where": "Part IV, Schedule 2 Item 6 (No. of Installments in the contract)",
+      "what": "Rendered as decimal money ('12.00') instead of an integer count ('12').",
+      "before": "form-review/1706/before/screen-05-part-4.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1706-screen-02",
+      "surface": "screen",
+      "where": "Part IV, Schedule 1 (TCT, Area labels)",
+      "what": "Shortened labels 'TCT' and 'Area' diverge from official form captions 'OCT/TCT/CCT No.' and 'Area (sq.m.)'.",
+      "before": "form-review/1706/before/screen-04-part-3.png",
+      "after": "",
+      "status": "open"
+    },
+    {
+      "id": "1706-screen-03",
+      "surface": "screen",
+      "where": "Part I Items 7A (Buyer's Name, Buyer's Registered Address) and Schedule 1 Location",
+      "what": "Single-line text inputs are narrow (~240px) inside the card so long names and addresses clip horizontally.",
+      "before": "form-review/1706/before/screen-02-part-1.png",
+      "after": "",
+      "status": "needs shared change"
+    }
+  ],
+  "files_changed": [],
+  "shared_changes_wanted": [
+    "nsh/screens/form/: widen long single-line text inputs (names, addresses, locations) to use available card width instead of clipping at ~240px."
+  ],
+  "tests_run": [],
+  "open_questions": []
+}
