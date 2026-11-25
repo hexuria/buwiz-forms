@@ -1,0 +1,11 @@
+total 1000
+drwx------ 2 u0_a212 u0_a212   4096 2026-11-25 12:53 .
+drwx------ 4 u0_a212 u0_a212   4096 2026-11-25 12:53 ..
+-rw------- 1 u0_a212 u0_a212   4096 2026-11-25 12:52 bir_data.db
+-rw------- 1 u0_a212 u0_a212  32768 2026-11-25 12:55 bir_data.db-shm
+-rw------- 1 u0_a212 u0_a212 918792 2026-11-25 12:52 bir_data.db-wal
+-rw------- 1 u0_a212 u0_a212      0 2026-11-25 12:52 bir_data.db.owner.lock
+-rw------- 1 u0_a212 u0_a212    324 2026-11-25 12:59 buwiz-cloud-account.json
+-rw------- 1 u0_a212 u0_a212     32 2026-11-25 12:53 buwiz-install-id
+-rw------- 1 u0_a212 u0_a212     36 2026-11-25 12:53 buwiz_submit_device_id.txt
+-rw------- 1 u0_a212 u0_a212     43 2026-11-25 12:53 buwiz_submit_device_key.txt

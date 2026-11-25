@@ -1,0 +1,8 @@
+--------- beginning of main
+11-25 13:04:25.689 12646 12646 I NSHKBD  : inputFocused input=2548 focused=true scroll=2214
+11-25 13:04:25.742 12646 12646 I NSHKBD  : keyboard screenTop=1517 focused=2548 scroll=2214 avoided=-1
+11-25 13:04:25.742 12646 12646 I NSHKBD  : setContentPaddingBottom scroll=2214 px=605
+11-25 13:04:59.149 13465 13465 I NSHKBD  : keyboard screenTop=1517 focused=null scroll=n/a avoided=-1
+11-25 13:04:59.544 12646 12646 I NSHKBD  : keyboard screenTop=2147483647 focused=2548 scroll=2214 avoided=2214
+11-25 13:04:59.544 12646 12646 I NSHKBD  : setContentPaddingBottom scroll=2214 px=0
+11-25 13:04:59.709 13465 13465 I NSHKBD  : keyboard screenTop=2147483647 focused=null scroll=n/a avoided=-1
