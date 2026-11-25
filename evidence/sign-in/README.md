@@ -58,3 +58,19 @@ Each pair is `before/signin-<look>-<state>.png` against `signin-<look>-<state>.p
   `settings-account-signed-in`, `settings-account-signed-out`: the heading "Buwiz" became "Buwiz account", "Sign out"
   became "Sign out of Buwiz" (it now asks first: `settings-account-sign-out-question`), "Not signed in" became "Not signed in
   to Buwiz", and the profile card has its own heading, "Profile on this computer".
+
+## This round (2026-11-25, emulator, iPhone Simulator and the account server's review)
+
+Pictures regenerated; what changed on the pages:
+
+- `email-after-change`: back from Change email, the field has the focus with the whole address selected, so typing replaces it
+  (an emulator run had typed onto its end and signed in as "juana@example.comg"); a tap places the caret.
+- After the right code the keyboard goes down (the first-run question opened with the number pad still over its second
+  choice). Not pictured: the macOS windows have no software keyboard.
+- On touch the sign-in page's scroll view ends at the keyboard's top, so a phone held sideways can scroll "Continue with
+  email" out from under the keyboard. Not pictured (no keyboard here); nothing changes with the keyboard down.
+- The code page has two new sentences, for a check the server held back without spending a try: "Too many codes were tried
+  from this network. Try again in N minutes." and "Sign-in is busy right now. Try again in a moment." A start or resend over
+  a limit now says "Too many sign-in codes were asked for. Try again in N minutes." (true for the address's limit and the
+  network's). Not pictured; the gate tests check them.
+- The local mock account server (`just mock-account`) gives each request its own code, printed in its output.
