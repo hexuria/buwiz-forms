@@ -2843,9 +2843,14 @@ mod tests {
                 ["not a try", "maybe sent"],
             ),
             (json!({"status": "unknown"}), ["maybe sent", "maybe sent"]),
+            // The server's two states that are not final: stored with the pipe not opened yet, and relay under way.
             (json!({"status": "ready"}), ["not yet", "not yet"]),
-            (json!({"status": "relaying"}), ["not yet", "not yet"]),
-            (json!({"status": "uploading"}), ["not yet", "not yet"]),
+            (json!({"status": "sending"}), ["not yet", "not yet"]),
+            // A name this client does not know, or none at all, is asked again, never settled.
+            (
+                json!({"status": "some-later-state"}),
+                ["not yet", "not yet"],
+            ),
             (json!({"id": "s1"}), ["not yet", "not yet"]),
         ];
         for (body, want) in rows {
