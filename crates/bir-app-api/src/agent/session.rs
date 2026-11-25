@@ -4300,7 +4300,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn form_fill_1702mx_nolco_populates_official_xml() {
         let mut session = session();
