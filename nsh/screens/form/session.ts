@@ -3891,7 +3891,11 @@ export class FormSession {
       this.sInvalid.get(k).set(shownMsgKeys.has(k) || Boolean(boxMsg));
       // A box whose sentence the row prints draws none of its own.
       this.sBoxMsg.get(k).set(this.rowPrints(k) ? "" : boxMsg);
-      this.sRefusal.get(k).set(boxMsg);
+      // A refusal is the host having refused the edit (it was never stored), not any sentence the
+      // box shows: a validation message (an over-long value that saved, reported by Check) must not
+      // hold the row drawer shut. An unfixable one put the stored value back, so nothing stands.
+      const liveRefusal = k in s.rejected && !s.unfixable.has(k);
+      this.sRefusal.get(k).set(liveRefusal ? this.refusalText(k, s.rejected[k]) : "");
     }
     for (const [k, { date, row }] of this.oneDates) {
       const parts = [date.month, date.day, date.year].filter(Boolean) as SchemaField[];

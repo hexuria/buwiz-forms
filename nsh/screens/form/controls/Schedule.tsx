@@ -7,6 +7,7 @@ import { AppButton, Code, Icon, ListGroup, ListRow, Sheet, Text } from "../../..
 import type { FieldControlProps } from "../contract";
 import { FieldControl } from "./FieldControl";
 import { drawerGroups, drawerTin, readText, rowParts, rowTitleOf } from "./model";
+import { emptyCell } from "../schema";
 import type { ScheduleInput } from "./types";
 
 /** The testID of a row's line: "fp-table-<first key>" becomes "fp-row-<first key>-<n>". */
@@ -86,7 +87,7 @@ export function ScheduleControl(props: ScheduleInput) {
     const r = open();
     if (r === null) return "";
     for (const c of props.columns) {
-      const msg = props.cell(r, c.index).box.refusal?.() || props.cell(r, c.index).box.message?.() || "";
+      const msg = props.cell(r, c.index).box.refusal?.() || "";
       if (msg) return msg;
     }
     return "";
@@ -172,7 +173,7 @@ export function ScheduleControl(props: ScheduleInput) {
               icon="trash"
               variant="danger"
               label="Delete row"
-              disabled={props.locked() || open() === null || props.summary(open() as number)() === ""}
+              disabled={props.locked() || open() === null || !props.columns.some((c) => !emptyCell(props.cell(open() as number, c.index).box.value() ?? "", c.col.t))}
               onPress={remove}
             />
             <AppButton
