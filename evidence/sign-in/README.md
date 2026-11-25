@@ -15,8 +15,7 @@ There is no other screen: no start card and no browser step.
   - `email-not-available`: the server does not offer it ("Sign-in is not available right now. Try again in a few minutes.").
   - `email-no-connection`: "No connection. Check your internet and try again."
 - The code page on the gate:
-  - `code`: just opened ("We sent a 6-digit code to …", Resend locked with its countdown, Change email, the line about the
-    button in the email).
+  - `code`: just opened ("We sent a 6-digit code to …", Resend locked with its countdown, Change email).
   - `code-typing`: three digits in.
   - `code-checking`: "Checking…" while the sixth digit's check runs.
   - `code-wrong`: a wrong code, with the tries left.

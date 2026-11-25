@@ -11,7 +11,6 @@ export const EMAIL_SENTENCE = "Enter your email and we will send you a 6-digit c
 export const EMAIL_BUTTON = "Continue with email";
 /** The code page's title and its line about the mail's button. */
 export const CODE_TITLE = "Enter the code";
-export const MAIL_BUTTON_LINE = "The button in the email also signs you in on this computer.";
 
 /** The email page under its title: the sentence, the address, what is wrong with it, "Continue with email" (its spinner while it sends). */
 export function EmailCardBody(props: { prefix: string; centred?: boolean }) {
@@ -105,9 +104,6 @@ export function CodeCardBody(props: { prefix: string; centred?: boolean }) {
             <FlowButton testID={`${props.prefix}-change-email`} label="Change email" onPress={signInFlow.changeEmail} />
           </If>
         </View>
-        <Text variant="meta" tone="fg3" class={props.centred ? "text-center" : ""} testID={`${props.prefix}-mail-line`}>
-          {deviceCopy(MAIL_BUTTON_LINE)}
-        </Text>
       </If>
     </View>
   );

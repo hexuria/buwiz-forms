@@ -99,12 +99,14 @@ for (const { name, size, device } of SIZES) {
     }, 60_000);
   }
 
-  test(`${name}: the code page: where the code went, Resend locked with its countdown, Change email, the mail's button`, async () => {
+  test(`${name}: the code page: where the code went, Resend locked with its countdown, Change email, and no promise about the mail's button yet`, async () => {
     const app = await at();
     await toCode(app);
-    for (const t of ["Enter the code", "We sent a 6-digit code to juana@example.com.", "Resend in 5:00", "Change email", `The button in the email also signs you in on ${device}.`]) {
+    for (const t of ["Enter the code", "We sent a 6-digit code to juana@example.com.", "Resend in 5:00", "Change email"]) {
       expect(app.texts()).toContain(t);
     }
+    // The button in the mail is not handled by the app yet: the page must not promise it.
+    expect(app.texts().join(" ")).not.toContain("button in the email");
     expect(app.enabled("id:gate-resend")).toBe(false);
     expect(app.shows("id:gate-continue")).toBe(false);
     expectClean(app.texts());
