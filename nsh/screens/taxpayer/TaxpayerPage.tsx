@@ -5,7 +5,7 @@ import type { JSX } from "nsh";
 import { Clipboard, effect, untracked, View } from "nsh";
 import { formatTin } from "../../lib/format";
 import { app, go, toast, type ViewParams } from "../../shell";
-import { AppButton, Avatar, Code, MetaLine, PageHeader, Tabs } from "../../ui";
+import { AppButton, Avatar, Code, MetaLine, PageHeader, Tabs, TOUCH } from "../../ui";
 import { FormsTab } from "./FormsTab";
 import type { EditableSection } from "./logic";
 import { createPageState, type PageState } from "./page";
@@ -63,7 +63,9 @@ function Header(props: { view: TaxpayerTab }) {
           { value: "templates", label: "Templates", count: app.templates().length },
         ]}
         value={props.view}
-        onChange={(v) => go(v as TaxpayerTab)}
+        // On a phone or tablet the three tabs are one page: a tab is not a step of the back gesture. With a pointer each is a stop of
+        // the history, as before (Back and Forward walk them).
+        onChange={(v) => (TOUCH ? app.switchView(v as TaxpayerTab) : go(v as TaxpayerTab))}
       />
     </View>
   );

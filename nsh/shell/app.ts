@@ -410,6 +410,8 @@ export const LEAVE_HOOKS_CAP_MS = 3000;
 const leaveHooks = new Set<LeaveHook>();
 /** The moves that wait for the hooks, in order; null when none does. */
 let leaving: Promise<void> | null = null;
+/** A move is waiting for the screens' leave hooks (a form saving what was typed): a phone's back gesture stays off till it is done. */
+const moving = signal(false);
 
 /**
  * A screen with work to finish before the app leaves it (the form page's pending edits) registers it here, and unregisters
@@ -499,9 +501,13 @@ function leave(move: () => void): void {
     .then(move)
     .catch((error) => store.logScreen("error", `moving: ${errorText(error)}`))
     .then(() => {
-      if (leaving === step) leaving = null;
+      if (leaving === step) {
+        leaving = null;
+        moving.set(false);
+      }
     });
   leaving = step;
+  moving.set(true);
 }
 
 /** Resolves when every move that waited for the hooks has happened (at once when none waits). */
@@ -574,6 +580,19 @@ function navigate(name: ViewName | "cron_tasks", params: ViewParams, from: Selec
         route.set({ view: target, params, seq: ++seq });
       });
     }
+    closeTransient();
+  });
+}
+
+/**
+ * A switch between the views of one page (the tax profile's Profile, Forms and Templates): in place, with no history entry, and on a
+ * phone or tablet the same page of the navigation stack (its seq stays), so a tab is not a step for the back gesture.
+ */
+function switchView(name: ViewName, params: ViewParams = {}): void {
+  leave(() => {
+    const meta = ROUTES[name];
+    if ((meta.needsTaxpayer && isFresh()) || (meta.dev && !doorStatus().testEnvironment)) return;
+    route.set({ view: name, params, seq: route().seq });
     closeTransient();
   });
 }
@@ -1482,6 +1501,9 @@ export const app = {
   canBack: () => lastAlive(history()) >= 0,
   /** A phone's navigation stack: its pages, the route of one, and the page the system's gesture popped. */
   stack: (): Route[] => stackPages(),
+  /** A move waits for the leave hooks (reactive). */
+  moving: (): boolean => moving(),
+  switchView,
   stackRoute,
   pagePopped,
   hasLayer,
