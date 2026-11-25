@@ -1,10 +1,12 @@
-# Relay (phone sending) and the local mock relay
+# The Buwiz relay and the local mock relay
 
-A phone cannot reach the BIR's SFTP gateway the way the desktop app does, so
-the NSH app on iOS and Android sends a filed return through the Buwiz relay.
-The production relay is not built. This page defines the minimal contract the
-app speaks and the **local mock relay** that implements it for development.
-Nothing here can reach the BIR or any other live endpoint.
+A release build sends a filed return through the Buwiz relay (protocol v2,
+`crates/bir-submit`) on every platform: macOS, Windows, Linux, iPhone, iPad
+and Android alike. See [Sending: the Buwiz relay](#sending-the-buwiz-relay) at
+the end. Most of this page is about the **local mock relay**, a development
+tool with its own small contract (v1, below) that takes the file on this
+computer. Nothing the mock relay does can reach the BIR or any other live
+endpoint.
 
 ## Contract (v1)
 
@@ -294,46 +296,60 @@ only boots a simulator, so a device needs a signed package:
    variables from the process environment.
 4. A device build is a release build, so `BUWIZ_NO_KEYCHAIN` is not forced:
    the app uses the iOS keychain unless you pass `BUWIZ_NO_KEYCHAIN=1`.
+   For the same reason, launched without `BIR_SFTP_DRY_RUN=1` (or
+   `EBIR_TEST_ENV=1`) and signed in to a real account, it files through the
+   production Buwiz relay, as the App Store build does.
 
-## Mock relay vs a real relay
+## Sending: the Buwiz relay
 
-| | Mock (today) | Real relay |
-| --- | --- | --- |
-| URL | `BIR_RELAY_URL=http://127.0.0.1:8787` | e.g. `https://relay.example.com` |
-| Allowed by the app | yes | **refused**: the worker does not start |
-| From a device | iPhone: not directly; Android: `adb reverse tcp:8787 tcp:8787` reaches the host mock | needs the changes below |
+The local mock relay (`BIR_RELAY_URL`) stays what it is: a development tool,
+honoured only in a debug build or one with the `mock-relay` feature, and only
+on loopback. It is not how a build that ships sends. Protocol v2 replaced the
+production design this page once sketched (a v1 relay origin with a bearer
+header); there is no "real relay" URL to point `BIR_RELAY_URL` at.
 
-What refuses it today, on purpose:
+### Every platform, one way
 
-- `bir_core::transport::loopback_relay_url` (`crates/bir-core/src/transport.rs`)
-  accepts only an `http://` origin on `127.0.0.1`, `::1` or `localhost`, with
-  no user, path, query or fragment. Anything else is a `Config` error, and the
-  upload never starts.
-- `relay_target` in `nsh/src/guards.rs` then requires that loopback port to
-  answer and `mock_health` requires HTTP 200 from `/v1/health` with JSON
-  containing `"service":"buwiz-mock-relay"`, `"version":1`, `"ok":true` and
-  `"mock":true`. Otherwise the send mode is `Refused`.
+Real sending, on a desktop and on a phone alike, goes through the Buwiz relay
+(`crates/bir-submit`, used by `crates/bir-core/src/relay.rs`):
 
-To test a real relay (a deliberate, reviewed change), you need:
+- the app signs each request with a **device key**, made on first use and kept
+  in the OS credential store (the keychain on macOS and iOS; a file in the
+  app's private data folder on Android or where there is no store);
+- the return is **sealed** on the device for the sending service, so Buwiz's
+  server sees it only to send it;
+- the **app opens the connections** to the BIR's servers itself, only to the
+  hosts named on Buwiz's **signed trust list** (trusted through a public key
+  compiled into the build), and pipes the sending service's session through
+  them;
+- the app keeps Buwiz's signed receipt. It needs the person's Buwiz sign-in
+  and a TIN approved on that account.
 
-1. Relay origin allowlist: replace the loopback-only rule with an explicit
-   list. For example, accept `https://<host>` only when it equals an origin
-   compiled into the build (`option_env!("BUWIZ_RELAY_ORIGIN")`), and keep
-   refusing every other origin. Keep `http://` loopback for the mock.
-2. In `relay_target`, adapt the URL parsing and reachability probe for the
-   production origin (HTTPS defaults to port 443, not 80). Replace
-   `mock_health`'s plain-HTTP, `"mock":true` check with an explicit production
-   health/authentication policy while retaining the mock checks for loopback.
-3. Authentication: the v1 contract has none. Add a header, e.g.
-   `authorization: Bearer …`, read from the keychain and never from a file
-   in the repository.
-4. App Transport Security: iOS blocks plain `http://` to anything but
-   loopback. Use `https://`. A LAN `http://` mock needs
-   `NSAllowsLocalNetworking` and `NSLocalNetworkUsageDescription` under
-   `ios.infoPlist` in `nsh/nsh.json`.
-5. The relay decides where returns go. Point a test relay at a mock or test
-   BIR endpoint: the app cannot tell what the relay forwards to.
+`bir_core::transport` decides the route: in a release build with no dry-run
+flag, the default is the Buwiz relay (`SendMode::Buwiz`, `doorStatus().sending
+=== "buwiz"`), whatever the platform. A practice account only simulates and
+never calls the relay; `BIR_SFTP_DRY_RUN=1` and a test environment are dry
+runs, as before.
 
-Until those changes land, the closest physical iPhone test is the dry run
-(no relay URL), or the mock relay from the simulator. Physical Android phones
-can use the host mock relay through `adb reverse`, as described above.
+### A development build
+
+A development build never sends through production. It has nowhere to send
+by default, and sends through the Buwiz relay only when asked to and only to a
+Buwiz server on this computer whose trust list a test key signed:
+
+| Variable | Value |
+| --- | --- |
+| `BUWIZ_SERVER_URL` | a loopback origin, e.g. `http://localhost:3008` |
+| `BUWIZ_TRUST_KEYS` | the test key(s) that signed that server's trust list; production's key is refused |
+| `BUWIZ_RELAY_SEND` | `1`: the ask to send through it |
+
+The send guard also requires that server's port to answer; otherwise the
+worker does not start. Whether anything reaches the BIR is that server's mode.
+
+From a phone: the iOS Simulator shares the Mac's loopback, so
+`http://localhost:3008` works as is (pass the variables as
+`SIMCTL_CHILD_<name>`, as above). An Android emulator reaches it with
+`adb reverse tcp:3008 tcp:3008`. That is only the network half on Android:
+the three variables are not among the [accepted dev.env keys](#accepted-devenv-keys)
+yet, and `BUWIZ_TRUST_KEYS` is read from the process environment, which an
+Android app process does not have.

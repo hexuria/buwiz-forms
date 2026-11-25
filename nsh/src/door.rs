@@ -5,7 +5,7 @@
 //!   runs on the engine thread, as the old shell's calls ran on its main thread.
 //! * The first call on a thread boots it, in the old host's order: hooks, send guard, database guard, the
 //!   account gate (`cloud_account::prepare_launch`), then the database and the submission worker.
-//! * The guards run before anything opens: development, test, agent and mobile launches do not file live,
+//! * The guards run before anything opens: development, test and agent launches do not file live (on any platform),
 //!   and the database guard still protects the owner's data folders.
 
 use std::cell::RefCell;

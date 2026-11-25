@@ -10,7 +10,7 @@ The NSH (TSX) app in `nsh/`, updated 2026-11-24. Plan and hard rules: [docs/plan
 | macOS | Built and tested (NSH 0.6.1, hexuria/nsh `buwiz-next` @ `ca39c0e9`, pinned by `NSH_PINNED_REF` in [.github/workflows/nsh.yml](../../.github/workflows/nsh.yml)): type check, build, headless tests, real-window screenshots; CI on `macos-15`. |
 | Windows | Built and tested in CI on `windows-2025` (nsh.yml `NSH app (Windows)` jobs: `nsh check`, `nsh build`, crate tests, headless TSX tests). A real window has not been tried. |
 | Linux | Built and tested in CI on `ubuntu-24.04`, including a dev-host build and real-window screenshots (nsh.yml `NSH app (Linux)` jobs). |
-| iOS | Builds and runs in the iOS Simulator (`nsh run --target ios` from `nsh/`, iPhone 17, Xcode 26). Print preview is the system print sheet. Sending goes through the local mock relay ([docs/relay.md](../relay.md)). Store packaging is in progress. |
+| iOS | Builds and runs in the iOS Simulator (`nsh run --target ios` from `nsh/`, iPhone 17, Xcode 26). Print preview is the system print sheet. A release build sends through the Buwiz relay, as on a desktop; development runs use a dry run or the local mock relay ([docs/relay.md](../relay.md)). Store packaging is in progress. |
 | Android | Build tooling exists (`scripts/setup-android-windows.ps1`, `cargo xtask android`); the app itself is not shipped. |
 
 Cells below marked "written" were recorded before Windows and Linux CI
@@ -86,6 +86,6 @@ the crates it uses; it checks out hexuria/nsh at `NSH_PINNED_REF` (with
 - Windows: a person at a real window (the matrix's untested cells), and
   Print at a printer.
 - Linux: Print and Save as PDF (a stub today), and an OS sign-in prompt.
-- iOS: a real relay (only the loopback mock exists), device signing and
+- iOS: a send through the Buwiz relay from a device, device signing and
   packaging, the keychain on a device. Android: the app itself. Screens
   are built wide and narrow with a test at 390x844.

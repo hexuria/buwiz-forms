@@ -283,8 +283,10 @@ impl ResolvedSftpTarget {
     }
 }
 
-/// The relay the phone app sends through (docs/relay.md). Only the local mock relay exists: the URL must be a
-/// plain `http://` origin on `127.0.0.1`, `::1` or `localhost`; anything else is refused, never sent to.
+/// The local mock relay, a development tool (docs/relay.md): it takes the file on this computer and sends nothing
+/// to the BIR. Real sending goes through the Buwiz relay ([`crate::relay`]). The URL must be a plain `http://`
+/// origin on `127.0.0.1`, `::1` or `localhost`; anything else is refused, never sent to, and a release build
+/// without the `mock-relay` feature refuses it outright.
 pub const RELAY_URL_ENV: &str = "BIR_RELAY_URL";
 
 /// [`RELAY_URL_ENV`] without a trailing slash when it is set, checked by [`loopback_relay_url`].
@@ -628,25 +630,16 @@ fn route() -> Route {
     if env_nonempty("BIR_SFTP_HOST").is_some() {
         return Route::LabHost;
     }
-    default_route(
-        direct_filing_built_in(),
-        cfg!(debug_assertions),
-        cfg!(any(
-            target_os = "macos",
-            target_os = "windows",
-            target_os = "linux"
-        )),
-    )
+    default_route(direct_filing_built_in(), cfg!(debug_assertions))
 }
 
 /// Where a send goes when nothing asked for anything else (no dry run, no mock, no lab host).
 ///
-/// A release build on a desktop files through the Buwiz relay: that is the only way a build that ships sends a
-/// return. A development build has nowhere to send by default (with no flag it is a dry run and never gets here),
-/// and neither has a phone build, whose guard forces a dry run until phones are proven. `direct-bir`, which no
-/// build that ships has, keeps the BIR's own dispatcher.
-fn default_route(direct: bool, development: bool, desktop: bool) -> Route {
-    if !direct && !development && desktop {
+/// A release build files through the Buwiz relay, on every platform (desktop, iPhone, iPad, Android): that is the
+/// only way a build that ships sends a return. A development build has nowhere to send by default (with no flag it
+/// is a dry run and never gets here). `direct-bir`, which no build that ships has, keeps the BIR's own dispatcher.
+fn default_route(direct: bool, development: bool) -> Route {
+    if !direct && !development {
         Route::Buwiz
     } else {
         Route::Bir
@@ -2055,27 +2048,22 @@ mod tests {
         assert!(!unavailable_for(&Route::Bir, true));
     }
 
-    /// The switch-on: with nothing else asked for, only a release build on a desktop goes through the Buwiz relay.
-    /// A development build and a phone build have nowhere to send, and `direct-bir` keeps the dispatcher.
+    /// The switch-on: with nothing else asked for, a release build goes through the Buwiz relay. The route takes
+    /// no platform: a release desktop build and a release phone build (iPhone, iPad, Android) get the same answer.
+    /// A development build has nowhere to send, and `direct-bir` keeps the dispatcher.
     #[test]
-    fn only_a_release_desktop_build_files_through_buwiz_by_default() {
-        assert!(matches!(default_route(false, false, true), Route::Buwiz));
-        for (direct, development, desktop) in [
-            (false, true, true),
-            (false, false, false),
-            (false, true, false),
-            (true, false, true),
-            (true, true, true),
-        ] {
+    fn a_release_build_files_through_buwiz_by_default_on_every_platform() {
+        assert!(matches!(default_route(false, false), Route::Buwiz));
+        for (direct, development) in [(false, true), (true, false), (true, true)] {
             assert!(
-                matches!(default_route(direct, development, desktop), Route::Bir),
-                "{direct} {development} {desktop}"
+                matches!(default_route(direct, development), Route::Bir),
+                "{direct} {development}"
             );
         }
-        // So a release desktop build has somewhere to send, and every other default build has not.
-        assert!(!unavailable_for(&default_route(false, false, true), false));
-        assert!(unavailable_for(&default_route(false, true, true), false));
-        assert!(unavailable_for(&default_route(false, false, false), false));
+        // So a release build has somewhere to send, and a development build without a flag has not.
+        assert!(!unavailable_for(&default_route(false, false), false));
+        assert!(unavailable_for(&default_route(false, true), false));
+        assert!(!unavailable_for(&default_route(true, false), true));
     }
 
     /// In a release build the relay is the fall-through, not an override: every dry-run flag, a test environment

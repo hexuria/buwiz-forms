@@ -117,9 +117,11 @@ inbox you configured, the status moves to Confirmed and then to Paid. A
 submitted return is read-only.
 
 **Sending goes through Buwiz.** When you queue a return, the app sends it to
-the BIR through Buwiz's server: the return is sealed for that server on your
-computer, the BIR's own servers are reached from your computer, and the app
-keeps Buwiz's signed receipt. It needs your Buwiz sign-in and a TIN that is
+the BIR through Buwiz's server, the same way on every platform it runs on
+(macOS, Windows, Linux, iPhone, iPad and Android): the return is sealed for
+that server on your device, the BIR's own servers are reached from your
+device, and the app keeps Buwiz's signed receipt. A practice account only
+simulates sending. It needs your Buwiz sign-in and a TIN that is
 approved on your Buwiz account; a return for any other TIN comes back to Draft
 with the reason. A return queued by an earlier version is not sent: it goes
 back to Draft once, to be checked and queued again. To simulate a submission,

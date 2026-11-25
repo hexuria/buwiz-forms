@@ -1,9 +1,10 @@
 //! The two guards that stand between the TSX screens and the owner's data or the BIR.
 //!
 //! * The **send guard** ([`send_guard`]) runs once, before the first database open and before the
-//!   submission worker starts. A desktop release has nowhere to send a return ([`SendMode::Off`]): bir-core's
-//!   `direct-bir` feature, the only code that files with the BIR itself, is off in this app. Development,
-//!   test, agent and mobile runs stay dry unless a local mock is selected.
+//!   submission worker starts. A release build files through the Buwiz relay ([`SendMode::Buwiz`]) on every
+//!   platform, desktop and phone alike; bir-core's `direct-bir` feature, the only code that files with the BIR
+//!   itself, is off in this app. Development, test and agent runs stay dry unless a local mock or a local Buwiz
+//!   server is selected.
 //! * The **database guard** ([`database_refusal`]) refuses to open a database inside the owner's data
 //!   folders, by name and by device and inode. It is checked before every host call, so a lazy open can
 //!   never get around it. The folders hang off the home folder of the account's real uid, not `$HOME`. In a
@@ -33,7 +34,7 @@ use bir_core::dev_mode::SubmissionMode;
 /// What the send guard decided.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SendMode {
-    /// The desktop release uses the configured filing transport. Only a build with bir-core's `direct-bir` feature,
+    /// A release build uses the configured filing transport. Only a build with bir-core's `direct-bir` feature,
     /// which no build that ships has.
     Live,
     /// This build has nowhere to send a return (`bir_core::transport::sending_unavailable`). Everything else works: the
@@ -46,7 +47,7 @@ pub enum SendMode {
     /// The local mock relay (`just mock-relay`, docs/relay.md) is listening at `url`, a loopback `http://` origin,
     /// and the transport sends there, and nowhere else. The relay may hand the file on to the mock BIR server.
     Relay { url: String },
-    /// Returns go to the BIR through the Buwiz server at `url`. A release build on a desktop: its configured server,
+    /// Returns go to the BIR through the Buwiz server at `url`. A release build on any platform: its configured server,
     /// production unless the build says otherwise. A development build asked with `BUWIZ_RELAY_SEND=1`: a server on
     /// this computer, trusted through a test key and listening; whether anything reaches the BIR is that server's
     /// mode.
@@ -115,10 +116,18 @@ pub fn send_guard() -> SendMode {
 }
 
 fn restrict_sending(debug_build: bool) -> bool {
-    !cfg!(any(target_os = "macos", target_os = "windows", target_os = "linux"))
-        || debug_build
-        || bir_core::db::test_environment()
-        || matches!(bir_core::config::var("GPUI_AGENT").as_deref(), Ok("1" | "true"))
+    restricted(
+        debug_build,
+        bir_core::db::test_environment(),
+        matches!(bir_core::config::var("GPUI_AGENT").as_deref(), Ok("1" | "true")),
+    )
+}
+
+/// Whether a launch is guarded (forced to a dry run unless a local mock or a local Buwiz server is selected): a
+/// development build, a test environment or an agent run, on every platform. The platform itself is not a reason: a
+/// release build on a phone files through the Buwiz relay like one on a desktop. Pure, so every case is tested.
+fn restricted(debug_build: bool, test_environment: bool, agent: bool) -> bool {
+    debug_build || test_environment || agent
 }
 
 /// [`send_guard`] with the "is anything listening there" probe given, for tests.
@@ -199,7 +208,7 @@ fn send_guard_for(
         .unwrap_or_else(|| verdict(mock, transport_dry_run(), panel))
 }
 
-/// A release build on a desktop files through the Buwiz relay (`bir_core::transport::sends_through_buwiz`): the
+/// A release build files through the Buwiz relay (`bir_core::transport::sends_through_buwiz`), on every platform: the
 /// mode names the configured Buwiz server, or refuses to start the worker when that server may not be used.
 /// `None` when the send does not go through Buwiz (a build with `direct-bir`).
 fn release_relay() -> Option<SendMode> {
@@ -873,9 +882,26 @@ mod tests {
         std::env::var("BIR_SFTP_DRY_RUN").ok()
     }
 
-    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    /// Only a development build, a test environment or an agent run is guarded, and the platform plays no part:
+    /// a release launch on a phone is no more restricted than one on a desktop.
     #[test]
-    fn desktop_release_leaves_the_filing_transport_in_control() {
+    fn only_development_test_and_agent_launches_are_restricted() {
+        assert!(!restricted(false, false, false), "a release launch, desktop or phone");
+        for (debug, test, agent) in [
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+            (true, true, true),
+        ] {
+            assert!(restricted(debug, test, agent), "{debug} {test} {agent}");
+        }
+        sending_env(&[], || assert!(!restrict_sending(false)));
+        sending_env(&[], || assert!(restrict_sending(true)));
+    }
+
+    /// A release launch (desktop or phone: [`restricted`] takes no platform) leaves the filing transport in control.
+    #[test]
+    fn a_release_launch_leaves_the_filing_transport_in_control() {
         // A dry run wins; then a build with nowhere to send is off; only a build that can file itself is live.
         for (transport_is_dry, nowhere_to_send, expected) in [
             (false, false, SendMode::Live),
@@ -885,7 +911,7 @@ mod tests {
         ] {
             sending_env(&[], || {
                 let mode = send_guard_for(
-                    restrict_sending(false),
+                    restricted(false, false, false),
                     |_, _| panic!("no mock requested"),
                     |_, _| panic!("no relay requested"),
                     || transport_is_dry,

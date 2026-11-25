@@ -1,7 +1,7 @@
 // The rules of the sign-in, setup and account-gate screens (old app/main.js auth section, the old shell's auth.js, gate.js): pure.
 import { deviceCopy } from "../../ui/look";
 
-/** The account gate's line before anything happened. It promises no filing: phones only simulate sending. */
+/** The account gate's line before anything happened. It promises no filing: sending needs the sign-in first. */
 export const GATE_DEFAULT = "Sign in with your Buwiz account to use eBIRForms on this computer.";
 
 /** What Buwiz is, under the gate's line (the account site's sign-in: an emailed 6-digit code, no password). */
