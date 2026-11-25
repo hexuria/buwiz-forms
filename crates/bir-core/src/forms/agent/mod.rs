@@ -147,6 +147,14 @@ const EXPANDABLE_TABLES: [(&str, &str); 6] = [
     ("2200a-v2020", "/others"),
 ];
 
+/// Whether `list` is an expandable table's draft path in `package` (the
+/// screen's frontier rules apply to these and to no fixed table).
+pub fn is_expandable_list(package: &str, list: &str) -> bool {
+    EXPANDABLE_TABLES
+        .iter()
+        .any(|(form, path)| *form == package && list.trim_start_matches('/') == path.trim_start_matches('/'))
+}
+
 /// Grow the bindings of an expandable table past the pre-allocated rows, as
 /// the official program builds them in script: every row of a family is the
 /// same binding with the row's own index in the one path segment the rows

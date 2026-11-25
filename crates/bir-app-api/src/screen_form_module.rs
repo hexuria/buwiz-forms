@@ -15843,6 +15843,121 @@ mod tests {
     /// None may be silent: each one's lock note (`lock_notes`, drawn under
     /// its item by form_page.js `lockNotesFor`) must be filer words; one
     /// that is not is marked SILENT, which no pinned line can match.
+    /// In the expandable tables (the rows the official program adds one at
+    /// a time), a row past the draft's frontier — the rows there are, plus
+    /// the first empty one, which is all the schedule shows — is not a box
+    /// on the page, so the sweeps skip it. The row is read from the
+    /// binding's array path, never the key's digits.
+    fn past_frontier(code: &str, draft: &Value, key: &str) -> bool {
+        let Some(kind) = AgentFormKind::from_code(code) else {
+            return false;
+        };
+        let def = kind.definition();
+        let shape = |k: &str| -> String {
+            let mut out = String::new();
+            let mut was_digit = false;
+            for c in k.chars() {
+                if c.is_ascii_digit() {
+                    if !was_digit {
+                        out.push('#');
+                    }
+                    was_digit = true;
+                } else {
+                    out.push(c);
+                    was_digit = false;
+                }
+            }
+            out
+        };
+        // The key's own binding when it has one, else a same-shape sibling's:
+        // a derived column is unbound exactly because it is derived, but its
+        // row still is the family's row.
+        // (path, row units): the key's own binding when it has one, else a
+        // same-shape sibling's — a derived column is unbound exactly because
+        // it is derived, but its row still is the family's row. The family
+        // offset (2200A's Others rows are one-based in the key, zero-based in
+        // the path) comes from the sibling pair itself.
+        let found = def.bindings.get(key).map(|bound| {
+            (bound.binding.path().to_string(), key.to_string())
+        });
+        let found = found.or_else(|| {
+            let wanted = shape(key);
+            def.bindings
+                .iter()
+                .find(|(other, _)| other.as_str() != key && shape(other) == wanted)
+                .map(|(other, bound)| (bound.binding.path().to_string(), other.clone()))
+        });
+        let Some((path, rowed_key)) = found else {
+            return false;
+        };
+        let segments: Vec<&str> = path.split('/').filter(|segment| !segment.is_empty()).collect();
+        // The row index is the path's first numeric segment; its list is
+        // every segment before it (nested arrays included). Only the
+        // expandable tables have a frontier at all: a fixed table's rows
+        // are on the page whether the draft holds them or not.
+        let Some(index_at) = segments
+            .iter()
+            .position(|segment| segment.parse::<usize>().is_ok())
+        else {
+            return false;
+        };
+        let list = segments[..index_at].join("/");
+        if !bir_core::forms::agent::is_expandable_list(&def.package, &list) {
+            return false;
+        }
+        // The row is the key's last digit run (the families number their
+        // rows nowhere else).
+        let digits: String = key
+            .chars()
+            .rev()
+            .take_while(|c| !c.is_ascii_digit())
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect();
+        let trailing = key.len() - digits.len();
+        let run: String = key[..trailing]
+            .chars()
+            .rev()
+            .take_while(|c| c.is_ascii_digit())
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect();
+        let Ok(key_row) = run.parse::<usize>() else {
+            return false;
+        };
+        let last_run = |k: &str| -> Option<usize> {
+            let tail: String = k
+                .chars()
+                .rev()
+                .take_while(|c| !c.is_ascii_digit())
+                .collect();
+            let run: String = k[..k.len() - tail.len()]
+                .chars()
+                .rev()
+                .take_while(|c| c.is_ascii_digit())
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect();
+            run.parse().ok()
+        };
+        let path_row = segments
+            .get(index_at)
+            .and_then(|segment| segment.parse::<usize>().ok());
+        let offset = match (last_run(&rowed_key), path_row) {
+            (Some(kr), Some(pr)) => kr as i64 - pr as i64,
+            _ => 0,
+        };
+        let row = key_row as i64 - offset;
+        let len = draft
+            .pointer(&format!("/{list}"))
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len) as i64;
+        row > len
+    }
+
     fn locked_and_blank(opened: &Value, code: &str, ticks: bool) -> Vec<String> {
         let mut out = Vec::new();
         let locked = |key: &str| opened["locks"][key].as_str();
@@ -15964,6 +16079,22 @@ mod tests {
             );
             let cols = item["cols"].as_array();
             for row in item["keys"].as_array().into_iter().flatten() {
+                // A row past the draft's frontier — the rows there are,
+                // plus the first empty one, which is all the schedule
+                // shows — is not on the page, so the sweep skips it. The
+                // row's index and its list come from any bound cell of the
+                // row itself (a derived column is unbound exactly because
+                // it is derived, yet its row still is the family's row).
+                let keys: Vec<&str> = row
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|key| key.as_str())
+                    .collect();
+                let beyond = keys.iter().any(|key| past_frontier(code, &opened["draft"], key));
+                if beyond {
+                    continue;
+                }
                 for (c, key) in row.as_array().into_iter().flatten().enumerate() {
                     let t = cols
                         .and_then(|cols| cols.get(c))
@@ -16418,6 +16549,12 @@ mod tests {
             }
             let opened = open(code, page_period_of(code));
             for (key, t) in screen_types(code) {
+                // A row past the draft's frontier is not a box on the page
+                // (the schedule shows the rows there are plus the first
+                // empty one), so the sweep does not type it.
+                if past_frontier(code, &opened["draft"], &key) {
+                    continue;
+                }
                 if t != "date" {
                     continue;
                 }
@@ -16556,23 +16693,41 @@ mod tests {
                 }
             }
         }
-        assert!(typed > 90, "{typed} date boxes typed");
+        // Rows past the drafts' frontiers are not typed (the sweep skips
+        // them as the page does), so the floor sits under the count the
+        // live boxes alone reach.
+        assert!(typed > 80, "{typed} date boxes typed");
         assert!(
             refused < 150,
             "{refused} date boxes refused for another rule"
         );
         closed.sort();
-        // Rows 0 to 49: the schedules grow to the rows the official
-        // program builds, and every one waits for item 13 the same way.
-        let mut schedule_dates: Vec<String> = (0..50)
-            .flat_map(|row| {
-                [
-                    format!("frm2000:sched2:txtPaymentDate{row}"),
-                    format!("frm2000:sched3:txtPaymentDate{row}"),
-                    format!("frm2000:sched4:txtRemittanceDate{row}"),
-                ]
-            })
-            .collect();
+        // The rows the draft holds: the schedules grow one row at a time as
+        // the official program builds them, so the sweep types — and item
+        // 13's gate closes — the rows there are, never a row past the
+        // frontier the page does not show.
+        let draft2000 = open("2000", page_period_of("2000"));
+        let rows_of = |list: &str| {
+            draft2000["draft"]
+                .pointer(list)
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len)
+        };
+        let mut schedule_dates: Vec<String> = [
+            ("/schedule2", "frm2000:sched2:txtPaymentDate"),
+            ("/schedule3", "frm2000:sched3:txtPaymentDate"),
+            ("/schedule4", "frm2000:sched4:txtRemittanceDate"),
+        ]
+        .into_iter()
+        .flat_map(|(list, stem)| {
+            // Plus the frontier row itself: the first empty row the page
+            // shows, which item 13's gate closes exactly as the rows there
+            // are.
+            (0..=rows_of(list))
+                .map(|row| format!("{stem}{row}"))
+                .collect::<Vec<_>>()
+        })
+        .collect();
         schedule_dates.sort();
         assert_eq!(closed, schedule_dates);
         // Every 2552 Part V date box drawn, and only those, waits for item
