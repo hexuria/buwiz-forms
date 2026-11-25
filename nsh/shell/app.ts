@@ -13,7 +13,7 @@
 //                while a return is Queued the lists are read every 3 s for about 30 s after the Queued set last changed (startQueuedWatch,
 //                also in the dev environment; it and the library warm-up wait for the frame to be shown: nothing is read behind a lock)
 import type { Accessor, Signal } from "nsh";
-import { batch, computed, effect, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
+import { batch, computed, effect, platform, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
 import { Application } from "nsh/desktop";
 import { bir, dataChangeToken, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
@@ -182,7 +182,8 @@ function writeLocal(key: string, value: unknown): void {
 // ---------------------------------------------------------------- layout (from the window's width)
 
 /** Under 600: the narrow layout (no sidebar, a bottom tab bar). */
-const narrow = computed(() => windowSize().width < BREAK.phone);
+// EXPERIMENT (not for merging): a phone or a tablet always takes the narrow (phone) shell, whatever its width.
+const narrow = computed(() => platform.os === "ios" || platform.os === "android" || windowSize().width < BREAK.phone);
 /** Under 860: the sidebar and the panel float over the page. */
 const overlayMode = computed(() => windowSize().width < BREAK.overlays);
 const sidebarDocked = computed(() => sidebarOpen() && !overlayMode());
