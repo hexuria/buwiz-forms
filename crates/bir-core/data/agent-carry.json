@@ -1970,7 +1970,11 @@
     ]
   },
   "2200a-v2020": {
-    "computed": [],
+    "computed": [
+      "frm2200Av2020:txtSched1_xa_others1_Due",
+      "frm2200Av2020:txtSched1_xa_others2_Due",
+      "frm2200Av2020:txtSched1_xa_others3_Due"
+    ],
     "dates": [
       "frm2200Av2020:cashDate",
       "frm2200Av2020:checkDate",
@@ -2046,9 +2050,6 @@
       "frm2200Av2020:txtSched1_3B_2022_Due",
       "frm2200Av2020:txtSched1_3B_2023_Due",
       "frm2200Av2020:txtSched1_3B_2024_Due",
-      "frm2200Av2020:txtSched1_xa_others1_Due",
-      "frm2200Av2020:txtSched1_xa_others2_Due",
-      "frm2200Av2020:txtSched1_xa_others3_Due",
       "frm2200Av2020:txtSched1_TotalDue"
     ],
     "page_writes": [],

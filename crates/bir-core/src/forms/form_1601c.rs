@@ -39,6 +39,23 @@ pub const MAX_SCHEDULE_1_ROWS: usize = 3;
 /// the bindings carry them to the same row count form 2000 validates.
 pub const MAX_SCHEDULE_1_EXPANDED_ROWS: usize = 50;
 
+/// The Schedule I row a print-map key belongs to, for keys that carry one.
+fn schedule_row_of(key: &str) -> Option<usize> {
+    if let Some(rest) = key.strip_prefix("chkScheduleDelete") {
+        return rest.parse().ok();
+    }
+    let cell = key.rsplit("sched1:").next()?;
+    let digits: String = cell
+        .chars()
+        .skip_while(|c| c.is_ascii_alphabetic())
+        .take_while(char::is_ascii_digit)
+        .collect();
+    if digits.is_empty() || !cell.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
+        return None;
+    }
+    digits.parse().ok()
+}
+
 /// Hash-locked source evidence for the exact January 2018 revision.
 pub const OFFICIAL_FORM_SHA256: &str =
     "c8faaa71015337a73b4ceb96bfb265c539589ab5e10eb27899bb81f87f417397";
@@ -386,6 +403,13 @@ impl Form1601CDraft {
                 fields.insert(format!("frm1601c:sched1:{key}{row}"), String::new());
             }
         }
+        // Rows past the paper's three print on the engine that grows the
+        // printed table; until that engine lands the printed sheet is the
+        // paper's rows, while the upload carries every row the filer added.
+        fields.retain(|key, _| {
+            !key.contains("sched1:") && !key.starts_with("chkScheduleDelete")
+                || schedule_row_of(key).is_none_or(|row| row < MAX_SCHEDULE_1_ROWS)
+        });
         for (key, value) in [
             ("tin_digits", tin_digits),
             ("address_line1", line1),
