@@ -4,7 +4,7 @@
 // the selection the input reported before each edit goes to the mask so the edit is read exactly (NSH: onKeyPress comes
 // before the text changes, onSelectionChange has the selection; nsh/.nsh/types/nsh/types.d.ts InputHostProps).
 import type { InputRef, JSX, ViewRef } from "nsh";
-import { effect, signal, Text as NText, untracked, View } from "nsh";
+import { cleanup, effect, signal, Text as NText, untracked, View } from "nsh";
 import { Calendar, type CalendarEntry, DatePicker, Input, OtpInput, type OtpInputRef } from "nsh/base";
 import { AppButton } from "./buttons";
 import type { IconName } from "./icons";
@@ -751,17 +751,37 @@ export interface PinCellsProps {
   onBlur?: () => void;
 }
 
+/**
+ * When `autoFocus` asks for the focus, in ms after the mount: at once, then again while the cells have not had it. A phone
+ * can drop the first request on a page it is still opening (an Android first launch left the cells unfocused), and a
+ * later one lands.
+ */
+const AUTO_FOCUS_TRIES = [0, 500, 1500, 3000];
+
 /** PIN and one-time-code cells: 32-point boxes (44 on touch), radius 8, the accent on the cell that takes the next digit. */
 export function PinCells(props: PinCellsProps) {
+  // Once the cells had the focus (asked for, or a tap), or are gone, nothing asks again: a person who moved on keeps it.
+  let hadFocus = false;
+  let gone = false;
+  cleanup(() => {
+    gone = true;
+  });
   return (
     <OtpInput
       testID={props.testID}
       ref={(r: OtpInputRef) => {
         props.focusRef?.(() => r.focus());
-        // After the mount, once the cells are there to take the focus.
-        if (props.autoFocus) setTimeout(() => r.focus(), 0);
+        if (!props.autoFocus) return;
+        for (const ms of AUTO_FOCUS_TRIES) {
+          setTimeout(() => {
+            if (!hadFocus && !gone) r.focus();
+          }, ms);
+        }
       }}
-      onFocus={() => props.onFocus?.()}
+      onFocus={() => {
+        hadFocus = true;
+        props.onFocus?.();
+      }}
       onBlur={() => props.onBlur?.()}
       length={props.length}
       value={props.value}
