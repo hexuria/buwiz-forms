@@ -2103,6 +2103,13 @@ export class FormSession {
     return (this.st.penalties || []).find((g) => g.keys.includes(k)) || null;
   }
 
+  /** A penalty box whose component the filer never typed: it shows the computed
+      amounts, and the page marks it "Computed from other items". */
+  penaltyComputed(k: string): boolean {
+    const g = this.penaltyGroupOf(k);
+    return Boolean(g && !(g.typed || []).includes(k));
+  }
+
   /** Locked on the page: off, a penalty not opened, or a host lock unless a profile box opened with Edit. */
   private isLocked(k: string): boolean {
     const s = this.st;
