@@ -1465,19 +1465,31 @@ fn p4_8_a_stored_1702ex_keeps_filing_its_shut_rows() {
 fn pr8_form_1702ex_folded_lines_say_what_fills_them() {
     setup();
     let opened = open("1702EX", 0);
-    for stem in [
-        "txtPg3Pt6I17OthersIDesc",
-        "txtPg3Pt6S2I4Description",
-        "txtPg3Pt6S3I3NonDeductExpenseOtherIncomeDesc",
-        "txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
-        "txtPg3Pt6S3I8SpecialDeductDesc",
+    for (stem, expected_note) in [
+        (
+            "txtPg3Pt6I17OthersIDesc",
+            "Filled from the attached schedule.",
+        ),
+        (
+            "txtPg3Pt6S2I4Description",
+            "Filled from the attached schedule.",
+        ),
+        (
+            "txtPg3Pt6S3I3NonDeductExpenseOtherIncomeDesc",
+            NOTE_COMPUTED,
+        ),
+        (
+            "txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
+            NOTE_COMPUTED,
+        ),
+        ("txtPg3Pt6S3I8SpecialDeductDesc", NOTE_COMPUTED),
     ] {
         assert_eq!(
             opened["waits"][ex(stem)],
             rows_annual_corporate::EX_FOLDED_WAITS,
             "{stem}"
         );
-        assert_eq!(opened["lock_notes"][ex(stem)], NOTE_COMPUTED, "{stem}");
+        assert_eq!(opened["lock_notes"][ex(stem)], expected_note, "{stem}");
     }
     let filled = fill(
         "1702EX",

@@ -4210,4 +4210,69 @@ mod tests {
             );
         }
     }
+
+    /// Official 1702EX runtime fixture (`rules/forms/1702ex-v2018c/fixtures/
+    /// runtime-control-inventory-v796.json`): Schedule 1 Item 17i and Schedule
+    /// 2 Item 4 (including Legal Basis) are popup/attached-schedule-owned
+    /// controls that BIR's program keeps shut. `form.fill` must refuse all
+    /// five boxes and name the attached schedule rather than accepting Legal
+    /// Basis or saying only "computed by BIR's own formulas".
+    #[test]
+    fn form_fill_1702ex_refuses_popup_owned_schedule_1_and_2_boxes_by_name() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1702EX", "year": 2025, "period": 0, "tin": TIN}),
+        )
+        .unwrap();
+        let reply = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm1702EX:txtPg3Pt6I17OthersIDesc": "Other expense",
+                    "frm1702EX:txtPg3Pt6I17OthersIAmt": "50000",
+                    "frm1702EX:txtPg3Pt6S2I4Description": "Special deduction",
+                    "frm1702EX:txtPg3Pt6S2I4LegalBasis": "RA 9999",
+                    "frm1702EX:txtPg3Pt6S2I4Amount": "75000"
+                }
+            }),
+        )
+        .unwrap();
+        assert_eq!(
+            reply["filled"],
+            json!([]),
+            "all five 1702EX popup-owned boxes must be refused: {reply}"
+        );
+        for (key, expected_schedule) in [
+            (
+                "frm1702EX:txtPg3Pt6I17OthersIDesc",
+                "Schedule 1 Item 17i (more...) attached schedule",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6I17OthersIAmt",
+                "Schedule 1 Item 17i (more...) attached schedule",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6S2I4Description",
+                "Schedule 2 Item 4 (more...) attached schedule",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6S2I4LegalBasis",
+                "Schedule 2 Item 4 (more...) attached schedule",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6S2I4Amount",
+                "Schedule 2 Item 4 (more...) attached schedule",
+            ),
+        ] {
+            let reason = reply["refused"][key].as_str().unwrap_or("");
+            assert!(
+                reason.contains(expected_schedule),
+                "expected `{key}` refusal to name `{expected_schedule}`, got `{reason}` ({reply})"
+            );
+        }
+    }
 }

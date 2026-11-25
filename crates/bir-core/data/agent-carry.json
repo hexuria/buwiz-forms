@@ -979,7 +979,10 @@
       "frm1702EX:txtPg3Pt6S3I8SpecialDeductAmt",
       "frm1702EX:txtPg3Pt6S3I9Total"
     ],
-    "page_writes": [],
+    "page_writes": [
+      "frm1702EX:txtPg3Pt6I17OthersIDesc",
+      "frm1702EX:txtPg3Pt6S2I4Description"
+    ],
     "period": [
       "frm1702EX:ddlPg1I2Date",
       "frm1702EX:txtPg1I2YearEnd"

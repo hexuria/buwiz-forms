@@ -388,26 +388,59 @@ pub mod annual_corporate {
     pub const EX_ATTACHED_LOCK_SCHED_1: &str = "filled from the Schedule 1 Item 17i (more...) attached schedule; BIR's program keeps this row shut";
     pub const EX_ATTACHED_LOCK_SCHED_2: &str = "filled from the Schedule 2 Item 4 (more...) attached schedule; BIR's program keeps this row shut";
 
-    /// The schedule-specific lock/refusal for an [`EX_ATTACHED_ROWS`] box,
-    /// by official key (`frm1702EX:...`).
+    /// The `(more...)` summary rows of Schedule 1 item 17i and Schedule 2
+    /// item 4 (`rules/forms/1702ex-v2018c/fixtures/runtime-control-inventory-v796.json`:
+    /// `txtPg3Pt6I17OthersIDesc`/`Amt`, `txtPg3Pt6S2I4Description`/`LegalBasis`/`Amount`).
+    /// BIR's program keeps all five shut as popup/attached-schedule-owned
+    /// controls; locking them here ensures both the form page and `form.fill`
+    /// refuse them by naming the attached schedule (including `LegalBasis`,
+    /// which is not computed, and overriding the generic `COMPUTED` lock on
+    /// the folded description/amount boxes).
+    const EX_ATTACHED_MORE_ROWS: [(&str, &[&str]); 2] = [
+        (
+            "Schedule 1 item 17i",
+            &["txtPg3Pt6I17OthersIDesc", "txtPg3Pt6I17OthersIAmt"],
+        ),
+        (
+            "Schedule 2 item 4",
+            &[
+                "txtPg3Pt6S2I4Description",
+                "txtPg3Pt6S2I4LegalBasis",
+                "txtPg3Pt6S2I4Amount",
+            ],
+        ),
+    ];
+
+    /// The schedule-specific lock/refusal for an [`EX_ATTACHED_ROWS`] or
+    /// [`EX_ATTACHED_MORE_ROWS`] box, by official key (`frm1702EX:...`).
     pub fn ex_attached_lock(key: &str) -> Option<&'static str> {
         let stem = key.strip_prefix(EX)?;
-        EX_ATTACHED_ROWS.iter().find_map(|(label, stems)| {
-            stems.contains(&stem).then(|| {
-                if *label == "Item 49" {
-                    EX_ATTACHED_LOCK_ITEM_49
-                } else if label.starts_with("Schedule 1") {
-                    EX_ATTACHED_LOCK_SCHED_1
-                } else {
-                    EX_ATTACHED_LOCK_SCHED_2
-                }
+        EX_ATTACHED_ROWS
+            .iter()
+            .chain(EX_ATTACHED_MORE_ROWS.iter())
+            .find_map(|(label, stems)| {
+                stems.contains(&stem).then(|| {
+                    if *label == "Item 49" {
+                        EX_ATTACHED_LOCK_ITEM_49
+                    } else if label.starts_with("Schedule 1") {
+                        EX_ATTACHED_LOCK_SCHED_1
+                    } else {
+                        EX_ATTACHED_LOCK_SCHED_2
+                    }
+                })
             })
-        })
     }
 
     /// Every [`EX_ATTACHED_ROWS`] box, by official key.
     pub fn ex_attached_keys() -> impl Iterator<Item = String> {
         EX_ATTACHED_ROWS
+            .iter()
+            .flat_map(|(_, stems)| stems.iter())
+            .map(|stem| format!("{EX}{stem}"))
+    }
+
+    fn ex_attached_more_keys() -> impl Iterator<Item = String> {
+        EX_ATTACHED_MORE_ROWS
             .iter()
             .flat_map(|(_, stems)| stems.iter())
             .map(|stem| format!("{EX}{stem}"))
@@ -661,9 +694,10 @@ pub mod annual_corporate {
                 locks.insert(key, json!(COMPUTED));
             }
         }
-        // 1702EX's rows BIR's program keeps shut, each box (P4-8).
+        // 1702EX's rows BIR's program keeps shut, each box (P4-8), including
+        // the Schedule 1 item 17i and Schedule 2 item 4 (more...) boxes.
         if code == "1702EX" {
-            for key in ex_attached_keys() {
+            for key in ex_attached_keys().chain(ex_attached_more_keys()) {
                 if let Some(reason) = ex_attached_lock(&key) {
                     locks.insert(key, json!(reason));
                 }

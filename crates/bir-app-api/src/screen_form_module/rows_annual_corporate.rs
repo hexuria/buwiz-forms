@@ -508,6 +508,10 @@ pub(super) fn waits(kind: AgentFormKind) -> Map<String, Value> {
             for key in ex_attached_keys().filter(|key| !ex_attached_amount(key)) {
                 out.insert(key, json!(EX_ATTACHED_NOTE));
             }
+            out.insert(
+                format!("{EX}txtPg3Pt6S2I4LegalBasis"),
+                json!(EX_ATTACHED_NOTE),
+            );
         }
         "1702MX" => {
             out.insert(
