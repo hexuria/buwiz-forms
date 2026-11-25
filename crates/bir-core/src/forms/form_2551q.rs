@@ -24,14 +24,63 @@ fn default_year_end_month() -> u8 {
     12
 }
 
-fn fits_decimal_comb(value: f64, integer_cells: usize) -> bool {
+/// Number of integer comb cells drawn on official BIR Form 2551Q (Jan 2018)
+/// for Schedule 1 Taxable Amount, Tax Due, Item 7 Total, and Part II Items 14–24.
+pub const FORM_2551Q_AMOUNT_INTEGER_CELLS: usize = 12;
+
+/// Official eBIRForms v7.9.6.0 `maxlength` on `txtATCAmt1..6` (raw typed chars
+/// before `onblur` adds commas and `.00`).
+pub const FORM_2551Q_TAXABLE_AMOUNT_TYPED_MAX_CHARS: usize = 12;
+
+pub fn fits_decimal_comb(value: f64, integer_cells: usize) -> bool {
     if !value.is_finite() {
         return false;
     }
-    format!("{value:.2}")
+    format!("{:.2}", value.abs())
         .split('.')
         .next()
         .is_some_and(|whole| whole.chars().count() <= integer_cells)
+}
+
+/// Whether a non-negative 2-decimal amount can be typed into the official
+/// `txtATCAmt1..6` input (`maxlength="12"` before `formatCurrency` adds commas
+/// and trailing `.00`): up to `999,999,999,999` without centavos (12 chars),
+/// `9,999,999,999.9` with tenths (12 chars), or `999,999,999.99` with centavos
+/// (12 chars).
+pub fn fits_taxable_amount_input(value: f64) -> bool {
+    if !value.is_finite() || value < 0.0 || !has_cent_precision(value) {
+        return false;
+    }
+    let formatted = format!("{value:.2}");
+    let trimmed = formatted.trim_end_matches('0').trim_end_matches('.');
+    let minimal = if trimmed.is_empty() { "0" } else { trimmed };
+    minimal.chars().count() <= FORM_2551Q_TAXABLE_AMOUNT_TYPED_MAX_CHARS
+}
+
+pub fn taxable_amount_limit_message(row_number: Option<usize>) -> String {
+    match row_number {
+        Some(n) => format!(
+            "Schedule 1 row {n} taxable amount exceeds the official 12-character input limit \
+             (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); \
+             enter a smaller amount."
+        ),
+        None => "Exceeds the official 12-character input limit \
+                 (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); \
+                 enter a smaller amount."
+            .to_string(),
+    }
+}
+
+pub fn amount_comb_limit_message(label: Option<&str>) -> String {
+    match label {
+        Some(label) => format!(
+            "{label} exceeds the official 12-digit peso field (at most 999,999,999,999.99); \
+             enter a smaller amount."
+        ),
+        None => "Exceeds the official 12-digit peso field (at most 999,999,999,999.99); \
+                 enter a smaller amount."
+            .to_string(),
+    }
 }
 
 /// Values less than half a cent from Rust's cent-rounded result serialize to
@@ -316,6 +365,16 @@ pub struct Form2551QDraft {
     /// printed or part of the queued fingerprint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relay_receipt: Option<String>,
+    /// The Buwiz relay send of this claimed return that may still be under
+    /// way, or whose end this app did not see: the client's
+    /// `bir_submit::PendingSend` as JSON (a submission id, a ticket id, the
+    /// XML's hash; never a token, a key or the return). Written by the worker
+    /// alone, on its own claim, before anything could reach the BIR; cleared
+    /// whenever the return leaves the claim. The worker asks the server how
+    /// such a send ended. Never filed, printed or part of the queued
+    /// fingerprint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay_pending: Option<String>,
     #[serde(default)]
     pub confirmed_at: Option<String>,
     #[serde(default)]
@@ -500,6 +559,7 @@ impl Form2551QDraft {
             submitted_dry_run: false,
             submitted_via_relay: false,
             relay_receipt: None,
+            relay_pending: None,
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
@@ -1194,6 +1254,7 @@ impl Form2551QDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.status = FilingStatus::Queued;
         self.submission_attempts = 0;
         self.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
@@ -1232,6 +1293,7 @@ impl Form2551QDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.updated_at = now.to_rfc3339();
     }
 
@@ -1300,6 +1362,7 @@ impl Form2551QDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.submission_attempts = 0;
         self.next_retry_at = None;
         self.last_error = None;
@@ -1390,6 +1453,7 @@ impl Form2551QDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
         self.updated_at = chrono::Utc::now().to_rfc3339();
         true
@@ -1409,6 +1473,7 @@ impl Form2551QDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.next_retry_at = Some(
             (chrono::Utc::now() + super::queueable::relay_retry_delay(self.submission_attempts))
                 .to_rfc3339(),
@@ -1433,6 +1498,7 @@ impl Form2551QDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.next_retry_at =
             Some(super::queueable::held_until(until, chrono::Utc::now()).to_rfc3339());
         self.updated_at = chrono::Utc::now().to_rfc3339();
@@ -1473,6 +1539,7 @@ impl Form2551QDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
 
         if self.submission_attempts >= 5 {
             self.status = FilingStatus::Draft;
@@ -2086,22 +2153,16 @@ impl FormValidator for Form2551QDraft {
                     ),
                 ));
             }
-            if !fits_decimal_comb(row.taxable_amount, 11) {
-                errors.push((
-                    field.clone(),
-                    format!(
-                        "Schedule 1 row {} taxable amount does not fit the official 11-cell integer field",
-                        i + 1
-                    ),
-                ));
+            if row.taxable_amount.is_finite()
+                && has_cent_precision(row.taxable_amount)
+                && !fits_taxable_amount_input(row.taxable_amount.abs())
+            {
+                errors.push((field.clone(), taxable_amount_limit_message(Some(i + 1))));
             }
-            if !fits_decimal_comb(row.tax_due, 7) {
+            if !fits_decimal_comb(row.tax_due, FORM_2551Q_AMOUNT_INTEGER_CELLS) {
                 errors.push((
                     field.clone(),
-                    format!(
-                        "Schedule 1 row {} tax due does not fit the official 7-cell integer field",
-                        i + 1
-                    ),
+                    amount_comb_limit_message(Some(&format!("Schedule 1 row {} tax due", i + 1))),
                 ));
             }
 
@@ -2362,18 +2423,18 @@ impl FormValidator for Form2551QDraft {
                     field.to_string(),
                     format!("{label} must be a finite amount"),
                 ));
-            } else if value < 0.0 {
-                errors.push((field.to_string(), format!("{label} must be non-negative")));
-            } else if !has_cent_precision(value) {
-                errors.push((
-                    field.to_string(),
-                    format!("{label} must have at most two decimal places"),
-                ));
-            } else if !fits_decimal_comb(value, 11) {
-                errors.push((
-                    field.to_string(),
-                    format!("{label} does not fit the official 11-cell integer field"),
-                ));
+            } else {
+                if value < 0.0 {
+                    errors.push((field.to_string(), format!("{label} must be non-negative")));
+                } else if !has_cent_precision(value) {
+                    errors.push((
+                        field.to_string(),
+                        format!("{label} must have at most two decimal places"),
+                    ));
+                }
+                if !fits_decimal_comb(value, FORM_2551Q_AMOUNT_INTEGER_CELLS) {
+                    errors.push((field.to_string(), amount_comb_limit_message(Some(label))));
+                }
             }
         }
 
@@ -2411,11 +2472,8 @@ impl FormValidator for Form2551QDraft {
                 self.total_amount_payable,
             ),
         ] {
-            if !fits_decimal_comb(value, 11) {
-                errors.push((
-                    field.to_string(),
-                    format!("{label} does not fit the official 11-cell integer field"),
-                ));
+            if !fits_decimal_comb(value, FORM_2551Q_AMOUNT_INTEGER_CELLS) {
+                errors.push((field.to_string(), amount_comb_limit_message(Some(label))));
             }
         }
 
@@ -4121,13 +4179,128 @@ mod tests {
         let errors = draft.validate();
 
         assert!(errors.iter().any(|(field, message)| {
-            field == "schedule_1_row_1" && message.contains("11-cell")
+            field == "schedule_1_row_1" && message.contains("12-character")
         }));
         assert!(
             errors
                 .iter()
-                .any(|(field, message)| field == "total_tax_due" && message.contains("11-cell"))
+                .any(|(field, message)| field == "total_tax_due" && message.contains("12-digit"))
         );
+    }
+
+    #[test]
+    fn schedule_1_taxable_amount_edges_match_official_12_char_input() {
+        // Whole pesos (no centavos): 12 chars max -> 999,999,999,999.00
+        for ok in [
+            999_999_999_998.0,
+            999_999_999_999.0,
+            // Tenths (1 decimal digit): 12 chars max -> 9,999,999,999.90
+            9_999_999_999.80,
+            9_999_999_999.90,
+            // Centavos (2 decimal digits): 12 chars max -> 999,999,999.99
+            999_999_999.98,
+            999_999_999.99,
+        ] {
+            let draft = make_draft(ok, 0.0, 2026, 1);
+            let errors = draft.validate();
+            assert!(
+                errors.is_empty(),
+                "expected {ok:.2} to pass validation, got {errors:?}"
+            );
+        }
+
+        for too_large in [1_000_000_000_000.0, 10_000_000_000.10, 1_000_000_000.01] {
+            let draft = make_draft(too_large, 0.0, 2026, 1);
+            let errors = draft.validate();
+            assert!(
+                errors.iter().any(|(field, message)| {
+                    field == "schedule_1_row_1" && message.contains("12-character")
+                }),
+                "expected {too_large:.2} to be refused on schedule_1_row_1, got {errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn schedule_1_tax_due_and_part_ii_edges_match_12_digit_comb() {
+        // Row tax due well above 10,000,000.00 (old 7-cell limit) passes cleanly:
+        // 30% of 999,999,999,999.00 = 299,999,999,999.70 (12 integer digits).
+        let mut draft = make_draft(0.0, 0.0, 2026, 1);
+        draft.item_13_election = Item13Election::NotApplicable;
+        let pt180 = find_atc("PT180").expect("PT180 in official catalog");
+        draft.schedule_1 = vec![Schedule1Row {
+            atc: pt180.code.to_string(),
+            atc_description: pt180.description.to_string(),
+            taxable_amount: 999_999_999_999.0,
+            tax_rate: pt180.rate,
+            tax_due: 299_999_999_999.70,
+        }];
+        draft.recompute(None);
+        assert!(
+            draft.validate().is_empty(),
+            "12-digit row tax due must pass, got {:?}",
+            draft.validate()
+        );
+
+        // Part II Item 15 just under, at, and just over 999,999,999,999.99
+        for (amt, should_pass) in [
+            (999_999_999_999.98, true),
+            (999_999_999_999.99, true),
+            (1_000_000_000_000.00, false),
+        ] {
+            let mut d = make_draft(100_000.0, amt, 2026, 1);
+            d.overpayment_disposition = OverpaymentDisposition::Refund;
+            let errs = d.validate();
+            let has_item15_err = errs
+                .iter()
+                .any(|(f, m)| f == "creditable_withheld" && m.contains("12-digit"));
+            assert_eq!(
+                !has_item15_err, should_pass,
+                "Item 15={amt:.2}: errs={errs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn six_rows_at_limit_whose_total_overflows_12_digits_are_refused_on_total() {
+        // Six distinct official ATCs (30% + 18% + 18% + 15% + 10% + 10% = 101%),
+        // each at the 12-char taxable limit (999,999,999,999.00):
+        // every row's tax due fits 12 integer digits (max 299,999,999,999.70),
+        // but their sum is 1,009,999,999,998.99 (13 digits, overflowing Schedule 1 / Part II totals).
+        let mut draft = make_draft(0.0, 0.0, 2026, 1);
+        draft.item_13_election = Item13Election::NotApplicable;
+        draft.schedule_1 = ["PT180", "PT140", "PT150", "PT170", "PT090", "PT160"]
+            .iter()
+            .map(|code| {
+                let entry = find_atc(code).expect("official ATC");
+                Schedule1Row {
+                    atc: entry.code.to_string(),
+                    atc_description: entry.description.to_string(),
+                    taxable_amount: 999_999_999_999.0,
+                    tax_rate: entry.rate,
+                    tax_due: 0.0,
+                }
+            })
+            .collect();
+        draft.recompute(None);
+        let errors = draft.validate();
+
+        // No individual row is refused: each row fits its own 12-char / 12-digit limits.
+        assert!(
+            errors
+                .iter()
+                .all(|(field, _)| !field.starts_with("schedule_1_row_")),
+            "individual rows should pass when each fits, got {errors:?}"
+        );
+        // Schedule 1 / Part II totals overflow 12 integer digits and are refused.
+        for total_field in ["total_tax_due", "tax_payable", "total_amount_payable"] {
+            assert!(
+                errors
+                    .iter()
+                    .any(|(field, msg)| field == total_field && msg.contains("12-digit")),
+                "expected 12-digit overflow error on {total_field}, got {errors:?}"
+            );
+        }
     }
 
     #[test]
@@ -4903,5 +5076,87 @@ mod tests {
                 .any(|(field, _)| field == "surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+
+    #[test]
+    fn negative_edges_for_overpayments_and_non_negative_boxes() {
+        // Items 19 and 24 are the only boxes that can legitimately be negative
+        // (overpayment): -999,999,999,999.98 and -999,999,999,999.99 fit the
+        // 12-digit peso comb; -1,000,000,000,000.00 overflows it.
+        for credit in [999_999_999_999.98, 999_999_999_999.99] {
+            let mut draft = make_draft(0.0, 0.0, 2026, 1);
+            draft.auto_compute_penalties = false;
+            draft.surcharge = 0.0;
+            draft.interest = 0.0;
+            draft.compromise = 0.0;
+            draft.creditable_tax_withheld = credit;
+            draft.overpayment_disposition = OverpaymentDisposition::Refund;
+            draft.recompute(None);
+            assert_eq!(draft.tax_payable, -credit);
+            assert_eq!(draft.total_amount_payable, -credit);
+            let errs = draft.validate();
+            assert!(
+                errs.is_empty(),
+                "12-digit negative overpayment -{credit:.2} must pass, got {errs:?}"
+            );
+        }
+
+        let mut over = make_draft(0.0, 0.0, 2026, 1);
+        over.auto_compute_penalties = false;
+        over.surcharge = 0.0;
+        over.interest = 0.0;
+        over.compromise = 0.0;
+        over.creditable_tax_withheld = 999_999_999_999.99;
+        over.other_tax_credit = 0.01;
+        over.other_tax_credit_description = "Prior credit".into();
+        over.overpayment_disposition = OverpaymentDisposition::Refund;
+        over.recompute(None);
+        assert_eq!(over.total_tax_credits, 1_000_000_000_000.00);
+        assert_eq!(over.tax_payable, -1_000_000_000_000.00);
+        assert_eq!(over.total_amount_payable, -1_000_000_000_000.00);
+        let over_errs = over.validate();
+        for f in ["total_tax_credits", "tax_payable", "total_amount_payable"] {
+            let msg = over_errs
+                .iter()
+                .find(|(field, _)| field == f)
+                .map(|(_, m)| m.as_str())
+                .unwrap_or("");
+            assert!(
+                msg.contains("at most 999,999,999,999.99")
+                    && msg.contains("enter a smaller amount"),
+                "expected unified limit wording on {f}, got {over_errs:?}"
+            );
+        }
+
+        // Negative values on non-negative editable boxes are refused, and
+        // over-limit negatives carry the unified limit sentence too.
+        let mut neg_sched = make_draft(0.0, 0.0, 2025, 1);
+        neg_sched.schedule_1[0].taxable_amount = -1_000_000_000.01;
+        let sched_errs = neg_sched.validate();
+        assert!(
+            sched_errs
+                .iter()
+                .any(|(f, m)| { f == "schedule_1_row_1" && m.contains("non-negative") })
+        );
+        assert!(
+            sched_errs
+                .iter()
+                .any(|(f, m)| { f == "schedule_1_row_1" && m.contains("enter a smaller amount") })
+        );
+
+        let mut neg_pen = make_draft(0.0, 0.0, 2025, 1);
+        neg_pen.auto_compute_penalties = false;
+        neg_pen.surcharge = -1_000_000_000_000.00;
+        let pen_errs = neg_pen.validate();
+        assert!(
+            pen_errs
+                .iter()
+                .any(|(f, m)| { f == "surcharge" && m.contains("non-negative") })
+        );
+        assert!(pen_errs.iter().any(|(f, m)| {
+            f == "surcharge"
+                && m.contains("at most 999,999,999,999.99")
+                && m.contains("enter a smaller amount")
+        }));
     }
 }

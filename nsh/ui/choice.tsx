@@ -9,7 +9,7 @@ import { AppButton } from "./buttons";
 import { TextField } from "./fields";
 import { revealAndFocus } from "./focus";
 import type { IconName } from "./icons";
-import { Popover } from "./layers";
+import { Popover, sheetMaxHeight } from "./layers";
 import { NameCell } from "./lists";
 import { matchOptions, multiComboLabel, type MultiComboWords, normalizeSelection, type PickOption } from "./logic";
 import { CTL, cx, FOCUS_RING, SMALL_HIT, TOUCH } from "./look";
@@ -278,6 +278,13 @@ export function Segmented(props: SegmentedProps) {
 const LIST_POPUP = TOUCH
   ? "rounded-t-(--radius-dialog) bg-card px-2 pt-2 pb-8"
   : "rounded-(--radius-card) border border-border bg-raised p-1 shadow-lg";
+/**
+ * Touch: a list of choices is a bottom sheet, and one with a search field brings the keyboard up under it. The list gives way so the
+ * whole sheet (its field, its padding and the list) stays below the status bar; with room it is the 280 points of `max-h-70`.
+ */
+const SHEET_CHROME = 112;
+const listRoom = () => (TOUCH ? { maxHeight: Math.max(120, Math.min(280, sheetMaxHeight() - SHEET_CHROME)) } : undefined);
+const sheetRoom = () => (TOUCH ? { maxHeight: sheetMaxHeight() } : undefined);
 /** A row of a list of choices: lit where the keys or the pointer are, the chosen one on the selected fill. */
 const LIST_ITEM = cx(
   "justify-center rounded-(--radius-ctl) px-2 focus:bg-hover selected:bg-selected disabled:opacity-50",
@@ -347,8 +354,10 @@ export function Dropdown(props: DropdownProps) {
       offset={4}
       margin={8}
       popupClass={LIST_POPUP}
+      popupStyle={sheetRoom()}
       backdropClass="bg-scrim"
       listClass="max-h-70"
+      listStyle={listRoom()}
       itemClass={LIST_ITEM}
       renderItem={(item: SelectEntry) => <Text testID={props.testID ? `${props.testID}-opt-${item.value}` : undefined}>{item.title}</Text>}
       empty={<Text variant="meta" tone="fg3" class="px-2 py-1.5">Nothing matches.</Text>}
@@ -424,8 +433,10 @@ export function ComboField(props: ComboFieldProps) {
         </View>
       }
       popupClass={LIST_POPUP}
+      popupStyle={sheetRoom()}
       backdropClass="bg-scrim"
       listClass="max-h-70"
+      listStyle={listRoom()}
       itemClass={cx(LIST_ITEM, "py-1")}
       renderItem={(item: SelectEntry) => <Text testID={props.testID ? `${props.testID}-opt-${item.value}` : undefined}>{item.title}</Text>}
       empty={<Text variant="meta" tone="fg3" class="px-2 py-1.5">No match. Try a code or a place name.</Text>}
