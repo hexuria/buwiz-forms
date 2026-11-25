@@ -42,11 +42,21 @@ fn filled_documents_reference_nothing_outside_themselves() {
             }
             scan = end;
         }
-        for needle in ["../assets/", "href=\"form.css\"", "href='form.css'", "href=\"../base.css\"", "href='../base.css'"] {
+        for needle in [
+            "../assets/",
+            "href=\"form.css\"",
+            "href='form.css'",
+            "href=\"../base.css\"",
+            "href='../base.css'",
+        ] {
             if doc.contains(needle) {
                 offenders.push(format!("{slug}: {needle}"));
             }
         }
     }
-    assert!(offenders.is_empty(), "external references remain:\n{}", offenders.join("\n"));
+    assert!(
+        offenders.is_empty(),
+        "external references remain:\n{}",
+        offenders.join("\n")
+    );
 }

@@ -3516,7 +3516,8 @@ fn inline_stylesheet_link(document: &str, href: &str, css: &str) -> Option<Strin
         let tag_end = document[at..].find('>').map(|i| at + i + 1)?;
         let tag = &document[at..tag_end];
         let is_stylesheet = tag.contains("rel=\"stylesheet\"") || tag.contains("rel='stylesheet'");
-        let has_href = tag.contains(&format!("href=\"{href}\"")) || tag.contains(&format!("href='{href}'"));
+        let has_href =
+            tag.contains(&format!("href=\"{href}\"")) || tag.contains(&format!("href='{href}'"));
         if is_stylesheet && has_href {
             return Some(format!(
                 "{}<style>{css}</style>{}",
