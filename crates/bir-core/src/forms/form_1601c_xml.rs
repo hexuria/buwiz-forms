@@ -227,8 +227,11 @@ impl Form1601CDraft {
             self.taxpayer_name.to_uppercase(),
         );
 
-        // Schedule I — the verified 1601-C payload exposes three rows.
-        for i in 0..MAX_SCHEDULE_1_ROWS {
+        // Schedule I — the verified 1601-C payload exposes three rows; rows
+        // past them exist once the filer adds them, numbered as the official
+        // page's script numbers them (the row-template keys of fields.json).
+        let schedule_rows = self.schedule_1.len().max(MAX_SCHEDULE_1_ROWS);
+        for i in 0..schedule_rows {
             let row = self.schedule_1.get(i);
             insert(&mut fields, &format!("chkScheduleDelete{}", i), "false");
             insert(
@@ -361,7 +364,19 @@ impl Form1601CDraft {
 
         let mut schedule_1 = Vec::new();
         let mut source_adjustments = Vec::new();
-        for index in 0..MAX_SCHEDULE_1_ROWS {
+        // Rows past the pre-allocated three exist when the filer added them;
+        // read every row the payload carries, to the write path's depth.
+        let schedule_rows = (0..super::form_1601c::MAX_SCHEDULE_1_EXPANDED_ROWS)
+            .filter(|index| {
+                fields.contains_key(&format!("frm1601c:sched1:txtMonthYear{index}"))
+                    || fields.contains_key(&format!("frm1601c:sched1:txtDatePaid{index}"))
+                    || fields.contains_key(&format!("frm1601c:sched1:txtTaxPaid{index}"))
+            })
+            .max()
+            .map_or(MAX_SCHEDULE_1_ROWS, |last| {
+                (last + 1).max(MAX_SCHEDULE_1_ROWS)
+            });
+        for index in 0..schedule_rows {
             let previous_month = field(fields, &format!("frm1601c:sched1:txtMonthYear{index}"));
             let date_paid = field(fields, &format!("frm1601c:sched1:txtDatePaid{index}"));
             let bank = field(fields, &format!("frm1601c:sched1:txtBankCode{index}"));

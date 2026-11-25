@@ -20657,6 +20657,7 @@ mod tests {
 
     /// PR 7: 1700, 1701, 1701A and 1701MS.
     mod annual_individual;
+    mod expandable_rows;
     /// PR 3: the monthly withholding forms.
     mod monthly;
 }
