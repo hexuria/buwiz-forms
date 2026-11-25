@@ -11825,7 +11825,9 @@ mod tests {
     /// six Schedule 1 ATCs (PR 1), 1600PT's 31 and 1600VT's 13 Part II ATC
     /// rows (PR 3), and 2000's three Schedule 1 ATCs and 2553's five row
     /// ATCs, items 14B to 18B (PR 4).
-    const CATALOG_TABLE_CELLS: usize = 51 + 36 + 30 + 7 + 2 + 6 + 31 + 13 + 3 + 5;
+    // plus 47: form 2000 Schedule 1's ATC lists on the rows the official
+    // program adds past the three pre-allocated ones (rows 3 to 49).
+    const CATALOG_TABLE_CELLS: usize = 51 + 36 + 30 + 7 + 2 + 6 + 31 + 13 + 3 + 5 + 47;
 
     #[test]
     fn catalog_lists_have_unique_values_across_the_schema() {

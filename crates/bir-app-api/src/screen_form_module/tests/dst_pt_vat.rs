@@ -556,7 +556,9 @@ fn pr4_form_2000_schedules_are_tables_of_their_printed_columns() {
             .find(|p| p["n"] == part_name)
             .unwrap_or_else(|| panic!("{part_name}"));
         let table = &part["items"][0];
-        assert_eq!(table["rows"], 3, "Schedule {n}");
+        // The schedules grow to the rows the official program builds
+        // (`{N}` row templates; btnSched*Add): fifty rows on the page.
+        assert_eq!(table["rows"], 50, "Schedule {n}");
         let row0: Vec<String> = table["keys"][0]
             .as_array()
             .unwrap()

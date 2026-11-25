@@ -546,7 +546,9 @@ fn pr11_2200a_schedule_1_is_by_atc_with_every_fixed_row_once() {
         .into_iter()
         .find(|it| it["l"] == "Others (specify)")
         .expect("4) Others (specify)");
-    assert_eq!(others["rows"], 3);
+    // The Others rows grow as the official program builds them
+    // (`txtSched1_xa_others{N>=4}` templates; btnAdd): fifty rows on the page.
+    assert_eq!(others["rows"], 50);
     assert_eq!(others["keys"][0][0], format!("{p}txtSched1_xa_others1_Atc"));
     assert!(captions[&format!("{p}txtSched1_xa_others1_Atc")].starts_with("4 Others (specify)"));
     // The rows' tick boxes are the page's row switch, not printed.
