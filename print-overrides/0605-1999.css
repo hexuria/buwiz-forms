@@ -51,3 +51,20 @@
 /* p1 +0.5pt 'YYYY' */ #p1t118{transform:translateY(0.82pt) scaleX(0.93201) !important}
 /* p1 +0.6pt 'Amount' */ #p1t119{transform:translateY(0.82pt) scaleX(0.94195) !important}
 /* p1 +2.4pt 'Tax Debit' */ #p1t134{transform:translateY(1.11pt) scaleX(0.90718) !important}
+
+/* ===== RULER: measurement only, never merged (try/android-print-ruler-*). One line of the same text at 4 to 9 CSS px,
+   outside the scaled .page, so a saved PDF shows which sizes the Android print path really draws. The 10 px line is
+   inside the scaled page, so its drawn size is 10 px times the page's scale. ===== */
+html::before,html::after,body::before,body::after,.sheet::before,.sheet::after,.page::before{
+  position:absolute !important;left:36pt !important;z-index:99999 !important;display:block !important;
+  background:#fff !important;color:#000 !important;white-space:nowrap !important;transform:none !important;
+  font-family:Arial,Helvetica,sans-serif !important;font-weight:400 !important;font-style:normal !important;
+  line-height:1 !important;letter-spacing:0 !important;padding:0 !important;margin:0 !important;
+  right:auto !important;bottom:auto !important;width:auto !important;height:auto !important}
+html::before{content:"RULER04 HXHXHXHXHX abcdefghij 0123456789" !important;top:300pt !important;font-size:4px !important}
+html::after{content:"RULER05 HXHXHXHXHX abcdefghij 0123456789" !important;top:312pt !important;font-size:5px !important}
+body::before{content:"RULER06 HXHXHXHXHX abcdefghij 0123456789" !important;top:324pt !important;font-size:6px !important}
+body::after{content:"RULER07 HXHXHXHXHX abcdefghij 0123456789" !important;top:336pt !important;font-size:7px !important}
+.sheet::before{content:"RULER08 HXHXHXHXHX abcdefghij 0123456789" !important;top:348pt !important;font-size:8px !important}
+.sheet::after{content:"RULER09 HXHXHXHXHX abcdefghij 0123456789" !important;top:362pt !important;font-size:9px !important}
+.page::before{content:"RULER10 HXHXHXHXHX abcdefghij 0123456789" !important;top:420pt !important;font-size:10px !important}
