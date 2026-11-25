@@ -72,14 +72,24 @@ CLI and NSH's Android release runtime at the pin into `$NSH_TOOLS` (default `~/B
 `just play-bundle` uses the same `$NSH_TOOLS` and refuses to build when its `nsh` is not at the NSH pin, or when the
 Android release runtime beside it is not recorded as built at the pin (`runtime/android/release/nsh-ref`, written by the
 setup script), so a bundle is never made with another NSH than CI tested. `nsh package` takes that release runtime even
-for a development build. The recipe prints the runtime's `classes.dex` SHA-256 with the CLI's version. On a Mac whose shared tool must stay as it is, keep the pinned one beside it
-and point both at it, with a build folder of its own:
+for a development build. The recipe prints the runtime's `classes.dex` SHA-256 with the CLI's version. On the owner's
+Mac the shared tool stays as other work needs it, and the pinned store tool lives beside it in `~/BuwizNsh/store-tools`
+(shared with the Apple store recipes; only the setup script writes there):
 
 ```sh
 export NSH_TOOLS=~/BuwizNsh/store-tools
-scripts/setup-android-macos.sh
+scripts/setup-android-macos.sh   # once, and again when the pin moves
 just play-bundle
 ```
+
+The app's Rust toolchain (`rust-toolchain.toml`) needs both Android targets; the setup script names the
+`rustup target add` for a missing one. The vendored OpenSSL needs the NDK's `llvm-ranlib`, which the recipe passes as
+`RANLIB_<target>`.
+
+First run, 25 November 2026, app `92b3e201` with this pull request's recipe: tool `nsh 0.6.1 (8c78cfd)`, runtime
+`classes.dex` SHA-256 `f70a1b02…`, cargo 1.102.0 from huacnlee/cargo 0.103.0-1 (the owner's Mac's cargo), rustc 1.99.0.
+The unsigned bundle (build 27, never uploaded) was 162.2 MB. `libnsh.so` is 86.5 MB on arm64-v8a and 74.6 MB on
+armeabi-v7a, about 24.3 MB and 22.8 MB compressed. The libraries took 21 and 16 minutes at `nice 15`.
 
 Machines never build or sign the store bundle. They build development and test packages with the Android debug key
 that `nsh package` makes on its own.
