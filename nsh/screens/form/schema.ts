@@ -2,6 +2,7 @@
 import type { ChoiceOption, FieldType, FormSchema, SchemaField, SchemaItem, SchemaPart } from "./contract";
 import { tinSegment } from "./controls/model";
 import { MONTHS, shortIsoDate } from "../../lib/dates";
+import { isDryRun } from "../../lib/statusWord";
 import type { ScreenFormExisting, SendState } from "../../bir";
 import { stripOtherError } from "./refusals";
 
@@ -195,7 +196,7 @@ export function choiceLabel(f: SchemaField): string {
 
 /** The width a box gets (old controlWidth). */
 export function controlWidth(f: { t: FieldType | "hidden"; m?: number }, available: number): number {
-  if (f.t === "money") return Math.min(230, available);
+  if (f.t === "money" || f.t === "num") return Math.min(230, available);
   if (f.t === "pct") return 88;
   // "September 30, 1988" is the widest long date: 126 pt of text plus the box's padding, gap and
   // calendar button needs about 174, so the smallest multiple of 4 that holds it is 176 (B14).
@@ -273,6 +274,13 @@ export const FILED_KEPT = "The filed version is kept in this return's history.";
 
 /** A filed return whose tax profile changed after it. */
 export const PROFILE_CHANGED_NOTE = "The tax profile changed after this return was filed. This return keeps what was filed.";
+/** The same note on a dry run, which was never filed (only simulated). */
+export const PROFILE_CHANGED_DRY_RUN_NOTE = "The tax profile changed after this dry run. This return keeps what the dry run held.";
+
+/** The note above a read-only return's profile changes: a filed return's, or a dry run's (`dryRun`). */
+export function profileChangedNote(dryRun: boolean): string {
+  return dryRun ? PROFILE_CHANGED_DRY_RUN_NOTE : PROFILE_CHANGED_NOTE;
+}
 
 export function profileUpdatesNote(updates: string[]): string {
   return `Updated from your tax profile: ${updates.join("; ")}`;
@@ -324,11 +332,14 @@ export function existingOfferFor(existing: ScreenFormExisting): { title: string;
       fastLane: false,
     };
   }
+  // A send the worker only simulated is no submission: it says "dry run", the form page's word (`statusWord`).
+  const dry = isDryRun(existing);
   const filed = existing.status === "Submitted" ? "submitted" : "filed";
-  const choices: OfferChoice[] = [{ id: "view", label: "View read-only", hint: `See exactly what was ${filed}.`, variant: "primary" }];
+  const hint = dry ? "See exactly what was in the dry run." : `See exactly what was ${filed}.`;
+  const choices: OfferChoice[] = [{ id: "view", label: "View read-only", hint, variant: "primary" }];
   if (has("amend")) choices.push({ id: "amend", label: "Amend this return", hint: `New amended return. ${FILED_KEPT}`, variant: "danger" });
   choices.push(keep);
-  return { title: `${label} was ${filed}`, subtitle: "", choices, fastLane: false };
+  return { title: dry ? `${label} was a dry run, not sent to BIR` : `${label} was ${filed}`, subtitle: "", choices, fastLane: false };
 }
 
 /** A host refusal in plain words: bir-core's "Other error: " prefix is not for the filer. */
@@ -375,7 +386,7 @@ export function keysOf(it: SchemaItem): string[] {
 export function emptyCell(value: string, type: string): boolean {
   const v = String(value ?? "").trim();
   if (v === "") return true;
-  if (type === "money" || type === "pct" || type === "int") return /^[-+]?0*\.?0*$/.test(v.replace(/[,₱%\s]/g, ""));
+  if (type === "money" || type === "num" || type === "pct" || type === "int") return /^[-+]?0*\.?0*$/.test(v.replace(/[,₱%\s]/g, ""));
   if (type === "chk" || type === "radio") return !(v === "true" || v === "1" || v === "Y");
   return false;
 }

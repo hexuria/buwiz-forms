@@ -87,6 +87,35 @@ test("a day narrows the list to it; a second press, or Show upcoming, lets go", 
   expect(listed(app.texts())).toEqual(lines(comingFor(everyone)));
 }, 90_000);
 
+test("a day's row of a dry-run send stays due and says Dry run; of a real send, Filed", async () => {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const [from, to] = gridRange(y, m);
+  // Every deadline due this month reads as sent (CalendarDemo `sent`): a day of this month with one.
+  const day = gridCells(y, m, bir.deadlines_between(from, to), now).find((c) => c.inMonth && c.items.length > 0)!;
+  const id = `id:calendar-row-${rowKey(day.items[0])}`;
+  const due = (app: Awaited<ReturnType<typeof open>>) => app.shows(`${id} >> text:/^(\\d+ days? overdue|Due today|In \\d+ days?)$/`);
+  const late = new Date(`${day.iso}T00:00:00`).getTime() - now.getTime() < 15 * 86_400_000;
+  // A dry run sent nothing: still due. Its one chip says how late or soon it is (the day is this month), and the line under the
+  // period says "Dry run"; a later day keeps the "Dry run" chip itself.
+  const dry = await open(ENTRY, asking({ branch: true, second: true, sent: "dry" }));
+  await dry.waitFor("id:calendar-narrow");
+  await dry.press(`id:calendar-day-${day.iso}`);
+  await dry.waitFor(id);
+  if (late) {
+    expect(due(dry)).toBe(true);
+    expect(dry.shows(`${id} >> text:/ · Dry run$/`)).toBe(true);
+  } else expect(dry.shows(`${id} >> text:Dry run`)).toBe(true);
+  expect(dry.shows(`${id} >> text:Filed`)).toBe(false);
+  const real = await open(ENTRY, asking({ branch: true, second: true, sent: "real" }));
+  await real.waitFor("id:calendar-narrow");
+  await real.press(`id:calendar-day-${day.iso}`);
+  await real.waitFor(id);
+  expect(real.shows(`${id} >> text:Filed`)).toBe(true);
+  expect(due(real)).toBe(false);
+  expect(real.shows(`${id} >> text:/Dry run/`)).toBe(false);
+}, 90_000);
+
 test("the month stepper moves the grid and clears the chosen day; Today comes back", async () => {
   const app = await open(ENTRY, asking({ branch: true, second: true }));
   await app.waitFor("id:calendar-narrow");

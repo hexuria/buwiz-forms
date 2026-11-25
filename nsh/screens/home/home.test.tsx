@@ -176,8 +176,44 @@ for (const { name, size } of SIZES) {
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     await app.press("id:home-tile-filed");
     await app.waitFor("id:filings");
-    expect(app.texts()).toContain(`filings {"statuses":["Submitted","Confirmed","Paid"],"updatedMonth":"${month}"}`);
+    expect(app.texts()).toContain(`filings {"statuses":["Submitted","Confirmed","Paid"],"updatedMonth":"${month}","filedOnly":true}`);
     expect(app.shows("id:filings-month-chip")).toBe(true);
+    expect(app.shows("id:filings-filed-only-chip")).toBe(true);
+  }, 120_000);
+
+  test(`${name}: a dry run leaves its deadline open with a Dry run chip and is not filed; a real send closes it and is filed`, async () => {
+    const year = new Date().getFullYear();
+    const january = `id:due-00012345300000-1601C-${year}-1`;
+    // Two saved 1601C returns (January, February: past due) whose deadlines read as sent, and a filed return of last year.
+    const dry = await open(ENTRY, { ...size, ...asking({ drafts: 2, dueSent: "dry", filed: 1, sent: "dry" }) });
+    await dry.waitFor("id:home-dashboard", { timeout: 60000 });
+    await dry.waitUntil(() => dry.texts().includes("Recently filed"), { timeout: 20000 });
+    expect(tileCount(dry, "Filed this month")).toBe(0);
+    const dryOverdue = tileCount(dry, "Overdue");
+    const dryProgress = dry.texts().find((t) => /^\d+ of \d+ filed this year$/.test(t));
+    // The Overdue tile's list holds the dry runs: still due, each with its "Dry run" chip.
+    await dry.press("id:home-tile-overdue");
+    await dry.waitFor(january, { timeout: 20000 });
+    expect(dry.shows(`${january} >> text:Dry run`)).toBe(true);
+    const real = await open(ENTRY, { ...size, ...asking({ drafts: 2, dueSent: "real", filed: 1, sent: "real" }) });
+    await real.waitFor("id:home-dashboard", { timeout: 60000 });
+    await real.waitUntil(() => tileCount(real, "Filed this month") === 1, { timeout: 20000 });
+    // Three saved returns' deadlines read as sent: January and February, and the filed December of last year (due in January).
+    // As dry runs they are still overdue and not filed; sent for real, they are filed and no longer overdue.
+    expect(dryOverdue).toBe(tileCount(real, "Overdue") + 3);
+    const realProgress = real.texts().find((t) => /^\d+ of \d+ filed this year$/.test(t));
+    expect(Number(realProgress?.split(" ")[0])).toBe(Number(dryProgress?.split(" ")[0]) + 3);
+    await real.press("id:home-tile-overdue");
+    await real.waitFor("text:Overdue");
+    await real.waitUntil(() => real.count("text:Overdue") === 2);
+    expect(real.shows(january)).toBe(false);
+    // The tile's number and the list it opens agree: the dry run is in neither.
+    await dry.press("id:home-tile-filed");
+    await dry.waitFor("id:filings-filed-only-chip");
+    await dry.waitFor("text:No returns match these filters.");
+    await real.press("id:home-tile-filed");
+    await real.waitFor("id:filings-filed-only-chip");
+    await real.waitFor("id:filings-count >> text:1 return");
   }, 120_000);
 }
 
@@ -230,6 +266,19 @@ for (const { name, size } of SIZES) {
 }
 
 for (const { name, size } of SIZES) {
+  test(`${name}: a dry-run send's rows say Dry run; a real send's say Filed`, async () => {
+    const shown = (texts: string[], word: string) => texts.filter((t) => t === word).length;
+    // A filed return with its template (so its row shows its chip) and an undated as-needed return, both sent.
+    const dry = await open(ENTRY, { ...size, ...asking({ filed: 1, template: true, undated: true, sent: "dry" }) });
+    await dry.waitFor("id:home-dashboard", { timeout: 60000 });
+    await dry.waitUntil(() => shown(dry.texts(), "Dry run") === 2, { timeout: 20000 });
+    expect(shown(dry.texts(), "Filed")).toBe(0);
+    const real = await open(ENTRY, { ...size, ...asking({ filed: 1, template: true, undated: true, sent: "real" }) });
+    await real.waitFor("id:home-dashboard", { timeout: 60000 });
+    await real.waitUntil(() => shown(real.texts(), "Filed") === 2, { timeout: 20000 });
+    expect(shown(real.texts(), "Dry run")).toBe(0);
+  }, 120_000);
+
   test(`${name}: each taxpayer's button opens the next deadline's return`, async () => {
     const app = await open(ENTRY, { ...size, ...asking({ second: true, branch: true }) });
     await app.waitFor("id:home-dashboard", { timeout: 30000 });

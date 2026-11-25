@@ -871,3 +871,94 @@ fn a_graduated_answer_keeps_a_refined_graduated_method() {
         Some(IncomeTaxElection::EightPercent)
     );
 }
+
+/// A return of `code` stored with `status` and its stored JSON.
+fn insert_return_json(db: &Database, tin: &str, code: &str, status: &str, data: &str) {
+    db.conn
+        .execute(
+            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+             VALUES (?1, ?2, 2025, 1, 'Q1', ?3, ?4)",
+            params![tin, code, status, data],
+        )
+        .unwrap();
+}
+
+/// The year's choice recorded, then one return of `code` stored as given:
+/// whether the choice is now locked.
+fn locks_the_choice(code: &str, status: &str, data: &str) -> bool {
+    let db = db();
+    db.set_year_facts(
+        HEAD,
+        2025,
+        &patch(json!({"tax_classification": "SelfEmployed"})),
+    )
+    .unwrap();
+    db.record_income_tax_election(BRANCH, 2025, IncomeTaxElection::EightPercent)
+        .unwrap();
+    insert_return_json(&db, BRANCH, code, status, data);
+    let locked = db.income_tax_election_locked(HEAD, 2025).unwrap();
+    assert_eq!(
+        db.year_facts_view(BRANCH, 2025).unwrap().election_locked,
+        locked,
+        "{code} {status} {data}"
+    );
+    locked
+}
+
+#[test]
+fn a_dry_run_send_leaves_the_election_open_and_the_choice_can_change() {
+    for code in ["2551Q", "1701Q", "1701"] {
+        // The worker only simulated the send: the flag at the top level (2551Q's inline
+        // lifecycle and the flattened generic one) or under `lifecycle`.
+        for data in [
+            r#"{"submitted_dry_run":true}"#,
+            r#"{"lifecycle":{"submitted_dry_run":true}}"#,
+            r#"{"submitted_dry_run":null,"lifecycle":{"submitted_dry_run":true}}"#,
+        ] {
+            assert!(!locks_the_choice(code, "Submitted", data), "{code} {data}");
+        }
+        // Nothing reached the BIR, so the choice may still change.
+        let db = db();
+        db.set_year_facts(
+            HEAD,
+            2025,
+            &patch(json!({"tax_classification": "SelfEmployed"})),
+        )
+        .unwrap();
+        db.record_income_tax_election(BRANCH, 2025, IncomeTaxElection::EightPercent)
+            .unwrap();
+        insert_return_json(
+            &db,
+            BRANCH,
+            code,
+            "Submitted",
+            r#"{"submitted_dry_run":true}"#,
+        );
+        db.record_income_tax_election(HEAD, 2025, IncomeTaxElection::GraduatedUnspecified)
+            .unwrap_or_else(|error| panic!("{code}: {error}"));
+    }
+}
+
+#[test]
+fn a_real_send_a_relay_receipt_a_confirmed_and_a_paid_return_lock_the_election() {
+    for code in ["2551Q", "1701Q", "1701"] {
+        // Sent for real, also by a build that kept no flag, and through the relay with a receipt.
+        for data in [
+            "{}",
+            r#"{"submitted_dry_run":false}"#,
+            r#"{"relay_receipt":"a.b.c","submitted_dry_run":false}"#,
+            "{broken",
+        ] {
+            assert!(locks_the_choice(code, "Submitted", data), "{code} {data}");
+        }
+        assert!(locks_the_choice(code, "Filed", "{}"), "{code} Filed");
+        // Confirmed and Paid reached the BIR whatever the stored JSON says.
+        for status in ["Confirmed", "Paid"] {
+            assert!(locks_the_choice(code, status, "{}"), "{code} {status}");
+            assert!(
+                locks_the_choice(code, status, r#"{"submitted_dry_run":true}"#),
+                "{code} {status} flagged"
+            );
+        }
+    }
+}

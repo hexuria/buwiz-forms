@@ -219,6 +219,8 @@ export function shell_set_chrome(open: boolean): null;
 export interface CloudAccountStatus {
     server_url: string;
     server_url_source: string;
+    /** The account site's address (where sign-in and account pages open). Empty when it is not a valid address. */
+    account_url: string;
     signed_in: boolean;
     email: string | null;
     user_id: string | null;
@@ -455,6 +457,8 @@ export interface InboxState {
     has_app_password: boolean;
     /** A usable Google refresh token exists on the profile or the inbox row. */
     oauth_connected: boolean;
+    /** This build can start Google's sign-in for mail (a client id and secret exist); false: offer the app password only. */
+    google_available: boolean;
     oauth_inbox_email: string | null;
     oauth_updated_at: string | null;
     /** A sibling on this inbox still has a Submitted return awaiting its BIR receipt. */
@@ -637,6 +641,8 @@ export interface ScreenFormExisting {
     /** What the page may offer: `load` (a draft), `view` (read-only), `amend` (reached BIR, and the form has an amended-return answer), `keep`. */
     actions: ("load" | "view" | "amend" | "keep")[];
     submitted_at: string | null;
+    /** The send `submitted_at` names was only simulated (a dry run): nothing reached BIR. */
+    submitted_dry_run: boolean;
     confirmed_at: string | null;
 }
 export interface ScreenFormSamplePeriod {
@@ -763,6 +769,8 @@ export interface DeadlineRow {
     due_date: string;
     /** "Not started" | "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid" */
     status: string;
+    /** A Submitted return whose send was only simulated (a dry run, `send.stage` "test_sent"): nothing reached BIR. */
+    submitted_dry_run: boolean;
     draft_id: number | null;
     /** The saved return's stored key (`screen_form_open`'s `key`), null when none is saved. */
     return_key: number | null;
@@ -773,6 +781,8 @@ export interface AsNeededReturn {
     period: number;
     return_key: number | null;
     status: string;
+    /** A Submitted return whose send was only simulated (a dry run): nothing reached BIR. */
+    submitted_dry_run: boolean;
     updated_at: string;
 }
 export interface AsNeededForm {
@@ -816,7 +826,7 @@ export interface ReturnRow {
 }
 /** What a screen says about a return's send (bir-app-api `send_state.rs`). */
 export interface SendState {
-    stage: "queued" | "sending" | "waiting" | "held" | "needs_attention" | "refused" | "sent" | "test_sent";
+    stage: "queued" | "sending" | "checking" | "waiting" | "held" | "needs_attention" | "refused" | "sent" | "test_sent";
     /** The sentence the person reads. */
     line: string;
     /** The code a refusal's reason ended in (`tin_not_active`), else null. */

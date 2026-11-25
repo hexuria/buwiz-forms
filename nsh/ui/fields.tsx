@@ -406,6 +406,8 @@ export interface MoneyInputProps extends MaskedFieldProps {
   onChange: (plain: string) => void;
   /** Whole pesos: leaving the box shows "1,234" rather than "1,234.00". */
   whole?: boolean;
+  /** What precedes the digits; "" for a bare number (an excise volume in metric tons, a count of shares). Default ₱. */
+  prefix?: string;
   /** A minus may be typed or pasted; unset, a pasted negative is refused and a typed minus does nothing (a negative value that is there stays negative). */
   negative?: boolean;
 }
@@ -421,7 +423,7 @@ export function MoneyInput(props: MoneyInputProps) {
       field={props}
       value={props.value}
       onChange={props.onChange}
-      prefix="₱"
+      prefix={props.prefix ?? "₱"}
       align="right"
       mask={moneyMask({ negative: props.negative })}
       shown={(v, focused) => shownMoney(v, focused, props.whole)}

@@ -122,6 +122,30 @@ test("the month filter keeps what changed in that local month", () => {
   expect(ids(filterRows(R, INDEX, { ...ALL, updatedMonth: "2019-01" }))).toEqual([]);
 });
 
+test("Filed only keeps what counts as filed: a real send, a relay send, Confirmed and Paid; never a dry run, a Draft or a Queued one", () => {
+  const send = (stage: SendState["stage"]): SendState => ({ stage, line: "", code: null, next_try_at: null, can_resolve: false });
+  const rows = [
+    row({ id: 11, status: "Submitted", send: send("test_sent") }),
+    row({ id: 12, status: "Submitted" }),
+    row({ id: 13, status: "Submitted", send: send("sent") }),
+    row({ id: 14, status: "Confirmed" }),
+    row({ id: 15, status: "Paid" }),
+    row({ id: 16, status: "Draft" }),
+    row({ id: 17, status: "Queued" }),
+  ];
+  expect(ids(filterRows(rows, INDEX, { ...ALL, filedOnly: true }))).toEqual([12, 13, 14, 15]);
+  expect(ids(filterRows(rows, INDEX, ALL))).toEqual([11, 12, 13, 14, 15, 16, 17]);
+  // Home's "Filed this month" asks for it; a preset carries it only when set.
+  expect(presetOf({ statuses: ["Submitted", "Confirmed", "Paid"], updatedMonth: "2026-11", filedOnly: true })).toEqual({
+    statuses: ["Submitted", "Confirmed", "Paid"],
+    updatedMonth: "2026-11",
+    filedOnly: true,
+  });
+  expect(presetOf({ filedOnly: true })).toEqual({ statuses: undefined, updatedMonth: undefined, filedOnly: true });
+  expect(presetOf({ filedOnly: "yes" })).toBeNull();
+  expect(presetFilters({ updatedMonth: "2026-11", filedOnly: true })).toEqual({ statuses: null, updatedMonth: "2026-11", filedOnly: true });
+});
+
 test("the board's columns hold every status once, with Paid in Confirmed", () => {
   expect(COLUMNS.map((c) => c.title)).toEqual(["Draft", "Queued", "Submitted", "Confirmed"]);
   expect(COLUMNS.flatMap((c) => [...c.statuses])).toEqual([...STATUSES]);
@@ -159,12 +183,21 @@ test("a preset keeps the real statuses it names, every status is no filter, and 
   expect(presetFilters({ statuses: ["Submitted"], updatedMonth: "2026-1" })).toEqual({ statuses: new Set(["Submitted"]), updatedMonth: null });
 });
 
-test("a card's send chip: Held, Retrying, Needs attention and Not sent with the host's line; the other stages and none say nothing", () => {
+test("a card's send chip: Checking, Held, Retrying, Needs attention and Not sent with the host's line; the other stages and none say nothing", () => {
   const send = (stage: SendState["stage"], line = `line of ${stage}`): SendState => ({ stage, line, code: null, next_try_at: null, can_resolve: stage === "needs_attention" });
   expect(sendChip(row({ status: "Queued", send: send("held") }))).toEqual({ label: "Held", tone: "neutral", line: "line of held" });
   expect(sendChip(row({ status: "Queued", send: send("waiting") }))).toEqual({ label: "Retrying", tone: "warning", line: "line of waiting" });
   expect(sendChip(row({ status: "Queued", send: send("needs_attention") }))).toEqual({ label: "Needs attention", tone: "warning", line: "line of needs_attention" });
+  expect(sendChip(row({ status: "Queued", send: send("checking") }))).toEqual({ label: "Checking", tone: "neutral", line: "line of checking" });
   expect(sendChip(row({ status: "Draft", send: send("refused") }))).toEqual({ label: "Not sent", tone: "danger", line: "line of refused" });
   for (const stage of ["queued", "sending", "sent", "test_sent"] as const) expect(sendChip(row({ send: send(stage) }))).toBe(null);
   expect(sendChip(row({}))).toBe(null);
+});
+
+test("a screen reader hears a dry-run send's word, Dry run, and a real send's Submitted", () => {
+  const send = (stage: SendState["stage"]): SendState => ({ stage, line: "", code: null, next_try_at: null, can_resolve: false });
+  const r = row({ form_code: "2550Q", period_label: "Q2 2026", status: "Submitted" });
+  expect(cardLabel({ ...r, send: send("test_sent") }).endsWith(", Dry run. Open")).toBe(true);
+  expect(cardLabel(r).endsWith(", Submitted. Open")).toBe(true);
+  expect(cardLabel({ ...r, send: send("sent") }).endsWith(", Submitted. Open")).toBe(true);
 });

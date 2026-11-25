@@ -20,6 +20,7 @@ test("status chips", () => {
   expect(statusChip("due_soon", 3)).toEqual({ label: "In 3 days", tone: "warning", check: false });
   expect(statusChip("overdue", -2)).toEqual({ label: "2 days overdue", tone: "danger", check: false });
   expect(statusChip("filed").check).toBe(true);
+  expect(statusChip("dry_run")).toEqual({ label: "Dry run", tone: "neutral", check: false });
   expect(statusChip("other").label).toBe("Not started");
 });
 

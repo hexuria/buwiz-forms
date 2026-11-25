@@ -46,9 +46,10 @@ pub enum SendMode {
     /// The local mock relay (`just mock-relay`, docs/relay.md) is listening at `url`, a loopback `http://` origin,
     /// and the transport sends there, and nowhere else. The relay may hand the file on to the mock BIR server.
     Relay { url: String },
-    /// A development build was asked to send through the Buwiz relay (`BUWIZ_RELAY_SEND=1`), and the Buwiz server at
-    /// `url` is on this computer, trusted through a test key, and listening. Whether anything reaches the BIR is that
-    /// server's mode; no build that ships has this mode yet.
+    /// Returns go to the BIR through the Buwiz server at `url`. A release build on a desktop: its configured server,
+    /// production unless the build says otherwise. A development build asked with `BUWIZ_RELAY_SEND=1`: a server on
+    /// this computer, trusted through a test key and listening; whether anything reaches the BIR is that server's
+    /// mode.
     Buwiz { url: String },
     /// Sending is not a dry run and not the mock: the submission worker does not start. Why.
     Refused(String),
@@ -84,9 +85,10 @@ impl SendMode {
             SendMode::Relay { url } => Some(format!(
                 "Sending through the mock relay at {url}. Nothing reaches the BIR."
             )),
-            SendMode::Buwiz { url } => Some(format!(
+            SendMode::Buwiz { url } if cfg!(debug_assertions) => Some(format!(
                 "Sending through the Buwiz server at {url} on this computer. Whether anything reaches the BIR is that server's mode."
             )),
+            SendMode::Buwiz { .. } => None,
             SendMode::Refused(reason) => Some(reason.clone()),
         }
     }
@@ -171,6 +173,8 @@ fn send_guard_for(
                 SendMode::DryRun
             } else if nowhere_to_send() {
                 SendMode::Off
+            } else if let Some(buwiz) = release_relay() {
+                buwiz
             } else {
                 SendMode::Live
             }
@@ -193,6 +197,19 @@ fn send_guard_for(
     relay_verdict(relay)
         .or_else(|| buwiz_verdict(buwiz))
         .unwrap_or_else(|| verdict(mock, transport_dry_run(), panel))
+}
+
+/// A release build on a desktop files through the Buwiz relay (`bir_core::transport::sends_through_buwiz`): the
+/// mode names the configured Buwiz server, or refuses to start the worker when that server may not be used.
+/// `None` when the send does not go through Buwiz (a build with `direct-bir`).
+fn release_relay() -> Option<SendMode> {
+    if !bir_core::transport::sends_through_buwiz() {
+        return None;
+    }
+    Some(match bir_core::relay::server() {
+        Ok(url) => SendMode::Buwiz { url },
+        Err(error) => SendMode::Refused(format!("{error} The submission worker was not started.")),
+    })
 }
 
 /// The decision when a development build is asked to send through the Buwiz relay (`buwiz`: the server's origin when

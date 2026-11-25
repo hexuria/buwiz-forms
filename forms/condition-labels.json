@@ -55,7 +55,11 @@
    "A joint return: Item 16 Married, Item 17 Yes and Item 18 Joint Filing.": "Needs item 16 = Married, item 17 = Yes and item 18 = Joint Filing",
    "A joint return (Items 16 to 18) and Part IV Item 8 Yes.": "Needs a joint return (items 16 to 18) and Part IV item 8 = Yes",
    "A joint return (Items 16 to 18) and Part IV Item 12 Graduated Rates.": "Needs a joint return (items 16 to 18) and Part IV item 12 = Graduated Rates",
-   "A joint return (Items 16 to 18) and Part IV Item 4 II011, II013 or II016.": "Needs a joint return (items 16 to 18) and Part IV item 4 = II011, II013 or II016"
+   "A joint return (Items 16 to 18) and Part IV Item 4 II011, II013 or II016.": "Needs a joint return (items 16 to 18) and Part IV item 4 = II011, II013 or II016",
+   "Item 7 ATC is II012, II013 or II014 (Graduated IT Rates).": "Needs graduated rates with business, profession or mixed income",
+   "A joint return (Items 16 to 18) and Part IV Item 4 is II012, II013 or II014 (Graduated IT Rates).": "Needs a joint return and spouse graduated rates (business, profession or mixed)",
+   "Item 7 ATC is II012, II013 or II014 and Item 21A is Itemized Deduction.": "Needs graduated rates and itemized deductions",
+   "A joint return (Items 16 to 18), Part IV Item 4 is II012, II013 or II014 and Part IV Item 12A is Itemized Deduction.": "Needs a joint return and spouse graduated rates with itemized deductions"
   },
   "1701A": {
    "Item 16 Civil Status is Married.": "Needs item 16 = Married",

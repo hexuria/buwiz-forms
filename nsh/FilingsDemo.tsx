@@ -13,6 +13,8 @@
 //   send   true: bir.list_returns answers the send states the worker leaves (SENDS below) on four seeded returns: the 2551Q draft
 //          refused, the queued 1601C with an unknown outcome, the Cebu 2551Q held and the second taxpayer's 1601C waiting for its next
 //          try (those two as Queued). A worker that leaves them cannot run here (nothing is sent from a test), so a test stands in for it.
+//   dry    true: bir.list_returns answers the seeded Submitted 2550Q as the dry-run worker leaves it (send "test_sent": only simulated,
+//          nothing reached BIR); the cards show "Dry run". The page's save never stores a dry-run fact, so a test stands in for the worker.
 // It sits at the nsh root because a real-window run serves assets (fonts, icons) from the entry's folder down.
 import { batch, effect, host, mount, untracked, View } from "nsh";
 import "./theme/fonts";
@@ -30,6 +32,7 @@ interface Params {
   generated?: boolean;
   legacy?: "rows" | "second";
   send?: boolean;
+  dry?: boolean;
 }
 
 const sendOf = (stage: SendState["stage"], line: string, code: string | null = null): SendState => ({
@@ -48,6 +51,14 @@ function answerSends(): void {
   const real = bir.list_returns;
   const table = bir as unknown as Record<string, typeof bir.list_returns>;
   table.list_returns = (which) => real(which).map((r) => (SENDS[r.id] ? { ...r, ...SENDS[r.id] } : r));
+}
+
+/** bir.list_returns with the seeded Submitted return answered as a dry-run send (param `dry`). */
+function answerDryRun(): void {
+  const real = bir.list_returns;
+  const table = bir as unknown as Record<string, typeof bir.list_returns>;
+  const dry = sendOf("test_sent", "Test send. Nothing reached the BIR.");
+  table.list_returns = (which) => real(which).map((r) => (r.id === IDS.submitted ? { ...r, send: dry } : r));
 }
 
 /** What the host answers for a TIN once the old program's folder was imported (made up: the demo taxpayers, their branch). */
@@ -84,6 +95,7 @@ function Demo() {
   const p = host.params as Params;
   if (p.legacy) answerLegacy(p.legacy);
   if (p.send) answerSends();
+  if (p.dry) answerDryRun();
   if (p.seed === "none") createDemoTaxpayer();
   else seedFilings();
   if (p.go) {

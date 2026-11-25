@@ -4,6 +4,7 @@ import { View } from "nsh";
 import type { AsNeededForm, AsNeededReturn, DeadlineRow, ReturnRow, Taxpayer } from "../../bir";
 import { nextText, progressText, type DashboardTaxpayerRow, type StripDay, type TileSpec } from "../../lib/dashboard";
 import { daysUntil, MONTHS, shortDate } from "../../lib/dates";
+import { countsAsFiled, isDryRun, isOpenDeadline, statusWord } from "../../lib/statusWord";
 import { store, today } from "../../shell";
 import { AppButton, Avatar, Code, Icon, type IconName, Line, ListRow, NameCell, PressCard, PressCell, StatusChip, Text } from "../../ui";
 import { cancelQueued, openDeadline, openListed, openUndated, startAsNeeded, useAsTemplate } from "./actions";
@@ -43,9 +44,9 @@ export function StatTile(props: { spec: TileSpec; width: number; picked: boolean
 
 // ---------------------------------------------------------------- strip
 
-/** The dot of one open deadline: accent for a draft, warning within a week, quiet after. */
+/** The dot of one open deadline: accent for a draft (or a dry run: started, nothing sent), warning within a week, quiet after. */
 function Dot(props: { d: DeadlineRow }) {
-  const tone = () => (props.d.status === "Draft" ? "bg-accent-blue" : daysUntil(props.d.due_date, today()) <= 7 ? "bg-warning" : "bg-subtle-foreground");
+  const tone = () => (props.d.status === "Draft" || isDryRun(props.d) ? "bg-accent-blue" : daysUntil(props.d.due_date, today()) <= 7 ? "bg-warning" : "bg-subtle-foreground");
   return <View class={`size-2 shrink-0 rounded-full ${tone()}`} />;
 }
 
@@ -110,7 +111,7 @@ function CodeCell(props: { code: string }) {
 /** When a deadline falls: an overdue or due-soon chip for an open one, else "Today", "N days ago" or "In N days". */
 function DueWhen(props: { d: DeadlineRow }) {
   const days = () => daysUntil(props.d.due_date, today());
-  const open = () => props.d.status === "Not started" || props.d.status === "Draft";
+  const open = () => isOpenDeadline(props.d);
   return (
     <If
       when={open() && days() < 0}
@@ -156,7 +157,7 @@ export function DueRow(props: { d: DeadlineRow; compact: boolean }) {
         </View>
       </If>
       <View class="shrink-0 flex-row justify-end" style={{ width: 88 }}>
-        <StatusChip status={statusKind(props.d.status)} />
+        <StatusChip status={statusKind(statusWord(props.d))} />
       </View>
     </ListRow>
   );
@@ -164,7 +165,8 @@ export function DueRow(props: { d: DeadlineRow; compact: boolean }) {
 
 /** What a filed return offers: Cancel queue while queued, its status or Use as template, then Open. */
 function FiledActions(props: { r: ReturnRow }) {
-  const filed = () => statusKind(props.r.status) === "filed";
+  // A dry run is not filed: it shows its "Dry run" chip, as a Draft shows its own, and no Use as template.
+  const filed = () => countsAsFiled(props.r);
   const hasTemplate = () => store.templates(props.r.tin).some((t) => t.form_code === props.r.form_code);
   return (
     <>
@@ -175,7 +177,7 @@ function FiledActions(props: { r: ReturnRow }) {
         when={hasTemplate() || !filed()}
         else={<AppButton testID={`return-${props.r.id}-use-template`} label="Use as template" icon="layout-template" size="sm" onPress={() => useAsTemplate(props.r)} />}
       >
-        <StatusChip status={statusKind(props.r.status)} />
+        <StatusChip status={statusKind(statusWord(props.r))} />
       </If>
       <AppButton testID={`return-${props.r.id}-open`} label="Open" variant="ghost" size="sm" onPress={() => openListed(props.r)} />
     </>
@@ -259,7 +261,7 @@ export function TaxpayerRow(props: { row: DashboardTaxpayerRow; compact: boolean
       <If when={next()}>
         <AppButton
           testID={`home-tp-${tp().tin_root}-next`}
-          label={next()?.status === "Draft" ? "Open next" : "Start next"}
+          label={next()?.status === "Draft" || isDryRun(next() ?? { status: "" }) ? "Open next" : "Start next"}
           size="sm"
           onPress={() => openDeadline(next()!)}
         />
@@ -308,7 +310,7 @@ export function AsNeededUndated(props: { f: AsNeededForm; r: AsNeededReturn; com
       </If>
       <NameCell title={props.f.trigger ? `No ${props.f.trigger.toLowerCase()} date yet` : "Saved return"} sub={`Saved ${shortDate(props.r.updated_at)}`} />
       <View class="shrink-0 flex-row justify-end" style={{ width: props.compact ? undefined : 88 }}>
-        <StatusChip status={statusKind(props.r.status)} />
+        <StatusChip status={statusKind(statusWord(props.r))} />
       </View>
       <AppButton testID={`${id()}-open`} label="Open" variant="ghost" size="sm" onPress={() => openUndated(props.f, props.r)} />
     </ListRow>

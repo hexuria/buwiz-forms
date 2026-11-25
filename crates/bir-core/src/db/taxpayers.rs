@@ -1325,7 +1325,12 @@ pub(crate) fn overlay_profile_for_year(
 }
 
 /// Decision 7: the year's election is locked once a 2551Q, 1701Q or 1701
-/// of any branch of the taxpayer is past Queued for the year.
+/// of any branch of the taxpayer is past Queued for the year. A Submitted
+/// return the worker only simulated (`submitted_dry_run`, top level or
+/// under `lifecycle`, read as [`super::Database::draft_submitted_via_relay`]
+/// reads its flag) reached nobody: it locks nothing. The JSON is read inside
+/// `CASE WHEN json_valid(..)`: SQLite does not promise to stop an `AND` early,
+/// and `json_type` on a row that is not JSON fails the whole query.
 pub(crate) fn election_locked_on(
     conn: &Connection,
     tin: &str,
@@ -1339,7 +1344,12 @@ pub(crate) fn election_locked_on(
             "SELECT count(*) FROM form_drafts
              WHERE {} AND taxable_year = ?2
                AND form_code IN ('2551Q', '1701Q', '1701')
-               AND status IN ('Submitted', 'Filed', 'Confirmed', 'Paid')",
+               AND status IN ('Submitted', 'Filed', 'Confirmed', 'Paid')
+               AND NOT (status IN ('Submitted', 'Filed')
+                        AND (CASE WHEN json_valid(data_json)
+                                  THEN COALESCE(NULLIF(json_type(data_json, '$.submitted_dry_run'), 'null'),
+                                                json_type(data_json, '$.lifecycle.submitted_dry_run'), 'false') = 'true'
+                                  ELSE 0 END))",
             root_matches("tin")
         ),
         params![root, i64::from(year)],
@@ -2354,7 +2364,12 @@ impl Database {
         let kind = template_form(&form_code)?;
         let draft: Value = serde_json::from_str(&row.data_json)?;
         let answers = snapshot_answers(kind, &draft);
-        let source = match super::drafts::filing_status_from_db(&row.status) {
+        // A dry run is no filed return: its template is recorded as taken from a return that was not filed, the
+        // kind a Draft's or a Queued return's template already has. No new stored kind: an older build reads it.
+        let status = super::drafts::filing_status_from_db(&row.status);
+        let dry_run = crate::forms::dry_run::json_marks_dry_run(&draft);
+        let source = match status {
+            FilingStatus::Submitted if dry_run => TemplateSource::Return { draft_id },
             FilingStatus::Submitted | FilingStatus::Confirmed | FilingStatus::Paid => {
                 TemplateSource::Filed { draft_id }
             }
@@ -2930,6 +2945,52 @@ mod tests {
             )
             .unwrap();
         db.conn.last_insert_rowid()
+    }
+
+    /// A template taken from a dry run is recorded as taken from a return that
+    /// was not filed ("return:<id>"), not "filed"; a real send, a
+    /// relay-receipt send, Confirmed and Paid are "filed" as before.
+    #[test]
+    fn a_template_from_a_dry_run_is_not_labelled_filed() {
+        let db = db_with_taxpayer(TaxpayerType::Individual);
+        let dry = insert_return(&db, HEAD, "Submitted");
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET data_json = json_set(data_json, '$.submitted_dry_run', json('true')) WHERE id = ?1",
+                [dry],
+            )
+            .unwrap();
+        let template = db.snapshot_template_from_return(dry).unwrap();
+        assert_eq!(template.source, TemplateSource::Return { draft_id: dry });
+        assert_eq!(template.source.to_db(), format!("return:{dry}"));
+        // Read back from the database, it is the same.
+        assert_eq!(
+            db.get_form_template(HEAD, "2551Q").unwrap().unwrap().source,
+            TemplateSource::Return { draft_id: dry }
+        );
+        for (status, set) in [
+            ("Submitted", "json('false')"),
+            ("Submitted", "json('false')"),
+            ("Confirmed", "json('true')"),
+            ("Paid", "json('true')"),
+        ] {
+            let db = db_with_taxpayer(TaxpayerType::Individual);
+            let id = insert_return(&db, HEAD, status);
+            db.conn
+                .execute(
+                    &format!(
+                        "UPDATE form_drafts SET data_json = json_set(data_json, '$.submitted_dry_run', {set}, '$.relay_receipt', 'a.b.c') WHERE id = ?1"
+                    ),
+                    [id],
+                )
+                .unwrap();
+            let template = db.snapshot_template_from_return(id).unwrap();
+            assert_eq!(
+                template.source,
+                TemplateSource::Filed { draft_id: id },
+                "{status}"
+            );
+        }
     }
 
     /// A template with only stops switched on (`stops`, box keys), stored

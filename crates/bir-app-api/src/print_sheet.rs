@@ -2,9 +2,19 @@
 //!
 //! Ported from the retired painted preview's A4 fit implementation. Each
 //! `.page` sits in a paper-sized `.sheet` (the wrappers are
-//! written by [`crate::static_html`]), the page is zoomed to fit A4, and
+//! written by [`crate::static_html`]), the page is scaled to fit A4, and
 //! html/body are pinned to the paper width so WebKit doesn't re-scale the
 //! print layout. Without that pin a 4-page form printed as 8 pages.
+//!
+//! The scale rule depends on the engine the host prints through. WebKit
+//! (macOS WKWebView, iOS, Linux WebKitGTK) measures text at the zoomed size
+//! (a 7pt run at zoom 0.88 quantizes wider than at zoom 1), so a page laid
+//! out at sub-1 zoom does not have the widths the sheet was written with and
+//! its small runs overflow into the next column: WebKit gets
+//! `transform:scale`, which paints the natural layout scaled. Chromium
+//! (Windows WebView2, Android WebView) scales text metrics linearly with
+//! `zoom` and has no such fault — and its PDF writer loses the text layer
+//! under a transform — so Chromium keeps `zoom`.
 
 pub const PAPER_WIDTH_PT: f32 = 595.28;
 pub const PAPER_HEIGHT_PT: f32 = 841.89;
@@ -29,6 +39,7 @@ fn fit_scale(native: (f32, f32)) -> f32 {
 
 fn fit_css(native: (f32, f32)) -> String {
     let scale = fit_scale(native);
+    let page_rule = page_scale_rule(native, scale);
     format!(
         "@page{{size:{w:.2}pt {h:.2}pt;margin:0}}\
 html,body{{width:{w:.2}pt;margin:0 auto;padding:0;background:#fff}}\
@@ -36,12 +47,31 @@ body>:not(.sheet){{display:none !important}}\
 .sheet{{position:relative;width:{w:.2}pt;height:{sheet_h:.2}pt;overflow:hidden;background:#fff;padding-top:{safety:.0}pt;break-after:page;page-break-after:always}}\
 .sheet:last-of-type{{break-after:auto;page-break-after:auto}}\
 .sheet-flow{{height:auto;min-height:{sheet_h:.2}pt;overflow:visible}}\
-.sheet>.page{{zoom:{scale:.4};margin:0 auto;break-after:auto;page-break-after:auto}}",
+{page_rule}",
         w = PAPER_WIDTH_PT,
         h = PAPER_HEIGHT_PT,
         sheet_h = PAPER_HEIGHT_PT - 1.0,
         safety = SAFETY_PT,
     )
+}
+
+/// The `.sheet>.page` scale rule for the engine this binary prints through
+/// (the host is compiled per system). WebKit needs `transform:scale`; a
+/// transform keeps the page's native box, so it is centred as `margin:0
+/// auto` did, and its bottom edge is pulled up by what the scale shrinks so
+/// a `.sheet-flow` wraps the painted size. Chromium keeps `zoom`.
+fn page_scale_rule(native: (f32, f32), scale: f32) -> String {
+    if cfg!(any(target_os = "windows", target_os = "android")) {
+        format!(
+            ".sheet>.page{{zoom:{scale:.4};margin:0 auto;break-after:auto;page-break-after:auto}}"
+        )
+    } else {
+        let left = ((PAPER_WIDTH_PT - native.0 * scale) / 2.0).max(0.0);
+        let bottom = (1.0 - scale) * native.1;
+        format!(
+            ".sheet>.page{{transform:scale({scale:.4});transform-origin:0 0;margin:0 0 -{bottom:.4}pt {left:.4}pt;break-after:auto;page-break-after:auto}}"
+        )
+    }
 }
 
 /// Screen-only extras (grey desk, gap and shadow between sheets, page label).
@@ -152,6 +182,21 @@ mod tests {
         assert!((scale - (841.89 - 20.0) / 936.0).abs() < 1e-4);
         // Never upscale a sheet that already fits.
         assert_eq!(super::fit_scale((400.0, 500.0)), 1.0);
+    }
+
+    #[test]
+    fn the_scale_rule_matches_the_host_engine() {
+        // WebKit measures text at the zoomed size, so it gets a transform;
+        // Chromium's text metrics scale with `zoom` and its PDF writer loses
+        // the text layer under a transform, so it keeps `zoom`.
+        let css = super::fit_css((612.0, 936.0));
+        if cfg!(any(target_os = "windows", target_os = "android")) {
+            assert!(css.contains(".sheet>.page{zoom:"), "{css}");
+            assert!(!css.contains(".sheet>.page{transform:scale("), "{css}");
+        } else {
+            assert!(css.contains(".sheet>.page{transform:scale("), "{css}");
+            assert!(!css.contains(".sheet>.page{zoom:"), "{css}");
+        }
     }
 
     #[test]

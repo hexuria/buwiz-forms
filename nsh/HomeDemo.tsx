@@ -7,6 +7,11 @@
 //   undated   true: a saved 2200M return that holds no removal date yet (the "As needed" list)
 //   filed     N: N filed 1601C returns of last year (periods 12, 11, ...). They are real saved returns that list_returns("filed") shows as
 //             Submitted (a headless run has a submission worker for its first database only, so nothing really sends them)
+//   sent      "dry": the filed returns (`filed`) read as sends the worker only simulated (send "test_sent") and the undated return
+//             (`undated`) as a Submitted dry run; "real": as real sends. Generated reads: nothing is stored
+//   dueSent   "dry": the saved Drafts' deadlines (`drafts`) read as Submitted dry runs (only simulated: still due); "real": as real
+//             sends (filed: no longer due). Generated reads: nothing is stored
+//   template  true: each filed return is saved as its form's template first, so its row shows its status chip
 //   queued    true: one queued 2551Q row appears with the filed list once the frame is up (generated; the worker would send a real one)
 //   archived  true: archive the taxpayer, so Home has no one to list
 //   lateDraft true: a button (testID demo-save-draft) saves a 1601C draft straight through bir, behind the store's back (Home reads Drafts once per visit)
@@ -30,6 +35,9 @@ interface Params {
   drafts?: number;
   undated?: boolean;
   filed?: number;
+  sent?: "dry" | "real";
+  dueSent?: "dry" | "real";
+  template?: boolean;
   queued?: boolean;
   archived?: boolean;
   lateDraft?: boolean;
@@ -51,12 +59,13 @@ async function saveReturn(tin: string, year: number, period: number): Promise<vo
  * template writes a real template from a real return) and list_returns("saved") leaves them out. The store reads through
  * `bir` at each call, so this holds across every re-read.
  */
-function showAsSubmitted(ids: number[]): void {
+function showAsSubmitted(ids: number[], dry: boolean): void {
   const host = bir as { list_returns: typeof bir.list_returns };
   const real = host.list_returns;
+  const send = dry ? { stage: "test_sent" as const, line: "Test send. Nothing reached the BIR.", code: null, next_try_at: null, can_resolve: false } : null;
   host.list_returns = (which) => {
     const saved = real("saved").filter((r) => ids.includes(r.id));
-    if (which === "filed") return [...saved.map((r) => ({ ...r, status: "Submitted" })), ...real("filed")];
+    if (which === "filed") return [...saved.map((r) => ({ ...r, status: "Submitted", send })), ...real("filed")];
     if (which === "saved") return real("saved").filter((r) => !ids.includes(r.id));
     return real(which);
   };
@@ -85,9 +94,27 @@ async function seed(p: Params): Promise<void> {
   }
   const filed = p.filed ?? 0;
   for (let i = 0; i < filed; i++) await saveReturn(head.tin, year - 1, 12 - i);
-  if (filed > 0) showAsSubmitted(bir.list_returns("saved").filter((r) => r.taxable_year === year - 1 && r.period > 12 - filed).map((r) => r.id));
+  const filedIds = bir.list_returns("saved").filter((r) => r.taxable_year === year - 1 && r.period > 12 - filed).map((r) => r.id);
+  if (filed > 0) showAsSubmitted(filedIds, p.sent === "dry");
+  if (filed > 0 && p.template) for (const id of filedIds) bir.create_template_from_return(id);
+  if (p.sent) showUndatedAsSent(p.sent === "dry");
+  if (p.dueSent) showDraftDeadlinesAsSent(p.dueSent === "dry");
   if (p.archived) bir.set_taxpayer_archived(taxpayer.tin_root, true);
   if (p.theme) bir.set_setting("theme_preference", p.theme);
+}
+
+/** bir.as_needed_forms with every undated return read as Submitted: only simulated (`dry`) or sent for real. */
+function showUndatedAsSent(dry: boolean): void {
+  const host = bir as { as_needed_forms: typeof bir.as_needed_forms };
+  const real = host.as_needed_forms;
+  host.as_needed_forms = (year) => real(year).map((f) => ({ ...f, undated: f.undated.map((r) => ({ ...r, status: "Submitted", submitted_dry_run: dry })) }));
+}
+
+/** bir.deadlines_between with every Draft's deadline read as Submitted: only simulated (`dry`) or sent for real. */
+function showDraftDeadlinesAsSent(dry: boolean): void {
+  const host = bir as { deadlines_between: typeof bir.deadlines_between };
+  const real = host.deadlines_between;
+  host.deadlines_between = (from, to) => real(from, to).map((d) => (d.status === "Draft" ? { ...d, status: "Submitted", submitted_dry_run: dry } : d));
 }
 
 /** A queued return that nothing will send: generated, so the list shows Waiting to send and Cancel queue. */

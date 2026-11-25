@@ -62,7 +62,8 @@ export const SETTINGS_ROWS: Readonly<Record<string, readonly SettingsRow[]>> = {
   account: [
     { id: "buwiz", search: "buwiz server cloud sign in sign out device" },
     { id: "identity", search: "account name email tin profile sign out add account taxpayer" },
-    { id: "google", search: "google gmail connect disconnect oauth inbox tracking mail" },
+    // Desktop only: Google's sign-in for mail waits on a local web address a phone cannot answer (taxpayer/Inbox.tsx).
+    { id: "google", search: "google gmail connect disconnect oauth inbox tracking mail", desktopOnly: true },
     { id: "security", search: "pin authenticator recovery key security" },
   ],
   transfer: [

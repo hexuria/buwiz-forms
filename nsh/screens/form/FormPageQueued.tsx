@@ -40,6 +40,7 @@ const params = (host.params || {}) as Params;
 const LINES: Record<SendState["stage"], string> = {
   queued: "Queued to send.",
   sending: "Sending now. Keep eBIRForms open.",
+  checking: "Checking with Buwiz whether this return was sent. Keep eBIRForms open.",
   waiting: "Not sent yet: BIR is not accepting returns right now. It tries again by itself.",
   held: "Buwiz is holding sends for now.",
   needs_attention: "The BIR may have received this return. Check for the BIR's confirmation email before sending it again.",

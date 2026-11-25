@@ -37,6 +37,7 @@ import {
 } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { cancelQueueMessage } from "../../lib/queue_message";
+import { statusWord } from "../../lib/statusWord";
 import { effectiveStops, nextRow, stopCall, todoRows, type TodoPart, type TodoRow } from "../../lib/todo";
 import { formatMoney, wholePesosOf } from "../../lib/money";
 import { DATE_ERROR, formatIso, formatLongDate, formatMDY, isTwoDigitDate, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
@@ -48,7 +49,7 @@ import { parsePeriod, periodLong, periodText, PERIOD_ERROR, PERIOD_TWO_DIGIT, pe
 import { hostSentence, refusalItem, refusalLabel, refusalSentence, unfixableRefusal, type RefusalContext } from "./refusals";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
-const NUMBER_KINDS = new Set(["money", "pct", "int"]);
+const NUMBER_KINDS = new Set(["money", "num", "pct", "int"]);
 /** What an emptied number box is staged as when the host refuses a blank: the host's cleared value. */
 const CLEARED = "0";
 
@@ -214,6 +215,8 @@ export interface HeaderInfo {
   loading: boolean;
   error: string;
   status: ScreenFormStatus;
+  /** The status as the chip says it (`statusWord`): "Dry run" for a send the worker only simulated, else `status`. */
+  statusWord: string;
   editable: boolean;
   sample: boolean;
   periodSet: boolean;
@@ -236,6 +239,8 @@ export interface HeaderInfo {
   accountFix: boolean;
   /** The send's outcome is unknown: the page offers "The email came" and "It did not arrive". */
   canResolve: boolean;
+  /** The worker is asking Buwiz how a send it did not see end went (`send` checking): nothing for the person to answer or cancel. */
+  checkingSend: boolean;
   profileUpdates: string[];
   profileDiffers: string[];
   profileChanged: string[];
@@ -529,6 +534,7 @@ export class FormSession {
   private sOptions = new SignalMap<ChoiceOption[]>([], sameJson);
   private sInvalid = new SignalMap<boolean>(false);
   private sBoxMsg = new SignalMap<string>("");
+  private sRefusal = new SignalMap<string>("");
   private sGuessed = signal(0);
   private sRow = new SignalMap<RowInfo>(null as unknown as RowInfo, sameJson);
   private sPart = new SignalMap<PartInfo>({ errors: 0, todo: 0, items: 0, open: false, fold: null }, sameJson);
@@ -651,6 +657,7 @@ export class FormSession {
       const options = this.sOptions.get(k);
       const invalid = this.sInvalid.get(k);
       const boxMsg = this.sBoxMsg.get(k);
+      const refusal = this.sRefusal.get(k);
       b = {
         value: () => value(),
         locked: () => locked(),
@@ -659,6 +666,7 @@ export class FormSession {
         options: () => options(),
         invalid: () => invalid(),
         message: () => boxMsg(),
+        refusal: () => refusal(),
         zeroWhenBlank: this.kindOf.get(k) === "money" && this.computedKeys.has(k),
       };
       this.boxes.set(k, b);
@@ -1428,6 +1436,8 @@ export class FormSession {
       const listed = this.listedOptions(k);
       if (listed.length > 0 && !listed.some((o) => o.value === String(v))) {
         s.rejected[k] = "not one of the listed choices";
+        s.boxMessages[k] = "Not one of the listed choices.";
+        this.sBoxMsg.get(k).set("Not one of the listed choices.");
         offList.add(k);
       }
     }
@@ -1524,7 +1534,7 @@ export class FormSession {
     const kind = one || period ? "date" : this.kindOf.get(k);
     const v = this.sValue.get(k);
     const raw = untracked(() => v());
-    if (kind === "money" && !this.isShut(k)) v.set(formatMoney(raw, this.wholeKeys.has(k)));
+    if ((kind === "money" || kind === "num") && !this.isShut(k)) v.set(formatMoney(raw, kind === "money" && this.wholeKeys.has(k)));
     else if (kind === "date" && !this.isShut(k)) {
       const date = parseTypedDate(raw);
       if (date && !(baseKey in s.rejected)) {
@@ -1560,7 +1570,7 @@ export class FormSession {
     const s = this.st;
     if (!s.draft || this.reopening) return;
     const kind = this.kindOf.get(k);
-    if (kind === "money" || kind === "pct" || kind === "int" || kind === "sel" || kind === "chk" || kind === "radio" || kind === "date") return;
+    if (kind === "money" || kind === "num" || kind === "pct" || kind === "int" || kind === "sel" || kind === "chk" || kind === "radio" || kind === "date") return;
     if (this.oneDates.has(k) || this.onePeriods.has(k) || this.datePartKeys.has(k) || this.periodPartKeys.has(k) || this.rangeTextKeys.has(k) || this.pools.has(k)) return;
     if (s.rejected[k] !== undefined || s.unfixable.has(k) || this.isShut(k)) return;
     const box = this.sValue.get(k);
@@ -2009,8 +2019,8 @@ export class FormSession {
     if (pool) return String(s.poolTexts[pool.keys[0]] ?? "");
     const kind = this.kindOf.get(k);
     const raw = String(s.values[k] ?? "");
-    if (kind === "money") {
-      const zero = this.isShut(k) && (this.isComputedBox(k) || this.penaltyGroupOf(k) !== null);
+    if (kind === "money" || kind === "num") {
+      const zero = kind === "money" && this.isShut(k) && (this.isComputedBox(k) || this.penaltyGroupOf(k) !== null);
       const v = raw || (zero && !this.reasonFor(k) ? "0" : "");
       return v === "" ? "" : formatMoney(v, this.wholeKeys.has(k));
     }
@@ -2092,7 +2102,7 @@ export class FormSession {
   private hostChanged(k: string, typed: string): boolean {
     const host = String(this.st.values[k] ?? "");
     const kind = this.kindOf.get(k);
-    if (kind === "money" || kind === "pct" || kind === "int") return !sameNumber(typed, host);
+    if (kind === "money" || kind === "num" || kind === "pct" || kind === "int") return !sameNumber(typed, host);
     if (kind === "sel" || kind === "chk" || kind === "radio") return true;
     if (kind === "date") {
       const a = parseTypedDate(typed);
@@ -3201,6 +3211,9 @@ export class FormSession {
       s.saved = true;
       // B19: a refused edit was never in the draft; the return still has it unsaved. An unfixable
       // one (shut/locked) put the stored value back, so it does not count (R7).
+      // A refusal whose text is no longer there (the row was cleared, the drawer discarded it, the
+      // agent put the stored value back) must not hold the return dirty: nothing is left unsaved.
+      // Only a refusal whose typed text still stands keeps the save line honest.
       if (Object.keys(s.rejected).some((k) => !s.unfixable.has(k))) s.dirty = true;
       s.saveState = s.dirty ? this.restingSaveState() : { state: "saved" };
       if (changed) this.hooks.onSaved?.(s.target);
@@ -3931,6 +3944,11 @@ export class FormSession {
       this.sInvalid.get(k).set(shownMsgKeys.has(k) || Boolean(boxMsg));
       // A box whose sentence the row prints draws none of its own.
       this.sBoxMsg.get(k).set(this.rowPrints(k) ? "" : boxMsg);
+      // A refusal is the host having refused the edit (it was never stored), not any sentence the
+      // box shows: a validation message (an over-long value that saved, reported by Check) must not
+      // hold the row drawer shut. An unfixable one put the stored value back, so nothing stands.
+      const liveRefusal = k in s.rejected && !s.unfixable.has(k);
+      this.sRefusal.get(k).set(liveRefusal ? this.refusalText(k, s.rejected[k]) : "");
     }
     for (const [k, { date, row }] of this.oneDates) {
       const parts = [date.month, date.day, date.year].filter(Boolean) as SchemaField[];
@@ -4129,6 +4147,7 @@ export class FormSession {
       loading: s.loading,
       error: s.error,
       status: s.status,
+      statusWord: statusWord({ status: s.status, submitted_dry_run: s.submittedDryRun, send: s.send }),
       editable: s.editable,
       sample: s.sample,
       periodSet: s.periodSet,
@@ -4140,6 +4159,7 @@ export class FormSession {
       sendNotice: send?.stage === "refused" && s.editable ? send.line : "",
       accountFix: send?.stage === "refused" && s.editable && ACCOUNT_FIX_CODES.includes(send.code ?? ""),
       canResolve: Boolean(send?.can_resolve) && s.status === "Queued" && !s.editable,
+      checkingSend: send?.stage === "checking" && s.status === "Queued" && !s.editable,
       profileUpdates: s.profileUpdates,
       profileDiffers: s.editable ? s.profileDiffers : [],
       profileChanged: !s.editable ? s.profileChanged : [],
