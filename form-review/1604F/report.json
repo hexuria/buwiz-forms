@@ -1,0 +1,51 @@
+{
+  "form": "1604F",
+  "title": "Annual Information Return of Income Payments Subjected to Final Withholding Taxes",
+  "revision": "January 2018",
+  "branch": "try/forms-neon-3-b",
+  "verdict": "tweak",
+  "worst_finding": "Page 1 Item 7 Registered Address truncates our 126-character address at '...1258 PASEO DE' (dropping the last 55 characters: 'ROXAS COR AYALA AVE BRGY SAN LORENZO MAKATI CITY'); also, overflowing Item 11A ('PH-US TAX TREATY ART 11') wipes out the '11A If yes, specify' label to its left.",
+  "test_return": {
+    "taxpayer": "SANTOS, JUANA MARIE DELA CRUZ-VILLANUEVA",
+    "tin": "000-123-453-00000",
+    "rdo": "039",
+    "year": 2025,
+    "schedules": "All 12 quarterly rows across Schedules 1 (1601-FQ), 2 (1602Q), and 3 (1603Q) filled with large amounts; Page 2 Part III Schedules 4, 5, and 6 are format-only on the official BIR form. Item 3 (19) and Item 11A ('PH-US TAX TREATY ART 11') entered by hand on the form page, saved, and reloaded from Filings."
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "area": "Page 1 — Item 7 Registered Address (p1c24 / p1c25)",
+      "detail": "The 126-character address is split across line 1 (40 slots) and line 2 (31 slots + 7A ZIP) and hard-truncated at 'UNIT 1408 TOWER B RESIDENCIAS DE SAN LOR / ENZO CONDOMINIUM 1258 PASEO DE', dropping the remaining 55 characters ('ROXAS COR AYALA AVE BRGY SAN LORENZO MAKATI CITY')."
+    },
+    {
+      "severity": "high",
+      "area": "Page 1 — Item 11A If yes, specify (p1c36)",
+      "detail": "When a value longer than 16 characters ('PH-US TAX TREATY ART 11') overflows the 11A comb, the overflow white band covers the '11A If yes, specify' static caption to its left so the item label disappears completely."
+    },
+    {
+      "severity": "medium",
+      "area": "Page 1 — Part II Schedules 1, 2, and 3 Penalties column (all 12 quarterly rows)",
+      "detail": "All 12 row amounts in the Penalties column (117,500.50..175,002.00) print left-aligned flush against the left cell border, whereas their TOTAL rows (545,005.00, 585,005.00, 625,005.00) and the Taxes Withheld and Total Amount Remitted columns print right-aligned."
+    },
+    {
+      "severity": "low",
+      "area": "Page 2 — Bottom ~50%",
+      "detail": "Official 'Guidelines and Instructions for BIR Form No. 1604-F' block is omitted from the frozen sheet, leaving the bottom half of Page 2 blank."
+    }
+  ],
+  "verified_ok": [
+    "Page 1 Item 1 Year (2025 comb), Item 3 Sheets (19), Item 4 TIN, Item 5 RDO (039), Item 6 Name (full 40-char name), Item 7A ZIP (1100), Items 8/8A/11 checkboxes, Item 9 Contact Number, Item 10 Email Address, and Page 2 header TIN and Withholding Agent's Name all print cleanly.",
+    "Part II Schedules 1, 2, and 3 Taxes Withheld and Total Amount Remitted columns and all TOTAL rows compute and print cleanly right-aligned."
+  ],
+  "artifacts": [
+    "official-p1.png",
+    "official-p2.png",
+    "screen-p1.png",
+    "screen-p2.png",
+    "screen-p3.png",
+    "screen-p4.png",
+    "print-p1.png",
+    "print-p2.png"
+  ]
+}
