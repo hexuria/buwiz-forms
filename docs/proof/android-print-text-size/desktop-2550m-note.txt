@@ -1,0 +1,61 @@
+Independent 2550M PDF print check
+=================================
+
+Commits used
+------------
+after.pdf:  3e8b12125f08a37e832ba0477db51b8da2d0d1b7 (verified with `git rev-parse HEAD` after checkout)
+before.pdf: 92b3e2013f7a60a86dda120dd93e5473cb4b0c16 (verified with `git rev-parse HEAD` after checkout; `git fetch origin main` was run first)
+
+Return and period
+-----------------
+Form: 2550M, monthly VAT, January 2026 (Item 1 = 01/2026), original return.
+Demo taxpayer only: Juana Santos, TIN 000-123-453-00000.
+Item 7 Taxpayer's Name: SANTOS, JUANA MARIE DELA CRUZ-VILLANUEVA
+Item 9 Registered Address (134 characters): UNIT 27F THE VERY LONG CORPORATE TOWER 12345 DONA JUANA MARIE DELA CRUZ AVENUE CORNER VILLANUEVA BOULEVARD BARANGAY SAN LORENZO MAKATI
+Item 8 Telephone: 09171234567; Item 10 ZIP: 1229; email in the draft: juana.santos@example.com.
+
+Part II values printed
+----------------------
+12A 1,234,567.89; 12B 148,148.15
+13A 987,654.32; 13B 118,518.52
+14 45,678.90
+15 12,345.67
+16A 2,280,246.78; 16B 266,666.67
+17A 10,000.25; 17B 20,000.50; 17C 30,000.75; 17D 40,000.10; 17E 50,000.20; 17F 150,001.80
+18A 250,000.00; 18B 30,000.00; 18C 1,200,000.00; 18D 144,000.00; 18E 500,000.00; 18F 60,000.00; 18G 300,000.00; 18H 36,000.00; 18I 200,000.00; 18J 24,000.00; 18K 100,000.00; 18L 12,000.00; 18M 75,000.00; 18N 80,000.00; 18O 9,600.00; 18P 2,705,000.00
+19 465,601.80
+20A 212,400.00; 20B -50,473.10; 20C 5,043.31; 20D 7,654.32; 20E 3,333.33; 20F 177,957.86
+21 287,643.94
+22 -20,977.27
+23A 20,000.75; 23B 30,000.50; 23C 40,000.25; 23D 0.00; 23E 10,000.10; 23F 5,000.05; 23G 105,001.65
+24 -125,978.92
+25A 1,234.56; 25B 2,345.67; 25C 3,456.78; 25D 7,037.01
+26 -118,941.91
+
+Schedule rows behind those amounts
+----------------------------------
+Schedule 1: VT010, amount 1,234,567.89.
+Schedule 2: 01/10/2026 DELIVERY VAN, amount 250,000.00, input tax 30,000.00.
+Schedule 3A: 01/12/2026 PRODUCTION MACHINE, amount 1,200,000.00, input tax 144,000.00, life 60/60.
+Schedule 3B: 12/15/2025 PRIOR CAPITAL EQUIPMENT, amount 600,000.00, prior input-tax balance 72,000.00, life 60/60.
+Schedule 4: direct input tax 10,000.00, not-direct input tax 20,000.00.
+Schedule 5: direct input tax 5,000.00, not-direct input tax 8,000.00.
+Schedule 6: ABC CREDITABLE WITHHOLDER, income payment 500,000.00, withheld 25,000.75, applied 20,000.75.
+Schedule 7: SAMPLE RICE MILL / OR-123456, paid 35,000.50, applied 30,000.50.
+Schedule 8: NATIONAL GOVERNMENT AGENCY, income payment 800,000.00, withheld 45,000.25, applied 40,000.25.
+
+How the PDFs were saved
+-----------------------
+Each run used the real Linux GTK desktop app through `nsh test ./check355-print.test.tsx --target linux` in the buwiz-nsh-2404 container, under Xvfb/dbus-run-session with GSK_RENDERER=cairo and the required safety environment. A scratch, untracked fixture (`nsh/Check355Print.tsx`) seeded the return through the app's own screen-form host APIs (`screen_form_sample_period`, `screen_form_fill`, `screen_form_save`), opened the saved return in the real shell, pressed the real `fp-print` Print preview control, then used the existing test-only Save PDF hook (`testing.savePath`) exposed by the print fixture because the native save panel cannot be driven by the test driver. No Queue control was pressed. No live SFTP mode was enabled.
+
+Environment/deviations
+----------------------
+- The values were seeded through app host APIs rather than typed one by one in the UI. The return was nevertheless saved first, opened as a saved return in the running desktop app, and printed through the desktop print preview path.
+- `WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1` was required inside this unprivileged container: without it WebKitGTK/bwrap crashed with "No permissions to create new namespace" when print preview opened. This was only the scratch container/test environment.
+- `pdffonts`/`pdftotext`/`pdfinfo` were not installed system-wide. poppler-utils 22.02.0-2ubuntu0.15 was downloaded with apt and extracted locally under ~/BuwizNsh/poppler-local without sudo; those binaries produced the text outputs.
+- before.pdf has 2 pages; after.pdf has 3 pages. The third after page is the Additional Sheet carrying the full taxpayer name/address continuation.
+- Nothing was committed or pushed.
+
+Quick bbox cross-check
+----------------------
+The bbox outputs show the expected visible difference: on Page 1 the 12A amount starts at x=301.99 in before.pdf (left-aligned column start), while in after.pdf the 12A/13A/16A amounts end at x=400.02 (right-aligned column edge). The first word of the Item 9 address is about 6.1 pt high in before.pdf and about 8.3 pt high in after.pdf; after.pdf additionally carries the full address on the Additional Sheet.
