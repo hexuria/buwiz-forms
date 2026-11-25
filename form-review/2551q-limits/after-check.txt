@@ -1,0 +1,5 @@
+mode: after
+row1: atc=PT010 taxable_amount=666666666.66 rate=0.0% tax_due=20000000.00
+row2: atc=PT040 taxable_amount=999999999999.00 rate=0.0% tax_due=29999999999.97
+total_tax_due(Item14)=30019999999.97 tax_payable(Item19)=30019999999.97 total_amount_payable(Item24)=39637142054.75
+validation_error_count: 0
