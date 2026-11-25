@@ -583,11 +583,15 @@ mod tests {
             assert!(refused.contains("test key"), "{keys:?}: {refused}");
         }
         force("BUWIZ_TRUST_KEYS", Some(test_key));
-        for url in ["https://api.buwiz.com", "http://192.0.2.1:3008"] {
+        for url in ["https://api.buwiz.com", "https://192.0.2.1:3008"] {
             force("BUWIZ_SERVER_URL", Some(url));
             let refused = server().unwrap_err().to_string();
             assert!(refused.contains("on this computer"), "{url}: {refused}");
         }
+        // Plain http to another host is refused before that, as an address: never a sign-in in the clear.
+        force("BUWIZ_SERVER_URL", Some("http://192.0.2.1:3008"));
+        let refused = server().unwrap_err().to_string();
+        assert!(refused.contains("https://"), "{refused}");
     }
 
     fn receipt(mode: &str, status: &str) -> Sent {

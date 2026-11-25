@@ -105,6 +105,9 @@ pub enum ServerUrlError {
     HasPath,
     HasQuery,
     Invalid,
+    /// Plain `http://` to a host that is not this computer: the sign-in code and the tokens would cross the
+    /// network unencrypted.
+    PlainHttp,
 }
 
 impl std::fmt::Display for ServerUrlError {
@@ -124,6 +127,10 @@ impl std::fmt::Display for ServerUrlError {
                 "The server address cannot include a query or a fragment."
             ),
             Self::Invalid => write!(f, "That server address is not a valid URL."),
+            Self::PlainHttp => write!(
+                f,
+                "The server address must start with https://. Plain http:// is only for a server on this computer."
+            ),
         }
     }
 }
@@ -479,6 +486,11 @@ pub fn normalize_server_url(raw: &str) -> Result<String, ServerUrlError> {
         .host_str()
         .ok_or(ServerUrlError::Invalid)?
         .trim_matches(|character| character == '[' || character == ']');
+    // The sign-in code and the tokens travel to this address. Unencrypted, only to this computer itself (a local
+    // development or mock server); to anywhere else it must be https, in every build.
+    if url.scheme() == "http" && !this_computer(host) {
+        return Err(ServerUrlError::PlainHttp);
+    }
     let host = if host.contains(':') {
         format!("[{host}]")
     } else {
@@ -490,6 +502,14 @@ pub fn normalize_server_url(raw: &str) -> Result<String, ServerUrlError> {
         out.push_str(&port.to_string());
     }
     Ok(out)
+}
+
+/// `host` (no brackets) is this computer: `localhost` or a loopback address.
+fn this_computer(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
 }
 
 pub fn status_from(resolved: &ResolvedServer, secrets: Option<&AccountSecrets>) -> AccountStatus {
@@ -1242,6 +1262,31 @@ mod tests {
         assert_eq!(
             normalize_server_url("http://[::1]:3008").unwrap(),
             "http://[::1]:3008"
+        );
+        // Plain http is for this computer only: the sign-in code and the tokens go to this address.
+        for local in [
+            "http://localhost:3008",
+            "http://127.0.0.1:3008",
+            "http://LOCALHOST",
+        ] {
+            assert!(normalize_server_url(local).is_ok(), "{local}");
+        }
+        for elsewhere in [
+            "http://api.buwiz.com",
+            "http://192.0.2.1:3008",
+            "http://10.0.2.2:3008",
+            "http://localhost.example",
+            "http://[2001:db8::1]:3008",
+        ] {
+            assert_eq!(
+                normalize_server_url(elsewhere),
+                Err(ServerUrlError::PlainHttp),
+                "{elsewhere}"
+            );
+        }
+        assert_eq!(
+            normalize_server_url("https://192.0.2.1:3008").unwrap(),
+            "https://192.0.2.1:3008"
         );
         assert!(matches!(
             normalize_server_url(""),
