@@ -37,9 +37,15 @@ On Android 15 the platform enforces edge-to-edge for target-35 apps itself — t
 bar, no contrast scrim, layout into the cutout — which is exactly what #38 switches on manually
 (the commit message says the same for the cutout part). On API 35 the BEFORE build already
 gets the AFTER behavior from the system. **The fix's effect is only observable on API 29–34
-devices**, where the scrim exists and the opt-out matters. An API-34 emulator run is the right
-decisive check; the system image download is in progress and the result will be amended here
-(strip shots on the first-run page, both builds, three-button mode).
+devices**, where the scrim exists and the opt-out matters. An API-34 emulator run was added (`api34-before|after-threebutton-firstrun.png`,
+buwiz34 AVD, google_apis x86_64, first-run page, three-button mode enforced by overlay):
+**pixel-identical there too — strip #fefefe in both builds.** In both, the strip is a
+system-drawn opaque band slightly whiter than the app's own background (#f1f0f7), so on these
+emulator images the app is not painting behind the navigation bar in EITHER build, and the
+scrim difference #38 removes does not present. Honest reading: the fix's visible effect could
+not be reproduced on the API-34/35 google_apis x86_64 emulator images at all; whether that is
+emulator rendering or a real gap in how the window lays out behind the bar needs a physical
+device or an image with a different nav implementation. Reported as a finding, not hidden.
 
 Landscape: `before|after-landscape-threebutton-*.png` — the side bar in both builds is the
 system's three-button rail; no black cutout band visible on this emulator (its cutout is a
