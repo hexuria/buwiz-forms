@@ -567,7 +567,7 @@ _package-mac-appstore args="": build-frozen-html-identity
     # A store package is built in this checkout's own folder, never the shared ~/BuwizNsh/target-nsh: Cargo cannot tell two
     # checkouts of the same crate version apart, so a shared folder can link another worktree's bir-core (its forms) with no
     # error, and the package would carry another branch's form data. A CARGO_TARGET_DIR set by the caller still wins.
-    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$(pwd -P)/target/mac-appstore}"
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/nsh-store}"
     # A store package comes only from the pinned NSH: the nsh tool built at NSH_PINNED_REF (NSH_TOOLS names its folder,
     # docs/platforms/ios.md) and the ../nsh checkout beside this one at that commit. Anything else is refused.
     pin="$(sed -n 's/^ *NSH_PINNED_REF: *//p' "$root/.github/workflows/nsh.yml" | head -1)"
@@ -753,7 +753,7 @@ ios-appstore: build-frozen-html-identity
     # A store package is built in this checkout's own folder, never the shared ~/BuwizNsh/target-nsh: Cargo cannot tell two
     # checkouts of the same crate version apart, so a shared folder can link another worktree's bir-core (its forms) with no
     # error, and the package would carry another branch's form data. A CARGO_TARGET_DIR set by the caller still wins.
-    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$(pwd -P)/target/ios-appstore}"
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/nsh-store}"
     # A store package comes only from the pinned NSH: the nsh tool built at NSH_PINNED_REF (NSH_TOOLS names its folder,
     # docs/platforms/ios.md) and the ../nsh checkout beside this one at that commit. Anything else is refused.
     pin="$(sed -n 's/^ *NSH_PINNED_REF: *//p' "$root/.github/workflows/nsh.yml" | head -1)"

@@ -29,7 +29,7 @@ repository; `.gitignore` keeps it out of commits). The App Store Connect API key
 `.env` already names for the Mac uploads (`APP_STORE_KEY_ID`, `APP_STORE_ISSUER_ID`, `APP_STORE_P8_PATH`).
 
 ```sh
-export NSH_TOOLS=~/BuwizNsh/tools-8c78cfd6                     # the nsh tool built at the NSH pin (below)
+export NSH_TOOLS=~/BuwizNsh/store-tools                         # the nsh tool built at the NSH pin (below)
 CODESIGN_IDENTITY="Apple Distribution: …" just ios-appstore   # target/release-artifacts/eBIRForms-iOS-<version>.ipa
 just ios-appstore-upload                                       # nsh publish ios, with the same tool
 ```
@@ -39,9 +39,9 @@ A store package comes only from the pinned NSH, `NSH_PINNED_REF` in `.github/wor
 - the `../nsh` checkout beside this one must be at that commit;
 - otherwise `just ios-appstore` (and the Mac App Store package, `just app`) refuses to start.
 
-The shared `~/BuwizNsh/tools` is the everyday tool. It is not rebuilt for a store build, because other sessions use it. Build the pinned tool side by side in `~/BuwizNsh/tools-<first 8 of the pin>` and point `NSH_TOOLS` at it.
+The shared `~/BuwizNsh/tools` is the everyday tool. It is not rebuilt for a store build, because other sessions use it. The pinned tool lives side by side in `~/BuwizNsh/store-tools`; its `nsh-ref` file names the commit it was built at. It is shared with the Google Play build (`just play-bundle`), so it is rebuilt only when the pin moves. Point `NSH_TOOLS` at it.
 
-Each package builds in the checkout's own folder (`target/ios-appstore`, `target/mac-appstore`), not the shared `~/BuwizNsh/target-nsh`. Cargo cannot tell two checkouts of the same crate version apart, so a shared folder could put another branch's form data in the package.
+Each package builds in the checkout's own folder (`target/nsh-store`), not the shared `~/BuwizNsh/target-nsh`. Cargo cannot tell two checkouts of the same crate version apart, so a shared folder could put another branch's form data in the package.
 
 The recipe prints `build: app <commit>, nsh <commit> beside it, tool <nsh --version>, folder <folder>` and keeps that line, with the build number, in `eBIRForms-iOS-<version>.provenance.txt` beside the package.
 
