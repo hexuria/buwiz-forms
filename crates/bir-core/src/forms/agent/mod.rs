@@ -1854,7 +1854,51 @@ fn draft_refusal(
 /// an object is left as it is. The form page's edits write this way
 /// (bir-shell's `set_draft_path` is this function), and so does the
 /// penalty layer's trial ([`draft_locks::penalties::applies`]).
+/// The blank row a table grows by: the last row's shape with every leaf
+/// emptied (strings blank, anything else null), so a serialized blank row
+/// reads exactly as the pre-allocated blank rows do.
+fn blanked_clone(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(key, value)| (key.clone(), blanked_clone(value)))
+                .collect(),
+        ),
+        Value::Array(rows) => Value::Array(rows.iter().map(blanked_clone).collect()),
+        Value::String(_) => Value::String(String::new()),
+        _ => Value::Null,
+    }
+}
+
+/// Grow the arrays along `path` to the row the write names — one row at a
+/// time and only at the frontier, as the official program's own Add button
+/// builds them: a write to the row after the last appends a blank row of
+/// the family's shape first. Rows further ahead stay unwritable (a draft
+/// never carries row 7 without rows 3 to 6, as the official page cannot).
+fn grow_arrays_to_frontier(draft: &mut Value, path: &str) {
+    let mut segments: Vec<&str> = path.split('/').filter(|segment| !segment.is_empty()).collect();
+    segments.pop();
+    let mut current = String::new();
+    for segment in segments {
+        current.push('/');
+        current.push_str(segment);
+        if let Ok(index) = segment.parse::<usize>() {
+            let parent = current.rsplit_once('/').map(|(parent, _)| parent).unwrap_or("");
+            if let Some(Value::Array(rows)) =
+                draft.pointer_mut(if parent.is_empty() { "" } else { parent })
+                && index == rows.len()
+                && let Some(last) = rows.last().cloned()
+            {
+                rows.push(blanked_clone(&last));
+            }
+        }
+    }
+}
+
 pub fn set_draft_path(draft: &mut Value, path: &str, value: Value) {
+    if draft.pointer(path).is_none() {
+        grow_arrays_to_frontier(draft, path);
+    }
     if let Some(slot) = draft.pointer_mut(path) {
         *slot = value;
     } else if let Some((parent, leaf)) = path.rsplit_once('/')
