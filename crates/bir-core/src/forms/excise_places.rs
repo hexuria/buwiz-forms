@@ -146,6 +146,38 @@ pub fn shared_comb_line(parts: &[(usize, &str)], width: usize) -> String {
     slots.into_iter().collect::<String>().trim_end().to_string()
 }
 
+/// The names of the place codes in one shared printed comb (2200-A,
+/// 2200-C, 2200-P): each name starts at its caption's slot like
+/// [`shared_comb_line`], but a name longer than its segment shifts the
+/// following names right instead of being cut, so a line longer than
+/// `width` prints whole in smaller type and no character is lost.
+pub fn names_comb_line(parts: &[(usize, &str)], width: usize) -> String {
+    let fits = parts.iter().enumerate().all(|(index, (start, text))| {
+        let end = parts
+            .get(index + 1)
+            .map_or(width, |(next, _)| next.saturating_sub(1))
+            .min(width);
+        *start + text.trim().chars().count() <= end
+    });
+    if fits {
+        return shared_comb_line(parts, width);
+    }
+    let mut line = String::new();
+    for (start, text) in parts {
+        let text = text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        let occupied = line.trim_end().chars().count();
+        let at = (*start).max(occupied + usize::from(occupied > 0));
+        while line.chars().count() < at {
+            line.push(' ');
+        }
+        line.push_str(text);
+    }
+    line
+}
+
 /// The contact number and email that share one printed comb (2200-A,
 /// 2200-C, 2200-P, 1707-A): the number from slot 0, the email from
 /// `email_slot`, as [`shared_comb_line`] places them. When either part would

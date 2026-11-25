@@ -517,6 +517,26 @@ impl Form2200MDraft {
                 fields.insert(format!("derived:line:item{item}_{level}"), name);
             }
         }
+        // The (E)/(I) rate cells of rows 9-10 print as rates ("4%",
+        // centred) like the sheet's fixed rows: the print map carries the
+        // bare number so the print engine formats it; the upload keeps the
+        // currency string.
+        for index in FORM_2200M_FIRST_OTHER_ROW..self.row_count() {
+            let n = index + 1;
+            let row = self.row(index);
+            for (key, rate) in [
+                (
+                    format!("txtSched1_LocallyExtractedTaxRateE{n}"),
+                    row.local_rate,
+                ),
+                (format!("txtSched1_ImportedTaxRate{n}"), row.imported_rate),
+            ] {
+                fields.insert(
+                    format!("frm2200M:{key}"),
+                    rate.map(|rate| rate.to_string()).unwrap_or_default(),
+                );
+            }
+        }
         super::print_map::blank_unset_date_parts(
             &mut fields,
             &[
@@ -1574,5 +1594,20 @@ mod tests {
                 .any(|(field, _)| field == "surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+
+    /// Rows 9-10 rate cells print as rates ("4%", centred): the print map
+    /// carries the bare number for the engine to format while the upload
+    /// keeps the currency string.
+    #[test]
+    fn continuation_rate_cells_print_as_bare_rate_numbers() {
+        let mut draft = sample();
+        draft.row_mut(8).unwrap().imported_rate = Some(4.0);
+        draft.row_mut(8).unwrap().local_rate = Some(6.5);
+        let print = draft.to_print_field_map();
+        assert_eq!(print["frm2200M:txtSched1_ImportedTaxRate9"], "4");
+        assert_eq!(print["frm2200M:txtSched1_LocallyExtractedTaxRateE9"], "6.5");
+        let upload = draft.to_bir_field_map();
+        assert_eq!(upload["frm2200M:txtSched1_ImportedTaxRate9"], "4.00");
     }
 }

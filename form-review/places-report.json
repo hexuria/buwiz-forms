@@ -1,0 +1,30 @@
+{
+  "item": "excise places print as names (items 10 and 11: region, province, city)",
+  "rule": "RULES.md: places print as names",
+  "same_saved_returns": "excise.db drafts, demo taxpayer 000-123-453-00000",
+  "before": {
+    "2200A": "raw PSGC codes printed (e.g. 130000000 137404000 137404001)",
+    "2200C": "raw PSGC codes printed",
+    "2200P": "raw PSGC codes printed",
+    "2200T": "blank: the page's six place selects listed only '(Select Region)' so the draft could only store '00'"
+  },
+  "after": "all four print names on the shared comb (e.g. NCR | NCR SECOND DISTRICT CITY OF MAKATI)",
+  "cause": {
+    "2200A_2200C_2200P": "the print map emitted raw codes through shared_comb_line; 2200AN/2200M used print_map::place_names + names_comb_line",
+    "2200T": "forms-schema.json gave the six selects a placeholder-only `o` list that shadowed the excise-places catalog (options() supplies lists only for selects with absent/empty `o`); schema-overrides.json now clears `o` for them and catalogs.rs location() admits 2200T so the cascade feeds it"
+  },
+  "notes": [
+    "2200T before/after differ in stored values by necessity: before-state drafts could only hold '00'; after-state holds real codes (the fix is what makes real codes enterable)",
+    "agent form.fields dumps still show the schema placeholder list; the page list is catalogs::options in the open payload - covered by test catalog_locations_filter_cascade_and_roundtrip_all_excise_forms (now includes 2200T)",
+    "names_comb_line never cuts a name; a longer name shifts the following names right and prints whole in smaller type"
+  ],
+  "goldens_touched": "none for this item (fitting/overflow golden changes belong to the 2200S Schedule-1 join item)",
+  "suites": {
+    "cargo test -p bir-core --lib": "1616 passed",
+    "cargo test -p bir-core --test sample_payloads_test": "142 passed (upload unchanged)",
+    "cargo test -p bir-print": "131 passed",
+    "cargo test -p bir-app-api --lib": "751 passed",
+    "cargo fmt --all -- --check": "clean",
+    "cargo clippy --locked --workspace -- -D warnings": "clean"
+  }
+}

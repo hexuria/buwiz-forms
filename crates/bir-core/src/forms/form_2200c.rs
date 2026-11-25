@@ -407,17 +407,20 @@ impl Form2200CDraft {
                 40,
             ),
         );
-        put(
-            "place",
-            super::excise_places::shared_comb_line(
-                &[
-                    (0, self.place.region.as_str()),
-                    (10, self.place.province.as_str()),
-                    (24, self.place.city.as_str()),
-                ],
-                40,
-            ),
-        );
+        {
+            let [region, province, city] = super::print_map::place_names(
+                &self.place.region,
+                &self.place.province,
+                &self.place.city,
+            );
+            put(
+                "place",
+                super::excise_places::names_comb_line(
+                    &[(0, &region), (10, &province), (24, &city)],
+                    40,
+                ),
+            );
+        }
         put(
             "page_header",
             super::print_map::tin_name_header(&self.tin, &self.taxpayer_name),

@@ -1601,6 +1601,14 @@ struct TextTarget<'a> {
 }
 
 fn is_percentage_rate_cell(writer_key: &str, caption: Option<&str>) -> bool {
+    // The 2200M rows-9-10 ad-valorem rate columns (E locally extracted,
+    // I imported) print "4%"-style rates like the sheet's fixed rows;
+    // other excise rate cells are peso rates or codes, not percentages.
+    if writer_key.starts_with("frm2200M:txtSched1_LocallyExtractedTaxRateE")
+        || writer_key.starts_with("frm2200M:txtSched1_ImportedTaxRate")
+    {
+        return true;
+    }
     if writer_key.starts_with("derived:")
         || writer_key.starts_with("frm2200")
         || writer_key.starts_with("frm2000")
@@ -1720,6 +1728,7 @@ fn format_percentage_rate(raw: &str, preprinted_percent: bool) -> Option<String>
         Some(format!("{normalized}%"))
     }
 }
+
 
 fn parse_svg_path_bbox(d: &str) -> Option<(f64, f64, f64, f64)> {
     let mut nums = Vec::new();
@@ -3915,15 +3924,98 @@ type SheetJoin = (&'static str, &'static str, &'static str);
 /// fillable cells in the frozen page ... reported on #113"): the frozen page
 /// has those cells. writer_cells() and merged_writer_cells_json() merge it,
 /// skipping any join writer-cells.json itself gains on a later re-sync.
-const SHEET_JOINS: &[(&str, &[SheetJoin])] = &[(
-    "2550m-2007",
-    &[
-        ("frm2550m:txtTIN1", "p1c127", "4 TIN (1-3)"),
-        ("frm2550m:txtTIN2", "p1c9", "4 TIN (4-6)"),
-        ("frm2550m:txtTIN3", "p1c11", "4 TIN (7-9)"),
-        ("frm2550m:txtBranchCode", "p1c13", "4 TIN branch"),
-    ],
-)];
+const SHEET_JOINS: &[(&str, &[SheetJoin])] = &[
+    (
+        "2550m-2007",
+        &[
+            ("frm2550m:txtTIN1", "p1c127", "4 TIN (1-3)"),
+            ("frm2550m:txtTIN2", "p1c9", "4 TIN (4-6)"),
+            ("frm2550m:txtTIN3", "p1c11", "4 TIN (7-9)"),
+            ("frm2550m:txtBranchCode", "p1c13", "4 TIN branch"),
+        ],
+    ),
+    // 2200S Schedule 1 (page 2): the product rows' Sales Value, Volume of
+    // Removals and Basic Excise Tax Due cells (data-rows 7-16, columns at
+    // x=319.49/403.75/488.14) and the two Others write-in rows' ATC, Tax
+    // Bracket, Applicable Tax Rate and money cells (data-rows 18-19). The
+    // Others rows' Description cells (p2c101, p2c108) are printed labels
+    // with no input and stay unjoined. Supersedes writer-cells.json's rule
+    // ("The product rows and Schedule 1 rows on page 2 have no column
+    // captions in the text layer and stay blank") and its not_joined_cells
+    // entries for these cells: the frozen page has them, the columns are
+    // fixed by the row's preprinted ATC/bracket/rate text.
+    (
+        "2200s-2018",
+        &[
+            ("frm2200S:txtSalesValue0", "p2c27", "Sales Value"),
+            ("frm2200S:txtVolumeRemovals0", "p2c28", "Volume of Removals"),
+            ("frm2200S:txtBasicTaxDue0", "p2c29", "Basic Excise Tax Due"),
+            ("frm2200S:txtSalesValue1", "p2c34", "Sales Value"),
+            ("frm2200S:txtVolumeRemovals1", "p2c35", "Volume of Removals"),
+            ("frm2200S:txtBasicTaxDue1", "p2c36", "Basic Excise Tax Due"),
+            ("frm2200S:txtSalesValue2", "p2c41", "Sales Value"),
+            ("frm2200S:txtVolumeRemovals2", "p2c42", "Volume of Removals"),
+            ("frm2200S:txtBasicTaxDue2", "p2c43", "Basic Excise Tax Due"),
+            ("frm2200S:txtSalesValue3", "p2c48", "Sales Value"),
+            ("frm2200S:txtVolumeRemovals3", "p2c49", "Volume of Removals"),
+            ("frm2200S:txtBasicTaxDue3", "p2c50", "Basic Excise Tax Due"),
+            ("frm2200S:txtSalesValue4", "p2c55", "Sales Value"),
+            ("frm2200S:txtVolumeRemovals4", "p2c56", "Volume of Removals"),
+            ("frm2200S:txtBasicTaxDue4", "p2c57", "Basic Excise Tax Due"),
+            ("frm2200S:txtSalesValue5", "p2c62", "Sales Value"),
+            ("frm2200S:txtVolumeRemovals5", "p2c63", "Volume of Removals"),
+            ("frm2200S:txtBasicTaxDue5", "p2c64", "Basic Excise Tax Due"),
+            ("frm2200S:txtSalesValue6", "p2c69", "Sales Value"),
+            ("frm2200S:txtVolumeRemovals6", "p2c70", "Volume of Removals"),
+            ("frm2200S:txtBasicTaxDue6", "p2c71", "Basic Excise Tax Due"),
+            ("frm2200S:txtSalesValue7", "p2c76", "Sales Value"),
+            ("frm2200S:txtVolumeRemovals7", "p2c77", "Volume of Removals"),
+            ("frm2200S:txtBasicTaxDue7", "p2c78", "Basic Excise Tax Due"),
+            ("frm2200S:txtSalesValue8", "p2c83", "Sales Value"),
+            ("frm2200S:txtVolumeRemovals8", "p2c84", "Volume of Removals"),
+            ("frm2200S:txtBasicTaxDue8", "p2c85", "Basic Excise Tax Due"),
+            ("frm2200S:txtSalesValue9", "p2c90", "Sales Value"),
+            ("frm2200S:txtVolumeRemovals9", "p2c91", "Volume of Removals"),
+            ("frm2200S:txtBasicTaxDue9", "p2c92", "Basic Excise Tax Due"),
+            ("frm2200S:txtsched1Atc0", "p2c100", "ATC"),
+            ("frm2200S:txtsched1TaxBracket0", "p2c102", "Tax Bracket"),
+            (
+                "frm2200S:txtsched1AppTaxRate0",
+                "p2c103",
+                "Applicable Tax Rate",
+            ),
+            ("frm2200S:txtsched1SalesValue0", "p2c104", "Sales Value"),
+            (
+                "frm2200S:txtsched1VolumeRemovals0",
+                "p2c105",
+                "Volume of Removals",
+            ),
+            (
+                "frm2200S:txtsched1BasicTaxDue0",
+                "p2c106",
+                "Basic Excise Tax Due",
+            ),
+            ("frm2200S:txtsched1Atc1", "p2c107", "ATC"),
+            ("frm2200S:txtsched1TaxBracket1", "p2c109", "Tax Bracket"),
+            (
+                "frm2200S:txtsched1AppTaxRate1",
+                "p2c110",
+                "Applicable Tax Rate",
+            ),
+            ("frm2200S:txtsched1SalesValue1", "p2c111", "Sales Value"),
+            (
+                "frm2200S:txtsched1VolumeRemovals1",
+                "p2c112",
+                "Volume of Removals",
+            ),
+            (
+                "frm2200S:txtsched1BasicTaxDue1",
+                "p2c113",
+                "Basic Excise Tax Due",
+            ),
+        ],
+    ),
+];
 
 /// Text cells drawn as a row of one-character inputs that are not a comb
 /// (no `data-slot-index`), per sheet, each with how a code shorter than its
@@ -6490,11 +6582,8 @@ mod tests {
         let html = filled_document("2200a-2020", &draft.to_print_field_map()).unwrap();
         // Items 8-9 share comb p1c34: contact from slot 0, email (as typed) from slot 12.
         assert_eq!(comb_text(&html, "p1c34"), "09171234567 Me@Example.ph");
-        // Item 10 comb p1c39: region from slot 0, province from 10, city from 24.
-        assert_eq!(
-            comb_text(&html, "p1c39"),
-            "010000000 012800000     012801000"
-        );
+        // Item 10 comb p1c39: region name from slot 0, province from 10, city from 24.
+        assert_eq!(comb_text(&html, "p1c39"), "REGION I  ILOCOS NORTE  ADAMS");
         assert_eq!(comb_text(&html, "p1c44"), "");
         // Others row 2: ATC p3c103, description p3c104, bracket p3c105, rate p3c106
         // (the sheet prints in capitals; only the email stays as typed).
@@ -6597,11 +6686,8 @@ mod tests {
             named_values(&html, "p2c126"),
             vec![fields["frm2200C:ACexciseTotal"].clone()]
         );
-        // Item 11 shares comb p1c41: region from slot 0, province from 10, city from 24.
-        assert_eq!(
-            comb_text(&html, "p1c41"),
-            "010000000 012800000     012801000"
-        );
+        // Item 11 shares comb p1c41: region name from slot 0, province from 10, city from 24.
+        assert_eq!(comb_text(&html, "p1c41"), "REGION I  ILOCOS NORTE  ADAMS");
     }
 
     fn withholding_profile(code: &str) -> bir_core::profile::TaxpayerProfile {
@@ -8534,8 +8620,15 @@ mod tests {
                 .map(|band| (band.key.clone(), band.value.clone()))
                 .collect();
             assert_eq!(fields.len(), boxes.len(), "{slug}: one key per box");
+            let cells = writer_cells(&slug).unwrap();
             let document = filled_document(&slug, &fields).unwrap();
             for band in &boxes {
+                // A cell that prints as a rate ("5%", centred) is styled
+                // and sized by that path, not by its class size.
+                let rate_cell = is_percentage_rate_cell(
+                    &band.key,
+                    cells.captions.get(&band.cell).map(String::as_str),
+                );
                 assert!(
                     band.room - 1.0 < band.width && band.width <= band.room,
                     "{slug} {}: {:?} measures {} in {}",
@@ -8549,7 +8642,7 @@ mod tests {
                     panic!("{slug} {}: one input", band.cell);
                 };
                 assert!(
-                    !tag.contains("font-size"),
+                    rate_cell || !tag.contains("font-size"),
                     "{slug} {}: {:?} keeps its class size: {tag}",
                     band.cell,
                     band.value

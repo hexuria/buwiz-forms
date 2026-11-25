@@ -29,7 +29,7 @@ fn code_option(code: &str, description: &str) -> Value {
 fn location(kind: AgentFormKind, key: &str) -> Option<(&str, usize)> {
     if !matches!(
         kind.form_code(),
-        "2200A" | "2200AN" | "2200C" | "2200M" | "2200P" | "2200S"
+        "2200A" | "2200AN" | "2200C" | "2200M" | "2200P" | "2200S" | "2200T"
     ) {
         return None;
     }

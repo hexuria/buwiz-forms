@@ -881,6 +881,78 @@
    "html_id": "p3c126",
    "printed": "Schedule 1 Others (specify) row 3, Applicable Tax Rate",
    "reason": "the cell under the page 3 Schedule 1 column header Applicable Tax Rate (header x order ATC, Description, Tax Bracket, Applicable Tax Rate) on Others row 3"
+  },
+  {
+   "writer_key": "derived:sched1_xt210_a_export",
+   "html_id": "p3c24",
+   "printed": "Item 7 Novel Tobacco XT210, Effective August 10, 2022 (P2.50/kg), Export/Exempt",
+   "reason": "no layout field exists for novel tobacco: the print map routes an Others (specify) row whose ATC is 210/220 onto this printed fixed row (the XT210 rate row follows the return year); the Others line stays blank. Column by x order."
+  },
+  {
+   "writer_key": "derived:sched1_xt210_a_taxable",
+   "html_id": "p3c25",
+   "printed": "Item 7 Novel Tobacco XT210, Effective August 10, 2022 (P2.50/kg), Taxable",
+   "reason": "no layout field exists for novel tobacco: the print map routes an Others (specify) row whose ATC is 210/220 onto this printed fixed row (the XT210 rate row follows the return year); the Others line stays blank. Column by x order."
+  },
+  {
+   "writer_key": "derived:sched1_xt210_a_due",
+   "html_id": "p3c26",
+   "printed": "Item 7 Novel Tobacco XT210, Effective August 10, 2022 (P2.50/kg), Basic Excise Tax Due",
+   "reason": "no layout field exists for novel tobacco: the print map routes an Others (specify) row whose ATC is 210/220 onto this printed fixed row (the XT210 rate row follows the return year); the Others line stays blank. Column by x order."
+  },
+  {
+   "writer_key": "derived:sched1_xt210_b_export",
+   "html_id": "p3c29",
+   "printed": "Item 7 Novel Tobacco XT210, Effective January 1, 2023 (P2.60/kg), Export/Exempt",
+   "reason": "no layout field exists for novel tobacco: the print map routes an Others (specify) row whose ATC is 210/220 onto this printed fixed row (the XT210 rate row follows the return year); the Others line stays blank. Column by x order."
+  },
+  {
+   "writer_key": "derived:sched1_xt210_b_taxable",
+   "html_id": "p3c30",
+   "printed": "Item 7 Novel Tobacco XT210, Effective January 1, 2023 (P2.60/kg), Taxable",
+   "reason": "no layout field exists for novel tobacco: the print map routes an Others (specify) row whose ATC is 210/220 onto this printed fixed row (the XT210 rate row follows the return year); the Others line stays blank. Column by x order."
+  },
+  {
+   "writer_key": "derived:sched1_xt210_b_due",
+   "html_id": "p3c31",
+   "printed": "Item 7 Novel Tobacco XT210, Effective January 1, 2023 (P2.60/kg), Basic Excise Tax Due",
+   "reason": "no layout field exists for novel tobacco: the print map routes an Others (specify) row whose ATC is 210/220 onto this printed fixed row (the XT210 rate row follows the return year); the Others line stays blank. Column by x order."
+  },
+  {
+   "writer_key": "derived:sched1_xt210_c_export",
+   "html_id": "p3c34",
+   "printed": "Item 7 Novel Tobacco XT210, 2024 Onwards (rate +4%/year), Export/Exempt",
+   "reason": "no layout field exists for novel tobacco: the print map routes an Others (specify) row whose ATC is 210/220 onto this printed fixed row (the XT210 rate row follows the return year); the Others line stays blank. Column by x order."
+  },
+  {
+   "writer_key": "derived:sched1_xt210_c_taxable",
+   "html_id": "p3c35",
+   "printed": "Item 7 Novel Tobacco XT210, 2024 Onwards (rate +4%/year), Taxable",
+   "reason": "no layout field exists for novel tobacco: the print map routes an Others (specify) row whose ATC is 210/220 onto this printed fixed row (the XT210 rate row follows the return year); the Others line stays blank. Column by x order."
+  },
+  {
+   "writer_key": "derived:sched1_xt210_c_due",
+   "html_id": "p3c36",
+   "printed": "Item 7 Novel Tobacco XT210, 2024 Onwards (rate +4%/year), Basic Excise Tax Due",
+   "reason": "no layout field exists for novel tobacco: the print map routes an Others (specify) row whose ATC is 210/220 onto this printed fixed row (the XT210 rate row follows the return year); the Others line stays blank. Column by x order."
+  },
+  {
+   "writer_key": "derived:sched1_xt220_export",
+   "html_id": "p3c105",
+   "printed": "Item 8 Novel Tobacco XT220 (P0.03/kg), Export/Exempt",
+   "reason": "no layout field exists for novel tobacco: the print map routes an Others (specify) row whose ATC is 210/220 onto this printed fixed row (the XT210 rate row follows the return year); the Others line stays blank. Column by x order."
+  },
+  {
+   "writer_key": "derived:sched1_xt220_taxable",
+   "html_id": "p3c106",
+   "printed": "Item 8 Novel Tobacco XT220 (P0.03/kg), Taxable",
+   "reason": "no layout field exists for novel tobacco: the print map routes an Others (specify) row whose ATC is 210/220 onto this printed fixed row (the XT210 rate row follows the return year); the Others line stays blank. Column by x order."
+  },
+  {
+   "writer_key": "derived:sched1_xt220_due",
+   "html_id": "p3c107",
+   "printed": "Item 8 Novel Tobacco XT220 (P0.03/kg), Basic Excise Tax Due",
+   "reason": "no layout field exists for novel tobacco: the print map routes an Others (specify) row whose ATC is 210/220 onto this printed fixed row (the XT210 rate row follows the return year); the Others line stays blank. Column by x order."
   }
  ],
  "money_joins": [
@@ -1502,54 +1574,6 @@
   {
    "html_id": "p2c255",
    "reason": "Schedule 1 item 6 (vapor products) row: printed a.) and b.) blocks do not match the 6 volume-bracket keys (10ml-above_50ml); 2022-2023 rows and the 2024 rows are left out"
-  },
-  {
-   "html_id": "p3c24",
-   "reason": "Schedule 1 item 7 (novel tobacco) rows: one printed block but the layout has 7A and 7B; the 7A/7B assignment is not verifiable"
-  },
-  {
-   "html_id": "p3c25",
-   "reason": "Schedule 1 item 7 (novel tobacco) rows: one printed block but the layout has 7A and 7B; the 7A/7B assignment is not verifiable"
-  },
-  {
-   "html_id": "p3c26",
-   "reason": "Schedule 1 item 7 (novel tobacco) rows: one printed block but the layout has 7A and 7B; the 7A/7B assignment is not verifiable"
-  },
-  {
-   "html_id": "p3c29",
-   "reason": "Schedule 1 item 7 (novel tobacco) rows: one printed block but the layout has 7A and 7B; the 7A/7B assignment is not verifiable"
-  },
-  {
-   "html_id": "p3c30",
-   "reason": "Schedule 1 item 7 (novel tobacco) rows: one printed block but the layout has 7A and 7B; the 7A/7B assignment is not verifiable"
-  },
-  {
-   "html_id": "p3c31",
-   "reason": "Schedule 1 item 7 (novel tobacco) rows: one printed block but the layout has 7A and 7B; the 7A/7B assignment is not verifiable"
-  },
-  {
-   "html_id": "p3c34",
-   "reason": "Schedule 1 item 7 (novel tobacco) rows: one printed block but the layout has 7A and 7B; the 7A/7B assignment is not verifiable"
-  },
-  {
-   "html_id": "p3c35",
-   "reason": "Schedule 1 item 7 (novel tobacco) rows: one printed block but the layout has 7A and 7B; the 7A/7B assignment is not verifiable"
-  },
-  {
-   "html_id": "p3c36",
-   "reason": "Schedule 1 item 7 (novel tobacco) rows: one printed block but the layout has 7A and 7B; the 7A/7B assignment is not verifiable"
-  },
-  {
-   "html_id": "p3c105",
-   "reason": "Schedule 1 item 8 (novel tobacco, XT220): no layout key"
-  },
-  {
-   "html_id": "p3c106",
-   "reason": "Schedule 1 item 8 (novel tobacco, XT220): no layout key"
-  },
-  {
-   "html_id": "p3c107",
-   "reason": "Schedule 1 item 8 (novel tobacco, XT220): no layout key"
   }
  ]
 }

@@ -8956,7 +8956,9 @@ mod tests {
     #[test]
     fn catalog_locations_filter_cascade_and_roundtrip_all_excise_forms() {
         setup();
-        for code in ["2200A", "2200AN", "2200C", "2200M", "2200P", "2200S"] {
+        for code in [
+            "2200A", "2200AN", "2200C", "2200M", "2200P", "2200S", "2200T",
+        ] {
             let kind = kind_of(code).unwrap();
             let base = if code == "2200C" {
                 "/place"
@@ -11886,11 +11888,13 @@ mod tests {
         // rdoPg1Pt1I6RDO, repeats the item's RDO box and is not drawn), and
         // plus 2 for 0605's Items 6 and 8 (form-fields PR 1, B2: the ATC and
         // tax type picks from the official lists):
-        // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3 + 2.
+        // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3 + 2 + 6
+        // (2200T items 10 and 11: their placeholder-only schema lists gave
+        // way to the catalog's regions, provinces and cities).
         // Table cells are counted apart: the 36 2550M Schedule 1 ATC lists
         // (N03), 1601EQ's 30 and 1601FQ's 41 Part II ATC rows, 1601FQ
         // Schedule 1's ten lists, 2551Q's six, and the other forms' tables.
-        assert_eq!(supplied, 72);
+        assert_eq!(supplied, 78);
         assert_eq!(cells, CATALOG_TABLE_CELLS);
         let atc = catalogs::options(AgentFormKind::Form2551Q, &Value::Null);
         for row in 1..=6 {

@@ -562,14 +562,12 @@ impl Form2200PDraft {
             ("place_of_production", &self.place_of_production),
             ("place_of_removal", &self.place_of_removal),
         ] {
+            let [region, province, city] =
+                super::print_map::place_names(&place.region, &place.province, &place.city);
             put(
                 key,
-                super::excise_places::shared_comb_line(
-                    &[
-                        (0, place.region.as_str()),
-                        (10, place.province.as_str()),
-                        (24, place.city.as_str()),
-                    ],
+                super::excise_places::names_comb_line(
+                    &[(0, &region), (10, &province), (24, &city)],
                     40,
                 ),
             );
@@ -578,6 +576,30 @@ impl Form2200PDraft {
             "page_header",
             super::print_map::tin_name_header(&self.tin, &self.taxpayer_name),
         );
+        // The Others rows' unit and rate print in the schedule's own
+        // style ("Per Liter", "P10.00"); the upload keeps the typed values
+        // (`print_map_adds_only_the_shared_comb_lines` exempts these keys).
+        for index in FORM_2200P_FIRST_OTHER_ROW..self.row_count() {
+            let n = index + 1;
+            let row = self.row(index);
+            let unit = row.unit_of_measure.trim();
+            fields.insert(
+                format!("frm2200P:txtSched1UnitOfMeasure{n}"),
+                if unit.is_empty() {
+                    String::new()
+                } else if unit.to_ascii_lowercase().starts_with("per") {
+                    unit.to_string()
+                } else {
+                    format!("Per {unit}")
+                },
+            );
+            fields.insert(
+                format!("frm2200P:txtSched1ApplicableRate{n}"),
+                row.applicable_rate
+                    .map(|rate| format!("P{}", official_amount(rate)))
+                    .unwrap_or_default(),
+            );
+        }
         super::print_map::blank_unset_date_parts(
             &mut fields,
             &[
@@ -1291,12 +1313,31 @@ mod tests {
             .collect()
     }
 
+    /// Rows 26+ print their unit and rate in the schedule's own style
+    /// ("Per Liter", "P10.00") instead of the typed text: the only keys
+    /// whose print value may differ from the upload value.
+    fn restyled_others_key(key: &str) -> bool {
+        ["txtSched1UnitOfMeasure", "txtSched1ApplicableRate"]
+            .iter()
+            .filter_map(|column| {
+                key.strip_prefix("frm2200P:")
+                    .and_then(|key| key.strip_prefix(column))
+            })
+            .any(|n| {
+                n.parse::<usize>()
+                    .is_ok_and(|n| n > FORM_2200P_FIRST_OTHER_ROW)
+            })
+    }
+
     #[test]
     fn print_map_adds_only_the_shared_comb_lines() {
         let draft = sample();
         let submit = draft.to_bir_field_map();
         let print = draft.to_print_field_map();
         for (key, value) in &submit {
+            if restyled_others_key(key) {
+                continue;
+            }
             assert_eq!(print.get(key), Some(value), "{key}");
         }
         assert!(
@@ -1309,8 +1350,14 @@ mod tests {
         assert!(line.starts_with(draft.contact_number.trim()));
         assert_eq!(&line[12..], draft.email.trim());
         let place = &print["derived:place_of_production"];
-        assert!(place.starts_with(draft.place_of_production.region.as_str()));
-        assert_eq!(&place[24..], draft.place_of_production.city.as_str());
+        let [region, _, city] = crate::forms::print_map::place_names(
+            &draft.place_of_production.region,
+            &draft.place_of_production.province,
+            &draft.place_of_production.city,
+        );
+        assert!(place.starts_with(&region));
+        assert!(place.contains(&city));
+        assert!(!place.contains(draft.place_of_production.region.as_str()));
     }
 
     #[test]
@@ -1533,5 +1580,21 @@ mod tests {
                 .any(|(field, _)| field == "surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+
+    /// The Others rows' unit and rate print in the schedule's own style
+    /// ("Per Liter", "P10.00"); the upload keeps the typed values.
+    #[test]
+    fn others_unit_and_rate_print_in_the_columns_style() {
+        let mut draft = sample();
+        let row = draft.row_mut(26).unwrap();
+        row.unit_of_measure = "liters".into();
+        row.applicable_rate = Some(24.0);
+        let print = draft.to_print_field_map();
+        assert_eq!(print["frm2200P:txtSched1UnitOfMeasure27"], "Per liters");
+        assert_eq!(print["frm2200P:txtSched1ApplicableRate27"], "P24.00");
+        let upload = draft.to_bir_field_map();
+        assert_eq!(upload["frm2200P:txtSched1UnitOfMeasure27"], "LITERS");
+        assert_eq!(upload["frm2200P:txtSched1ApplicableRate27"], "24.00");
     }
 }

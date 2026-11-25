@@ -47504,27 +47504,33 @@
     },
     "frm2200Tv2020:prodRegion": {
       "label": "Region",
-      "evidence": "PR 11: html-frozen/2200t-2022/index.html items 10 and 11 print Region, Province and City"
+      "options": [],
+      "evidence": "the extractor copied the printed placeholder as the select's whole list ('(Select Region)'), which shadows the excise-places catalog the rest of the family serves; 2200A/2200AN/2200M/2200P/2200S list no o here, so the list comes from field_options (regions/provinces/cities) | PR 11: html-frozen/2200t-2022/index.html items 10 and 11 print Region, Province and City"
     },
     "frm2200Tv2020:prodProvince": {
       "label": "Province",
-      "evidence": "PR 11: html-frozen/2200t-2022/index.html items 10 and 11 print Region, Province and City"
+      "options": [],
+      "evidence": "the extractor copied the printed placeholder as the select's whole list ('(Select Region)'), which shadows the excise-places catalog the rest of the family serves; 2200A/2200AN/2200M/2200P/2200S list no o here, so the list comes from field_options (regions/provinces/cities) | PR 11: html-frozen/2200t-2022/index.html items 10 and 11 print Region, Province and City"
     },
     "frm2200Tv2020:prodCity": {
       "label": "City",
-      "evidence": "PR 11: html-frozen/2200t-2022/index.html items 10 and 11 print Region, Province and City"
+      "options": [],
+      "evidence": "the extractor copied the printed placeholder as the select's whole list ('(Select Region)'), which shadows the excise-places catalog the rest of the family serves; 2200A/2200AN/2200M/2200P/2200S list no o here, so the list comes from field_options (regions/provinces/cities) | PR 11: html-frozen/2200t-2022/index.html items 10 and 11 print Region, Province and City"
     },
     "frm2200Tv2020:remRegion": {
       "label": "Region",
-      "evidence": "PR 11: html-frozen/2200t-2022/index.html items 10 and 11 print Region, Province and City"
+      "options": [],
+      "evidence": "the extractor copied the printed placeholder as the select's whole list ('(Select Region)'), which shadows the excise-places catalog the rest of the family serves; 2200A/2200AN/2200M/2200P/2200S list no o here, so the list comes from field_options (regions/provinces/cities) | PR 11: html-frozen/2200t-2022/index.html items 10 and 11 print Region, Province and City"
     },
     "frm2200Tv2020:remProvince": {
       "label": "Province",
-      "evidence": "PR 11: html-frozen/2200t-2022/index.html items 10 and 11 print Region, Province and City"
+      "options": [],
+      "evidence": "the extractor copied the printed placeholder as the select's whole list ('(Select Region)'), which shadows the excise-places catalog the rest of the family serves; 2200A/2200AN/2200M/2200P/2200S list no o here, so the list comes from field_options (regions/provinces/cities) | PR 11: html-frozen/2200t-2022/index.html items 10 and 11 print Region, Province and City"
     },
     "frm2200Tv2020:remCity": {
       "label": "City",
-      "evidence": "PR 11: html-frozen/2200t-2022/index.html items 10 and 11 print Region, Province and City"
+      "options": [],
+      "evidence": "the extractor copied the printed placeholder as the select's whole list ('(Select Region)'), which shadows the excise-places catalog the rest of the family serves; 2200A/2200AN/2200M/2200P/2200S list no o here, so the list comes from field_options (regions/provinces/cities) | PR 11: html-frozen/2200t-2022/index.html items 10 and 11 print Region, Province and City"
     },
     "frm2200Tv2020:paymentOther": {
       "label": "Specify",

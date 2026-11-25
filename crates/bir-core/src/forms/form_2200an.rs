@@ -520,6 +520,23 @@ impl Form2200ANDraft {
                 fields.insert(format!("derived:line:item{item}_{level}"), name);
             }
         }
+        // The Others ATC box pre-prints "XG": only the digits are written
+        // in (the screen keeps the XG-prefixed ATC for the upload).
+        for index in 0..2 {
+            let atc = self
+                .other_goods
+                .get(index)
+                .map(|other| other.atc.trim())
+                .unwrap_or_default();
+            let digits = atc
+                .strip_prefix("XG")
+                .or_else(|| atc.strip_prefix("xg"))
+                .unwrap_or(atc);
+            fields.insert(
+                format!("frm2200ANv2018:txtXGOthers{}", index + 1),
+                digits.to_string(),
+            );
+        }
         super::print_map::blank_unset_date_parts(
             &mut fields,
             &[
@@ -1153,5 +1170,24 @@ mod tests {
                 .any(|(field, _)| field == "surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+
+    /// The Others ATC box pre-prints "XG": the print map carries only the
+    /// digits while the upload keeps the XG-prefixed ATC.
+    #[test]
+    fn others_atc_prints_digits_after_the_preprinted_xg() {
+        let mut draft = sample();
+        draft.other_goods.push(Form2200ANOtherGood {
+            atc: "XG999".into(),
+            name: "Other good".into(),
+            rate: "12.00".into(),
+            row: Form2200ANRow::default(),
+        });
+        let print = draft.to_print_field_map();
+        assert_eq!(print["frm2200ANv2018:txtXGOthers1"], "999");
+        assert_eq!(print["frm2200ANv2018:txtXGOthers2"], "");
+        let upload = draft.to_bir_field_map();
+        assert_eq!(upload["frm2200ANv2018:txtXGOthers1"], "XG999");
+        assert_eq!(upload["frm2200ANv2018:txtXGOthers2"], "XG");
     }
 }
