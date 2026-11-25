@@ -1,0 +1,356 @@
+{
+  "0605": {
+    "slug": "0605-1999",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "0619E": {
+    "slug": "0619e-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "0619F": {
+    "slug": "0619f-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1600PT": {
+    "slug": "1600-pt-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1600VT": {
+    "slug": "1600-vt-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1600WP": {
+    "slug": "1600wp-2010",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1601C": {
+    "slug": "1601c-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1601EQ": {
+    "slug": "1601eq-2019",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1601FQ": {
+    "slug": "1601-fq-2020",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1602Q": {
+    "slug": "1602q-2019",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1603Q": {
+    "slug": "1603q-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1604C": {
+    "slug": "1604c-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1604E": {
+    "slug": "1604e-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1604F": {
+    "slug": "1604f-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1606": {
+    "slug": "1606-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": [
+      {
+        "key": "frm1606:txtFMVBIR",
+        "printed": "Schedule 1 row 2, FMV per BIR (Zonal Value) (Column 2)",
+        "official_default": "",
+        "bir_unused": "0.00",
+        "our_print": ""
+      }
+    ]
+  },
+  "1700": {
+    "slug": "1700-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1701": {
+    "slug": "1701-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1701A": {
+    "slug": "1701a-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1701MS": {
+    "slug": "1701ms-2024",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1701Q": {
+    "slug": "1701q-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1702EX": {
+    "slug": "1702ex-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1702MX": {
+    "slug": "1702mx-2018c",
+    "zero_where_bir_blank": [
+      {
+        "key": "frm1702MX:txtPg2Pt4I32CA",
+        "printed": "Schedule 1 item 2 Legal Basis, column A",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0"
+      },
+      {
+        "key": "frm1702MX:txtPg2Pt4I32CB",
+        "printed": "Schedule 1 item 2 Legal Basis, column B",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0"
+      },
+      {
+        "key": "frm1702MX:txtPg2Pt4I32CC",
+        "printed": "Schedule 1 item 2 Legal Basis, column C",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0"
+      },
+      {
+        "key": "frm1702MX:txtPg2Pt4I33CA",
+        "printed": "Schedule 1 item 3 Registered Activity/Program, column A",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0"
+      },
+      {
+        "key": "frm1702MX:txtPg2Pt4I33CB",
+        "printed": "Schedule 1 item 3 Registered Activity/Program, column B",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0"
+      },
+      {
+        "key": "frm1702MX:txtPg2Pt4I33CC",
+        "printed": "Schedule 1 item 3 Registered Activity/Program, column C",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0"
+      }
+    ],
+    "blank_where_bir_zero": []
+  },
+  "1702Q": {
+    "slug": "1702q-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1702RT": {
+    "slug": "1702rt-2018c",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1706": {
+    "slug": "1706-2018",
+    "zero_where_bir_blank": [
+      {
+        "key": "frm1706:txtInstallment",
+        "printed": "Schedule 4 D Installment Collected (From Schedule 2 Item 5)",
+        "official_default": "0.00",
+        "bir_unused": "",
+        "our_print": "0.00"
+      }
+    ],
+    "blank_where_bir_zero": []
+  },
+  "1707": {
+    "slug": "1707-2021",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1707A": {
+    "slug": "1707a-2021",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1800": {
+    "slug": "1800-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "1801": {
+    "slug": "1801-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "2000": {
+    "slug": "2000-dst-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "2000OT": {
+    "slug": "2000-ot-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "2200A": {
+    "slug": "2200a-2020",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "2200AN": {
+    "slug": "2200an-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "2200C": {
+    "slug": "2200c-2018",
+    "zero_where_bir_blank": [
+      {
+        "key": "frm2200C:CPPexmpt1",
+        "printed": "Schedule 1 row 1, column A: cosmetic procedures performed, exempt",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0.00"
+      },
+      {
+        "key": "frm2200C:CPPexcise1",
+        "printed": "Schedule 1 row 1, column B: cosmetic procedures performed, excisable",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0.00"
+      },
+      {
+        "key": "frm2200C:CPPnonexcise1",
+        "printed": "Schedule 1 row 1, column C: cosmetic procedures performed, non-excisable",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0.00"
+      },
+      {
+        "key": "frm2200C:CPPexmpt2",
+        "printed": "Schedule 1 row 2, column A: cosmetic procedures performed, exempt",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0.00"
+      },
+      {
+        "key": "frm2200C:CPPexcise2",
+        "printed": "Schedule 1 row 2, column B: cosmetic procedures performed, excisable",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0.00"
+      },
+      {
+        "key": "frm2200C:CPPnonexcise2",
+        "printed": "Schedule 1 row 2, column C: cosmetic procedures performed, non-excisable",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0.00"
+      },
+      {
+        "key": "frm2200C:CPPexmpt3",
+        "printed": "Schedule 1 row 3, column A: cosmetic procedures performed, exempt",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0.00"
+      },
+      {
+        "key": "frm2200C:CPPexcise3",
+        "printed": "Schedule 1 row 3, column B: cosmetic procedures performed, excisable",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0.00"
+      },
+      {
+        "key": "frm2200C:CPPnonexcise3",
+        "printed": "Schedule 1 row 3, column C: cosmetic procedures performed, non-excisable",
+        "official_default": "",
+        "bir_unused": "",
+        "our_print": "0.00"
+      }
+    ],
+    "blank_where_bir_zero": []
+  },
+  "2200M": {
+    "slug": "2200m-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": [
+      {
+        "key": "frm2200M:txtSched1_LocallyExtractedRateD4",
+        "printed": "Schedule 1 row 4 (D)",
+        "official_default": "",
+        "bir_unused": "0.00",
+        "our_print": ""
+      }
+    ]
+  },
+  "2200P": {
+    "slug": "2200p-2020",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": [
+      {
+        "key": "frm2200P:txtSched1Exports16",
+        "printed": "Schedule 1 XP140 row, Exports column",
+        "official_default": "",
+        "bir_unused": "0.00",
+        "our_print": ""
+      }
+    ]
+  },
+  "2200S": {
+    "slug": "2200s-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "2200T": {
+    "slug": "2200t-2022",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "2550M": {
+    "slug": "2550m-2007",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "2550Q": {
+    "slug": "2550q-2024",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "2551Q": {
+    "slug": "2551q-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "2552": {
+    "slug": "2552-2018",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  },
+  "2553": {
+    "slug": "2553-1999",
+    "zero_where_bir_blank": [],
+    "blank_where_bir_zero": []
+  }
+}
