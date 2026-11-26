@@ -444,16 +444,17 @@ pub fn logout(origin: &str, store: &impl SessionStore) -> Result<String, String>
 }
 
 /// [`logout`] against `http`. The saved session is removed before the server is asked, so a command stopped
-/// while a slow or absent network holds the logout still leaves this computer signed out. A store that could
-/// not be cleared is reported after the logout is sent, so the server still ends the session.
+/// while a slow or absent network holds the logout still leaves this computer signed out. It is removed also
+/// when it cannot be read (nothing to revoke then). A store that could not be cleared is reported after the
+/// logout is sent, so the server still ends the session.
 fn logout_with(
     origin: &str,
     store: &impl SessionStore,
     http: &mut dyn cloud_account::Http,
 ) -> Result<String, String> {
-    let session = store.load()?;
+    let session = store.load();
     let cleared = store.clear();
-    if let Some(session) = session {
+    if let Ok(Some(session)) = session {
         let mut secrets = session.to_stored().to_secrets();
         if secrets.server_url.is_empty() {
             secrets.server_url = trim_origin(origin);
@@ -908,5 +909,46 @@ mod tests {
             );
             assert!(store.load().unwrap().is_none());
         }
+    }
+
+    /// A saved record that cannot be read (a damaged file).
+    #[derive(Default)]
+    struct Unreadable {
+        cleared: std::cell::Cell<bool>,
+    }
+
+    impl SessionStore for Unreadable {
+        fn load(&self) -> Result<Option<Session>, String> {
+            Err("could not read the saved Buwiz account".into())
+        }
+
+        fn save(&self, _: &Session) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn clear(&self) -> Result<(), String> {
+            self.cleared.set(true);
+            Ok(())
+        }
+    }
+
+    /// No logout can be sent: there is no token to send.
+    struct NoRequest;
+
+    impl cloud_account::Http for NoRequest {
+        fn exchange(
+            &mut self,
+            _: &cloud_account::HttpRequest,
+        ) -> Result<cloud_account::HttpResponse, CloudError> {
+            panic!("a logout went out with no token to revoke");
+        }
+    }
+
+    #[test]
+    fn logout_clears_an_unreadable_record_and_sends_no_request() {
+        let store = Unreadable::default();
+        let answer = logout_with("http://127.0.0.1:9", &store, &mut NoRequest);
+        assert!(store.cleared.get(), "the unreadable record was left");
+        assert_eq!(answer.as_deref(), Ok("Signed out."));
     }
 }

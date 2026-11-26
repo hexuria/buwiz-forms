@@ -805,13 +805,24 @@ pub fn refresh_session(
 
 /// Best-effort revocation. Local sign-out still proceeds when this fails.
 pub fn revoke_session(http: &mut dyn Http, secrets: &AccountSecrets) {
-    let _ = http.exchange(&HttpRequest {
+    let _ = send_logout(http, &secrets.server_url, &secrets.access_token);
+}
+
+/// `POST /api/auth/logout` with `access_token`: the HTTP status the server answered. It needs nothing else of
+/// the sign-in, so a caller that sends it later keeps only the address and that one token.
+pub fn send_logout(
+    http: &mut dyn Http,
+    server_url: &str,
+    access_token: &str,
+) -> Result<u16, CloudError> {
+    http.exchange(&HttpRequest {
         method: "POST",
-        url: format!("{}/api/auth/logout", secrets.server_url),
+        url: format!("{server_url}/api/auth/logout"),
         content_type: "application/json",
-        bearer: Some(secrets.access_token.clone()),
+        bearer: Some(access_token.to_owned()),
         body: "{}".into(),
-    });
+    })
+    .map(|response| response.status)
 }
 
 /// Opens the account site in the system browser. On a phone the app's
@@ -863,6 +874,36 @@ pub fn save_stored_account(stored: &StoredAccount) -> Result<(), CloudError> {
 pub fn clear_stored_account() {
     keyring_delete();
     let _ = std::fs::remove_file(account_file_path());
+}
+
+/// Remove the saved sign-in for a sign-out, and make sure it is gone: read back, removed once more, then
+/// overwritten with nothing where it still reads (an empty keychain entry or file is not a sign-in). An error
+/// means a sign-in still reads back on this device.
+pub fn forget_stored_account() -> Result<(), CloudError> {
+    clear_stored_account();
+    if !sign_in_reads_back() {
+        return Ok(());
+    }
+    clear_stored_account();
+    if !sign_in_reads_back() {
+        return Ok(());
+    }
+    if keyring_load().is_some() {
+        let _ = keyring_save("");
+    }
+    if account_file_path().exists() {
+        let _ = write_secret_file("");
+    }
+    if sign_in_reads_back() {
+        return Err(CloudError::Unexpected(
+            "the saved Buwiz sign-in could not be removed".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn sign_in_reads_back() -> bool {
+    matches!(load_stored_account(), Ok(Some(_)))
 }
 
 fn account_file_path() -> PathBuf {
@@ -1891,6 +1932,57 @@ mod tests {
                 assert_eq!(loaded.refresh_token, "refresh-secret");
                 clear_stored_account();
                 assert!(load_stored_account().unwrap().is_none());
+            },
+        );
+    }
+
+    /// A private file that cannot be deleted (its folder is read-only) is overwritten, so it no longer reads as
+    /// a sign-in; one that cannot be overwritten either (read-only too) is reported, never taken as removed.
+    #[cfg(unix)]
+    #[test]
+    fn forgetting_a_sign_in_that_cannot_be_deleted_overwrites_it_or_says_so() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |path: &Path, mode: u32| {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(ACCOUNT_FILE_NAME);
+        temp_env::with_vars(
+            [
+                ("BUWIZ_NO_KEYCHAIN", Some("1")),
+                (ENV_ACCOUNT_FILE, Some(path.to_str().unwrap())),
+            ],
+            || {
+                save_stored_account(&StoredAccount::from_secrets(&secrets())).unwrap();
+                mode(dir.path(), 0o555);
+                let overwritten = forget_stored_account();
+                let left = load_stored_account();
+                mode(dir.path(), 0o755);
+                assert!(
+                    !matches!(left, Ok(Some(_))),
+                    "the sign-in still reads back after the sign-out"
+                );
+                assert!(
+                    overwritten.is_ok(),
+                    "an overwritten file was reported as left"
+                );
+
+                save_stored_account(&StoredAccount::from_secrets(&secrets())).unwrap();
+                mode(&path, 0o400);
+                mode(dir.path(), 0o555);
+                let stuck = forget_stored_account();
+                let left = load_stored_account();
+                mode(dir.path(), 0o755);
+                mode(&path, 0o600);
+                assert!(
+                    matches!(left, Ok(Some(_))),
+                    "the test could not make the file stick"
+                );
+                assert!(
+                    stuck.is_err(),
+                    "a sign-in that still reads back was reported as removed"
+                );
+                clear_stored_account();
             },
         );
     }
