@@ -1,20 +1,8 @@
-===== 1800
-ellipsis count: 68 overflow warnings: 52
-two-line-fitted cells (line-height:1.04): 5
-continuation pages: 18 total pages: 11
-tin-segments present: True
-===== 1801
-ellipsis count: 71 overflow warnings: 53
-two-line-fitted cells (line-height:1.04): 10
-continuation pages: 18 total pages: 11
-tin-segments present: True
-===== 2200S
-ellipsis count: 0 overflow warnings: 3
-two-line-fitted cells (line-height:1.04): 0
-continuation pages: 0 total pages: 2
-tin-segments present: True
-===== 2200T
-ellipsis count: 27 overflow warnings: 19
-two-line-fitted cells (line-height:1.04): 0
-continuation pages: 8 total pages: 7
-tin-segments present: True
+1800: pages 2 continuation 0 warnings 0 full-200char 50 shortened-text-values 0 bytes 902651
+  chrome-pdf pages: 2
+1801: pages 2 continuation 0 warnings 0 full-200char 54 shortened-text-values 0 bytes 975409
+  chrome-pdf pages: 2
+2200S: pages 2 continuation 0 warnings 0 full-200char 0 shortened-text-values 0 bytes 569480
+  chrome-pdf pages: 2
+2200T: pages 3 continuation 0 warnings 0 full-200char 19 shortened-text-values 0 bytes 852026
+  chrome-pdf pages: 3

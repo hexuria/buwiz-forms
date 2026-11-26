@@ -1,0 +1,24 @@
+===== 1800: additional-sheet rows 50, on-form shortened values 50
+distinct shortened texts: 9
+unmatched shortened (full text NOWHERE): 0
+rows per page ref: {'Page 1': 10, 'Page 2': 40}
+full entries distinct: 1 of 50
+
+===== 1801: additional-sheet rows 53, on-form shortened values 53
+distinct shortened texts: 20
+unmatched shortened (full text NOWHERE): 0
+rows per page ref: {'Page 1': 9, 'Page 2': 44}
+full entries distinct: 1 of 53
+
+===== 2200S: additional-sheet rows 0, on-form shortened values 0
+distinct shortened texts: 0
+unmatched shortened (full text NOWHERE): 0
+rows per page ref: {}
+full entries distinct: 0 of 0
+
+===== 2200T: additional-sheet rows 19, on-form shortened values 19
+distinct shortened texts: 6
+unmatched shortened (full text NOWHERE): 0
+rows per page ref: {'Page 1': 7, 'Page 3': 12}
+full entries distinct: 1 of 19
+
