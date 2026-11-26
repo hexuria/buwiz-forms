@@ -2183,10 +2183,15 @@ pub fn quarterly_period_label(taxable_year: u16, quarter: u8) -> String {
 /// `test_sent` line (bir-app-api `send_state::TEST_SENT_LINE`) say it.
 pub const TEST_SENT_LINE: &str = "Test send. Nothing reached the BIR.";
 
+/// The first words of a test send's notice title.
+const TEST_SEND_TITLE: &str = "Test send";
+
 /// Desktop banner for a successful PUT: who, which return, when — not the
 /// IAF filename, which says none of that at a glance. Returns `(title, body)`.
-/// A `dry_run` send reached nobody: its banner says [`TEST_SENT_LINE`] and
-/// never that the return was submitted, sent or filed.
+/// A `dry_run` send reached nobody: its title leads with "Test send", so a
+/// phone banner that cuts a long registered name off still shows it, and its
+/// body's first line is [`TEST_SENT_LINE`]. It never says the return was
+/// submitted, sent or filed.
 pub fn submission_notice<Tz: chrono::TimeZone>(
     profile: &TaxpayerProfile,
     form_code: &str,
@@ -2202,10 +2207,10 @@ where
     if dry_run {
         return (
             format!(
-                "{form_code} {period_label} \u{2014} {}: {TEST_SENT_LINE}",
+                "{TEST_SEND_TITLE}: {form_code} {period_label} \u{2014} {}",
                 profile.full_name
             ),
-            format!("TIN {tin}\nTested {at}"),
+            format!("{TEST_SENT_LINE}\nTIN {tin}\nTested {at}"),
         );
     }
     (
@@ -3002,17 +3007,38 @@ mod tests {
             .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
             .unwrap();
         let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at, true);
+        assert_eq!(title, "Test send: 1601C 09/26 \u{2014} Juan Dela Cruz");
         assert_eq!(
-            title,
-            "1601C 09/26 \u{2014} Juan Dela Cruz: Test send. Nothing reached the BIR."
+            body,
+            "Test send. Nothing reached the BIR.\nTIN 000-000-000-00000\nTested 03:17 PM, 12 Sep 2026"
         );
-        assert_eq!(body, "TIN 000-000-000-00000\nTested 03:17 PM, 12 Sep 2026");
         assert_never_filed_notice(&title, &body);
     }
 
-    /// A test send's notice says the app's one sentence for it, and never that the return was submitted, sent or filed.
+    /// A phone banner shows the title's first few words and cuts the rest: a test send's title leads with "Test
+    /// send" whatever the registered name's length, and the body's first line is the app's sentence for it.
+    #[test]
+    fn a_test_send_notice_leads_with_test_send_before_a_long_name() {
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.full_name =
+            "Juan Dela Cruz Trading and General Merchandise Corporation of the Philippines".into();
+        let sent_at = chrono::FixedOffset::east_opt(8 * 3600)
+            .unwrap()
+            .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
+            .unwrap();
+        let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at, true);
+        let banner: String = title.chars().take(20).collect();
+        assert_eq!(banner, "Test send: 1601C 09/");
+        assert_eq!(body.lines().next(), Some(TEST_SENT_LINE));
+        assert_never_filed_notice(&title, &body);
+    }
+
+    /// A test send's notice leads with "Test send" in the title, carries the app's one sentence for it as a line of
+    /// its own (the OS notice's first; the stored alert names the taxpayer above it), and never says the return was
+    /// submitted, sent or filed.
     fn assert_never_filed_notice(title: &str, body: &str) {
-        assert!(title.contains(TEST_SENT_LINE), "{title}");
+        assert!(title.starts_with("Test send: "), "{title}");
+        assert!(body.lines().any(|line| line == TEST_SENT_LINE), "{body}");
         for text in [title, body] {
             let lower = text.to_lowercase();
             for word in ["submitted", "sent ", "filed"] {

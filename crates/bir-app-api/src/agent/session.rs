@@ -522,7 +522,8 @@ impl Session {
         if status == FilingStatus::Draft {
             agent::save_draft(kind, &db, &mut draft)?;
         }
-        let (dry_run, send) = stored_send_facts(&db, draft.get("id").and_then(Value::as_i64))?;
+        let facts = stored_send_facts(&db, draft.get("id").and_then(Value::as_i64))?;
+        let status = facts.status.unwrap_or(status);
         drop(db);
         self.selected_tin = Some(tin.clone());
         self.open = Some(OpenForm {
@@ -550,8 +551,8 @@ impl Session {
             "period": period,
             "tin": tin,
             "status": format!("{status:?}"),
-            "dry_run": dry_run,
-            "send": send,
+            "dry_run": facts.dry_run,
+            "send": facts.send,
         })))
     }
 
@@ -583,16 +584,19 @@ impl Session {
             }
         }
         let questions = def.boxes.iter().filter(|entry| entry.is_question()).count();
-        let status = agent::identity(open.kind, &open.draft)?.status;
-        let (dry_run, send) = stored_send_facts(
+        let facts = stored_send_facts(
             &*self.lock_db()?,
             open.draft.get("id").and_then(Value::as_i64),
         )?;
+        let status = match facts.status {
+            Some(status) => status,
+            None => agent::identity(open.kind, &open.draft)?.status,
+        };
         Ok(DispatchResult::json(json!({
             "form": open.kind.form_code(),
             "status": format!("{status:?}"),
-            "dry_run": dry_run,
-            "send": send,
+            "dry_run": facts.dry_run,
+            "send": facts.send,
             "id": open.draft.get("id").cloned().unwrap_or(Value::Null),
             "boxes": boxes,
             "read_only": questions.saturating_sub(boxes.len()),
@@ -1127,7 +1131,7 @@ impl Session {
         let past_returns: Vec<Value> = drafts
             .into_iter()
             .map(|summary| {
-                let (dry_run, send) = stored_send_facts(&db, Some(summary.id))?;
+                let facts = stored_send_facts(&db, Some(summary.id))?;
                 Ok(json!({
                     "kind": "saved_return",
                     "form": summary.form_code,
@@ -1135,8 +1139,8 @@ impl Session {
                     "quarter": summary.quarter,
                     "month": summary.month,
                     "status": format!("{:?}", summary.status),
-                    "dry_run": dry_run,
-                    "send": send,
+                    "dry_run": facts.dry_run,
+                    "send": facts.send,
                     "updated_at": summary.updated_at,
                 }))
             })
@@ -2033,22 +2037,51 @@ fn queued_answer(code: &str, id: i64, through_buwiz: bool, dry_run: bool) -> Val
     })
 }
 
-/// What the agent reads of the stored return `id`'s send, as the screens get it: `dry_run`, the worker's
-/// `submitted_dry_run` (nothing reached the BIR), and `send`, the send state (send_state.rs: stage, line ...; null
-/// where the screens show the status alone). A return not stored yet has neither.
-fn stored_send_facts(db: &Database, id: Option<i64>) -> Result<(bool, Value), String> {
+/// What the agent reads of the stored return's send, from its one stored row, as the screens get it.
+struct SendFacts {
+    /// The stored row's status; None for a return not stored yet.
+    status: Option<FilingStatus>,
+    /// Whether the finished send reached nobody (the worker's `submitted_dry_run`). None until a send has finished
+    /// (Submitted, Confirmed or Paid): a Draft or a Queued return has no send to tell of, and through the Buwiz relay
+    /// only the server's answer says whether it was a test send.
+    dry_run: Option<bool>,
+    /// The send state (send_state.rs: stage, line ...); null where the screens show the status alone.
+    send: Value,
+}
+
+fn stored_send_facts(db: &Database, id: Option<i64>) -> Result<SendFacts, String> {
     let Some(id) = id else {
-        return Ok((false, Value::Null));
+        return Ok(SendFacts {
+            status: None,
+            dry_run: None,
+            send: Value::Null,
+        });
     };
-    let dry_run = db
+    let Some((summary, json)) = db
         .draft_summary_and_json(id)
         .map_err(|error| error.to_string())?
-        .and_then(|(_, json)| serde_json::from_str::<Value>(&json).ok())
-        .is_some_and(|draft| {
-            crate::screen_form_module::lifecycle_flag(&draft, "submitted_dry_run")
+    else {
+        return Ok(SendFacts {
+            status: None,
+            dry_run: None,
+            send: Value::Null,
         });
+    };
+    let dry_run = matches!(
+        summary.status,
+        FilingStatus::Submitted | FilingStatus::Confirmed | FilingStatus::Paid
+    )
+    .then(|| {
+        serde_json::from_str::<Value>(&json).is_ok_and(|draft| {
+            crate::screen_form_module::lifecycle_flag(&draft, "submitted_dry_run")
+        })
+    });
     let send = crate::send_state::stored_send(db, id).map_err(|error| error.to_string())?;
-    Ok((dry_run, send))
+    Ok(SendFacts {
+        status: Some(summary.status),
+        dry_run,
+        send,
+    })
 }
 
 #[cfg(test)]
@@ -4087,7 +4120,8 @@ mod tests {
 
     /// Once the worker has sent a return, `form.open` (called again), `form.fields` and `form.context`'s
     /// `past_returns` say whether that send reached nobody (`dry_run`, the worker's `submitted_dry_run`) and the send
-    /// state the screens show (`send`: stage, line ...). A Draft has no send to tell of.
+    /// state the screens show (`send`: stage, line ...), with the stored row's status. A Draft and a Queued return
+    /// have no finished send to tell of: `dry_run` is null, as `form.send` says it.
     #[test]
     fn the_agent_reads_whether_a_send_was_a_test_send() {
         use crate::send_state::TEST_SENT_LINE;
@@ -4096,9 +4130,39 @@ mod tests {
         let args = json!({"code": "2551Q", "year": 2026, "period": 1, "tin": TIN});
         let draft = call(&mut session, "form.open", args.clone()).unwrap();
         assert_eq!(draft["status"], "Draft");
-        assert_eq!(draft["dry_run"], false);
+        assert!(draft["dry_run"].is_null(), "{draft}");
         assert!(draft["send"].is_null(), "{draft}");
         let id = session.open.as_ref().unwrap().draft["id"].as_i64().unwrap();
+        // Queued and not sent yet: no send has finished, whatever this build's dry-run setting says.
+        {
+            let db = session.lock_db().unwrap();
+            let (_, stored) = db.draft_summary_and_json(id).unwrap().unwrap();
+            let mut queued: Value = serde_json::from_str(&stored).unwrap();
+            queued["status"] = json!("Queued");
+            db.conn_for_tests()
+                .execute(
+                    "UPDATE form_drafts SET status = 'Queued', data_json = ?1 WHERE id = ?2",
+                    (queued.to_string(), id),
+                )
+                .unwrap();
+        }
+        // form.fields reads the status from the stored row its `send` comes from, not from the form held open.
+        let fields = call(&mut session, "form.fields", json!({})).unwrap();
+        assert_eq!(fields["status"], "Queued", "form.fields: {fields}");
+        assert!(fields["dry_run"].is_null(), "form.fields: {fields}");
+        let queued = call(&mut session, "form.open", args.clone()).unwrap();
+        assert_eq!(queued["status"], "Queued");
+        assert!(queued["dry_run"].is_null(), "form.open: {queued}");
+        let context = call(&mut session, "form.context", json!({})).unwrap();
+        let past = context["past_returns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|past| past["form"] == "2551Q" && past["year"] == 2026 && past["quarter"] == 1)
+            .expect("the queued return")
+            .clone();
+        assert_eq!(past["status"], "Queued");
+        assert!(past["dry_run"].is_null(), "form.context: {past}");
         // The worker's store of a relay dry_run result (bir-core: Submitted, submitted_dry_run, its receipt).
         {
             let db = session.lock_db().unwrap();
