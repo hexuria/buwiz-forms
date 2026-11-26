@@ -1,0 +1,12 @@
+{
+  "rate_after_keys": "42",
+  "rate_after_leave": "0.00",
+  "focused_after_tabin": false,
+  "focused_after_keys": false,
+  "sentence_texts": [
+    "Tax Rate: you typed 42; the return holds 0.00."
+  ],
+  "draft_rate": 42.0,
+  "shot_after42": "/home/ubuntu/forms-validation/money-30ada-proof/l2-after42.png",
+  "shot_after_leave": "/home/ubuntu/forms-validation/money-30ada-proof/l2-after-leave.png"
+}

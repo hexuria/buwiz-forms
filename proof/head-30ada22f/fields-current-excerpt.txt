@@ -1,0 +1,351 @@
+  let suffix = 0;
+  while (suffix < zero.length - p && suffix < raw.length - p && zero[zero.length - 1 - suffix] === raw[raw.length - 1 - suffix]) suffix++;
+  for (let i = 0; i < p; i++) mask[i] = true;
+  for (let i = 0; i < suffix; i++) mask[raw.length - 1 - i] = true;
+  return mask;
+}
+
+// Windows alone loses the platform select-all when a recompute writes a box just before keyboard focus: the measured
+// end-collapse arrives 41-43 ms after focus for a write about 20 ms before it, and does not arrive at 85-110 ms.
+const WINDOWS_RESELECT_COLLAPSE_MS = 150;
+const WINDOWS_RESELECT_WRITE_MS = 300;
+const WINDOWS_RESELECT = platform.os === "windows";
+
+/**
+ * A TextField whose text goes through a mask on every edit, the caret kept beside the same digit. The box always shows
+ * what was reported: an edit the mask refuses is taken back out of the native box, and leaving a box the filer edited
+ * reports the value it settled on (a typed 1.255 shown as 1.26 is 1.26 in the draft too) when that is not the one last
+ * reported. A box left unedited never reports: a stored value is shown, not changed.
+ *
+ * Every way the native text changes comes to `change` as one edit of the text the box showed: typing, Backspace or Delete over
+ * a caret or a selection (Cmd+A and Backspace, a drag and Delete), Cut, a paste, a digit over a selection. NSH reports each as a
+ * key press (the typed text, or "Backspace" for any deletion, Cut included) BEFORE the change, with the selection the edit
+ * started from known from the last onSelectionChange; an emptied box reports "" like any other value.
+ *
+ * Where the caret goes as the box takes the keys: platform focus keeps the platform's own selection or click caret; a zero
+ * number becomes empty so its first digit starts the amount; and the page's own focus() selects the whole text after focus has
+ * landed. Besides that deliberate selection write, Windows has exactly one more: the narrowly guarded recompute-collapse repair
+ * below. No other caret or text is written while the box has the keys.
+ */
+function MaskedField(props: MaskedProps) {
+  let input: InputRef | undefined;
+  const focused = signal(false);
+  const text = signal(props.shown(props.value ?? "", false));
+  const same = (a: string, b: string) => (props.same ? props.same(a, b) : a === b);
+  // The value last reported or last given: a report is made only when it changes. `edited`: the filer changed it since the
+  // box took the keys.
+  let last = props.value ?? "";
+  let edited = false;
+  // The selection the input last reported, and what the current edit started from (taken at its key press): that
+  // selection, and whether the key typed a character (a paste or any edit without a key is judged as a paste).
+  let selected: TextSelection | undefined;
+  let editFrom: TextSelection | undefined;
+  let editTyped = false;
+  // The text the box last reported while it has the keys. Keys that come faster than the answers (a burst, an agent's
+  // typing) are typed on this text, not on the answer: NSH drops an answer the box has typed past.
+  let boxText: string | undefined;
+  // A value that arrives while the box has the keys: applied on blur only when the filer made no edit of their own.
+  let outsideValue: string | undefined;
+  // The sentence this box draws itself when no form session does it for it; null while focused or readable.
+  const leftUnreadable = signal<string | null>(null);
+  // The value shown when this focus began: an unreadable edit rolls the report back to it once.
+  let focusValue = props.value ?? "";
+  let invalidActive = false;
+  let rollbackReported = false;
+  // Windows F6: an outside write into the unfocused box, followed closely by keyboard focus, can collapse select-all.
+  let outsideWriteAt = 0;
+  let armWindowsReselect = false;
+  let windowsReselectDone = false;
+  let windowsFocusAt = 0;
+  // Set only through the wrapped ref the page receives; a platform Tab, click or tap never sets it.
+  let programmaticFocus = false;
+  let programmaticFocusToken = 0;
+  // Input can reach the native box before its first focus callback (macOS, a zero-click burst). The box is
+  // semantically focused from that input; the late callback still goes to the page but must not start the edit again.
+  let focusCallbackSeen = false;
+  let inputBeforeFocus = false;
+  // The zero text a focus is clearing, while its empty write waits one turn so same-turn input can supersede it.
+  let zeroFocusText: string | undefined;
+  let zeroWriteTimer: ReturnType<typeof setTimeout> | undefined;
+  // Which visible characters are the stale zero text (true); input that arrives before its empty write is never stale.
+  let zeroMask: boolean[] | undefined;
+  let zeroWriteLanded = false;
+  let zeroWriteGraceTimer: ReturnType<typeof setTimeout> | undefined;
+  // Whose comma the money text holds for this focus: the box's grouping, the filer's, none yet, or not attributable.
+  let commaState: CommaState = initialCommaState(props.shown(props.value ?? "", false));
+  const commaValueOf = (reading: string, leaving: boolean) =>
+    props.commaStates ? (readAmountWithCommas(reading, commaState, props.commaNegative, leaving) ?? "") : props.valueOf(reading);
+  const commaValid = (reading: string, leaving: boolean) =>
+    props.commaStates ? validAmountWithCommas(reading, commaState, props.commaNegative, leaving) : props.valid ? props.valid(reading) : true;
+  const writeText = (value: string) => {
+    if (untracked(text) !== value) props.field.writeProbe?.("text");
+    text.set(value);
+  };
+  const writeCaret = (start: number, end = start) => {
+    props.field.writeProbe?.("caret", start, end);
+    input?.setSelection(start, end);
+  };
+  // A value set from outside (another box, a reload) shows; the field's own edits come back equal and change nothing.
+  effect(() => {
+    const value = props.value ?? "";
+    // Focused text is never rewritten. A change equal to what this box just reported is its own echo; only a different
+    // value is outside, and is held for blur until the filer's own edit supersedes it.
+    if (untracked(focused)) {
+      // A zero that only answers this box's own empty report is not a new outside edit; it is read again on leaving,
+      // where a host that truly holds blank still shows blank and a host that holds zero shows zero.
+      const ownEmptyEcho = last === "" && isZeroAmount(value);
+      if (!same(value, last) && !ownEmptyEcho) {
+        outsideValue = value;
+        last = value;
+      }
+      return;
+    }
+    last = value;
+    const now = untracked(text);
+    if (!same(props.valueOf(now), value)) {
+      if (WINDOWS_RESELECT) outsideWriteAt = Date.now();
+      writeText(props.shown(value, false));
+      invalidActive = false;
+      rollbackReported = false;
+    }
+  });
+  // Take the stale zero text out of the reported reading wherever its characters sit. zeroWriteLanded lasts only
+  // for the task queue immediately after the empty write, so a key already on its way is stripped while a later,
+  // genuine leading zero is the filer's own.
+  const readWithoutStaleZero = (prev: string, raw: string) => {
+    if (!zeroMask) return raw;
+    if (zeroWriteLanded && zeroFocusText) {
+      zeroMask = staleMaskAfterEmptyWrite(zeroFocusText, raw);
+      zeroWriteLanded = false;
+    } else {
+      const e = shapedEditAt(prev, raw);
+      zeroMask.splice(e.at, e.removed, ...Array.from({ length: e.inserted.length }, () => false));
+    }
+    zeroFocusText = undefined; // the first input ends the zero rule; later zeroes are the filer's own
+    return [...raw].filter((_, i) => zeroMask![i] === false).join("");
+  };
+
+  const change = (raw: string) => {
+    armWindowsReselect = false;
+    const prev = untracked(text);
+    const stored = props.value ?? "";
+    if (!untracked(focused) && isZeroAmount(stored) && props.shown(stored, true) === "" && prev === props.shown(stored, false)) {
+      inputBeforeFocus = true;
+      focused.set(true);
+      focusValue = stored;
+      commaState = initialCommaState(prev);
+      zeroFocusText = prev;
+      zeroMask = Array.from({ length: prev.length }, () => true);
+      zeroWriteLanded = true;
+    }
+    const from = editFrom;
+    const typed = editTyped;
+    editFrom = undefined;
+    editTyped = false;
+    if (props.noLiveFormat) {
+      // Focused text is authoritative: strict reading decides the report; no mask rewrite or refusal answer is computed for it.
+      boxText = raw;
+      text.set(raw);
+      if (props.commaStates) commaState = nextCommaState(commaState, prev, raw);
+      const reading = readWithoutStaleZero(prev, raw);
+      const valid = commaValid(reading, false);
+      if (!valid) {
+        invalidActive = true;
+        if (!rollbackReported) {
+          rollbackReported = true;
+          // A newer value held for this focus is the fallback, not the older value the box had when focus began.
+          const fallback = untracked(focused) ? (outsideValue ?? focusValue) : last;
+          if (!same(fallback, last)) {
+            last = fallback;
+            props.onChange(fallback);
+          }
+        }
+        return;
+      }
+      if (invalidActive) {
+        invalidActive = false;
+        rollbackReported = false;
+      }
+      const value = commaValueOf(reading, false);
+      // A key and its Backspace are no edit: a value held from outside still wins on leaving.
+      edited = !same(value, focusValue);
+      if (value === last) return;
+      last = value;
+      props.onChange(value);
+      return;
+    }
+    const staleRead = readWithoutStaleZero(prev, raw);
+    const [on, at] = editBase(prev, boxText, raw, from);
+    const next = reconcile(on, raw, props.mask, undefined, at, typed);
+    // An edit that changes nothing is taken back: what the box holds after it is the text shown.
+    boxText = next.rejected || next.text === prev ? next.text : raw;
+    // The native box holds `raw`. A signal that already holds the answer would send nothing: show `raw` first so the
+    // answer is a change the box must take.
+    if (next.text === prev && raw !== prev) writeText(raw);
+    writeText(next.text);
+    // The box puts the caret at the end of a text it takes, so a caret that belongs there is not sent: sent, it would
+    // arrive after the keys typed since this edit and put the next ones inside the number.
+    if (next.rejected || (next.text !== raw && next.caret !== next.text.length)) writeCaret(next.caret);
+    if (next.rejected) return;
+    const value = props.valueOf(zeroMask ? staleRead : next.text);
+    edited = !same(value, focusValue);
+    if (value === last) return;
+    last = value;
+    props.onChange(value);
+  };
+  // Blur and unmount are the same leave. Unmount cannot write the native box away, but the value, unreadable-note
+  // callback and the box's blur callback are exactly the blur ones.
+  const finishLeave = (write: boolean) => {
+        if (zeroWriteTimer !== undefined) {
+          clearTimeout(zeroWriteTimer);
+          zeroWriteTimer = undefined;
+        }
+        if (zeroWriteGraceTimer !== undefined) {
+          clearTimeout(zeroWriteGraceTimer);
+          zeroWriteGraceTimer = undefined;
+        }
+        armWindowsReselect = false;
+        windowsReselectDone = false;
+        const held = text();
+        const reading = zeroMask ? [...held].filter((_, i) => zeroMask![i] === false).join("") : held;
+        const validBlur = commaValid(reading, true);
+        if (!validBlur) {
+          // The return keeps the fallback amount. A newer outside value held during this focus is that fallback.
+          const fallback = outsideValue ?? focusValue;
+          const shownFallback = props.shown(fallback, false);
+          const kept = shownFallback === "" ? props.shown("0", false) : shownFallback;
+          if (write) writeText(kept);
+          const hint = held.includes(",") ? " Use a point for centavos, and commas only between thousands." : "";
+          if (props.field.onLeftUnreadable) props.field.onLeftUnreadable(held, kept);
+          else leftUnreadable.set(`${held} is not an amount. The box kept ${kept}.${hint}`);
+          invalidActive = false;
+          rollbackReported = false;
+        } else {
+          if (write && !edited && outsideValue !== undefined) writeText(props.shown(outsideValue, false));
+          const heldZero = reading.trim() === "" && isZeroAmount(props.value ?? "") ? (props.value ?? "") : commaValueOf(reading, true);
+          const laidOut = edited ? props.shown(heldZero, false) : props.shown(outsideValue ?? props.value ?? "", false);
+          const semanticShown = edited && props.settle ? props.settle(laidOut) : laidOut;
+          // Blank is what nullable amounts hold; a host that stores zero writes that zero back through the outside value.
+          if (write && semanticShown !== text()) writeText(semanticShown);
+          const value = commaValueOf(semanticShown, true);
+          if (!same(value, last)) {
+            last = value;
+            props.onChange(value);
+          }
+        }
+        outsideValue = undefined;
+        focused.set(false);
+        editFrom = undefined;
+        editTyped = false;
+        edited = false;
+        focusCallbackSeen = false;
+        inputBeforeFocus = false;
+        zeroFocusText = undefined;
+        zeroMask = undefined;
+        zeroWriteLanded = false;
+        programmaticFocus = false;
+        programmaticFocusToken++;
+        props.field.onBlur?.();
+  };
+
+  cleanup(() => {
+    if (untracked(focused)) finishLeave(false);
+  });
+
+  return (
+    <TextField
+      value={text()}
+      onChange={change}
+      keyboardType={props.keyboardType}
+      inputRef={(r) => {
+        input = r;
+        props.field.inputRef?.({
+          focus: () => {
+            programmaticFocus = !untracked(focused);
+            r.focus();
+            if (programmaticFocus) {
+              // Native focus gives no "did not land" answer; this bounded request token is the only deterministic age-out.
+              const token = ++programmaticFocusToken;
+              setTimeout(() => {
+                if (token === programmaticFocusToken) programmaticFocus = false;
+              }, 250);
+            }
+          },
+          blur: () => r.blur(),
+          measure: () => r.measure(),
+          reveal: (options?: Parameters<typeof r.reveal>[0]) => r.reveal(options),
+          animateLayout: (transition?: Parameters<typeof r.animateLayout>[0]) => r.animateLayout(transition),
+          setSelection: (start: number, end?: number) => r.setSelection(start, end),
+          insertText: (value: string) => r.insertText(value),
+        });
+      }}
+      tabular
+      label={props.field.label}
+      accessibilityLabel={props.field.accessibilityLabel}
+      hint={props.field.hint}
+      error={leftUnreadable() ?? props.field.error}
+      placeholder={props.field.placeholder ?? props.placeholder}
+      disabled={props.field.disabled}
+      locked={props.field.locked}
+      width={props.field.width}
+      size={props.field.size}
+      align={props.field.align ?? props.align}
+      icon={props.field.icon}
+      prefix={props.field.prefix ?? props.prefix}
+      suffix={props.field.suffix ?? props.suffix}
+      trailing={props.field.trailing}
+      autoFocus={props.field.autoFocus}
+      returnKeyType={props.field.returnKeyType}
+      onSubmit={props.field.onSubmit}
+      testID={props.field.testID}
+      onSelectionChange={(e) => {
+        if (WINDOWS_RESELECT && armWindowsReselect && !windowsReselectDone) {
+          const len = untracked(text).length;
+          const now = Date.now();
+          if (len > 0 && e.start === len && e.end === len && now - windowsFocusAt <= WINDOWS_RESELECT_COLLAPSE_MS) {
+            // The second and only other deliberate selection write: Windows' proven recompute collapse repair.
+            windowsReselectDone = true;
+            armWindowsReselect = false;
+            writeCaret(0, len);
+          } else if (now - windowsFocusAt > WINDOWS_RESELECT_COLLAPSE_MS) {
+            armWindowsReselect = false;
+          }
+        }
+        selected = { start: e.start, end: e.end };
+        props.field.onSelectionChange?.(e);
+      }}
+      onKeyPress={(e) => {
+        editFrom = selected;
+        editTyped = [...e.key].length === 1;
+        props.field.onKeyPress?.(e);
+      }}
+      onFocus={() => {
+        // A duplicate focus without a blur is not a new edit session: no reset, rewrite, reselect or renotify.
+        if (untracked(focused)) {
+          const firstCallback = !focusCallbackSeen;
+          focusCallbackSeen = true;
+          programmaticFocus = false;
+          programmaticFocusToken++;
+          if (firstCallback && inputBeforeFocus) props.field.onFocus?.();
+          return;
+        }
+        focusCallbackSeen = true;
+        focused.set(true);
+        boxText = undefined;
+        edited = false;
+        focusValue = props.value ?? "";
+        rollbackReported = false;
+        invalidActive = false;
+        leftUnreadable.set(null);
+        zeroFocusText = undefined;
+        if (WINDOWS_RESELECT && outsideWriteAt > 0 && Date.now() - outsideWriteAt <= WINDOWS_RESELECT_WRITE_MS && !windowsReselectDone) {
+          armWindowsReselect = true;
+          windowsFocusAt = Date.now();
+        }
+        outsideWriteAt = 0;
+        const before = untracked(text);
+        commaState = initialCommaState(before);
+        const focusShown = props.shown(props.value ?? "", true);
+        if (focusShown !== before) {
+          if (focusShown === "") {
+            // Give same-turn input one chance to win over the zero-to-empty write; otherwise that write can land after

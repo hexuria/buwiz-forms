@@ -1,0 +1,13 @@
+MONEYTRACE 1795707034039 fp-frm2550m:txtTax13B outside-write {"value":"14280.00","now":"999.00","shown":"14,280.00","writeAt":1795707034039}
+MONEYTRACE 1795707034058 fp-frm2550m:txtTax13B focus-callback {"text":"14,280.00","sinceOutsideWrite":19}
+MONEYTRACE 1795707034058 fp-frm2550m:txtTax13B selection {"start":0,"end":6,"len":9,"arm":true,"focusGap":0}
+MONEYTRACE 1795707034093 fp-frm2550m:txtTax13B selection {"start":9,"end":9,"len":9,"arm":true,"focusGap":35}
+MONEYTRACE 1795707034093 fp-frm2550m:txtTax13B reselect {"start":0,"end":9,"focusGap":35}
+MONEYTRACE 1795707034094 fp-frm2550m:txtTax13B selection {"start":0,"end":9,"len":9,"arm":false,"focusGap":36}
+MONEYTRACE 1795707034159 fp-frm2550m:txtTax13B selection {"start":1,"end":1,"len":9,"arm":false,"focusGap":101}
+MONEYTRACE 1795707034161 fp-frm2550m:txtTax13B change {"raw":"9","selected":{"start":1,"end":1},"focused":true}
+MONEYTRACE 1795707034280 fp-frm2550m:txtTax13B selection {"start":2,"end":2,"len":1,"arm":false,"focusGap":222}
+MONEYTRACE 1795707034280 fp-frm2550m:txtTax13B change {"raw":"99","selected":{"start":2,"end":2},"focused":true}
+MONEYTRACE 1795707034400 fp-frm2550m:txtTax13B selection {"start":3,"end":3,"len":2,"arm":false,"focusGap":342}
+MONEYTRACE 1795707034401 fp-frm2550m:txtTax13B change {"raw":"999","selected":{"start":3,"end":3},"focused":true}
+MONEYTRACE 1795707034648 fp-frm2550m:txtTax13B selection {"start":6,"end":6,"len":6,"arm":false,"focusGap":590}

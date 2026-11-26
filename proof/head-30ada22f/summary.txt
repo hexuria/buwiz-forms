@@ -1,0 +1,19 @@
+HEAD confirmed: 30ada22f7071b0e243e29ec5e7f17486e58c0eb9
+
+L2 unchanged 30ada22f: 1601FQ Schedule 1 rate, relief unanswered, Tab in, type 42, Tab out. Box after leaving: 0.00. Exact sentence: "Tax Rate: you typed 42; the return holds 0.00." Draft schedule1[0].tax_rate read from form_drafts.data_json: 42.0.
+
+Linux widened guard matrix, 2550M 13A -> Tab -> recomputed 13B, type 999:
+delay ms | failures/10 | after_keys | saved 13B
+0 | 0/10 | 999 x10 | 999.0 x10
+120 | 0/10 | 999 x10 | 999.0 x10
+300 | 0/10 | 999 x10 | 999.0 x10
+1000 | 0/10 | 999 x10 | 999.0 x10
+
+Five 120 ms traces: outside write -> focus callback 17-18 ms (bound 300 ms); focus callback -> end-collapsed caret 34-35 ms (bound 150 ms). Reselect happened in 10/10 runs at 120/300/1000 ms.
+
+Nothing-else checks:
+a filled non-recomputed 13A, wait 1 s, End, 9: 1,234.009 -- appended, not selection replacement.
+b same with Tab/End/9 chained in 40.7 ms: 1,234.009 -- appended, not selection replacement.
+c click interior of filled 13A, 9: 1,2394.00 -- inserted at clicked interior position, not selection replacement.
+d click just-recomputed 13B right end within 100 ms of recompute, 9: COST. Trace places the click caret about 49 ms after the outside write; the guard reselected all and 9 replaced the recomputed amount. Box after leaving 9.00, saved 9.0.
+e Tab into zero 13A, type 42: box 42 as expected.

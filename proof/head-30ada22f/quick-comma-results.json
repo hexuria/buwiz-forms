@@ -1,0 +1,5 @@
+{"case": "insert9", "after_keys": "19,234.56", "after_leave": "19,234.56", "saved": 1234.56, "sentences": [], "shot": "/home/ubuntu/forms-validation/money-30ada-proof/quick-insert9.png"}
+{"case": "backspaces", "after_keys": "1,23", "after_leave": "123.00", "saved": 1234.56, "sentences": [], "shot": "/home/ubuntu/forms-validation/money-30ada-proof/quick-backspaces.png"}
+{"case": "1500comma50", "after_keys": "1500,50", "after_leave": "1,500.50", "saved": 0.0, "sentences": [], "shot": "/home/ubuntu/forms-validation/money-30ada-proof/quick-1500comma50.png"}
+{"case": "1500grouped", "after_keys": "1,500", "after_leave": "1,500.00", "saved": 0.0, "sentences": [], "shot": "/home/ubuntu/forms-validation/money-30ada-proof/quick-1500grouped.png"}
+{"case": "paste-invalid", "after_keys": "1500,50", "after_leave": "1,234.56", "saved": 1234.56, "sentences": ["Taxable Amount: 1500,50 is not an amount. The box kept 1,234.56. Use a point for centavos, and commas only between thousands."], "shot": "/home/ubuntu/forms-validation/money-30ada-proof/quick-paste-invalid.png"}

@@ -1,0 +1,47 @@
+{
+  "widening_active": true,
+  "A": [
+    {
+      "case": "backs",
+      "after_leave": "123.00",
+      "saved": 123.0
+    },
+    {
+      "case": "1500comma50",
+      "after_leave": "1,500.50",
+      "saved": 1500.5
+    },
+    {
+      "case": "1500grouped",
+      "after_leave": "1,500.00",
+      "saved": 1500.0
+    }
+  ],
+  "stray": "untested",
+  "stray_main_642bfc78": {
+    "db_rows": [
+      {
+        "atc": "",
+        "atc_description": "",
+        "taxable_amount": 0.0,
+        "tax_rate": 0.0,
+        "tax_due": 0.0
+      },
+      {
+        "atc": "PT040",
+        "atc_description": "",
+        "taxable_amount": 7777.0,
+        "tax_rate": 0.03,
+        "tax_due": 233.31
+      }
+    ],
+    "visible_rows": [
+      [
+        "fp-row-drpATC1-1",
+        "Row 2, PT040 \u00b7 7,777.00 \u00b7 3.0 \u00b7 233.31. Open"
+      ]
+    ],
+    "one_line": "MAIN 642bfc78: blank zero row remains in draft JSON; page visibly shows one row (only former row 2)."
+  },
+  "stray_30ada22f": "untested"
+}

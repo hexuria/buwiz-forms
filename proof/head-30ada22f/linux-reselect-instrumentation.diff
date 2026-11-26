@@ -1,0 +1,63 @@
+diff --git a/nsh/ui/fields.tsx b/nsh/ui/fields.tsx
+index acd518557..36b477137 100644
+--- a/nsh/ui/fields.tsx
++++ b/nsh/ui/fields.tsx
+@@ -228,7 +228,7 @@ function staleMaskAfterEmptyWrite(zero: string, raw: string): boolean[] {
+ // end-collapse arrives 41-43 ms after focus for a write about 20 ms before it, and does not arrive at 85-110 ms.
+ const WINDOWS_RESELECT_COLLAPSE_MS = 150;
+ const WINDOWS_RESELECT_WRITE_MS = 300;
+-const WINDOWS_RESELECT = platform.os === "windows";
++const WINDOWS_RESELECT = platform.os === "windows" || platform.os === "linux";
+ 
+ /**
+  * A TextField whose text goes through a mask on every edit, the caret kept beside the same digit. The box always shows
+@@ -304,6 +304,9 @@ function MaskedField(props: MaskedProps) {
+     props.field.writeProbe?.("caret", start, end);
+     input?.setSelection(start, end);
+   };
++  const trace = (event: string, data: Record<string, unknown> = {}) => {
++    if (props.field.testID?.includes("txtTax13B")) console.log(`MONEYTRACE ${Date.now()} ${props.field.testID} ${event} ${JSON.stringify(data)}`);
++  };
+   // A value set from outside (another box, a reload) shows; the field's own edits come back equal and change nothing.
+   effect(() => {
+     const value = props.value ?? "";
+@@ -323,6 +326,7 @@ function MaskedField(props: MaskedProps) {
+     const now = untracked(text);
+     if (!same(props.valueOf(now), value)) {
+       if (WINDOWS_RESELECT) outsideWriteAt = Date.now();
++      trace("outside-write", { value, now, shown: props.shown(value, false), writeAt: outsideWriteAt });
+       writeText(props.shown(value, false));
+       invalidActive = false;
+       rollbackReported = false;
+@@ -345,6 +349,7 @@ function MaskedField(props: MaskedProps) {
+   };
+ 
+   const change = (raw: string) => {
++    trace("change", { raw, selected, focused: untracked(focused) });
+     armWindowsReselect = false;
+     const prev = untracked(text);
+     const stored = props.value ?? "";
+@@ -518,6 +523,7 @@ function MaskedField(props: MaskedProps) {
+       onSubmit={props.field.onSubmit}
+       testID={props.field.testID}
+       onSelectionChange={(e) => {
++        trace("selection", { start: e.start, end: e.end, len: untracked(text).length, arm: armWindowsReselect, focusGap: windowsFocusAt ? Date.now() - windowsFocusAt : null });
+         if (WINDOWS_RESELECT && armWindowsReselect && !windowsReselectDone) {
+           const len = untracked(text).length;
+           const now = Date.now();
+@@ -525,6 +531,7 @@ function MaskedField(props: MaskedProps) {
+             // The second and only other deliberate selection write: Windows' proven recompute collapse repair.
+             windowsReselectDone = true;
+             armWindowsReselect = false;
++            trace("reselect", { start: 0, end: len, focusGap: Date.now() - windowsFocusAt });
+             writeCaret(0, len);
+           } else if (now - windowsFocusAt > WINDOWS_RESELECT_COLLAPSE_MS) {
+             armWindowsReselect = false;
+@@ -549,6 +556,7 @@ function MaskedField(props: MaskedProps) {
+           return;
+         }
+         focusCallbackSeen = true;
++        trace("focus-callback", { text: untracked(text), sinceOutsideWrite: outsideWriteAt ? Date.now() - outsideWriteAt : null });
+         focused.set(true);
+         boxText = undefined;
+         edited = false;

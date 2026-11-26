@@ -1,0 +1,27 @@
+Fault 2 causal chain at 93c575187749d8fa121c032bc489765c857810b3
+
+Runtime key: txtRate0 (Schedule 1 row 1 Tax Rate). Runtime kind was pct, not money.
+Reproduction fixture: tax_relief null / empty treaty and ATC / income 0 / rate 0 (inconsistent Schedule 1 row), the state that reproduced the original report.
+
+Ordered decisive trace (ms timestamps):
+1795703599327 session:txtRate0 edit-entry text=42 kind=pct stored=0.00
+1795703599649 session:txtRate0 applyFill-host-answer typed=42 before=0.00 hostValue=0.00 next=0.00
+1795703599650 session:txtRate0 syncShown-hostChanged-box-set typed=42 shown=0.00 stored=0.00 hostChanged=true
+1795703599858 MaskedField finishLeave-entry text=42 value/outsideValue/focusValue=0.00 edited=true
+1795703599860 finishLeave wrote/reported 42; FormSession blur staged 42 again
+1795703599880 second applyFill-host-answer typed=42 hostValue=0.00 next=0.00
+1795703599881 second syncShown-hostChanged-box-set typed=42 shown=0.00 hostChanged=true
+1795703599883 MaskedField writeText caller=outside-effect value=0.00 before=42
+1795703599883 outside-effect focused=false outcome=wrote
+
+Exact lines in unmodified HEAD:
+- crates/bir-core/src/forms/form_1601fq.rs:1164 writes the host field-map fallback txtRate0 = "0.00" whenever tax_relief is None, regardless of schedule1 row data.
+- nsh/screens/form/session.ts:2239 syncShown writes shownText(k) into the key's sValue because hostChanged() is true.
+- nsh/screens/form/session.ts:2266 hostChanged treats pct numerically; 42 differs from host "0.00".
+- nsh/ui/fields.tsx:322 MaskedField outside-value effect writes props.shown(value,false) after focus has left; that is the native text write to 0.00.
+
+Database read path used for the stored value: SQLite table form_drafts, column data_json, JSON key schedule1[0].tax_rate. After the click and Tab repro runs this read was 42.0 while host values txtRate0 were 0.00 and the visible field was 0.00.
+
+Why 42 becomes host zero: the ordinary direct binding writes the typed 42 into draft JSON, but Form1601FqDraft::field_map deliberately emits zero placeholders for every Schedule 1 row whenever tax_relief is None (lines 1154-1165). Therefore values_json returns txtRate0=0.00 although form_drafts.data_json.schedule1[0].tax_rate is 42.0. Form validation also says this state is not valid: when tax_relief is None and any Schedule 1 row is not unused, validation error schedule1 says: "You are not availing of tax relief under Special Law or International Tax Treaty. There is no need to fill up schedule 1."
+
+Control run: in a coherent row (tax relief/category answered, treaty AU, ATC WI330, income 1000), typing 42 produced hostValue=42.00, visible 42 after blur, and draft tax_rate 42.0; the fault did not reproduce.

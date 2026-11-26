@@ -1,0 +1,7 @@
+{
+  "a": {"result":"pass","observed":"1,234.009","meaning":"9 appended at end; no selection replacement","note":"raw JSON expected 12349 incorrectly because the focused box retained formatted decimals"},
+  "b": {"result":"pass","observed":"1,234.009","chain_ms":40.7,"meaning":"9 appended at end; no selection replacement/cost in a non-recomputed box"},
+  "c": {"result":"pass","observed":"1,2394.00","meaning":"9 landed inside the filled amount at the clicked interior position"},
+  "d": {"result":"cost observed","observed_after_keys":"9","observed_after_leave":"9.00","saved_13b":9.0,"meaning":"within-100ms click caret was misclassified; guard reselected all and typing replaced the recomputed amount"},
+  "e": {"result":"pass","observed":"42","meaning":"zero box typed 42 as expected"}
+}
