@@ -310,13 +310,14 @@ fn values_match_exact(official: &str, printed: &str, is_numeric: bool) -> bool {
     if off == prt {
         return true;
     }
+    // form-review/RULES.md section 7: official "0" / "0.00" for an
+    // untouched amount box prints blank; typed or computed zero may print as zero.
+    if normalize_number_for_compare(off).as_deref() == Some("0") && prt.is_empty() {
+        return true;
+    }
     if is_numeric {
         let off_n = normalize_number_for_compare(off);
         let prt_n = normalize_number_for_compare(prt);
-        // Official "0" / "0.00" may legitimately print blank or "0".
-        if off_n.as_deref() == Some("0") && prt.is_empty() {
-            return true;
-        }
         if off_n.is_some() && off_n == prt_n {
             return true;
         }

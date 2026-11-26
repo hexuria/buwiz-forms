@@ -284,6 +284,11 @@ fn official_matches_print_exact(official: &str, printed: &str) -> bool {
     {
         return true;
     }
+    // form-review/RULES.md section 7: an untouched amount box stays blank on
+    // paper even though the upload carries zero; typed or computed zero may print.
+    if norm_numeric(off) == Some(0.0) && prt.is_empty() {
+        return true;
+    }
     if let (Some(a), Some(b)) = (norm_numeric(off), norm_numeric(prt)) {
         if (a - b).abs() < 1e-6 {
             return true;

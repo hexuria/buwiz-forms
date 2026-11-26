@@ -390,6 +390,22 @@ pub struct Form1702MXReliefDetails {
     pub effectivity_until: [String; 3],
 }
 
+fn zero_lexeme(value: &str) -> bool {
+    let mut digit = false;
+    let mut dot = false;
+    value.trim().chars().all(|ch| match ch {
+        '0' => {
+            digit = true;
+            true
+        }
+        '.' if !dot => {
+            dot = true;
+            true
+        }
+        _ => false,
+    }) && digit
+}
+
 impl Form1702MXDraft {
     /// The print sheet's field map: the upload map plus `derived:` keys
     /// that only shape the print.
@@ -404,6 +420,7 @@ impl Form1702MXDraft {
         // so all joined schedules (Part II Items 14-16 and Schedules 1-10) print
         // the exact official values, skipping only official keys that
         // `1702mx-2018c/writer-cells.json` does not yet join or list in `not_joined`.
+        let untouched_amount_keys = self.untouched_amount_print_keys();
         for (k, v) in self.to_official_field_map() {
             if matches!(
                 k.as_str(),
@@ -428,6 +445,13 @@ impl Form1702MXDraft {
                         || k.ends_with("CF")
                         || k.ends_with("CG")))
             {
+                continue;
+            }
+            // form-review/RULES.md section 7: an untouched amount box stays
+            // blank on print even though the upload carries zero. `amount:
+            // None` marks it untouched; typed or computed zero is `Some(0)`.
+            if untouched_amount_keys.contains(&k) && zero_lexeme(&v) {
+                fields.insert(k, String::new());
                 continue;
             }
             fields.insert(k, v);

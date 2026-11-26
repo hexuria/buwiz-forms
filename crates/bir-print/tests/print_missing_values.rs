@@ -78,6 +78,11 @@ fn form_1801_prints_item5_tin_items_16_and_24_and_specify_boxes() {
     };
     d.other_special_deduction_description = "SPECIAL TREATY ALLOWANCE".into();
     d.other_special_deduction = 4_500_000.75;
+    // Keep this print fixture independent of the wall clock: the return's
+    // death date would otherwise accrue penalties after its one-year due date.
+    d.penalty.penalty_overrides.surcharge = Some(0.0);
+    d.penalty.penalty_overrides.interest = Some(0.0);
+    d.penalty.penalty_overrides.compromise = Some(0.0);
     d.compute();
 
     let map = d.print_field_map();
@@ -88,8 +93,8 @@ fn form_1801_prints_item5_tin_items_16_and_24_and_specify_boxes() {
     assert_eq!(printed_cell(&doc, "p1c15").0, "453");
     assert_eq!(printed_cell(&doc, "p1c56").0, "292323706");
     assert_eq!(printed_cell(&doc, "p1c57").0, "57");
-    assert_eq!(printed_cell(&doc, "p1c112").0, "23600398");
-    assert_eq!(printed_cell(&doc, "p1c114").0, "69");
+    assert_eq!(printed_cell(&doc, "p1c112").0, "17539422");
+    assert_eq!(printed_cell(&doc, "p1c114").0, "39");
     assert_eq!(printed_cell(&doc, "p2c259").0, "SPECIAL TREATY ALLOWANCE");
     assert_eq!(
         printed_cell(&doc, "p2c261").0,
@@ -325,6 +330,12 @@ fn form_2200s_prints_schedule1_rows_and_part_iii_items() {
     assert_eq!(printed_cell(&doc, "p2c83").0, "234,567,890.34");
     assert_eq!(printed_cell(&doc, "p2c84").0, "5,000.25");
     assert_eq!(printed_cell(&doc, "p2c85").0, "60,003.00");
+
+    // form-review/RULES.md section 7: untouched fixed-row amount boxes stay
+    // blank even though the upload carries zero.
+    assert_eq!(printed_cell(&doc, "p2c34").0, "");
+    assert_eq!(printed_cell(&doc, "p2c35").0, "");
+    assert_eq!(printed_cell(&doc, "p2c36").0, "");
 
     // Page 2 Schedule 1 Others row 1
     assert_eq!(printed_cell(&doc, "p2c100").0, "XB010");
