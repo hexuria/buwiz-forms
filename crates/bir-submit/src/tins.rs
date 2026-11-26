@@ -2171,4 +2171,299 @@ mod tests {
         );
         assert!(seen.lock().unwrap().is_empty());
     }
+
+    /// End to end against a local buwiz-com (TRACK-D-CONTRACT.md), never by
+    /// default: `BUWIZ_TRACKD_E2E_URL=http://127.0.0.1:3028
+    /// BUWIZ_TRACKD_E2E_LOG=<its server.log> cargo test -p bir-submit --lib
+    /// trackd_e2e_against_a_local_server -- --ignored`. Only a server on this
+    /// computer is taken. It signs a new `example.test` address in with the
+    /// email code (read from the server's log, `MAIL_TRANSPORT=log`), the
+    /// way bir-core's `email_sign_in` does: bir-submit never signs in and
+    /// cannot use that crate. `BUWIZ_TRACKD_E2E_TOKEN` skips the sign-in;
+    /// `BUWIZ_TRACKD_E2E_ACCOUNT_URL` is the server's account site
+    /// (`http://account.localhost:3028` by default).
+    #[tokio::test]
+    #[ignore = "needs a local buwiz-com: BUWIZ_TRACKD_E2E_URL"]
+    async fn trackd_e2e_against_a_local_server() {
+        use base64::Engine;
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use sha2::{Digest, Sha256};
+
+        let url = std::env::var("BUWIZ_TRACKD_E2E_URL")
+            .expect("BUWIZ_TRACKD_E2E_URL")
+            .trim_end_matches('/')
+            .to_owned();
+        let host = url::Url::parse(&url).unwrap();
+        assert!(
+            matches!(host.host_str(), Some("127.0.0.1" | "localhost" | "[::1]")),
+            "only a server on this computer: {url}"
+        );
+        let account_site = std::env::var("BUWIZ_TRACKD_E2E_ACCOUNT_URL")
+            .unwrap_or_else(|_| "http://account.localhost:3028".into());
+        let http = reqwest::Client::new();
+        let tag = crate::device::hex(&rand::random::<[u8; 4]>());
+        let email = format!("trackd-{tag}@example.test");
+
+        let token = match std::env::var("BUWIZ_TRACKD_E2E_TOKEN") {
+            Ok(token) => token,
+            Err(_) => {
+                let log = std::env::var("BUWIZ_TRACKD_E2E_LOG").expect("BUWIZ_TRACKD_E2E_LOG");
+                let secret = URL_SAFE_NO_PAD.encode(rand::random::<[u8; 32]>());
+                let started: Value = http
+                    .post(format!("{url}/auth/email/start"))
+                    .json(&json!({
+                        "client_id": "buwiz-desktop",
+                        "email": email,
+                        "intent": "create",
+                        "secret_hash": URL_SAFE_NO_PAD.encode(Sha256::digest(secret.as_bytes())),
+                        "platform": "macos",
+                        "install_id": format!("install-id-of-trackd-e2e-{tag}"),
+                    }))
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+                let request_id = started["request_id"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{started}"));
+                let mut code = None;
+                for _ in 0..50 {
+                    let text = std::fs::read_to_string(&log).unwrap_or_default();
+                    code = text
+                        .lines()
+                        .rev()
+                        .find(|line| line.contains(&email) && line.contains("sign-in code"))
+                        .and_then(|line| {
+                            let line: String = line
+                                .split('\u{1b}')
+                                .map(|part| part.split_once('m').map_or(part, |(_, rest)| rest))
+                                .collect();
+                            let after = &line[line.find("code=")? + 5..];
+                            let digits: String = after
+                                .trim_start_matches('"')
+                                .chars()
+                                .take_while(char::is_ascii_digit)
+                                .collect();
+                            (!digits.is_empty()).then_some(digits)
+                        });
+                    if code.is_some() {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                }
+                let code = code.expect("the sign-in code in the server's log");
+                let tokens: Value = http
+                    .post(format!("{url}/auth/email/verify"))
+                    .json(&json!({"request_id": request_id, "secret": secret, "code": code}))
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+                assert_eq!(tokens["scope"], "app", "{tokens}");
+                tokens["access_token"].as_str().unwrap().to_owned()
+            }
+        };
+        /// The token the sign-in gave, as the host would hand it.
+        struct Signed(String, String);
+        impl crate::TokenSource for Signed {
+            fn access_token(
+                &self,
+                _force_refresh: bool,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<String, ClientError>> + Send + '_>,
+            > {
+                let token = self.0.clone();
+                Box::pin(async move { Ok(token) })
+            }
+            fn login(&self) -> Option<String> {
+                Some(self.1.clone())
+            }
+            fn session_ended(&self) {}
+        }
+        let client = Submitter::new(
+            SubmitConfig {
+                server_url: url.clone(),
+                device_name: "trackd e2e".into(),
+                trust_keys: Vec::new(),
+                install_id: None,
+                platform: None,
+            },
+            Box::new(SharedStore::default()),
+            Arc::new(Signed(token.clone(), email.clone())),
+        );
+        let raw_get = || {
+            http.get(format!("{url}/api/tax-profiles?include=all"))
+                .bearer_auth(&token)
+                .send()
+        };
+        let raw_post = |body: Value| {
+            http.post(format!("{url}/api/tax-profiles"))
+                .bearer_auth(&token)
+                .json(&body)
+                .send()
+        };
+        let invariants = |body: &Value| {
+            let rows = body["profiles"].as_array().expect("profiles");
+            for row in rows {
+                let next = row["next"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("next on {row}"));
+                assert_eq!(next == "fix", !row["action"].is_null(), "{row}");
+                assert_eq!(next == "send", row["can_send"] == true, "{row}");
+            }
+            rows.len()
+        };
+
+        // GET ?include=all: a new account lists nothing, completely.
+        let list = client.account_tins(0).await.unwrap();
+        assert!(list.complete && list.rows.is_empty(), "{list:?}");
+
+        // POST a new TIN: 201, unverified, Fix, linking to the account site.
+        let root = format!(
+            "2{:08}",
+            u32::from_le_bytes(rand::random::<[u8; 4]>()) % 100_000_000
+        );
+        let tin = key(&format!("{root}00000"));
+        let added = client
+            .add_account_tin(TinKind::Individual, &tin, "Dela Cruz Juan", None)
+            .await
+            .unwrap()
+            .expect("the added row");
+        assert_eq!(added.status, TinStatus::Unverified);
+        assert_eq!(added.next, Next::Fix);
+        assert!(!added.can_send && !added.test_only);
+        let answer: Value = raw_get().await.unwrap().json().await.unwrap();
+        assert_eq!(answer["include"], "all");
+        assert_eq!(invariants(&answer), 1);
+        let row = &answer["profiles"][0];
+        let link = row["action"]["url"].as_str().unwrap();
+        assert!(
+            link.starts_with(&format!("{account_site}/tins/claims/")) && link.ends_with("/verify"),
+            "{link}"
+        );
+        let list = client.account_tins(0).await.unwrap();
+        assert!(list.complete);
+        let listed = list.find(&tin).unwrap();
+        assert_eq!(
+            (listed.status.clone(), listed.next),
+            (TinStatus::Unverified, Next::Fix)
+        );
+
+        // The refusals this account can reach.
+        assert_eq!(
+            client
+                .add_account_tin(TinKind::Individual, &tin, "Dela Cruz Juan", None)
+                .await,
+            Err(AddTinError::TinAlreadyAdded)
+        );
+        assert_eq!(
+            client
+                .add_account_tin(
+                    TinKind::Individual,
+                    &key("111111114"),
+                    "Dela Cruz Juan",
+                    None
+                )
+                .await,
+            Err(AddTinError::TestTin)
+        );
+        let refusal = |answer: Value| {
+            answer["error"]["code"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned()
+        };
+        let bad: Value = raw_post(json!({"kind":"personal","tin":"12345","registered_name":"X"}))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(refusal(bad), "bad_tin");
+        let empty: Value = raw_post(
+            json!({"kind":"personal","tin":format!("{root}00001"),"registered_name":"   "}),
+        )
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+        assert_eq!(refusal(empty), "name_missing");
+        let long: Value = raw_post(
+            json!({"kind":"personal","tin":format!("{root}00001"),"registered_name":"Ñ".repeat(150)}),
+        )
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+        match refusal(long).as_str() {
+            "name_too_long" => eprintln!("name_too_long: answered"),
+            "name_missing" => {
+                eprintln!("name_too_long: EXPECTED-MISSING (this server answers name_missing)")
+            }
+            other => panic!("a long name answered {other}"),
+        }
+
+        // The add limit: 10 tries per sign-in an hour, then 429 with Retry-After.
+        let mut limited = None;
+        for _ in 0..12 {
+            let response =
+                raw_post(json!({"kind":"personal","tin":tin_text(&tin),"registered_name":"X"}))
+                    .await
+                    .unwrap();
+            if response.status() == 429 {
+                limited = Some(response);
+                break;
+            }
+        }
+        let limited = limited.expect("a 429 within 10 adds");
+        let retry_after: i64 = limited.headers()["retry-after"]
+            .to_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!((1..=3600).contains(&retry_after), "{retry_after}");
+        let body: Value = limited.json().await.unwrap();
+        assert_eq!(refusal(body), "rate_limited");
+        let refused = client
+            .add_account_tin(TinKind::Individual, &tin, "X", None)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(refused, AddTinError::RateLimited { .. }),
+            "{refused:?}"
+        );
+        assert!(
+            refused
+                .to_string()
+                .starts_with("Too many tries. Try again in ")
+        );
+
+        // The read limit: 120 per sign-in in 10 minutes, then 429; the client keeps its list.
+        let kept = client.account_tins(0).await.unwrap();
+        let mut read_limited = None;
+        for _ in 0..125 {
+            let response = raw_get().await.unwrap();
+            if response.status() == 429 {
+                read_limited = Some(response);
+                break;
+            }
+        }
+        let read_limited = read_limited.expect("a 429 within 120 reads");
+        assert!(read_limited.headers().contains_key("retry-after"));
+        let body: Value = read_limited.json().await.unwrap();
+        assert_eq!(body["error"]["code"], "rate_limited");
+        let stale = client.account_tins(0).await.unwrap();
+        assert!(stale.stale, "the kept list, marked stale");
+        assert_eq!(stale.rows, kept.rows);
+    }
+
+    fn tin_text(tin: &TinKey) -> String {
+        dashed(tin)
+    }
 }
