@@ -1,0 +1,60 @@
+pills: hover at Yes (719.5,761.0) 300ms screenshot taken
+pills-amended-c1: click Yes at (719.5,761.0) before={'yes': False, 'no': True} after={'yes': True, 'no': False} changed=True
+pills-amended-c2: click No at (760.5,761.0) before={'yes': True, 'no': False} after={'yes': False, 'no': True} changed=True
+pills-amended-c3: click Yes at (719.5,761.0) before={'yes': False, 'no': True} after={'yes': True, 'no': False} changed=True
+pills-amended-c4: click No at (760.5,761.0) before={'yes': True, 'no': False} after={'yes': False, 'no': True} changed=True
+pills-amended-c5: click Yes at (719.5,761.0) before={'yes': False, 'no': True} after={'yes': True, 'no': False} changed=True
+pills-amended-c6: click No at (760.5,761.0) before={'yes': True, 'no': False} after={'yes': False, 'no': True} changed=True
+pills-amended-c7: click Yes at (719.5,761.0) before={'yes': False, 'no': True} after={'yes': True, 'no': False} changed=True
+pills-amended-c8: click No at (760.5,761.0) before={'yes': True, 'no': False} after={'yes': False, 'no': True} changed=True
+pills-amended-c9: click Yes at (719.5,761.0) before={'yes': False, 'no': True} after={'yes': True, 'no': False} changed=True
+pills-amended-c10: click No at (760.5,761.0) before={'yes': True, 'no': False} after={'yes': False, 'no': True} changed=True
+pills AMENDED RESULT: 10/10 changed
+pills-qtr-c1: click qtr_1 at (717.0,678.0) before={1: False, 2: False, 3: False, 4: True} after={1: False, 2: False, 3: False, 4: True} changed=False
+pills-qtr-c2: click qtr_2 at (758.5,678.0) before={1: False, 2: False, 3: False, 4: True} after={1: False, 2: False, 3: False, 4: True} changed=False
+pills-qtr-c3: click qtr_3 at (802.0,678.0) before={1: False, 2: False, 3: False, 4: True} after={1: False, 2: False, 3: False, 4: True} changed=False
+pills-qtr-c4: click qtr_4 at (844.0,678.0) before={1: False, 2: False, 3: False, 4: True} after={1: False, 2: False, 3: False, 4: True} changed=False
+pills-qtr-c5: click qtr_1 at (717.0,678.0) before={1: False, 2: False, 3: False, 4: True} after={1: False, 2: False, 3: False, 4: True} changed=False
+pills-qtr-c6: click qtr_2 at (758.5,678.0) before={1: False, 2: False, 3: False, 4: True} after={1: False, 2: False, 3: False, 4: True} changed=False
+pills-qtr-c7: click qtr_3 at (802.0,678.0) before={1: False, 2: False, 3: False, 4: True} after={1: False, 2: False, 3: False, 4: True} changed=False
+pills-qtr-c8: click qtr_4 at (844.0,678.0) before={1: False, 2: False, 3: False, 4: True} after={1: False, 2: False, 3: False, 4: True} changed=False
+pills-qtr-c9: click qtr_1 at (717.0,678.0) before={1: False, 2: False, 3: False, 4: True} after={1: False, 2: False, 3: False, 4: True} changed=False
+pills-qtr-c10: click qtr_2 at (758.5,678.0) before={1: False, 2: False, 3: False, 4: True} after={1: False, 2: False, 3: False, 4: True} changed=False
+pills QUARTER RESULT: 0/10 changed
+pills-contrast-nav: click nav-calendar at (124.0,204.0) navigated-or-responded=True
+pq-c1: qtr_1 missing
+pq-c2: qtr_2 missing
+pq-c3: qtr_3 missing
+pq-c4: qtr_4 missing
+pq-c5: qtr_1 missing
+pq-c6: qtr_2 missing
+pq-c7: qtr_3 missing
+pq-c8: qtr_4 missing
+pq-c9: qtr_1 missing
+pq-c10: qtr_2 missing
+pills QUARTER-ENABLED RESULT: 0/10 changed
+pq-c1: click qtr_1 at (717.0,613.0) before={1: False, 2: False, 3: False, 4: False} after={1: True, 2: False, 3: False, 4: False} changed=True
+pq-c2: click qtr_2 at (758.5,613.0) before={1: True, 2: False, 3: False, 4: False} after={1: True, 2: False, 3: False, 4: False} changed=False
+pq-c3: click qtr_3 at (802.0,613.0) before={1: True, 2: False, 3: False, 4: False} after={1: True, 2: False, 3: False, 4: False} changed=False
+pq-c4: click qtr_4 at (844.0,613.0) before={1: True, 2: False, 3: False, 4: False} after={1: True, 2: False, 3: False, 4: False} changed=False
+pq-c5: click qtr_1 at (717.0,613.0) before={1: True, 2: False, 3: False, 4: False} after={1: True, 2: False, 3: False, 4: False} changed=False
+pq-c6: click qtr_2 at (758.5,613.0) before={1: True, 2: False, 3: False, 4: False} after={1: True, 2: False, 3: False, 4: False} changed=False
+pq-c7: click qtr_3 at (802.0,613.0) before={1: True, 2: False, 3: False, 4: False} after={1: True, 2: False, 3: False, 4: False} changed=False
+pq-c8: click qtr_4 at (844.0,613.0) before={1: True, 2: False, 3: False, 4: False} after={1: True, 2: False, 3: False, 4: False} changed=False
+pq-c9: click qtr_1 at (717.0,613.0) before={1: True, 2: False, 3: False, 4: False} after={1: True, 2: False, 3: False, 4: False} changed=False
+pq-c10: click qtr_2 at (758.5,613.0) before={1: True, 2: False, 3: False, 4: False} after={1: True, 2: False, 3: False, 4: False} changed=False
+pills QUARTER-ENABLED RESULT: 1/10 changed
+pills-step4 left-quarter: target=(747.8,613.0) cursor-at=Point(x=747, y=613) WindowFromPoint hwnd=131772 class='NshWindow' title='eBIRForms'
+pills-step4 right-quarter: target=(769.2,613.0) cursor-at=Point(x=769, y=613) WindowFromPoint hwnd=131772 class='NshWindow' title='eBIRForms'
+pills-step4 top-third: target=(758.0,605.0) cursor-at=Point(x=758, y=605) WindowFromPoint hwnd=131772 class='NshWindow' title='eBIRForms'
+pills-step4 bottom-third: target=(758.0,621.0) cursor-at=Point(x=758, y=621) WindowFromPoint hwnd=131772 class='NshWindow' title='eBIRForms'
+pills-step4 center: target=(758.5,613.0) cursor-at=Point(x=758, y=613) WindowFromPoint hwnd=131772 class='NshWindow' title='eBIRForms'
+pills-step4 probe click qtr_2 center: before={1: True, 2: False, 3: False, 4: False} after={1: True, 2: False, 3: False, 4: False}
+pills-step4 probe2 qtr_3: {1: True, 2: False, 3: False, 4: False}
+pills-step4 agent-press-qtr2: {1: True, 2: False, 3: False, 4: False}
+pills-step4 slowclick-qtr3: {1: True, 2: False, 3: False, 4: False}
+pills-step4 doubleclick-qtr4: {1: True, 2: False, 3: False, 4: False}
+pills-step4 keyboard-right: {1: True, 2: False, 3: False, 4: False}
+pills-step4 keyboard-right2: {1: True, 2: False, 3: False, 4: False}
+pills-step4 after-period-set click-qtr2: {1: False, 2: False, 3: False, 4: False}
+pills-step4 after-period-set agentpress-qtr3: {1: False, 2: False, 3: True, 4: False}
