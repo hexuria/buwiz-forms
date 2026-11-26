@@ -1,0 +1,143 @@
+==== CASE 1 B1 delete-row-with-focused-cell ====
+--- c1a-r1: rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1a-r1 typed 500 into row 2 amount box, NOT leaving
+c1a-r1 rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1a-r1 rows after:  ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1a-r1 total after: 120.00
+c1a-r1 500-appears: False
+c1a-r1 row-count-ok: True (2 vs 2)
+c1a-r1-rebuild rebuild: adding row (PT040 2000)
+==== CASE 1 B1 delete-row-with-focused-cell ====
+--- c1a-r2: rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1a-r2 typed 500 into row 2 amount box, NOT leaving
+c1a-r2 rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1a-r2 rows after:  ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00']
+c1a-r2 total after: 30.00
+c1a-r2 500-appears: False
+c1a-r2 row-count-ok: True (1 vs 1)
+c1a-r2-rebuild rebuild: adding row (PT010 3000)
+c1a-r2-rebuild rebuild: adding row (PT010 3000)
+c1a-r2-rebuild rebuild done: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT010 · 3,000.00 · 3.0 · 90.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+--- c1a-r3: rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT010 · 3,000.00 · 3.0 · 90.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1a-r3 typed 500 into row 2 amount box, NOT leaving
+c1a-r3 rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT010 · 3,000.00 · 3.0 · 90.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1a-r3 rows after:  ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1a-r3 total after: 120.00
+c1a-r3 500-appears: False
+c1a-r3 row-count-ok: True (2 vs 2)
+c1a-r3-rebuild rebuild: adding row (PT010 1000)
+c1a-r3-rebuild rebuild done: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+==== CASE 1a DONE ====
+--- c1a-r4: rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1a-r4 typed 500 into row 2 amount, NOT leaving
+c1a-r4 rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1a-r4 rows after:  ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1a-r4 total after: 120.00
+c1a-r4 500-appears: False
+c1a-r4 row-count-ok: True (2 vs 2)
+c1a-r4-rebuild rebuild done: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+--- c1b-r1: rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1b-r1 typed 500 into row 3 amount, NOT leaving
+c1b-r1 rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1b-r1 rows after:  ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00']
+c1b-r1 total after: 90.00
+c1b-r1 500-appears: False
+c1b-r1 row-count-ok: True (2 vs 2)
+c1b-r1-rebuild rebuild done: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+--- c1b-r2: rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1b-r2 typed 500 into row 3 amount, NOT leaving
+c1b-r2 rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1b-r2 rows after:  ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00']
+c1b-r2 total after: 90.00
+c1b-r2 500-appears: False
+c1b-r2 row-count-ok: True (2 vs 2)
+c1b-r2-rebuild rebuild done: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+--- c1b-r3: rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1b-r3 typed 500 into row 3 amount, NOT leaving
+pre-c1b-redo rebuild done: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+--- c1b-r2redo: rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1b-r2redo typed 500 into row 3 amount, NOT leaving
+c1b-r2redo rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1b-r2redo rows after:  ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00']
+c1b-r2redo total after: 90.00
+c1b-r2redo 500-appears: False
+c1b-r2redo row-count-ok: True (2 vs 2)
+c1b-r2redo-rebuild rebuild done: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+--- c1b-r3: rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1b-r3 typed 500 into row 3 amount, NOT leaving
+c1b-r3 rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT010 · 3,000.00 · 3.0 · 90.00']
+c1b-r3 rows after:  ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00']
+c1b-r3 total after: 90.00
+c1b-r3 500-appears: False
+c1b-r3 row-count-ok: True (2 vs 2)
+c1b-r3-rebuild rebuild done: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT040 · 2,000.00 · 3.0 · 60.00']
+--- c1c-control: rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT040 · 2,000.00 · 3.0 · 60.00']
+c1c-control typed 500 into row 2 amount, NOT leaving
+c1c-control tabbed out before delete (control)
+c1c-control rows before: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT040 · 2,000.00 · 3.0 · 60.00']
+c1c-control rows after:  ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 3, PT040 · 2,000.00 · 3.0 · 60.00']
+c1c-control total after: 90.00
+c1c-control 500-appears: False
+c1c-control row-count-ok: True (2 vs 2)
+c1c-rebuild rebuild done: ['Row 1, PT010 · 1,000.00 · 3.0 · 30.00', 'Row 2, PT040 · 2,000.00 · 3.0 · 60.00', 'Row 3, PT040 · 2,000.00 · 3.0 · 60.00']
+==== CASE 1 ALL DONE ====
+==== CASE 2 B2 print/save settle focused box ====
+c2 setup: txt15 after settle value='value': '1,234.56'
+c2a: typed 1500,50 in txt15, NOT leaving; opening print preview by REAL click
+c2a: print preview opened, screenshot taken
+c2: preview closed, file menu shot taken
+c2: File menu opened (attempt 2)
+c2b: 1500,50 typed in-flight, checking topbar save affordance
+c2b: after ctrl+S + Tab, txt15 value='value': '1,500.50'
+c2b: fp-label-2:4 note 'Total Tax Credits/Payments (Sum of Items 15 to 17)' b=(697.0,974.0,708.
+==== CASE 3 grey zero, fast typing, 10 runs ====
+c3-r1: box-before= typed=15000.50@0ms saved='value': '15,000.50'
+c3-r2: box-before= typed=15000.50@0ms saved=
+c3-r3: box-before= typed=15000.50@0ms saved='value': '15,000.50'
+c3-r4: box-before= typed=15000.50@0ms saved=
+c3-r5: box-before= typed=15000.50@0ms saved='value': '15,000.50'
+c3-r6: box-before= typed=15000.50@0ms saved=
+c3-r7: box-before= typed=15000.50@0ms saved='value': '15,000.50'
+c3-r8: box-before= typed=15000.50@0ms saved=
+c3-r9: box-before= typed=15000.50@0ms saved='value': '15,000.50'
+c3-r10: box-before= typed=15000.50@0ms saved=
+==== CASE 3 DONE ====
+c3-probe: txt16 manual run saved=
+==== CASE 3 extra: txt17-only runs 11-15 (box reset to grey-zero between runs; txt16 invalid target - domain validation requires Amended) ====
+c3-r11: typed=15000.50@0ms saved='value': '15,000.50'
+c3-r12: typed=15000.50@0ms saved='value': '15,000.50'
+c3-r13: typed=15000.50@0ms saved='value': '15,000.50'
+c3-r14: typed=15000.50@0ms saved='value': '15,000.50'
+c3-r15: typed=15000.50@0ms saved='value': '15,000.50'
+==== CASE 3b DONE ====
+==== CASE 5 commas ====
+c5a-decimal-comma: typed=1500,50 box-after='value': '1,500.50'
+c5a-msg: n16204 note 'Item 17 description is required when an other tax credit/payment is entered' b=(697.0,707.0,320.0,39.0) en=True foc=False
+c5a-malformed: typed=15,00,50 box-after=
+c5b-msg: n16314 note 'Item 17: 15,00,50 is not an amount. The box kept 0.00. Use a point for centavos, and commas only between thousands.' b=(1033.0,683.0,230.0,59.0) en=True foc=False
+==== CASE 5 DONE ====
+c4 convert: save-state=["fp-save-state note '✓ Saved' b=(1398.0,135.0,50.0,20.0) en=True foc=False"]
+c4 convert: sample-chip=[]
+==== CASE 4 recomputed box 2550M 13A/13B ====
+==== CASE 4 recomputed box 2550M 13A/13B ====
+c4-0ms-r1: delay=0ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-0ms-r2: delay=0ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-0ms-r3: delay=0ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-0ms-r4: delay=0ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-0ms-r5: delay=0ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-0ms-r6: delay=0ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-0ms-r7: delay=0ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-0ms-r8: delay=0ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-0ms-r9: delay=0ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-0ms-r10: delay=0ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-120ms-r1: delay=120ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-120ms-r2: delay=120ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-120ms-r3: delay=120ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-120ms-r4: delay=120ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-120ms-r5: delay=120ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-120ms-r6: delay=120ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-120ms-r7: delay=120ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-120ms-r8: delay=120ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-120ms-r9: delay=120ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+c4-120ms-r10: delay=120ms saved-13B='value': '999.00' 13A='value': '1,000.00'
+==== CASE 4 DONE ====
