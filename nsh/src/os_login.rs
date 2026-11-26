@@ -58,10 +58,14 @@ pub fn owner_check() -> OwnerCheck {
 }
 
 /// Asks the OS to prove the device's owner is present, once, with `reason` as the sheet's text. Blocks until the
-/// person answers. Windows: `RequestVerificationForWindowAsync`, owned by the app's window (`windows.rs`).
-pub fn prove_owner(reason: &str) -> OwnerCheckResult {
+/// person answers.
+///
+/// `window_title` is the exact title of the window that owns the sheet: the app's main window ("eBIRForms", from
+/// nsh.json). Windows: `RequestVerificationForWindowAsync`, owned by our NSH window with that title, never the print
+/// preview (`windows.rs`); no such window, no prompt. Other targets ignore it.
+pub fn prove_owner(reason: &str, window_title: &str) -> OwnerCheckResult {
     let answer = prove_owner_with(crate::door::test_environment(), || {
-        platform_prove_owner(reason)
+        platform_prove_owner(reason, window_title)
     });
     tracing::info!(?answer, "os_login prove_owner");
     answer
@@ -93,8 +97,8 @@ fn platform_owner_check() -> OwnerCheck {
 }
 
 #[cfg(windows)]
-fn platform_prove_owner(reason: &str) -> OwnerCheckResult {
-    self::windows::prove_owner(reason)
+fn platform_prove_owner(reason: &str, window_title: &str) -> OwnerCheckResult {
+    self::windows::prove_owner(reason, window_title)
 }
 
 // Every other target, until its half lands (Apple: ios-submission's `apple.rs`).
@@ -104,7 +108,7 @@ fn platform_owner_check() -> OwnerCheck {
 }
 
 #[cfg(not(windows))]
-fn platform_prove_owner(_reason: &str) -> OwnerCheckResult {
+fn platform_prove_owner(_reason: &str, _window_title: &str) -> OwnerCheckResult {
     OwnerCheckResult::Unavailable
 }
 
