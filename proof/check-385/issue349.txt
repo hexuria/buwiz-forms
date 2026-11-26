@@ -1,0 +1,17 @@
+# 349: agent: Three discovery records are written at listener startup; a reader can briefly see one named after the running program
+state: open
+
+Found while tracing an intermittent failure of `nsh/tests/agent.rs` (`an_external_agent_creates_the_demo_taxpayer_opens_a_2551q_fills_a_box_and_reads_it_back`, the assertion that the discovery record's executable is "bir") on a branch cut before #311.
+
+**What happens.** When the assistant listener starts, three records are written one after another to the same file `hosts/<pid>-<port>.json`:
+
+1. the pinned gpui-agent library's own record, written by its serve thread and named after the running program;
+2. the host's `publish_current`, named after the running program again;
+3. the correct record with the executable "bir".
+
+#311 made the app wait so that its record is the last one written, which is why the test passes on main (50 of 50 with default threads and 50 of 50 serial at a head that contains it). But a reader of the hosts folder in between, such as an outside tool listing running hosts, can still see the first or second record for a few milliseconds. In a release build the running program is "bir", so all three records agree; the wrong name shows only where the program has another name, such as a test binary.
+
+**A change that removes two of the three writes** is on the fork: `uriahg17/buwiz-forms`, branch `fix/agent-single-discovery-record`, commit `f7d87513` (one commit on main `00a20033`, no pull request). `try_start` no longer publishes; it waits out the library's one write, and the caller publishes the one correct record. The headless host had the same sequence and waits too. With it the agent test step passed 50 of 50 both ways. The remaining first write is the library's and can only be removed there.
+
+Not pursued further by the forms work: it is not a forms change. Filed so the finding is not lost.
+

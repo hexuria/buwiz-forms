@@ -1,0 +1,79 @@
+label: main
+repo: C:\Users\Administrator\builds\check-385\main\buwiz-forms
+command: cargo test --manifest-path Cargo.toml --features agent --test agent an_external_agent_creates_the_demo_taxpayer_opens_a_2551q_fills_a_box_and_reads_it_back -- --nocapture
+cwd: C:\Users\Administrator\builds\check-385\main\buwiz-forms\nsh
+test process exit: 0
+candidate runtime dirs: C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv
+hosts first seen ms: 4755.0105
+first record ms: 4755.0105
+stop reason: two seconds after first record content
+
+DISTINCT CONTENT OBSERVED BY POLLING, IN ORDER
+4755.011 ms sha256=528fcb5e5ced350b174f9fd0b2a593df51abf496d8ffb13db0613ae54c02dadd size=110 path=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json
+{
+  "addr": "127.0.0.1:1",
+  "pid": 1760,
+  "app": "bir-shell",
+  "executable": "agent-adb111aefb026f75.exe"
+}
+---
+4760.523 ms sha256=a69b1e31d6212eee4d106090cafa14bded3ac068fc87340df0639233f1b07485 size=87 path=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json
+{
+  "addr": "127.0.0.1:1",
+  "pid": 1760,
+  "app": "bir-shell",
+  "executable": "bir"
+}
+---
+4922.810 ms ABSENT C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json
+4923.936 ms ABSENT C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json
+
+ALL POLL TRANSITIONS
+4755.011 ms content sha256=528fcb5e5ced350b174f9fd0b2a593df51abf496d8ffb13db0613ae54c02dadd size=110 C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json
+4760.523 ms content sha256=a69b1e31d6212eee4d106090cafa14bded3ac068fc87340df0639233f1b07485 size=87 C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json
+4922.810 ms read_error C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json [Errno 2] No such file or directory: 'C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\1760-1.json'
+4923.936 ms absent C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json 
+
+record rename-into-place events: 3
+watchdog event timestamps are event-delivery times, not exact write times; polling timestamps are sample times
+
+WATCHDOG EVENTS
+5881.038 ms created src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts dest= 
+5881.180 ms created src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\.1760-1.json.tmp dest= 
+5881.286 ms modified src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\.1760-1.json.tmp dest= 
+5881.531 ms moved src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\.1760-1.json.tmp dest=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json 
+5881.737 ms modified src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts dest= 
+5881.835 ms created src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\.1760-1.json.tmp dest= 
+5881.932 ms modified src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\.1760-1.json.tmp dest= 
+5882.026 ms deleted src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json dest= 
+5882.168 ms moved src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\.1760-1.json.tmp dest=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json 
+5882.242 ms modified src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts dest= 
+5882.372 ms deleted src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json dest= 
+5882.560 ms modified src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts dest= 
+5882.656 ms created src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\.1760-1.json.tmp dest= 
+5882.804 ms modified src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\.1760-1.json.tmp dest= 
+5882.891 ms modified src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts dest= 
+5882.936 ms moved src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\.1760-1.json.tmp dest=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json 
+5882.980 ms modified src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts dest= 
+5883.021 ms deleted src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts\1760-1.json dest= 
+5883.069 ms modified src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts dest= 
+5883.116 ms deleted src=C:\Users\Administrator\AppData\Local\Temp\.tmpeyxnTv\hosts dest= 
+
+TEST OUTPUT TAIL
+warning: patch `nsh-cli v0.6.1 (C:\Users\Administrator\builds\check-385\main\nsh\crates\nsh-cli)` was not used in the crate graph
+warning: patch `nsh-ios-host v0.6.1 (C:\Users\Administrator\builds\check-385\main\nsh\crates\nsh-ios-host)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.47s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests\agent.rs (C:\Users\Administrator\builds\check-385\main\buwiz-forms\target-check-385\debug\deps\agent-adb111aefb026f75.exe)
+
+running 1 test
+gpui-agent listening on 127.0.0.1:1 (platform=desktop, app=bir-shell)
+test an_external_agent_creates_the_demo_taxpayer_opens_a_2551q_fills_a_box_and_reads_it_back ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.40s
+

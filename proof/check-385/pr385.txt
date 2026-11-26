@@ -1,0 +1,16 @@
+# 385: agent: The listener publishes exactly one discovery record
+state: open
+
+Fixes #349.
+
+## What changes
+
+The agent listener publishes exactly one discovery record, the right one. Before, the listener could publish duplicate or stale discovery records, so an external client (the way `bir-mcp` is one) could connect to the wrong record or see more than one. Touches `crates/bir-app-api/src/agent/headless.rs`, `crates/bir-app-api/src/agent/mod.rs` and `nsh/src/agent.rs`, rebased from f7d87513 onto current main.
+
+## Tests and results (Linux)
+
+- `bir-app-api` lib with the `agent` feature: 844 passed / 0 failed / 7 ignored
+- `nsh/tests/agent.rs` (`--features agent`): 7 passed / 0 failed
+
+Not yet: an independent check; CI
+

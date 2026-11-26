@@ -1,0 +1,143 @@
+{
+  "label": "pr",
+  "repo": "C:\\Users\\Administrator\\builds\\check-385\\pr\\buwiz-forms",
+  "command": "cargo test --manifest-path Cargo.toml --features agent --test agent an_external_agent_creates_the_demo_taxpayer_opens_a_2551q_fills_a_box_and_reads_it_back -- --nocapture",
+  "cwd": "C:\\Users\\Administrator\\builds\\check-385\\pr\\buwiz-forms\\nsh",
+  "test_process_exit": 0,
+  "started_perf_ns": 4779020125300,
+  "candidates": {
+    "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t": 2628.0482
+  },
+  "observer_started_ms": {
+    "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t": 2631.2207
+  },
+  "hosts_first_seen_ms": 2810.6198,
+  "first_record_ms": 2810.6198,
+  "stop_reason": "two seconds after first record content",
+  "poll_interval_requested_ms": 0.5,
+  "poll_iterations": 3493,
+  "observations": [
+    {
+      "t_ms": 2810.6198,
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\6768-1.json",
+      "kind": "content",
+      "sha256": "cb02b2600f4129b60ba6fcad7fe6c1307cc70956d21e04f929d94df8a8f505ef",
+      "size": 110,
+      "content": "{\n  \"addr\": \"127.0.0.1:1\",\n  \"pid\": 6768,\n  \"app\": \"bir-shell\",\n  \"executable\": \"agent-e7cc3c45fc04aa8b.exe\"\n}"
+    },
+    {
+      "t_ms": 2817.1726,
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\6768-1.json",
+      "kind": "content",
+      "sha256": "22d06f588241b6d1cfcf5da7ce822dea6030307a75c56780bdae15559b0f6c06",
+      "size": 87,
+      "content": "{\n  \"addr\": \"127.0.0.1:1\",\n  \"pid\": 6768,\n  \"app\": \"bir-shell\",\n  \"executable\": \"bir\"\n}"
+    },
+    {
+      "t_ms": 2968.88,
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\6768-1.json",
+      "kind": "absent"
+    }
+  ],
+  "watchdog_events": [
+    {
+      "t_ms": 3812.5754,
+      "type": "created",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3812.7038,
+      "type": "created",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\.6768-1.json.tmp",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3812.7637,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\.6768-1.json.tmp",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3812.9172,
+      "type": "moved",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\.6768-1.json.tmp",
+      "dest": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\6768-1.json",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3812.97,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3813.0117,
+      "type": "created",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\.6768-1.json.tmp",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3813.1453,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3813.2101,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\.6768-1.json.tmp",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3813.2491,
+      "type": "deleted",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\6768-1.json",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3813.2857,
+      "type": "moved",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\.6768-1.json.tmp",
+      "dest": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\6768-1.json",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3813.3203,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3813.3544,
+      "type": "deleted",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts\\6768-1.json",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3813.3885,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 3813.4222,
+      "type": "deleted",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpgksr8t\\hosts",
+      "dest": "",
+      "is_directory": false
+    }
+  ],
+  "test_output_tail": "warning: patch `nsh-cli v0.6.1 (C:\\Users\\Administrator\\builds\\check-385\\pr\\nsh\\crates\\nsh-cli)` was not used in the crate graph\nwarning: patch `nsh-ios-host v0.6.1 (C:\\Users\\Administrator\\builds\\check-385\\pr\\nsh\\crates\\nsh-ios-host)` was not used in the crate graph\nhelp: Check that the patched package version and available features are compatible\n      with the dependency requirements. If the patch has a different version from\n      what is locked in the Cargo.lock file, run `cargo update` to use the new\n      version. This may also occur with an optional dependency that is not enabled.\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.52s\nwarning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2\nnote: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`\n     Running tests\\agent.rs (C:\\Users\\Administrator\\builds\\check-385\\pr\\buwiz-forms\\target-check-385\\debug\\deps\\agent-e7cc3c45fc04aa8b.exe)\n\nrunning 1 test\ngpui-agent listening on 127.0.0.1:1 (platform=desktop, app=bir-shell)\ntest an_external_agent_creates_the_demo_taxpayer_opens_a_2551q_fills_a_box_and_reads_it_back ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.42s\n\n"
+}

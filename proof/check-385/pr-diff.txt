@@ -1,0 +1,638 @@
+diff --git a/crates/bir-app-api/src/agent/headless.rs b/crates/bir-app-api/src/agent/headless.rs
+index efcf3d52..2f37f556 100644
+--- a/crates/bir-app-api/src/agent/headless.rs
++++ b/crates/bir-app-api/src/agent/headless.rs
+@@ -373,160 +373,163 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
+     // fall back to an ephemeral port while the old server still holds it.
+     if !wait {
+         config.addr = super::resolve_addr(config.addr);
+     }
+     let token_set = config.token.is_some();
+ 
+     loop {
+         // The real `listen` is the bind check. A throwaway successful bind
+         // (what `serve_blocker` does) is closed before that listen. On
+         // Windows, closing the previous socket — listening or not — can
+         // leave the next listener unable to accept.
+         let (opened, path) = match open_serve_database() {
+             Ok(opened) => opened,
+             Err(error) if wait && error.contains("already open") => {
+                 eprintln!("waiting for live DB owner lock …");
+                 thread::sleep(Duration::from_millis(200));
+                 continue;
+             }
+             Err(error) => {
+                 eprintln!("{error}");
+                 return Err(ExitCode::from(1));
+             }
+         };
+ 
+         let db = Arc::new(Mutex::new(opened));
+         let mut session = Session::headless();
+         session.set_db(db.clone());
+         let host = Arc::new(Mutex::new(session));
+         let mailbox = AgentMailbox::new();
+         let (addr, shutdown) = match spawn_mailbox_named(
+             config.addr,
+             config.token.clone(),
+             mailbox.clone(),
+             Duration::from_secs(8),
+             APP,
+         ) {
+             Ok(started) => started,
+             Err(error) if wait && error.kind() == ErrorKind::AddrInUse => {
+                 drop(host);
+                 drop(db);
+                 eprintln!("waiting for bind {} …", config.addr);
+                 thread::sleep(Duration::from_millis(200));
+                 continue;
+             }
+             Err(error) => {
+                 eprintln!("{}", bind_failure_message(config.addr, &error));
+                 return Err(ExitCode::from(2));
+             }
+         };
+ 
+         if !listener_accepts(addr) {
+             drop(host);
+             drop(db);
+             abandon_deaf_listener(addr, &shutdown);
+             if wait {
+                 eprintln!("waiting for bind {addr} …");
+                 thread::sleep(Duration::from_millis(200));
+                 continue;
+             }
+             eprintln!(
+                 "gpui-agent bind {addr} accepted no connections. Quit shell GUI                  or the previous headless process and retry.                  `bir serve --wait` polls until a handshake succeeds."
+             );
+             return Err(ExitCode::from(2));
+         }
+ 
+         let cron_db = db.clone();
+         thread::spawn(move || {
+             if let Ok(rt) = tokio::runtime::Runtime::new() {
+                 rt.block_on(async move {
+                     bir_core::background_cron::start_cron_jobs(cron_db).await;
+                 });
+             } else {
+                 eprintln!("Failed to initialize Tokio runtime for headless background tasks");
+             }
+         });
+ 
+         if let Err(error) = headless_daemon::write_current_pid() {
+             eprintln!("pid file: {error}");
+         }
+         let _pid_guard = ServePidGuard;
++        // The serve thread's one write must land first, or it overwrites
++        // this record after it is written (see try_start).
++        crate::agent::wait_for_serve_record(&addr);
+         let identity = gpui_agent::discovery::detect_identity();
+         let record = gpui_agent::discovery::HostRecord {
+             addr: addr.to_string(),
+             pid: std::process::id(),
+             app: APP.to_owned(),
+             executable: RECORD_EXECUTABLE.to_owned(),
+             bundle_id: identity.bundle_id,
+             connect_id: identity.connect_id,
+         };
+         let root = gpui_agent::discovery::runtime_root();
+         let _discovery_guard = match gpui_agent::discovery::publish_record(&root, &record) {
+             Ok(published) => Some(published),
+             Err(error) => {
+                 eprintln!("gpui-agent discovery record not written: {error}");
+                 None
+             }
+         };
+ 
+         eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir)");
+         eprintln!(
+             "log file: {} (override with {})",
+             headless_daemon::log_path().display(),
+             headless_daemon::LOG_ENV
+         );
+         eprintln!(
+             "opt-in: GPUI_AGENT=1 · bind via from_env · protocol v2 HMAC · GPUI_AGENT_TOKEN required unless GPUI_AGENT_INSECURE_NO_TOKEN=1"
+         );
+         if token_set {
+             eprintln!(
+                 "auth: required (GPUI_AGENT_TOKEN set; CLI/MCP send protocol v2 HMAC, never the raw token)"
+             );
+         } else {
+             eprintln!(
+                 "auth: none (GPUI_AGENT_INSECURE_NO_TOKEN=1 demo only; recipe/MCP still need a client token)"
+             );
+         }
+         if request_log::log_requests_enabled() {
+             eprintln!(
+                 "request log: {} (id/op/invoke/ok; token never logged)",
+                 request_log::LOG_REQUESTS_ENV
+             );
+         }
+         eprintln!("delivery: semantic only (virtual_unavailable — no GPUI event pipeline)");
+         eprintln!(
+             "database: {} (default_database_path unless BIR_DATABASE_PATH; exclusive owner lock; not ephemeral)",
+             path.display()
+         );
+         eprintln!(
+             "BIR: no GPU · screenshot_unavailable · form.print errors · in-process SFTP cron. \
+              Single bind + single live-DB owner. `serve --wait` resumes after GUI quit. \
+              No Op::Yield. launchd KeepAlive is optional."
+         );
+ 
+         // Poll fast while a client is sending steps back to back (a recipe
+         // run), and fall back to the idle interval once it goes quiet.
+         let mut last_request = None::<std::time::Instant>;
+         while !shutdown.load(std::sync::atomic::Ordering::SeqCst) {
+             for posted in mailbox.take() {
+                 last_request = Some(std::time::Instant::now());
+                 let req = posted.request.clone();
+                 let mut guard = host.lock().expect("host");
+                 let resp = request_log::handle_request_logged(&mut *guard, req, None, None);
+                 let stop = guard.should_quit();
+                 drop(guard);
+                 posted.reply(resp);
+                 if stop {
+                     shutdown.store(true, std::sync::atomic::Ordering::SeqCst);
+                     break;
+                 }
+             }
+             if host.lock().expect("host").should_quit() {
+                 break;
+             }
+             thread::sleep(drain_interval(last_request.map(|at| at.elapsed())));
+         }
+         if let Ok(guard) = db.lock()
+             && let Err(error) = guard.checkpoint()
+         {
+             eprintln!("wal checkpoint on shutdown: {error}");
+         }
+diff --git a/crates/bir-app-api/src/agent/mod.rs b/crates/bir-app-api/src/agent/mod.rs
+index 619d4b2d..ef6610d6 100644
+--- a/crates/bir-app-api/src/agent/mod.rs
++++ b/crates/bir-app-api/src/agent/mod.rs
+@@ -1,268 +1,272 @@
+ //! The agent control plane both hosts share: the gpui-agent session (every
+ //! `invoke` the assistants know), its UI-command queue, the opt-in rules for
+ //! the listener, and the batch drain. No UI in here.
+ //!
+ //! The TCP thread only posts into [`gpui_agent::AgentMailbox`]. The host
+ //! drains that mailbox on the thread that owns the live database and the
+ //! window (the gpui shell's timer; the NSH app's engine thread) and gives
+ //! [`drain`] the semantic tree it has. Screen changes are queued for the
+ //! script (`bir.agent_take`, through [`pop_command`]); the TCP thread never
+ //! touches a window. `bir-shell` keeps only its gpui glue (the timer and the
+ //! tree of its script view); `nsh/src/agent.rs` is the NSH host's.
+ //!
+ //! The `bir` command (feature `headless`, crates/bir-cli) runs the same [`Session`] without a
+ //! window: its UI commands are discarded and screenshots are unavailable.
+ 
+ pub mod request_log;
+ pub mod session;
+ 
+ #[cfg(feature = "headless")]
+ pub mod headless;
+ #[cfg(feature = "headless")]
+ pub mod headless_daemon;
+ 
+ pub use session::{Session, UiQueue, send_draft};
+ 
+ use std::collections::BTreeSet;
+ use std::path::{Path, PathBuf};
+ use std::sync::atomic::AtomicBool;
+ use std::sync::{Arc, Mutex};
+ use std::time::Duration;
+ 
+-use gpui_agent::discovery::{self, PublishedHost};
++use gpui_agent::discovery;
+ use gpui_agent::mailbox::{AgentMailbox, MailboxRequest};
+ use gpui_agent::protocol::PlatformKind;
+ use gpui_agent::security::{AgentConfig, SecurityError, authorize_bind, from_env};
+ use gpui_agent::server::{default_addr, spawn_mailbox_named};
+ use gpui_agent::tree::{UiNode, UiTree, role};
+ use gpui_agent::{authorize_request, handle_request, virtual_unavailable};
+ use serde_json::Value;
+ 
+ /// `app` in this host's discovery record and `hello`.
+ pub const APP: &str = "bir-shell";
+ 
+ static UI_COMMANDS: Mutex<Option<session::UiQueue>> = Mutex::new(None);
+ 
+ /// Pop the next command for `bir.agent_take`. Null when the listener is off.
+ pub fn pop_command() -> Option<Value> {
+     UI_COMMANDS
+         .lock()
+         .expect("agent ui queue")
+         .as_ref()
+         .and_then(session::UiQueue::pop)
+ }
+ 
+ /// A running listener: what the host's drain needs, and what keeps the
+ /// discovery record alive.
+ pub struct Started {
+     pub mailbox: AgentMailbox,
+     pub shutdown: Arc<AtomicBool>,
+-    pub discovery: Option<PublishedHost>,
+     pub commands: session::UiQueue,
+     /// The address the listener bound (an ephemeral port is the real one).
+     pub addr: std::net::SocketAddr,
+ }
+ 
++/// Wait for the record the serve thread of the library publishes for this
++/// listener: `spawn_mailbox_named`'s serve loop writes exactly one discovery
++/// record when it starts — naming the running binary — into the same
++/// `hosts/<pid>-<port>.json` path the app's record uses, at a time it
++/// chooses. The app's correct record must be written only after that write
++/// has landed, or a late serve-thread write overwrites it and names the
++/// binary instead of the app's executable. The serve thread writes once, so
++/// the record written after it is the last write. Returns as soon as the
++/// record exists, or after two seconds (a record the thread never wrote —
++/// a read-only runtime dir — cannot overwrite the app's either).
++pub fn wait_for_serve_record(addr: &std::net::SocketAddr) {
++    let serve_record = discovery::runtime_root().join("hosts").join(format!(
++        "{}-{}.json",
++        std::process::id(),
++        addr.port()
++    ));
++    let until = std::time::Instant::now() + Duration::from_secs(2);
++    while !serve_record.exists() && std::time::Instant::now() < until {
++        std::thread::sleep(Duration::from_millis(5));
++    }
++}
++
+ /// Start the listener when `GPUI_AGENT=1`, on the address the environment
+ /// names ([`resolve_addr`]). Why it is off or refused is logged.
+ pub fn maybe_start() -> Option<Started> {
+     try_start_with(|requested| Ok(resolve_addr(requested)))
+         .ok()
+         .flatten()
+ }
+ 
+ /// [`maybe_start`] with the host's say over the address, and the reason when
+ /// it does not start: `Ok(None)` is "off" (`GPUI_AGENT=1` is not set), `Err`
+ /// is a refusal or a failed bind, in a sentence. `choose` gets the address
+ /// the environment asked for and answers the one to bind, or refuses it. A
+ /// host that shares the environment's address with another listener (the NSH
+ /// window's control plane) answers another one; a host that listens on
+ /// loopback only refuses the rest.
+ pub fn try_start_with(
+     choose: impl FnOnce(std::net::SocketAddr) -> Result<std::net::SocketAddr, String>,
+ ) -> Result<Option<Started>, String> {
+     try_start_with_token(None, choose)
+ }
+ 
+ /// The listener's configuration when the environment opted in without a token: the host's `token` stands in for it,
+ /// on the address `GPUI_AGENT_ADDR` names (`requested`) or the default. Every other answer of the environment stays.
+ fn with_fallback_token(
+     from_environment: Result<Option<AgentConfig>, SecurityError>,
+     requested: Option<String>,
+     token: Option<String>,
+ ) -> Result<Option<AgentConfig>, SecurityError> {
+     match (from_environment, token.filter(|token| !token.is_empty())) {
+         (Err(SecurityError::LoopbackRequiresToken), Some(token)) => requested
+             .map_or_else(
+                 || Ok(default_addr()),
+                 |raw| raw.parse().map_err(|_| SecurityError::BadAddr(raw)),
+             )
+             .and_then(|addr| authorize_bind(addr, Some(&token), false))
+             .map(|addr| {
+                 Some(AgentConfig {
+                     addr,
+                     token: Some(token),
+                 })
+             }),
+         (other, _) => other,
+     }
+ }
+ 
+ /// [`try_start_with`] for a host whose launcher keeps `GPUI_AGENT_TOKEN` out of the process environment (NSH's
+ /// phone hosts get the window plane's token as a private file that the window plane reads and deletes): when the
+ /// environment opts in (`GPUI_AGENT=1`) but carries no token, `token` is the one this listener checks. A token in
+ /// the environment wins, and every other rule of the environment (the release gate, the address) still applies.
+ pub fn try_start_with_token(
+     token: Option<String>,
+     choose: impl FnOnce(std::net::SocketAddr) -> Result<std::net::SocketAddr, String>,
+ ) -> Result<Option<Started>, String> {
+     let from_environment =
+         with_fallback_token(from_env(), std::env::var("GPUI_AGENT_ADDR").ok(), token);
+     let config = match from_environment {
+         Ok(Some(config)) => config,
+         Ok(None) => {
+             tracing::info!("gpui-agent control plane off (set GPUI_AGENT=1 to opt in)");
+             return Ok(None);
+         }
+         Err(error) => {
+             tracing::warn!(%error, "gpui-agent control plane refused");
+             return Err(error.to_string());
+         }
+     };
+     try_start_config(config, choose)
+ }
+ 
+ /// [`try_start_with`] for a host that reads the opt-in itself (Android, whose app process has no launch
+ /// environment): `config` is the address asked for and the token, already decided.
+ pub fn try_start_config(
+     config: gpui_agent::security::AgentConfig,
+     choose: impl FnOnce(std::net::SocketAddr) -> Result<std::net::SocketAddr, String>,
+ ) -> Result<Option<Started>, String> {
+     let bind = match choose(config.addr) {
+         Ok(bind) => bind,
+         Err(error) => {
+             tracing::warn!(%error, "gpui-agent control plane refused");
+             return Err(error);
+         }
+     };
+     let mailbox = AgentMailbox::new();
+     let commands = session::UiQueue::new();
+     match spawn_mailbox_named(
+         bind,
+         config.token,
+         mailbox.clone(),
+         Duration::from_secs(8),
+         APP,
+     ) {
+         Ok((addr, shutdown)) => {
+             tracing::info!(%addr, "gpui-agent listening (platform=desktop, app=bir-shell, protocol v2 HMAC)");
+             say(&format!(
+                 "gpui-agent listening on {addr} (platform=desktop, app={APP})"
+             ));
+-            // The serve thread publishes its own record for this same
+-            // `hosts/<pid>-<port>.json` path (naming the binary it runs in)
+-            // at a time it chooses; a record published here before it lands
+-            // is overwritten by it. Wait for that record first — the host's
+-            // record must be the last write, or a late serve-thread write
+-            // names the executable of the binary instead of the app's.
+-            let serve_record = discovery::runtime_root().join("hosts").join(format!(
+-                "{}-{}.json",
+-                std::process::id(),
+-                addr.port()
+-            ));
+-            let until = std::time::Instant::now() + Duration::from_secs(2);
+-            while !serve_record.exists() && std::time::Instant::now() < until {
+-                std::thread::sleep(Duration::from_millis(5));
+-            }
+-            let discovery = match discovery::publish_current(addr, APP) {
+-                Ok(published) => Some(published),
+-                Err(error) => {
+-                    tracing::warn!(%error, "gpui-agent discovery record not written");
+-                    None
+-                }
+-            };
++            // The serve thread writes the only record the library ever
++            // writes; the app's correct record must come after it. Nothing
++            // is published here: a record written now would name this
++            // binary, and the executable the record must carry is the
++            // host's (`bir`, `bir-headless`), which only the caller knows.
++            wait_for_serve_record(&addr);
+             install_queue(commands.clone());
+             Ok(Some(Started {
+                 mailbox,
+                 shutdown,
+-                discovery,
+                 commands,
+                 addr,
+             }))
+         }
+         Err(error) => {
+             tracing::error!(%error, "gpui-agent failed to bind");
+             Err(format!("cannot bind {bind}: {error}"))
+         }
+     }
+ }
+ 
+ /// A line on stderr. A write that fails is ignored: a host whose stderr is a closed pipe (a launcher that reads nothing) must
+ /// not panic where `eprintln!` would.
+ pub fn say(line: &str) {
+     use std::io::Write;
+     let _ = writeln!(std::io::stderr(), "{line}");
+ }
+ 
+ /// Answer the whole batch with the sign-in error when the account gate is
+ /// locked, and do no host work. `Some` is the batch to run.
+ pub fn admit(batch: Vec<MailboxRequest>) -> Option<Vec<MailboxRequest>> {
+     if let Err(error) = crate::account_gate::ensure_unlocked() {
+         let message = error.to_string();
+         for posted in batch {
+             let id = posted.request.id.clone();
+             posted.reply(gpui_agent::Response::err(id, message.clone()));
+         }
+         return None;
+     }
+     Some(batch)
+ }
+ 
+ /// Make `queue` the one `bir.agent_take` reads ([`pop_command`]).
+ pub fn install_queue(queue: session::UiQueue) {
+     *UI_COMMANDS.lock().expect("agent ui queue") = Some(queue);
+ }
+ 
+ /// Keep an explicit `GPUI_AGENT_ADDR`. Otherwise use an ephemeral port when
+ /// the default is already taken.
+ pub fn resolve_addr(requested: std::net::SocketAddr) -> std::net::SocketAddr {
+     let explicit = std::env::var_os("GPUI_AGENT_ADDR").is_some_and(|value| !value.is_empty());
+     if explicit || std::net::TcpListener::bind(requested).is_ok() {
+         return requested;
+     }
+     std::net::SocketAddr::new(requested.ip(), 0)
+ }
+ 
+ /// Answer every request of `batch` with `message` as the error, and do no host work.
+ fn refuse(batch: Vec<MailboxRequest>, message: &str) {
+     for posted in batch {
+         let id = posted.request.id.clone();
+         posted.reply(gpui_agent::Response::err(id, message.to_owned()));
+     }
+ }
+ 
+ /// Run one drain of `mailbox` on the host's thread; `true` when the session
+ /// asked the host to quit. `tree` gives the semantic tree the host has now;
+ /// it is only asked for when a batch is waiting.
+ pub fn drain(
+     mailbox: &AgentMailbox,
+     session: &std::cell::RefCell<Session>,
+     tree: impl FnOnce() -> UiTree,
+ ) -> bool {
+     drain_gated(mailbox, session, tree, || Ok(()))
+ }
+ 
+ /// [`drain`] for a host that has a say of its own, after the account gate: `gate` is asked once per waiting batch and an
+ /// `Err` answers every request of it with that sentence, doing no host work (the NSH app refuses while its sign-in lock is up
+ /// or a taxpayer is signed in; the old shell has no such state and calls [`drain`]).
+ pub fn drain_gated(
+     mailbox: &AgentMailbox,
+     session: &std::cell::RefCell<Session>,
+     tree: impl FnOnce() -> UiTree,
+     gate: impl FnOnce() -> Result<(), String>,
+ ) -> bool {
+     let batch = mailbox.take();
+     if batch.is_empty() {
+         return false;
+     }
+     // Every gpui-agent / bir-mcp tool hits this drain. The account gate is
+diff --git a/nsh/src/agent.rs b/nsh/src/agent.rs
+index 0967f518..1030bd02 100644
+--- a/nsh/src/agent.rs
++++ b/nsh/src/agent.rs
+@@ -353,161 +353,162 @@ mod live {
+                     if matches!(read, Ok(0)) && std::time::Instant::now() < until {
+                         std::thread::sleep(std::time::Duration::from_millis(50));
+                         continue;
+                     }
+                     if let Err(error) = std::fs::remove_file(&path) {
+                         tracing::warn!(%error, "agent token file not deleted");
+                     }
+                     return read.ok().filter(|_| !token.is_empty() && token.len() <= 4096).map(|_| token);
+                 }
+                 Err(_) if std::time::Instant::now() < until => {
+                     std::thread::sleep(std::time::Duration::from_millis(50));
+                 }
+                 Err(_) => return None,
+             }
+         }
+     }
+ 
+     /// The token of one authorized development launch, kept in the process and outside the engine thread, which a full
+     /// reload replaces: the launcher writes the file once and [`take_token`] deletes it, so the replacement listener is
+     /// authorized with the token this launch already read. A process holds one, so it ends with the launch; a token
+     /// file that arrives later (the launcher ran again against the live process) replaces it.
+     #[derive(Debug, Default)]
+     pub struct LaunchToken(std::sync::Mutex<Option<String>>);
+ 
+     impl LaunchToken {
+         /// A launch that has read no token yet.
+         pub const fn new() -> Self {
+             Self(std::sync::Mutex::new(None))
+         }
+ 
+         /// The token: the one in [`TOKEN_FILE`] in `dir`, read and deleted as [`take_token`] does and waited for up to
+         /// `wait` only while the launch holds none; otherwise the one held.
+         pub fn take(&self, dir: &std::path::Path, wait: std::time::Duration) -> Option<String> {
+             let mut held = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+             let wait = if held.is_some() { std::time::Duration::ZERO } else { wait };
+             if let Some(token) = take_token(dir, wait) {
+                 *held = Some(token);
+             }
+             held.clone()
+         }
+     }
+ 
+     /// This process's launch.
+     #[cfg(target_os = "android")]
+     static LAUNCH: LaunchToken = LaunchToken::new();
+ 
+     /// The data plane's token on a phone host. NSH hands the window plane's token to its iOS and Android hosts as a
+     /// private file that the window plane reads and deletes before the app starts, and keeps `GPUI_AGENT_TOKEN` out of
+     /// the app's environment, so this listener would be refused for want of one. `just nsh-run-agent` passes the same
+     /// token as `BIR_AGENT_TOKEN` there. Read only where the environment has no `GPUI_AGENT_TOKEN`; never on a desktop.
+     /// Android reads its opt-in from the development settings and its token from a private file instead
+     /// ([`settings_config`], [`LaunchToken`]).
+     #[cfg(not(target_os = "android"))]
+     fn phone_token() -> Option<String> {
+         if cfg!(target_os = "ios") {
+             std::env::var("BIR_AGENT_TOKEN").ok()
+         } else {
+             None
+         }
+     }
+ 
+     /// Starts the listener when `GPUI_AGENT=1`, on the calling thread's database: the door boots first (the database
+     /// guard and the send guard run before the first request is answered). `Ok(None)`: off. `Err`: refused, why.
+     pub fn listen() -> Result<Option<Listener>, String> {
+         crate::door::call("system_info", Vec::new())?;
+         #[cfg(not(target_os = "android"))]
+         let started = bir_app_api::agent::try_start_with_token(phone_token(), choose)?;
+         #[cfg(target_os = "android")]
+         let started = match settings_config(
+             crate::dev_env::ENABLED,
+             |name| bir_core::config::var(name).ok(),
+             || LAUNCH.take(&bir_core::platform::data_dir(), std::time::Duration::from_secs(10)),
+         )? {
+             Some(config) => bir_app_api::agent::try_start_config(config, choose)?,
+             None => None,
+         };
+         let Some(started) = started else {
+             return Ok(None);
+         };
+         // The record names the executable `bir`: see RECORD_EXECUTABLE.
+-        drop(started.discovery);
++        // `try_start` has already waited out the serve thread's one write,
++        // so this correct record is the last write the hosts folder sees.
+         let identity = discovery::detect_identity();
+         let record = HostRecord {
+             addr: started.addr.to_string(),
+             pid: std::process::id(),
+             app: APP.to_owned(),
+             executable: RECORD_EXECUTABLE.to_owned(),
+             bundle_id: identity.bundle_id,
+             connect_id: identity.connect_id,
+         };
+         let published = match discovery::publish_record(&discovery::runtime_root(), &record) {
+             Ok(published) => Some(published),
+             Err(error) => {
+                 tracing::warn!(%error, "gpui-agent discovery record not written");
+                 None
+             }
+         };
+         Ok(Some(Listener {
+             mailbox: started.mailbox,
+             session: Rc::new(RefCell::new(Session::new(started.commands.clone()))),
+             commands: started.commands,
+             shutdown: started.shutdown,
+             addr: started.addr,
+             _discovery: published,
+         }))
+     }
+ 
+     thread_local! {
+         /// The listener of the engine thread, while the remote control runs.
+         static RUNNING: RefCell<Option<Listener>> = const { RefCell::new(None) };
+         /// Why it is not running, once `start` has answered.
+         static NOTE: RefCell<Option<String>> = const { RefCell::new(None) };
+     }
+ 
+     pub(super) fn status() -> AgentStatus {
+         let running = RUNNING.with(|slot| slot.borrow().as_ref().map(Listener::address));
+         match running {
+             Some(addr) => AgentStatus {
+                 built: true,
+                 active: true,
+                 address: Some(addr.to_string()),
+                 note: None,
+             },
+             None => AgentStatus {
+                 built: true,
+                 active: false,
+                 address: None,
+                 note: Some(
+                     NOTE.with(|note| note.borrow().clone())
+                         .unwrap_or_else(|| OFF.to_owned()),
+                 ),
+             },
+         }
+     }
+ 
+     pub(super) fn start() -> AgentStatus {
+         if RUNNING.with(|slot| slot.borrow().is_some()) {
+             return status();
+         }
+         let note = match listen() {
+             Ok(Some(listener)) => {
+                 RUNNING.with(|slot| *slot.borrow_mut() = Some(listener));
+                 None
+             }
+             Ok(None) => Some(OFF.to_owned()),
+             Err(error) => {
+                 bir_app_api::agent::say(&format!("agent control refused: {error}"));
+                 Some(format!("Agent control refused: {error}"))
+             }
+         };
+         NOTE.with(|slot| *slot.borrow_mut() = note);
+         status()
+     }
+ 
+     pub(super) fn drain() -> bool {
+         RUNNING.with(|slot| slot.borrow().as_ref().is_some_and(Listener::drain))
+     }
+ 
+     #[cfg(test)]
+     mod tests {
+         use super::*;

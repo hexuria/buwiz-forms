@@ -1,0 +1,191 @@
+{
+  "label": "main",
+  "repo": "C:\\Users\\Administrator\\builds\\check-385\\main\\buwiz-forms",
+  "command": "cargo test --manifest-path Cargo.toml --features agent --test agent an_external_agent_creates_the_demo_taxpayer_opens_a_2551q_fills_a_box_and_reads_it_back -- --nocapture",
+  "cwd": "C:\\Users\\Administrator\\builds\\check-385\\main\\buwiz-forms\\nsh",
+  "test_process_exit": 0,
+  "started_perf_ns": 4765960960900,
+  "candidates": {
+    "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv": 4592.6206
+  },
+  "observer_started_ms": {
+    "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv": 4597.0487
+  },
+  "hosts_first_seen_ms": 4755.0105,
+  "first_record_ms": 4755.0105,
+  "stop_reason": "two seconds after first record content",
+  "poll_interval_requested_ms": 0.5,
+  "poll_iterations": 4542,
+  "observations": [
+    {
+      "t_ms": 4755.0105,
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\1760-1.json",
+      "kind": "content",
+      "sha256": "528fcb5e5ced350b174f9fd0b2a593df51abf496d8ffb13db0613ae54c02dadd",
+      "size": 110,
+      "content": "{\n  \"addr\": \"127.0.0.1:1\",\n  \"pid\": 1760,\n  \"app\": \"bir-shell\",\n  \"executable\": \"agent-adb111aefb026f75.exe\"\n}"
+    },
+    {
+      "t_ms": 4760.5225,
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\1760-1.json",
+      "kind": "content",
+      "sha256": "a69b1e31d6212eee4d106090cafa14bded3ac068fc87340df0639233f1b07485",
+      "size": 87,
+      "content": "{\n  \"addr\": \"127.0.0.1:1\",\n  \"pid\": 1760,\n  \"app\": \"bir-shell\",\n  \"executable\": \"bir\"\n}"
+    },
+    {
+      "t_ms": 4922.8095,
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\1760-1.json",
+      "kind": "read_error",
+      "error": "[Errno 2] No such file or directory: 'C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Temp\\\\.tmpeyxnTv\\\\hosts\\\\1760-1.json'"
+    },
+    {
+      "t_ms": 4923.9363,
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\1760-1.json",
+      "kind": "absent"
+    }
+  ],
+  "watchdog_events": [
+    {
+      "t_ms": 5881.0382,
+      "type": "created",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5881.1799,
+      "type": "created",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\.1760-1.json.tmp",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5881.2859,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\.1760-1.json.tmp",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5881.531,
+      "type": "moved",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\.1760-1.json.tmp",
+      "dest": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\1760-1.json",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5881.7371,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5881.835,
+      "type": "created",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\.1760-1.json.tmp",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5881.9323,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\.1760-1.json.tmp",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5882.026,
+      "type": "deleted",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\1760-1.json",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5882.1682,
+      "type": "moved",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\.1760-1.json.tmp",
+      "dest": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\1760-1.json",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5882.2415,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5882.372,
+      "type": "deleted",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\1760-1.json",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5882.5597,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5882.6564,
+      "type": "created",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\.1760-1.json.tmp",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5882.8036,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\.1760-1.json.tmp",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5882.8914,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5882.9361,
+      "type": "moved",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\.1760-1.json.tmp",
+      "dest": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\1760-1.json",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5882.9804,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5883.0214,
+      "type": "deleted",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts\\1760-1.json",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5883.0695,
+      "type": "modified",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts",
+      "dest": "",
+      "is_directory": false
+    },
+    {
+      "t_ms": 5883.1163,
+      "type": "deleted",
+      "src": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpeyxnTv\\hosts",
+      "dest": "",
+      "is_directory": false
+    }
+  ],
+  "test_output_tail": "warning: patch `nsh-cli v0.6.1 (C:\\Users\\Administrator\\builds\\check-385\\main\\nsh\\crates\\nsh-cli)` was not used in the crate graph\nwarning: patch `nsh-ios-host v0.6.1 (C:\\Users\\Administrator\\builds\\check-385\\main\\nsh\\crates\\nsh-ios-host)` was not used in the crate graph\nhelp: Check that the patched package version and available features are compatible\n      with the dependency requirements. If the patch has a different version from\n      what is locked in the Cargo.lock file, run `cargo update` to use the new\n      version. This may also occur with an optional dependency that is not enabled.\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.47s\nwarning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2\nnote: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`\n     Running tests\\agent.rs (C:\\Users\\Administrator\\builds\\check-385\\main\\buwiz-forms\\target-check-385\\debug\\deps\\agent-adb111aefb026f75.exe)\n\nrunning 1 test\ngpui-agent listening on 127.0.0.1:1 (platform=desktop, app=bir-shell)\ntest an_external_agent_creates_the_demo_taxpayer_opens_a_2551q_fills_a_box_and_reads_it_back ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.40s\n\n"
+}
