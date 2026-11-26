@@ -411,7 +411,7 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
             />
             <AppButton testID="fp-queue" size="sm" icon="send" label="Queue" variant={formUi.reviewing() ? "primary" : undefined} disabled={h().loading} onPress={() => s.queue()} />
           </If>
-          <If when={h().status === "Queued" && !h().sample && !h().canResolve}>
+          <If when={h().status === "Queued" && !h().sample && !h().canResolve && !h().checkingSend}>
             <AppButton testID="fp-cancel-queue" size="sm" label="Cancel queue" onPress={() => s.cancelQueue()} />
           </If>
           <If when={h().editable && h().sample && !h().periodSet}>

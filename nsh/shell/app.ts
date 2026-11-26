@@ -1426,6 +1426,8 @@ export const app = {
   view,
   params: (): ViewParams => route().params,
   canBack: () => lastAlive(history()) >= 0,
+  /** The page Back would show (a header names it, a sub-page asks whether its parent is there); null when there is none. */
+  previous: (): Route | null => history()[lastAlive(history())]?.route ?? null,
   canForward: () => lastAlive(forward()) >= 0,
   // Selection.
   taxpayers: () => store.taxpayers(),

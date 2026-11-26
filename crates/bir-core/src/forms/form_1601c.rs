@@ -273,6 +273,16 @@ pub struct Form1601CDraft {
     /// printed or part of the queued fingerprint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relay_receipt: Option<String>,
+    /// The Buwiz relay send of this claimed return that may still be under
+    /// way, or whose end this app did not see: the client's
+    /// `bir_submit::PendingSend` as JSON (a submission id, a ticket id, the
+    /// XML's hash; never a token, a key or the return). Written by the worker
+    /// alone, on its own claim, before anything could reach the BIR; cleared
+    /// whenever the return leaves the claim. The worker asks the server how
+    /// such a send ended. Never filed, printed or part of the queued
+    /// fingerprint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay_pending: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirmed_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -474,6 +484,7 @@ impl Form1601CDraft {
             submitted_dry_run: false,
             submitted_via_relay: false,
             relay_receipt: None,
+            relay_pending: None,
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
@@ -556,6 +567,7 @@ impl Form1601CDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.status = FilingStatus::Queued;
         self.submission_attempts = 0;
         self.submission_error = None;
@@ -592,6 +604,7 @@ impl Form1601CDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.updated_at = now;
     }
 
@@ -647,6 +660,7 @@ impl Form1601CDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.submission_attempts = 0;
         self.submission_error = None;
         self.next_retry_at = None;
@@ -730,6 +744,7 @@ impl Form1601CDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.next_retry_at = Some(chrono::Utc::now().to_rfc3339());
         self.updated_at = chrono::Utc::now().to_rfc3339();
         true
@@ -749,6 +764,7 @@ impl Form1601CDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.next_retry_at = Some(
             (chrono::Utc::now() + super::queueable::relay_retry_delay(self.submission_attempts))
                 .to_rfc3339(),
@@ -773,6 +789,7 @@ impl Form1601CDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         self.next_retry_at =
             Some(super::queueable::held_until(until, chrono::Utc::now()).to_rfc3339());
         self.updated_at = chrono::Utc::now().to_rfc3339();
@@ -813,6 +830,7 @@ impl Form1601CDraft {
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
         self.submission_put_started_at = None;
+        self.relay_pending = None;
         if self.submission_attempts >= 5 {
             self.status = FilingStatus::Draft;
             self.next_retry_at = None;

@@ -222,6 +222,15 @@ test("desktop: an unknown outcome asks the person; The email came, confirmed, ma
   expect(app.texts().some((t) => t.includes("Marked as sent to the BIR."))).toBe(true);
 });
 
+test("desktop: a send the worker is checking with Buwiz says so and offers no answer and no Cancel queue", async () => {
+  const app = await open(ENTRY, DESK({ send: "checking" }));
+  await app.waitFor("text:Checking with Buwiz whether this return was sent. Keep eBIRForms open.", { timeout: 15_000 });
+  expect(app.texts()).toContain("Queued · read-only");
+  expect(app.shows("id:fp-email-came")).toBe(false);
+  expect(app.shows("id:fp-email-missing")).toBe(false);
+  expect(app.shows("id:fp-cancel-queue")).toBe(false);
+});
+
 test("desktop: It did not arrive, confirmed, puts the return back to Draft", async () => {
   const app = await open(ENTRY, DESK({ send: "needs_attention" }));
   await app.waitFor("id:fp-email-missing", { timeout: 15_000 });
