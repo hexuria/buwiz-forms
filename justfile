@@ -264,6 +264,24 @@ ci-test-clean:
         fi
     done
 
+# Several pull requests proven together (docs/CI.md, "Proving several pull requests together"): main plus the squash
+# of each, in the given order, pushed to test/<system>/batch-<pr>-<pr>... Default system: Linux and Windows.
+# Prove pull requests together: `just ci-batch [linux|windows|macos|all|linux-windows] <pr> <pr> ...`
+ci-batch *args:
+    {{PYTHON}} scripts/ci_batch.py build {{args}}
+
+# A batch's runs: green or red per workflow; for red, the failed jobs and the two halves to re-run
+ci-batch-status branch:
+    {{PYTHON}} scripts/ci_batch.py status {{quote(branch)}}
+
+# Prints (never runs) a green batch's merge commands, after checking main and every head are unchanged
+ci-batch-merge branch:
+    {{PYTHON}} scripts/ci_batch.py merge {{quote(branch)}}
+
+# After the merges: is main's tree the tree the batch proved?
+ci-batch-verify branch:
+    {{PYTHON}} scripts/ci_batch.py verify {{quote(branch)}}
+
 # After a batch of merges: a push to main runs only the quick checks. Also what the nightly run does, on demand.
 # Start a complete run of main: every suite of ci.yml and nsh.yml on all three systems
 ci-main:
