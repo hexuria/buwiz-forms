@@ -1,0 +1,43 @@
+2026-11-26T09:25:38.548196Z  INFO bir_core::logging: 🔍 Tracing initialized (developer_mode: false)
+2026-11-26T09:25:38.548608Z  INFO nsh_app_ebirforms::door: eBIRForms started
+2026-11-26T09:25:38.565608Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-26T09:25:38.570076Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-26T09:25:38.570411Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-26T09:25:38.570767Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-26T09:25:38.571113Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-26T09:25:38.571893Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-26T09:25:38.573773Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-26T09:25:38.573989Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-26T09:25:38.574535Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-26T09:25:38.574736Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-26T09:25:38.574884Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-26T09:25:38.575456Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-26T09:25:38.575562Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-26T09:25:38.575692Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-26T09:25:38.575823Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-26T09:25:38.576442Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-26T09:25:38.579248Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-26T09:25:38.579346Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-26T09:25:38.580455Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-26T09:25:38.580571Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-26T09:25:38.585643Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-26T09:25:38.585735Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-26T09:25:38.586044Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-26T09:25:38.586345Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-26T09:25:38.587392Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-26T09:25:38.587734Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-26T09:25:38.589243Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-26T09:25:38.589686Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-26T09:25:38.592847Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-26T09:25:38.596207Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-26T09:25:38.928551Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-26T09:25:38.943229Z  INFO bir_app_api::agent: gpui-agent listening (platform=desktop, app=bir-shell, protocol v2 HMAC) addr=127.0.0.1:17422
+2026-11-26T09:25:46.150941Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:25:47.206341Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:25:47.248579Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:25:48.013005Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:35:06.148300Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:35:09.955414Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:35:37.460367Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:35:43.816745Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:35:43.816971Z  INFO bir_core::background_cron: Background cron engine stopped
