@@ -1,0 +1,24 @@
+[mock-account] listening on http://127.0.0.1:3008 (auto-approve: false, email sign-in: on, code: 246810 and up, one per request, code life: 300s, resend after: 300s)
+[mock-account] each email sign-in code is printed below as it is sent ("sign-in code for <email>: <code>")
+[mock-account] DEVELOPMENT ONLY: no passwords; all state disappears on exit
+[mock-account] POST /auth/email/start
+[mock-account] sign-in code for juana@example.com: 246810
+[mock-account] POST /auth/email/verify
+[mock-account] GET /me
+[mock-account] POST /api/devices
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] POST /api/auth/logout
+[mock-account] POST /auth/email/start
+[mock-account] sign-in code for juana@example.com: 246811
+[mock-account] POST /auth/email/verify
+[mock-account] GET /me
+[mock-account] POST /api/devices
+[mock-account] GET /me
