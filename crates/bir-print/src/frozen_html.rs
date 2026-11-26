@@ -798,6 +798,8 @@ struct SheetType {
     css: &'static str,
     /// The sheet's [`SINGLE_CHARACTER_CELLS`].
     split: &'static [(&'static str, bool)],
+    /// How the sheet's form shows a negative amount ([`NegativeStyle`]).
+    negative: NegativeStyle,
 }
 
 impl SheetType {
@@ -819,16 +821,19 @@ impl SheetType {
             letter: Spacing::of(rule, "letter-spacing"),
             css,
             split: &[],
+            negative: NegativeStyle::Minus,
         }
     }
 
-    /// The type of sheet `slug`, with its split one-character cells.
+    /// The type of sheet `slug`, with its split one-character cells and its
+    /// form's negative amounts.
     fn of_sheet(slug: &str, css: &'static str) -> Self {
         Self {
             split: SINGLE_CHARACTER_CELLS
                 .iter()
                 .find(|(sheet, _)| *sheet == slug)
                 .map_or(&[], |(_, cells)| *cells),
+            negative: NegativeStyle::of_sheet(slug),
             ..Self::of(css)
         }
     }
@@ -841,6 +846,7 @@ impl SheetType {
             letter: Spacing::default(),
             css: "",
             split: &[],
+            negative: NegativeStyle::Minus,
         }
     }
 
@@ -1393,16 +1399,21 @@ fn is_whole_peso_writer_key(key: &str) -> bool {
 ///
 /// Returns `None` when the text is already a comma-grouped whole peso (or 3 or
 /// fewer digits with no decimal point).
-fn format_plain_whole_peso_with_commas(text: &str) -> Option<String> {
+fn format_plain_whole_peso_with_commas(text: &str, style: NegativeStyle) -> Option<String> {
     let trimmed = text.trim();
-    let (prefix, inner, suffix) =
+    let (negative, inner) =
         if let Some(inner) = trimmed.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
-            ("(", inner.trim(), ")")
+            (true, inner.trim())
         } else if let Some(rest) = trimmed.strip_prefix('-') {
-            ("-", rest.trim(), "")
+            (true, rest.trim())
         } else {
-            ("", trimmed, "")
+            (false, trimmed)
         };
+    let (prefix, suffix) = match (negative, style) {
+        (false, _) => ("", ""),
+        (true, NegativeStyle::Minus) => ("-", ""),
+        (true, NegativeStyle::Parentheses) => ("(", ")"),
+    };
     if let Some((whole_part, cents_part)) = inner.split_once('.') {
         if cents_part.len() != 2 || !cents_part.bytes().all(|b| b.is_ascii_digit()) {
             return None;
@@ -2382,24 +2393,20 @@ fn format_rect_amount(
     if !negative || (peso_digits.chars().all(|c| c == '0') && cents.unwrap_or("00") == "00") {
         return body;
     }
-    match style {
-        NegativeStyle::Parentheses => format!("({body})"),
-        NegativeStyle::Minus => format!("-{body}"),
-        NegativeStyle::Unsigned => body,
-    }
+    style.sign(&body)
 }
 
 /// Formats a raw numeric amount string (e.g. from a plain/comb amount key)
 /// with thousands commas while preserving whether it carries decimals.
 fn format_comb_amount_for_rect(raw: &str, style: NegativeStyle) -> String {
     let trimmed = raw.trim();
-    let (negative, inner, effective_style) =
+    let (negative, inner) =
         if let Some(s) = trimmed.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
-            (true, s.trim(), NegativeStyle::Parentheses)
+            (true, s.trim())
         } else if let Some(s) = trimmed.strip_prefix('-') {
-            (true, s.trim(), style)
+            (true, s.trim())
         } else {
-            (false, trimmed, style)
+            (false, trimmed)
         };
     let clean: String = inner.chars().filter(|&c| c != ',').collect();
     if let Some((p, c)) = clean.split_once('.') {
@@ -2407,10 +2414,10 @@ fn format_comb_amount_for_rect(raw: &str, style: NegativeStyle) -> String {
             && p.bytes().all(|b| b.is_ascii_digit())
             && c.bytes().all(|b| b.is_ascii_digit())
         {
-            return format_rect_amount(negative, p, Some(c), effective_style);
+            return format_rect_amount(negative, p, Some(c), style);
         }
     } else if !clean.is_empty() && clean.bytes().all(|b| b.is_ascii_digit()) {
-        return format_rect_amount(negative, &clean, None, effective_style);
+        return format_rect_amount(negative, &clean, None, style);
     }
     trimmed.to_string()
 }
@@ -2750,8 +2757,7 @@ fn fill_text_input(
         let overflow = (whole_line && chars.len() > ordered.len())
             .then(|| {
                 if amount_comb {
-                    let style = NegativeStyle::from_printed_label(caption);
-                    let formatted = format_comb_amount_for_rect(print, style);
+                    let formatted = format_comb_amount_for_rect(print, sheet.negative);
                     comb_overflow_amount_line(html, input_name, &formatted, sheet)
                 } else {
                     comb_overflow_line(html, input_name, print, sheet)
@@ -2816,12 +2822,10 @@ fn fill_text_input(
                 let (p, c) = body.split_once('.').unwrap_or((body, "00"));
                 (neg, p, c)
             };
-            let neg_style = NegativeStyle::from_printed_label(caption);
             let (peso_text, cents_text) = if neg {
-                match neg_style {
+                match sheet.negative {
                     NegativeStyle::Parentheses => (format!("({raw_peso}"), format!("{raw_cents})")),
                     NegativeStyle::Minus => (format!("-{raw_peso}"), raw_cents.to_string()),
-                    NegativeStyle::Unsigned => (raw_peso.to_string(), raw_cents.to_string()),
                 }
             } else {
                 (raw_peso.to_string(), raw_cents.to_string())
@@ -2862,7 +2866,7 @@ fn fill_text_input(
             && is_whole_peso_writer_key(name)
             && is_amount_typed_cell(name, caption)
             && (is_formatted_whole_peso_amount(print) || is_formatted_money_amount(print)))
-        .then(|| format_plain_whole_peso_with_commas(print))
+        .then(|| format_plain_whole_peso_with_commas(print, sheet.negative))
         .flatten();
         let display = formatted_rate
             .as_deref()
@@ -3002,7 +3006,7 @@ fn money_comb_values(
         return None;
     }
     let (negative, peso, cents) = split_writer_money(trimmed)?;
-    let peso = signed_digits(negative, &peso, &cents, NegativeStyle::Minus, false);
+    let peso = signed_digits(negative, &peso, &cents, NegativeStyle::Minus);
     let peso_values = right_aligned_slot_values(*gap, &peso)?;
     let mut out: Vec<(usize, String)> = ordered[..*gap].iter().copied().zip(peso_values).collect();
     out.extend(
@@ -3190,63 +3194,54 @@ struct MoneyCells {
     point_slot: bool,
 }
 
-/// How a negative amount prints on a money or whole-peso comb, derived from
-/// the official paper caption (`printed` in `writer-cells.json`).
+/// How a negative amount prints, the way the official eBIRForms page shows
+/// it in that form's boxes (its printout is the page itself, `window.print()`).
+/// One form per sheet, from the official package (eBIRForms 7.9.6, the HTAs
+/// whose SHA-256 the official layouts in `crates/bir-core/data/official-xml/`
+/// record):
+///
+/// - [`Parentheses`](Self::Parentheses) where the form writes its amounts
+///   through a bracketing formatter: 1702MX January 2018C
+///   (`BIR-Form1702MXv2018C.hta`: `getDifference`, l. 15595-15606, and
+///   `summation` write `NegativeValue(formatCurrencyWOC(..))`; Schedule 8
+///   item 3 is `getDifference('txtPg4Sc8It1', 'txtPg4Sc8It2',
+///   'txtPg4Sc8It3')`, l. 14529), 1702RT January 2018C (its sum, difference
+///   and product helpers, l. 6912-6972, write `NegativeValue(..)`), both
+///   through `js/string-util2014.js` `NegativeValue` (l. 66-93:
+///   `'(' + num + ')'`), and 1707A 2021 (`BIR-Form1707Av2021.hta`
+///   `roundAmount`, l. 4271-4301: `returnAmount = '(' + splitCap[1] + ')'`).
+/// - [`Minus`](Self::Minus) everywhere else: those forms write their amounts
+///   with `formatCurrency` (`js/string-util.js` l. 321-355:
+///   `((sign) ? '' : '-') + num + '.' + cents`) and have no bracketing
+///   formatter on an amount box; their official uploads, which copy the box
+///   text, carry the minus (`1701Q-2025Q2` `txt42A=-1,000.51`, `1801-06052025`
+///   `txtTaxableEstate=-3,489,999.38`, `1701MS-122025-special`
+///   `txtTaxPayableNo25a=-26,000`, `1702EX-122025`
+///   `txtPg1Pt2I20TotalOverpmt=-1,000.00`).
+///
+/// A negative never prints without its sign.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum NegativeStyle {
+pub(crate) enum NegativeStyle {
     #[default]
     Minus,
-    /// Dual-state `/(Overpayment)`, `/(Overremittance)`, `/(Loss)`, `/(Excess ...)`:
-    /// prints `(digits)` in whole-peso combs (matching 1700/1701A) and `-digits`
-    /// left of pesos in split peso+centavo combs.
     Parentheses,
-    /// Dedicated single-state overremittance/overpayment/loss line (no `/(...)`):
-    /// prints unsigned magnitude.
-    Unsigned,
 }
 
 impl NegativeStyle {
-    fn from_printed_label(label: Option<&str>) -> Self {
-        let Some(raw) = label else {
-            return Self::Minus;
-        };
-        let lower = raw.to_ascii_lowercase();
-        if [
-            "/(overpay",
-            "/(over-pay",
-            "/(overremit",
-            "/(over-remit",
-            "/(over remit",
-            "/ (over remit",
-            "/(loss",
-            "/(deficit",
-            "/(excess",
-            "/(refund",
-            "/ (overpay",
-            "/ (over-pay",
-            "/ (overremit",
-            "/ (over-remit",
-            "/ (loss",
-            "/ (excess",
-        ]
-        .iter()
-        .any(|needle| lower.contains(needle))
-        {
+    /// The official negative form of the form printed on sheet `slug`.
+    pub(crate) fn of_sheet(slug: &str) -> Self {
+        if matches!(slug, "1702mx-2018c" | "1702rt-2018c" | "1707a-2021") {
             Self::Parentheses
-        } else if [
-            "overpayment",
-            "over-payment",
-            "overremittance",
-            "over-remittance",
-            "net operating loss",
-            "excess tax",
-        ]
-        .iter()
-        .any(|needle| lower.contains(needle))
-        {
-            Self::Unsigned
         } else {
             Self::Minus
+        }
+    }
+
+    /// `body` (digits, commas, a decimal part) signed in this form.
+    pub(crate) fn sign(self, body: &str) -> String {
+        match self {
+            Self::Parentheses => format!("({body})"),
+            Self::Minus => format!("-{body}"),
         }
     }
 }
@@ -3539,7 +3534,7 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
         cells.money_joins.push(MoneyJoin {
             writer_key: key.to_string(),
             cells: pairs,
-            negative_style: NegativeStyle::from_printed_label(required_str(row, "printed")),
+            negative_style: NegativeStyle::Minus,
         });
     }
 
@@ -3560,7 +3555,7 @@ fn parse_writer_cells(json: &str) -> Result<WriterCells, String> {
         cells.peso_joins.push(PesoJoin {
             writer_key: key.to_string(),
             html_ids,
-            negative_style: NegativeStyle::from_printed_label(required_str(row, "printed")),
+            negative_style: NegativeStyle::Minus,
         });
     }
 
@@ -3669,6 +3664,13 @@ fn writer_cells(slug: &str) -> Result<WriterCells, String> {
     };
     merge_sheet_joins(&mut cells, sheet_joins(slug));
     add_donor_estate_joins(slug, &mut cells);
+    let negative = NegativeStyle::of_sheet(slug);
+    for join in &mut cells.money_joins {
+        join.negative_style = negative;
+    }
+    for join in &mut cells.peso_joins {
+        join.negative_style = negative;
+    }
     Ok(cells)
 }
 
@@ -4185,24 +4187,14 @@ fn split_writer_money(value: &str) -> Option<(bool, String, String)> {
     Some((negative, peso.to_string(), format!("{cents:0<2}")))
 }
 
-/// Formats the peso digits for a money or whole-peso comb according to the
-/// line's official `NegativeStyle`; a zero amount (`-0`, `-0.00`) prints unsigned.
-fn signed_digits(
-    negative: bool,
-    digits: &str,
-    cents: &str,
-    style: NegativeStyle,
-    whole_peso_comb: bool,
-) -> String {
+/// Formats the peso digits for a money or whole-peso comb in the sheet's
+/// official [`NegativeStyle`]; a zero amount (`-0`, `-0.00`) prints unsigned.
+fn signed_digits(negative: bool, digits: &str, cents: &str, style: NegativeStyle) -> String {
     let zero = digits.chars().chain(cents.chars()).all(|ch| ch == '0');
     if !negative || zero {
         return digits.to_string();
     }
-    match style {
-        NegativeStyle::Unsigned => digits.to_string(),
-        NegativeStyle::Parentheses if whole_peso_comb => format!("({digits})"),
-        NegativeStyle::Parentheses | NegativeStyle::Minus => format!("-{digits}"),
-    }
+    style.sign(digits)
 }
 
 fn right_aligned_slot_values(slots: usize, digits: &str) -> Option<Vec<String>> {
@@ -4250,7 +4242,7 @@ fn fill_money_joins_with_sheet(
         };
         let zero = raw_peso.chars().chain(cents.chars()).all(|ch| ch == '0');
         let parenthesized = negative && !zero && join.negative_style == NegativeStyle::Parentheses;
-        let peso = signed_digits(negative, &raw_peso, &cents, join.negative_style, false);
+        let peso = signed_digits(negative, &raw_peso, &cents, join.negative_style);
         for cells in &join.cells {
             let Some(peso_indices) = grouped.get(cells.peso_html_id.as_str()) else {
                 continue;
@@ -4385,7 +4377,7 @@ fn whole_pesos_with_style(value: &str, style: NegativeStyle) -> Option<String> {
         }
     }
     let digits = String::from_utf8(digits).ok()?;
-    Some(signed_digits(negative, &digits, "", style, true))
+    Some(signed_digits(negative, &digits, "", style))
 }
 
 #[allow(dead_code)]
@@ -4749,8 +4741,7 @@ pub(crate) fn fill_continuation_fragment(
         cells.joins.entry(k.clone()).or_default().extend(v.clone());
     }
     for (k, peso_id, cents_id) in extra_money_joins {
-        let negative_style =
-            NegativeStyle::from_printed_label(cells.captions.get(peso_id).map(String::as_str));
+        let negative_style = NegativeStyle::of_sheet(slug);
         cells.money_joins.push(MoneyJoin {
             writer_key: k.clone(),
             cells: vec![MoneyCells {
@@ -4762,8 +4753,7 @@ pub(crate) fn fill_continuation_fragment(
         });
     }
     for (k, html_id) in extra_peso_joins {
-        let negative_style =
-            NegativeStyle::from_printed_label(cells.captions.get(html_id).map(String::as_str));
+        let negative_style = NegativeStyle::of_sheet(slug);
         cells.peso_joins.push(PesoJoin {
             writer_key: k.clone(),
             html_ids: vec![html_id.clone()],
@@ -6956,68 +6946,57 @@ mod tests {
     }
 
     #[test]
-    fn negative_style_follows_official_line_wording() {
+    fn negative_style_follows_the_official_form() {
         use std::collections::BTreeMap;
-        assert_eq!(
-            super::NegativeStyle::from_printed_label(Some("24 Tax Payable/(Overpayment)")),
-            super::NegativeStyle::Parentheses
-        );
-        assert_eq!(
-            super::NegativeStyle::from_printed_label(Some("22 Tax Still Due/(Overremittance)")),
-            super::NegativeStyle::Parentheses
-        );
-        assert_eq!(
-            super::NegativeStyle::from_printed_label(Some("27 Tax Still Due/(Over-remittance)")),
-            super::NegativeStyle::Parentheses
-        );
-        assert_eq!(
-            super::NegativeStyle::from_printed_label(Some(
-                "23 Over-remittance from Previous Quarter"
-            )),
-            super::NegativeStyle::Unsigned
-        );
-        // Split peso+centavo combs on 1600PT, 1600VT, and 1601FQ print negative
-        // (Overremittance)/(Over-remittance) values in parentheses, not with '-'.
-        for (slug, key, peso_id, cent_id) in [
-            (
-                "1600-pt-2018",
-                "frm1600PT:txtPg1P2I22TaxStillDueOverremit",
-                "p1c116",
-                "p1c118",
-            ),
-            (
-                "1600-vt-2018",
-                "frm1600VT:txtPg1P2I27TotAmtStillDueOverremit",
-                "p1c136",
-                "p1c138",
-            ),
-            ("1601-fq-2020", "frm1601FQ:txtTax27", "p1c161", "p1c163"),
-            ("1601-fq-2020", "frm1601FQ:txtTax32", "p1c181", "p1c183"),
-        ] {
-            let mut m = BTreeMap::new();
-            m.insert(key.to_string(), "-1,234.56".to_string());
-            let doc = super::filled_document(slug, &m).unwrap();
-            let (printed, size) = super::printed_cell(&doc, peso_id);
+        // The forms whose official page brackets a negative amount
+        // (NegativeValue / roundAmount) and the rest (formatCurrency's minus).
+        for slug in ["1702mx-2018c", "1702rt-2018c", "1707a-2021"] {
             assert_eq!(
-                printed, "(1,234.56)",
-                "{slug} {key} should convert to a bracketed plain rectangle"
+                super::NegativeStyle::of_sheet(slug),
+                super::NegativeStyle::Parentheses,
+                "{slug}"
             );
-            assert!(size.unwrap() >= super::PLAIN_TEXT_MIN_PT);
-            assert!(comb_values(&doc, cent_id).iter().all(|v| v.is_empty()));
         }
-        assert_eq!(
-            super::NegativeStyle::from_printed_label(Some("12 Total Amount of Overremittance")),
-            super::NegativeStyle::Unsigned
+        for slug in [
+            "1600-pt-2018",
+            "1600-vt-2018",
+            "1601-fq-2020",
+            "1700-2018",
+            "1701-2018",
+            "1701a-2018",
+            "1701ms-2024",
+            "1701q-2018",
+            "1702ex-2018",
+            "1702q-2018",
+            "1801-2018",
+            "2550q-2024",
+        ] {
+            assert_eq!(
+                super::NegativeStyle::of_sheet(slug),
+                super::NegativeStyle::Minus,
+                "{slug}"
+            );
+        }
+        // 1702MX Schedule 8 item 3, a net operating loss: the official page
+        // writes it through getDifference -> NegativeValue, so it prints in
+        // brackets; before, the line's wording printed it with no sign at all.
+        let mut m = BTreeMap::new();
+        m.insert("frm1702MX:txtPg4Sc8It3".to_string(), "-200000".to_string());
+        let doc = super::filled_document("1702mx-2018c", &m).unwrap();
+        assert_eq!(super::printed_cell(&doc, "p4c53").0, "(200000)");
+        // A minus form's split peso + centavo comb keeps the minus left of
+        // the pesos (1600PT item 22, formatCurrency).
+        let mut m = BTreeMap::new();
+        m.insert(
+            "frm1600PT:txtPg1P2I22TaxStillDueOverremit".to_string(),
+            "-1,234.56".to_string(),
         );
-        assert_eq!(
-            super::NegativeStyle::from_printed_label(Some(
-                "3 Net Operating Loss (Item 1 Less Item 2)"
-            )),
-            super::NegativeStyle::Unsigned
-        );
-        assert_eq!(
-            super::NegativeStyle::from_printed_label(Some("22 Tax Payable, 1st installment")),
-            super::NegativeStyle::Minus
+        let doc = super::filled_document("1600-pt-2018", &m).unwrap();
+        let (pesos, _) = super::printed_cell(&doc, "p1c116");
+        let (cents, _) = super::printed_cell(&doc, "p1c118");
+        assert!(
+            pesos.starts_with('-') && pesos.contains("1") && !pesos.contains('('),
+            "{pesos:?} {cents:?}"
         );
 
         let html = comb("p", 8);
@@ -7033,14 +7012,13 @@ mod tests {
             comb_values(&doc, "p"),
             ["", "", "", "(", "1", "2", "3", ")"]
         );
-
-        let unsigned = [super::PesoJoin {
+        let minus = [super::PesoJoin {
             writer_key: "k".into(),
             html_ids: vec!["p".into()],
-            negative_style: super::NegativeStyle::Unsigned,
+            negative_style: super::NegativeStyle::Minus,
         }];
-        let doc = super::fill_peso_joins(&html, &fields, &unsigned);
-        assert_eq!(comb_values(&doc, "p"), ["", "", "", "", "", "1", "2", "3"]);
+        let doc = super::fill_peso_joins(&html, &fields, &minus);
+        assert_eq!(comb_values(&doc, "p"), ["", "", "", "", "-", "1", "2", "3"]);
     }
 
     #[test]
@@ -7098,7 +7076,9 @@ mod tests {
         assert_eq!(warnings[0].cell, "cont2-p1c80");
         assert_eq!(warnings[0].kind, "amount-comb");
 
-        // 3. Derived amount comb via fill_by_name_with_cells (1700 / 1701A / 1701MS)
+        // 3. Derived amount comb via fill_by_name_with_cells (1700 / 1701A /
+        // 1701MS); outside a sheet a negative takes the minus, however the
+        // value came in.
         let html = comb_div("p1c90", 72.0, 8);
         let mut dfields = BTreeMap::new();
         dfields.insert("derived:amount_22A".to_string(), "(199914152)".to_string());
@@ -7106,7 +7086,7 @@ mod tests {
         cells.insert("derived:amount_22A".to_string(), vec!["p1c90".to_string()]);
         let doc = super::fill_by_name_with_cells(&html, &dfields, &cells, &BTreeMap::new());
         let (printed, _) = super::printed_cell(&doc, "p1c90");
-        assert_eq!(printed, "(199,914,152)");
+        assert_eq!(printed, "-199,914,152");
         assert!(doc.contains("text-align:right;justify-content:flex-end;padding-right:1pt"));
         assert_eq!(super::overflow_warnings(&doc).len(), 1);
     }
@@ -9135,7 +9115,8 @@ mod tests {
         assert_eq!(printed_cell(&html, "p3c81").0, "SAMPLE DEDUCTION");
         assert_eq!(comb_text(&html, "p3c87"), "");
         assert_eq!(comb_text(&html, "p2c47"), "        1000");
-        assert_eq!(comb_text(&html, "p1c83"), "      (1000)");
+        // 1702EX shows a negative with a minus (formatCurrency).
+        assert_eq!(comb_text(&html, "p1c83"), "       -1000");
         for checked in ["p1c7", "p1c13", "p1c15", "p1c11", "p1c56", "p1c86"] {
             assert_eq!(
                 named_values(&html, checked),
@@ -11097,12 +11078,6 @@ mod donor_estate_print_tests {
         assert_eq!(
             super::format_percentage_rate("15.00", true).as_deref(),
             Some("15")
-        );
-        assert_eq!(
-            super::NegativeStyle::from_printed_label(Some(
-                "18 Total Amount Payable/(Over remittance)"
-            )),
-            super::NegativeStyle::Parentheses
         );
     }
 

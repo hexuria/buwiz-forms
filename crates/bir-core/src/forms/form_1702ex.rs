@@ -430,11 +430,13 @@ fn print_lines(text: &str, widths: &[usize]) -> Vec<String> {
 }
 
 /// A whole-peso amount (50 centavos or more round up) right-aligned in a
-/// 12-slot comb; a negative amount prints in parentheses.
+/// 12-slot comb; a negative amount prints with a minus, as the official page
+/// shows it (`BIR-Form1702EXv2018C.hta` writes the Part II amounts with
+/// `formatCurrency`; its upload holds `txtPg1Pt2I20TotalOverpmt=-1,000.00`).
 fn print_whole_pesos(amount: f64) -> String {
     let pesos = (amount.abs() + 0.5 + 1e-9).floor();
     let text = if amount < 0.0 && pesos > 0.0 {
-        format!("({pesos:.0})")
+        format!("-{pesos:.0}")
     } else {
         format!("{pesos:.0}")
     };
@@ -2049,7 +2051,7 @@ mod tests {
             get("amount:txtPg2Pt4I28SalesReceiptsRevFees"),
             "     5000001"
         );
-        assert_eq!(get("amount:txtPg1Pt2I22TotalAmtPayable"), "      (1000)");
+        assert_eq!(get("amount:txtPg1Pt2I22TotalAmtPayable"), "       -1000");
         assert_eq!(
             get("amount:txtPg2Pt4I38OptionalStandardDeduc"),
             "           0"

@@ -1290,8 +1290,10 @@ impl Form1701ADraft {
                 return None;
             }
             let digits = format!("{:.0}", value.abs());
+            // The official page shows a negative with a minus (formatCurrency,
+            // js/string-util.js l. 354; no bracketing formatter on its amount boxes).
             let printed = if value < 0.0 {
-                format!("({digits})")
+                format!("-{digits}")
             } else {
                 digits
             };
@@ -2247,12 +2249,13 @@ mod tests {
         over.taxpayer.quarterly_payments = 200_000.0;
         over.recompute();
         let p = over.to_print_field_map();
-        assert_eq!(p["derived:amount_22A"], "(114152)");
+        // An overpayment prints with a minus, as the official page shows it.
+        assert_eq!(p["derived:amount_22A"], " -114152");
         over.taxpayer.quarterly_payments = 200_000_000.0;
         over.recompute();
         assert_eq!(
             over.to_print_field_map()["derived:amount_22A"],
-            "(199914152)"
+            "-199914152"
         );
     }
 

@@ -588,8 +588,10 @@ fn print_amount(text: &str, slots: usize) -> Option<String> {
         return None;
     }
     let rounded = (parsed.abs() + 0.5 + 1e-9).floor() as u64;
+    // The official page shows a negative with a minus (formatCurrency,
+    // js/string-util.js l. 354; no bracketing formatter on its amount boxes).
     let whole = if negative && rounded > 0 {
-        format!("({rounded})")
+        format!("-{rounded}")
     } else {
         rounded.to_string()
     };
@@ -1991,7 +1993,7 @@ mod tests {
         );
         assert_eq!(
             print_amount("-50,000.50", 12).as_deref(),
-            Some("     (50001)")
+            Some("      -50001")
         );
         assert_eq!(
             print_amount("12,345,678.90", 12).as_deref(),

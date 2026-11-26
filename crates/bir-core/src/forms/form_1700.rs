@@ -1020,8 +1020,10 @@ impl Form1700Draft {
                 return None;
             }
             let digits = format!("{:.0}", value.abs());
+            // The official page shows a negative with a minus (formatCurrency,
+            // js/string-util.js l. 354; no bracketing formatter on its amount boxes).
             let printed = if value < 0.0 {
-                format!("({digits})")
+                format!("-{digits}")
             } else {
                 digits
             };

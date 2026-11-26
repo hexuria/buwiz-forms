@@ -383,11 +383,12 @@ fn print_right_aligned(text: String) -> String {
 }
 
 /// A whole-peso amount as the printed comb shows it: digits only, an
-/// overpayment in parentheses.
+/// overpayment with a minus, as the official page shows it (its upload,
+/// which copies the box, holds `-26,000` for an overpayment of 26,000).
 fn print_whole_amount(value: f64) -> String {
     let whole = js_round(value.abs()) as u64;
     if value < 0.0 && whole != 0 {
-        print_right_aligned(format!("({whole})"))
+        print_right_aligned(format!("-{whole}"))
     } else {
         print_right_aligned(whole.to_string())
     }
@@ -2582,10 +2583,10 @@ mod tests {
     }
 
     #[test]
-    fn print_amounts_right_align_digits_and_bracket_overpayments() {
+    fn print_amounts_right_align_digits_and_sign_overpayments() {
         assert_eq!(print_whole_amount(0.0), "        0");
         assert_eq!(print_whole_amount(123_456_789.0), "123456789");
-        assert_eq!(print_whole_amount(-4_500.0), "   (4500)");
+        assert_eq!(print_whole_amount(-4_500.0), "    -4500");
         assert_eq!(print_cents_amount(-1_234.5), "  1234.50");
         assert_eq!(print_rate(5.0), ("5".to_string(), "0".to_string()));
         assert_eq!(print_rate(7.5), ("7".to_string(), "5".to_string()));

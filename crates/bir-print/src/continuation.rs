@@ -284,7 +284,7 @@ pub fn detect_overflow(
             .enumerate()
             .map(|(ci, col)| {
                 let subtotal = if spec.has_total && col.is_amount && col_has_numeric[ci] {
-                    Some(format_amount(col_sums[ci]))
+                    Some(format_amount(col_sums[ci], slug))
                 } else {
                     None
                 };
@@ -502,7 +502,7 @@ pub fn continuation_pages_html_with_truncated(
                 for (col, val) in sched.columns.iter().zip(row.values.iter()) {
                     let display = if col.is_amount {
                         parse_amount(val)
-                            .map(format_amount)
+                            .map(|amount| format_amount(amount, slug))
                             .unwrap_or_else(|| val.clone())
                     } else {
                         val.clone()
@@ -1904,7 +1904,7 @@ fn detect_popup_overflow(
             .enumerate()
             .map(|(ci, col)| {
                 let subtotal = if def.has_total && col.is_amount && col_has_numeric[ci] {
-                    Some(format_amount(col_sums[ci]))
+                    Some(format_amount(col_sums[ci], slug))
                 } else {
                     None
                 };
@@ -2014,7 +2014,10 @@ fn parse_amount(val: &str) -> Option<f64> {
     cleaned.parse::<f64>().ok()
 }
 
-fn format_amount(value: f64) -> String {
+/// A column total, grouped, with a negative in the form's official
+/// [`frozen_html::NegativeStyle`] (brackets on 1702MX, 1702RT and 1707A,
+/// a minus elsewhere).
+fn format_amount(value: f64, slug: &str) -> String {
     let negative = value < -0.005;
     let abs = value.abs();
     let formatted = format!("{abs:.2}");
@@ -2028,7 +2031,7 @@ fn format_amount(value: f64) -> String {
     }
     let whole_grouped: String = with_commas.chars().rev().collect();
     if negative {
-        format!("-{whole_grouped}.{frac}")
+        frozen_html::NegativeStyle::of_sheet(slug).sign(&format!("{whole_grouped}.{frac}"))
     } else {
         format!("{whole_grouped}.{frac}")
     }
