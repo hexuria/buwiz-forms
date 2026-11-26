@@ -1,0 +1,10 @@
+{
+ "box_before_print": "1500,50",
+ "texts": [
+  [
+   "fp-frm2550m:txtTax16A",
+   "Item 16A amount: 1,234.56"
+  ]
+ ],
+ "draft_after_print": 1234.56
+}

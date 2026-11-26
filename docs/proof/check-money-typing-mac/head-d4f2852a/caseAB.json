@@ -1,0 +1,227 @@
+[
+ {
+  "label": "A1ph click",
+  "keys": "15000.50",
+  "states": [
+   "",
+   "1",
+   "15",
+   "150",
+   "1500",
+   "15000",
+   "15000.",
+   "15000.5",
+   "15000.50"
+  ],
+  "shown": "15,000.50",
+  "saved": 15000.5,
+  "verdict": "RIGHT"
+ },
+ {
+  "label": "A2 tab",
+  "keys": "15000.50",
+  "states": [
+   "",
+   "1",
+   "15",
+   "150",
+   "1500",
+   "15000",
+   "15000.",
+   "15000.5",
+   "15000.50"
+  ],
+  "shown": "15,000.50",
+  "saved": 15000.5,
+  "verdict": "RIGHT"
+ },
+ {
+  "label": "A3 shifttab",
+  "keys": "15000.50",
+  "states": [
+   "",
+   "1",
+   "15",
+   "150",
+   "1500",
+   "15000",
+   "15000.",
+   "15000.5",
+   "15000.50"
+  ],
+  "shown": "15,000.50",
+  "saved": 15000.5,
+  "verdict": "RIGHT"
+ },
+ {
+  "label": "A4 click",
+  "keys": "1000000.005",
+  "states": [
+   "",
+   "1",
+   "10",
+   "100",
+   "1000",
+   "10000",
+   "100000",
+   "1000000",
+   "1000000.",
+   "1000000.0",
+   "1000000.00",
+   "1000000.005"
+  ],
+  "shown": "1,000,000.01",
+  "saved": 1000000.01,
+  "verdict": "RIGHT"
+ },
+ {
+  "label": "A5 tab",
+  "keys": "1000000.005",
+  "states": [
+   "",
+   "1",
+   "10",
+   "100",
+   "1000",
+   "10000",
+   "100000",
+   "1000000",
+   "1000000.",
+   "1000000.0",
+   "1000000.00",
+   "1000000.005"
+  ],
+  "shown": "1,000,000.01",
+  "saved": 1000000.01,
+  "verdict": "RIGHT"
+ },
+ {
+  "label": "A6 burst click",
+  "shown": "15,000.50",
+  "saved": 15000.5,
+  "verdict": "RIGHT"
+ },
+ {
+  "label": "A7 burst tab",
+  "shown": "15,000.50",
+  "saved": 15000.5,
+  "verdict": "RIGHT"
+ },
+ {
+  "label": "A8 click+key 0ms x10",
+  "wrong": 0,
+  "runs": [
+   {
+    "end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "ok": true
+   },
+   {
+    "end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "ok": true
+   },
+   {
+    "end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "ok": true
+   },
+   {
+    "end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "ok": true
+   },
+   {
+    "end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "ok": true
+   },
+   {
+    "end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "ok": true
+   },
+   {
+    "end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "ok": true
+   },
+   {
+    "end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "ok": true
+   },
+   {
+    "end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "ok": true
+   },
+   {
+    "end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "ok": true
+   }
+  ]
+ },
+ {
+  "label": "B1 tab then 7",
+  "states": [
+   "1,234.56",
+   "7"
+  ],
+  "shown": "7.00",
+  "saved": 7.0,
+  "verdict": "RIGHT"
+ },
+ {
+  "label": "B2 tab right 9",
+  "states": [
+   "1,234.56",
+   "1,234.569"
+  ],
+  "shown": "1,234.57",
+  "saved": 1234.57,
+  "verdict": "RIGHT"
+ },
+ {
+  "label": "B3 click between 2 and 3 then 9",
+  "states": [
+   "1,234.56",
+   "1,2934.56"
+  ],
+  "shown": "12,934.56",
+  "saved": 12934.56,
+  "verdict": "RIGHT",
+  "frac": 0.91,
+  "note": "first-pass frac 0.35 was a rig aim miss (click in the empty left area); redone at frac 0.91 measured by scan"
+ },
+ {
+  "label": "B4 cmda backspace tab",
+  "empty": "",
+  "shown": "",
+  "saved": 0.0,
+  "verdict": "RIGHT"
+ },
+ {
+  "label": "B5 end 4xbackspace",
+  "states": [
+   "1,234.5",
+   "1,234.",
+   "1,234",
+   "1,23"
+  ],
+  "shown": "123.00",
+  "saved": 123.0,
+  "verdict": "RIGHT"
+ }
+]

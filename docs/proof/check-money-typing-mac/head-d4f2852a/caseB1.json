@@ -1,0 +1,254 @@
+[
+ {
+  "label": "B1a-run1",
+  "box": "500",
+  "page": [
+   "Row 1, PT010 \u00b7 1,000.00 \u00b7 3.0 \u00b7 30.00. Open",
+   "Row 3, PT010 \u00b7 3,000.00 \u00b7 3.0 \u00b7 90.00. Open"
+  ],
+  "draft": [
+   {
+    "atc": "PT010",
+    "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+    "taxable_amount": 1000.0,
+    "tax_rate": 0.03,
+    "tax_due": 30.0
+   },
+   {
+    "atc": "",
+    "atc_description": "",
+    "taxable_amount": 0.0,
+    "tax_rate": 0.0,
+    "tax_due": 0.0
+   },
+   {
+    "atc": "PT010",
+    "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+    "taxable_amount": 3000.0,
+    "tax_rate": 0.03,
+    "tax_due": 90.0
+   }
+  ],
+  "totals": {
+   "total_tax_due": 120.0,
+   "tax_payable": 120.0,
+   "total_amount_payable": 120.0
+  }
+ },
+ {
+  "label": "B1a-run2",
+  "box": "500",
+  "page": [
+   "Row 1, PT010 \u00b7 1,000.00 \u00b7 3.0 \u00b7 30.00. Open",
+   "Row 3, PT010 \u00b7 3,000.00 \u00b7 3.0 \u00b7 90.00. Open"
+  ],
+  "draft": [
+   {
+    "atc": "PT010",
+    "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+    "taxable_amount": 1000.0,
+    "tax_rate": 0.03,
+    "tax_due": 30.0
+   },
+   {
+    "atc": "",
+    "atc_description": "",
+    "taxable_amount": 0.0,
+    "tax_rate": 0.0,
+    "tax_due": 0.0
+   },
+   {
+    "atc": "PT010",
+    "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+    "taxable_amount": 3000.0,
+    "tax_rate": 0.03,
+    "tax_due": 90.0
+   }
+  ],
+  "totals": {
+   "total_tax_due": 120.0,
+   "tax_payable": 120.0,
+   "total_amount_payable": 120.0
+  }
+ },
+ {
+  "label": "B1a-run3",
+  "box": "500",
+  "page": [
+   "Row 1, PT010 \u00b7 1,000.00 \u00b7 3.0 \u00b7 30.00. Open",
+   "Row 3, PT010 \u00b7 3,000.00 \u00b7 3.0 \u00b7 90.00. Open"
+  ],
+  "draft": [
+   {
+    "atc": "PT010",
+    "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+    "taxable_amount": 1000.0,
+    "tax_rate": 0.03,
+    "tax_due": 30.0
+   },
+   {
+    "atc": "",
+    "atc_description": "",
+    "taxable_amount": 0.0,
+    "tax_rate": 0.0,
+    "tax_due": 0.0
+   },
+   {
+    "atc": "PT010",
+    "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+    "taxable_amount": 3000.0,
+    "tax_rate": 0.03,
+    "tax_due": 90.0
+   }
+  ],
+  "totals": {
+   "total_tax_due": 120.0,
+   "tax_payable": 120.0,
+   "total_amount_payable": 120.0
+  }
+ },
+ {
+  "label": "B1b-run1",
+  "box": "500",
+  "page": [
+   "Row 1, PT010 \u00b7 1,000.00 \u00b7 3.0 \u00b7 30.00. Open",
+   "Row 2, PT040 \u00b7 2,000.00 \u00b7 3.0 \u00b7 60.00. Open"
+  ],
+  "draft": [
+   {
+    "atc": "PT010",
+    "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+    "taxable_amount": 1000.0,
+    "tax_rate": 0.03,
+    "tax_due": 30.0
+   },
+   {
+    "atc": "PT040",
+    "atc_description": "Domestic carriers and keepers of garages [Sec. 117]",
+    "taxable_amount": 2000.0,
+    "tax_rate": 0.03,
+    "tax_due": 60.0
+   },
+   {
+    "atc": "",
+    "atc_description": "",
+    "taxable_amount": 0.0,
+    "tax_rate": 0.0,
+    "tax_due": 0.0
+   }
+  ],
+  "totals": {
+   "total_tax_due": 90.0,
+   "tax_payable": 90.0,
+   "total_amount_payable": 90.0
+  }
+ },
+ {
+  "label": "B1b-run2",
+  "box": "500",
+  "page": [
+   "Row 1, PT010 \u00b7 1,000.00 \u00b7 3.0 \u00b7 30.00. Open",
+   "Row 2, PT040 \u00b7 2,000.00 \u00b7 3.0 \u00b7 60.00. Open"
+  ],
+  "draft": [
+   {
+    "atc": "PT010",
+    "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+    "taxable_amount": 1000.0,
+    "tax_rate": 0.03,
+    "tax_due": 30.0
+   },
+   {
+    "atc": "PT040",
+    "atc_description": "Domestic carriers and keepers of garages [Sec. 117]",
+    "taxable_amount": 2000.0,
+    "tax_rate": 0.03,
+    "tax_due": 60.0
+   },
+   {
+    "atc": "",
+    "atc_description": "",
+    "taxable_amount": 0.0,
+    "tax_rate": 0.0,
+    "tax_due": 0.0
+   }
+  ],
+  "totals": {
+   "total_tax_due": 90.0,
+   "tax_payable": 90.0,
+   "total_amount_payable": 90.0
+  }
+ },
+ {
+  "label": "B1b-run3",
+  "box": "500",
+  "page": [
+   "Row 1, PT010 \u00b7 1,000.00 \u00b7 3.0 \u00b7 30.00. Open",
+   "Row 2, PT040 \u00b7 2,000.00 \u00b7 3.0 \u00b7 60.00. Open"
+  ],
+  "draft": [
+   {
+    "atc": "PT010",
+    "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+    "taxable_amount": 1000.0,
+    "tax_rate": 0.03,
+    "tax_due": 30.0
+   },
+   {
+    "atc": "PT040",
+    "atc_description": "Domestic carriers and keepers of garages [Sec. 117]",
+    "taxable_amount": 2000.0,
+    "tax_rate": 0.03,
+    "tax_due": 60.0
+   },
+   {
+    "atc": "",
+    "atc_description": "",
+    "taxable_amount": 0.0,
+    "tax_rate": 0.0,
+    "tax_due": 0.0
+   }
+  ],
+  "totals": {
+   "total_tax_due": 90.0,
+   "tax_payable": 90.0,
+   "total_amount_payable": 90.0
+  }
+ },
+ {
+  "label": "B1c-control",
+  "box": "500",
+  "page": [
+   "Row 1, PT010 \u00b7 1,000.00 \u00b7 3.0 \u00b7 30.00. Open",
+   "Row 3, PT010 \u00b7 3,000.00 \u00b7 3.0 \u00b7 90.00. Open"
+  ],
+  "draft": [
+   {
+    "atc": "PT010",
+    "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+    "taxable_amount": 1000.0,
+    "tax_rate": 0.03,
+    "tax_due": 30.0
+   },
+   {
+    "atc": "",
+    "atc_description": "",
+    "taxable_amount": 0.0,
+    "tax_rate": 0.0,
+    "tax_due": 0.0
+   },
+   {
+    "atc": "PT010",
+    "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+    "taxable_amount": 3000.0,
+    "tax_rate": 0.03,
+    "tax_due": 90.0
+   }
+  ],
+  "totals": {
+   "total_tax_due": 120.0,
+   "tax_payable": 120.0,
+   "total_amount_payable": 120.0
+  }
+ }
+]
