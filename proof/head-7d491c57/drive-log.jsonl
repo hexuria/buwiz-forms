@@ -1,0 +1,307 @@
+{"t": 1795694213.573696, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795694228.845478, "event": "click", "id": "return-1", "screen": [556, 320], "logical": [556.5, 320.5]}
+{"t": 1795694230.92377, "event": "click", "id": "fp-parts-toggle", "screen": [1058, 115], "logical": [1058.0, 115.0]}
+{"t": 1795694331.1205585, "event": "click", "id": "sb-new", "screen": [226, 92], "logical": [226.0, 92.0]}
+{"t": 1795694332.2617333, "event": "click", "id": "new-return-2551Q", "screen": [1280, 956], "logical": [1280.0, 956.0]}
+{"t": 1795694333.4226403, "event": "click", "id": "new-return-open", "screen": [1492, 1083], "logical": [1492.5, 1083.0]}
+{"t": 1795694335.5082092, "event": "click", "id": "fp-parts-toggle", "screen": [1058, 115], "logical": [1058.0, 115.0]}
+{"t": 1795694358.9426384, "event": "click", "id": "fp-row-drpATC1-0", "screen": [1542, 1568], "logical": [1542.0, 1568.0]}
+{"t": 1795694359.0246277, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694360.3062103, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694362.0503058, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694363.436844, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795694365.9963596, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694367.2579706, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694368.9096878, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694370.326629, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795694372.8535912, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694374.1219666, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694375.831373, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694376.8338656, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795694379.3600261, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694380.6223216, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694382.96065, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694383.9763591, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795694386.709654, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694387.9927278, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694389.6835961, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694390.6531343, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795694393.159795, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694393.7260492, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694395.4444005, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694396.4158304, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795694398.9386265, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694399.476384, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694401.2195988, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694402.604409, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795694405.3396246, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694405.8889768, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694409.7396822, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694410.275651, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694414.1201138, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694414.6562316, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694418.60022, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694419.1372674, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694423.0339596, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694423.6252122, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694428.987612, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694429.528481, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694433.3707688, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694433.9079893, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694437.8486137, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694438.3847344, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694442.2609236, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694442.7974446, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694446.8490992, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694447.3838034, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694451.239733, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694452.5017004, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694454.1505983, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694455.03138, "event": "xdotool-type", "text": "1500,50", "delay": 120, "keys": "1 5 0 0 comma 5 0"}
+{"t": 1795694458.0912807, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694459.337647, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694460.6051276, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694462.2430363, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694465.034696, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694466.2686138, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694467.5327337, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694469.1726027, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694471.8676763, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694473.1356237, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694474.3960521, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694476.0812428, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694476.6042926, "event": "xdotool-type", "text": "12a3", "delay": 120, "keys": "1 2 a 3"}
+{"t": 1795694479.2550578, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694480.4846206, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694481.7460573, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694483.4376252, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694484.4949622, "event": "xdotool-type", "text": "1.234,56", "delay": 120, "keys": "1 period 2 3 4 comma 5 6"}
+{"t": 1795694487.1402595, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694488.3742201, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694489.6401644, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694491.2785718, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694491.916859, "event": "xdotool-type", "text": "1,2,3", "delay": 120, "keys": "1 comma 2 comma 3"}
+{"t": 1795694494.5816262, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694495.8511806, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694497.1171901, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694498.7595754, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694498.91168, "event": "xdotool-type", "text": ",", "delay": 120, "keys": "comma"}
+{"t": 1795694501.567152, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694502.8113432, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694503.3484323, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694505.0196848, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694507.8409255, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694508.3776093, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694510.0206034, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694512.719998, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694513.2588928, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694514.9804509, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694517.706891, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694518.253992, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694519.910606, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694522.5888712, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694523.8497965, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795694525.5546327, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694528.050972, "event": "xdotool-type", "text": "12345678901234567890", "delay": 120, "keys": "1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0"}
+{"t": 1795694531.7980905, "event": "click", "id": "fp-check", "screen": [1793, -2921], "logical": [1793.0, -2921.0]}
+{"t": 1795694532.9706297, "event": "click", "id": "fp-pill-next", "screen": [1741, 1803], "logical": [1741.0, 1803.0]}
+{"t": 1795694534.244632, "event": "click", "id": "fp-pill-next", "screen": [1741, 1803], "logical": [1741.0, 1803.0]}
+{"t": 1795694535.5396307, "event": "click", "id": "fp-pill-next", "screen": [1741, 1803], "logical": [1741.0, 1803.0]}
+{"t": 1795694536.866635, "event": "click", "id": "fp-pill-next", "screen": [1741, 1803], "logical": [1741.0, 1803.0]}
+{"t": 1795694538.2846417, "event": "click", "id": "fp-pill-next", "screen": [1741, 1803], "logical": [1741.0, 1803.0]}
+{"t": 1795694538.8787932, "event": "xdotool-type", "text": "2500", "delay": 120, "keys": "2 5 0 0"}
+{"t": 1795694797.2900999, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795694798.3496149, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795694800.1075153, "event": "click", "id": "return-1", "screen": [556, 320], "logical": [556.5, 320.5]}
+{"t": 1795694800.9822896, "event": "click", "id": "fp-parts-toggle", "screen": [1058, 115], "logical": [1058.0, 115.0]}
+{"t": 1795694869.7576454, "event": "click", "id": "fp-part-4-toggle", "screen": [1518, 1468], "logical": [1518.0, 1468.0]}
+{"t": 1795694876.2966697, "event": "click", "id": "fp-nav-4", "screen": [976, 382], "logical": [976.0, 382.0]}
+{"t": 1795694877.6206186, "event": "click", "id": "fp-row-drpATC1-0", "screen": [1542, 801], "logical": [1542.0, 801.0]}
+{"t": 1795694878.404629, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694878.9446814, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694880.5525665, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694881.5232708, "event": "xdotool-type", "text": "99999.99", "delay": 120, "keys": "9 9 9 9 9 period 9 9"}
+{"t": 1795694895.5228999, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795694896.4396348, "event": "click", "id": "fp-parts-toggle", "screen": [1058, 115], "logical": [1058.0, 115.0]}
+{"t": 1795694942.063656, "event": "click", "id": "fp-nav-4", "screen": [976, 382], "logical": [976.0, 382.0]}
+{"t": 1795694943.2670178, "event": "click", "id": "fp-row-drpATC1-0", "screen": [1542, 801], "logical": [1542.0, 801.0]}
+{"t": 1795694943.374826, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694943.9102697, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694945.5179658, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694946.4895344, "event": "xdotool-type", "text": "99999.99", "delay": 120, "keys": "9 9 9 9 9 period 9 9"}
+{"t": 1795694948.7738228, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694949.326817, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694950.9616392, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694952.34932, "event": "xdotool-type", "text": "1000000.005", "delay": 120, "keys": "1 0 0 0 0 0 0 period 0 0 5"}
+{"t": 1795694954.5925918, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694955.1278098, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694956.7406142, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694957.953943, "event": "xdotool-type", "text": "1234567890", "delay": 120, "keys": "1 2 3 4 5 6 7 8 9 0"}
+{"t": 1795694960.7975981, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694961.333288, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694962.9485953, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694964.2868485, "event": "xdotool-type", "text": "99999999.99", "delay": 120, "keys": "9 9 9 9 9 9 9 9 period 9 9"}
+{"t": 1795694966.5547473, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694967.0933673, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694968.7097578, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694970.0438468, "event": "xdotool-type", "text": "99999999.99", "delay": 120, "keys": "9 9 9 9 9 9 9 9 period 9 9"}
+{"t": 1795694972.3119361, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694972.8490844, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694974.4607756, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694975.7967265, "event": "xdotool-type", "text": "99999999.99", "delay": 120, "keys": "9 9 9 9 9 9 9 9 period 9 9"}
+{"t": 1795694978.1072338, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694978.6837654, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694980.3046231, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795694982.6115148, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795694983.1484969, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795694984.765592, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795695023.2632015, "event": "click", "id": "fp-nav-0", "screen": [976, 181], "logical": [976.0, 181.0]}
+{"t": 1795695032.5372849, "event": "click", "id": "fp-nav-0", "screen": [976, 181], "logical": [976.0, 181.0]}
+{"t": 1795695077.384134, "event": "click", "id": "fp-frm2551Qv2018:txtSheets", "screen": [1221, 846], "logical": [1221.0, 846.0]}
+{"t": 1795695077.5401156, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795695078.912613, "event": "click", "id": "fp-frm2551Qv2018:txtSheets", "screen": [1221, 846], "logical": [1221.0, 846.0]}
+{"t": 1795695079.1635325, "event": "xdotool-type", "text": "42", "delay": 120, "keys": "4 2"}
+{"t": 1795695081.3163614, "event": "click", "id": "fp-frm2551Qv2018:txtSheets", "screen": [1221, 846], "logical": [1221.0, 846.0]}
+{"t": 1795695081.4682903, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795695082.8538985, "event": "click", "id": "fp-frm2551Qv2018:txtSheets", "screen": [1221, 846], "logical": [1221.0, 846.0]}
+{"t": 1795695083.4951031, "event": "xdotool-type", "text": "42", "delay": 120, "keys": "4 2"}
+{"t": 1795695086.3696246, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795695087.5476303, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795695089.4186325, "event": "click", "id": "return-3", "screen": [556, 420], "logical": [556.5, 419.5]}
+{"t": 1795695090.3010905, "event": "click", "id": "fp-parts-toggle", "screen": [1058, 115], "logical": [1058.0, 115.0]}
+{"t": 1795695169.7146935, "event": "click", "id": "fp-row-drpTreatyCode0-0", "screen": [1542, 1007], "logical": [1542.0, 1007.0]}
+{"t": 1795695170.781643, "event": "click", "id": "fp-txtRate0", "screen": [2312, 389], "logical": [2311.5, 389.0]}
+{"t": 1795695170.9678054, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795695172.4356356, "event": "click", "id": "fp-txtRate0", "screen": [2312, 389], "logical": [2311.5, 389.0]}
+{"t": 1795695173.0966346, "event": "xdotool-type", "text": "42", "delay": 120, "keys": "4 2"}
+{"t": 1795695240.5356832, "event": "click", "id": "fp-txtRate0", "screen": [2312, 389], "logical": [2311.5, 389.0]}
+{"t": 1795695240.688461, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795695242.2522817, "event": "click", "id": "fp-txtRate0", "screen": [2312, 389], "logical": [2311.5, 389.0]}
+{"t": 1795695242.3758903, "event": "xdotool-type", "text": "4", "delay": 120, "keys": "4"}
+{"t": 1795695242.9069653, "event": "xdotool-type", "text": "2", "delay": 120, "keys": "2"}
+{"t": 1795695245.4156158, "event": "click", "id": "fp-txtRate0", "screen": [2312, 389], "logical": [2311.5, 389.0]}
+{"t": 1795695245.5715587, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795695247.1260865, "event": "click", "id": "fp-txtRate0", "screen": [2312, 389], "logical": [2311.5, 389.0]}
+{"t": 1795695247.6952126, "event": "xdotool-type", "text": "4", "delay": 120, "keys": "4"}
+{"t": 1795695248.2812603, "event": "xdotool-type", "text": "2", "delay": 120, "keys": "2"}
+{"t": 1795695796.6226652, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795695803.2950869, "event": "click", "id": "return-2", "screen": [556, 618], "logical": [556.5, 617.5]}
+{"t": 1795695822.6036565, "event": "click", "id": "fp-nav-2", "screen": [976, 282], "logical": [976.0, 282.0]}
+{"t": 1795695854.905633, "event": "click", "id": "fp-frm2550m:txtTax13A", "screen": [1299, 363], "logical": [1299.0, 363.0]}
+{"t": 1795695855.4258773, "event": "xdotool-type", "text": "1000", "delay": 120, "keys": "1 0 0 0"}
+{"t": 1795695888.3985968, "event": "click", "id": "fp-frm2550m:txtTax13A", "screen": [1299, 363], "logical": [1299.0, 363.0]}
+{"t": 1795695888.9277222, "event": "xdotool-type", "text": "1000", "delay": 120, "keys": "1 0 0 0"}
+{"t": 1795695892.6225939, "event": "click", "id": "fp-frm2550m:txtTax13A", "screen": [1299, 363], "logical": [1299.0, 363.0]}
+{"t": 1795695893.1370208, "event": "xdotool-type", "text": "2000", "delay": 120, "keys": "2 0 0 0"}
+{"t": 1795695896.9176545, "event": "click", "id": "fp-frm2550m:txtTax13A", "screen": [1299, 363], "logical": [1299.0, 363.0]}
+{"t": 1795695897.4357903, "event": "xdotool-type", "text": "3000", "delay": 120, "keys": "3 0 0 0"}
+{"t": 1795695901.6626046, "event": "click", "id": "fp-frm2550m:txtTax13A", "screen": [1299, 363], "logical": [1299.0, 363.0]}
+{"t": 1795695902.1768892, "event": "xdotool-type", "text": "4000", "delay": 120, "keys": "4 0 0 0"}
+{"t": 1795695906.0067418, "event": "click", "id": "fp-frm2550m:txtTax13A", "screen": [1299, 363], "logical": [1299.0, 363.0]}
+{"t": 1795695906.5243952, "event": "xdotool-type", "text": "5000", "delay": 120, "keys": "5 0 0 0"}
+{"t": 1795695910.2060528, "event": "click", "id": "fp-frm2550m:txtTax13A", "screen": [1299, 363], "logical": [1299.0, 363.0]}
+{"t": 1795695910.728884, "event": "xdotool-type", "text": "1100", "delay": 120, "keys": "1 1 0 0"}
+{"t": 1795695913.9926476, "event": "click", "id": "fp-frm2550m:txtTax13A", "screen": [1299, 363], "logical": [1299.0, 363.0]}
+{"t": 1795695914.506085, "event": "xdotool-type", "text": "2200", "delay": 120, "keys": "2 2 0 0"}
+{"t": 1795695917.731629, "event": "click", "id": "fp-frm2550m:txtTax13A", "screen": [1299, 363], "logical": [1299.0, 363.0]}
+{"t": 1795695918.2465491, "event": "xdotool-type", "text": "3300", "delay": 120, "keys": "3 3 0 0"}
+{"t": 1795695921.4666343, "event": "click", "id": "fp-frm2550m:txtTax13A", "screen": [1299, 363], "logical": [1299.0, 363.0]}
+{"t": 1795695921.9875572, "event": "xdotool-type", "text": "4400", "delay": 120, "keys": "4 4 0 0"}
+{"t": 1795695925.18759, "event": "click", "id": "fp-frm2550m:txtTax13A", "screen": [1299, 363], "logical": [1299.0, 363.0]}
+{"t": 1795695925.703619, "event": "xdotool-type", "text": "5500", "delay": 120, "keys": "5 5 0 0"}
+{"t": 1795695956.0988138, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795695957.1577566, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795695959.0517924, "event": "click", "id": "return-1", "screen": [556, 618], "logical": [556.5, 617.5]}
+{"t": 1795695960.209376, "event": "click", "id": "fp-nav-4", "screen": [976, 382], "logical": [976.0, 382.0]}
+{"t": 1795695965.9999478, "event": "click", "id": "fp-row-drpATC1-1", "screen": [1542, 853], "logical": [1542.0, 853.0]}
+{"t": 1795696051.5752661, "event": "xdotool-type", "text": "7777", "delay": 120, "keys": "7 7 7 7"}
+{"t": 1795696096.5819776, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795696098.1499467, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795696099.715596, "event": "click", "id": "return-1", "screen": [556, 320], "logical": [556.5, 320.5]}
+{"t": 1795696100.7905493, "event": "click", "id": "fp-nav-4", "screen": [976, 382], "logical": [976.0, 382.0]}
+{"t": 1795696135.3626375, "event": "click", "id": "fp-row-drpATC1-1", "screen": [1542, 853], "logical": [1542.0, 853.0]}
+{"t": 1795696136.0238817, "event": "xdotool-type", "text": "7777", "delay": 120, "keys": "7 7 7 7"}
+{"t": 1795696200.789545, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795696202.3513703, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795696203.9226232, "event": "click", "id": "return-1", "screen": [556, 320], "logical": [556.5, 320.5]}
+{"t": 1795696205.0039823, "event": "click", "id": "fp-nav-4", "screen": [976, 382], "logical": [976.0, 382.0]}
+{"t": 1795696212.3813646, "event": "click", "id": "fp-row-drpATC1-1", "screen": [1542, 853], "logical": [1542.0, 853.0]}
+{"t": 1795696213.0531883, "event": "xdotool-type", "text": "7777", "delay": 120, "keys": "7 7 7 7"}
+{"t": 1795696234.9462686, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795696236.0116239, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795696237.9418142, "event": "click", "id": "return-4", "screen": [556, 518], "logical": [556.5, 518.5]}
+{"t": 1795696244.7647111, "event": "click", "id": "fp-nav-2", "screen": [976, 282], "logical": [976.0, 282.0]}
+{"t": 1795696251.878681, "event": "click", "id": "fp-table-frm1604c:txtSched1Date1-add", "screen": [1225, 536], "logical": [1225.0, 536.0]}
+{"t": 1795696266.9416456, "event": "click", "id": "fp-frm1604c:txtSched1Adj1", "screen": [2328, 389], "logical": [2327.5, 389.0]}
+{"t": 1795696376.5609756, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795696378.0726318, "event": "click", "id": "fp-nav-2", "screen": [976, 282], "logical": [976.0, 282.0]}
+{"t": 1795696379.0308914, "event": "click", "id": "fp-table-frm1604c:txtSched1Date1-add", "screen": [1225, 576], "logical": [1225.0, 576.0]}
+{"t": 1795696392.4876435, "event": "click", "id": "fp-table-frm1604c:txtSched1Date1-add", "screen": [1225, 576], "logical": [1225.0, 576.0]}
+{"t": 1795696429.2226546, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795696431.004176, "event": "click", "id": "return-4", "screen": [556, 618], "logical": [556.5, 617.5]}
+{"t": 1795696432.180751, "event": "click", "id": "fp-nav-2", "screen": [976, 282], "logical": [976.0, 282.0]}
+{"t": 1795696433.3406281, "event": "click", "id": "fp-table-frm1604c:txtSched1Date1-add", "screen": [1225, 576], "logical": [1225.0, 576.0]}
+{"t": 1795696463.3260787, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795696503.5262341, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795696526.9336486, "event": "click", "id": "return-5", "screen": [556, 320], "logical": [556.5, 320.5]}
+{"t": 1795696528.0031736, "event": "click", "id": "fp-nav-2", "screen": [976, 282], "logical": [976.0, 282.0]}
+{"t": 1795696529.080937, "event": "click", "id": "fp-row-frm1604c:txtSched1Date1-0", "screen": [1542, 524], "logical": [1542.0, 524.0]}
+{"t": 1795696529.55447, "event": "click", "id": "fp-frm1604c:txtSched1Adj1", "screen": [2328, 389], "logical": [2327.5, 389.0]}
+{"t": 1795696529.7070067, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795696531.27463, "event": "click", "id": "fp-frm1604c:txtSched1Adj1", "screen": [2328, 389], "logical": [2327.5, 389.0]}
+{"t": 1795696535.056546, "event": "click", "id": "fp-frm1604c:txtSched1Adj1", "screen": [2328, 389], "logical": [2327.5, 389.0]}
+{"t": 1795696535.20883, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795696536.7758815, "event": "click", "id": "fp-frm1604c:txtSched1Adj1", "screen": [2328, 389], "logical": [2327.5, 389.0]}
+{"t": 1795696613.0929413, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795696614.8249528, "event": "click", "id": "return-1", "screen": [556, 420], "logical": [556.5, 419.5]}
+{"t": 1795696615.9126344, "event": "click", "id": "fp-nav-4", "screen": [976, 382], "logical": [976.0, 382.0]}
+{"t": 1795696617.0066364, "event": "click", "id": "fp-row-drpATC1-0", "screen": [1542, 801], "logical": [1542.0, 801.0]}
+{"t": 1795696676.7304788, "event": "xdotool-type", "text": "9", "delay": 120, "keys": "9"}
+{"t": 1795696702.4246519, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795696703.3050532, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795696705.2376728, "event": "click", "id": "fp-table-drpATC1-done", "screen": [2514, 378], "logical": [2514.5, 378.0]}
+{"t": 1795696706.2086515, "event": "click", "id": "fp-row-drpATC1-0", "screen": [1542, 801], "logical": [1542.0, 801.0]}
+{"t": 1795696706.979372, "event": "xdotool-type", "text": "9", "delay": 120, "keys": "9"}
+{"t": 1795696714.6358416, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795696715.5700676, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795696717.5200148, "event": "click", "id": "fp-table-drpATC1-done", "screen": [2514, 378], "logical": [2514.5, 378.0]}
+{"t": 1795696718.496625, "event": "click", "id": "fp-row-drpATC1-0", "screen": [1542, 801], "logical": [1542.0, 801.0]}
+{"t": 1795696719.2604604, "event": "xdotool-type", "text": "9", "delay": 120, "keys": "9"}
+{"t": 1795696739.6296697, "event": "click", "id": "fp-table-drpATC1-done", "screen": [2514, 378], "logical": [2514.5, 378.0]}
+{"t": 1795696740.7133296, "event": "click", "id": "fp-nav-2", "screen": [976, 273], "logical": [976.0, 273.0]}
+{"t": 1795696787.1327574, "event": "click", "id": "fp-nav-4", "screen": [976, 382], "logical": [976.0, 382.0]}
+{"t": 1795696788.2450035, "event": "click", "id": "fp-row-drpATC1-0", "screen": [1542, 801], "logical": [1542.0, 801.0]}
+{"t": 1795696788.742037, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795696789.6515172, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795696791.13574, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795696793.6018083, "event": "xdotool-type", "text": "12345678901234567890", "delay": 120, "keys": "1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0"}
+{"t": 1795696796.7096457, "event": "click", "id": "fp-table-drpATC1-done", "screen": [2514, 460], "logical": [2514.5, 460.0]}
+{"t": 1795696797.7847877, "event": "click", "id": "fp-nav-2", "screen": [976, 273], "logical": [976.0, 273.0]}
+{"t": 1795696798.2896347, "event": "click", "id": "fp-frm2551Qv2018:txt15", "screen": [1299, 372], "logical": [1299.0, 372.0]}
+{"t": 1795696799.17687, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795696800.845639, "event": "click", "id": "fp-frm2551Qv2018:txt15", "screen": [1299, 372], "logical": [1299.0, 372.0]}
+{"t": 1795696803.3147676, "event": "xdotool-type", "text": "12345678901234567890", "delay": 120, "keys": "1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0"}
+{"t": 1795696807.0796216, "event": "click", "id": "fp-nav-4", "screen": [976, 391], "logical": [976.0, 391.0]}
+{"t": 1795696808.2094607, "event": "click", "id": "fp-row-drpATC1-0", "screen": [1542, 801], "logical": [1542.0, 801.0]}
+{"t": 1795696808.736228, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795696809.632766, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795696811.1354425, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795696812.772619, "event": "xdotool-type", "text": "1234567890123", "delay": 120, "keys": "1 2 3 4 5 6 7 8 9 0 1 2 3"}
+{"t": 1795696815.92262, "event": "click", "id": "fp-table-drpATC1-done", "screen": [2514, 441], "logical": [2514.5, 441.0]}
+{"t": 1795696816.9936392, "event": "click", "id": "fp-nav-2", "screen": [976, 273], "logical": [976.0, 273.0]}
+{"t": 1795696817.4873943, "event": "click", "id": "fp-frm2551Qv2018:txt15", "screen": [1299, 333], "logical": [1299.0, 333.0]}
+{"t": 1795696818.3639073, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795696819.856516, "event": "click", "id": "fp-frm2551Qv2018:txt15", "screen": [1299, 372], "logical": [1299.0, 372.0]}
+{"t": 1795696821.4631553, "event": "xdotool-type", "text": "1234567890123", "delay": 120, "keys": "1 2 3 4 5 6 7 8 9 0 1 2 3"}
+{"t": 1795696988.1894863, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795696989.7569163, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795696991.3266025, "event": "click", "id": "return-1", "screen": [556, 320], "logical": [556.5, 320.5]}
+{"t": 1795696992.4090686, "event": "click", "id": "fp-nav-4", "screen": [976, 382], "logical": [976.0, 382.0]}
+{"t": 1795697037.0816064, "event": "click", "id": "fp-row-drpATC1-1", "screen": [1542, 853], "logical": [1542.0, 853.0]}
+{"t": 1795697037.7394106, "event": "xdotool-type", "text": "7777", "delay": 120, "keys": "7 7 7 7"}
+{"t": 1795697045.1387022, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795697046.7606835, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795697048.4366505, "event": "click", "id": "return-1", "screen": [556, 320], "logical": [556.5, 320.5]}
+{"t": 1795697049.5553772, "event": "click", "id": "fp-nav-4", "screen": [976, 382], "logical": [976.0, 382.0]}
+{"t": 1795697050.7966988, "event": "click", "id": "fp-row-drpATC1-1", "screen": [1542, 853], "logical": [1542.0, 853.0]}
+{"t": 1795697051.462913, "event": "xdotool-type", "text": "7777", "delay": 120, "keys": "7 7 7 7"}

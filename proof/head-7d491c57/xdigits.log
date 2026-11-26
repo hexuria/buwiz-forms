@@ -1,0 +1,10 @@
+X schedule 20 digits 12345678901234567890 1,234.56 1234.56 ['Taxable Amount: you typed 12,345,678,901,234,567,890.00; the return holds 1,234.56. Exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.']
+X item15 20 digits 12345678901234567890 1,234.56 1234.56 ['Item 15: you typed 12,345,678,901,234,567,890.00; the return holds 1,234.56. Exceeds the official 12-digit peso field (at most 999,999,999,999.99); enter a smaller amount.']
+X schedule 13 digits 1234567890123 1,234.56 1234.56 ['Taxable Amount: you typed 1,234,567,890,123.00; the return holds 1,234.56. Exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.']
+X item15 13 digits 1234567890123 1,234.56 1234.56 ['Item 15: you typed 1,234,567,890,123.00; the return holds 1,234.56. Exceeds the official 12-digit peso field (at most 999,999,999,999.99); enter a smaller amount.']
+Traceback (most recent call last):
+  File "/home/ubuntu/forms-validation/money-accept-proof/run_digits_extra.py", line 46, in <module>
+    w({'case':'X digits complete','ak':None,'al':None,'saved':None})
+  File "/home/ubuntu/forms-validation/money-accept-proof/run_digits_extra.py", line 5, in w
+    def w(x):open(RES,'a').write(json.dumps(x,ensure_ascii=False)+'\n');print(x['case'],x['ak'],x['al'],x['saved'],x['sentence'],flush=True)
+KeyError: 'sentence'
