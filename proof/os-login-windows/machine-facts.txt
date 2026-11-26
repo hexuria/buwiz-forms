@@ -1,0 +1,14 @@
+Machine: DEVINBOX
+OS caption: Microsoft Windows Server 2022 Standard
+OS version: 10.0.20348
+EnableLUA: 0
+Session type: console
+Screen resolution: 1600x1200
+TPM: no TPM (Get-CimInstance root/cimv2/security/microsofttpm Win32_Tpm returned no instance)
+Settings > Accounts > Sign-in options: "Windows Hello PIN" is listed but marked "This option is currently unavailable—click to learn more"; page also shows managed-settings banner.
+Drive: C: Windows is the only usable data drive; D: is config-2 with about 0.01 GB free and was not used.
+App commit: cbf8fc0814e2e20aa0792a64bb64d65461a593e7
+Sibling NSH commit: 8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf
+nsh --version: nsh 0.6.1 (8c78cfd)
+Checkout folder: C:\Users\Administrator\builds\os-login-windows\buwiz-forms
+Build folder: C:\Users\Administrator\builds\os-login-windows\target

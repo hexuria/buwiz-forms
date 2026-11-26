@@ -1,0 +1,31 @@
+command: cargo test --manifest-path nsh/Cargo.toml --lib os_login::windows::tests::real_windows_answers -- --ignored --nocapture
+
+warning: patch `nsh-cli v0.6.1 (C:\Users\Administrator\builds\os-login-windows\nsh\crates\nsh-cli)` was not used in the crate graph
+warning: patch `nsh-ios-host v0.6.1 (C:\Users\Administrator\builds\os-login-windows\nsh\crates\nsh-ios-host)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+warning: function `page_gate_refusal` is never used
+    --> C:\Users\Administrator\builds\os-login-windows\buwiz-forms\crates\bir-app-api\src\screen_form_module.rs:4981:15
+     |
+4981 | pub(crate) fn page_gate_refusal(
+     |               ^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `bir-app-api` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.00s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src\lib.rs (C:\Users\Administrator\builds\os-login-windows\target\debug\deps\nsh_app_ebirforms-32e8ce9438e4bf91.exe)
+
+running 1 test
+owner_check=None (4.6919ms) lock_window=None prove_owner=Unavailable total 5.621ms
+test os_login::windows::tests::real_windows_answers ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 166 filtered out; finished in 0.01s
+
+
+EXIT_CODE=0
+ELAPSED_SECONDS=1.1
