@@ -99,6 +99,55 @@ token on standard input (not in any process's arguments, not an intent extra).
 The app's data plane waits up to 10 s for that file when `GPUI_AGENT=1`, reads
 it once and deletes it; without it the listener is refused.
 
+#### Emulator sign-in against the local account server
+
+`BUWIZ_SERVER_URL`, `BUWIZ_ACCOUNT_URL` and `BUWIZ_TRUST_KEYS` are on the
+allowlist, so an Android development build can sign in to `just mock-account`
+and register its device right after the sign-in, as a desktop or iOS Simulator
+development build does with the same variables in its launch environment.
+Bake, with no `BIR_AUTH_BYPASS` (with it and `EBIR_TEST_ENV` the app skips the
+sign-in gate):
+
+```sh
+CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true BUWIZ_ANDROID_DEV=1 BUWIZ_ANDROID_DEV_ENV='EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;BUWIZ_SERVER_URL=http://localhost:3008;BUWIZ_TRUST_KEYS=dev-test-key-not-production' nsh package --target android --abi x86_64
+```
+
+Then, with `just mock-account --port 3008` running on this computer:
+
+```sh
+adb reverse tcp:3008 tcp:3008
+```
+
+The test key is honoured only with `debug_assertions` (hence
+`CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true`); a build without them pins the
+production trust key whatever is baked. The development rules still hold: the
+relay client is made only for a server on this computer and only on a test key,
+never production's. `BUWIZ_RELAY_SEND` is not on the allowlist: an Android
+development build does not send through the Buwiz server yet. A release build
+without `BUWIZ_ANDROID_DEV=1` ignores the baked list entirely.
+
+#### A sign-in kept when the app is swiped away (`BIR_DATABASE_PATH`)
+
+With `EBIR_TEST_ENV=1` and no database named, each engine opens a fresh scratch
+database in the temporary folder (`nsh/src/door.rs`). The pending email sign-in,
+the saved account and the install id live beside that database, so they are gone
+whenever the app makes a new engine: after a swipe from Recents even when the
+process survives, and after a process death. To check on an emulator that a code
+page in progress comes back, give the test run a database that outlives the
+engine. Add to the baked list (a relative value is taken under the engine's data
+folder, `files/nsh/dev.goldcoders.bir`):
+
+```sh
+CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true BUWIZ_ANDROID_DEV=1 BUWIZ_ANDROID_DEV_ENV='EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;BUWIZ_SERVER_URL=http://localhost:3008;BUWIZ_TRUST_KEYS=dev-test-key-not-production;BIR_DATABASE_PATH=test-data/bir_data.db' nsh package --target android --abi x86_64
+```
+
+In a test run the guard (`android_test_database_refusal` in `nsh/src/guards.rs`)
+opens a named database only inside `<data folder>/test-data/`, never the app's
+own `bir_data.db`. A build without the opt-in ignores the list, so a release
+build is unaffected. Clear it with
+`adb shell run-as dev.goldcoders.bir rm -r files/nsh/dev.goldcoders.bir/test-data`
+(or uninstall) to start from nothing.
+
 Android installs these values in bir-core's process-wide configuration store
 before the door starts its database or workers; it does not modify the process
 environment. Core, account-gate and transport readers consult that store before
@@ -146,7 +195,8 @@ dismisses an unsubmitted preview as documented in the migration lifecycle model.
 
 Only these keys are accepted:
 `EBIR_TEST_ENV`, `BIR_AUTH_BYPASS`, `BUWIZ_NO_KEYCHAIN`, `BIR_SFTP_DRY_RUN`,
-`BIR_RELAY_URL`, and the agent data plane's `GPUI_AGENT` and `GPUI_AGENT_ADDR`
+`BIR_RELAY_URL`, `BUWIZ_SERVER_URL`, `BUWIZ_ACCOUNT_URL`, `BUWIZ_TRUST_KEYS`,
+`BIR_DATABASE_PATH` (see above), and the agent data plane's `GPUI_AGENT` and `GPUI_AGENT_ADDR`
 (never its token, see above). The format is literal `KEY=VALUE`, with surrounding whitespace
 trimmed; blank lines and full-line `#` comments are allowed. No `export`,
 quoting, variable expansion or inline comments. Unknown/duplicate keys,

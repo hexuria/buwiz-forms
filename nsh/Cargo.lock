@@ -667,12 +667,15 @@ version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
  "chrono",
+ "core-foundation 0.10.1",
+ "core-foundation-sys",
  "ed25519-dalek 2.2.0",
  "futures-util",
  "hpke",
  "keyring",
  "rand 0.10.3",
  "reqwest",
+ "security-framework-sys",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -4867,6 +4870,7 @@ dependencies = [
  "peniko",
  "png 0.17.16",
  "robius-authentication",
+ "serde",
  "serde_json",
  "temp-env",
  "tempfile",
@@ -4874,6 +4878,7 @@ dependencies = [
  "webkit6",
  "webview2-com",
  "windows 0.62.2",
+ "windows-future",
  "windows-sys 0.61.2",
 ]
 

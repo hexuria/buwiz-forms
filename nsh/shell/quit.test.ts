@@ -8,6 +8,8 @@ import { realApi } from "./desktop/updates";
 function record() {
   const order: string[] = [];
   const real = { ...quitSteps };
+  // A desktop, where the run ends when asked (the headless runner is not one).
+  quitSteps.ends = () => true;
   quitSteps.shutdown = () => void order.push("door shutdown");
   quitSteps.end = () => void order.push("run ends");
   const stop = app.beforeLeave(async () => {
@@ -16,6 +18,7 @@ function record() {
   });
   const restore = () => {
     stop();
+    quitSteps.ends = real.ends;
     quitSteps.shutdown = real.shutdown;
     quitSteps.end = real.end;
   };
@@ -29,14 +32,25 @@ test("app.quit() with no exit runs the hooks, then the door's shutdown, then end
   expect(r.order).toEqual(["hook done", "door shutdown", "run ends"]);
 });
 
+test("where the platform does not end the run (a phone, where only the agent's quit gets here), the door stays open", async () => {
+  const r = record();
+  quitSteps.ends = () => false;
+  await app.quit();
+  r.restore();
+  // The hooks ran (unsaved edits are saved); the door was not shut, so the app that goes on running still answers.
+  expect(r.order).toEqual(["hook done"]);
+});
+
 test("a shutdown that throws still ends the run", async () => {
   const order: string[] = [];
   const real = { ...quitSteps };
+  quitSteps.ends = () => true;
   quitSteps.shutdown = () => {
     throw new Error("the worker did not stop");
   };
   quitSteps.end = () => void order.push("run ends");
   await app.quit();
+  quitSteps.ends = real.ends;
   quitSteps.shutdown = real.shutdown;
   quitSteps.end = real.end;
   expect(order).toEqual(["run ends"]);

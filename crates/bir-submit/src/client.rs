@@ -48,8 +48,15 @@ pub struct SubmitConfig {
     /// Shown on the account site's device list.
     pub device_name: String,
     /// Public keys (base64url) the signed trust list must verify with:
-    /// [`trust::pinned_keys`] unless a test or lab sets its own in code.
+    /// [`trust::pinned_keys`] unless a test or lab sets its own in code, or
+    /// the host sets [`trust::pinned_keys_from`] with the value it read.
     pub trust_keys: Vec<String>,
+    /// This install's id, sent with the registration (the host's own; never
+    /// a raw hardware value).
+    pub install_id: Option<String>,
+    /// `ios`, `ipados`, `android`, `macos`, `windows` or `linux`, sent with
+    /// the registration.
+    pub platform: Option<String>,
 }
 
 /// An https URL, or an http one whose host is this machine.
@@ -83,6 +90,8 @@ impl SubmitConfig {
             server_url: url.trim_end_matches('/').to_owned(),
             device_name: format!("eBIRForms on {}", std::env::consts::OS),
             trust_keys: trust::pinned_keys(),
+            install_id: None,
+            platform: None,
         })
     }
 }
@@ -106,6 +115,17 @@ pub enum ClientError {
         code: String,
         message: String,
     },
+    /// A second registration on this sign-in was refused (`409
+    /// device_registered`) while the app holds no registered key: it lost
+    /// its device key (the key file or Keychain item is gone). Only a new
+    /// sign-in can register one. Not a try, and never tried again by itself.
+    #[error("This device's key is missing. Sign out and sign in again to send returns.")]
+    DeviceKeyMissing,
+    /// `409 install_in_use`: this install's device belongs to another live
+    /// sign-in. This client sends its install id from the start, so it should
+    /// never see it. Not a try, never tried again by itself.
+    #[error("Sign out and sign in again on this device.")]
+    InstallInUse,
     #[error("{0}")]
     Other(String),
     /// The server says this was not a try and nothing reached the BIR: a
@@ -140,6 +160,8 @@ impl ClientError {
             ClientError::NotATry { .. }
                 | ClientError::SignedOut
                 | ClientError::DeviceRevoked
+                | ClientError::DeviceKeyMissing
+                | ClientError::InstallInUse
                 | ClientError::Network(_)
         )
     }
@@ -283,6 +305,15 @@ impl FileName {
 
 /// The longest the relay WebSocket may take to open.
 const RELAY_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// What [`Submitter::register_device`] did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Registered {
+    /// This sign-in's device was registered now.
+    New,
+    /// It already was (a kept id, or `409 device_registered`).
+    AlreadyDone,
+}
 
 /// One app's connection to buwiz-server. Cheap to share behind an `Arc`.
 pub struct Submitter {
@@ -491,7 +522,31 @@ impl Submitter {
         Ok(())
     }
 
-    /// Registers the device key once per sign-in; answers its id.
+    /// Registers this device right after a sign-in (the host calls it once
+    /// the tokens are saved): [`Registered::New`], or
+    /// [`Registered::AlreadyDone`] when this sign-in already has its device
+    /// (`409 device_registered`, or an id is kept). An error is the host's to
+    /// log: the first send registers as it always did.
+    pub async fn register_device(&self) -> Result<Registered, ClientError> {
+        let _guard = self.session_lock.lock().await;
+        if self.store.get(DEVICE_ID)?.is_some() {
+            return Ok(Registered::AlreadyDone);
+        }
+        match self.post_registration().await {
+            Ok(_) => Ok(Registered::New),
+            Err(ClientError::Server {
+                status: 409, code, ..
+            }) if code == "device_registered" => Ok(Registered::AlreadyDone),
+            Err(ClientError::Server {
+                status: 409, code, ..
+            }) if code == "install_in_use" => Err(ClientError::InstallInUse),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Registers the device key once per sign-in; answers its id. A `409
+    /// device_registered` here means the sign-in has a device whose key this
+    /// app no longer holds: [`ClientError::DeviceKeyMissing`], once.
     async fn ensure_device(&self) -> Result<String, ClientError> {
         if let Some(id) = self.store.get(DEVICE_ID)? {
             return Ok(id);
@@ -500,12 +555,30 @@ impl Submitter {
         if let Some(id) = self.store.get(DEVICE_ID)? {
             return Ok(id);
         }
+        match self.post_registration().await {
+            Err(ClientError::Server {
+                status: 409, code, ..
+            }) if code == "device_registered" => Err(ClientError::DeviceKeyMissing),
+            Err(ClientError::Server {
+                status: 409, code, ..
+            }) if code == "install_in_use" => Err(ClientError::InstallInUse),
+            other => other,
+        }
+    }
+
+    /// `POST /api/devices` with this device's key, name, install id and
+    /// platform, signed with the key; keeps and answers the id.
+    async fn post_registration(&self) -> Result<String, ClientError> {
         let access_token = self.tokens.access_token(false).await?;
         let key = self.device_key()?;
-        let body = serde_json::to_vec(
-            &json!({ "public_key": key.public_key(), "name": self.config.device_name }),
-        )
-        .expect("json");
+        let mut fields = json!({ "public_key": key.public_key(), "name": self.config.device_name });
+        if let Some(install_id) = &self.config.install_id {
+            fields["install_id"] = json!(install_id);
+        }
+        if let Some(platform) = &self.config.platform {
+            fields["platform"] = json!(platform);
+        }
+        let body = serde_json::to_vec(&fields).expect("json");
         let path = "/api/devices";
         let mut request = self
             .request(reqwest::Method::POST, path)
@@ -1062,19 +1135,26 @@ enum Ending {
 }
 
 /// What a send's final status means. `verify` checks a receipt and runs
-/// only for `sent` or `dry_run` with one. Once the relay had opened toward
-/// BIR and dropped, a status read back at that moment may not record the
-/// upload yet, so only an explicit `failed` is not sent.
-fn outcome<R, E: std::fmt::Display>(
+/// only for `sent` or `dry_run` with one; a verified receipt counts only
+/// when its signed claims say what the status says ([`claims_disagree`]).
+/// Once the relay had opened toward BIR and dropped, a status read back at
+/// that moment may not record the upload yet, so only an explicit `failed`
+/// is not sent.
+fn outcome<E: std::fmt::Display>(
     ending: Ending,
     status: &str,
     error: Option<String>,
     receipt_jws: Option<String>,
-    verify: impl FnOnce(&str) -> Result<R, E>,
-) -> Result<(String, R), SendError> {
+    verify: impl FnOnce(&str) -> Result<Receipt, E>,
+) -> Result<(String, Receipt), SendError> {
     match (status, receipt_jws) {
         ("sent" | "dry_run", Some(receipt_jws)) => match verify(&receipt_jws) {
-            Ok(receipt) => Ok((receipt_jws, receipt)),
+            Ok(receipt) => match claims_disagree(status, &receipt) {
+                None => Ok((receipt_jws, receipt)),
+                Some(why) => Err(SendError::MaybeSent(format!(
+                    "the server's answer and its signed receipt disagree ({why}); BIR may have received this return; check for its confirmation email before sending again"
+                ))),
+            },
             Err(error) => Err(SendError::MaybeSent(format!(
                 "the server reports the return sent, but its receipt does not check out ({error}); check for BIR's confirmation email"
             ))),
@@ -1089,6 +1169,33 @@ fn outcome<R, E: std::fmt::Display>(
             "BIR may have received this return; check for its confirmation email before sending again".into()
         }))),
     }
+}
+
+/// Why the server's final `status` and a verified receipt's signed claims
+/// do not tell of the same send, or `None` when they agree:
+///
+/// | status    | claims `status` | claims `mode`   |
+/// |-----------|-----------------|-----------------|
+/// | `sent`    | `sent`          | `live` or `lab` |
+/// | `dry_run` | `dry_run`       | `dry_run` or `lab` |
+///
+/// Anything else disagrees: a `sent` whose claims say `dry_run` (in either
+/// claim), a `dry_run` whose claims say `sent` or `live`, and a claim this
+/// client does not know. A disagreement is never a send nor a test send: the
+/// person is asked ([`SendError::MaybeSent`]).
+fn claims_disagree(status: &str, receipt: &Receipt) -> Option<String> {
+    let modes: &[&str] = match status {
+        "sent" => &["live", "lab"],
+        "dry_run" => &["dry_run", "lab"],
+        _ => &[],
+    };
+    if receipt.status == status && modes.contains(&receipt.mode.as_str()) {
+        return None;
+    }
+    Some(format!(
+        "the server says {status}, the receipt says status {} in mode {}",
+        receipt.status, receipt.mode
+    ))
 }
 
 /// What the app saw of its own connections toward the BIR during a send.
@@ -1330,14 +1437,35 @@ mod tests {
         assert_eq!(config.trust_keys, trust::pinned_keys());
     }
 
-    /// What `outcome` answers, as a word: sent, not sent or maybe sent.
+    /// A receipt whose signed claims say `mode` and `status`.
+    fn signed(mode: &str, status: &str) -> Receipt {
+        Receipt {
+            sub: "u1".into(),
+            tin: "000000000000".into(),
+            form_type: "1601Cv2018".into(),
+            period: "102026".into(),
+            filename: "f.xml".into(),
+            xml_sha256: "00".into(),
+            payload_sha256: "00".into(),
+            remote_path: "/1601Cv2018/f.xml".into(),
+            mode: mode.into(),
+            status: status.into(),
+            iat: 1,
+            jti: None,
+        }
+    }
+
+    /// What `outcome` answers, as a word: sent, not sent or maybe sent. A
+    /// receipt named `mode/status` verifies with those claims (`good` is
+    /// `live/sent`, `dry` is `dry_run/dry_run`); any other is forged.
     fn decided(ending: Ending, status: &str, receipt: Option<&str>) -> &'static str {
-        let verify = |jws: &str| {
-            if jws == "good" {
-                Ok(())
-            } else {
-                Err("bad signature")
-            }
+        let verify = |jws: &str| match jws {
+            "good" => Ok(signed("live", "sent")),
+            "dry" => Ok(signed("dry_run", "dry_run")),
+            named => match named.split_once('/') {
+                Some((mode, status)) => Ok(signed(mode, status)),
+                None => Err("bad signature"),
+            },
         };
         match outcome(ending, status, None, receipt.map(str::to_owned), verify) {
             Ok(_) => "sent",
@@ -1356,15 +1484,30 @@ mod tests {
         use Ending::{
             DroppedAfterOpening as Opened, DroppedBeforeOpening as Before, Result as Res,
         };
-        let rows: [(&str, Option<&str>, [&str; 3]); 9] = [
-            ("sent", Some("good"), ["sent", "sent", "sent"]),
-            ("dry_run", Some("good"), ["sent", "sent", "sent"]),
-            (
-                "sent",
-                Some("forged"),
-                ["maybe sent", "maybe sent", "maybe sent"],
-            ),
-            ("sent", None, ["maybe sent", "maybe sent", "maybe sent"]),
+        const MAYBE: [&str; 3] = ["maybe sent", "maybe sent", "maybe sent"];
+        const SENT: [&str; 3] = ["sent", "sent", "sent"];
+        let rows: [(&str, Option<&str>, [&str; 3]); 24] = [
+            ("sent", Some("good"), SENT),
+            ("sent", Some("lab/sent"), SENT),
+            ("dry_run", Some("dry"), SENT),
+            ("dry_run", Some("lab/dry_run"), SENT),
+            ("sent", Some("forged"), MAYBE),
+            ("dry_run", Some("forged"), MAYBE),
+            ("sent", None, MAYBE),
+            ("dry_run", None, MAYBE),
+            // The status and the signed claims disagree: neither a send nor a test send.
+            ("dry_run", Some("good"), MAYBE),
+            ("dry_run", Some("live/dry_run"), MAYBE),
+            ("dry_run", Some("dry_run/sent"), MAYBE),
+            ("dry_run", Some("lab/sent"), MAYBE),
+            ("sent", Some("dry"), MAYBE),
+            ("sent", Some("live/dry_run"), MAYBE),
+            ("sent", Some("dry_run/sent"), MAYBE),
+            ("sent", Some("lab/dry_run"), MAYBE),
+            // A claim this client does not know.
+            ("sent", Some("/sent"), MAYBE),
+            ("sent", Some("staging/sent"), MAYBE),
+            ("sent", Some("live/queued"), MAYBE),
             ("failed", None, ["not sent", "not sent", "not sent"]),
             ("expired", None, ["not sent", "not sent", "maybe sent"]),
             ("ready", None, ["not sent", "not sent", "maybe sent"]),
@@ -1396,7 +1539,7 @@ mod tests {
                 status,
                 Some("the ticket expired".into()),
                 None,
-                |_: &str| Ok::<(), String>(()),
+                |_: &str| Ok::<Receipt, String>(signed("live", "sent")),
             );
             let Err(SendError::MaybeSent(message)) = answer else {
                 panic!("{status}: {answer:?}");
@@ -1412,12 +1555,12 @@ mod tests {
     /// The server's error and the verifier's text pass through as before.
     #[test]
     fn outcome_messages_are_unchanged_where_the_outcome_is() {
-        let message = |answer: Result<(String, ()), SendError>| match answer {
+        let message = |answer: Result<(String, Receipt), SendError>| match answer {
             Err(SendError::NotSent(message) | SendError::MaybeSent(message)) => message,
             Err(SendError::NotATry { reason, .. } | SendError::Counted { reason, .. }) => reason,
             Ok(_) => panic!("sent"),
         };
-        let ok = |_: &str| Ok::<(), String>(());
+        let ok = |_: &str| Ok::<Receipt, String>(signed("live", "sent"));
         for ending in [
             Ending::Result,
             Ending::DroppedBeforeOpening,
@@ -1457,7 +1600,7 @@ mod tests {
                     "sent",
                     None,
                     Some("x".into()),
-                    |_: &str| Err::<(), _>("bad signature")
+                    |_: &str| Err::<Receipt, _>("bad signature")
                 )),
                 "the server reports the return sent, but its receipt does not check out (bad signature); check for BIR's confirmation email"
             );
@@ -1526,7 +1669,7 @@ mod tests {
     /// refusal. A maybe-sent text with a code is never one.
     #[test]
     fn a_relay_failed_with_a_tin_code_is_a_refusal() {
-        let ok = |_: &str| Ok::<(), String>(());
+        let ok = |_: &str| Ok::<Receipt, String>(signed("live", "sent"));
         for ending in [
             Ending::Result,
             Ending::DroppedBeforeOpening,
@@ -1559,17 +1702,48 @@ mod tests {
             "dry_run",
             None,
             Some("jws".into()),
-            |jws: &str| Ok::<_, String>(jws.len()),
+            |jws: &str| {
+                assert_eq!(jws, "jws");
+                Ok::<_, String>(signed("dry_run", "dry_run"))
+            },
         );
-        assert_eq!(answer.unwrap(), ("jws".to_owned(), 3));
+        assert_eq!(
+            answer.unwrap(),
+            ("jws".to_owned(), signed("dry_run", "dry_run"))
+        );
         let answer = outcome(
             Ending::Result,
             "failed",
             None,
             Some("jws".into()),
-            |_: &str| -> Result<(), String> { panic!("verified a failed send's receipt") },
+            |_: &str| -> Result<Receipt, String> { panic!("verified a failed send's receipt") },
         );
         assert!(matches!(answer, Err(SendError::NotSent(_))));
+    }
+
+    /// A verified receipt whose claims say another send than the status asks
+    /// the person, and says what disagrees.
+    #[test]
+    fn a_status_its_receipt_disagrees_with_says_what_disagrees() {
+        for (status, mode, claimed) in [("dry_run", "live", "sent"), ("sent", "dry_run", "dry_run")]
+        {
+            let answer = outcome(
+                Ending::Result,
+                status,
+                None,
+                Some("jws".into()),
+                |_: &str| Ok::<_, String>(signed(mode, claimed)),
+            );
+            let Err(SendError::MaybeSent(message)) = answer else {
+                panic!("{status} {mode} {claimed}: {answer:?}");
+            };
+            assert_eq!(
+                message,
+                format!(
+                    "the server's answer and its signed receipt disagree (the server says {status}, the receipt says status {claimed} in mode {mode}); BIR may have received this return; check for its confirmation email before sending again"
+                )
+            );
+        }
     }
 
     // ------------------------------------------ the host's sign-in
@@ -1751,6 +1925,142 @@ mod tests {
             .map(|request| request.path.clone())
             .collect();
         assert_eq!(paths, ["/api/tickets", "/api/devices", "/api/tickets"]);
+    }
+
+    // ----------------------------------------------- registration after a sign-in
+
+    /// Right after a sign-in: one registration with the install id and the
+    /// platform; a second is already done, by the kept id or by `409`.
+    #[tokio::test]
+    async fn a_new_sign_in_registers_its_device_once_with_the_install_id() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url2, seen2) = serve(|request| match request.path.as_str() {
+            "/api/devices" => Answer::json(200, &json!({"id": "d7"})),
+            _ => Answer::json(404, &json!({})),
+        });
+        let (mut client, _) = submitter_tokens(&url2, true, Vec::new());
+        client.store.delete(DEVICE_ID).unwrap();
+        client.config.install_id = Some("install-id-of-this-test-0001".into());
+        client.config.platform = Some("macos".into());
+        assert_eq!(client.register_device().await.unwrap(), Registered::New);
+        assert_eq!(client.store.get(DEVICE_ID).unwrap().as_deref(), Some("d7"));
+        assert_eq!(
+            client.register_device().await.unwrap(),
+            Registered::AlreadyDone
+        );
+        let sent = seen2.lock().unwrap();
+        assert_eq!(sent.len(), 1, "one registration");
+        let body: Value = serde_json::from_str(&sent[0].body).unwrap();
+        assert_eq!(body["install_id"], "install-id-of-this-test-0001");
+        assert_eq!(body["platform"], "macos");
+        assert_eq!(body["name"], "test");
+        for later in ["model", "os_version", "computer_name"] {
+            assert!(body.get(later).is_none(), "{later} is a later change");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_409_after_the_sign_in_is_already_done_and_other_failures_are_errors() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, _) = serve(|_| {
+            Answer::json(
+                409,
+                &json!({"error": "device_registered", "message": "already"}),
+            )
+        });
+        let (client, _) = submitter_tokens(&url, true, Vec::new());
+        client.store.delete(DEVICE_ID).unwrap();
+        assert_eq!(
+            client.register_device().await.unwrap(),
+            Registered::AlreadyDone
+        );
+        let (url, _) = serve(|_| Answer::json(500, &json!({"error": "oops"})));
+        let (client, _) = submitter_tokens(&url, true, Vec::new());
+        client.store.delete(DEVICE_ID).unwrap();
+        assert!(client.register_device().await.is_err());
+    }
+
+    /// `409 install_in_use`: a plain sentence where the send is held, after
+    /// the sign-in and on a send alike; one request each, no loop.
+    #[tokio::test]
+    async fn an_install_in_use_says_sign_in_again_and_never_loops() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, seen) = serve(|request| match request.path.as_str() {
+            "/api/devices" => Answer::json(
+                409,
+                &json!({"error": "install_in_use", "message": "in use"}),
+            ),
+            _ => Answer::json(404, &json!({})),
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        client.store.delete(DEVICE_ID).unwrap();
+        let after_sign_in = client.register_device().await.unwrap_err();
+        assert!(
+            matches!(after_sign_in, ClientError::InstallInUse),
+            "{after_sign_in:?}"
+        );
+        let on_send = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            on_send.to_string(),
+            "Sign out and sign in again on this device."
+        );
+        assert!(on_send.is_not_a_try());
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            2,
+            "one registration each, no loop"
+        );
+        assert_eq!(tokens.ended(), 0);
+    }
+
+    /// The device key is gone while still signed in: the server does not
+    /// know the new key (`401 unknown_device`), the one registration again is
+    /// refused (`409`): one plain sentence, held, never a loop.
+    #[tokio::test]
+    async fn a_lost_device_key_says_so_once_and_never_loops() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, seen) = serve(|request| match request.path.as_str() {
+            "/api/devices" => Answer::json(
+                409,
+                &json!({"error": "device_registered", "message": "already"}),
+            ),
+            _ => Answer::json(
+                401,
+                &json!({"error": {"code": "unknown_device", "message": "who?"}}),
+            ),
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        let error = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ClientError::DeviceKeyMissing), "{error:?}");
+        assert_eq!(
+            error.to_string(),
+            "This device's key is missing. Sign out and sign in again to send returns."
+        );
+        assert!(error.is_not_a_try());
+        let paths: Vec<String> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|r| r.path.clone())
+            .collect();
+        assert_eq!(paths, ["/api/tickets", "/api/devices"]);
+        assert_eq!(tokens.ended(), 0, "not signed out by itself");
+        // The next send asks once more and says the same; still no loop.
+        assert!(matches!(
+            client.signed("POST", "/api/tickets", &json!({})).await,
+            Err(ClientError::DeviceKeyMissing)
+        ));
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            3,
+            "one registration try per send"
+        );
     }
 
     // ----------------------------------------------- the version header
@@ -2745,6 +3055,55 @@ mod tests {
         assert_eq!(connections(&listener), 0);
     }
 
+    /// Link 1 of 3 of "a relay dry_run result never reads as filed" (link 2:
+    /// bir-core `background_cron::tests::a_relay_dry_run_result_is_stored_as_a_test_send_on_every_path`;
+    /// link 3: bir-app-api `screen_form_module::tests::a_relay_dry_run_result_never_reads_as_filed`).
+    /// The shared fixture `relay-result-dry-run.json` is the relay's `result`
+    /// for a test TIN: status `dry_run`, and the claims of its dry-run receipt
+    /// for `<xml/>` on ticket `jti-1`. The test key signs those claims here
+    /// (no signed token is kept in the repository), and over a loopback relay
+    /// the real send verifies the receipt and hands it over as a test send:
+    /// exactly the fixture's claims, which is what the queue reads.
+    #[tokio::test]
+    async fn a_relay_dry_run_result_with_its_signed_receipt_is_a_verified_test_send() {
+        let fixture = crate::testkit::fixture_json("relay-result-dry-run.json");
+        assert_eq!(fixture["type"], "result");
+        assert_eq!(fixture["status"], "dry_run");
+        let claims = &fixture["receipt_claims"];
+        assert_eq!(
+            claims["xml_sha256"],
+            xml_hash(),
+            "the claims are for <xml/>"
+        );
+        let receipt = crate::testkit::sign_receipt_claims(&[7; 32], claims);
+        let mut result = fixture.clone();
+        let frame = result.as_object_mut().unwrap();
+        frame.remove("receipt_claims");
+        frame.insert("receipt".into(), json!(receipt));
+        let (host, listener) = bir_host();
+        let (name, port) = host.split_once(':').unwrap();
+        let open = format!(r#"{{"type":"open","stream":1,"host":"{name}","port":{port}}}"#);
+        let (client, _, _) = filing_to(
+            &[&host],
+            created(),
+            Answer::relay(&[&open, &result.to_string()]),
+            Answer::hang_up(),
+        );
+        let (_, note) = notes(None);
+        let sent = client
+            .send_noting(RETURN, b"<xml/>", &note)
+            .await
+            .expect("a verified receipt");
+        assert_eq!(sent.receipt_jws, receipt);
+        assert_eq!(
+            sent.receipt,
+            serde_json::from_value::<Receipt>(claims.clone()).unwrap(),
+            "the fixture's claims, verified"
+        );
+        assert!(sent.receipt.is_test(), "nothing reached the BIR");
+        assert_eq!(connections(&listener), 1);
+    }
+
     #[tokio::test]
     async fn a_failed_opening_note_opens_nothing_toward_the_bir() {
         let (host, listener) = bir_host();
@@ -2820,6 +3179,15 @@ mod tests {
             (
                 json!({"status": "dry_run", "receipt_jws": dry}),
                 ["sent", "sent"],
+            ),
+            // The status and the signed claims disagree.
+            (
+                json!({"status": "dry_run", "receipt_jws": good}),
+                ["maybe sent", "maybe sent"],
+            ),
+            (
+                json!({"status": "sent", "receipt_jws": dry}),
+                ["maybe sent", "maybe sent"],
             ),
             (
                 json!({"status": "sent", "receipt_jws": forged}),

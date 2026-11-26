@@ -1,10 +1,9 @@
 // A searchable list for a long choice (ATC codes, RDOs, regions, cities): a trigger that looks like the kit's Dropdown, a
 // search box that matches every typed word in any order (the kit's ComboField matches one run of text only), and the
-// matches as rows. Wide: a popover at the trigger. Narrow (under BREAK.phone, the kit Sheet's own rule): a bottom sheet.
+// matches as rows. Wide: a popover at the trigger. In the phone layout (every touch screen, and a desktop window under 600 points, as the kit Sheet does): a bottom sheet.
 import type { Accessor, ViewRef } from "nsh";
-import { signal, View, windowSize } from "nsh";
-import { Icon, Line, ListGroup, ListRow, Popover, Sheet, Text, TextField, TOUCH } from "../../../ui";
-import { BREAK } from "../../../theme/tokens";
+import { signal, View } from "nsh";
+import { Icon, Line, ListGroup, ListRow, phoneLayout, Popover, Sheet, T_MIN_H, Text, TextField, TOUCH } from "../../../ui";
 import type { ChoiceOption } from "../contract";
 import { cx, matchWords, splitLabel } from "./model";
 
@@ -93,7 +92,7 @@ export function SearchPick(props: SearchPickProps) {
   const open = signal(false);
   const sheet = signal(false);
   const query = signal("");
-  const small = () => windowSize().width < BREAK.phone;
+  const small = () => phoneLayout();
   const current = () => props.options.find((o) => o.value === props.value && o.value !== "");
   const close = () => {
     open.set(false);
@@ -126,7 +125,7 @@ export function SearchPick(props: SearchPickProps) {
             accessibilityLabel={`${props.label}: ${current()?.label ?? "nothing chosen"}`}
             class={cx(
               "min-w-0 flex-row items-center gap-2 rounded-(--radius-row) border bg-card pr-2 pl-2.5",
-              TOUCH ? "min-h-11" : "h-8",
+              TOUCH ? T_MIN_H : "h-8",
               props.error ? "border-danger" : open() || sheet() ? "border-accent-blue" : "border-border-strong",
               props.disabled ? "opacity-50" : "hover:bg-hover",
             )}

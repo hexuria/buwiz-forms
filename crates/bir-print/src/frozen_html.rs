@@ -1356,16 +1356,18 @@ fn fill_text_input(
         // digits into the slots before the point and put the two centavo
         // digits after it. Spreading the text left-to-right put `0.00` as
         // `0 . 0 0` from the first box (#print-audit decimal mapping).
-        if let Some(writes) = money_comb_values(tags, &ordered, print) {
-            for (offset, (index, ch)) in writes.into_iter().enumerate() {
-                let writer = (via_cell && offset == 0).then_some(print);
-                replacements.push((
-                    tags[index].start,
-                    tags[index].end,
-                    set_value(tags[index].tag, &ch, writer),
-                ));
+        if !name.starts_with("derived:") {
+            if let Some(writes) = money_comb_values(tags, &ordered, print) {
+                for (offset, (index, ch)) in writes.into_iter().enumerate() {
+                    let writer = (via_cell && offset == 0).then_some(print);
+                    replacements.push((
+                        tags[index].start,
+                        tags[index].end,
+                        set_value(tags[index].tag, &ch, writer),
+                    ));
+                }
+                return;
             }
-            return;
         }
         let chars: Vec<char> = print.chars().collect();
         // Text longer than its comb (a long name, an email, a
@@ -7452,7 +7454,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1419, "band boxes");
+        assert_eq!(total, 1433, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 
@@ -7866,7 +7868,7 @@ mod donor_estate_print_tests {
             ),
             (
                 "1801-2018",
-                "3793bd7404622e63a41cc4e72aae3f0d375f1c823b9d92f83bea99956332ff74",
+                "2a923d5d5eed26eb27aa41dc90805f12695240ae5e56827dae49496c332e60b2",
             ),
             (
                 "1800-2018",

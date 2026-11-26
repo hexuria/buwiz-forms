@@ -12,6 +12,18 @@ LISTENER = SCRIPT[SCRIPT.index('function Assert-MockAccountListener'):SCRIPT.ind
 
 @unittest.skipUnless(os.name == 'nt' and shutil.which('powershell'), 'Windows PowerShell required')
 class LauncherTests(unittest.TestCase):
+    def test_runtimes_must_be_copies_recorded_at_the_pin(self):
+        # A runtime linked into a checkout's build folder made every run a test of another NSH.
+        check = SCRIPT.index("foreach ($built in 'bin-dev', 'bin')")
+        copy = SCRIPT.index('Copy-Item "$tools\\android\\bin-dev\\*"')
+        self.assertLess(check, copy)
+        block = SCRIPT[check:copy]
+        self.assertIn("NSH_PINNED_REF", SCRIPT[:check])
+        self.assertIn("$item.LinkType", block)
+        self.assertIn("$ref -ne $pin", block)
+        self.assertIn("throw", block)
+        self.assertIn("Get-FileHash", block)
+
     def test_hardware_virtualization_flags_only_provide_positive_evidence(self):
         function = SCRIPT[SCRIPT.index('function Test-HardwareVirtualization'):SCRIPT.index('function Test-WHPXRebootPending')]
         for processors, expected in (

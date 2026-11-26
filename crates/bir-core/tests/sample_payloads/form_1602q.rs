@@ -6,7 +6,7 @@ use bir_core::forms::form_1602q::{
 };
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_1602q() -> Form1602QDraft {
+pub(crate) fn sample_1602q() -> Form1602QDraft {
     let mut draft =
         Form1602QDraft::new_from_profile(&dummy_profile("1602Q", "Corporation"), 2025, 3);
     draft.is_amended = Some(false);

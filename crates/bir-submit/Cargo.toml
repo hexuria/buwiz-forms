@@ -28,10 +28,18 @@ tracing.workspace = true
 url = "2"
 
 # The OS credential store for the device key and id, with the same
-# backends bir-core uses for its database key. Android has none: the
-# secrets go to a file in the app's private data dir instead.
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+# backends bir-core uses for its database key. Android and iOS have none
+# here: the secrets go to files in the app's private data dir instead.
+[target.'cfg(target_os = "macos")'.dependencies]
 keyring = { workspace = true, features = ["apple-native"] }
+
+# iOS: the install id in the Keychain, and the files' protection and the
+# data folder's backup exclusion (src/ios_storage.rs). Already in the graph
+# through keyring's security-framework.
+[target.'cfg(target_os = "ios")'.dependencies]
+core-foundation = "0.10"
+core-foundation-sys = "0.8"
+security-framework-sys = "2.17"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { workspace = true, features = ["windows-native"] }
@@ -41,3 +49,4 @@ keyring = { workspace = true, features = ["sync-secret-service", "crypto-rust"] 
 
 [dev-dependencies]
 tempfile = "3"
+tracing-subscriber = { workspace = true }

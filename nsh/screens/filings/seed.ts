@@ -4,7 +4,7 @@ import { bir } from "../../bir";
 import { createDemoTaxpayer, DEMO } from "../../bir/testing";
 
 /** The generated second taxpayer. */
-export const SECOND = { root: "000111229", rootDashed: "000-111-229", tin: "00011122900000", name: "Sample Trading Corp" } as const;
+export const SECOND = { root: "000111225", rootDashed: "000-111-225", tin: "00011122500000", name: "Sample Trading Corp" } as const;
 
 /** Juana's Cebu branch (not the head office): its TIN as host functions take it. */
 export const CEBU = { code: "00001", name: "Cebu branch", tin: "00012345300001" } as const;

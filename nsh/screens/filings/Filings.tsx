@@ -164,7 +164,8 @@ export function Filings(): JSX.Element {
   // The frame pads the page 16 each side under 640 points of main surface, 32 from there (Shell.tsx ViewFrame).
   const pad = () => (app.layout.mainWidth() < BREAK.narrowContent ? 16 : 32);
   const column = () => Math.max(200, app.layout.mainWidth() - pad() * 2);
-  const wide = () => column() >= BOARD_MIN;
+  // The board needs a pointer and room; the phone layout (every phone and tablet) always lists the returns.
+  const wide = () => !app.layout.narrow() && column() >= BOARD_MIN;
   const sheetOpen = signal(false);
 
   const open = (r: ReturnRow) =>

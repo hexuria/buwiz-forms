@@ -9,7 +9,7 @@ use bir_core::forms::queueable::QueueableForm as _;
 
 /// Married, filing jointly. Taxpayer: mixed income, graduated rates, OSD.
 /// Spouse: compensation income only.
-fn sample_1701ms() -> Form1701MsDraft {
+pub(crate) fn sample_1701ms() -> Form1701MsDraft {
     let mut draft = Form1701MsDraft::new_from_profile(&dummy_profile("1701MS", "Individual"), 2025);
     draft.civil_status = Form1701MsCivilStatus::Married;
     draft.filing = Form1701MsFiling::Jointly;
@@ -63,7 +63,7 @@ fn form_1701ms_sample_payload_is_current() {
 /// Single; business income at a special rate with Items 13–16, cost of
 /// sales, a foreign tax credit (its blur upper-cases every text control,
 /// emails included) and an overpayment to be refunded.
-fn sample_1701ms_special() -> Form1701MsDraft {
+pub(crate) fn sample_1701ms_special() -> Form1701MsDraft {
     let mut draft = Form1701MsDraft::new_from_profile(&dummy_profile("1701MS", "Individual"), 2025);
     draft.taxpayer_name = "Dummy, Sample Taxpayer".to_string();
     draft.civil_status = Form1701MsCivilStatus::Single;
@@ -118,7 +118,7 @@ fn form_1701ms_penalty_items_follow_the_shared_model() {
 /// of another government agency). For the agent-form probe only (PR 7):
 /// without it the probe saw those spouse boxes blank on every sample and
 /// could not bind them.
-fn sample_1701ms_joint_special() -> Form1701MsDraft {
+pub(crate) fn sample_1701ms_joint_special() -> Form1701MsDraft {
     let mut draft = sample_1701ms();
     draft.spouse = Form1701MsColumn {
         source: Form1701MsSource::Business,
@@ -145,7 +145,7 @@ fn sample_1701ms_joint_special() -> Form1701MsDraft {
 
 /// Married, filing jointly, the spouse on the 8% rate (Items 19B and 20B).
 /// For the agent-form probe only (PR 7), as above.
-fn sample_1701ms_joint_eight() -> Form1701MsDraft {
+pub(crate) fn sample_1701ms_joint_eight() -> Form1701MsDraft {
     let mut draft = sample_1701ms();
     draft.spouse = Form1701MsColumn {
         source: Form1701MsSource::Profession,

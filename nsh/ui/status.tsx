@@ -4,7 +4,7 @@ import { colorScheme, Text as NText, View } from "nsh";
 import { Avatar as BaseAvatar, Button } from "nsh/base";
 import type { IconName } from "./icons";
 import { avatarColors, type ChipTone, type ReturnStatus, initials, statusChip } from "./logic";
-import { cx, FOCUS_RING, TOUCH, type Tone } from "./look";
+import { cx, FOCUS_RING, T_MIN_H, TOUCH, type Tone } from "./look";
 import { Icon, Line, Text } from "./text";
 
 /** The sizes the app draws avatars at: 20 (rows, the pill), 28 (account), 40 (page header), 56 (panel). */
@@ -78,7 +78,7 @@ export function ContextPill(props: ContextPillProps) {
       class={cx(
         "min-w-0 shrink flex-row items-center gap-2 rounded-full border border-border bg-card pr-2.5 enabled:hover:border-border-strong selected:border-border-strong selected:bg-selected",
         FOCUS_RING,
-        TOUCH ? "min-h-11" : "h-7.5",
+        TOUCH ? T_MIN_H : "h-7.5",
         props.empty ? "pl-2.5" : "pl-1",
       )}
       style={{ maxWidth: 460 }}

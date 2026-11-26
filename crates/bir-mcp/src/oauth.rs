@@ -110,8 +110,8 @@ pub fn resolve_authorization_server(
 
 /// The authorization server for this process.
 pub fn configured_authorization_server() -> Result<String, String> {
-    let account_runtime = std::env::var(cloud_account::ENV_ACCOUNT_URL).ok();
-    let server_runtime = std::env::var(cloud_account::ENV_SERVER_URL).ok();
+    let account_runtime = bir_core::config::var(cloud_account::ENV_ACCOUNT_URL).ok();
+    let server_runtime = bir_core::config::var(cloud_account::ENV_SERVER_URL).ok();
     resolve_authorization_server(
         account_runtime.as_deref(),
         option_env!("BUWIZ_ACCOUNT_URL"),

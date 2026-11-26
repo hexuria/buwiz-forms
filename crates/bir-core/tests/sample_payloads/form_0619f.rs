@@ -4,7 +4,7 @@ use bir_core::forms::form_0619f::{Form0619FDraft, Form0619FTaxType};
 use bir_core::forms::queueable::QueueableForm as _;
 
 /// Tax type WF (Item 14), amended, rounding cases.
-fn sample_0619f() -> Form0619FDraft {
+pub(crate) fn sample_0619f() -> Form0619FDraft {
     let mut draft =
         Form0619FDraft::new_from_profile(&dummy_profile("0619F", "Corporation"), 2025, 6);
     draft.is_amended = true;

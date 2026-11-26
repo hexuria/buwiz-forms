@@ -2,7 +2,7 @@
 // one nsh/base Button (presses, focus, selected, role) styled from tokens, like the kit's own NavRow.
 import { View } from "nsh";
 import { Button } from "nsh/base";
-import { Icon, Kbd, Line, Text, TOUCH, type IconName } from "../ui";
+import { Icon, Kbd, Line, T_MIN_H, Text, TOUCH, type IconName } from "../ui";
 
 const FOCUS_RING = "focus-visible:ring-2 focus-visible:ring-accent-blue";
 
@@ -12,7 +12,7 @@ export function SearchRow(props: { shortcut: string; onPress: () => void }) {
     <Button
       testID="sb-search"
       accessibilityLabel="Search"
-      class={`min-w-0 flex-1 flex-row items-center gap-2 rounded-(--radius-row) border border-border bg-card pr-2 pl-2.5 enabled:hover:border-border-strong ${FOCUS_RING} ${TOUCH ? "min-h-11" : "h-8"}`}
+      class={`min-w-0 flex-1 flex-row items-center gap-2 rounded-(--radius-row) border border-border bg-card pr-2 pl-2.5 enabled:hover:border-border-strong ${FOCUS_RING} ${TOUCH ? T_MIN_H : "h-8"}`}
       onPress={props.onPress}
     >
       <Icon name="search" tone="fg3" />

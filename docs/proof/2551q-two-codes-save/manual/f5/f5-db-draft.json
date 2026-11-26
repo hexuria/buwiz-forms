@@ -1,0 +1,31 @@
+{
+  "scratch_db_container_path": "/tmp/ebirforms-door/36933-0/bir_data.db",
+  "host_proc_path": "/proc/875744/root/tmp/ebirforms-door/36933-0/bir_data.db",
+  "row": {
+    "tin": "00012345300000",
+    "form_code": "2551Q",
+    "taxable_year": 2026,
+    "quarter": 4,
+    "status": "Draft",
+    "updated_at": "2026-11-25 22:33:10"
+  },
+  "schedule_1": [
+    {
+      "atc": "PT040",
+      "atc_description": "Domestic carriers and keepers of garages [Sec. 117]",
+      "taxable_amount": 0.0,
+      "tax_rate": 0.03,
+      "tax_due": 0.0
+    },
+    {
+      "atc": "PT060",
+      "atc_description": "Franchises on gas and water utilities [Sec. 119]",
+      "taxable_amount": 2000.0,
+      "tax_rate": 0.02,
+      "tax_due": 40.0
+    }
+  ],
+  "total_tax_due": 40.0,
+  "tax_payable": 40.0,
+  "total_amount_payable": 40.0
+}

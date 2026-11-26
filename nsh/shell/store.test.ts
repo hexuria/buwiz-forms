@@ -139,14 +139,14 @@ test("a read that works after failing stays cached; a bump starts a failing key'
 
 test("the session's scope narrows the taxpayers and the deadlines it may see", () => {
   const t = createDemoTaxpayer();
-  bir.create_taxpayer({ tin_root: "000-111-229", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039" } });
+  bir.create_taxpayer({ tin_root: "000-111-225", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039" } });
   store.bump();
   expect(store.taxpayers().length).toBeGreaterThanOrEqual(2);
   store.setScope(t.tin_root);
   expect(store.scopeRoot()).toBe(t.tin_root);
   expect(store.taxpayers().map((x) => x.tin_root)).toEqual([t.tin_root]);
   expect(store.canSee(t.tin_root)).toBe(true);
-  expect(store.canSee("000111229")).toBe(false);
+  expect(store.canSee("000111225")).toBe(false);
   store.setScope(null);
   expect(store.taxpayers().length).toBeGreaterThanOrEqual(2);
 });

@@ -16,8 +16,9 @@ use serde_json::Value;
 pub const SENDING_LINE: &str = "Sending now. Keep eBIRForms open.";
 /// The line of a Queued return with no reason kept.
 pub const QUEUED_LINE: &str = "Queued to send.";
-/// The line of a dry-run send.
-pub const TEST_SENT_LINE: &str = "Test send. Nothing reached the BIR.";
+/// The line of a dry-run send: the app's one sentence for a test send, the
+/// one the OS notice says too (bir-core).
+pub const TEST_SENT_LINE: &str = bir_core::background_cron::TEST_SENT_LINE;
 /// The line of a send the Buwiz relay gave a receipt for.
 pub const SENT_LINE: &str =
     "Sent to the BIR through Buwiz. Waiting for the BIR's confirmation email.";
