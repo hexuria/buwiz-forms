@@ -108,8 +108,11 @@ function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void
   let list: ListRef | null = null;
   // Measured once every part is laid out (the panel's and the list's onLayout: a ref callback comes before its later siblings' refs
   // and before layout, so the old report from the search field's ref found no list and said nothing) and on every scroll of the list.
+  // Only a test that registered watchSheetFrames before the sheet opened gets the handlers below: without one the panel and the list
+  // carry no onLayout or scroll handlers at all (no events sent, no measure() calls, no signals written, so no extra renders).
+  const watch = frameWatch;
+  const watching = <T,>(fn: T): T | undefined => (watch ? fn : undefined);
   const report = () => {
-    const watch = frameWatch;
     if (!watch || !refs.search || !refs.list || !refs.panel) return;
     void Promise.all([boxOf(refs.search), boxOf(refs.list), boxOf(refs.panel)]).then(([search, listBox, panel]) => {
       if (search && listBox && panel) watch({ testID: p.testID, search, list: listBox, panel, window: windowSize().height });
@@ -120,7 +123,7 @@ function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void
     if (open.length === 1) props.choose(open[0].value);
   };
   return (
-    <View ref={(r: ViewRef) => (refs.panel = r)} class="min-h-0 gap-3" onLayout={report}>
+    <View ref={(r: ViewRef) => (refs.panel = r)} class="min-h-0 gap-3" onLayout={watching(report)}>
       <TextField
         size="sm"
         icon="search"
@@ -151,11 +154,11 @@ function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void
         estimatedItemSize={56}
         keyboardShouldPersistTaps="handled"
         style={{ height: listHeight() }}
-        onLayout={report}
-        onScroll={report}
-        onScrollEnd={report}
-        onScrollDragEnd={report}
-        onMomentumEnd={report}
+        onLayout={watching(report)}
+        onScroll={watching(report)}
+        onScrollEnd={watching(report)}
+        onScrollDragEnd={watching(report)}
+        onMomentumEnd={watching(report)}
         header={() => (
           <If when={showClear()}>
             <ChoiceRow testID={`${p.testID}-opt-`} label="Clear the choice" onPress={() => props.choose("")}>
