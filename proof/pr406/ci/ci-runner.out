@@ -1,0 +1,23 @@
+app a9c9fd7c0a50a3639435dcb3e83c71fdb6f6bdea
+nsh 8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf
+cli nsh 0.6.1 (8c78cfd)
+cargo cargo 1.99.0 (5f94df478 2026-08-27)
+target /Users/devin/BuwizNsh/target-a9c9fd7c
+RUNNING nsh-check
+PASS nsh-check
+RUNNING nsh-build
+PASS nsh-build
+RUNNING rust-tests
+PASS rust-tests
+RUNNING agent-no-run
+PASS agent-no-run
+RUNNING agent-tests
+PASS agent-tests
+RUNNING agent-tree
+PASS agent-tree
+RUNNING ios-sim-agent-check
+PASS ios-sim-agent-check
+RUNNING iphone-compile
+PASS iphone-compile
+RUNNING screen-tests
+FAIL screen-tests rc=1
