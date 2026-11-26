@@ -1,0 +1,24 @@
+===== 1800
+all font sizes under 7.5pt in document: [6.0, 6.48, 6.96]
+ellipsis elements (fontsize, text[:40]): [('8.55', 'ABCDEFGHIJABCDEFGHIJABCDEFGHIJABCDEFGH'), ('8.55', 'ABCDEFGHIJABCDEFGHIJABCDEFGHIJABCD...'), ('8.55', 'ABCDEFGHIJABCDEFGHIJABCDEFGHIJABCDEFGH'), ('8.55', 'ABCDEFGHIJABCDEFGHIJABCDEFGHIJABCD...'), ('8.55', 'ABCDEFGHIJABCDEFGHIJABCDEFGHIJABCDEFGH')] total 68
+full 200-char value occurrences in html: 0
+overflow-warning attrs: 52
+has flow/continuation structures: True
+===== 1801
+all font sizes under 7.5pt in document: [0.96, 4.56, 4.7, 5.04, 5.17, 5.55, 5.83, 6.0, 6.12, 6.33, 6.44, 6.48, 6.55, 6.65, 6.76, 6.87, 6.96, 7.19, 7.41, 7.47]
+ellipsis elements (fontsize, text[:40]): [('7.50', 'ABCDEFGHIJABCDEF&#10;GHIJABCDEFGHIJA..'), ('7.50', 'ABCDEFGHIJABCDEFGHIJABCDEFGHIJABCDEFGH'), ('7.50', 'ABCDEFGHIJABC&#10;DEFGHIJABCDE...'), ('7.50', 'ABCDEFGHIJABCDEF&#10;GHIJABCDEFGHIJAB.'), ('7.50', 'ABCDEFGHIJABC&#10;DEFGHIJABCDE...')] total 71
+full 200-char value occurrences in html: 0
+overflow-warning attrs: 53
+has flow/continuation structures: True
+===== 2200S
+all font sizes under 7.5pt in document: [6.0, 6.48, 6.96]
+ellipsis elements (fontsize, text[:40]): [] total 0
+full 200-char value occurrences in html: 0
+overflow-warning attrs: 3
+has flow/continuation structures: False
+===== 2200T
+all font sizes under 7.5pt in document: [3.96, 5.04, 6.0, 6.96]
+ellipsis elements (fontsize, text[:40]): [('7.50', 'ABCDEFGHIJAB...'), ('7.50', 'ABCDEFGHIJABCDE...'), ('7.50', 'ABCDEFGHIJAB...'), ('7.50', 'ABCDEFGHIJABCDE...'), ('7.50', 'ABCDEFGHIJAB...')] total 27
+full 200-char value occurrences in html: 0
+overflow-warning attrs: 19
+has flow/continuation structures: True
