@@ -1,0 +1,14 @@
+8:Android Emulator: PINPROBE body bsca t=1795662230182
+9:Android Emulator: PINPROBE ref bsca autoFocus=true t=1795662230182
+10:Android Emulator: PINPROBE try bsca 0 hadFocus=false gone=false t=1795662230220
+11:Android Emulator: PINPROBE focus bsca t=1795662230258
+12:Android Emulator: PINPROBE try bsca 500 hadFocus=true gone=false t=1795662230683
+13:Android Emulator: PINPROBE try bsca 1500 hadFocus=true gone=false t=1795662231683
+14:Android Emulator: PINPROBE try bsca 3000 hadFocus=true gone=false t=1795662233183
+18:PINPROBE body p601 t=1795662349529
+19:PINPROBE ref p601 autoFocus=true t=1795662349531
+20:PINPROBE try p601 0 hadFocus=false gone=false t=1795662349552
+21:PINPROBE focus p601 t=1795662349601
+22:PINPROBE try p601 500 hadFocus=true gone=false t=1795662350032
+23:PINPROBE try p601 1500 hadFocus=true gone=false t=1795662351031
+24:PINPROBE try p601 3000 hadFocus=true gone=false t=1795662352533
