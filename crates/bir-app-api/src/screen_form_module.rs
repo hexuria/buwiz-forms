@@ -7310,6 +7310,8 @@ mod tests {
     // The decimal-drop fault: count-labelled decimal amounts are never the
     // digits-only box, and a whole box refuses a decimal part.
     mod input_decimal;
+    // Report-only third-decimal audit harness; records behavior, fixes nothing.
+    mod money_decimal_audit;
     // Form fields PR 1 handoff 2: a code off a select's list is refused
     // on every form (bug B17).
     mod sel_lists;

@@ -1,0 +1,21 @@
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:20:1
+   |
+20 | repository = "https://github.com/hexuria/buwiz-forms"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling bir-app-api v0.2.1 (/home/ubuntu/urgent2551/money-audit/buwiz-forms/crates/bir-app-api)
+    Finished `test` profile [unoptimized] target(s) in 9.04s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/lib.rs (/home/ubuntu/.cargo/targets/buwiz-forms-13bc0fdf/debug/build/bir-app-api/4d7fd87e57d4c116/out/bir_app_api-adf6bd256412d8c6)
+
+running 1 test
+money audit wrote /home/ubuntu/urgent2551/money-audit/money-third-decimal-audit.json: 327 records
+test screen_form_module::tests::money_decimal_audit::money_third_decimal_audit_matrix ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 796 filtered out; finished in 5.72s
+

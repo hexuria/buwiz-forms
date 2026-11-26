@@ -1,0 +1,954 @@
+{
+  "0605-v2003": {
+    "all_blur_rule_ids": [
+      "0605-input-001-amount-format"
+    ],
+    "blur_official_behavior": "The source silently replaces the value with 0.00; otherwise it applies parseFloat(...).toFixed(2).",
+    "blur_rounding": "parseFloat/toFixed(2)",
+    "blur_rule_count": 1,
+    "blur_rule_id": "0605-input-001-amount-format",
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "formatCurrency after NumWithComma conversion; displayed to two decimal places."
+    ],
+    "input_money_field_count": 6,
+    "logical_type_counts": {
+      "decimal-amount": 8
+    },
+    "money_field_count": 8,
+    "normalization": [
+      "parseFloat().toFixed(2)",
+      "NumWithComma",
+      "formatCurrency"
+    ]
+  },
+  "0619e-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "formatCurrency after NumWithComma conversion; displayed to two decimal places."
+    ],
+    "input_money_field_count": 9,
+    "logical_type_counts": {
+      "decimal-amount": 12
+    },
+    "money_field_count": 12,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency"
+    ]
+  },
+  "0619f-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "formatCurrency after NumWithComma conversion; displayed to two decimal places."
+    ],
+    "input_money_field_count": 10,
+    "logical_type_counts": {
+      "decimal-amount": 14
+    },
+    "money_field_count": 14,
+    "normalization": [
+      "NumWithComma",
+      "round(...,2)",
+      "formatCurrency"
+    ]
+  },
+  "1600pt-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "unresolved",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "mixed: parseFloat/toFixed(2) + formatCurrency/round",
+    "computation_rounding_texts": [
+      "toFixed(2), then formatCurrency.",
+      "formatCurrency.",
+      "formatCurrency after every incremental addition."
+    ],
+    "input_money_field_count": 77,
+    "logical_type_counts": {
+      "decimal": 119
+    },
+    "money_field_count": 119,
+    "normalization": [
+      "legacy currency formatting"
+    ]
+  },
+  "1600vt-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "unresolved",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "mixed: parseFloat/toFixed(2) + formatCurrency/round",
+    "computation_rounding_texts": [
+      "toFixed(2), then formatCurrency.",
+      "formatCurrency.",
+      "formatCurrency after every incremental addition."
+    ],
+    "input_money_field_count": 41,
+    "logical_type_counts": {
+      "decimal": 65
+    },
+    "money_field_count": 65,
+    "normalization": [
+      "legacy currency formatting"
+    ]
+  },
+  "1600wp-v2010": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "formatCurrency applies two decimals unless the formula documents an earlier rounding defect."
+    ],
+    "input_money_field_count": 25,
+    "logical_type_counts": {
+      "decimal-amount": 41,
+      "decimal-rate": 1
+    },
+    "money_field_count": 42,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "round(...,2)"
+    ]
+  },
+  "1601c-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "mixed: formatCurrency/round + parseFloat/toFixed(2)",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "parseFloat/toFixed(2)",
+    "computation_rounding_texts": [
+      "NumWithComma inputs, arithmetic, toFixed(2), then formatCurrency."
+    ],
+    "input_money_field_count": 23,
+    "logical_type_counts": {
+      "decimal-amount": 36
+    },
+    "money_field_count": 36,
+    "normalization": [
+      "NumWithComma",
+      "round(...,2)",
+      "formatCurrency",
+      "toFixed(2)"
+    ]
+  },
+  "1601eq-v2018": {
+    "all_blur_rule_ids": [
+      "1601eq-blur-002",
+      "1601eq-input-003"
+    ],
+    "blur_official_behavior": "round() truncates integer input to 12 digits, rounds half-up to two decimals, comma-groups, and coerces NaN or excess precision to 0.00.",
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 2,
+    "blur_rule_id": "1601eq-blur-002",
+    "computation_rounding": "mixed: unresolved + formatCurrency/round",
+    "computation_rounding_texts": [
+      "Catalog/override value is stored as a decimal percentage string; no arithmetic rounding is applied here.",
+      "formatCurrency rounds half-up to two decimals using binary floating point, truncates overly long positive integer parts to 15 digits, and comma-groups.",
+      "Each row is already stored at two decimals; the sum is formatted to two decimals with formatCurrency.",
+      "Formatted to two decimals with formatCurrency.",
+      "Inputs are parsed after comma removal; result is formatted to two decimals with formatCurrency.",
+      "Formatted to two decimals with formatCurrency; the formatted string is then parseFloat'd to control over-remittance choices."
+    ],
+    "input_money_field_count": 122,
+    "logical_type_counts": {
+      "money": 239
+    },
+    "money_field_count": 239,
+    "normalization": [
+      "official round() formats to two decimals and comma groups on blur"
+    ]
+  },
+  "1601fq-v2018": {
+    "all_blur_rule_ids": [
+      "1601fq-input-003"
+    ],
+    "blur_official_behavior": "Nonnumeric input is silently cleared; numeric input is rounded with parseFloat().toFixed(2).",
+    "blur_rounding": "parseFloat/toFixed(2)",
+    "blur_rule_count": 1,
+    "blur_rule_id": "1601fq-input-003",
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "formatCurrency to two decimals using legacy binary-number helpers.",
+      "formatCurrency after binary summation.",
+      "formatCurrency to two decimals.",
+      "formatCurrency.",
+      "formatCurrency is redundantly applied twice in computePenalties."
+    ],
+    "input_money_field_count": 96,
+    "logical_type_counts": {
+      "decimal": 157
+    },
+    "money_field_count": 157,
+    "normalization": [
+      "legacy numeric blur formatting"
+    ]
+  },
+  "1602q-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "formatCurrency applies two decimal places; input blur handlers call round(...,2)."
+    ],
+    "input_money_field_count": 34,
+    "logical_type_counts": {
+      "decimal-amount": 64
+    },
+    "money_field_count": 64,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "round(...,2)"
+    ]
+  },
+  "1603q-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "unresolved",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "formatCurrency to two decimals.",
+      "formatCurrency.",
+      "NaN is explicitly coerced to zero by formatCurrency."
+    ],
+    "input_money_field_count": 13,
+    "logical_type_counts": {
+      "decimal": 23
+    },
+    "money_field_count": 23,
+    "normalization": [
+      "legacy currency formatting"
+    ]
+  },
+  "1604c-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "Row handlers call round(this,2); aggregate results use formatCurrency after NumWithComma parsing."
+    ],
+    "input_money_field_count": 37,
+    "logical_type_counts": {
+      "decimal-amount": 53
+    },
+    "money_field_count": 53,
+    "normalization": [
+      "NumWithComma",
+      "round(this,2)",
+      "formatCurrency"
+    ]
+  },
+  "1604e-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "Inputs are parsed after comma removal; outputs use formatCurrency."
+    ],
+    "input_money_field_count": 50,
+    "logical_type_counts": {
+      "decimal-amount": 54
+    },
+    "money_field_count": 54,
+    "normalization": [
+      "NumWithComma",
+      "round(this,2)",
+      "formatCurrency"
+    ]
+  },
+  "1604f-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "mixed: parseFloat/toFixed(2) + formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "parseFloat/toFixed(2)",
+    "computation_rounding_texts": [
+      "Entry handlers use parseFloat(...).toFixed(2); totals use NumWithComma and formatCurrency."
+    ],
+    "input_money_field_count": 24,
+    "logical_type_counts": {
+      "decimal-amount": 45
+    },
+    "money_field_count": 45,
+    "normalization": [
+      "parseFloat",
+      "toFixed(2)",
+      "NumWithComma",
+      "formatCurrency",
+      "negative values reset to 0.00"
+    ]
+  },
+  "1606-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing."
+    ],
+    "input_money_field_count": 15,
+    "logical_type_counts": {
+      "decimal-amount": 22
+    },
+    "money_field_count": 22,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "round(...,2)"
+    ]
+  },
+  "1700-v2013": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "whole-peso",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "whole-peso",
+    "computation_rounding_texts": [
+      "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC."
+    ],
+    "input_money_field_count": 96,
+    "logical_type_counts": {
+      "whole-peso-amount": 147
+    },
+    "money_field_count": 147,
+    "normalization": [
+      "NumWithComma",
+      "parseInt",
+      "formatCurrencyWOC",
+      "NegativeValue",
+      "whole-number key filter",
+      "formatDisplayAmount"
+    ]
+  },
+  "1701-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise."
+    ],
+    "input_money_field_count": 23,
+    "logical_type_counts": {
+      "decimal-amount": 30
+    },
+    "money_field_count": 30,
+    "normalization": [
+      "NumWithComma parsing",
+      "formatCurrency formatting where invoked"
+    ]
+  },
+  "1701a-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "mixed: whole-peso + formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "whole-peso",
+    "computation_rounding_texts": [
+      "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals."
+    ],
+    "input_money_field_count": 59,
+    "logical_type_counts": {
+      "whole-peso-amount": 98
+    },
+    "money_field_count": 98,
+    "normalization": [
+      "NumWithComma",
+      "toFixed(0)",
+      "formatCurrency",
+      "whole-number key filter",
+      "round(this,2) despite whole-peso display"
+    ]
+  },
+  "1701ms-v2024": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "whole-peso",
+    "computation_rounding_texts": [
+      "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy."
+    ],
+    "input_money_field_count": 73,
+    "logical_type_counts": {
+      "whole-peso-amount": 124
+    },
+    "money_field_count": 124,
+    "normalization": [
+      "NumWithComma",
+      "Math.round where invoked",
+      "formatCurrencyWithComma"
+    ]
+  },
+  "1701q-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "mixed: whole-peso + parseFloat/toFixed(2)",
+    "computation_rounding_texts": [
+      "toFixed(2), Math.round to whole peso, formatCurrency",
+      "Math.round to whole peso, formatCurrency",
+      "toFixed(2), Math.round to whole peso",
+      "Math.round to whole peso",
+      "Bracket result toFixed(2), Math.round to whole peso",
+      "toFixed(2), Math.round to whole peso; negative becomes 0.00",
+      "toFixed(2), formatCurrency"
+    ],
+    "input_money_field_count": 44,
+    "logical_type_counts": {
+      "money": 80
+    },
+    "money_field_count": 80,
+    "normalization": [
+      "round/format to two decimals on blur"
+    ]
+  },
+  "1702ex-v2018c": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "mixed: formatCurrency/round + whole-peso",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "whole-peso",
+    "computation_rounding_texts": [
+      "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting."
+    ],
+    "input_money_field_count": 50,
+    "logical_type_counts": {
+      "whole-peso-amount": 99
+    },
+    "money_field_count": 99,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "toFixed(0)"
+    ]
+  },
+  "1702mx-v2018c": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "whole-peso",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "whole-peso",
+    "computation_rounding_texts": [
+      "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths."
+    ],
+    "input_money_field_count": 253,
+    "logical_type_counts": {
+      "whole-peso-amount": 525
+    },
+    "money_field_count": 525,
+    "normalization": [
+      "NumWithComma",
+      "NumWithParenthesis",
+      "NegativeValue",
+      "formatCurrencyWOC"
+    ]
+  },
+  "1702q-v2018c": {
+    "all_blur_rule_ids": [
+      "1702q-input-001",
+      "1702q-input-002"
+    ],
+    "blur_official_behavior": "Nonnumeric and negative values are silently replaced with 0.00; numeric values are rounded with binary parseFloat().toFixed(2).",
+    "blur_rounding": "parseFloat/toFixed(2)",
+    "blur_rule_count": 2,
+    "blur_rule_id": "1702q-input-001",
+    "computation_rounding": "mixed: whole-peso + parseFloat/toFixed(2) + unresolved",
+    "computation_rounding_texts": [
+      "Math.round to whole peso, then legacy JScript toLocaleString (the engine ignores modern currency-style options).",
+      "Math.round to whole peso.",
+      "Math.round to whole peso. A separate netIncome handler can later clamp the same output to zero.",
+      "Binary Number arithmetic, toFixed(2), then shared formatCurrency.",
+      "Binary Number arithmetic to two decimals.",
+      "Math.round to whole peso, despite wrapping toFixed(2) before the round.",
+      "Intermediate toFixed(2), then Math.round to whole peso.",
+      "Product is formatted to five decimals and then Math.rounded to whole peso.",
+      "Shared formatCurrency; source value is already whole-peso rounded.",
+      "Inputs are already whole-peso rounded.",
+      "NumWithComma parsing; no independent rounding until Item 7.",
+      "No additional rounding."
+    ],
+    "input_money_field_count": 32,
+    "logical_type_counts": {
+      "money": 62
+    },
+    "money_field_count": 62,
+    "normalization": [
+      "Serialize with JavaScript escape()."
+    ]
+  },
+  "1702rt-v2018c": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "whole-peso",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "unresolved",
+    "computation_rounding_texts": [
+      "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references."
+    ],
+    "input_money_field_count": 110,
+    "logical_type_counts": {
+      "whole-peso-amount": 119
+    },
+    "money_field_count": 119,
+    "normalization": [
+      "NumWithComma/NumWithParenthesis",
+      "whole-peso display",
+      "whole-number key filter",
+      "currency formatting"
+    ]
+  },
+  "1706-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing."
+    ],
+    "input_money_field_count": 16,
+    "logical_type_counts": {
+      "decimal-amount": 22
+    },
+    "money_field_count": 22,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "round(...,2)"
+    ]
+  },
+  "1707-v2021": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "mixed: formatCurrency/round + parseFloat/toFixed(2)",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "parseFloat/toFixed(2)",
+    "computation_rounding_texts": [
+      "Source applies toFixed(2) and formatCurrency at each displayed output."
+    ],
+    "input_money_field_count": 19,
+    "logical_type_counts": {
+      "decimal-amount": 33
+    },
+    "money_field_count": 33,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "toFixed(2)"
+    ]
+  },
+  "1707a-v2021": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "preciseCompute/roundAmount",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "preciseCompute/roundAmount",
+    "computation_rounding_texts": [
+      "preciseCompute followed by roundAmount at displayed boundaries."
+    ],
+    "input_money_field_count": 38,
+    "logical_type_counts": {
+      "decimal-amount": 62
+    },
+    "money_field_count": 62,
+    "normalization": [
+      "valForCompute",
+      "preciseCompute",
+      "roundAmount"
+    ]
+  },
+  "1800-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing."
+    ],
+    "input_money_field_count": 42,
+    "logical_type_counts": {
+      "decimal-amount": 54,
+      "decimal-or-string": 1
+    },
+    "money_field_count": 55,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "round(...,2)"
+    ]
+  },
+  "1801-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "parseFloat/toFixed(2)",
+    "computation_rounding_texts": [
+      "formatCurrency calls Number.toFixed(2) and inserts thousands separators."
+    ],
+    "input_money_field_count": 45,
+    "logical_type_counts": {
+      "decimal-amount": 87,
+      "decimal-or-string": 8
+    },
+    "money_field_count": 95,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "round(...,2)",
+      "blockNegativeNumber"
+    ]
+  },
+  "2000-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "parseFloat/toFixed(2)",
+    "computation_rounding_texts": [
+      "Source normally applies Number.toFixed(2) through formatCurrency; per-block operations do not consistently apply statutory ceiling."
+    ],
+    "input_money_field_count": 27,
+    "logical_type_counts": {
+      "decimal-amount": 40
+    },
+    "money_field_count": 40,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "round(...,2)"
+    ]
+  },
+  "2000ot-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "parseFloat/toFixed(2)",
+    "computation_rounding_texts": [
+      "formatCurrency uses toFixed(2) and thousands separators unless formula states otherwise."
+    ],
+    "input_money_field_count": 28,
+    "logical_type_counts": {
+      "decimal-amount": 42,
+      "decimal-or-string": 2
+    },
+    "money_field_count": 44,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "round(...,2)"
+    ]
+  },
+  "2200a-v2020": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "unresolved",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "parseFloat/toFixed(2)",
+    "computation_rounding_texts": [
+      "amtFormat/toFixed(2) after source arithmetic."
+    ],
+    "input_money_field_count": 141,
+    "logical_type_counts": {
+      "decimal-amount": 210,
+      "decimal-rate": 4
+    },
+    "money_field_count": 214,
+    "normalization": [
+      "NumWithComma",
+      "amtFormat",
+      "round(2)"
+    ]
+  },
+  "2200an-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "formatCurrency after source arithmetic."
+    ],
+    "input_money_field_count": 146,
+    "logical_type_counts": {
+      "decimal-amount": 157
+    },
+    "money_field_count": 157,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "round(2)"
+    ]
+  },
+  "2200c-v2018": {
+    "all_blur_rule_ids": [
+      "2200c-defect-028-whole-peso-rounding"
+    ],
+    "blur_official_behavior": "Every formula calls toFixed(0), discarding centavos before currency formatting.",
+    "blur_rounding": "whole-peso",
+    "blur_rule_count": 1,
+    "blur_rule_id": "2200c-defect-028-whole-peso-rounding",
+    "computation_rounding": "whole-peso",
+    "computation_rounding_texts": [
+      "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible."
+    ],
+    "input_money_field_count": 88,
+    "logical_type_counts": {
+      "decimal-amount": 125
+    },
+    "money_field_count": 125,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency"
+    ]
+  },
+  "2200m-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "parseFloat/toFixed(2)",
+    "computation_rounding_texts": [
+      "toFixed(2), then formatCurrency where arithmetic occurs."
+    ],
+    "input_money_field_count": 155,
+    "logical_type_counts": {
+      "decimal-amount": 163
+    },
+    "money_field_count": 163,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "round(2)"
+    ]
+  },
+  "2200p-v2020": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "parseFloat/toFixed(2)",
+    "computation_rounding_texts": [
+      "toFixed(2), then formatCurrency."
+    ],
+    "input_money_field_count": 322,
+    "logical_type_counts": {
+      "decimal-amount": 330
+    },
+    "money_field_count": 330,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "round(2)"
+    ]
+  },
+  "2200s-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "mixed: round-down + formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "round-down",
+    "computation_rounding_texts": [
+      "roundDownComputation to two displayed decimal places."
+    ],
+    "input_money_field_count": 43,
+    "logical_type_counts": {
+      "decimal-amount": 65
+    },
+    "money_field_count": 65,
+    "normalization": [
+      "NumWithComma",
+      "roundDownComputation",
+      "formatCurrency"
+    ]
+  },
+  "2200t-v2020": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "unresolved",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "parseFloat/toFixed(2)",
+    "computation_rounding_texts": [
+      "amtFormat uses Number.toFixed(2) and inserts thousands separators."
+    ],
+    "input_money_field_count": 208,
+    "logical_type_counts": {
+      "decimal-amount": 218
+    },
+    "money_field_count": 218,
+    "normalization": [
+      "round(2)",
+      "blockNegativeNumber",
+      "amtFormat"
+    ]
+  },
+  "2550m-v2007": {
+    "all_blur_rule_ids": [
+      "2550m-input-001",
+      "2550m-input-002"
+    ],
+    "blur_official_behavior": "parseFloat/toFixed(2) normalization.",
+    "blur_rounding": "parseFloat/toFixed(2)",
+    "blur_rule_count": 2,
+    "blur_rule_id": "2550m-input-001",
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "formatCurrency/JavaScript number semantics unless noted."
+    ],
+    "input_money_field_count": 76,
+    "logical_type_counts": {
+      "decimal-money": 162
+    },
+    "money_field_count": 162,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency"
+    ]
+  },
+  "2550q-v2024": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "parseFloat/toFixed(2)",
+    "computation_rounding_texts": [
+      "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called."
+    ],
+    "input_money_field_count": 64,
+    "logical_type_counts": {
+      "boolean": 4,
+      "code": 6,
+      "date": 2,
+      "decimal-money": 77
+    },
+    "money_field_count": 89,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency"
+    ]
+  },
+  "2551q-v2018": {
+    "all_blur_rule_ids": [
+      "2551q-input-money",
+      "2551q-input-integer"
+    ],
+    "blur_official_behavior": "parseFloat/toFixed(2); NaN becomes 0.00.",
+    "blur_rounding": "parseFloat/toFixed(2)",
+    "blur_rule_count": 2,
+    "blur_rule_id": "2551q-input-money",
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "NumWithComma inputs and formatCurrency outputs; ATC rates divide by 100."
+    ],
+    "input_money_field_count": 16,
+    "logical_type_counts": {
+      "decimal-money": 34
+    },
+    "money_field_count": 34,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency"
+    ]
+  },
+  "2552-v2018": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "mixed: formatCurrency/round + whole-peso",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "whole-peso",
+    "computation_rounding_texts": [
+      "toFixed(0), then formatCurrency."
+    ],
+    "input_money_field_count": 57,
+    "logical_type_counts": {
+      "whole-peso-amount": 98
+    },
+    "money_field_count": 98,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "toFixed(0)"
+    ]
+  },
+  "2553-v1999": {
+    "all_blur_rule_ids": [],
+    "blur_official_behavior": null,
+    "blur_rounding": "formatCurrency/round",
+    "blur_rule_count": 0,
+    "blur_rule_id": null,
+    "computation_rounding": "formatCurrency/round",
+    "computation_rounding_texts": [
+      "formatCurrency after source arithmetic; editable inputs round to two decimals on blur where wired."
+    ],
+    "input_money_field_count": 6,
+    "logical_type_counts": {
+      "decimal-amount": 16
+    },
+    "money_field_count": 16,
+    "normalization": [
+      "NumWithComma",
+      "formatCurrency",
+      "round(2)"
+    ]
+  }
+}
