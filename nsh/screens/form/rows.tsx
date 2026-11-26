@@ -39,6 +39,7 @@ export function fieldProps(s: FormSession, f: SchemaField, narrow: Accessor<bool
     onBlur: () => s.blur(f.k),
     focusRef: (focus) => s.registerFocus(f.k, focus),
     blurRef: (blur) => s.registerBlur(f.k, blur),
+    leaveRef: (leave) => s.registerLeave(f.k, leave),
     onLeftUnreadable: (typed, kept) => s.leftUnreadable(f.k, typed, kept),
     onCommaRead: (typed, shown) => s.commaRead(f.k, typed, shown),
     onOutsideKept: (typed, shown) => s.outsideKept(f.k, typed, shown),

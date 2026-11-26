@@ -513,6 +513,22 @@ for (const size of SIZES) {
     expect(readout(app, "Comma count:")).toBe("Comma count: 2");
   });
 
+  test(`${size.name}: [F1] leaveRef's leave reads and reports the box at once, with the keys still in it, and the blur after it adds nothing`, async () => {
+    const app = await open("./masked.fixture.tsx", size.options);
+    await app.clear("id:m-cb");
+    await app.type("id:m-cb", "1500,50");
+    expect(readout(app, "Cb:")).not.toBe("Cb: 1500.50");
+    // Return's key press asks for the leave, in its own turn, before the blur Return brings headless.
+    await app.keyboard.press("enter");
+    expect(readout(app, "Cb at Return:")).toBe("Cb at Return: 1500.50");
+    expect(readout(app, "Comma:")).toBe("Comma: 1500,50|1,500.50");
+    // The blur after it is the same leave: it runs once.
+    await app.type("id:m-other", " ");
+    expect(readout(app, "Cb:")).toBe("Cb: 1500.50");
+    expect(readout(app, "Cb blurs:")).toBe("Cb blurs: 1");
+    expect(readout(app, "Comma count:")).toBe("Comma count: 1");
+  });
+
   test(`${size.name}: a held outside value is the fallback for unreadable text`, async () => {
     const app = await open("./masked.fixture.tsx", { ...size.options, clock: {} });
     await app.press("id:m-arm-held");

@@ -177,6 +177,8 @@ export type MaskedFieldProps = Omit<TextFieldProps, "value" | "onChange" | "keyb
   onCommaRead?: (typed: string, shown: string) => void;
   /** Money text the filer typed during this focus came to the amount the box showed, and a value set from outside meanwhile won on leaving: what was typed, and what the box shows now. */
   onOutsideKept?: (typed: string, shown: string) => void;
+  /** Receives how to leave the box at once, in this turn, as unmount does (no write to the native box): a page that saves before quit or navigation. */
+  leaveRef?: (leave: () => void) => void;
 };
 
 interface MaskedProps {
@@ -443,6 +445,10 @@ function MaskedField(props: MaskedProps) {
   };
 
   cleanup(() => {
+    if (untracked(focused)) finishLeave(false);
+  });
+  // The same leave, asked for by the page (its flush before quit or navigation, its going) while the box has the keys.
+  props.field.leaveRef?.(() => {
     if (untracked(focused)) finishLeave(false);
   });
 

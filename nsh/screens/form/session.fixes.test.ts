@@ -1336,6 +1336,49 @@ for (const [period, door, name] of [[4, "screen_form_save", "Save"], [2, "screen
   });
 }
 
+/**
+ * A money box with the keys whose blur never reaches the session in time (quit, the page going), as fields.tsx's MaskedField with its
+ * leaveRef: it reported `live` while typed and reads `reads` only on leaving ("1500,50" reads 1,500.50), which its leave reports.
+ */
+function leavingBox(s: FormSession, k: string, live: string, reads: string) {
+  let focused = true;
+  s.registerBlur(k, () => {});
+  s.registerLeave(k, () => {
+    if (!focused) return;
+    focused = false;
+    s.edit(k, reads);
+    s.blur(k);
+  });
+  s.focus(k);
+  s.edit(k, live);
+}
+
+for (const how of ["flushNow", "dispose"] as const) {
+  test(`[F1] ${how} with an amount box still focused leaves it first, in the same turn: the save holds what the box reads`, async () => {
+    const key = "frm2551Qv2018:txt15";
+    const target = at("2551Q", 2023, how === "flushNow" ? 3 : 4);
+    const s = await opened(target);
+    s.jumpTo(2);
+    const saves = recordAt("screen_form_save", () => s.valueOf(key));
+    let back: FormSession | undefined;
+    try {
+      leavingBox(s, key, "1500", "1500.50");
+      if (how === "flushNow") expect(await s.flushNow()).toBe(true);
+      else s.dispose();
+      expect(saves.seen[saves.seen.length - 1]).toBe("1,500.50");
+      s.dispose();
+      back = new FormSession(target);
+      expect(await back.open()).toBe(null);
+      await back.idle();
+      expect(back.valueOf(key)).toBe("1,500.50");
+    } finally {
+      saves.restore();
+      s.dispose();
+      back?.dispose();
+    }
+  });
+}
+
 test("[B2] no box focused: Save and Print run in the same turn, as before", async () => {
   const key = "frm2551Qv2018:txt15";
   const s = await opened(at("2551Q", 2022, 4));

@@ -35,6 +35,10 @@ function App() {
   const outside = signal("none");
   const showCb = signal(true);
   let twoRef: InputRef | undefined;
+  // Cb's leave-now (leaveRef), which its Return key's press asks for here (before the blur Return brings), as the form page's flush
+  // before quit asks for it; and what Cb had reported right after it, in that same turn.
+  let cbLeave: (() => void) | undefined;
+  const cbAtReturn = signal("none");
   const armHeld = signal(false);
   const refill = signal("1250");
   const refillOnce = signal(true);
@@ -67,6 +71,7 @@ function App() {
         <Text variant="cap">{`Comma: ${comma()}`}</Text>
         <Text variant="cap">{`Comma count: ${commaCount()}`}</Text>
         <Text variant="cap">{`Outside: ${outside()}`}</Text>
+        <Text variant="cap">{`Cb at Return: ${cbAtReturn()}`}</Text>
         <Text variant="cap">{`Cb shown: ${showCb()}`}</Text>
       </View>
       <View class="flex-row flex-wrap gap-2">
@@ -134,6 +139,12 @@ function App() {
           onLeftUnreadable={(typed, kept) => {
             invalidCount.update((n) => n + 1);
             invalid.set(`${typed}|${kept}`);
+          }}
+          leaveRef={(leave) => (cbLeave = leave)}
+          onKeyPress={(e) => {
+            if (e.key !== "Enter") return;
+            cbLeave?.();
+            cbAtReturn.set(cb());
           }}
           onCommaRead={(typed, shown) => {
             commaCount.update((n) => n + 1);
