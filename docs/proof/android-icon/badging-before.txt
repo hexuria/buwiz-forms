@@ -1,0 +1,4 @@
+package: name='dev.goldcoders.bir' versionCode='27' versionName='0.2.1' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+application-icon-160:'res/mipmap-xxxhdpi-v4/ic_launcher.png'
+application-icon-640:'res/mipmap-xxxhdpi-v4/ic_launcher.png'
+application: label='eBIRForms' icon='res/mipmap-xxxhdpi-v4/ic_launcher.png'
