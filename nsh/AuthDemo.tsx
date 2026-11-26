@@ -14,7 +14,8 @@
 //   drop      true: the button "Test: drop the sign-in" forgets the sign-in flow's state in memory (signInFlow.reset), as an
 //             engine made anew starts without it
 //   lock      true: the sign-in screen once the frame is up, whatever the codes (to show "Open without signing in")
-//   readout   true: print the session and what the session can see (returns, deadlines by TIN root) at the top right
+//   readout   true: print the session and what the session can see (returns, deadlines by TIN root) at the top right, and
+//             what the open page before the app measured and chose ("fit: <page> logo=<points> fits=<bool> rest=.. room=..")
 //   start     the dev route            firstRun  default true
 //   authFails a sentence: the host's auth_state throws it (the access state cannot be read) until "Test: heal auth" is pressed
 //   polls     true: the buttons "Test: toast" (a toast, as any screen shows one) and "Test: filing event" (the first taxpayer's
@@ -25,6 +26,7 @@ import { effect, host, mount, signal, Text, untracked, View } from "nsh";
 import "./theme/fonts";
 import { bir } from "./bir";
 import { createDemoTaxpayer } from "./bir/testing";
+import { lastOpenFit } from "./screens/auth/parts";
 import { signInFlow } from "./screens/auth/signInFlow";
 import { type EmailParams, fakeEmail } from "./screens/auth/testEmail";
 import { totpCode } from "./screens/auth/testTotp";
@@ -109,6 +111,13 @@ function fakeAccount(p: Params): void {
   if (p.gate) fakeEmail(h, p, called, undefined, () => pendingReads.set(pendingReads() + 1));
 }
 
+/** What the open page now showing measured and chose (screens/auth/parts.tsx OpenPage). */
+function fitLine(): string {
+  const fit = lastOpenFit();
+  if (!fit) return "fit: none";
+  return `fit: ${fit.page} logo=${fit.logo} fits=${fit.fits} rest=${fit.rest} room=${fit.room}`;
+}
+
 function Readout() {
   const roots = (rows: { tin_root: string }[]) => [...new Set(rows.map((r) => r.tin_root))].sort().join(",") || "none";
   const year = new Date().getFullYear();
@@ -118,6 +127,7 @@ function Readout() {
       <Text testID="demo-visible">{`returns: ${roots(store.savedReturns())} | deadlines: ${roots(store.deadlines(`${year}-01-01`, `${year + 1}-12-31`))} | taxpayers: ${roots(store.taxpayers())}`}</Text>
       <Text testID="demo-calls">{`calls: ${calls().join(",") || "none"}`}</Text>
       <Text testID="demo-pending-reads">{`pending reads: ${pendingReads()}`}</Text>
+      <Text testID="demo-fit">{fitLine()}</Text>
       <Text testID="demo-key">{`key: ${recoveryKey}`}</Text>
     </View>
   );
