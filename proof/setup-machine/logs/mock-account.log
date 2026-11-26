@@ -1,0 +1,57 @@
+cargo run --locked -p bir-core --features mock-account --bin mock_account -- 
+   Compiling bitflags v2.13.1
+   Compiling tokio v1.53.1
+   Compiling rustix v1.1.4
+   Compiling chrono v0.4.45
+   Compiling serde_json v1.0.151
+   Compiling zvariant_utils v4.2.0
+   Compiling time v0.3.55
+   Compiling serde_urlencoded v0.7.1
+   Compiling png v0.18.1
+   Compiling nix v0.31.3
+   Compiling zvariant v5.15.0
+   Compiling image v0.25.10
+   Compiling diligent-date-parser v0.1.5
+   Compiling zbus_names v4.3.4
+   Compiling openssl v0.10.81
+   Compiling uuid v1.26.0
+   Compiling polling v3.11.0
+   Compiling hyper v1.11.1
+   Compiling async-io v2.6.0
+   Compiling tokio-rustls v0.26.5
+   Compiling async-signal v0.2.14
+   Compiling hyper-util v0.1.20
+   Compiling tower v0.5.3
+   Compiling tower-http v0.6.11
+   Compiling hyper-rustls v0.27.9
+   Compiling async-process v2.5.0
+   Compiling qrcodegen-image v1.5.2
+   Compiling zbus v5.19.0
+   Compiling native-tls v0.2.18
+   Compiling reqwest v0.12.28
+   Compiling tokio-tungstenite v0.28.0
+   Compiling tokio-util v0.7.19
+   Compiling russh-util v0.52.0
+   Compiling atom_syndication v0.12.10
+   Compiling russh-cryptovec v0.62.0
+   Compiling serde_bytes v0.11.19
+   Compiling bir-core v0.2.1 (/home/ubuntu/repos/buwiz-forms/crates/bir-core)
+   Compiling tracing-appender v0.2.5
+   Compiling bir-submit v0.2.1 (/home/ubuntu/repos/buwiz-forms/crates/bir-submit)
+   Compiling rss v2.1.1
+   Compiling cron v0.16.0
+   Compiling notify-rust v4.18.0
+   Compiling rusqlite v0.32.1
+   Compiling totp-rs v5.7.2
+   Compiling imap v2.4.1
+   Compiling russh v0.63.3
+   Compiling russh-sftp v3.0.0
+   Compiling zip v2.4.2
+   Compiling bir-rules v0.2.1 (/home/ubuntu/repos/buwiz-forms/crates/bir-rules)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 23s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running `target/debug/mock_account`
+[mock-account] listening on http://127.0.0.1:3008 (auto-approve: false, email sign-in: on, code: 246810 and up, one per request, code life: 300s, resend after: 300s)
+[mock-account] each email sign-in code is printed below as it is sent ("sign-in code for <email>: <code>")
+[mock-account] DEVELOPMENT ONLY: no passwords; all state disappears on exit

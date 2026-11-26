@@ -1,0 +1,9 @@
+  docker                 Docker version 29.7.2, build a7dcaa6
+  image:buwiz-nsh-2404   present
+  ../nsh                 MISSING or not at 8c78cfd
+  nsh CLI                8c78cfd
+  nsh2404.sh wrapper     present
+  android ndk            27.2.12479018
+  avd:buwiz              present
+  nsh android runtime    8c78cfd
+[1;33mwarning:[0m Missing pieces — run scripts/setup-linux-nsh.sh

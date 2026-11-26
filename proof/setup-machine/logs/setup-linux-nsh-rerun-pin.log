@@ -1,0 +1,26 @@
+[1;34m==>[0m Checking out NSH at 8c78cfd
+From https://git-manager.devin.ai/proxy/github.com/hexuria/nsh
+ * branch                8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf -> FETCH_HEAD
+HEAD is now at 8c78cfd6d cli: Commit an App Store Connect upload with the file's MD5 (#37)
+[1;34m==>[0m Building the buwiz-nsh-2404 image (cached after the first run)
+[1;34m==>[0m nsh CLI already at 8c78cfd
+[1;34m==>[0m Installing Android SDK packages (NDK 27.2.12479018, API 35)
+NOTE: Picked up JDK_JAVA_OPTIONS: -XX:+IgnoreUnrecognizedVMOptions -XX:+UnlockDiagnosticVMOptions -XX:-UseBASE64Intrinsics
+info: component rust-std for target aarch64-linux-android is up to date
+info: component rust-std for target armv7-linux-androideabi is up to date
+info: component rust-std for target x86_64-linux-android is up to date
+[1;34m==>[0m NSH Android runtime already at 8c78cfd
+[1;34m==>[0m Verifying
+  docker                 Docker version 29.7.2, build a7dcaa6
+  image:buwiz-nsh-2404   present
+  ../nsh                 8c78cfd
+  nsh CLI                8c78cfd
+  nsh2404.sh wrapper     present
+  android ndk            27.2.12479018
+  avd:buwiz              present
+  nsh android runtime    8c78cfd
+[1;34m==>[0m NSH toolchain ready
+
+Add to your shell profile:
+  export ANDROID_HOME=/home/ubuntu/Android/Sdk
+  export ANDROID_SDK_ROOT=/home/ubuntu/Android/Sdk

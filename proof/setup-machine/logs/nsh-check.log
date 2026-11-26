@@ -1,0 +1,27 @@
+error checking nsh-app-ebirforms failed
+    Updating crates.io index
+    Updating git repository `https://github.com/hexuria/nsh-gpui-agent`
+error: failed to get `nsh-gpui-agent-android` as a dependency of package `nsh-app-ebirforms v0.2.1 (/home/ubuntu/repos/buwiz-forms/nsh)`
+
+Caused by:
+  failed to load source for dependency `nsh-gpui-agent-android`
+
+Caused by:
+  unable to update https://github.com/hexuria/nsh-gpui-agent?rev=a6bb130a544198b26b3fb22d7f4d89dd38758725#a6bb130a
+
+Caused by:
+  failed to clone into: /home/ubuntu/.cargo/git/db/nsh-gpui-agent-430c25c17b0dac6b
+
+Caused by:
+  revision a6bb130a544198b26b3fb22d7f4d89dd38758725 not found
+
+Caused by:
+  failed to authenticate when downloading repository: https://git-manager.devin.ai/proxy/github.com/hexuria/nsh-gpui-agent
+
+  * attempted to find username/password via git's `credential.helper` support, but failed
+
+  if the git CLI succeeds then `net.git-fetch-with-cli` may help here
+  https://doc.rust-lang.org/cargo/reference/config.html#netgit-fetch-with-cli
+
+Caused by:
+  failed to acquire username/password from local configuration
