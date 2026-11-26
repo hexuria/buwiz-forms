@@ -991,6 +991,14 @@ impl Form2200ADraft {
         let (line1, line2) = super::print_map::split_print_line(&address, 40);
         put("address_line1", line1);
         put("line:address_line2", line2);
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm2200Av2020:txtDateMonth",
+                "frm2200Av2020:txtDateDay",
+                "frm2200Av2020:txtDateYear",
+            ],
+        );
         fields
     }
 

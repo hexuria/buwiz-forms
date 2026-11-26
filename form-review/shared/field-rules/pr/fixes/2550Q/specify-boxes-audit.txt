@@ -1,0 +1,117 @@
+# Specify Box Audit Across All 43 Forms (RULES.md Rule 6)
+#
+# Why 2550Q item 19 and 2551Q item 17 did not get the Rule 6 override at 3e8b1212:
+#   #339 embedded all 31 `rule6_fields` in `<script id="formgen-page-layout">`,
+#   including 2550q-2024 p1c205 (item 19) and 2551q-2018 p1c187 (item 17),
+#   but `crates/bir-print/src/frozen_html.rs` had no consumer for `rule6_fields`.
+#   Every overflowing specify box therefore fell back to Rule 3 (shrinking and
+#   ellipsizing inside its narrow inline box, with full text on the Additional Sheet).
+#
+# Fix: Added shared `apply_rule6_specify_bands` in `crates/bir-print/src/frozen_html.rs`,
+#   driven directly by `formgen-page-layout`'s `rule6_fields` (31 inline-label specify boxes
+#   across 11 forms, covering all 9 inline-label boxes named in RULES.md rule 6 plus 22
+#   identical-shape inline specify boxes). The remaining 5 boxes named in RULES.md rule 6
+#   (1702EX p2c54/p2c58, 1702RT p2c66, 1702Q p2c110/p2c114) are already 348.7pt x 17-20.5pt
+#   dedicated-row comb fields (not narrow inline-label boxes) and already convert to wide
+#   plain rectangles under Rules 1+3. Any box that still ellipsizes (Rule 6 or non-Rule-6)
+#   emits `data-overflow-warning="text-truncated"` + `data-writer-value` so the full text
+#   prints on the Additional Sheet ("Entries continued from the form").
+#
+# Totals: 95 specify text/comb boxes across 43 forms | Rule 6 band covered: 31 | Rule 1+3 wide comb: 50 | Rule 3 plain box: 14
+
+form_slug	cell_id	writer_key	kind	box_size	named_in_rules_md	rule6_override_covered	overflow_behavior	caption
+0619e-2018	p1c130	txtParticular22	comb	99.8x18.2pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	22 Others (specify below)
+0619f-2018	p1c144	txtParticular23	comb	99.7x18.2pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	23 Others (specify below)
+1600-pt-2018	p1c41	frm1600PT:txtPg1Pt1I12TaxReliefSpec	comb	227.6x19.9pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	12A If Yes, specify
+1600-vt-2018	p1c41	frm1600VT:txtPg1Pt1I12TaxReliefSpec	comb	227.4x21.2pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	12A If Yes, specify
+1601-fq-2020	p1c228	frm1601FQ:txtParticular36	comb	100.9x18.1pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	36 Others (specify below), Particulars
+1601-fq-2020	p1c52	derived:line:tax_relief_specify	comb	246.7x20.6pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	13A If yes, specify
+1601c-2018	p1c51	derived:line:tax_relief_specify	comb	246.7x20.7pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	13A If yes, specify
+1601c-2018	p1c223	frm1601c:txt20Other	text	373.1x13.0pt	yes	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	20 Other Non-Taxable Compensation (specify)
+1601c-2018	p1c225	frm1601c:txt29Other	text	373.1x13.0pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	29 Other Remittances Made (specify)
+1601c-2018	p1c192	frm1601c:txtParticular40	comb	100.9x17.5pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	40 Others (specify below)
+1601eq-2019	p1c202	frm1601EQ:txtParticular36	comb	100.9x17.4pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	35 Others (specify below), Particulars
+1602q-2019	p1c52	derived:line:tax_relief_specify	comb	246.7x20.6pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	13A If yes, specify
+1603q-2018	p1c140	frm1603Q:txtParticular27	comb	100.9x19.3pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	27 Others (specify below), Particulars
+1603q-2018	p1c52	derived:line:tax_relief_specify	comb	246.7x21.8pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	13A If yes, specify
+1603q-2018	p1c181	frm1603Q:txt16Other	text	373.1x14.9pt	yes	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	16 Other Remittances Made (specify)
+1604f-2018	p1c36	frm1604f:availedTaxRelief	comb	320.0x20.0pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	11A If yes, specify
+1606-2018	p2c129	frm1606:txtOtherss28E	text	293.4x15.5pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	Schedule 3 Item 1D Others (Specify)
+1606-2018	p1c63	derived:line:tax_relief_specify	comb	169.9x21.1pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	11 If yes, specify
+1700-2018	p2c151	frm1700:txtPg2I45Desc	text	342.2x13.4pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	45 (specify)
+1700-2018	p2c153	frm1700:txtPg2I49Desc	text	342.2x13.2pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	49 (specify)
+1700-2018	p2c155	frm1700:txtPg2I51Desc	text	342.2x13.2pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	51 (specify)
+1700-2018	p2c157	frm1700:txtPg2I57Desc	text	342.2x13.4pt	yes	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	57 (specify)
+1701-2018	p1c157	frm1701:txtPg1I37Particular	comb	97.8x15.5pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	37 Others, Particulars (specify below)
+1701-2018	p2c134	frm1701:txtPg2IShed3_19Desc	text	282.1x14.8pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	19 Add: Other Non-Operating Income (specify below)
+1701-2018	p2c139	frm1701:txtPg2IShed3_20Desc	text	282.1x14.8pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	20 (specify below)
+1701-2018	p3c16	frm1701:txtPg3IShed3_27Desc	text	282.1x17.2pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	27 Add: Other Non-Operating Income (specify below)
+1701-2018	p4c213	frm1701:txtPg4IPart7_9Specify	text	312.9x11.5pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	Part VII item 9 (specify)
+1701a-2018	p2c29	frm1701A:txt41Desc	text	311.6x18.2pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	41 Other Non-Operating Income (specify)
+1701a-2018	p2c34	frm1701A:txt42Desc	text	311.6x18.3pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	42 Other Non-Operating Income (specify)
+1701a-2018	p2c62	frm1701A:txt50Desc	text	311.6x18.2pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	50 Other Non-Operating Income (specify)
+1701a-2018	p2c67	frm1701A:txt51Desc	text	311.6x18.3pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	51 Other Non-Operating Income (specify)
+1701a-2018	p2c176	frm1701A:txt63Desc	text	342.1x12.1pt	yes	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	63 Other Tax Credits/Payments (specify)
+1701ms-2024	p2c177	derived:foreign_tax_credits_description	text	312.9x11.5pt	yes	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	Part V 7 Foreign Tax Credits (specify)
+1701ms-2024	p2c179	derived:other_credits_description	text	312.9x11.4pt	yes	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	Part V 9 Other Tax Credits/Payments (specify)
+1701q-2018	p1c154	frm1701q:txtParticular35	comb	101.7x15.5pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	35 Others (specify)
+1701q-2018	p2c148	frm1701q:txt43Desc	text	342.2x12.3pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	43 (specify)
+1701q-2018	p2c150	frm1701q:txt48Desc	text	342.2x12.3pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	48 (specify)
+1701q-2018	p2c152	frm1701q:txt61Desc	text	342.2x12.1pt	yes	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	61 (specify)
+1702ex-2018	p2c54	frm1702EX:txtPg2Pt4I48OtherTaxCrPmtDesc	comb	348.7x20.5pt	yes	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	48 Other Tax Credits/Payments (specify)
+1702ex-2018	p2c58	frm1702EX:txtPg2Pt4I49OtherTaxCrPmtDesc	comb	348.7x20.5pt	yes	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	49 Other Tax Credits/Payments (specify)
+1702mx-2018c	p1c122	frm1702MX:txtPg1Pt1I29Others	comb	115.1x19.5pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	26 Others (specify below)
+1702mx-2018c	p2c278	frm1702MX:txtPg2Sc3It30	text	212.3x9.9pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	Schedule 3 item 30 description
+1702mx-2018c	p2c280	frm1702MX:txtPg2Sc3It31	text	212.3x9.9pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	Schedule 3 item 31 description
+1702q-2018	p1c52	frm1702q:txtTxRlfSpcfy	comb	288.0x21.9pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	13 If yes, specify
+1702q-2018	p2c110	frm1702q:Sched4:txtOthrTxCrdts0	comb	348.7x17.0pt	yes	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Schedule 4 Item 6a Other Tax Credits/Payments (specify)
+1702q-2018	p2c114	frm1702q:Sched4:txtOthrTxCrdts1	comb	348.7x17.2pt	yes	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Schedule 4 Item 6b Other Tax Credits/Payments (specify)
+1702rt-2018c	p1c123	frm1702RT:txtPg1Pt3I26Others	comb	115.3x19.3pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	26 Others (specify below)
+1702rt-2018c	p2c66	frm1702RT:txtPg2Pt4I53C1	comb	348.7x19.3pt	yes	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	53 Other Tax Credits/Payments (specify), description
+1706-2018	p1c77	derived:line:tax_relief_specify	comb	170.1x20.1pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	11 If yes, specify
+1706-2018	p2c150	frm1706:txtOtherss30F	text	265.6x14.0pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	Schedule 4 E Others (specify)
+1707-2021	p1c217	frm1707:txtPg1I8TaxReliefSpec	comb	360.8x15.4pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	8 If yes, specify
+1707-2021	p1c214	frm1707:txtPg1I9TransDescSpec	text	189.8x9.9pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	9 Others (please specify)
+1800-2018	p1c160	frm1800v2018:txtParticular36	comb	109.5x17.1pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	24 Others (Specify below)
+1801-2018	p1c157	frm1801v2018:othersDetails	comb	98.2x18.7pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	28 Others (Specify)
+2000-dst-2018	p1c105	frm2000:txtParticular36	comb	98.3x18.7pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	23 Others (specify)
+2000-ot-2018	p2c99	frm2000OT:Sched2:txtOthers	text	287.5x13.4pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	C Others (Specify)
+2200a-2020	p1c47	frm2200Av2020:treatyY	comb	347.4x17.8pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	12A If yes, specify
+2200a-2020	p1c56	frm2200Av2020:paymentOther	comb	390.8x17.9pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	15 Other Similar Schemes (specify)
+2200a-2020	p1c113	frm2200Av2020:othersDetails	comb	101.3x13.9pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	28 Others (specify)
+2200a-2020	p3c97	frm2200Av2020:txtSched1_xa_others1_Desc	text	202.6x9.6pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	4 Others (specify), row 1 Description
+2200a-2020	p3c104	frm2200Av2020:txtSched1_xa_others2_Desc	text	202.6x9.7pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	4 Others (specify), row 2 Description
+2200a-2020	p3c111	frm2200Av2020:txtSched1_xa_others3_Desc	text	202.6x9.7pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	4 Others (specify), row 3 Description
+2200an-2018	p1c52	frm2200ANv2018:lstSpecialTax	comb	331.4x15.2pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	12A If yes, specify
+2200an-2018	p1c60	frm2200ANv2018:MannerOfPaymentOthers	comb	389.2x15.2pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Other Similar Schemes (specify)
+2200an-2018	p1c172	frm2200ANv2018:txtParticular27	comb	100.3x14.6pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	28 Others (specify), particulars
+2200an-2018	p2c246	frm2200ANv2018:txtXGOthers1Name	text	189.4x14.8pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Others (specify), name of item/product
+2200an-2018	p2c254	frm2200ANv2018:txtXGOthers2Name	text	189.4x15.2pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Others (specify), name of item/product
+2200c-2018	p1c44	frm2200C:txtPg1I12TaxReliefSpecify	comb	347.4x19.6pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	12A If yes, specify
+2200c-2018	p1c52	frm2200C:txtPg1Pt2MOPOtherDesc	comb	390.8x17.8pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Other Similar Schemes (specify)
+2200m-2018	p1c54	frm2200M:txtPg1I12TaxReliefSpecify	comb	331.5x15.3pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	12A If yes, specify
+2200m-2018	p1c61	frm2200M:txtPg1Pt2MOPOtherDesc	comb	389.4x15.2pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	15 Other Similar Schemes (specify)
+2200m-2018	p2c100	frm2200M:txtSched1_description9	text	101.1x17.2pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Schedule 1 row 9 (XM060 other 1) Description (specify)
+2200m-2018	p2c108	frm2200M:txtSched1_description10	text	101.1x19.8pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Schedule 1 row 10 (XM060 other 2) Description (specify)
+2200p-2020	p1c47	frm2200P:txtPg1I12TaxReliefSpecify	comb	347.4x17.8pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	12A If yes, specify
+2200p-2020	p1c55	frm2200P:txtPg1Pt2MOPOtherDesc	comb	390.8x17.8pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Other Similar Schemes (specify)
+2200p-2020	p2c377	frm2200P:txtSched1Description26	text	86.9x16.7pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Others (specify), description column
+2200p-2020	p2c391	frm2200P:txtSched1Description27	text	86.9x16.6pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Others (specify), description column
+2200s-2018	p1c56	frm2200S:txtOthMannerofPymnt	comb	391.4x16.6pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	17 Other Similar Schemes (specify)
+2200s-2018	p1c141	frm2200S:txtParticular36	comb	92.2x15.2pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	30 Others (specify)
+2200s-2018	p1c50	derived:line:tax_relief_specify	comb	330.3x14.9pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	14A If yes, specify
+2200t-2022	p1c52	frm2200Tv2020:treatyY	comb	331.4x15.2pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	12A If yes, specify
+2200t-2022	p1c61	frm2200Tv2020:paymentOther	comb	389.2x15.2pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	15 Other Similar Schemes (specify)
+2200t-2022	p1c173	frm2200Tv2020:othersDetails	comb	100.3x14.6pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	28 Others (specify)
+2200t-2022	p3c110	frm2200Tv2020:txtSched1_xt_others1_Desc	text	177.8x10.8pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Schedule 1 Others (specify) row 1, Description
+2200t-2022	p3c117	frm2200Tv2020:txtSched1_xt_others2_Desc	text	177.8x10.8pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Schedule 1 Others (specify) row 2, Description
+2200t-2022	p3c124	frm2200Tv2020:txtSched1_xt_others3_Desc	text	177.8x11.4pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	Schedule 1 Others (specify) row 3, Description
+2550q-2024	p1c56	frm2550qv2024:specifyInternationalTreaty	comb	231.1x21.2pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	14A If yes, specify
+2550q-2024	p1c205	frm2550qv2024:addSpecifyNo19	text	353.6x14.1pt	yes	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	19 Other Credits/Payment (Specify)
+2550q-2024	p2c246	frm2550qv2024:addSpecifyNo42	text	354.0x12.5pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	42 Others (Specify)
+2550q-2024	p2c248	frm2550qv2024:addSpecifyNo47	text	140.4x12.1pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	47 Others (Specify)
+2550q-2024	p2c250	frm2550qv2024:addSpecifyNo56	text	354.0x12.4pt	no	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	56 Others (Specify)
+2551q-2018	p1c42	derived:line:tax_relief_specify	comb	227.4x19.3pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	12A If yes, specify
+2551q-2018	p1c187	frm2551Qv2018:txt17Specify	text	353.9x13.6pt	yes	yes	rule6_full_width_band (2-line wrap >=7.5pt, then ... + Additional Sheet)	17 Other Tax Credit/Payment (specify)
+2552-2018	p1c35	frm2552:txtPg1Pt1I10TaxReliefSpec	comb	200.2x18.2pt	no	no	rule1+3_plain_rect (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	10A If yes, specify
+2553-1999	p1c32	derived:line:tax_relief_specify	text	220.8x19.4pt	no	no	rule3_in_box (2-line wrap >=7.5pt if tall enough, then ... + Additional Sheet)	13 If yes, specify

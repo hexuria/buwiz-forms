@@ -517,6 +517,14 @@ impl Form2200MDraft {
                 fields.insert(format!("derived:line:item{item}_{level}"), name);
             }
         }
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm2200M:txtPg1I1Month",
+                "frm2200M:txtPg1I1Day",
+                "frm2200M:txtPg1I1Year",
+            ],
+        );
         fields
     }
 

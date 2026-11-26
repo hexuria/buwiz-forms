@@ -1,0 +1,61 @@
+# Additional Sheet TIN Header Audit (All 43 Forms)
+# Tested programmatically via `continuation::tests::all_43_forms_additional_sheet_header_extracts_tin`
+# Profile TIN: 00012345300000 -> expected Additional Sheet header: 000-123-453-00000
+#
+# Summary:
+# - Missing ("—") at 3e8b1212: 19 forms
+# - Missing branch code ("000-123-453") at 3e8b1212: 1 form (2550q-2024)
+# - Already complete at 3e8b1212: 23 forms
+# - Total affected at 3e8b1212: 20 forms
+# - Passing after fix: 43 / 43 forms
+#
+# Root cause: `extract_tin` in `crates/bir-print/src/continuation.rs` only checked
+# `derived:tin` and case-sensitive suffixes `txtTIN1..3`/`txtTin1..3` + `txtBranchCode`/`txtTIN4`/`txtBranch`,
+# missing `derived:tin_digits`/`derived:tp_tin`/`derived:seller_tin`/`derived:buyer_tin` and
+# form-specific TIN/branch keys (`txtPg1TIN1..4`, `tinA..C`, `branchCode`, `txtPg1I4TIN1..3`,
+# `txtPg1Pt1I6TINC1..4`, `BranchMaskP1`, `txtPg1I6SellerTIN0..2`, `txtI5TIN1..3`, etc.).
+
+form_slug	before_3e8b1212	after_fix	status
+0605-1999	000-123-453-00000	000-123-453-00000	already_ok
+0619e-2018	000-123-453-00000	000-123-453-00000	already_ok
+0619f-2018	000-123-453-00000	000-123-453-00000	already_ok
+1600-pt-2018	—	000-123-453-00000	fixed_missing
+1600-vt-2018	—	000-123-453-00000	fixed_missing
+1600wp-2010	000-123-453-00000	000-123-453-00000	already_ok
+1601-fq-2020	000-123-453-00000	000-123-453-00000	already_ok
+1601c-2018	000-123-453-00000	000-123-453-00000	already_ok
+1601eq-2019	000-123-453-00000	000-123-453-00000	already_ok
+1602q-2019	000-123-453-00000	000-123-453-00000	already_ok
+1603q-2018	000-123-453-00000	000-123-453-00000	already_ok
+1604c-2018	—	000-123-453-00000	fixed_missing
+1604e-2018	000-123-453-00000	000-123-453-00000	already_ok
+1604f-2018	—	000-123-453-00000	fixed_missing
+1606-2018	000-123-453-00000	000-123-453-00000	already_ok
+1700-2018	—	000-123-453-00000	fixed_missing
+1701-2018	—	000-123-453-00000	fixed_missing
+1701a-2018	000-123-453-00000	000-123-453-00000	already_ok
+1701ms-2024	—	000-123-453-00000	fixed_missing
+1701q-2018	000-123-453-00000	000-123-453-00000	already_ok
+1702ex-2018	—	000-123-453-00000	fixed_missing
+1702mx-2018c	—	000-123-453-00000	fixed_missing
+1702q-2018	000-123-453-00000	000-123-453-00000	already_ok
+1702rt-2018c	—	000-123-453-00000	fixed_missing
+1706-2018	000-123-453-00000	000-123-453-00000	already_ok
+1707-2021	—	000-123-453-00000	fixed_missing
+1707a-2021	—	000-123-453-00000	fixed_missing
+1800-2018	000-123-453-00000	000-123-453-00000	already_ok
+1801-2018	—	000-123-453-00000	fixed_missing
+2000-dst-2018	000-123-453-00000	000-123-453-00000	already_ok
+2000-ot-2018	000-123-453-00000	000-123-453-00000	already_ok
+2200a-2020	—	000-123-453-00000	fixed_missing
+2200an-2018	000-123-453-00000	000-123-453-00000	already_ok
+2200c-2018	—	000-123-453-00000	fixed_missing
+2200m-2018	—	000-123-453-00000	fixed_missing
+2200p-2020	—	000-123-453-00000	fixed_missing
+2200s-2018	000-123-453-00000	000-123-453-00000	already_ok
+2200t-2022	—	000-123-453-00000	fixed_missing
+2550m-2007	000-123-453-00000	000-123-453-00000	already_ok
+2550q-2024	000-123-453	000-123-453-00000	fixed_missing_branch
+2551q-2018	000-123-453-00000	000-123-453-00000	already_ok
+2552-2018	—	000-123-453-00000	fixed_missing
+2553-1999	000-123-453-00000	000-123-453-00000	already_ok

@@ -562,23 +562,42 @@ fn print_lines(text: &str, width: usize) -> (String, String) {
     (first.trim_end().to_string(), second)
 }
 
-/// An official amount right-aligned in a `slots`-wide comb. Commas go first
-/// when it does not fit; `None` (blank on print) when it still does not.
+/// An official whole-peso amount right-aligned in a `slots`-wide comb.
+/// Form 1702Q prints whole pesos without centavos (49 centavos or less drop
+/// down; 50 or more round up) and draws preprinted commas between digit
+/// groups, so in-comb values emit bare rounded digits right-aligned to
+/// `slots`. Values wider than `slots` are returned unpadded so the shared
+/// print engine renders them as a plain right-aligned comma-formatted
+/// rectangle under RULES 2.
 fn print_amount(text: &str, slots: usize) -> Option<String> {
     let text = text.trim();
     if text.is_empty() {
         return None;
     }
-    let fitted = if text.chars().count() <= slots {
-        text.to_string()
+    let (negative, unsigned) =
+        if let Some(inner) = text.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
+            (true, inner.trim())
+        } else if let Some(rest) = text.strip_prefix('-') {
+            (true, rest.trim())
+        } else {
+            (false, text)
+        };
+    let bare: String = unsigned.chars().filter(|ch| *ch != ',').collect();
+    let parsed: f64 = bare.parse().ok()?;
+    if !parsed.is_finite() {
+        return None;
+    }
+    let rounded = (parsed.abs() + 0.5 + 1e-9).floor() as u64;
+    let whole = if negative && rounded > 0 {
+        format!("({rounded})")
     } else {
-        let bare: String = text.chars().filter(|ch| *ch != ',').collect();
-        if bare.chars().count() > slots {
-            return None;
-        }
-        bare
+        rounded.to_string()
     };
-    Some(format!("{fitted:>slots$}"))
+    if whole.chars().count() <= slots {
+        Some(format!("{whole:>slots$}"))
+    } else {
+        Some(whole)
+    }
 }
 
 /// A whole-number rate right-aligned in a 2-slot box; `None` when the rate
@@ -1946,9 +1965,9 @@ mod tests {
         );
         assert_eq!(get("address_line2"), "UEZON CITY");
         assert_eq!(get("tin_digits"), "123456788");
-        assert_eq!(get("txtTax25"), "  739,265.00");
-        assert_eq!(get("Sched2:txtTax1"), "5,000,001.00");
-        assert_eq!(get("Sched1:txtTax1B"), "  800,001.00");
+        assert_eq!(get("txtTax25"), "      739265");
+        assert_eq!(get("Sched2:txtTax1"), "     5000001");
+        assert_eq!(get("Sched1:txtTax1B"), "      800001");
         assert_eq!(get("sched1_rate_a"), " 0");
         assert_eq!(get("sched1_rate_b_whole"), "10");
         assert_eq!(get("sched1_rate_b_tenths"), "0");
@@ -1957,16 +1976,31 @@ mod tests {
     }
 
     #[test]
-    fn print_amounts_fit_the_comb_or_stay_blank() {
+    fn print_amounts_fit_the_comb_or_overflow_as_whole_pesos() {
         assert_eq!(
             print_amount("1,234.00", 12).as_deref(),
-            Some("    1,234.00")
+            Some("        1234")
+        );
+        assert_eq!(
+            print_amount("875,000.49", 12).as_deref(),
+            Some("      875000")
+        );
+        assert_eq!(
+            print_amount("875,000.50", 12).as_deref(),
+            Some("      875001")
+        );
+        assert_eq!(
+            print_amount("-50,000.50", 12).as_deref(),
+            Some("     (50001)")
         );
         assert_eq!(
             print_amount("12,345,678.90", 12).as_deref(),
-            Some(" 12345678.90")
+            Some("    12345679")
         );
-        assert_eq!(print_amount("1,234,567,890,123.00", 12), None);
+        assert_eq!(
+            print_amount("1,234,567,890,123.00", 12).as_deref(),
+            Some("1234567890123")
+        );
         assert_eq!(print_amount("", 12), None);
         assert_eq!(print_whole_rate("2.5"), None);
         assert_eq!(print_tenths_rate("2.5"), Some((" 2".into(), "5".into())));

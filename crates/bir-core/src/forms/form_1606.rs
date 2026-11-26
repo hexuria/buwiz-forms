@@ -911,11 +911,29 @@ impl Form1606Draft {
             self.fmv_improvements_tax_declaration,
             self.fmv_improvements_bir,
         );
+        let sched1_class = match self.property_class {
+            Some(Form1606PropertyClass::Residential) => "RR".to_string(),
+            Some(Form1606PropertyClass::Commercial) => "CR".to_string(),
+            Some(Form1606PropertyClass::CondominiumResidential) => "RC".to_string(),
+            Some(Form1606PropertyClass::CondominiumCommercial) => "CC".to_string(),
+            Some(Form1606PropertyClass::Agricultural) => "A".to_string(),
+            Some(Form1606PropertyClass::Industrial) => "I".to_string(),
+            Some(Form1606PropertyClass::Others) => self.property_class_other.trim().to_uppercase(),
+            None => String::new(),
+        };
         for (row, kind, (a, b)) in [(1, "LOT", land), (2, "IMPROVEMENT", improvement)] {
             let shown = a.is_some() || b.is_some();
             put(
                 &format!("sched1_kind{row}"),
                 if shown { kind } else { "" }.to_string(),
+            );
+            put(
+                &format!("sched1_class{row}"),
+                if shown {
+                    sched1_class.clone()
+                } else {
+                    String::new()
+                },
             );
             put(&format!("sched1_fmv{row}"), higher(a, b));
         }
@@ -931,6 +949,22 @@ impl Form1606Draft {
                 Form1606TaxRelief::No | Form1606TaxRelief::YesUnspecified => "",
             }
             .to_string(),
+        );
+        // Official upload XML keeps two decimals (`48.00`), matching eBIRForms,
+        // while print displays the installment count as a plain number (`48`).
+        if !fields.get("frm1606:txtTotalN").is_none_or(String::is_empty) {
+            fields.insert(
+                "frm1606:txtTotalN".to_string(),
+                super::print_map::format_count(Some(self.number_of_installments)),
+            );
+        }
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm1606:txtDateMonth",
+                "frm1606:txtDateDay",
+                "frm1606:txtDateYear",
+            ],
         );
         fields
     }
@@ -1729,5 +1763,37 @@ mod tests {
                 .any(|(field, _)| field == "surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+
+    #[test]
+    fn print_map_derives_schedule_1_classification_codes_from_property_class() {
+        let mut draft = sample();
+        draft.fmv_land_tax_declaration = Some(1_000_000.0);
+        draft.fmv_improvements_tax_declaration = None;
+        draft.fmv_improvements_bir = None;
+        for (class, code) in [
+            (Form1606PropertyClass::Residential, "RR"),
+            (Form1606PropertyClass::Commercial, "CR"),
+            (Form1606PropertyClass::CondominiumResidential, "RC"),
+            (Form1606PropertyClass::CondominiumCommercial, "CC"),
+            (Form1606PropertyClass::Agricultural, "A"),
+            (Form1606PropertyClass::Industrial, "I"),
+        ] {
+            draft.property_class = Some(class);
+            let p = draft.to_print_field_map();
+            assert_eq!(p["derived:sched1_class1"], code);
+            assert_eq!(p["derived:sched1_class2"], "");
+            assert!(
+                !draft
+                    .to_bir_field_map()
+                    .contains_key("derived:sched1_class1")
+            );
+        }
+        draft.property_class = Some(Form1606PropertyClass::Others);
+        draft.property_class_other = " cl ".into();
+        draft.fmv_improvements_bir = Some(500_000.0);
+        let p = draft.to_print_field_map();
+        assert_eq!(p["derived:sched1_class1"], "CL");
+        assert_eq!(p["derived:sched1_class2"], "CL");
     }
 }

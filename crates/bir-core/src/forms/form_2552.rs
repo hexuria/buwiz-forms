@@ -779,6 +779,21 @@ impl Form2552Draft {
         fields
     }
 
+    /// Print-only field map: blanks unset (`0`) Item 1 date parts so the sheet
+    /// does not print `00`/`0000`, while keeping `to_bir_field_map()` unchanged.
+    pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
+        let mut fields = self.to_bir_field_map();
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm2552:txtPg1I1Month",
+                "frm2552:txtPg1I1Day",
+                "frm2552:txtPg1I1Year",
+            ],
+        );
+        fields
+    }
+
     /// The exact official submit plaintext.
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         self.official_payload()
@@ -1207,7 +1222,7 @@ impl Form2552Draft {
 
 impl QueueableForm for Form2552Draft {
     fn print_field_map(&self) -> BTreeMap<String, String> {
-        self.to_bir_field_map()
+        self.to_print_field_map()
     }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]

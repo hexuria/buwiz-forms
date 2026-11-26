@@ -175,6 +175,12 @@
    "reason": "the Lot / Improvement cell on Schedule 1 row 1: LOT on row 1, IMPROVEMENT on row 2 when that row has values"
   },
   {
+   "writer_key": "derived:sched1_class1",
+   "html_id": "p2c41",
+   "printed": "Schedule 1 row 1, Classification*",
+   "reason": "print-only BIR legend code (RR/CR/RC/CC/A/I or Others text) derived from Item 15 property_class on row 1 when shown"
+  },
+  {
    "writer_key": "derived:sched1_fmv1",
    "html_id": "p2c45",
    "printed": "Schedule 1 row 1, Fair Market Value (whichever is higher between Columns 1 & 2)",
@@ -185,6 +191,12 @@
    "html_id": "p2c47",
    "printed": "Schedule 1 row 2, Lot / Improvement",
    "reason": "the Lot / Improvement cell on Schedule 1 row 2: LOT on row 1, IMPROVEMENT on row 2 when that row has values"
+  },
+  {
+   "writer_key": "derived:sched1_class2",
+   "html_id": "p2c48",
+   "printed": "Schedule 1 row 2, Classification*",
+   "reason": "print-only BIR legend code (RR/CR/RC/CC/A/I or Others text) derived from Item 15 property_class on row 2 when shown"
   },
   {
    "writer_key": "derived:sched1_fmv2",
@@ -834,14 +846,6 @@
   {
    "html_id": "p2c31",
    "reason": "Schedule 1 table rows 2-5: no layout key"
-  },
-  {
-   "html_id": "p2c41",
-   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
-  },
-  {
-   "html_id": "p2c48",
-   "reason": "no layout key matches this printed item (signature, tax agent, Part III payment, additional seller/buyer rows, or Schedule 2/3 extras)"
   },
   {
    "html_id": "p2c49",

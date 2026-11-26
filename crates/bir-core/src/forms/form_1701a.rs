@@ -1295,7 +1295,11 @@ impl Form1701ADraft {
             } else {
                 digits
             };
-            (printed.len() <= AMOUNT_SLOTS).then(|| format!("{printed:>AMOUNT_SLOTS$}"))
+            Some(if printed.len() <= AMOUNT_SLOTS {
+                format!("{printed:>AMOUNT_SLOTS$}")
+            } else {
+                printed
+            })
         };
         let mut columns = vec!["A"];
         if self.is_joint() {
@@ -2246,7 +2250,10 @@ mod tests {
         assert_eq!(p["derived:amount_22A"], "(114152)");
         over.taxpayer.quarterly_payments = 200_000_000.0;
         over.recompute();
-        assert!(!over.to_print_field_map().contains_key("derived:amount_22A"));
+        assert_eq!(
+            over.to_print_field_map()["derived:amount_22A"],
+            "(199914152)"
+        );
     }
 
     #[test]
