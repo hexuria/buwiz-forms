@@ -2,9 +2,12 @@
 // only), each printing what it reported ("rdo: 050 | picks: 1 | opens: 1"), and the phone sheet's frames as its list scrolls
 // (watchSheetFrames), the first and the latest, so pick.test.tsx can read that the search field stays inside the sheet.
 // host.params: { rdo?: string (the starting value), required?: boolean (the RDO not clearable) }.
+// A plain box under the picks ("pp-other") takes the keys when the test sends the host event "focus-other": the form's own focus()
+// moving the keys with no press (a pill step, Queue's jump), so the combobox's leaving can be tested without the list hearing one.
+import type { InputRef } from "nsh";
 import { host, mount, signal, View } from "nsh";
 import "../../../theme/fonts";
-import { Text } from "../../../ui";
+import { Text, TextField } from "../../../ui";
 import type { ChoiceOption } from "../contract";
 import { type FrameBox, SearchPick, type SheetFrames, watchSheetFrames } from "./Pick";
 
@@ -42,6 +45,9 @@ function Probe() {
   const first = signal("");
   const last = signal("");
   const reports = signal(0);
+  const other = signal("");
+  let otherRef: InputRef | null = null;
+  host.on("focus-other", () => otherRef?.focus());
   watchSheetFrames((f) => {
     if (!first()) first.set(said(f));
     last.set(said(f));
@@ -73,6 +79,13 @@ function Probe() {
           bump("zipPicks");
         }}
         onOpen={() => bump("zipOpens")}
+      />
+      <TextField
+        testID="pp-other"
+        accessibilityLabel="Other box"
+        value={other()}
+        onChange={(v) => other.set(v)}
+        inputRef={(r: InputRef) => (otherRef = r)}
       />
       <Text>{`rdo: ${rdo()} | picks: ${counts().rdoPicks} | opens: ${counts().rdoOpens}`}</Text>
       <Text>{`zip: ${zip()} | picks: ${counts().zipPicks} | opens: ${counts().zipOpens}`}</Text>

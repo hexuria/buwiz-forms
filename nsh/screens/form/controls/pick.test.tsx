@@ -248,6 +248,45 @@ test("desktop: an emptied box clears the choice on leaving; a required one goes 
   expect(line(required, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
 });
 
+test("desktop: the focus moved away with no press (the form's focus()) closes the list and puts the last pick back with a sentence", async () => {
+  const app = await probe({ rdo: "050" }, DESKTOP);
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  expect(app.shows("id:pp-rdo-list")).toBe(true);
+  // The page's own focus() into another box (a pill step, Queue's jump): no press, so the list's onPressOutside hears nothing.
+  await app.host.send("focus-other");
+  await app.waitFor("id:pp-rdo-list", { state: "gone" });
+  expect(app.value("id:pp-rdo-search")).toBe("050 — South Makati");
+  expect(line(app, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
+  // Two choices fit "makati": not taken, as Tab would not take it (resolveTyped), and the line under the box says so.
+  await app.waitFor("text:“makati” fits 2 choices. Pick one from the list. The box kept 050 — South Makati.");
+  expect(app.shows("id:pp-rdo-note")).toBe(true);
+});
+
+test("desktop: a row pressed while the list is open picks it; the settling of the box's leaving does not undo it", async () => {
+  const app = await probe({ rdo: "050" }, DESKTOP);
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  // "makati" alone names no one choice: had the leaving been settled, the box would go back to 050 with a sentence.
+  await app.press("id:pp-rdo-opt-047");
+  await app.waitFor("id:pp-rdo-list", { state: "gone" });
+  // Past the turn the deferred settling runs on.
+  await app.wait(50);
+  expect(line(app, "rdo")).toBe("rdo: 047 | picks: 1 | opens: 1");
+  expect(app.value("id:pp-rdo-search")).toBe("047 — East Makati");
+  expect(app.shows("id:pp-rdo-note")).toBe(false);
+  // The chevron still closes the list it opened (its press takes the focus too).
+  await app.press("id:pp-rdo-trigger");
+  await app.waitFor("id:pp-rdo-list");
+  await app.press("id:pp-rdo-trigger");
+  await app.waitFor("id:pp-rdo-list", { state: "gone" });
+  await app.wait(50);
+  expect(app.shows("id:pp-rdo-list")).toBe(false);
+  expect(line(app, "rdo")).toBe("rdo: 047 | picks: 1 | opens: 2");
+});
+
 test("desktop: the clear row clears a chosen value from the whole list", async () => {
   const app = await probe({ rdo: "050" }, DESKTOP);
   await app.press("id:pp-rdo-trigger");

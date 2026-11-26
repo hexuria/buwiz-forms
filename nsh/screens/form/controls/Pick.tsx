@@ -252,6 +252,9 @@ function FieldList(props: {
   showClear: Accessor<boolean>;
   setLit: (value: string) => void;
   choose: (value: string) => void;
+  /** A press went down on a row, and ended: the focus that press takes from the box is not the box's leaving. */
+  pressDown: () => void;
+  pressUp: () => void;
   list: (ref: ListRef) => void;
   seen: (first: number, last: number) => void;
 }) {
@@ -277,7 +280,13 @@ function FieldList(props: {
       }}
       header={() => (
         <If when={props.showClear()}>
-          <ChoiceRow testID={`${p.testID}-opt-`} label="Clear the choice" onPress={() => props.choose("")}>
+          <ChoiceRow
+            testID={`${p.testID}-opt-`}
+            label="Clear the choice"
+            onPress={() => props.choose("")}
+            onPressDown={props.pressDown}
+            onPressUp={props.pressUp}
+          >
             <Text tone="fg3">Clear the choice</Text>
           </ChoiceRow>
         </If>
@@ -295,6 +304,8 @@ function FieldList(props: {
               tooltip={pickLabel(o())}
               onHover={o().disabled ? undefined : () => props.setLit(o().value)}
               onPress={o().disabled ? undefined : () => props.choose(o().value)}
+              onPressDown={props.pressDown}
+              onPressUp={props.pressUp}
             >
               <RowWords o={o} oneLine />
             </ChoiceRow>
@@ -321,6 +332,10 @@ function FieldPick(props: { p: SearchPickProps }) {
   let list: ListRef | null = null;
   let seen = { first: 0, last: -1 };
   let selectOnCaret = false;
+  /** The focus left the box with the list open, not yet settled (settleLeaving). */
+  let leaving = false;
+  /** A press is down on a row or the chevron. */
+  let pressing = false;
 
   const current = () => currentOf(p);
   const shown = () => (dirty() ? typed() : current() ? pickLabel(current()!) : "");
@@ -351,6 +366,7 @@ function FieldPick(props: { p: SearchPickProps }) {
   };
   /** A row chosen (a press, Enter): it is the value, the list closes, the keys stay in the box. */
   const choose = (value: string) => {
+    leaving = false;
     batch(() => {
       close();
       restore();
@@ -361,6 +377,7 @@ function FieldPick(props: { p: SearchPickProps }) {
   };
   /** The keys leave (Tab, a press elsewhere, the focus going): the typed text is taken only when it names a choice. */
   const commit = () => {
+    leaving = false;
     if (!dirty()) return close();
     const r = resolveTyped(p.options, typed(), p.value, p.clearable !== false);
     batch(() => {
@@ -395,6 +412,24 @@ function FieldPick(props: { p: SearchPickProps }) {
     if (dirty()) return commit();
     showList();
   };
+  // The focus left the box while the list was open. A press in the list (a row, the clear row) or on the chevron takes the focus
+  // as it goes down and settles the box itself (choose, or the chevron's commit). Any other leaving comes with no press the list
+  // hears (the form's focus() into another box, Queue's jump to a note, the lock, a window switch): the typed text is settled on
+  // the next turn, as Tab settles it, so the box never shows typed words over a value they are not.
+  const settleLeaving = () =>
+    setTimeout(() => {
+      if (leaving && !pressing && !focused()) commit();
+    }, 0);
+  const pressDown = () => {
+    pressing = true;
+  };
+  // A turn after the release, so the press it makes (a row's pick) comes first; a press that picked nothing (moved off,
+  // cancelled) lets the leaving settle.
+  const pressUp = () =>
+    setTimeout(() => {
+      pressing = false;
+      if (leaving) settleLeaving();
+    }, 0);
 
   // The keys a combobox takes while its box has the focus; Escape only while there is something to close or restore, so a dialog
   // around a quiet box still closes on it. Tab moves on as it always does (passThrough) after the text is settled.
@@ -432,6 +467,7 @@ function FieldPick(props: { p: SearchPickProps }) {
         }}
         onFocus={() => {
           focused.set(true);
+          leaving = false;
           note.set("");
           // A click leaves its caret after the focus (AppKit selects all, then puts the caret): select the whole choice again, so
           // typing replaces it rather than adding to "050 — South Makati".
@@ -445,8 +481,10 @@ function FieldPick(props: { p: SearchPickProps }) {
         }}
         onBlur={() => {
           focused.set(false);
-          // With the list open the press that took the focus may be a row's; the list's own press-outside settles the rest.
-          if (!open()) commit();
+          if (!open()) return commit();
+          // With the list open the press that took the focus may be a row's: settled a turn later, unless it was (settleLeaving).
+          leaving = true;
+          settleLeaving();
         }}
         onChange={(v) => {
           selectOnCaret = false;
@@ -470,6 +508,8 @@ function FieldPick(props: { p: SearchPickProps }) {
             tooltip={`Show every ${p.label}`}
             testID={`${p.testID}-trigger`}
             disabled={p.disabled}
+            onPressDown={pressDown}
+            onPressUp={pressUp}
             onPress={() => {
               if (open()) return commit();
               batch(() => {
@@ -505,6 +545,8 @@ function FieldPick(props: { p: SearchPickProps }) {
                 showClear={showClear}
                 setLit={(v) => lit.set(v)}
                 choose={choose}
+                pressDown={pressDown}
+                pressUp={pressUp}
                 list={(r) => (list = r)}
                 seen={(first, last) => (seen = { first, last })}
               />
