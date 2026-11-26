@@ -467,15 +467,29 @@ impl Submitter {
     /// [`crate::tins`]: once more with a refreshed token when the server says
     /// the token expired.
     pub(crate) async fn bearer_get(&self, path: &str) -> Result<Value, ClientError> {
+        self.bearer_send(reqwest::Method::GET, path, None).await
+    }
+
+    /// [`Self::bearer_get`] with any method and an optional JSON body. Asked
+    /// once more only after `401 invalid_token`, which the server answers
+    /// before it does anything.
+    pub(crate) async fn bearer_send(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&Value>,
+    ) -> Result<Value, ClientError> {
         let mut refreshed = false;
         loop {
             let access_token = self.tokens.access_token(refreshed).await?;
-            let response = self
-                .request(reqwest::Method::GET, path)
+            let mut request = self
+                .request(method.clone(), path)
                 .bearer_auth(&access_token)
-                .timeout(std::time::Duration::from_secs(5))
-                .send()
-                .await?;
+                .timeout(std::time::Duration::from_secs(5));
+            if let Some(body) = body {
+                request = request.json(body);
+            }
+            let response = request.send().await?;
             match self.ok_json(response).await {
                 Err(ClientError::Server {
                     status: 401, code, ..
