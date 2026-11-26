@@ -33,6 +33,7 @@ pub mod form;
 pub mod form_rules;
 pub mod forms;
 pub mod google_calendar;
+pub mod http_timeouts;
 pub mod import;
 pub mod integration;
 pub mod ipc;

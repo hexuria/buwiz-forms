@@ -34,8 +34,8 @@ export function hostFunctions(): HostFunction[] {
 }
 
 /**
- * The quit path of the old host: stops the submission worker and checkpoints the database. Call it once, when the
- * app quits, and use the door no more afterwards (the owner lock is held until the process exits, as before).
+ * The quit path of the old host: stops the submission worker and closes the database, which frees its owner lock.
+ * Call it once, when the app quits: every door call on this engine after it is refused ("eBIRForms is closing.").
  */
 export function shutdown(): void {
   Door.shutdown();

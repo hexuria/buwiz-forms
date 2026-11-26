@@ -67,15 +67,15 @@ test("phone: the badge's menu opens the notifications sheet", async () => {
   await app.waitFor("id:notifications-list", { state: "gone" });
 });
 
-test("phone: a dry-run send's notification says it finished a dry run; a real send's says it was submitted", async () => {
+test("phone: a dry-run send's notification says it was a test send; a real send's says it was submitted", async () => {
   const app = await open(ENTRY, asking({ filed: true }));
   await app.waitFor("id:nb-avatar");
   await app.press("id:nb-avatar");
   await app.waitFor("id:nb-menu-notifications");
   await app.press("id:nb-menu-notifications");
   await app.waitFor("id:notifications-list");
-  await app.waitFor("text:2551Q for Q2 2025: dry run finished");
-  expect(app.texts()).toContain("Nothing was sent to the BIR · Juana Santos");
+  await app.waitFor("text:2551Q for Q2 2025: Test send. Nothing reached the BIR.");
+  expect(app.texts()).not.toContain("2551Q for Q2 2025: dry run finished");
   expect(app.texts()).not.toContain("2551Q for Q2 2025 was submitted");
   expect(app.texts()).toContain("2551Q for Q1 2025 was submitted");
   expect(app.texts()).toContain("Waiting for BIR's confirmation email · Juana Santos");

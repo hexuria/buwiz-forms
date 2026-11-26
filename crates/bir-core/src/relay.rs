@@ -352,6 +352,34 @@ pub(crate) fn send_outcome(sent: Result<Sent, SendError>) -> Result<StoreReport,
     }
 }
 
+/// The relay's `result` for a test TIN, shared by the three links of "a relay dry_run result never reads as filed"
+/// (`bir-submit/tests/fixtures/relay-result-dry-run.json`): status `dry_run`, and the claims of its dry-run receipt for
+/// `<xml/>` on ticket `jti-1`. bir-submit's `a_relay_dry_run_result_with_its_signed_receipt_is_a_verified_test_send`
+/// signs those claims with its test key and proves the client's send verifies them and hands them over unchanged.
+#[cfg(any(test, feature = "test-support"))]
+pub const DRY_RUN_RESULT_FIXTURE: &str =
+    include_str!("../../bir-submit/tests/fixtures/relay-result-dry-run.json");
+
+/// What the queue keeps of [`DRY_RUN_RESULT_FIXTURE`]: the client's [`Sent`] of it through [`send_outcome`], exactly
+/// as a send through the Buwiz relay hands it to the worker. Its receipt is the fixture's claims in compact form; the
+/// queue keeps it as it comes and checks no signature (the client did, link 1).
+#[cfg(any(test, feature = "test-support"))]
+pub fn dry_run_result_fixture_report() -> StoreReport {
+    let result: serde_json::Value =
+        serde_json::from_str(DRY_RUN_RESULT_FIXTURE).expect("the fixture is JSON");
+    let claims = &result["receipt_claims"];
+    let part = |value: &serde_json::Value| {
+        data_encoding::BASE64URL_NOPAD.encode(value.to_string().as_bytes())
+    };
+    let header = serde_json::json!({"alg": "EdDSA", "typ": bir_submit::receipt::TYP});
+    let sent = Sent {
+        submission_id: "s1".into(),
+        receipt: serde_json::from_value(claims.clone()).expect("receipt claims"),
+        receipt_jws: format!("{}.{}.verified-by-the-client", part(&header), part(claims)),
+    };
+    send_outcome(Ok(sent)).expect("a receipt is a send that went")
+}
+
 /// [`send_outcome`] of a send that ended without a receipt.
 fn send_failure(error: SendError) -> TransportError {
     match error {

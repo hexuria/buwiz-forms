@@ -13,12 +13,12 @@
 //                while a return is Queued the lists are read every 3 s for about 30 s after the Queued set last changed (startQueuedWatch,
 //                also in the dev environment; it and the library warm-up wait for the frame to be shown: nothing is read behind a lock)
 import type { Accessor, Signal } from "nsh";
-import { batch, computed, effect, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
-import { Application } from "nsh/desktop";
+import { batch, computed, effect, platform, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
+import { Application, isAvailable } from "nsh/desktop";
 import { bir, dataChangeToken, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
 import { errorText } from "../lib/errors";
-import { isDryRun } from "../lib/statusWord";
+import { DRY_RUN_WORD, isDryRun } from "../lib/statusWord";
 import { POLL, startPolls } from "../lib/poll";
 import { addRecent, bumpRecent, loadRecent, recentEntry, recentOpenOptions, type RecentEntry, type RecentInput } from "../lib/recent";
 import type { FormTarget } from "../screens/form/FormPage";
@@ -248,6 +248,8 @@ function readAccess(): boolean | null {
 function retryAccess(): void {
   if (accessError() === null) return;
   const code = readAccess();
+  // One line per press, on the console (the daily log needs the database this card may be locked out of).
+  console.warn(`Try again on the locked card: ${code === null ? `still locked: ${accessError()}` : "opened"}`);
   if (code !== null) appLocked.set(code);
 }
 
@@ -509,8 +511,13 @@ function settled(): Promise<void> {
   return leaving ?? Promise.resolve();
 }
 
-/** The two steps that end the run, as one object so a test can stand in for them; the app never changes it. */
+/** The steps that end the run, as one object so a test can stand in for them; the app never changes it. */
 export const quitSteps = {
+  /**
+   * Whether this platform ends the run when asked: the desktops. Elsewhere NSH's `Application.quit()` and `restart()` do nothing
+   * (a phone, where only the agent's quit gets here), and an app whose door was shut would go on running with every call refused.
+   */
+  ends: (): boolean => isAvailable && platform.desktop,
   /** The door's quit path: the submission worker stops and the database is checkpointed (safe to call twice). */
   shutdown: (): void => shutdown(),
   /** The application ends. */
@@ -520,8 +527,13 @@ export const quitSteps = {
 /**
  * What ends the run once every screen has finished its work: the door's quit path first, then `then` (the app ends). A caller that
  * ends the run its own way (the updater's install and restart) calls this inside its exit, so no way out skips the door's shutdown.
+ * Where the platform does not end the run (`quitSteps.ends`), neither happens: the app stays open and its door keeps answering.
  */
 function endRun(then: () => void = () => quitSteps.end()): void {
+  if (!quitSteps.ends()) {
+    store.logScreen("warn", "quit: this platform does not end the run; the app stays open");
+    return;
+  }
   try {
     quitSteps.shutdown();
   } catch (error) {
@@ -964,7 +976,8 @@ function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
 
 /**
  * Submissions sent and confirmation emails received, newest first: the return's own status is the record. A send the worker only
- * simulated (`isDryRun`: a dry run, a practice account) is a finished dry run, not a submission.
+ * simulated (`isDryRun`: a dry run, a practice account, a Buwiz test TIN) is a test send, not a submission: it says the host's one
+ * sentence for it (`send.line`, send_state.rs `TEST_SENT_LINE`: "Test send. Nothing reached the BIR.").
  */
 const notifications = computed<Notification[]>(() => {
   const seen = readIds();
@@ -975,17 +988,18 @@ const notifications = computed<Notification[]>(() => {
     const id = `return:${r.id}:${confirmed ? "confirmed" : "submitted"}`;
     const who = r.branch_count > 1 ? `${r.taxpayer_name} · ${r.branch_name}` : r.taxpayer_name;
     const dry = !confirmed && isDryRun(r);
+    const testLine = r.send?.stage === "test_sent" ? r.send.line : DRY_RUN_WORD;
     items.push({
       id,
       title: confirmed
         ? `BIR confirmed ${r.form_code} for ${r.period_label}`
         : dry
-          ? `${r.form_code} for ${r.period_label}: dry run finished`
+          ? `${r.form_code} for ${r.period_label}: ${testLine}`
           : `${r.form_code} for ${r.period_label} was submitted`,
       sub: confirmed
         ? `Confirmation email received · ${who}`
         : dry
-          ? `Nothing was sent to the BIR · ${who}`
+          ? who
           : r.submitted_via_relay
             ? `Sent to the mock relay, not to BIR: no BIR email will come · ${who}`
             : `Waiting for BIR's confirmation email · ${who}`,

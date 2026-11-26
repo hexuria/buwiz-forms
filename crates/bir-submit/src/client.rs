@@ -1135,19 +1135,26 @@ enum Ending {
 }
 
 /// What a send's final status means. `verify` checks a receipt and runs
-/// only for `sent` or `dry_run` with one. Once the relay had opened toward
-/// BIR and dropped, a status read back at that moment may not record the
-/// upload yet, so only an explicit `failed` is not sent.
-fn outcome<R, E: std::fmt::Display>(
+/// only for `sent` or `dry_run` with one; a verified receipt counts only
+/// when its signed claims say what the status says ([`claims_disagree`]).
+/// Once the relay had opened toward BIR and dropped, a status read back at
+/// that moment may not record the upload yet, so only an explicit `failed`
+/// is not sent.
+fn outcome<E: std::fmt::Display>(
     ending: Ending,
     status: &str,
     error: Option<String>,
     receipt_jws: Option<String>,
-    verify: impl FnOnce(&str) -> Result<R, E>,
-) -> Result<(String, R), SendError> {
+    verify: impl FnOnce(&str) -> Result<Receipt, E>,
+) -> Result<(String, Receipt), SendError> {
     match (status, receipt_jws) {
         ("sent" | "dry_run", Some(receipt_jws)) => match verify(&receipt_jws) {
-            Ok(receipt) => Ok((receipt_jws, receipt)),
+            Ok(receipt) => match claims_disagree(status, &receipt) {
+                None => Ok((receipt_jws, receipt)),
+                Some(why) => Err(SendError::MaybeSent(format!(
+                    "the server's answer and its signed receipt disagree ({why}); BIR may have received this return; check for its confirmation email before sending again"
+                ))),
+            },
             Err(error) => Err(SendError::MaybeSent(format!(
                 "the server reports the return sent, but its receipt does not check out ({error}); check for BIR's confirmation email"
             ))),
@@ -1162,6 +1169,33 @@ fn outcome<R, E: std::fmt::Display>(
             "BIR may have received this return; check for its confirmation email before sending again".into()
         }))),
     }
+}
+
+/// Why the server's final `status` and a verified receipt's signed claims
+/// do not tell of the same send, or `None` when they agree:
+///
+/// | status    | claims `status` | claims `mode`   |
+/// |-----------|-----------------|-----------------|
+/// | `sent`    | `sent`          | `live` or `lab` |
+/// | `dry_run` | `dry_run`       | `dry_run` or `lab` |
+///
+/// Anything else disagrees: a `sent` whose claims say `dry_run` (in either
+/// claim), a `dry_run` whose claims say `sent` or `live`, and a claim this
+/// client does not know. A disagreement is never a send nor a test send: the
+/// person is asked ([`SendError::MaybeSent`]).
+fn claims_disagree(status: &str, receipt: &Receipt) -> Option<String> {
+    let modes: &[&str] = match status {
+        "sent" => &["live", "lab"],
+        "dry_run" => &["dry_run", "lab"],
+        _ => &[],
+    };
+    if receipt.status == status && modes.contains(&receipt.mode.as_str()) {
+        return None;
+    }
+    Some(format!(
+        "the server says {status}, the receipt says status {} in mode {}",
+        receipt.status, receipt.mode
+    ))
 }
 
 /// What the app saw of its own connections toward the BIR during a send.
@@ -1403,14 +1437,35 @@ mod tests {
         assert_eq!(config.trust_keys, trust::pinned_keys());
     }
 
-    /// What `outcome` answers, as a word: sent, not sent or maybe sent.
+    /// A receipt whose signed claims say `mode` and `status`.
+    fn signed(mode: &str, status: &str) -> Receipt {
+        Receipt {
+            sub: "u1".into(),
+            tin: "000000000000".into(),
+            form_type: "1601Cv2018".into(),
+            period: "102026".into(),
+            filename: "f.xml".into(),
+            xml_sha256: "00".into(),
+            payload_sha256: "00".into(),
+            remote_path: "/1601Cv2018/f.xml".into(),
+            mode: mode.into(),
+            status: status.into(),
+            iat: 1,
+            jti: None,
+        }
+    }
+
+    /// What `outcome` answers, as a word: sent, not sent or maybe sent. A
+    /// receipt named `mode/status` verifies with those claims (`good` is
+    /// `live/sent`, `dry` is `dry_run/dry_run`); any other is forged.
     fn decided(ending: Ending, status: &str, receipt: Option<&str>) -> &'static str {
-        let verify = |jws: &str| {
-            if jws == "good" {
-                Ok(())
-            } else {
-                Err("bad signature")
-            }
+        let verify = |jws: &str| match jws {
+            "good" => Ok(signed("live", "sent")),
+            "dry" => Ok(signed("dry_run", "dry_run")),
+            named => match named.split_once('/') {
+                Some((mode, status)) => Ok(signed(mode, status)),
+                None => Err("bad signature"),
+            },
         };
         match outcome(ending, status, None, receipt.map(str::to_owned), verify) {
             Ok(_) => "sent",
@@ -1429,15 +1484,30 @@ mod tests {
         use Ending::{
             DroppedAfterOpening as Opened, DroppedBeforeOpening as Before, Result as Res,
         };
-        let rows: [(&str, Option<&str>, [&str; 3]); 9] = [
-            ("sent", Some("good"), ["sent", "sent", "sent"]),
-            ("dry_run", Some("good"), ["sent", "sent", "sent"]),
-            (
-                "sent",
-                Some("forged"),
-                ["maybe sent", "maybe sent", "maybe sent"],
-            ),
-            ("sent", None, ["maybe sent", "maybe sent", "maybe sent"]),
+        const MAYBE: [&str; 3] = ["maybe sent", "maybe sent", "maybe sent"];
+        const SENT: [&str; 3] = ["sent", "sent", "sent"];
+        let rows: [(&str, Option<&str>, [&str; 3]); 24] = [
+            ("sent", Some("good"), SENT),
+            ("sent", Some("lab/sent"), SENT),
+            ("dry_run", Some("dry"), SENT),
+            ("dry_run", Some("lab/dry_run"), SENT),
+            ("sent", Some("forged"), MAYBE),
+            ("dry_run", Some("forged"), MAYBE),
+            ("sent", None, MAYBE),
+            ("dry_run", None, MAYBE),
+            // The status and the signed claims disagree: neither a send nor a test send.
+            ("dry_run", Some("good"), MAYBE),
+            ("dry_run", Some("live/dry_run"), MAYBE),
+            ("dry_run", Some("dry_run/sent"), MAYBE),
+            ("dry_run", Some("lab/sent"), MAYBE),
+            ("sent", Some("dry"), MAYBE),
+            ("sent", Some("live/dry_run"), MAYBE),
+            ("sent", Some("dry_run/sent"), MAYBE),
+            ("sent", Some("lab/dry_run"), MAYBE),
+            // A claim this client does not know.
+            ("sent", Some("/sent"), MAYBE),
+            ("sent", Some("staging/sent"), MAYBE),
+            ("sent", Some("live/queued"), MAYBE),
             ("failed", None, ["not sent", "not sent", "not sent"]),
             ("expired", None, ["not sent", "not sent", "maybe sent"]),
             ("ready", None, ["not sent", "not sent", "maybe sent"]),
@@ -1469,7 +1539,7 @@ mod tests {
                 status,
                 Some("the ticket expired".into()),
                 None,
-                |_: &str| Ok::<(), String>(()),
+                |_: &str| Ok::<Receipt, String>(signed("live", "sent")),
             );
             let Err(SendError::MaybeSent(message)) = answer else {
                 panic!("{status}: {answer:?}");
@@ -1485,12 +1555,12 @@ mod tests {
     /// The server's error and the verifier's text pass through as before.
     #[test]
     fn outcome_messages_are_unchanged_where_the_outcome_is() {
-        let message = |answer: Result<(String, ()), SendError>| match answer {
+        let message = |answer: Result<(String, Receipt), SendError>| match answer {
             Err(SendError::NotSent(message) | SendError::MaybeSent(message)) => message,
             Err(SendError::NotATry { reason, .. } | SendError::Counted { reason, .. }) => reason,
             Ok(_) => panic!("sent"),
         };
-        let ok = |_: &str| Ok::<(), String>(());
+        let ok = |_: &str| Ok::<Receipt, String>(signed("live", "sent"));
         for ending in [
             Ending::Result,
             Ending::DroppedBeforeOpening,
@@ -1530,7 +1600,7 @@ mod tests {
                     "sent",
                     None,
                     Some("x".into()),
-                    |_: &str| Err::<(), _>("bad signature")
+                    |_: &str| Err::<Receipt, _>("bad signature")
                 )),
                 "the server reports the return sent, but its receipt does not check out (bad signature); check for BIR's confirmation email"
             );
@@ -1599,7 +1669,7 @@ mod tests {
     /// refusal. A maybe-sent text with a code is never one.
     #[test]
     fn a_relay_failed_with_a_tin_code_is_a_refusal() {
-        let ok = |_: &str| Ok::<(), String>(());
+        let ok = |_: &str| Ok::<Receipt, String>(signed("live", "sent"));
         for ending in [
             Ending::Result,
             Ending::DroppedBeforeOpening,
@@ -1632,17 +1702,48 @@ mod tests {
             "dry_run",
             None,
             Some("jws".into()),
-            |jws: &str| Ok::<_, String>(jws.len()),
+            |jws: &str| {
+                assert_eq!(jws, "jws");
+                Ok::<_, String>(signed("dry_run", "dry_run"))
+            },
         );
-        assert_eq!(answer.unwrap(), ("jws".to_owned(), 3));
+        assert_eq!(
+            answer.unwrap(),
+            ("jws".to_owned(), signed("dry_run", "dry_run"))
+        );
         let answer = outcome(
             Ending::Result,
             "failed",
             None,
             Some("jws".into()),
-            |_: &str| -> Result<(), String> { panic!("verified a failed send's receipt") },
+            |_: &str| -> Result<Receipt, String> { panic!("verified a failed send's receipt") },
         );
         assert!(matches!(answer, Err(SendError::NotSent(_))));
+    }
+
+    /// A verified receipt whose claims say another send than the status asks
+    /// the person, and says what disagrees.
+    #[test]
+    fn a_status_its_receipt_disagrees_with_says_what_disagrees() {
+        for (status, mode, claimed) in [("dry_run", "live", "sent"), ("sent", "dry_run", "dry_run")]
+        {
+            let answer = outcome(
+                Ending::Result,
+                status,
+                None,
+                Some("jws".into()),
+                |_: &str| Ok::<_, String>(signed(mode, claimed)),
+            );
+            let Err(SendError::MaybeSent(message)) = answer else {
+                panic!("{status} {mode} {claimed}: {answer:?}");
+            };
+            assert_eq!(
+                message,
+                format!(
+                    "the server's answer and its signed receipt disagree (the server says {status}, the receipt says status {claimed} in mode {mode}); BIR may have received this return; check for its confirmation email before sending again"
+                )
+            );
+        }
     }
 
     // ------------------------------------------ the host's sign-in
@@ -2954,6 +3055,55 @@ mod tests {
         assert_eq!(connections(&listener), 0);
     }
 
+    /// Link 1 of 3 of "a relay dry_run result never reads as filed" (link 2:
+    /// bir-core `background_cron::tests::a_relay_dry_run_result_is_stored_as_a_test_send_on_every_path`;
+    /// link 3: bir-app-api `screen_form_module::tests::a_relay_dry_run_result_never_reads_as_filed`).
+    /// The shared fixture `relay-result-dry-run.json` is the relay's `result`
+    /// for a test TIN: status `dry_run`, and the claims of its dry-run receipt
+    /// for `<xml/>` on ticket `jti-1`. The test key signs those claims here
+    /// (no signed token is kept in the repository), and over a loopback relay
+    /// the real send verifies the receipt and hands it over as a test send:
+    /// exactly the fixture's claims, which is what the queue reads.
+    #[tokio::test]
+    async fn a_relay_dry_run_result_with_its_signed_receipt_is_a_verified_test_send() {
+        let fixture = crate::testkit::fixture_json("relay-result-dry-run.json");
+        assert_eq!(fixture["type"], "result");
+        assert_eq!(fixture["status"], "dry_run");
+        let claims = &fixture["receipt_claims"];
+        assert_eq!(
+            claims["xml_sha256"],
+            xml_hash(),
+            "the claims are for <xml/>"
+        );
+        let receipt = crate::testkit::sign_receipt_claims(&[7; 32], claims);
+        let mut result = fixture.clone();
+        let frame = result.as_object_mut().unwrap();
+        frame.remove("receipt_claims");
+        frame.insert("receipt".into(), json!(receipt));
+        let (host, listener) = bir_host();
+        let (name, port) = host.split_once(':').unwrap();
+        let open = format!(r#"{{"type":"open","stream":1,"host":"{name}","port":{port}}}"#);
+        let (client, _, _) = filing_to(
+            &[&host],
+            created(),
+            Answer::relay(&[&open, &result.to_string()]),
+            Answer::hang_up(),
+        );
+        let (_, note) = notes(None);
+        let sent = client
+            .send_noting(RETURN, b"<xml/>", &note)
+            .await
+            .expect("a verified receipt");
+        assert_eq!(sent.receipt_jws, receipt);
+        assert_eq!(
+            sent.receipt,
+            serde_json::from_value::<Receipt>(claims.clone()).unwrap(),
+            "the fixture's claims, verified"
+        );
+        assert!(sent.receipt.is_test(), "nothing reached the BIR");
+        assert_eq!(connections(&listener), 1);
+    }
+
     #[tokio::test]
     async fn a_failed_opening_note_opens_nothing_toward_the_bir() {
         let (host, listener) = bir_host();
@@ -3029,6 +3179,15 @@ mod tests {
             (
                 json!({"status": "dry_run", "receipt_jws": dry}),
                 ["sent", "sent"],
+            ),
+            // The status and the signed claims disagree.
+            (
+                json!({"status": "dry_run", "receipt_jws": good}),
+                ["maybe sent", "maybe sent"],
+            ),
+            (
+                json!({"status": "sent", "receipt_jws": dry}),
+                ["maybe sent", "maybe sent"],
             ),
             (
                 json!({"status": "sent", "receipt_jws": forged}),
