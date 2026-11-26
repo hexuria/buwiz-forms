@@ -4,6 +4,9 @@ name: CI
 # - The quick lane: a pull request, or a push to main or codex/**, runs the quick checks on Linux only (formatting,
 #   clippy, the production-boundary check, the NSH type check, the Python script tests, legacy-guard). About ten
 #   minutes; this is what `ci-ok`, the one required status, reports.
+# - A draft pull request runs nothing until it is marked ready (`ready_for_review` starts the quick lane). A pull
+#   request that closes or merges runs nothing either; its `closed` run only takes the pull request's concurrency
+#   group, which cancels the runs still queued or running for it.
 # - The test lane: a push to test/** (the branch name picks the systems), a manual run, and the nightly run on main
 #   run the test suites. Checks attach to the commit, so pushing a pull request's head to test/... shows the results
 #   on the pull request. `just ci-test [linux|windows|macos|all]` does that push.
@@ -13,6 +16,9 @@ on:
     branches: [ "main", "codex/**", "test/**" ]
   pull_request:
     branches: [ "main", "gol/**", "codex/**", "feat/**" ]
+    # `closed` runs nothing (every job's `if` is false for it, see `changes`), but it takes the pull request's
+    # concurrency group below and so cancels its runs still queued or running once it merges or closes.
+    types: [ opened, synchronize, reopened, ready_for_review, closed ]
   # Nightly safety net: everything, validation audits included, on all three systems. 18:00 UTC is 02:00 in Manila.
   schedule:
     - cron: "0 18 * * *"
@@ -39,14 +45,19 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # As NSH's CI: CI builds each crate once, so incremental data only makes the caches bigger. Swatinem/rust-cache
+  # already exports the same value before it computes its key, so the workspace cache keys do not change.
+  CARGO_INCREMENTAL: "0"
 
-# One run per ref: a newer push to the same pull request or test/... branch cancels the older run, whose result
-# nobody reads. main is the exception: every run there gets a group of its own (its run id) and is never cancelled.
-# Four merges in three minutes used to cancel each other and leave main with no complete run; now each merge gets
-# its quick run, and a merge can no longer cancel the nightly or a manual complete run either.
+# One run per pull request or ref: a newer push to the same pull request or test/... branch cancels the older run,
+# whose result nobody reads. A pull request's group is keyed on its number, not on github.ref, so its `closed` run
+# (whatever ref GitHub gives a merged pull request's event) lands in the same group and cancels what is still queued
+# or running for it. main is the exception: every run there gets a group of its own (its run id) and is never
+# cancelled. Four merges in three minutes used to cancel each other and leave main with no complete run; now each
+# merge gets its quick run, and a merge can no longer cancel the nightly or a manual complete run either.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || (github.ref == 'refs/heads/main' && github.run_id) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
 
 jobs:
   # One job for both lanes, so the two never drift apart. In the quick lane it
@@ -464,7 +475,12 @@ jobs:
   # comes from the event, the systems from the branch name or the inputs, and
   # the suites from the files the change touches. nsh.yml's `plan` job runs the
   # same script.
+  # A closed pull request and a draft plan nothing (ci_plan.py's first rule),
+  # and this `if` says the same so that no runner is taken for them: every job
+  # below needs this one, and the two that do not (legacy-guard, ci-ok) carry
+  # the same condition. scripts/tests/test_ci_plan.py checks all three.
   changes:
+    if: ${{ (github.event_name != 'pull_request' || (github.event.action != 'closed' && !github.event.pull_request.draft)) }}
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -487,6 +503,8 @@ jobs:
       id: decide
       env:
         EVENT: ${{ github.event_name }}
+        ACTION: ${{ github.event.action }}
+        DRAFT: ${{ github.event.pull_request.draft }}
         REF: ${{ github.ref }}
         BRANCH: ${{ github.head_ref || github.ref_name }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -659,9 +677,9 @@ jobs:
   # paths back (not even docs).
   # No `needs` on purpose: a docs-only PR must still fail if it brings an
   # old name back. A test/** push skips it: the pull request's run checked the
-  # same commit.
+  # same commit. So does a closed or draft pull request (see `changes`).
   legacy-guard:
-    if: ${{ !startsWith(github.ref, 'refs/heads/test/') }}
+    if: ${{ !startsWith(github.ref, 'refs/heads/test/') && (github.event_name != 'pull_request' || (github.event.action != 'closed' && !github.event.pull_request.draft)) }}
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -680,7 +698,7 @@ jobs:
 
   main-report:
     needs: [ ci-ok ]
-    # `failure` only: a cancelled run is not a break.
+    # `failure` only: a cancelled run is not a break (and its ci-ok is skipped).
     if: always() && needs.ci-ok.result == 'failure' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'push')
     runs-on: ubuntu-22.04
     permissions:
@@ -712,8 +730,19 @@ jobs:
   # when `changes` decided, every job it asked for passed (the validation-rules
   # audits included: their old summary job is folded in here), and
   # legacy-guard passed. A job skipped because something it needs failed is a
-  # failure here, not a skip. It cannot hang: `always()` runs it once every job
-  # it needs has finished or been skipped.
+  # failure here, not a skip. It cannot hang: `!cancelled()` runs it once
+  # every job it needs has finished or been skipped. Not `always()`: that also
+  # runs it in a run being cancelled, where it reported red on the commit (a
+  # newer push, or the pull request closing, cancels the older run). A
+  # cancelled run now reports no `ci-ok` at all.
+  #
+  # Not on a closed or draft pull request (see `changes`): it is skipped
+  # there, as every other job is, so no runner is taken. GitHub does not
+  # evaluate a skipped job's name, so that run adds no check named `ci-ok`
+  # (it lists one named after the expression below): a draft shows the
+  # required `ci-ok` as not reported yet, and a closed pull request keeps the
+  # `ci-ok` its last real run reported. Marking a draft ready starts the run
+  # whose `ci-ok` counts.
   #
   # Named `ci-ok` in the quick lane only. A test/** push or a manual or nightly
   # run reports `tests-ok` instead, so a test lane on a pull request's commit
@@ -722,7 +751,7 @@ jobs:
   ci-ok:
     name: ${{ (github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok' }}
     needs: [ changes, check, nsh-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
-    if: always()
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.event.action != 'closed' && !github.event.pull_request.draft)) }}
     runs-on: ubuntu-22.04
     steps:
     - name: Result

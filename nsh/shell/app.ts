@@ -13,8 +13,8 @@
 //                while a return is Queued the lists are read every 3 s for about 30 s after the Queued set last changed (startQueuedWatch,
 //                also in the dev environment; it and the library warm-up wait for the frame to be shown: nothing is read behind a lock)
 import type { Accessor, Signal } from "nsh";
-import { batch, computed, effect, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
-import { Application } from "nsh/desktop";
+import { batch, computed, effect, platform, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
+import { Application, isAvailable } from "nsh/desktop";
 import { bir, dataChangeToken, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
 import { errorText } from "../lib/errors";
@@ -248,6 +248,8 @@ function readAccess(): boolean | null {
 function retryAccess(): void {
   if (accessError() === null) return;
   const code = readAccess();
+  // One line per press, on the console (the daily log needs the database this card may be locked out of).
+  console.warn(`Try again on the locked card: ${code === null ? `still locked: ${accessError()}` : "opened"}`);
   if (code !== null) appLocked.set(code);
 }
 
@@ -509,8 +511,13 @@ function settled(): Promise<void> {
   return leaving ?? Promise.resolve();
 }
 
-/** The two steps that end the run, as one object so a test can stand in for them; the app never changes it. */
+/** The steps that end the run, as one object so a test can stand in for them; the app never changes it. */
 export const quitSteps = {
+  /**
+   * Whether this platform ends the run when asked: the desktops. Elsewhere NSH's `Application.quit()` and `restart()` do nothing
+   * (a phone, where only the agent's quit gets here), and an app whose door was shut would go on running with every call refused.
+   */
+  ends: (): boolean => isAvailable && platform.desktop,
   /** The door's quit path: the submission worker stops and the database is checkpointed (safe to call twice). */
   shutdown: (): void => shutdown(),
   /** The application ends. */
@@ -520,8 +527,13 @@ export const quitSteps = {
 /**
  * What ends the run once every screen has finished its work: the door's quit path first, then `then` (the app ends). A caller that
  * ends the run its own way (the updater's install and restart) calls this inside its exit, so no way out skips the door's shutdown.
+ * Where the platform does not end the run (`quitSteps.ends`), neither happens: the app stays open and its door keeps answering.
  */
 function endRun(then: () => void = () => quitSteps.end()): void {
+  if (!quitSteps.ends()) {
+    store.logScreen("warn", "quit: this platform does not end the run; the app stays open");
+    return;
+  }
   try {
     quitSteps.shutdown();
   } catch (error) {

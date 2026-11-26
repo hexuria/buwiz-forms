@@ -1139,6 +1139,23 @@ impl Form1801Draft {
                 }
             }
         }
+        // Schedule 4's RDO is the official rdo.xml dropdown ("000", its
+        // empty choice, is a blank cell above): free text off it is no RDO.
+        for (index, b) in self.business_interests.iter().enumerate() {
+            let rdo = b.rdo_code.trim();
+            if !rdo.is_empty()
+                && rdo != "000"
+                && !crate::validation::rdo_code_is_official_option(rdo)
+            {
+                err(
+                    &format!("business_interests[{index}].rdo_code"),
+                    &format!(
+                        "Please enter a valid RDO Code on Schedule 4, Row {}.",
+                        index + 1
+                    ),
+                );
+            }
+        }
 
         // A capital() blur happens on Item 10; the uppercase rule relies on it.
         if self.administrator_name.trim().is_empty() {
@@ -1656,6 +1673,27 @@ mod tests {
             },
             "Incomplete values on Schedule 1, Row 1.",
         );
+        let row = |rdo: &str| Form1801Business {
+            name: "Example Store".into(),
+            address: "1 Example Street".into(),
+            rdo_code: rdo.into(),
+            value: Form1801Split {
+                exclusive: 1000.0,
+                conjugal: 0.0,
+            },
+        };
+        check(
+            &|d| d.business_interests = vec![row("000")],
+            "Incomplete values on Schedule 4, Row 1.",
+        );
+        check(
+            &|d| d.business_interests = vec![row("[]")],
+            "Please enter a valid RDO Code on Schedule 4, Row 1.",
+        );
+        let mut d = sample();
+        d.business_interests = vec![row("040")];
+        d.recompute();
+        assert!(!messages(&d).iter().any(|m| m.contains("Schedule 4")));
     }
 
     #[test]

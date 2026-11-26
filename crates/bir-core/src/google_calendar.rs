@@ -265,11 +265,21 @@ pub fn default_profile_calendar_name(profile: &TaxpayerProfile) -> String {
     format!("eBIRForms - {} (...{})", profile.full_name, suffix)
 }
 
+/// Makes a Google calendar for the profile, links it, and syncs it once. Nothing calls it in the app today (the old
+/// shell did); a caller passes the stop of the engine it runs for, as every sync takes one: `stop` is checked before
+/// the calendar is made and before each request of the first sync. A first sync cut short keeps the link (the
+/// calendar is made and linked), and the worker's next sync finishes it.
 pub fn create_profile_calendar(
     db: Arc<Mutex<Database>>,
     tin: &str,
     requested_name: Option<&str>,
+    stop: &dyn Fn() -> bool,
 ) -> Result<CalendarSyncReport, anyhow::Error> {
+    if stop() {
+        return Err(anyhow::anyhow!(
+            "Not linking the Google calendar: eBIRForms is ending"
+        ));
+    }
     let profile = {
         let db = lock_timing::lock(&db).map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
         if db.get_profile_calendar_link(tin)?.is_some() {
@@ -309,8 +319,8 @@ pub fn create_profile_calendar(
             )),
         };
     }
-    match sync_profile_calendar(db.clone(), tin) {
-        Ok(report) => Ok(report),
+    match sync_profile_calendar_until(db.clone(), tin, stop) {
+        Ok((report, _stopped)) => Ok(report),
         Err(error) => {
             let rollback_remote = client.delete_calendar(&link.google_calendar_id);
             let rollback_local = lock_timing::lock(&db)
@@ -349,31 +359,72 @@ pub fn delete_profile_calendar(db: Arc<Mutex<Database>>, tin: &str) -> Result<()
     unlink_profile_calendar(db, tin)
 }
 
-pub fn sync_all_profile_calendars(
-    db: Arc<Mutex<Database>>,
-) -> Vec<(String, Result<CalendarSyncReport, String>)> {
-    let tins = match lock_timing::lock(&db) {
+/// What [`sync_all_profile_calendars_until`] did: each calendar it synced, and whether it reached the end of the list.
+pub struct CalendarSyncRun {
+    pub results: Vec<(String, Result<CalendarSyncReport, String>)>,
+    /// False when `stop` said so, or the database went, before every linked calendar was synced: the run is not a
+    /// sync, and is not recorded as one.
+    pub complete: bool,
+}
+
+/// Every linked calendar synced, as the queue worker does it (the only sync the app runs): it holds the database only
+/// while one profile's calendar syncs, and checks `stop` before each calendar and before each request to Google within
+/// one (or the database is gone). A worker that is being dropped lets go of the database after the Google call in flight: at most four requests
+/// of 30 s each (a token refresh, the call, a refresh after a 401 and its retry).
+pub fn sync_all_profile_calendars_until(
+    db: std::sync::Weak<Mutex<Database>>,
+    stop: &dyn Fn() -> bool,
+) -> CalendarSyncRun {
+    let stopped = |results| CalendarSyncRun {
+        results,
+        complete: false,
+    };
+    let Some(strong) = db.upgrade() else {
+        return stopped(Vec::new());
+    };
+    let tins = match lock_timing::lock(&strong) {
         Ok(db) => db
             .list_profile_calendar_links()
             .unwrap_or_default()
             .into_iter()
             .map(|link| link.profile_tin)
             .collect::<Vec<_>>(),
-        Err(_) => return Vec::new(),
+        Err(_) => return stopped(Vec::new()),
     };
 
-    tins.into_iter()
-        .map(|tin| {
-            let result = sync_profile_calendar(db.clone(), &tin).map_err(|error| error.to_string());
-            (tin, result)
-        })
-        .collect()
+    drop(strong);
+    let mut results = Vec::new();
+    for tin in tins {
+        if stop() {
+            return stopped(results);
+        }
+        let Some(db) = db.upgrade() else {
+            return stopped(results);
+        };
+        match sync_profile_calendar_until(db, &tin, stop) {
+            Ok((report, stopped_inside)) => {
+                results.push((tin, Ok(report)));
+                if stopped_inside {
+                    return stopped(results);
+                }
+            }
+            Err(error) => results.push((tin, Err(error.to_string()))),
+        }
+    }
+    CalendarSyncRun {
+        results,
+        complete: true,
+    }
 }
 
-pub fn sync_profile_calendar(
+/// One profile's calendar synced, checking `stop` before each request to Google. Answers the report and whether
+/// `stop` cut it short; a sync cut short records no result for the calendar (its last one stays), and what it did not reach
+/// waits for the next sync.
+fn sync_profile_calendar_until(
     db: Arc<Mutex<Database>>,
     tin: &str,
-) -> Result<CalendarSyncReport, anyhow::Error> {
+    stop: &dyn Fn() -> bool,
+) -> Result<(CalendarSyncReport, bool), anyhow::Error> {
     let (link, desired, existing, excluded_undated) = {
         let db_guard =
             lock_timing::lock(&db).map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
@@ -388,12 +439,55 @@ pub fn sync_profile_calendar(
         (link, desired, existing, excluded)
     };
 
-    let result = sync_snapshot(&db, &link, desired, existing, excluded_undated);
-    if let Ok(db_guard) = lock_timing::lock(&db) {
+    let result = GoogleCalendarClient::new().and_then(|mut client| {
+        sync_snapshot(
+            &db,
+            &link,
+            desired,
+            existing,
+            excluded_undated,
+            &mut client,
+            stop,
+        )
+    });
+    if !matches!(result, Ok((_, true)))
+        && let Ok(db_guard) = lock_timing::lock(&db)
+    {
         let error = result.as_ref().err().map(|error| error.to_string());
         let _ = db_guard.set_profile_calendar_sync_result(tin, error.as_deref());
     }
     result
+}
+
+/// The event calls a sync makes: Google's Calendar API, or a test's fake.
+trait CalendarEvents {
+    fn create_event(&mut self, calendar_id: &str, body: &Value) -> Result<String, anyhow::Error>;
+    fn update_event(
+        &mut self,
+        calendar_id: &str,
+        event_id: &str,
+        body: &Value,
+    ) -> Result<(), anyhow::Error>;
+    fn delete_event(&mut self, calendar_id: &str, event_id: &str) -> Result<(), anyhow::Error>;
+}
+
+impl CalendarEvents for GoogleCalendarClient {
+    fn create_event(&mut self, calendar_id: &str, body: &Value) -> Result<String, anyhow::Error> {
+        GoogleCalendarClient::create_event(self, calendar_id, body)
+    }
+
+    fn update_event(
+        &mut self,
+        calendar_id: &str,
+        event_id: &str,
+        body: &Value,
+    ) -> Result<(), anyhow::Error> {
+        GoogleCalendarClient::update_event(self, calendar_id, event_id, body)
+    }
+
+    fn delete_event(&mut self, calendar_id: &str, event_id: &str) -> Result<(), anyhow::Error> {
+        GoogleCalendarClient::delete_event(self, calendar_id, event_id)
+    }
 }
 
 fn desired_events_for_sync(
@@ -407,14 +501,17 @@ fn desired_events_for_sync(
     }
 }
 
+/// One calendar's events made to match `desired`. `stop` is checked before each call to `client`: once it says so, the
+/// sync answers what it did so far and `true`.
 fn sync_snapshot(
     db: &Arc<Mutex<Database>>,
     link: &ProfileCalendarLink,
     desired: Vec<DesiredCalendarEvent>,
     existing: Vec<CalendarEventLink>,
     excluded_undated: usize,
-) -> Result<CalendarSyncReport, anyhow::Error> {
-    let mut client = GoogleCalendarClient::new()?;
+    client: &mut dyn CalendarEvents,
+    stop: &dyn Fn() -> bool,
+) -> Result<(CalendarSyncReport, bool), anyhow::Error> {
     let desired_by_key: BTreeMap<_, _> = desired
         .into_iter()
         .map(|event| (event.obligation_key.clone(), event))
@@ -437,6 +534,9 @@ fn sync_snapshot(
                 report.unchanged += 1;
                 continue;
             }
+            if stop() {
+                return Ok((report, true));
+            }
             match client.update_event(
                 &link.google_calendar_id,
                 &stored.google_event_id,
@@ -447,6 +547,9 @@ fn sync_snapshot(
                     report.updated += 1;
                 }
                 Err(error) if is_resource_not_found(&error) => {
+                    if stop() {
+                        return Ok((report, true));
+                    }
                     let google_event_id =
                         client.create_event(&link.google_calendar_id, &event.body)?;
                     save_event_mapping(db, &link.profile_tin, event, &google_event_id)?;
@@ -455,6 +558,9 @@ fn sync_snapshot(
                 Err(error) => return Err(error),
             }
         } else {
+            if stop() {
+                return Ok((report, true));
+            }
             let google_event_id = client.create_event(&link.google_calendar_id, &event.body)?;
             save_event_mapping(db, &link.profile_tin, event, &google_event_id)?;
             report.inserted += 1;
@@ -464,6 +570,9 @@ fn sync_snapshot(
     for (key, stored) in &existing_by_key {
         if desired_by_key.contains_key(key) {
             continue;
+        }
+        if stop() {
+            return Ok((report, true));
         }
         if let Err(error) = client.delete_event(&link.google_calendar_id, &stored.google_event_id)
             && !is_resource_not_found(&error)
@@ -475,7 +584,7 @@ fn sync_snapshot(
         report.deleted += 1;
     }
 
-    Ok(report)
+    Ok((report, false))
 }
 
 fn save_event_mapping(
@@ -766,7 +875,7 @@ struct GoogleCalendarClient {
 impl GoogleCalendarClient {
     fn new() -> Result<Self, anyhow::Error> {
         Ok(Self {
-            http: reqwest::blocking::Client::new(),
+            http: crate::http_timeouts::bounded_blocking_client(),
             credentials: load_credentials()?,
         })
     }
@@ -1532,5 +1641,222 @@ mod tests {
             // Still nothing after the refused save.
             assert!(load_credentials().is_err());
         });
+    }
+
+    /// A sync that `stop` ends before every linked calendar is done says so, so the worker does not record it as a
+    /// sync (the last sync time and a pending "sync now" stay as they were); one with nothing to stop it is complete.
+    #[test]
+    fn a_stopped_calendar_sync_is_not_complete() {
+        let file = NamedTempFile::new().unwrap();
+        let db = Database::open(file.path()).unwrap();
+        db.save_profile(test_profile()).unwrap();
+        db.save_profile_calendar_link(&ProfileCalendarLink {
+            profile_tin: "123456789000".into(),
+            google_calendar_id: "calendar-1".into(),
+            calendar_name: "Deadlines".into(),
+            enabled: true,
+            last_synced_at: None,
+            last_error: None,
+        })
+        .unwrap();
+        let db = Arc::new(Mutex::new(db));
+
+        let stopped = sync_all_profile_calendars_until(Arc::downgrade(&db), &|| true);
+        assert!(!stopped.complete, "stopped before the linked calendar");
+        assert!(stopped.results.is_empty());
+
+        let empty = Arc::new(Mutex::new(
+            Database::open(NamedTempFile::new().unwrap().path()).unwrap(),
+        ));
+        let none_linked = sync_all_profile_calendars_until(Arc::downgrade(&empty), &|| true);
+        assert!(
+            none_linked.complete,
+            "no linked calendar: nothing left undone"
+        );
+
+        let gone = Arc::downgrade(&db);
+        drop(db);
+        assert!(
+            !sync_all_profile_calendars_until(gone, &|| false).complete,
+            "the database went"
+        );
+    }
+
+    fn linked(tin: &str) -> ProfileCalendarLink {
+        ProfileCalendarLink {
+            profile_tin: tin.into(),
+            google_calendar_id: format!("calendar-{tin}"),
+            calendar_name: "Deadlines".into(),
+            enabled: true,
+            last_synced_at: None,
+            last_error: None,
+        }
+    }
+
+    /// A stop that comes between two linked calendars: the first was synced (here it fails at once: with the keychain
+    /// off nothing is connected, and no request leaves), the second is not touched, and the run is not complete.
+    #[test]
+    fn a_stop_between_calendars_leaves_the_next_one_untouched() {
+        temp_env::with_var("BUWIZ_NO_KEYCHAIN", Some("1"), || {
+            let file = NamedTempFile::new().unwrap();
+            let db = Database::open(file.path()).unwrap();
+            let first = test_profile();
+            let mut second = test_profile();
+            second.tin.segment3 = "790".into();
+            second.full_name = "Second Calendar Corp".into();
+            for profile in [first, second] {
+                let tin = profile.tin.full();
+                db.save_profile(profile).unwrap();
+                db.save_profile_calendar_link(&linked(&tin)).unwrap();
+            }
+            let db = Arc::new(Mutex::new(db));
+
+            let asked = std::cell::Cell::new(0);
+            let stop = || {
+                asked.set(asked.get() + 1);
+                asked.get() > 1
+            };
+            let run = sync_all_profile_calendars_until(Arc::downgrade(&db), &stop);
+
+            assert!(!run.complete, "stopped before the second calendar");
+            assert_eq!(run.results.len(), 1, "only the first calendar was synced");
+            let (synced, result) = &run.results[0];
+            assert!(result.is_err(), "nothing connected: {result:?}");
+            let db = db.lock().unwrap();
+            for link in db.list_profile_calendar_links().unwrap() {
+                if &link.profile_tin == synced {
+                    assert!(
+                        link.last_error.is_some(),
+                        "the first calendar's result is recorded"
+                    );
+                } else {
+                    assert!(
+                        link.last_error.is_none() && link.last_synced_at.is_none(),
+                        "the second is untouched"
+                    );
+                }
+            }
+        });
+    }
+
+    /// A link asked for while the engine ends makes nothing: the stop is read before the calendar is made, so no
+    /// request leaves and no link is saved (with the keychain off nothing is connected either, but the stop answers
+    /// first).
+    #[test]
+    fn a_calendar_link_asked_while_the_engine_ends_makes_nothing() {
+        temp_env::with_var("BUWIZ_NO_KEYCHAIN", Some("1"), || {
+            let file = NamedTempFile::new().unwrap();
+            let db = Database::open(file.path()).unwrap();
+            let profile = test_profile();
+            let tin = profile.tin.full();
+            db.save_profile(profile).unwrap();
+            let db = Arc::new(Mutex::new(db));
+
+            let error = create_profile_calendar(db.clone(), &tin, None, &|| true).unwrap_err();
+            assert!(error.to_string().contains("eBIRForms is ending"), "{error}");
+            assert!(
+                db.lock()
+                    .unwrap()
+                    .get_profile_calendar_link(&tin)
+                    .unwrap()
+                    .is_none(),
+                "no link"
+            );
+
+            let not_connected =
+                create_profile_calendar(db.clone(), &tin, None, &|| false).unwrap_err();
+            assert!(
+                !not_connected.to_string().contains("ending"),
+                "without the stop it goes on: {not_connected}"
+            );
+        });
+    }
+
+    /// Google's event calls, counted; every call succeeds.
+    struct CountingCalendar(std::rc::Rc<std::cell::Cell<usize>>);
+
+    impl CalendarEvents for CountingCalendar {
+        fn create_event(
+            &mut self,
+            _calendar_id: &str,
+            _body: &Value,
+        ) -> Result<String, anyhow::Error> {
+            self.0.set(self.0.get() + 1);
+            Ok(format!("event-{}", self.0.get()))
+        }
+
+        fn update_event(
+            &mut self,
+            _calendar_id: &str,
+            _event_id: &str,
+            _body: &Value,
+        ) -> Result<(), anyhow::Error> {
+            self.0.set(self.0.get() + 1);
+            Ok(())
+        }
+
+        fn delete_event(
+            &mut self,
+            _calendar_id: &str,
+            _event_id: &str,
+        ) -> Result<(), anyhow::Error> {
+            self.0.set(self.0.get() + 1);
+            Ok(())
+        }
+    }
+
+    /// A stop inside one calendar's sync: checked before each call to Google, so after the call in flight nothing
+    /// more is asked, the sync says it was cut short, and only what was made is mapped (the rest waits for the next
+    /// sync). Before, one calendar's sync ran every create, update and delete to the end, holding the database.
+    #[test]
+    fn a_stop_inside_a_calendar_sync_ends_it_before_the_next_request() {
+        let (_file, db) = test_database();
+        let profile = test_profile();
+        let tin = profile.tin.full();
+        db.save_profile(profile.clone()).unwrap();
+        db.save_profile_calendar_link(&linked(&tin)).unwrap();
+        let (desired, excluded) = build_desired_events(&db, &profile).unwrap();
+        assert!(desired.len() > 1, "more than one event to create");
+        let db = Arc::new(Mutex::new(db));
+
+        let calls = std::rc::Rc::new(std::cell::Cell::new(0));
+        let mut google = CountingCalendar(calls.clone());
+        let stop = || calls.get() >= 1;
+        let (report, stopped) = sync_snapshot(
+            &db,
+            &linked(&tin),
+            desired,
+            Vec::new(),
+            excluded,
+            &mut google,
+            &stop,
+        )
+        .unwrap();
+
+        assert!(stopped, "cut short");
+        assert_eq!(calls.get(), 1, "no request after the stop");
+        assert_eq!(report.inserted, 1);
+        let mapped = db.lock().unwrap().list_calendar_event_links(&tin).unwrap();
+        assert_eq!(mapped.len(), 1, "only the event made is mapped");
+
+        let all = std::rc::Rc::new(std::cell::Cell::new(0));
+        let (desired, _) = build_desired_events(&db.lock().unwrap(), &profile).unwrap();
+        let wanted = desired.len();
+        let (report, stopped) = sync_snapshot(
+            &db,
+            &linked(&tin),
+            desired,
+            Vec::new(),
+            0,
+            &mut CountingCalendar(all.clone()),
+            &|| false,
+        )
+        .unwrap();
+        assert!(!stopped);
+        assert_eq!(
+            (report.inserted, all.get()),
+            (wanted, wanted),
+            "nothing to stop it: every event"
+        );
     }
 }

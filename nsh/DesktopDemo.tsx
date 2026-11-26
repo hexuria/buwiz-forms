@@ -127,6 +127,7 @@ function Demo() {
   if (p.hotkey) bir.set_global_hotkey(p.hotkey);
   if (p.locked) app.setCloudLocked(true);
   if (p.quit === "fake") {
+    quitSteps.ends = () => true;
     quitSteps.shutdown = () => {};
     quitSteps.end = () => quits.update((n) => n + 1);
   }
