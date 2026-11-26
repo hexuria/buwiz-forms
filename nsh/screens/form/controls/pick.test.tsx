@@ -116,7 +116,9 @@ test("phone: the search field stays where it is, inside the sheet, while the lis
   const app = await probe();
   await app.press("id:pp-rdo-trigger");
   await app.waitFor("id:pp-rdo-search");
+  // Measured as the sheet is laid out (the fixture prints the sheet's frames; the page behind the sheet is still read by texts()).
   await app.waitUntil(() => frames(app, "first").search !== null);
+  const opened = reports(app);
   await scrollTo(app, "id:pp-rdo-list", 600, "id:pp-rdo-opt-138");
   // Scrolled to its very end (the last step may stop short of it).
   try {
@@ -124,13 +126,8 @@ test("phone: the search field stays where it is, inside the sheet, while the lis
   } catch {
     // at the end already
   }
-  // The scroll measured the frames again (the fixture counts the reports and prints the latest).
-  await app.waitUntil(() => reports(app) > 1);
-  // The search field is still there to type in, and the last row is still pressable.
-  await app.type("id:pp-rdo-search", "13");
-  await app.waitFor("id:pp-rdo-opt-138");
-  await app.back();
-  await app.waitFor("id:pp-rdo-search", { state: "gone" });
+  // The scrolls measured the frames again: "last" is the sheet with its list at the end.
+  await app.waitUntil(() => reports(app) > opened);
   const before = frames(app, "first");
   const after = frames(app, "last");
   for (const f of [before, after]) {
@@ -138,14 +135,19 @@ test("phone: the search field stays where it is, inside the sheet, while the lis
     expect(f.list).not.toBeNull();
     expect(f.panel).not.toBeNull();
   }
-  // Pinned: the field did not move with the list.
+  // Pinned: the field did not move with the list (the bug: the sheet's body scrolled, and the field went up and out with the rows).
   expect(after.search!.top).toBe(before.search!.top);
-  // Inside the sheet: under its top, above the list, and the list ends inside the panel, which ends on the screen.
+  expect(after.list!.top).toBe(before.list!.top);
+  // Wholly inside the sheet: under the panel's top, above the list, on the screen; the list ends inside the panel, which ends on it.
   expect(after.search!.top).toBeGreaterThanOrEqual(after.panel!.top);
+  expect(after.search!.top).toBeGreaterThanOrEqual(0);
   expect(after.search!.bottom).toBeLessThanOrEqual(after.list!.top);
   expect(after.list!.bottom).toBeLessThanOrEqual(after.panel!.bottom + 1);
   expect(after.panel!.bottom).toBeLessThanOrEqual(after.window);
-  expect(after.search!.top).toBeGreaterThanOrEqual(0);
+  // The last row is reachable: a press on it picks it.
+  await app.press("id:pp-rdo-opt-138");
+  await app.waitFor("id:pp-rdo-search", { state: "gone" });
+  expect(line(app, "rdo")).toBe("rdo: 138 | picks: 1 | opens: 1");
 });
 
 // ---------------------------------------------------------------- desktop

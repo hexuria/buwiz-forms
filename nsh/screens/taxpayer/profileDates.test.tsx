@@ -128,8 +128,11 @@ test("phone: the birth date is a row whose date sheet types, picks, refuses an i
   await app.press(BOX);
   await app.press(`${BOX}-sheet-clear`);
   await app.waitFor(input, { state: "gone" });
-  expect(app.texts()).not.toContain("May 20, 1990");
+  // The row is empty again (the profile's read view behind the edit sheet still says the saved day until Save).
+  expect(app.shows(`${BOX} >> text:MM/DD/YYYY`)).toBe(true);
+  expect(app.shows(`${BOX} >> text:May 20, 1990`)).toBe(false);
   await app.press("id:tp-taxpayer-save");
   await app.waitFor("id:tp-edit-sheet-body", { state: "gone" });
-  expect(app.texts()).not.toContain("May 20, 1990");
+  // Saved as no birth date: the read view drops it.
+  await app.waitUntil(() => !app.texts().includes("May 20, 1990"));
 });

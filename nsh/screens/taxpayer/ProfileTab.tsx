@@ -247,6 +247,8 @@ function EditDate(props: { s: PageState; field: "birth_date" | "business_start_d
           max={todayText()}
           error={error()}
           validate={(text) => profileDateProblem(text, props.noun)}
+          // A form's link to this date (TaxpayerPage: focusField) opens its sheet, as the wide box takes the keys.
+          autoOpen={e()?.focusField === props.field}
           onChange={(text) => {
             take(text);
             settle();

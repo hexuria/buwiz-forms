@@ -106,9 +106,11 @@ function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void
   const listHeight = () => Math.max(T_PX * 2, sheetBodyRoom() - 32 - 12 - T_PX);
   const refs: { panel?: ViewRef; search?: ViewRef; list?: ViewRef } = {};
   let list: ListRef | null = null;
+  // Measured once every part is laid out (the panel's and the list's onLayout: a ref callback comes before its later siblings' refs
+  // and before layout, so the old report from the search field's ref found no list and said nothing) and on every scroll of the list.
   const report = () => {
     const watch = frameWatch;
-    if (!watch) return;
+    if (!watch || !refs.search || !refs.list || !refs.panel) return;
     void Promise.all([boxOf(refs.search), boxOf(refs.list), boxOf(refs.panel)]).then(([search, listBox, panel]) => {
       if (search && listBox && panel) watch({ testID: p.testID, search, list: listBox, panel, window: windowSize().height });
     });
@@ -118,7 +120,7 @@ function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void
     if (open.length === 1) props.choose(open[0].value);
   };
   return (
-    <View ref={(r: ViewRef) => (refs.panel = r)} class="min-h-0 gap-3">
+    <View ref={(r: ViewRef) => (refs.panel = r)} class="min-h-0 gap-3" onLayout={report}>
       <TextField
         size="sm"
         icon="search"
@@ -135,10 +137,7 @@ function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void
         placeholder="Search by code or words"
         accessibilityLabel={`Search ${p.label}`}
         testID={`${p.testID}-search`}
-        inputRef={(r: InputRef) => {
-          refs.search = r;
-          report();
-        }}
+        inputRef={(r: InputRef) => (refs.search = r)}
       />
       <List
         ref={(r: ListRef) => {
@@ -152,8 +151,11 @@ function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void
         estimatedItemSize={56}
         keyboardShouldPersistTaps="handled"
         style={{ height: listHeight() }}
+        onLayout={report}
         onScroll={report}
         onScrollEnd={report}
+        onScrollDragEnd={report}
+        onMomentumEnd={report}
         header={() => (
           <If when={showClear()}>
             <ChoiceRow testID={`${p.testID}-opt-`} label="Clear the choice" onPress={() => props.choose("")}>
