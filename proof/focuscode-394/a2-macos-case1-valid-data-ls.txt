@@ -1,0 +1,8 @@
+total 1928
+drwxr-xr-x    7 devin  staff     224 Nov 26 01:16 .
+drwxr-xr-x  101 devin  staff    3232 Nov 26 01:15 ..
+-rw-r--r--    1 devin  staff    4096 Nov 26 00:59 bir_data.db
+-rw-r--r--    1 devin  staff   32768 Nov 26 01:13 bir_data.db-shm
+-rw-r--r--    1 devin  staff  943512 Nov 26 01:01 bir_data.db-wal
+-rw-r--r--    1 devin  staff       0 Nov 26 00:59 bir_data.db.owner.lock
+-rw-------    1 devin  staff      32 Nov 26 01:00 buwiz-install-id

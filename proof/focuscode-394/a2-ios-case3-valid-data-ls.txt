@@ -1,0 +1,11 @@
+total 1952
+drwxr-xr-x  10 devin  staff     320 Nov 26 00:56 .
+drwxr-xr-x   3 devin  staff      96 Nov 26 00:48 ..
+-rw-r--r--   1 devin  staff    4096 Nov 26 00:48 bir_data.db
+-rw-r--r--   1 devin  staff   32768 Nov 26 00:55 bir_data.db-shm
+-rw-r--r--   1 devin  staff  943512 Nov 26 00:50 bir_data.db-wal
+-rw-r--r--   1 devin  staff       0 Nov 26 00:48 bir_data.db.owner.lock
+-rw-------   1 devin  staff     322 Nov 26 00:57 buwiz-cloud-account.json
+-rw-------   1 devin  staff      32 Nov 26 00:49 buwiz-install-id
+-rw-------   1 devin  staff      36 Nov 26 00:56 buwiz_submit_device_id.txt
+-rw-------   1 devin  staff      43 Nov 26 00:56 buwiz_submit_device_key.txt
