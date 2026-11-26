@@ -1,0 +1,61 @@
+RDO label at ('RDO', 540, 2106, 87, 2081, 993, 2132)
+rdo choose at ('Choose…', 514, 1755, 116, 1728, 912, 1783)
+sheet-open keyboard={'served': 'null}\n', 'inputType': '0', 'shown': True}
+edittexts=0 focused=0
+BEFORE-RDO sheet: total edittext nodes in tree=0
+after typing 05 rows=['051', '052', '055', '056']
+after clear rows count visible=4 first=['003', '004', '005', '006']
+after scroll rows visible=['059', '060', '061', '062', '063']
+row 061 center-y=323
+row 062 center-y=474
+row 063 center-y=615
+list end rows=['055', '056', '057', '058', '059', '060', '061', '062', '063', '064', '065', '066']
+end-row 064 y=1819 h=-801
+end-row 065 y=1970 h=-952
+end-row 066 y=2120 h=-1102
+kbd at end: {'served': 'null}\n', 'inputType': '2002', 'shown': False}
+x-candidate=None
+after X-tap sheet-closed=True
+state: New taxpayer,The 9-digit TIN, the registere,TIN,-,-,Taxpayer type
+reopen sheet: kbd={'served': 'null}\n', 'inputType': '0', 'shown': True}
+after makati rows=['047', '048', '049', '050']
+after pick: makati-texts=['East Makati', 'West Makati', 'North Makati']
+after clear: rows=4 nothing-matches=False
+zzz test: nothing-matches=True text=[Nothing matches. Try a code or other words.]
+makati rows=[('047', 540, 38), ('048', 540, 188), ('049', 540, 339), ('050', 540, 489)]
+after careful pick: sheet-gone? rows-gone=False makati-on-form=['East Makati', 'West Makati']
+b-step1b.mp4 duration=76.146400
+pick 048: sheet-closed=True rdo-value=['048 - West Makati']
+ZIP sheet: keyboard={'served': 'null}\n', 'inputType': '0', 'shown': True}
+after 12: zip-rows=['1120', '1121', '1122', '1123']
+zip scroll end rows=['1612', '1707', '1712', '2012', '2112', '2212', '2312', '2412', '2512', '2612', '2712', '2812']
+truncation-note: Showing 60 of 141. Type more words to narrow it.
+zip picked: sheet-closed=False value=['1612 - Green Park']
+b-step2.mp4 duration=64.579600
+zip-on-form=['1612 - Green Park'] sheet-open=False
+reopened sample: True
+yearend label: ('Year Ended (MM/YYYY) *', 587, 1749, 171, 1722, 1004, 1777)
+edittexts: [(461, 1872, 105, 1809, 817, 1935)]
+quarters: [('1st', 144, 2150, 124, 2125, 165, 2176), ('2nd', 276, 2150, 247, 2125, 306, 2176), ('3rd', 407, 2150, 381, 2125, 433, 2176), ('4th', 539, 2150, 513, 2125, 565, 2176)]
+save-as-return: ('Save as return…', 208, 783, 76, 756, 340, 811)
+after save: [('Which period is this return for?', 540, 833), ('Save makes this sample your return for t', 540, 897), ('Year-end month (MM)', 540, 979), ('Year (YYYY)', 540, 1198), ('Quarter', 540, 1417), ('Q1', 151, 1516)]
+after period save: [('Form 2551Q', 199), ('JC', 199), ('BIR Form 2551Q', 342), ('Revision 2018', 342), ('Quarterly Percentage Tax Return', 421), ('Quarterly', 510), ('2 pages', 510), ('85 fields', 510)]
+after: [('Form 2551Q', 199), ('JC', 199), ('BIR Form 2551Q', 342), ('Revision 2018', 342), ('Quarterly Percentage Tax Return', 421), ('Quarterly', 510), ('2 pages', 510), ('85 fields', 510)]
+after: [('eBIRForms', 199), ('JC', 199), ('Good afternoon', 359), ('Thursday, November 26, 2026.', 445), ('Overdue', 600), ('0', 674), ('past the due date', 747), ('Due in 7 days', 600)]
+final: [('eBIRForms', 199), ('JC', 199), ('Good afternoon', 359), ('Thursday, November 26, 2026.', 445), ('Overdue', 600), ('0', 674), ('past the due date', 747), ('Due in 7 days', 600)]
+library: False
+2551Q rows: []
+sample open: False
+dialog: False
+dialog ets: []
+q4: []
+savebtn: []
+post-save: [('eBIRForms', 199), ('JC', 199), ('Good afternoon', 359), ('Thursday, November 26, 2026.', 445), ('Overdue', 600), ('0', 674)]
+reset-state: [('eBIRForms', 199), ('JC', 199), ('Good afternoon', 359), ('Thursday, November 26, 2026.', 445), ('Overdue', 600), ('0', 674)]
+step4 BEFORE birth-tap: keyboard={'served': 'null}\n', 'inputType': '0', 'shown': False}
+step4 BEFORE type 05/17/1990: field=[]
+step4 BEFORE save 05/17/1990 result-dump above
+BEFORE iso-correct 1990-05-17: msgs=[] sheet-still-open=False field=?
+ISO accepted — sheet closed
+step4 BEFORE SUMMARY: birth date = plain text input placeholder YYYY-MM-DD, NO date sheet/calendar (shot b-step4-after-tap.png). typed 05/17/1990 -> Save -> REJECTED sentence 'Type the date as YYYY-MM-DD, like 1990-05-17.' sheet stays. ISO 1990-05-17 accepted sheet closed. persistence: profile shows 'May 17, 1990'. 02/30 + future-year NOT MEASURED on before (same raw validation path covers it). recording b-step4b.mp4.
+step3 BEFORE: NOT MEASURED YET — form RDO picker: 2551Q has no RDO picker in return details; unchecked Part I. NOTE for continuation.

@@ -1,0 +1,64 @@
+after-step1 nav: reached new taxpayer
+after editor open attempt
+AFTER ZIP sheet: keyboard={'served': 'null}\n', 'inputType': 'c001', 'shown': True}
+focused edittext present: False
+zip rows visible=[] count=0
+AFTER zip type12 rows=['1120 — BF Homes, Vio', '1121 — Commonwealth,', '1122 — Fairview Sout', '1123 — Damong Maliit', '1124 — Kaligayahan']
+AFTER zip scroll end rows=['9312 — Pagay', '9412 — Pigka', '9512 — Sural', '9612 — Talay', '9712 — Tarak']
+row ys: [2, 113, 250, 387, 524] (screen 2400, keyboard top ~1400)
+AFTER zip pick: sheet-closed=False values-now=['9612 — Talayan']
+page: New taxpayer,The 9-digit TIN, the,TIN,-,-,Taxpayer type
+after tin: New taxpayer,The 9-digit TIN, the regi,TIN,123456788,1,2,3,4
+AFTER-S1 RDO sheet open: kbd={'served': 'null}\n', 'inputType': '0', 'shown': True} edittexts=[('123456788', ('87', '706', '885', '822'), True), ('As registered with BIR', ('116', '1161', '965', '1281'), False), ('', ('116', '1684', '965', '1805'), False), ('', ('116', '2377', '965', '2400'), False)]
+rows-at-open: ['123456788']
+hint: Taxpayer type @y890
+hint: ZIP code @y1875
+AFTER-S1 type05 rows: ['123456788']
+edittext after type: [('123456788', ('87', '706', '885', '822'), True), ('As registered with BIR', ('116', '1161', '965', '1281'), False), ('', ('116', '1684', '965', '1805'), False), ('', ('116', '2377', '965', '2400'), False)]
+AFTER-S1 scrollend rows: [] ys=[]
+kbd at scrollend: {'served': 'null}\n', 'inputType': '0', 'shown': True}
+edittext at scrollend: [('', ('116', '241', '965', '336'), False), ('', ('116', '908', '965', '1029'), False), ('name@example.com', ('116', '1139', '965', '1260'), False)]
+AFTER-S1 RDO open: kbd-shown=True itype=0 edittexts=[] rows=['003 — San Fernando, La Union', '004 — Calasiao, Pangasinan', '005 — Alaminos City', '006 — Urdaneta City', '007 — Bangued, Abra']
+sheet-top: [('003 — San Fernando, La Union', 60), ('004 — Calasiao, Pangasinan', 197), ('005 — Alaminos City', 334), ('006 — Urdaneta City', 471), ('007 — Bangued, Abra', 588)]
+AFTER-S1 type05: rows=[('051 — Pasay City', 60), ('052 — Parañaque City', 197), ('055 — San Pablo City', 334), ('056 — Calamba City', 471), ('057 — Biñan City', 588)] edittexts=[]
+AFTER-S1 scrollend(3 swipes): rows=[('005 — Alaminos City', 710), ('050 — South Makati', 847), ('051 — Pasay City', 984), ('052 — Parañaque City', 1121), ('055 — San Pablo City', 1258), ('056 — Calamba City', 1395), ('057 — Biñan City', 1532), ('058 — Batangas City', 1669)]
+sheet state rows=[('003 — San Fernando, ', 60), ('004 — Calasiao, Pang', 197), ('005 — Alaminos City', 334)]
+AFTER-S1 zzz: nothing-matches-texts=[]
+after clear rows=5 first=[('003 — San Fernando', 60), ('004 — Calasiao, Pa', 197)]
+after scroll-fix rows: [('123456788', 331)]
+page now: ['TIN', '123456788', '1', '2', '3', '4']
+after name: ['New taxpayer', 'The 9-digit TIN, the regi', 'TIN', '123456788', '1', '2']
+AFTER-S2 zip open: kbd-shown=True itype=2002 rows=[('1002 — Intramuros', 60), ('1003 — Sta. Cruz South', 197), ('1004 — Malate', 334), ('1005 — San Miguel', 471)]
+AFTER-S2 type12: rows=['1120 — BF Homes, Violago', '1121 — Commonwealth, Fai', '1122 — Fairview South', '1123 — Damong Maliit, No', '1124 — Kaligayahan']
+AFTER-S2 after scroll-fix rows: []
+state: ['Individual', 'Registered name', 'Juan Dela Cruz', 'Start from', 'Nothing yet: I choos']
+AFTER-S2 makati rows: []
+AFTER-S2 makati after fix rows: [('1200 — Makati CPO + Buendia Ave', 710), ('1224 — Makati Commercial Ctr.', 847)]
+picking 1200 — Makati CPO + Buendia Ave
+AFTER-S2 zip picked-onform: ['1200 — Makati CPO + Buendia Ave']
+AFTER-S4 birth tap: ['Taxpayer', 'Registered name', 'Juan Dela Cruz', 'TIN', '123456788', '1', '2', '3', '4', '5', '6', '7']
+kbd: {'served': 'null}\n', 'inputType': '0', 'shown': False}
+sheet now: ['Birth date', 'MM/DD/YYYY', 'Nov', '2026', 'Su', 'Mo', 'Tu', 'We', 'Th', 'Fr']
+mmfield: [(540, 1169)]
+AFTER-S4 type05171990: []
+sheettexts: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', '29', '30', '1', '2', '3']
+AFTER-S4 after Done: ['Birth date', 'May 17, 1990']
+page: ['Taxpayer', 'Registered name', 'Juan Dela Cruz', 'TIN', '123456788', '1', '2', '3']
+reopened: ['Birth date', '05/17/1990', 'May', '1990', 'Su', 'Mo', 'Tu', 'We']
+cleared
+AFTER-S4 02/30: msgs=[] sheet-still-open=False
+editor birth now: [] page: ['Taxpayer', 'Registered name', 'Juan Dela Cruz', 'TIN', '123456788']
+sheet open mm: [('MM/DD/YYYY', 540, 1169)]
+AFTER-S4 02/30 retry: msgs=[] sheet-still-open=True
+AFTER-S4 future-date: sheet-still-open=False
+after save: ['Tax profile', 'JC', 'JC', 'Juan Dela Cruz', '123-456-788-00000', 'Head office', 'Individual', 'Copy TIN']
+AFTER-S4 saved state: ['Birth date']
+AFTER-S5 notice present, link at [(296, 1028)]
+after link tap: ['Business start date', 'MM/DD/YYYY', 'Nov', '2026', 'Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', '1', '2', '3']
+AFTER-S5: editor-open=False date-sheet-already-open=True
+after done: ['Registered activity', 'Branch code', '00000', 'Branch name', 'Head office', 'RDO', '050 — South Makati', 'Line of business', 'As on the Certificate of Reg', 'Business start date', 'January 1, 2026', 'Cancel']
+editor after done: save-btn=True date-texts=['Business start date', 'January 1, 2026']
+after save: ['Form 2551Q', 'JC', 'BIR Form 2551Q', 'Revision 2018', 'Quarterly Percentage Tax Ret', 'Quarterly', '2 pages', '85 fields', 'Print preview', 'Check']
+notice-right-after-save: []
+notice-after-scroll-scan: []
+AFTER-S5 VERDICT: link opened profile editor with date sheet already open on top; typed 01012026 + Done showed January 1, 2026; Save returned to form. notice-gone-check above.
