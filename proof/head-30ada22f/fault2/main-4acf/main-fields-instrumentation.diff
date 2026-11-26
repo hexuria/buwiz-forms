@@ -1,0 +1,77 @@
+diff --git a/nsh/ui/fields.tsx b/nsh/ui/fields.tsx
+index 4360f741b..ad39083ac 100644
+--- a/nsh/ui/fields.tsx
++++ b/nsh/ui/fields.tsx
+@@ -225,6 +225,18 @@ function MaskedField(props: MaskedProps) {
+   let input: InputRef | undefined;
+   const focused = signal(false);
+   const text = signal(props.shown(props.value ?? "", false));
++  // Temporary local fault-2 comparison instrumentation; not for commit.
++  const traceId = props.field.testID ?? props.field.accessibilityLabel ?? props.field.label ?? "money";
++  const traceEnabled = traceId === "fp-txtRate0" || traceId === "fp-frm1601FQ:txtTaxRate1";
++  const trace = (event: string, details: Record<string, unknown> = {}) => {
++    if (!traceEnabled) return;
++    console.log(`MONEYTRACE ${Date.now()} ${traceId} ${event} ${JSON.stringify(details)}`);
++  };
++  const writeText = (value: string, caller = "unknown") => {
++    const before = untracked(text);
++    trace("writeText", { caller, value, before, changed: before !== value });
++    text.set(value);
++  };
+   const same = (a: string, b: string) => (props.same ? props.same(a, b) : a === b);
+   // The value last reported or last given: a report is made only when it changes. `edited`: the filer changed it since the
+   // box took the keys.
+@@ -266,12 +278,13 @@ function MaskedField(props: MaskedProps) {
+     const value = props.value ?? "";
+     last = value;
+     const now = untracked(text);
++    trace("outside-effect", { incoming: value, focused: untracked(focused), now, last });
+     if (!same(props.valueOf(now), value)) {
+       // The filer emptied this box, and an amount comes back in it (a form that cannot hold a blank amount shows the draft's
+       // again): selected whole, so the digits typed next replace it instead of being appended to it.
+       const refilled = props.numeric && now === "" && edited && untracked(focused);
+       const shown = props.shown(value, untracked(focused));
+-      text.set(shown);
++      writeText(shown, "outside-effect");
+       if (refilled && shown !== "") input?.setSelection(0, shown.length);
+     }
+   });
+@@ -287,8 +300,9 @@ function MaskedField(props: MaskedProps) {
+     boxText = next.rejected || next.text === prev ? next.text : raw;
+     // The native box holds `raw`. A signal that already holds the answer would send nothing: show `raw` first so the
+     // answer is a change the box must take.
+-    if (next.text === prev && raw !== prev) text.set(raw);
+-    text.set(next.text);
++    if (next.text === prev && raw !== prev) writeText(raw, "change-raw");
++    writeText(next.text, "change-mask");
++    trace("change", { raw, prev, next: next.text, reading: props.valueOf(next.text) });
+     // The box puts the caret at the end of a text it takes, so a caret that belongs there is not sent: sent, it would
+     // arrive after the keys typed since this edit and put the next ones inside the number.
+     if (next.rejected || (next.text !== raw && next.caret !== next.text.length)) input?.setSelection(next.caret);
+@@ -342,6 +356,7 @@ function MaskedField(props: MaskedProps) {
+         props.field.onKeyPress?.(e);
+       }}
+       onFocus={() => {
++        trace("focus", { text: untracked(text), value: props.value });
+         focused.set(true);
+         boxText = undefined;
+         edited = false;
+@@ -350,6 +365,7 @@ function MaskedField(props: MaskedProps) {
+         byFocus = false;
+       }}
+       onBlur={() => {
++        trace("blur-entry", { text: untracked(text), value: props.value, edited });
+         focused.set(false);
+         clickUntil = 0;
+         byFocus = false;
+@@ -358,8 +374,9 @@ function MaskedField(props: MaskedProps) {
+         const laidOut = props.shown(props.valueOf(text()), false);
+         const shown = edited && props.settle ? props.settle(laidOut) : laidOut;
+         edited = false;
+-        if (shown !== text()) text.set(shown);
++        if (shown !== text()) writeText(shown, "blur-settle");
+         const value = props.valueOf(shown);
++        trace("blur-result", { shown, reading: value, reported: same(value, last) ? null : value });
+         if (!same(value, last)) {
+           last = value;
+           props.onChange(value);

@@ -1,0 +1,10 @@
+Fault1 93c matrix failures/10: 0ms 0/10; 120ms 10/10; 300ms 10/10; 1000ms 10/10
+Bisect failures/5 at 120ms then 0ms
+1720e362: 120ms 5/5 failures; 0ms 0/5 failures
+e6360071: 120ms 5/5 failures; 0ms 0/5 failures
+27d56733: 120ms 5/5 failures; 0ms 0/5 failures
+a7fb6dd4: 120ms 5/5 failures; 0ms 0/5 failures
+84c6bc33: 120ms 5/5 failures; 0ms 0/5 failures
+c16b45c9: 120ms 5/5 failures; 0ms 0/5 failures
+
+Oldest listed commit 1720e362 already fails, so the bisect does not isolate introduction inside the listed range. Its parent already contains the same outside-effect/focus lines.

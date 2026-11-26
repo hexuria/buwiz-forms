@@ -1,0 +1,31 @@
+diff --git a/nsh/screens/form/session.ts b/nsh/screens/form/session.ts
+index e6510a8d1..b408f9999 100644
+--- a/nsh/screens/form/session.ts
++++ b/nsh/screens/form/session.ts
+@@ -53,6 +53,13 @@ const NUMBER_KINDS = new Set(["money", "num", "pct", "int"]);
+ /** What an emptied number box is staged as when the host refuses a blank: the host's cleared value. */
+ const CLEARED = "0";
+ 
++// Temporary local fault-2 comparison instrumentation; not for commit.
++const SESSION_TRACE_KEYS = new Set(["txtRate0", "frm1601FQ:txtTaxRate1"]);
++const sessionTrace = (key: string, event: string, details: Record<string, unknown> = {}) => {
++  if (!SESSION_TRACE_KEYS.has(key)) return;
++  console.log(`MONEYTRACE ${Date.now()} session:${key} ${event} ${JSON.stringify(details)}`);
++};
++
+ /** What a fill answers, with the boxes an emptied number box was cleared in. */
+ type Filled = ScreenFormFilled & { cleared?: string[] };
+ 
+@@ -1678,7 +1685,11 @@ export class FormSession {
+     if (s.sample && Array.isArray(r.blank)) s.blank = new Set(r.blank);
+     const before = s.values;
+     s.draft = r.draft;
+-    s.values = this.shown(r.values);
++    const nextValues = this.shown(r.values);
++    for (const traceKey of SESSION_TRACE_KEYS) {
++      sessionTrace(traceKey, "applyFill-host-answer", { typed: edits[traceKey], before: before[traceKey] ?? "", hostValue: r.values?.[traceKey] ?? "", next: nextValues[traceKey] ?? "", rejected: r.rejected?.[traceKey] });
++    }
++    s.values = nextValues;
+     s.profilePrerequisites = r.profile_prerequisites || [];
+     s.options = (r.options || {}) as Record<string, unknown[]>;
+     if (Array.isArray(r.penalties)) s.penalties = r.penalties;

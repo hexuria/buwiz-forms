@@ -1,0 +1,10 @@
+old on main on Linux: the keys are appended to the recomputed amount
+MAIN 642bfc78221c0a87b318c7c3378c3f5b0b2c9359 and PR older head 7eacb1d2195b8dc1e1a1b65ad97728c15b50bc2f behave identically on 2550M 13A -> Tab -> freshly recomputed editable 13B.
+
+commit | delay | failures | after_keys | saved_13b per run
+main-642bfc78 | 0 ms | 0/5 | 999 x5 | 999.0 x5
+main-642bfc78 | 120 ms | 5/5 | 12,120.00999 / 12,240.00999 / 12,360.00999 / 12,480.00999 / 12,600.00999 | 12120.01 / 12240.01 / 12360.01 / 12480.01 / 12600.01
+7eacb1d2 | 0 ms | 0/5 | 999 x5 | 999.0 x5
+7eacb1d2 | 120 ms | 5/5 | 12,120.00999 / 12,240.00999 / 12,360.00999 / 12,480.00999 / 12,600.00999 | 12120.01 / 12240.01 / 12360.01 / 12480.01 / 12600.01
+
+Because 7eacb1d2 also fails, the nsh/ui/fields.tsx 7e-vs-1720 diff condition was not triggered. The prior passing evidence used a different box/route and timing: 2550M 18E -> 18F, not 13A -> 13B; recompute was allowed to settle for about 0.9 s before returning to 18E; and the xdotool invocation `key Tab key --delay 120 9 9 9` does not impose an initial 120 ms post-Tab wait -- `--delay` spaces keys within the following key sequence, so the first 9 was effectively immediate. It therefore resembled the passing 0 ms case rather than the required explicit post-Tab 120 ms case.

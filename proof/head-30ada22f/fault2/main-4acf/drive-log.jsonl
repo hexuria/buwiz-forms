@@ -1,0 +1,7 @@
+{"t": 1795704247.4023223, "event": "click", "id": "home-tile-drafts", "screen": [1182, 808], "logical": [111.0, 314.5]}
+{"t": 1795704249.4472375, "event": "click", "id": "return-3", "screen": [1281, 864], "logical": [210.0, 369.5]}
+{"t": 1795704266.045648, "event": "click", "id": "fp-part-3-toggle", "screen": [1281, 882], "logical": [210.0, 388.5]}
+{"t": 1795704273.712642, "event": "click", "id": "fp-row-drpTreatyCode0-0", "screen": [1542, 1038], "logical": [1542.0, 1038.0]}
+{"t": 1795704274.3048599, "event": "click", "id": "fp-txtRate0", "screen": [2312, 389], "logical": [2311.5, 389.0]}
+{"t": 1795704274.635633, "event": "xdotool-type", "text": "4", "delay": 120, "keys": "4"}
+{"t": 1795704275.1465142, "event": "xdotool-type", "text": "2", "delay": 120, "keys": "2"}

@@ -1,0 +1,351 @@
+diff --git a/nsh/screens/form/session.ts b/nsh/screens/form/session.ts
+index 1d54e2de9..9bf71148a 100644
+--- a/nsh/screens/form/session.ts
++++ b/nsh/screens/form/session.ts
+@@ -53,6 +53,13 @@ const NUMBER_KINDS = new Set(["money", "num", "pct", "int"]);
+ /** What an emptied number box is staged as when the host refuses a blank: the host's cleared value. */
+ const CLEARED = "0";
+ 
++// Temporary local fault-2 instrumentation; not for commit.
++const SESSION_TRACE_KEYS = new Set(["txtRate0", "txtAmtIncomePay0", "frm1601FQ:txtTaxRate1", "frm2550m:txtTax13A", "frm2550m:txtTax13B"]);
++const sessionTrace = (key: string, event: string, details: Record<string, unknown> = {}) => {
++  if (!SESSION_TRACE_KEYS.has(key)) return;
++  console.log(`MONEYTRACE ${Date.now()} session:${key} ${event} ${JSON.stringify(details)}`);
++};
++
+ /** What a fill answers, with the boxes an emptied number box was cleared in. */
+ type Filled = ScreenFormFilled & { cleared?: string[] };
+ 
+@@ -1053,7 +1060,9 @@ export class FormSession {
+     const kind = this.kindOf.get(k);
+     if (kind === "sel" || kind === "chk" || kind === "radio") return this.choose({ [k]: text });
+     if (kind === "money" || kind === "num") this.amountEdited.add(k);
++    sessionTrace(k, "edit-entry", { text, kind, shut: this.isShut(k), stored: s.values[k] ?? "" });
+     this.sValue.get(k).set(text);
++    sessionTrace(k, "edit-box-set", { text, stored: s.values[k] ?? "" });
+     if (s.periodParts.has(k)) return this.setPeriodPart({ [k]: text });
+     let value = text;
+     if (kind === "date" || this.rangeTextKeys.has(k)) {
+@@ -1062,6 +1071,7 @@ export class FormSession {
+       if (date || !text.trim()) this.setDateError(k, "");
+       value = date ? formatMDY(date) : text;
+     }
++    sessionTrace(k, "edit-stage", { text, value, storedBeforeStage: s.values[k] ?? "" });
+     this.stage({ [k]: value });
+     this.checkRangeOrders();
+   }
+@@ -1602,7 +1612,13 @@ export class FormSession {
+     const kind = one || period ? "date" : this.kindOf.get(k);
+     const v = this.sValue.get(k);
+     const raw = untracked(() => v());
+-    if ((kind === "money" || kind === "num") && !this.isShut(k)) v.set(formatMoney(raw, kind === "money" && this.wholeKeys.has(k)));
++    const shut = this.isShut(k);
++    sessionTrace(k, "blur-entry", { raw, kind, shut, stored: s.values[k] ?? "", pending: s.pending[k] });
++    if ((kind === "money" || kind === "num") && !shut) {
++      const formatted = formatMoney(raw, kind === "money" && this.wholeKeys.has(k));
++      v.set(formatted);
++      sessionTrace(k, "blur-box-set", { raw, formatted, stored: s.values[k] ?? "" });
++    }
+     else if (kind === "date" && !this.isShut(k)) {
+       const date = parseTypedDate(raw);
+       if (date && !(baseKey in s.rejected)) {
+@@ -1775,7 +1791,11 @@ export class FormSession {
+     if (s.sample && Array.isArray(r.blank)) s.blank = new Set(r.blank);
+     const before = s.values;
+     s.draft = r.draft;
+-    s.values = this.shown(r.values);
++    const nextValues = this.shown(r.values);
++    for (const traceKey of SESSION_TRACE_KEYS) {
++      sessionTrace(traceKey, "applyFill-host-answer", { typed: edits[traceKey], before: before[traceKey] ?? "", hostValue: r.values?.[traceKey] ?? "", next: nextValues[traceKey] ?? "", rejected: r.rejected?.[traceKey] });
++    }
++    s.values = nextValues;
+     s.profilePrerequisites = r.profile_prerequisites || [];
+     s.options = (r.options || {}) as Record<string, unknown[]>;
+     if (Array.isArray(r.penalties)) s.penalties = r.penalties;
+@@ -1798,9 +1818,11 @@ export class FormSession {
+     for (const k of Object.keys(edits)) {
+       const kind = this.kindOf.get(k);
+       if ((kind !== "money" && kind !== "num") || k in rej || this.pools.has(k) || this.oneDateParts.has(k) || this.periodPartKeys.has(k)) continue;
++      const hadAmountEdited = this.amountEdited.has(k);
+       const typedEdit = this.amountEdited.delete(k);
+       const typed = String(edits[k] ?? "");
+       const stored = String(s.values[k] ?? "");
++      sessionTrace(k, "amount-note-gate", { kind, rejected: k in rej, pooled: this.pools.has(k), typedEdit, hadAmountEdited, isShut: this.isShut(k), typed, stored, sameNumber: sameNumber(typed, stored) });
+       if (!typedEdit) continue;
+       // A gate that zeroes the amount in the same batch is an outside change of identity, not a mistyped save.
+       if (this.isShut(k)) continue;
+@@ -1879,7 +1901,9 @@ export class FormSession {
+     const stored = String(s.values[k] ?? "");
+     delete s.rejected[k];
+     s.amountNotes[k] = `amount refused|${stored === "" ? "no amount" : exactMoney(stored, whole)}|${exactMoney(typed, whole)}|${reason}`;
+-    this.sValue.get(k).set(this.shownText(k));
++    const shown = this.shownText(k);
++    sessionTrace(k, "noteRefusedAmount-box-set", { typed, shown, stored: s.values[k] ?? "", reason });
++    this.sValue.get(k).set(shown);
+     this.setErrors(s.errors);
+     this.publish();
+   }
+@@ -2215,7 +2239,11 @@ export class FormSession {
+   /** Every box shows what the draft holds (an opening, a rebuild, a restore). */
+   private resetShown() {
+     const pending = this.st.pending;
+-    for (const k of this.allKeys) if (!(k in pending)) this.sValue.get(k).set(this.shownText(k));
++    for (const k of this.allKeys) if (!(k in pending)) {
++      const shown = this.shownText(k);
++      sessionTrace(k, "resetShown-box-set", { shown, stored: this.st.values[k] ?? "", pending: k in pending });
++      this.sValue.get(k).set(shown);
++    }
+     for (const [k, { date }] of this.oneDates) {
+       if ([date.month.k, date.day?.k, date.year.k].some((p) => p && p in pending)) continue;
+       this.sValue.get(k).set(this.shownText(k));
+@@ -2236,10 +2264,18 @@ export class FormSession {
+         if (rejected && k in rejected) continue;
+         // A box the host changed to something other than what was typed (a schedule row moved up into a cleared
+         // row) shows the host's value, unless typed again since.
+-        if (!(k in s.pending) && !this.pools.has(k) && (this.oneDateParts.has(k) || this.hostChanged(k, edits[k]))) this.sValue.get(k).set(this.shownText(k));
++        if (!(k in s.pending) && !this.pools.has(k) && (this.oneDateParts.has(k) || this.hostChanged(k, edits[k]))) {
++          const shown = this.shownText(k);
++          sessionTrace(k, "syncShown-hostChanged-box-set", { typed: edits[k], shown, stored: s.values[k] ?? "", hostChanged: this.hostChanged(k, edits[k]) });
++          this.sValue.get(k).set(shown);
++        }
+         continue;
+       }
+-      if (this.isShut(k) || this.pools.has(k) || (before[k] ?? "") !== (s.values[k] ?? "")) this.sValue.get(k).set(this.shownText(k));
++      if (this.isShut(k) || this.pools.has(k) || (before[k] ?? "") !== (s.values[k] ?? "")) {
++        const shown = this.shownText(k);
++        sessionTrace(k, "syncShown-loop-box-set", { shown, before: before[k] ?? "", stored: s.values[k] ?? "", shut: this.isShut(k), pooled: this.pools.has(k) });
++        this.sValue.get(k).set(shown);
++      }
+     }
+     for (const [k, { date }] of this.oneDates) {
+       const parts = [date.month.k, date.day?.k, date.year.k].filter(Boolean) as string[];
+@@ -2275,7 +2311,11 @@ export class FormSession {
+ 
+   /** Computed and locked boxes follow the draft (after a validation). */
+   private syncComputed() {
+-    for (const k of this.allKeys) if (this.isShut(k)) this.sValue.get(k).set(this.shownText(k));
++    for (const k of this.allKeys) if (this.isShut(k)) {
++      const shown = this.shownText(k);
++      sessionTrace(k, "syncComputed-box-set", { shown, stored: this.st.values[k] ?? "", shut: this.isShut(k) });
++      this.sValue.get(k).set(shown);
++    }
+   }
+ 
+   // ---------------------------------------------------------------- locks
+diff --git a/nsh/ui/fields.tsx b/nsh/ui/fields.tsx
+index c8d5c2b74..2403eee79 100644
+--- a/nsh/ui/fields.tsx
++++ b/nsh/ui/fields.tsx
+@@ -267,6 +267,14 @@ function MaskedField(props: MaskedProps) {
+   let outsideValue: string | undefined;
+   // The sentence this box draws itself when no form session does it for it; null while focused or readable.
+   const leftUnreadable = signal<string | null>(null);
++  // Temporary local Android Home/resume instrumentation; not for commit.
++  const traceId = props.field.testID ?? props.field.accessibilityLabel ?? props.field.label ?? "money";
++  const traceEnabled = props.commaStates === true || traceId === "fp-txtRate0" || traceId === "fp-frm1601FQ:txtTaxRate1" || traceId === "fp-frm2550m:txtTax13B" || traceId === "fp-frm2550m:txtTax13A";
++  const trace = (event: string, details: Record<string, unknown> = {}) => {
++    if (!traceEnabled) return;
++    console.log(`MONEYTRACE ${Date.now()} ${traceId} ${event} ${JSON.stringify(details)}`);
++  };
++  cleanup(() => trace("cleanup-unmount", { text: untracked(text), focused: untracked(focused) }));
+   // The value shown when this focus began: an unreadable edit rolls the report back to it once.
+   let focusValue = props.value ?? "";
+   let invalidActive = false;
+@@ -292,8 +300,10 @@ function MaskedField(props: MaskedProps) {
+     props.commaStates ? (readAmountWithCommas(reading, commaState, props.commaNegative, leaving) ?? "") : props.valueOf(reading);
+   const commaValid = (reading: string, leaving: boolean) =>
+     props.commaStates ? validAmountWithCommas(reading, commaState, props.commaNegative, leaving) : props.valid ? props.valid(reading) : true;
+-  const writeText = (value: string) => {
+-    if (untracked(text) !== value) props.field.writeProbe?.("text");
++  const writeText = (value: string, caller = "unknown") => {
++    const before = untracked(text);
++    trace("writeText", { caller, value, before, changed: before !== value });
++    if (before !== value) props.field.writeProbe?.("text");
+     text.set(value);
+   };
+   const writeCaret = (start: number, end = start) => {
+@@ -303,26 +313,33 @@ function MaskedField(props: MaskedProps) {
+   // A value set from outside (another box, a reload) shows; the field's own edits come back equal and change nothing.
+   effect(() => {
+     const value = props.value ?? "";
++    const isFocused = untracked(focused);
+     // Focused text is never rewritten. A change equal to what this box just reported is its own echo; only a different
+     // value is outside, and is held for blur until the filer's own edit supersedes it.
+-    if (untracked(focused)) {
++    if (isFocused) {
+       // A zero that only answers this box's own empty report is not a new outside edit; it is read again on leaving,
+       // where a host that truly holds blank still shows blank and a host that holds zero shows zero.
+       const ownEmptyEcho = last === "" && isZeroAmount(value);
++      let outcome = "echo-or-zero";
+       if (!same(value, last) && !ownEmptyEcho) {
+         outsideValue = value;
+         last = value;
++        outcome = "held";
+       }
++      trace("outside-effect", { incoming: value, focused: isFocused, outcome, last });
+       return;
+     }
+     last = value;
+     const now = untracked(text);
++    let outcome = "unchanged";
+     if (!same(props.valueOf(now), value)) {
+       if (WINDOWS_RESELECT) outsideWriteAt = Date.now();
+-      writeText(props.shown(value, false));
++      writeText(props.shown(value, false), "outside-effect");
+       invalidActive = false;
+       rollbackReported = false;
++      outcome = "wrote";
+     }
++    trace("outside-effect", { incoming: value, focused: isFocused, outcome, now, last });
+   });
+   // Take the stale zero text out of the reported reading wherever its characters sit. zeroWriteLanded lasts only
+   // for the task queue immediately after the empty write, so a key already on its way is stripped while a later,
+@@ -349,6 +366,7 @@ function MaskedField(props: MaskedProps) {
+     editTyped = false;
+     if (props.noLiveFormat) {
+       // Focused text is authoritative: strict reading decides the report; no mask rewrite or refusal answer is computed for it.
++      const commaBefore = commaState;
+       boxText = raw;
+       text.set(raw);
+       if (props.commaStates) commaState = nextCommaState(commaState, prev, raw);
+@@ -356,15 +374,18 @@ function MaskedField(props: MaskedProps) {
+       const valid = commaValid(reading, false);
+       if (!valid) {
+         invalidActive = true;
++        let reported: string | null = null;
+         if (!rollbackReported) {
+           rollbackReported = true;
+           // A newer value held for this focus is the fallback, not the older value the box had when focus began.
+           const fallback = untracked(focused) ? (outsideValue ?? focusValue) : last;
+           if (!same(fallback, last)) {
+             last = fallback;
++            reported = fallback;
+             props.onChange(fallback);
+           }
+         }
++        trace("change", { raw, before: prev, commaBefore, commaAfter: commaState, reading, valid, reported, edited, outcome: "invalid" });
+         return;
+       }
+       if (invalidActive) {
+@@ -374,9 +395,15 @@ function MaskedField(props: MaskedProps) {
+       const value = commaValueOf(reading, false);
+       // A key and its Backspace are no edit: a value held from outside still wins on leaving.
+       edited = !same(value, focusValue);
+-      if (value === last) return;
+-      last = value;
+-      props.onChange(value);
++      let reported: string | null = null;
++      let outcome = "unchanged";
++      if (value !== last) {
++        last = value;
++        reported = value;
++        outcome = "reported";
++        props.onChange(value);
++      }
++      trace("change", { raw, before: prev, commaBefore, commaAfter: commaState, reading, valid, reported, edited, outcome });
+       return;
+     }
+     const staleRead = readWithoutStaleZero(prev, raw);
+@@ -386,8 +413,8 @@ function MaskedField(props: MaskedProps) {
+     boxText = next.rejected || next.text === prev ? next.text : raw;
+     // The native box holds `raw`. A signal that already holds the answer would send nothing: show `raw` first so the
+     // answer is a change the box must take.
+-    if (next.text === prev && raw !== prev) writeText(raw);
+-    writeText(next.text);
++    if (next.text === prev && raw !== prev) writeText(raw, "change-raw");
++    writeText(next.text, "change-mask");
+     // The box puts the caret at the end of a text it takes, so a caret that belongs there is not sent: sent, it would
+     // arrive after the keys typed since this edit and put the next ones inside the number.
+     if (next.rejected || (next.text !== raw && next.caret !== next.text.length)) writeCaret(next.caret);
+@@ -401,6 +428,7 @@ function MaskedField(props: MaskedProps) {
+   // Blur and unmount are the same leave. Unmount cannot write the native box away, but the value, unreadable-note
+   // callback and the box's blur callback are exactly the blur ones.
+   const finishLeave = (write: boolean) => {
++        trace("finishLeave-entry", { write, text: untracked(text), value: props.value ?? "", outsideValue, focusValue, edited, last });
+         if (zeroWriteTimer !== undefined) {
+           clearTimeout(zeroWriteTimer);
+           zeroWriteTimer = undefined;
+@@ -419,24 +447,28 @@ function MaskedField(props: MaskedProps) {
+           const fallback = outsideValue ?? focusValue;
+           const shownFallback = props.shown(fallback, false);
+           const kept = shownFallback === "" ? props.shown("0", false) : shownFallback;
+-          if (write) writeText(kept);
++          if (write) writeText(kept, "leave-invalid");
+           const hint = held.includes(",") ? " Use a point for centavos, and commas only between thousands." : "";
+           if (props.field.onLeftUnreadable) props.field.onLeftUnreadable(held, kept);
+           else leftUnreadable.set(`${held} is not an amount. The box kept ${kept}.${hint}`);
+           invalidActive = false;
+           rollbackReported = false;
++          trace("finishLeave", { write, held, reading, validBlur, wrote: write ? kept : null, reported: null, outcome: "invalid", focusValue, outsideValue, edited, last });
+         } else {
+-          if (write && !edited && outsideValue !== undefined) writeText(props.shown(outsideValue, false));
++          if (write && !edited && outsideValue !== undefined) writeText(props.shown(outsideValue, false), "leave-held-outside");
+           const heldZero = reading.trim() === "" && isZeroAmount(props.value ?? "") ? (props.value ?? "") : commaValueOf(reading, true);
+           const laidOut = edited ? props.shown(heldZero, false) : props.shown(outsideValue ?? props.value ?? "", false);
+           const semanticShown = edited && props.settle ? props.settle(laidOut) : laidOut;
+           // Blank is what nullable amounts hold; a host that stores zero writes that zero back through the outside value.
+-          if (write && semanticShown !== text()) writeText(semanticShown);
++          if (write && semanticShown !== text()) writeText(semanticShown, "leave-semantic");
+           const value = commaValueOf(semanticShown, true);
++          let reported: string | null = null;
+           if (!same(value, last)) {
+             last = value;
++            reported = value;
+             props.onChange(value);
+           }
++          trace("finishLeave", { write, held, reading, validBlur, wrote: write ? semanticShown : null, reported, outcome: "valid", edited, outsideValue, focusValue, last });
+         }
+         outsideValue = undefined;
+         focused.set(false);
+@@ -502,6 +534,7 @@ function MaskedField(props: MaskedProps) {
+       onSubmit={props.field.onSubmit}
+       testID={props.field.testID}
+       onSelectionChange={(e) => {
++        trace("selection", { start: e.start, end: e.end, text: untracked(text) });
+         if (WINDOWS_RESELECT && armWindowsReselect && !windowsReselectDone) {
+           const len = untracked(text).length;
+           const now = Date.now();
+@@ -518,11 +551,13 @@ function MaskedField(props: MaskedProps) {
+         props.field.onSelectionChange?.(e);
+       }}
+       onKeyPress={(e) => {
++        trace("key", { key: e.key, selected, text: untracked(text) });
+         editFrom = selected;
+         editTyped = [...e.key].length === 1;
+         props.field.onKeyPress?.(e);
+       }}
+       onFocus={() => {
++        trace("focus-entry", { text: untracked(text), value: props.value ?? "", duplicate: untracked(focused) });
+         // A duplicate focus without a blur is not a new edit session: no reset, rewrite, reselect or renotify.
+         if (untracked(focused)) {
+           programmaticFocus = false;
+@@ -553,7 +588,7 @@ function MaskedField(props: MaskedProps) {
+             zeroWriteTimer = setTimeout(() => {
+               zeroWriteTimer = undefined;
+               if (!edited && untracked(focused) && untracked(text) === before) {
+-                writeText("");
++                writeText("", "focus-zero");
+                 zeroWriteLanded = true;
+                 zeroWriteGraceTimer = setTimeout(() => {
+                   zeroWriteGraceTimer = undefined;
+@@ -562,7 +597,7 @@ function MaskedField(props: MaskedProps) {
+               }
+             }, 0);
+           } else {
+-            writeText(focusShown);
++            writeText(focusShown, "focus-shown");
+           }
+         }
+         // One of exactly two deliberate selection writes in typed boxes: the page's own focus(), never platform focus.
+@@ -572,9 +607,11 @@ function MaskedField(props: MaskedProps) {
+         }
+         programmaticFocus = false;
+         programmaticFocusToken++;
++        trace("focus-ready", { text: untracked(text), value: props.value ?? "", focusShown, programmaticFocus });
+         props.field.onFocus?.();
+       }}
+       onBlur={() => {
++        trace("blur-entry", { text: untracked(text), value: props.value ?? "", focused: untracked(focused) });
+         if (untracked(focused)) finishLeave(true);
+       }}
+     />

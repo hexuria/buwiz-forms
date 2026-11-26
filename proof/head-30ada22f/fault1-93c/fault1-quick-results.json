@@ -1,0 +1,32 @@
+{
+  "commit": "93c575187749d8fa121c032bc489765c857810b3",
+  "status": "incomplete_navigation_blocked",
+  "note": "2551Q opened, but Schedule 1 taxable amount node fp-txtATCAmt1 did not appear after visible navigation attempts to fp-nav-4/fp-part-4-toggle/fp-parts-toggle; no comma cases or row-delete comparison were validly executed.",
+  "cases": [
+    {
+      "case": "insert 9 between 2 and 3",
+      "status": "untested"
+    },
+    {
+      "case": "end four BackSpaces",
+      "status": "untested"
+    },
+    {
+      "case": "zero type 1500,50",
+      "status": "untested"
+    },
+    {
+      "case": "zero type 1,500",
+      "status": "untested"
+    },
+    {
+      "case": "select-all paste 1500,50",
+      "status": "untested"
+    },
+    {
+      "case": "MAIN plain Delete stray row",
+      "status": "untested"
+    }
+  ],
+  "created": 1795705588.9154356
+}
