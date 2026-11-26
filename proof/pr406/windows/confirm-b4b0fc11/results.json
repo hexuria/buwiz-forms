@@ -1,0 +1,10 @@
+{
+  "commit": "b4b0fc1156842e69041e721f6990288db0c0b1bf",
+  "nsh": "8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf",
+  "rdo": "PASS",
+  "zip": "PASS",
+  "rdo_notes": "Typed 0, scrolled to end, Enter picked 001; reopened, scrolled full list to end, click picked final row 93B correctly.",
+  "zip_notes": "Typed 1, scrolled filtered list to final 0410 row, Enter picked hover-highlighted 1006; reopened full catalog, scrolled to end, click picked final row 0560 correctly.",
+  "issues": [],
+  "artifact_notes": "ZIP mp4 is dead-time-trimmed genuine capture due very long physical wheel scrolling."
+}
