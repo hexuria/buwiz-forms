@@ -541,8 +541,10 @@ impl Submitter {
     ///   request; the server's own answer still decides everything else.
     /// - The added row, as `include=all` lists it (`None` when the answer
     ///   could not be read: the TIN was added all the same).
-    /// - After an add, and after `tin_already_active`, `tin_already_added`
-    ///   or `claim_already_pending`, the next list read asks the server.
+    /// - After an add, after `tin_already_active`, `tin_already_added` or
+    ///   `claim_already_pending`, and after [`AddTinError::Offline`] (a POST
+    ///   that timed out may still have added it), the next list read asks
+    ///   the server.
     pub async fn add_account_tin(
         &self,
         kind: TinKind,
@@ -575,10 +577,13 @@ impl Submitter {
             .bearer_send(reqwest::Method::POST, PLAIN_PATH, Some(&body))
             .await
             .map_err(add_error);
-        if added
-            .as_ref()
-            .map_or_else(AddTinError::refreshes_list, |_| true)
-        {
+        // A POST that timed out (`Offline`) may still have added the TIN on
+        // the server: the next read asks rather than trust the list from
+        // before.
+        if added.as_ref().map_or_else(
+            |error| error.refreshes_list() || *error == AddTinError::Offline,
+            |_| true,
+        ) {
             self.tins.invalidate();
         }
         Ok(AccountTin::parse(&added?["profile"]))
@@ -733,6 +738,11 @@ fn minutes(seconds: &i64) -> String {
 fn add_error(error: ClientError) -> AddTinError {
     match error {
         ClientError::SignedOut | ClientError::DeviceRevoked => AddTinError::SignedOut,
+        // A second `invalid_token` after the forced refresh: the grant was
+        // revoked on the server.
+        ClientError::Server {
+            status: 401, code, ..
+        } if code == "invalid_token" => AddTinError::SignedOut,
         ClientError::Network(_) => AddTinError::Offline,
         ClientError::NotATry {
             status: 429,
@@ -785,6 +795,11 @@ fn tins_error(error: ClientError) -> TinsError {
                 .unwrap_or_else(|| device::now() + LIMIT_DEFAULT_SECS),
         },
         ClientError::SignedOut | ClientError::DeviceRevoked => TinsError::SignedOut,
+        // A second `invalid_token` after the forced refresh: the grant was
+        // revoked on the server.
+        ClientError::Server {
+            status: 401, code, ..
+        } if code == "invalid_token" => TinsError::SignedOut,
         error @ (ClientError::DeviceKeyMissing | ClientError::InstallInUse) => TinsError::Server {
             code: "device_not_registered".to_owned(),
             message: error.to_string(),
@@ -1479,11 +1494,9 @@ mod tests {
             ))
         });
         let (submitter, tokens) = submitter_tokens(&url, true);
-        let read = submitter.account_tins(60).await;
-        assert!(
-            matches!(read, Err(TinsError::Server { ref code, .. }) if code == "invalid_token"),
-            "{read:?}"
-        );
+        // A second `invalid_token` after the refresh: the grant was revoked
+        // on the server, which is signed out, not a server failure.
+        assert_eq!(submitter.account_tins(60).await, Err(TinsError::SignedOut));
         assert_eq!(seen.lock().unwrap().len(), 2, "refreshed once, not again");
         assert_eq!(tokens.asked(), [false, true]);
     }
@@ -2157,6 +2170,57 @@ mod tests {
         );
         let body: Value = serde_json::from_str(&bodies.lock().unwrap()[0]).unwrap();
         assert_eq!(body["registered_name"].as_str().unwrap().len(), 200);
+    }
+
+    /// A grant revoked on the server answers `invalid_token` again after
+    /// the forced refresh: the add is signed out, not "could not add".
+    #[tokio::test]
+    async fn a_revoked_grant_adds_as_signed_out() {
+        let (url, seen) = fake_server(0, |_, _| {
+            Some((
+                401,
+                r#"{"error":{"code":"invalid_token","message":"revoked"}}"#.into(),
+            ))
+        });
+        let (submitter, tokens) = submitter_tokens(&url, true);
+        assert_eq!(
+            submitter
+                .add_account_tin(TinKind::Individual, &key("000123453"), "X", None)
+                .await,
+            Err(AddTinError::SignedOut)
+        );
+        assert_eq!(seen.lock().unwrap().len(), 2, "refreshed once, not again");
+        assert_eq!(tokens.asked(), [false, true]);
+    }
+
+    /// A POST that gets no answer may still have added the TIN: the next
+    /// read asks the server instead of answering the list from before.
+    #[tokio::test]
+    async fn an_add_with_no_answer_makes_the_next_read_ask() {
+        let (url, seen) = fake_server(0, |n, _| match n {
+            0 | 2 => {
+                ok(json!({"include":"all","profiles":[{"tin":"000123453","registered_name":"X"}]}))
+            }
+            _ => None,
+        });
+        let submitter = submitter(&url, true);
+        assert!(submitter.account_tins(60).await.is_ok());
+        assert_eq!(
+            submitter
+                .add_account_tin(TinKind::Individual, &key("000123462"), "Y", None)
+                .await,
+            Err(AddTinError::Offline)
+        );
+        assert!(submitter.account_tins(60).await.is_ok());
+        assert_eq!(
+            *seen.lock().unwrap(),
+            [
+                "GET /api/tax-profiles?include=all",
+                "POST /api/tax-profiles",
+                "GET /api/tax-profiles?include=all"
+            ],
+            "the read after the unanswered add asked the server"
+        );
     }
 
     #[tokio::test]

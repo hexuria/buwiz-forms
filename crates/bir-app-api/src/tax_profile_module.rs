@@ -3495,6 +3495,66 @@ mod tests {
         });
     }
 
+    /// The one road to `POST /api/tax-profiles`: outside tests, the only
+    /// call of `add_account_tin(` in the app's Rust is in `activate_tin`
+    /// (the "Activate this TIN to send" verb), so no other path (a profile
+    /// made or changed, a sign-in, a sync) can add a TIN to the account.
+    #[test]
+    fn only_activate_tin_calls_add_account_tin() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut dirs = vec![root.join("nsh/src")];
+        for entry in std::fs::read_dir(root.join("crates")).expect("crates/") {
+            dirs.push(entry.expect("a crate").path().join("src"));
+        }
+        let mut calls = Vec::new();
+        while let Some(dir) = dirs.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries {
+                let path = entry.expect("an entry").path();
+                if path.is_dir() {
+                    dirs.push(path);
+                    continue;
+                }
+                if path.extension().is_none_or(|extension| extension != "rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).expect("a source file");
+                // The test module at the end of the file is not the app.
+                let code = text
+                    .find("\n#[cfg(test)]\nmod tests")
+                    .map_or(text.as_str(), |end| &text[..end]);
+                for (at, _) in code.match_indices("add_account_tin(") {
+                    if code[..at].ends_with("fn ") {
+                        continue;
+                    }
+                    let start = code[..at].rfind("\nfn ").map_or(0, |line| line + 4);
+                    let function = code[start..]
+                        .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                        .next()
+                        .unwrap_or_default()
+                        .to_owned();
+                    let file = path
+                        .strip_prefix(&root)
+                        .unwrap_or(&path)
+                        .display()
+                        .to_string()
+                        .replace('\\', "/");
+                    calls.push((file, function));
+                }
+            }
+        }
+        assert_eq!(
+            calls,
+            [(
+                "crates/bir-app-api/src/tax_profile_module.rs".to_owned(),
+                "activate_tin".to_owned()
+            )],
+            "add_account_tin( outside tests"
+        );
+    }
+
     /// Making, changing and listing tax profiles never adds a TIN to the
     /// account: only "Activate this TIN to send" posts.
     #[test]
