@@ -50,11 +50,12 @@ test("tablet and computer: the same boundaries for 180, 128, 88", () => {
 });
 
 test("the room the block has, before the page measures: a 375x667 phone, a 390x844 phone, a 1280x640 window", () => {
-  // The window, less the 40-point title bar, the top inset and the back row, less 16 above and below the block.
-  expect(blockRoom(underBackRowGuess(667, 0, true, false))).toBe(551);
-  expect(blockRoom(underBackRowGuess(844, 47, true, false))).toBe(681);
+  // The window, less the top inset on touch (the 40-point title bar with a pointer) and the back row, less 16 above and below
+  // the block.
+  expect(blockRoom(underBackRowGuess(667, 0, true, false))).toBe(591);
+  expect(blockRoom(underBackRowGuess(844, 47, true, false))).toBe(721);
   expect(blockRoom(underBackRowGuess(640, 0, false, false))).toBe(528);
-  // A 390x844 phone with a 336-point keyboard up leaves 461 for the block: a 400-point page scrolls at the smallest step.
+  // A 390x844 phone with a 336-point keyboard up leaves 385 for the block: a 400-point page scrolls at the smallest step.
   expect(logoStep(LOGO_STEPS_PHONE, blockRoom(underBackRowGuess(844 - 336, 47, true, false)), 400)).toEqual({ logo: 80, fits: false });
   expect(blockRoom(10)).toBe(0);
 });

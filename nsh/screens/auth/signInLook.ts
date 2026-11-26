@@ -85,10 +85,10 @@ export function backRowHeight(touch: boolean, android: boolean): number {
 
 /**
  * Before the page has measured itself: the height under the back row as the window gives it (the window, less the locked
- * frame's 40-point title bar and the top inset, less the back row).
+ * frame's top: its 40-point title bar with a pointer, only the top inset on touch; less the back row).
  */
 export function underBackRowGuess(windowHeight: number, safeTop: number, touch: boolean, android: boolean): number {
-  return windowHeight - 40 - safeTop - backRowHeight(touch, android);
+  return windowHeight - (touch ? 0 : 40) - safeTop - backRowHeight(touch, android);
 }
 
 /**

@@ -241,6 +241,7 @@ function LockedFrame() {
   return (
     <View testID="locked-frame" class="min-h-0 flex-1">
       {/* The locked menu (About, Quit, editing) stays reachable where the window draws the menu: the menu row, or ☰ when narrow. */}
+      {/* On a phone or tablet the strip is only the status bar's room: the page's back row is where a navigation bar would be. */}
       <If
         when={chromeNow().menuRow}
         else={
@@ -248,7 +249,7 @@ function LockedFrame() {
             testID="title-bar"
             desktop={{ windowDrag: true }}
             class="shrink-0 flex-row items-center"
-            style={{ height: SIZE.titleBar + safeArea().top, paddingTop: safeArea().top, paddingLeft: 8 + titleBar().left, paddingRight: titleBar().right }}
+            style={{ height: (TOUCH ? 0 : SIZE.titleBar) + safeArea().top, paddingTop: safeArea().top, paddingLeft: 8 + titleBar().left, paddingRight: titleBar().right }}
           >
             <If when={chromeNow().hamburger}>
               <MenuListButton testID="locked-menu" />
