@@ -265,11 +265,21 @@ pub fn default_profile_calendar_name(profile: &TaxpayerProfile) -> String {
     format!("eBIRForms - {} (...{})", profile.full_name, suffix)
 }
 
+/// Makes a Google calendar for the profile, links it, and syncs it once. Nothing calls it in the app today (the old
+/// shell did); a caller passes the stop of the engine it runs for, as every sync takes one: `stop` is checked before
+/// the calendar is made and before each request of the first sync. A first sync cut short keeps the link (the
+/// calendar is made and linked), and the worker's next sync finishes it.
 pub fn create_profile_calendar(
     db: Arc<Mutex<Database>>,
     tin: &str,
     requested_name: Option<&str>,
+    stop: &dyn Fn() -> bool,
 ) -> Result<CalendarSyncReport, anyhow::Error> {
+    if stop() {
+        return Err(anyhow::anyhow!(
+            "Not linking the Google calendar: eBIRForms is ending"
+        ));
+    }
     let profile = {
         let db = lock_timing::lock(&db).map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
         if db.get_profile_calendar_link(tin)?.is_some() {
@@ -309,8 +319,8 @@ pub fn create_profile_calendar(
             )),
         };
     }
-    match sync_profile_calendar(db.clone(), tin) {
-        Ok(report) => Ok(report),
+    match sync_profile_calendar_until(db.clone(), tin, stop) {
+        Ok((report, _stopped)) => Ok(report),
         Err(error) => {
             let rollback_remote = client.delete_calendar(&link.google_calendar_id);
             let rollback_local = lock_timing::lock(&db)
@@ -349,15 +359,6 @@ pub fn delete_profile_calendar(db: Arc<Mutex<Database>>, tin: &str) -> Result<()
     unlink_profile_calendar(db, tin)
 }
 
-pub fn sync_all_profile_calendars(
-    db: Arc<Mutex<Database>>,
-) -> Vec<(String, Result<CalendarSyncReport, String>)> {
-    let weak = Arc::downgrade(&db);
-    let run = sync_all_profile_calendars_until(weak, &|| false);
-    drop(db);
-    run.results
-}
-
 /// What [`sync_all_profile_calendars_until`] did: each calendar it synced, and whether it reached the end of the list.
 pub struct CalendarSyncRun {
     pub results: Vec<(String, Result<CalendarSyncReport, String>)>,
@@ -366,9 +367,9 @@ pub struct CalendarSyncRun {
     pub complete: bool,
 }
 
-/// [`sync_all_profile_calendars`] for the queue worker: it holds the database only while one profile's calendar
-/// syncs, and checks `stop` before each calendar and before each request to Google within one (or the database is
-/// gone). A worker that is being dropped lets go of the database after the Google call in flight: at most four requests
+/// Every linked calendar synced, as the queue worker does it (the only sync the app runs): it holds the database only
+/// while one profile's calendar syncs, and checks `stop` before each calendar and before each request to Google within
+/// one (or the database is gone). A worker that is being dropped lets go of the database after the Google call in flight: at most four requests
 /// of 30 s each (a token refresh, the call, a refresh after a 401 and its retry).
 pub fn sync_all_profile_calendars_until(
     db: std::sync::Weak<Mutex<Database>>,
@@ -416,15 +417,8 @@ pub fn sync_all_profile_calendars_until(
     }
 }
 
-pub fn sync_profile_calendar(
-    db: Arc<Mutex<Database>>,
-    tin: &str,
-) -> Result<CalendarSyncReport, anyhow::Error> {
-    sync_profile_calendar_until(db, tin, &|| false).map(|(report, _)| report)
-}
-
-/// [`sync_profile_calendar`] that checks `stop` before each request to Google. Answers the report and whether `stop`
-/// cut it short; a sync cut short records no result for the calendar (its last one stays), and what it did not reach
+/// One profile's calendar synced, checking `stop` before each request to Google. Answers the report and whether
+/// `stop` cut it short; a sync cut short records no result for the calendar (its last one stays), and what it did not reach
 /// waits for the next sync.
 fn sync_profile_calendar_until(
     db: Arc<Mutex<Database>>,
@@ -1742,6 +1736,39 @@ mod tests {
                     );
                 }
             }
+        });
+    }
+
+    /// A link asked for while the engine ends makes nothing: the stop is read before the calendar is made, so no
+    /// request leaves and no link is saved (with the keychain off nothing is connected either, but the stop answers
+    /// first).
+    #[test]
+    fn a_calendar_link_asked_while_the_engine_ends_makes_nothing() {
+        temp_env::with_var("BUWIZ_NO_KEYCHAIN", Some("1"), || {
+            let file = NamedTempFile::new().unwrap();
+            let db = Database::open(file.path()).unwrap();
+            let profile = test_profile();
+            let tin = profile.tin.full();
+            db.save_profile(profile).unwrap();
+            let db = Arc::new(Mutex::new(db));
+
+            let error = create_profile_calendar(db.clone(), &tin, None, &|| true).unwrap_err();
+            assert!(error.to_string().contains("eBIRForms is ending"), "{error}");
+            assert!(
+                db.lock()
+                    .unwrap()
+                    .get_profile_calendar_link(&tin)
+                    .unwrap()
+                    .is_none(),
+                "no link"
+            );
+
+            let not_connected =
+                create_profile_calendar(db.clone(), &tin, None, &|| false).unwrap_err();
+            assert!(
+                !not_connected.to_string().contains("ending"),
+                "without the stop it goes on: {not_connected}"
+            );
         });
     }
 

@@ -291,6 +291,9 @@ struct Booted {
     module: Rc<HostModule>,
     /// The database path the guard last passed.
     checked: PathBuf,
+    /// The engine that booted the module (its [`Engine`] state). Only that engine is handed it ([`enter`]), and once it
+    /// quit no call is answered on it, a direct one included ([`booted`]).
+    owner: Rc<Engine>,
 }
 
 thread_local! {
@@ -334,35 +337,58 @@ impl nsh_core::element::Local for Engine {}
 /// What a door call made after `Door.shutdown` on the same engine answers.
 pub const QUITTING: &str = "eBIRForms is closing.";
 
+/// What an engine answers once a newer engine has booted on its thread while it was still alive. NSH runs one engine per
+/// thread at a time, so nobody should read it.
+pub const REPLACED: &str = "eBIRForms started again; this copy no longer answers.";
+
+thread_local! {
+    /// The engine whose door call runs now on this thread ([`enter`] sets it): what a boot records as the module's owner.
+    static CALLER: RefCell<Option<Rc<Engine>>> = const { RefCell::new(None) };
+}
+
 /// Every door call that can boot goes through this first, with the calling engine's `System::locals`.
 /// - Once this engine has quit, it is refused with [`QUITTING`]. A timer that fires between the quit and the process's end
 ///   cannot boot the app again and start a worker that sends.
 /// - The first call of an engine on a thread where an earlier engine booted (a host that runs one engine after another on
 ///   one thread) ends that one first, as its thread's end would: its worker stops and its database closes (nothing is
 ///   left to do when it quit). Then this engine boots, with a launch and a worker of its own.
+/// - An engine that has made calls and finds a newer engine's module on its thread (two VMs alive on one thread, which NSH
+///   never runs) is refused with [`REPLACED`], never handed the newer one's module.
 pub fn enter(engine: &nsh_core::element::Locals) -> Result<(), String> {
     let this = engine.get::<Engine>();
     if this.quit.get() {
         return Err(QUITTING.to_owned());
     }
-    if !this.entered.replace(true) && BOOTED.with(|slot| slot.borrow().is_some()) {
+    let owner = BOOTED.with(|slot| slot.borrow().as_ref().map(|booted| Rc::clone(&booted.owner)));
+    if let Some(owner) = owner
+        && !Rc::ptr_eq(&owner, &this)
+    {
+        if this.entered.get() {
+            return Err(REPLACED.to_owned());
+        }
         bir_app_api::bir_module::shutdown_at_engine_end();
         BOOTED.with(|slot| slot.borrow_mut().take());
     }
+    this.entered.set(true);
+    CALLER.with(|caller| *caller.borrow_mut() = Some(this));
     Ok(())
 }
 
 /// The module of this thread, booted on the first call, with the database guard checked against the
-/// database path as it is now. The door's functions reach it after [`enter`].
+/// database path as it is now. The door's functions reach it after [`enter`]. Once the engine that booted it quit, it
+/// answers no call, one that skipped [`enter`] included.
 fn booted() -> Result<Rc<HostModule>, String> {
     let current = BOOTED.with(|slot| {
         slot.borrow()
             .as_ref()
-            .map(|booted| (Rc::clone(&booted.module), booted.checked.clone()))
+            .map(|booted| (Rc::clone(&booted.module), booted.checked.clone(), booted.owner.quit.get()))
     });
-    let Some((module, checked)) = current else {
+    let Some((module, checked, quit)) = current else {
         return boot_thread();
     };
+    if quit {
+        return Err(QUITTING.to_owned());
+    }
     let path = bir_core::db::app_database_path();
     if path != checked {
         if let Some(why) = guards::database_refusal_here(&path) {
@@ -409,10 +435,13 @@ fn boot_thread() -> Result<Rc<HostModule>, String> {
         .validate()
         .map_err(|error| format!("The bir module is inconsistent: {error}"))?;
     let module = Rc::new(module);
+    // The engine whose call boots it owns it; a call that skipped `enter` (a test's) boots one of its own.
+    let owner = CALLER.with(|caller| caller.borrow_mut().take()).unwrap_or_default();
     BOOTED.with(|slot| {
         *slot.borrow_mut() = Some(Booted {
             module: Rc::clone(&module),
             checked: path,
+            owner,
         });
     });
     Ok(module)
@@ -863,6 +892,30 @@ mod tests {
                     .expect("the thread of engines 7, 8 and 9")
             });
             assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 9");
+
+            // Two engines ALIVE together on one thread (NSH never runs that; the door does not rely on it). Engine 10
+            // boots; engine 11's first call ends it and boots its own; engine 10's next call is refused, never handed
+            // engine 11's module. After engine 11 quits, a call that skips the gate (the agent's listener boots with a
+            // plain `door::call`) is refused, and so is the agent's start.
+            std::thread::scope(|scope| {
+                scope
+                    .spawn(|| {
+                        let ten = System::default();
+                        auth_state(&ten).expect("engine 10 boots");
+                        let eleven = System::default();
+                        auth_state(&eleven).expect("engine 11 boots in its place");
+                        assert_eq!(auth_state(&ten).unwrap_err(), REPLACED, "engine 10 gets nothing of engine 11's");
+                        auth_state(&eleven).expect("engine 11 still answers");
+                        crate::Door::shutdown(eleven.clone());
+                        assert_eq!(call("system_info", vec![]).unwrap_err(), QUITTING, "a call past the gate, after the quit");
+                        let agent = crate::agent::Agent::start(eleven.clone());
+                        assert_eq!(agent.note.as_deref(), Some(QUITTING), "the agent starts nothing after the quit");
+                        assert!(!agent.active);
+                    })
+                    .join()
+                    .expect("the thread of engines 10 and 11")
+            });
+            assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 11");
         });
     }
 
