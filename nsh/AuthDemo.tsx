@@ -9,6 +9,8 @@
 //   gate      true: the Buwiz account gate is closed (the host's gate answer is replaced; the dev bypass would open it)
 //   email, expiresIn, resendIn, pending, resend: the email-and-code sign-in, which the gate opens on (screens/auth/testEmail.ts);
 //             the readout counts the reads of the kept request ("pending reads: N")
+//   signOut   true: the button "Test: sign out" closes the gate again (the host's gate answers locked, the sign-in flow starts
+//             over and the app locks as Settings > Account's Sign out leaves it), for a second sign-in in the same run
 //   drop      true: the button "Test: drop the sign-in" forgets the sign-in flow's state in memory (signInFlow.reset), as an
 //             engine made anew starts without it
 //   lock      true: the sign-in screen once the frame is up, whatever the codes (to show "Open without signing in")
@@ -47,6 +49,7 @@ interface Params extends EmailParams {
   authFails?: string;
   polls?: boolean;
   drop?: boolean;
+  signOut?: boolean;
   start?: string;
   firstRun?: boolean;
 }
@@ -89,15 +92,17 @@ async function seed(p: Params): Promise<void> {
 }
 
 /** The gate and the email sign-in as a test needs them (the dev bypass opens the real gate; a test never reaches the network). */
+/** Whether the fake gate is open (gate): the right code opens it, "Test: sign out" closes it. */
+let gateOpen = false;
+
 function fakeAccount(p: Params): void {
   const h = bir as unknown as Record<string, unknown>;
   if (p.gate) {
-    let open = false;
     const realOpened = bir.cloud_account_session_opened;
-    h.cloud_account_gate = () => ({ unlocked: open, offline: false, server_url: "http://localhost:3008", email: null, detail: "" });
+    h.cloud_account_gate = () => ({ unlocked: gateOpen, offline: false, server_url: "http://localhost:3008", email: null, detail: "" });
     h.cloud_account_session_opened = () => {
       called("cloud_account_session_opened");
-      open = true;
+      gateOpen = true;
       return realOpened();
     };
   }
@@ -193,6 +198,18 @@ function Demo() {
       <View class="absolute bottom-0 right-0 flex-row gap-1">
         <If when={Boolean(p.authFails)}>
           <AppButton testID="demo-auth-heal" label="Test: heal auth" size="sm" onPress={() => authBroken.set(false)} />
+        </If>
+        <If when={p.signOut === true}>
+          <AppButton
+            testID="demo-sign-out"
+            label="Test: sign out"
+            size="sm"
+            onPress={() => {
+              gateOpen = false;
+              signInFlow.reset();
+              app.lockCloud();
+            }}
+          />
         </If>
         <If when={p.drop === true}>
           <AppButton testID="demo-drop-sign-in" label="Test: drop the sign-in" size="sm" onPress={() => signInFlow.reset()} />

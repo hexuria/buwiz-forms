@@ -14,9 +14,11 @@ for (const look of LOOKS) {
 
   test(`account gate, ${look.name}`, async () => {
     const app = await at({ gate: true, email: "offline" });
-    await app.waitFor("id:gate-card");
+    await app.waitFor("id:gate-start");
     await app.wait(400);
     await shoot(app, name("gate"));
+    await app.press("id:gate-start-continue");
+    await app.waitFor("id:gate-email-page");
     await app.type("id:gate-email", "juana@example.com");
     await app.press("id:gate-continue");
     await app.waitFor("text:No connection. Check your internet and try again.");

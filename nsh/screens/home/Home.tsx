@@ -11,6 +11,7 @@ import { SAVED_RETURNS_KEY } from "../../shell/store";
 import { recentLabel, visibleRecent } from "../../shell/Sidebar";
 import { recentOpenOptions } from "../../lib/recent";
 import { AppButton, deviceCopy, EmptyRow, Icon, type IconName, ListGroup, ListRow, NameCell, PageHeader, SectionTitle, StepCircle, Text, TOUCH } from "../../ui";
+import { WelcomeNote } from "../auth/welcome";
 import { AsNeededHead, AsNeededUndated, DeadlineStrip, DueRow, FiledRow, StatTile, TaxpayerRow } from "./parts";
 import { homePick } from "./pick";
 import { FILED_STATUSES, openFilings } from "./preset";
@@ -221,6 +222,7 @@ export function Home() {
   const width = signal(firstWidth());
   return (
     <View testID="home" class="w-full" onLayout={(e) => e.bounds.size.width > 0 && width.set(Math.round(e.bounds.size.width))}>
+      <WelcomeNote />
       <If when={app.isFresh()} else={<Dashboard width={width} />}>
         <Welcome />
       </If>

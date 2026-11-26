@@ -2,12 +2,14 @@
 // the admin is. "Just me or my business" makes the owner's own taxpayer the admin (typed here first on an empty computer,
 // on the New taxpayer page with no chrome); "I help other taxpayers" makes the reserved TIN 000-000-000 the admin, with a
 // 4-digit PIN and a recovery key shown once.
-import { effect, Scroll, untracked, View, windowSize } from "nsh";
+import { effect, platform, Scroll, untracked, View, windowSize } from "nsh";
 import { app, store } from "../../shell";
 import { BREAK, SIZE } from "../../theme/tokens";
 import { AppButton, Code, PinCells, Text, TOUCH } from "../../ui";
 import { NewTaxpayerPage } from "../taxpayer";
+import { BrandLogo } from "./brand";
 import { Actions, AuthCard, ChoiceTile, deviceCopy, ErrorLine, Heading, Labelled } from "./parts";
+import { backRowHeight, openTop } from "./signInLook";
 import { auth } from "./state";
 
 /** The choice, the help desk's PIN, or its recovery key: the step app.setup() names. */
@@ -30,7 +32,7 @@ export function Setup() {
 function Choose() {
   return (
     <AuthCard testID="setup-card">
-      <Heading icon="users" title={deviceCopy("Who will use eBIRForms on this computer?")} line="This decides who the admin is. Nobody can lock the others out." />
+      <Heading title={deviceCopy("Who will use eBIRForms on this computer?")} line="This decides who the admin is. Nobody can lock the others out." />
       <ChoiceTile
         testID="setup-solo"
         icon="user"
@@ -53,7 +55,6 @@ function HelpdeskPin() {
   return (
     <AuthCard testID="setup-pin-card">
       <Heading
-        icon="key-round"
         title="Choose the admin PIN"
         line="The help desk admin signs in with TIN 000-000-000 and this PIN. It also opens any taxpayer who forgot theirs."
       />
@@ -73,7 +74,6 @@ function RecoveryKey() {
   return (
     <AuthCard testID="setup-key-card">
       <Heading
-        icon="key-round"
         title="Write down your recovery key"
         line="If you forget the admin PIN, this key signs you in once. It is shown only now. Keep it away from this computer."
       />
@@ -108,8 +108,12 @@ export function SoloTaxpayer() {
   });
   const padX = () => (windowSize().width < BREAK.narrowContent ? 16 : 32);
   return (
-    <Scroll testID="setup-taxpayer" keyboardShouldPersistTaps="handled" class="min-h-0 flex-1" contentClass="items-center pt-7 pb-14" style={{ paddingLeft: padX(), paddingRight: padX() }}>
-      <View class="w-full min-w-0" style={{ maxWidth: SIZE.contentMax }}>
+    <Scroll testID="setup-taxpayer" keyboardShouldPersistTaps="handled" class="min-h-0 flex-1" contentClass="items-center pb-14" style={{ paddingLeft: padX(), paddingRight: padX() }}>
+      {/* The logo where every page before the app has it (parts.tsx OpenPage: under the back control's row). */}
+      <View class="w-full min-w-0" style={{ maxWidth: SIZE.contentMax, paddingTop: openTop(TOUCH, windowSize().height) + backRowHeight(TOUCH, platform.os === "android") + 18 }}>
+        <View class="mb-6">
+          <BrandLogo />
+        </View>
         <NewTaxpayerPage />
       </View>
     </Scroll>
