@@ -1,0 +1,13 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./shots/select.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (966ms)
+✓ built the headless runner of nsh-app-ebirforms (1.2s)
+✓ bundled ui/select.fixture.tsx (54145 B in 30.5 ms)
+✓ shots/select.test.tsx › a real window: Cmd+A and Backspace, Cmd+A and Delete, Cmd+A and a digit, each leaves the box empty or replaced and reports it (173ms)
+✓ shots/select.test.tsx › a real window: a selected range that holds a separator, deleted or typed over (120ms)
+✓ shots/select.test.tsx › a real window: a click into a box of zero selects it, so the first digit replaces the zeros (120ms)
+✓ shots/select.test.tsx › a real window: a click into an amount puts the caret where it landed; Tab and the box's own focus() select it whole (126ms)
+✓ shots/select.test.tsx › a real window: after Tab, a caret the user moves later is not turned back into a selection (130ms)
+✓ shots/select.test.tsx › a real window: a box emptied and refilled from outside shows the old amount selected, so the digits typed next replace it (123ms)
+✓ bundled BasePreview.tsx (212172 B in 74.0 ms)
+✓ shots/select.test.tsx › a real window on the kit gallery: a date and the kit's amounts empty and refill (627ms)
+✓ 7 tests: 7 passed, 0 failed (2.7s)

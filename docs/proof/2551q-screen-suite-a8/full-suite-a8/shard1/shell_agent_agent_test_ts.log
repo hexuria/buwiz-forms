@@ -1,0 +1,51 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./shell/agent/agent.test.ts
+✓ built the Rust crate nsh-app-ebirforms (2.4s)
+✓ built the headless runner of nsh-app-ebirforms (2.2s)
+[2m2026-11-26T00:25:05.919460Z[0m [32m INFO[0m [2mbir_core::logging[0m[2m:[0m 🔍 Tracing initialized (developer_mode: false)
+[2m2026-11-26T00:25:05.964447Z[0m [32m INFO[0m [2mnsh_app_ebirforms::door[0m[2m:[0m eBIRForms started
+[2m2026-11-26T00:25:05.979877Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v1
+[2m2026-11-26T00:25:05.986926Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v2
+[2m2026-11-26T00:25:05.987971Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v3
+[2m2026-11-26T00:25:05.988482Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v4
+[2m2026-11-26T00:25:05.988864Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v5
+[2m2026-11-26T00:25:05.990446Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v5 migration: added period_key column to form_drafts
+[2m2026-11-26T00:25:05.991220Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v6
+[2m2026-11-26T00:25:05.991702Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v7
+[2m2026-11-26T00:25:05.992537Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v8
+[2m2026-11-26T00:25:05.996234Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v9
+[2m2026-11-26T00:25:05.996541Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v10
+[2m2026-11-26T00:25:05.997493Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v11
+[2m2026-11-26T00:25:05.998047Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v12
+[2m2026-11-26T00:25:05.998340Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v13
+[2m2026-11-26T00:25:05.998554Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v14
+[2m2026-11-26T00:25:05.999168Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v15
+[2m2026-11-26T00:25:06.004818Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v15 migration: added 6 missing form-rule state columns
+[2m2026-11-26T00:25:06.005810Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v16
+[2m2026-11-26T00:25:06.008032Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v16 migration: added 2 checked Final Copy proof columns
+[2m2026-11-26T00:25:06.008632Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v17
+[2m2026-11-26T00:25:06.018380Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v17 migration: added 12 exact form-rule identity columns
+[2m2026-11-26T00:25:06.019406Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v18
+[2m2026-11-26T00:25:06.020131Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v19
+[2m2026-11-26T00:25:06.021028Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v20
+[2m2026-11-26T00:25:06.023121Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v21
+[2m2026-11-26T00:25:06.024165Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v22
+[2m2026-11-26T00:25:06.027117Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v23
+[2m2026-11-26T00:25:06.028034Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v24
+[2m2026-11-26T00:25:06.033355Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v11 migration: added 5 missing Forms Set provenance columns
+[2m2026-11-26T00:25:06.038780Z[0m [33m WARN[0m [2mbir_core::db::google_calendar[0m[2m:[0m Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred [3mreason[0m[2m=[0m"the background worker is not running yet"
+[2m2026-11-26T00:25:06.044175Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine started
+✓ shell/agent/agent.test.ts › a command is read from the JSON text the host hands over, as the old app read it (1ms)
+✓ shell/agent/agent.test.ts › what is not a command is ignored (1ms)
+✓ shell/agent/agent.test.ts › go, refresh and open act on the frame at once (1ms)
+✓ shell/agent/agent.test.ts › a fill and a review wait for the page of the return the agent opened (0ms)
+✓ shell/agent/agent.test.ts › a page that never comes takes nothing: the fill is dropped, not put on another return (0ms)
+✓ shell/agent/agent.test.ts › quit goes by the app's quit path (0ms)
+✓ shell/agent/agent.test.ts › a build without the agent, or an app not opted in, polls nothing (121ms)
+✓ shell/agent/agent.test.ts › a listening agent is drained on the host's thread as well as polled (47ms)
+✓ shell/agent/agent.test.ts › a listening agent is polled and its commands are applied one at a time, in order (124ms)
+✓ shell/agent/agent.test.ts › a command that throws is reported and the poll goes on (72ms)
+✓ shell/agent/agent.test.ts › the host refusing to start is a quiet no-op (41ms)
+✓ shell/agent/agent.test.ts › a fill's dropped answers reach the page with its edits (0ms)
+[2m2026-11-26T00:25:06.469873Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:06.470496Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine stopped
+✓ 12 tests: 12 passed, 0 failed (3.1s)

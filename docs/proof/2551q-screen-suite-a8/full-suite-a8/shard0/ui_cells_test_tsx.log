@@ -1,0 +1,9 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./ui/cells.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (1.1s)
+✓ built the headless runner of nsh-app-ebirforms (1.1s)
+✓ bundled ui/cells.fixture.tsx (16853 B in 36.3 ms)
+✓ ui/cells.test.tsx › phone: the TIN is nine digits in three groups with two dashes; the ninth digit is reported and moves the keys on (1.8s)
+✓ ui/cells.test.tsx › phone: dashes and letters typed or pasted are not digits; a branch code is five cells (1.7s)
+✓ ui/cells.test.tsx › desktop: the TIN is nine digits in three groups with two dashes; the ninth digit is reported and moves the keys on (1.7s)
+✓ ui/cells.test.tsx › desktop: dashes and letters typed or pasted are not digits; a branch code is five cells (1.7s)
+✓ 4 tests: 4 passed, 0 failed (8.2s)

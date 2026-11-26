@@ -1,0 +1,11 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/taxpayer/logic.test.ts
+✓ built the Rust crate nsh-app-ebirforms (2.2s)
+✓ built the headless runner of nsh-app-ebirforms (2.6s)
+✓ screens/taxpayer/logic.test.ts › dates: a real YYYY-MM-DD, not after today (1ms)
+✓ screens/taxpayer/logic.test.ts › ATC codes and field errors (0ms)
+✓ screens/taxpayer/logic.test.ts › errors show once a field was left, all after submit, and the host's always (0ms)
+✓ screens/taxpayer/logic.test.ts › new taxpayer: problems, a TIN in use said at once, the start year (0ms)
+✓ screens/taxpayer/logic.test.ts › setups: the toast, and the question only when something set was kept (0ms)
+✓ screens/taxpayer/logic.test.ts › years, schedules and counts (0ms)
+✓ screens/taxpayer/logic.test.ts › section summaries (0ms)
+✓ 7 tests: 7 passed, 0 failed (2.7s)

@@ -1,0 +1,61 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/form/session.fold.test.ts
+✓ built the Rust crate nsh-app-ebirforms (1.6s)
+✓ built the headless runner of nsh-app-ebirforms (1.9s)
+[2m2026-11-26T00:22:13.436662Z[0m [32m INFO[0m [2mbir_core::logging[0m[2m:[0m 🔍 Tracing initialized (developer_mode: false)
+[2m2026-11-26T00:22:13.483855Z[0m [32m INFO[0m [2mnsh_app_ebirforms::door[0m[2m:[0m eBIRForms started
+[2m2026-11-26T00:22:13.491639Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v1
+[2m2026-11-26T00:22:13.495647Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v2
+[2m2026-11-26T00:22:13.496419Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v3
+[2m2026-11-26T00:22:13.496936Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v4
+[2m2026-11-26T00:22:13.497308Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v5
+[2m2026-11-26T00:22:13.498408Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v5 migration: added period_key column to form_drafts
+[2m2026-11-26T00:22:13.498918Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v6
+[2m2026-11-26T00:22:13.499163Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v7
+[2m2026-11-26T00:22:13.499814Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v8
+[2m2026-11-26T00:22:13.500150Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v9
+[2m2026-11-26T00:22:13.500456Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v10
+[2m2026-11-26T00:22:13.501402Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v11
+[2m2026-11-26T00:22:13.501698Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v12
+[2m2026-11-26T00:22:13.502011Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v13
+[2m2026-11-26T00:22:13.502314Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v14
+[2m2026-11-26T00:22:13.503015Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v15
+[2m2026-11-26T00:22:13.508205Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v15 migration: added 6 missing form-rule state columns
+[2m2026-11-26T00:22:13.511002Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v16
+[2m2026-11-26T00:22:13.513067Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v16 migration: added 2 checked Final Copy proof columns
+[2m2026-11-26T00:22:13.513465Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v17
+[2m2026-11-26T00:22:13.526484Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v17 migration: added 12 exact form-rule identity columns
+[2m2026-11-26T00:22:13.527128Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v18
+[2m2026-11-26T00:22:13.527652Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v19
+[2m2026-11-26T00:22:13.528324Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v20
+[2m2026-11-26T00:22:13.530245Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v21
+[2m2026-11-26T00:22:13.531003Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v22
+[2m2026-11-26T00:22:13.534957Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v23
+[2m2026-11-26T00:22:13.535705Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v24
+[2m2026-11-26T00:22:13.543196Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v11 migration: added 5 missing Forms Set provenance columns
+[2m2026-11-26T00:22:13.548329Z[0m [33m WARN[0m [2mbir_core::db::google_calendar[0m[2m:[0m Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred [3mreason[0m[2m=[0m"the background worker is not running yet"
+[2m2026-11-26T00:22:13.555644Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine started
+[2m2026-11-26T00:22:15.342606Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:15.502855Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.fold.test.ts › B10: 1602Q's fold opens on what points inside and closes by hand otherwise (1.7s)
+[2m2026-11-26T00:22:16.763623Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:17.923411Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.fold.test.ts › B10: the fold closes again once nothing points inside (2.5s)
+✓ screens/form/session.fold.test.ts › B10: 1700's line-of-business box is not in a closed fold (272ms)
+✓ screens/form/session.fold.test.ts › B10: 1701's line-of-business box is not in a closed fold (1.3s)
+✓ screens/form/session.fold.test.ts › B10: 1707's line-of-business box is not in a closed fold (118ms)
+✓ screens/form/session.fold.test.ts › B10: 1800's line-of-business box is not in a closed fold (121ms)
+✓ screens/form/session.fold.test.ts › B10: 2000's line-of-business box is not in a closed fold (88ms)
+✓ screens/form/session.fold.test.ts › B10: 2552's line-of-business box is not in a closed fold (161ms)
+✓ screens/form/session.fold.test.ts › B10: 1603Q's line-of-business box is not in a closed fold (57ms)
+✓ screens/form/session.fold.test.ts › B10: 1604E's line-of-business box is not in a closed fold (63ms)
+✓ screens/form/session.fold.test.ts › B10: 1604F's line-of-business box is not in a closed fold (56ms)
+✓ screens/form/session.fold.test.ts › B10: 1701A's line-of-business box is not in a closed fold (175ms)
+✓ screens/form/session.fold.test.ts › B10: 1702EX's line-of-business box is not in a closed fold (258ms)
+✓ screens/form/session.fold.test.ts › B10: 1707A's line-of-business box is not in a closed fold (176ms)
+✓ screens/form/session.fold.test.ts › B10: 2000OT's line-of-business box is not in a closed fold (179ms)
+✓ screens/form/session.fold.test.ts › B10: 2200C's line-of-business box is not in a closed fold (156ms)
+✓ screens/form/session.fold.test.ts › B10: 2200P's line-of-business box is not in a closed fold (279ms)
+✓ screens/form/session.fold.test.ts › B10: 2200S's line-of-business box is not in a closed fold (163ms)
+[2m2026-11-26T00:22:21.652051Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:21.652615Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine stopped
+✓ 18 tests: 18 passed, 0 failed (10.6s)

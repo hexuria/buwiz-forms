@@ -1,0 +1,9 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/auth/logic.test.ts
+✓ built the Rust crate nsh-app-ebirforms (2.2s)
+✓ built the headless runner of nsh-app-ebirforms (2.2s)
+✓ screens/auth/logic.test.ts › the TIN names the admin, a taxpayer, or says why not (3ms)
+✓ screens/auth/logic.test.ts › the sign-in line follows the path and the mode (0ms)
+✓ screens/auth/logic.test.ts › codes: length first, then which wrong answer (2ms)
+✓ screens/auth/logic.test.ts › the gate's waiting line: the browser opened, or the address to open, with the code (0ms)
+✓ screens/auth/logic.test.ts › the test authenticator gives RFC 6238's SHA-1 codes (1ms)
+✓ 5 tests: 5 passed, 0 failed (2.3s)

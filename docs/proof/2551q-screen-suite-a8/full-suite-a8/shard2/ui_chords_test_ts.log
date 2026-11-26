@@ -1,0 +1,10 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./ui/chords.test.ts
+✓ built the Rust crate nsh-app-ebirforms (985ms)
+✓ built the headless runner of nsh-app-ebirforms (1.3s)
+✓ ui/chords.test.ts › every subset of ctrl, alt, shift and cmd with each of the 76 keys, modifiers in one order (136ms)
+✓ ui/chords.test.ts › the keys beyond letters, digits and f1 to f12: space, arrows, home, end, page up and down, punctuation, f13 to f20 (25ms)
+✓ ui/chords.test.ts › splitChord (0ms)
+✓ ui/chords.test.ts › the keystrokes the platform keeps are left out and every other one is bound, in few calls (3ms)
+✓ ui/chords.test.ts › with the real keymap every chord binds but the few the platform keeps, whichever platform runs the test (440ms)
+✓ ui/chords.test.ts › nothing kept: one call; everything kept: nothing bound (0ms)
+✓ 6 tests: 6 passed, 0 failed (2.1s)

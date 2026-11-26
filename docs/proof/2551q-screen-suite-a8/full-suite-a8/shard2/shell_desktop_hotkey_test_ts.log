@@ -1,0 +1,52 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./shell/desktop/hotkey.test.ts
+✓ built the Rust crate nsh-app-ebirforms (1.1s)
+✓ built the headless runner of nsh-app-ebirforms (1.1s)
+✓ shell/desktop/hotkey.test.ts › a stored combo is registered, and pressing it runs the toggle (5ms)
+✓ shell/desktop/hotkey.test.ts › the same combo again changes nothing; another one replaces it; an empty one turns it off (0ms)
+✓ shell/desktop/hotkey.test.ts › a chord another app holds is refused, said so, and not asked again until the setting changes (0ms)
+✓ shell/desktop/hotkey.test.ts › a combo the host cannot register is invalid, and a newer setting replaces a chord the system has not answered yet (0ms)
+[2m2026-11-26T00:29:43.155744Z[0m [32m INFO[0m [2mbir_core::logging[0m[2m:[0m 🔍 Tracing initialized (developer_mode: false)
+[2m2026-11-26T00:29:43.173265Z[0m [32m INFO[0m [2mnsh_app_ebirforms::door[0m[2m:[0m eBIRForms started
+[2m2026-11-26T00:29:43.177413Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v1
+[2m2026-11-26T00:29:43.180082Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v2
+[2m2026-11-26T00:29:43.180498Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v3
+[2m2026-11-26T00:29:43.180894Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v4
+[2m2026-11-26T00:29:43.181165Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v5
+[2m2026-11-26T00:29:43.181971Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v5 migration: added period_key column to form_drafts
+[2m2026-11-26T00:29:43.182265Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v6
+[2m2026-11-26T00:29:43.182430Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v7
+[2m2026-11-26T00:29:43.182850Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v8
+[2m2026-11-26T00:29:43.183024Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v9
+[2m2026-11-26T00:29:43.183211Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v10
+[2m2026-11-26T00:29:43.183861Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v11
+[2m2026-11-26T00:29:43.184034Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v12
+[2m2026-11-26T00:29:43.184227Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v13
+[2m2026-11-26T00:29:43.184393Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v14
+[2m2026-11-26T00:29:43.184833Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v15
+[2m2026-11-26T00:29:43.188184Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v15 migration: added 6 missing form-rule state columns
+[2m2026-11-26T00:29:43.188429Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v16
+[2m2026-11-26T00:29:43.189738Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v16 migration: added 2 checked Final Copy proof columns
+[2m2026-11-26T00:29:43.189922Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v17
+[2m2026-11-26T00:29:43.196385Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v17 migration: added 12 exact form-rule identity columns
+[2m2026-11-26T00:29:43.196754Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v18
+[2m2026-11-26T00:29:43.197053Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v19
+[2m2026-11-26T00:29:43.197438Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v20
+[2m2026-11-26T00:29:43.198643Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v21
+[2m2026-11-26T00:29:43.199138Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v22
+[2m2026-11-26T00:29:43.200914Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v23
+[2m2026-11-26T00:29:43.201374Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v24
+[2m2026-11-26T00:29:43.204845Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v11 migration: added 5 missing Forms Set provenance columns
+[2m2026-11-26T00:29:43.207971Z[0m [33m WARN[0m [2mbir_core::db::google_calendar[0m[2m:[0m Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred [3mreason[0m[2m=[0m"the background worker is not running yet"
+✓ shell/desktop/hotkey.test.ts › the host's combo rules reach TSX: what Settings stores, GlobalShortcut can take (58ms)
+[2m2026-11-26T00:29:43.211017Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine started
+✓ shell/desktop/hotkey.test.ts › the page and the host agree: whatever the host can map the page stores, and what the page refuses the host does not map (6ms)
+✓ shell/desktop/hotkey.test.ts › F19: the keys only this app registers: the host maps and stores each stored word, and the page's table spells them the same (11ms)
+✓ shell/desktop/hotkey.test.ts › a chord the system answers for late is given back when the setting moved on; the same chord again is kept (0ms)
+✓ shell/desktop/hotkey.test.ts › F8-11: a lock and an unlock while the system is still answering leave one chord, tracked, and nothing held when it is off (0ms)
+✓ shell/desktop/hotkey.test.ts › F8-11: a lock while the system is still answering gives the chord back when the answer comes; one call at a time throughout (0ms)
+✓ shell/desktop/hotkey.test.ts › F8-11: stop while the system is answering still gives the chord back (0ms)
+✓ shell/desktop/hotkey.test.ts › F17: a hold is counted, let go once, and the status Settings reads is the one the host wrote (0ms)
+✓ shell/desktop/hotkey.test.ts › F17: the hotkey follows an empty combo while it is held, so the chord goes back to the system, and takes the combo again when the hold ends (0ms)
+[2m2026-11-26T00:29:43.234399Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:29:43.234881Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine stopped
+✓ 13 tests: 13 passed, 0 failed (1.3s)

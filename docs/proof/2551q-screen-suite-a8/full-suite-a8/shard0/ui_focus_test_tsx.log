@@ -1,0 +1,7 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./ui/focus.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (1.0s)
+✓ built the headless runner of nsh-app-ebirforms (1.1s)
+✓ bundled ui/focus.fixture.tsx (70401 B in 27.8 ms)
+✓ ui/focus.test.tsx › desktop: money, percent, integer, TIN and date boxes take the keyboard from their ref (1.2s)
+✓ ui/focus.test.tsx › desktop: a checkbox and a dropdown take the keyboard from their ref (551ms)
+✓ 2 tests: 2 passed, 0 failed (3.0s)

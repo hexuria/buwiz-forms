@@ -1,0 +1,78 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/form/session.queueFirst.test.ts
+✓ built the Rust crate nsh-app-ebirforms (1.7s)
+✓ built the headless runner of nsh-app-ebirforms (2.4s)
+[2m2026-11-26T00:22:35.101768Z[0m [32m INFO[0m [2mbir_core::logging[0m[2m:[0m 🔍 Tracing initialized (developer_mode: false)
+[2m2026-11-26T00:22:35.145118Z[0m [32m INFO[0m [2mnsh_app_ebirforms::door[0m[2m:[0m eBIRForms started
+[2m2026-11-26T00:22:35.155270Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v1
+[2m2026-11-26T00:22:35.159352Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v2
+[2m2026-11-26T00:22:35.160126Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v3
+[2m2026-11-26T00:22:35.160700Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v4
+[2m2026-11-26T00:22:35.161163Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v5
+[2m2026-11-26T00:22:35.162340Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v5 migration: added period_key column to form_drafts
+[2m2026-11-26T00:22:35.162853Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v6
+[2m2026-11-26T00:22:35.164962Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v7
+[2m2026-11-26T00:22:35.165648Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v8
+[2m2026-11-26T00:22:35.166029Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v9
+[2m2026-11-26T00:22:35.166353Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v10
+[2m2026-11-26T00:22:35.167323Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v11
+[2m2026-11-26T00:22:35.167629Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v12
+[2m2026-11-26T00:22:35.169468Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v13
+[2m2026-11-26T00:22:35.169796Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v14
+[2m2026-11-26T00:22:35.170468Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v15
+[2m2026-11-26T00:22:35.179024Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v15 migration: added 6 missing form-rule state columns
+[2m2026-11-26T00:22:35.179677Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v16
+[2m2026-11-26T00:22:35.181564Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v16 migration: added 2 checked Final Copy proof columns
+[2m2026-11-26T00:22:35.182074Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v17
+[2m2026-11-26T00:22:35.192070Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v17 migration: added 12 exact form-rule identity columns
+[2m2026-11-26T00:22:35.192702Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v18
+[2m2026-11-26T00:22:35.193222Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v19
+[2m2026-11-26T00:22:35.193936Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v20
+[2m2026-11-26T00:22:35.195844Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v21
+[2m2026-11-26T00:22:35.196577Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v22
+[2m2026-11-26T00:22:35.199303Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v23
+[2m2026-11-26T00:22:35.203486Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v24
+[2m2026-11-26T00:22:35.208924Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v11 migration: added 5 missing Forms Set provenance columns
+[2m2026-11-26T00:22:35.214077Z[0m [33m WARN[0m [2mbir_core::db::google_calendar[0m[2m:[0m Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred [3mreason[0m[2m=[0m"the background worker is not running yet"
+[2m2026-11-26T00:22:35.220280Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine started
+✓ screens/form/session.queueFirst.test.ts › a page notice is no reason for a refused Queue, and a validation message on the same fields of another form is (1ms)
+[2m2026-11-26T00:22:35.879886Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.queueFirst.test.ts › items to fix and the tier warning: Queue says what Check says, shows every message, and asks nothing (540ms)
+[2m2026-11-26T00:22:36.124862Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.queueFirst.test.ts › a second Queue takes the refusal toast down before its question opens: the toast's Show item must not float over the dialog (445ms)
+[2m2026-11-26T00:22:36.570722Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.queueFirst.test.ts › a second Queue with the same list goes to the host, which decides: the page's reading never keeps a return from being queued (451ms)
+[2m2026-11-26T00:22:37.030857Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.queueFirst.test.ts › a host refusal not listed on the page stays visible even when the page has other items (337ms)
+[2m2026-11-26T00:22:37.380859Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:37.731290Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:37.734804Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:37.735087Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Cron: Attempting to submit queued 0619E 042024 for 00012345300000
+[2m2026-11-26T00:22:37.737667Z[0m [32m INFO[0m [2mbir_core::transport[0m[2m:[0m SFTP dry-run: no network [3msource[0m[2m=[0m"dry-run" [3mfolder[0m[2m=[0m"0619E"
+[2m2026-11-26T00:22:37.744434Z[0m [32m INFO[0m [2mbir_core::transport[0m[2m:[0m SFTP dry-run PUT (no network) [3msource[0m[2m=[0m"dry-run" [3mremote_path[0m[2m=[0m"/0619E/00012345300000-0619E-042024#juana@example.com#.xml" [3mpayload_len[0m[2m=[0m662 [3mpayload_sha256[0m[2m=[0m"3870793c7064bcc1cb68b944f8b98da0d03720cdb8fc728061c83fe157c0c825"
+[2m2026-11-26T00:22:37.745171Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Cron: dry run: simulated submission of queued 0619E 00012345300000-0619E-042024#juana@example.com#.xml (nothing sent to BIR)
+[2m2026-11-26T00:22:37.749859Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.queueFirst.test.ts › nothing to fix and the tier warning: Queue asks once; Cancel queues nothing, Continue queues it (533ms)
+[2m2026-11-26T00:22:38.162625Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:38.528891Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:38.546882Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Cron: Attempting to submit queued 1702RT 122022 for 00012345300000
+[2m2026-11-26T00:22:38.557803Z[0m [32m INFO[0m [2mbir_core::transport[0m[2m:[0m SFTP dry-run: no network [3msource[0m[2m=[0m"dry-run" [3mfolder[0m[2m=[0m"1702RTv2018C"
+[2m2026-11-26T00:22:38.597410Z[0m [32m INFO[0m [2mbir_core::transport[0m[2m:[0m SFTP dry-run PUT (no network) [3msource[0m[2m=[0m"dry-run" [3mremote_path[0m[2m=[0m"/1702RTv2018C/00012345300000-1702RTv2018C-122022#juana@example.com#.xml" [3mpayload_len[0m[2m=[0m2497 [3mpayload_sha256[0m[2m=[0m"734d415f070053bc12bf3ca00bc2b2d7a7a0a55e29b000a44a6a136492c64f88"
+[2m2026-11-26T00:22:38.599179Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Cron: dry run: simulated submission of queued 1702RT 00012345300000-1702RTv2018C-122022#juana@example.com#.xml (nothing sent to BIR)
+[2m2026-11-26T00:22:38.609872Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.queueFirst.test.ts › nothing to fix and no warning: Queue queues straight away, once, even when pressed twice (961ms)
+[2m2026-11-26T00:22:38.898860Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.queueFirst.test.ts › Check clean and the host still refuses: Continue reveals the host message instead of only a count (272ms)
+[2m2026-11-26T00:22:39.310464Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:39.758898Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:39.766845Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:39.780560Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Cron: Attempting to submit queued 1702RT 122021 for 00012345300000
+[2m2026-11-26T00:22:39.788784Z[0m [32m INFO[0m [2mbir_core::transport[0m[2m:[0m SFTP dry-run: no network [3msource[0m[2m=[0m"dry-run" [3mfolder[0m[2m=[0m"1702RTv2018C"
+[2m2026-11-26T00:22:39.801298Z[0m [32m INFO[0m [2mbir_core::transport[0m[2m:[0m SFTP dry-run PUT (no network) [3msource[0m[2m=[0m"dry-run" [3mremote_path[0m[2m=[0m"/1702RTv2018C/00012345300000-1702RTv2018C-122021#juana@example.com#.xml" [3mpayload_len[0m[2m=[0m2497 [3mpayload_sha256[0m[2m=[0m"94e7d10ee3792fdfc406446a9494b4212165cf8114bde77ad5bdd22df1c63c3d"
+[2m2026-11-26T00:22:39.801906Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Cron: dry run: simulated submission of queued 1702RT 00012345300000-1702RTv2018C-122021#juana@example.com#.xml (nothing sent to BIR)
+[2m2026-11-26T00:22:39.809530Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.queueFirst.test.ts › a message that is only a page notice does not stop Queue (990ms)
+[2m2026-11-26T00:22:40.161858Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.queueFirst.test.ts › 2551Q: its Queue reconciles the stored return with the year's tax profile, so Queue still asks and the host decides (221ms)
+[2m2026-11-26T00:22:40.257445Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:40.258340Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine stopped
+✓ 10 tests: 10 passed, 0 failed (7.9s)

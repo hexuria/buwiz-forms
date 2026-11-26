@@ -1,0 +1,10 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/print/PreviewWindow.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (2.3s)
+✓ built the headless runner of nsh-app-ebirforms (1.9s)
+✓ bundled screens/print/PreviewDemo.tsx (44116 B in 82.4 ms)
+✓ screens/print/PreviewWindow.test.tsx › desktop: the toolbar says the page rule; Print and Save as PDF ask for their work and note the result (915ms)
+✓ screens/print/PreviewWindow.test.tsx › desktop: a cancelled save says nothing; a failure says why, in words (1.3s)
+✓ screens/print/PreviewWindow.test.tsx › desktop: a wait that never ends has a Cancel that always works and is logged (598ms)
+✓ screens/print/PreviewWindow.test.tsx › the least width of the window (560): both buttons are there and press (402ms)
+✓ screens/print/PreviewWindow.test.tsx › the zoom choice is a pressable pair (509ms)
+✓ 5 tests: 5 passed, 0 failed (5.8s)

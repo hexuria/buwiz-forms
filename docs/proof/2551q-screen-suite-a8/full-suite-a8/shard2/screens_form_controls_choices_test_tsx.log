@@ -1,0 +1,13 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/form/controls/choices.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (1.4s)
+✓ built the headless runner of nsh-app-ebirforms (1.8s)
+✓ bundled ControlsShot.tsx (150044 B in 174.7 ms)
+✓ screens/form/controls/choices.test.tsx › phone: two to four choices are a segmented bar of radios labelled by the choices (850ms)
+✓ screens/form/controls/choices.test.tsx › phone: an optional group of three or more clears; a pair has no Clear (799ms)
+✓ screens/form/controls/choices.test.tsx › phone: five to twelve choices are a dropdown, None clears the optional group (1.7s)
+✓ screens/form/controls/choices.test.tsx › phone: more than twelve choices are a search list (1.5s)
+✓ screens/form/controls/choices.test.tsx › phone: a locked group takes nothing and says why (398ms)
+✓ screens/form/controls/choices.test.tsx › phone: long labels stack the bar full-width, and a pick still lands (527ms)
+✓ screens/form/controls/choices.test.tsx › desktop: short labels hold one line, long ones still stack (388ms)
+✓ screens/form/controls/choices.test.tsx › phone: two one-answer groups in one item pick on their own (624ms)
+✓ 8 tests: 8 passed, 0 failed (8.8s)

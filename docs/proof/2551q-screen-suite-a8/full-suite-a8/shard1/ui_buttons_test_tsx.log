@@ -1,0 +1,9 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./ui/buttons.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (940ms)
+✓ built the headless runner of nsh-app-ebirforms (1.1s)
+✓ bundled BasePreview.tsx (212172 B in 59.8 ms)
+✓ ui/buttons.test.tsx › phone: buttons press, disabled ones do not (990ms)
+✓ ui/buttons.test.tsx › phone: icon buttons and nav rows (964ms)
+✓ ui/buttons.test.tsx › desktop: buttons press, disabled ones do not (873ms)
+✓ ui/buttons.test.tsx › desktop: icon buttons and nav rows (948ms)
+✓ 4 tests: 4 passed, 0 failed (4.9s)

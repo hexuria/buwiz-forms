@@ -1,0 +1,13 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./shots/kit.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (964ms)
+✓ built the headless runner of nsh-app-ebirforms (1.2s)
+✓ bundled BasePreview.tsx (212172 B in 85.7 ms)
+✓ shots/kit.test.tsx › kit gallery, wide-light (10.1s)
+✓ shots/kit.test.tsx › kit layers, wide-light (8.2s)
+✓ shots/kit.test.tsx › kit gallery, wide-dark (10.3s)
+✓ shots/kit.test.tsx › kit layers, wide-dark (7.4s)
+✓ shots/kit.test.tsx › kit gallery, narrow-light (12.5s)
+✓ shots/kit.test.tsx › kit layers, narrow-light (7.7s)
+✓ shots/kit.test.tsx › kit gallery, narrow-dark (12.5s)
+✓ shots/kit.test.tsx › kit layers, narrow-dark (7.8s)
+✓ 8 tests: 8 passed, 0 failed (1m 17s)

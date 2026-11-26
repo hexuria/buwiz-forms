@@ -1,0 +1,3 @@
+./bir/DoorProbe.test.tsx rc=0
+./bir/door.test.ts rc=0
+./lib/chrome_gate.test.ts rc=0

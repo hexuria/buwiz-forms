@@ -1,0 +1,7 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./lib/statusWord.test.ts
+✓ built the Rust crate nsh-app-ebirforms (1.6s)
+✓ built the headless runner of nsh-app-ebirforms (3.2s)
+✓ lib/statusWord.test.ts › a simulated send says Dry run, from either fact (1ms)
+✓ lib/statusWord.test.ts › a real send keeps Submitted, and every other status its own word (2ms)
+✓ lib/statusWord.test.ts › a dry run does not count as filed and leaves its deadline open; a real send, Confirmed and Paid are filed (0ms)
+✓ 3 tests: 3 passed, 0 failed (3.4s)

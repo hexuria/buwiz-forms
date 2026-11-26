@@ -1,0 +1,7 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/home/rows.test.ts
+✓ built the Rust crate nsh-app-ebirforms (1.6s)
+✓ built the headless runner of nsh-app-ebirforms (2.3s)
+✓ screens/home/rows.test.ts › a status becomes the chip kind the row shows (1ms)
+✓ screens/home/rows.test.ts › a row names the branch only when the taxpayer has several (0ms)
+✓ screens/home/rows.test.ts › an as-needed deadline is keyed by its saved return, so two in one period stay two rows (0ms)
+✓ 3 tests: 3 passed, 0 failed (2.4s)

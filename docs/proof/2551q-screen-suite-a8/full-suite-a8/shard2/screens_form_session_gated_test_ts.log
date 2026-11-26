@@ -1,0 +1,92 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/form/session.gated.test.ts
+✓ built the Rust crate nsh-app-ebirforms (2.9s)
+✓ built the headless runner of nsh-app-ebirforms (2.0s)
+[2m2026-11-26T00:25:06.504669Z[0m [32m INFO[0m [2mbir_core::logging[0m[2m:[0m 🔍 Tracing initialized (developer_mode: false)
+[2m2026-11-26T00:25:06.529749Z[0m [32m INFO[0m [2mnsh_app_ebirforms::door[0m[2m:[0m eBIRForms started
+[2m2026-11-26T00:25:06.542569Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v1
+[2m2026-11-26T00:25:06.549353Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v2
+[2m2026-11-26T00:25:06.551644Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v3
+[2m2026-11-26T00:25:06.555600Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v4
+[2m2026-11-26T00:25:06.556050Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v5
+[2m2026-11-26T00:25:06.557124Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v5 migration: added period_key column to form_drafts
+[2m2026-11-26T00:25:06.557532Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v6
+[2m2026-11-26T00:25:06.557702Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v7
+[2m2026-11-26T00:25:06.558252Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v8
+[2m2026-11-26T00:25:06.558452Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v9
+[2m2026-11-26T00:25:06.558610Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v10
+[2m2026-11-26T00:25:06.559442Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v11
+[2m2026-11-26T00:25:06.559759Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v12
+[2m2026-11-26T00:25:06.560078Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v13
+[2m2026-11-26T00:25:06.560381Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v14
+[2m2026-11-26T00:25:06.561068Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v15
+[2m2026-11-26T00:25:06.567499Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v15 migration: added 6 missing form-rule state columns
+[2m2026-11-26T00:25:06.568382Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v16
+[2m2026-11-26T00:25:06.570616Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v16 migration: added 2 checked Final Copy proof columns
+[2m2026-11-26T00:25:06.571085Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v17
+[2m2026-11-26T00:25:06.586949Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v17 migration: added 12 exact form-rule identity columns
+[2m2026-11-26T00:25:06.587770Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v18
+[2m2026-11-26T00:25:06.588512Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v19
+[2m2026-11-26T00:25:06.589370Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v20
+[2m2026-11-26T00:25:06.591437Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v21
+[2m2026-11-26T00:25:06.592376Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v22
+[2m2026-11-26T00:25:06.595190Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v23
+[2m2026-11-26T00:25:06.595971Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v24
+[2m2026-11-26T00:25:06.601416Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v11 migration: added 5 missing Forms Set provenance columns
+[2m2026-11-26T00:25:06.607150Z[0m [33m WARN[0m [2mbir_core::db::google_calendar[0m[2m:[0m Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred [3mreason[0m[2m=[0m"the background worker is not running yet"
+[2m2026-11-26T00:25:06.611291Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine started
+[2m2026-11-26T00:25:08.002885Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:08.841866Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.gated.test.ts › G1 0605 item 17: the Specify box is absent until Others (Specify) is picked, then comes back in place (2.1s)
+[2m2026-11-26T00:25:09.770872Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:10.607861Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:11.441601Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:12.275324Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:13.128877Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:13.987891Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.gated.test.ts › G1 0605: the specify box is a gated box inside a drawn row, and the approval radios are a gated row of their own (5.1s)
+[2m2026-11-26T00:25:14.911265Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:16.052864Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:16.874872Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.gated.test.ts › G1 0619E item 4: item 14's whole row hides until Any Taxes Withheld = Yes; a stored value or a refusal keeps it drawn (4.0s)
+[2m2026-11-26T00:25:18.912270Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:19.768844Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.gated.test.ts › G1 2551Q item 12: the tax-relief specify box follows the Yes radio (1.8s)
+[2m2026-11-26T00:25:20.877300Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:21.805309Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:22.715544Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:23.669493Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.gated.test.ts › G1 1700: the spouse chain opens one level at a time — Married, then spouse income, then joint filing, then the spouse part (4.0s)
+G1 sweep: 43 forms, 517 gated keys, 517 hidden, 0 kept for a value, 27 chain links
+   chain 1701A: frm1701A:optFilingStatus_1 behind gated item 17
+   chain 1701A: frm1701A:optFilingStatus_2 behind gated item 17
+   chain 1701A: frm1701A:txtSpouseTIN1 behind gated item 17
+   chain 1701A: frm1701A:txtSpouseTIN1 behind gated item 18
+   chain 1701A: frm1701A:txtSpouseTIN2 behind gated item 17
+   chain 1701A: frm1701A:txtSpouseTIN2 behind gated item 18
+   chain 1701A: frm1701A:txtSpouseTIN3 behind gated item 17
+   chain 1701A: frm1701A:txtSpouseTIN3 behind gated item 18
+   chain 1701A: frm1701A:txtSpouseBranchCode behind gated item 17
+   chain 1701A: frm1701A:txtSpouseBranchCode behind gated item 18
+   chain 1701A: frm1701A:txtSpouseRDOCode behind gated item 17
+   chain 1701A: frm1701A:txtSpouseRDOCode behind gated item 18
+   chain 1701A: frm1701A:optSpouseTaxType_1 behind gated item 17
+   chain 1701A: frm1701A:optSpouseTaxType_1 behind gated item 18
+   chain 1701A: frm1701A:optSpouseTaxType_2 behind gated item 17
+   chain 1701A: frm1701A:optSpouseTaxType_2 behind gated item 18
+   chain 1701A: frm1701A:txtSpouseName behind gated item 17
+   chain 1701A: frm1701A:txtSpouseName behind gated item 18
+   chain 1701A: frm1701A:txtSpouseTelNum behind gated item 17
+   chain 1701A: frm1701A:txtSpouseTelNum behind gated item 18
+✓ screens/form/session.gated.test.ts › G1 sweep: on a fresh return every blank box with an off reason is hidden, no hidden row is to do, and every opener exists (9.5s)
+[2m2026-11-26T00:25:33.532060Z[0m [33m WARN[0m [2mnsh_app_ebirforms::print[0m[2m:[0m the print preview has no window host (screens/print/host is not loaded) [3mpath[0m[2m=[0m/tmp/bir-0619E-2025-1795652733-preview.html
+✓ screens/form/session.gated.test.ts › G1 is page-only: with item 14's row hidden, the draft is the host's own and it still prints (213ms)
+[2m2026-11-26T00:25:34.905972Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:35.024327Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.gated.test.ts › G1 1700 item 18: refused spouse TIN boxes say a shared reason once, not once per box (1.5s)
+[2m2026-11-26T00:25:36.474015Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:37.389861Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.gated.test.ts › 1700 Schedule 1: a row's Taxpayer and Spouse columns are tick boxes, and never both ticked (2.5s)
+✓ screens/form/session.gated.test.ts › 1700 Schedule 1: switching row 4_2 to Taxpayer keeps row 4_3 ACME as Spouse with its amounts (6.0s)
+[2m2026-11-26T00:25:43.566446Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:25:43.566975Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine stopped
+✓ 10 tests: 10 passed, 0 failed (39.5s)

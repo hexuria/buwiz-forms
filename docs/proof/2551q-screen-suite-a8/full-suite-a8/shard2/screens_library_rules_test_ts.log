@@ -1,0 +1,10 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/library/rules.test.ts
+✓ built the Rust crate nsh-app-ebirforms (921ms)
+✓ built the headless runner of nsh-app-ebirforms (1.2s)
+✓ screens/library/rules.test.ts › the frequency choices keep the old order, and an unknown choice is All (2ms)
+✓ screens/library/rules.test.ts › a search reads the code with and without dashes, the title, and VAT for the Value-Added forms (0ms)
+✓ screens/library/rules.test.ts › scope: owned shows the forms filed this year, all shows every form (0ms)
+✓ screens/library/rules.test.ts › the frequency narrows within the scope (0ms)
+✓ screens/library/rules.test.ts › the search trims, ignores case, finds a code without its dashes, and VAT finds the Value-Added forms (0ms)
+✓ screens/library/rules.test.ts › scope, frequency and search together (0ms)
+✓ 6 tests: 6 passed, 0 failed (1.4s)

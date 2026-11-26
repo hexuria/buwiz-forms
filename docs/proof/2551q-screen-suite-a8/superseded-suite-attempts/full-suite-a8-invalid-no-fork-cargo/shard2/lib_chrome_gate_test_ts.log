@@ -1,0 +1,3 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./lib/chrome_gate.test.ts
+error: recipe `nsh-test` was terminated by signal 15
+error: recipe `test` failed on line 12 with exit code 143

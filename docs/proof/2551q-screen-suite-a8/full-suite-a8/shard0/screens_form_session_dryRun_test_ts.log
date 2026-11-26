@@ -1,0 +1,56 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/form/session.dryRun.test.ts
+✓ built the Rust crate nsh-app-ebirforms (2.2s)
+✓ built the headless runner of nsh-app-ebirforms (1.8s)
+[2m2026-11-26T00:22:07.045992Z[0m [32m INFO[0m [2mbir_core::logging[0m[2m:[0m 🔍 Tracing initialized (developer_mode: false)
+[2m2026-11-26T00:22:07.080091Z[0m [32m INFO[0m [2mnsh_app_ebirforms::door[0m[2m:[0m eBIRForms started
+[2m2026-11-26T00:22:07.087814Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v1
+[2m2026-11-26T00:22:07.094508Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v2
+[2m2026-11-26T00:22:07.095281Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v3
+[2m2026-11-26T00:22:07.099452Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v4
+[2m2026-11-26T00:22:07.099781Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v5
+[2m2026-11-26T00:22:07.100940Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v5 migration: added period_key column to form_drafts
+[2m2026-11-26T00:22:07.101382Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v6
+[2m2026-11-26T00:22:07.101562Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v7
+[2m2026-11-26T00:22:07.102459Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v8
+[2m2026-11-26T00:22:07.102826Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v9
+[2m2026-11-26T00:22:07.103069Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v10
+[2m2026-11-26T00:22:07.103923Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v11
+[2m2026-11-26T00:22:07.104125Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v12
+[2m2026-11-26T00:22:07.104320Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v13
+[2m2026-11-26T00:22:07.104531Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v14
+[2m2026-11-26T00:22:07.105119Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v15
+[2m2026-11-26T00:22:07.110823Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v15 migration: added 6 missing form-rule state columns
+[2m2026-11-26T00:22:07.111496Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v16
+[2m2026-11-26T00:22:07.113827Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v16 migration: added 2 checked Final Copy proof columns
+[2m2026-11-26T00:22:07.114363Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v17
+[2m2026-11-26T00:22:07.127273Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v17 migration: added 12 exact form-rule identity columns
+[2m2026-11-26T00:22:07.128125Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v18
+[2m2026-11-26T00:22:07.128724Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v19
+[2m2026-11-26T00:22:07.129551Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v20
+[2m2026-11-26T00:22:07.131483Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v21
+[2m2026-11-26T00:22:07.132297Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v22
+[2m2026-11-26T00:22:07.135072Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v23
+[2m2026-11-26T00:22:07.135937Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v24
+[2m2026-11-26T00:22:07.141013Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v11 migration: added 5 missing Forms Set provenance columns
+[2m2026-11-26T00:22:07.146137Z[0m [33m WARN[0m [2mbir_core::db::google_calendar[0m[2m:[0m Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred [3mreason[0m[2m=[0m"the background worker is not running yet"
+[2m2026-11-26T00:22:07.150252Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine started
+✓ screens/form/session.dryRun.test.ts › the words: a real send and a dry run (5ms)
+✓ screens/form/session.dryRun.test.ts › a read-only return's profile-changed note: a filed return's, and a dry run's (never filed) (0ms)
+✓ screens/form/session.dryRun.test.ts › a sample's offer of a stored return: a dry-run send says dry run, a real send says submitted (0ms)
+✓ screens/form/session.dryRun.test.ts › the send's words: a held or waiting send says when it goes again, in local time, with the date when it is not today (0ms)
+[2m2026-11-26T00:22:07.403894Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:07.560245Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:07.872094Z[0m [33m WARN[0m [2mbir_core::lock_timing[0m[2m:[0m held the database lock [3msite[0m[2m=[0m/home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/crates/bir-app-api/src/bir_module.rs:1675:18 [3mmillis[0m[2m=[0m309
+[2m2026-11-26T00:22:07.872825Z[0m [33m WARN[0m [2mbir_core::lock_timing[0m[2m:[0m waited for the database lock [3msite[0m[2m=[0m/home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/crates/bir-core/src/background_cron.rs:158:30 [3mmillis[0m[2m=[0m308
+[2m2026-11-26T00:22:07.874802Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:07.877327Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Cron: Attempting to submit queued 1601C 092025 for 00012345300000
+[2m2026-11-26T00:22:07.883644Z[0m [32m INFO[0m [2mbir_core::transport[0m[2m:[0m SFTP dry-run: no network [3msource[0m[2m=[0m"dry-run" [3mfolder[0m[2m=[0m"1601Cv2018"
+[2m2026-11-26T00:22:07.891890Z[0m [32m INFO[0m [2mbir_core::transport[0m[2m:[0m SFTP dry-run PUT (no network) [3msource[0m[2m=[0m"dry-run" [3mremote_path[0m[2m=[0m"/1601Cv2018/00012345300000-1601Cv2018-092025#juana@example.com#.xml" [3mpayload_len[0m[2m=[0m1007 [3mpayload_sha256[0m[2m=[0m"9ce1f9f6a353384593cf12385e31c651e340a93d95229cdd91533cf23904fdfc"
+[2m2026-11-26T00:22:07.892689Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Cron: dry run: simulated submission of queued 1601C 00012345300000-1601Cv2018-092025#juana@example.com#.xml (nothing sent to BIR)
+[2m2026-11-26T00:22:07.895160Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:07.895328Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Cron: 1601C dry-run PUT succeeded; skipping IMAP poll (source=dry-run)
+✓ screens/form/session.dryRun.test.ts › a return the dry-run worker sent says Dry run, not sent to BIR (695ms)
+✓ screens/form/session.dryRun.test.ts › a return sent for real (no dry-run fact) says Sent to BIR (641ms)
+[2m2026-11-26T00:22:08.745937Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:08.746435Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine stopped
+✓ 6 tests: 6 passed, 0 failed (3.9s)

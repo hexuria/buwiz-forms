@@ -1,0 +1,8 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./ui/focus.test.ts
+✓ built the Rust crate nsh-app-ebirforms (949ms)
+✓ built the headless runner of nsh-app-ebirforms (1.1s)
+✓ ui/focus.test.ts › a linked editor is revealed in its enclosing scroll views before it receives focus (0ms)
+✓ ui/focus.test.ts › a reveal failure is propagated without focusing an unrevealed editor (0ms)
+✓ ui/focus.test.ts › a linked choice reveals the whole editor containing its Save action, not just the choice (0ms)
+✓ ui/focus.test.ts › a container reveal failure does not focus its choice below the fold (0ms)
+✓ 4 tests: 4 passed, 0 failed (1.2s)

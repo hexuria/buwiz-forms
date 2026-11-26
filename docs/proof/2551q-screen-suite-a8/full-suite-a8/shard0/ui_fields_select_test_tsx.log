@@ -1,0 +1,6 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./ui/fields.select.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (1.0s)
+✓ built the headless runner of nsh-app-ebirforms (1.2s)
+✓ bundled ui/select.fixture.tsx (54145 B in 23.0 ms)
+✓ ui/fields.select.test.tsx › the clear gesture empties every number box and reports empty; typing then starts from nothing (1.2s)
+✓ 1 test: 1 passed, 0 failed (2.5s)

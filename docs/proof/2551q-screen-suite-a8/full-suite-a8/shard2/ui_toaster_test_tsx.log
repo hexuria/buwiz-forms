@@ -1,0 +1,9 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./ui/toaster.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (969ms)
+✓ built the headless runner of nsh-app-ebirforms (1.1s)
+✓ bundled ui/ToasterProbe.tsx (29008 B in 23.6 ms)
+✓ ui/toaster.test.tsx › phone: with no toast showing, a press at the bottom reaches the bar under the Toaster (255ms)
+✓ ui/toaster.test.tsx › phone: with a toast showing, a press outside its card reaches the bar and its own buttons work (580ms)
+✓ ui/toaster.test.tsx › desktop: with no toast showing, a press at the bottom reaches the bar under the Toaster (218ms)
+✓ ui/toaster.test.tsx › desktop: with a toast showing, a press outside its card reaches the bar and its own buttons work (580ms)
+✓ 4 tests: 4 passed, 0 failed (2.9s)

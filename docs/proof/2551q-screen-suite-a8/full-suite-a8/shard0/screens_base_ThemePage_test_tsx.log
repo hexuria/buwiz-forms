@@ -1,0 +1,7 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/base/ThemePage.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (2.5s)
+✓ built the headless runner of nsh-app-ebirforms (1.8s)
+✓ bundled BasePreview.tsx (212172 B in 184.0 ms)
+✓ screens/base/ThemePage.test.tsx › phone: narrow layout, and the Rust bridge answers (632ms)
+✓ screens/base/ThemePage.test.tsx › desktop: wide layout as macOS, in dark (412ms)
+✓ 2 tests: 2 passed, 0 failed (3.1s)

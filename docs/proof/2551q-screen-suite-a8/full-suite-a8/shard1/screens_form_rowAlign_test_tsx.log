@@ -1,0 +1,7 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/form/rowAlign.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (1.5s)
+✓ built the headless runner of nsh-app-ebirforms (2.1s)
+✓ bundled screens/form/RowAlign.tsx (98730 B in 110.8 ms)
+✓ screens/form/rowAlign.test.tsx › desktop: a long choice and a locked box of one row share their top and their height (433ms)
+✓ screens/form/rowAlign.test.tsx › phone: a long choice and a locked box of one row share their top and their height (314ms)
+✓ 2 tests: 2 passed, 0 failed (3.0s)

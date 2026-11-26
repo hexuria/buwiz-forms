@@ -1,0 +1,13 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./ui/choice.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (1.4s)
+✓ built the headless runner of nsh-app-ebirforms (1.5s)
+✓ bundled BasePreview.tsx (212172 B in 74.2 ms)
+✓ ui/choice.test.tsx › phone: switch, checkbox, radio, segmented (1.2s)
+✓ ui/choice.test.tsx › phone: dropdown opens, chooses, closes (1.1s)
+✓ ui/choice.test.tsx › phone: combo field filters a long list by typing (1.2s)
+✓ ui/choice.test.tsx › phone: multi combo selects, clears, selects all (1.1s)
+✓ ui/choice.test.tsx › desktop: switch, checkbox, radio, segmented (1.2s)
+✓ ui/choice.test.tsx › desktop: dropdown opens, chooses, closes (738ms)
+✓ ui/choice.test.tsx › desktop: combo field filters a long list by typing (843ms)
+✓ ui/choice.test.tsx › desktop: multi combo selects, clears, selects all (1.1s)
+✓ 8 tests: 8 passed, 0 failed (10.2s)

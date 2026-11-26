@@ -1,0 +1,128 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/form/all43.test.ts
+✓ built the Rust crate nsh-app-ebirforms (1.5s)
+✓ built the headless runner of nsh-app-ebirforms (3.3s)
+[2m2026-11-26T00:20:10.048247Z[0m [32m INFO[0m [2mbir_core::logging[0m[2m:[0m 🔍 Tracing initialized (developer_mode: false)
+[2m2026-11-26T00:20:10.093998Z[0m [32m INFO[0m [2mnsh_app_ebirforms::door[0m[2m:[0m eBIRForms started
+[2m2026-11-26T00:20:10.104000Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v1
+[2m2026-11-26T00:20:10.111699Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v2
+[2m2026-11-26T00:20:10.114465Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v3
+[2m2026-11-26T00:20:10.118528Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v4
+[2m2026-11-26T00:20:10.119070Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v5
+[2m2026-11-26T00:20:10.120301Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v5 migration: added period_key column to form_drafts
+[2m2026-11-26T00:20:10.120908Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v6
+[2m2026-11-26T00:20:10.121248Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v7
+[2m2026-11-26T00:20:10.121962Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v8
+[2m2026-11-26T00:20:10.124073Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v9
+[2m2026-11-26T00:20:10.124430Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v10
+[2m2026-11-26T00:20:10.125410Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v11
+[2m2026-11-26T00:20:10.126961Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v12
+[2m2026-11-26T00:20:10.127339Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v13
+[2m2026-11-26T00:20:10.127706Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v14
+[2m2026-11-26T00:20:10.128439Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v15
+[2m2026-11-26T00:20:10.137320Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v15 migration: added 6 missing form-rule state columns
+[2m2026-11-26T00:20:10.138074Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v16
+[2m2026-11-26T00:20:10.144044Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v16 migration: added 2 checked Final Copy proof columns
+[2m2026-11-26T00:20:10.144695Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v17
+[2m2026-11-26T00:20:10.158687Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v17 migration: added 12 exact form-rule identity columns
+[2m2026-11-26T00:20:10.159411Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v18
+[2m2026-11-26T00:20:10.159980Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v19
+[2m2026-11-26T00:20:10.160690Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v20
+[2m2026-11-26T00:20:10.162807Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v21
+[2m2026-11-26T00:20:10.163674Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v22
+[2m2026-11-26T00:20:10.166612Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v23
+[2m2026-11-26T00:20:10.167345Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v24
+[2m2026-11-26T00:20:10.172886Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v11 migration: added 5 missing Forms Set provenance columns
+[2m2026-11-26T00:20:10.177585Z[0m [33m WARN[0m [2mbir_core::db::google_calendar[0m[2m:[0m Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred [3mreason[0m[2m=[0m"the background worker is not running yet"
+[2m2026-11-26T00:20:10.194115Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine started
+✓ screens/form/all43.test.ts › the door lists 43 forms, each code once, each with a title (1ms)
+D8 0605 parts=4 fields=45 ms=391
+✓ screens/form/all43.test.ts › D8 01 0605 opens as a sample (407ms)
+D8 0619E parts=5 fields=29 ms=85
+✓ screens/form/all43.test.ts › D8 02 0619E opens as a sample (96ms)
+D8 0619F parts=5 fields=30 ms=80
+✓ screens/form/all43.test.ts › D8 03 0619F opens as a sample (90ms)
+D8 1600PT parts=6 fields=188 ms=150
+✓ screens/form/all43.test.ts › D8 04 1600PT opens as a sample (177ms)
+D8 1600VT parts=6 fields=116 ms=130
+✓ screens/form/all43.test.ts › D8 05 1600VT opens as a sample (147ms)
+D8 1600WP parts=5 fields=105 ms=92
+✓ screens/form/all43.test.ts › D8 06 1600WP opens as a sample (103ms)
+D8 1601C parts=6 fields=70 ms=146
+✓ screens/form/all43.test.ts › D8 07 1601C opens as a sample (158ms)
+D8 1601EQ parts=5 fields=159 ms=335
+✓ screens/form/all43.test.ts › D8 08 1601EQ opens as a sample (373ms)
+D8 1601FQ parts=6 fields=235 ms=204
+✓ screens/form/all43.test.ts › D8 09 1601FQ opens as a sample (236ms)
+D8 1602Q parts=7 fields=98 ms=105
+✓ screens/form/all43.test.ts › D8 10 1602Q opens as a sample (120ms)
+D8 1603Q parts=5 fields=50 ms=67
+✓ screens/form/all43.test.ts › D8 11 1603Q opens as a sample (78ms)
+D8 1604C parts=3 fields=111 ms=85
+✓ screens/form/all43.test.ts › D8 12 1604C opens as a sample (94ms)
+D8 1604E parts=4 fields=121 ms=67
+✓ screens/form/all43.test.ts › D8 13 1604E opens as a sample (76ms)
+D8 1604F parts=4 fields=91 ms=71
+✓ screens/form/all43.test.ts › D8 14 1604F opens as a sample (82ms)
+D8 1606 parts=8 fields=91 ms=118
+✓ screens/form/all43.test.ts › D8 15 1606 opens as a sample (132ms)
+D8 1700 parts=6 fields=289 ms=235
+✓ screens/form/all43.test.ts › D8 16 1700 opens as a sample (261ms)
+D8 1701 parts=17 fields=379 ms=1174
+✓ screens/form/all43.test.ts › D8 17 1701 opens as a sample (1.2s)
+D8 1701A parts=8 fields=218 ms=220
+✓ screens/form/all43.test.ts › D8 18 1701A opens as a sample (246ms)
+D8 1701MS parts=8 fields=177 ms=215
+✓ screens/form/all43.test.ts › D8 19 1701MS opens as a sample (239ms)
+D8 1701Q parts=9 fields=142 ms=243
+✓ screens/form/all43.test.ts › D8 20 1701Q opens as a sample (263ms)
+D8 1702EX parts=10 fields=259 ms=209
+✓ screens/form/all43.test.ts › D8 21 1702EX opens as a sample (239ms)
+D8 1702MX parts=17 fields=525 ms=703
+✓ screens/form/all43.test.ts › D8 22 1702MX opens as a sample (782ms)
+D8 1702Q parts=7 fields=94 ms=283
+✓ screens/form/all43.test.ts › D8 23 1702Q opens as a sample (310ms)
+D8 1702RT parts=12 fields=364 ms=342
+✓ screens/form/all43.test.ts › D8 24 1702RT opens as a sample (380ms)
+D8 1706 parts=7 fields=110 ms=131
+✓ screens/form/all43.test.ts › D8 25 1706 opens as a sample (167ms)
+D8 1707 parts=8 fields=165 ms=161
+✓ screens/form/all43.test.ts › D8 26 1707 opens as a sample (179ms)
+D8 1707A parts=6 fields=194 ms=154
+✓ screens/form/all43.test.ts › D8 27 1707A opens as a sample (171ms)
+D8 1800 parts=7 fields=228 ms=141
+✓ screens/form/all43.test.ts › D8 28 1800 opens as a sample (166ms)
+D8 1801 parts=6 fields=528 ms=343
+✓ screens/form/all43.test.ts › D8 29 1801 opens as a sample (380ms)
+D8 2000 parts=9 fields=89 ms=92
+✓ screens/form/all43.test.ts › D8 30 2000 opens as a sample (100ms)
+D8 2000OT parts=5 fields=243 ms=123
+✓ screens/form/all43.test.ts › D8 31 2000OT opens as a sample (140ms)
+D8 2200A parts=6 fields=261 ms=214
+✓ screens/form/all43.test.ts › D8 32 2200A opens as a sample (235ms)
+D8 2200AN parts=8 fields=187 ms=160
+✓ screens/form/all43.test.ts › D8 33 2200AN opens as a sample (182ms)
+D8 2200C parts=7 fields=142 ms=108
+✓ screens/form/all43.test.ts › D8 34 2200C opens as a sample (121ms)
+D8 2200M parts=7 fields=329 ms=180
+✓ screens/form/all43.test.ts › D8 35 2200M opens as a sample (202ms)
+D8 2200P parts=7 fields=519 ms=269
+✓ screens/form/all43.test.ts › D8 36 2200P opens as a sample (292ms)
+D8 2200S parts=6 fields=160 ms=141
+✓ screens/form/all43.test.ts › D8 37 2200S opens as a sample (161ms)
+D8 2200T parts=7 fields=258 ms=179
+✓ screens/form/all43.test.ts › D8 38 2200T opens as a sample (198ms)
+D8 2550M parts=12 fields=566 ms=301
+✓ screens/form/all43.test.ts › D8 39 2550M opens as a sample (338ms)
+D8 2550Q parts=6 fields=435 ms=254
+✓ screens/form/all43.test.ts › D8 40 2550Q opens as a sample (282ms)
+D8 2551Q parts=5 fields=85 ms=93
+✓ screens/form/all43.test.ts › D8 41 2551Q opens as a sample (105ms)
+D8 2552 parts=8 fields=415 ms=202
+✓ screens/form/all43.test.ts › D8 42 2552 opens as a sample (225ms)
+D8 2553 parts=5 fields=61 ms=73
+✓ screens/form/all43.test.ts › D8 43 2553 opens as a sample (83ms)
+PR5 radio groups=249 segmented=237 dropdown=12 search=0
+✓ screens/form/all43.test.ts › PR5: every radio group draws by its size and every choice is reachable (309ms)
+[2m2026-11-26T00:20:20.815840Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:20:20.820220Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine stopped
+✓ 45 tests: 45 passed, 0 failed (14.5s)

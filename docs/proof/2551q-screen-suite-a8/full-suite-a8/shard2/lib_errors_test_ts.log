@@ -1,0 +1,11 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./lib/errors.test.ts
+✓ built the Rust crate nsh-app-ebirforms (2.2s)
+✓ built the headless runner of nsh-app-ebirforms (2.6s)
+✓ lib/errors.test.ts › errorText › an Error reads as its message (1ms)
+✓ lib/errors.test.ts › errorText › drops the host function name that starts the message (4ms)
+✓ lib/errors.test.ts › errorText › drops an Error: prefix from text or from a message (1ms)
+✓ lib/errors.test.ts › errorText › a plain value is its text (0ms)
+✓ lib/errors.test.ts › errorText › an object with a message reads as that message (0ms)
+✓ lib/errors.test.ts › errorText › only the first function name is dropped (0ms)
+✓ lib/errors.test.ts › errorText › old behaviour kept: an empty message reads as the error's name, and null reads as the word null (0ms)
+✓ 7 tests: 7 passed, 0 failed (2.7s)

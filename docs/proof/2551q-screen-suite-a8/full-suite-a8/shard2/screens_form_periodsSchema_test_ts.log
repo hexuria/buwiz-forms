@@ -1,0 +1,84 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./screens/form/periodsSchema.test.ts
+✓ built the Rust crate nsh-app-ebirforms (1.6s)
+✓ built the headless runner of nsh-app-ebirforms (1.5s)
+✓ screens/form/periodsSchema.test.ts › PR3: the eighteen month+year pairs are all listed (0ms)
+[2m2026-11-26T00:22:20.319539Z[0m [32m INFO[0m [2mbir_core::logging[0m[2m:[0m 🔍 Tracing initialized (developer_mode: false)
+[2m2026-11-26T00:22:20.360942Z[0m [32m INFO[0m [2mnsh_app_ebirforms::door[0m[2m:[0m eBIRForms started
+[2m2026-11-26T00:22:20.367306Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v1
+[2m2026-11-26T00:22:20.374126Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v2
+[2m2026-11-26T00:22:20.376360Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v3
+[2m2026-11-26T00:22:20.376960Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v4
+[2m2026-11-26T00:22:20.377387Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v5
+[2m2026-11-26T00:22:20.378598Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v5 migration: added period_key column to form_drafts
+[2m2026-11-26T00:22:20.380010Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v6
+[2m2026-11-26T00:22:20.380292Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v7
+[2m2026-11-26T00:22:20.380980Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v8
+[2m2026-11-26T00:22:20.381317Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v9
+[2m2026-11-26T00:22:20.381607Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v10
+[2m2026-11-26T00:22:20.382534Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v11
+[2m2026-11-26T00:22:20.382846Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v12
+[2m2026-11-26T00:22:20.383146Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v13
+[2m2026-11-26T00:22:20.383433Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v14
+[2m2026-11-26T00:22:20.384154Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v15
+[2m2026-11-26T00:22:20.388810Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v15 migration: added 6 missing form-rule state columns
+[2m2026-11-26T00:22:20.389380Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v16
+[2m2026-11-26T00:22:20.391459Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v16 migration: added 2 checked Final Copy proof columns
+[2m2026-11-26T00:22:20.391907Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v17
+[2m2026-11-26T00:22:20.401940Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v17 migration: added 12 exact form-rule identity columns
+[2m2026-11-26T00:22:20.402560Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v18
+[2m2026-11-26T00:22:20.403081Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v19
+[2m2026-11-26T00:22:20.403824Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v20
+[2m2026-11-26T00:22:20.405801Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v21
+[2m2026-11-26T00:22:20.406599Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v22
+[2m2026-11-26T00:22:20.409414Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v23
+[2m2026-11-26T00:22:20.410142Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v24
+[2m2026-11-26T00:22:20.415555Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v11 migration: added 5 missing Forms Set provenance columns
+[2m2026-11-26T00:22:20.420777Z[0m [33m WARN[0m [2mbir_core::db::google_calendar[0m[2m:[0m Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred [3mreason[0m[2m=[0m"the background worker is not running yet"
+[2m2026-11-26T00:22:20.447190Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine started
+✓ screens/form/periodsSchema.test.ts › PR3: 0605's month+year pair is marked one_periods on one item, with the host's two_digit truth (664ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 0619E's month+year pair is marked one_periods on one item, with the host's two_digit truth (10ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 0619F's month+year pair is marked one_periods on one item, with the host's two_digit truth (10ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1600PT's month+year pair is marked one_periods on one item, with the host's two_digit truth (24ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1600VT's month+year pair is marked one_periods on one item, with the host's two_digit truth (19ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1601C's month+year pair is marked one_periods on one item, with the host's two_digit truth (19ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1701's month+year pair is marked one_periods on one item, with the host's two_digit truth (156ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1701A's month+year pair is marked one_periods on one item, with the host's two_digit truth (29ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1701MS's month+year pair is marked one_periods on one item, with the host's two_digit truth (28ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2000's month+year pair is marked one_periods on one item, with the host's two_digit truth (22ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2550M's month+year pair is marked one_periods on one item, with the host's two_digit truth (57ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2550Q's month+year pair is marked one_periods on one item, with the host's two_digit truth (41ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2551Q's month+year pair is marked one_periods on one item, with the host's two_digit truth (13ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2553's month+year pair is marked one_periods on one item, with the host's two_digit truth (10ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1702EX's month+year pair is marked one_periods on one item, with the host's two_digit truth (48ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1702MX's month+year pair is marked one_periods on one item, with the host's two_digit truth (84ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1702Q's month+year pair is marked one_periods on one item, with the host's two_digit truth (18ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1702RT's month+year pair is marked one_periods on one item, with the host's two_digit truth (51ms)
+✓ screens/form/periodsSchema.test.ts › PR3: the six from-to pairs are all listed (0ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1600WP's from-to pair frm1600WP:DateWithholdingMonth is marked date_ranges on one item (14ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2550Q's from-to pair frm2550qv2024:RtnPeriodFromNo4 is marked date_ranges on one item (9ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1702EX's from-to pair frm1702EX:txtPg1Pt1I17EffectivityFrom is marked date_ranges on one item (11ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1701MS's from-to pair frm1701MS:txtTaxpayerNo16a is marked date_ranges on one item (10ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1701MS's from-to pair frm1701MS:txtTaxpayerNo16b is marked date_ranges on one item (10ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2551Q's from-to pair txtDateIssue is marked date_ranges on one item (5ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2551Q's bare keys are whole-date boxes (5ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1600PT's year is a select that lists about a hundred years (7ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1702EX's 20YY year box caps at two digits (11ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1702MX's 20YY year box caps at two digits (23ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1702RT's 20YY year box caps at two digits (13ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1702Q's year box is a number box (6ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 0605's four-digit year box is a number box (4ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 0619E's four-digit year box is a number box (4ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 0619F's four-digit year box is a number box (4ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1601C's four-digit year box is a number box (5ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1701's four-digit year box is a number box (27ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1701A's four-digit year box is a number box (9ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1701MS's four-digit year box is a number box (9ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2000's four-digit year box is a number box (6ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2550M's four-digit year box is a number box (10ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2550Q's four-digit year box is a number box (9ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2551Q's four-digit year box is a number box (5ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 2553's four-digit year box is a number box (4ms)
+✓ screens/form/periodsSchema.test.ts › PR3: 1701's month moved onto the year's item and 2000's year joined its month — one item per pair (33ms)
+[2m2026-11-26T00:22:21.901909Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T00:22:21.902788Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine stopped
+✓ 45 tests: 45 passed, 0 failed (3.6s)

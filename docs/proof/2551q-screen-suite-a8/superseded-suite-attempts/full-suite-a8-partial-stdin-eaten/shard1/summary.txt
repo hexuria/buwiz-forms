@@ -1,0 +1,1 @@
+./bir/door.test.ts rc=0

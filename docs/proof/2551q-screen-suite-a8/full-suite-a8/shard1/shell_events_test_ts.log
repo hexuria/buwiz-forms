@@ -1,0 +1,6 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./shell/events.test.ts
+✓ built the Rust crate nsh-app-ebirforms (1.5s)
+✓ built the headless runner of nsh-app-ebirforms (1.7s)
+✓ shell/events.test.ts › one new event is announced by its title, several by a count, none by nothing (2ms)
+✓ shell/events.test.ts › an event is fresh once: the known set learns it (0ms)
+✓ 2 tests: 2 passed, 0 failed (1.9s)

@@ -1,0 +1,13 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./shots/controls.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (1.1s)
+✓ built the headless runner of nsh-app-ebirforms (1.1s)
+✓ bundled ControlsShot.tsx (150044 B in 56.7 ms)
+✓ shots/controls.test.tsx › controls gallery, wide-light (4.1s)
+✓ shots/controls.test.tsx › controls layers, wide-light (4.0s)
+✓ shots/controls.test.tsx › controls gallery, wide-dark (3.9s)
+✓ shots/controls.test.tsx › controls layers, wide-dark (4.0s)
+✓ shots/controls.test.tsx › controls gallery, narrow-light (6.7s)
+✓ shots/controls.test.tsx › controls layers, narrow-light (4.6s)
+✓ shots/controls.test.tsx › controls gallery, narrow-dark (6.7s)
+✓ shots/controls.test.tsx › controls layers, narrow-dark (4.7s)
+✓ 8 tests: 8 passed, 0 failed (39.8s)

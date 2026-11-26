@@ -1,0 +1,1 @@
+./lib/chrome_gate.test.ts rc=1

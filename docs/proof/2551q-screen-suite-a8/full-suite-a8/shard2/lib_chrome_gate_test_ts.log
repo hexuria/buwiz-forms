@@ -1,0 +1,9 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./lib/chrome_gate.test.ts
+✓ built the Rust crate nsh-app-ebirforms (3.6s)
+✓ built the headless runner of nsh-app-ebirforms (2.1s)
+✓ lib/chrome_gate.test.ts › shellChromeVisible › a finished, signed-in app shows its chrome, solo or help desk (1ms)
+✓ lib/chrome_gate.test.ts › shellChromeVisible › nothing shows before boot, behind the account gate, or on the sign-in screen (0ms)
+✓ lib/chrome_gate.test.ts › shellChromeVisible › no mode yet (who will use this computer) hides it (0ms)
+✓ lib/chrome_gate.test.ts › shellChromeVisible › a setup still pending (the first taxpayer) hides it; an empty pending step does not (0ms)
+✓ lib/chrome_gate.test.ts › shellChromeVisible › the recovery key step hides it until the key is written down; other steps do not (0ms)
+✓ 5 tests: 5 passed, 0 failed (2.3s)

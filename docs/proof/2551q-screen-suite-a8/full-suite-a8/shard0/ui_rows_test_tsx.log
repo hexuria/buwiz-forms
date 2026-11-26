@@ -1,0 +1,9 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./ui/rows.test.tsx
+✓ built the Rust crate nsh-app-ebirforms (1.1s)
+✓ built the headless runner of nsh-app-ebirforms (1.3s)
+✓ bundled BasePreview.tsx (212172 B in 78.5 ms)
+✓ ui/rows.test.tsx › phone: tabs, list rows, setting rows (1.0s)
+✓ ui/rows.test.tsx › phone: status parts show their words (788ms)
+✓ ui/rows.test.tsx › desktop: tabs, list rows, setting rows (843ms)
+✓ ui/rows.test.tsx › desktop: status parts show their words (737ms)
+✓ 4 tests: 4 passed, 0 failed (4.8s)

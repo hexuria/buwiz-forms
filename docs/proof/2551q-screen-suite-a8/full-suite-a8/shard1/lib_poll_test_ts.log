@@ -1,0 +1,9 @@
+just --justfile /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/../justfile --working-directory /home/ubuntu/urgent2551/a8aeaca8/buwiz-forms/nsh/.. nsh-test ./lib/poll.test.ts
+✓ built the Rust crate nsh-app-ebirforms (2.5s)
+✓ built the headless runner of nsh-app-ebirforms (2.7s)
+✓ lib/poll.test.ts › the schedule of the app's polls (15ms)
+✓ lib/poll.test.ts › a task runs on its interval, and stop ends it (99ms)
+✓ lib/poll.test.ts › the first run can come sooner than the interval (66ms)
+✓ lib/poll.test.ts › a slow task never overlaps itself (70ms)
+✓ lib/poll.test.ts › a throw goes to onError and the task goes on (21ms)
+✓ 5 tests: 5 passed, 0 failed (3.2s)
