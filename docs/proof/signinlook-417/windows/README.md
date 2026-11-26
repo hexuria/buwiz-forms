@@ -115,9 +115,9 @@ BEFORE has no `signin-wide-light-start.png` because that screenshot did not exis
 | `after/signin-short-light-code-expired-resend.png` | sign-in flow: code-expired-resend | short-light, 1280x640 | after |  |
 | `after/signin-short-light-code-too-many.png` | sign-in flow: code-too-many | short-light, 1280x640 | after |  |
 | `after/signin-short-light-code-restored.png` | sign-in flow: code-restored | short-light, 1280x640 | after |  |
-| `after/signin-short-light-settings-account-signed-in.png` | sign-in flow: settings-account-signed-in | short-light, 1280x640 | after |  |
+| `after/signin-short-light-settings-account-signed-in.png` | sign-in flow: settings-account-signed-in | short-light, 1280x640 | after | the scrollable settings page continues below the visible area |
 | `after/signin-short-light-settings-account-sign-out-question.png` | sign-in flow: settings-account-sign-out-question | short-light, 1280x640 | after |  |
-| `after/signin-short-light-settings-account-signed-out.png` | sign-in flow: settings-account-signed-out | short-light, 1280x640 | after |  |
+| `after/signin-short-light-settings-account-signed-out.png` | sign-in flow: settings-account-signed-out | short-light, 1280x640 | after | the scrollable settings page continues below the visible area |
 | `after/signin-short-light-email-after-change.png` | sign-in flow: email-after-change | short-light, 1280x640 | after |  |
 | `after/signin-short-light-code-after-change.png` | sign-in flow: code-after-change | short-light, 1280x640 | after |  |
 | `after/auth-wide-light-gate.png` | gate/setup/lock: gate | wide-light, 1440x900 | after |  |
