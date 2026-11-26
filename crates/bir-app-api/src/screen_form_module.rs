@@ -3248,7 +3248,7 @@ fn lifecycle_text<'a>(draft: &'a Value, name: &str) -> Option<&'a str> {
 }
 
 /// A lifecycle fact that is a yes or no (absent is no); see [`lifecycle_text`].
-fn lifecycle_flag(draft: &Value, name: &str) -> bool {
+pub(crate) fn lifecycle_flag(draft: &Value, name: &str) -> bool {
     draft[name]
         .as_bool()
         .or_else(|| draft["lifecycle"][name].as_bool())
@@ -4973,6 +4973,70 @@ pub(crate) fn removes(
         .or_else(|| rows_as_needed::removes(kind, before, after, edits))
         .or_else(|| rows_donor_estate::removes(kind, before, after, edits))
         .or_else(|| rows_excise::removes(kind, before, after, edits))
+}
+
+/// The reviewed reason a person sees on the form page when `key` is gated
+/// shut on `draft` (corpus `enabled_when` conditions and host module gates).
+/// Blank and untick writes are clears and are never refused by a gate.
+pub(crate) fn page_gate_refusal(
+    kind: AgentFormKind,
+    draft: &Value,
+    key: &str,
+    value: &Value,
+) -> Option<String> {
+    if value.is_null()
+        || value.as_str().is_some_and(agent::carry::is_blank_value)
+        || is_unticked(value)
+    {
+        return None;
+    }
+    let code = kind.form_code();
+    if let Some(why) = rows_income_q::closed_refusal(kind, draft, key, value)
+        .map(str::to_string)
+        .or_else(|| rows_annual_individual::closed_refusal(kind, draft, key, value))
+    {
+        return Some(why);
+    }
+    if let Some((_, tag)) = rows_donor_estate::closed(kind, draft)
+        .into_iter()
+        .find(|(k, _)| k == key)
+    {
+        return Some(tag.to_string());
+    }
+    if rows_withholding::gated(kind, draft, key) == Some(true)
+        || rows_monthly::gated(kind, draft, key) == Some(true)
+    {
+        return conditions::tag(code, key);
+    }
+    if let Some(tag) = rows_income_q::gated(kind, draft, key) {
+        return Some(tag.to_string());
+    }
+    if rows_annual_individual::gated(kind, draft, key) {
+        return conditions::tag(code, key);
+    }
+    let shown = Value::Object(
+        agent::field_map(kind, draft)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(k, v)| (k, Value::String(v)))
+            .collect(),
+    );
+    if let Some(tag) = conditions::off_now(kind, draft, &shown, key) {
+        return Some(tag);
+    }
+    if let Some(tag) = rows_as_needed::off(kind, draft, &shown)
+        .get(key)
+        .and_then(Value::as_str)
+    {
+        return Some(tag.to_string());
+    }
+    if let Some(tag) = rows_excise::off(kind, draft, &shown)
+        .get(key)
+        .and_then(Value::as_str)
+    {
+        return Some(tag.to_string());
+    }
+    None
 }
 
 /// Apply the page's edits to `draft` the one way both the draft fill and the
@@ -7330,6 +7394,9 @@ mod tests {
     // on every form (bug B17).
     mod sel_lists;
     mod unfillable;
+    // Every form's RDO box offers the RDO catalog, never 1601C's leftover
+    // "000" option script; "000" is no RDO.
+    mod rdo_lists;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -14825,6 +14892,85 @@ mod tests {
         }
     }
 
+    /// Link 3 of 3 of "a relay dry_run result never reads as filed" (link 1:
+    /// bir-submit `client::tests::a_relay_dry_run_result_with_its_signed_receipt_is_a_verified_test_send`;
+    /// link 2: bir-core `background_cron::tests::a_relay_dry_run_result_is_stored_as_a_test_send_on_every_path`).
+    /// The shared fixture's result through bir-core's `send_outcome`, stored
+    /// as link 2 proves the worker stores it (Submitted, `submitted_dry_run`,
+    /// the receipt, not the mock relay), for each storage shape: the open,
+    /// the returns list and the deadline rows all say a test send, never a
+    /// send that reached the BIR, and the deadline stays open (its row says
+    /// `submitted_dry_run`, which the screens read as not filed).
+    #[test]
+    fn a_relay_dry_run_result_never_reads_as_filed() {
+        use crate::send_state::{SENT_LINE, TEST_SENT_LINE};
+        let report = bir_core::relay::dry_run_result_fixture_report();
+        let codes = [("1601C", 6i64), ("2551Q", 2), ("0619E", 5)];
+        setup_taxpayer_filing(&codes.map(|(code, _)| code));
+        for (code, period) in codes {
+            let opened = open_for(TIN, code, 2026, period);
+            let id = store_filed(code, &opened["draft"], "Submitted");
+            let (_, raw) = raw_row(id);
+            let mut sent: Value = serde_json::from_str(&raw).unwrap();
+            let lifecycle = if sent["lifecycle"].is_object() {
+                &mut sent["lifecycle"]
+            } else {
+                &mut sent
+            };
+            lifecycle["submitted_dry_run"] = json!(report.simulated);
+            lifecycle["submitted_via_relay"] = json!(false);
+            lifecycle["relay_receipt"] = json!(report.relay_receipt);
+            raw_exec(
+                &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+                &[&serde_json::to_string(&sent).unwrap()],
+            );
+
+            let open = open_for(TIN, code, 2026, period);
+            assert_eq!(open["status"], "Submitted", "{code}: the stored status");
+            assert_eq!(open["submitted_dry_run"], true, "{code}");
+            assert_eq!(open["send"]["stage"], "test_sent", "{code}");
+            assert_eq!(open["send"]["line"], TEST_SENT_LINE, "{code}");
+
+            let rows = call("list_returns", vec!["all".into()]).unwrap();
+            let row = rows
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["id"] == id)
+                .unwrap_or_else(|| panic!("{code}: listed"))
+                .clone();
+            assert_eq!(row["send"]["stage"], "test_sent", "{code}");
+            assert_eq!(row["send"]["line"], TEST_SENT_LINE, "{code}");
+            assert_eq!(row["submitted_via_relay"], false, "{code}");
+
+            let due = call(
+                "deadlines_between",
+                vec!["2026-01-01".into(), "2026-12-31".into()],
+            )
+            .unwrap();
+            let due = due
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|due| due["draft_id"] == id)
+                .unwrap_or_else(|| panic!("{code}: a deadline row"))
+                .clone();
+            assert_eq!(
+                due["submitted_dry_run"], true,
+                "{code}: the deadline stays open"
+            );
+
+            for send in [&open["send"], &row["send"]] {
+                assert_ne!(send["stage"], "sent", "{code}");
+                assert_ne!(send["line"], SENT_LINE, "{code}");
+                let line = send["line"].as_str().unwrap().to_lowercase();
+                for word in ["sent", "filed", "submitted"] {
+                    assert!(!line.contains(word), "{code}: {word:?} in {line:?}");
+                }
+            }
+        }
+    }
+
     /// `send` in the open's answer is the stored return's send state
     /// (send_state.rs), for each storage shape: null on a plain Draft and a
     /// Submitted return without a relay receipt, `refused` on a Draft the
@@ -18812,10 +18958,14 @@ mod tests {
                 // column, plus 2 for 1701MS (PR 7 review, round 2): item 16's
                 // rate in each column. At pr0b-push none had an entry.
                 ("1700", 17),
-                // Plus 34 for 1701: Schedule 3.A items 8/9/11 A&B (6),
-                // Schedule 4 items 3 and 6-13 A&B (18), and Schedule 6
-                // NOLCO filer cells 6A/6B/7B/9A-11B/12B (10).
-                ("1701", 69),
+                // Plus 95 for 1701: the schedule input boxes of Schedules
+                // 3.A, 4 and 6 in both columns wait for the graduated and
+                // itemized answers (rows_annual_individual.rs GATED_BOXES):
+                // Schedule 3.A items 8/9/11/19/20/21 A&B plus items 19/20's
+                // descriptions (14), Schedule 4 items 1-17d A&B plus 17dDesc
+                // (41), and Schedule 6's summary and NOLCO rows but the
+                // computed current-year row (40).
+                ("1701", 130),
                 ("1701A", 17),
                 ("1701MS", 52),
                 // 8 for 1706 (PR 9): items 8 and 9, item 11's list,

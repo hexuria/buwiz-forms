@@ -1,4 +1,4 @@
-// The word a return's status shows. A send the worker only simulated (a dry run, a practice account, a phone build) is stored as
+// The word a return's status shows. A send the worker only simulated (a dry run, a practice account) is stored as
 // Submitted with the worker's `submitted_dry_run` (the host's `send.stage` "test_sent"); every screen shows it as "Dry run", the
 // word of the form page's banner ("Dry run <date>, not sent to BIR"). What is stored stays the status. A dry run is never filed:
 // it counts nowhere as filed and leaves its deadline open (`countsAsFiled`). Tested in statusWord.test.ts.

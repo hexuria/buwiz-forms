@@ -9,9 +9,12 @@ test("F3-4 desktop: an autosave drops the frame's cached reads (the saved return
   await app.waitFor("text:BIR Form 2551Q");
   await app.waitFor("text:saved returns 0");
   await app.press("id:fp-parts-toggle");
+  await app.clear("id:fp-frm2551Qv2018:txt15");
   await app.type("id:fp-frm2551Qv2018:txt15", "100");
   await app.waitFor("text:✓ Saved", { timeout: 5000 });
   await app.waitFor("text:saved returns 1", { timeout: 3000 });
+  // Exactly the typed value is what the return holds: item 18 (items 15 to 17, empty but for item 15) moves by it.
+  expect(app.texts()).toContain("100.00");
 });
 
 test("F3-11 desktop: Cmd+Right inside a text box stays in the box; outside one it steps", async () => {

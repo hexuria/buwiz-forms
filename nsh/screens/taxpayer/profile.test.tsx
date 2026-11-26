@@ -40,9 +40,9 @@ test("desktop: editing the taxpayer saves the name, shows a bad date once left, 
   await app.clear("id:tp-taxpayer-name");
   await app.type("id:tp-taxpayer-name", "Juana Santos Trading");
   await app.type("id:tp-taxpayer-birth_date", "1990-13-40");
-  expect(app.texts()).not.toContain("Type the date as YYYY-MM-DD, like 1990-05-17.");
+  expect(app.texts()).not.toContain("Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.");
   await app.press("id:tp-taxpayer-save");
-  await app.waitFor("text:Type the date as YYYY-MM-DD, like 1990-05-17.");
+  await app.waitFor("text:Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.");
   expect(app.shows("id:tp-taxpayer-name")).toBe(true); // still editing
   await app.clear("id:tp-taxpayer-birth_date");
   await app.type("id:tp-taxpayer-birth_date", "1990-05-17");
@@ -100,6 +100,8 @@ test("desktop: a branch follows the head office until switched off, and its code
   await app.waitFor("id:tp-branch-code");
   await app.press("id:tp-inherit-rdo_code");
   await app.press("id:tp-branch-rdo_code-trigger");
+  // The combobox's box holds the inherited choice's words: empty it before searching (a real window selects them, so typing replaces).
+  await app.clear("id:tp-branch-rdo_code-search");
   await app.type("id:tp-branch-rdo_code-search", "cebu city");
   await app.waitFor("id:tp-branch-rdo_code-opt-081");
   await app.press("id:tp-branch-rdo_code-opt-081");

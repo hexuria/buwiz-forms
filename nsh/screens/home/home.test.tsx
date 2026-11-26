@@ -283,11 +283,11 @@ for (const { name, size } of SIZES) {
     const app = await open(ENTRY, { ...size, ...asking({ second: true, branch: true }) });
     await app.waitFor("id:home-dashboard", { timeout: 30000 });
     expect(app.shows("id:home-tp-000123453")).toBe(true);
-    expect(app.shows("id:home-tp-000111229")).toBe(true);
+    expect(app.shows("id:home-tp-000111225")).toBe(true);
     expect(app.texts()).toContain("Sample Trading Corp");
     expect(app.texts().some((t) => t === "Juana Santos · Head office")).toBe(true); // a taxpayer with two branches names the branch
     expect(app.texts()).toContain("Start next");
-    await app.press("id:home-tp-000111229-next");
+    await app.press("id:home-tp-000111225-next");
     await app.waitFor("id:form-page", { timeout: 30000 });
     expect(app.texts().some((t) => t === "Sample Trading Corp" || t === "SC")).toBe(true); // the context pill names whose return it is (an avatar when narrow)
   }, 90_000);

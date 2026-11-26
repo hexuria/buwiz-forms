@@ -136,6 +136,7 @@ export function NewTaxpayerPage() {
           testID={`new-tp-${key}`}
           label={label}
           options={pickOptions(key)}
+          searchKeyboard={key === "zip_code" ? "digits-first" : "default"}
           value={n()[key]}
           onPick={(v) => {
             batch(() => {

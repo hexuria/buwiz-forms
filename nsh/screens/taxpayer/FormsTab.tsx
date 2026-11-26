@@ -6,7 +6,7 @@ import type { ScreenFormIndexEntry } from "../../bir";
 import { daysUntil, shortDate } from "../../lib/dates";
 import { errorText } from "../../lib/errors";
 import { app, store, toast, today } from "../../shell";
-import { AppButton, Banner, Checkbox, CheckboxLabel, Chip, Code, Dropdown, EmptyRow, IconButton, Line, ListGroup, ListRow, NameCell, Segmented, Text, TextField } from "../../ui";
+import { AppButton, Banner, CheckboxLabel, CheckRow, Chip, Code, Dropdown, EmptyRow, IconButton, Line, ListGroup, ListRow, NameCell, Segmented, Text, TextField } from "../../ui";
 import { applySetup, deleteSetup } from "./actions";
 import { AnnualConflictBanner, ReplaceBanner } from "./Banners";
 import { allowedYears, defaultAddYear, formsSavedText, formSub, FREQS, plural, schedule, searchText, yearAddedText } from "./logic";
@@ -96,11 +96,8 @@ function FormRow(props: { s: PageState; f: ScreenFormIndexEntry }) {
     const now = today();
     return schedule(store.formDeadlines(b.tin, f.c, y, `${y}-01-01`, `${y + 1}-12-31`), (iso) => daysUntil(iso, now), shortDate);
   };
-  return (
-    <ListRow testID={`tp-form-${f.c}`}>
-      <If when={editing()}>
-        <Checkbox testID={`tp-form-${f.c}-check`} checked={on()} onChange={(v) => props.s.toggleForm(f.c, v)} label={`File ${f.c} in ${year()}`} />
-      </If>
+  const cells = (
+    <>
       <View class="shrink-0" style={{ width: 68 }}>
         <Code tone={on() ? "fg" : "fg3"}>{f.c}</Code>
       </View>
@@ -122,7 +119,19 @@ function FormRow(props: { s: PageState; f: ScreenFormIndexEntry }) {
           </If>
         </If>
       </View>
-    </ListRow>
+    </>
+  );
+  // Editing, the whole row is the one checkbox control: a press anywhere in it (the text, the code,
+  // the empty part, the box) toggles once, and screen readers read one control with the row's state.
+  return (
+    <If
+      when={editing()}
+      else={<ListRow testID={`tp-form-${f.c}`}>{cells}</ListRow>}
+    >
+      <CheckRow testID={`tp-form-${f.c}`} checked={on()} onChange={(v) => props.s.toggleForm(f.c, v)} label={`File ${f.c} in ${year()}`}>
+        {cells}
+      </CheckRow>
+    </If>
   );
 }
 

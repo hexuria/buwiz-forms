@@ -525,6 +525,7 @@ impl Form2200MDraft {
                 "frm2200M:txtPg1I1Year",
             ],
         );
+        super::print_map::match_upload_case("2200m-v2018", &mut fields, None);
         fields
     }
 

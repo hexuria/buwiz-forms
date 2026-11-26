@@ -15,52 +15,48 @@ name: NSH app
 # private, create NSH_REPO_TOKEN, a token that can read hexuria/nsh (a fine-grained personal access token with
 # "Contents: read" on that one repository); without it the step then fails. Pull requests from forks never get it.
 
+# The test lane only (docs/CI.md): a pull request no longer starts these jobs. ci.yml's quick lane runs the app's type
+# check (`nsh check`) on every pull request that touches the app; the builds and tests here run on
+#   - a push to test/** (`just ci-test`): the branch name picks the systems, the changed files the suites;
+#   - a manual run (`gh workflow run nsh.yml`, docs/CI.md): the systems, suites, screen-test filter and shard asked for;
+#   - the nightly run on main: everything on all three systems, one runner per system.
+# Only main's runs save caches every branch can read (a cache saved on another ref is read by that ref alone): the
+# dependency builds of ./nsh/.github/actions/cargo (it saves on refs/heads/main only), the nsh command line, the Linux
+# packages and core-plain's rust-cache. So the nightly run and `just ci-main` are what keep them fresh; a push to main
+# no longer runs this workflow.
 on:
-  # main runs too, and only main's runs save caches every pull request can read: a cache saved by a pull request's run
-  # lives under refs/pull/<n>/merge, which no other pull request restores. That covers the dependency builds of
-  # ./nsh/.github/actions/cargo (it saves on refs/heads/main only), the nsh command line, and core-plain's rust-cache.
   push:
-    branches: [main]
-    paths:
-      - "nsh/**"
-      - "forms/**"
-      - "crates/bir-app-api/**"
-      - "crates/bir-core/**"
-      - "crates/bir-host-shim/**"
-      # What those crates are built on, and this file.
-      - "crates/bir-print/**"
-      - "crates/bir-rules/**"
-      # The workspace the jobs build in: its manifest, lock file, recipes and toolchain.
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "justfile"
-      - "rust-toolchain.toml"
-      - ".github/workflows/nsh.yml"
-  pull_request:
-    paths:
-      - "nsh/**"
-      - "forms/**"
-      - "crates/bir-app-api/**"
-      - "crates/bir-core/**"
-      - "crates/bir-host-shim/**"
-      # What those crates are built on, and this file.
-      - "crates/bir-print/**"
-      - "crates/bir-rules/**"
-      # The workspace the jobs build in: its manifest, lock file, recipes and toolchain.
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "justfile"
-      - "rust-toolchain.toml"
-      - ".github/workflows/nsh.yml"
+    branches: [ "test/**" ]
+  schedule:
+    - cron: "0 18 * * *"
   workflow_dispatch:
+    inputs:
+      systems:
+        description: "Systems: all, or a comma list of linux, windows, macos"
+        type: string
+        default: "linux,windows"
+      suites:
+        description: "Suites: all, or a comma list of rust, screens, build, installer, validation"
+        type: string
+        default: "all"
+      screens:
+        description: "Screen-test files to run, e.g. screens/form/** or screens/form (empty: all)"
+        type: string
+        default: ""
+      shard:
+        description: "Screen-test shard to run, of three (main always runs one runner per system)"
+        type: choice
+        options: [ "all", "0", "1", "2" ]
+        default: "all"
 
 permissions:
   contents: read
 
+# One run per ref: a newer push to the same test/... branch cancels the older run. main's runs (nightly and manual)
+# each get a group of their own and are never cancelled: they are the ones that save the caches.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # A pull request's older run is superseded. main's run is left to finish: it is the one that saves the caches.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -80,15 +76,54 @@ env:
   BIR_SFTP_DRY_RUN: "1"
 
 jobs:
+  # Decides what this run does: scripts/ci_plan.py, the same script as ci.yml's `changes` job (docs/CI.md).
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      nsh_macos: ${{ steps.decide.outputs.nsh_macos }}
+      nsh_linux: ${{ steps.decide.outputs.nsh_linux }}
+      nsh_windows: ${{ steps.decide.outputs.nsh_windows }}
+      screens: ${{ steps.decide.outputs.screens }}
+      build: ${{ steps.decide.outputs.build }}
+      nsh_rust: ${{ steps.decide.outputs.nsh_rust }}
+      core_plain: ${{ steps.decide.outputs.core_plain }}
+      linux_packages: ${{ steps.decide.outputs.linux_packages }}
+      shards: ${{ steps.decide.outputs.shards }}
+      shard_count: ${{ steps.decide.outputs.shard_count }}
+      lead_shard: ${{ steps.decide.outputs.lead_shard }}
+      screens_filter: ${{ steps.decide.outputs.screens_filter }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BRANCH: ${{ github.ref_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+          IN_SYSTEMS: ${{ inputs.systems }}
+          IN_SUITES: ${{ inputs.suites }}
+          IN_SCREENS: ${{ inputs.screens }}
+          IN_SHARD: ${{ inputs.shard }}
+        run: python3 -I scripts/ci_plan.py
+
+  # The suites, in every job below: `build` is the bundle, the agent build, the other targets' compiles, the
+  # development host and the real-window test; `rust` the app crate's Rust tests (and core-plain-test); `screens` the
+  # headless TSX tests. The lead shard (shard 0 unless a manual run names another) runs `nsh check` and the build and
+  # Rust suites; every shard runs its part of the screen tests. A branch's run splits the screen tests over three
+  # runners; main's runs use one runner per system, so the dependency cache main saves holds what every shard needs.
   nsh-macos:
-    # A pull request splits the headless TSX test files over three runners (every third file of the sorted list each);
-    # shard 0 also runs the type check, the build and the Rust tests. main and manual runs use one runner for
-    # everything, so the dependency cache main saves holds what every shard needs.
     name: NSH app (macOS, shard ${{ matrix.shard }})
+    needs: plan
+    if: needs.plan.outputs.nsh_macos == 'true'
     strategy:
       fail-fast: false
       matrix:
-        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[0, 1, 2]' || '[0]') }}
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     runs-on: macos-15
     # Cold: the nsh command line alone is 10 minutes on an M-series Mac, and every test file opens a headless runner.
     timeout-minutes: 120
@@ -98,7 +133,12 @@ jobs:
       RUSTUP_TOOLCHAIN: "1.99.0"
       CARGO_INCREMENTAL: "0"
       SHARD: ${{ matrix.shard }}
-      SHARDS: ${{ github.event_name == 'pull_request' && 3 || 1 }}
+      SHARDS: ${{ needs.plan.outputs.shard_count }}
+      LEAD_SHARD: ${{ matrix.shard == fromJSON(needs.plan.outputs.lead_shard) }}
+      SUITE_BUILD: ${{ needs.plan.outputs.build }}
+      SUITE_RUST: ${{ needs.plan.outputs.nsh_rust }}
+      SUITE_SCREENS: ${{ needs.plan.outputs.screens }}
+      SCREENS_FILTER: ${{ needs.plan.outputs.screens_filter }}
     steps:
       # The layout the app's Cargo.toml expects: <workspace>/buwiz-forms and <workspace>/nsh side by side, because
       # buwiz-forms/nsh/Cargo.toml names the NSH crates as ../../nsh/crates/...
@@ -154,9 +194,10 @@ jobs:
         working-directory: nsh
         run: cargo install --locked --path crates/nsh-cli --root "$HOME/BuwizNsh/tools"
 
-      # Only shard 0 saves: the shards of a new pin's first run all build it, and one copy is enough.
+      # Only main's lead shard saves: the shards of a new pin's first run all build it, and one copy is enough. A
+      # branch's copy would be readable by that branch alone and take room from main's caches.
       - name: Save the nsh command line
-        if: steps.nsh-cli.outputs.cache-hit != 'true' && matrix.shard == 0
+        if: steps.nsh-cli.outputs.cache-hit != 'true' && env.LEAD_SHARD == 'true' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v4
         with:
           path: ~/BuwizNsh/tools
@@ -168,17 +209,17 @@ jobs:
           "$HOME/BuwizNsh/tools/bin/nsh" -V
 
       - name: nsh check (the crate, then the TSX types)
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true'
         working-directory: buwiz-forms
         run: just nsh-check -v
 
       - name: nsh build (every warning is a finding)
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_BUILD == 'true'
         working-directory: buwiz-forms
         run: just nsh-build
 
       - name: Rust tests of the app's crate
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_RUST == 'true'
         working-directory: buwiz-forms
         run: cargo test --manifest-path nsh/Cargo.toml --no-fail-fast
 
@@ -188,7 +229,7 @@ jobs:
       # "ambiguous" when the control plane's Git copy of NSH is in the graph too; that build compiles, and its
       # window listener never starts.
       - name: The agent feature builds, with one NSH in the host
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_BUILD == 'true'
         working-directory: buwiz-forms
         run: |
           cargo test --manifest-path nsh/Cargo.toml --features agent --no-run
@@ -202,7 +243,7 @@ jobs:
       # The app as an iPhone and iPad run it: the device target, which the simulator check above does not compile.
       # The relay client (its HPKE, signing and WebSocket crates) and the Keychain code must build for it.
       - name: The app compiles for an iPhone
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_BUILD == 'true'
         working-directory: buwiz-forms
         run: |
           rustup target add aarch64-apple-ios
@@ -210,26 +251,12 @@ jobs:
 
       # Every *.test.ts and *.test.tsx, one headless run per file, as `just nsh-test` does (nsh/verify holds real-window
       # verifiers that need the owner's data copy, so it is left out). `just nsh-test <file>` sets the four safety
-      # variables again and never sets BIR_DATABASE_PATH.
-      #
-      # Shards: line k of the sorted list (from 0) belongs to shard k % SHARDS, so every file is in exactly one shard
-      # and the shards together run the same list as before. LC_ALL=C makes the order the same on every runner.
+      # variables again and never sets BIR_DATABASE_PATH. The script holds the shard rule (line k of the sorted list
+      # belongs to shard k % SHARDS) and the manual run's file filter.
       - name: Headless TSX tests, file by file
+        if: env.SUITE_SCREENS == 'true'
         working-directory: buwiz-forms/nsh
-        run: |
-          failed=()
-          ran=0
-          while IFS= read -r file; do
-            ran=$((ran + 1))
-            just test "$file" || failed+=("$file")
-          done < <(find . -mindepth 1 \( -path ./verify -o -name node_modules -o -name target -o -name '.*' \) -prune -o \( -name '*.test.ts' -o -name '*.test.tsx' \) -print | LC_ALL=C sort | awk -v n="$SHARDS" -v i="$SHARD" '(NR - 1) % n == i')
-          echo "shard $SHARD of $SHARDS ran $ran test files"
-          [ "$ran" -gt 0 ] || { echo "::error::this shard found no test files"; exit 1; }
-          if [ ${#failed[@]} -gt 0 ]; then
-            echo "failed in:"
-            printf '  %s\n' "${failed[@]}"
-            exit 1
-          fi
+        run: bash ../scripts/nsh_screen_tests.sh
 
   # The same app on Linux (NSH's GTK 4 backend, docs/platforms/nsh-linux-handover.md): the CLI built from the pin, the
   # crate and its TSX types, the bundle, the crate's Rust tests and the headless TSX tests (sharded as on macOS), the
@@ -238,17 +265,24 @@ jobs:
   # line (section 3.2), which is NSH's own Linux CI's plus the app's: libdbus and OpenSSL's build, and python3 for stylo.
   nsh-linux:
     name: NSH app (Linux, shard ${{ matrix.shard }})
+    needs: plan
+    if: needs.plan.outputs.nsh_linux == 'true'
     strategy:
       fail-fast: false
       matrix:
-        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[0, 1, 2]' || '[0]') }}
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
       RUSTUP_TOOLCHAIN: "1.99.0"
       CARGO_INCREMENTAL: "0"
       SHARD: ${{ matrix.shard }}
-      SHARDS: ${{ github.event_name == 'pull_request' && 3 || 1 }}
+      SHARDS: ${{ needs.plan.outputs.shard_count }}
+      LEAD_SHARD: ${{ matrix.shard == fromJSON(needs.plan.outputs.lead_shard) }}
+      SUITE_BUILD: ${{ needs.plan.outputs.build }}
+      SUITE_RUST: ${{ needs.plan.outputs.nsh_rust }}
+      SUITE_SCREENS: ${{ needs.plan.outputs.screens }}
+      SCREENS_FILTER: ${{ needs.plan.outputs.screens_filter }}
     steps:
       - name: Check out buwiz-forms
         uses: actions/checkout@v4
@@ -301,8 +335,9 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" ~/apt-archives
           rm -rf ~/apt-archives/partial ~/apt-archives/lock
 
+      # main only: every pull request used to save its own 110 MB copy whenever this file changed.
       - name: Save the Linux packages
-        if: steps.apt-cache.outputs.cache-hit != 'true' && matrix.shard == 0
+        if: steps.apt-cache.outputs.cache-hit != 'true' && env.LEAD_SHARD == 'true' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v4
         with:
           path: ~/apt-archives
@@ -336,7 +371,7 @@ jobs:
         run: cargo install --locked --path crates/nsh-cli --root "$HOME/BuwizNsh/tools"
 
       - name: Save the nsh command line
-        if: steps.nsh-cli.outputs.cache-hit != 'true' && matrix.shard == 0
+        if: steps.nsh-cli.outputs.cache-hit != 'true' && env.LEAD_SHARD == 'true' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v4
         with:
           path: ~/BuwizNsh/tools
@@ -348,17 +383,17 @@ jobs:
           "$HOME/BuwizNsh/tools/bin/nsh" -V
 
       - name: nsh check (the crate, then the TSX types)
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true'
         working-directory: buwiz-forms
         run: just nsh-check -v
 
       - name: nsh build (every warning is a finding)
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_BUILD == 'true'
         working-directory: buwiz-forms
         run: just nsh-build
 
       - name: Rust tests of the app's crate
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_RUST == 'true'
         working-directory: buwiz-forms
         run: cargo test --manifest-path nsh/Cargo.toml --no-fail-fast
 
@@ -367,7 +402,7 @@ jobs:
       # loopback). `cargo tree` prints a feature of bir-core only when something enables it. Linux only: the
       # answer does not depend on the runner.
       - name: The app does not enable direct-bir
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true'
         working-directory: buwiz-forms
         run: |
           tree=$(cargo tree --manifest-path nsh/Cargo.toml --all-features --target all -e features -i bir-core)
@@ -381,7 +416,7 @@ jobs:
       # brings C and assembly (ring) that need the NDK's compiler. The runner image carries the NDK
       # (ANDROID_NDK_LATEST_HOME); API level 24 is the oldest the toolchain names.
       - name: The app compiles for Android
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_BUILD == 'true'
         working-directory: buwiz-forms
         run: |
           ndk="${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME:-}}"
@@ -402,7 +437,7 @@ jobs:
       # "ambiguous" when the control plane's Git copy of NSH is in the graph too; that build compiles, and its
       # window listener never starts.
       - name: The agent feature builds, with one NSH in the host
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_BUILD == 'true'
         working-directory: buwiz-forms
         run: |
           cargo test --manifest-path nsh/Cargo.toml --features agent --no-run
@@ -413,7 +448,7 @@ jobs:
       # The host `nsh run --target linux` builds, from the workspace nsh check generated in .nsh/rust: it links NSH's GTK
       # backend with its development features (the dev and agent code a plain build leaves out).
       - name: Build the Linux development host
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_BUILD == 'true'
         working-directory: buwiz-forms/nsh
         run: cargo build --manifest-path .nsh/rust/Cargo.toml -p nsh-app-nsh-app-ebirforms-linux-host
 
@@ -421,12 +456,12 @@ jobs:
       # session bus of its own and a virtual display. The four safety variables are the workflow's; nothing sets
       # BIR_DATABASE_PATH. Run from nsh/ so the test host reuses the build above.
       - name: Real windows (shots/base)
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_BUILD == 'true'
         working-directory: buwiz-forms/nsh
         run: dbus-run-session -- xvfb-run -a -s '-screen 0 1920x1080x24' nsh test shots/base.test.tsx --target linux
 
       - name: Keep the real-window screenshots
-        if: always() && matrix.shard == 0
+        if: always() && env.LEAD_SHARD == 'true' && env.SUITE_BUILD == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: nsh-linux-shots
@@ -434,21 +469,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: Headless TSX tests, file by file
+        if: env.SUITE_SCREENS == 'true'
         working-directory: buwiz-forms/nsh
-        run: |
-          failed=()
-          ran=0
-          while IFS= read -r file; do
-            ran=$((ran + 1))
-            just test "$file" || failed+=("$file")
-          done < <(find . -mindepth 1 \( -path ./verify -o -name node_modules -o -name target -o -name '.*' \) -prune -o \( -name '*.test.ts' -o -name '*.test.tsx' \) -print | LC_ALL=C sort | awk -v n="$SHARDS" -v i="$SHARD" '(NR - 1) % n == i')
-          echo "shard $SHARD of $SHARDS ran $ran test files"
-          [ "$ran" -gt 0 ] || { echo "::error::this shard found no test files"; exit 1; }
-          if [ ${#failed[@]} -gt 0 ]; then
-            echo "failed in:"
-            printf '  %s\n' "${failed[@]}"
-            exit 1
-          fi
+        run: bash ../scripts/nsh_screen_tests.sh
 
   # The same app on Windows (the NSH Win32 backend), as far as a machine without a display reaches: the CLI built from
   # the pin, the crate and its TSX types, the bundle, and the Windows development host `nsh run --target windows`
@@ -458,13 +481,14 @@ jobs:
   # Windows since #228, so a test's scratch database opens). Real windows are not run here yet
   # (docs/platforms/nsh-windows-handover.md, W11 onwards).
   nsh-windows:
-    # A pull request splits the headless TSX test files over three runners, as the macOS job does; shard 0 also runs
-    # the type check, the build, the development host and the Rust tests. main and manual runs use one runner.
+    # Sharded as the macOS job is; the lead shard also builds the development host.
     name: NSH app (Windows, shard ${{ matrix.shard }})
+    needs: plan
+    if: needs.plan.outputs.nsh_windows == 'true'
     strategy:
       fail-fast: false
       matrix:
-        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[0, 1, 2]' || '[0]') }}
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     # Pinned, as the other jobs are: the steps below name paths of this image (Strawberry Perl, LLVM). windows-2025 is
     # Windows Server 2025 with Visual Studio 2026, the image the job was first verified on.
     runs-on: windows-2025
@@ -486,7 +510,12 @@ jobs:
       BIR_AUTH_BYPASS: "1"
       BIR_SFTP_DRY_RUN: "1"
       SHARD: ${{ matrix.shard }}
-      SHARDS: ${{ github.event_name == 'pull_request' && 3 || 1 }}
+      SHARDS: ${{ needs.plan.outputs.shard_count }}
+      LEAD_SHARD: ${{ matrix.shard == fromJSON(needs.plan.outputs.lead_shard) }}
+      SUITE_BUILD: ${{ needs.plan.outputs.build }}
+      SUITE_RUST: ${{ needs.plan.outputs.nsh_rust }}
+      SUITE_SCREENS: ${{ needs.plan.outputs.screens }}
+      SCREENS_FILTER: ${{ needs.plan.outputs.screens_filter }}
     steps:
       - name: Check out buwiz-forms
         uses: actions/checkout@v4
@@ -542,9 +571,10 @@ jobs:
         shell: pwsh
         run: cargo install --locked --path crates/nsh-cli --root "$HOME\BuwizNsh\tools"
 
-      # Only shard 0 saves: the shards of a new pin's first run all build it, and one copy is enough.
+      # Only main's lead shard saves: the shards of a new pin's first run all build it, and one copy is enough. A
+      # branch's copy would be readable by that branch alone and take room from main's caches.
       - name: Save the nsh command line
-        if: steps.nsh-cli.outputs.cache-hit != 'true' && matrix.shard == 0
+        if: steps.nsh-cli.outputs.cache-hit != 'true' && env.LEAD_SHARD == 'true' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v4
         with:
           path: ~/BuwizNsh/tools
@@ -557,19 +587,19 @@ jobs:
           & "$HOME\BuwizNsh\tools\bin\nsh.exe" -V
 
       - name: nsh check (the crate, then the TSX types)
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true'
         working-directory: buwiz-forms/nsh
         shell: pwsh
         run: nsh check -v
 
       - name: nsh build
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_BUILD == 'true'
         working-directory: buwiz-forms/nsh
         shell: pwsh
         run: nsh build
 
       - name: Rust tests of the app's crate
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_RUST == 'true'
         working-directory: buwiz-forms/nsh
         shell: pwsh
         run: cargo test --manifest-path Cargo.toml --no-fail-fast
@@ -577,7 +607,7 @@ jobs:
       # The agent build, as the macOS and Linux jobs check it: the control plane against this NSH, the two data-plane
       # tests, and one nsh-testing in the generated host (cargo tree stops with "ambiguous" on two).
       - name: The agent feature builds, with one NSH in the host
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_BUILD == 'true'
         working-directory: buwiz-forms/nsh
         shell: pwsh
         run: |
@@ -592,7 +622,7 @@ jobs:
       # The host `nsh run --target windows` builds, from the workspace nsh check generated in .nsh/rust: it links NSH's
       # Win32 backend with its development features (the dev and agent code a plain build leaves out).
       - name: Build the Windows development host
-        if: matrix.shard == 0
+        if: env.LEAD_SHARD == 'true' && env.SUITE_BUILD == 'true'
         working-directory: buwiz-forms/nsh
         shell: pwsh
         run: cargo build --manifest-path .nsh/rust/Cargo.toml -p nsh-app-nsh-app-ebirforms-windows-host
@@ -601,11 +631,20 @@ jobs:
       # real-window verifiers that need the owner's data copy, so it is left out). Shards: file k of the list in
       # ordinal order (from 0) belongs to shard k % SHARDS, so every file is in exactly one shard.
       - name: Headless TSX tests, file by file
+        if: env.SUITE_SCREENS == 'true'
         working-directory: buwiz-forms/nsh
         shell: pwsh
         run: |
           [string[]]$files = git ls-files -- '*.test.ts' '*.test.tsx' | Where-Object { $_ -notlike 'verify/*' }
           [Array]::Sort($files, [StringComparer]::Ordinal)
+          # The manual run's filter, before sharding, as scripts/nsh_screen_tests.sh reads it: a glob (* also crosses
+          # folders) or a plain file or folder path.
+          $filter = $env:SCREENS_FILTER
+          if ($filter) {
+            if ($filter -match '[*?\[]') { $files = @($files | Where-Object { $_ -like $filter }) }
+            else { $path = $filter.TrimEnd('/'); $files = @($files | Where-Object { $_ -eq $path -or $_ -like "$path/*" }) }
+          }
+          if ($files.Count -eq 0) { throw "no test files$(if ($filter) { " match $filter" })" }
           $failed = @()
           $ran = 0
           for ($k = 0; $k -lt $files.Count; $k++) {
@@ -614,8 +653,8 @@ jobs:
             nsh test "./$($files[$k])"
             if ($LASTEXITCODE -ne 0) { $failed += $files[$k] }
           }
-          "shard $env:SHARD of $env:SHARDS ran $ran test files"
-          if ($ran -eq 0) { throw "this shard found no test files" }
+          "shard $env:SHARD of $env:SHARDS ran $ran of $($files.Count) test files"
+          if ($ran -eq 0 -and -not $filter) { throw "this shard found no test files" }
           if ($failed.Count -gt 0) {
             "failed in:"
             $failed | ForEach-Object { "  $_" }
@@ -627,6 +666,8 @@ jobs:
   # system packages are a guess from the existing CI job's list and the dbus crate the keychain code pulls in.
   core-plain-test:
     name: bir-core and bir-app-api, plain SQLite
+    needs: plan
+    if: needs.plan.outputs.core_plain == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -654,3 +695,15 @@ jobs:
 
       - name: Plain-SQLite tests
         run: just core-plain-test
+
+  # The Linux release packages (deb, rpm and the rest, x64 and arm64), built and smoke-tested by release-linux.yml,
+  # which pull requests no longer start. Here in the nightly run and a manual run whose suites include `build` (Linux
+  # chosen). An empty tag gives the version <app>-pr, as a manual run of that workflow does; no secrets are passed, and
+  # the workflow only keeps workflow artifacts: release.yml is what publishes.
+  linux-packages:
+    name: Linux release packages
+    needs: plan
+    if: needs.plan.outputs.linux_packages == 'true'
+    uses: ./.github/workflows/release-linux.yml
+    with:
+      tag: ""

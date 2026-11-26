@@ -12,7 +12,7 @@ fn row(date: &str, bank: &str, reference: &str, tax: f64, penalty: f64) -> Form1
     }
 }
 
-fn sample_1604e() -> Form1604eDraft {
+pub(crate) fn sample_1604e() -> Form1604eDraft {
     let mut draft = Form1604eDraft::new_from_profile(&dummy_profile("1604E", "Corporation"), 2025);
     draft.agent_category = Form1604eAgentCategory::Private;
     draft.top_withholding_agent = Some(false);

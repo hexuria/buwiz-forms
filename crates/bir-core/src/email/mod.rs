@@ -16,7 +16,7 @@ pub use auth_oauth::{
 pub use auth_password::AppPasswordAuth;
 pub use fetcher::{
     ImapAuthenticator, fetch_and_process_emails, fetch_and_process_emails_for_address,
-    test_connection,
+    fetch_and_process_emails_for_address_until, test_connection,
 };
 pub use inbox::{
     EmailPollPlan, plan_email_poll_for_address, resolve_inbox_fetch_profile,

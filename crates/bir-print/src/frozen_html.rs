@@ -2706,16 +2706,18 @@ fn fill_text_input(
         // digits into the slots before the point and put the two centavo
         // digits after it. Spreading the text left-to-right put `0.00` as
         // `0 . 0 0` from the first box (#print-audit decimal mapping).
-        if let Some(writes) = money_comb_values(tags, &ordered, print) {
-            for (offset, (index, ch)) in writes.into_iter().enumerate() {
-                let writer = (via_cell && offset == 0).then_some(print);
-                replacements.push((
-                    tags[index].start,
-                    tags[index].end,
-                    set_value(tags[index].tag, &ch, writer),
-                ));
+        if !name.starts_with("derived:") {
+            if let Some(writes) = money_comb_values(tags, &ordered, print) {
+                for (offset, (index, ch)) in writes.into_iter().enumerate() {
+                    let writer = (via_cell && offset == 0).then_some(print);
+                    replacements.push((
+                        tags[index].start,
+                        tags[index].end,
+                        set_value(tags[index].tag, &ch, writer),
+                    ));
+                }
+                return;
             }
-            return;
         }
         let chars: Vec<char> = print.chars().collect();
         // A 14-slot TIN header comb whose last 5 slots are preprinted `00000`
@@ -10619,7 +10621,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1458, "band boxes");
+        assert_eq!(total, 1472, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 
@@ -11045,11 +11047,11 @@ mod donor_estate_print_tests {
             ),
             (
                 "1801-2018",
-                "8989ce9589de1810d146d87bc2afbcb79e925dfc595dfebaf4db4ec6b6fd04dc",
+                "7b44a624c6589e3a0438bc82f857067f84591f10acff80aaddab197108952c1a",
             ),
             (
                 "1800-2018",
-                "cbb7527e975e652ef3039de2849c52bd4491b88ca2af89ebcbbc1fa9d9dd06c4",
+                "670451d9d0b74b7814c936613151f9837d93c08b64b5963a241230346680463e",
             ),
         ] {
             let html = filled_document(slug, &every_join_filled(slug)).unwrap();

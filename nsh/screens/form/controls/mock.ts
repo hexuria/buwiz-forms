@@ -3,7 +3,7 @@
 // on them: typing keeps the text as typed, leaving an amount groups it, leaving a date writes it long, a pick commits at once.
 import type { Accessor, Signal } from "nsh";
 import { signal, windowSize } from "nsh";
-import { formatLongDate, formatMoney, parseTypedDate } from "../../../ui";
+import { formatLongDate, formatMoney, parseTypedDate, TOUCH } from "../../../ui";
 import { BREAK } from "../../../theme/tokens";
 import type { BoxState, ChoiceOption, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "../contract";
 import type { FieldInput } from "./types";
@@ -24,8 +24,8 @@ export function reports() {
 }
 export type Reports = ReturnType<typeof reports>;
 
-/** The phone layout under 600 points wide, as the page decides it. */
-export const narrowNow: Accessor<boolean> = () => windowSize().width < BREAK.phone;
+/** The phone layout, as the page decides it: every touch screen, and a desktop window under 600 points. */
+export const narrowNow: Accessor<boolean> = () => TOUCH || windowSize().width < BREAK.phone;
 
 /** A box's state as its own signals. */
 export interface MockBox {

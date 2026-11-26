@@ -33,7 +33,7 @@ interface Params {
 }
 
 /** A second taxpayer (`Test: switch to the second taxpayer` adds it and switches the frame to it). */
-const OTHER_ROOT = "000111229";
+const OTHER_ROOT = "000111225";
 
 const saved = signal("no pdf yet");
 const read = signal("pdf not read");
@@ -85,7 +85,7 @@ function Demo() {
             testID="px-switch"
             onPress={() => {
               if (!store.taxpayers().some((t) => t.tin_root === OTHER_ROOT)) {
-                store.write("create_taxpayer", { tin_root: "000-111-229", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039" } });
+                store.write("create_taxpayer", { tin_root: "000-111-225", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039" } });
               }
               app.selectTaxpayer(OTHER_ROOT);
             }}

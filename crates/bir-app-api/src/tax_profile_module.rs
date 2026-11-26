@@ -586,6 +586,39 @@ fn revoke_send(arguments: &HostArguments) -> HostResult {
     })
 }
 
+/// The official TIN check digit at the two places a person types a TIN
+/// root in: a taxpayer's creation and the correction of its TIN. The same
+/// check the form pages run (`official_tin_check_code`), with the dev-mode
+/// escape they use. It catches misread and transposed digits, not every
+/// mistake — a permutation that keeps the digit valid passes it.
+///
+/// The sentence is deliberately not the form pages' "You have entered an
+/// incorrect TIN" (the official program's own alert, kept there because the
+/// form pages mirror the official program). Here the filer is not inside a
+/// form: what they need is what to do next, so the sentence says it.
+fn reject_wrong_check_digit(tin_root: &str) -> Result<(), HostError> {
+    // Normalized by the store's own rule (`parse_tin_root` drops dashes and
+    // spaces): a wrong digit is refused however it was spaced. What is not
+    // nine digits even then is the store's own error — "A TIN root is
+    // exactly 9 digits" — which says it more precisely; there is no digit
+    // to check. The reserved admin root fails the digit too, but its own
+    // refusal says why more precisely; leave it to the store.
+    let root = match bir_core::tax_profile::parse_tin_root(tin_root) {
+        Ok(root) => root,
+        Err(_) => return Ok(()),
+    };
+    if root == "000000000"
+        || bir_core::validation::relaxed_dev_mode()
+        || bir_core::validation::official_tin_check_code(&root) == 0
+    {
+        return Ok(());
+    }
+    Err(HostError::new(format!(
+        "TIN {} fails the official check digit. Compare each digit with the registration and type it again.",
+        bir_core::tax_profile::format_tin_root(&root)
+    )))
+}
+
 fn create_taxpayer(arguments: &HostArguments) -> HostResult {
     let input = object_argument(arguments, 0)?;
     let head = input.get("head_office").cloned().unwrap_or(Value::Null);
@@ -599,8 +632,10 @@ fn create_taxpayer(arguments: &HostArguments) -> HostResult {
                 .map_err(|_| HostError::new(format!("`{raw}` is not a date (YYYY-MM-DD)")))
         })
         .transpose()?;
+    let tin_root = optional_string(&input, "tin_root")?.unwrap_or_default();
+    reject_wrong_check_digit(&tin_root)?;
     let new = NewTaxpayer {
-        tin_root: optional_string(&input, "tin_root")?.unwrap_or_default(),
+        tin_root,
         name: optional_string(&input, "name")?.unwrap_or_default(),
         taxpayer_type: taxpayer_type(&input, "taxpayer_type")?.unwrap_or_default(),
         birth_date,
@@ -646,6 +681,7 @@ fn update_taxpayer(arguments: &HostArguments) -> HostResult {
 fn move_taxpayer_tin(arguments: &HostArguments) -> HostResult {
     let old_root = arguments.string(0)?;
     let new_root = arguments.string(1)?;
+    reject_wrong_check_digit(new_root)?;
     with_database(|db| {
         let moved = db
             .move_taxpayer_tin(old_root, new_root)
@@ -1642,6 +1678,86 @@ mod tests {
         .unwrap()
     }
 
+    fn create_with(tin_root: &str) -> Result<Value, String> {
+        use_ephemeral_database();
+        call(
+            create_taxpayer,
+            vec![
+                json!({"tin_root": tin_root, "name": "Juana Santos", "taxpayer_type": "Individual", "head_office": {}}),
+            ],
+        )
+    }
+
+    #[test]
+    fn a_tin_that_passes_the_official_check_digit_is_created() {
+        assert!(
+            create_with("000-123-453").is_ok(),
+            "{:?}",
+            create_with("000-123-453")
+        );
+    }
+
+    #[test]
+    fn a_tin_one_digit_wrong_is_refused_with_what_to_do() {
+        let err = create_with("000-123-454").unwrap_err();
+        assert!(
+            err.contains("fails the official check digit") && err.contains("type it again"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_tin_two_digits_swapped_is_refused() {
+        // 000-123-453 with two neighboring digits transposed.
+        assert!(create_with("000-123-543").is_err());
+    }
+
+    #[test]
+    fn a_moved_digit_tin_the_burst_produced_passes_the_check_digit() {
+        // 001-234-530 is what fast typing stored for 000-123-453 (one digit
+        // moved to the end): a permutation, and a permutation can keep the
+        // check digit valid. Nobody should believe this check catches the
+        // burst; it catches misread and transposed digits only.
+        assert!(create_with("001-234-530").is_ok());
+    }
+
+    #[test]
+    fn a_wrong_digit_spaced_like_the_store_allows_is_still_refused() {
+        // The store's own normalization drops spaces as well as dashes, so
+        // the check sees the same nine digits however they were spaced.
+        for typed in ["000 123 454", " 000123454 ", "000-123 454"] {
+            let err = create_with(typed).unwrap_err();
+            assert!(
+                err.contains("fails the official check digit"),
+                "{typed}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn what_is_not_nine_digits_is_the_stores_own_refusal() {
+        // A letter or a wrong length never reaches the digit check: the
+        // store's parse already says what is wrong, more precisely.
+        for typed in ["00012345X", "00012345", "0001234530"] {
+            let err = create_with(typed).unwrap_err();
+            assert!(err.contains("exactly 9 digits"), "{typed}: {err}");
+            assert!(!err.contains("check digit"), "{typed}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_tin_correction_checks_the_check_digit_too() {
+        setup();
+        let wrong = call(move_taxpayer_tin, vec![json!(ROOT), json!("000123454")]);
+        assert!(
+            wrong
+                .unwrap_err()
+                .contains("fails the official check digit")
+        );
+        let right = ok(move_taxpayer_tin, vec![json!(ROOT), json!("000123453")]);
+        assert_eq!(right["tin_root"], "000123453");
+    }
+
     #[test]
     fn create_taxpayer_returns_the_taxpayer_with_its_head_office() {
         let created = setup();
@@ -1708,9 +1824,9 @@ mod tests {
     fn move_taxpayer_tin_moves_and_refuses_a_used_tin() {
         setup();
         add_branch("00001");
-        let moved = ok(move_taxpayer_tin, vec![json!(ROOT), json!("987-654-320")]);
-        assert_eq!(moved["tin_root"], "987654320");
-        assert_eq!(moved["branches"][1]["tin"], "98765432000001");
+        let moved = ok(move_taxpayer_tin, vec![json!(ROOT), json!("987-654-321")]);
+        assert_eq!(moved["tin_root"], "987654321");
+        assert_eq!(moved["branches"][1]["tin"], "98765432100001");
         assert_eq!(ok(get_taxpayer, vec![json!(ROOT)]), Value::Null);
 
         ok(
@@ -1720,7 +1836,7 @@ mod tests {
                 "head_office": {"rdo_code": "1", "registered_address": "a", "zip_code": "1", "phone": "1", "email": "a@example.com"}}),
             ],
         );
-        let refused = call(move_taxpayer_tin, vec![json!("987654320"), json!(ROOT)]);
+        let refused = call(move_taxpayer_tin, vec![json!("987654321"), json!(ROOT)]);
         assert_eq!(
             refused.unwrap_err(),
             "TIN 123-456-788 is already used by Sample Holdings Inc"
@@ -1749,9 +1865,9 @@ mod tests {
             Ok(())
         })
         .unwrap();
-        ok(move_taxpayer_tin, vec![json!(ROOT), json!("987654320")]);
+        ok(move_taxpayer_tin, vec![json!(ROOT), json!("987654321")]);
         let admin_root = with_database(|db| Ok(db.get_setting("admin_tin_root").unwrap())).unwrap();
-        assert_eq!(admin_root.as_deref(), Some("987654320"));
+        assert_eq!(admin_root.as_deref(), Some("987654321"));
     }
 
     #[test]

@@ -3,7 +3,8 @@
 import { expect, test } from "nsh/test";
 import {
   addressMeta, afterApply, agentMeta, allowedYears, defaultAddYear, emptyNewTaxpayer, factError, factsMeta, formSub, formsSavedText,
-  hiddenFactsText, inboxMeta, newTaxpayerErrors, newTaxpayerProblems, parseAtcCodes, pastDateError, realDate, replaceSentence, schedule,
+  futureDateNote, hiddenFactsText, inboxMeta, newTaxpayerErrors, newTaxpayerProblems, parseAtcCodes, pastDateError, profileDateProblem,
+  profileDateShown, profileDateStored, realDate, replaceSentence, schedule,
   searchText, shownErrors, startHint, startYear, templateCounts, templateErrorText, trackingLine, yearAddedText,
 } from "./logic";
 
@@ -13,9 +14,35 @@ test("dates: a real YYYY-MM-DD, not after today", () => {
   expect(realDate("2024-02-29")).toBe(true);
   expect(realDate("2025-02-29")).toBe(false);
   expect(pastDateError("", NOW)).toBeNull();
-  expect(pastDateError("1990-13-01", NOW)).toBe("Type the date as YYYY-MM-DD, like 1990-05-17.");
+  // The form page's sentences: the profile's boxes are the form's date boxes.
+  expect(pastDateError("1990-13-01", NOW)).toBe("Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.");
+  expect(pastDateError("02/30/1990", NOW)).toBe("Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.");
+  expect(pastDateError("08/17/88", NOW)).toBe("Type the four-digit year, for example 08/17/1988.");
   expect(pastDateError("2026-11-16", NOW)).toBe("That date is in the future.");
   expect(pastDateError("2026-11-15", NOW)).toBeNull();
+});
+
+test("profile dates: MM/DD/YYYY in the box, ISO in the store, converted at the box's edge", () => {
+  expect(profileDateStored("05/17/1990")).toBe("1990-05-17");
+  expect(profileDateStored("05171990")).toBe("1990-05-17");
+  expect(profileDateStored("May 17, 1990")).toBe("1990-05-17");
+  expect(profileDateStored("1990-05-17")).toBe("1990-05-17");
+  expect(profileDateStored("")).toBe("");
+  // Not a day: kept as typed, so Save refuses it with the box's sentence.
+  expect(profileDateStored("02/30/1990")).toBe("02/30/1990");
+  expect(profileDateShown("1990-05-17")).toBe("05/17/1990");
+  expect(profileDateShown("")).toBe("");
+  expect(profileDateShown("02/30/1990")).toBe("02/30/1990");
+});
+
+test("profile dates: a day after today is refused, in the sheet and on leaving the box", () => {
+  expect(profileDateProblem("", "A birth date", NOW)).toBe("");
+  expect(profileDateProblem("11/15/2026", "A birth date", NOW)).toBe("");
+  expect(profileDateProblem("11/16/2026", "A birth date", NOW)).toBe("A birth date can't be in the future.");
+  expect(profileDateProblem("02/30/1990", "A birth date", NOW)).toBe("Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.");
+  expect(profileDateProblem("08/17/88", "A birth date", NOW)).toBe("Type the four-digit year, for example 08/17/1988.");
+  expect(futureDateNote("A birth date", "1990-05-17")).toBe("A birth date can't be in the future. The box kept 05/17/1990.");
+  expect(futureDateNote("A business start date", "")).toBe("A business start date can't be in the future. The box stays empty.");
 });
 
 test("ATC codes and field errors", () => {

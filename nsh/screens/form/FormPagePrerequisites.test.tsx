@@ -51,8 +51,18 @@ for (const look of [{}, { width: 1440, height: 900, platform: "macos" as const }
     expect(app.texts().join(" ")).toContain("annual income-tax election for 2026");
     await app.press("id:fp-set-profile-business_start_date");
     await app.waitFor("id:tp-branch-business_start_date");
-    await app.clear("id:tp-branch-business_start_date");
-    await app.type("id:tp-branch-business_start_date", "2026-01-01");
+    if (Object.keys(look).length) {
+      // Desktop: the form's date box, with the keys in it.
+      await app.clear("id:tp-branch-business_start_date");
+      await app.type("id:tp-branch-business_start_date", "01/01/2026");
+    } else {
+      // Phone: the link opens the date's sheet by itself (DateTouchField autoOpen); the date is typed there and taken on Done.
+      await app.waitFor("id:tp-branch-business_start_date-sheet-input");
+      await app.clear("id:tp-branch-business_start_date-sheet-input");
+      await app.type("id:tp-branch-business_start_date-sheet-input", "01/01/2026");
+      await app.press("id:tp-branch-business_start_date-sheet-done");
+      await app.waitFor("id:tp-branch-business_start_date-sheet-input", { state: "gone" });
+    }
     await app.press("id:tp-branch-save");
     await app.waitFor("id:fp-set-profile-income_tax_election");
     expect(app.shows("id:fp-set-profile-business_start_date")).toBe(false);

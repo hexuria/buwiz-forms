@@ -567,6 +567,7 @@ impl Form1707ADraft {
                 "frm1707Av2021:txtI1YearEndYear",
             ],
         );
+        super::print_map::match_upload_case("1707a-v2021", &mut fields, None);
         fields
     }
 

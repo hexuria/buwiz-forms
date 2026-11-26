@@ -2,7 +2,7 @@
 // Screens import from here ("../../ui"), never from nsh/base. The gallery of every part: screens/base/KitPage.tsx.
 export { AppButton, type AppButtonProps, type ButtonVariant, IconButton, type IconButtonProps, NavRow, type NavRowProps } from "./buttons";
 export {
-  Checkbox, CheckboxLabel, type CheckboxProps, ComboField, type ComboFieldProps, Dropdown, type DropdownOption, type DropdownProps,
+  Checkbox, CheckboxLabel, CheckRow, type CheckboxProps, ComboField, type ComboFieldProps, Dropdown, type DropdownOption, type DropdownProps,
   MultiCombo, type MultiComboOption, type MultiComboProps, RadioGroup, type RadioGroupProps, type RadioOption, Segmented,
   type SegmentedProps, type SegmentOption, Switch, type SwitchProps,
 } from "./choice";
@@ -18,12 +18,12 @@ export { PressCard, type PressCardProps, PressCell, type PressCellProps } from "
 export { ShortcutRecorder, type ShortcutRecorderProps } from "./shortcut";
 export {
   Dialog, type DialogProps, Disclosure, DisclosureGroup, type DisclosureProps, dismissToast, Menu, MenuItem, type MenuItemProps,
-  type MenuProps, MenuSeparator, Popover, type PopoverProps, Sheet, type SheetProps, SidePanel, type SidePanelProps, toast,
+  type MenuProps, MenuSeparator, Popover, type PopoverProps, Sheet, sheetBodyRoom, type SheetProps, SidePanel, type SidePanelProps, toast,
   Toaster, type ToastOptions, Tooltip, undoToast,
 } from "./layers";
-export { Card, EmptyRow, ListGroup, ListRow, NameCell, PageHeader, type PageHeaderProps, SettingRow, type TabItem, Tabs } from "./lists";
+export { Card, ChoiceRow, type ChoiceRowProps, EmptyRow, ListGroup, ListRow, NameCell, PageHeader, type PageHeaderProps, SettingRow, type TabItem, Tabs } from "./lists";
 export { type ChipTone, type PickOption, type ReturnStatus, hueFor, initials } from "./logic";
-export { deviceCopy, TOUCH, type Tone } from "./look";
+export { deviceCopy, phoneLayout, T_H, T_MIN_H, T_MIN_W, T_PX, T_SIZE, tabletRoom, TOUCH, type Tone } from "./look";
 export {
   applyMask, DATE_ERROR, digitsOnly, formatIso, formatLongDate, formatMDY, formatMoney, formatTin, formatTinDigits, moneyPlain,
   parseTypedDate, shownDate, type Ymd,

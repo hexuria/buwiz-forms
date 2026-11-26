@@ -21,6 +21,7 @@ nsh-core = { path = "../../nsh/crates/nsh-core" }
 bir-app-api = { path = "../crates/bir-app-api", default-features = false }
 bir-core = { path = "../crates/bir-core", default-features = false }
 # Object keys keep their order (the host functions rely on it); bir-app-api turns it on, this states it.
+serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tracing = "0.1"
 # Print preview (src/print.rs): the PDF is made from the same sheet as the printer gets; bir-print merges the pages.
@@ -71,7 +72,10 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 # Print preview on Windows (src/print.rs): a hidden WebView2 of the app's own makes the PDF (PrintToPdf) and prints
 # (Print) after the system's print dialog (PrintDlgEx). The versions nsh's Windows backend uses.
 webview2-com = "0.39"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_RemoteDesktop", "Win32_System_Threading", "Win32_UI_Controls_Dialogs", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = ["Foundation", "Security_Credentials_UI", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_RemoteDesktop", "Win32_System_Threading", "Win32_System_WinRT", "Win32_UI_Controls_Dialogs", "Win32_UI_WindowsAndMessaging"] }
+# Windows Hello for "Use this computer's login" (src/os_login/windows.rs): the IAsyncOperation the interop call
+# returns lives in windows-future, which windows 0.62 uses but does not re-export.
+windows-future = "0.3"
 # The window's own control plane on Windows is the plug's, in nsh-gpui-agent-windows; same rev as the other
 # platform crates.
 nsh-gpui-agent-windows = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", optional = true }

@@ -10,7 +10,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = (ROOT / "scripts/setup-android-windows.ps1").read_text(encoding="utf-8")
 ENVRC_BLOCK = SCRIPT[SCRIPT.index("if ($env:ENVRC) {"):SCRIPT.index("$machinePath =")]
-RUNTIME_FUNCTION = SCRIPT[SCRIPT.index('function Test-AndroidRuntime'):SCRIPT.index('$principal =')]
+RUNTIME_FUNCTION = SCRIPT[SCRIPT.index('function Remove-RuntimeLink'):SCRIPT.index('$principal =')]
 RUNTIME_BLOCK = SCRIPT[SCRIPT.index('$variants ='):SCRIPT.index('if ($Run) { &')]
 
 

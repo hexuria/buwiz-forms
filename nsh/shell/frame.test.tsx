@@ -98,7 +98,7 @@ test("desktop: the profile panel switches branch and taxpayer, and the pill foll
   await app.waitUntil(() => Object.keys(app.storage()).some((k) => k.startsWith("redesign.selection@")));
   const selection = Object.entries(app.storage()).find(([k]) => k.startsWith("redesign.selection@"))!;
   expect(JSON.parse(selection[1])).toEqual({ root: "000123453", code: "00001" });
-  await app.press("id:panel-tp-000111229");
+  await app.press("id:panel-tp-000111225");
   await app.waitFor("text:Sample Trading Corp");
   await app.waitFor("text:Switched to Sample Trading Corp");
 });
@@ -268,9 +268,9 @@ test("desktop: filing events become notifications: an unread dot, the list, Mark
   expect(app.texts()).toContain("Confirmation email received · Juana Santos");
   // A mock-relay send never reaches BIR, so it does not wait for BIR's email.
   expect(app.texts()).toContain("Sent to the mock relay, not to BIR: no BIR email will come · Juana Santos");
-  // A send the worker only simulated (a dry run) is no submission: it finished a dry run and sent nothing.
-  expect(app.texts()).toContain("2551Q for Q2 2025: dry run finished");
-  expect(app.texts()).toContain("Nothing was sent to the BIR · Juana Santos");
+  // A send the worker only simulated (a dry run) is no submission: it says the host's one sentence for a test send.
+  expect(app.texts()).toContain("2551Q for Q2 2025: Test send. Nothing reached the BIR.");
+  expect(app.texts()).not.toContain("2551Q for Q2 2025: dry run finished");
   expect(app.texts()).not.toContain("2551Q for Q2 2025 was submitted");
   expect(app.shows("id:notif-unread-return:9001:submitted")).toBe(true);
   expect(app.shows("id:notif-unread-return:9002:confirmed")).toBe(true);

@@ -6,7 +6,7 @@ use bir_core::forms::form_1707::{
 };
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_1707() -> Form1707Draft {
+pub(crate) fn sample_1707() -> Form1707Draft {
     let mut draft = Form1707Draft::new_from_profile(&dummy_profile("1707", "Individual"), 2025, 1);
     draft.transaction_month = 6;
     draft.transaction_day = 30;
@@ -85,7 +85,7 @@ fn form_1707_sample_payload_is_current() {
 
 /// Schedules 2 and 3 past row D: the "More" pop-ups. The layout is the
 /// generated one extended by `Form1707Draft::official_layout`.
-fn sample_1707_with_popups() -> Form1707Draft {
+pub(crate) fn sample_1707_with_popups() -> Form1707Draft {
     let mut draft = sample_1707();
     draft.transaction_month = 7;
     draft.transaction_day = 15;
@@ -132,7 +132,7 @@ fn form_1707_sample_with_popups_is_current() {
 
 /// More than ten rows in both schedules: the pop-ups have no row limit, so
 /// every row past row D is written as D.1, D.2, … up to D.11 / D.9.
-fn sample_1707_many_rows() -> Form1707Draft {
+pub(crate) fn sample_1707_many_rows() -> Form1707Draft {
     let mut draft = sample_1707();
     draft.transaction_month = 8;
     draft.transaction_day = 29;

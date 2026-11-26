@@ -1302,11 +1302,8 @@ fn pr8_form_1702ex_other_credits_and_schedule_rows_take_entries() {
     let noted = strings(&opened["notes_always"]);
     for key in &attached {
         assert_eq!(inventory.get(key), Some(&true), "{key} is shut at load");
-        assert_eq!(
-            opened["locks"][key],
-            rows_annual_corporate::EX_ATTACHED_LOCK,
-            "{key}"
-        );
+        let expected_lock = rows_annual_corporate::ex_attached_lock(key).expect(key);
+        assert_eq!(opened["locks"][key], expected_lock, "{key}");
         assert_eq!(
             opened["lock_notes"][key], "Filled from the attached schedule.",
             "{key}"
@@ -1322,10 +1319,25 @@ fn pr8_form_1702ex_other_credits_and_schedule_rows_take_entries() {
         let refused = fill("1702EX", &opened["draft"], json!({ key: "100" }));
         assert_eq!(
             refused["rejected"][key],
-            format!("`{key}` is {}", rows_annual_corporate::EX_ATTACHED_LOCK),
+            format!("`{key}` is {expected_lock}"),
             "{key}"
         );
         assert_eq!(refused["draft"], opened["draft"], "{key}");
+        // Assistant `form.fill` refuses with the same schedule-naming reason,
+        // never silently leaving 0.00.
+        let mut agent_draft = opened["draft"].clone();
+        let agent_err = bir_core::forms::agent::fill(
+            bir_core::forms::agent::AgentFormKind::from_code("1702EX").unwrap(),
+            &mut agent_draft,
+            key,
+            &json!("100"),
+            None,
+        )
+        .expect_err(key);
+        assert!(
+            agent_err.contains(expected_lock),
+            "{key}: expected `{expected_lock}` in `{agent_err}`"
+        );
     }
     let filled = fill(
         "1702EX",
@@ -1453,19 +1465,31 @@ fn p4_8_a_stored_1702ex_keeps_filing_its_shut_rows() {
 fn pr8_form_1702ex_folded_lines_say_what_fills_them() {
     setup();
     let opened = open("1702EX", 0);
-    for stem in [
-        "txtPg3Pt6I17OthersIDesc",
-        "txtPg3Pt6S2I4Description",
-        "txtPg3Pt6S3I3NonDeductExpenseOtherIncomeDesc",
-        "txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
-        "txtPg3Pt6S3I8SpecialDeductDesc",
+    for (stem, expected_note) in [
+        (
+            "txtPg3Pt6I17OthersIDesc",
+            "Filled from the attached schedule.",
+        ),
+        (
+            "txtPg3Pt6S2I4Description",
+            "Filled from the attached schedule.",
+        ),
+        (
+            "txtPg3Pt6S3I3NonDeductExpenseOtherIncomeDesc",
+            NOTE_COMPUTED,
+        ),
+        (
+            "txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
+            NOTE_COMPUTED,
+        ),
+        ("txtPg3Pt6S3I8SpecialDeductDesc", NOTE_COMPUTED),
     ] {
         assert_eq!(
             opened["waits"][ex(stem)],
             rows_annual_corporate::EX_FOLDED_WAITS,
             "{stem}"
         );
-        assert_eq!(opened["lock_notes"][ex(stem)], NOTE_COMPUTED, "{stem}");
+        assert_eq!(opened["lock_notes"][ex(stem)], expected_note, "{stem}");
     }
     let filled = fill(
         "1702EX",
@@ -3024,9 +3048,23 @@ fn pr8_form_1702mx_others_rows_stay_as_the_runtime_keeps_them() {
     }
     for key in &shut {
         assert_eq!(inventory.get(key), Some(&true), "{key} is shut at load");
-        assert!(opened["locks"].get(key).is_some(), "{key} stays locked");
+        let expected_lock = rows_annual_corporate::mx_attached_lock(key).expect(key);
+        assert_eq!(opened["locks"][key], expected_lock, "{key} stays locked");
         let refused = fill("1702MX", &opened["draft"], json!({ key: "100" }));
         assert!(refused["rejected"].get(key).is_some(), "{key}");
+        let mut agent_draft = opened["draft"].clone();
+        let agent_err = agent::fill(
+            AgentFormKind::from_code("1702MX").unwrap(),
+            &mut agent_draft,
+            key,
+            &json!("100"),
+            None,
+        )
+        .expect_err(key);
+        assert!(
+            agent_err.contains(expected_lock),
+            "{key}: expected `{expected_lock}` in `{agent_err}`"
+        );
     }
     for key in [
         "txtPg3Sc5Itm17aA",
@@ -3613,4 +3651,43 @@ fn p5_2_a_stored_2019_return_says_what_changed() {
     );
     assert!(said.contains(&no_date), "{said:#?}");
     assert!(said.iter().all(|m| !m.contains("four years")), "{said:#?}");
+}
+
+#[test]
+fn agent_fill_1702mx_writes_nolco_schedules_7_and_8() {
+    setup();
+    let kind = AgentFormKind::from_code("1702MX").unwrap();
+    let opened = open("1702MX", 0);
+    let mut draft = opened["draft"].clone();
+    // Schedule 7.1 (Regular NOLCO) rows 4-6 require Itemized Deduction so
+    // recompute does not clear them (methodOfDeductionsOptional).
+    draft["deduction_method"] = json!("Itemized");
+    for (key, value) in [
+        ("frm1702MX:txtPg3IShed7_4Year", "2023"),
+        ("frm1702MX:txtPg3IShed7_4A", "100000"),
+        ("frm1702MX:txtPg3IShed7_4B", "20000"),
+        ("frm1702MX:txtPg3IShed7_4C", "10000"),
+        ("frm1702MX:txtPg3IShed7_4D", "50000"),
+        ("frm1702MX:txtPg3IShed8_4Year", "2023"),
+        ("frm1702MX:txtPg4IShed8_4A", "40000"),
+        ("frm1702MX:txtPg4IShed8_4B", "5000"),
+        ("frm1702MX:txtPg4IShed8_4C", "0"),
+        ("frm1702MX:txtPg4IShed8_4D", "15000"),
+    ] {
+        agent::fill(kind, &mut draft, key, &json!(value), None).unwrap();
+    }
+    agent::compute(kind, &mut draft).unwrap();
+    let map = agent::field_map(kind, &draft).unwrap();
+    assert_eq!(map["frm1702MX:txtPg3IShed7_4A"], "100,000.00");
+    assert_eq!(map["frm1702MX:txtPg3IShed7_4B"], "20,000.00");
+    assert_eq!(map["frm1702MX:txtPg3IShed7_4C"], "10,000.00");
+    assert_eq!(map["frm1702MX:txtPg3IShed7_4D"], "50,000.00");
+    assert_eq!(map["frm1702MX:txtPg3IShed7_4E"], "20,000");
+    assert_eq!(map["frm1702MX:txtPg3IShed78D"], "50,000");
+    assert_eq!(map["frm1702MX:txtPg2Sc2It10C"], "50000");
+    assert_eq!(map["frm1702MX:txtPg4IShed8_4A"], "40,000.00");
+    assert_eq!(map["frm1702MX:txtPg4IShed8_4D"], "15,000.00");
+    assert_eq!(map["frm1702MX:txtPg4IShed8_4E"], "20,000");
+    assert_eq!(map["frm1702MX:txtPg3IShed88D"], "15,000");
+    assert_eq!(map["frm1702MX:txtPg2Sc2It10B"], "15000");
 }

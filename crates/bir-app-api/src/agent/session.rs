@@ -518,9 +518,12 @@ impl Session {
         let profile = load_profile(&db, &tin, year)?;
         let mut draft =
             crate::screen_form_module::load_draft(&db, kind, &profile, year, period, false, None)?;
-        if agent::identity(kind, &draft)?.status == FilingStatus::Draft {
+        let status = agent::identity(kind, &draft)?.status;
+        if status == FilingStatus::Draft {
             agent::save_draft(kind, &db, &mut draft)?;
         }
+        let facts = stored_send_facts(&db, draft.get("id").and_then(Value::as_i64))?;
+        let status = facts.status.unwrap_or(status);
         drop(db);
         self.selected_tin = Some(tin.clone());
         self.open = Some(OpenForm {
@@ -547,6 +550,9 @@ impl Session {
             "year": year,
             "period": period,
             "tin": tin,
+            "status": format!("{status:?}"),
+            "dry_run": facts.dry_run,
+            "send": facts.send,
         })))
     }
 
@@ -578,10 +584,19 @@ impl Session {
             }
         }
         let questions = def.boxes.iter().filter(|entry| entry.is_question()).count();
-        let status = agent::identity(open.kind, &open.draft)?.status;
+        let facts = stored_send_facts(
+            &*self.lock_db()?,
+            open.draft.get("id").and_then(Value::as_i64),
+        )?;
+        let status = match facts.status {
+            Some(status) => status,
+            None => agent::identity(open.kind, &open.draft)?.status,
+        };
         Ok(DispatchResult::json(json!({
             "form": open.kind.form_code(),
             "status": format!("{status:?}"),
+            "dry_run": facts.dry_run,
+            "send": facts.send,
             "id": open.draft.get("id").cloned().unwrap_or(Value::Null),
             "boxes": boxes,
             "read_only": questions.saturating_sub(boxes.len()),
@@ -635,6 +650,7 @@ impl Session {
         let (forgot, kept_answers) = forget_unanswered(kind, &mut draft, args, &fields)?;
         refused.extend(kept_answers);
         let mut chosen = BTreeMap::new();
+        let mut pending: Vec<(String, Value)> = Vec::new();
         for (key, value) in &fields {
             if sources
                 .get(key)
@@ -644,12 +660,45 @@ impl Session {
                 kept.push(key.clone());
                 continue;
             }
-            if let Err(why) = agent::fill(kind, &mut draft, key, value, Some(&from_profile)) {
-                refused.insert(key.clone(), Value::String(why));
-                continue;
+            pending.push((key.clone(), value.clone()));
+        }
+        // Enforce the form page's gates (`screen_form_module::page_gate_refusal`)
+        // using the same reviewed reason a person sees. Defer gated keys until
+        // earlier/sibling answers in the same call have been applied and computed
+        // so opening an answer and filling its dependent box in one call works
+        // regardless of key order.
+        loop {
+            let mut deferred: Vec<(String, Value, String)> = Vec::new();
+            let mut progressed = false;
+            for (key, value) in pending {
+                if let Some(reason) =
+                    crate::screen_form_module::page_gate_refusal(kind, &draft, &key, &value)
+                {
+                    deferred.push((key, value, reason));
+                    continue;
+                }
+                if let Err(why) = agent::fill(kind, &mut draft, &key, &value, Some(&from_profile)) {
+                    refused.insert(key, Value::String(why));
+                    continue;
+                }
+                note_choice(kind, def, &key, &value, &mut chosen);
+                filled.push(key);
+                progressed = true;
             }
-            note_choice(kind, def, key, value, &mut chosen);
-            filled.push(key.clone());
+            if deferred.is_empty() {
+                break;
+            }
+            if !progressed {
+                for (key, _, reason) in deferred {
+                    refused.insert(key, Value::String(reason));
+                }
+                break;
+            }
+            agent::compute(kind, &mut draft)?;
+            pending = deferred
+                .into_iter()
+                .map(|(key, value, _)| (key, value))
+                .collect();
         }
         agent::compute(kind, &mut draft)?;
         let map = agent::field_map(kind, &draft)?;
@@ -1116,17 +1165,20 @@ impl Session {
         let past_returns: Vec<Value> = drafts
             .into_iter()
             .map(|summary| {
-                json!({
+                let facts = stored_send_facts(&db, Some(summary.id))?;
+                Ok(json!({
                     "kind": "saved_return",
                     "form": summary.form_code,
                     "year": summary.taxable_year,
                     "quarter": summary.quarter,
                     "month": summary.month,
                     "status": format!("{:?}", summary.status),
+                    "dry_run": facts.dry_run,
+                    "send": facts.send,
                     "updated_at": summary.updated_at,
-                })
+                }))
             })
-            .collect();
+            .collect::<Result<_, String>>()?;
         let submissions = db
             .list_submissions_for_tin(&tin)
             .map_err(|error| error.to_string())?;
@@ -1982,21 +2034,88 @@ pub fn send_draft(db: &Database, kind: AgentFormKind, draft: &mut Value) -> Resu
         }));
     }
     let id = queue_validated(kind, db, draft)?;
-    let dry = bir_core::transport::is_sftp_dry_run();
-    Ok(json!({
+    Ok(queued_answer(
+        &code,
+        id,
+        bir_core::transport::sends_through_buwiz(),
+        bir_core::transport::is_sftp_dry_run(),
+    ))
+}
+
+/// What `form.send` says of a return it queued, by where the send goes. Through the Buwiz relay the server decides
+/// whether it is a real send or a test send (a test TIN), so `dry_run` is unknown (null) until it is sent; the agent
+/// reads it then from `form.open` (`dry_run`, `send`). Otherwise this build's dry-run setting says it.
+fn queued_answer(code: &str, id: i64, through_buwiz: bool, dry_run: bool) -> Value {
+    let (dry_run, message) = if through_buwiz {
+        (
+            Value::Null,
+            "Queued. It goes to the BIR through the Buwiz relay; whether it is a real send or a test send is known once it is sent: open the form again (form.open) for `dry_run` and `send`.",
+        )
+    } else if dry_run {
+        (
+            json!(true),
+            "Queued. This build is a dry run: nothing is sent to BIR.",
+        )
+    } else {
+        (json!(false), "Queued for upload from this computer.")
+    };
+    json!({
         "ok": true,
         "status": "queued",
         "queued": true,
         "filed": false,
-        "dry_run": dry,
+        "dry_run": dry_run,
         "form": code,
         "id": id,
-        "message": if dry {
-            "Queued. This build is a dry run: nothing is sent to BIR."
-        } else {
-            "Queued for upload from this computer."
-        },
-    }))
+        "message": message,
+    })
+}
+
+/// What the agent reads of the stored return's send, from its one stored row, as the screens get it.
+struct SendFacts {
+    /// The stored row's status; None for a return not stored yet.
+    status: Option<FilingStatus>,
+    /// Whether the finished send reached nobody (the worker's `submitted_dry_run`). None until a send has finished
+    /// (Submitted, Confirmed or Paid): a Draft or a Queued return has no send to tell of, and through the Buwiz relay
+    /// only the server's answer says whether it was a test send.
+    dry_run: Option<bool>,
+    /// The send state (send_state.rs: stage, line ...); null where the screens show the status alone.
+    send: Value,
+}
+
+fn stored_send_facts(db: &Database, id: Option<i64>) -> Result<SendFacts, String> {
+    let Some(id) = id else {
+        return Ok(SendFacts {
+            status: None,
+            dry_run: None,
+            send: Value::Null,
+        });
+    };
+    let Some((summary, json)) = db
+        .draft_summary_and_json(id)
+        .map_err(|error| error.to_string())?
+    else {
+        return Ok(SendFacts {
+            status: None,
+            dry_run: None,
+            send: Value::Null,
+        });
+    };
+    let dry_run = matches!(
+        summary.status,
+        FilingStatus::Submitted | FilingStatus::Confirmed | FilingStatus::Paid
+    )
+    .then(|| {
+        serde_json::from_str::<Value>(&json).is_ok_and(|draft| {
+            crate::screen_form_module::lifecycle_flag(&draft, "submitted_dry_run")
+        })
+    });
+    let send = crate::send_state::stored_send(db, id).map_err(|error| error.to_string())?;
+    Ok(SendFacts {
+        status: Some(summary.status),
+        dry_run,
+        send,
+    })
 }
 
 #[cfg(test)]
@@ -4031,6 +4150,349 @@ mod tests {
         let context = call(&mut session, "form.context", json!({})).unwrap();
         assert_eq!(context["profile"]["registered_name"], "TEST");
         assert!(context["past_returns"].as_array().is_some());
+    }
+
+    /// Once the worker has sent a return, `form.open` (called again), `form.fields` and `form.context`'s
+    /// `past_returns` say whether that send reached nobody (`dry_run`, the worker's `submitted_dry_run`) and the send
+    /// state the screens show (`send`: stage, line ...), with the stored row's status. A Draft and a Queued return
+    /// have no finished send to tell of: `dry_run` is null, as `form.send` says it.
+    #[test]
+    fn the_agent_reads_whether_a_send_was_a_test_send() {
+        use crate::send_state::TEST_SENT_LINE;
+        let mut session = session();
+        save_scratch(&mut session);
+        let args = json!({"code": "2551Q", "year": 2026, "period": 1, "tin": TIN});
+        let draft = call(&mut session, "form.open", args.clone()).unwrap();
+        assert_eq!(draft["status"], "Draft");
+        assert!(draft["dry_run"].is_null(), "{draft}");
+        assert!(draft["send"].is_null(), "{draft}");
+        let id = session.open.as_ref().unwrap().draft["id"].as_i64().unwrap();
+        // Queued and not sent yet: no send has finished, whatever this build's dry-run setting says.
+        {
+            let db = session.lock_db().unwrap();
+            let (_, stored) = db.draft_summary_and_json(id).unwrap().unwrap();
+            let mut queued: Value = serde_json::from_str(&stored).unwrap();
+            queued["status"] = json!("Queued");
+            db.conn_for_tests()
+                .execute(
+                    "UPDATE form_drafts SET status = 'Queued', data_json = ?1 WHERE id = ?2",
+                    (queued.to_string(), id),
+                )
+                .unwrap();
+        }
+        // form.fields reads the status from the stored row its `send` comes from, not from the form held open.
+        let fields = call(&mut session, "form.fields", json!({})).unwrap();
+        assert_eq!(fields["status"], "Queued", "form.fields: {fields}");
+        assert!(fields["dry_run"].is_null(), "form.fields: {fields}");
+        let queued = call(&mut session, "form.open", args.clone()).unwrap();
+        assert_eq!(queued["status"], "Queued");
+        assert!(queued["dry_run"].is_null(), "form.open: {queued}");
+        let context = call(&mut session, "form.context", json!({})).unwrap();
+        let past = context["past_returns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|past| past["form"] == "2551Q" && past["year"] == 2026 && past["quarter"] == 1)
+            .expect("the queued return")
+            .clone();
+        assert_eq!(past["status"], "Queued");
+        assert!(past["dry_run"].is_null(), "form.context: {past}");
+        // The worker's store of a relay dry_run result (bir-core: Submitted, submitted_dry_run, its receipt).
+        {
+            let db = session.lock_db().unwrap();
+            let (_, stored) = db.draft_summary_and_json(id).unwrap().unwrap();
+            let mut sent: Value = serde_json::from_str(&stored).unwrap();
+            sent["status"] = json!("Submitted");
+            sent["submitted_at"] = json!("2026-04-10T01:02:03+00:00");
+            sent["submitted_dry_run"] = json!(true);
+            sent["relay_receipt"] = json!("a.b.c");
+            db.conn_for_tests()
+                .execute(
+                    "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+                    (sent.to_string(), id),
+                )
+                .unwrap();
+        }
+        let is_test_send = |answer: &Value, what: &str| {
+            assert_eq!(answer["dry_run"], true, "{what}: {answer}");
+            assert_eq!(answer["send"]["stage"], "test_sent", "{what}: {answer}");
+            assert_eq!(answer["send"]["line"], TEST_SENT_LINE, "{what}: {answer}");
+        };
+        let opened = call(&mut session, "form.open", args).unwrap();
+        assert_eq!(opened["status"], "Submitted");
+        is_test_send(&opened, "form.open");
+        let fields = call(&mut session, "form.fields", json!({})).unwrap();
+        assert_eq!(fields["status"], "Submitted");
+        is_test_send(&fields, "form.fields");
+        let context = call(&mut session, "form.context", json!({})).unwrap();
+        let past = context["past_returns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|past| past["form"] == "2551Q" && past["year"] == 2026 && past["quarter"] == 1)
+            .expect("the sent return")
+            .clone();
+        assert_eq!(past["status"], "Submitted");
+        is_test_send(&past, "form.context");
+    }
+
+    /// `form.send`'s answer never claims a real or a test send it cannot know: through the Buwiz relay the server
+    /// decides (a test TIN), so `dry_run` is null until it is sent, and the return does not go "from this computer".
+    #[test]
+    fn a_queued_answer_says_only_what_its_route_knows() {
+        let relay = queued_answer("2551Q", 7, true, false);
+        assert!(relay["dry_run"].is_null(), "{relay}");
+        let message = relay["message"].as_str().unwrap();
+        assert!(!message.contains("from this computer"), "{message}");
+        assert!(message.contains("Buwiz relay"), "{message}");
+        assert!(message.contains("form.open"), "{message}");
+        assert_eq!(relay["queued"], true);
+        assert_eq!(relay["filed"], false);
+        assert_eq!(relay["id"], 7);
+        // The Buwiz relay wins over this build's dry-run setting: the server decides there.
+        assert!(queued_answer("2551Q", 7, true, true)["dry_run"].is_null());
+        let dry = queued_answer("2551Q", 7, false, true);
+        assert_eq!(dry["dry_run"], true);
+        assert_eq!(
+            dry["message"],
+            "Queued. This build is a dry run: nothing is sent to BIR."
+        );
+        let local = queued_answer("2551Q", 7, false, false);
+        assert_eq!(local["dry_run"], false);
+        assert_eq!(local["message"], "Queued for upload from this computer.");
+    }
+
+    /// Official rules: `rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json`
+    /// (`txtPg1Pt1I12TotShare` lines 307-318, `txtPg2P4I2Amount..I5Amount` lines 823-906)
+    /// and `rules/forms/2552-v2018/fixtures/source-v796.html` (lines 759, 1327-1357).
+    /// `form.fill` must enforce the same page gates (`screen_form_module::off_boxes`)
+    /// as the form page, refusing gated boxes with the reason a person sees until
+    /// the opening answer is filled.
+    #[test]
+    fn form_fill_2552_refuses_page_gated_boxes_until_opened() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2552", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+
+        // Fresh return: Item 12 total shares and Part IV row 2 are shut on the page.
+        let fresh = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm2552:txtPg1Pt1I12TotShare": "1000000",
+                    "frm2552:txtPg2P4I2Amount": "500000",
+                }
+            }),
+        )
+        .unwrap();
+        assert!(
+            fresh["filled"].as_array().unwrap().is_empty(),
+            "fresh 2552 should refuse both gated boxes: {fresh}"
+        );
+        let share_reason = fresh["refused"]["frm2552:txtPg1Pt1I12TotShare"]
+            .as_str()
+            .unwrap_or("");
+        assert!(
+            share_reason.starts_with("Needs "),
+            "expected page gate reason for Item 12 total shares, got {fresh}"
+        );
+        let row2_reason = fresh["refused"]["frm2552:txtPg2P4I2Amount"]
+            .as_str()
+            .unwrap_or("");
+        assert!(
+            row2_reason.contains("Part IV row 1"),
+            "expected Part IV row 1 gate reason, got {fresh}"
+        );
+
+        // Under LSE, Item 12 total shares stays shut.
+        let under_lse = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm2552:rdoPg1I11Transaction": "LSE",
+                    "frm2552:txtPg1Pt1I12TotShare": "1000000",
+                }
+            }),
+        )
+        .unwrap();
+        assert!(
+            under_lse["refused"]["frm2552:txtPg1Pt1I12TotShare"]
+                .as_str()
+                .is_some_and(|s| s.starts_with("Needs ")),
+            "LSE must keep Item 12 total shares shut: {under_lse}"
+        );
+
+        // Switching to Primary opens Item 12 total shares; filling Part IV row 1 opens row 2.
+        let opened = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm2552:rdoPg1I11Transaction": "Primary",
+                    "frm2552:txtPg1Pt1I12TotShare": "1000000",
+                    "frm2552:txtPg2P4I1TransClass": "Gift",
+                    "frm2552:txtPg2P4I1Amount": "250000",
+                    "frm2552:txtPg2P4I2TransClass": "Swap",
+                    "frm2552:txtPg2P4I2Amount": "500000",
+                }
+            }),
+        )
+        .unwrap();
+        let filled: Vec<&str> = opened["filled"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        assert!(
+            filled.contains(&"frm2552:txtPg1Pt1I12TotShare"),
+            "Primary should open Item 12 total shares: {opened}"
+        );
+        assert!(
+            filled.contains(&"frm2552:txtPg2P4I2Amount"),
+            "Part IV row 1 should open row 2: {opened}"
+        );
+        assert!(
+            opened.get("refused").is_none(),
+            "no refusals expected once opened: {opened}"
+        );
+    }
+
+    #[test]
+    fn form_fill_1701_fresh_return_refuses_page_gated_boxes() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1701", "year": 2025, "period": 0, "tin": TIN}),
+        )
+        .unwrap();
+
+        // A fresh 1701 is a single filer's: item 17 (spouse income) waits on
+        // item 16 Married, and Part IV's spouse boxes wait on a joint return
+        // (items 16 Married, 17 Yes, 18 Joint Filing). The page fades them;
+        // form.fill must refuse them with the same reasons.
+        let fresh = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+                    "frm1701:txtPg2I5SpouseName": "SPOUSE NAME",
+                }
+            }),
+        )
+        .unwrap();
+        assert!(
+            fresh["filled"].as_array().unwrap().is_empty(),
+            "fresh 1701 should refuse both gated boxes: {fresh}"
+        );
+        let income_reason = fresh["refused"]["frm1701:rdoPg1I17SpouseIncomeYes"]
+            .as_str()
+            .unwrap_or("");
+        assert!(
+            income_reason.contains("married filer") && income_reason.contains("item 16"),
+            "item 17 should carry the item-16-Married gate reason, got: {income_reason}"
+        );
+        let tin_reason = fresh["refused"]["frm1701:txtPg2I5SpouseName"]
+            .as_str()
+            .unwrap_or("");
+        assert!(
+            tin_reason.contains("joint return") && tin_reason.contains("item 18"),
+            "spouse name should carry the joint-return gate reason, got: {tin_reason}"
+        );
+
+        // Counter-case: making the gating choices opens the same boxes.
+        let opened = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm1701:rdoPg1I16CivilStatusM": "true",
+                    "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+                    "frm1701:rdoPg1I18FilingStatusJ": "true",
+                    "frm1701:txtPg2I5SpouseName": "SPOUSE NAME",
+                }
+            }),
+        )
+        .unwrap();
+        assert!(
+            opened.get("refused").is_none(),
+            "once married + spouse income + joint filing are chosen the same boxes fill: {opened}"
+        );
+    }
+
+    /// Official 1702EX runtime fixture (`rules/forms/1702ex-v2018c/fixtures/
+    /// runtime-control-inventory-v796.json`): Schedule 1 Item 17i and Schedule
+    /// 2 Item 4 (including Legal Basis) are popup/attached-schedule-owned
+    /// controls that BIR's program keeps shut. `form.fill` must refuse all
+    /// five boxes and name the attached schedule rather than accepting Legal
+    /// Basis or saying only "computed by BIR's own formulas".
+    #[test]
+    fn form_fill_1702ex_refuses_popup_owned_schedule_1_and_2_boxes_by_name() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1702EX", "year": 2025, "period": 0, "tin": TIN}),
+        )
+        .unwrap();
+        let reply = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm1702EX:txtPg3Pt6I17OthersIDesc": "Other expense",
+                    "frm1702EX:txtPg3Pt6I17OthersIAmt": "50000",
+                    "frm1702EX:txtPg3Pt6S2I4Description": "Special deduction",
+                    "frm1702EX:txtPg3Pt6S2I4LegalBasis": "RA 9999",
+                    "frm1702EX:txtPg3Pt6S2I4Amount": "75000"
+                }
+            }),
+        )
+        .unwrap();
+        assert_eq!(
+            reply["filled"],
+            json!([]),
+            "all five 1702EX popup-owned boxes must be refused: {reply}"
+        );
+        for (key, expected_schedule) in [
+            (
+                "frm1702EX:txtPg3Pt6I17OthersIDesc",
+                "Schedule 1 Item 17i (more...) attached schedule",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6I17OthersIAmt",
+                "Schedule 1 Item 17i (more...) attached schedule",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6S2I4Description",
+                "Schedule 2 Item 4 (more...) attached schedule",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6S2I4LegalBasis",
+                "Schedule 2 Item 4 (more...) attached schedule",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6S2I4Amount",
+                "Schedule 2 Item 4 (more...) attached schedule",
+            ),
+        ] {
+            let reason = reply["refused"][key].as_str().unwrap_or("");
+            assert!(
+                reason.contains(expected_schedule),
+                "expected `{key}` refusal to name `{expected_schedule}`, got `{reason}` ({reply})"
+            );
+        }
     }
 
     #[test]

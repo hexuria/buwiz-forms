@@ -8,7 +8,7 @@
 import type { ViewRef } from "nsh";
 import { View } from "nsh";
 import {
-  CheckboxLabel, DateField, Dropdown, Icon, IntInput, Line, MoneyInput, moneyPlain, PercentInput, Text, TextField, TinInput, Tooltip, TOUCH,
+  CheckboxLabel, DateField, Dropdown, Icon, IntInput, Line, MoneyInput, moneyPlain, PercentInput, T_H, T_MIN_H, Text, TextField, TinInput, Tooltip, TOUCH,
 } from "../../../ui";
 import { SearchPick } from "./Pick";
 import { cx, isOn, listedOptions, mdy, readBoxPad, readText, SEARCH_FROM, selectModel, tinKind, tinSegment } from "./model";
@@ -66,7 +66,7 @@ function ReadBox(props: { p: FieldInput }) {
       class={cx(
         "min-w-0 flex-row items-center gap-1.5 rounded-(--radius-row) border",
         readBoxPad(cellOf(p)) === 4 ? "px-1" : "px-2.5",
-        TOUCH ? "min-h-11" : grows() ? "min-h-8 py-1" : "h-8",
+        TOUCH ? T_MIN_H : grows() ? "min-h-8 py-1" : "h-8",
         grows() && "max-w-full",
         computed() ? "border-transparent bg-hover" : "border-border bg-hover",
         dimmed() && "opacity-60",
@@ -137,7 +137,7 @@ function Choice(props: { p: FieldInput }) {
       when={model().options.length > SEARCH_FROM}
       else={
         // The kit's select root is a few points taller than its trigger: a box of the trigger's own height keeps neighbours aligned.
-        <View class={cx("min-w-0", TOUCH ? "h-11" : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
+        <View class={cx("min-w-0", TOUCH ? T_H : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
           <Dropdown
             testID={p.testID}
             label={nameOf(p)}
@@ -154,7 +154,7 @@ function Choice(props: { p: FieldInput }) {
     >
       {/* SearchPick is a popover and a sheet side by side: in the box's own column the closed sheet took a 4-point gap and
           the trigger sat higher than its neighbours (a multi-control row aligns at the bottom). One box of the trigger's height. */}
-      <View class={cx("min-w-0", TOUCH ? "h-11" : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
+      <View class={cx("min-w-0", TOUCH ? T_H : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
         <SearchPick
           testID={p.testID}
           label={p.label}
@@ -176,7 +176,7 @@ function DateBox(props: { p: FieldInput }) {
   // The kit's DateField prints "Enter a valid date..." under its box; the page prints the same sentence on the item's own
   // message line (and the box's red border), so the box is clipped to its own height and the sentence shows once.
   return (
-    <View class={cx("min-w-0 overflow-hidden", TOUCH ? "h-11" : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
+    <View class={cx("min-w-0 overflow-hidden", TOUCH ? T_H : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
       <DateField
         testID={p.testID}
         accessibilityLabel={nameOf(p)}

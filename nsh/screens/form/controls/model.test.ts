@@ -1,7 +1,7 @@
 // The controls' pure rules (model.ts): options, the shown choice, the TIN tell, word search, dates, row titles.
 import { expect, test } from "nsh/test";
 import type { ChoiceOption } from "../contract";
-import { drawerGroups, drawerTin, headFits, isOn, listedOptions, matchWords, mdy, optionOf, readText, rowHead, rowTitleOf, selectModel, splitLabel, tinKind } from "./model";
+import { drawerGroups, drawerTin, headFits, isOn, listedOptions, matchWords, mdy, optionOf, pickLabel, readText, resolveTyped, rowHead, rowTitleOf, searchKeyboardType, selectModel, splitLabel, tinKind } from "./model";
 
 const box = (value: string, options: ChoiceOption[] = [], zeroWhenBlank = false) =>
   ({ value: () => value, options: () => options, zeroWhenBlank }) as never;
@@ -134,4 +134,49 @@ test("drawerGroups: a run of TIN digit columns is one group; a whole-TIN column 
   const whole = [{ col: { l: "TIN (Including Branch Code)", t: "text" }, k: "f:txtTin1" }, { col: { l: "ATC", t: "text" }, k: "f:atc" }];
   expect(drawerGroups(whole, (c) => c.k).map((g) => g.length)).toEqual([1, 1]);
   expect(drawerTin(["b. TIN (1-3)", "TIN (4-6)", "TIN (7-9)", "Branch code"])).toEqual({ weights: [1, 1, 1, 1.4], title: "b. TIN" });
+});
+
+test("pickLabel: a code and its name joined by an em dash, a label with no code as it is", () => {
+  expect(pickLabel({ label: "050 - South Makati" })).toBe("050 — South Makati");
+  expect(pickLabel({ label: "WI010 — Professional fees" })).toBe("WI010 — Professional fees");
+  expect(pickLabel({ label: "Single" })).toBe("Single");
+});
+
+test("resolveTyped: what a desktop pick takes from its box on leaving, and the sentence when it takes nothing", () => {
+  const rdo: ChoiceOption[] = [
+    { value: "", label: "Choose…" },
+    { value: "050", label: "050 - South Makati" },
+    { value: "047", label: "047 - East Makati" },
+    { value: "039", label: "039 - South Quezon City" },
+    { value: "081", label: "081 - Cebu City North", disabled: true },
+  ];
+  // The current choice's own words keep it; so does nothing typed with nothing chosen.
+  expect(resolveTyped(rdo, "050 — South Makati", "050")).toEqual({ kind: "keep" });
+  expect(resolveTyped(rdo, "  ", "")).toEqual({ kind: "keep" });
+  // A code, a whole label (either dash, any case) or words that fit one choice pick it.
+  expect(resolveTyped(rdo, "047", "050")).toEqual({ kind: "pick", value: "047" });
+  expect(resolveTyped(rdo, "039 - south quezon city", "")).toEqual({ kind: "pick", value: "039" });
+  expect(resolveTyped(rdo, "east mak", "050")).toEqual({ kind: "pick", value: "047" });
+  // An emptied box clears a clearable choice; a required one goes back and says why.
+  expect(resolveTyped(rdo, "", "050")).toEqual({ kind: "clear" });
+  expect(resolveTyped(rdo, "", "050", false)).toEqual({ kind: "revert", note: "This choice can't be left empty. The box kept 050 — South Makati." });
+  // Text that is no choice is not taken: the box keeps the last pick and the note names both.
+  expect(resolveTyped(rdo, "xyz", "050")).toEqual({ kind: "revert", note: "“xyz” is not in the list. The box kept 050 — South Makati." });
+  expect(resolveTyped(rdo, "xyz", "")).toEqual({ kind: "revert", note: "“xyz” is not in the list. The box stays empty." });
+  // Text that fits several choices is not guessed.
+  expect(resolveTyped(rdo, "makati", "039")).toEqual({
+    kind: "revert",
+    note: "“makati” fits 2 choices. Pick one from the list. The box kept 039 — South Quezon City.",
+  });
+  // A choice that takes no pick is not taken by typing either.
+  expect(resolveTyped(rdo, "081", "050")).toEqual({ kind: "revert", note: "“081” can't be chosen here. The box kept 050 — South Makati." });
+});
+
+test("searchKeyboardType: a ZIP search opens on digits only where letters stay one key away", () => {
+  expect(searchKeyboardType("digits-first", "ios")).toBe("numbers-and-punctuation");
+  // Android's number keyboards have no letters: the ordinary keyboard, so a city can still be typed.
+  expect(searchKeyboardType("digits-first", "android")).toBe("default");
+  expect(searchKeyboardType("digits-first", "macos")).toBe("default");
+  expect(searchKeyboardType("default", "ios")).toBe("default");
+  expect(searchKeyboardType(undefined, "ios")).toBe("default");
 });
