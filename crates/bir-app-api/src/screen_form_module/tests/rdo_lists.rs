@@ -362,3 +362,196 @@ fn every_form_flags_000_as_its_rdo() {
     assert!(failures.is_empty(), "{failures:#?}");
     assert!(seen >= 30, "{seen}");
 }
+
+/// The year's facts Queue asks for first (decision 3), so a refusal is the
+/// return's own validation.
+fn set_queue_facts(tin: &str) {
+    with_database(|db| {
+        db.set_year_facts(
+            tin,
+            2026,
+            &bir_core::tax_profile::YearFactsPatch {
+                eopt_tier: Some(Some(bir_core::profile::EoptTier::Micro)),
+                is_government_withholding_entity: Some(Some(false)),
+                atc_codes: Some(vec!["II012".to_string()]),
+                ..Default::default()
+            },
+        )
+        .map(|_| ())
+        .map_err(|error| HostError::new(error.to_string()))
+    })
+    .unwrap();
+}
+
+/// Queue a saved return the way the page does: `screen_form_queue` for a
+/// queueable form, `queue_form_draft` for the rest. Either runs the form's
+/// `transition_to_queued`, which validates.
+fn queue_saved(code: &str, period: i64, saved: &Value) -> Result<Value, HostError> {
+    match kind_of(code).unwrap() {
+        AgentFormKind::Queueable(_) => call(
+            "screen_form_queue",
+            vec![code.into(), json(saved["draft"].clone())],
+        ),
+        _ => call(
+            "queue_form_draft",
+            vec![TIN.into(), code.into(), YEAR.into(), period.into()],
+        ),
+    }
+}
+
+/// What validation says on `key`, and what Queue answers, for `draft`
+/// saved over `base` (the stored return so far). Returns the messages on
+/// the box, Queue's error (`None`: it queued) and the saved draft.
+fn judged(
+    code: &str,
+    period: i64,
+    key: &str,
+    draft: &Value,
+) -> (Vec<String>, Option<String>, Value) {
+    let on_box: Vec<String> = validated(code, draft)["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| strings(&e["keys"]).contains(key))
+        .map(|e| e["message"].as_str().unwrap_or_default().to_string())
+        .collect();
+    let saved = save(code, draft);
+    let queued = queue_saved(code, period, &saved)
+        .err()
+        .map(|e| e.message().to_string());
+    (on_box, queued, saved["draft"].clone())
+}
+
+/// A 1701Q, 1701A and 1701 return WITH a spouse (the gates that switch the
+/// spouse's boxes on, and a valid spouse TIN: 1701A judges the RDO only
+/// once the TIN is well formed), opened for the fixture taxpayer.
+fn with_spouse(code: &str) -> Value {
+    let mut draft = open(code, page_period_of(code))["draft"].clone();
+    let gates = match code {
+        "1701Q" => json!({"has_spouse": true, "spouse_tin": "000-123-453-00000",
+            "spouse_name": "Example Spouse"}),
+        "1701A" => json!({"civil_status": "married", "spouse_has_income": true,
+            "filing_status": "joint"}),
+        "1701" => json!({"civil_status": "Married", "spouse_has_income": true,
+            "joint_filing_status": "Joint"}),
+        _ => unreachable!("{code}"),
+    };
+    for (k, v) in gates.as_object().unwrap() {
+        draft[k] = v.clone();
+    }
+    if code != "1701Q" {
+        draft["spouse"]["enabled"] = json!(true);
+        draft["spouse"]["tin"] = json!("000-123-453-00000");
+        draft["spouse"]["name"] = json!("Example Spouse");
+    }
+    draft
+}
+
+/// The spouse RDO boxes: `(form, key, draft path, validation field,
+/// message)`.
+const SPOUSE_RDOS: [(&str, &str, &str, &str, &str); 3] = [
+    (
+        "1701Q",
+        "frm1701q:txtSpouseRDOCode",
+        "/spouse_rdo_code",
+        "spouse_rdo_code",
+        "Please enter a valid RDO Code on Item 18.",
+    ),
+    (
+        "1701A",
+        "frm1701A:txtSpouseRDOCode",
+        "/spouse/rdo_code",
+        "spouse.rdo_code",
+        "Please enter a valid RDO Code on Item 67.",
+    ),
+    (
+        "1701",
+        "frm1701:txtPg2I2SpouseRDOCode",
+        "/spouse_rdo_code",
+        "spouse_rdo_code",
+        "Please enter a valid RDO Code on Page 2 Part IV Item 2.",
+    ),
+];
+
+/// On a return with a spouse, the spouse RDO "000" (the official
+/// placeholder) and "[]" (what 1701Q's broken list offered) are refused:
+/// validation names the box with the form's message, and Queue
+/// (`transition_to_queued`) refuses with it. A catalog code clears it. The
+/// spouse RDO left empty is refused the same way.
+#[test]
+fn a_spouse_rdo_off_the_catalog_or_empty_is_refused_on_validate_and_queue() {
+    setup();
+    set_queue_facts(TIN);
+    for (code, key, path, field, message) in SPOUSE_RDOS {
+        let period = page_period_of(code);
+        let mut base = with_spouse(code);
+        let queued_line = format!("{field}: {message}");
+        for rdo in ["000", "[]", "", "040"] {
+            let mut draft = base.clone();
+            *draft.pointer_mut(path).unwrap() = json!(rdo);
+            let (on_box, queued, saved) = judged(code, period, key, &draft);
+            assert_eq!(saved.pointer(path), Some(&json!(rdo)), "{code} {rdo:?}");
+            let queued = queued.unwrap_or_else(|| panic!("{code} {rdo:?} queued"));
+            if rdo == "040" {
+                assert!(on_box.is_empty(), "{code} {rdo:?}: {on_box:?}");
+                assert!(!queued.contains(&queued_line), "{code} {rdo:?}: {queued}");
+            } else {
+                assert_eq!(on_box, [message], "{code} {rdo:?}");
+                assert!(queued.contains(&queued_line), "{code} {rdo:?}: {queued}");
+            }
+            base = saved;
+        }
+    }
+}
+
+/// 1801 Schedule 4, row 1 with its other cells filled: an RDO of "000"
+/// (the official dropdown's empty choice, which the field map also writes
+/// for a blank) leaves the row incomplete; "[]" is no catalog code. Both
+/// are named on the box and refused by Queue; a catalog code passes.
+#[test]
+fn form_1801_schedule_4_rdo_off_the_catalog_is_refused_on_validate_and_queue() {
+    setup();
+    let (code, key) = ("1801", "frm1801v2018:sched4Rdo_1");
+    let period = page_period_of(code);
+    let mut base = open(code, period)["draft"].clone();
+    for (rdo, refusal) in [
+        (
+            "000",
+            Some((
+                "business_interests[0]",
+                "Incomplete values on Schedule 4, Row 1.",
+            )),
+        ),
+        (
+            "[]",
+            Some((
+                "business_interests[0].rdo_code",
+                "Please enter a valid RDO Code on Schedule 4, Row 1.",
+            )),
+        ),
+        ("040", None),
+    ] {
+        let mut draft = base.clone();
+        draft["business_interests"] = json!([{
+            "name": "Example Store", "address": "1 Example Street", "rdo_code": rdo,
+            "value": {"exclusive": 1000.0, "conjugal": 0.0},
+        }]);
+        let (on_box, queued, saved) = judged(code, period, key, &draft);
+        assert_eq!(saved["business_interests"][0]["rdo_code"], rdo);
+        let queued = queued.unwrap_or_else(|| panic!("{rdo:?} queued"));
+        match refusal {
+            Some((field, message)) => {
+                assert_eq!(on_box, [message], "{rdo:?}");
+                assert!(
+                    queued.contains(&format!("{field}: {message}")),
+                    "{rdo:?}: {queued}"
+                );
+            }
+            None => {
+                assert!(on_box.is_empty(), "{rdo:?}: {on_box:?}");
+                assert!(!queued.contains("business_interests"), "{rdo:?}: {queued}");
+            }
+        }
+        base = saved;
+    }
+}
