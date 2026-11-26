@@ -1,0 +1,14 @@
+A. dev.env: ABSENT — files/ has only nsh/; files/nsh/dev.goldcoders.bir/ has storage.json(511)+test-data/+tmp, no dev.env, 0 lines. BIR_AUTH_BYPASS nowhere. It was never compiled in either: the job-19 bake recipe had it explicitly unset; the bypass only ever lived in dev.env during the paused-grind window, removed at digit-entry step 0 and never restored (real sign-in worked).
+B(1) signed-in inventory Thu Nov 26 07:45:41 UTC 2026: storage.json 511 bytes; test-data files below
+6303 nsh/dev.goldcoders.bir/tmp/ebirforms-logs-3571/logs/ebirforms.2026-11-26.log
+B(2) after sign-out, gate showing:
+6303 nsh/dev.goldcoders.bir/tmp/ebirforms-logs-3571/logs/ebirforms.2026-11-26.log
+force-stop at 07:47:59 (10s after gate)
+B(3) after force-stop:
+6303 nsh/dev.goldcoders.bir/tmp/ebirforms-logs-3571/logs/ebirforms.2026-11-26.log
+C. Sign-out timing: confirm tapped, gate appeared +4.3s after; POST /api/auth/logout arrived at the mock during that window (log line 41). Button busy roughly those 4s. Recording: signout.mp4.
+REPEAT RESULT (item 5): sign-out -> gate -> wait 10s -> force-stop 07:47:59 -> relaunch: THE GATE SHOWS ('Sign in to eBIRForms' email page). Sign-out DOES stick.
+CORRECTION to the earlier side observation: the earlier 'Home signed in after relaunch' was NOT a sign-out failure. Sequence then was: sign-out (logout arrived) -> NEW OTP sign-in for measurement (a) (code 246816 accepted, token stored) -> session-open refused by the relay probe -> force-stop -> relaunch opened Home signed in. The accurate finding is narrower: a sign-in whose session-open is REFUSED still leaves the account signed in, so the next launch opens Home. Sign-out itself works.
+B-inventory oddity: storage.json (511 bytes, mtime 05:59 unchanged) exists at all three moments - sign-out does not rewrite or delete it; yet the gate shows after relaunch, so the signed-out state is not (only) that file's presence. Reported as facts, no values read.
+4-menu-path: Home -> tap DT avatar (top right) -> bottom sheet -> Settings -> Account row -> 'Sign out of Buwiz' -> sheet 'Sign out of Buwiz' confirm. After: the cloud email gate ('Sign in to eBIRForms'), not a bare email page - same thing here.
+First-time seconds between sign-out and force-stop: the measurement-(a) sign-in happened in between (~1-2 min total), so the number is meaningless there; the clean repeat above is the valid one.
