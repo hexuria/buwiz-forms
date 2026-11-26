@@ -1,0 +1,12 @@
+[package]
+name = "accounts-lock-windows-probes"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Windows facts the accounts-and-lock plan relies on (PLAN.md A.2 X1, A.3.2 step 4, B.2 L4/X3). Not shipped."
+
+# Its own workspace: the root workspace never sees this crate.
+[workspace]
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_SystemInformation"] }
