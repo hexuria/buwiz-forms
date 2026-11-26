@@ -4,7 +4,7 @@ import { DATE_ERROR, formatIso, formatLongDate, formatMDY, isTwoDigitDate, parse
 import { AppButton } from "./buttons";
 import { CalendarGrid, DateField } from "./fields";
 import { Sheet } from "./layers";
-import { cx, FOCUS_RING } from "./look";
+import { cx, FOCUS_RING, T_MIN_H } from "./look";
 import { Icon, Line } from "./text";
 
 export interface DateTouchFieldProps {
@@ -55,7 +55,7 @@ export function DateTouchField(props: DateTouchFieldProps) {
         testID={props.testID}
         accessibilityLabel={`${props.label}, ${show() || "not set"}${props.errorDescription ? `, ${props.errorDescription}` : ""}`}
         disabled={props.disabled}
-        class={cx("min-h-11 w-full flex-row items-center gap-2 rounded-(--radius-row) border bg-card px-2.5", FOCUS_RING,
+        class={cx(T_MIN_H, "w-full flex-row items-center gap-2 rounded-(--radius-row) border bg-card px-2.5", FOCUS_RING,
           props.error ? "border-danger" : "border-border-strong")}
         onPress={() => {
           const date = parseTypedDate(props.value);

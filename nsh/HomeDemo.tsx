@@ -82,8 +82,8 @@ async function seed(p: Params): Promise<void> {
     }
   }
   if (p.branch && !taxpayer.branches.some((b) => b.code === "00001")) bir.create_branch(taxpayer.tin_root, { branch_code: "00001", name: "Cebu branch" });
-  if (p.second && !bir.list_taxpayers().some((t) => t.tin_root === "000111229")) {
-    const second = bir.create_taxpayer({ tin_root: "000-111-229", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
+  if (p.second && !bir.list_taxpayers().some((t) => t.tin_root === "000111225")) {
+    const second = bir.create_taxpayer({ tin_root: "000-111-225", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
     bir.add_tax_year(second.branches[0].tin, year, false);
     bir.set_yearly_forms(second.branches[0].tin, year, ["1601C"]);
   }

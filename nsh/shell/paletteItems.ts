@@ -110,7 +110,8 @@ export const paletteItems = computed<PaletteItem[]>(() => {
     items.push({ group: "Actions", label: "Next to do", icon: "chevron-right", hint: keymap.label("mod+right"), run: () => formUi.step(1) });
     items.push({ group: "Actions", label: "Previous to do", icon: "chevron-left", hint: keymap.label("mod+left"), run: () => formUi.step(-1) });
   }
-  items.push({ group: "Actions", label: "Toggle sidebar", icon: "panel-left", hint: keymap.label("mod+b"), run: app.toggleSidebar });
+  // The narrow layout (every phone and tablet) has no sidebar.
+  if (!app.layout.narrow()) items.push({ group: "Actions", label: "Toggle sidebar", icon: "panel-left", hint: keymap.label("mod+b"), run: app.toggleSidebar });
   items.push({
     group: "Actions",
     label: app.panel() === "profile" ? "Hide tax profile" : "Show tax profile",

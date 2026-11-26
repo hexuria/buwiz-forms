@@ -4975,6 +4975,70 @@ pub(crate) fn removes(
         .or_else(|| rows_excise::removes(kind, before, after, edits))
 }
 
+/// The reviewed reason a person sees on the form page when `key` is gated
+/// shut on `draft` (corpus `enabled_when` conditions and host module gates).
+/// Blank and untick writes are clears and are never refused by a gate.
+pub(crate) fn page_gate_refusal(
+    kind: AgentFormKind,
+    draft: &Value,
+    key: &str,
+    value: &Value,
+) -> Option<String> {
+    if value.is_null()
+        || value.as_str().is_some_and(agent::carry::is_blank_value)
+        || is_unticked(value)
+    {
+        return None;
+    }
+    let code = kind.form_code();
+    if let Some(why) = rows_income_q::closed_refusal(kind, draft, key, value)
+        .map(str::to_string)
+        .or_else(|| rows_annual_individual::closed_refusal(kind, draft, key, value))
+    {
+        return Some(why);
+    }
+    if let Some((_, tag)) = rows_donor_estate::closed(kind, draft)
+        .into_iter()
+        .find(|(k, _)| k == key)
+    {
+        return Some(tag.to_string());
+    }
+    if rows_withholding::gated(kind, draft, key) == Some(true)
+        || rows_monthly::gated(kind, draft, key) == Some(true)
+    {
+        return conditions::tag(code, key);
+    }
+    if let Some(tag) = rows_income_q::gated(kind, draft, key) {
+        return Some(tag.to_string());
+    }
+    if rows_annual_individual::gated(kind, draft, key) {
+        return conditions::tag(code, key);
+    }
+    let shown = Value::Object(
+        agent::field_map(kind, draft)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(k, v)| (k, Value::String(v)))
+            .collect(),
+    );
+    if let Some(tag) = conditions::off_now(kind, draft, &shown, key) {
+        return Some(tag);
+    }
+    if let Some(tag) = rows_as_needed::off(kind, draft, &shown)
+        .get(key)
+        .and_then(Value::as_str)
+    {
+        return Some(tag.to_string());
+    }
+    if let Some(tag) = rows_excise::off(kind, draft, &shown)
+        .get(key)
+        .and_then(Value::as_str)
+    {
+        return Some(tag.to_string());
+    }
+    None
+}
+
 /// Apply the page's edits to `draft` the one way both the draft fill and the
 /// live print preview use, so the preview never prints a different answer
 /// than the page shows. Returns the rejected keys with their reasons.
@@ -18787,10 +18851,14 @@ mod tests {
                 // column, plus 2 for 1701MS (PR 7 review, round 2): item 16's
                 // rate in each column. At pr0b-push none had an entry.
                 ("1700", 17),
-                // Plus 34 for 1701: Schedule 3.A items 8/9/11 A&B (6),
-                // Schedule 4 items 3 and 6-13 A&B (18), and Schedule 6
-                // NOLCO filer cells 6A/6B/7B/9A-11B/12B (10).
-                ("1701", 69),
+                // Plus 95 for 1701: the schedule input boxes of Schedules
+                // 3.A, 4 and 6 in both columns wait for the graduated and
+                // itemized answers (rows_annual_individual.rs GATED_BOXES):
+                // Schedule 3.A items 8/9/11/19/20/21 A&B plus items 19/20's
+                // descriptions (14), Schedule 4 items 1-17d A&B plus 17dDesc
+                // (41), and Schedule 6's summary and NOLCO rows but the
+                // computed current-year row (40).
+                ("1701", 130),
                 ("1701A", 17),
                 ("1701MS", 52),
                 // 8 for 1706 (PR 9): items 8 and 9, item 11's list,

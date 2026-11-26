@@ -227,12 +227,12 @@ for (const { name, size } of SIZES) {
     expect(app.texts()).toContain("Hand the computer to another taxpayer, or use it to help other taxpayers.");
     await app.press("id:setup-change-owner");
     await app.waitFor("id:setup-change-owner-head");
-    expectTexts(app, ["New owner", "Sample Trading Corp", "TIN 000-111-229"]);
+    expectTexts(app, ["New owner", "Sample Trading Corp", "TIN 000-111-225"]);
     // The owner herself is not a candidate.
     expect(app.shows("id:setup-change-cand-000123453")).toBe(false);
-    await app.press("id:setup-change-pick-000111229");
+    await app.press("id:setup-change-pick-000111225");
     await app.waitFor("id:setup-change-what");
-    expect(app.texts()).toContain("Make Sample Trading Corp (TIN 000-111-229) the owner and admin");
+    expect(app.texts()).toContain("Make Sample Trading Corp (TIN 000-111-225) the owner and admin");
     expect(app.texts()).toContain("Your current admin PIN");
     // The admin has no authenticator: no Use code.
     expect(app.shows("id:setup-change-toggle")).toBe(false);
@@ -254,7 +254,7 @@ for (const { name, size } of SIZES) {
     expect(app.texts().some((t) => KEY.test(t))).toBe(true);
     // Only the key shows now: no section list, and the title is Computer.
     expect(app.shows("id:settings-nav-general")).toBe(false);
-    expect(state(app)).toContain("admin=000111229");
+    expect(state(app)).toContain("admin=000111225");
 
     await app.press("id:setup-change-done");
     await app.waitFor("text:/locked=true/");
@@ -266,13 +266,13 @@ for (const { name, size } of SIZES) {
     const app = await openSettings(size, { solo: true, second: true, pin: "1234", signin: true }, "computer");
     await app.press("id:setup-change-btn");
     await app.press("id:setup-change-owner");
-    await app.press("id:setup-change-pick-000111229");
+    await app.press("id:setup-change-pick-000111225");
     await app.type("id:setup-change-pin-cells", "1234");
     await app.press("id:setup-change-confirm-btn");
     await app.waitFor("id:setup-change-done", { timeout: 15000 });
     await app.press(name === "narrow desktop" ? "id:tab-home" : "id:nav-home");
     await app.waitFor("text:/locked=true/");
-    expect(state(app)).toContain("admin=000111229");
+    expect(state(app)).toContain("admin=000111225");
   }, 90_000);
 
   test(`${name}: Cancel closes the change at each step and forgets what was typed`, async () => {
@@ -299,7 +299,7 @@ for (const { name, size } of SIZES) {
     await app.press("id:setup-change-cancel");
     await app.press("id:setup-change-btn");
     await app.press("id:setup-change-owner");
-    await app.press("id:setup-change-pick-000111229");
+    await app.press("id:setup-change-pick-000111225");
     await app.waitFor("id:setup-change-what");
     await app.press("id:setup-change-cancel");
     await app.waitFor("id:setup-change-btn");
@@ -311,8 +311,8 @@ for (const { name, size } of SIZES) {
     await app.press("id:setup-change-btn");
     await app.press("id:setup-change-owner");
     await app.waitFor("id:setup-change-owner-head");
-    expect(app.texts()).toContain("TIN 000-111-229. No PIN yet: they set one in Settings after signing in");
-    expect(app.shows("id:setup-change-pick-000111229")).toBe(false);
+    expect(app.texts()).toContain("TIN 000-111-225. No PIN yet: they set one in Settings after signing in");
+    expect(app.shows("id:setup-change-pick-000111225")).toBe(false);
   }, 60_000);
 
   test(`${name}: with no other taxpayer, Another owner says to add one first`, async () => {
@@ -357,7 +357,7 @@ for (const { name, size } of SIZES) {
     await app.waitFor("id:setup-change-owner-head");
     // Juana has no PIN, so only Sample Trading Corp can be chosen.
     expect(app.shows("id:setup-change-pick-000123453")).toBe(false);
-    await app.press("id:setup-change-pick-000111229");
+    await app.press("id:setup-change-pick-000111225");
     await app.waitFor("id:setup-change-what");
     expect(app.shows("id:setup-change-pin-cells")).toBe(true);
     await app.press("id:setup-change-toggle");
@@ -370,7 +370,7 @@ for (const { name, size } of SIZES) {
     await app.type("id:setup-change-code-cells", totpCode(SECRET));
     await app.press("id:setup-change-confirm-btn");
     await app.waitFor("id:setup-change-key", { timeout: 15000 });
-    expect(state(app)).toContain("admin=000111229");
+    expect(state(app)).toContain("admin=000111225");
     expect(state(app)).toContain("mode=solo");
   }, 90_000);
 }

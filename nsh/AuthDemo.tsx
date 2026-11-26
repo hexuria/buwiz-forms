@@ -52,7 +52,7 @@ interface Params extends EmailParams {
 }
 
 /** The second taxpayer (generated data). */
-const SECOND = { root: "000111229", name: "Sample Trading Corp" };
+const SECOND = { root: "000111225", name: "Sample Trading Corp" };
 
 /** The host functions the app called that this fixture answers (the readout lists them). */
 const calls = signal<string[]>([]);
@@ -65,7 +65,7 @@ let recoveryKey = "";
 async function seed(p: Params): Promise<void> {
   if (p.demo) createDemoTaxpayer();
   if (p.second && !bir.list_taxpayers().some((t) => t.tin_root === SECOND.root)) {
-    bir.create_taxpayer({ tin_root: "000-111-229", name: SECOND.name, taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
+    bir.create_taxpayer({ tin_root: "000-111-225", name: SECOND.name, taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
   }
   if (p.years) {
     const year = new Date().getFullYear();

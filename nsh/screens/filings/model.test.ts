@@ -27,7 +27,7 @@ const R = [
   row({ id: 2, form_code: "1601C", period: 9, period_label: "September 2026", status: "Queued" }),
   row({ id: 3, form_code: "1604C", period: 0, period_label: "TY 2025", taxable_year: 2025, status: "Paid", updated_at: "2026-10-31 22:30:00" }),
   row({ id: 4, tin: "00012345300001", branch_code: "00001", branch_name: "Cebu branch", period: 2, period_label: "Q2 2026", updated_at: "2026-11-15 01:00:00" }),
-  row({ id: 5, tin: "00011122900000", tin_root: "000111229", taxpayer_name: "Sample Trading Corp", form_code: "1601C", period: 8, period_label: "August 2026", status: "Confirmed" }),
+  row({ id: 5, tin: "00011122500000", tin_root: "000111225", taxpayer_name: "Sample Trading Corp", form_code: "1601C", period: 8, period_label: "August 2026", status: "Confirmed" }),
 ];
 const ids = (rows: ReturnRow[]) => rows.map((r) => r.id);
 
@@ -91,7 +91,7 @@ test("newest change first", () => {
 
 test("every filter keeps what it names and null means every value", () => {
   expect(ids(filterRows(R, INDEX, ALL))).toEqual([1, 2, 3, 4, 5]);
-  expect(ids(filterRows(R, INDEX, { ...ALL, tps: new Set(["000111229"]) }))).toEqual([5]);
+  expect(ids(filterRows(R, INDEX, { ...ALL, tps: new Set(["000111225"]) }))).toEqual([5]);
   expect(ids(filterRows(R, INDEX, { ...ALL, forms: new Set(["1601C"]) }))).toEqual([2, 5]);
   expect(ids(filterRows(R, INDEX, { ...ALL, periods: new Set(["Q3 2026"]) }))).toEqual([1, 2, 5]);
   expect(ids(filterRows(R, INDEX, { ...ALL, periods: new Set(["TY 2025"]) }))).toEqual([3]);

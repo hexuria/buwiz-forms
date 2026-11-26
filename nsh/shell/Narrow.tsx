@@ -1,14 +1,14 @@
-// The narrow layout (under 600 points, and phones): a header with the page's name and the account badge, and a bottom bar of
-// four tabs. The badge is the header's one button: it carries a red dot while notifications are unread and opens a menu
-// with the tax profile (the taxpayer switcher), search, the notifications and Settings. The header keeps clear of the
-// window's own buttons (titleBar()). Back is the platform's back (Android's button); the header's arrow is there for the
-// windows that have none (a narrow desktop window).
+// The narrow layout (every phone and tablet, at any width; a desktop window under 600 points): a header and a bottom bar of four
+// tabs. The header: Back on a pushed page, the page's name, New return (+), Search, and the account badge; on a tablet the open
+// taxpayer's name, TIN and branch beside the badge, so whose return is on screen is always in view. The badge carries a red dot
+// while notifications are unread and opens a menu with the tax profile (the taxpayer switcher), search, the notifications and
+// Settings. The header keeps clear of the window's own buttons (titleBar()) and of a phone's sensor housing turned sideways.
 import type { JSX } from "nsh";
 import { safeArea, View } from "nsh";
 import { Button } from "nsh/base";
 import { titleBar } from "nsh/desktop";
 import { SIZE } from "../theme/tokens";
-import { Avatar, Icon, IconButton, Menu, MenuItem, MenuSeparator, NavRow, Sheet, Text, TOUCH } from "../ui";
+import { Avatar, Icon, IconButton, Menu, MenuItem, MenuSeparator, NavRow, Sheet, T_SIZE, tabletRoom, Text, TOUCH } from "../ui";
 import { app } from "./app";
 import { chromeNow } from "./chrome";
 import { MenuListButton } from "./MenuRow";
@@ -50,7 +50,12 @@ export function NarrowBar() {
       class="shrink-0 flex-row items-center gap-1"
       // The window's own buttons sit at the ends of this bar on the desktops (GTK's, Windows' caption buttons, the
       // traffic lights): pad by their widths so nothing of ours goes under them (0 on phones).
-      style={{ minHeight: TOUCH ? 52 : SIZE.titleBar, paddingLeft: 8 + titleBar().left, paddingRight: 8 + titleBar().right, paddingTop: safeArea().top }}
+      style={{
+        minHeight: TOUCH ? 52 : SIZE.titleBar,
+        paddingLeft: 8 + titleBar().left + safeArea().left,
+        paddingRight: 8 + titleBar().right + safeArea().right,
+        paddingTop: safeArea().top,
+      }}
     >
       {/* Windows and Linux windows whose menu is drawn in the window: ☰ lists every menu (macOS and KDE keep theirs at the top of the screen). */}
       <If when={chromeNow().hamburger}>
@@ -60,8 +65,36 @@ export function NarrowBar() {
         <IconButton testID="nb-back" icon="arrow-left" tooltip="Back" onPress={headerBack} />
       </If>
       <Text testID="nb-title" variant="emph" class="min-w-0 flex-1 pl-1" lines={1}>{pageTitle()}</Text>
+      <IconButton testID="nb-new" icon="plus" tooltip="New return" onPress={() => app.startNewReturn()} />
+      <IconButton testID="nb-search" icon="search" tooltip="Search" onPress={app.openPalette} />
+      <If when={tabletRoom() && app.taxpayer()}>
+        <TaxpayerLabel />
+      </If>
       <AccountMenu />
     </View>
+  );
+}
+
+/**
+ * A tablet's header: whose return is on screen, the taxpayer's name over its TIN and branch (the wide title bar's context pill, said
+ * the narrow way). A press opens the tax profile sheet, where the taxpayer and the branch are switched.
+ */
+function TaxpayerLabel() {
+  const tp = () => app.taxpayer();
+  const br = () => app.branch();
+  // The TIN with its branch code (000-123-453-00000), then the branch's name.
+  const line = () => [br()?.tin_display, br()?.name].filter(Boolean).join(" · ");
+  return (
+    <Button
+      testID="nb-taxpayer"
+      accessibilityLabel={`Tax profile: ${tp()?.name ?? ""}`}
+      class="min-w-0 shrink justify-center rounded-(--radius-row) px-2 py-1 enabled:hover:bg-hover active:bg-selected focus-visible:ring-2 focus-visible:ring-accent-blue"
+      style={{ maxWidth: 320 }}
+      onPress={() => app.togglePanel("profile")}
+    >
+      <Text testID="nb-taxpayer-name" variant="emph" class="text-right" lines={1}>{tp()?.name ?? ""}</Text>
+      <Text testID="nb-taxpayer-line" variant="cap" tone="fg3" class="text-right" lines={1}>{line()}</Text>
+    </Button>
   );
 }
 
@@ -79,7 +112,7 @@ function AccountMenu() {
           testID="nb-avatar"
           accessibilityLabel={unread() > 0 ? `Account, ${unread()} unread notifications` : "Account"}
           selected={open() || app.panel() !== null}
-          class={`items-center justify-center rounded-full selected:bg-selected focus-visible:ring-2 focus-visible:ring-accent-blue ${TOUCH ? "size-11" : "size-8"}`}
+          class={`items-center justify-center rounded-full selected:bg-selected focus-visible:ring-2 focus-visible:ring-accent-blue ${TOUCH ? T_SIZE : "size-8"}`}
         >
           <If when={tp()} else={<Icon name="user" tone="fg2" />}>
             <Avatar name={tp()?.name ?? ""} size={28} hueKey={tp()?.tin_root} />
@@ -104,13 +137,22 @@ function AccountMenu() {
   );
 }
 
+/** The four tabs together are never wider than this: on a tablet they sit grouped in the middle, about 200 points each. */
+const TABS_MAX_WIDTH = 800;
+
 /** Home, Forms, Filings, Calendar. */
 export function TabBar() {
   return (
-    <View testID="tab-bar" class="shrink-0 flex-row border-t border-border bg-background" style={{ paddingBottom: safeArea().bottom }}>
-      <Each of={TABS} key={(t) => t.view}>
-        {(t) => <TabButton view={t().view} label={t().label} icon={t().icon} current={app.view() === t().view} onPress={() => app.go(t().view)} />}
-      </Each>
+    <View
+      testID="tab-bar"
+      class="shrink-0 items-center border-t border-border bg-background"
+      style={{ paddingBottom: safeArea().bottom, paddingLeft: safeArea().left, paddingRight: safeArea().right }}
+    >
+      <View testID="tab-row" class="w-full flex-row" style={{ maxWidth: TABS_MAX_WIDTH }}>
+        <Each of={TABS} key={(t) => t.view}>
+          {(t) => <TabButton view={t().view} label={t().label} icon={t().icon} current={app.view() === t().view} onPress={() => app.go(t().view)} />}
+        </Each>
+      </View>
     </View>
   );
 }

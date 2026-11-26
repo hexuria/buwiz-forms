@@ -132,7 +132,7 @@ function Pane(props: { narrow: boolean }) {
     <Scroll
       testID="settings-scroll"
       class="min-h-0 flex-1"
-      contentClass={props.narrow ? "px-4 pt-3 pb-14" : "items-center px-8 pt-7 pb-14"}
+      contentClass={props.narrow ? "items-center px-4 pt-3 pb-14" : "items-center px-8 pt-7 pb-14"}
     >
       <View class="w-full min-w-0 gap-5" style={{ maxWidth: COLUMN }}>
         <If when={props.narrow && ownHeader() && !keyOnly()}>

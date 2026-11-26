@@ -53,7 +53,8 @@ Three steps on the owner's Mac. The first needs no secret; the second is the onl
 1. **Build** (`just play-bundle`, or `just play-bundle 28` to choose the number). It builds the bundle, removes
    the debug signature `nsh package` puts on it and the updater's source, and checks the result: package
    `com.buwiz.ebirforms`, the expected `versionCode`, `targetSdkVersion` from `nsh.json`, backup off, not debuggable,
-   phone ABIs only (`scripts/android_bundle.py check`). It writes
+   phone ABIs only (`scripts/android_bundle.py check`). It builds in the checkout's own `target/play-bundle` unless
+   `CARGO_TARGET_DIR` is set, so a bundle never links crates compiled from another worktree. It writes
    `target/release-artifacts/eBIRForms-Android-<version>-<build>.aab`, unsigned.
 2. **Sign** (`just play-sign`): the owner types the upload key's password when `jarsigner` asks. It writes
    `…-signed.aab` beside the unsigned file, verifies it, and shows it in Finder.
@@ -61,6 +62,37 @@ Three steps on the owner's Mac. The first needs no secret; the second is the onl
    release, then drag the signed file into the box. The first upload asks about app signing: keep **Google-generated
    app signing key** (Play App Signing). Google then signs what users install, and our key only proves the upload is
    ours.
+
+### On a Mac, once
+
+`scripts/setup-android-macos.sh` makes this Mac ready for `just play-bundle`: it checks the Android SDK (the
+`platforms;android-<targetSdk>` of `nsh/nsh.json`, build-tools, an NDK), a JDK and the Rust Android targets, and reports
+the command for anything missing; then it moves the NSH checkout beside this repository to the pin, and builds the `nsh`
+CLI and NSH's Android release runtime at the pin into `$NSH_TOOLS` (default `~/BuwizNsh/tools`). `--check` only checks.
+
+`just play-bundle` uses the same `$NSH_TOOLS` and refuses to build when its `nsh` is not at the NSH pin, or when the
+Android release runtime beside it is not recorded as built at the pin (`runtime/android/release/nsh-ref`, written by the
+setup script), so a bundle is never made with another NSH than CI tested. `nsh package` takes that release runtime even
+for a development build. The recipe prints the runtime's `classes.dex` SHA-256 with the CLI's version. On the owner's
+Mac the shared tool stays as other work needs it, and the pinned store tool lives beside it in `~/BuwizNsh/store-tools`
+(shared with the Apple store recipes; only the setup script writes there):
+
+```sh
+export NSH_TOOLS=~/BuwizNsh/store-tools
+scripts/setup-android-macos.sh   # once, and again when the pin moves
+just play-bundle
+```
+
+The app's Rust toolchain (`rust-toolchain.toml`) needs both Android targets; the setup script names the
+`rustup target add` for a missing one. The vendored OpenSSL needs the NDK's `llvm-ranlib`, which the recipe passes as
+`RANLIB_<target>`.
+
+A run on the owner's Mac, 26 November 2026, app `d1a8c2c4` (this pull request). The store tool and runtime were
+rebuilt by the setup script with rustup's cargo 1.99.1; the bundle was built by the app's pinned cargo 1.99.0 in
+`target/play-bundle`. The tool is `nsh 0.6.1 (8c78cfd)`, and the runtime `classes.dex` SHA-256 is `f70a1b02…`, the same
+bytes inside the bundle. The unsigned bundle (build 27, never uploaded) was 162.3 MB. `libnsh.so` is 86.6 MB on arm64-v8a
+and 74.6 MB on armeabi-v7a; the bundle stores them uncompressed. At `nice 15` the setup's runtime took about 40 minutes
+and the bundle's two libraries 16 and 11 minutes.
 
 Machines never build or sign the store bundle. They build development and test packages with the Android debug key
 that `nsh package` makes on its own.

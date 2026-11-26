@@ -4,7 +4,7 @@
 import type { JSX } from "nsh";
 import { Scroll, View } from "nsh";
 import { Button } from "nsh/base";
-import { deviceCopy, Icon, Text, TOUCH, type IconName } from "../../ui";
+import { deviceCopy, Icon, T_MIN_H, Text, TOUCH, type IconName } from "../../ui";
 import { authScrollStyle } from "./signInLook";
 
 export { deviceCopy };
@@ -80,7 +80,7 @@ export function TextLink(props: { label: string; testID: string; onPress: () => 
       testID={props.testID}
       accessibilityLabel={props.label}
       onPress={props.onPress}
-      class={`self-start justify-center rounded-(--radius-ctl) enabled:hover:opacity-80 focus-visible:ring-2 focus-visible:ring-accent-blue ${TOUCH ? "min-h-11" : ""}`}
+      class={`self-start justify-center rounded-(--radius-ctl) enabled:hover:opacity-80 focus-visible:ring-2 focus-visible:ring-accent-blue ${TOUCH ? T_MIN_H : ""}`}
     >
       <Text variant="metaStrong" tone="accent">{props.label}</Text>
     </Button>

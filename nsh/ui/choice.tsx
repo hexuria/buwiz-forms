@@ -9,10 +9,10 @@ import { AppButton } from "./buttons";
 import { TextField } from "./fields";
 import { revealAndFocus } from "./focus";
 import type { IconName } from "./icons";
-import { Popover, sheetMaxHeight } from "./layers";
+import { Popover, sheetMaxHeight, sheetSides } from "./layers";
 import { NameCell } from "./lists";
 import { matchOptions, multiComboLabel, type MultiComboWords, normalizeSelection, type PickOption } from "./logic";
-import { CTL, cx, FOCUS_RING, SMALL_HIT, TOUCH } from "./look";
+import { CTL, cx, FOCUS_RING, SMALL_HIT, T_MIN_H, T_MIN_W, TOUCH } from "./look";
 import { Icon, Line, Text } from "./text";
 
 // ---------------------------------------------------------------- switch
@@ -126,7 +126,7 @@ export function CheckboxLabel(props: CheckboxProps & { hint?: string }) {
       disabled={props.disabled}
       testID={props.testID}
       focusRef={props.focusRef}
-      class={TOUCH ? "min-h-11" : undefined}
+      class={TOUCH ? T_MIN_H : undefined}
     >
       <View class="min-w-0 shrink">
         <Text>{props.label}</Text>
@@ -193,7 +193,7 @@ export function RadioGroup(props: RadioGroupProps) {
             accessibilityLabel={o().label}
             hitSlop={SMALL_HIT}
             onChange={() => props.onChange(o().value)}
-            class={cx("group flex-row items-start gap-2 rounded-(--radius-ctl) disabled:opacity-50", FOCUS_RING, TOUCH && "min-h-11 items-center")}
+            class={cx("group flex-row items-start gap-2 rounded-(--radius-ctl) disabled:opacity-50", FOCUS_RING, TOUCH && cx(T_MIN_H, "items-center"))}
           >
             <View class="mt-0.5 size-4 shrink-0 items-center justify-center rounded-full border border-border-strong bg-card group-checked:border-primary">
               <View class="size-2 rounded-full bg-primary opacity-0 group-checked:opacity-100" />
@@ -273,12 +273,12 @@ export function Segmented(props: SegmentedProps) {
             checked={o().value === props.value}
             disabled={off(o().disabled)}
             accessibilityLabel={o().label}
-            hitSlop={TOUCH ? { top: 10, bottom: 10 } : 0}
             onChange={() => props.onChange(o().value)}
             class={cx(
               "group flex-row items-center gap-1.5 rounded-(--radius-ctl) px-2.5 checked:bg-raised checked:shadow-xs disabled:opacity-50",
               // A stacked segment grows with its words: a long choice wraps inside the bar instead of running off its edge.
-              props.stacked ? cx("w-full py-1", TOUCH ? "min-h-11" : "min-h-8") : "h-6",
+              // On touch every segment is a whole target (44 points, 48 dp on Android), not a 24-point chip with reach around it.
+              props.stacked ? cx("w-full py-1", TOUCH ? T_MIN_H : "min-h-8") : TOUCH ? cx(T_MIN_H, T_MIN_W, "justify-center") : "h-6",
               FOCUS_RING,
             )}
           >
@@ -305,11 +305,11 @@ const LIST_POPUP = TOUCH
  */
 const SHEET_CHROME = 112;
 const listRoom = () => (TOUCH ? { maxHeight: Math.max(120, Math.min(280, sheetMaxHeight() - SHEET_CHROME)) } : undefined);
-const sheetRoom = () => (TOUCH ? { maxHeight: sheetMaxHeight() } : undefined);
+const sheetRoom = () => (TOUCH ? { maxHeight: sheetMaxHeight(), ...sheetSides() } : undefined);
 /** A row of a list of choices: lit where the keys or the pointer are, the chosen one on the selected fill. */
 const LIST_ITEM = cx(
   "justify-center rounded-(--radius-ctl) px-2 focus:bg-hover selected:bg-selected disabled:opacity-50",
-  TOUCH ? "min-h-11" : "min-h-7",
+  TOUCH ? T_MIN_H : "min-h-7",
 );
 
 /** A trigger's frame: a 32-point box (44 on touch) on the surface, the strong border, radius 8. */
@@ -572,7 +572,7 @@ export function MultiCombo(props: MultiComboProps) {
               onChange={() => toggle(o().value)}
               label={o().label}
               testID={props.testID ? `${props.testID}-opt-${o().value}` : undefined}
-              class={cx("px-2 enabled:hover:bg-selected", TOUCH ? "min-h-11" : o().sub ? "min-h-9" : "min-h-7")}
+              class={cx("px-2 enabled:hover:bg-selected", TOUCH ? T_MIN_H : o().sub ? "min-h-9" : "min-h-7")}
             >
               {o().lead?.()}
               <NameCell title={o().label} sub={o().sub} />

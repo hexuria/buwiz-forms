@@ -539,7 +539,7 @@ _package-mac args="": build-frozen-html-identity
                 echo "⚠️  $arg was a gpui-shell feature; the NSH app ignores it" ;;
         esac
     done
-    NSH="${NSH:-$HOME/BuwizNsh/tools/bin/nsh}" VERSION="{{VERSION}}" OUT_DIR="{{RELEASE_DIR}}" \
+    NSH="${NSH:-${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin/nsh}" VERSION="{{VERSION}}" OUT_DIR="{{RELEASE_DIR}}" \
         bash scripts/package_macos_release.sh
 
 # ---------------------------------------------------------------------------
@@ -750,7 +750,39 @@ play-bundle build="":
     fi
     case "$BUILD" in ''|*[!0-9]*) echo "Invalid build number: $BUILD" >&2; exit 1 ;; esac
     TARGET_SDK="$({{PYTHON}} -c 'import json; print(json.load(open("nsh/nsh.json"))["android"]["targetSdk"])')"
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    # The build folder is this checkout's own (target/play-bundle) unless CARGO_TARGET_DIR is set: Cargo cannot tell two
+    # checkouts of the same crate version apart in a shared folder, so a bundle could link another worktree's bir-core,
+    # form definitions included, with no error. The nsh CLI is $NSH_TOOLS's (default the shared ~/BuwizNsh/tools): a Mac
+    # whose shared tool must stay as it is builds with the pinned one beside it (scripts/setup-android-macos.sh). Either way
+    # the CLI must be at the NSH pin, or the bundle is not what CI tested.
+    TOOLS="${NSH_TOOLS:-$HOME/BuwizNsh/tools}"
+    export PATH="$TOOLS/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/play-bundle}"
+    # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    scripts/build-line.sh --strict
+    PIN="$(sed -n 's/^ *NSH_PINNED_REF: *//p' .github/workflows/nsh.yml | head -1)"
+    HAVE="$(nsh --version 2>/dev/null || true)"
+    case "$HAVE" in
+        *"(${PIN:0:7})"*) ;;
+        *) echo "❌ $TOOLS/bin/nsh is '${HAVE:-missing}', not the NSH pin ${PIN:0:7}: run scripts/setup-android-macos.sh (NSH_TOOLS=<folder> for one beside the shared tool)." >&2; exit 1 ;;
+    esac
+    # `nsh package` takes the Android RELEASE runtime next to the CLI (or under $NSH_RUNTIME), whatever built it. The setup
+    # script records the NSH commit beside it (nsh-ref); a runtime without that record, or from another commit, is refused.
+    RUNTIME="${NSH_RUNTIME:-$TOOLS/runtime}/android/release"
+    RUNTIME_REF="$(cat "$RUNTIME/nsh-ref" 2>/dev/null || true)"
+    if [ ! -f "$RUNTIME/classes.dex" ] || [ "$RUNTIME_REF" != "$PIN" ]; then
+        echo "❌ The Android release runtime in $RUNTIME is ${RUNTIME_REF:+from $RUNTIME_REF, }not recorded as built at the NSH pin $PIN: run scripts/setup-android-macos.sh." >&2
+        exit 1
+    fi
+    echo "nsh: $HAVE; Android release runtime at $PIN, classes.dex sha256 $(shasum -a 256 "$RUNTIME/classes.dex" | cut -d' ' -f1)"
+    # NSH's CLI sets CC and AR for Android but not RANLIB, which the vendored OpenSSL needs: the NDK has only llvm-ranlib
+    # (setup-linux-nsh.sh and setup-android-windows.ps1 set the same).
+    SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
+    NDK="${ANDROID_NDK_HOME:-$(ls -d "$SDK"/ndk/* 2>/dev/null | sort -V | tail -1)}"
+    RANLIB_NDK="$(ls "$NDK"/toolchains/llvm/prebuilt/*/bin/llvm-ranlib 2>/dev/null | head -1)"
+    [ -x "$RANLIB_NDK" ] || { echo "❌ No llvm-ranlib in the NDK ($NDK): run scripts/setup-android-macos.sh." >&2; exit 1; }
+    export RANLIB_aarch64_linux_android="${RANLIB_aarch64_linux_android:-$RANLIB_NDK}"
+    export RANLIB_armv7_linux_androideabi="${RANLIB_armv7_linux_androideabi:-$RANLIB_NDK}"
     # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one.
     unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV
     # nsh builds libnsh.so in its generated workspace, which has no [profile.release]: this repository's own profile never
@@ -916,7 +948,7 @@ ios-appstore-upload:
 nsh-check *args="":
     #!/usr/bin/env bash
     set -euo pipefail
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
     cd nsh
     exec nsh check {{args}}
 
@@ -925,8 +957,9 @@ nsh-check *args="":
 nsh-check *args="":
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
-    $env:PATH = "$HOME\BuwizNsh\tools\bin;$env:PATH"
-    $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh"
+    $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
+    $env:PATH = "$tools\bin;$env:PATH"
+    if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
     Set-Location nsh
     nsh check {{args}}
     exit $LASTEXITCODE
@@ -936,7 +969,7 @@ nsh-check *args="":
 nsh-build *args="":
     #!/usr/bin/env bash
     set -euo pipefail
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
     cd nsh
     exec nsh build {{args}}
 
@@ -945,8 +978,9 @@ nsh-build *args="":
 nsh-build *args="":
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
-    $env:PATH = "$HOME\BuwizNsh\tools\bin;$env:PATH"
-    $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh"
+    $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
+    $env:PATH = "$tools\bin;$env:PATH"
+    if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
     Set-Location nsh
     nsh build {{args}}
     exit $LASTEXITCODE
@@ -962,7 +996,10 @@ nsh-build *args="":
 nsh-test *args="":
     #!/usr/bin/env bash
     set -euo pipefail
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
+    # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    scripts/build-line.sh --strict
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     unset BIR_SFTP_LIVE BIR_DATABASE_PATH
     cd nsh
@@ -1000,8 +1037,11 @@ nsh-test *args="":
 nsh-test *args="":
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
-    $env:PATH = "$HOME\BuwizNsh\tools\bin;$env:PATH"
-    $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh"
+    $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
+    $env:PATH = "$tools\bin;$env:PATH"
+    if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
+    $app = git rev-parse --short=8 HEAD; $kit = git -C ..\nsh rev-parse --short=8 HEAD; $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
+    [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, $cargoVersion, folder $env:CARGO_TARGET_DIR")
     $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_AUTH_BYPASS = '1'; $env:BIR_SFTP_DRY_RUN = '1'
     Remove-Item Env:BIR_SFTP_LIVE -ErrorAction SilentlyContinue
     Remove-Item Env:BIR_DATABASE_PATH -ErrorAction SilentlyContinue
@@ -1204,7 +1244,7 @@ _nsh-db-guard $db:
 nsh-run db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_nsh-db-guard db)
     #!/usr/bin/env bash
     set -euo pipefail
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     unset BIR_SFTP_LIVE
     if [ -n "{{db}}" ]; then export BIR_DATABASE_PATH="{{db}}"; else unset BIR_DATABASE_PATH; fi
@@ -1221,7 +1261,10 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     set -euo pipefail
     [ -n "${GPUI_AGENT_TOKEN:-}" ] || { echo "nsh-run-agent: set GPUI_AGENT_TOKEN first"; exit 1; }
     root="$(pwd -P)"
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
+    # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    scripts/build-line.sh --strict
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     export GPUI_AGENT=1 GPUI_AGENT_ADDR="${GPUI_AGENT_ADDR:-127.0.0.1:17421}"
     unset BIR_SFTP_LIVE
@@ -1235,6 +1278,19 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     fi
     port="${GPUI_AGENT_ADDR##*:}"
     run_args=()
+    if [ "{{target}}" = android ] && [ "$(uname -s)" = Linux ]; then
+        # The runtimes `nsh run` (dev) and `nsh package` (release) take, checked against the pin: a runtime that is a
+        # link into a checkout's build folder, or was built at another commit, made every test on it a test of another NSH.
+        pin="$(sed -n 's/^ *NSH_PINNED_REF: *//p' "$root/.github/workflows/nsh.yml" | head -1)"
+        for variant in dev release; do
+            dir="${NSH_RUNTIME:-$HOME/BuwizNsh/tools/runtime}/android/$variant"
+            if [ -L "$dir" ] || [ "$(cat "$dir/nsh-ref" 2>/dev/null || true)" != "$pin" ]; then
+                echo "nsh-run-agent: $dir is not a copy recorded as built at the NSH pin ${pin:0:7}: run scripts/setup-linux-nsh.sh" >&2
+                exit 1
+            fi
+            echo "nsh android $variant runtime: ${pin:0:7}, classes.dex sha256 $(sha256sum "$dir/classes.dex" | cut -d' ' -f1)"
+        done
+    fi
     if [ "{{target}}" = android ]; then
         # An Android app process has no launch environment: the dry-run settings and the data plane's switch and address are
         # baked into this development build (nsh/src/dev_env.rs). The token is not (a baked one is readable in the built library):
@@ -1291,8 +1347,11 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
 nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_nsh-db-guard db)
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
-    $env:PATH = "$HOME\BuwizNsh\tools\bin;$env:PATH"
-    $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh"
+    $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
+    $env:PATH = "$tools\bin;$env:PATH"
+    if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
+    $app = git rev-parse --short=8 HEAD; $kit = git -C ..\nsh rev-parse --short=8 HEAD; $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
+    [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, $cargoVersion, folder $env:CARGO_TARGET_DIR")
     if (-not $env:GPUI_AGENT_TOKEN) { "nsh-run-agent: set GPUI_AGENT_TOKEN first"; exit 1 }
     $root = (Get-Location).ProviderPath
     $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_AUTH_BYPASS = '1'; $env:BIR_SFTP_DRY_RUN = '1'
@@ -1472,7 +1531,10 @@ nsh-agent-check:
     #!/usr/bin/env bash
     set -euo pipefail
     root="$(pwd -P)"
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
+    # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    scripts/build-line.sh --strict
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     unset BIR_SFTP_LIVE BIR_DATABASE_PATH
     work="$(mktemp -d)"
@@ -1506,7 +1568,10 @@ nsh-agent-check:
 nsh-shots name="base" *args="":
     #!/usr/bin/env bash
     set -euo pipefail
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
+    # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    scripts/build-line.sh --strict
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     unset BIR_SFTP_LIVE
     {{just_executable()}} _nsh-db-guard "${BIR_DATABASE_PATH:-}"

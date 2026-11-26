@@ -17,7 +17,9 @@ for (const { name, size } of SIZES) {
     await app.press("text:Dark");
     await app.waitFor("text:/theme=dark/");
     if (name === "phone") {
-      for (const id of ["settings-recent", "settings-compact-form-nav", "settings-auto-update"]) expect(app.shows(`id:${id}`)).toBe(false);
+      // A phone has Recent on Home, so its switch shows; the desktop-only rows do not.
+      expect(app.shows("id:settings-recent")).toBe(true);
+      for (const id of ["settings-compact-form-nav", "settings-auto-update"]) expect(app.shows(`id:${id}`)).toBe(false);
       expect(calls(app)).toEqual([]);
       return;
     }
@@ -123,7 +125,8 @@ for (const platform of ["ios", "android"] as const) {
     expect(app.texts()).toContain("Device");
     expect(app.shows("id:settings-nav-keyboard")).toBe(false);
     await goSection(app, "general", "id:settings-theme-row");
-    for (const id of ["settings-recent", "settings-compact-form-nav", "settings-auto-update"]) expect(app.shows(`id:${id}`)).toBe(false);
+    expect(app.shows("id:settings-recent")).toBe(true);
+    for (const id of ["settings-compact-form-nav", "settings-auto-update"]) expect(app.shows(`id:${id}`)).toBe(false);
     await backToList(app);
     await goSection(app, "computer", "id:settings-files");
     expect(app.shows("id:settings-retention-row")).toBe(true);
@@ -136,7 +139,7 @@ for (const platform of ["ios", "android"] as const) {
     await goSection(app, "computer", "id:settings-files");
     expect(app.shows("id:settings-setup")).toBe(true);
     await backToList(app);
-    for (const query of ["keyboard", "hotkey", "sidebar", "compact", "download", "tray", "menu bar", "close window", "launch at login", "file associations"]) {
+    for (const query of ["keyboard", "hotkey", "compact", "download", "tray", "menu bar", "close window", "launch at login", "file associations"]) {
       await app.clear("id:settings-search");
       await app.type("id:settings-search", query);
       await app.waitFor("id:settings-nav-empty");

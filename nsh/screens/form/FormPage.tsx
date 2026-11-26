@@ -21,7 +21,7 @@
 // The pill names the part at the top of the viewport: the scroll offset against the part cards' laid-out tops.
 import type { Accessor, ListRef, ScrollRef, ViewRef } from "nsh";
 import { cleanup, computed, effect, keymap, List, Scroll, signal, untracked, View, windowSize } from "nsh";
-import { BREAK } from "../../theme/tokens";
+import { BREAK, SIZE } from "../../theme/tokens";
 import {
   AppButton,
   CheckboxLabel,
@@ -41,6 +41,7 @@ import {
   Spinner,
   Text,
   TextField,
+  phoneLayout,
   TOUCH,
   toast as kitToast,
   dismissToast as kitDismissToast,
@@ -134,11 +135,16 @@ export function FormPage(props: FormPageProps) {
   // list from 760 of column, set in by the column's centring edge, and the form 22 beside the list, at most
   // column - 236 wide (820 for a column of 1056), its text starting at the left of its scroll.
   const padX = () => (width() < BREAK.narrowContent ? 16 : 32);
-  const column = () => Math.max(200, Math.min(FORM_COLUMN_MAX, width()) - padX() * 2);
+  // A touch screen always has the phone form (the owner's tablet pick): no side list, the bottom pill, the form in one column, which
+  // on a tablet keeps a page's readable width (the frame's page column, 880 with its padding) and stays centred.
+  const column = () =>
+    TOUCH
+      ? Math.max(200, Math.min(SIZE.contentMax, width()) - padX() * 2)
+      : Math.max(200, Math.min(FORM_COLUMN_MAX, width()) - padX() * 2);
   const edge = () => Math.max(padX(), Math.floor((width() - column()) / 2));
   const formW = () => column() - 208 - 28;
-  const wide = () => column() >= BREAK.formNav;
-  const narrow = () => width() < BREAK.phone;
+  const wide = () => !TOUCH && column() >= BREAK.formNav;
+  const narrow = () => TOUCH || width() < BREAK.phone;
 
   // Not while a text box has the keys: there Cmd/Ctrl+Left/Right move the caret (index.d.ts KeyBindingOptions "notEditing").
   keymap.bind("mod+left", () => s.step(-1), { when: "notEditing" });
@@ -929,8 +935,8 @@ function Dialogs(props: { s: FormSession }) {
     const v = o();
     return v?.kind === "profile-ask" ? v.ask : null;
   };
-  // Under 600 points the ask is a bottom sheet; from there up, a dialog (Q1 P1b).
-  const phone = () => windowSize().width < BREAK.phone;
+  // In the phone layout (every touch screen, and a desktop window under 600 points) the ask is a bottom sheet; else a dialog (Q1 P1b).
+  const phone = () => phoneLayout();
   const askTitle = () => {
     const a = profileAsk();
     return a ? `Save ${a.label.toLowerCase()} to the tax profile?` : "";

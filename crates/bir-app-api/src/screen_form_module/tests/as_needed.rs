@@ -3381,3 +3381,41 @@ fn f1_0619e_a_zero_day_is_refused_with_the_date_sentence() {
     assert_eq!(&bad["draft"], before);
     assert_eq!(bad["values"][day], opened["values"][day]);
 }
+
+#[test]
+fn agent_fill_2552_writes_item_12_total_shares_and_part_iv_amounts() {
+    use bir_core::forms::agent::{self, AgentFormKind};
+
+    setup();
+    let kind = AgentFormKind::from_code("2552").unwrap();
+    let opened = open("2552", 3);
+    let mut draft = opened["draft"].clone();
+    // Primary offering opens Item 12 total outstanding shares (inventory L759).
+    agent::fill(
+        kind,
+        &mut draft,
+        "frm2552:rdoPg1I11Transaction",
+        &json!("Primary"),
+        None,
+    )
+    .unwrap();
+    agent::fill(
+        kind,
+        &mut draft,
+        "frm2552:txtPg1Pt1I12TotShare",
+        &json!("5000000"),
+        None,
+    )
+    .unwrap();
+    for (row, amount) in [(2, "250.00"), (3, "350.25"), (4, "450.50"), (5, "550.75")] {
+        let key = format!("frm2552:txtPg2P4I{row}Amount");
+        agent::fill(kind, &mut draft, &key, &json!(amount), None).unwrap();
+    }
+    agent::compute(kind, &mut draft).unwrap();
+    let map = agent::field_map(kind, &draft).unwrap();
+    assert_eq!(map["frm2552:txtPg1Pt1I12TotShare"], "5000000");
+    assert_eq!(map["frm2552:txtPg2P4I2Amount"], "250.00");
+    assert_eq!(map["frm2552:txtPg2P4I3Amount"], "350.25");
+    assert_eq!(map["frm2552:txtPg2P4I4Amount"], "450.50");
+    assert_eq!(map["frm2552:txtPg2P4I5Amount"], "550.75");
+}
