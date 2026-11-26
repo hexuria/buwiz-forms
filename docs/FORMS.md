@@ -99,8 +99,9 @@ upload target is missing. 2200T, 2200S and 2200C can be queued.
 - **1601FQ** (code revision 2018) prints on the September 2020 sheet
   (`1601-fq-2020`). No January 2018 sheet is available. The form's preview
   message says so.
-- **2200T** (registry revision 2020) prints on the 2022 sheet (`2200t-2020`,
-  source "2200-T Aug 2022").
+- **2200T** (registry revision 2020) prints on its own January 2020 sheet
+  (`2200t-2020`, source "2200-T Jan 2020 ENCS Final version2"). It used to
+  print on the August 2022 sheet (`2200t-2022`).
 - The other folder names match the registry revision, with these spelling
   differences: `1600-pt-2018` and `1600-vt-2018` (1600PT, 1600VT),
   `2000-dst-2018` (2000), `2000-ot-2018` (2000OT), and `1602q-2019` (1602Q,
