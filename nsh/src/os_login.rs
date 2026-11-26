@@ -17,6 +17,20 @@
 #[cfg(any(windows, test))]
 mod windows;
 
+/// The app's main window title: nsh/nsh.json `window.title`, the value the kit gives the window, read from the file
+/// compiled into this build (never a second copy of the string, PLAN W4). A3a-2 passes it to `prove_owner`, so the
+/// sheet belongs to the main window and never to a print preview (titled with the taxpayer). An unreadable value is
+/// empty, which no window has: no prompt.
+pub static APP_WINDOW_TITLE: std::sync::LazyLock<String> =
+    std::sync::LazyLock::new(|| window_title_from(include_str!("../nsh.json")));
+
+fn window_title_from(config: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(config)
+        .ok()
+        .and_then(|config| config.pointer("/window/title")?.as_str().map(str::to_owned))
+        .unwrap_or_default()
+}
+
 /// What this device can do to prove its owner, checked without prompting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -60,8 +74,7 @@ pub fn owner_check() -> OwnerCheck {
 /// Asks the OS to prove the device's owner is present, once, with `reason` as the sheet's text. Blocks until the
 /// person answers.
 ///
-/// `window_title` is the exact title of the window that owns the sheet: the app's main window ("eBIRForms", from
-/// nsh.json). Windows: `RequestVerificationForWindowAsync`, owned by our NSH window with that title, never the print
+/// `window_title` is the exact title of the window that owns the sheet: the app's main window, [`APP_WINDOW_TITLE`]. Windows: `RequestVerificationForWindowAsync`, owned by our NSH window with that title, never the print
 /// preview (`windows.rs`); no such window, no prompt. Other targets ignore it.
 pub fn prove_owner(reason: &str, window_title: &str) -> OwnerCheckResult {
     let answer = prove_owner_with(crate::door::test_environment(), || {
@@ -176,6 +189,17 @@ mod tests {
             word(serde_json::json!(OwnerCheckResult::Unavailable)),
             "unavailable"
         );
+    }
+
+    #[test]
+    fn the_main_window_title_comes_from_nsh_json() {
+        assert!(!APP_WINDOW_TITLE.is_empty(), "nsh.json window.title");
+        assert_eq!(
+            window_title_from(r#"{"window":{"title":"Focus"},"tailwind":{"title":[1]}}"#),
+            "Focus"
+        );
+        assert_eq!(window_title_from(r#"{"title":"not the window's"}"#), "");
+        assert_eq!(window_title_from("not json"), "");
     }
 
     #[test]

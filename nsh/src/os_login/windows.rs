@@ -255,8 +255,12 @@ mod tests {
     use super::*;
 
     const OURS: u32 = 4242;
-    const MAIN_TITLE: &str = "eBIRForms";
     const PREVIEW_TITLE: &str = "BIR Form 2551Q · Q4 2026 — Juana Santos";
+
+    /// The main window's title, from the build (nsh.json `window.title`), never a copy of the string.
+    fn main_title() -> &'static str {
+        super::super::APP_WINDOW_TITLE.as_str()
+    }
 
     fn window(
         hwnd: isize,
@@ -277,14 +281,14 @@ mod tests {
     }
 
     fn pick(foreground: Option<&WindowRecord>, all: &[WindowRecord]) -> Option<isize> {
-        pick_window(foreground, all, OURS, MAIN_TITLE)
+        pick_window(foreground, all, OURS, main_title())
     }
 
     #[test]
     fn windows_handle_is_ours_or_none() {
-        let main = window(10, OURS, NSH_WINDOW_CLASS, true, false, MAIN_TITLE);
+        let main = window(10, OURS, NSH_WINDOW_CLASS, true, false, main_title());
         let other_app = window(20, 7, "Chrome_WidgetWin_1", true, false, "");
-        let other_nsh = window(30, 7, NSH_WINDOW_CLASS, true, false, MAIN_TITLE);
+        let other_nsh = window(30, 7, NSH_WINDOW_CLASS, true, false, main_title());
 
         // The foreground window is ours: taken.
         assert_eq!(
@@ -301,11 +305,11 @@ mod tests {
             Some(10)
         );
         // Two of ours that both qualify, neither in front: none.
-        let second_main = window(11, OURS, NSH_WINDOW_CLASS, true, false, MAIN_TITLE);
+        let second_main = window(11, OURS, NSH_WINDOW_CLASS, true, false, main_title());
         assert_eq!(pick(Some(&other_app), &[main.clone(), second_main]), None);
         // An owned window (a dialog of ours) and a hidden one are skipped, in front too.
-        let dialog = window(12, OURS, NSH_WINDOW_CLASS, true, true, MAIN_TITLE);
-        let hidden = window(13, OURS, NSH_WINDOW_CLASS, false, false, MAIN_TITLE);
+        let dialog = window(12, OURS, NSH_WINDOW_CLASS, true, true, main_title());
+        let hidden = window(13, OURS, NSH_WINDOW_CLASS, false, false, main_title());
         assert_eq!(
             pick(Some(&dialog), &[dialog.clone(), main.clone()]),
             Some(10)
@@ -316,7 +320,7 @@ mod tests {
         );
         assert_eq!(pick(None, &[dialog, hidden, main.clone()]), Some(10));
         // Our process but not an NSH window: not taken.
-        let ours_other_class = window(14, OURS, "#32770", true, false, MAIN_TITLE);
+        let ours_other_class = window(14, OURS, "#32770", true, false, main_title());
         assert_eq!(
             pick(
                 Some(&ours_other_class),
@@ -336,7 +340,7 @@ mod tests {
     /// try/pin-save-panel-398 enumwin-pass-a.json). It never owns the sheet, in front or in the list.
     #[test]
     fn a_preview_in_front_never_owns_the_sheet() {
-        let main = window(10, OURS, NSH_WINDOW_CLASS, true, false, MAIN_TITLE);
+        let main = window(10, OURS, NSH_WINDOW_CLASS, true, false, main_title());
         let preview = window(11, OURS, NSH_WINDOW_CLASS, true, false, PREVIEW_TITLE);
         // In front: the list decides, and the main window matches by title.
         assert_eq!(
@@ -347,15 +351,9 @@ mod tests {
         assert_eq!(pick(None, &[main.clone(), preview.clone()]), Some(10));
         // Only the preview: no window has the title, so none and no prompt.
         assert_eq!(pick(Some(&preview), std::slice::from_ref(&preview)), None);
-        // A title that only contains the main title is not it.
-        let near = window(
-            15,
-            OURS,
-            NSH_WINDOW_CLASS,
-            true,
-            false,
-            "eBIRForms - Juana Santos",
-        );
+        // A title that only starts with the main title is not it.
+        let near_title = format!("{} - Juana Santos", main_title());
+        let near = window(15, OURS, NSH_WINDOW_CLASS, true, false, &near_title);
         assert_eq!(pick(Some(&near), std::slice::from_ref(&near)), None);
     }
 
@@ -527,8 +525,8 @@ mod tests {
         let started = std::time::Instant::now();
         let check = owner_check();
         let checked_in = started.elapsed();
-        let window = os::lock_window("eBIRForms");
-        let proved = prove_owner("move your tax profiles to your Buwiz account", "eBIRForms");
+        let window = os::lock_window(main_title());
+        let proved = prove_owner("move your tax profiles to your Buwiz account", main_title());
         println!(
             "owner_check={check:?} ({checked_in:?}) lock_window={window:?} prove_owner={proved:?} total {:?}",
             started.elapsed()
@@ -557,7 +555,7 @@ mod tests {
                     .expect("STA")
             };
             let check = owner_check();
-            let proved = prove_owner("move your tax profiles to your Buwiz account", "eBIRForms");
+            let proved = prove_owner("move your tax profiles to your Buwiz account", main_title());
             unsafe { CoUninitialize() };
             assert_eq!(check, OwnerCheck::None);
             assert_eq!(proved, OwnerCheckResult::Unavailable);
