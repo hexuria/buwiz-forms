@@ -224,6 +224,16 @@ const RESELECT_WRITE_MS = 300;
 const RECOMPUTE_RESELECT = platform.os === "windows" || platform.os === "linux";
 
 /**
+ * Whether a selection the input reported is the recompute collapse the guard repairs (Windows, Linux; the box armed by an outside
+ * write just before its focus): the caret collapsed to the end of a nonempty text within RESELECT_COLLAPSE_MS of that focus, and no
+ * key has been seen in the box since its focus. A key, even one that changed no text (Enter, a refused key), makes the caret the
+ * filer's. Exported for its test: headless input reports a selection only after a text change, so the box cannot be driven there.
+ */
+export function isRecomputeCollapse(selection: TextSelection, length: number, sinceFocus: number, keySeen: boolean): boolean {
+  return !keySeen && length > 0 && selection.start === length && selection.end === length && sinceFocus <= RESELECT_COLLAPSE_MS;
+}
+
+/**
  * A TextField whose text goes through a mask on every edit, the caret kept beside the same digit. The box always shows
  * what was reported: an edit the mask refuses is taken back out of the native box, and leaving a box the filer edited
  * reports the value it settled on (a typed 1.255 shown as 1.26 is 1.26 in the draft too) when that is not the one last
@@ -282,6 +292,8 @@ function MaskedField(props: MaskedProps) {
   let armWindowsReselect = false;
   let windowsReselectDone = false;
   let windowsFocusAt = 0;
+  // A key press reached the box since its focus (onKeyPress comes before any text change).
+  let keySeen = false;
   // Set only through the wrapped ref the page receives; a platform Tab, click or tap never sets it.
   let programmaticFocus = false;
   let programmaticFocusToken = 0;
@@ -502,12 +514,12 @@ function MaskedField(props: MaskedProps) {
         if (RECOMPUTE_RESELECT && armWindowsReselect && !windowsReselectDone) {
           const len = untracked(text).length;
           const now = Date.now();
-          if (len > 0 && e.start === len && e.end === len && now - windowsFocusAt <= RESELECT_COLLAPSE_MS) {
+          if (isRecomputeCollapse(e, len, now - windowsFocusAt, keySeen)) {
             // The second and only other deliberate selection write: the measured recompute collapse repair (Windows, Linux).
             windowsReselectDone = true;
             armWindowsReselect = false;
             writeCaret(0, len);
-          } else if (now - windowsFocusAt > RESELECT_COLLAPSE_MS) {
+          } else if (keySeen || now - windowsFocusAt > RESELECT_COLLAPSE_MS) {
             armWindowsReselect = false;
           }
         }
@@ -515,6 +527,7 @@ function MaskedField(props: MaskedProps) {
         props.field.onSelectionChange?.(e);
       }}
       onKeyPress={(e) => {
+        keySeen = true;
         editFrom = selected;
         editTyped = [...e.key].length === 1;
         props.field.onKeyPress?.(e);
@@ -527,6 +540,7 @@ function MaskedField(props: MaskedProps) {
           return;
         }
         focused.set(true);
+        keySeen = false;
         boxText = undefined;
         edited = false;
         typedThisFocus = false;
