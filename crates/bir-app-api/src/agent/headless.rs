@@ -2,8 +2,9 @@
 //!
 //! Mirrors gpui-agent `apps/todo-headless`: clap `serve` (default) / `status` /
 //! `shutdown` / `logs`, `from_env` + `spawn_mailbox_named`, no GPU window. Opens
-//! the room of the account in the saved sign-in ([`serve_database_path`]; or
-//! `BIR_DATABASE_PATH` in a debug or test run), not `Database::open_ephemeral()`. Starts the same in-process SFTP submission cron as shell GUI.
+//! the room of the account in the saved sign-in, or the legacy file while no room
+//! exists ([`serve_database_path`]; or `BIR_DATABASE_PATH` in a debug or test
+//! run), not `Database::open_ephemeral()`. Starts the same in-process SFTP submission cron as shell GUI.
 //! There is no protocol `Op::Yield`. Exclusivity is TCP bind + live-DB owner
 //! lock. `serve --wait` (also `bir --wait`) polls until both are free.
 //! `serve --detach` backgrounds the daemon (Docker `-d`); `logs --follow`
@@ -116,21 +117,45 @@ fn run_cli() -> Result<(), ExitCode> {
 /// What `bir-headless serve` answers when there is no saved sign-in, or no room for it.
 pub const NOT_SIGNED_IN: &str = "Sign in in the eBIRForms app first.";
 
-/// The database `bir-headless serve` opens (accounts-and-lock PLAN §A.2, decided):
+/// The database `bir-headless serve` opens (accounts-and-lock PLAN §A.2, decided), in
+/// `db::app_database_path`'s order:
 /// - where single-room mode is allowed (a debug build or a test environment), the file an explicit
-///   `BIR_DATABASE_PATH` names, as before;
-/// - else the room of the account in the saved sign-in, found through `device.db`'s `rooms`.
+///   `BIR_DATABASE_PATH` names, as before; a debug build's separate dev database;
+/// - the room of the account in the saved sign-in, found through `device.db`'s `rooms`;
+/// - while no room exists yet (no `rooms/` folder: every install until A3a), the legacy `data_dir()/bir_data.db`
+///   when that file is there, so A1 changes nothing for a headless run.
 ///
-/// It refuses with [`NOT_SIGNED_IN`] when there is no saved sign-in or no room for it. It never creates
-/// `data_dir()/bir_data.db` or a room, and it never makes `device.db`.
+/// Otherwise it refuses with [`NOT_SIGNED_IN`]. It never creates `data_dir()/bir_data.db` or a room, and it never
+/// makes `device.db`.
 pub fn serve_database_path() -> Result<std::path::PathBuf, String> {
     if let Some(named) = db::single_room_database() {
         return Ok(named);
     }
+    if let Some(dev) = bir_core::dev_mode::dev_database_path() {
+        return Ok(dev);
+    }
     let stored = bir_core::cloud_account::load_stored_account()
         .ok()
         .flatten();
-    signed_in_room_database(&bir_core::rooms::Layout::here(), stored.as_ref())
+    serve_database_for(&bir_core::rooms::Layout::here(), stored.as_ref())
+}
+
+/// [`serve_database_path`] after single-room mode: the signed-in room under `layout`, else the legacy file while no
+/// room exists, else [`NOT_SIGNED_IN`] (or why the device store could not be read, once rooms exist).
+pub(crate) fn serve_database_for(
+    layout: &bir_core::rooms::Layout,
+    stored: Option<&bir_core::cloud_account::StoredAccount>,
+) -> Result<std::path::PathBuf, String> {
+    let room = signed_in_room_database(layout, stored);
+    if room.is_ok() || layout.has_rooms() {
+        return room;
+    }
+    let legacy = layout.legacy_database();
+    if legacy.is_file() {
+        Ok(legacy)
+    } else {
+        Err(NOT_SIGNED_IN.to_owned())
+    }
 }
 
 /// The room file of `stored`'s account under `layout`, if `rooms` has it and the file is there.
@@ -538,7 +563,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         }
         eprintln!("delivery: semantic only (virtual_unavailable — no GPUI event pipeline)");
         eprintln!(
-            "database: {} (the saved sign-in's room, or BIR_DATABASE_PATH in a debug or test run; exclusive owner lock; not ephemeral)",
+            "database: {} (the saved sign-in's room, the legacy file before rooms, or BIR_DATABASE_PATH in a debug or test run; exclusive owner lock; not ephemeral)",
             path.display()
         );
         eprintln!(
@@ -660,12 +685,12 @@ mod tests {
         }
     }
 
-    /// Accounts-and-lock A1 (I3): with no explicit path, `serve` opens only the saved sign-in's room, found
-    /// through `rooms`. No sign-in, no device store, no row, or no file: refused with the sentence, and nothing is
-    /// made (no `bir_data.db`, no room, no `device.db`).
+    /// Accounts-and-lock A1 (I3): with no explicit path and no legacy file, `serve` opens only the saved sign-in's
+    /// room, found through `rooms`. No sign-in, no device store, no row, or no file: refused with the sentence, and
+    /// nothing is made (no `bir_data.db`, no room, no `device.db`).
     #[test]
     fn headless_refuses_without_a_signed_in_room() {
-        use super::{NOT_SIGNED_IN, signed_in_room_database};
+        use super::{NOT_SIGNED_IN, serve_database_for};
         use bir_core::rooms::{DeviceStore, Layout, RoomRecord, room_id_for};
         let folder = tempfile::tempdir().unwrap();
         let layout = Layout::at(folder.path());
@@ -676,11 +701,11 @@ mod tests {
         };
 
         assert_eq!(
-            signed_in_room_database(&layout, None).unwrap_err(),
+            serve_database_for(&layout, None).unwrap_err(),
             NOT_SIGNED_IN
         );
         assert_eq!(
-            signed_in_room_database(&layout, Some(&jane)).unwrap_err(),
+            serve_database_for(&layout, Some(&jane)).unwrap_err(),
             NOT_SIGNED_IN
         );
         nothing_made(&layout);
@@ -688,7 +713,7 @@ mod tests {
 
         let store = DeviceStore::open(&layout).unwrap();
         assert_eq!(
-            signed_in_room_database(&layout, Some(&jane)).unwrap_err(),
+            serve_database_for(&layout, Some(&jane)).unwrap_err(),
             NOT_SIGNED_IN
         );
         let room = room_id_for("https://api.buwiz.com", "user-1");
@@ -704,7 +729,7 @@ mod tests {
             .unwrap();
         // The row without its file is still no room to open.
         assert_eq!(
-            signed_in_room_database(&layout, Some(&jane)).unwrap_err(),
+            serve_database_for(&layout, Some(&jane)).unwrap_err(),
             NOT_SIGNED_IN
         );
         nothing_made(&layout);
@@ -712,21 +737,58 @@ mod tests {
         layout.create_room_dir(&room).unwrap();
         std::fs::write(layout.room_database(&room), b"").unwrap();
         assert_eq!(
-            signed_in_room_database(&layout, Some(&jane)).unwrap(),
+            serve_database_for(&layout, Some(&jane)).unwrap(),
             layout.room_database(&room)
         );
         // Another account, or the same id on another server, has no room here.
         let other = signed_in("https://api.buwiz.com", "user-2");
         assert_eq!(
-            signed_in_room_database(&layout, Some(&other)).unwrap_err(),
+            serve_database_for(&layout, Some(&other)).unwrap_err(),
             NOT_SIGNED_IN
         );
         let test_server = signed_in("http://127.0.0.1:3008", "user-1");
         assert_eq!(
-            signed_in_room_database(&layout, Some(&test_server)).unwrap_err(),
+            serve_database_for(&layout, Some(&test_server)).unwrap_err(),
             NOT_SIGNED_IN
         );
         assert!(!layout.legacy_database().exists(), "no bir_data.db");
+    }
+
+    /// Accounts-and-lock A1: until a room exists (no `rooms/` folder, every install before A3a), `serve` opens the
+    /// legacy `bir_data.db` when it is there, signed in or not, as before A1. It makes nothing. Once any room exists,
+    /// the legacy file is never the answer: it may be waiting for another account.
+    #[test]
+    fn headless_uses_the_legacy_file_before_rooms_exist() {
+        use super::{NOT_SIGNED_IN, serve_database_for};
+        use bir_core::rooms::{Layout, room_id_for};
+        let folder = tempfile::tempdir().unwrap();
+        let layout = Layout::at(folder.path());
+        std::fs::write(layout.legacy_database(), b"").unwrap();
+        let jane = signed_in("https://api.buwiz.com", "user-1");
+
+        assert_eq!(
+            serve_database_for(&layout, None).unwrap(),
+            layout.legacy_database()
+        );
+        assert_eq!(
+            serve_database_for(&layout, Some(&jane)).unwrap(),
+            layout.legacy_database()
+        );
+        assert!(!layout.device_db().exists(), "no device.db made");
+        assert!(!layout.rooms_dir().exists(), "no room made");
+
+        // Another account's room exists: the legacy file is no longer opened.
+        layout
+            .create_room_dir(&room_id_for("https://api.buwiz.com", "user-2"))
+            .unwrap();
+        assert_eq!(
+            serve_database_for(&layout, Some(&jane)).unwrap_err(),
+            NOT_SIGNED_IN
+        );
+        assert_eq!(
+            serve_database_for(&layout, None).unwrap_err(),
+            NOT_SIGNED_IN
+        );
     }
 }
 
