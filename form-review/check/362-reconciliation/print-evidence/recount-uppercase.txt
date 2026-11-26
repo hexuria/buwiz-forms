@@ -1,0 +1,8 @@
+1800: raw-full=50 flat-full=50
+  writer-value attrs with 100+ chars: 0 sample: None
+1801: raw-full=53 flat-full=54
+  writer-value attrs with 100+ chars: 0 sample: None
+2200S: raw-full=0 flat-full=0
+  writer-value attrs with 100+ chars: 0 sample: None
+2200T: raw-full=19 flat-full=19
+  writer-value attrs with 100+ chars: 0 sample: None
