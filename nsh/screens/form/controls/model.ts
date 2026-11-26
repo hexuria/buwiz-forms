@@ -151,6 +151,14 @@ export function pickLabel(o: Pick<ChoiceOption, "label">): string {
   return name ? `${code} — ${name}` : o.label;
 }
 
+/**
+ * The kit keyboard for a searched list's `searchKeyboard` (Pick.tsx) on a system: "digits-first" opens on digits only where letters
+ * stay one key away (iOS's numbers-and-punctuation); Android's number keyboards have no letters, so there it is the ordinary one.
+ */
+export function searchKeyboardType(kind: "default" | "digits-first" | undefined, os: string): "default" | "numbers-and-punctuation" {
+  return kind === "digits-first" && os === "ios" ? "numbers-and-punctuation" : "default";
+}
+
 /** What a desktop pick does with the text left in its box when the keys leave it (or Enter is pressed with no row lit). */
 export type TypedPick =
   | { kind: "keep" }

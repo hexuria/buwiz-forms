@@ -266,7 +266,7 @@ function EditPick(props: { s: PageState; field: "rdo_code" | "zip_code"; label: 
         testID={`tp-${e()?.sec}-${props.field}`}
         label={props.label}
         options={pickOptions(props.field)}
-        searchKeyboard={props.field === "zip_code" ? "number-pad" : "default"}
+        searchKeyboard={props.field === "zip_code" ? "digits-first" : "default"}
         value={e()?.values[props.field] ?? ""}
         onPick={(v) => {
           props.s.setValue(props.field, v);

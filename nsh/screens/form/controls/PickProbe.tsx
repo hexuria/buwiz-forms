@@ -16,11 +16,17 @@ const RDO: ChoiceOption[] = [
     return { value: code, label: `${code} - ${PLACES[code] ?? `Revenue District ${i + 1}`}` };
   }),
 ];
+// Three ZIPs of one city (Makati City), so a search by the city's name finds them all and no other.
+const ZIP_PLACES: Record<string, string> = {
+  "1209": "Bel-Air, Makati City",
+  "1226": "Bel-Air, San Lorenzo, Makati City",
+  "1232": "Poblacion, Makati City",
+};
 const ZIP: ChoiceOption[] = [
   { value: "", label: "Choose…" },
   ...Array.from({ length: 400 }, (_, i) => {
     const code = String(1000 + i);
-    return { value: code, label: code === "1226" ? "1226 - Bel-Air, San Lorenzo" : `${code} - Place ${i + 1}` };
+    return { value: code, label: `${code} - ${ZIP_PLACES[code] ?? `Place ${i + 1}`}` };
   }),
 ];
 
@@ -61,7 +67,7 @@ function Probe() {
         label="ZIP code"
         options={ZIP}
         value={zip()}
-        searchKeyboard="number-pad"
+        searchKeyboard="digits-first"
         onPick={(v) => {
           zip.set(v);
           bump("zipPicks");

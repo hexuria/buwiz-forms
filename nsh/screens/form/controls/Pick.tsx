@@ -7,10 +7,10 @@
 //   Enter picks it, Escape closes and restores, Tab leaves; the chevron opens the whole list. Text that is not a choice is not taken
 //   on leaving: the box goes back to the last pick and a line under it says so (resolveTyped in model.ts).
 import type { Accessor, InputRef, ListRef, ViewRef } from "nsh";
-import { announce, batch, effect, keymap, List, Overlay, signal, untracked, View, windowSize } from "nsh";
+import { announce, batch, effect, keymap, List, Overlay, platform, signal, untracked, View, windowSize } from "nsh";
 import { ChoiceRow, Icon, IconButton, Line, phoneLayout, Popover, Sheet, sheetBodyRoom, T_MIN_H, T_PX, Text, TextField, TOUCH } from "../../../ui";
 import type { ChoiceOption } from "../contract";
-import { cx, matchWords, pickLabel, resolveTyped } from "./model";
+import { cx, matchWords, pickLabel, resolveTyped, searchKeyboardType } from "./model";
 
 /** Props of SearchPick. */
 export interface SearchPickProps {
@@ -32,8 +32,13 @@ export interface SearchPickProps {
   disabled?: boolean;
   /** The "Clear the choice" row shows for a chosen value (default true); a required group passes false. */
   clearable?: boolean;
-  /** The phone keyboard the search opens with: "number-pad" for a list searched by number (ZIP codes); default letters and digits. */
-  searchKeyboard?: "default" | "number-pad";
+  /**
+   * The phone keyboard the search opens with. "digits-first" for a list mostly searched by number but also by name (ZIP codes: a
+   * filer who does not know the ZIP knows the city): iOS's numbers-and-punctuation keyboard, which opens on digits and reaches
+   * letters with one key; Android's number keyboards have no letters, so there it is the ordinary keyboard. Never a digits-only
+   * pad: every list here is searchable by name. Default: the ordinary keyboard.
+   */
+  searchKeyboard?: "default" | "digits-first";
   /** Fires when the list opens. */
   onOpen?: () => void;
   /** Receives the trigger's ref (phone) or the text box's (wide), so a pill step can put the keyboard on it. */
@@ -44,6 +49,7 @@ const real = (p: SearchPickProps) => p.options.filter((o) => o.value !== "");
 const currentOf = (p: SearchPickProps) => p.options.find((o) => o.value === p.value && o.value !== "");
 const rowLabel = (o: ChoiceOption) => (o.disabled ? `${pickLabel(o)}, unavailable` : pickLabel(o));
 const NOTHING = "Nothing matches. Try a code or other words.";
+
 
 // ---------------------------------------------------------------- test seam
 
@@ -122,11 +128,11 @@ function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void
           query.set(v);
           list?.scrollToOffset({ offset: 0, animated: false });
         }}
-        keyboardType={p.searchKeyboard ?? "default"}
+        keyboardType={searchKeyboardType(p.searchKeyboard, platform.os)}
         autoCapitalize="none"
         returnKeyType="search"
         onSubmit={submit}
-        placeholder={p.searchKeyboard === "number-pad" ? "Search by number" : "Search by code or words"}
+        placeholder="Search by code or words"
         accessibilityLabel={`Search ${p.label}`}
         testID={`${p.testID}-search`}
         inputRef={(r: InputRef) => {

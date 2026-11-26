@@ -1,7 +1,7 @@
 // The controls' pure rules (model.ts): options, the shown choice, the TIN tell, word search, dates, row titles.
 import { expect, test } from "nsh/test";
 import type { ChoiceOption } from "../contract";
-import { drawerGroups, drawerTin, headFits, isOn, listedOptions, matchWords, mdy, optionOf, pickLabel, readText, resolveTyped, rowHead, rowTitleOf, selectModel, splitLabel, tinKind } from "./model";
+import { drawerGroups, drawerTin, headFits, isOn, listedOptions, matchWords, mdy, optionOf, pickLabel, readText, resolveTyped, rowHead, rowTitleOf, searchKeyboardType, selectModel, splitLabel, tinKind } from "./model";
 
 const box = (value: string, options: ChoiceOption[] = [], zeroWhenBlank = false) =>
   ({ value: () => value, options: () => options, zeroWhenBlank }) as never;
@@ -170,4 +170,13 @@ test("resolveTyped: what a desktop pick takes from its box on leaving, and the s
   });
   // A choice that takes no pick is not taken by typing either.
   expect(resolveTyped(rdo, "081", "050")).toEqual({ kind: "revert", note: "“081” can't be chosen here. The box kept 050 — South Makati." });
+});
+
+test("searchKeyboardType: a ZIP search opens on digits only where letters stay one key away", () => {
+  expect(searchKeyboardType("digits-first", "ios")).toBe("numbers-and-punctuation");
+  // Android's number keyboards have no letters: the ordinary keyboard, so a city can still be typed.
+  expect(searchKeyboardType("digits-first", "android")).toBe("default");
+  expect(searchKeyboardType("digits-first", "macos")).toBe("default");
+  expect(searchKeyboardType("default", "ios")).toBe("default");
+  expect(searchKeyboardType(undefined, "ios")).toBe("default");
 });

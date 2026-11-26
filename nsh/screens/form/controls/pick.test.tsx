@@ -76,6 +76,25 @@ test("phone: a ZIP is found by its number, and a search that finds nothing says 
   expect(line(app, "zip")).toBe("zip: 1226 | picks: 1 | opens: 1");
 });
 
+test("phone: a filer who does not know the ZIP finds it by the city's name", async () => {
+  const app = await probe();
+  await app.press("id:pp-zip-trigger");
+  await app.waitFor("id:pp-zip-search");
+  await app.type("id:pp-zip-search", "makati");
+  await app.waitFor("id:pp-zip-opt-1209");
+  expect(app.count("id:pp-zip-opt-1226")).toBe(1);
+  expect(app.count("id:pp-zip-opt-1232")).toBe(1);
+  expect(app.count("id:pp-zip-opt-1000")).toBe(0);
+  // Words in any order narrow it to one city part.
+  await app.clear("id:pp-zip-search");
+  await app.type("id:pp-zip-search", "makati poblacion");
+  await app.waitFor("id:pp-zip-opt-1232");
+  expect(app.count("id:pp-zip-opt-1209")).toBe(0);
+  await app.press("id:pp-zip-opt-1232");
+  await app.waitFor("id:pp-zip-search", { state: "gone" });
+  expect(line(app, "zip")).toBe("zip: 1232 | picks: 1 | opens: 1");
+});
+
 test("phone: the list opens on the current choice, and the clear row clears it", async () => {
   const app = await probe({ rdo: "120" });
   await app.press("id:pp-rdo-trigger");
