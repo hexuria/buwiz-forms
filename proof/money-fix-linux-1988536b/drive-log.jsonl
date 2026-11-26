@@ -1,0 +1,99 @@
+{"t": 1795675095.739351, "event": "click", "id": "setup-solo", "screen": [1280, 958], "logical": [1280.0, 957.5]}
+{"t": 1795675112.3256834, "event": "click", "id": "home-tile-drafts", "screen": [1398, 240], "logical": [1398.0, 239.5]}
+{"t": 1795675118.9316764, "event": "click", "id": "return-1", "screen": [556, 320], "logical": [556.5, 320.5]}
+{"t": 1795675139.5626779, "event": "click", "id": "fp-part-4-toggle", "screen": [1518, 952], "logical": [1518.0, 952.0]}
+{"t": 1795675145.9060996, "event": "click", "id": "fp-row-drpATC1-0", "screen": [1542, 1052], "logical": [1542.0, 1052.0]}
+{"t": 1795675154.1038852, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675154.2706084, "event": "xdotool-type", "text": "1", "delay": 120, "keys": "1"}
+{"t": 1795675179.699285, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675180.590778, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795675182.4737413, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675184.1903963, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795675266.1156614, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675266.2690752, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795675324.6882398, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675325.669515, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795675326.1946397, "event": "case-focused", "case": "a zero click type", "focused": "15000.50", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/a-focused.png"}
+{"t": 1795675341.369706, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675342.2558944, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795675344.1207428, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675345.1757295, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795675345.6775434, "event": "case-focused", "case": "b ctrl+a type", "focused": "15000.50", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/b-focused.png"}
+{"t": 1795675348.2994337, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675349.1938832, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795675351.0696802, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675352.1254234, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795675352.6635704, "event": "case-focused", "case": "c ctrl+a backspace type", "focused": "15000.50", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/c-focused.png"}
+{"t": 1795675355.3223739, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675356.2122042, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795675358.2046528, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795675359.6687205, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795675360.1758769, "event": "case-focused", "case": "d tab in type", "focused": "1234.515000506", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/d-focused.png"}
+{"t": 1795675385.1626651, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675386.0422845, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795675388.2436545, "event": "click", "id": "fp-table-drpATC1-done", "screen": [2514, 378], "logical": [2514.5, 378.0]}
+{"t": 1795675389.2078936, "event": "click", "id": "fp-row-drpATC1-0", "screen": [1542, 1052], "logical": [1542.0, 1052.0]}
+{"t": 1795675389.7218292, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795675391.1394746, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795675391.623774, "event": "case-focused", "case": "d2 tab in fresh editor type", "focused": "1234.515000506", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/d2-focused.png"}
+{"t": 1795675415.7946734, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675415.9595404, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795675417.799562, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675418.7764037, "event": "xdotool-type", "text": "99999.99", "delay": 120, "keys": "9 9 9 9 9 period 9 9"}
+{"t": 1795675419.260654, "event": "case-focused", "case": "99999.99", "focused": "99999.99", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/n99999-focused.png"}
+{"t": 1795675421.8386497, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675421.9987175, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795675423.9276466, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675425.308927, "event": "xdotool-type", "text": "1000000.005", "delay": 120, "keys": "1 0 0 0 0 0 0 period 0 0 5"}
+{"t": 1795675426.0607688, "event": "case-focused", "case": "1000000.005", "focused": "1000000.005", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/round-focused.png"}
+{"t": 1795675428.690649, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675428.843963, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795675430.674748, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675431.8921974, "event": "xdotool-type", "text": "1234567890", "delay": 120, "keys": "1 2 3 4 5 6 7 8 9 0"}
+{"t": 1795675432.6354709, "event": "case-focused", "case": "left left backspace", "focused": "123456790", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/editkeys-focused.png"}
+{"t": 1795675435.2587843, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675435.4151456, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795675437.2545676, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675438.6241083, "event": "xdotool-type", "text": "99999999.99", "delay": 120, "keys": "9 9 9 9 9 9 9 9 period 9 9"}
+{"t": 1795675439.341002, "event": "case-focused", "case": "99999999.99 run 1", "focused": "99999999.99", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/nines1-focused.png"}
+{"t": 1795675441.9213169, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675442.0743897, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795675443.921701, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675445.2762005, "event": "xdotool-type", "text": "99999999.99", "delay": 120, "keys": "9 9 9 9 9 9 9 9 period 9 9"}
+{"t": 1795675445.7701643, "event": "case-focused", "case": "99999999.99 run 2", "focused": "99999999.99", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/nines2-focused.png"}
+{"t": 1795675448.337631, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675448.4923031, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795675450.3234415, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675451.6652186, "event": "xdotool-type", "text": "99999999.99", "delay": 120, "keys": "9 9 9 9 9 9 9 9 period 9 9"}
+{"t": 1795675452.1386325, "event": "case-focused", "case": "99999999.99 run 3", "focused": "99999999.99", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/nines3-focused.png"}
+{"t": 1795675454.730295, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675454.8864033, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795675456.716522, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675456.7223992, "event": "xdotool-type", "text": "99999999.99", "delay": 0, "keys": "9 9 9 9 9 9 9 9 period 9 9"}
+{"t": 1795675457.209515, "event": "case-focused", "case": "burst no delay", "focused": "99999999.99", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/burst-focused.png"}
+{"t": 1795675459.7656364, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675459.9192638, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795675461.7496789, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795675462.3702288, "event": "case-focused", "case": "paste", "focused": "99999999.99", "screenshot": "/home/ubuntu/forms-validation/money-box-proof/paste-focused.png"}
+{"t": 1795675513.389699, "event": "click", "id": "fp-frm2551Qv2018:txtSheets", "screen": [1221, 674], "logical": [1221.0, 674.0]}
+{"t": 1795675513.9051917, "event": "xdotool-type", "text": "1234", "delay": 120, "keys": "1 2 3 4"}
+{"t": 1795675516.5906389, "event": "click", "id": "fp-frm2551Qv2018:txtSheets", "screen": [1221, 674], "logical": [1221.0, 674.0]}
+{"t": 1795675517.3646574, "event": "xdotool-type", "text": "111222", "delay": 120, "keys": "1 1 1 2 2 2"}
+{"t": 1795675554.534668, "event": "click", "id": "fp-frm2551Qv2018:txtSheets", "screen": [1221, 674], "logical": [1221.0, 674.0]}
+{"t": 1795675554.9637067, "event": "xdotool-type", "text": "12", "delay": 120, "keys": "1 2"}
+{"t": 1795675558.289336, "event": "click", "id": "fp-frm2551Qv2018:txtSheets", "screen": [1221, 674], "logical": [1221.0, 674.0]}
+{"t": 1795675558.7260733, "event": "xdotool-type", "text": "11", "delay": 120, "keys": "1 1"}
+{"t": 1795675572.259289, "event": "click", "id": "fp-part-3-toggle", "screen": [1518, 882], "logical": [1518.0, 882.0]}
+{"t": 1795675581.221328, "event": "click", "id": "tb-panel", "screen": [2536, 52], "logical": [2536.0, 52.0]}
+{"t": 1795675586.6529498, "event": "click", "id": "panel-edit-profile", "screen": [2400, 364], "logical": [2400.0, 364.0]}
+{"t": 1795675614.052455, "event": "click", "id": "tp-sec-taxpayer-edit", "screen": [1605, 260], "logical": [1605.0, 260.0]}
+{"t": 1795675687.0576866, "event": "click", "id": "n317", "screen": [1007, 398], "logical": [1007.0, 398.0]}
+{"t": 1795675688.5812385, "event": "xdotool-type", "text": "111222333", "delay": 120, "keys": "1 1 1 2 2 2 3 3 3"}
+{"t": 1795675690.4185486, "event": "click", "id": "tp-taxpayer-birth_date", "screen": [1252, 470], "logical": [1252.0, 470.0]}
+{"t": 1795675691.8168812, "event": "xdotool-type", "text": "11112011", "delay": 120, "keys": "1 1 1 1 2 0 1 1"}
+{"t": 1795675694.6566463, "event": "click", "id": "tp-taxpayer-save", "screen": [1576, 556], "logical": [1576.0, 556.0]}
+{"t": 1795675741.6408663, "event": "click", "id": "n317", "screen": [1007, 398], "logical": [1007.0, 398.0]}
+{"t": 1795675743.2832754, "event": "xdotool-type", "text": "111222333", "delay": 120, "keys": "1 1 1 2 2 2 3 3 3"}
+{"t": 1795675745.5842626, "event": "click", "id": "tp-taxpayer-birth_date", "screen": [1252, 470], "logical": [1252.0, 470.0]}
+{"t": 1795675747.3815155, "event": "xdotool-type", "text": "2011-11-11", "delay": 120, "keys": "2 0 1 1 minus 1 1 minus 1 1"}
+{"t": 1795675815.5636683, "event": "click", "id": "tp-taxpayer-save", "screen": [1576, 556], "logical": [1576.0, 556.0]}

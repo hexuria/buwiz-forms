@@ -1,0 +1,25 @@
+case,keys_action,shown_focused,shown_after_blur,saved_draft_value,expected_focused,expected_after_blur,expected_saved,pass,notes
+a zero click type,"click, type 15000.50",15000.50,"15,000.50",15000.5,15000.50,"15,000.50",15000.5,True,
+b ctrl+a type,"holding 1,234.56; click, Ctrl+A, type 15000.50",15000.50,"15,000.50",15000.5,15000.50,"15,000.50",15000.5,True,
+c ctrl+a backspace type,"holding 1,234.56; click, Ctrl+A, BackSpace, type 15000.50",15000.50,"15,000.50",15000.5,15000.50,"15,000.50",15000.5,True,
+d tab in type,"holding 1,234.56; Tab in, type 15000.50",1234.515000506,"1,234.52",1234.52,15000.50,"15,000.50",15000.5,False,
+d2 tab in fresh editor type,"holding 1,234.56; close/reopen editor, Tab in, type 15000.50",1234.515000506,"1,234.52",1234.52,15000.50,"15,000.50",15000.5,False,
+99999.99,from 0.00; type 99999.99,99999.99,"99,999.99",99999.99,99999.99,"99,999.99",99999.99,True,
+1000000.005,from 0.00; type 1000000.005,1000000.005,"1,000,000.01",1000000.01,1000000.005,"1,000,000.01",1000000.01,True,
+left left backspace,from 0.00; type 1234567890 then Left Left BackSpace,123456790,"123,456,790.00",123456790.0,123456790,"123,456,790.00",123456790.0,True,
+99999999.99 run 1,from 0.00; type 99999999.99 (run 1),99999999.99,"99,999,999.99",99999999.99,99999999.99,"99,999,999.99",99999999.99,True,
+99999999.99 run 2,from 0.00; type 99999999.99 (run 2),99999999.99,"99,999,999.99",99999999.99,99999999.99,"99,999,999.99",99999999.99,True,
+99999999.99 run 3,from 0.00; type 99999999.99 (run 3),99999999.99,"99,999,999.99",99999999.99,99999999.99,"99,999,999.99",99999999.99,True,
+burst no delay,from 0.00; type 99999999.99 with xdotool delay 0,99999999.99,"99,999,999.99",99999999.99,99999999.99,"99,999,999.99",99999999.99,True,
+paste,from 0.00; paste 99999999.99 with real Ctrl+V,99999999.99,"99,999,999.99",99999999.99,99999999.99,"99,999,999.99",99999999.99,True,
+whole number int-normal,"click, Ctrl+A, type 1234",0,0,0,1234,1234,1234,False,
+whole number int-repeated,"click, Ctrl+A, type 111222",11,11,11,111222,111222,111222,False,
+whole number int-normal-valid,"click, Ctrl+A, type 12",12,12,12,12,12,12,True,
+whole number int-repeated-valid,"click, Ctrl+A, type 11",11,11,11,11,11,11,True,
+TIN repeated digits,"profile TIN: click, Ctrl+A, type 111222333",000123453,000123453,"{'segment1': '000', 'segment2': '123', 'segment3': '453', 'branch': '00000'}",111-222-333,111-222-333,111222333,False,
+date repeated digits,"birth date: click, Ctrl+A, type 11112011",11112011,11112011,,11/11/2011,"November 11, 2011",11/11/2011,False,
+date repeated digits corrected,"profile birth date: click, Ctrl+A, type 2011-11-11",2011-11-11,2011-11-11,2011-11-11,2011-11-11,2011-11-11,2011-11-11,True,profile DateField requires ISO yyyy-mm-dd; repeated-neighbour digit adaptation of owner example
+TIN shared mask,attempted profile TIN with real keys,000123451,000123451,000123451 (scratch profile),,,,False,"BLOCKED/NOT REPRESENTATIVE: profile uses DigitCells, not shared TinInput; Ctrl+A batch typing changed only last digit. No editable shared TinInput found in 2551Q because TIN is profile-locked."
+RDO code,inspection,,,,,,,,"UNTESTED/NOT APPLICABLE in 2551Q: RDO is profile-locked; taxpayer profile RDO is a dropdown pick, not typed shared mask."
+ATC,inspection,,,,,,,,"UNTESTED/NOT APPLICABLE in 2551Q Schedule 1: ATC is a dropdown trigger, not typed text."
+date in 2551Q payment part,inspection,,,,,,,,UNTESTED/NOT APPLICABLE: txtDate25-28 are explicitly closed/locked until payment; profile birth date used instead.
