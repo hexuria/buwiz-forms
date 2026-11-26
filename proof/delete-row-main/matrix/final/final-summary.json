@@ -1,0 +1,61 @@
+{
+ "rows": 139,
+ "two_filled_rows_setup": {
+  "yes": 132,
+  "no": 7
+ },
+ "confidence": {
+  "high_host_seeded": 127,
+  "medium_direct_seed_host_values_verified": 5,
+  "low_invalid_or_incomplete_setup": 7
+ },
+ "seeding_methods": {
+  "host_screen_form_fill": 130,
+  "direct_draft_rows_fallback_clearly_marked": 7,
+  "direct_seed_failed": 2
+ },
+ "invalid_rows": [
+  [
+   "1601EQ_frm1601EQ_txtAtcCd7",
+   "host_screen_form_fill",
+   2,
+   "first two transformed screen rows do not show distinct seeded host values"
+  ],
+  [
+   "1601FQ_drpTreatyCode0",
+   "host_screen_form_fill",
+   2,
+   "first two transformed screen rows do not show distinct seeded host values"
+  ],
+  [
+   "1604F_frm1604f_txtSched1Date1",
+   "direct_seed_failed",
+   2,
+   "direct seeding failed: not a 1604F draft: invalid length 2, expected an array of length 3"
+  ],
+  [
+   "1604F_frm1604f_txtSched2Date1",
+   "direct_draft_rows_fallback_clearly_marked",
+   3,
+   "backing array has 3 nonblank/nonzero rows, not exactly 2; first two transformed screen rows do not show distinct seeded host values"
+  ],
+  [
+   "1604F_frm1604f_txtSched3Date1",
+   "direct_seed_failed",
+   4,
+   "direct seeding failed: not a 1604F draft: invalid length 4, expected fewer elements in array; backing array has 4 nonblank/nonzero rows, not exactly 2"
+  ],
+  [
+   "1700_frm1700_rdoPg2I4_1PartVIEmployeeT",
+   "host_screen_form_fill",
+   5,
+   "backing array has 5 nonblank/nonzero rows, not exactly 2"
+  ],
+  [
+   "2553_frm2553_txt18A",
+   "direct_draft_rows_fallback_clearly_marked",
+   2,
+   "the transformed schedule exposes only one row, so a second screen row cannot be seeded; first two transformed screen rows do not show distinct seeded "
+  ]
+ ]
+}

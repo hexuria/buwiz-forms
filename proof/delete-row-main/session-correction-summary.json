@@ -1,0 +1,138 @@
+{
+  "2551Q": {
+    "confirmation_required": false,
+    "confirmation_message": null,
+    "zero_retry": {
+      "edits": {
+        "txtATCAmt1": "0"
+      },
+      "rejected": {},
+      "removes": null,
+      "draft_schedule_1": [
+        {
+          "atc": "",
+          "atc_description": "",
+          "taxable_amount": 0,
+          "tax_rate": 0,
+          "tax_due": 0
+        },
+        {
+          "atc": "PT040",
+          "atc_description": "Domestic carriers and keepers of garages [Sec. 117]",
+          "taxable_amount": 7777,
+          "tax_rate": 0.03,
+          "tax_due": 233.31
+        }
+      ],
+      "merged_rejected": {},
+      "cleared": [
+        "txtATCAmt1"
+      ]
+    },
+    "analysis": {
+      "row_count_before": 2,
+      "row_count_after": 2,
+      "row0_before": {
+        "atc": "PT010",
+        "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+        "taxable_amount": 1000,
+        "tax_rate": 0.03,
+        "tax_due": 30
+      },
+      "row0_after": {
+        "atc": "",
+        "atc_description": "",
+        "taxable_amount": 0,
+        "tax_rate": 0,
+        "tax_due": 0
+      },
+      "row1_before": {
+        "atc": "PT040",
+        "atc_description": "Domestic carriers and keepers of garages [Sec. 117]",
+        "taxable_amount": 7777,
+        "tax_rate": 0.03,
+        "tax_due": 233.31
+      },
+      "row1_after": {
+        "atc": "PT040",
+        "atc_description": "Domestic carriers and keepers of garages [Sec. 117]",
+        "taxable_amount": 7777,
+        "tax_rate": 0.03,
+        "tax_due": 233.31
+      },
+      "total_tax_due_before": 263.31,
+      "total_tax_due_after": 233.31
+    },
+    "payload": {
+      "bytes": 5559,
+      "ok": true,
+      "path": "session-2551q-generated-payload.txt"
+    },
+    "payload_rows": [
+      {
+        "atc": "",
+        "atc_description": "",
+        "tax_due": 0.0,
+        "tax_rate": 0.0,
+        "taxable_amount": 0.0
+      },
+      {
+        "atc": "PT040",
+        "atc_description": "Domestic carriers and keepers of garages [Sec. 117]",
+        "tax_due": 233.31,
+        "tax_rate": 0.03,
+        "taxable_amount": 7777.0
+      }
+    ]
+  },
+  "1601EQ": {
+    "confirmation_required": true,
+    "confirmation_message": "Clearing this ATC removes its row and its tax base of \u20b11,000.00. Continue?",
+    "zero_retry": null,
+    "analysis": {
+      "row_count_before": 2,
+      "row_count_after": 1,
+      "rows_before": [
+        {
+          "atc_code": "WI010",
+          "tax_base": 1000,
+          "tax_withheld": 50
+        },
+        {
+          "atc_code": "WI011",
+          "tax_base": 2000,
+          "tax_withheld": 200
+        }
+      ],
+      "rows_after": [
+        {
+          "atc_code": "WI011",
+          "tax_base": 0,
+          "tax_withheld": 0
+        }
+      ],
+      "total_taxes_withheld_before": 250,
+      "total_taxes_withheld_after": 0,
+      "exact_delete_key_order": [
+        "frm1601EQ:txtAtcCd1",
+        "frm1601EQ:txtTaxBase1"
+      ]
+    },
+    "payload": {
+      "errors": [
+        [
+          "schedule[0].tax_base",
+          "Please enter a valid value for tax base for WI011."
+        ]
+      ],
+      "ok": false
+    },
+    "payload_rows": [
+      {
+        "atc_code": "WI011",
+        "tax_base": 0.0,
+        "tax_withheld": 0.0
+      }
+    ]
+  }
+}

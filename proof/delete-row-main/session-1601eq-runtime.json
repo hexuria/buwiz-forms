@@ -1,0 +1,588 @@
+{
+  "form": "1601EQ",
+  "correction": "session-faithful: blank writes in one batch; removes holds the first host answer for confirmation and skips every numeric zero retry",
+  "schedule_item": {
+    "no": "13",
+    "title": "ATC (Items 13 to 18)",
+    "rows": 6,
+    "keys": [
+      [
+        "frm1601EQ:txtAtcCd1",
+        "frm1601EQ:txtTaxBase1",
+        "frm1601EQ:txtTaxRate1",
+        "frm1601EQ:txtTaxbeWithHeld1"
+      ],
+      [
+        "frm1601EQ:txtAtcCd2",
+        "frm1601EQ:txtTaxBase2",
+        "frm1601EQ:txtTaxRate2",
+        "frm1601EQ:txtTaxbeWithHeld2"
+      ]
+    ],
+    "cols": [
+      {
+        "l": "ATC",
+        "t": "sel"
+      },
+      {
+        "l": "Tax Base",
+        "t": "money"
+      },
+      {
+        "l": "Tax Rate",
+        "t": "pct",
+        "c": 1
+      },
+      {
+        "l": "Tax Withheld",
+        "t": "money",
+        "c": 1
+      }
+    ]
+  },
+  "seed_steps": [
+    {
+      "label": "answer any taxes withheld yes",
+      "edits": {
+        "frm1601EQ:optWithheld:Y": true
+      },
+      "rejected": {},
+      "removes": null,
+      "draft_schedule": [],
+      "values": {
+        "frm1601EQ:txtAtcCd1": "",
+        "frm1601EQ:txtAtcCd2": "",
+        "frm1601EQ:txtAtcCd3": "",
+        "frm1601EQ:txtAtcCd4": "",
+        "frm1601EQ:txtAtcCd5": "",
+        "frm1601EQ:txtAtcCd6": "",
+        "frm1601EQ:txtTaxBase1": "",
+        "frm1601EQ:txtTaxBase2": "",
+        "frm1601EQ:txtTaxBase3": "",
+        "frm1601EQ:txtTaxBase4": "",
+        "frm1601EQ:txtTaxBase5": "",
+        "frm1601EQ:txtTaxBase6": "",
+        "frm1601EQ:txtTaxRate1": "",
+        "frm1601EQ:txtTaxRate2": "",
+        "frm1601EQ:txtTaxRate3": "",
+        "frm1601EQ:txtTaxRate4": "",
+        "frm1601EQ:txtTaxRate5": "",
+        "frm1601EQ:txtTaxRate6": "",
+        "frm1601EQ:txtTaxbeWithHeld1": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld2": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld3": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld4": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld5": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld6": "0.00"
+      }
+    },
+    {
+      "label": "answer category private",
+      "edits": {
+        "frm1601EQ:optCategory:P": true
+      },
+      "rejected": {},
+      "removes": null,
+      "draft_schedule": [],
+      "values": {
+        "frm1601EQ:txtAtcCd1": "",
+        "frm1601EQ:txtAtcCd2": "",
+        "frm1601EQ:txtAtcCd3": "",
+        "frm1601EQ:txtAtcCd4": "",
+        "frm1601EQ:txtAtcCd5": "",
+        "frm1601EQ:txtAtcCd6": "",
+        "frm1601EQ:txtTaxBase1": "",
+        "frm1601EQ:txtTaxBase2": "",
+        "frm1601EQ:txtTaxBase3": "",
+        "frm1601EQ:txtTaxBase4": "",
+        "frm1601EQ:txtTaxBase5": "",
+        "frm1601EQ:txtTaxBase6": "",
+        "frm1601EQ:txtTaxRate1": "",
+        "frm1601EQ:txtTaxRate2": "",
+        "frm1601EQ:txtTaxRate3": "",
+        "frm1601EQ:txtTaxRate4": "",
+        "frm1601EQ:txtTaxRate5": "",
+        "frm1601EQ:txtTaxRate6": "",
+        "frm1601EQ:txtTaxbeWithHeld1": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld2": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld3": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld4": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld5": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld6": "0.00"
+      }
+    },
+    {
+      "label": "seed row 1 ATC WI010",
+      "edits": {
+        "frm1601EQ:txtAtcCd1": "WI010"
+      },
+      "rejected": {},
+      "removes": null,
+      "draft_schedule": [
+        {
+          "atc_code": "WI010",
+          "tax_base": 0,
+          "tax_withheld": 0
+        }
+      ],
+      "values": {
+        "frm1601EQ:txtAtcCd1": "WI010",
+        "frm1601EQ:txtAtcCd2": "",
+        "frm1601EQ:txtAtcCd3": "",
+        "frm1601EQ:txtAtcCd4": "",
+        "frm1601EQ:txtAtcCd5": "",
+        "frm1601EQ:txtAtcCd6": "",
+        "frm1601EQ:txtTaxBase1": "0.00",
+        "frm1601EQ:txtTaxBase2": "",
+        "frm1601EQ:txtTaxBase3": "",
+        "frm1601EQ:txtTaxBase4": "",
+        "frm1601EQ:txtTaxBase5": "",
+        "frm1601EQ:txtTaxBase6": "",
+        "frm1601EQ:txtTaxRate1": " 5.0",
+        "frm1601EQ:txtTaxRate2": "",
+        "frm1601EQ:txtTaxRate3": "",
+        "frm1601EQ:txtTaxRate4": "",
+        "frm1601EQ:txtTaxRate5": "",
+        "frm1601EQ:txtTaxRate6": "",
+        "frm1601EQ:txtTaxbeWithHeld1": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld2": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld3": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld4": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld5": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld6": "0.00"
+      }
+    },
+    {
+      "label": "seed row 1 base",
+      "edits": {
+        "frm1601EQ:txtTaxBase1": "1000"
+      },
+      "rejected": {},
+      "removes": null,
+      "draft_schedule": [
+        {
+          "atc_code": "WI010",
+          "tax_base": 1000,
+          "tax_withheld": 50
+        }
+      ],
+      "values": {
+        "frm1601EQ:txtAtcCd1": "WI010",
+        "frm1601EQ:txtAtcCd2": "",
+        "frm1601EQ:txtAtcCd3": "",
+        "frm1601EQ:txtAtcCd4": "",
+        "frm1601EQ:txtAtcCd5": "",
+        "frm1601EQ:txtAtcCd6": "",
+        "frm1601EQ:txtTaxBase1": "1,000.00",
+        "frm1601EQ:txtTaxBase2": "",
+        "frm1601EQ:txtTaxBase3": "",
+        "frm1601EQ:txtTaxBase4": "",
+        "frm1601EQ:txtTaxBase5": "",
+        "frm1601EQ:txtTaxBase6": "",
+        "frm1601EQ:txtTaxRate1": " 5.0",
+        "frm1601EQ:txtTaxRate2": "",
+        "frm1601EQ:txtTaxRate3": "",
+        "frm1601EQ:txtTaxRate4": "",
+        "frm1601EQ:txtTaxRate5": "",
+        "frm1601EQ:txtTaxRate6": "",
+        "frm1601EQ:txtTaxbeWithHeld1": "50.00",
+        "frm1601EQ:txtTaxbeWithHeld2": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld3": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld4": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld5": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld6": "0.00"
+      }
+    },
+    {
+      "label": "seed row 2 ATC WI011",
+      "edits": {
+        "frm1601EQ:txtAtcCd2": "WI011"
+      },
+      "rejected": {},
+      "removes": null,
+      "draft_schedule": [
+        {
+          "atc_code": "WI010",
+          "tax_base": 1000,
+          "tax_withheld": 50
+        },
+        {
+          "atc_code": "WI011",
+          "tax_base": 0,
+          "tax_withheld": 0
+        }
+      ],
+      "values": {
+        "frm1601EQ:txtAtcCd1": "WI010",
+        "frm1601EQ:txtAtcCd2": "WI011",
+        "frm1601EQ:txtAtcCd3": "",
+        "frm1601EQ:txtAtcCd4": "",
+        "frm1601EQ:txtAtcCd5": "",
+        "frm1601EQ:txtAtcCd6": "",
+        "frm1601EQ:txtTaxBase1": "1,000.00",
+        "frm1601EQ:txtTaxBase2": "0.00",
+        "frm1601EQ:txtTaxBase3": "",
+        "frm1601EQ:txtTaxBase4": "",
+        "frm1601EQ:txtTaxBase5": "",
+        "frm1601EQ:txtTaxBase6": "",
+        "frm1601EQ:txtTaxRate1": " 5.0",
+        "frm1601EQ:txtTaxRate2": " 10.0",
+        "frm1601EQ:txtTaxRate3": "",
+        "frm1601EQ:txtTaxRate4": "",
+        "frm1601EQ:txtTaxRate5": "",
+        "frm1601EQ:txtTaxRate6": "",
+        "frm1601EQ:txtTaxbeWithHeld1": "50.00",
+        "frm1601EQ:txtTaxbeWithHeld2": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld3": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld4": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld5": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld6": "0.00"
+      }
+    },
+    {
+      "label": "seed row 2 base",
+      "edits": {
+        "frm1601EQ:txtTaxBase2": "2000"
+      },
+      "rejected": {},
+      "removes": null,
+      "draft_schedule": [
+        {
+          "atc_code": "WI010",
+          "tax_base": 1000,
+          "tax_withheld": 50
+        },
+        {
+          "atc_code": "WI011",
+          "tax_base": 2000,
+          "tax_withheld": 200
+        }
+      ],
+      "values": {
+        "frm1601EQ:txtAtcCd1": "WI010",
+        "frm1601EQ:txtAtcCd2": "WI011",
+        "frm1601EQ:txtAtcCd3": "",
+        "frm1601EQ:txtAtcCd4": "",
+        "frm1601EQ:txtAtcCd5": "",
+        "frm1601EQ:txtAtcCd6": "",
+        "frm1601EQ:txtTaxBase1": "1,000.00",
+        "frm1601EQ:txtTaxBase2": "2,000.00",
+        "frm1601EQ:txtTaxBase3": "",
+        "frm1601EQ:txtTaxBase4": "",
+        "frm1601EQ:txtTaxBase5": "",
+        "frm1601EQ:txtTaxBase6": "",
+        "frm1601EQ:txtTaxRate1": " 5.0",
+        "frm1601EQ:txtTaxRate2": " 10.0",
+        "frm1601EQ:txtTaxRate3": "",
+        "frm1601EQ:txtTaxRate4": "",
+        "frm1601EQ:txtTaxRate5": "",
+        "frm1601EQ:txtTaxRate6": "",
+        "frm1601EQ:txtTaxbeWithHeld1": "50.00",
+        "frm1601EQ:txtTaxbeWithHeld2": "200.00",
+        "frm1601EQ:txtTaxbeWithHeld3": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld4": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld5": "0.00",
+        "frm1601EQ:txtTaxbeWithHeld6": "0.00"
+      }
+    }
+  ],
+  "before": {
+    "id": null,
+    "tin": "00012345300000",
+    "taxable_year": 2026,
+    "quarter": 4,
+    "is_amended": false,
+    "any_tax_withheld": true,
+    "number_of_attached_sheets": 0,
+    "rdo_code": "039",
+    "line_of_business": "",
+    "taxpayer_name": "Juana Santos",
+    "registered_address": "Quezon City",
+    "zip_code": "1100",
+    "contact_number": "09170000000",
+    "category": "private",
+    "email": "juana@example.com",
+    "schedule": [
+      {
+        "atc_code": "WI010",
+        "tax_base": 1000,
+        "tax_withheld": 50
+      },
+      {
+        "atc_code": "WI011",
+        "tax_base": 2000,
+        "tax_withheld": 200
+      }
+    ],
+    "total_other_tax_withheld": 0,
+    "total_taxes_withheld": 250,
+    "remittance_first_month": 0,
+    "remittance_second_month": 0,
+    "tax_remitted_previous": 0,
+    "over_remittance_previous_quarter": 0,
+    "total_remittances": 0,
+    "tax_still_due": 250,
+    "surcharge": 0,
+    "interest": 0,
+    "compromise": 0,
+    "penalty_model_version": 1,
+    "penalty_due_date": "2027-02-01",
+    "computed_penalties": {
+      "surcharge": 0,
+      "interest": 0,
+      "compromise": 0,
+      "inputs": {
+        "due_date": "2027-02-01",
+        "filing_date": "2026-11-26",
+        "payment_date": "2026-11-26",
+        "days_late": 0,
+        "basic_tax_due": 250,
+        "taxpayer_class": "Regular",
+        "class_from_profile": false,
+        "schedule": "Withholding"
+      }
+    },
+    "penalty_overrides": {},
+    "total_penalties": 0,
+    "total_amount_due": 250,
+    "over_remittance": "none",
+    "status": "Draft",
+    "created_at": "2026-11-26T19:55:15.949263505+00:00",
+    "updated_at": "2026-11-26T19:55:15.949263505+00:00",
+    "submission_attempts": 0,
+    "profile_baseline": {
+      "/contact_number": "09170000000",
+      "/email": "juana@example.com",
+      "/line_of_business": "",
+      "/rdo_code": "039",
+      "/registered_address": "Quezon City",
+      "/taxpayer_name": "Juana Santos",
+      "/zip_code": "1100"
+    }
+  },
+  "exact_delete": {
+    "edits": {
+      "frm1601EQ:txtAtcCd1": "",
+      "frm1601EQ:txtTaxBase1": ""
+    },
+    "excluded": [
+      {
+        "key": "frm1601EQ:txtTaxRate1",
+        "column": "Tax Rate",
+        "reason": "computed column, locked on page"
+      },
+      {
+        "key": "frm1601EQ:txtTaxbeWithHeld1",
+        "column": "Tax Withheld",
+        "reason": "computed column, locked on page"
+      }
+    ],
+    "row_keys": [
+      "frm1601EQ:txtAtcCd1",
+      "frm1601EQ:txtTaxBase1",
+      "frm1601EQ:txtTaxRate1",
+      "frm1601EQ:txtTaxbeWithHeld1"
+    ]
+  },
+  "session_fill": {
+    "first_rejected": {},
+    "first_removes": {
+      "message": "Clearing this ATC removes its row and its tax base of \u20b11,000.00. Continue?",
+      "done": "Removed the row",
+      "rows": 1
+    },
+    "first_draft_schedule": [
+      {
+        "atc_code": "WI011",
+        "tax_base": 0,
+        "tax_withheld": 0
+      }
+    ],
+    "confirmation_required": true,
+    "confirmation_message": "Clearing this ATC removes its row and its tax base of \u20b11,000.00. Continue?",
+    "zero_retry": null,
+    "final_edits": {
+      "frm1601EQ:txtAtcCd1": "",
+      "frm1601EQ:txtTaxBase1": ""
+    }
+  },
+  "after": {
+    "id": null,
+    "tin": "00012345300000",
+    "taxable_year": 2026,
+    "quarter": 4,
+    "is_amended": false,
+    "any_tax_withheld": true,
+    "number_of_attached_sheets": 0,
+    "rdo_code": "039",
+    "line_of_business": "",
+    "taxpayer_name": "Juana Santos",
+    "registered_address": "Quezon City",
+    "zip_code": "1100",
+    "contact_number": "09170000000",
+    "category": "private",
+    "email": "juana@example.com",
+    "schedule": [
+      {
+        "atc_code": "WI011",
+        "tax_base": 0,
+        "tax_withheld": 0
+      }
+    ],
+    "total_other_tax_withheld": 0,
+    "total_taxes_withheld": 0,
+    "remittance_first_month": 0,
+    "remittance_second_month": 0,
+    "tax_remitted_previous": 0,
+    "over_remittance_previous_quarter": 0,
+    "total_remittances": 0,
+    "tax_still_due": 0,
+    "surcharge": 0,
+    "interest": 0,
+    "compromise": 0,
+    "penalty_model_version": 1,
+    "penalty_due_date": "2027-02-01",
+    "computed_penalties": {
+      "surcharge": 0,
+      "interest": 0,
+      "compromise": 0,
+      "inputs": {
+        "due_date": "2027-02-01",
+        "filing_date": "2026-11-26",
+        "payment_date": "2026-11-26",
+        "days_late": 0,
+        "basic_tax_due": 0,
+        "taxpayer_class": "Regular",
+        "class_from_profile": false,
+        "schedule": "Withholding"
+      }
+    },
+    "penalty_overrides": {},
+    "total_penalties": 0,
+    "total_amount_due": 0,
+    "over_remittance": "none",
+    "status": "Draft",
+    "created_at": "2026-11-26T19:55:15.949263505+00:00",
+    "updated_at": "2026-11-26T19:55:15.949263505+00:00",
+    "submission_attempts": 0,
+    "profile_baseline": {
+      "/contact_number": "09170000000",
+      "/email": "juana@example.com",
+      "/line_of_business": "",
+      "/rdo_code": "039",
+      "/registered_address": "Quezon City",
+      "/taxpayer_name": "Juana Santos",
+      "/zip_code": "1100"
+    }
+  },
+  "after_values": {
+    "frm1601EQ:txtAtcCd1": "WI011",
+    "frm1601EQ:txtAtcCd2": "",
+    "frm1601EQ:txtAtcCd3": "",
+    "frm1601EQ:txtAtcCd4": "",
+    "frm1601EQ:txtAtcCd5": "",
+    "frm1601EQ:txtAtcCd6": "",
+    "frm1601EQ:txtTaxBase1": "0.00",
+    "frm1601EQ:txtTaxBase2": "",
+    "frm1601EQ:txtTaxBase3": "",
+    "frm1601EQ:txtTaxBase4": "",
+    "frm1601EQ:txtTaxBase5": "",
+    "frm1601EQ:txtTaxBase6": "",
+    "frm1601EQ:txtTaxRate1": " 10.0",
+    "frm1601EQ:txtTaxRate2": "",
+    "frm1601EQ:txtTaxRate3": "",
+    "frm1601EQ:txtTaxRate4": "",
+    "frm1601EQ:txtTaxRate5": "",
+    "frm1601EQ:txtTaxRate6": "",
+    "frm1601EQ:txtTaxbeWithHeld1": "0.00",
+    "frm1601EQ:txtTaxbeWithHeld2": "0.00",
+    "frm1601EQ:txtTaxbeWithHeld3": "0.00",
+    "frm1601EQ:txtTaxbeWithHeld4": "0.00",
+    "frm1601EQ:txtTaxbeWithHeld5": "0.00",
+    "frm1601EQ:txtTaxbeWithHeld6": "0.00"
+  },
+  "decomposition": {
+    "atc_blank_only": {
+      "schedule": [
+        {
+          "atc_code": "WI011",
+          "tax_base": 2000,
+          "tax_withheld": 200
+        }
+      ],
+      "rejected": {},
+      "removes": {
+        "message": "Clearing this ATC removes its row and its tax base of \u20b11,000.00. Continue?",
+        "done": "Removed the row",
+        "rows": 1
+      }
+    },
+    "atc_blank_then_base_blank": {
+      "schedule": [
+        {
+          "atc_code": "WI011",
+          "tax_base": 0,
+          "tax_withheld": 0
+        }
+      ],
+      "rejected": {},
+      "removes": null
+    },
+    "base_blank_only": {
+      "schedule": [
+        {
+          "atc_code": "WI010",
+          "tax_base": 0,
+          "tax_withheld": 0
+        },
+        {
+          "atc_code": "WI011",
+          "tax_base": 2000,
+          "tax_withheld": 200
+        }
+      ],
+      "rejected": {},
+      "removes": null
+    },
+    "base_blank_then_atc_blank": {
+      "schedule": [
+        {
+          "atc_code": "WI011",
+          "tax_base": 2000,
+          "tax_withheld": 200
+        }
+      ],
+      "rejected": {},
+      "removes": null
+    }
+  },
+  "analysis": {
+    "row_count_before": 2,
+    "row_count_after": 1,
+    "rows_before": [
+      {
+        "atc_code": "WI010",
+        "tax_base": 1000,
+        "tax_withheld": 50
+      },
+      {
+        "atc_code": "WI011",
+        "tax_base": 2000,
+        "tax_withheld": 200
+      }
+    ],
+    "rows_after": [
+      {
+        "atc_code": "WI011",
+        "tax_base": 0,
+        "tax_withheld": 0
+      }
+    ],
+    "total_taxes_withheld_before": 250,
+    "total_taxes_withheld_after": 0,
+    "exact_delete_key_order": [
+      "frm1601EQ:txtAtcCd1",
+      "frm1601EQ:txtTaxBase1"
+    ]
+  }
+}

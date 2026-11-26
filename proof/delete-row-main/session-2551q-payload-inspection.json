@@ -1,0 +1,79 @@
+{
+  "draft_rows": [
+    {
+      "atc": "",
+      "atc_description": "",
+      "tax_due": 0.0,
+      "tax_rate": 0.0,
+      "taxable_amount": 0.0
+    },
+    {
+      "atc": "PT040",
+      "atc_description": "Domestic carriers and keepers of garages [Sec. 117]",
+      "tax_due": 233.31,
+      "tax_rate": 0.03,
+      "taxable_amount": 7777.0
+    }
+  ],
+  "field_map_selected": {
+    "drpATC1": "0",
+    "drpATC2": "2",
+    "drpATC3": "0",
+    "drpATC4": "0",
+    "drpATC5": "0",
+    "drpATC6": "0",
+    "frm2551Qv2018:txt14": "233.31",
+    "txtATCAmt1": "0.00",
+    "txtATCAmt2": "7,777.00",
+    "txtATCAmt3": "0.00",
+    "txtATCAmt4": "0.00",
+    "txtATCAmt5": "0.00",
+    "txtATCAmt6": "0.00",
+    "txtATCDue1": "0.00",
+    "txtATCDue2": "233.31",
+    "txtATCDue3": "0.00",
+    "txtATCDue4": "0.00",
+    "txtATCDue5": "0.00",
+    "txtATCDue6": "0.00",
+    "txtATCRate1": "0.00",
+    "txtATCRate2": "3.0",
+    "txtATCRate3": "0.00",
+    "txtATCRate4": "0.00",
+    "txtATCRate5": "0.00",
+    "txtATCRate6": "0.00",
+    "txtTotalSched1": "233.31"
+  },
+  "payload": {
+    "bytes": 5559,
+    "ok": true,
+    "path": "session-2551q-generated-payload.txt"
+  },
+  "print_field_map_selected": {
+    "drpATC1": "0",
+    "drpATC2": "2",
+    "drpATC3": "0",
+    "drpATC4": "0",
+    "drpATC5": "0",
+    "drpATC6": "0",
+    "frm2551Qv2018:txt14": "233.31",
+    "txtATCAmt1": "0.00",
+    "txtATCAmt2": "7,777.00",
+    "txtATCAmt3": "",
+    "txtATCAmt4": "",
+    "txtATCAmt5": "",
+    "txtATCAmt6": "",
+    "txtATCDue1": "0.00",
+    "txtATCDue2": "233.31",
+    "txtATCDue3": "",
+    "txtATCDue4": "",
+    "txtATCDue5": "",
+    "txtATCDue6": "",
+    "txtATCRate1": "0.00",
+    "txtATCRate2": "3.0",
+    "txtATCRate3": "",
+    "txtATCRate4": "",
+    "txtATCRate5": "",
+    "txtATCRate6": "",
+    "txtTotalSched1": "233.31"
+  }
+}

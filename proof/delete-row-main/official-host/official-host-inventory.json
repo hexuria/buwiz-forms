@@ -1,0 +1,678 @@
+{
+  "evidence_scope": "Static repository reading only at MAIN bcbaf324187137010b19814d6ef6e59db4d1f5d9. Exact quotes are limited to text present in repository rule/model/page files; no uncited HTA source lines were invented.",
+  "official_forms": [
+    {
+      "form": "2551Q Schedule 1",
+      "official_delete_or_remove_control": "none found; fixed six-row table",
+      "official_mechanism": "No Add/Delete row builder. Choosing the zero/blank ATC in a fixed row disables and zeros amount/rate in place; no row compaction is evidenced.",
+      "compact_or_clear_in_place": "clear/zero in place only; no removal control and no compaction",
+      "quotes": [
+        {
+          "file": "rules/forms/2551q-v2018/evidence.md",
+          "lines": "5-5",
+          "quote": "Applying that predicate to the pinned DOM produces 98 static occurrences; `getRdo()` injects the RDO select into `frmMain`, producing 99 occurrences total. There are 98 distinct serialized keys because the DOM contains two `txtEmail` controls and the loop emits both under the same key. Six ATC rows are concrete and bounded. No Add/Delete row builder or unbounded family exists."
+        },
+        {
+          "file": "rules/forms/2551q-v2018/validations.json",
+          "lines": "317-337",
+          "quote": "\"rule_id\": \"2551q-atc-row-enable\" ... \"condition\": \"An ATC row selection is zero or nonzero.\" ... \"source_refs\": [\"official-hta-runtime#drpATCChanged:L2976-L2997\"] ... \"official_behavior\": \"Zero selection disables and zeros amount/rate; a selected ATC enables amount and copies the catalog rate.\""
+        },
+        {
+          "file": "rules/forms/2551q-v2018/calculations.json",
+          "lines": "18-35",
+          "quote": "\"calculation_id\": \"2551q-atc-row-tax\" ... \"outputs\": [\"txtATCDue{1..6}\"] ... \"official_formula\": \"For row N, tax due = amount * (rate / 100).\" ... \"trigger\": \"computeATC\" ... \"official-hta-runtime#computeATC:L2998-L3005\""
+        }
+      ],
+      "caveat": "The repository evidence proves no Add/Delete builder and fixed rows; it does not contain any Delete handler because none is documented."
+    },
+    {
+      "form": "1601EQ ATC schedule",
+      "official_delete_or_remove_control": "no per-row Delete/Remove control found. The official UI uses the ATC checkbox popup; runtime inventory also records a popup-level Clear button (`btnClearOtherAtc`) but not a row delete button.",
+      "official_mechanism": "Rows are positional projections of ticked ATC checkboxes. Rows 1-6 always exist after populateAtcPart2; rows 7-N exist only when more than six ATCs are selected. Thus unticking reduces/rebuilds the selected-row projection in popup order rather than leaving an independent row object. The exact HTA statements for unticking are not quoted in the repository artifacts, so this compaction conclusion is an evidence-backed inference from the documented positional row existence and getATCCode refs, not a literal source quote.",
+      "compact_or_clear_in_place": "checkbox selection model; rows are rebuilt/compact positional slots. No evidence of a table-row clear-in-place Delete control.",
+      "quotes": [
+        {
+          "file": "rules/forms/1601eq-v2018/evidence.md",
+          "lines": "15-19",
+          "quote": "The representative dummy save contains the initial six ATC rows. Source inspection proves up to 111 dynamic row positions. Because each added row contributes four serialized keys, the complete category-dependent source-reachable union is 621 fields. ... ATC row slots are positional within the selected Private/Government catalog, not permanent meanings.",
+          "quote_note": "Ellipsis joins two non-contiguous repository sentences: line 15 and line 19."
+        },
+        {
+          "file": "rules/forms/1601eq-v2018/fixtures/runtime-control-inventory-v796.json",
+          "lines": "1297-1316",
+          "quote": "\"id_pattern\": \"AtcCode{1..N}\", \"control_kind\": \"checkbox\", \"minimum_instances\": 0, \"maximum_instances\": 111, \"existence\": \"N is 111 for Private and 96 for Government after Item 11 category filtering.\" ... \"id_pattern\": \"frm1601EQ:txtAtcCd{1..N}\" ... \"existence\": \"Rows 1-6 always exist after populateAtcPart2; rows 7-N exist when more than six ATCs are selected.\" ... \"official-hta-runtime#populateAtcPart2:L2861-L2875\" ... \"official-hta-runtime#getATCCode:L2890-L3031\""
+        },
+        {
+          "file": "rules/forms/1601eq-v2018/fixtures/runtime-control-inventory-v796.json",
+          "lines": "985-997",
+          "quote": "\"id\": \"btnClearOtherAtc\" ... \"control_kind\": \"button\" ... \"source_line\": 1093 ... \"value\": \" Clear \""
+        },
+        {
+          "file": "rules/forms/1601eq-v2018/calculations.json",
+          "lines": "63-67",
+          "quote": "\"condition\": \"Only additional ATC rows numbered 7 and above.\" ... \"official_formula\": \"AdditionalATCTotal = sum(TaxWithheld[row], row=7..(compute-table rows + other-table rows - 4)).\" ... \"trigger\": \"Additional ATC row computation, selection change, clear, or year/rate refresh.\""
+        }
+      ],
+      "port_crosscheck": "crates/bir-core/src/forms/form_1601eq.rs:5-14 says the port is of changedrpATCList/getATCCode/populateAtcPart2 and dynamically adds popup checkboxes/rows; remove_atc at lines 874-877 retains nonmatching rows and recompute sorts rows in popup order at lines 891-895.",
+      "caveat": "The rules package does not quote the literal HTA lines showing what btnClearOtherAtc or an individual untick executes; no stronger claim is made."
+    },
+    {
+      "form": "2550Q Schedule 1",
+      "official_delete_or_remove_control": "Add/Delete behavior exists for the dynamic rows, including Schedule 1; no maximum-row guard.",
+      "official_mechanism": "Repository evidence proves Add/Delete and unbounded indexed families, but does not quote enough of the dynamic-row-builder implementation to establish whether official Delete compacts rows up or clears in place. Serialization metadata uses assigned stable row ids and marks serialization order unresolved, so it does not settle compaction either.",
+      "compact_or_clear_in_place": "unestablished from the repository official-form artifacts; do not infer. Host runtime behavior compacts backing arrays, but that is host behavior, not proof of the official HTA mechanism.",
+      "quotes": [
+        {
+          "file": "rules/forms/2550q-v2024/evidence.md",
+          "lines": "20-20",
+          "quote": "The concrete union therefore has 160 keys. Source inspection also proves 28 unbounded indexed families: nine Schedule 1 fields, five Schedule 3 fields, six Schedule 4 fields, and description/amount pairs for Items 19, 42, 47, and 56. The HTA has Add/Delete behavior and no maximum-row guard, so `fields.json` records family descriptors instead of inventing a finite row count."
+        },
+        {
+          "file": "rules/forms/2550q-v2024/fields.json",
+          "lines": "5894-5900",
+          "quote": "\"source_refs\": [\"official-hta-runtime#dynamic-row-builders:L5830-L6760\", \"official-hta-runtime#serialization:L5160-L5820\"] ... \"The HTA exposes Add/Delete without a maximum-row guard; this descriptor prevents a false finite inventory claim.\""
+        },
+        {
+          "file": "rules/forms/2550q-v2024/fixtures/serialization-binding-inventory-v796.json",
+          "lines": "97-110",
+          "quote": "\"group_id\": \"schedule-1-capital-good-row\" ... \"instance_identity\": \"assigned-stable-id\", \"instance_order\": \"legacy-zero-based-index-ascending\" ... \"serialization_instance_order_relation\": \"unresolved\" ... \"official-hta-runtime#dynamic-row-builders:L6089-6217\""
+        },
+        {
+          "file": "rules/forms/2550q-v2024/validations.json",
+          "lines": "789-805",
+          "quote": "\"rule_id\": \"2550q-s1-empty\" ... \"condition\": \"Any materialized Schedule 1 row field is blank.\" ... \"exact_message\": \"Empty fields are not allowed \" ... \"official-hta-runtime#schedule1-validation:L5830-L6357\""
+        }
+      ],
+      "host_contrast": "The current host row module compacts emptied Schedule 1/3/4 backing rows (rows_2550q.rs:175-192), but the official Delete mechanism is not established by the quoted repository artifacts."
+    }
+  ],
+  "host_inventory": [
+    {
+      "form": "1600PT",
+      "inventoried_schedule_count": 3,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [
+        {
+          "method": "Form1600PtDraft::toggle_atc",
+          "file": "crates/bir-core/src/forms/form_1600pt.rs",
+          "lines": "559-590",
+          "mechanism": "unticking an existing ATC removes it with Vec::remove; rows are then kept in popup order"
+        }
+      ],
+      "typed_model_method_note": "",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "yes for ATC rows: matrix rows 1600PT_frm1600PT_txtAtcCd1 and txtAtcCd6 compacted; host blank ATC branch removes `atc_rows[row]` in rows_monthly.rs:291-298",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1600VT",
+      "inventoried_schedule_count": 3,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [
+        {
+          "method": "Form1600VtDraft::toggle_atc",
+          "file": "crates/bir-core/src/forms/form_1600vt.rs",
+          "lines": "480-510",
+          "mechanism": "unticking an existing ATC removes it with Vec::remove; rows are then kept in popup order"
+        }
+      ],
+      "typed_model_method_note": "",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "yes for ATC rows: matrix rows 1600VT_frm1600VT_txtAtcCd1 and txtAtcCd6 compacted; same rows_monthly.rs:291-298 mechanism",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1600WP",
+      "inventoried_schedule_count": 2,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [
+        {
+          "method": "Form1600WpDraft::toggle_atc",
+          "file": "crates/bir-core/src/forms/form_1600wp.rs",
+          "lines": "317-345",
+          "mechanism": "unticking an existing ATC removes it with Vec::remove; rows are sorted in list order"
+        }
+      ],
+      "typed_model_method_note": "",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1601C",
+      "inventoried_schedule_count": 1,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1601EQ",
+      "inventoried_schedule_count": 2,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [
+        {
+          "method": "Form1601EqDraft::remove_atc",
+          "file": "crates/bir-core/src/forms/form_1601eq.rs",
+          "lines": "874-877",
+          "mechanism": "retains rows whose ATC differs, then recomputes; recompute sorts remaining rows into popup order at lines 891-895"
+        }
+      ],
+      "typed_model_method_note": "",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "yes: matrix rows 1601EQ_frm1601EQ_txtAtcCd1 and txtAtcCd7 compacted; blank ATC calls remove_atc in catalogs.rs:516-526 and rows re-sort",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1601FQ",
+      "inventoried_schedule_count": 3,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [
+        {
+          "method": "Form1601FqDraft::remove_atc",
+          "file": "crates/bir-core/src/forms/form_1601fq.rs",
+          "lines": "843-847",
+          "mechanism": "retains rows whose popup index differs, then recomputes"
+        }
+      ],
+      "typed_model_method_note": "",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "yes: matrix rows 1601FQ_frm1601FQ_txtAtcCode1 and txtAtcCode7 compacted; blank ATC calls remove_atc in rows_withholding.rs:373-382",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1602Q",
+      "inventoried_schedule_count": 2,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1603Q",
+      "inventoried_schedule_count": 1,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1604C",
+      "inventoried_schedule_count": 1,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1604E",
+      "inventoried_schedule_count": 2,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1604F",
+      "inventoried_schedule_count": 3,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1700",
+      "inventoried_schedule_count": 2,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1701",
+      "inventoried_schedule_count": 3,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1701A",
+      "inventoried_schedule_count": 2,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1702EX",
+      "inventoried_schedule_count": 5,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1702MX",
+      "inventoried_schedule_count": 1,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1702RT",
+      "inventoried_schedule_count": 6,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1707",
+      "inventoried_schedule_count": 6,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1707A",
+      "inventoried_schedule_count": 3,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1800",
+      "inventoried_schedule_count": 2,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "1801",
+      "inventoried_schedule_count": 6,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2000",
+      "inventoried_schedule_count": 4,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [
+        {
+          "method": "Form2000Draft::clear_atc",
+          "file": "crates/bir-core/src/forms/form_2000.rs",
+          "lines": "652-660",
+          "mechanism": "clears one row in place, then pops only trailing empty rows"
+        }
+      ],
+      "typed_model_method_note": "",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2000OT",
+      "inventoried_schedule_count": 2,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2200A",
+      "inventoried_schedule_count": 11,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2200C",
+      "inventoried_schedule_count": 1,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2200M",
+      "inventoried_schedule_count": 8,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2200P",
+      "inventoried_schedule_count": 3,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2200S",
+      "inventoried_schedule_count": 1,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2200T",
+      "inventoried_schedule_count": 25,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2550M",
+      "inventoried_schedule_count": 7,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [
+        {
+          "method": "Form2550MDraft::remove_sales_atc",
+          "file": "crates/bir-core/src/forms/form_2550m.rs",
+          "lines": "689-693",
+          "mechanism": "retains sales rows whose ATC differs, then recomputes"
+        }
+      ],
+      "typed_model_method_note": "",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "yes across the seven inventoried row tables in the runtime matrix; rows_2550m.rs:220-225 removes a fully blank/default row and later rows move up; sales ATC also has typed retain removal",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2550Q",
+      "inventoried_schedule_count": 7,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [
+        {
+          "method": "Form2550QRawEditorState::remove_repeated_row",
+          "file": "crates/bir-core/src/forms/form_2550q.rs",
+          "lines": "452-465",
+          "mechanism": "not a schedule-row removal method: it forgets raw editor buffers/malformed notes for an already removed repeated row"
+        }
+      ],
+      "typed_model_method_note": "2550Q entry is raw-state cleanup only, not row deletion",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "yes for Schedule 1/3/4 backing arrays: matrix rows txtDatePurchase10, txtDateCovered30 and txtDate40 compacted; rows_2550q.rs:175-192 removes an emptied row and then restores only the minimum trailing rows",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2551Q",
+      "inventoried_schedule_count": 1,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2552",
+      "inventoried_schedule_count": 8,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [],
+      "typed_model_method_note": "none found in the typed model file",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "no compaction detected in the Phase 2/3 runtime matrix rows for this form",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    },
+    {
+      "form": "2553",
+      "inventoried_schedule_count": 2,
+      "dedicated_exposed_host_call": "none",
+      "dedicated_host_call_evidence": "nsh/bir/types.d.ts:727-765 exposes screen_form_schema/open/fill/validate/save/print/queue/etc.; no row-delete or row-remove function appears there or in nsh/bir/functions.ts. screen_form_fill is types.d.ts:740.",
+      "typed_model_removal_or_compaction_methods": [
+        {
+          "method": "Form2553Draft::clear_atc",
+          "file": "crates/bir-core/src/forms/form_2553.rs",
+          "lines": "347-355",
+          "mechanism": "clears one row in place, then pops only trailing empty rows"
+        }
+      ],
+      "typed_model_method_note": "",
+      "page_accessible_delete_mechanism_today": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)",
+      "page_mechanism_citations": [
+        "nsh/screens/form/controls/Schedule.tsx:96-100",
+        "nsh/screens/form/rows.tsx:160-162"
+      ],
+      "host_blank_write_implicit_compaction": "limited/yes for row 18 only in matrix: rows_dst_pt_vat.rs:385-390 calls clear_atc on blank ATC and form_2553.rs:347-355 pops trailing empty rows; fixed printed rows 14-17 do not compact",
+      "removes_reporting_chain": "screen_form_module.rs:4957-4976 delegates removes reporting to row modules; agent/session.rs:712-723 applies the same confirmation contract for agent fills"
+    }
+  ],
+  "host_summary": {
+    "forms_with_inventoried_schedules": 34,
+    "dedicated_exposed_host_calls": "none for every form",
+    "forms_with_runtime_matrix_compaction_evidence": [
+      "1600PT",
+      "1600VT",
+      "1601EQ",
+      "1601FQ",
+      "2550M",
+      "2550Q",
+      "2553"
+    ],
+    "page_path_constant_for_all_forms": "Schedule.tsx remove -> rows.tsx onClearRow -> blank string writes -> screen_form_fill (session numeric-zero retry/removes confirmation semantics)"
+  }
+}
