@@ -285,8 +285,10 @@ export function Shell(props: ShellProps) {
   }
   bindKeys();
   bindMenuKeys();
-  // Android's back button: the topmost layer closes first, then history goes back; else the app leaves.
-  if (mobileAvailable && platform.os === "android") BackHandler.on("press", () => app.dismiss() || app.back());
+  // Android's back button: the topmost layer closes first, then history goes back; else the app leaves. While the frame is
+  // hidden (the account gate, sign-in, first-run setup) the history behind it is not the person's to walk: the press is
+  // left alone, so it leaves the app (the gate's own listener steps back on its email and code pages first).
+  if (mobileAvailable && platform.os === "android") BackHandler.on("press", () => app.chromeVisible() && (app.dismiss() || app.back()));
   // The polls end with the root; headless fixtures leave them off unless a test asks.
   if (props.polling !== false) cleanup(startPolling());
   // A queued return is watched where the polls run, and in the dev environment too (the app asks); fixtures leave it off.

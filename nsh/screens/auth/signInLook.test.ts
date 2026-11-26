@@ -3,7 +3,7 @@
 // pages' record of them.
 import { expect, test } from "nsh/test";
 import {
-  backRow, blockRoom, codeBoxWidth, keyboardCover, LOGO_STEPS_LARGE, LOGO_STEPS_PHONE, logoStep, logoSteps, openColumnMax, SAID_SLOT,
+  backRow, blockRoom, bottomPad, codeBoxWidth, keyboardCover, LOGO_STEPS_LARGE, LOGO_STEPS_PHONE, logoStep, logoSteps, openColumnMax, openSpacing, SAID_SLOT,
   signInHeights, underBackRowGuess,
 } from "./signInLook";
 import { accountKey, welcomedAfter } from "./welcome";
@@ -19,9 +19,9 @@ test("the code boxes are 46 wide where six fit, narrower on a 320-point phone, n
   expect(codeBoxWidth(200)).toBe(36);
 });
 
-test("the logo's steps: a phone 150, 112, 80; a tablet and a computer 180, 128, 88", () => {
+test("the logo's steps: a phone 150, 112, 80; a tablet and a computer 180, 128, 88, 64", () => {
   expect(LOGO_STEPS_PHONE).toEqual([150, 112, 80]);
-  expect(LOGO_STEPS_LARGE).toEqual([180, 128, 88]);
+  expect(LOGO_STEPS_LARGE).toEqual([180, 128, 88, 64]);
   expect(logoSteps(true, { width: 375, height: 667 })).toBe(LOGO_STEPS_PHONE);
   expect(logoSteps(true, { width: 844, height: 390 })).toBe(LOGO_STEPS_PHONE);
   expect(logoSteps(true, { width: 820, height: 1180 })).toBe(LOGO_STEPS_LARGE);
@@ -39,14 +39,44 @@ test("phone: the largest step at which the whole block fits, at each boundary; t
   expect(logoStep(LOGO_STEPS_PHONE, 479, rest)).toEqual({ logo: 80, fits: false });
 });
 
-test("tablet and computer: the same boundaries for 180, 128, 88", () => {
+test("tablet and computer: the same boundaries for 180, 128, 88, 64", () => {
   const rest = 300;
   expect(logoStep(LOGO_STEPS_LARGE, 480, rest)).toEqual({ logo: 180, fits: true });
   expect(logoStep(LOGO_STEPS_LARGE, 479, rest)).toEqual({ logo: 128, fits: true });
   expect(logoStep(LOGO_STEPS_LARGE, 428, rest)).toEqual({ logo: 128, fits: true });
   expect(logoStep(LOGO_STEPS_LARGE, 427, rest)).toEqual({ logo: 88, fits: true });
   expect(logoStep(LOGO_STEPS_LARGE, 388, rest)).toEqual({ logo: 88, fits: true });
-  expect(logoStep(LOGO_STEPS_LARGE, 387, rest)).toEqual({ logo: 88, fits: false });
+  expect(logoStep(LOGO_STEPS_LARGE, 387, rest)).toEqual({ logo: 64, fits: true });
+  expect(logoStep(LOGO_STEPS_LARGE, 364, rest)).toEqual({ logo: 64, fits: true });
+  expect(logoStep(LOGO_STEPS_LARGE, 363, rest)).toEqual({ logo: 64, fits: false });
+});
+
+test("the bottom safe area: the room ends above it, and the block's padding keeps clear of it unless the keyboard covers it", () => {
+  // Android 360x640 dp with the three-button bar (top inset 24, bottom 48): 568 under the back row, 488 for the block.
+  const under = underBackRowGuess(640, 24, true, true);
+  expect(under).toBe(568);
+  expect(blockRoom(under, 0, 48)).toBe(488);
+  // The keyboard covers the bar: the larger of the two comes off, once.
+  expect(blockRoom(under, 300, 48)).toBe(236);
+  expect(bottomPad(16, 0, 48)).toBe(64);
+  expect(bottomPad(16, 300, 48)).toBe(16);
+  expect(bottomPad(8, 0, 0)).toBe(8);
+});
+
+test("tight spacing below 520 points of room: half the padding, half the logo's gap; decided from the room alone", () => {
+  expect(openSpacing(528)).toEqual({ tight: false, pad: 16, logoGap: 24 });
+  expect(openSpacing(520)).toEqual({ tight: false, pad: 16, logoGap: 24 });
+  expect(openSpacing(519)).toEqual({ tight: true, pad: 8, logoGap: 12 });
+  // A 360x640 Android phone with its three buttons draws tight, and gets 16 more points: 504 for the block.
+  expect(openSpacing(blockRoom(568, 0, 48)).tight).toBe(true);
+  expect(blockRoom(568, 0, 48, 8)).toBe(504);
+  // The shortest desktop windows: 800x500 has 404, 420x480 has 384 for the block once tight.
+  expect(openSpacing(blockRoom(underBackRowGuess(500, 0, false, false))).tight).toBe(true);
+  expect(blockRoom(underBackRowGuess(500, 0, false, false), 0, 0, 8)).toBe(404);
+  expect(blockRoom(underBackRowGuess(480, 0, false, false), 0, 0, 8)).toBe(384);
+  // 1280x640 and a 375x667 phone keep the usual spacing.
+  expect(openSpacing(blockRoom(underBackRowGuess(640, 0, false, false))).tight).toBe(false);
+  expect(openSpacing(blockRoom(underBackRowGuess(667, 0, true, false))).tight).toBe(false);
 });
 
 test("the room the block has, before the page measures: a 375x667 phone, a 390x844 phone, a 1280x640 window", () => {

@@ -39,12 +39,30 @@ export const BLOCK_PAD_Y = 16;
 /** Between the logo and what is under it. */
 export const LOGO_GAP = 24;
 
+/** Under this room (at the usual padding) the page draws tight: its gaps step down with the logo (a short desktop window). */
+export const TIGHT_ROOM = 520;
+
+/**
+ * The page's spacing for the room it has at the usual padding (blockRoom with BLOCK_PAD_Y): the usual, or tight when the room is
+ * under TIGHT_ROOM: 8 over and under the block instead of 16, 12 under the logo instead of 24, and the page's own gaps a step
+ * smaller (parts.tsx). Decided from the room alone, never from what the block measures, so drawing tight can never undo itself.
+ */
+export function openSpacing(usualRoom: number): { tight: boolean; pad: number; logoGap: number } {
+  const tight = usualRoom < TIGHT_ROOM;
+  return tight ? { tight, pad: 8, logoGap: 12 } : { tight, pad: BLOCK_PAD_Y, logoGap: LOGO_GAP };
+}
+
+/** The block's padding under it: its own, and the bottom safe area (a home indicator, Android's buttons) unless the keyboard covers it. */
+export function bottomPad(pad: number, cover: number, safeBottom: number): number {
+  return pad + (cover > 0 ? 0 : safeBottom);
+}
+
 /**
  * The logo's heights, largest first (the owner's layout C): a phone (a touch screen under 600 points on its short side) 150,
- * 112, 80; a tablet and a computer 180, 128, 88.
+ * 112, 80; a tablet and a computer 180, 128, 88, and 64 for the shortest desktop windows (420 by 480).
  */
 export const LOGO_STEPS_PHONE: readonly number[] = [150, 112, 80];
-export const LOGO_STEPS_LARGE: readonly number[] = [180, 128, 88];
+export const LOGO_STEPS_LARGE: readonly number[] = [180, 128, 88, 64];
 
 /** The logo's steps for this screen. */
 export function logoSteps(touch: boolean, window: { width: number; height: number }): readonly number[] {
@@ -63,9 +81,13 @@ export function logoStep(steps: readonly number[], room: number, rest: number): 
   return { logo: steps[steps.length - 1], fits: false };
 }
 
-/** The room for the block, from the height under the back row (what the page measures, else what the window gives). */
-export function blockRoom(underBackRow: number): number {
-  return Math.max(0, underBackRow - 2 * BLOCK_PAD_Y);
+/**
+ * The room for the block: the height under the back row (what the page measures, else what the window gives), less what covers
+ * its bottom (the keyboard's part, keyboardCover, or else the bottom safe area: a home indicator, Android's three buttons), less
+ * the block's padding over and under it.
+ */
+export function blockRoom(underBackRow: number, cover = 0, safeBottom = 0, pad = BLOCK_PAD_Y): number {
+  return Math.max(0, underBackRow - Math.max(cover, safeBottom) - 2 * pad);
 }
 
 /**

@@ -10,7 +10,8 @@ import { BREAK, SIZE } from "../../theme/tokens";
 import { deviceCopy, Icon, type IconName, Spinner, T_MIN_H, Text, TOUCH } from "../../ui";
 import { BrandLogo } from "./brand";
 import {
-  BLOCK_PAD_Y, blockRoom, backRow, keyboardCover, LOGO_GAP, logoStep, logoSteps, OPEN_SIDE, openColumnMax, signInHeights, underBackRowGuess,
+  blockRoom, backRow, bottomPad, keyboardCover, LOGO_GAP, logoStep, logoSteps, OPEN_SIDE, openColumnMax, openSpacing, signInHeights,
+  underBackRowGuess,
 } from "./signInLook";
 
 export { deviceCopy };
@@ -31,6 +32,24 @@ export function lastOpenFit(): OpenFit | null {
   return openFit();
 }
 
+/** Whether the open page now showing draws tight (signInLook.ts openSpacing): its pieces' gaps step down with it. */
+const tightNow = signal(false);
+export function openTight(): boolean {
+  return tightNow();
+}
+
+/** The height of what sits over the open page in the locked screen (the welcome note), which the page's top is under. */
+const abovePage = signal(0);
+export function setAbovePage(height: number): void {
+  abovePage.set(height);
+}
+
+/** A gap class one step smaller when the page draws tight. */
+function tighter(gap: string, tight: boolean): string {
+  if (!tight) return gap;
+  return { "gap-4": "gap-3", "gap-3": "gap-2" }[gap] ?? gap;
+}
+
 /**
  * The open page every page before the app is drawn on (the owner's layout C, look B inside it): a fixed back row at the top,
  * under the window's title bar and inside the safe area, the same on every page (empty where there is no back control); under
@@ -47,19 +66,25 @@ export function lastOpenFit(): OpenFit | null {
  */
 export function OpenPage(props: { testID: string; back?: JSX.Element; footer?: JSX.Element; gap?: string; wide?: boolean; children?: JSX.Element }) {
   const row = () => backRow(TOUCH, ANDROID, safeArea().left);
-  // The height under the back row (measured; before that, the window's) and the block's height under the logo (measured).
+  // The height under the back row (measured; before that, the window's) and the block's height under the logo (measured;
+  // before that, a guess of a page's height, so the first frame mostly draws the step it keeps).
   const under = signal(0);
-  const rest = signal(0);
-  const guess = () => underBackRowGuess(windowSize().height, safeArea().top, TOUCH, ANDROID);
+  const rest = signal(LOGO_GAP + 6 * signInHeights(ANDROID).button);
+  // What the window gives under the back row, from this page's own top (under the welcome note when one shows over it).
+  const guess = () => underBackRowGuess(windowSize().height, safeArea().top, TOUCH, ANDROID) - abovePage();
   const measured = () => (under() > 0 ? under() : guess());
   // The keyboard's part the page still has to end above (0 while it is down, and on a pointer).
   const cover = () => keyboardCover(keyboardFrame().height, guess(), measured());
-  const room = () => blockRoom(measured() - cover());
+  const spacing = () => openSpacing(blockRoom(measured(), cover(), safeArea().bottom));
+  const room = () => blockRoom(measured(), cover(), safeArea().bottom, spacing().pad);
   const fit = () => logoStep(logoSteps(TOUCH, windowSize()), room(), rest());
   effect(() => {
     const now = fit();
+    tightNow.set(spacing().tight);
     openFit.set({ page: props.testID, room: room(), rest: rest(), logo: now.logo, fits: now.fits });
   });
+  // Under the block: its padding and the bottom safe area ("Just me"'s long page keeps the frame's 56 under its end).
+  const padBottom = () => Math.max(props.wide ? 56 : 0, bottomPad(spacing().pad, cover(), safeArea().bottom));
   const side = () => (props.wide ? (windowSize().width < BREAK.narrowContent ? 16 : 32) : OPEN_SIDE);
   const column = () => (props.wide ? SIZE.contentMax : openColumnMax(TOUCH)) + 2 * side();
   return (
@@ -79,13 +104,13 @@ export function OpenPage(props: { testID: string; back?: JSX.Element; footer?: J
           <View
             testID={props.testID}
             class="w-full"
-            style={{ maxWidth: column(), paddingLeft: side(), paddingRight: side(), paddingTop: BLOCK_PAD_Y, paddingBottom: BLOCK_PAD_Y }}
+            style={{ maxWidth: column(), paddingLeft: side(), paddingRight: side(), paddingTop: spacing().pad, paddingBottom: padBottom() }}
           >
             <BrandLogo height={fit().logo} />
-            <View class="w-full" style={{ paddingTop: LOGO_GAP }} onLayout={(e) => e.bounds.size.height > 0 && rest.set(Math.round(e.bounds.size.height))}>
-              <View class={`w-full ${props.gap ?? "gap-4"}`}>{props.children}</View>
+            <View class="w-full" style={{ paddingTop: spacing().logoGap }} onLayout={(e) => e.bounds.size.height > 0 && rest.set(Math.round(e.bounds.size.height))}>
+              <View class={`w-full ${tighter(props.gap ?? "gap-4", spacing().tight)}`}>{props.children}</View>
               <If when={props.footer !== undefined}>
-                <View class="mt-6 w-full gap-2.5">{props.footer}</View>
+                <View class={`${spacing().tight ? "mt-4" : "mt-6"} w-full gap-2.5`}>{props.footer}</View>
               </If>
             </View>
           </View>
@@ -168,7 +193,7 @@ export function SoftLine(props: { testID?: string; size?: number; children?: JSX
 /** The page's head under the logo: the title (20/600) and a line (12 fg2), centred. */
 export function Heading(props: { title: string; line: string; testID?: string }) {
   return (
-    <View class="items-center gap-2">
+    <View class={openTight() ? "items-center gap-1" : "items-center gap-2"}>
       <Text variant="page" class="text-center" testID={props.testID}>{deviceCopy(props.title)}</Text>
       <Text variant="meta" tone="fg2" class="text-center">{deviceCopy(props.line)}</Text>
     </View>
@@ -178,7 +203,7 @@ export function Heading(props: { title: string; line: string; testID?: string })
 /** A label (12 fg2) over its control. */
 export function Labelled(props: { label: string; children?: JSX.Element }) {
   return (
-    <View class="gap-2">
+    <View class={openTight() ? "gap-1" : "gap-2"}>
       <Text variant="meta" tone="fg2">{props.label}</Text>
       {props.children}
     </View>

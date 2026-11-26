@@ -634,3 +634,18 @@ test("desktop: a signed-in owner with a PIN gets the PIN sign-in next", async ()
   await app.waitFor("id:auth-card", { timeout: 15000 });
   expect(app.shows("id:frame")).toBe(false);
 }, 60_000);
+
+test("desktop: signed out as the menu's Sign Out does, the gate opens on its first page; Continue, then Back, returns to it", async () => {
+  const app = await open(ENTRY, { ...WIDE, host: { params: { gate: true, demo: true, mode: "solo", firstRun: false, signOut: true, readout: true } } });
+  await toCode(app);
+  await app.type("id:gate-code-boxes", "246810");
+  await app.waitFor("id:frame", { timeout: 15000 });
+  // The host's sign-out, then app.lockCloud: nothing else resets the sign-in (shell/desktop/actions.ts signOutOfTheAccount).
+  await app.press("id:demo-sign-out");
+  await app.waitFor("id:gate-start", { timeout: 15000 });
+  expect(app.shows("id:gate-email-page")).toBe(false);
+  await app.press("id:gate-start-continue");
+  await app.waitFor("id:gate-email-page");
+  await app.press("id:gate-back");
+  await app.waitFor("id:gate-start");
+}, 60_000);

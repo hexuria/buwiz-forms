@@ -9,6 +9,7 @@ import { cleanup, effect, signal, View } from "nsh";
 import type { CloudAccountStatus } from "../../bir";
 import { store } from "../../shell";
 import { Icon, Text, TOUCH } from "../../ui";
+import { setAbovePage } from "./parts";
 import { signInFlow } from "./signInFlow";
 import { openColumnMax } from "./signInLook";
 
@@ -64,9 +65,12 @@ export function WelcomeNote(props: { when?: () => boolean; centred?: boolean }) 
   let shown = false;
   effect(() => {
     if (shows()) shown = true;
+    // Over an open page, the page's top is under the note: it counts the note out of its room while it shows.
+    else if (props.centred) setAbovePage(0);
   });
   cleanup(() => {
     if (shown) pending.set(false);
+    if (props.centred) setAbovePage(0);
   });
   const note = () => (
     <View testID="welcome-note" class="mb-4 w-full flex-row items-center gap-2 rounded-(--radius-card) bg-success-soft px-4 py-3">
@@ -78,7 +82,7 @@ export function WelcomeNote(props: { when?: () => boolean; centred?: boolean }) 
   return (
     <If when={shows()}>
       <If when={props.centred} else={note()}>
-        <View class="w-full items-center px-6 pt-3">
+        <View class="w-full items-center px-6 pt-3" onLayout={(e) => setAbovePage(Math.round(e.bounds.size.height))}>
           <View class="w-full" style={{ maxWidth: openColumnMax(TOUCH) }}>
             {note()}
           </View>

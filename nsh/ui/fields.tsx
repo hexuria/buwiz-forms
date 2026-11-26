@@ -101,8 +101,9 @@ export function TextField(props: TextFieldProps) {
                 props.large ? "rounded-[10px] border" : "rounded-(--radius-row) border",
                 // A centred box is a cell of the phone TIN grid: 47 pt wide on a 320 pt phone, where 10 pt sides cut
                 // the third digit. It keeps 4 pt, like the locked cell (controls/model.ts readBoxPad).
-                props.align === "center" ? "px-1" : props.large ? "px-3" : "px-2.5",
-                props.large ? (T_PX > 46 ? "min-h-12" : "min-h-11.5") : TOUCH ? T_MIN_H : sm() ? "h-7" : "h-8",
+                props.align === "center" ? "px-1" : props.large ? "px-0" : "px-2.5",
+                // The large field is one fixed height, so its input (h-full) fills it: a press anywhere in the box focuses it.
+                props.large ? (T_PX > 46 ? "h-12" : "h-11.5") : TOUCH ? T_MIN_H : sm() ? "h-7" : "h-8",
                 flat() ? "border-border bg-hover" : "bg-card",
                 props.error ? "border-danger" : !flat() && "border-border-strong focus-within:border-accent-blue",
               ),
@@ -141,6 +142,8 @@ export function TextField(props: TextFieldProps) {
           class={cx(
             "h-full min-w-0 flex-1 bg-transparent caret-accent-blue placeholder:text-subtle-foreground selection:bg-accent-blue-soft",
             props.bare || props.large ? "text-emph font-normal" : "text-body",
+            // The large field's sides are the input's own, so the whole box takes the press.
+            props.large && "px-3",
             flat() ? "text-muted-foreground" : "text-foreground",
             props.align === "right" && "text-right",
             props.align === "center" && "text-center",

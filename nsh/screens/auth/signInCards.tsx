@@ -8,7 +8,7 @@ import { type InputRef, Text as NText, View, windowSize } from "nsh";
 import { Button } from "nsh/base";
 import { app } from "../../shell";
 import { deviceCopy, PinCells, Spinner, T_MIN_H, Text, TextField, TOUCH } from "../../ui";
-import { BackControl, OpenPage, PageButton, PageHeading, SoftLine } from "./parts";
+import { BackControl, OpenPage, openTight, PageButton, PageHeading, SoftLine } from "./parts";
 import { codeSaid, emailSaid, resendLabel, type Said, signInFlow, type SignInState } from "./signInFlow";
 import { codeBoxWidth, OPEN_SIDE, openColumnMax, SAID_SLOT } from "./signInLook";
 
@@ -99,7 +99,7 @@ export function EmailPage(props: { prefix: string }) {
     >
       <PageHeading testID={`${props.prefix}-title`}>{EMAIL_TITLE}</PageHeading>
       <SoftLine testID={`${props.prefix}-email-sentence`}>{EMAIL_SENTENCE}</SoftLine>
-      <View class="mt-2 w-full gap-2">
+      <View class={`${openTight() ? "mt-1" : "mt-2"} w-full gap-2`}>
         <TextField
           testID={`${props.prefix}-email`}
           label="Email"

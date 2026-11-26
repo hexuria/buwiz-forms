@@ -9,8 +9,8 @@
 //   gate      true: the Buwiz account gate is closed (the host's gate answer is replaced; the dev bypass would open it)
 //   email, expiresIn, resendIn, pending, resend: the email-and-code sign-in, which the gate opens on (screens/auth/testEmail.ts);
 //             the readout counts the reads of the kept request ("pending reads: N")
-//   signOut   true: the button "Test: sign out" closes the gate again (the host's gate answers locked, the sign-in flow starts
-//             over and the app locks as Settings > Account's Sign out leaves it), for a second sign-in in the same run
+//   signOut   true (with gate): the button "Test: sign out" signs out as the desktop menu's Sign Out does (the host's sign-out,
+//             faked to answer at once, then app.lockCloud), for a second sign-in in the same run
 //   drop      true: the button "Test: drop the sign-in" forgets the sign-in flow's state in memory (signInFlow.reset), as an
 //             engine made anew starts without it
 //   lock      true: the sign-in screen once the frame is up, whatever the codes (to show "Open without signing in")
@@ -28,7 +28,7 @@ import { bir } from "./bir";
 import { createDemoTaxpayer } from "./bir/testing";
 import { lastOpenFit } from "./screens/auth/parts";
 import { signInFlow } from "./screens/auth/signInFlow";
-import { type EmailParams, fakeEmail } from "./screens/auth/testEmail";
+import { type EmailParams, fakeEmail, SIGNED_IN } from "./screens/auth/testEmail";
 import { totpCode } from "./screens/auth/testTotp";
 import { app, pollSteps } from "./shell/app";
 import { Shell } from "./shell/Shell";
@@ -109,6 +109,13 @@ function fakeAccount(p: Params): void {
     };
   }
   if (p.gate) fakeEmail(h, p, called, undefined, () => pendingReads.set(pendingReads() + 1));
+  if (p.gate && p.signOut) {
+    // Signed out at once, no network: the gate's answer is closed again.
+    h.cloud_account_sign_out = async () => {
+      gateOpen = false;
+      return { ...SIGNED_IN, signed_in: false, email: null, user_id: null };
+    };
+  }
 }
 
 /** What the open page now showing measured and chose (screens/auth/parts.tsx OpenPage). */
@@ -215,9 +222,12 @@ function Demo() {
             label="Test: sign out"
             size="sm"
             onPress={() => {
-              gateOpen = false;
-              signInFlow.reset();
-              app.lockCloud();
+              // The menu's Sign Out (shell/desktop/actions.ts signOutOfTheAccount): the host signs out, then app.lockCloud. Nothing
+              // here resets the sign-in flow: the gate's coming back must do that itself.
+              void (async () => {
+                await bir.cloud_account_sign_out();
+                app.lockCloud();
+              })();
             }}
           />
         </If>

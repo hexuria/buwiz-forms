@@ -317,7 +317,8 @@ function openEmail(): void {
  * One page back (the pages' back control, Android's back button): the code page goes back to the email page with the address
  * kept (Change email); the email page to the first page (its address, and the request Change email keeps, stay; a sentence
  * goes). True when it stepped back; false on the first page, where back leaves as it does elsewhere. While Continue sends,
- * it stays (the request is on its way) and says it handled the press.
+ * it stays (the request is on its way) and says it handled the press. Signed in (`approved`) with the email page still open,
+ * it closes the email page as well. Android's button reaches this only while the email or code page shows (Gate.tsx).
  */
 function back(): boolean {
   const now = state();
@@ -325,8 +326,7 @@ function back(): boolean {
     changeEmail();
     return true;
   }
-  // Signed in (the gate is going or gone): the press is the app's.
-  if (!emailOpen() || now.kind === "approved") return false;
+  if (!emailOpen()) return false;
   if (now.kind === "sending") return true;
   batch(() => {
     emailOpen.set(false);
@@ -430,3 +430,7 @@ export function pageOf(now: SignInState, emailOpened: boolean): "start" | "email
   if (now.kind === "code") return "code";
   return emailOpened ? "email" : "start";
 }
+
+// Every way the account gate comes back (the menu's Sign Out, Settings' Sign out and Sign in) starts the sign-in over on its
+// first page: nothing of the last sign-in (an open email page, an approval) is left behind it.
+app.onCloudLock(() => signInFlow.reset());

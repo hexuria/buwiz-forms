@@ -10,6 +10,10 @@ const PHONE = { width: 390, height: 844 };
 const SMALL_PHONE = { width: 375, height: 667 };
 const DESKTOP = { width: 1440, height: 900, platform: "macos" as const };
 const SHORT_DESKTOP = { width: 1280, height: 640, platform: "macos" as const };
+const SMALL_DESKTOP = { width: 800, height: 500, platform: "macos" as const };
+const SMALLEST_DESKTOP = { width: 420, height: 480, platform: "macos" as const };
+/** Android 360x640 dp with the three-button bar: the status bar's 24 over the page, the bar's 48 under it. */
+const SMALL_ANDROID = { width: 360, height: 640, platform: "android" as const, safeArea: { top: 24, bottom: 48 } };
 
 interface Fit {
   page: string;
@@ -112,6 +116,42 @@ for (const [name, size, steps] of [
     await expectFits(locked, "access-error-card");
   }, 90_000);
 }
+
+for (const [name, size] of [
+  ["800x500 desktop window", SMALL_DESKTOP],
+  ["420x480 desktop window (the smallest the app allows)", SMALLEST_DESKTOP],
+] as const) {
+  test(`${name}: the email and code pages fit, drawn tight, the logo at one of its steps`, async () => {
+    const app = await open(ENTRY, { ...size, host: { params: { gate: true, readout: true } } });
+    await toEmail(app);
+    expect([180, 128, 88, 64]).toContain((await expectFits(app, "gate-email-page")).logo);
+    await app.type("id:gate-email", "juana@example.com");
+    await app.press("id:gate-continue");
+    await app.waitFor("id:gate-code-page", { timeout: 15000 });
+    await expectFits(app, "gate-code-page");
+  }, 60_000);
+
+  test(`${name}: the TIN and PIN sign-in fits, the owner's and the help desk's (whose line is longer)`, async () => {
+    const owner = await open(ENTRY, { ...size, host: { params: { demo: true, mode: "solo", adminPin: "1234", readout: true } } });
+    await owner.waitFor("id:auth-card");
+    await expectFits(owner, "auth-card");
+    const desk = await open(ENTRY, { ...size, host: { params: { demo: true, mode: "helpdesk", adminPin: "1234", pins: { "000123453": "4321" }, readout: true } } });
+    await desk.waitFor("id:auth-card");
+    expect(desk.texts().some((t) => t.includes("help desk admin"))).toBe(true);
+    await expectFits(desk, "auth-card");
+    for (const id of ["auth-tin", "auth-tp-pin", "auth-submit", "auth-method", "auth-forgot"]) expect(desk.shows(`id:${id}`)).toBe(true);
+  }, 60_000);
+}
+
+test("Android 360x640 with the three-button bar: the TIN and PIN sign-in fits above the bar, Forgot PIN? included", async () => {
+  const owner = await open(ENTRY, { ...SMALL_ANDROID, host: { params: { demo: true, mode: "solo", adminPin: "1234", readout: true } } });
+  await owner.waitFor("id:auth-card");
+  await expectFits(owner, "auth-card");
+  expect(owner.shows("id:auth-forgot")).toBe(true);
+  const desk = await open(ENTRY, { ...SMALL_ANDROID, host: { params: { demo: true, mode: "helpdesk", adminPin: "1234", pins: { "000123453": "4321" }, readout: true } } });
+  await desk.waitFor("id:auth-card");
+  await expectFits(desk, "auth-card");
+}, 60_000);
 
 test("a window too short for the block at its smallest step: the logo at 80, and the page scrolls with its field and button in the scroll view", async () => {
   // As a 390x844 phone with its keyboard up leaves about 390 points (the test kit has no keyboard to raise).
