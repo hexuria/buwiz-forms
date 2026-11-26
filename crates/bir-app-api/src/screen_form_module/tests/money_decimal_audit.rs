@@ -262,3 +262,38 @@ fn money_third_decimal_audit_matrix() {
         .unwrap_or_else(|error| panic!("write {out}: {error}"));
     eprintln!("money audit wrote {out}: {} records", records.len());
 }
+
+#[test]
+fn audit_1601fq_complete_schedule_row_reaches_upload_and_print() {
+    setup();
+    let opened = open("1601FQ", 3);
+    let relief_yes = fill(
+        "1601FQ",
+        &opened["draft"],
+        json!({"frm1601FQ:SpecialTax_1": "true", "frm1601FQ:SpecialTax_2": "false"}),
+    );
+    let filled = fill(
+        "1601FQ",
+        &relief_yes["draft"],
+        json!({
+            "drpTreatyCode0": "AU",
+            "drpATCCode0": "WI330",
+            "txtAmtIncomePay0": "1000.005",
+        }),
+    );
+    assert_eq!(filled["rejected"], json!({}));
+    let map = agent::field_map(kind_of("1601FQ").unwrap(), &filled["draft"]).unwrap();
+    eprintln!(
+        "complete 1601FQ row: stored={:?} upload={:?} rate={:?} withheld={:?}",
+        filled["draft"].pointer("/schedule1/0/income_payment"),
+        map.get("txtAmtIncomePay0"),
+        map.get("txtRate0"),
+        map.get("txtReqWithheld0"),
+    );
+    assert_eq!(map["txtAmtIncomePay0"], "1,000.01");
+    let draft: bir_core::forms::form_1601fq::Form1601FqDraft =
+        serde_json::from_value(filled["draft"].clone()).unwrap();
+    let html = bir_print::frozen_html::filled_document("1601-fq-2020", &draft.to_print_field_map())
+        .unwrap();
+    assert!(html.contains("1,000.01"));
+}
