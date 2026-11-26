@@ -1,0 +1,12 @@
+✓ built the Rust crate nsh-app-ebirforms (4m 10s)
+✓ booted iPad Pro 13-inch (M5) (28.8s)
+✓ built App.tsx (1.4 MB js, 5.1 MB bytecode, 381ms)
+✓ built the development host for the iOS simulator (1m 57s, 1 warning: -v shows it)
+• iOS Simulator (iPad Pro 13-inch (M5)) connected, build 1
+• iOS Simulator (iPhone 17 Pro) connected, build 1
+• iOS Simulator (iPad Pro 13-inch (M5)) disconnected
+• iOS Simulator (iPhone 17 Pro) disconnected
+• iOS Simulator (iPad Pro 13-inch (M5)) connected, build 1
+• iOS Simulator (iPhone 17 Pro) connected, build 1
+• iOS Simulator (iPad Pro 13-inch (M5)) disconnected
+• iOS Simulator (iPhone 17 Pro) disconnected
