@@ -1,0 +1,26 @@
+23:18:25 === M1 tab-in from the box before, type 15000.50 ===
+23:18:35 box before: '1,234.56'
+23:18:40 box states: ['1,234.56', '1', '15', '150', '1,500', '15,000', '15,000.', '15,000.5', '15,000.50']
+23:18:41 after leaving: '15,000.50'
+23:18:43 saved: 15000.5  verdict: right
+23:18:43 === M2 shift+tab in from the box after, type 15000.50 ===
+23:18:53 box states: ['1,234.56', '1', '15', '150', '1,500', '15,000', '15,000.', '15,000.5', '15,000.50']
+23:18:54 after leaving: '15,000.50'
+23:18:55 saved: 15000.5  verdict: right
+23:18:55 === M3 first click between 2 and 3, key 9 ===
+23:19:07 box states: ['1,234.56', '19,234.56']
+23:19:08 after leaving: '19,234.56'
+23:19:10 saved: 19234.56  verdict: right
+23:19:10 === M4 first click just after the last digit, key 9 ===
+23:19:22 box states: ['1,234.56', '1,234.596']
+23:19:23 after leaving: '1,234.60'
+23:19:25 saved: 1234.6  verdict: right
+23:19:25 === M5 first click empty left part, key 9 ===
+23:19:36 box states: ['1,234.56', '91,234.56']
+23:19:37 after leaving: '91,234.56'
+23:19:39 saved: 91234.56  verdict: right
+23:19:39 === M6 type 1234, switch away and back, type 5 ===
+23:19:46 before switch: '1,234'
+23:19:51 box states: ['1,234', '12,345']
+23:19:52 after leaving: '12,345.00'
+23:19:54 saved: 12345.0  verdict: right
