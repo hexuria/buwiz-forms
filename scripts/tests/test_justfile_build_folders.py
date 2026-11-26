@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-JUSTFILE = (ROOT / "justfile").read_text()
+JUSTFILE = (ROOT / "justfile").read_text(encoding="utf-8")
 
 
 class BuildFolderTests(unittest.TestCase):
@@ -31,7 +31,7 @@ class BuildFolderTests(unittest.TestCase):
 
     def test_the_linux_container_keeps_the_callers_folders(self):
         # nsh2404.sh runs every Linux NSH command; it used to pin the shared folder whatever the caller set.
-        wrapper = (ROOT / "scripts/setup-linux-nsh.sh").read_text()
+        wrapper = (ROOT / "scripts/setup-linux-nsh.sh").read_text(encoding="utf-8")
         self.assertIn('-e CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"', wrapper)
         self.assertIn('-e PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:', wrapper)
         self.assertIn("-e NSH_RUNTIME \\\n", wrapper)
@@ -55,12 +55,12 @@ class BuildFolderTests(unittest.TestCase):
             nsh.write_text('#!/bin/sh\necho "tool=$0 folder=$CARGO_TARGET_DIR args=$*"\n')
             nsh.chmod(nsh.stat().st_mode | stat.S_IEXEC)
             env = {**os.environ, "NSH_TOOLS": tmp, "CARGO_TARGET_DIR": str(Path(tmp) / "own")}
-            result = subprocess.run(["just", "nsh-check"], cwd=ROOT, env=env, text=True, capture_output=True)
+            result = subprocess.run(["just", "nsh-check"], cwd=ROOT, env=env, text=True, encoding="utf-8", capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn(f"tool={nsh}", result.stdout)
             self.assertIn(f"folder={Path(tmp) / 'own'}", result.stdout)
             env.pop("CARGO_TARGET_DIR")
-            result = subprocess.run(["just", "nsh-check"], cwd=ROOT, env=env, text=True, capture_output=True)
+            result = subprocess.run(["just", "nsh-check"], cwd=ROOT, env=env, text=True, encoding="utf-8", capture_output=True)
             self.assertIn(f"folder={Path.home() / 'BuwizNsh' / 'target-nsh'}", result.stdout)
 
     @unittest.skipUnless(os.name != "nt" and shutil.which("bash"), "bash")
@@ -74,7 +74,7 @@ class BuildFolderTests(unittest.TestCase):
                     tool.write_text(f"#!/bin/sh\n{text}\n")
                     tool.chmod(tool.stat().st_mode | stat.S_IEXEC)
                 env = {**os.environ, "PATH": f"{tmp}:{os.environ['PATH']}", "CARGO_TARGET_DIR": "/tmp/own"}
-                result = subprocess.run(["bash", "scripts/build-line.sh"], cwd=ROOT, env=env, text=True, capture_output=True)
+                result = subprocess.run(["bash", "scripts/build-line.sh"], cwd=ROOT, env=env, text=True, encoding="utf-8", capture_output=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn(version, result.stderr)
                 self.assertIn(expected, result.stderr)
@@ -87,7 +87,7 @@ class BuildFolderTests(unittest.TestCase):
             cargo.write_text('#!/bin/sh\necho "cargo 1.102.0 (d69 2026-11-16) (huacnlee/cargo 0.103.0-1)"\n')
             cargo.chmod(cargo.stat().st_mode | stat.S_IEXEC)
             env = {**os.environ, "PATH": f"{tmp}:{os.environ['PATH']}"}
-            result = subprocess.run(["bash", "scripts/build-line.sh", "--strict"], cwd=ROOT, env=env, text=True, capture_output=True)
+            result = subprocess.run(["bash", "scripts/build-line.sh", "--strict"], cwd=ROOT, env=env, text=True, encoding="utf-8", capture_output=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("shares one build folder between checkouts", result.stderr)
         for recipe in ("play-bundle", "nsh-test", "nsh-run-agent", "nsh-agent-check", "nsh-shots"):
