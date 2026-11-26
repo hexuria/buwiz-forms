@@ -25,11 +25,14 @@ export interface PrintActions {
    * needs no web view and no GPU). Absent where a web view shows the sheet's page (macOS, and a test's own actions).
    */
   sheets?(key: string): Promise<SheetImage[]>;
+  /** The person pressed Cancel on a wait for `what` ("Print", "Save as PDF"): the app's log gets a line. */
+  stoppedWaiting?(what: string): void;
 }
 
 /** The real actions. */
 export const REAL_ACTIONS: PrintActions = {
   print: (key) => Print.print(key),
   savePdf: (key) => Print.savePdf(key, testing.savePath ?? null),
+  stoppedWaiting: (what) => Print.stoppedWaiting(what),
   ...(Print.drawsSheets() ? { sheets: (key: string) => Print.sheets(key) } : {}),
 };
