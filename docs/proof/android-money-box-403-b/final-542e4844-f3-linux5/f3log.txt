@@ -1,0 +1,33 @@
+nav ok, starting phase A (no ATC, 16 trials)
+A-t1 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t2 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t3 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t4 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t5 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t6 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t7 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t8 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t9 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t10 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t11 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t12 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t13 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t14 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t15 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+A-t16 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+=== PHASE A: changed 0 of 16 (launcher 0/8, recents 0/8) ===
+atc row candidates: ['Row 1', 'Alphanumeric Tax Code (ATC)', 'Choose…', 'Taxable Amount', '₱', '1,234.56', 'Tax Rate', '0.00', '%', 'Tax Due', '₱', '0.00', 'Delete row', 'Done']
+phase B atc set: False
+B-t1 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+B-t2 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+--- phase B rerun with cascade live (PT010 3.0%) ---
+B-t1 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+B-t2 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+B-t3 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+B-t4 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+B-t5 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+B-t6 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+B-t7 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+B-t8 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+=== PHASE B (cascade): changed 0 of 8 ===
+DONE-B
