@@ -453,6 +453,9 @@ function freshState(target: FormTarget): St {
   };
 }
 
+/** What a removal's Undo says when typing came after the removal (an edit retires Undo). */
+const UNDO_TYPED_SINCE = "Undo is no longer available: you typed since.";
+
 /** The longest Queue waits for a focused amount box to let go; then it stops and asks the filer to finish the amount. */
 const QUEUE_SETTLE_MS = 500;
 
@@ -2098,12 +2101,20 @@ export class FormSession {
   private undoRemoval(draft: object, state: St, undo: () => void) {
     const s = this.st;
     if (s !== state || this.removalUndo !== undo || !s.editable) return;
+    // U1: an amount box that still has the keys is left first: what it holds is stored on its own row before Undo brings back the
+    // earlier draft, which would otherwise take that amount on leaving, onto whatever row then holds its keys. A leave that stored an
+    // edit retired Undo (as any edit does), and the filer is told so, as for typing still pending.
+    if (this.settleFocused(() => {
+      if (this.st !== state) return;
+      if (this.removalUndo === undo) return this.undoRemoval(draft, state, undo);
+      this.toast(UNDO_TYPED_SINCE, "triangle-alert");
+    })) return;
     // V8: typing still pending is stored first, on its own keys. An edit retires Undo (Undo brings back a whole earlier draft, which
     // would drop what was typed or put it on another row), so the filer is told and the rows stay as they are.
     if (Object.keys(s.pending).length) {
       this.flush();
       this.retireRemovalUndo();
-      return void this.toast("Undo is no longer available: you typed since.", "triangle-alert");
+      return void this.toast(UNDO_TYPED_SINCE, "triangle-alert");
     }
     this.removalUndo = null;
     this.undoToast = null;

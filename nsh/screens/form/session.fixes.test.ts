@@ -1434,3 +1434,41 @@ test("[B8] Continue on Queue's question with an amount box focused again leaves 
     s?.dispose();
   }
 });
+
+test("[U1] a removal's Undo with an amount box still focused leaves it first: the amount stays on its own row, and Undo says it is no longer available", async () => {
+  const K = (n: string) => "frm1601EQ:" + n;
+  const h = hooks();
+  const s = await opened(at("1601EQ", 2023, 2), h);
+  s.choose({ [K("optWithheld:Y")]: "true", [K("optCategory:P")]: "true" });
+  s.choose({ [K("txtAtcCd1")]: "WI010" });
+  s.edit(K("txtTaxBase1"), "100");
+  s.flush();
+  s.choose({ [K("txtAtcCd2")]: "WI011" });
+  s.edit(K("txtTaxBase2"), "200");
+  s.flush();
+  await s.idle();
+  s.choose({ [K("txtAtcCd1")]: "" });
+  s.confirmRemoval();
+  await s.idle();
+  expect([s.valueOf(K("txtAtcCd1")), s.valueOf(K("txtTaxBase1"))]).toEqual(["WI011", "200.00"]);
+  // The filer is in WI011's base (row 1 now) with "1500,50": the box reported nothing for it and reads 1,500.50 only on leaving.
+  const base = K("txtTaxBase1");
+  let focused = true;
+  const leave = () => {
+    if (!focused) return;
+    focused = false;
+    s.edit(base, "1500.50");
+    s.blur(base);
+  };
+  s.registerBlur(base, () => void setTimeout(leave, 60));
+  s.focus(base);
+  s.undoLastRemoval();
+  await s.idle();
+  // A box nobody asked to leave is left later, when the filer goes elsewhere.
+  leave();
+  await s.idle();
+  const rows = [1, 2].map((n) => [s.valueOf(K("txtAtcCd" + n)), s.valueOf(K("txtTaxBase" + n))]);
+  expect(rows).toEqual([["WI011", "1,500.50"], ["", ""]]);
+  expect(h.said.toasts.map((t) => t.message)).toContain("Undo is no longer available: you typed since.");
+  s.dispose();
+});
