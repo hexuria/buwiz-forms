@@ -1,6 +1,7 @@
 // A test fixture, not a screen: two SearchPicks as the taxpayer screens use them (an RDO list of 138 and a ZIP list of 400, numbers
 // only), each printing what it reported ("rdo: 050 | picks: 1 | opens: 1"), and the phone sheet's frames as its list scrolls
-// (watchSheetFrames), the first and the latest, so pick.test.tsx can read that the search field stays inside the sheet.
+// (watchSheetFrames), the first and the latest, so pick.test.tsx can read that the search field stays inside the sheet and that
+// sheetBodyRoom() is the room the sheet's body really has.
 // host.params: { rdo?: string (the starting value), required?: boolean (the RDO not clearable) }.
 // A plain box under the picks ("pp-other") takes the keys when the test sends the host event "focus-other": the form's own focus()
 // moving the keys with no press (a pill step, Queue's jump), so the combobox's leaving can be tested without the list hearing one.
@@ -34,7 +35,12 @@ const ZIP: ChoiceOption[] = [
 ];
 
 const box = (b: FrameBox) => `${Math.round(b.top)}-${Math.round(b.bottom)}`;
-const said = (f: SheetFrames) => `search=${box(f.search)} list=${box(f.list)} panel=${box(f.panel)} window=${Math.round(f.window)}`;
+/** To a tenth of a point: the sheet's own measures are compared within 1 point. */
+const tenth = (n: number) => String(Math.round(n * 10) / 10);
+const fine = (b: FrameBox) => `${tenth(b.top)}~${tenth(b.bottom)}`;
+const said = (f: SheetFrames) =>
+  `search=${box(f.search)} list=${box(f.list)} panel=${box(f.panel)} window=${Math.round(f.window)}` +
+  ` header=${fine(f.header)} body=${fine(f.body)} sheet=${tenth(f.sheetTop)} room=${tenth(f.room)} max=${tenth(f.maxHeight)}`;
 
 function Probe() {
   const p = (host.params ?? {}) as { rdo?: string; required?: boolean };

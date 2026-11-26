@@ -8,7 +8,9 @@
 //   on leaving: the box goes back to the last pick and a line under it says so (resolveTyped in model.ts).
 import type { Accessor, InputRef, ListRef, ViewRef } from "nsh";
 import { announce, batch, effect, keymap, List, Overlay, platform, signal, untracked, View, windowSize } from "nsh";
-import { ChoiceRow, Icon, IconButton, Line, phoneLayout, Popover, Sheet, sheetBodyRoom, T_MIN_H, T_PX, Text, TextField, TOUCH } from "../../../ui";
+import {
+  ChoiceRow, Icon, IconButton, Line, phoneLayout, Popover, Sheet, sheetBodyRoom, sheetPanelMaxHeight, T_MIN_H, T_PX, Text, TextField, TOUCH,
+} from "../../../ui";
 import type { ChoiceOption } from "../contract";
 import { cx, matchWords, pickLabel, resolveTyped, searchKeyboardType } from "./model";
 
@@ -59,18 +61,36 @@ export interface FrameBox {
   bottom: number;
 }
 
-/** The phone sheet's search field, its list and the panel around them, with the window's height. */
+/**
+ * The phone sheet's search field, its list and the panel around them; the sheet's own header and body (Sheet's views), the top of
+ * the sheet's panel (the header's top less its place in the panel); what sheetBodyRoom() and sheetPanelMaxHeight() said then; and
+ * the window's height.
+ */
 export interface SheetFrames {
   testID: string;
   search: FrameBox;
   list: FrameBox;
   panel: FrameBox;
+  header: FrameBox;
+  body: FrameBox;
+  sheetTop: number;
+  room: number;
+  maxHeight: number;
   window: number;
+}
+
+/** Sheet's header and body views, kept only while a test watches (SheetPick hands Sheet the refs then). */
+interface SheetParts {
+  header?: ViewRef;
+  body?: ViewRef;
 }
 
 let frameWatch: ((f: SheetFrames) => void) | null = null;
 
-/** Test seam: hears the sheet's frames as it opens and as its list scrolls (PickProbe.tsx prints them). Null stops. */
+/**
+ * Test seam: hears the sheet's frames as it opens and as its list scrolls (PickProbe.tsx prints them). Registered before the pick
+ * mounts; null stops.
+ */
 export function watchSheetFrames(fn: ((f: SheetFrames) => void) | null) {
   frameWatch = fn;
 }
@@ -92,7 +112,7 @@ function RowWords(props: { o: Accessor<ChoiceOption>; oneLine?: boolean }) {
 }
 
 /** The sheet's body: the search field, then the list in the room that is left. Mounted per opening (a fresh search, the list on the current choice). */
-function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void }) {
+function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void; parts: SheetParts }) {
   const p = props.p;
   const query = signal("");
   const rows = () => matchWords(real(p), query());
@@ -108,15 +128,34 @@ function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void
   let list: ListRef | null = null;
   // Measured once every part is laid out (the panel's and the list's onLayout: a ref callback comes before its later siblings' refs
   // and before layout, so the old report from the search field's ref found no list and said nothing) and on every scroll of the list.
-  // Only a test that registered watchSheetFrames before the sheet opened gets the handlers below: without one the panel and the list
+  // Only a test that registered watchSheetFrames before the pick mounted gets the handlers below: without one the panel and the list
   // carry no onLayout or scroll handlers at all (no events sent, no measure() calls, no signals written, so no extra renders).
   const watch = frameWatch;
   const watching = <T,>(fn: T): T | undefined => (watch ? fn : undefined);
   const report = () => {
-    if (!watch || !refs.search || !refs.list || !refs.panel) return;
-    void Promise.all([boxOf(refs.search), boxOf(refs.list), boxOf(refs.panel)]).then(([search, listBox, panel]) => {
-      if (search && listBox && panel) watch({ testID: p.testID, search, list: listBox, panel, window: windowSize().height });
-    });
+    const { header, body } = props.parts;
+    if (!watch || !refs.search || !refs.list || !refs.panel || !header || !body) return;
+    const room = sheetBodyRoom();
+    const maxHeight = sheetPanelMaxHeight();
+    void Promise.all([boxOf(refs.search), boxOf(refs.list), boxOf(refs.panel), header.measure(), boxOf(body)]).then(
+      ([search, listBox, panel, head, bodyBox]) => {
+        if (!search || !listBox || !panel || !head || !bodyBox) return;
+        const top = head.pagePosition.y;
+        watch({
+          testID: p.testID,
+          search,
+          list: listBox,
+          panel,
+          header: { top, bottom: top + head.bounds.size.height },
+          body: bodyBox,
+          // The header's frame is in the sheet's panel: its y there is everything above it (the grabber and its margin).
+          sheetTop: top - head.bounds.origin.y,
+          room,
+          maxHeight,
+          window: windowSize().height,
+        });
+      },
+    );
   };
   const submit = () => {
     const open = rows().filter((o) => !o.disabled);
@@ -204,6 +243,9 @@ function SheetPick(props: { p: SearchPickProps }) {
     sheet.set(false);
     p.onPick(value);
   };
+  // The test seam's refs to Sheet's own views: handed over only while a test watches, so a release build passes Sheet none.
+  const parts: SheetParts = {};
+  const watched = frameWatch !== null;
   return (
     <>
       {/* A popover that is never open: its trigger is the kit's pressable (focus, Return, the press), routed to the sheet (AGENTS.md). */}
@@ -229,9 +271,17 @@ function SheetPick(props: { p: SearchPickProps }) {
           </View>
         }
       />
-      <Sheet testID={`${p.testID}-sheet`} open={sheet()} onOpenChange={asked} title={p.label} scroll={false}>
+      <Sheet
+        testID={`${p.testID}-sheet`}
+        open={sheet()}
+        onOpenChange={asked}
+        title={p.label}
+        scroll={false}
+        headerRef={watched ? (r: ViewRef) => (parts.header = r) : undefined}
+        bodyRef={watched ? (r: ViewRef) => (parts.body = r) : undefined}
+      >
         <If when={sheet()}>
-          <SheetPanel p={p} choose={choose} />
+          <SheetPanel p={p} choose={choose} parts={parts} />
         </If>
       </Sheet>
     </>

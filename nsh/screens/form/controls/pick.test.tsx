@@ -31,15 +31,37 @@ async function scrollTo(app: App, list: string, step: number, selector: string) 
 /** How many times the sheet reported its frames ("frames reports: 4"). */
 const reports = (app: App) => Number((app.texts().find((t) => t.startsWith("frames reports:")) ?? "frames reports: 0").slice(16));
 
-/** "search=120-164 list=176-760 panel=104-760 window=844" as numbers. */
+/**
+ * "search=173-217 list=229-828 panel=173-828 window=844 header=96.4~157.4 body=157.4~844 sheet=84.4 room=686.6 max=759.6" as
+ * numbers: the pick's own parts in whole points, the sheet's (its header and body views, its panel's top, what sheetBodyRoom() and
+ * sheetPanelMaxHeight() said) to a tenth.
+ */
 function frames(app: App, which: "first" | "last") {
   const text = app.texts().find((t) => t.startsWith(`frames ${which}:`)) ?? "";
   const part = (name: string) => {
     const m = new RegExp(`${name}=(-?\\d+)-(-?\\d+)`).exec(text);
     return m ? { top: Number(m[1]), bottom: Number(m[2]) } : null;
   };
+  const fine = (name: string) => {
+    const m = new RegExp(`${name}=(-?[\\d.]+)~(-?[\\d.]+)`).exec(text);
+    return m ? { top: Number(m[1]), bottom: Number(m[2]) } : null;
+  };
+  const num = (name: string) => {
+    const m = new RegExp(`${name}=(-?[\\d.]+)`).exec(text);
+    return m ? Number(m[1]) : null;
+  };
   const w = /window=(\d+)/.exec(text);
-  return { search: part("search"), list: part("list"), panel: part("panel"), window: w ? Number(w[1]) : 0 };
+  return {
+    search: part("search"),
+    list: part("list"),
+    panel: part("panel"),
+    window: w ? Number(w[1]) : 0,
+    header: fine("header"),
+    body: fine("body"),
+    sheetTop: num("sheet"),
+    room: num("room"),
+    max: num("max"),
+  };
 }
 
 // ---------------------------------------------------------------- phone
@@ -148,6 +170,31 @@ test("phone: the search field stays where it is, inside the sheet, while the lis
   await app.press("id:pp-rdo-opt-138");
   await app.waitFor("id:pp-rdo-search", { state: "gone" });
   expect(line(app, "rdo")).toBe("rdo: 138 | picks: 1 | opens: 1");
+});
+
+test("phone: the list's room is the sheet's real body: sheetBodyRoom() is the body Sheet draws, and the list ends inside it", async () => {
+  const app = await probe();
+  await app.press("id:pp-rdo-trigger");
+  await app.waitFor("id:pp-rdo-search");
+  await app.waitUntil(() => frames(app, "last").header !== null);
+  const f = frames(app, "last");
+  expect(f.list).not.toBeNull();
+  expect(f.body).not.toBeNull();
+  expect(f.sheetTop).not.toBeNull();
+  expect(f.room).not.toBeNull();
+  expect(f.max).not.toBeNull();
+  const header = f.header!;
+  const body = f.body!;
+  // The body starts where Sheet's header ends.
+  expect(Math.abs(body.top - header.bottom)).toBeLessThanOrEqual(1);
+  // The list ends inside the body (a header taller than sheetBodyRoom() counts makes the list taller than the room it has).
+  expect(f.list!.bottom).toBeLessThanOrEqual(body.bottom);
+  // sheetBodyRoom() is the body's measured height: its grabber and header numbers are Sheet's real layout. A taller header
+  // clamps the panel and leaves the body less than the room the list was sized to.
+  expect(Math.abs(body.bottom - body.top - f.room!)).toBeLessThanOrEqual(1);
+  // And the panel is as tall as it may be (sheetPanelMaxHeight), from its measured top to the window's bottom (no keyboard, no
+  // inset): a shorter header would leave the panel short of it, the room unused.
+  expect(Math.abs(f.window - f.sheetTop! - f.max!)).toBeLessThanOrEqual(1);
 });
 
 // ---------------------------------------------------------------- desktop
