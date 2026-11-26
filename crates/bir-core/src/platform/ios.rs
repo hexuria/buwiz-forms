@@ -35,7 +35,7 @@ pub(super) fn prepare_ios_storage() -> (bool, String) {
     use bir_submit::ios_storage::{
         OLD_ITEMS_MARKER, OsKeychain, exclude_from_backup, remove_old_items, set_file_protection,
     };
-    let dir = data_dir();
+    let dir = super::backup_excluded_dir();
     let backup = exclude_from_backup(&dir);
     let protection = set_file_protection(&dir, true);
     let keychain = (!super::keychain_disabled())

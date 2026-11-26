@@ -542,16 +542,36 @@ fn close_handle(mut handle: std::sync::Arc<std::sync::Mutex<Database>>) {
     }
 }
 
-/// The stored global-show chord, if the database is already open and a key
-/// is saved. Does not open the database: a missing handle means "not set".
+/// The stored global-show chord, if a key is saved: `device_settings` first,
+/// then the database this engine already has open (accounts-and-lock O1).
+/// Does not open the database: a missing handle means "not set" there.
 #[cfg(not(feature = "mas_build"))]
 pub fn stored_global_hotkey() -> Option<String> {
+    device_setting(GLOBAL_HOTKEY_SETTING).filter(|value| !value.is_empty())
+}
+
+/// The stored global-show chord's settings key.
+const GLOBAL_HOTKEY_SETTING: &str = "global_hotkey_key";
+
+/// A device-wide setting (accounts-and-lock PLAN §A.2, O1): the
+/// `device_settings` value first; until one is there, the same key in the
+/// database this engine has open (the legacy file before rooms). Never opens
+/// the database. `Some("")` is a value.
+pub fn device_setting(key: &str) -> Option<String> {
+    if let Some(value) = bir_core::rooms::device_setting(key) {
+        return Some(value);
+    }
     let handle = DATABASE.with(|slot| slot.borrow().clone())?;
     let db = bir_core::lock_timing::lock(&handle).ok()?;
-    db.get_setting("global_hotkey_key")
-        .ok()
-        .flatten()
-        .filter(|value| !value.is_empty())
+    db.get_setting(key).ok().flatten()
+}
+
+/// Write a device-wide setting: to `device_settings` from A1 on. Refused
+/// while the account gate is locked, as the database write it replaces was.
+fn set_device_setting(key: &str, value: &str) -> Result<(), HostError> {
+    crate::account_gate::ensure_unlocked()?;
+    bir_core::rooms::set_device_setting(key, value)
+        .map_err(|error| HostError::new(error.to_string()))
 }
 
 /// Whether no database handle of this process is open any more: true once
@@ -598,11 +618,14 @@ fn launch_on(handle: std::sync::Arc<std::sync::Mutex<Database>>) {
         .ok()
         .map(|guard| bir_core::log_files::retention_days(&guard));
     if let Some(days) = days {
+        // The round below reads the device store; until it has a value, this one.
+        bir_core::log_files::remember_retention(days);
         let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), days);
     }
-    // Not in test processes: the thread sleeps six hours between rounds.
+    // Not in test processes: the thread sleeps six hours between rounds. It
+    // holds no database handle (accounts-and-lock I5).
     #[cfg(not(test))]
-    bir_core::log_files::spawn_retention(std::sync::Arc::downgrade(&handle));
+    bir_core::log_files::spawn_retention();
 }
 
 /// Whether a submission worker runs in this process.
@@ -696,6 +719,8 @@ pub(crate) fn with_reader<R>(
 /// the live database through `BIR_DATABASE_PATH`.
 #[cfg(test)]
 pub(crate) fn use_ephemeral_database() {
+    // Its device settings in memory too: never a device.db in a real folder.
+    bir_core::rooms::use_ephemeral_device_store();
     drop_reader();
     DATABASE.with(|slot| {
         *slot.borrow_mut() = Some(std::sync::Arc::new(std::sync::Mutex::new(
@@ -754,21 +779,15 @@ pub fn to_json(value: &HostValue) -> serde_json::Value {
     }
 }
 
-/// Hotkey, log retention, and the paths Settings shows. A database that is
-/// not open yet answers the defaults; this must not fail the boot read.
+/// Hotkey, log retention, and the paths Settings shows. Device-wide settings:
+/// `device_settings` first, then the database if it is open; neither answers
+/// the defaults. This must not fail the boot read, and opens no database.
 fn computer_snapshot() -> (Option<String>, u32) {
-    let Some(handle) = DATABASE.with(|slot| slot.borrow().clone()) else {
-        return (None, bir_core::log_files::DEFAULT_RETENTION_DAYS);
-    };
-    let Ok(db) = bir_core::lock_timing::lock(&handle) else {
-        return (None, bir_core::log_files::DEFAULT_RETENTION_DAYS);
-    };
-    let hotkey = db
-        .get_setting("global_hotkey_key")
-        .ok()
-        .flatten()
-        .filter(|value| !value.trim().is_empty());
-    (hotkey, bir_core::log_files::retention_days(&db))
+    let hotkey = device_setting(GLOBAL_HOTKEY_SETTING).filter(|value| !value.trim().is_empty());
+    let retention = bir_core::log_files::parse_retention(
+        device_setting(bir_core::log_files::RETENTION_SETTING).as_deref(),
+    );
+    (hotkey, retention)
 }
 
 /// Chords the Settings picker offers. The same combo language as
@@ -831,11 +850,8 @@ fn set_global_hotkey(arguments: &gpui_shell::HostArguments) -> HostResult {
     if !combo.is_empty() && !crate::hooks::hooks().global_hotkey_registrable(&combo) {
         return Err(HostError::new(crate::hotkey_combo::NOT_REGISTRABLE));
     }
-    with_database(|db| {
-        db.set_setting("global_hotkey_key", &combo)
-            .map(|_| HostValue::Null)
-            .map_err(|error| HostError::new(error.to_string()))
-    })
+    set_device_setting(GLOBAL_HOTKEY_SETTING, &combo)?;
+    Ok(HostValue::Null)
 }
 
 /// How many days of `ebirforms.*.log` to keep. Out of range is refused.
@@ -851,12 +867,11 @@ fn set_log_retention(arguments: &gpui_shell::HostArguments) -> HostResult {
             bir_core::log_files::MAX_RETENTION_DAYS
         )));
     }
-    let days = with_database(|db| {
-        db.set_setting(bir_core::log_files::RETENTION_SETTING, &days.to_string())
-            .map_err(|error| HostError::new(error.to_string()))?;
-        Ok(bir_core::log_files::retention_days(db))
-    })?;
-    // File work, after the lock: the worker waits on it.
+    set_device_setting(bir_core::log_files::RETENTION_SETTING, &days.to_string())?;
+    let days = bir_core::log_files::parse_retention(
+        device_setting(bir_core::log_files::RETENTION_SETTING).as_deref(),
+    );
+    bir_core::log_files::remember_retention(days);
     let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), days);
     Ok(HostValue::Null)
 }
@@ -897,15 +912,12 @@ fn check_for_updates() -> HostResult {
 
 fn set_auto_update_download(arguments: &gpui_shell::HostArguments) -> HostResult {
     let enabled = arguments.boolean(0)?;
-    with_database(|db| {
-        db.set_setting(
-            crate::hooks::AUTO_DOWNLOAD_SETTING,
-            if enabled { "1" } else { "0" },
-        )
-        .map_err(|error| HostError::new(error.to_string()))?;
-        crate::hooks::hooks().set_auto_update_download(enabled);
-        Ok(HostValue::Null)
-    })
+    set_device_setting(
+        crate::hooks::AUTO_DOWNLOAD_SETTING,
+        if enabled { "1" } else { "0" },
+    )?;
+    crate::hooks::hooks().set_auto_update_download(enabled);
+    Ok(HostValue::Null)
 }
 
 fn list_profiles() -> HostResult {
@@ -981,8 +993,14 @@ fn page_setting_key(arguments: &gpui_shell::HostArguments) -> Result<String, Hos
     }
 }
 
+/// The page's settings are device-wide (the theme, accounts-and-lock §A.2):
+/// `device_settings` first, then the same key in the open database (O1).
 fn get_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     let key = page_setting_key(arguments)?;
+    if let Some(value) = bir_core::rooms::device_setting(&key) {
+        crate::account_gate::ensure_unlocked()?;
+        return Ok(HostValue::from(value));
+    }
     with_database(|db| {
         db.get_setting(&key)
             .map(HostValue::from)
@@ -990,14 +1008,12 @@ fn get_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     })
 }
 
+/// Written to `device_settings` (accounts-and-lock A1).
 fn set_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     let key = page_setting_key(arguments)?;
     let value = arguments.string(1)?.to_owned();
-    with_database(|db| {
-        db.set_setting(&key, &value)
-            .map(|_| HostValue::Null)
-            .map_err(|error| HostError::new(error.to_string()))
-    })
+    set_device_setting(&key, &value)?;
+    Ok(HostValue::Null)
 }
 
 // ---------- S2: auth + profile management ----------
@@ -1247,9 +1263,13 @@ fn generate_totp_secret(arguments: &gpui_shell::HostArguments) -> HostResult {
         .into())
 }
 
+/// Deleted from `device_settings` and from the open database, so the
+/// fallback cannot bring an old value back.
 fn delete_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     let key = page_setting_key(arguments)?;
     with_database(|db| {
+        bir_core::rooms::delete_device_setting(&key)
+            .map_err(|error| HostError::new(error.to_string()))?;
         db.delete_setting(&key)
             .map(|_| HostValue::Null)
             .map_err(db_error)
@@ -5033,7 +5053,8 @@ mod tests {
     }
 
     /// (a) The page's one setting round-trips through the three verbs, and
-    /// each step reaches the database.
+    /// each step reaches the device store (accounts-and-lock A1: the theme
+    /// is device-wide).
     #[test]
     fn the_theme_preference_round_trips_through_the_page_verbs() {
         setup();
@@ -5043,11 +5064,83 @@ mod tests {
             set_setting(&args(vec![key(), s("Dark")])).unwrap(),
             HostValue::Null
         );
-        assert_eq!(stored_setting("theme_preference").as_deref(), Some("Dark"));
+        assert_eq!(
+            bir_core::rooms::device_setting("theme_preference").as_deref(),
+            Some("Dark")
+        );
+        assert_eq!(stored_setting("theme_preference"), None, "not the room's");
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), s("Dark"));
         assert_eq!(delete_setting(&args(vec![key()])).unwrap(), HostValue::Null);
-        assert_eq!(stored_setting("theme_preference"), None);
+        assert_eq!(bir_core::rooms::device_setting("theme_preference"), None);
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
+    }
+
+    /// Accounts-and-lock A1 (O1): the device-wide settings a person set
+    /// before A1 live in the open database. Each reader answers them until
+    /// `device_settings` has a value; every write goes to `device_settings`.
+    #[test]
+    fn device_settings_fall_back_to_the_open_database() {
+        setup();
+        with_database(|db| {
+            for (key, value) in [
+                ("theme_preference", "Dark"),
+                ("global_hotkey_key", "control+alt+B"),
+                ("log_retention_days", "30"),
+                (crate::hooks::AUTO_DOWNLOAD_SETTING, "0"),
+            ] {
+                db.set_setting(key, value).map_err(db_error)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        let theme = || get_setting(&args(vec![s("theme_preference")])).unwrap();
+        assert_eq!(theme(), s("Dark"));
+        let info = to_json(&system_info().unwrap());
+        assert_eq!(info["global_hotkey"], "control+alt+B");
+        assert_eq!(info["log_retention_days"], 30);
+        #[cfg(not(feature = "mas_build"))]
+        assert_eq!(stored_global_hotkey().as_deref(), Some("control+alt+B"));
+        assert_eq!(
+            device_setting(crate::hooks::AUTO_DOWNLOAD_SETTING).as_deref(),
+            Some("0"),
+            "auto-download off in the legacy file reads off"
+        );
+
+        set_setting(&args(vec![s("theme_preference"), s("Light")])).unwrap();
+        set_global_hotkey(&args(vec![s("control+alt+E")])).unwrap();
+        set_log_retention(&args(vec![14_i64.into()])).unwrap();
+        set_auto_update_download(&args(vec![HostValue::Bool(true)])).unwrap();
+        assert_eq!(theme(), s("Light"));
+        let info = to_json(&system_info().unwrap());
+        assert_eq!(info["global_hotkey"], "control+alt+E");
+        assert_eq!(info["log_retention_days"], 14);
+        assert_eq!(
+            device_setting(crate::hooks::AUTO_DOWNLOAD_SETTING).as_deref(),
+            Some("1")
+        );
+        for (key, legacy) in [
+            ("theme_preference", "Dark"),
+            ("global_hotkey_key", "control+alt+B"),
+            ("log_retention_days", "30"),
+            (crate::hooks::AUTO_DOWNLOAD_SETTING, "0"),
+        ] {
+            assert_eq!(
+                stored_setting(key).as_deref(),
+                Some(legacy),
+                "{key}: the write went to device_settings"
+            );
+            assert!(bir_core::rooms::device_setting(key).is_some(), "{key}");
+        }
+        // A delete leaves no legacy value to fall back to.
+        delete_setting(&args(vec![s("theme_preference")])).unwrap();
+        assert_eq!(theme(), HostValue::Null);
+        // A cleared hotkey stays cleared: the device row wins.
+        set_global_hotkey(&args(vec![s("")])).unwrap();
+        assert_eq!(
+            to_json(&system_info().unwrap())["global_hotkey"],
+            serde_json::Value::Null
+        );
+        bir_core::log_files::remember_retention(bir_core::log_files::DEFAULT_RETENTION_DAYS);
     }
 
     /// (b) The help desk admin's authenticator secret stays host-side: the

@@ -275,11 +275,7 @@ impl Sources for OsSources {
     }
 
     fn folder(&self) -> PathBuf {
-        crate::db::app_database_path()
-            .parent()
-            .filter(|path| !path.as_os_str().is_empty())
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."))
+        crate::platform::device_dir()
     }
 }
 
