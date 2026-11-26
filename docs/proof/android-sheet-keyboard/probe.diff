@@ -1,0 +1,25 @@
+diff --git a/nsh/ui/choice.tsx b/nsh/ui/choice.tsx
+index 9db47138..815a067d 100644
+--- a/nsh/ui/choice.tsx
++++ b/nsh/ui/choice.tsx
+@@ -1,7 +1,7 @@
+ // Choice controls: Switch, Checkbox, CheckboxLabel, RadioGroup, Segmented, Dropdown (a select), ComboField
+ // (type-to-filter single choice for long lists: RDO, ZIP), MultiCombo (a multi-select filter in a popover).
+ import type { Accessor, JSX, ViewRef } from "nsh";
+-import { Scroll, signal, View } from "nsh";
++import { keyboardFrame, safeArea, Scroll, signal, View, windowSize } from "nsh";
+ import {
+   Checkbox as BaseCheckbox, Combobox, Radio, RadioGroup as BaseRadioGroup, Select, type SelectEntry, Switch as BaseSwitch,
+ } from "nsh/base";
+@@ -284,7 +284,10 @@ const LIST_POPUP = TOUCH
+  */
+ const SHEET_CHROME = 112;
+ const listRoom = () => (TOUCH ? { maxHeight: Math.max(120, Math.min(280, sheetMaxHeight() - SHEET_CHROME)) } : undefined);
+-const sheetRoom = () => (TOUCH ? { maxHeight: sheetMaxHeight() } : undefined);
++const sheetRoom = () => {
++  if (TOUCH) console.log("sheet-inner", windowSize().height, safeArea().top, safeArea().bottom, keyboardFrame().height, sheetMaxHeight());
++  return TOUCH ? { maxHeight: sheetMaxHeight() } : undefined;
++};
+ /** A row of a list of choices: lit where the keys or the pointer are, the chosen one on the selected fill. */
+ const LIST_ITEM = cx(
+   "justify-center rounded-(--radius-ctl) px-2 focus:bg-hover selected:bg-selected disabled:opacity-50",
