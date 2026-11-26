@@ -7,10 +7,11 @@
 //! - **The retry limit** lives in `pin_attempts`, one row per room and subject: the owner, each client (TIN
 //!   root) and the legacy lock. It survives a restart. Today's schedule is kept: after every 6th wrong PIN in a
 //!   row, a wait of 1 min, 5 min, 15 min, 30 min, 1 h, then 24 h for each later round.
-//! - **A try is counted before its check.** [`DeviceStore::begin_try`] commits the count (and the wait it starts)
-//!   first; then the hash runs; then [`DeviceStore::settle_try`] commits the reset on a match; only then is the page
-//!   answered. A process killed during the check has already paid for the try, and no answer ever leaves before
-//!   its commit. A check that fails (a store or database error, not a wrong PIN) gives its try back, as today.
+//! - **Hash, commit, answer (L5).** [`DeviceStore::begin_try`] only reads whether a wait is running; then the hash
+//!   runs; then [`DeviceStore::settle_try`] commits the result (failures + 1 for a miss, and the wait the miss
+//!   that reaches the threshold starts; a reset to 0 for a match); only then is the page answered. A process
+//!   killed before the commit gave no answer, so an attacker gains nothing, and a crash never costs a try. A check
+//!   that fails (a store or database error, not a wrong PIN) commits nothing, as today.
 //! - **The clock (L4, X3).** A wait records the wall clock and the boot ([`crate::boot_clock`]) it started in.
 //!   Within the same boot (the same boot id) the time since boot decides, so moving the wall clock changes
 //!   nothing; after a reboot the wall clock does, and a clock set back never shortens a wait. Every read caps the
@@ -90,7 +91,7 @@ impl AttemptKey {
 /// One `pin_attempts` row.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AttemptRow {
-    /// Wrong PINs in a row (tries in progress included).
+    /// Wrong PINs in a row.
     pub failures: i64,
     /// The wait the last failure started, in seconds; 0 when none ever did.
     pub wait_secs: i64,
@@ -146,41 +147,26 @@ pub fn lockout_message(wait: Duration) -> String {
 /// What [`DeviceStore::begin_try`] found.
 #[derive(Debug)]
 pub enum Begun {
-    /// A wait is running: nothing was counted and no check may run.
+    /// A wait is running: no check may run, and nothing is counted.
     Waiting(Duration),
-    /// The try is counted and committed; run the check, then [`DeviceStore::settle_try`].
-    Counted(PendingTry),
+    /// No wait: run the check, then commit its result with [`DeviceStore::settle_try`].
+    Ready(PendingTry),
 }
 
-/// A try that is counted and not settled yet.
+/// A try whose check may run; nothing about it is written yet.
 #[derive(Debug, Clone)]
 pub struct PendingTry {
     key: AttemptKey,
-    before: AttemptRow,
-    after: AttemptRow,
-    /// This try is the one that starts a wait (the 6th, 12th... in a row).
-    starts_wait: bool,
     now: ClockReading,
 }
 
-impl PendingTry {
-    /// The wait this try started if it is a miss (the miss that starts a wait says so).
-    pub fn wait_if_missed(&self) -> Option<Duration> {
-        self.starts_wait
-            .then(|| self.after.wait_left(&self.now))
-            .flatten()
-    }
-}
-
-/// How a counted try ended.
+/// How a check ended, to commit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TryOutcome {
     /// The PIN matched: the count goes back to 0.
     Matched,
-    /// A wrong PIN: the count stays.
+    /// A wrong PIN: the count goes up by one, and the miss that reaches the threshold starts a wait.
     Missed,
-    /// The check itself failed (not a wrong PIN): the try is given back.
-    Failed,
 }
 
 impl DeviceStore {
@@ -189,82 +175,60 @@ impl DeviceStore {
         Ok(read_attempts(&self.conn, key)?.unwrap_or_default())
     }
 
-    /// Count a try of `key` at `now` and commit it, before the check runs. A running wait refuses instead and
-    /// counts nothing.
+    /// Whether a try of `key` may run its check at `now`. Reads only: nothing is written before the check.
     pub fn begin_try(
         &self,
         key: &AttemptKey,
         now: &ClockReading,
     ) -> Result<Begun, DeviceStoreError> {
-        let transaction =
-            rusqlite::Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
-        let before = read_attempts(&transaction, key)?.unwrap_or_default();
-        if let Some(wait) = before.wait_left(now) {
-            transaction.commit()?;
-            return Ok(Begun::Waiting(wait));
-        }
-        let mut after = before.clone();
-        after.failures += 1;
-        let starts_wait = wait_after(after.failures).is_some();
-        if let Some(wait) = wait_after(after.failures) {
-            after.wait_secs = wait;
-            after.started_unix = now.unix_secs;
-            match &now.boot {
-                Some(boot) => {
-                    after.started_boot_secs = boot.secs;
-                    after.started_boot_id = boot.id.clone();
-                }
-                None => {
-                    after.started_boot_secs = 0;
-                    after.started_boot_id = String::new();
-                }
-            }
-        }
-        write_attempts(&transaction, key, &after)?;
-        transaction.commit()?;
-        Ok(Begun::Counted(PendingTry {
-            key: key.clone(),
-            before,
-            after,
-            starts_wait,
-            now: now.clone(),
-        }))
+        let row = read_attempts(&self.conn, key)?.unwrap_or_default();
+        Ok(match row.wait_left(now) {
+            Some(wait) => Begun::Waiting(wait),
+            None => Begun::Ready(PendingTry {
+                key: key.clone(),
+                now: now.clone(),
+            }),
+        })
     }
 
-    /// Commit how a counted try ended: a match resets the count; a miss is already counted; a failed check gives
-    /// the try back (and the wait it started).
+    /// Commit the result of a check: a match resets the count; a miss adds one and, on the 6th, 12th... in a row,
+    /// starts the wait it reaches. Answers the wait this miss started, if it started one.
     pub fn settle_try(
         &self,
         pending: &PendingTry,
         outcome: TryOutcome,
-    ) -> Result<(), DeviceStoreError> {
-        match outcome {
-            TryOutcome::Missed => Ok(()),
-            TryOutcome::Matched => {
-                self.conn.execute(
-                    "DELETE FROM pin_attempts WHERE room_id = ?1 AND subject = ?2",
-                    params![pending.key.room_id, pending.key.subject.key()],
-                )?;
-                Ok(())
-            }
-            TryOutcome::Failed => {
-                let transaction = rusqlite::Transaction::new_unchecked(
-                    &self.conn,
-                    TransactionBehavior::Immediate,
-                )?;
-                let mut row = read_attempts(&transaction, &pending.key)?.unwrap_or_default();
-                row.failures = (row.failures - 1).max(0);
-                if pending.starts_wait {
-                    row.wait_secs = pending.before.wait_secs;
-                    row.started_unix = pending.before.started_unix;
-                    row.started_boot_secs = pending.before.started_boot_secs;
-                    row.started_boot_id = pending.before.started_boot_id.clone();
+    ) -> Result<Option<Duration>, DeviceStoreError> {
+        let key = &pending.key;
+        if outcome == TryOutcome::Matched {
+            self.conn.execute(
+                "DELETE FROM pin_attempts WHERE room_id = ?1 AND subject = ?2",
+                params![key.room_id, key.subject.key()],
+            )?;
+            return Ok(None);
+        }
+        let now = &pending.now;
+        let transaction =
+            rusqlite::Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let mut row = read_attempts(&transaction, key)?.unwrap_or_default();
+        row.failures += 1;
+        let started = wait_after(row.failures);
+        if let Some(wait) = started {
+            row.wait_secs = wait;
+            row.started_unix = now.unix_secs;
+            match &now.boot {
+                Some(boot) => {
+                    row.started_boot_secs = boot.secs;
+                    row.started_boot_id = boot.id.clone();
                 }
-                write_attempts(&transaction, &pending.key, &row)?;
-                transaction.commit()?;
-                Ok(())
+                None => {
+                    row.started_boot_secs = 0;
+                    row.started_boot_id = String::new();
+                }
             }
         }
+        write_attempts(&transaction, key, &row)?;
+        transaction.commit()?;
+        Ok(started.and_then(|_| row.wait_left(now)))
     }
 
     /// The owner lock of `room`, if it has a row.
@@ -379,15 +343,14 @@ pub enum Attempt {
 /// Why a guarded check gave no answer.
 #[derive(Debug)]
 pub enum GuardError<E> {
-    /// The limit could not be read or counted: no check ran.
+    /// The limit could not be read, or the result could not be committed: no answer.
     Store(DeviceStoreError),
-    /// The check itself failed; its try was given back.
+    /// The check itself failed; nothing was committed.
     Check(E),
 }
 
-/// Run `check` for `key` under the limit, in the order above: count and commit, check, commit the reset on a
-/// match, answer. A settle that cannot be written after a match or a failed check is logged: the answer still
-/// stands, and the try stays counted.
+/// Run `check` for `key` under the limit, in the order above (L5): refuse during a wait; run the check (the hash);
+/// commit its result; only then answer. A result that cannot be committed gives no answer.
 pub fn guarded<E>(
     store: &DeviceStoreRef,
     key: &AttemptKey,
@@ -398,30 +361,29 @@ pub fn guarded<E>(
         .with(true, |store| store.begin_try(key, now))
         .map_err(GuardError::Store)?
     {
-        Some(Begun::Counted(pending)) => pending,
+        Some(Begun::Ready(pending)) => pending,
         Some(Begun::Waiting(wait)) => return Ok(Attempt::Waiting(wait)),
-        None => {
-            return Err(GuardError::Store(DeviceStoreError::Io(
-                std::io::ErrorKind::NotFound.into(),
-            )));
-        }
+        None => return Err(GuardError::Store(not_found())),
     };
-    let checked = check();
-    let outcome = match &checked {
-        Ok(true) => TryOutcome::Matched,
-        Ok(false) => TryOutcome::Missed,
-        Err(_) => TryOutcome::Failed,
+    let matched = check().map_err(GuardError::Check)?;
+    let outcome = if matched {
+        TryOutcome::Matched
+    } else {
+        TryOutcome::Missed
     };
-    if let Err(error) = store.with(true, |store| store.settle_try(&pending, outcome)) {
-        tracing::warn!(subject = %key.subject.key(), "PIN try not settled: {error}");
-    }
-    match checked {
-        Ok(true) => Ok(Attempt::Matched),
-        Ok(false) => Ok(Attempt::Missed {
-            wait: pending.wait_if_missed(),
-        }),
-        Err(error) => Err(GuardError::Check(error)),
-    }
+    let started = store
+        .with(true, |store| store.settle_try(&pending, outcome))
+        .map_err(GuardError::Store)?
+        .ok_or_else(|| GuardError::Store(not_found()))?;
+    Ok(if matched {
+        Attempt::Matched
+    } else {
+        Attempt::Missed { wait: started }
+    })
+}
+
+fn not_found() -> DeviceStoreError {
+    DeviceStoreError::Io(std::io::ErrorKind::NotFound.into())
 }
 
 // ------------------------------------------------------------------------------------------- the owner PIN store
@@ -673,7 +635,7 @@ mod tests {
     }
 
     #[test]
-    fn subjects_and_rooms_count_apart_and_a_failed_check_gives_its_try_back() {
+    fn subjects_and_rooms_count_apart_and_a_failed_check_commits_nothing() {
         let store = memory_store();
         let now = reading(1_000_000, Some(("boot-a", 500)));
         let room = room_id_for("https://api.buwiz.com", "user-1");
@@ -704,7 +666,7 @@ mod tests {
             1,
             "only the one real miss counts"
         );
-        // A failed check on the try that would start a wait gives the wait back too.
+        // A failed check on the try that would start a wait starts none.
         for _ in 0..4 {
             miss(&store, &key, &now);
         }
@@ -848,13 +810,14 @@ mod tests {
                 six_misses(&store, &key, &now);
             }
             "hang-in-the-check" => {
-                let marker = std::path::Path::new(&folder).join("in-the-check");
-                let _ = guarded(&store, &key, &now, || {
-                    std::fs::write(&marker, b"1").unwrap();
+                let folder = std::path::Path::new(&folder);
+                // A wrong PIN, killed while its hash runs: had it reached the commit it would count.
+                let answer = guarded(&store, &key, &now, || {
+                    std::fs::write(folder.join("in-the-check"), b"1").unwrap();
                     std::thread::sleep(Duration::from_secs(120));
-                    Ok::<_, ()>(true)
+                    Ok::<_, ()>(false)
                 });
-                unreachable!("killed during the check");
+                std::fs::write(folder.join("answered"), format!("{answer:?}")).unwrap();
             }
             other => panic!("unknown role {other}"),
         }
@@ -898,11 +861,17 @@ mod tests {
         );
     }
 
-    /// The try is counted before the check: a process killed while the hash runs gave no answer and still paid for
-    /// the try (the brief's L5 reading; the PLAN's §B.8 named this "counts nothing").
+    /// L5, hash then commit then answer: a process killed while the hash runs never reached the commit, so the
+    /// count is what it was and the page got no answer.
     #[test]
-    fn a_kill_during_the_check_still_counts() {
+    fn a_kill_before_the_commit_counts_nothing_and_answers_nothing() {
         let folder = tempfile::tempdir().unwrap();
+        let store = file_store(folder.path());
+        let key = AttemptKey::client(None, "123456788");
+        let now = crate::boot_clock::read();
+        for _ in 0..2 {
+            assert_eq!(miss(&store, &key, &now), Attempt::Missed { wait: None });
+        }
         let mut running = child(folder.path(), "hang-in-the-check").spawn().unwrap();
         let marker = folder.path().join("in-the-check");
         let deadline = std::time::Instant::now() + Duration::from_secs(60);
@@ -916,11 +885,13 @@ mod tests {
         running.kill().unwrap();
         let status = running.wait().unwrap();
         assert!(!status.success(), "killed, not finished");
-        let stored = row(
-            &file_store(folder.path()),
-            &AttemptKey::client(None, "123456788"),
+        assert!(
+            !folder.path().join("answered").exists(),
+            "the page got no answer"
         );
-        assert_eq!(stored.failures, 1, "the killed try is counted");
+        let stored = row(&store, &key);
+        assert_eq!(stored.failures, 2, "the killed try counts nothing");
+        assert_eq!(stored.wait_secs, 0);
     }
 
     // ----------------------------------------------------------------------------------------- the owner PIN

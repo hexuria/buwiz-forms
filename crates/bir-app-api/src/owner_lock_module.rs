@@ -5,8 +5,8 @@
 //!
 //! - The PIN hash runs on a thread of its own (`owner-pin`), as `mac_login`'s prompt does, so the engine never
 //!   waits on it: the two verbs that hash are async.
-//! - The try is counted and committed before the hash, and the reset after a match, before the page is answered
-//!   (`bir_core::owner_lock::guarded`).
+//! - Hash, commit, answer (L5): the result of the hash is committed (failures + 1 or the reset) before the page is
+//!   answered (`bir_core::owner_lock::guarded`).
 //! - `lock_now` is a stub in B1: it records the lock (this process forgets the room's unlock), and B2 makes the
 //!   host enforce it (`ROOM_UNLOCKED` in `ensure_unlocked`). A room with no owner PIN has no lock: `lock_now` does
 //!   nothing there (N5).

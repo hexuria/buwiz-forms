@@ -6,8 +6,8 @@
 //!
 //! A client's count (one taxpayer's PIN and authenticator, [`guarded_client`])
 //! is kept in `device.db` (accounts-and-lock PLAN §B.2,
-//! `bir_core::owner_lock`), so quitting the app does not reset it, and a try is
-//! counted before its check. The admin's and the recovery key's counts still
+//! `bir_core::owner_lock`), so quitting the app does not reset it. The hash runs,
+//! then its result is committed, then the page is answered. The admin's and the recovery key's counts still
 //! live in memory, like the original limiter's, until the legacy lock goes
 //! (A3a-2, B3).
 //!
@@ -61,14 +61,16 @@ fn taxpayer(tin_root: &str) -> String {
 
 /// Runs `check` for the client `tin_root` under its persisted count in
 /// `device.db`, for the room open on this thread (or the legacy file's
-/// clients while none is): counted and committed first, then the check, then
-/// the reset on a match, then the answer. A match clears the count; a miss
-/// counts, and the miss that starts a wait says so; a `check` that fails gives
-/// its try back.
+/// clients while none is), in the order hash, commit, answer (PLAN §B.2, L5):
+/// a running wait refuses; then the check; then its result is committed (a
+/// match clears the count, a miss counts, and the miss that starts a wait says
+/// so); only then the answer. A `check` that fails commits nothing.
 ///
-/// Where `device.db` cannot be opened or written (missing while rooms are on
-/// disk, unreadable), the count falls back to this process's memory, as before
-/// B1: no weaker than today, and the client is not locked out by a broken store.
+/// Where `device.db` cannot be opened before the check (missing while rooms are
+/// on disk, unreadable), the count falls back to this process's memory, as
+/// before B1: no weaker than today, and the client is not locked out by a
+/// broken store. A result that cannot be committed after the check gives no
+/// answer.
 pub(crate) fn guarded_client(
     tin_root: &str,
     check: impl FnOnce() -> Result<bool, HostError>,
