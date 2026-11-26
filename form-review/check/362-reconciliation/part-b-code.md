@@ -29,3 +29,11 @@ Note: the goldens are output HASHES (64-hex strings), so "no value moving" canno
 the fixture itself — verified at print level in part C/D instead. Also verified: the fitting
 goldens (fitting-goldens.json, fitting-band-goldens.json) for 1600-pt-2018 are IDENTICAL between
 #355 and the merge — the fitting rules' output did not change there.
+
+## Test reruns (cargo 1.99.0, RUSTC_WRAPPER empty, one target folder per checkout)
+- Merge 8225f8a4: bir-print lib **175 passed, 0 failed**, 1 ignored — the claimed "bir-print 175/0" exactly;
+  plus integration suites all green (frozen_sheet_faults 7/7 incl. form_1800/form_1801_prints_branch_code_on_both_pages,
+  form_2200t_prints_2020_2021_2023_rows_and_item16_sum, form_2200t_long_registered_name_prints_whole_over_the_comb,
+  form_2200s_prints_both_other_descriptions; self_contained_print 1/1; export 3/3; misc 2/2). The frozen/stamps checks
+  live inside these suites (frozen_sheet_faults is the freeze verification; the stamp tests are in the lib run) — all green.
+- #362 dfdb0664 alone: total 138 passed, 0 failed across the same binaries (fewer tests: the merge adds #355's).
