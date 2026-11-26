@@ -3,7 +3,7 @@ use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use bir_core::forms::form_1601eq::{Form1601EqCategory, Form1601EqDraft, form_1601eq_atc_option};
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_1601eq() -> Form1601EqDraft {
+pub(crate) fn sample_1601eq() -> Form1601EqDraft {
     let mut draft =
         Form1601EqDraft::new_from_profile(&dummy_profile("1601EQ", "Corporation"), 2025, 1);
     draft.set_any_tax_withheld(true);

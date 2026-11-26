@@ -5,7 +5,7 @@ use bir_core::forms::queueable::QueueableForm as _;
 
 /// Amended, with tax withheld, rounding cases and an address long enough to
 /// use the official second address line.
-fn sample_0619e() -> Form0619EDraft {
+pub(crate) fn sample_0619e() -> Form0619EDraft {
     let mut draft =
         Form0619EDraft::new_from_profile(&dummy_profile("0619E", "Corporation"), 2025, 6);
     draft.registered_address =

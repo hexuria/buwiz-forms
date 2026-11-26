@@ -14,7 +14,8 @@
 #   - the nsh CLI in ~/BuwizNsh/tools/bin, built in the image at the pin
 #   - Android (x86_64 host): JDK 17, SDK command-line tools, platform-tools, emulator,
 #     android-35, build-tools 35.0.1, NDK 27, the API 35 x86_64 image, an AVD
-#     named "buwiz", the Rust Android targets and NSH's Android runtime
+#     named "buwiz", the Rust Android targets and NSH's Android dev and release runtimes
+#     (copies, each with the NSH commit it was built from in nsh-ref)
 #   - ~/BuwizNsh/nsh2404.sh <cmd>: runs <cmd> in the image from nsh/ with
 #     $DISPLAY (default :0), host networking (`just mock-account` on 127.0.0.1:3008) and
 #     the local-test safety variables (baked into Android dev builds)
@@ -90,6 +91,10 @@ in_image() {  # in_image <workdir> <docker -e args...> -- <cmd...>
     local envs=()
     while [ "$1" != "--" ]; do envs+=("$1"); shift; done
     shift
+    # The same git settings as the wrapper (write_wrapper): a host git proxy does not authenticate in the container.
+    if git config --global --get-regexp '^(url\..*\.insteadof|credential\..*helper)$' >/dev/null 2>&1; then
+        envs+=(-e CARGO_NET_GIT_FETCH_WITH_CLI=true -e GIT_CONFIG_GLOBAL=/dev/null)
+    fi
     docker run --rm -u "$(id -u):$(id -g)" \
         -e HOME="$HOME" -e PATH="$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin" \
         -e CARGO_INCREMENTAL=0 "${envs[@]}" \
@@ -157,16 +162,24 @@ RANLIB="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib"
 android=(); case " $* " in *android*) android=(-e CARGO_PROFILE_DEV_DEBUG=0
   -e "BUWIZ_ANDROID_DEV_ENV=EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1");; esac
 uid="$(id -u)"
+# A host git config that rewrites GitHub URLs or names a credential helper (a Devin machine's git proxy) does not
+# authenticate inside the container, and Cargo's first git fetch fails there. Then the container fetches with the git
+# CLI and without the host's global config; NSH's git dependencies are public. Off such a machine nothing changes.
+git_env=()
+if git config --global --get-regexp '^(url\..*\.insteadof|credential\..*helper)$' >/dev/null 2>&1; then
+  git_env=(-e CARGO_NET_GIT_FETCH_WITH_CLI=true -e GIT_CONFIG_GLOBAL=/dev/null)
+fi
 NSH_EOF
     local mounts=("${MOUNTS[@]}") sdk
     # Kept on --no-android runs too, so they don't break an existing Android setup.
     mapfile -t sdk < <(sdk_mount); mounts+=("${sdk[@]}")
     printf 'mounts=(%s)\n' "$(printf '%q ' "${mounts[@]}")" >> "$WORK/nsh2404.sh"
     cat >> "$WORK/nsh2404.sh" <<'NSH_EOF'
-exec docker run --rm -i "${tty[@]}" "${android[@]}" --network host --security-opt apparmor=unconfined -u "$uid:$(id -g)" \
+exec docker run --rm -i "${tty[@]}" "${android[@]}" "${git_env[@]}" --network host --security-opt apparmor=unconfined -u "$uid:$(id -g)" \
   -e HOME="$HOME" \
-  -e PATH="$HOME/BuwizNsh/tools/bin:$HOME/.cargo/bin:$android_home/platform-tools:/usr/local/bin:/usr/bin:/bin" \
-  -e CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh" \
+  -e PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$HOME/.cargo/bin:$android_home/platform-tools:/usr/local/bin:/usr/bin:/bin" \
+  -e CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}" \
+  -e NSH_RUNTIME \
   -e CARGO_INCREMENTAL=0 \
   -e ANDROID_HOME="$android_home" -e ANDROID_NDK_HOME="$ndk" \
   -e RANLIB_x86_64_linux_android="$RANLIB" -e RANLIB_aarch64_linux_android="$RANLIB" -e RANLIB_armv7_linux_androideabi="$RANLIB" \
@@ -245,37 +258,46 @@ install_android_sdk() {
     rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
 }
 
-# NSH's Android runtime (classes.dex + libnsh.so per ABI). xtask reads its own
-# target/ dir, so no CARGO_TARGET_DIR; the CLI looks for it next to its bin/.
+# NSH's Android runtimes (classes.dex + libnsh.so per ABI): dev for `nsh run`, release for `nsh package`, which takes
+# the release one even for a development build. xtask reads its own target/ dir, so no CARGO_TARGET_DIR; the CLI looks
+# for them next to its bin/. Each is a COPY with the NSH commit it was built from in `nsh-ref` (the recipes check it), never
+# a link into a checkout's build folder: such a link silently follows whatever that checkout builds next.
 android_runtime_stamp() {
     printf '%s\n' "$REF" "$NDK_VERSION" "$ANDROID_RUNTIME_DEBUG"
 }
 
 nsh_android_runtime_current() {
-    local dest="$WORK/tools/runtime/android/dev" abi
-    [ -s "$dest/classes.dex" ] &&
-        [ "$(cat "$dest/nsh-build" 2>/dev/null)" = "$(android_runtime_stamp)" ] || return 1
+    local variant="${1:-dev}" abi
+    local dest="$WORK/tools/runtime/android/$variant"
+    [ ! -L "$dest" ] && [ -s "$dest/classes.dex" ] &&
+        [ "$(cat "$dest/nsh-build" 2>/dev/null)" = "$(android_runtime_stamp)" ] &&
+        [ "$(cat "$dest/nsh-ref" 2>/dev/null)" = "$REF" ] || return 1
     for abi in arm64-v8a armeabi-v7a x86_64; do
         [ -s "$dest/lib/$abi/libnsh.so" ] || return 1
     done
 }
 
 install_android_runtime() {
-    local dest="$WORK/tools/runtime/android/dev"
-    if nsh_android_runtime_current; then
-        log "NSH Android runtime already at ${REF:0:7}"
-        return 0
-    fi
-    log "Building NSH's Android runtime in the image"
-    local sdk; mapfile -t sdk < <(sdk_mount)
-    in_image "$NSH" "${sdk[@]}" -e ANDROID_HOME="$ANDROID_HOME" \
-        -e ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION" \
-        -e CARGO_PROFILE_DEV_DEBUG="$ANDROID_RUNTIME_DEBUG" -- \
-        cargo xtask android --dev
-    rm -rf "$dest" && mkdir -p "$WORK/tools/runtime/android"
-    cp -r "$NSH/target/android/debug-dev" "$dest"
-    android_runtime_stamp > "$dest/nsh-build"
-    nsh_android_runtime_current || die "NSH Android runtime is incomplete"
+    local variant flag built
+    for variant in dev release; do
+        if nsh_android_runtime_current "$variant"; then
+            log "NSH Android $variant runtime already at ${REF:0:7}"
+            continue
+        fi
+        if [ "$variant" = dev ]; then flag=--dev built=debug-dev; else flag=--release built=release; fi
+        log "Building NSH's Android $variant runtime in the image"
+        local sdk; mapfile -t sdk < <(sdk_mount)
+        in_image "$NSH" "${sdk[@]}" -e ANDROID_HOME="$ANDROID_HOME" \
+            -e ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION" \
+            -e CARGO_PROFILE_DEV_DEBUG="$ANDROID_RUNTIME_DEBUG" -- \
+            cargo xtask android "$flag"
+        local dest="$WORK/tools/runtime/android/$variant"
+        rm -rf "$dest" && mkdir -p "$WORK/tools/runtime/android"
+        cp -r "$NSH/target/android/$built" "$dest"
+        android_runtime_stamp > "$dest/nsh-build"
+        printf '%s\n' "$REF" > "$dest/nsh-ref"
+        nsh_android_runtime_current "$variant" || die "NSH Android $variant runtime is incomplete"
+    done
 }
 
 check() {
@@ -302,8 +324,10 @@ check() {
         else report "android ndk" MISSING 0; fi
         if "$ANDROID_HOME/emulator/emulator" -list-avds 2>/dev/null | grep -qx "$AVD"; then report "avd:$AVD" present 1
         else report "avd:$AVD" MISSING 0; fi
-        if nsh_android_runtime_current; then report "nsh android runtime" "${REF:0:7}" 1
-        else report "nsh android runtime" "MISSING, incomplete or stale" 0; fi
+        if nsh_android_runtime_current dev; then report "nsh android dev runtime" "${REF:0:7}" 1
+        else report "nsh android dev runtime" "MISSING, incomplete, stale or a link" 0; fi
+        if nsh_android_runtime_current release; then report "nsh android release runtime" "${REF:0:7}" 1
+        else report "nsh android release runtime" "MISSING, incomplete, stale or a link" 0; fi
     fi
     [ "$ok" -eq 1 ] && log "NSH toolchain ready" || warn "Missing pieces — run scripts/setup-linux-nsh.sh"
     return $((1 - ok))

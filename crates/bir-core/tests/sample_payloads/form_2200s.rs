@@ -4,7 +4,7 @@ use bir_core::forms::excise_places::ExcisePlace;
 use bir_core::forms::form_2200s::{Form2200SDraft, Form2200SManner, Form2200SOtherRow};
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_2200s() -> Form2200SDraft {
+pub(crate) fn sample_2200s() -> Form2200SDraft {
     let mut draft =
         Form2200SDraft::new_from_profile(&dummy_profile("2200S", "Corporation"), 2025, 6);
     draft.month = 6;
@@ -59,7 +59,7 @@ fn form_2200s_sample_payload_is_current() {
 
 /// Five "Others" rows: `addFieldsForSched1` appends rows to
 /// `frm2200SadditionalSched1` without a limit, each after the previous one.
-fn sample_2200s_many_rows() -> Form2200SDraft {
+pub(crate) fn sample_2200s_many_rows() -> Form2200SDraft {
     let mut draft = sample_2200s();
     draft.day = 29;
     for k in 1..=4u32 {
@@ -96,7 +96,7 @@ fn form_2200s_sample_with_many_rows_is_current() {
 }
 
 /// The sample as a prepayment (Item 13 manner of payment).
-fn sample_2200s_prepayment() -> Form2200SDraft {
+pub(crate) fn sample_2200s_prepayment() -> Form2200SDraft {
     let mut draft = sample_2200s();
     draft.manner = Form2200SManner::Prepayment;
     draft.recompute();

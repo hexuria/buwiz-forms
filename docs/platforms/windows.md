@@ -1,6 +1,7 @@
 # eBIRForms on Windows
 
-Status: built and tested in CI on every pull request — the `NSH app
+Status: built and tested in CI nightly and whenever a `test/...` push or a
+manual run asks for Windows ([CI.md](../CI.md)): the `NSH app
 (Windows)` job in
 [.github/workflows/nsh.yml](../../.github/workflows/nsh.yml) runs
 `nsh check`, `nsh build`, the Rust crate tests and the headless TSX tests

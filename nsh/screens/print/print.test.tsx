@@ -41,6 +41,7 @@ test("desktop: Print preview opens one window, again focuses it, edits follow, l
   expect(app.window(WINDOW).state()).not.toBeNull();
 
   // An edit in the form reaches the open preview within about a second.
+  await app.clear("id:fp-frm2551Qv2018:txtSheets");
   await app.type("id:fp-frm2551Qv2018:txtSheets", "2");
   await app.waitFor("text:/^preview 2551Q: revision [3-9]/", { timeout: 5000 });
 
@@ -60,6 +61,7 @@ test("desktop: the person closing the window ends the preview, and the next pres
   await app.waitFor("text:no preview of 2551Q");
   expect(app.window(WINDOW).state()).toBeNull();
   // An edit now has no window to follow (the host function answers false) and opens nothing.
+  await app.clear("id:fp-frm2551Qv2018:txtSheets");
   await app.type("id:fp-frm2551Qv2018:txtSheets", "2");
   await app.wait(600);
   expect(app.window(WINDOW).state()).toBeNull();
@@ -135,6 +137,7 @@ test("F8-10 desktop: a quick switch to another return of the same form gets its 
   await app.wait(800);
   expect(app.window(WINDOW_Q2).state()).not.toBeNull();
   await app.waitFor("text:/^preview 2551Q: revision 1$/");
+  await app.clear("id:fp-frm2551Qv2018:txtSheets");
   await app.type("id:fp-frm2551Qv2018:txtSheets", "2");
   await app.waitFor("text:/^preview 2551Q: revision [2-9]/", { timeout: 5000 });
 }, 120_000);

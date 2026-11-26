@@ -1358,16 +1358,18 @@ fn fill_text_input(
         // digits into the slots before the point and put the two centavo
         // digits after it. Spreading the text left-to-right put `0.00` as
         // `0 . 0 0` from the first box (#print-audit decimal mapping).
-        if let Some(writes) = money_comb_values(tags, &ordered, print) {
-            for (offset, (index, ch)) in writes.into_iter().enumerate() {
-                let writer = (via_cell && offset == 0).then_some(print);
-                replacements.push((
-                    tags[index].start,
-                    tags[index].end,
-                    set_value(tags[index].tag, &ch, writer),
-                ));
+        if !name.starts_with("derived:") {
+            if let Some(writes) = money_comb_values(tags, &ordered, print) {
+                for (offset, (index, ch)) in writes.into_iter().enumerate() {
+                    let writer = (via_cell && offset == 0).then_some(print);
+                    replacements.push((
+                        tags[index].start,
+                        tags[index].end,
+                        set_value(tags[index].tag, &ch, writer),
+                    ));
+                }
+                return;
             }
-            return;
         }
         let chars: Vec<char> = print.chars().collect();
         // Text longer than its comb (a long name, an email, a
@@ -7424,7 +7426,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1458, "band boxes");
+        assert_eq!(total, 1472, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 
@@ -7838,11 +7840,11 @@ mod donor_estate_print_tests {
             ),
             (
                 "1801-2018",
-                "dabb25108c05d4eb0d6de571493933c807e332007abeec2c3a467343bd55b2f0",
+                "dda1fda9077c316a860b747d983c65b499cd7da40ffe7727588cc6737e9c0d16",
             ),
             (
                 "1800-2018",
-                "8340d00dcb242f3a5982247c1cced7366326d76687aa6d23333711fd9b4d597e",
+                "1ee1587dbacf834418c9004661fd10f45eddf11116d0800905f3c1c374e1b50b",
             ),
         ] {
             let html = filled_document(slug, &every_join_filled(slug)).unwrap();

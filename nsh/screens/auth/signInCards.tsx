@@ -41,6 +41,19 @@ function selectAfterChange(input: InputRef): void {
 }
 
 /**
+ * The boxes take the focus, so the code is typed with no tap first: when the code page opens (the email field's letter keyboard
+ * gives way to the number pad), and when "Send a new code" opens boxes that were spent (a page that opened spent, back from
+ * Change email, gave them no focus to keep). After the mount, once the boxes are there to take it; not while they are locked
+ * (a check running, too many wrong tries), and not once the page has gone.
+ */
+function focusWhenOpen(focus: () => void): void {
+  setTimeout(() => {
+    const now = signInFlow.state();
+    if (now.kind === "code" && !now.checking && !now.tooMany) focus();
+  }, 0);
+}
+
+/**
  * The email page under its title: the sentence, the address, what is wrong with it (or why the gate could not open), "Continue
  * with email" (its spinner while it sends).
  */
@@ -89,6 +102,12 @@ export function CodeCardBody(props: { prefix: string }) {
   const page = () => signInFlow.state() as Extract<SignInState, { kind: "code" }>;
   const said = () => codeSaid(page(), signInFlow.now());
   const locked = () => !page().tooMany && signInFlow.now() < page().request.resendAt;
+  // The boxes' focus, kept from their mount for "Send a new code", which opens them again on the same page.
+  let focusBoxes = (): void => undefined;
+  const takeFocus = (focus: () => void): void => {
+    focusBoxes = focus;
+    focusWhenOpen(focus);
+  };
   return (
     <View class="w-full gap-4">
       <Text variant="meta" tone="fg2" class="text-center" testID={`${props.prefix}-code-sentence`}>
@@ -104,6 +123,7 @@ export function CodeCardBody(props: { prefix: string }) {
           onComplete={(digits) => void signInFlow.checkCode(digits)}
           error={said()?.danger === true}
           disabled={page().checking || page().tooMany}
+          focusRef={takeFocus}
         />
         <View class={`${SAID_SLOT} items-center`} testID={`${props.prefix}-code-slot`}>
           <If when={page().checking} else={<SaidLine said={said()} testID={`${props.prefix}-code-said`} />}>
@@ -121,7 +141,7 @@ export function CodeCardBody(props: { prefix: string }) {
           block={TOUCH}
           disabled={locked()}
           leading={page().resending ? <Spinner size={14} tone="fg2" label="Sending a new code" /> : undefined}
-          onPress={() => void (page().tooMany ? signInFlow.newCode() : signInFlow.resendCode())}
+          onPress={() => void (page().tooMany ? signInFlow.newCode().then(() => focusWhenOpen(focusBoxes)) : signInFlow.resendCode())}
         />
         <FlowButton testID={`${props.prefix}-change-email`} label="Change email" onPress={signInFlow.changeEmail} />
       </View>

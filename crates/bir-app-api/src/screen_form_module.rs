@@ -4975,6 +4975,70 @@ pub(crate) fn removes(
         .or_else(|| rows_excise::removes(kind, before, after, edits))
 }
 
+/// The reviewed reason a person sees on the form page when `key` is gated
+/// shut on `draft` (corpus `enabled_when` conditions and host module gates).
+/// Blank and untick writes are clears and are never refused by a gate.
+pub(crate) fn page_gate_refusal(
+    kind: AgentFormKind,
+    draft: &Value,
+    key: &str,
+    value: &Value,
+) -> Option<String> {
+    if value.is_null()
+        || value.as_str().is_some_and(agent::carry::is_blank_value)
+        || is_unticked(value)
+    {
+        return None;
+    }
+    let code = kind.form_code();
+    if let Some(why) = rows_income_q::closed_refusal(kind, draft, key, value)
+        .map(str::to_string)
+        .or_else(|| rows_annual_individual::closed_refusal(kind, draft, key, value))
+    {
+        return Some(why);
+    }
+    if let Some((_, tag)) = rows_donor_estate::closed(kind, draft)
+        .into_iter()
+        .find(|(k, _)| k == key)
+    {
+        return Some(tag.to_string());
+    }
+    if rows_withholding::gated(kind, draft, key) == Some(true)
+        || rows_monthly::gated(kind, draft, key) == Some(true)
+    {
+        return conditions::tag(code, key);
+    }
+    if let Some(tag) = rows_income_q::gated(kind, draft, key) {
+        return Some(tag.to_string());
+    }
+    if rows_annual_individual::gated(kind, draft, key) {
+        return conditions::tag(code, key);
+    }
+    let shown = Value::Object(
+        agent::field_map(kind, draft)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(k, v)| (k, Value::String(v)))
+            .collect(),
+    );
+    if let Some(tag) = conditions::off_now(kind, draft, &shown, key) {
+        return Some(tag);
+    }
+    if let Some(tag) = rows_as_needed::off(kind, draft, &shown)
+        .get(key)
+        .and_then(Value::as_str)
+    {
+        return Some(tag.to_string());
+    }
+    if let Some(tag) = rows_excise::off(kind, draft, &shown)
+        .get(key)
+        .and_then(Value::as_str)
+    {
+        return Some(tag.to_string());
+    }
+    None
+}
+
 /// Apply the page's edits to `draft` the one way both the draft fill and the
 /// live print preview use, so the preview never prints a different answer
 /// than the page shows. Returns the rejected keys with their reasons.

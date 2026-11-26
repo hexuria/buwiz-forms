@@ -517,6 +517,7 @@ impl Form2200MDraft {
                 fields.insert(format!("derived:line:item{item}_{level}"), name);
             }
         }
+        super::print_map::match_upload_case("2200m-v2018", &mut fields, None);
         fields
     }
 
