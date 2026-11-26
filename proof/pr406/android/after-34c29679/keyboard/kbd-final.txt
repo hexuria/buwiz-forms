@@ -1,0 +1,25 @@
+sheet open: ['003 — San Fernando, La Union', '004 — Calasiao, Pangasinan', '005 — Alaminos City', '006 — Urdaneta City', '007 — Bangued, Abra']
+--- kbUP ---
+win: mCurrentFocus=Window{cad384e u0 dev.goldcoders.bir/com.longbridge.nsh.AppActivity}
+inputShown: true
+rootVG (0, 0, 1080, 2400)
+bigView (0, 0, 1080, 1517) 
+bigView (45, 0, 1035, 131) 
+bigView (45, 131, 1035, 268) 
+bigView (45, 268, 1035, 405) 
+panel (0, 0, 1080, 697) 
+panel (3, 0, 1077, 634) 
+panel (45, 0, 1035, 595) 
+panel (0, 0, 1080, 1517) 
+after back: ['RDO', 'Search by code or words', '001 — Laoag City', '002 — Vigan City', '003 — San Fernando, La Union', '004 — Calasiao, Pangasinan']
+--- kbDOWN ---
+win: mCurrentFocus=Window{cad384e u0 dev.goldcoders.bir/com.longbridge.nsh.AppActivity}
+inputShown: false
+rootVG (0, 0, 1080, 2400)
+bigView (0, 0, 1080, 2400) 
+bigView (45, 644, 1035, 781) 
+bigView (45, 781, 1035, 918) 
+bigView (45, 918, 1035, 1055) 
+panel (3, 445, 1077, 2337) 
+panel (45, 487, 1035, 2298) 
+panel (45, 644, 1035, 2298) 

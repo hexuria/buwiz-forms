@@ -1,0 +1,2 @@
+aapt: android:windowSoftInputMode=(type 0x11)0x10 (=adjustResize) — present in after34.apk manifest
+dumpsys window | grep -i softInputMode: no matching line printed on API35 (the mode is only in the manifest/WindowLayoutParams); mCurrentFocus lines in kbd-final.txt
