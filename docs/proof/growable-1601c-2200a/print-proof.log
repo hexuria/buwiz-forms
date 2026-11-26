@@ -1,0 +1,12 @@
+   Compiling bir-print v0.2.1 (/home/ubuntu/growable/print-merge/crates/bir-print)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.12s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests/growable_rows_print_proof.rs (/home/ubuntu/growable/print-target/debug/deps/growable_rows_print_proof-a791c1fcc820be35)
+
+running 1 test
+test growable_rows_print_once_with_row_sum_totals ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.94s
+
+rc:0

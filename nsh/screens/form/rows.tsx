@@ -152,7 +152,11 @@ export function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow
       const cur = openRow();
       if (cur !== null && r !== cur && keys[cur]) {
         const blocked = columns.some((c) => Boolean(s.box(keys[cur][c.index]).refusal?.()));
-        if (blocked) return;
+        // Delete row (or a filer clearing every box) is a way out even while a
+        // just-cleared control still carries its transient refusal: nothing
+        // remains to close over and list as if it existed.
+        const hasContent = keys[cur].some((k, c) => !emptyCell(s.box(k).value(), cols[c]?.t ?? "text"));
+        if (blocked && hasContent) return;
       }
       if (r === null) s.touch(id);
       openRow.set(r);

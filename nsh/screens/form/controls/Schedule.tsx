@@ -96,8 +96,10 @@ export function ScheduleControl(props: ScheduleInput) {
   const remove = () => {
     const r = open();
     if (r === null) return;
-    props.onClearRow(r);
+    // Close first: clearing can transiently mark just-emptied controls refused,
+    // and the close gate must not trap a row the filer has chosen to delete.
     props.onOpenRow(null);
+    props.onClearRow(r);
   };
   return (
     <View testID={props.testID} class="min-w-0 gap-2">
