@@ -1,0 +1,9 @@
+43B RDO open 1s: kbd=True rows=[('052 — Parañaque City', 60), ('055 — San Pablo City', 197), ('056 — Calamba City', 334), ('057 — Biñan City', 471)] search-visible=False title=False
+43B RDO open 3s: rows=[('052 — Parañaque City', 60), ('055 — San Pablo City', 197), ('056 — Calamba City', 334), ('057 — Biñan City', 471)] search-visible=False
+state after backs: ['Registered activity', 'Branch code', '00000', 'Branch name']
+edit pencils: [('Edit', 938, 930), ('Edit', 938, 1720)]
+43B ZIP open 1s: kbd=True rows=[('1202 — Fort Bonifaci', 60), ('1203 — San Antonio V', 197), ('1204 — La Paz-Singka', 334), ('1205 — Sta. Cruz', 471)] search-visible=False
+43B ZIP open 3s: rows=[('1202 — Fort Bonifaci', 60), ('1203 — San Antonio V', 197), ('1204 — La Paz-Singka', 334), ('1205 — Sta. Cruz', 471)]
+after one keytap: mm-nodes=[]
+after typing 02301990: slash-nodes=[]
+43B keypad-0230 Done: sheet-still-open=True
