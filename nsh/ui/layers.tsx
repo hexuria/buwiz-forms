@@ -10,7 +10,7 @@ import {
 import { SIZE } from "../theme/tokens";
 import { AppButton, IconButton } from "./buttons";
 import type { IconName } from "./icons";
-import { cx, FOCUS_RING, phoneLayout, T_MIN_H, TOUCH } from "./look";
+import { cx, FOCUS_RING, phoneLayout, T_MIN_H, T_PX, TOUCH } from "./look";
 import { Icon, Line, Text } from "./text";
 
 type Placement = "top" | "bottom" | "left" | "right";
@@ -84,6 +84,11 @@ export interface SheetProps {
   width?: number;
   /** Fixed under the scrolling body: the drawer's actions. */
   footer?: JSX.Element;
+  /**
+   * The body scrolls (default true). False: the body is a plain column that never scrolls, for content that scrolls itself
+   * (a search field pinned over its own list: SearchPick). Its content must fit `sheetBodyRoom()`.
+   */
+  scroll?: boolean;
   testID?: string;
   children?: JSX.Element;
 }
@@ -105,6 +110,17 @@ export function sheetSides(): { marginLeft: number; marginRight: number } {
 export function sheetMaxHeight(): number {
   const keyboard = Math.max(0, keyboardFrame().height - safeArea().bottom);
   return Math.max(160, windowSize().height - safeArea().top - keyboard - 24);
+}
+
+/**
+ * The height a bottom sheet's body may take (padding included) once the grabber, the header and the bottom inset are drawn: what
+ * a `scroll={false}` body sizes its own scrolling part to. It shrinks while the software keyboard is up (sheetMaxHeight), so the
+ * last rows of a list in it stay above the keyboard.
+ */
+export function sheetBodyRoom(): number {
+  const grabber = 12;
+  const header = (TOUCH ? T_PX : 28) + 16 + 1;
+  return Math.min(windowSize().height * 0.9, sheetMaxHeight()) - grabber - header - safeArea().bottom;
 }
 
 /**
@@ -140,9 +156,16 @@ export function Sheet(props: SheetProps) {
         <Text variant="emph" class="flex-1" lines={1}>{props.title ?? ""}</Text>
         <IconButton icon="x" tooltip="Close" onPress={() => props.onOpenChange(false)} />
       </View>
-      <Scroll keyboardShouldPersistTaps="handled" class="shrink" contentClass="gap-4 p-4">
-        {props.children}
-      </Scroll>
+      <If
+        when={props.scroll === false}
+        else={
+          <Scroll keyboardShouldPersistTaps="handled" class="shrink" contentClass="gap-4 p-4">
+            {props.children}
+          </Scroll>
+        }
+      >
+        <View class="min-h-0 shrink gap-3 p-4">{props.children}</View>
+      </If>
       <If when={props.footer}>
         <View class="flex-row justify-end gap-2 border-t border-border px-4 py-3">{props.footer}</View>
       </If>

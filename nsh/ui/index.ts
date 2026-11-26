@@ -18,10 +18,10 @@ export { PressCard, type PressCardProps, PressCell, type PressCellProps } from "
 export { ShortcutRecorder, type ShortcutRecorderProps } from "./shortcut";
 export {
   Dialog, type DialogProps, Disclosure, DisclosureGroup, type DisclosureProps, dismissToast, Menu, MenuItem, type MenuItemProps,
-  type MenuProps, MenuSeparator, Popover, type PopoverProps, Sheet, type SheetProps, SidePanel, type SidePanelProps, toast,
+  type MenuProps, MenuSeparator, Popover, type PopoverProps, Sheet, sheetBodyRoom, type SheetProps, SidePanel, type SidePanelProps, toast,
   Toaster, type ToastOptions, Tooltip, undoToast,
 } from "./layers";
-export { Card, EmptyRow, ListGroup, ListRow, NameCell, PageHeader, type PageHeaderProps, SettingRow, type TabItem, Tabs } from "./lists";
+export { Card, ChoiceRow, type ChoiceRowProps, EmptyRow, ListGroup, ListRow, NameCell, PageHeader, type PageHeaderProps, SettingRow, type TabItem, Tabs } from "./lists";
 export { type ChipTone, type PickOption, type ReturnStatus, hueFor, initials } from "./logic";
 export { deviceCopy, phoneLayout, T_H, T_MIN_H, T_MIN_W, T_PX, T_SIZE, tabletRoom, TOUCH, type Tone } from "./look";
 export {

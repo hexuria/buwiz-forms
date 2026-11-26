@@ -100,6 +100,8 @@ test("desktop: a branch follows the head office until switched off, and its code
   await app.waitFor("id:tp-branch-code");
   await app.press("id:tp-inherit-rdo_code");
   await app.press("id:tp-branch-rdo_code-trigger");
+  // The combobox's box holds the inherited choice's words: empty it before searching (a real window selects them, so typing replaces).
+  await app.clear("id:tp-branch-rdo_code-search");
   await app.type("id:tp-branch-rdo_code-search", "cebu city");
   await app.waitFor("id:tp-branch-rdo_code-opt-081");
   await app.press("id:tp-branch-rdo_code-opt-081");
