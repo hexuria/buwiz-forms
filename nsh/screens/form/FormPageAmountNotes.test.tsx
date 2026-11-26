@@ -243,3 +243,29 @@ test("note in a row drawer: with the drawer closed and its part folded, Queue op
   expect(saying()).toBe(before);
   expect(checked(app)).toBe(true);
 }, 40_000);
+
+// 2550Q Schedule 3 (a nullable schedule: the cells of a row not started hold no amount, not zero).
+const S3_TABLE = "fp-table-txtDateCovered30";
+
+test("[Z1] unreadable text left in a blank schedule cell: the cell stays blank and the note says it was left blank, not that it kept 0.00", async () => {
+  const edits = { txtDateCovered30: "01/01/2024", txtDateCovered3To0: "03/31/2024", txtNameWithHoldingAgent30: "A0", txtIncomePayment30: "1000" };
+  const pay = "txtIncomePayment31";
+  const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "2550Q", year: 2024, period: 1, probeKey: pay, setup: [{ edits }] } } });
+  await app.waitFor("text:BIR Form 2550Q");
+  await app.press("id:fp-nav-5");
+  for (let i = 0; i < 30 && !app.shows(`id:${S3_TABLE}-add`); i++) await app.scroll("id:form-scroll", 400).catch(() => {});
+  // Add row opens row 2, nothing in it yet: its Income Payment holds no amount.
+  await app.press(`id:${S3_TABLE}-add`);
+  await app.waitFor(`id:fp-${pay}`);
+  expect(probe(app)).toBe("");
+  // Text that is no amount from its first key: the box reports nothing, so the row stays not started.
+  for (const ch of "abc") {
+    await app.type(`id:fp-${pay}`, ch);
+    await app.wait(40);
+  }
+  await app.keyboard.press("tab");
+  await app.waitUntil(() => app.texts().some((t) => t.includes("abc is not an amount")), { timeout: 5000 });
+  expect(app.texts().some((t) => t.endsWith("abc is not an amount. The box was left blank."))).toBe(true);
+  expect(app.texts().some((t) => t.includes("The box kept"))).toBe(false);
+  expect(probe(app)).toBe("");
+}, 40_000);

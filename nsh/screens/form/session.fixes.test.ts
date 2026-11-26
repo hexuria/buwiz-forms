@@ -757,6 +757,18 @@ test("unreadable note: a Delete row of its row takes it away; a sample with one 
   }
 });
 
+test("[Z1] unreadable note on a blank schedule cell: it says the box was left blank, never that it kept 0.00", async () => {
+  const s = await opened(at("2550Q", 2021, 1));
+  fillSched3Row(s, 0, "Agent One", "");
+  await s.idle();
+  // The box hands over "" as what it shows again: the cell held no amount.
+  s.leftUnreadable("txtIncomePayment30", "1500x", "");
+  expect(s.boxMessageOf("txtIncomePayment30")).toBe("(C) Income Payment: 1500x is not an amount. The box was left blank.");
+  s.leftUnreadable("txtIncomePayment30", "15,00,5", "");
+  expect(s.boxMessageOf("txtIncomePayment30")).toBe("(C) Income Payment: 15,00,5 is not an amount. The box was left blank. Use a point for centavos, and commas only between thousands.");
+  s.dispose();
+});
+
 test("money note: leaving with a note and other valid edits saves them all; a second session reads them from the database", async () => {
   const key = "frm2551Qv2018:txt15";
   const restore = hostFault(key, "100", "99.00");

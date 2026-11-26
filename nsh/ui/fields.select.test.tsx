@@ -134,6 +134,17 @@ test("unreadable text left in a zero box returns to the placeholder with the ord
   expect(read(app, "Zero:")).toBe("Zero: 0");
 });
 
+test("[Z1] unreadable text left in a blank box says the box was left blank, never that it kept 0.00", async () => {
+  const app = await open("./select.fixture.tsx", { ...WIDE, height: 1000 });
+  await app.type("id:s-blank", "1500x");
+  await app.type("id:s-free", "x");
+  await app.wait(50);
+  expect(app.value("id:s-blank")).toBe("");
+  expect(app.texts()).toContain("1500x is not an amount. The box was left blank.");
+  expect(app.texts().some((t) => t.includes("The box kept"))).toBe(false);
+  expect(read(app, "Blank:")).toBe("Blank: empty");
+});
+
 test("outside values move an unfocused zero box from placeholder to amount and back", async () => {
   const app = await open("./select.fixture.tsx", WIDE);
   expect(app.value("id:s-zero")).toBe("");

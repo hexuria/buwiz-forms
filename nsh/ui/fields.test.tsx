@@ -3,7 +3,8 @@ import { expect, open, test } from "nsh/test";
 import { openKit, readout, SIZES } from "./harness";
 
 const commaHint = " Use a point for centavos, and commas only between thousands.";
-const leftSentence = (typed: string, kept: string) => `${typed} is not an amount. The box kept ${kept}.${typed.includes(",") ? commaHint : ""}`;
+const leftSentence = (typed: string, kept: string) =>
+  `${typed} is not an amount. ${kept === "" ? "The box was left blank." : `The box kept ${kept}.`}${typed.includes(",") ? commaHint : ""}`;
 
 for (const size of SIZES) {
   test(`${size.name}: touch date sheet validates Done, discards dismissal and clears`, async () => {
@@ -174,7 +175,7 @@ for (const size of SIZES) {
     await app.type("id:m-other", " ");
     expect(app.value("id:m-amount")).toBe("");
     expect(readout(app, "Amount:")).toBe("Amount: empty");
-    expect(app.texts()).toContain(leftSentence("1250000.5x", "0.00"));
+    expect(app.texts()).toContain(leftSentence("1250000.5x", ""));
   });
 
   test(`${size.name}: negatives read by sign or accounting parentheses only where allowed`, async () => {
@@ -373,7 +374,7 @@ for (const size of SIZES) {
     await app.type("id:m-other", " ");
     expect(app.value("id:m-amount")).toBe("");
     expect(readout(app, "Amount:")).toBe("Amount: empty");
-    expect(app.texts()).toContain(leftSentence("99999999.995x.", "0.00"));
+    expect(app.texts()).toContain(leftSentence("99999999.995x.", ""));
   });
 
   test(`${size.name}: typed commas and letters stay exact, invalid and unreported`, async () => {
@@ -391,7 +392,7 @@ for (const size of SIZES) {
       await app.type("id:m-other", " ");
       expect(app.value("id:m-amount")).toBe("");
       expect(readout(app, "Amount:")).toBe("Amount: empty");
-      expect(app.texts()).toContain(leftSentence(bad, "0.00"));
+      expect(app.texts()).toContain(leftSentence(bad, ""));
     }
   });
 
@@ -410,7 +411,7 @@ for (const size of SIZES) {
       await app.type("id:m-other", " ");
       expect(app.value("id:m-amount")).toBe("");
       expect(readout(app, "Amount:")).toBe("Amount: empty");
-      expect(app.texts()).toContain(leftSentence(bad, "0.00"));
+      expect(app.texts()).toContain(leftSentence(bad, ""));
     }
   });
 
@@ -428,7 +429,7 @@ for (const size of SIZES) {
     await app.type("id:m-other", " ");
     expect(app.value("id:m-amount")).toBe("");
     expect(readout(app, "Amount:")).toBe("Amount: empty");
-    expect(app.texts()).toContain(leftSentence("15000..50", "0.00"));
+    expect(app.texts()).toContain(leftSentence("15000..50", ""));
   });
 
   test(`${size.name}: invalid typing falls back to the focus value, and correcting it reports again`, async () => {

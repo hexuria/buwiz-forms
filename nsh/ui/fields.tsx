@@ -171,7 +171,7 @@ export function TextField(props: TextFieldProps) {
 export type MaskedFieldProps = Omit<TextFieldProps, "value" | "onChange" | "keyboardType" | "masked" | "maxLength"> & {
   /** Test hook: each text or caret operation this field sends to its native box. */
   writeProbe?: (write: "text" | "caret", start?: number, end?: number) => void;
-  /** Money text was left unreadable: what was typed, and the amount text the box kept. */
+  /** Money text was left unreadable: what was typed, and the amount text the box kept ("" when it was left blank). */
   onLeftUnreadable?: (typed: string, kept: string) => void;
 };
 
@@ -388,12 +388,13 @@ function MaskedField(props: MaskedProps) {
         if (!validBlur) {
           // The return keeps the fallback amount. A newer outside value held during this focus is that fallback.
           const fallback = outsideValue ?? focusValue;
-          const shownFallback = props.shown(fallback, false);
-          const kept = shownFallback === "" ? props.shown("0", false) : shownFallback;
+          // What the box shows again: "" when the fallback is blank (a nullable schedule cell that held no amount), unless the host
+          // answered the box's own empty report with its zero (a started row's cell): then it holds that zero.
+          const kept = props.shown(fallback === "" && isZeroAmount(props.value ?? "") ? (props.value ?? "") : fallback, false);
           if (write) writeText(displayShown(kept));
           const hint = held.includes(",") ? " Use a point for centavos, and commas only between thousands." : "";
           if (props.field.onLeftUnreadable) props.field.onLeftUnreadable(held, kept);
-          else leftUnreadable.set(`${held} is not an amount. The box kept ${kept}.${hint}`);
+          else leftUnreadable.set(`${held} is not an amount. ${kept === "" ? "The box was left blank." : `The box kept ${kept}.`}${hint}`);
           invalidActive = false;
           rollbackReported = false;
         } else {
