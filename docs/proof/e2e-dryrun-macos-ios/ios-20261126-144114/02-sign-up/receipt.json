@@ -1,0 +1,157 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "ui-sign-up-phone",
+  "fingerprint": "fnv1a64:236d9a225decabca",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 8
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 689
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 7
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 636
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 5
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 6092
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2853
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1614
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1099
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 11
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 916
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 6
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1257
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 8
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1166
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 9
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 798
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 8
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1279
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "elapsed_ms": 4
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1387,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-144114/02-sign-up/021-s21.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "elapsed_ms": 11
+    },
+    {
+      "id": "s23",
+      "ok": false,
+      "error": "node `home-tp-12345678800000` not found",
+      "error_code": "not_found",
+      "elapsed_ms": 164,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-144114/02-sign-up/023-s23.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-144114/02-sign-up/021-s21.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-144114/02-sign-up/023-s23.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 20038
+}

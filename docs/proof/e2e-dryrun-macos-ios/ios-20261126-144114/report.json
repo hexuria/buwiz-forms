@@ -1,0 +1,93 @@
+{
+ "suite": "smoke",
+ "target": "ios",
+ "started": "20261126-144114",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-144114",
+ "cli_version": "0.4.0",
+ "app_commit": "3b39bd3e",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 1653,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-144114/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "known gap",
+   "ms": 21168,
+   "note": null,
+   "file": "agent-recipes/ui/ui-sign-up-phone.wants",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-144114/02-sign-up/recording.mp4",
+   "step": "s23",
+   "error": "node `home-tp-12345678800000` not found",
+   "error_code": "not_found",
+   "line": "assert home-tp-$tin --screenshot",
+   "known_gap": "gap 1: the ZIP and RDO pickers are sheets on a phone, and gpui-agent presses inside sheets did not land in this week's rounds",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-144114/02-sign-up/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-144114/02-sign-up/failure-tree.json"
+  },
+  {
+   "name": "navigate",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "birth-date",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "open-2551q",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "money-boxes",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "delete-row",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "queue",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "sign-out",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  }
+ ]
+}

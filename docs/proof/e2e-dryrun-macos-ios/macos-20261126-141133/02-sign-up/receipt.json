@@ -1,0 +1,140 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "sign-up",
+  "fingerprint": "fnv1a64:a5b1aedf614e6d2d",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 384
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 66
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 352
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1241
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 382
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 389
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 440
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 93
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 526
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 84
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 781,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-141133/02-sign-up/011-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 425
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 104
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 372
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 49
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 498,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-141133/02-sign-up/016-s16.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 718,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-141133/02-sign-up/017-s17.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s18",
+      "ok": false,
+      "error": "wait_until timed out: node `nav-home` not found",
+      "error_code": "timeout",
+      "elapsed_ms": 10046
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-141133/02-sign-up/011-s11.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-141133/02-sign-up/016-s16.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-141133/02-sign-up/017-s17.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 16958
+}
