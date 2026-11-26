@@ -67,6 +67,56 @@ fn form_1800_prints_item14_centavos_as_a_comb() {
         map.insert("frm1800v2018:TotalNetGifts".into(), format!("123.{cents}"));
         let doc = filled_document("1800-2018", &map).unwrap();
         assert_eq!(printed_cell(&doc, "p1c64").0, cents);
+        // The peso comb holds the pesos alone: no centavo digit and no
+        // decimal point left in it now that the centavos have their cell.
+        assert_eq!(printed_cell(&doc, "p1c62").0, "123");
+    }
+}
+
+/// Page 1's branch cell, page 2's 14-slot header and the upload carry the
+/// same branch for a 1-, 3- and 5-digit branch code: the upload's split
+/// left-pads it (`1` -> `00001`), and page 2 now reads the upload's own
+/// page 2 keys instead of right-padding the stored TIN (`00100` before).
+#[test]
+fn pages_one_and_two_and_the_upload_agree_on_the_branch() {
+    for (branch, padded) in [("1", "00001"), ("123", "00123"), ("12345", "12345")] {
+        let donor = Form1800Draft::new_from_profile(&profile(branch), 2025, 1);
+        let upload = donor.to_bir_field_map();
+        assert_eq!(
+            upload["frm1800v2018:txtBranchCode"], padded,
+            "1800 {branch}"
+        );
+        assert_eq!(
+            upload["frm1800v2018:txtPg2BranchCode"], padded,
+            "1800 {branch}"
+        );
+        let doc = filled_document("1800-2018", &donor.print_field_map()).unwrap();
+        assert_eq!(
+            printed_cell(&doc, "p1c18").0,
+            padded,
+            "1800 {branch} page 1"
+        );
+        assert_eq!(
+            printed_cell(&doc, "p2c5").0,
+            format!("000123453{padded}"),
+            "1800 {branch} page 2"
+        );
+
+        let estate = Form1801Draft::new_from_profile(&profile(branch), 2025, 1);
+        let upload = estate.to_bir_field_map();
+        assert_eq!(upload["frm1801v2018:branchCode_1"], padded, "1801 {branch}");
+        assert_eq!(upload["frm1801v2018:branchCode_2"], padded, "1801 {branch}");
+        let doc = filled_document("1801-2018", &estate.print_field_map()).unwrap();
+        assert_eq!(
+            printed_cell(&doc, "p1c17").0,
+            padded,
+            "1801 {branch} page 1"
+        );
+        assert_eq!(
+            printed_cell(&doc, "p2c5").0,
+            format!("000123453{padded}"),
+            "1801 {branch} page 2"
+        );
     }
 }
 

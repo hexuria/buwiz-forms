@@ -534,8 +534,18 @@ impl Form1800Draft {
             self.email.trim().to_string(),
         );
         // The page 2 header comb has fourteen inputs: nine TIN digits and
-        // the five-digit branch code.
-        let tin_digits = super::print_map::tin_digits(&self.tin);
+        // the five-digit branch code, read from the upload's own page 2 TIN
+        // keys (as 1601C does), so pages 1 and 2 and the upload carry the
+        // same left-padded branch.
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm1800v2018:txtPg2TIN1",
+                "frm1800v2018:txtPg2TIN2",
+                "frm1800v2018:txtPg2TIN3",
+                "frm1800v2018:txtPg2BranchCode",
+            ],
+        );
         fields.insert("derived:tin_digits".to_string(), tin_digits);
         fields
     }
