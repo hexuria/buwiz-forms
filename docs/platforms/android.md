@@ -12,6 +12,7 @@ and signed, and what the Play Console needs.
 | Application id | `--id com.buwiz.ebirforms` in `just play-bundle` | Google Play's id for the app, fixed forever once published. `nsh/nsh.json` keeps `dev.goldcoders.bir`, the id of every other system and of development builds, so a development build installs beside the store app. The id names the app's data folder inside its sandbox (`files/nsh/com.buwiz.ebirforms`); `bir_core::platform::NSH_APP_ID` does not, on Android. |
 | Target API level | `nsh/nsh.json` `android.targetSdk` (36) | Google Play requires new apps and updates to target Android 16 (API 36) since 31 August 2026 ([Google's page](https://support.google.com/googleplay/android-developer/answer/11926878)). The SDK needs `platforms;android-36` (`scripts/setup-android-windows.ps1` installs it). The oldest Android the app runs on is 8.0 (API 26), NSH's minimum. |
 | Backup off | `nsh/nsh.json` `android.allowBackup` (`false`) | Returns, the sign-in and the device key stay on the phone: no copy to the user's Google account and none to a new phone. NSH writes `allowBackup="false"`, `fullBackupContent="false"` and data extraction rules that exclude every storage domain from both (Android 12 and later read only the rules). |
+| Launcher icon | `nsh/nsh.json` `android.adaptiveIcon`: `assets/android/adaptive-foreground.png` on white (`#ffffff`) | An adaptive icon (NSH's `mipmap-anydpi-v26`, the icon and the round icon): each launcher masks it to its own shape (circle, squircle, rounded square, teardrop) at the size of every other app's icon. The whole Buwiz Forms logo with its words sits inside the 66 dp circle every mask keeps; there is no logo without its words. `icon.android` (`assets/android/icon.png`) still goes into the package, but every Android NSH runs on (8 and later) shows the layers. No themed icon: as one flat tone the logo loses its sun and yellow facets, so a themed launcher shows it in full colour. `just icons` writes all three files from `assets/brand/buwiz-forms.svg`. |
 | Native code | `--abi arm64-v8a,armeabi-v7a` | Phones and tablets. Google Play makes one download per ABI from the bundle. NSH links `libnsh.so` for 16 KB memory pages, which Android 15 devices need. |
 | Version | `versionName` = the version, `versionCode` = the build number | [VERSIONING.md](../VERSIONING.md). |
 | No updater | `scripts/android_bundle.py prepare` removes `nsh-updater.json` | Google Play updates the app. The updater never starts on a phone (`DesktopHost` mounts only on a desktop); its source goes too, as in the iOS package. |
@@ -83,6 +84,7 @@ affected. `jarsigner` and `keytool` come from `$JAVA_HOME`, Homebrew's `openjdk`
 | Field | Value |
 | --- | --- |
 | App name | eBIRForms by Buwiz |
+| App icon | `assets/android/play-icon-512.png` (512×512, 32-bit PNG, opaque; uploaded by hand) |
 | Developer account | Hexuria (organization; Google also shows the organization's legal name and address) |
 | Contact email | support@buwiz.com |
 | Website | https://ebirforms.buwiz.com |

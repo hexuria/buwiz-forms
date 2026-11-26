@@ -39,7 +39,11 @@
   },
   "android": {
     "targetSdk": 36,
-    "allowBackup": false
+    "allowBackup": false,
+    "adaptiveIcon": {
+      "foreground": "../assets/android/adaptive-foreground.png",
+      "background": "#ffffff"
+    }
   },
   "updater": {
     "github": "hexuria/buwiz-forms",
