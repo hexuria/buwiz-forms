@@ -3625,10 +3625,25 @@
           "elapsed": 4.084959030151367,
           "timed_out": false,
           "ci_html_head": "12171d975b65a6faab141c82c6540bc8d8b38e2a"
+        },
+        {
+          "name": "check-python-scripts",
+          "rc": 1,
+          "log": "C:\\ciw\\logs\\b52eefcb\\check\\check-python-scripts.log",
+          "elapsed": 301.05719351768494,
+          "timed_out": false,
+          "python_counts": {
+            "ran": 290,
+            "ok": false
+          },
+          "build_folders_test": "3 ok, 0 failed, 3 skipped of 6"
         }
       ],
-      "status": "PASS"
+      "status": "FAIL",
+      "build_folders_test": "3 ok, 0 failed, 3 skipped of 6"
     }
   },
-  "test_file_count": 195
+  "test_file_count": 195,
+  "retries": [],
+  "finished": "2026-11-26T08:37:06.156182+00:00"
 }

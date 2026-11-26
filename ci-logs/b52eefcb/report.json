@@ -1,0 +1,95 @@
+{
+  "free_disk_gb": 55.2,
+  "pr": 361,
+  "commit": "b52eefcb9dead3614d2d8ff1e9d21583166e4cb9",
+  "sibling": "8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf",
+  "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+  "nsh": "nsh 0.6.1 (8c78cfd)",
+  "target": "C:\\ciw\\targets\\b52eefcb",
+  "built_with": "rustup toolchain 1.99.0 cargo at C:\\Users\\Administrator\\.rustup\\toolchains\\1.99.0-x86_64-pc-windows-msvc\\bin; huacnlee/cargo skipped; RUSTC_WRAPPER empty",
+  "jobs": [
+    {
+      "job": "NSH app (Windows, shard 0)",
+      "job_key": "nsh-shard-0",
+      "commit": "b52eefcb9dead3614d2d8ff1e9d21583166e4cb9",
+      "status": "PASS",
+      "counts": "65/65 files; 599 passed, 0 failed",
+      "failed_steps": [],
+      "build_folders_test": ""
+    },
+    {
+      "job": "NSH app (Windows, shard 1)",
+      "job_key": "nsh-shard-1",
+      "commit": "b52eefcb9dead3614d2d8ff1e9d21583166e4cb9",
+      "status": "PASS",
+      "counts": "65/65 files; 529 passed, 0 failed",
+      "failed_steps": [],
+      "build_folders_test": ""
+    },
+    {
+      "job": "NSH app (Windows, shard 2)",
+      "job_key": "nsh-shard-2",
+      "commit": "b52eefcb9dead3614d2d8ff1e9d21583166e4cb9",
+      "status": "PASS",
+      "counts": "65/65 files; 630 passed, 0 failed",
+      "failed_steps": [],
+      "build_folders_test": ""
+    },
+    {
+      "job": "check (windows-latest, x86_64-pc-windows-msvc)",
+      "job_key": "check-windows",
+      "commit": "b52eefcb9dead3614d2d8ff1e9d21583166e4cb9",
+      "status": "FAIL",
+      "counts": "python 290; cargo 0 passed, 0 failed",
+      "failed_steps": [
+        {
+          "name": "check-python-scripts",
+          "rc": 1,
+          "log": "C:\\ciw\\logs\\b52eefcb\\check\\check-python-scripts.log"
+        }
+      ],
+      "build_folders_test": "3 ok, 0 failed, 3 skipped of 6"
+    }
+  ],
+  "failed_files": [],
+  "retries": [],
+  "test_file_count": 195,
+  "python_retries": {
+    "same_commit": {
+      "name": "same-commit-rerun1",
+      "rc": 1,
+      "log": "C:\\ciw\\logs\\b52eefcb\\retries\\python-test_nsh_run_agent_windows\\same-commit-rerun1.log",
+      "elapsed": 133.47377562522888,
+      "timed_out": false,
+      "ran": 10,
+      "failed": 10,
+      "ok": false,
+      "status": "FAIL"
+    },
+    "origin_main": {
+      "name": "origin-main-rerun1",
+      "rc": 0,
+      "log": "C:\\ciw\\logs\\b52eefcb\\retries\\python-test_nsh_run_agent_windows\\origin-main-rerun1.log",
+      "elapsed": 36.0154447555542,
+      "timed_out": false,
+      "ran": 10,
+      "failed": 0,
+      "ok": true,
+      "status": "PASS"
+    },
+    "main_commit": "afc1c738349c051f973fcf580873e854b8227d37"
+  },
+  "python_failed_file": "scripts/tests/test_nsh_run_agent_windows.py",
+  "python_failed_tests": [
+    "test_a_cancelled_launch_stops_the_token_writer",
+    "test_a_failed_launch_stops_the_token_writer",
+    "test_a_launch_that_fails_after_the_token_was_stored_removes_it",
+    "test_a_missing_sdk_or_adb_is_reported_before_the_launch",
+    "test_android_sdk_root_is_used_when_android_home_is_unset",
+    "test_android_serial_must_name_the_device_nsh_launches",
+    "test_android_studios_default_sdk_is_found_without_variables_or_path",
+    "test_ctrl_c_after_the_token_was_stored_removes_it_and_stops_the_writer",
+    "test_no_online_device_is_refused_before_the_launch",
+    "test_with_two_devices_the_token_goes_to_the_one_nsh_launches"
+  ]
+}

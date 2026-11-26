@@ -1,0 +1,25 @@
+{
+  "same_commit": {
+    "name": "same-commit-rerun1",
+    "rc": 1,
+    "log": "C:\\ciw\\logs\\b52eefcb\\retries\\python-test_nsh_run_agent_windows\\same-commit-rerun1.log",
+    "elapsed": 133.47377562522888,
+    "timed_out": false,
+    "ran": 10,
+    "failed": 10,
+    "ok": false,
+    "status": "FAIL"
+  },
+  "origin_main": {
+    "name": "origin-main-rerun1",
+    "rc": 0,
+    "log": "C:\\ciw\\logs\\b52eefcb\\retries\\python-test_nsh_run_agent_windows\\origin-main-rerun1.log",
+    "elapsed": 36.0154447555542,
+    "timed_out": false,
+    "ran": 10,
+    "failed": 0,
+    "ok": true,
+    "status": "PASS"
+  },
+  "main_commit": "afc1c738349c051f973fcf580873e854b8227d37"
+}
