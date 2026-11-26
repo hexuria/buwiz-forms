@@ -1,0 +1,10 @@
+22:22:28 === click between 2 and 3 of 1,234.56, type 9 ===
+22:22:29 after click, box: '1234.56'
+22:22:30 box states: ['1234.56', '91234.56']
+22:22:31 after leaving: '91,234.56'
+22:22:32 saved: 91234.56  verdict: right
+22:22:32 === click in empty left part of 1,234.56, type 9 ===
+22:22:39 after click, box: '1234.56'
+22:22:40 box states: ['1234.56', '91234.56']
+22:22:41 after leaving: '91,234.56'
+22:22:43 saved: 91234.56  verdict: right
