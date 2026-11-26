@@ -383,7 +383,7 @@ function MaskedField(props: MaskedProps) {
             // A focus rewrite or the platform's own keyboard focus can put the caret at the end of the plain text. That is
             // not proof of a click: mapping it as one puts the caret one digit early (`1,234.56` -> 6). A real click at
             // the end is still known from its press-down; a click anywhere else is the caret itself.
-            const rewriteEnd = e.start === focusMap.to.length;
+            const rewriteEnd = e.start === focusMap.to.length && !pointerDown;
             if (!rewriteEnd) {
               if (props.numeric && isZeroAmount(now)) {
                 focusCaret = 0;
@@ -402,6 +402,7 @@ function MaskedField(props: MaskedProps) {
         pointerDown = true;
       }}
       onKeyPress={(e) => {
+        pointerDown = false;
         clickUntil = 0;
         focusMap = undefined;
         focusCaret = undefined;
@@ -422,7 +423,6 @@ function MaskedField(props: MaskedProps) {
         }
         const selectWhole = byFocus;
         const byPointer = pointerDown;
-        pointerDown = false;
         if (props.noLiveFormat && byPointer && !selectWhole && selected && selected.start === selected.end) {
           // A click's caret is often reported before the focus event itself. It is in the grouped text's coordinates here.
           focusCaret = caretAfterSameDigits(focusMap?.from ?? untracked(text), focusMap?.to ?? untracked(text), selected.start);
@@ -432,14 +432,27 @@ function MaskedField(props: MaskedProps) {
         byFocus = false;
         const mapped = focusMap;
         if (mapped) {
-          setTimeout(() => {
+          const settle = () => {
             if (!untracked(focused) || focusMap !== mapped) return;
             const now = untracked(text);
-            if (selectWhole || (props.numeric && isZeroAmount(now)) || focusCaret === undefined) {
+            const clicked = byPointer || pointerDown;
+            pointerDown = false;
+            if (selectWhole || (props.numeric && isZeroAmount(now))) {
               writeCaret(0, now.length);
-            } else {
+            } else if (focusCaret !== undefined) {
               writeCaret(focusCaret);
+            } else if (clicked) {
+              writeCaret(now.length);
+            } else {
+              writeCaret(0, now.length);
             }
+          };
+          // The platforms can report focus before the press-down and click caret of the same mouse event. Selection is
+          // written after the text rewrite's turn; with no click evidence yet, one more turn lets that press-down arrive.
+          setTimeout(() => {
+            if (!untracked(focused) || focusMap !== mapped) return;
+            if (byPointer || pointerDown || focusCaret !== undefined) settle();
+            else setTimeout(settle, 0);
           }, 0);
         }
       }}
@@ -447,6 +460,7 @@ function MaskedField(props: MaskedProps) {
         if (!edited && outsideValue !== undefined) writeText(props.shown(outsideValue, false));
         outsideValue = undefined;
         focused.set(false);
+        pointerDown = false;
         clickUntil = 0;
         focusMap = undefined;
         focusCaret = undefined;
