@@ -14,7 +14,7 @@ The iOS icon in the installed bundles was verified against nsh.json's `ios` icon
 
 ## iPad Pro 13-inch (light/dark pairs)
 - ios-before-ipad-home-light/dark.png — home screen, BEFORE icon.
-- ios-after-ipad-home-light/dark.png — home screen, AFTER icon (same clean-corner result as iPhone).
+- ios-after-ipad-home-light/dark.png — home screen page 2 (where SpringBoard keeps the icon), AFTER icon (same clean-corner result as iPhone). Retaken: the first pair showed page 1 without the app.
 - ios-before-ipad-settings-light/dark.png — Settings > Apps row, BEFORE (also reshot after the reboot).
 - ios-after-ipad-settings-light/dark.png — Settings > Apps row, AFTER.
 - ios-before-ipad-spotlight-light/dark.png — Spotlight Top Hit, BEFORE.
@@ -23,7 +23,7 @@ The iOS icon in the installed bundles was verified against nsh.json's `ios` icon
 ## Mac — Dock
 - mac-after-dock-light.png — AFTER running in the Dock, light: white tile as drawn, same size as its neighbours, NO grey "legacy icon" frame (macOS 26 does not jail it).
 - mac-after-dock-dark.png — same in dark appearance.
-- mac-after-dock-big-comparison.png — 2x enlargement: AFTER tile beside Chrome's stock squircle — same size and shape language, compare directly.
+- mac-after-dock-big-comparison.png — 2x enlargement: the AFTER tile beside Chrome's stock squircle — same size and shape language, compare directly. (Re-cropped: the first crop cut the tile off.)
 - mac-before-dock-light.png / mac-before-dock-dark.png — BEFORE running in the Dock (blue circle "e").
 
 ## Mac — Finder (large icon view at 116pt, plus list view)
