@@ -14,7 +14,7 @@
 //! from backups and protected "complete until first user authentication").
 
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
@@ -906,16 +906,12 @@ fn sign_in_reads_back() -> bool {
     matches!(load_stored_account(), Ok(Some(_)))
 }
 
-fn account_file_path() -> PathBuf {
+/// The saved sign-in's file: in the device folder (`platform::device_dir`), whichever room is open.
+pub(crate) fn account_file_path() -> PathBuf {
     if let Some(path) = std::env::var_os(ENV_ACCOUNT_FILE) {
         return PathBuf::from(path);
     }
-    let database = crate::db::app_database_path();
-    let directory = database
-        .parent()
-        .filter(|path| !path.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    directory.join(ACCOUNT_FILE_NAME)
+    crate::platform::device_dir().join(ACCOUNT_FILE_NAME)
 }
 
 fn write_secret_file(raw: &str) -> Result<(), CloudError> {
@@ -1942,7 +1938,7 @@ mod tests {
     #[test]
     fn forgetting_a_sign_in_that_cannot_be_deleted_overwrites_it_or_says_so() {
         use std::os::unix::fs::PermissionsExt;
-        let mode = |path: &Path, mode: u32| {
+        let mode = |path: &std::path::Path, mode: u32| {
             std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
         };
         let dir = tempfile::tempdir().unwrap();

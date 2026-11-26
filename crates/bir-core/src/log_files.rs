@@ -134,11 +134,22 @@ pub fn prune_rotated_logs(dir: &Path, keep_days: u32, today: NaiveDate) -> Vec<P
     removed
 }
 
-/// The user's retention setting, clamped, defaulting to a week.
+/// The user's retention setting, clamped, defaulting to a week. A device-wide
+/// setting (accounts-and-lock PLAN §A.2): `device_settings` first, then the
+/// same key in `db`, the database the app has open.
 pub fn retention_days(db: &Database) -> u32 {
-    db.get_setting(RETENTION_SETTING)
-        .ok()
-        .flatten()
+    stored_retention_days(Some(db))
+}
+
+/// [`retention_days`] where a database may not be open: `device_settings`
+/// first, then `open`'s own key, then a week.
+pub fn stored_retention_days(open: Option<&Database>) -> u32 {
+    parse_retention(crate::rooms::device_setting_or(RETENTION_SETTING, open).as_deref())
+}
+
+/// A stored day count, clamped; anything else (none, blank, not a number) is a week.
+pub fn parse_retention(value: Option<&str>) -> u32 {
+    value
         .and_then(|value| value.trim().parse::<u32>().ok())
         .map(|days| days.clamp(MIN_RETENTION_DAYS, MAX_RETENTION_DAYS))
         .unwrap_or(DEFAULT_RETENTION_DAYS)
@@ -153,39 +164,44 @@ pub fn maintain(dir: &Path, retention_days: u32) -> Vec<PathBuf> {
     prune_rotated_logs(dir, retention_days, chrono::Utc::now().date_naive())
 }
 
+/// The retention the app last read or set ([`remember_retention`]): what the
+/// six-hourly round uses while `device_settings` has no value yet.
+static KNOWN_RETENTION: std::sync::atomic::AtomicU32 =
+    std::sync::atomic::AtomicU32::new(DEFAULT_RETENTION_DAYS);
+
+/// Tell the retention round what the app read at launch (with its database's
+/// fallback) or what Settings just set.
+pub fn remember_retention(days: u32) {
+    KNOWN_RETENTION.store(
+        days.clamp(MIN_RETENTION_DAYS, MAX_RETENTION_DAYS),
+        std::sync::atomic::Ordering::SeqCst,
+    );
+}
+
+/// What a retention round prunes to: the `device_settings` value, else the
+/// one the app last read or set. Holds no database (I5).
+pub fn round_retention_days() -> u32 {
+    crate::rooms::device_setting(RETENTION_SETTING).map_or_else(
+        || KNOWN_RETENTION.load(std::sync::atomic::Ordering::SeqCst),
+        |value| parse_retention(Some(&value)),
+    )
+}
+
 /// Re-check retention every six hours so a long-running process crosses
-/// midnight without growing past the setting, on the database `db` names.
+/// midnight without growing past the setting.
 ///
-/// The thread keeps only a [`std::sync::Weak`]: it never holds the database
-/// open, so an engine that ends can close it and free the owner lock. One
-/// thread per process; a later call (the next engine of the same process)
-/// points it at that engine's database.
-pub fn spawn_retention(db: std::sync::Weak<std::sync::Mutex<Database>>) {
-    static TARGET: std::sync::Mutex<std::sync::Weak<std::sync::Mutex<Database>>> =
-        std::sync::Mutex::new(std::sync::Weak::new());
+/// The thread holds no database handle (accounts-and-lock I5): it reads the
+/// device store ([`round_retention_days`]), so no room is kept open by it.
+/// One thread per process; later calls do nothing.
+pub fn spawn_retention() {
     static STARTED: std::sync::Once = std::sync::Once::new();
-    *TARGET
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = db;
     STARTED.call_once(|| {
         let spawned = std::thread::Builder::new()
             .name("bir-log-retention".into())
             .spawn(move || {
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(6 * 60 * 60));
-                    let target = TARGET
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner())
-                        .upgrade();
-                    let Some(db) = target else {
-                        continue;
-                    };
-                    // Never waits on the database while holding it: busy now, the next round prunes.
-                    let days = db.try_lock().ok().map(|guard| retention_days(&guard));
-                    drop(db);
-                    if let Some(days) = days {
-                        let _ = maintain(&log_dir(), days);
-                    }
+                    let _ = maintain(&log_dir(), round_retention_days());
                 }
             });
         if let Err(error) = spawned {
@@ -310,6 +326,7 @@ mod tests {
 
     #[test]
     fn retention_setting_is_parsed_clamped_and_defaulted() {
+        crate::rooms::use_ephemeral_device_store();
         let db = Database::open_ephemeral().unwrap();
         assert_eq!(retention_days(&db), DEFAULT_RETENTION_DAYS);
         db.set_setting(RETENTION_SETTING, "30").unwrap();
@@ -320,5 +337,34 @@ mod tests {
         assert_eq!(retention_days(&db), MAX_RETENTION_DAYS);
         db.set_setting(RETENTION_SETTING, "soon").unwrap();
         assert_eq!(retention_days(&db), DEFAULT_RETENTION_DAYS);
+        crate::rooms::forget_ephemeral_device_store();
+    }
+
+    /// Accounts-and-lock A1 (O1, I5): retention is a device setting. The
+    /// legacy database's value answers until `device_settings` has one; then
+    /// the device value wins. The six-hourly round reads the device store,
+    /// else what the app last read, and needs no database handle.
+    #[test]
+    fn log_retention_reads_the_device_store_and_its_round_holds_no_database() {
+        crate::rooms::use_ephemeral_device_store();
+        let legacy = Database::open_ephemeral().unwrap();
+        legacy.set_setting(RETENTION_SETTING, "30").unwrap();
+        assert_eq!(
+            stored_retention_days(Some(&legacy)),
+            30,
+            "the legacy value still answers"
+        );
+        assert_eq!(stored_retention_days(None), DEFAULT_RETENTION_DAYS);
+        remember_retention(stored_retention_days(Some(&legacy)));
+        drop(legacy);
+        assert_eq!(round_retention_days(), 30, "the round needs no database");
+
+        crate::rooms::set_device_setting(RETENTION_SETTING, "14").unwrap();
+        let legacy = Database::open_ephemeral().unwrap();
+        legacy.set_setting(RETENTION_SETTING, "30").unwrap();
+        assert_eq!(stored_retention_days(Some(&legacy)), 14);
+        assert_eq!(round_retention_days(), 14);
+        crate::rooms::forget_ephemeral_device_store();
+        remember_retention(DEFAULT_RETENTION_DAYS);
     }
 }

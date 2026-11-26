@@ -553,15 +553,12 @@ pub fn clear_pending() {
     let _ = std::fs::remove_file(pending_file_path());
 }
 
-fn pending_file_path() -> PathBuf {
+/// The pending email sign-in's file: in the device folder (`platform::device_dir`), whichever room is open.
+pub(crate) fn pending_file_path() -> PathBuf {
     if let Some(path) = std::env::var_os(ENV_PENDING_FILE) {
         return PathBuf::from(path);
     }
-    crate::db::app_database_path()
-        .parent()
-        .filter(|path| !path.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."))
-        .join(PENDING_FILE_NAME)
+    crate::platform::device_dir().join(PENDING_FILE_NAME)
 }
 
 fn write_private(path: &Path, raw: &str) -> std::io::Result<()> {

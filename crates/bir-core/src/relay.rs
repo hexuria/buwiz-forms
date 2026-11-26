@@ -99,16 +99,11 @@ pub fn server() -> Result<String, TransportError> {
     Ok(server.url)
 }
 
-/// Where the device key and id live when the keychain is not used: beside the database, as the saved sign-in
-/// is. A scratch database (a development, test or agent run) gets a scratch device, never a file in the app's
-/// real data folder.
-fn secrets_dir() -> std::path::PathBuf {
-    let database = crate::db::app_database_path();
-    database
-        .parent()
-        .filter(|path| !path.as_os_str().is_empty())
-        .map(std::path::Path::to_path_buf)
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
+/// Where the device key and id live when the keychain is not used: the device folder, as the saved sign-in
+/// is (`platform::device_dir`), whichever room is open. A scratch database (a development, test or agent run) gets
+/// a scratch device, never a file in the app's real data folder.
+pub(crate) fn secrets_dir() -> std::path::PathBuf {
+    crate::platform::device_dir()
 }
 
 /// The client for the configured Buwiz server, made once per server.

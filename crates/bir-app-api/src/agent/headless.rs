@@ -2,8 +2,8 @@
 //!
 //! Mirrors gpui-agent `apps/todo-headless`: clap `serve` (default) / `status` /
 //! `shutdown` / `logs`, `from_env` + `spawn_mailbox_named`, no GPU window. Opens
-//! [`bir_core::db::default_database_path`] (or `BIR_DATABASE_PATH` in CI), not
-//! `Database::open_ephemeral()`. Starts the same in-process SFTP submission cron as shell GUI.
+//! the room of the account in the saved sign-in ([`serve_database_path`]; or
+//! `BIR_DATABASE_PATH` in a debug or test run), not `Database::open_ephemeral()`. Starts the same in-process SFTP submission cron as shell GUI.
 //! There is no protocol `Op::Yield`. Exclusivity is TCP bind + live-DB owner
 //! lock. `serve --wait` (also `bir --wait`) polls until both are free.
 //! `serve --detach` backgrounds the daemon (Docker `-d`); `logs --follow`
@@ -113,15 +113,58 @@ fn run_cli() -> Result<(), ExitCode> {
     }
 }
 
-/// Open the live (or `BIR_DATABASE_PATH`) SQLCipher database. Never ephemeral.
+/// What `bir-headless serve` answers when there is no saved sign-in, or no room for it.
+pub const NOT_SIGNED_IN: &str = "Sign in in the eBIRForms app first.";
+
+/// The database `bir-headless serve` opens (accounts-and-lock PLAN §A.2, decided):
+/// - where single-room mode is allowed (a debug build or a test environment), the file an explicit
+///   `BIR_DATABASE_PATH` names, as before;
+/// - else the room of the account in the saved sign-in, found through `device.db`'s `rooms`.
 ///
-/// Uses [`db::open_serve_database`] (`Database::open` + exclusive owner lock),
-/// not `open_or_recreate`: a daemon must not quarantine a taxpayer DB.
-pub fn open_serve_database() -> Result<(Database, std::path::PathBuf), String> {
-    db::open_serve_database().map_err(format_serve_open_error)
+/// It refuses with [`NOT_SIGNED_IN`] when there is no saved sign-in or no room for it. It never creates
+/// `data_dir()/bir_data.db` or a room, and it never makes `device.db`.
+pub fn serve_database_path() -> Result<std::path::PathBuf, String> {
+    if let Some(named) = db::single_room_database() {
+        return Ok(named);
+    }
+    let stored = bir_core::cloud_account::load_stored_account()
+        .ok()
+        .flatten();
+    signed_in_room_database(&bir_core::rooms::Layout::here(), stored.as_ref())
 }
 
-fn format_serve_open_error(error: db::DbError) -> String {
+/// The room file of `stored`'s account under `layout`, if `rooms` has it and the file is there.
+pub(crate) fn signed_in_room_database(
+    layout: &bir_core::rooms::Layout,
+    stored: Option<&bir_core::cloud_account::StoredAccount>,
+) -> Result<std::path::PathBuf, String> {
+    let stored = stored.ok_or_else(|| NOT_SIGNED_IN.to_owned())?;
+    let store = bir_core::rooms::DeviceStore::open_existing(layout)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| NOT_SIGNED_IN.to_owned())?;
+    match bir_core::rooms::room_for(Some(&store), &stored.server_url, &stored.user_id) {
+        Ok(bir_core::rooms::RoomLookup::Known(room)) => {
+            let path = layout.room_database(&room.room_id);
+            if path.is_file() {
+                Ok(path)
+            } else {
+                Err(NOT_SIGNED_IN.to_owned())
+            }
+        }
+        Ok(bir_core::rooms::RoomLookup::New { .. }) | Err(_) => Err(NOT_SIGNED_IN.to_owned()),
+    }
+}
+
+/// Open the database [`serve_database_path`] names. Never ephemeral.
+///
+/// Uses [`db::open_serve_database_at`] (`Database::open` + exclusive owner lock),
+/// not `open_or_recreate`: a daemon must not quarantine a taxpayer DB.
+pub fn open_serve_database() -> Result<(Database, std::path::PathBuf), String> {
+    let path = serve_database_path()?;
+    db::open_serve_database_at(&path).map_err(|error| format_serve_open_error(&path, error))
+}
+
+fn format_serve_open_error(path: &std::path::Path, error: db::DbError) -> String {
     if matches!(error, db::DbError::LiveDatabaseInUse(_)) {
         error.to_string()
     } else {
@@ -129,7 +172,7 @@ fn format_serve_open_error(error: db::DbError) -> String {
             "failed to open live database {}: {error} \
              (bir will not quarantine or recreate this file; \
              shell GUI uses open_or_recreate on the same default path)",
-            db::app_database_path().display()
+            path.display()
         )
     }
 }
@@ -193,7 +236,8 @@ pub fn serve_blocker(addr: SocketAddr) -> Result<Option<ServeBlocker>, String> {
         }
         Err(error) => return Err(format!("gpui-agent failed to bind {addr}: {error}")),
     }
-    match db::try_acquire_live_owner_lock(&db::app_database_path()) {
+    let path = serve_database_path()?;
+    match db::try_acquire_live_owner_lock(&path) {
         Ok(lock) => drop(lock),
         Err(db::DbError::LiveDatabaseInUse(_)) => {
             return Ok(Some(ServeBlocker::DatabaseInUse));
@@ -201,7 +245,7 @@ pub fn serve_blocker(addr: SocketAddr) -> Result<Option<ServeBlocker>, String> {
         Err(error) => {
             return Err(format!(
                 "failed to probe live DB lock {}: {error}",
-                db::app_database_path().display()
+                path.display()
             ));
         }
     }
@@ -237,7 +281,7 @@ pub fn wait_until_unblocked(addr: SocketAddr, wait: bool) -> Result<(), String> 
                 ));
             }
             Some(ServeBlocker::DatabaseInUse) => {
-                return Err(db::DbError::LiveDatabaseInUse(db::app_database_path()).to_string());
+                return Err(db::DbError::LiveDatabaseInUse(serve_database_path()?).to_string());
             }
         }
     }
@@ -272,14 +316,14 @@ fn load_serve_config() -> Result<gpui_agent::security::AgentConfig, ExitCode> {
     };
 
     let token_set = config.token.is_some();
-    let using_path_override =
-        std::env::var_os("BIR_DATABASE_PATH").is_some_and(|value| !value.is_empty());
+    // Single-room mode only where it is allowed (accounts-and-lock I3): in a release build an explicit path is
+    // ignored, so the signed-in account's room is the live database and the token is required.
+    let using_path_override = db::single_room_database().is_some();
     if live_database_token_required(token_set, using_path_override) {
         eprintln!(
-            "refusing to open the live app database ({}) without GPUI_AGENT_TOKEN.\n\
+            "refusing to open the live app database (the signed-in account's room) without GPUI_AGENT_TOKEN.\n\
              export GPUI_AGENT_TOKEN=... (never log the value). \
-             CI may set BIR_DATABASE_PATH to a temp file.",
-            db::default_database_path().display()
+             CI may set BIR_DATABASE_PATH to a temp file."
         );
         return Err(ExitCode::from(2));
     }
@@ -494,7 +538,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         }
         eprintln!("delivery: semantic only (virtual_unavailable — no GPUI event pipeline)");
         eprintln!(
-            "database: {} (default_database_path unless BIR_DATABASE_PATH; exclusive owner lock; not ephemeral)",
+            "database: {} (the saved sign-in's room, or BIR_DATABASE_PATH in a debug or test run; exclusive owner lock; not ephemeral)",
             path.display()
         );
         eprintln!(
@@ -600,6 +644,89 @@ mod tests {
         assert!(Cli::try_parse_from(["bir", "--wait"]).is_ok());
         assert!(Cli::try_parse_from(["bir", "serve", "--detach"]).is_ok());
         assert!(Cli::try_parse_from(["bir", "logs", "--tail", "20"]).is_ok());
+    }
+
+    fn signed_in(server_url: &str, user_id: &str) -> bir_core::cloud_account::StoredAccount {
+        bir_core::cloud_account::StoredAccount {
+            server_url: server_url.to_owned(),
+            access_token: "access".to_owned(),
+            refresh_token: "refresh".to_owned(),
+            access_expires_at_unix: 0,
+            user_id: user_id.to_owned(),
+            email: Some("jane@buwiz.com".to_owned()),
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        }
+    }
+
+    /// Accounts-and-lock A1 (I3): with no explicit path, `serve` opens only the saved sign-in's room, found
+    /// through `rooms`. No sign-in, no device store, no row, or no file: refused with the sentence, and nothing is
+    /// made (no `bir_data.db`, no room, no `device.db`).
+    #[test]
+    fn headless_refuses_without_a_signed_in_room() {
+        use super::{NOT_SIGNED_IN, signed_in_room_database};
+        use bir_core::rooms::{DeviceStore, Layout, RoomRecord, room_id_for};
+        let folder = tempfile::tempdir().unwrap();
+        let layout = Layout::at(folder.path());
+        let jane = signed_in("https://api.buwiz.com/", "user-1");
+        let nothing_made = |layout: &Layout| {
+            assert!(!layout.legacy_database().exists(), "no bir_data.db");
+            assert!(!layout.rooms_dir().exists(), "no room");
+        };
+
+        assert_eq!(
+            signed_in_room_database(&layout, None).unwrap_err(),
+            NOT_SIGNED_IN
+        );
+        assert_eq!(
+            signed_in_room_database(&layout, Some(&jane)).unwrap_err(),
+            NOT_SIGNED_IN
+        );
+        nothing_made(&layout);
+        assert!(!layout.device_db().exists(), "no device.db");
+
+        let store = DeviceStore::open(&layout).unwrap();
+        assert_eq!(
+            signed_in_room_database(&layout, Some(&jane)).unwrap_err(),
+            NOT_SIGNED_IN
+        );
+        let room = room_id_for("https://api.buwiz.com", "user-1");
+        store
+            .add_room(&RoomRecord {
+                room_id: room.clone(),
+                origin: "https://api.buwiz.com".to_owned(),
+                user_id: "user-1".to_owned(),
+                email: Some("jane@buwiz.com".to_owned()),
+                created_at: "2026-11-26T00:00:00+00:00".to_owned(),
+                from_legacy: false,
+            })
+            .unwrap();
+        // The row without its file is still no room to open.
+        assert_eq!(
+            signed_in_room_database(&layout, Some(&jane)).unwrap_err(),
+            NOT_SIGNED_IN
+        );
+        nothing_made(&layout);
+
+        layout.create_room_dir(&room).unwrap();
+        std::fs::write(layout.room_database(&room), b"").unwrap();
+        assert_eq!(
+            signed_in_room_database(&layout, Some(&jane)).unwrap(),
+            layout.room_database(&room)
+        );
+        // Another account, or the same id on another server, has no room here.
+        let other = signed_in("https://api.buwiz.com", "user-2");
+        assert_eq!(
+            signed_in_room_database(&layout, Some(&other)).unwrap_err(),
+            NOT_SIGNED_IN
+        );
+        let test_server = signed_in("http://127.0.0.1:3008", "user-1");
+        assert_eq!(
+            signed_in_room_database(&layout, Some(&test_server)).unwrap_err(),
+            NOT_SIGNED_IN
+        );
+        assert!(!layout.legacy_database().exists(), "no bir_data.db");
     }
 }
 

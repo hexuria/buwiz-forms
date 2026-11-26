@@ -96,6 +96,35 @@ pub fn browser_url_allowed(url: &str) -> bool {
     }
 }
 
+/// The device folder (accounts-and-lock PLAN §A.2): where the device-wide
+/// files live, whichever room is open. The saved sign-in, the relay device
+/// key, the install id, the pending email sign-in, `device.db` and the
+/// one-copy guard's lock are found here, never from the database path.
+///
+/// - Single-room mode (a debug build or a test environment that named its
+///   database, [`crate::db::single_room_database`]): that file's folder, so
+///   every test keeps its scratch isolation.
+/// - Else [`data_dir`]. On a normal install that is where those files always
+///   were, so nothing moves.
+pub fn device_dir() -> std::path::PathBuf {
+    match crate::db::single_room_database() {
+        Some(named) => named
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_else(|| std::path::PathBuf::from(".")),
+        None => data_dir(),
+    }
+}
+
+/// The folder [`prepare_app_storage`] excludes from backups on iOS and gives
+/// file protection: the whole [`data_dir`]. Every new folder of the rooms
+/// layout (`rooms/`, `backups/`, `previews/`, `device.db`) is made inside it
+/// (Lead's review point 1), never beside it.
+pub fn backup_excluded_dir() -> std::path::PathBuf {
+    data_dir()
+}
+
 /// Run once at launch, before the database is opened. iOS: the data
 /// folder is excluded from backups and given the file protection "complete
 /// until first user authentication" (files made in it take it too), and the
