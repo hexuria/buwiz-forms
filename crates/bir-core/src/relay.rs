@@ -78,13 +78,24 @@ fn trust_keys_allowed(
     Ok(())
 }
 
+/// The trust list's pinned keys for this process: `BUWIZ_TRUST_KEYS` as [`crate::config::var`] reads it (the
+/// process environment, or an Android development build's baked list), under `bir_submit`'s own rule: it replaces
+/// the production key only in a debug or `lab` build.
+fn trust_keys() -> Vec<String> {
+    bir_submit::trust::pinned_keys_from(
+        crate::config::var(bir_submit::trust::KEYS_ENV)
+            .ok()
+            .as_deref(),
+    )
+}
+
 /// The Buwiz server this build may send through, or why it may not: the configured server, which for a
 /// development build must be on this computer and trusted through a test key. No request is made.
 pub fn server() -> Result<String, TransportError> {
     let server = crate::cloud_account::configured_server()
         .map_err(|error| TransportError::Config(error.to_string()))?;
     server_allowed(&server.url, cfg!(debug_assertions))?;
-    trust_keys_allowed(&bir_submit::trust::pinned_keys(), cfg!(debug_assertions))?;
+    trust_keys_allowed(&trust_keys(), cfg!(debug_assertions))?;
     Ok(server.url)
 }
 
@@ -113,8 +124,11 @@ pub fn submitter() -> Result<Arc<Submitter>, TransportError> {
     {
         return Ok(submitter.clone());
     }
-    let config = SubmitConfig::new(&server.url)
+    let mut config = SubmitConfig::new(&server.url)
         .map_err(|error| TransportError::Config(error.to_string()))?;
+    config.install_id = Some(crate::install_id::install_id());
+    config.platform = Some(crate::install_id::platform().to_owned());
+    config.trust_keys = trust_keys();
     trust_keys_allowed(&config.trust_keys, cfg!(debug_assertions))?;
     let store =
         bir_submit::secrets::platform_store(secrets_dir(), !crate::platform::keychain_disabled());
@@ -136,6 +150,69 @@ pub fn forget_device() {
         && let Err(error) = submitter.forget_device()
     {
         tracing::warn!("could not forget the relay device key: {error}");
+    }
+}
+
+/// What [`register_after_sign_in`] did. Never an error the sign-in sees.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Registration {
+    /// A practice account never sends, so it registers no device.
+    Practice,
+    /// No client for this build or server (a development build without a test trust key, say): the first send
+    /// registers, or says why it cannot.
+    NoClient(String),
+    Registered,
+    /// This sign-in already has its device (`409 device_registered`).
+    AlreadyDone,
+    /// It did not go through (offline, refused): logged; the first send registers as it always did.
+    Failed(String),
+}
+
+/// Adds this device to the account right after a sign-in's tokens are saved (after [`forget_device`]): once, with the
+/// install id and the platform. A practice account registers none. Blocks the calling thread for the one request, so the
+/// host calls it off the sign-in's path; nothing here can fail the sign-in.
+pub fn register_after_sign_in() -> Registration {
+    let outcome = register_with(crate::transport::practice_account(), submitter);
+    match &outcome {
+        Registration::Practice => {
+            tracing::info!("device registration: a practice account adds no device")
+        }
+        Registration::NoClient(why) => {
+            tracing::info!("device registration: not now ({why}); the first send registers")
+        }
+        Registration::Registered => tracing::info!("device registration: this device was added"),
+        Registration::AlreadyDone => {
+            tracing::info!("device registration: already done for this sign-in")
+        }
+        Registration::Failed(why) => {
+            tracing::warn!("device registration failed ({why}); the first send registers")
+        }
+    }
+    outcome
+}
+
+fn register_with(
+    practice: bool,
+    client: impl FnOnce() -> Result<Arc<Submitter>, TransportError>,
+) -> Registration {
+    if practice {
+        return Registration::Practice;
+    }
+    let submitter = match client() {
+        Ok(submitter) => submitter,
+        Err(error) => return Registration::NoClient(error.to_string()),
+    };
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => return Registration::Failed(error.to_string()),
+    };
+    match runtime.block_on(submitter.register_device()) {
+        Ok(bir_submit::Registered::New) => Registration::Registered,
+        Ok(bir_submit::Registered::AlreadyDone) => Registration::AlreadyDone,
+        Err(error) => Registration::Failed(error.to_string()),
     }
 }
 
@@ -197,6 +274,8 @@ impl RelaySession {
         note: bir_submit::Note<'_>,
     ) -> Result<StoreReport, TransportError> {
         let name = crate::transport::iaf_basename(filename);
+        // This device carries the upload: a phone stays awake and asks for time until the send ends, however it ends.
+        let _in_flight = crate::send_in_flight::begin();
         match tokio::time::timeout(SEND_LIMIT, self.submitter.send_noting(name, xml, note)).await {
             Ok(sent) => send_outcome(sent),
             Err(_) => Err(TransportError::RelayUnknown(
@@ -295,6 +374,158 @@ mod tests {
     use crate::forms::queueable::NoReceipt;
     use bir_submit::Blame;
 
+    /// A fixed access token (the mock's), as the host's sign-in would give it.
+    struct Fixed(String);
+    impl bir_submit::TokenSource for Fixed {
+        fn access_token(
+            &self,
+            _force_refresh: bool,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<String, bir_submit::ClientError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            let token = self.0.clone();
+            Box::pin(async move { Ok(token) })
+        }
+        fn login(&self) -> Option<String> {
+            Some("filer@example.test".into())
+        }
+        fn session_ended(&self) {}
+    }
+
+    #[test]
+    fn a_practice_account_registers_no_device_and_no_client_is_not_a_failure() {
+        let asked = std::cell::Cell::new(false);
+        let outcome = register_with(true, || {
+            asked.set(true);
+            Err(TransportError::Config("unused".into()))
+        });
+        assert_eq!(outcome, Registration::Practice);
+        assert!(!asked.get(), "no client is made for a practice account");
+        assert_eq!(
+            register_with(false, || Err(TransportError::Config(
+                "no test trust key".into()
+            ))),
+            Registration::NoClient(TransportError::Config("no test trust key".into()).to_string())
+        );
+        // Through the real entry point in a test run: a debug build has no test trust key here, so no client; nothing
+        // is sent and nothing fails.
+        if !crate::transport::practice_account() {
+            assert!(matches!(
+                register_after_sign_in(),
+                Registration::NoClient(_) | Registration::Failed(_)
+            ));
+        }
+    }
+
+    /// Against the in-repo mock: after an email sign-in the device is added once with the install id; a second time
+    /// is already done (the kept id, or the server's 409); a dead server is a logged failure.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn after_a_sign_in_the_device_is_added_once_and_409_is_done() {
+        use crate::email_sign_in::{Intent, new_secret, start, verify};
+        use crate::mock_account::{MockAccount, MockOptions};
+        let server =
+            MockAccount::start_with("127.0.0.1:0".parse().unwrap(), MockOptions::default())
+                .await
+                .unwrap();
+        let url = server.url();
+        let install = "install-id-of-this-test-0001";
+        let outcome = std::thread::spawn(move || {
+            let mut http = crate::cloud_account::BlockingHttp::new();
+            let secret = new_secret();
+            let started = start(
+                &mut http,
+                &url,
+                "filer@example.test",
+                Intent::SignIn,
+                &secret,
+                "macos",
+                install,
+                None,
+            )
+            .unwrap();
+            let tokens = verify(
+                &mut http,
+                &url,
+                &started.request_id,
+                &secret,
+                crate::mock_account::DEFAULT_CODE,
+            )
+            .unwrap();
+            let client = |store: Arc<bir_submit::secrets::MemoryStore>| {
+                let mut config = SubmitConfig::new(&url).unwrap();
+                config.install_id = Some(install.into());
+                config.platform = Some("macos".into());
+                use bir_submit::secrets::SecretStore;
+                struct Shared(Arc<bir_submit::secrets::MemoryStore>);
+                impl bir_submit::secrets::SecretStore for Shared {
+                    fn get(
+                        &self,
+                        name: &str,
+                    ) -> Result<Option<String>, bir_submit::secrets::StoreError>
+                    {
+                        self.0.get(name)
+                    }
+                    fn set(
+                        &self,
+                        name: &str,
+                        value: &str,
+                    ) -> Result<(), bir_submit::secrets::StoreError> {
+                        self.0.set(name, value)
+                    }
+                    fn delete(&self, name: &str) -> Result<(), bir_submit::secrets::StoreError> {
+                        self.0.delete(name)
+                    }
+                }
+                Arc::new(Submitter::new(
+                    config,
+                    Box::new(Shared(store)),
+                    Arc::new(Fixed(tokens.access_token.clone())),
+                ))
+            };
+            let store = Arc::new(bir_submit::secrets::MemoryStore::default());
+            let first = register_with(false, || Ok(client(store.clone())));
+            let again = register_with(false, || Ok(client(store.clone())));
+            // A fresh store (the id forgotten) on the same sign-in: the server's 409 is "already done".
+            let fresh = register_with(false, || {
+                Ok(client(
+                    Arc::new(bir_submit::secrets::MemoryStore::default()),
+                ))
+            });
+            (first, again, fresh)
+        })
+        .join()
+        .unwrap();
+        assert_eq!(
+            outcome,
+            (
+                Registration::Registered,
+                Registration::AlreadyDone,
+                Registration::AlreadyDone
+            )
+        );
+        assert_eq!(server.registered_devices(), 1);
+        let (_, platform, _) = server.registered(install).unwrap();
+        assert_eq!(platform, "macos");
+        drop(server);
+        let dead = std::thread::spawn(|| {
+            register_with(false, || {
+                let config = SubmitConfig::new("http://127.0.0.1:9").unwrap();
+                Ok(Arc::new(Submitter::new(
+                    config,
+                    Box::new(bir_submit::secrets::MemoryStore::default()),
+                    Arc::new(Fixed("token".into())),
+                )))
+            })
+        })
+        .join()
+        .unwrap();
+        assert!(matches!(dead, Registration::Failed(_)), "{dead:?}");
+    }
+
     #[test]
     fn a_development_build_sends_only_through_a_server_on_this_computer() {
         for url in [
@@ -354,6 +585,68 @@ mod tests {
             );
         }
         assert!(trust_keys_allowed(&production, false).is_ok());
+    }
+
+    /// The server and the trust keys are read through `config::var` (an Android development build's baked list),
+    /// and that path keeps both rules: on this computer, and a test key, never production's. Runs in a child
+    /// process, so its overrides never reach another test.
+    #[test]
+    fn configured_server_and_trust_keys_keep_the_development_rules() {
+        const CHILD: &str = "BIR_RELAY_CONFIG_CHILD";
+        const TEST: &str =
+            "relay::tests::configured_server_and_trust_keys_keep_the_development_rules";
+        let test_key = "dGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXktdGVzdC1rZXk";
+        let production = bir_submit::trust::TRUST_KEYS[0];
+        if std::env::var_os(CHILD).is_none() {
+            // The environment names production's server and key: the overrides below must win over it.
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", TEST, "--nocapture"])
+                .env(CHILD, "1")
+                .env("BUWIZ_SERVER_URL", "https://api.buwiz.com")
+                .env("BUWIZ_TRUST_KEYS", production)
+                .env_remove("BUWIZ_ACCOUNT_URL")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        use crate::config::force;
+        force("BUWIZ_SERVER_URL", Some("http://localhost:3008"));
+        force("BUWIZ_TRUST_KEYS", Some(test_key));
+        assert_eq!(
+            crate::cloud_account::configured_server().unwrap().url,
+            "http://localhost:3008"
+        );
+        let expected = if cfg!(debug_assertions) {
+            vec![test_key.to_owned()]
+        } else {
+            vec![production.to_owned()]
+        };
+        assert_eq!(trust_keys(), expected);
+        if !cfg!(debug_assertions) {
+            return;
+        }
+        assert_eq!(server().unwrap(), "http://localhost:3008");
+        for keys in [Some(production), None] {
+            force("BUWIZ_TRUST_KEYS", keys);
+            let refused = server().unwrap_err().to_string();
+            assert!(refused.contains("test key"), "{keys:?}: {refused}");
+        }
+        force("BUWIZ_TRUST_KEYS", Some(test_key));
+        for url in ["https://api.buwiz.com", "https://192.0.2.1:3008"] {
+            force("BUWIZ_SERVER_URL", Some(url));
+            let refused = server().unwrap_err().to_string();
+            assert!(refused.contains("on this computer"), "{url}: {refused}");
+        }
+        // Plain http to another host is refused before that, as an address: never a sign-in in the clear.
+        force("BUWIZ_SERVER_URL", Some("http://192.0.2.1:3008"));
+        let refused = server().unwrap_err().to_string();
+        assert!(refused.contains("https://"), "{refused}");
     }
 
     fn receipt(mode: &str, status: &str) -> Sent {

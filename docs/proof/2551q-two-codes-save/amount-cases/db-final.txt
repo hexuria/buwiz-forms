@@ -1,0 +1,9 @@
+[
+  {
+    "atc": "PT010",
+    "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+    "taxable_amount": 0.0,
+    "tax_rate": 0.03,
+    "tax_due": 0.0
+  }
+]

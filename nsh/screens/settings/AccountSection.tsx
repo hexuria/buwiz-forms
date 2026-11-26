@@ -1,4 +1,6 @@
-// Settings > Account (old accountCards): Buwiz, who is signed in, Google, Security; each only where the search keeps its row.
+// Settings > Account (old accountCards): the Buwiz account, the profile on this computer (who unlocked eBIRForms here, not a
+// second account), Google, Security; each only where the search keeps its row.
+import { deviceCopy } from "../../ui";
 import { BuwizCard } from "./Buwiz";
 import { GoogleBlock } from "./Google";
 import { IdentityBlock } from "./Identity";
@@ -10,12 +12,14 @@ export function AccountSection(props: { rows: string[] }) {
   return (
     <>
       <If when={has("buwiz")}>
-        <Labeled label="Buwiz">
+        <Labeled label="Buwiz account" testID="settings-buwiz-heading">
           <BuwizCard />
         </Labeled>
       </If>
       <If when={has("identity")}>
-        <IdentityBlock />
+        <Labeled label={deviceCopy("Profile on this computer")} testID="settings-profile-heading">
+          <IdentityBlock />
+        </Labeled>
       </If>
       <If when={has("google")}>
         <GoogleBlock />

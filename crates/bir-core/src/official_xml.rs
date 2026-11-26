@@ -316,6 +316,38 @@ pub fn write(
     Ok(out)
 }
 
+/// Apply the official upload layout's `uppercase` flag to a print field map so
+/// every box prints in the same letter case the upload submits for that key.
+/// Email keys and any key the layout does not mark `uppercase` stay as held.
+pub fn apply_official_uppercase(form_id: &str, fields: &mut BTreeMap<String, String>) {
+    let Ok(layout) = layout(form_id) else {
+        return;
+    };
+    for entry in &layout.entries {
+        if let Entry::Value { key, parts, .. } = entry {
+            let upper_key = parts.iter().any(|part| {
+                matches!(
+                    part,
+                    Part::Source {
+                        source,
+                        uppercase: true,
+                        ..
+                    } if source == key
+                )
+            });
+            if !upper_key || key.to_ascii_lowercase().contains("email") {
+                continue;
+            }
+            if let Some(value) = fields.get_mut(key) {
+                let upper = value.to_uppercase();
+                if upper != *value {
+                    *value = upper;
+                }
+            }
+        }
+    }
+}
+
 /// Read an official plaintext back into a field map, checking every byte of
 /// structure against `layout`: header, order, keys and the text after each
 /// `<div>`. Values are decoded per part (`escape()` or raw). A control written

@@ -6,7 +6,7 @@ use bir_core::forms::form_1706::{
 };
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_1706() -> Form1706Draft {
+pub(crate) fn sample_1706() -> Form1706Draft {
     let mut draft = Form1706Draft::new_from_profile(&dummy_profile("1706", "Individual"), 2025, 1);
     draft.transaction_month = 3;
     draft.transaction_day = 15;

@@ -39,11 +39,19 @@ pub const TRUST_KEYS: &[&str] = &[
 /// only in debug builds or with the `lab` feature, never in a release.
 pub const KEYS_ENV: &str = "BUWIZ_TRUST_KEYS";
 
-/// The pinned keys: [`TRUST_KEYS`], or [`KEYS_ENV`] in a debug or `lab`
-/// build when it is set.
+/// The pinned keys: [`TRUST_KEYS`], or [`KEYS_ENV`] from the process
+/// environment in a debug or `lab` build when it is set.
 pub fn pinned_keys() -> Vec<String> {
+    pinned_keys_from(std::env::var(KEYS_ENV).ok().as_deref())
+}
+
+/// [`pinned_keys`] with `raw` as the [`KEYS_ENV`] value the host read (its
+/// own configuration: on Android there is no launch environment). The same
+/// rule: `raw` replaces [`TRUST_KEYS`] only in a debug or `lab` build and
+/// only when it names a key; a release build always pins [`TRUST_KEYS`].
+pub fn pinned_keys_from(raw: Option<&str>) -> Vec<String> {
     if cfg!(any(debug_assertions, feature = "lab"))
-        && let Ok(raw) = std::env::var(KEYS_ENV)
+        && let Some(raw) = raw
         && !raw.trim().is_empty()
     {
         return raw
@@ -346,5 +354,18 @@ mod tests {
         };
         assert_eq!(pinned_keys(), expected);
         unsafe { std::env::remove_var(KEYS_ENV) };
+    }
+
+    #[test]
+    fn a_host_given_value_follows_the_same_rule_as_the_environment() {
+        let release: Vec<String> = TRUST_KEYS.iter().map(|key| key.to_string()).collect();
+        assert_eq!(pinned_keys_from(None), release);
+        assert_eq!(pinned_keys_from(Some("  ")), release);
+        let expected = if cfg!(any(debug_assertions, feature = "lab")) {
+            vec!["a".to_owned(), "b".to_owned()]
+        } else {
+            release
+        };
+        assert_eq!(pinned_keys_from(Some(" a , b ")), expected);
     }
 }

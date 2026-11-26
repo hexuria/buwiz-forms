@@ -11,7 +11,7 @@ fn remittance(date: &str, reference: &str, tax: f64, penalty: f64) -> Form1604fR
     }
 }
 
-fn sample_1604f() -> Form1604fDraft {
+pub(crate) fn sample_1604f() -> Form1604fDraft {
     let mut draft = Form1604fDraft::new_from_profile(&dummy_profile("1604F", "Corporation"), 2025);
     draft.agent_category = Form1604fAgentCategory::Private;
     draft.tax_relief = true;

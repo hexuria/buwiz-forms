@@ -54,7 +54,15 @@ function Assert-Native($message) {
     if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine($message); exit $LASTEXITCODE }
 }
 
+# A runtime must be a copy with the NSH commit it was built from (nsh-ref): a link into a checkout's build folder follows
+# whatever that checkout builds next, and nsh package takes the release runtime even for a development build.
+function Remove-RuntimeLink($path) {
+    $item = Get-Item $path -ErrorAction SilentlyContinue
+    if ($item -and $item.LinkType) { $item.Delete() }
+}
 function Test-AndroidRuntime($path, $pin) {
+    $item = Get-Item $path -ErrorAction SilentlyContinue
+    if (-not $item -or $item.LinkType) { return $false }
     if (-not (Test-Path "$path\classes.dex") -or -not (Test-Path "$path\lib\x86_64\libnsh.so") -or -not (Test-Path "$path\nsh-ref")) { return $false }
     $builtRef = Get-Content "$path\nsh-ref" -Raw
     $builtRef -and $builtRef.Trim() -eq $pin
@@ -250,6 +258,8 @@ foreach ($variant in $variants) {
         cargo xtask android $($variant[3])
         Assert-Native "Android $($variant[2]) runtime build failed"
     } finally { Pop-Location }
+    Remove-RuntimeLink $dest
+    Remove-RuntimeLink $runtime
     New-Item -ItemType Directory -Force $dest, $runtime | Out-Null
     foreach ($install in $dest, $runtime) {
         Remove-Item "$install\nsh-ref" -Force -ErrorAction SilentlyContinue

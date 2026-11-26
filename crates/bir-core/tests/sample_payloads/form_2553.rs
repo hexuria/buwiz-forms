@@ -3,7 +3,7 @@ use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_2553::{FORM_2553_ATC_OPTIONS, Form2553Draft, Form2553TaxTreaty};
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_2553() -> Form2553Draft {
+pub(crate) fn sample_2553() -> Form2553Draft {
     let mut draft = Form2553Draft::new_from_profile(&dummy_profile("2553", "Corporation"), 2025, 1);
     draft.tax_treaty = Form2553TaxTreaty::SpecialRate;
     draft.set_atc(0, &FORM_2553_ATC_OPTIONS[0]).unwrap();

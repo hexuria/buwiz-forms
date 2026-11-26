@@ -12,20 +12,16 @@ on:
       tag:
         description: Optional release tag (otherwise the app version plus -pr)
         type: string
-  pull_request:
-    paths:
-      - .github/workflows/release-linux.yml
-      - packaging/linux/**
-      - nsh/**
-      - assets/linux/**
-      - print-overrides/**
+  # No pull-request trigger: a pull request runs no builds (docs/CI.md). nsh.yml calls this workflow, with an empty
+  # tag and no secrets, in the nightly run of main and in a manual run whose suites include `build`. It only builds,
+  # smoke-tests and keeps the packages as workflow artifacts; release.yml is what publishes them.
 
 permissions:
   contents: read
 
 concurrency:
   group: release-linux-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always

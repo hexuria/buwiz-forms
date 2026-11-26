@@ -13,7 +13,7 @@ fn split(exclusive: f64, conjugal: f64) -> Form1801Split {
     }
 }
 
-fn sample_1801() -> Form1801Draft {
+pub(crate) fn sample_1801() -> Form1801Draft {
     let mut d = Form1801Draft::new_from_profile(&dummy_profile("1801", "Estate"), 2025, 1);
     d.death_month = 6;
     d.death_day = 5;
@@ -104,7 +104,7 @@ fn form_1801_sample_payload_is_current() {
 /// A return with tax due and rows added with "Add row": its layout is the
 /// generated one extended by `Form1801Draft::official_layout`, so the shared
 /// `check_sample` (fixed layout) is replaced by the same checks against it.
-fn sample_1801_with_tax_and_added_rows() -> Form1801Draft {
+pub(crate) fn sample_1801_with_tax_and_added_rows() -> Form1801Draft {
     let mut d = sample_1801();
     d.death_month = 9;
     d.death_day = 15;
@@ -166,7 +166,7 @@ fn form_1801_sample_with_tax_due_and_added_rows_is_current() {
 
 /// Every Part V table past the six rows the page used to show here, and
 /// Schedule 1 past the old 20-row cap: `addRow_*` has no limit.
-fn sample_1801_many_rows() -> Form1801Draft {
+pub(crate) fn sample_1801_many_rows() -> Form1801Draft {
     let mut d = sample_1801();
     d.death_month = 9;
     d.death_day = 16;

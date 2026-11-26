@@ -3,7 +3,7 @@ use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use bir_core::forms::form_1601fq::{Form1601FqCategory, Form1601FqDraft, Form1601FqTaxRelief};
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_1601fq() -> Form1601FqDraft {
+pub(crate) fn sample_1601fq() -> Form1601FqDraft {
     let mut draft =
         Form1601FqDraft::new_from_profile(&dummy_profile("1601FQ", "Corporation"), 2025, 2);
     // The sample enters its penalties by hand.

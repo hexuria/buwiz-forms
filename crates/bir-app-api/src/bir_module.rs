@@ -2382,15 +2382,25 @@ pub(crate) fn after_path_prompt(
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     let answer: crate::hooks::PathAnswer = Box::new(move |choice| {
         let result = match choice {
-            PathChoice::Picked(path) => work(path),
+            PathChoice::Picked(path) => {
+                let done = work(path);
+                if let Err(error) = &done {
+                    tracing::warn!("Working with the file picked failed: {error}");
+                }
+                done
+            }
             PathChoice::Cancelled => Ok(HostObject::new().field("kind", "cancelled").into()),
-            PathChoice::Failed(error) => Err(HostError::new(format!(
-                "The file dialog could not open: {error}"
-            ))),
+            PathChoice::Failed(error) => {
+                tracing::warn!("The file dialog could not open: {error}");
+                Err(HostError::new(format!(
+                    "The file dialog could not open: {error}"
+                )))
+            }
         };
         let _ = sender.send(result);
     });
     if !prompt(answer) {
+        tracing::warn!("The file dialog could not open: no app is running to open it");
         return Err(HostError::new("no app is running to open the file dialog"));
     }
     Ok(Box::pin(async move {
@@ -2912,14 +2922,16 @@ pub fn module() -> HostModule {
         .function("pull_device_filings", |_| pull_device_filings())
         .function("shell_set_chrome", shell_set_chrome);
     let module = crate::cloud_account::register(module);
+    let module = crate::cloud_email::register(module);
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
     let module = crate::legacy_import_module::register(module);
     // bir-shell appends its scroll exports (GPUI elements) after these.
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}{}{}",
         crate::cloud_account::DECLARATIONS,
+        crate::cloud_email::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
         crate::screen_form_module::DECLARATIONS,
         crate::dashboard_module::DECLARATIONS,

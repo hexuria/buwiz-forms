@@ -217,8 +217,13 @@ where
     let account_origin = trim_origin(account_origin);
     let mut http = BlockingHttp::new();
     let started_at = (hooks.now)();
-    let challenge =
-        cloud_account::start_device(&mut http, &api_origin, started_at).map_err(login_error)?;
+    let challenge = cloud_account::start_device(
+        &mut http,
+        &api_origin,
+        started_at,
+        &bir_core::install_id::install_id(),
+    )
+    .map_err(login_error)?;
     let page = cloud_account::account_browser_url(
         &account_origin,
         AccountBrowser::SignIn,

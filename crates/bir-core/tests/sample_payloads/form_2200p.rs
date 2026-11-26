@@ -3,7 +3,7 @@ use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_2200p::{Form2200PDraft, Form2200PPayment, Form2200PPlace};
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_2200p() -> Form2200PDraft {
+pub(crate) fn sample_2200p() -> Form2200PDraft {
     let mut draft =
         Form2200PDraft::new_from_profile(&dummy_profile("2200P", "Corporation"), 2025, 3);
     draft.day = 14;
@@ -75,7 +75,7 @@ fn form_2200p_sample_payload_is_current() {
 
 /// Rows past the page's 27: `addRowSched1` has no row limit once rows 26
 /// and 27 are complete, and each added row follows the previous one.
-fn sample_2200p_many_rows() -> Form2200PDraft {
+pub(crate) fn sample_2200p_many_rows() -> Form2200PDraft {
     let mut draft = sample_2200p();
     draft.day = 13;
     let row = draft.row_mut(26).unwrap();
