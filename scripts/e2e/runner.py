@@ -58,7 +58,12 @@ ANDROID_HOST = "com.longbridge.nsh.host"
 ANDROID_TEST_DB = "files/nsh/dev.goldcoders.bir/test-data/bir_data.db"
 
 SEND_WORDS = {"queue", "send", "submit", "file", "filing"}
-SECRET_WORDS = {"password", "passcode", "pin", "secret", "token", "otp", "totp"}
+SECRET_WORDS = {"password", "passcode", "pin", "secret", "token", "otp", "totp", "recovery"}
+# A secret word with a prefix in one word: newpin, confirmpin, oldpasscode, adminotp, newcode.
+SECRET_WORD = re.compile(r"(new|old|confirm|current|repeat|admin|setup)?(pins?|passcodes?|passwords?|otp|totp)"
+                         r"|(new|old|confirm|current|repeat|admin|setup)codes?")
+# Screens that talk to the account server: every action there is a sign-in step.
+SIGN_IN_PREFIXES = {"gate", "auth"}
 # A code box is a secret too (the email sign-in code, an authenticator's): "code" then one of these words.
 CODE_BOX_WORDS = {"box", "boxes", "cell", "cells"}
 # ... or one of these, then "code" (a node's name: "Authenticator code", "6-digit code", "Verification code").
@@ -214,28 +219,27 @@ def selectors(step, params=None):
     if "words" in step:
         found += step["words"]
 
-    def walk(value, key=None):
-        if key in VALUE_FIELDS:
-            return
+    def walk(value):
         if isinstance(value, str):
             found.append(value)
         elif isinstance(value, dict):
-            for inner, item in value.items():
-                walk(item, inner)
+            for item in value.values():
+                walk(item)
         elif isinstance(value, list):
             for item in value:
                 walk(item)
 
+    # Only a step's own text and expected values are skipped: a nested {"target": {"id": ...}} is read.
     for key, value in step.items():
-        if key != "words":
-            walk(value, key)
+        if key != "words" and key not in VALUE_FIELDS:
+            walk(value)
     return [bind(item, params) for item in found]
 
 
 def is_secret_text(text):
     """An id, name or role that says password, PIN, passcode, secret, token, OTP or TOTP, or a code box."""
     listed = word_list(text)
-    if set(listed) & SECRET_WORDS:
+    if set(listed) & SECRET_WORDS or any(SECRET_WORD.fullmatch(word) for word in listed):
         return True
     pairs = list(zip(listed, listed[1:]))
     return any(word == "code" and following in CODE_BOX_WORDS for word, following in pairs) or any(
@@ -260,16 +264,20 @@ def is_secret_entry(step, params=None, names=None):
     if op not in TYPING_OPS:
         return False
     names = names or {}
-    return any(is_secret_text(item) or is_secret_text(names.get(item, "")) for item in found)
+    return any(is_secret_text(item) or any(is_secret_text(described) for resolved, described in names.items()
+                                           if resolved and resolved in item)
+               for item in found)
 
 
 def is_sign_in_step(step, params=None):
-    """A press that asks the account server for something: Continue or Resend on a sign-in screen."""
-    if step.get("op") not in PRESS_OPS:
+    """An action on a sign-in screen (a press, key or typing on gate-* or auth-*: Enter in the email box sends the
+    code), or Continue / Verify / Resend on one."""
+    op = step.get("op")
+    if op not in PRESS_OPS | TYPING_OPS:
         return False
     for item in selectors(step, params):
         listed = word_list(item)
-        if "resend" in listed:
+        if "resend" in listed or (listed and listed[0] in SIGN_IN_PREFIXES):
             return True
         joined = set(listed) | ({"signin"} if any(a == "sign" and b == "in" for a, b in zip(listed, listed[1:]))
                                 else set())
@@ -1002,7 +1010,7 @@ def close_device(target, addr, env, log):
     t0 = time.monotonic()
     commands = []
     if target == "ios":
-        commands.append(["xcrun", "simctl", "terminate", "booted", ANDROID_HOST])
+        commands.append(["xcrun", "simctl", "terminate", booted_simulator() or "booted", ANDROID_HOST])
     elif target == "android":
         adb = android_adb(env)
         if adb:
@@ -1018,16 +1026,31 @@ def close_device(target, addr, env, log):
         log.line("close", target, "the app stopped on the device", (time.monotonic() - t0) * 1000)
 
 
+def booted_simulator():
+    """The UDID of the one booted Simulator, or None (none, several, or no simctl)."""
+    try:
+        listed = json.loads(subprocess.run(["xcrun", "simctl", "list", "devices", "booted", "-j"],
+                                           capture_output=True, text=True, timeout=30).stdout or "{}")
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    booted = [device.get("udid") for devices in (listed.get("devices") or {}).values() for device in devices
+              if device.get("state") == "Booted"]
+    return booted[0] if len(booted) == 1 else None
+
+
 def remove_scratch(db, log):
     """The run's scratch database and its SQLite side files; the evidence stays."""
+    removed = True
     for path in (db, Path(f"{db}-wal"), Path(f"{db}-shm"), Path(f"{db}-journal")):
         try:
             path.unlink()
         except FileNotFoundError:
             pass
         except OSError as error:
+            removed = False
             log.line("clean", path, f"not removed: {error}", 0)
-    log.line("clean", db, "scratch database removed", 0)
+    if removed:
+        log.line("clean", db, "scratch database removed", 0)
 
 
 def fresh_android(env, log):

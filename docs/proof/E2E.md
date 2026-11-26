@@ -19,7 +19,7 @@ The run does not depend on `.env`: the runner launches the app in the dry-run te
 the live SFTP and relay variables (`BIR_SFTP_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`, `_LIVE`,
 `_ACCEPT_ANY_HOST_KEY`, `BIR_RELAY_URL`, `BUWIZ_RELAY_SEND`) that `just` reads from `.env`; `nsh-run-agent` removes
 them again after its own read of `.env`. An account server that is not on this machine (`BUWIZ_SERVER_URL`,
-`BUWIZ_ACCOUNT_URL`) is removed too, so a debug build talks to the local mock.
+`BUWIZ_ACCOUNT_URL`) is removed too, by both, so a debug build talks to the local mock.
 
 ## The rule
 
@@ -81,11 +81,14 @@ The checks read every word of a step (flag values included) and every string of 
 - **`--no-launch`** drives an app that is already running only when it answers `app.info` with `"database":
   "test"`; otherwise nothing runs.
 - **Secret boxes.** No step types, sets, pastes or keys into a box that says password, PIN, passcode, secret,
-  token, OTP, TOTP or authenticator, or a code box (`…-code-boxes`, `…-code-cells`, a node named "6-digit code" or
-  "Verification code"), and no step presses the software keyboard's keys (`system-keyboard…`). The store review
+  token, recovery, OTP or TOTP, also inside a word (`newpin`, `confirmPin`, `adminotp`, `newcode`), or a code box
+  (`…-code-boxes`, `…-code-cells`, a node named "6-digit code", "Authenticator code" or "Verification code"), and no
+  step presses the software keyboard's keys (`system-keyboard…`). Nested selectors (`{"target": {"id": …}}`) are
+  read, and a resolved id is checked by its node's name and role wherever it appears in a selector. The store review
   account's fixed code never goes in a file.
-- **Sign-in.** Continue, Verify or Resend on a sign-in screen (`gate-continue`, `gate-resend`, …) only in a recipe
-  marked `"sign_in": true`, in an app this run launched, against an account server on this machine.
+- **Sign-in.** Every press, key or typing on a sign-in screen (`gate-*`, `auth-*`: Enter in the email box sends the
+  code), and Continue, Verify or Resend there, only in a recipe marked `"sign_in": true`, in an app this run launched,
+  against an account server on this machine. `assert` and `wait_until` there are fine.
 - **The token** stays in the environment of the processes that need it, and is masked in `run.log`, the receipts,
   the failure trees and `app.log`.
 - **Afterwards** the app is stopped, on the Simulator or emulator too (and the emulator's forwarded ports removed),

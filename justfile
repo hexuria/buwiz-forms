@@ -1288,6 +1288,13 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     # .env (dotenv-load) may hold the live SFTP account and relay: none of it reaches an agent run, dry run or not.
     unset BIR_SFTP_LIVE BIR_SFTP_HOST BIR_SFTP_PORT BIR_SFTP_USERNAME BIR_SFTP_PASSWORD BIR_SFTP_ACCEPT_ANY_HOST_KEY \
         BIR_RELAY_URL BUWIZ_RELAY_SEND
+    # An account server that is not on this machine neither: a debug build then talks to the local mock.
+    for name in BUWIZ_SERVER_URL BUWIZ_ACCOUNT_URL; do
+        case "${!name:-}" in
+            ""|http://localhost|http://localhost[:/]*|http://127.0.0.1|http://127.0.0.1[:/]*|http://\[::1\]*) ;;
+            *) unset "$name" ;;
+        esac
+    done
     # The guard read a relative path from here, and the app starts in nsh/: hand it the same file, as an absolute path.
     db={{quote(db)}}
     if [ -n "$db" ]; then
@@ -1378,6 +1385,11 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     # .env (dotenv-load) may hold the live SFTP account and relay: none of it reaches an agent run, dry run or not.
     foreach ($name in 'BIR_SFTP_LIVE', 'BIR_SFTP_HOST', 'BIR_SFTP_PORT', 'BIR_SFTP_USERNAME', 'BIR_SFTP_PASSWORD', 'BIR_SFTP_ACCEPT_ANY_HOST_KEY', 'BIR_RELAY_URL', 'BUWIZ_RELAY_SEND') {
         Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+    }
+    # An account server that is not on this machine neither: a debug build then talks to the local mock.
+    foreach ($name in 'BUWIZ_SERVER_URL', 'BUWIZ_ACCOUNT_URL') {
+        $value = [Environment]::GetEnvironmentVariable($name)
+        if ($value -and $value -notmatch '^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(/|$)') { Remove-Item "Env:$name" -ErrorAction SilentlyContinue }
     }
     $env:GPUI_AGENT = '1'
     if (-not $env:GPUI_AGENT_ADDR) { $env:GPUI_AGENT_ADDR = '127.0.0.1:17421' }

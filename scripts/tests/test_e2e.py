@@ -147,11 +147,22 @@ class SafetyTests(unittest.TestCase):
         self.assertTrue(E2E.is_send_step({"op": "click", "target": "fpQueue"}))
         self.assertTrue(E2E.is_send_step({"op": "click", "target": "x", "words": ["x", "--id", "form-submit"]}))
 
+    def test_secret_words_inside_a_word_nested_targets_and_recovery_keys(self):
+        for step in ({"op": "type", "target": "setup-change-newpin-cells"},
+                     {"op": "type", "target": "settings-confirmPin"}, {"op": "type", "target": "auth-recovery"},
+                     {"op": "type", "target": {"id": "auth-tp-pin"}}, {"op": "type", "target": "adminotp-box"}):
+            self.assertTrue(E2E.is_secret_entry(step), step)
+        for target in ("new-tp-zip_code-search", "tp-sec-branch-edit", "fp-frm1601FQ:txtAtcCode1", "spinner-box"):
+            self.assertFalse(E2E.is_secret_entry({"op": "type", "target": target}), target)
+
     def test_a_resolved_id_is_checked_by_what_its_node_says(self):
         step = {"op": "type", "target": "$box"}
         params = {"box": "n42"}
         self.assertFalse(E2E.is_secret_entry(step, params))
         self.assertTrue(E2E.is_secret_entry(step, params, {"n42": "n42 Enter your PIN textbox"}))
+        # A selector that holds the resolved id among other words.
+        self.assertTrue(E2E.is_secret_entry({"op": "type", "target": "view:$box"}, params,
+                                            {"n42": "n42 Enter your PIN textbox"}))
         with tempfile.TemporaryDirectory() as folder:
             path = write(folder, "r.wants", "type $box 1234\n")
             problems = E2E.step_problems(E2E.recipe_steps(path), params, "r.wants", {},
@@ -163,8 +174,15 @@ class SafetyTests(unittest.TestCase):
     def test_sign_in_presses_need_a_marked_recipe_and_the_local_mock(self):
         for target in ("gate-continue", "gate-resend", "signInContinue", "sign-in-continue", "auth-verify"):
             self.assertTrue(E2E.is_sign_in_step({"op": "click", "target": target}), target)
-        for target in ("queue-continue", "removal-continue", "gate-change-email"):
+        for target in ("queue-continue", "removal-continue", "account-row"):
             self.assertFalse(E2E.is_sign_in_step({"op": "click", "target": target}), target)
+        # Every action on a sign-in screen: Enter in the email box sends the code.
+        for step in ({"op": "key", "target": "gate-email", "words": ["gate-email", "Enter"]},
+                     {"op": "type", "target": "gate-email", "text": "a@example.com"},
+                     {"op": "click", "target": "gate-change-email"}):
+            self.assertTrue(E2E.is_sign_in_step(step), step)
+        for step in ({"op": "wait_until", "target": "gate-email"}, {"op": "assert", "target": "gate-code-boxes"}):
+            self.assertFalse(E2E.is_sign_in_step(step), step)
         entry = {"name": "s", "file": "s.wants", "sign_in": True}
         base = {"target": "macos", "form_factor": "desktop", "features": [], "cli_version": "0.4.1",
                 "allow_send": False}
