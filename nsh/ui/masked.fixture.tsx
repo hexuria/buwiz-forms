@@ -30,6 +30,8 @@ function App() {
   const invalidCount = signal(0);
   const cb = signal("2000");
   const cbBlurs = signal(0);
+  const comma = signal("none");
+  const commaCount = signal(0);
   const showCb = signal(true);
   let twoRef: InputRef | undefined;
   const armHeld = signal(false);
@@ -61,6 +63,8 @@ function App() {
         <Text variant="cap">{`Invalid count: ${invalidCount()}`}</Text>
         <Text variant="cap">{`Cb: ${cb() || "empty"}`}</Text>
         <Text variant="cap">{`Cb blurs: ${cbBlurs()}`}</Text>
+        <Text variant="cap">{`Comma: ${comma()}`}</Text>
+        <Text variant="cap">{`Comma count: ${commaCount()}`}</Text>
         <Text variant="cap">{`Cb shown: ${showCb()}`}</Text>
       </View>
       <View class="flex-row flex-wrap gap-2">
@@ -127,6 +131,10 @@ function App() {
           onLeftUnreadable={(typed, kept) => {
             invalidCount.update((n) => n + 1);
             invalid.set(`${typed}|${kept}`);
+          }}
+          onCommaRead={(typed, shown) => {
+            commaCount.update((n) => n + 1);
+            comma.set(`${typed}|${shown}`);
           }}
           testID="m-cb"
         />

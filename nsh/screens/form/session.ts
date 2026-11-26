@@ -385,7 +385,8 @@ interface St {
   rejected: Record<string, string>;
   /**
    * Notes under amount boxes: the box shows what the return holds, and this says what the filer typed instead: "<kind>|<held>|<typed>"
-   * with kind "amount typed" (the host stored another number), "amount unreadable" (the box's text was not an amount) or "amount
+   * with kind "amount typed" (the host stored another number), "amount unreadable" (the box's text was not an amount), "amount comma"
+   * (one comma was read as the decimal point; Queue does not stop on it) or "amount
    * refused" (the host refused the amount; its reason follows, "|<reason>"). `held` is what the box shows. A note holds no save; it
    * goes when its box is edited, its box is shut, or the amount under it moves (its row moved or was removed); focus keeps it.
    */
@@ -866,6 +867,20 @@ export class FormSession {
     this.publish();
   }
 
+  /**
+   * Amount box k was left with one comma read as its decimal point ("1500,50" shown as 1,500.50): a note under it says so. It stops
+   * nothing (Queue does not stop on it); like every note it goes when the box is edited, shut, or its amount moves.
+   */
+  commaRead(k: string, typed: string, shown: string) {
+    const s = this.st;
+    if (!s.draft || !s.editable || this.isShut(k)) return;
+    s.amountNotes[k] = `amount comma|${shown}|${typed}`;
+    const id = this.keyIndex.get(k);
+    if (id) s.touched.add(id);
+    this.setErrors(s.errors);
+    this.publish();
+  }
+
   /** The schedule opened the drawer of the row that holds k, as Queue asked: its note has been shown. */
   drawerOpened(k: string) {
     const s = this.st;
@@ -873,12 +888,15 @@ export class FormSession {
     if (s.amountNotes[k] !== undefined) s.notesShown[k] = s.amountNotes[k];
   }
 
-  /** The notes Queue stops on: every note it has not brought into view yet, in page order (a folded part's too: Queue opens it). */
+  /**
+   * The notes Queue stops on: every note it has not brought into view yet, in page order (a folded part's too: Queue opens it). A comma
+   * read as the decimal point is no such note: the return holds what the box shows, read as the filer meant it.
+   */
   private queueNotes(): string[] {
     const s = this.st;
     const at = (k: string) => this.rowIds.indexOf(this.keyIndex.get(k) ?? "");
     return Object.keys(s.amountNotes)
-      .filter((k) => s.notesShown[k] !== s.amountNotes[k] && at(k) >= 0)
+      .filter((k) => !s.amountNotes[k].startsWith("amount comma|") && s.notesShown[k] !== s.amountNotes[k] && at(k) >= 0)
       .sort((a, b) => at(a) - at(b));
   }
 
@@ -3262,7 +3280,14 @@ export class FormSession {
     const it = this.items.get(id);
     if (!it) return 0;
     const keys = it.rows ? (it.keys || []).flat() : keysOf(it);
-    return keys.filter((k) => this.st.boxMessages[k]).length;
+    return keys.filter((k) => this.st.boxMessages[k] && !this.commaOnly(k)).length;
+  }
+
+  /** Whether box k's only sentence is a comma-read note: it is said under the box but is nothing to fix (no count, no Check or Queue stop). */
+  private commaOnly(k: string): boolean {
+    const s = this.st;
+    const note = s.amountNotes[k];
+    return note !== undefined && note.startsWith("amount comma|") && s.boxMessages[k] === this.refusalText(k, note);
   }
 
   /** How many messages each row with a shown message carries (a date's own sentence counts once). */

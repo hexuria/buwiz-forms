@@ -173,6 +173,8 @@ export type MaskedFieldProps = Omit<TextFieldProps, "value" | "onChange" | "keyb
   writeProbe?: (write: "text" | "caret", start?: number, end?: number) => void;
   /** Money text was left unreadable: what was typed, and the amount text the box kept ("" when it was left blank). */
   onLeftUnreadable?: (typed: string, kept: string) => void;
+  /** Money text was left with one comma the filer typed, read as its decimal point ("1500,50" as 1,500.50): what was typed, and what the box shows. */
+  onCommaRead?: (typed: string, shown: string) => void;
 };
 
 interface MaskedProps {
@@ -411,6 +413,10 @@ function MaskedField(props: MaskedProps) {
           if (!sameReported(value, last)) {
             report(value);
           }
+          // A lone comma of the filer's read as the decimal point only now (strictly it is no amount), and the box shows that
+          // reading (no outside value won): the caller may say so under the box.
+          const commaRead = props.commaStates && commaState === "filer" && reading.includes(",") && readAmountWithCommas(reading, commaState, props.commaNegative, false) === null;
+          if (commaRead && (filerEdited || outsideValue === undefined)) props.field.onCommaRead?.(held, semanticShown);
         }
         outsideValue = undefined;
         focused.set(false);

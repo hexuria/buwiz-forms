@@ -40,6 +40,7 @@ export function fieldProps(s: FormSession, f: SchemaField, narrow: Accessor<bool
     focusRef: (focus) => s.registerFocus(f.k, focus),
     blurRef: (blur) => s.registerBlur(f.k, blur),
     onLeftUnreadable: (typed, kept) => s.leftUnreadable(f.k, typed, kept),
+    onCommaRead: (typed, shown) => s.commaRead(f.k, typed, shown),
   };
 }
 

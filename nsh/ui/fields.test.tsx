@@ -487,6 +487,32 @@ for (const size of SIZES) {
     expect(readout(app, "Invalid count:")).toBe("Invalid count: 1");
   });
 
+  test(`${size.name}: [comma] a lone comma read as the decimal point on leaving is said through onCommaRead, once; a thousands comma is not`, async () => {
+    const app = await open("./masked.fixture.tsx", size.options);
+    await app.clear("id:m-cb");
+    await app.type("id:m-cb", "1500,50");
+    await app.type("id:m-other", " ");
+    expect(app.value("id:m-cb")).toBe("1,500.50");
+    expect(readout(app, "Cb:")).toBe("Cb: 1500.50");
+    expect(readout(app, "Comma:")).toBe("Comma: 1500,50|1,500.50");
+    expect(readout(app, "Comma count:")).toBe("Comma count: 1");
+    // Back in and out with no edit: the box's own grouping is no comma of the filer's.
+    await app.type("id:m-cb", "");
+    await app.type("id:m-other", " ");
+    expect(readout(app, "Comma count:")).toBe("Comma count: 1");
+    // "1,5" is 1.50; "2,500" is two thousand five hundred, read strictly: no call.
+    await app.clear("id:m-cb");
+    await app.type("id:m-cb", "1,5");
+    await app.type("id:m-other", " ");
+    expect(readout(app, "Comma:")).toBe("Comma: 1,5|1.50");
+    expect(readout(app, "Comma count:")).toBe("Comma count: 2");
+    await app.clear("id:m-cb");
+    await app.type("id:m-cb", "2,500");
+    await app.type("id:m-other", " ");
+    expect(app.value("id:m-cb")).toBe("2,500.00");
+    expect(readout(app, "Comma count:")).toBe("Comma count: 2");
+  });
+
   test(`${size.name}: a held outside value is the fallback for unreadable text`, async () => {
     const app = await open("./masked.fixture.tsx", { ...size.options, clock: {} });
     await app.press("id:m-arm-held");

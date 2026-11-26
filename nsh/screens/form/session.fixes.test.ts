@@ -769,6 +769,42 @@ test("[Z1] unreadable note on a blank schedule cell: it says the box was left bl
   s.dispose();
 });
 
+test("[comma] a comma read as the decimal point is said under its box and stops nothing: not Queue, not a count; an edit ends it", async () => {
+  const key = "frm2551Qv2018:txt15";
+  const sentence = "Item 15: 1500,50 was read as 1,500.50.";
+  const checks = countQueueChecks();
+  const h = hooks();
+  let s: FormSession | undefined;
+  try {
+    s = await opened(at("2551Q", 2023, 1), h);
+    s.jumpTo(2);
+    // The box left "1500,50": it reported 1500.50 (the to-do list as that amount leaves it), then said how it read it.
+    s.focus(key);
+    s.edit(key, "1500.50");
+    s.blur(key);
+    await s.idle();
+    const todo = s.todo().map((r) => r.id);
+    s.commaRead(key, "1500,50", "1,500.50");
+    await s.idle();
+    expect(s.valueOf(key)).toBe("1,500.50");
+    expect(s.boxMessageOf(key)).toBe(sentence);
+    // Nothing to fix: the to-do list (and the counts it shares) is as it was.
+    expect(s.todo().map((r) => r.id)).toEqual(todo);
+    // Queue goes straight on to the host's check: it does not stop on this note, nor toast it.
+    s.queue();
+    await s.idle();
+    expect(checks.count).toBeGreaterThan(0);
+    expect(h.said.toasts.map((t) => t.message)).not.toContain(sentence);
+    expect(s.boxMessageOf(key)).toBe(sentence);
+    // An edit of the box ends it.
+    s.edit(key, "1500");
+    expect(s.boxMessageOf(key) ?? "").toBe("");
+  } finally {
+    checks.restore();
+    s?.dispose();
+  }
+});
+
 test("money note: leaving with a note and other valid edits saves them all; a second session reads them from the database", async () => {
   const key = "frm2551Qv2018:txt15";
   const restore = hostFault(key, "100", "99.00");

@@ -165,18 +165,26 @@ for (const typed of ["1500x", "15,00,50"]) {
   }, 30_000);
 }
 
-test("decimal comma 1500,50: after leaving, the box shows the point amount, no sentence, and Save works", async () => {
+test("[comma] decimal comma 1500,50: after leaving, the box shows the point amount and one note says how the comma was read; Save and Queue go on", async () => {
   const app = await page(2024, 2);
   await app.type(BOX, "");
   await app.waitUntil(() => app.value(BOX) === "", { timeout: 3000 });
   await app.type(BOX, "1500,50");
   await app.submit(BOX);
   await app.waitUntil(() => app.value(BOX) === "1,500.50", { timeout: 5000 });
-  expect(probe(app)).toBe("1,500.50");
+  // The fixture republishes the draft's amount every 100 ms.
+  await app.waitUntil(() => probe(app) === "1,500.50", { timeout: 3000 });
   expect(app.texts().some((t) => t.includes("is not an amount"))).toBe(false);
+  const said = "Item 15: 1500,50 was read as 1,500.50.";
+  await app.waitUntil(() => app.texts().includes(said), { timeout: 3000 });
+  expect(app.texts().filter((t) => t === said).length).toBe(1);
   await app.press("id:fp-save").catch(() => {});
   await app.waitFor("text:✓ Saved", { timeout: 8000 });
-}, 30_000);
+  // The note stops nothing: the first Queue goes on to the host's checks, with no toast of it.
+  await app.press("id:fp-queue");
+  await app.waitUntil(() => checked(app), { timeout: 5000 });
+  expect(app.texts().filter((t) => t === said).length).toBe(1);
+}, 40_000);
 
 // 2551Q Schedule 1, row 1's Taxable Amount: a cell edited in its row's drawer.
 const CELL = "id:fp-txtATCAmt1";

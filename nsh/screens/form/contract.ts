@@ -188,6 +188,8 @@ export interface FieldControlProps {
   blurRef?(blur: (() => void) | null): void;
   /** An amount box was left with text that is not an amount (`typed`) and shows `kept`, the return's amount, again. The session says so under it. */
   onLeftUnreadable?(typed: string, kept: string): void;
+  /** An amount box was left with one comma read as its decimal point (`typed` "1500,50", `shown` "1,500.50"). The session says so under it. */
+  onCommaRead?(typed: string, shown: string): void;
 }
 
 /** One answer of a radio group. */
