@@ -60,7 +60,12 @@ icons svg="":
 # Local only, not a CI job: another machine's librsvg can draw edges differently. `just icons` fixes a failure.
 # Exit 1 when a committed icon is not what assets/brand/buwiz-forms.svg gives
 icons-check:
-    uv run -q --no-project --with 'pillow>=11.1' python assets/brand/make_icons.py --check
+    uv run -q --no-project --with 'pillow>=11.1' --with numpy python assets/brand/make_icons.py --check
+
+# Then `just icons`. Needs uv (it fetches Pillow and NumPy) and rsvg-convert. assets/brand/parts/README.md says what each part is.
+# Rebuild assets/brand/buwiz-forms.svg from the logo's eight parts in assets/brand/parts/
+logo *args:
+    uv run -q --no-project --with 'pillow>=11.1' --with numpy python assets/brand/parts/merge.py assets/brand/buwiz-forms.svg {{args}}
 
 # Show available commands
 help:
