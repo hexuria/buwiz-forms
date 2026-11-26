@@ -3,9 +3,21 @@
 `buwiz-forms.svg` is the one source for every app icon. The logo is always the whole logo with its words, never the
 eagle alone.
 
-To change the icon, put the new SVG in and rebuild:
+## A new logo: the whole procedure
 
-    just icons path/to/new-logo.svg   # copies it to assets/brand/buwiz-forms.svg, then rebuilds everything
+1. `just icons /path/to/new-logo.svg`. It copies the SVG to `assets/brand/buwiz-forms.svg`, writes every icon below
+   again, and lists each file it wrote.
+2. Look at a few: `assets/ios/icon-1024.png`, `assets/macos/icon-1024.png`, `assets/android/icon.png`,
+   `assets/icon-app.targetsize-16.png`. `just icons-check` should then say every icon matches.
+3. Commit the SVG and every file the command changed, and open a pull request of them. Nothing else changes: no code, no
+   `nsh/nsh.json`, no manifest.
+
+The next build of each app carries the new icon. The App Store shows the icon from the build. So does the Microsoft
+Store, unless Partner Center has store logos uploaded of its own: replace those too. Google Play's store listing icon is
+uploaded by hand in Play Console: `assets/android/play-icon-512.png`.
+
+The other commands:
+
     just icons                        # rebuilds everything from the SVG already here
     just icons-check                  # exit 1 when a committed icon is not what the SVG gives
 
