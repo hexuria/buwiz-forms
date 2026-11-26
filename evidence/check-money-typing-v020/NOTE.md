@@ -1,0 +1,2 @@
+﻿Released v0.2.0 Windows installer (sha256 44d58aff0c847d51e6178e9c958d8bea57903a22ed6f626deffee4438c4cba71) opens only Buwiz Sign in / Create account; release builds compile out the test-environment auth bypass.
+No real account was used and no filing control was touched, so the money-typing check of the installer's binary could not proceed.
