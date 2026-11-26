@@ -1,5 +1,5 @@
 // Delete row on the real form page (FormPageAny.tsx, the demo taxpayer, a scratch database) while an amount cell of the row still
-// has the keys: Schedule.tsx's remove() clears the row and closes the drawer at once, so the cell goes away as its row is cleared.
+// has the keys: Schedule.tsx's remove() deletes the row and closes the drawer at once, so the cell goes away with its row.
 // The typed amount goes with its row; it never lands on the row that moves up into its keys, and a deleted last row stays deleted.
 import { expect, open, test } from "nsh/test";
 import { warmForms } from "../../bir/testing";
@@ -61,7 +61,7 @@ test("Delete row of the last row with its amount cell still focused: the row doe
   expect(app.shows(`id:${TABLE.replace("fp-table-", "fp-row-")}-1`)).toBe(false);
 }, 40_000);
 
-// 2551Q Schedule 1 keeps its slots (no row moves up), and every slot is in the filing: a cleared slot must hold no amount.
+// 2551Q Schedule 1 does not compact in the host's blank-write path; Delete row still removes the row and moves the rows below up intact.
 const ATC_TABLE = "fp-table-drpATC1";
 
 /** The page on 2551Q (year, quarter) with Schedule 1's three rows filled and its part open, `probeKey` published as `probe <value>`. */
@@ -74,7 +74,7 @@ async function schedule1(year: number, period: number, probeKey: string) {
 }
 
 for (const [period, r] of [[1, 1], [2, 2]] as const) {
-  test(`2551Q Schedule 1: Delete row ${r + 1} with its amount cell still holding typed keys leaves no amount in the cleared slot`, async () => {
+  test(`2551Q Schedule 1: Delete row ${r + 1} with its amount cell still holding typed keys moves the row below up intact`, async () => {
     const amt = `txtATCAmt${r + 1}`;
     const app = await schedule1(2023, period, amt);
     await app.waitUntil(() => probe(app) === `${r + 1},000.00`, { timeout: 8000 });
@@ -85,7 +85,9 @@ for (const [period, r] of [[1, 1], [2, 2]] as const) {
     await app.press(`id:${ATC_TABLE}-delete`);
     await app.waitUntil(() => !app.shows(`id:${ATC_TABLE}-drawer`), { timeout: 3000 });
     await app.wait(1200);
-    expect(["", "0.00"]).toContain(probe(app));
+    // Row 3 moves into row 2's slot with its own amount; deleting the last row leaves no slot.
+    if (r === 1) expect(probe(app)).toBe("3,000.00");
+    else expect(["", "0.00"]).toContain(probe(app));
     expect(app.texts().some((t) => t.includes("Finish the amount"))).toBe(false);
   }, 40_000);
 }

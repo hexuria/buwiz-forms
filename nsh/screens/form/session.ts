@@ -1962,6 +1962,55 @@ export class FormSession {
     }
   }
 
+  /** Delete one schedule row at once (no confirmation); Undo restores the draft exactly. */
+  deleteRow(rowKeys: string[]) {
+    const s = this.st;
+    if (!s.editable || !s.draft || !rowKeys.length) return;
+    // A focused amount is stored on the row it was typed for before the rows move. Typing still
+    // pending is committed first for the same reason; a refusal or side-effect removal question
+    // stops the explicit delete rather than letting it write over a shifted row.
+    if (!this.reopening && this.settleFocused(() => this.deleteRow(rowKeys))) return;
+    if (Object.keys(s.pending).length && !this.reopening) {
+      this.flush();
+      if (s.removal || Object.keys(s.pending).length) return;
+    }
+    const draft = s.draft;
+    this.retireRemovalUndo();
+    let removedRow = true;
+    try {
+      const r = bir.screen_form_remove_row(s.target.formCode, draft, rowKeys);
+      removedRow = r.row_removed !== false;
+      const before = { ...s.values };
+      // A tentative row is only refused input. Treating the blanks as this batch's edits clears
+      // its refusal and forces its boxes back to blank; a real removal has no blank-cell edits.
+      this.applyFill(r, {});
+      for (const k of this.allKeys) if (before[k] !== s.values[k]) this.sValue.get(k).set(this.shownText(k));
+      if (!removedRow) {
+        // The drawer held only refused input. Discard it through the page's ordinary clear
+        // batch (no stored row exists, so nothing can shift underneath it) and offer no Undo.
+        this.choose(Object.fromEntries(rowKeys.map((k) => [k, ""])));
+        return;
+      }
+    } catch (e) {
+      return void this.toast(errorText(e), "triangle-alert");
+    }
+    s.dirty = true;
+    this.markUnsaved();
+    this.validate();
+    const state = s;
+    const undo = () => this.undoRemoval(draft, state, undo);
+    this.removalUndo = undo;
+    this.undoToast = this.toast("Row deleted.", "trash", { label: "Undo", onPress: undo });
+    // Any save retires Undo (it would restore a draft older than the stored one), so autosave waits it out.
+    this.scheduleAutosave();
+    const token = this.token;
+    this.later(UNDO_WINDOW, () => {
+      if (token !== this.token || this.removalUndo !== undo) return;
+      this.retireRemovalUndo();
+      this.scheduleAutosave();
+    });
+  }
+
   /** An answer that removes typed rows asks first: the old answer shows until Continue. */
   private holdRemoval(r: ScreenFormFilled, edits: Record<string, string>) {
     const s = this.st;

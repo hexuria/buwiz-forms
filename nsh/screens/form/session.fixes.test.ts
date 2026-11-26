@@ -57,7 +57,7 @@ test("F3-1: deleting the first row of a compacting schedule (2550Q Schedule 3) s
   s.edit("txtIncomePayment31", "2000");
   await s.idle();
   expect(s.valueOf("txtNameWithHoldingAgent31")).toBe("Agent Two");
-  // The drawer's Delete row (rows.tsx onClearRow): "" for every open cell of the row.
+  // The drawer's Delete row (rows.tsx onDeleteRow): "" for every open cell of the row.
   s.choose(Object.fromEntries(row(0).filter((k) => !s.box(k).locked()).map((k) => [k, ""])));
   await s.idle();
   expect(s.valueOf("txtNameWithHoldingAgent30")).toBe("Agent Two");
@@ -66,6 +66,34 @@ test("F3-1: deleting the first row of a compacting schedule (2550Q Schedule 3) s
   expect(s.shownOf("txtDateCovered30")).not.toBe("");
   expect(s.valueOf("txtNameWithHoldingAgent31")).toBe("");
   expect(s.shownOf("txtNameWithHoldingAgent31")).toBe("");
+  s.dispose();
+});
+
+test("Delete row on 1601EQ asks nothing, removes the row, and Undo brings it back with its base", async () => {
+  const K = (n: string) => "frm1601EQ:" + n;
+  const rowKeys = (n: number) => [K("txtAtcCd" + n), K("txtTaxBase" + n), K("txtTaxRate" + n), K("txtTaxbeWithHeld" + n)];
+  const h = hooks();
+  const s = await opened(at("1601EQ", 2023, 3), h);
+  s.choose({ [K("optWithheld:Y")]: "true", [K("optCategory:P")]: "true" });
+  s.choose({ [K("txtAtcCd1")]: "WI010" });
+  s.edit(K("txtTaxBase1"), "100");
+  s.flush();
+  s.choose({ [K("txtAtcCd2")]: "WI011" });
+  s.edit(K("txtTaxBase2"), "200");
+  s.flush();
+  await s.idle();
+  s.deleteRow(rowKeys(1));
+  await s.idle();
+  expect(s.overlay()).toBe(null);
+  expect(h.said.toasts.map((t) => t.message)).toContain("Row deleted.");
+  expect([s.valueOf(K("txtAtcCd1")), s.valueOf(K("txtTaxBase1"))]).toEqual(["WI011", "200.00"]);
+  expect([s.valueOf(K("txtAtcCd2")), s.valueOf(K("txtTaxBase2"))]).toEqual(["", ""]);
+  const undo = h.said.toasts.find((t) => t.action?.label === "Undo");
+  expect(undo).toBeTruthy();
+  undo!.action!.onPress();
+  await s.idle();
+  expect([s.valueOf(K("txtAtcCd1")), s.valueOf(K("txtTaxBase1"))]).toEqual(["WI010", "100.00"]);
+  expect([s.valueOf(K("txtAtcCd2")), s.valueOf(K("txtTaxBase2"))]).toEqual(["WI011", "200.00"]);
   s.dispose();
 });
 
@@ -430,8 +458,9 @@ test("money note: an amount the host stored as another number shows as stored, w
 
 function hostFault(key: string, typed: string, stored: string): () => void {
   const fill = bir.screen_form_fill;
+  const removeRow = bir.screen_form_remove_row;
   const validate = bir.screen_form_validate;
-  const door = bir as { screen_form_fill: typeof fill; screen_form_validate: typeof validate };
+  const door = bir as { screen_form_fill: typeof fill; screen_form_remove_row: typeof removeRow; screen_form_validate: typeof validate };
   const fault = (values: Record<string, unknown> | undefined) => {
     const v = String(values?.[key] ?? "").replace(/,/g, "");
     if (values && v !== "" && Number(v) === Number(typed)) values[key] = stored;
@@ -441,6 +470,11 @@ function hostFault(key: string, typed: string, stored: string): () => void {
     fault(r.values as Record<string, unknown>);
     return r;
   }) as typeof fill;
+  door.screen_form_remove_row = ((...args: Parameters<typeof removeRow>): ReturnType<typeof removeRow> => {
+    const r = removeRow(...args);
+    fault(r.values as Record<string, unknown>);
+    return r;
+  }) as typeof removeRow;
   door.screen_form_validate = ((...args: Parameters<typeof validate>): ReturnType<typeof validate> =>
     validate(...args).then((r) => {
       fault(r.values as Record<string, unknown> | undefined);
@@ -448,6 +482,7 @@ function hostFault(key: string, typed: string, stored: string): () => void {
     })) as typeof validate;
   return () => {
     door.screen_form_fill = fill;
+    door.screen_form_remove_row = removeRow;
     door.screen_form_validate = validate;
   };
 }
@@ -473,10 +508,10 @@ function fillSched3Row(s: FormSession, n: number, agent: string, payment: string
   s.edit("txtIncomePayment3" + n, payment);
 }
 
-/** The drawer's Delete row (rows.tsx onClearRow): "" for every open cell of the row. */
-const deleteRow = (s: FormSession, n: number) => s.choose(Object.fromEntries(sched3(n).filter((k) => !s.box(k).locked()).map((k) => [k, ""])));
+/** The drawer's Delete row: the row's keys go to the session's row removal. */
+const deleteRow = (s: FormSession, n: number) => s.deleteRow(sched3(n));
 
-test("F10: an amount typed in a row that a Delete row in the same batch clears or moves raises no note; a real one in that batch still does", async () => {
+test("F10: an amount typed in a row that a Delete row in the same batch removes or moves raises no note; a real one in that batch still does", async () => {
   const other = "frm2550qv2024:vatRefund";
   const restore = hostFault(other, "100", "99.00");
   const mismatch = (s: FormSession, k: string) => (s.boxMessageOf(k) ?? "").includes("you typed");
@@ -1043,7 +1078,7 @@ const sched3Rows = (s: FormSession, n: number) => Array.from({ length: n }, (_x,
 const sched3Messages = (s: FormSession) => [0, 1, 2].flatMap((n) => sched3(n)).filter((k) => Boolean(s.boxMessageOf(k)));
 
 test("[B1] Delete row with an amount box in that row still focused: the typed amount goes with its row and never lands on the row that moves up", async () => {
-  // Schedule.tsx's remove(): the row's clear (onClearRow), then the drawer closes at once and the focused cell goes away.
+  // Schedule.tsx's remove(): the row's clear (onDeleteRow), then the drawer closes at once and the focused cell goes away.
   for (const [period, blurOn] of [[4, "later"], [4, "now"]] as const) {
     const s = await opened(at("2550Q", blurOn === "later" ? 2025 : 2022, period));
     fillSched3Row(s, 0, "A0", "1000");
@@ -1106,7 +1141,7 @@ test("[B1] Delete row while a focused amount box never lets go: nothing is clear
   expect(told).toEqual(["Finish the amount in (C) Income Payment first."]);
   expect(s.valueOf("txtNameWithHoldingAgent30")).toBe("A0");
   expect(s.valueOf("txtNameWithHoldingAgent31")).toBe("A1");
-  // The box really was left: Delete row then clears the row, its typed amount with it.
+  // The box really was left: Delete row then removes the row, its typed amount with it.
   box.unmount();
   deleteRow(s, 0);
   await s.idle();
@@ -1152,7 +1187,7 @@ test("[B1] Delete row with a focused amount box that is gone (its blur unregiste
   s.dispose();
 });
 
-test("[B1] no box focused: Delete row clears the row and moves the rows below up in the same turn, as before", async () => {
+test("[B1] no box focused: Delete row removes the row and moves the rows below up in the same turn", async () => {
   const s = await opened(at("2550Q", 2022, 3));
   fillSched3Row(s, 0, "A0", "1000");
   fillSched3Row(s, 1, "A1", "2000");
@@ -1172,8 +1207,8 @@ function sched2551(s: FormSession) {
   const cols = it.cols || [];
   return {
     keys,
-    /** The drawer's Delete row (rows.tsx onClearRow): "" for every visible, open cell of slot r. */
-    deleteRow: (r: number) => s.choose(Object.fromEntries(keys[r].filter((k, c) => cols[c]?.t !== "hidden" && !s.box(k).locked()).map((k) => [k, ""]))),
+    /** The drawer's Delete row: the row's keys go to the session's row removal. */
+    deleteRow: (r: number) => s.deleteRow(keys[r]),
     /** Slot r's draft values, key by key. */
     slot: (r: number) => Object.fromEntries(keys[r].map((k) => [k, s.valueOf(k)])),
   };
@@ -1182,7 +1217,7 @@ function sched2551(s: FormSession) {
 /** An empty slot's value: blank, a zero amount or rate, the cleared ATC's "0", an unticked box. */
 const zeroOrBlank = (v: string) => v.trim() === "" || v === "false" || /^0(\.0+)?$/.test(v.replace(/,/g, ""));
 
-test("[B1] 2551Q Schedule 1: after a Delete row with a focused cell holding typed text, no cleared slot carries an amount", async () => {
+test("[B1] 2551Q Schedule 1: after a Delete row with a focused cell holding typed text, no leftover slot carries an amount", async () => {
   for (const [period, r, blurOn] of [[1, 1, "later"], [2, 1, "now"], [3, 2, "later"]] as const) {
     const s = await opened(at("2551Q", 2019, period));
     const t = sched2551(s);
@@ -1199,10 +1234,11 @@ test("[B1] 2551Q Schedule 1: after a Delete row with a focused cell holding type
     t.deleteRow(r);
     box.unmount();
     await s.idle();
-    // Schedule 1 keeps its slots (no row moves up): the deleted row's slot is cleared whole, its amount with it (the cleared ATC
-    // reads "0"); the other rows keep theirs.
-    expect(Object.entries(t.slot(r)).filter(([, v]) => !zeroOrBlank(v))).toEqual([]);
-    for (const n of [0, 1, 2].filter((n) => n !== r)) expect(s.valueOf("txtATCAmt" + (n + 1))).toBe(["1,000.00", "2,000.00", "3,000.00"][n]);
+    // The row is removed: rows below move up intact into the earlier slots, and no zero row is left.
+    const expected = ["1,000.00", "2,000.00", "3,000.00"].filter((_v, n) => n !== r);
+    expect(s.valueOf("txtATCAmt1")).toBe(expected[0]);
+    expect(s.valueOf("txtATCAmt2")).toBe(expected[1]);
+    expect(zeroOrBlank(s.valueOf("txtATCAmt3"))).toBe(true);
     s.dispose();
   }
 });

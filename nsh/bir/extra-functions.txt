@@ -25,3 +25,4 @@ cloud_account_email_verify
 cloud_account_email_resend
 cloud_account_email_cancel
 cloud_account_email_pending
+screen_form_remove_row
