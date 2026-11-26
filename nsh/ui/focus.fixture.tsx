@@ -14,6 +14,8 @@ const OPTIONS = [
 
 function App() {
   const money = signal("");
+  const moneyCaret = signal("");
+  const moneyOps = signal("");
   const pct = signal("");
   const int = signal("");
   const tin = signal("");
@@ -31,6 +33,8 @@ function App() {
     <View class="gap-2 p-3">
       <View class="flex-row flex-wrap gap-x-3">
         <Text variant="cap">{`Money: ${money() || "empty"}`}</Text>
+        <Text variant="cap">{`Money caret:${moneyCaret()}`}</Text>
+        <Text variant="cap">{`Money ops:${moneyOps()}`}</Text>
         <Text variant="cap">{`Pct: ${pct() || "empty"}`}</Text>
         <Text variant="cap">{`Int: ${int() || "empty"}`}</Text>
         <Text variant="cap">{`Tin: ${tin() || "empty"}`}</Text>
@@ -47,7 +51,17 @@ function App() {
         <AppButton label="Focus dropdown" size="sm" testID="go-drop" onPress={() => dropRef?.focus()} />
         <AppButton label="Focus checkbox" size="sm" testID="go-box" onPress={() => boxRef?.focus()} />
       </View>
-      <MoneyInput label="Money" value={money()} onChange={(v) => money.set(v)} inputRef={(r) => (moneyRef = r)} testID="f-money" />
+      <MoneyInput
+        label="Money"
+        value={money()}
+        onChange={(v) => money.set(v)}
+        inputRef={(r) => (moneyRef = r)}
+        testID="f-money"
+        writeProbe={(write, start, end) => {
+          moneyOps.update((ops) => ops + (write === "text" ? "T" : "C"));
+          if (write === "caret") moneyCaret.update((ops) => `${ops} ${start}:${end}`);
+        }}
+      />
       <PercentInput label="Pct" value={pct()} onChange={(v) => pct.set(v)} inputRef={(r) => (pctRef = r)} testID="f-pct" />
       <IntInput label="Int" value={int()} onChange={(v) => int.set(v)} inputRef={(r) => (intRef = r)} testID="f-int" />
       <TinInput label="TIN" value={tin()} onChange={(v) => tin.set(v)} inputRef={(r) => (tinRef = r)} testID="f-tin" />

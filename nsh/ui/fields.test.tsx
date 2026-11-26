@@ -319,6 +319,49 @@ for (const size of SIZES) {
     expect(readout(app, "Host:")).toBe("Host: 15000.50");
   });
 
+  test(`${size.name}: Tab into a filled amount selects it whole; typing 15000.50 replaces it`, async () => {
+    if (size.name !== "desktop") return; // the phone harness has no hardware Tab focus traversal
+    const app = await open("./masked.fixture.tsx", size.options);
+    await app.clear("id:m-amount");
+    await app.type("id:m-amount", "1234.56");
+    await app.type("id:m-other", " ");
+    expect(app.value("id:m-amount")).toBe("1,234.56");
+    await app.keyboard.press("tab");
+    await app.wait(100);
+    // Headless keyboard typing does not replace the native selection: it appends at the caret even after
+    // setSelection(0, 7). The platform-independent proof here is the operation the field sends, after the text write.
+    expect(readout(app, "Caret ops:")).toContain("0:7");
+    expect(readout(app, "Write ops:")?.endsWith("TC")).toBe(true);
+  });
+
+  test(`${size.name}: Shift+Tab into a filled amount selects it whole after the plain-text rewrite`, async () => {
+    if (size.name !== "desktop") return;
+    const app = await open("./masked.fixture.tsx", size.options);
+    await app.type("id:m-amount", "1234.56");
+    await app.type("id:m-other", " ");
+    expect(app.value("id:m-amount")).toBe("1,234.56");
+    await app.type("id:m-stored", "");
+    await app.keyboard.press("shift+tab");
+    await app.wait(100);
+    expect(app.value("id:m-amount")).toBe("1234.56");
+    expect(readout(app, "Caret ops:")).toContain("0:7");
+    expect(readout(app, "Write ops:")?.endsWith("TC")).toBe(true);
+  });
+
+  test(`${size.name}: keyboard focus into a zero amount sends (0, 0) after its empty rewrite`, async () => {
+    if (size.name !== "desktop") return;
+    const app = await open("./masked.fixture.tsx", size.options);
+    await app.type("id:m-amount", "0");
+    await app.type("id:m-other", " ");
+    expect(app.value("id:m-amount")).toBe("0.00");
+    await app.type("id:m-stored", "");
+    await app.keyboard.press("shift+tab");
+    await app.wait(100);
+    expect(app.value("id:m-amount")).toBe("");
+    expect(readout(app, "Caret ops:")).toContain("0:0");
+    expect(readout(app, "Write ops:")?.endsWith("TC")).toBe(true);
+  });
+
   test(`${size.name}: a plain paste, a third decimal and a refused key send no focused write`, async () => {
     const app = await open("./masked.fixture.tsx", size.options);
     await app.clear("id:m-amount");

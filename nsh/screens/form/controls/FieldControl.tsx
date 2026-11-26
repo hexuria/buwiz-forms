@@ -6,7 +6,7 @@
 // a TIN its digits (no dashes); a date MM/DD/YYYY once the text reads as a date, else the text; sel the code; chk
 // "true"/"false". Locked, computed and disabled boxes draw as read-only boxes (no Input) and report nothing.
 import type { ViewRef } from "nsh";
-import { View } from "nsh";
+import { host, signal, View } from "nsh";
 import {
   CheckboxLabel, DateField, Dropdown, Icon, IntInput, Line, MoneyInput, moneyPlain, PercentInput, Text, TextField, TinInput, Tooltip, TOUCH,
 } from "../../../ui";
@@ -15,6 +15,15 @@ import { cx, isOn, listedOptions, mdy, readBoxPad, readText, SEARCH_FROM, select
 import { type FieldInput, read } from "./types";
 
 const OFF_OPACITY = 0.45;
+
+/** Test fixture only: caret/text writes of the money box `host.params.probeWrites` names, shown by FormPageAny. */
+export const moneyWriteOps = signal("");
+
+function probeMoneyWrite(p: FieldInput, write: "text" | "caret", start?: number, end?: number) {
+  const wanted = (host.params as { probeWrites?: string } | undefined)?.probeWrites;
+  if (!wanted || p.testID !== `fp-${wanted}`) return;
+  moneyWriteOps.update((ops) => `${ops}${write === "text" ? "T" : `C${start}:${end}`}`);
+}
 
 /** The box takes no typing: the host locks it, the form computes it, or the page has switched it off. */
 function shut(p: FieldInput): boolean {
@@ -293,6 +302,7 @@ function TypedBox(props: { p: FieldInput }) {
         negative
         placeholder={p.placeholder}
         inputRef={(ref) => giveFocus(p, ref)}
+        writeProbe={(write, start, end) => probeMoneyWrite(p, write, start, end)}
       />
     </If>
   );

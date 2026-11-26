@@ -341,7 +341,8 @@ test("B14: a boxed birth date shows the long month and asks once to save to the 
 test("money safety net: a host-stored amount different from the shown amount is named and never reported saved", async () => {
   const key = "frm2551Qv2018:txt15";
   const original = bir.screen_form_fill;
-  bir.screen_form_fill = ((...args: Parameters<typeof original>): ReturnType<typeof original> => {
+  const mutableBir = bir as { screen_form_fill: typeof original };
+  mutableBir.screen_form_fill = ((...args: Parameters<typeof original>): ReturnType<typeof original> => {
     const r = original(...args);
     if (args[2][key] === "100") {
       // The host fault the net exists for: the fill answers as though it stored 99.00 for a shown 100.00.
@@ -361,7 +362,7 @@ test("money safety net: a host-stored amount different from the shown amount is 
     expect(reported).toBe(0);
     expect(s.saveState().state).toBe("unsaved");
   } finally {
-    bir.screen_form_fill = original;
+    mutableBir.screen_form_fill = original;
     s?.dispose();
   }
 });

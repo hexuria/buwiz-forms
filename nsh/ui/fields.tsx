@@ -74,6 +74,8 @@ export interface TextFieldProps {
   onSelectionChange?: (e: { start: number; end: number }) => void;
   /** Before the text changes: the typed text, "Backspace" or "Enter". */
   onKeyPress?: (e: { key: string }) => void;
+  /** A pointer press went down in the box (the masked fields use it to tell a tap or click from keyboard focus). */
+  onPressDown?: () => void;
   /** The input's ref, to focus it or set its selection. */
   inputRef?: (ref: InputRef) => void;
   testID?: string;
@@ -136,6 +138,7 @@ export function TextField(props: TextFieldProps) {
           onSubmit={() => props.onSubmit?.()}
           onSelectionChange={props.onSelectionChange}
           onKeyPress={props.onKeyPress}
+          onPressDown={props.onPressDown}
           class={cx(
             "h-full min-w-0 flex-1 bg-transparent caret-accent-blue placeholder:text-subtle-foreground selection:bg-accent-blue-soft",
             props.bare ? "text-emph font-normal" : "text-body",
@@ -170,7 +173,7 @@ export function TextField(props: TextFieldProps) {
 /** What the masked fields share with TextField (the value and its events are theirs). `inputRef` gives the box's InputRef (focus(), setSelection()). */
 export type MaskedFieldProps = Omit<TextFieldProps, "value" | "onChange" | "keyboardType" | "masked" | "maxLength"> & {
   /** Test hook: each text or caret operation this field sends to its native box. */
-  writeProbe?: (write: "text" | "caret") => void;
+  writeProbe?: (write: "text" | "caret", start?: number, end?: number) => void;
 };
 
 interface MaskedProps {
@@ -244,15 +247,16 @@ function MaskedField(props: MaskedProps) {
   // The text the box last reported while it has the keys. Keys that come faster than the answers (a burst, an agent's
   // typing) are typed on this text, not on the answer: NSH drops an answer the box has typed past.
   let boxText: string | undefined;
-  // The box took the keys by itself (not through its focus()): until this time (Date.now(), 0: never) a caret is the click's that
-  // gave them, and a key press ends it. A click's caret can come twice (AppKit places it as the press goes down and again when
-  // it ends), so every caret in the window counts, not only the first.
+  // A pointer press gave the box the keys: until this time (Date.now(), 0: never) a caret is the click's or tap's.
+  // Keyboard focus (Tab, Shift+Tab, Enter, a phone's Next, or the page's focus()) has no press, so it selects whole.
   let clickUntil = 0;
+  let pointerDown = false;
   // The page's focus() was called: the box is selected whole, there is no click to wait for.
   let byFocus = false;
   // A value that arrives while the box has the keys: applied on blur only when the filer made no edit of their own.
   let outsideValue: string | undefined;
-  // The one focus rewrite of a no-live-format box: the selection that arrives with the click is mapped from its old laid-out text.
+  // The one focus rewrite of a no-live-format box: a click's caret is mapped from its old laid-out text. A focus that
+  // shows no click (Tab, Shift+Tab, Enter or a phone's Next) selects the whole text instead.
   let focusMap: { from: string; to: string } | undefined;
   let focusCaret: number | undefined;
   const writeText = (value: string) => {
@@ -260,7 +264,7 @@ function MaskedField(props: MaskedProps) {
     text.set(value);
   };
   const writeCaret = (start: number, end = start) => {
-    props.field.writeProbe?.("caret");
+    props.field.writeProbe?.("caret", start, end);
     input?.setSelection(start, end);
   };
   const caretAfterSameDigits = (fromText: string, toText: string, caret: number) => {
@@ -281,7 +285,6 @@ function MaskedField(props: MaskedProps) {
           focus() {
             byFocus = true;
             r.focus();
-            writeCaret(0, untracked(text).length);
           },
           blur: () => r.blur(),
           measure: () => r.measure(),
@@ -375,13 +378,18 @@ function MaskedField(props: MaskedProps) {
         if (focusMap && clickUntil > 0 && Date.now() <= clickUntil) {
           const now = untracked(text);
           if (e.start === 0 && e.end >= Math.max(focusMap.from.length, focusMap.to.length)) {
-            if (!(e.start === 0 && e.end === now.length)) writeCaret(0, now.length);
+            // A platform's keyboard focus often selects all natively. The explicit answer is sent after the focus rewrite.
           } else if (e.start === e.end) {
-            if (props.numeric && isZeroAmount(now)) {
-              if (!(e.start === 0 && e.end === now.length)) writeCaret(0, now.length);
-            } else {
-              if (focusCaret === undefined) focusCaret = caretAfterSameDigits(focusMap.from, focusMap.to, e.start);
-              if (focusCaret !== e.start) writeCaret(focusCaret);
+            // A focus rewrite or the platform's own keyboard focus can put the caret at the end of the plain text. That is
+            // not proof of a click: mapping it as one puts the caret one digit early (`1,234.56` -> 6). A real click at
+            // the end is still known from its press-down; a click anywhere else is the caret itself.
+            const rewriteEnd = e.start === focusMap.to.length;
+            if (!rewriteEnd) {
+              if (props.numeric && isZeroAmount(now)) {
+                focusCaret = 0;
+              } else {
+                focusCaret = caretAfterSameDigits(focusMap.from, focusMap.to, e.start);
+              }
             }
           }
         } else if (e.start === e.end && clickUntil > 0 && Date.now() <= clickUntil && props.numeric) {
@@ -389,6 +397,9 @@ function MaskedField(props: MaskedProps) {
           if (isZeroAmount(now)) writeCaret(0, now.length);
         }
         props.field.onSelectionChange?.(e);
+      }}
+      onPressDown={() => {
+        pointerDown = true;
       }}
       onKeyPress={(e) => {
         clickUntil = 0;
@@ -405,26 +416,28 @@ function MaskedField(props: MaskedProps) {
         if (props.noLiveFormat) {
           const before = untracked(text);
           const plain = props.shown(props.value ?? "", true);
-          if (plain !== before) {
-            focusMap = { from: before, to: plain };
-            writeText(plain);
-          }
+          focusMap = { from: before, to: plain };
+          focusCaret = undefined;
+          if (plain !== before) writeText(plain);
         }
         const selectWhole = byFocus;
-        const selectionAtFocus = selectionSeq;
+        const byPointer = pointerDown;
+        pointerDown = false;
+        if (props.noLiveFormat && byPointer && !selectWhole && selected && selected.start === selected.end) {
+          // A click's caret is often reported before the focus event itself. It is in the grouped text's coordinates here.
+          focusCaret = caretAfterSameDigits(focusMap?.from ?? untracked(text), focusMap?.to ?? untracked(text), selected.start);
+        }
         props.field.onFocus?.();
         clickUntil = byFocus ? 0 : Date.now() + CLICK_MS;
         byFocus = false;
-        if (selectWhole) writeCaret(0, untracked(text).length);
         const mapped = focusMap;
         if (mapped) {
           setTimeout(() => {
             if (!untracked(focused) || focusMap !== mapped) return;
             const now = untracked(text);
-            if (selectWhole || (props.numeric && isZeroAmount(now))) {
+            if (selectWhole || (props.numeric && isZeroAmount(now)) || focusCaret === undefined) {
               writeCaret(0, now.length);
-            } else if (selectionSeq !== selectionAtFocus && selected && selected.start === selected.end) {
-              if (focusCaret === undefined) focusCaret = caretAfterSameDigits(mapped.from, mapped.to, selected.start);
+            } else {
               writeCaret(focusCaret);
             }
           }, 0);

@@ -6,6 +6,7 @@ import { bir } from "../../bir";
 import "../../theme/fonts";
 import { createDemoTaxpayer, DEMO } from "../../bir/testing";
 import { app, store } from "../../shell";
+import { moneyWriteOps } from "./controls/FieldControl";
 import { FormPage, type FormTarget } from "./FormPage";
 
 interface Params {
@@ -87,6 +88,7 @@ function Fixture() {
         <Text>{`saved returns ${store.savedReturns().length}`}</Text>
         <Text testID="fx-session-fields">{`session fields ${sessionFields()}`}</Text>
         <Text>{`probe ${probeValue()}`}</Text>
+        <Text>{`writes ${moneyWriteOps()}`}</Text>
         <Each of={toasts()}>{(t) => <Text>{t()}</Text>}</Each>
       </View>
     </View>

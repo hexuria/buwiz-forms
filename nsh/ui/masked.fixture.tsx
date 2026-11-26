@@ -10,6 +10,8 @@ function App() {
   const reports = signal(0);
   const textWrites = signal(0);
   const caretWrites = signal(0);
+  const caretOps = signal("");
+  const writeOrder = signal("");
   const stored = signal("-250");
   const free = signal("");
   const whole = signal("1234.5");
@@ -27,6 +29,8 @@ function App() {
         <Text variant="cap">{`Reports: ${reports()}`}</Text>
         <Text variant="cap">{`Text writes: ${textWrites()}`}</Text>
         <Text variant="cap">{`Caret writes: ${caretWrites()}`}</Text>
+        <Text variant="cap">{`Caret ops:${caretOps()}`}</Text>
+        <Text variant="cap">{`Write ops:${writeOrder()}`}</Text>
         <Text variant="cap">{`Stored: ${stored() || "empty"}`}</Text>
         <Text variant="cap">{`Free: ${free() || "empty"}`}</Text>
         <Text variant="cap">{`Whole: ${whole() || "empty"}`}</Text>
@@ -45,7 +49,17 @@ function App() {
           reports.update((n) => n + 1);
         }}
         testID="m-amount"
-        writeProbe={(write) => (write === "text" ? textWrites.update((n) => n + 1) : caretWrites.update((n) => n + 1))}
+        writeProbe={(write, start, end) => {
+          if (write === "text") {
+            textWrites.update((n) => n + 1);
+            writeOrder.update((ops) => `${ops}T`);
+          }
+          else {
+            caretWrites.update((n) => n + 1);
+            caretOps.update((ops) => `${ops} ${start}:${end}`);
+            writeOrder.update((ops) => `${ops}C`);
+          }
+        }}
       />
       <MoneyInput label="Stored" value={stored()} onChange={(v) => stored.set(v)} testID="m-stored" />
       <MoneyInput label="Free" negative value={free()} onChange={(v) => free.set(v)} testID="m-free" />

@@ -68,6 +68,51 @@ test("money round trip desktop: a focused zero amount is never rewritten while 1
 }, 60_000);
 
 
+test("money keyboard focus desktop: Tab away and Shift+Tab back into 1,234.56 sends select-all after the plain rewrite", async () => {
+  const box = "id:fp-frm2551Qv2018:txt15";
+  const app = await open(ENTRY, {
+    ...DESKTOP,
+    host: { params: { formCode: "2551Q", year: 2024, period: 1, probeKey: "frm2551Qv2018:txt15", probeWrites: "frm2551Qv2018:txt15" } },
+  });
+  await app.waitFor("text:BIR Form 2551Q");
+  await app.press("id:fp-nav-2");
+  await app.waitFor(box);
+  await app.type(box, "");
+  await app.waitUntil(() => app.value(box) === "", { timeout: 3000 });
+  await app.type(box, "1234.56");
+  await app.submit(box);
+  await app.waitFor("text:✓ Saved", { timeout: 8000 });
+  expect(app.value(box)).toBe("1,234.56");
+  await app.type(box, "");
+  await app.keyboard.press("tab");
+  await app.wait(100);
+  await app.keyboard.press("shift+tab");
+  await app.wait(150);
+  expect(app.value(box)).toBe("1234.56");
+  // The headless input has no real selection store: typing always appends at the end. This page-level assertion is
+  // therefore the write order the box receives: text rewrite first, then the explicit (0, 7) selection.
+  expect(app.texts().find((t) => t.startsWith("writes "))?.endsWith("TC0:7")).toBe(true);
+}, 30_000);
+
+test("money keyboard focus desktop: Shift+Tab back into a zero amount selects its empty plain text", async () => {
+  const box = "id:fp-frm2551Qv2018:txt15";
+  const app = await open(ENTRY, {
+    ...DESKTOP,
+    host: { params: { formCode: "2551Q", year: 2024, period: 2, probeWrites: "frm2551Qv2018:txt15" } },
+  });
+  await app.waitFor("text:BIR Form 2551Q");
+  await app.press("id:fp-nav-2");
+  await app.waitFor(box);
+  expect(app.value(box)).toBe("0.00");
+  await app.type(box, "");
+  await app.keyboard.press("tab");
+  await app.wait(100);
+  await app.keyboard.press("shift+tab");
+  await app.wait(150);
+  expect(app.value(box)).toBe("");
+  expect(app.texts().find((t) => t.startsWith("writes "))?.endsWith("TC0:0")).toBe(true);
+}, 30_000);
+
 test("F7-1 desktop: emptying an amount box shows the host's zero, not the old amount, and the save line says Saved", async () => {
   // The amount is typed through the fixture (app.type lands beside a box's prefilled 0.00).
   const box = "id:fp-frm2551Qv2018:txt15";
