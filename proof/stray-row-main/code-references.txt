@@ -1,0 +1,4 @@
+nsh/screens/form/controls/Schedule.tsx:96-100 — remove() calls props.onClearRow(r) and closes the drawer; it never splices/removes the row object.
+nsh/screens/form/rows.tsx:160-162 — onClearRow writes every visible unlocked cell of that row to "" through s.choose(edits); this clear-in-place is what can leave a blank zero row.
+crates/bir-core/src/forms/form_2551q_xml.rs:212-242 — the output field map writes each existing Schedule 1 row into fixed slots, including zero values for a blank row; :264-270 validates and writes that same map.
+crates/bir-core/src/forms/form_2551q.rs:1241-1243 — transition_to_queued stores self.to_bir_xml_payload() as submitted_payload (inspection only; Queue was never invoked).

@@ -1,0 +1,38 @@
+{
+  "after_reopen_rows": [
+    {
+      "instance_id": "row-00000000000000000007",
+      "purchase_or_import_date": null,
+      "source_code": "",
+      "description": "",
+      "purchase_or_import_amount": 0.0,
+      "input_tax": 0.0,
+      "estimated_life_months": 0,
+      "recognized_life_months": 0,
+      "allowable_input_tax_for_period": 24.0,
+      "balance_to_next_period": 96.0
+    },
+    {
+      "instance_id": "row-00000000000000000008",
+      "purchase_or_import_date": null,
+      "source_code": "I",
+      "description": "INVENTED CAPITAL B",
+      "purchase_or_import_amount": 2000.0,
+      "input_tax": 240.0,
+      "estimated_life_months": 60,
+      "recognized_life_months": 12,
+      "allowable_input_tax_for_period": 48.0,
+      "balance_to_next_period": 192.0
+    }
+  ],
+  "visible_rows_after_reopen": [
+    [
+      "fp-row-txtDatePurchase10-0",
+      "Row 1, 24.00 \u00b7 96.00. Open"
+    ],
+    [
+      "fp-row-txtDatePurchase10-1",
+      "Row 2, I \u00b7 INVENTED CAPITAL B \u00b7 2,000.00 \u00b7 240.00 \u00b7 60 \u00b7 12 \u00b7 48.00 \u00b7 192.00. Open"
+    ]
+  ]
+}

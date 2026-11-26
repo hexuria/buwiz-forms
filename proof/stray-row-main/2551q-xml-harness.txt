@@ -1,0 +1,45 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling bir-core v0.2.1 (/home/ubuntu/forms-validation/stray-row-main-642/crates/bir-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.63s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running `/home/ubuntu/forms-validation/target-stray-row-main-642/debug/examples/stray_xml /home/ubuntu/forms-validation/stray-row-main-proof/2551q-after-delete-draft.json`
+FIELD_MAP
+{
+  "drpATC1": "0",
+  "drpATC2": "2",
+  "drpATC3": "0",
+  "drpATC4": "0",
+  "drpATC5": "0",
+  "drpATC6": "0",
+  "txtATCAmt1": "0.00",
+  "txtATCAmt2": "7,777.00",
+  "txtATCAmt3": "0.00",
+  "txtATCAmt4": "0.00",
+  "txtATCAmt5": "0.00",
+  "txtATCAmt6": "0.00",
+  "txtATCDue1": "0.00",
+  "txtATCDue2": "233.31",
+  "txtATCDue3": "0.00",
+  "txtATCDue4": "0.00",
+  "txtATCDue5": "0.00",
+  "txtATCDue6": "0.00",
+  "txtATCRate1": "0.00",
+  "txtATCRate2": "3.0",
+  "txtATCRate3": "0.00",
+  "txtATCRate4": "0.00",
+  "txtATCRate5": "0.00",
+  "txtATCRate6": "0.00",
+  "txtTotalSched1": "233.31"
+}
+XML_OK bytes=5581
+drpATC1 context=tPg2TaxpayerName=</div>		<div>drpATC1=0drpATC1=</div>		<div>txtATCAmt1=0.00txtATCAmt1=</div>		<div>txtATCRate1=0.00txtATCRate1=
+txtATCAmt1 context=drpATC1=0drpATC1=</div>		<div>txtATCAmt1=0.00txtATCAmt1=</div>		<div>txtATCRate1=0.00txtATCRate1=</div>		<div>txtATCDue1=0.00txtAT
+txtATCRate1 context=1=0.00txtATCAmt1=</div>		<div>txtATCRate1=0.00txtATCRate1=</div>		<div>txtATCDue1=0.00txtATCDue1=</div>		<div>drpATC2=2drpATC2=</di
+txtATCDue1 context==0.00txtATCRate1=</div>		<div>txtATCDue1=0.00txtATCDue1=</div>		<div>drpATC2=2drpATC2=</div>		<div>txtATCAmt2=7,777.00txtATCAmt2=<
+drpATC2 context=1=0.00txtATCDue1=</div>		<div>drpATC2=2drpATC2=</div>		<div>txtATCAmt2=7,777.00txtATCAmt2=</div>		<div>txtATCRate2=3.0txtATCRat
+txtATCAmt2 context=drpATC2=2drpATC2=</div>		<div>txtATCAmt2=7,777.00txtATCAmt2=</div>		<div>txtATCRate2=3.0txtATCRate2=</div>		<div>txtATCDue2=233.31
+txtATCRate2 context=777.00txtATCAmt2=</div>		<div>txtATCRate2=3.0txtATCRate2=</div>		<div>txtATCDue2=233.31txtATCDue2=</div>		<div>drpATC3=0drpATC3=</d
+txtATCDue2 context=2=3.0txtATCRate2=</div>		<div>txtATCDue2=233.31txtATCDue2=</div>		<div>drpATC3=0drpATC3=</div>		<div>txtATCAmt3=0.00txtATCAmt3=</d

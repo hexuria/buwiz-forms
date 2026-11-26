@@ -1,0 +1,258 @@
+{
+  "commit": "642bfc78221c0a87b318c7c3378c3f5b0b2c9359",
+  "environment": "real Linux window, pinned NSH 8c78cfd container, scratch invented data, safety vars, no Queue/send",
+  "primary": {
+    "form": "2551Q",
+    "schedule": "Schedule 1",
+    "draft_json_key": "schedule_1",
+    "before": {
+      "form": "2551Q",
+      "schedule_key": "schedule_1",
+      "before_rows": [
+        {
+          "atc": "PT010",
+          "atc_description": "",
+          "taxable_amount": 1000.0,
+          "tax_rate": 0.03,
+          "tax_due": 30.0
+        },
+        {
+          "atc": "PT040",
+          "atc_description": "",
+          "taxable_amount": 7777.0,
+          "tax_rate": 0.03,
+          "tax_due": 233.31
+        }
+      ]
+    },
+    "after_delete": {
+      "form": "2551Q",
+      "schedule_key": "schedule_1",
+      "after_rows": [
+        {
+          "atc": "",
+          "atc_description": "",
+          "taxable_amount": 0.0,
+          "tax_rate": 0.0,
+          "tax_due": 0.0
+        },
+        {
+          "atc": "PT040",
+          "atc_description": "",
+          "taxable_amount": 7777.0,
+          "tax_rate": 0.03,
+          "tax_due": 233.31
+        }
+      ],
+      "visible_rows_after_delete": [
+        [
+          "fp-row-drpATC1-1",
+          "Row 2, PT040 \u00b7 7,777.00 \u00b7 3.0 \u00b7 233.31. Open"
+        ]
+      ]
+    },
+    "reopen": [
+      [
+        "fp-row-drpATC1-1",
+        "Row 2, PT040 \u00b7 7,777.00 \u00b7 3.0 \u00b7 233.31. Open"
+      ]
+    ],
+    "answer": "Plain real-UI Delete clears row 1 in place: draft retains a blank zero row at index 0 plus row 2; the page and close/reopen show one visible row (former row 2)."
+  },
+  "print_preview": {
+    "artifact": "2551q-print-page2.png / 2551q-print-schedule1-crop.png / 2551q-print-sheet.html",
+    "answer": "The retained blank row prints as Schedule 1 row 1 with blank ATC and 0.00 taxable amount/tax due; unused rows after the last stored row print blank. It is a row of zeros, not a gap and not absent."
+  },
+  "output_payload": {
+    "artifact": "2551q-generated.xml / 2551q-xml-harness.txt / 2551q-xml-totals.json",
+    "harness": "temporary uncommitted Rust example copied to proof as stray_xml.rs; it decoded the real after-delete draft, recomputed it, repaired only two unrelated fixture-validity fields in memory, and invoked Form2551QDraft::to_bir_xml_payload without queueing or sending",
+    "selected_fields": {
+      "drpATC1": "0",
+      "txtATCAmt1": "0.00",
+      "txtATCRate1": "0.00",
+      "txtATCDue1": "0.00",
+      "drpATC2": "2",
+      "txtATCAmt2": "7,777.00",
+      "txtATCRate2": "3.0",
+      "txtATCDue2": "233.31",
+      "txtTotalSched1": "233.31"
+    },
+    "totals": {
+      "txtTotalSched1": "233.31",
+      "frm2551Qv2018:txt14": "233.31",
+      "frm2551Qv2018:txt18": "1,234.56",
+      "frm2551Qv2018:txt19": "-1,001.25",
+      "frm2551Qv2018:txt23": "2,500.00",
+      "frm2551Qv2018:txt24": "1,498.75"
+    },
+    "answer": "The blank row appears in the generated filed payload as slot 1 zero values (ATC option 0, rate/amount/due 0.00); total Schedule 1/tax due remains 233.31 from row 2."
+  },
+  "additional_forms": {
+    "1601EQ": {
+      "before": {
+        "schedule": [
+          {
+            "atc_code": "WI010",
+            "tax_base": 1000.0,
+            "tax_withheld": 50.0
+          },
+          {
+            "atc_code": "WI011",
+            "tax_base": 2000.0,
+            "tax_withheld": 200.0
+          }
+        ]
+      },
+      "after": {
+        "after_rows": [
+          {
+            "atc_code": "WI010",
+            "tax_base": 1000.0,
+            "tax_withheld": 50.0
+          },
+          {
+            "atc_code": "WI011",
+            "tax_base": 2000.0,
+            "tax_withheld": 200.0
+          }
+        ],
+        "visible_rows_after_delete_confirm": [
+          [
+            "fp-row-frm1601EQ:txtAtcCd1-0",
+            "Row 1, WI011 \u00b7 1,000.00 \u00b7  10.0. Open"
+          ]
+        ]
+      },
+      "reopen": {
+        "after_reopen_rows": [
+          {
+            "atc_code": "WI011",
+            "tax_base": 0.0,
+            "tax_withheld": 0.0
+          }
+        ],
+        "visible_rows_after_reopen": [
+          [
+            "fp-row-frm1601EQ:txtAtcCd1-0",
+            "Row 1, WI011 \u00b7  10.0. Open"
+          ]
+        ]
+      },
+      "answer": "Delete required the form-specific destructive confirmation. No blank row object remained; the array compacted to one row and the page showed one row. Caveat: the surviving row was WI011 with zero base/tax, so this path also lost the former second row\u2019s amounts."
+    },
+    "2550Q": {
+      "schedule": "Schedule 1 capital goods",
+      "before": {
+        "schedule_1": [
+          {
+            "instance_id": null,
+            "purchase_or_import_date": null,
+            "source_code": "D",
+            "description": "INVENTED CAPITAL A",
+            "purchase_or_import_amount": 1000.0,
+            "input_tax": 120.0,
+            "estimated_life_months": 60,
+            "recognized_life_months": 12,
+            "allowable_input_tax_for_period": 24.0,
+            "balance_to_next_period": 96.0
+          },
+          {
+            "instance_id": null,
+            "purchase_or_import_date": null,
+            "source_code": "I",
+            "description": "INVENTED CAPITAL B",
+            "purchase_or_import_amount": 2000.0,
+            "input_tax": 240.0,
+            "estimated_life_months": 60,
+            "recognized_life_months": 12,
+            "allowable_input_tax_for_period": 48.0,
+            "balance_to_next_period": 192.0
+          }
+        ]
+      },
+      "after": {
+        "after_rows": [
+          {
+            "instance_id": "row-00000000000000000007",
+            "purchase_or_import_date": null,
+            "source_code": "",
+            "description": "",
+            "purchase_or_import_amount": 0.0,
+            "input_tax": 0.0,
+            "estimated_life_months": 0,
+            "recognized_life_months": 0,
+            "allowable_input_tax_for_period": 24.0,
+            "balance_to_next_period": 96.0
+          },
+          {
+            "instance_id": "row-00000000000000000008",
+            "purchase_or_import_date": null,
+            "source_code": "I",
+            "description": "INVENTED CAPITAL B",
+            "purchase_or_import_amount": 2000.0,
+            "input_tax": 240.0,
+            "estimated_life_months": 60,
+            "recognized_life_months": 12,
+            "allowable_input_tax_for_period": 48.0,
+            "balance_to_next_period": 192.0
+          }
+        ],
+        "visible_rows_after_delete": [
+          [
+            "fp-row-txtDatePurchase10-0",
+            "Row 1, 24.00 \u00b7 96.00. Open"
+          ],
+          [
+            "fp-row-txtDatePurchase10-1",
+            "Row 2, I \u00b7 INVENTED CAPITAL B \u00b7 2,000.00 \u00b7 240.00 \u00b7 60 \u00b7 12 \u00b7 48.00 \u00b7 192.00. Open"
+          ]
+        ]
+      },
+      "reopen": {
+        "after_reopen_rows": [
+          {
+            "instance_id": "row-00000000000000000007",
+            "purchase_or_import_date": null,
+            "source_code": "",
+            "description": "",
+            "purchase_or_import_amount": 0.0,
+            "input_tax": 0.0,
+            "estimated_life_months": 0,
+            "recognized_life_months": 0,
+            "allowable_input_tax_for_period": 24.0,
+            "balance_to_next_period": 96.0
+          },
+          {
+            "instance_id": "row-00000000000000000008",
+            "purchase_or_import_date": null,
+            "source_code": "I",
+            "description": "INVENTED CAPITAL B",
+            "purchase_or_import_amount": 2000.0,
+            "input_tax": 240.0,
+            "estimated_life_months": 60,
+            "recognized_life_months": 12,
+            "allowable_input_tax_for_period": 48.0,
+            "balance_to_next_period": 192.0
+          }
+        ],
+        "visible_rows_after_reopen": [
+          [
+            "fp-row-txtDatePurchase10-0",
+            "Row 1, 24.00 \u00b7 96.00. Open"
+          ],
+          [
+            "fp-row-txtDatePurchase10-1",
+            "Row 2, I \u00b7 INVENTED CAPITAL B \u00b7 2,000.00 \u00b7 240.00 \u00b7 60 \u00b7 12 \u00b7 48.00 \u00b7 192.00. Open"
+          ]
+        ]
+      },
+      "answer": "The row object remained at index 0 with user-entered cells cleared/zero, but hidden/computed allowable_input_tax_for_period 24.00 and balance_to_next_period 96.00 survived; the page therefore still showed two rows."
+    }
+  },
+  "code_references": {
+    "delete_button": "nsh/screens/form/controls/Schedule.tsx:96-100 remove() calls props.onClearRow(r) and closes the drawer; it does not splice the row array.",
+    "clearing": "nsh/screens/form/rows.tsx:160-162 onClearRow writes every visible unlocked cell of that row to blank through s.choose(edits); clearing in place is why a zero row object can remain.",
+    "payload_loop": "crates/bir-core/src/forms/form_2551q_xml.rs:212-242 writes every existing schedule row into fixed slots and zero values for blank rows; lines 264-270 validate and write that field map.",
+    "queue_use": "crates/bir-core/src/forms/form_2551q.rs:1241-1243 transition_to_queued stores self.to_bir_xml_payload() as submitted_payload."
+  }
+}

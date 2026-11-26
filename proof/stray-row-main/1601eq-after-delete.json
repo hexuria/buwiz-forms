@@ -1,0 +1,20 @@
+{
+  "after_rows": [
+    {
+      "atc_code": "WI010",
+      "tax_base": 1000.0,
+      "tax_withheld": 50.0
+    },
+    {
+      "atc_code": "WI011",
+      "tax_base": 2000.0,
+      "tax_withheld": 200.0
+    }
+  ],
+  "visible_rows_after_delete_confirm": [
+    [
+      "fp-row-frm1601EQ:txtAtcCd1-0",
+      "Row 1, WI011 \u00b7 1,000.00 \u00b7  10.0. Open"
+    ]
+  ]
+}

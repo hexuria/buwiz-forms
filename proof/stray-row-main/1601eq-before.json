@@ -1,0 +1,14 @@
+{
+  "schedule": [
+    {
+      "atc_code": "WI010",
+      "tax_base": 1000.0,
+      "tax_withheld": 50.0
+    },
+    {
+      "atc_code": "WI011",
+      "tax_base": 2000.0,
+      "tax_withheld": 200.0
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "after_reopen_rows": [
+    {
+      "atc_code": "WI011",
+      "tax_base": 0.0,
+      "tax_withheld": 0.0
+    }
+  ],
+  "visible_rows_after_reopen": [
+    [
+      "fp-row-frm1601EQ:txtAtcCd1-0",
+      "Row 1, WI011 \u00b7  10.0. Open"
+    ]
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "schedule_1": [
+    {
+      "instance_id": null,
+      "purchase_or_import_date": null,
+      "source_code": "D",
+      "description": "INVENTED CAPITAL A",
+      "purchase_or_import_amount": 1000.0,
+      "input_tax": 120.0,
+      "estimated_life_months": 60,
+      "recognized_life_months": 12,
+      "allowable_input_tax_for_period": 24.0,
+      "balance_to_next_period": 96.0
+    },
+    {
+      "instance_id": null,
+      "purchase_or_import_date": null,
+      "source_code": "I",
+      "description": "INVENTED CAPITAL B",
+      "purchase_or_import_amount": 2000.0,
+      "input_tax": 240.0,
+      "estimated_life_months": 60,
+      "recognized_life_months": 12,
+      "allowable_input_tax_for_period": 48.0,
+      "balance_to_next_period": 192.0
+    }
+  ]
+}

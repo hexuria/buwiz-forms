@@ -1,0 +1,20 @@
+{
+  "form": "2551Q",
+  "schedule_key": "schedule_1",
+  "before_rows": [
+    {
+      "atc": "PT010",
+      "atc_description": "",
+      "taxable_amount": 1000.0,
+      "tax_rate": 0.03,
+      "tax_due": 30.0
+    },
+    {
+      "atc": "PT040",
+      "atc_description": "",
+      "taxable_amount": 7777.0,
+      "tax_rate": 0.03,
+      "tax_due": 233.31
+    }
+  ]
+}
