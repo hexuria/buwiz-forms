@@ -1,10 +1,11 @@
-// Settings > Account > Buwiz (old account.js AccountActions): the cloud account's status, the refresh when Settings opens, sign
-// in and sign out. The sign-in screens (the gate) are D2's; these are the same host calls the old card made, and the gate's
-// seam on the frame: app.finishUnlock and app.lockCloud. One owner: this file's private signals.
+// Settings > Account > Buwiz account (old account.js AccountActions): the cloud account's status, the refresh when Settings
+// opens, sign in (the gate) and sign out. The sign-in pages are the gate's only; these are the same host calls the old card
+// made, and the gate's seam on the frame: app.finishUnlock and app.lockCloud. One owner: this file's private signals.
 import { signal } from "nsh";
 import type { CloudAccountStatus } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { app, store } from "../../shell";
+import { signInFlow } from "../auth/signInFlow";
 
 const status = signal<CloudAccountStatus | null>(null);
 const busy = signal(false);
@@ -50,33 +51,17 @@ export async function refresh(): Promise<void> {
   }
 }
 
-/** The browser sign-in: the host opens it, this says what to do while it waits, and finishes when it is approved. */
-export async function signIn(): Promise<void> {
-  if (busy()) return;
-  busy.set(true);
+// Every approval of the sign-in flow shows the account here.
+signInFlow.onApproved((approved) => {
+  status.set(approved);
   failure.set(null);
-  status.set({ ...cloud.status(), detail: "Opening your browser to sign in…" });
-  try {
-    const started = await store.call("cloud_account_begin_sign_in");
-    const code = started.user_code ? ` Code ${started.user_code}.` : "";
-    status.set({
-      ...cloud.status(),
-      detail: started.browser_opened
-        ? `Finish signing in in the browser, then return here.${code}`
-        : `Open ${started.verification_uri_complete} and approve this computer.${code}`,
-    });
-    status.set(await store.call("cloud_account_finish_sign_in"));
-    failure.set(null);
-    await app.finishUnlock();
-  } catch (error) {
-    failure.set(errorText(error));
-    try {
-      status.set(store.call("cloud_account_status"));
-    } catch {
-      /* keep the previous status */
-    }
-  }
-  busy.set(false);
+});
+
+/** Sign in from Settings (signed out: a development state): the gate, the one place to sign in (screens/auth/Gate.tsx). */
+export function signIn(): void {
+  if (busy()) return;
+  failure.set(null);
+  app.lockCloud();
 }
 
 export async function signOut(): Promise<void> {
@@ -86,6 +71,7 @@ export async function signOut(): Promise<void> {
   try {
     status.set(await store.call("cloud_account_sign_out"));
     failure.set(null);
+    signInFlow.reset();
     app.lockCloud();
   } catch (error) {
     failure.set(errorText(error));

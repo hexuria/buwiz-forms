@@ -42,6 +42,7 @@ for (const look of LOOKS) {
     await app.press("id:fp-frm0619E:optWithheld:Y");
     await jump(app, 2, wide);
     await reach(app, "id:fp-item-2:0");
+    await app.clear("id:fp-frm0619E:txtTax14");
     await app.type("id:fp-frm0619E:txtTax14", "1250.50");
     await app.wait(400);
     await shoot(app, `g1-0619e-14-open-${look.name}`);

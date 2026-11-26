@@ -1,7 +1,7 @@
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_2551q::{Form2551QDraft, Item13Election};
 
-fn sample_2551q() -> Form2551QDraft {
+pub(crate) fn sample_2551q() -> Form2551QDraft {
     let mut draft =
         Form2551QDraft::new_from_profile(&dummy_profile("2551Qv2018", "Individual"), 2025, 1);
     draft.item_13_election = Item13Election::Graduated;

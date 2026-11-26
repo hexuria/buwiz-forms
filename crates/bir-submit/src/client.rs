@@ -48,8 +48,15 @@ pub struct SubmitConfig {
     /// Shown on the account site's device list.
     pub device_name: String,
     /// Public keys (base64url) the signed trust list must verify with:
-    /// [`trust::pinned_keys`] unless a test or lab sets its own in code.
+    /// [`trust::pinned_keys`] unless a test or lab sets its own in code, or
+    /// the host sets [`trust::pinned_keys_from`] with the value it read.
     pub trust_keys: Vec<String>,
+    /// This install's id, sent with the registration (the host's own; never
+    /// a raw hardware value).
+    pub install_id: Option<String>,
+    /// `ios`, `ipados`, `android`, `macos`, `windows` or `linux`, sent with
+    /// the registration.
+    pub platform: Option<String>,
 }
 
 /// An https URL, or an http one whose host is this machine.
@@ -83,6 +90,8 @@ impl SubmitConfig {
             server_url: url.trim_end_matches('/').to_owned(),
             device_name: format!("eBIRForms on {}", std::env::consts::OS),
             trust_keys: trust::pinned_keys(),
+            install_id: None,
+            platform: None,
         })
     }
 }
@@ -106,6 +115,17 @@ pub enum ClientError {
         code: String,
         message: String,
     },
+    /// A second registration on this sign-in was refused (`409
+    /// device_registered`) while the app holds no registered key: it lost
+    /// its device key (the key file or Keychain item is gone). Only a new
+    /// sign-in can register one. Not a try, and never tried again by itself.
+    #[error("This device's key is missing. Sign out and sign in again to send returns.")]
+    DeviceKeyMissing,
+    /// `409 install_in_use`: this install's device belongs to another live
+    /// sign-in. This client sends its install id from the start, so it should
+    /// never see it. Not a try, never tried again by itself.
+    #[error("Sign out and sign in again on this device.")]
+    InstallInUse,
     #[error("{0}")]
     Other(String),
     /// The server says this was not a try and nothing reached the BIR: a
@@ -140,6 +160,8 @@ impl ClientError {
             ClientError::NotATry { .. }
                 | ClientError::SignedOut
                 | ClientError::DeviceRevoked
+                | ClientError::DeviceKeyMissing
+                | ClientError::InstallInUse
                 | ClientError::Network(_)
         )
     }
@@ -283,6 +305,15 @@ impl FileName {
 
 /// The longest the relay WebSocket may take to open.
 const RELAY_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// What [`Submitter::register_device`] did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Registered {
+    /// This sign-in's device was registered now.
+    New,
+    /// It already was (a kept id, or `409 device_registered`).
+    AlreadyDone,
+}
 
 /// One app's connection to buwiz-server. Cheap to share behind an `Arc`.
 pub struct Submitter {
@@ -491,7 +522,31 @@ impl Submitter {
         Ok(())
     }
 
-    /// Registers the device key once per sign-in; answers its id.
+    /// Registers this device right after a sign-in (the host calls it once
+    /// the tokens are saved): [`Registered::New`], or
+    /// [`Registered::AlreadyDone`] when this sign-in already has its device
+    /// (`409 device_registered`, or an id is kept). An error is the host's to
+    /// log: the first send registers as it always did.
+    pub async fn register_device(&self) -> Result<Registered, ClientError> {
+        let _guard = self.session_lock.lock().await;
+        if self.store.get(DEVICE_ID)?.is_some() {
+            return Ok(Registered::AlreadyDone);
+        }
+        match self.post_registration().await {
+            Ok(_) => Ok(Registered::New),
+            Err(ClientError::Server {
+                status: 409, code, ..
+            }) if code == "device_registered" => Ok(Registered::AlreadyDone),
+            Err(ClientError::Server {
+                status: 409, code, ..
+            }) if code == "install_in_use" => Err(ClientError::InstallInUse),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Registers the device key once per sign-in; answers its id. A `409
+    /// device_registered` here means the sign-in has a device whose key this
+    /// app no longer holds: [`ClientError::DeviceKeyMissing`], once.
     async fn ensure_device(&self) -> Result<String, ClientError> {
         if let Some(id) = self.store.get(DEVICE_ID)? {
             return Ok(id);
@@ -500,12 +555,30 @@ impl Submitter {
         if let Some(id) = self.store.get(DEVICE_ID)? {
             return Ok(id);
         }
+        match self.post_registration().await {
+            Err(ClientError::Server {
+                status: 409, code, ..
+            }) if code == "device_registered" => Err(ClientError::DeviceKeyMissing),
+            Err(ClientError::Server {
+                status: 409, code, ..
+            }) if code == "install_in_use" => Err(ClientError::InstallInUse),
+            other => other,
+        }
+    }
+
+    /// `POST /api/devices` with this device's key, name, install id and
+    /// platform, signed with the key; keeps and answers the id.
+    async fn post_registration(&self) -> Result<String, ClientError> {
         let access_token = self.tokens.access_token(false).await?;
         let key = self.device_key()?;
-        let body = serde_json::to_vec(
-            &json!({ "public_key": key.public_key(), "name": self.config.device_name }),
-        )
-        .expect("json");
+        let mut fields = json!({ "public_key": key.public_key(), "name": self.config.device_name });
+        if let Some(install_id) = &self.config.install_id {
+            fields["install_id"] = json!(install_id);
+        }
+        if let Some(platform) = &self.config.platform {
+            fields["platform"] = json!(platform);
+        }
+        let body = serde_json::to_vec(&fields).expect("json");
         let path = "/api/devices";
         let mut request = self
             .request(reqwest::Method::POST, path)
@@ -1751,6 +1824,142 @@ mod tests {
             .map(|request| request.path.clone())
             .collect();
         assert_eq!(paths, ["/api/tickets", "/api/devices", "/api/tickets"]);
+    }
+
+    // ----------------------------------------------- registration after a sign-in
+
+    /// Right after a sign-in: one registration with the install id and the
+    /// platform; a second is already done, by the kept id or by `409`.
+    #[tokio::test]
+    async fn a_new_sign_in_registers_its_device_once_with_the_install_id() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url2, seen2) = serve(|request| match request.path.as_str() {
+            "/api/devices" => Answer::json(200, &json!({"id": "d7"})),
+            _ => Answer::json(404, &json!({})),
+        });
+        let (mut client, _) = submitter_tokens(&url2, true, Vec::new());
+        client.store.delete(DEVICE_ID).unwrap();
+        client.config.install_id = Some("install-id-of-this-test-0001".into());
+        client.config.platform = Some("macos".into());
+        assert_eq!(client.register_device().await.unwrap(), Registered::New);
+        assert_eq!(client.store.get(DEVICE_ID).unwrap().as_deref(), Some("d7"));
+        assert_eq!(
+            client.register_device().await.unwrap(),
+            Registered::AlreadyDone
+        );
+        let sent = seen2.lock().unwrap();
+        assert_eq!(sent.len(), 1, "one registration");
+        let body: Value = serde_json::from_str(&sent[0].body).unwrap();
+        assert_eq!(body["install_id"], "install-id-of-this-test-0001");
+        assert_eq!(body["platform"], "macos");
+        assert_eq!(body["name"], "test");
+        for later in ["model", "os_version", "computer_name"] {
+            assert!(body.get(later).is_none(), "{later} is a later change");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_409_after_the_sign_in_is_already_done_and_other_failures_are_errors() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, _) = serve(|_| {
+            Answer::json(
+                409,
+                &json!({"error": "device_registered", "message": "already"}),
+            )
+        });
+        let (client, _) = submitter_tokens(&url, true, Vec::new());
+        client.store.delete(DEVICE_ID).unwrap();
+        assert_eq!(
+            client.register_device().await.unwrap(),
+            Registered::AlreadyDone
+        );
+        let (url, _) = serve(|_| Answer::json(500, &json!({"error": "oops"})));
+        let (client, _) = submitter_tokens(&url, true, Vec::new());
+        client.store.delete(DEVICE_ID).unwrap();
+        assert!(client.register_device().await.is_err());
+    }
+
+    /// `409 install_in_use`: a plain sentence where the send is held, after
+    /// the sign-in and on a send alike; one request each, no loop.
+    #[tokio::test]
+    async fn an_install_in_use_says_sign_in_again_and_never_loops() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, seen) = serve(|request| match request.path.as_str() {
+            "/api/devices" => Answer::json(
+                409,
+                &json!({"error": "install_in_use", "message": "in use"}),
+            ),
+            _ => Answer::json(404, &json!({})),
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        client.store.delete(DEVICE_ID).unwrap();
+        let after_sign_in = client.register_device().await.unwrap_err();
+        assert!(
+            matches!(after_sign_in, ClientError::InstallInUse),
+            "{after_sign_in:?}"
+        );
+        let on_send = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            on_send.to_string(),
+            "Sign out and sign in again on this device."
+        );
+        assert!(on_send.is_not_a_try());
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            2,
+            "one registration each, no loop"
+        );
+        assert_eq!(tokens.ended(), 0);
+    }
+
+    /// The device key is gone while still signed in: the server does not
+    /// know the new key (`401 unknown_device`), the one registration again is
+    /// refused (`409`): one plain sentence, held, never a loop.
+    #[tokio::test]
+    async fn a_lost_device_key_says_so_once_and_never_loops() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, seen) = serve(|request| match request.path.as_str() {
+            "/api/devices" => Answer::json(
+                409,
+                &json!({"error": "device_registered", "message": "already"}),
+            ),
+            _ => Answer::json(
+                401,
+                &json!({"error": {"code": "unknown_device", "message": "who?"}}),
+            ),
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        let error = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ClientError::DeviceKeyMissing), "{error:?}");
+        assert_eq!(
+            error.to_string(),
+            "This device's key is missing. Sign out and sign in again to send returns."
+        );
+        assert!(error.is_not_a_try());
+        let paths: Vec<String> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|r| r.path.clone())
+            .collect();
+        assert_eq!(paths, ["/api/tickets", "/api/devices"]);
+        assert_eq!(tokens.ended(), 0, "not signed out by itself");
+        // The next send asks once more and says the same; still no loop.
+        assert!(matches!(
+            client.signed("POST", "/api/tickets", &json!({})).await,
+            Err(ClientError::DeviceKeyMissing)
+        ));
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            3,
+            "one registration try per send"
+        );
     }
 
     // ----------------------------------------------- the version header

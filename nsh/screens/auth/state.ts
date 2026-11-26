@@ -2,37 +2,9 @@
 // their actions in app/main.js), one owner: this module. The frame's session (who is signed in, locked or not) is
 // shell/app.ts; these screens only change it through app.startSession, app.finishUnlock and app.setSetup.
 import { batch, signal } from "nsh";
-import type { CloudSignInStart } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { app, go, store, toast, type Session } from "../../shell";
-import { codeLengthError, signInTarget, waitingDetail, wrongCode } from "./logic";
-
-// ---------------------------------------------------------------- the account gate
-
-const gateBusy = signal(false);
-const gateDetail = signal("");
-
-/** Sign in or Create account: begin the device flow (the host opens the browser), show the code, wait for the approval. */
-async function startAccountFlow(kind: "sign-in" | "create"): Promise<void> {
-  if (gateBusy()) return;
-  batch(() => {
-    gateBusy.set(true);
-    app.setGateError(null);
-    gateDetail.set("Opening your browser…");
-  });
-  try {
-    const started = (await store.call(kind === "create" ? "cloud_account_begin_sign_up" : "cloud_account_begin_sign_in")) as CloudSignInStart;
-    gateDetail.set(waitingDetail(started));
-    await store.call("cloud_account_finish_sign_in");
-    await app.finishUnlock();
-  } catch (error) {
-    app.setGateError(errorText(error));
-  }
-  batch(() => {
-    gateBusy.set(false);
-    gateDetail.set("");
-  });
-}
+import { codeLengthError, signInTarget, wrongCode } from "./logic";
 
 // ---------------------------------------------------------------- sign-in
 
@@ -309,9 +281,6 @@ const ro = <T,>(s: () => T) => () => s();
 
 /** What the auth screens read (accessors) and do (actions). */
 export const auth = {
-  gateBusy: ro(gateBusy),
-  gateDetail: ro(gateDetail),
-  startAccountFlow,
   tin: ro(tin),
   method: ro(method),
   forgot: ro(forgot),

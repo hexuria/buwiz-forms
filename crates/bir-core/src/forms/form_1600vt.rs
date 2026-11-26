@@ -744,6 +744,7 @@ impl Form1600VtDraft {
                 .unwrap_or(rate);
             fields.insert(format!("derived:rate{}", index + 1), rate.to_string());
         }
+        super::print_map::match_upload_case("1600vt-v2018", &mut fields, None);
         fields
     }
 

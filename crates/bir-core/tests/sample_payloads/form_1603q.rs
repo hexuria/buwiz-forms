@@ -3,7 +3,7 @@ use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1603q::{Form1603QCategory, Form1603QDraft, Form1603QTaxRelief};
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_1603q() -> Form1603QDraft {
+pub(crate) fn sample_1603q() -> Form1603QDraft {
     let mut draft =
         Form1603QDraft::new_from_profile(&dummy_profile("1603Q", "Corporation"), 2025, 3);
     draft.category = Some(Form1603QCategory::Government);

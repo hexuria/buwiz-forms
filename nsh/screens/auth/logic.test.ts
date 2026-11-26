@@ -1,6 +1,6 @@
 // The pure rules of the gate and lock screens, and the test authenticator against a published RFC 6238 vector.
 import { expect, test } from "nsh/test";
-import { codeLengthError, signInLine, signInTarget, waitingDetail, wrongCode } from "./logic";
+import { codeLengthError, signInLine, signInTarget, wrongCode } from "./logic";
 import { generatedSecret, totpCode } from "./testTotp";
 import { deviceCopy } from "../../ui/look";
 
@@ -25,11 +25,6 @@ test("codes: length first, then which wrong answer", () => {
   expect(wrongCode(false, false)).toBe("Wrong TIN or PIN. Try again.");
   expect(wrongCode(true, false)).toBe("Wrong TIN or code. Try again.");
   expect(wrongCode(false, true)).toBe("That taxpayer has no PIN yet. Ask the admin to open it.");
-});
-
-test("the gate's waiting line: the browser opened, or the address to open, with the code", () => {
-  expect(waitingDetail({ user_code: "WXYZ-2345", browser_opened: true, verification_uri_complete: "http://x/login" })).toBe("Finish in the browser, then return here. Code WXYZ-2345.");
-  expect(waitingDetail({ user_code: "", browser_opened: false, verification_uri_complete: "http://x/login" })).toBe(deviceCopy("Open http://x/login and approve this computer."));
 });
 
 test("the test authenticator gives RFC 6238's SHA-1 codes", () => {

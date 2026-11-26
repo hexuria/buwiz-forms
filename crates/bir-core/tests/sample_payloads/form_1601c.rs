@@ -1,7 +1,7 @@
 use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row};
 
-fn sample_1601c() -> Form1601CDraft {
+pub(crate) fn sample_1601c() -> Form1601CDraft {
     let mut draft =
         Form1601CDraft::new_from_profile(&dummy_profile("1601Cv2018", "Corporation"), 2025, 6);
     draft.auto_compute_penalties = false;

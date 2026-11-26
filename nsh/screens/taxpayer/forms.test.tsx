@@ -30,8 +30,8 @@ test("desktop: the year's forms show their next period and template; Edit forms 
   await app.waitFor("id:tp-form-1601C");
   expect(app.shows("id:tp-form-2551Q")).toBe(false);
   await app.press("id:tp-forms-freq >> label:All");
-  await app.waitFor("id:tp-form-2551Q-check");
-  await app.press("id:tp-form-2551Q-check");
+  await app.waitFor("id:tp-form-2551Q");
+  await app.press("id:tp-form-2551Q");
   expect(app.texts()).toContain("1 selected");
   expect(app.texts()).toContain("Not filed this year");
   await app.press("id:tp-forms-save");
@@ -41,7 +41,7 @@ test("desktop: the year's forms show their next period and template; Edit forms 
 
   // Cancel keeps the list as it was.
   await app.press("id:tp-forms-edit");
-  await app.press("id:tp-form-1601C-check");
+  await app.press("id:tp-form-1601C");
   await app.press("id:tp-forms-cancel");
   expect(app.shows("id:tp-form-1601C")).toBe(true);
   expect(app.shows("id:tp-forms-search")).toBe(false);
@@ -134,4 +134,34 @@ test("desktop: with no tax year Forms shows the band and Templates offers Add ye
   await app.press("id:tp-add-year-add");
   await app.waitFor(`text:${YEAR} added. Choose the forms it files.`);
   await app.waitFor("id:tp-forms-empty");
+});
+
+test("desktop: a tap on the row's text, code or empty part selects it; one tap toggles once", async () => {
+  const app = await desk();
+  await app.waitFor("id:tp-form-1601C");
+  await app.press("id:tp-forms-edit");
+  await app.waitFor("id:tp-forms-search");
+  expect(app.texts()).toContain("2 selected");
+
+  // A tap on the row's text selects it (the press lands on the one control the row is): one off.
+  await app.press("text:2551Q");
+  expect(app.texts()).toContain("1 selected");
+  // A second tap selects it again: each tap moved the count exactly once.
+  await app.press("text:2551Q");
+  expect(app.texts()).toContain("2 selected");
+  // The control pressed by its row id (the checkbox end) toggles exactly once as well.
+  await app.press("id:tp-form-2551Q");
+  expect(app.texts()).toContain("1 selected");
+});
+
+test("phone: a tap on the row's text selects it at narrow width", async () => {
+  const app = await open(ENTRY, { host: { params: { start: "view=forms" } } });
+  await app.waitFor("id:tp-form-1601C");
+  await app.press("id:tp-forms-edit");
+  await app.waitFor("id:tp-forms-search");
+  expect(app.texts()).toContain("2 selected");
+  await app.press("text:2551Q");
+  expect(app.texts()).toContain("1 selected");
+  await app.press("text:2551Q");
+  expect(app.texts()).toContain("2 selected");
 });

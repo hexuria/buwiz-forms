@@ -5,12 +5,9 @@
 //! a mode-0600 file beside the database — the same fallback the database key
 //! uses when the keychain is missing. The page cannot read either store.
 
-use std::sync::Mutex;
-use std::time::Duration;
-
 use bir_core::cloud_account::{
-    self, AccountBrowser, AccountSecrets, AccountStatus, BlockingHttp, CloudError, DeviceChallenge,
-    ENV_SERVER_URL, GateDecision, RefreshOutcome, SessionUpdate, StoredAccount,
+    self, AccountSecrets, AccountStatus, BlockingHttp, CloudError, ENV_SERVER_URL, GateDecision,
+    RefreshOutcome, SessionUpdate, StoredAccount,
 };
 use gpui_shell::{HostArguments, HostError, HostModule, HostObject, HostResult, HostValue};
 
@@ -32,12 +29,6 @@ export interface CloudAccountStatus {
     practice: boolean;
     detail: string;
 }
-export interface CloudSignInStart {
-    user_code: string;
-    verification_uri: string;
-    verification_uri_complete: string;
-    browser_opened: boolean;
-}
 export interface CloudAccountGate {
     unlocked: boolean;
     offline: boolean;
@@ -47,24 +38,16 @@ export interface CloudAccountGate {
 }
 export function cloud_account_status(): CloudAccountStatus;
 export function cloud_account_gate(): CloudAccountGate;
-export function cloud_account_begin_sign_in(): Promise<CloudSignInStart>;
-export function cloud_account_begin_sign_up(): Promise<CloudSignInStart>;
-export function cloud_account_finish_sign_in(): Promise<CloudAccountStatus>;
 export function cloud_account_refresh(): Promise<CloudAccountStatus>;
 export function cloud_account_sign_out(): Promise<CloudAccountStatus>;
 export function cloud_account_session_opened(): null;
 export function cloud_account_session_closed(): null;
 "#;
 
-static PENDING: Mutex<Option<DeviceChallenge>> = Mutex::new(None);
-
 pub fn register(module: HostModule) -> HostModule {
     module
         .function("cloud_account_status", |_| status_now())
         .function("cloud_account_gate", |_| gate_value())
-        .async_function("cloud_account_begin_sign_in", begin_sign_in)
-        .async_function("cloud_account_begin_sign_up", begin_sign_up)
-        .async_function("cloud_account_finish_sign_in", finish_sign_in)
         .async_function("cloud_account_refresh", refresh_account)
         .async_function("cloud_account_sign_out", sign_out)
         .function("cloud_account_session_opened", |_| session_opened())
@@ -88,7 +71,7 @@ pub fn prepare_launch() {
     crate::account_gate::set_unlocked(unlocked);
 }
 
-fn status_now() -> HostResult {
+pub(crate) fn status_now() -> HostResult {
     let resolved = match resolve() {
         Ok(resolved) => resolved,
         Err(error) => {
@@ -115,81 +98,54 @@ fn status_now() -> HostResult {
     )))
 }
 
-fn begin_sign_in(
-    _arguments: &HostArguments,
-) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
-    begin_browser(AccountBrowser::SignIn)
+/// The first tokens of a sign-in, from either path (the browser's device flow, the email code): the profile is
+/// read, the sign-in saved under the account-session lock, and the device key of an earlier sign-in forgotten.
+pub(crate) fn save_signed_in(
+    http: &mut dyn cloud_account::Http,
+    server_url: &str,
+    tokens: cloud_account::TokenSet,
+    now: i64,
+) -> Result<(), HostError> {
+    if tokens.refresh_token.is_empty() {
+        return Err(HostError::new(
+            "The server did not return a refresh token. Sign in again.",
+        ));
+    }
+    let (user_id, email, practice) =
+        cloud_account::load_profile(http, server_url, &tokens.access_token).map_err(host_error)?;
+    let secrets = AccountSecrets {
+        server_url: server_url.to_owned(),
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        access_expires_at_unix: now.saturating_add(tokens.expires_in),
+        user_id,
+        email,
+        offline: false,
+        practice,
+    };
+    {
+        let _one = bir_core::account_session::lock();
+        bir_core::transport::set_practice_account(practice);
+        save_stored(&stored_from(secrets, now))?;
+    }
+    // A new sign-in registers a new device key with the relay (the old one belonged to the old sign-in).
+    bir_core::relay::forget_device();
+    register_device_soon();
+    Ok(())
 }
 
-fn begin_sign_up(
-    _arguments: &HostArguments,
-) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
-    begin_browser(AccountBrowser::CreateAccount)
-}
-
-fn begin_browser(
-    entry: AccountBrowser,
-) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
-    spawn_account("buwiz-account-start", move || {
-        let resolved = resolve()?;
-        let account = cloud_account::configured_account().map_err(host_error)?;
-        let mut http = BlockingHttp::new();
-        let challenge =
-            cloud_account::start_device(&mut http, &resolved.url, cloud_account::unix_now())
-                .map_err(host_error)?;
-        let url = cloud_account::account_browser_url(&account.url, entry, &challenge.user_code);
-        let browser_opened = cloud_account::open_browser(&url).is_ok();
-        let started = HostObject::new()
-            .field("user_code", challenge.user_code.clone())
-            .field("verification_uri", challenge.verification_uri.clone())
-            .field("verification_uri_complete", url)
-            .field("browser_opened", browser_opened)
-            .into();
-        *pending_lock() = Some(challenge);
-        Ok(started)
-    })
-}
-
-fn finish_sign_in(
-    _arguments: &HostArguments,
-) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
-    let challenge = pending_lock()
-        .take()
-        .ok_or_else(|| HostError::new("Sign-in has not started. Press Sign in again."))?;
-    spawn_account("buwiz-account-finish", move || {
-        let mut http = BlockingHttp::new();
-        let mut now = cloud_account::unix_now;
-        let mut sleep = |delay: Duration| std::thread::sleep(delay);
-        let tokens = cloud_account::poll_until(&mut http, &challenge, &mut now, &mut sleep)
-            .map_err(host_error)?;
-        if tokens.refresh_token.is_empty() {
-            return Err(HostError::new(
-                "The server did not return a refresh token. Sign in again.",
-            ));
-        }
-        let (user_id, email, practice) =
-            cloud_account::load_profile(&mut http, &challenge.server_url, &tokens.access_token)
-                .map_err(host_error)?;
-        let now = cloud_account::unix_now();
-        let secrets = AccountSecrets {
-            server_url: challenge.server_url.clone(),
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-            access_expires_at_unix: now.saturating_add(tokens.expires_in),
-            user_id,
-            email,
-            offline: false,
-            practice,
-        };
-        {
-            let _one = bir_core::account_session::lock();
-            bir_core::transport::set_practice_account(practice);
-            save_stored(&stored_from(secrets, now))?;
-        }
-        // A new sign-in registers a new device key with the relay (the old one belonged to the old sign-in).
-        bir_core::relay::forget_device();
-        status_now()
-    })
+/// Adds this device to the account (bir-core `relay::register_after_sign_in`) on a thread of its own, so signing in never
+/// waits for it: a failure is logged there and the first send registers as it always did; a practice account adds none.
+fn register_device_soon() {
+    let database = bir_core::db::capture_database_path_override();
+    let started = std::thread::Builder::new()
+        .name("buwiz-device-register".into())
+        .spawn(move || {
+            database.run(bir_core::relay::register_after_sign_in);
+        });
+    if let Err(error) = started {
+        tracing::warn!("device registration not started ({error}); the first send registers");
+    }
 }
 
 fn refresh_account(
@@ -232,7 +188,7 @@ fn sign_out(
     _arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     spawn_account("buwiz-account-sign-out", || {
-        clear_pending();
+        crate::cloud_email::cancel();
         {
             let _one = bir_core::account_session::lock();
             if let Some(stored) = load_stored()? {
@@ -250,7 +206,7 @@ fn sign_out(
 
 fn session_opened() -> HostResult {
     // The page opens the gate after a sign-in; take the flag from the saved
-    // account. An unreadable store leaves the value finish_sign_in set.
+    // account. An unreadable store leaves the value save_signed_in set.
     if let Ok(Some(stored)) = load_stored() {
         bir_core::transport::set_practice_account(stored.practice);
     }
@@ -353,7 +309,7 @@ fn gate_value() -> HostResult {
         .into())
 }
 
-fn spawn_account(
+pub(crate) fn spawn_account(
     name: &str,
     work: impl FnOnce() -> HostResult + Send + 'static,
 ) -> Result<std::pin::Pin<Box<dyn std::future::Future<Output = HostResult> + Send>>, HostError> {
@@ -374,7 +330,7 @@ fn spawn_account(
     }))
 }
 
-fn resolve() -> Result<cloud_account::ResolvedServer, HostError> {
+pub(crate) fn resolve() -> Result<cloud_account::ResolvedServer, HostError> {
     cloud_account::configured_server().map_err(host_error)
 }
 
@@ -389,7 +345,7 @@ fn forget_saved_server_url() {
 }
 
 fn rejected_origin_text(runtime_name: &str, compiled: Option<&str>) -> String {
-    std::env::var(runtime_name)
+    bir_core::config::var(runtime_name)
         .ok()
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty())
@@ -432,16 +388,6 @@ fn optional_text(value: Option<&str>) -> HostValue {
 
 fn host_error(error: impl std::fmt::Display) -> HostError {
     HostError::new(error.to_string())
-}
-
-fn pending_lock() -> std::sync::MutexGuard<'static, Option<DeviceChallenge>> {
-    PENDING
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-fn clear_pending() {
-    *pending_lock() = None;
 }
 
 /// Server origin and the user access token, when this computer is signed in.

@@ -11,7 +11,7 @@ use bir_core::official_xml;
 use sha2::{Digest, Sha256};
 
 /// A deficiency-tax installment payment with penalties and rounding cases.
-fn sample_0605() -> Form0605Draft {
+pub(crate) fn sample_0605() -> Form0605Draft {
     let mut draft = Form0605Draft::new_from_profile(&dummy_profile("0605", "Individual"), 2025, 1);
     // The filename carries the clock time the return was made at.
     draft.lifecycle.created_at = "2025-12-01T01:02:03+00:00".into();

@@ -4,7 +4,7 @@ use bir_core::forms::excise_places::ExcisePlace;
 use bir_core::forms::form_2200c::{Form2200CDraft, Form2200CManner, Form2200CRow};
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_2200c() -> Form2200CDraft {
+pub(crate) fn sample_2200c() -> Form2200CDraft {
     let mut draft =
         Form2200CDraft::new_from_profile(&dummy_profile("2200Cv2018", "Corporation"), 2025);
     draft.month = 6;

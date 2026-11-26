@@ -410,6 +410,17 @@ impl Form1604cDraft {
     /// is "Yes" (the submitted controls hold `00` / `0.00` then).
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
+        // Item 1 on the 1604C sheet preprints "2 0" in slots 0-1 and provides
+        // only two input boxes (slots 2-3); keep the 4-digit year in upload XML.
+        // Leave blank if the year is outside 2000..=2099 rather than printing a wrong century.
+        if (2000..=2099).contains(&self.taxable_year) {
+            fields.insert(
+                "frm1604c:txtYear".to_string(),
+                format!("{:02}", self.taxable_year % 100),
+            );
+        } else {
+            fields.insert("frm1604c:txtYear".to_string(), String::new());
+        }
         let (line1, line2) = print_address_lines(&self.registered_address);
         fields.insert("derived:line:address1".to_string(), line1);
         fields.insert("derived:line:address2".to_string(), line2);

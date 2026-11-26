@@ -64,9 +64,9 @@ pub(crate) fn install_logging() {
         }
         let developer_mode = bir_core::logging::developer_mode_enabled();
         let default_filter = if developer_mode {
-            "nsh_app_ebirforms=debug,bir_app_api=debug,bir_core=info,bir_print=debug,panic=error"
+            "nsh_app_ebirforms=debug,bir_app_api=debug,bir_core=info,bir_submit::ios_storage=info,bir_print=debug,panic=error"
         } else {
-            "nsh_app_ebirforms=info,bir_app_api=info,bir_core=info,bir_print=error,panic=error"
+            "nsh_app_ebirforms=info,bir_app_api=info,bir_core=info,bir_submit::ios_storage=info,bir_print=error,panic=error"
         };
         if bir_core::logging::install(bir_core::logging::InstallOptions {
             developer_mode,
@@ -74,6 +74,8 @@ pub(crate) fn install_logging() {
         }) {
             tracing::info!("eBIRForms started");
         }
+        // The launch storage step ran at registration, before there was a log: its outcome goes out now.
+        bir_core::platform::log_app_storage();
     });
 }
 
@@ -84,7 +86,16 @@ pub(crate) fn install_logging() {
 fn set_up(send_guard: impl FnOnce() -> SendMode) -> Process {
     #[cfg(not(target_os = "android"))]
     switch_off_keychain(cfg!(debug_assertions));
+    // iOS: the data folder out of backups and protected, and the old build's Keychain items removed once, after the
+    // keychain switch and before the database is opened. Nothing elsewhere. Its outcome is logged once logging starts.
+    bir_core::platform::prepare_app_storage();
     let _ = bir_app_api::install_hooks(NshHooks);
+    // Phones: the browser for the sign-in, and the phone kept awake while a send is in flight. Desktops register
+    // nothing: bir-core opens the browser itself there.
+    #[cfg(target_os = "ios")]
+    crate::phone_ios::install();
+    #[cfg(target_os = "android")]
+    crate::phone_android::register();
     let send = send_guard();
     if !send.worker_may_start() {
         bir_app_api::bir_module::refuse_submission_worker();
@@ -193,7 +204,8 @@ fn fresh_scratch_folder(root: &Path, pid: u32, sequence: u32) -> std::io::Result
 /// whose caller named none (`BIR_DATABASE_PATH` unset or empty). A test's [`use_database`] names one later, per thread.
 /// The one-copy guard asks this at registration, before any thread has named anything.
 pub(crate) fn scratch_database_wanted() -> bool {
-    test_environment() && !std::env::var_os(DATABASE_PATH).is_some_and(|value| !value.is_empty())
+    // The configuration store (Android's dev list) first, then the launch environment.
+    test_environment() && !bir_core::config::var(DATABASE_PATH).is_ok_and(|value| !value.is_empty())
 }
 
 /// How long a scratch folder lives after its last change.

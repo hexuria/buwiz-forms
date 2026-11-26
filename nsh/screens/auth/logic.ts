@@ -1,12 +1,6 @@
 // The rules of the sign-in, setup and account-gate screens (old app/main.js auth section, the old shell's auth.js, gate.js): pure.
 import { deviceCopy } from "../../ui/look";
 
-/** The account gate's line before anything happened. It promises no filing: phones only simulate sending. */
-export const GATE_DEFAULT = "Sign in with your Buwiz account to use eBIRForms on this computer.";
-
-/** What Buwiz is, under the gate's line (the account site's sign-in: an emailed 6-digit code, no password). */
-export const GATE_ABOUT = "Buwiz is the account behind eBIRForms. We email you a 6-digit code to sign in; there is no password.";
-
 /** The TIN typed on the sign-in screen: the admin account, a taxpayer, or why neither. */
 export type SignInTarget = { error: string } | { root: string; admin: boolean };
 
@@ -35,12 +29,4 @@ export function codeLengthError(totp: boolean, code: string): string | null {
 export function wrongCode(totp: boolean, taxpayerHasNoCode: boolean): string {
   if (taxpayerHasNoCode) return "That taxpayer has no PIN yet. Ask the admin to open it.";
   return totp ? "Wrong TIN or code. Try again." : "Wrong TIN or PIN. Try again.";
-}
-
-/** The gate's line while the browser approves this computer (old startAccountFlow). */
-export function waitingDetail(started: { user_code?: string | null; browser_opened: boolean; verification_uri_complete: string }): string {
-  const code = started.user_code ? ` Code ${started.user_code}.` : "";
-  return started.browser_opened
-    ? `Finish in the browser, then return here.${code}`
-    : deviceCopy(`Open ${started.verification_uri_complete} and approve this computer.${code}`);
 }

@@ -49,8 +49,13 @@ test("phone: open, Check shows the to-dos on the pill, step to one, type, autosa
   await app.waitFor("id:fp-section-2", { timeout: 15_000 });
   await app.press("id:fp-section-2");
   await app.wait(800);
+  await app.clear("id:fp-frm2551Qv2018:txt15");
   await app.type("id:fp-frm2551Qv2018:txt15", "100");
   await app.waitFor("text:✓ Saved", { timeout: 5000 });
+  // The exact value typed is what the return computes with: item 18 (the sum of items 15
+  // to 17, empty here but for item 15) and item 19 move by exactly it.
+  expect(app.texts()).toContain("100.00");
+  expect(app.texts()).toContain("-100.00");
 });
 
 test("desktop: stepping with the pill puts the keyboard in a tick box, then in a money box", async () => {
