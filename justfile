@@ -223,6 +223,54 @@ unused:
 test:
     cargo test --locked --workspace
 
+# Pull requests run only the quick checks; the test suites run on a push to test/** (docs/CI.md). Pushes HEAD to
+# test/<system>/<branch>, so the results show on the pull request of that commit; a newer push replaces the older run.
+# No system: Linux and Windows. Remote: $CI_TEST_REMOTE, else origin (it must be allowed to push workflow files).
+# Ask GitHub for the test suites at this commit: `just ci-test [linux|windows|macos|all]`
+[unix]
+ci-test system="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{system}}" in
+        linux|windows|macos|all) lane="{{system}}" ;;
+        "") lane="linux-windows" ;;
+        *) echo "ci-test: system is linux, windows, macos or all (none: Linux and Windows)" >&2; exit 1 ;;
+    esac
+    branch=$(git symbolic-ref --short -q HEAD) || { echo "ci-test: check out the pull request's branch first" >&2; exit 1; }
+    name=$(sed -E 's#^(feat|fix|spike)/##' <<<"$branch")
+    remote="${CI_TEST_REMOTE:-origin}"
+    sha=$(git rev-parse HEAD)
+    target="test/$lane/$name"
+    git push --force "$remote" "$sha:refs/heads/$target"
+    echo "$sha on $target"
+    echo "https://github.com/hexuria/buwiz-forms/actions?query=branch%3A${target//\//%2F}"
+    echo "When the runs are done: just ci-test-clean"
+
+# Deletes only branches with no queued or running workflow run; their results stay on the commit and its pull request.
+# Delete the test/** branches whose runs have all finished
+[unix]
+ci-test-clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    remote="${CI_TEST_REMOTE:-origin}"
+    git ls-remote --heads "$remote" 'refs/heads/test/*' | while read -r _ ref; do
+        branch="${ref#refs/heads/}"
+        busy=$(gh run list --repo hexuria/buwiz-forms --branch "$branch" --limit 100 --json status \
+            --jq '[.[] | select(.status != "completed")] | length' </dev/null)
+        if [ "$busy" = 0 ]; then
+            git push "$remote" --delete "$branch" </dev/null
+        else
+            echo "keeping $branch: $busy run(s) not finished"
+        fi
+    done
+
+# After a batch of merges: a push to main runs only the quick checks. Also what the nightly run does, on demand.
+# Start a complete run of main: every suite of ci.yml and nsh.yml on all three systems
+ci-main:
+    gh workflow run ci.yml --repo hexuria/buwiz-forms --ref main -f systems=all -f suites=all
+    gh workflow run nsh.yml --repo hexuria/buwiz-forms --ref main -f systems=all -f suites=all
+    @echo "https://github.com/hexuria/buwiz-forms/actions?query=branch%3Amain+event%3Aworkflow_dispatch"
+
 # Automated tab-walk over the generated form corpus (tools/formgen/tab_check.py).
 # Omit the slug to walk every form in forms/. Artifacts (tab.json, page-<N>.png
 # per page, and a review index.html) land in forms/review/ -- see that

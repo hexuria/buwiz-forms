@@ -76,10 +76,11 @@ Without just: `export PATH="$HOME/BuwizNsh/tools/bin:$PATH"; cd nsh; nsh check; 
 `nsh run --target windows` and `--target linux` are NSH's commands for those backends; CI builds and tests on `windows-2025` and `ubuntu-24.04`, while `nsh-run` and `nsh-shots` pass `--target macos` locally.
 On Windows, as on macOS, a test environment's scratch database needs no `BIR_DATABASE_PATH` (the guard verifies there). Engines in one run cannot share one named file.
 
-CI: `.github/workflows/nsh.yml` runs the steps above on `macos-15`,
-`windows-2025` and `ubuntu-24.04` on pull requests that touch `nsh/` or
-the crates it uses; it checks out hexuria/nsh at `NSH_PINNED_REF` (with
-`NSH_REPO_TOKEN` when the fork is private) and has run and passed.
+CI ([docs/CI.md](../CI.md)): a pull request that touches `nsh/` or the crates it uses runs `just nsh-check -v` on
+Linux (ci.yml's `NSH app type check (Linux)`). `.github/workflows/nsh.yml` runs the steps above on `macos-15`,
+`windows-2025` and `ubuntu-24.04`, but only when they are asked for: on a push to `test/...` (`just ci-test`), in a
+manual run, and nightly on `main`. It checks out hexuria/nsh at `NSH_PINNED_REF` (with `NSH_REPO_TOKEN` when the
+fork is private) and has run and passed.
 
 ## Parked
 

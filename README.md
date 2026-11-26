@@ -48,7 +48,7 @@ that server is unreachable. Details: [docs/cloud-account.md](docs/cloud-account.
 | --- | --- | --- | --- | --- |
 | macOS | Fully tested | `scripts/setup-macos.sh` | `~/Library/Application Support/dev.goldcoders.bir/bir_data.db` | [macos.md](docs/platforms/macos.md) |
 | Linux | Fully tested | `scripts/setup-linux.sh` | `~/.local/share/dev.goldcoders.bir/bir_data.db` | [linux.md](docs/platforms/linux.md) |
-| Windows | Built and tested in CI on every pull request | `scripts\setup-windows.ps1` | `%LOCALAPPDATA%\dev.goldcoders.bir\bir_data.db` | [windows.md](docs/platforms/windows.md) |
+| Windows | Built and tested in CI (nightly and on request) | `scripts\setup-windows.ps1` | `%LOCALAPPDATA%\dev.goldcoders.bir\bir_data.db` | [windows.md](docs/platforms/windows.md) |
 
 Not every feature works the same on every platform. The full table is in
 [docs/FEATURES.md](docs/FEATURES.md). Each platform page lists the packages,
