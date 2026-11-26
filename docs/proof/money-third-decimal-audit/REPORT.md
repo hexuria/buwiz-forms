@@ -1,6 +1,8 @@
 # Money-box third-decimal audit
 
 Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.
+The harness also records whether the upload field or any other newly changed draft number keeps a sub-cent value. In this run neither happened, so the user's worst rank is empty; raw draft-only retention is ranked below visible rounding differences.
+The final harness run used the fresh clone's own isolated HOME, Cargo home and target directory.
 
 ## Official blur and computation inventory
 
@@ -63,21 +65,21 @@ Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.
 | 1601C | `frm1601c:sched1:txtShouldTaxDue0` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | unclear-official |
 | 1601C | `frm1601c:sched1:txtShouldTaxDue0` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | unclear-official |
 | 1601C | `frm1601c:sched1:txtShouldTaxDue0` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | unclear-official |
-| 2551Q | `frm2551Qv2018:txt15` | ordinary-item | `2551q-input-money` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 2551Q | `frm2551Qv2018:txt15` | ordinary-item | `2551q-input-money` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 2551Q | `frm2551Qv2018:txt15` | ordinary-item | `2551q-input-money` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
-| 2551Q | `frm2551Qv2018:txt20` | penalty-item | `2551q-input-money` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 2551Q | `frm2551Qv2018:txt20` | penalty-item | `2551q-input-money` | 1.005 | kept-3dp | 1.005 | 1.00 | mismatch-kept-3dp |
-| 2551Q | `frm2551Qv2018:txt20` | penalty-item | `2551q-input-money` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 2551Q | `frm2551Qv2018:txt15` | ordinary-item | `2551q-input-money` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 2551Q | `frm2551Qv2018:txt15` | ordinary-item | `2551q-input-money` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 2551Q | `frm2551Qv2018:txt15` | ordinary-item | `2551q-input-money` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
+| 2551Q | `frm2551Qv2018:txt20` | penalty-item | `2551q-input-money` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 2551Q | `frm2551Qv2018:txt20` | penalty-item | `2551q-input-money` | 1.005 | kept-3dp | 1.005 | 1.00 | mismatch-kept-3dp-draft-only |
+| 2551Q | `frm2551Qv2018:txt20` | penalty-item | `2551q-input-money` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 2551Q | `txtATCAmt1` | schedule-row | `2551q-input-money` | 1000.005 | refused: Exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount. | 0 | 0.00 | mismatch-wrong-refusal |
 | 2551Q | `txtATCAmt1` | schedule-row | `2551q-input-money` | 1.005 | refused: Exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount. | 0 | 0.00 | mismatch-wrong-refusal |
 | 2551Q | `txtATCAmt1` | schedule-row | `2551q-input-money` | 2.675 | refused: Exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount. | 0 | 0.00 | mismatch-wrong-refusal |
 | 2553 | `frm2553:txt20B` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 2553 | `frm2553:txt20B` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 2553 | `frm2553:txt20B` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
-| 2553 | `frm2553:txt22A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 2553 | `frm2553:txt22A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 2553 | `frm2553:txt22A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 2553 | `frm2553:txt22A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 2553 | `frm2553:txt22A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 2553 | `frm2553:txt22A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 2553 | `frm2553:txt14C` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 2553 | `frm2553:txt14C` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 2553 | `frm2553:txt14C` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
@@ -96,9 +98,9 @@ Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.
 | 1606 | `frm1606:txtAmount` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 |  | match |
 | 1606 | `frm1606:txtAmount` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 |  | match |
 | 1606 | `frm1606:txtAmount` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 |  | match |
-| 1606 | `frm1606:txtCompromise` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 1606 | `frm1606:txtCompromise` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 1606 | `frm1606:txtCompromise` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 1606 | `frm1606:txtCompromise` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 1606 | `frm1606:txtCompromise` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 1606 | `frm1606:txtCompromise` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 1600VT | `frm1600VT:txtPg1P2I19TaxRemittedInRtrn` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 1600VT | `frm1600VT:txtPg1P2I19TaxRemittedInRtrn` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 1600VT | `frm1600VT:txtPg1P2I19TaxRemittedInRtrn` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
@@ -120,27 +122,27 @@ Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.
 | 1600WP | `frm1600WP:txtTax13` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 1600WP | `frm1600WP:txtTax13` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 1600WP | `frm1600WP:txtTax13` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
-| 1600WP | `frm1600WP:txtTax15A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 1600WP | `frm1600WP:txtTax15A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 1600WP | `frm1600WP:txtTax15A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 1600WP | `frm1600WP:txtTax15A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 1600WP | `frm1600WP:txtTax15A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 1600WP | `frm1600WP:txtTax15A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 1600WP | `frm1600WP:txtTaxBase1` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 1600WP | `frm1600WP:txtTaxBase1` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 1600WP | `frm1600WP:txtTaxBase1` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
 | 1601EQ | `frm1601EQ:txtTax20` | ordinary-item | `1601eq-blur-002` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 1601EQ | `frm1601EQ:txtTax20` | ordinary-item | `1601eq-blur-002` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 1601EQ | `frm1601EQ:txtTax20` | ordinary-item | `1601eq-blur-002` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
-| 1601EQ | `frm1601EQ:txtTax26` | penalty-item | `1601eq-blur-002` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 1601EQ | `frm1601EQ:txtTax26` | penalty-item | `1601eq-blur-002` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 1601EQ | `frm1601EQ:txtTax26` | penalty-item | `1601eq-blur-002` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 1601EQ | `frm1601EQ:txtTax26` | penalty-item | `1601eq-blur-002` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 1601EQ | `frm1601EQ:txtTax26` | penalty-item | `1601eq-blur-002` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 1601EQ | `frm1601EQ:txtTax26` | penalty-item | `1601eq-blur-002` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 1601EQ | `frm1601EQ:txtTaxBase9` | schedule-row | `1601eq-blur-002` | 1000.005 | refused: Choose this row's ATC first. | — | — | inconclusive-gated |
 | 1601EQ | `frm1601EQ:txtTaxBase9` | schedule-row | `1601eq-blur-002` | 1.005 | refused: Choose this row's ATC first. | — | — | inconclusive-gated |
 | 1601EQ | `frm1601EQ:txtTaxBase9` | schedule-row | `1601eq-blur-002` | 2.675 | refused: Choose this row's ATC first. | — | — | inconclusive-gated |
 | 1601FQ | `frm1601FQ:txtTax23` | ordinary-item | `1601fq-input-003` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | mismatch-different-rounding |
 | 1601FQ | `frm1601FQ:txtTax23` | ordinary-item | `1601fq-input-003` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | mismatch-different-rounding |
 | 1601FQ | `frm1601FQ:txtTax23` | ordinary-item | `1601fq-input-003` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | mismatch-different-rounding |
-| 1601FQ | `frm1601FQ:txtTax28` | penalty-item | `1601fq-input-003` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 1601FQ | `frm1601FQ:txtTax28` | penalty-item | `1601fq-input-003` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 1601FQ | `frm1601FQ:txtTax28` | penalty-item | `1601fq-input-003` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 1601FQ | `frm1601FQ:txtTax28` | penalty-item | `1601fq-input-003` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 1601FQ | `frm1601FQ:txtTax28` | penalty-item | `1601fq-input-003` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 1601FQ | `frm1601FQ:txtTax28` | penalty-item | `1601fq-input-003` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 1601FQ | `txtAmtIncomePay0` | schedule-row | `1601fq-input-003` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 0.00 | mismatch-different-rounding |
 | 1601FQ | `txtAmtIncomePay0` | schedule-row | `1601fq-input-003` | 1.005 | rounded-formatCurrency/round | 1.01 | 0.00 | mismatch-different-rounding |
 | 1601FQ | `txtAmtIncomePay0` | schedule-row | `1601fq-input-003` | 2.675 | rounded-formatCurrency/round | 2.68 | 0.00 | mismatch-different-rounding |
@@ -156,9 +158,9 @@ Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.
 | 1602Q | `frm1602Q:txt18` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 1602Q | `frm1602Q:txt18` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 1602Q | `frm1602Q:txt18` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
-| 1602Q | `frm1602Q:txt24` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 1602Q | `frm1602Q:txt24` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 1602Q | `frm1602Q:txt24` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 1602Q | `frm1602Q:txt24` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 1602Q | `frm1602Q:txt24` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 1602Q | `frm1602Q:txt24` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 1602Q | `frm1602Q:txtSched1Amount1` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 1602Q | `frm1602Q:txtSched1Amount1` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 1602Q | `frm1602Q:txtSched1Amount1` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
@@ -174,18 +176,18 @@ Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.
 | 2550M | `frm2550m:txtTax13A` | ordinary-item | `2550m-input-001` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | mismatch-different-rounding |
 | 2550M | `frm2550m:txtTax13A` | ordinary-item | `2550m-input-001` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | mismatch-different-rounding |
 | 2550M | `frm2550m:txtTax13A` | ordinary-item | `2550m-input-001` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | mismatch-different-rounding |
-| 2550M | `frm2550m:txtTax25A` | penalty-item | `2550m-input-001` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 2550M | `frm2550m:txtTax25A` | penalty-item | `2550m-input-001` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 2550M | `frm2550m:txtTax25A` | penalty-item | `2550m-input-001` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 2550M | `frm2550m:txtTax25A` | penalty-item | `2550m-input-001` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 2550M | `frm2550m:txtTax25A` | penalty-item | `2550m-input-001` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 2550M | `frm2550m:txtTax25A` | penalty-item | `2550m-input-001` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 2550M | `txtAmountPaidSch70` | schedule-row | `2550m-input-001` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | mismatch-different-rounding |
 | 2550M | `txtAmountPaidSch70` | schedule-row | `2550m-input-001` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | mismatch-different-rounding |
 | 2550M | `txtAmountPaidSch70` | schedule-row | `2550m-input-001` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | mismatch-different-rounding |
 | 1706 | `frm1706:txtAmount` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 1706 | `frm1706:txtAmount` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 1706 | `frm1706:txtAmount` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
-| 1706 | `frm1706:txtCompromise` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 1706 | `frm1706:txtCompromise` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 1706 | `frm1706:txtCompromise` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 1706 | `frm1706:txtCompromise` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 1706 | `frm1706:txtCompromise` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 1706 | `frm1706:txtCompromise` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 1707 | `frm1707:txtPg2P4Sch1I1SellPrice` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 1707 | `frm1707:txtPg2P4Sch1I1SellPrice` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 1707 | `frm1707:txtPg2P4Sch1I1SellPrice` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
@@ -204,36 +206,36 @@ Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.
 | 1800 | `frm1800v2018:TaxCredit17A` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 1800 | `frm1800v2018:TaxCredit17A` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 1800 | `frm1800v2018:TaxCredit17A` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
-| 1800 | `frm1800v2018:Compromise` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 1800 | `frm1800v2018:Compromise` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 1800 | `frm1800v2018:Compromise` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 1800 | `frm1800v2018:Compromise` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 1800 | `frm1800v2018:Compromise` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 1800 | `frm1800v2018:Compromise` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 1800 | `frm1800v2018:schedA:txtFairMarketValue0` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 1800 | `frm1800v2018:schedA:txtFairMarketValue0` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 1800 | `frm1800v2018:schedA:txtFairMarketValue0` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
 | 1801 | `frm1801v2018:sched5EstateConj` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 1801 | `frm1801v2018:sched5EstateConj` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 1801 | `frm1801v2018:sched5EstateConj` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
-| 1801 | `frm1801v2018:txtPen_Compromise` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 1801 | `frm1801v2018:txtPen_Compromise` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 1801 | `frm1801v2018:txtPen_Compromise` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 1801 | `frm1801v2018:txtPen_Compromise` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 1801 | `frm1801v2018:txtPen_Compromise` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 1801 | `frm1801v2018:txtPen_Compromise` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 1801 | `frm1801v2018:sched1AConj_1` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 1801 | `frm1801v2018:sched1AConj_1` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 1801 | `frm1801v2018:sched1AConj_1` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
 | 2000 | `frm2000:txtTax15A` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 2000 | `frm2000:txtTax15A` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 2000 | `frm2000:txtTax15A` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
-| 2000 | `frm2000:txtTax17A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 2000 | `frm2000:txtTax17A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 2000 | `frm2000:txtTax17A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 2000 | `frm2000:txtTax17A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 2000 | `frm2000:txtTax17A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 2000 | `frm2000:txtTax17A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 2000 | `frm2000:sched1:txtTaxBase0` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 2000 | `frm2000:sched1:txtTaxBase0` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 2000 | `frm2000:sched1:txtTaxBase0` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
 | 2000OT | `frm2000OT:Sched2:txtGrossSellingPrice` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 2000OT | `frm2000OT:Sched2:txtGrossSellingPrice` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 2000OT | `frm2000OT:Sched2:txtGrossSellingPrice` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
-| 2000OT | `frm2000OT:txtTax20A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 2000OT | `frm2000OT:txtTax20A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 2000OT | `frm2000OT:txtTax20A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 2000OT | `frm2000OT:txtTax20A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 2000OT | `frm2000OT:txtTax20A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 2000OT | `frm2000OT:txtTax20A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 2000OT | `frm2000OT:sched1A:txtFMVCol10` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 2000OT | `frm2000OT:sched1A:txtFMVCol10` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 2000OT | `frm2000OT:sched1A:txtFMVCol10` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
@@ -249,27 +251,27 @@ Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.
 | 2200C | `frm2200C:txtPg1P3I17ABalCarriedOver` | ordinary-item | `2200c-defect-028-whole-peso-rounding` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | mismatch-different-rounding |
 | 2200C | `frm2200C:txtPg1P3I17ABalCarriedOver` | ordinary-item | `2200c-defect-028-whole-peso-rounding` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | mismatch-different-rounding |
 | 2200C | `frm2200C:txtPg1P3I17ABalCarriedOver` | ordinary-item | `2200c-defect-028-whole-peso-rounding` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | mismatch-different-rounding |
-| 2200C | `frm2200C:txtPg1P3I21ASurcharge` | penalty-item | `2200c-defect-028-whole-peso-rounding` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 2200C | `frm2200C:txtPg1P3I21ASurcharge` | penalty-item | `2200c-defect-028-whole-peso-rounding` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 2200C | `frm2200C:txtPg1P3I21ASurcharge` | penalty-item | `2200c-defect-028-whole-peso-rounding` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 2200C | `frm2200C:txtPg1P3I21ASurcharge` | penalty-item | `2200c-defect-028-whole-peso-rounding` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 2200C | `frm2200C:txtPg1P3I21ASurcharge` | penalty-item | `2200c-defect-028-whole-peso-rounding` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 2200C | `frm2200C:txtPg1P3I21ASurcharge` | penalty-item | `2200c-defect-028-whole-peso-rounding` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 2200C | `frm2200C:CPPexcise1` | schedule-row | `2200c-defect-028-whole-peso-rounding` | 1000.005 | refused: Needs item 13 or item 15 | — | 0.00 | inconclusive-gated |
 | 2200C | `frm2200C:CPPexcise1` | schedule-row | `2200c-defect-028-whole-peso-rounding` | 1.005 | refused: Needs item 13 or item 15 | — | 0.00 | inconclusive-gated |
 | 2200C | `frm2200C:CPPexcise1` | schedule-row | `2200c-defect-028-whole-peso-rounding` | 2.675 | refused: Needs item 13 or item 15 | — | 0.00 | inconclusive-gated |
 | 2200AN | `frm2200ANv2018:txt17A` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 2200AN | `frm2200ANv2018:txt17A` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 2200AN | `frm2200ANv2018:txt17A` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
-| 2200AN | `frm2200ANv2018:txt21A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 2200AN | `frm2200ANv2018:txt21A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 2200AN | `frm2200ANv2018:txt21A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 2200AN | `frm2200ANv2018:txt21A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 2200AN | `frm2200ANv2018:txt21A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 2200AN | `frm2200ANv2018:txt21A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 2200AN | `frm2200ANv2018:txtXG021Exempt2` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 2200AN | `frm2200ANv2018:txtXG021Exempt2` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 2200AN | `frm2200ANv2018:txtXG021Exempt2` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
 | 2200M | `frm2200M:txtPg1P3I17ABalCarriedOver` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 2200M | `frm2200M:txtPg1P3I17ABalCarriedOver` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 2200M | `frm2200M:txtPg1P3I17ABalCarriedOver` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
-| 2200M | `frm2200M:txtPg1P3I21ASurcharge` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 2200M | `frm2200M:txtPg1P3I21ASurcharge` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 2200M | `frm2200M:txtPg1P3I21ASurcharge` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 2200M | `frm2200M:txtPg1P3I21ASurcharge` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 2200M | `frm2200M:txtPg1P3I21ASurcharge` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 2200M | `frm2200M:txtPg1P3I21ASurcharge` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 2200M | `frm2200M:txtSched1_ImportedExemptH1` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 2200M | `frm2200M:txtSched1_ImportedExemptH1` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 2200M | `frm2200M:txtSched1_ImportedExemptH1` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
@@ -294,24 +296,24 @@ Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.
 | 2200P | `frm2200P:txtPg1P3I17ABalCarriedOver` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 2200P | `frm2200P:txtPg1P3I17ABalCarriedOver` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 2200P | `frm2200P:txtPg1P3I17ABalCarriedOver` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
-| 2200P | `frm2200P:txtPg1P3I21ASurcharge` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 2200P | `frm2200P:txtPg1P3I21ASurcharge` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 2200P | `frm2200P:txtPg1P3I21ASurcharge` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 2200P | `frm2200P:txtPg1P3I21ASurcharge` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 2200P | `frm2200P:txtPg1P3I21ASurcharge` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 2200P | `frm2200P:txtPg1P3I21ASurcharge` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 2200P | `frm2200P:txtSched1BasicExciseTaxDue1` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 2200P | `frm2200P:txtSched1BasicExciseTaxDue1` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 2200P | `frm2200P:txtSched1BasicExciseTaxDue1` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
 | 1701MS | `frm1701MS:txtAllowableItemizedDeductionsNo10a` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-other:0 | 0 | 0 | inconclusive-dropped-in-incomplete-draft |
 | 1701MS | `frm1701MS:txtAllowableItemizedDeductionsNo10a` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-other:0 | 0 | 0 | inconclusive-dropped-in-incomplete-draft |
 | 1701MS | `frm1701MS:txtAllowableItemizedDeductionsNo10a` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-other:0 | 0 | 0 | inconclusive-dropped-in-incomplete-draft |
-| 1701MS | `frm1701MS:txtCompromise28a` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000 | mismatch-kept-3dp |
-| 1701MS | `frm1701MS:txtCompromise28a` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1 | mismatch-kept-3dp |
-| 1701MS | `frm1701MS:txtCompromise28a` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 3 | mismatch-kept-3dp |
+| 1701MS | `frm1701MS:txtCompromise28a` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000 | mismatch-kept-3dp-draft-only |
+| 1701MS | `frm1701MS:txtCompromise28a` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1 | mismatch-kept-3dp-draft-only |
+| 1701MS | `frm1701MS:txtCompromise28a` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 3 | mismatch-kept-3dp-draft-only |
 | 1702Q | `frm1702q:Sched1:txtTax1A` | ordinary-item | `1702q-input-001` | 1000.005 | refused: Needs item 5 = an ATC | 0 | 0.00 | inconclusive-gated |
 | 1702Q | `frm1702q:Sched1:txtTax1A` | ordinary-item | `1702q-input-001` | 1.005 | refused: Needs item 5 = an ATC | 0 | 0.00 | inconclusive-gated |
 | 1702Q | `frm1702q:Sched1:txtTax1A` | ordinary-item | `1702q-input-001` | 2.675 | refused: Needs item 5 = an ATC | 0 | 0.00 | inconclusive-gated |
-| 1702Q | `frm1702q:txtTax21` | penalty-item | `1702q-input-001` | 1000.005 | kept-3dp | 1000.005 | 1,000.00 | mismatch-kept-3dp |
-| 1702Q | `frm1702q:txtTax21` | penalty-item | `1702q-input-001` | 1.005 | kept-3dp | 1.005 | 1.00 | mismatch-kept-3dp |
-| 1702Q | `frm1702q:txtTax21` | penalty-item | `1702q-input-001` | 2.675 | kept-3dp | 2.675 | 3.00 | mismatch-kept-3dp |
+| 1702Q | `frm1702q:txtTax21` | penalty-item | `1702q-input-001` | 1000.005 | kept-3dp | 1000.005 | 1,000.00 | mismatch-kept-3dp-draft-only |
+| 1702Q | `frm1702q:txtTax21` | penalty-item | `1702q-input-001` | 1.005 | kept-3dp | 1.005 | 1.00 | mismatch-kept-3dp-draft-only |
+| 1702Q | `frm1702q:txtTax21` | penalty-item | `1702q-input-001` | 2.675 | kept-3dp | 2.675 | 3.00 | mismatch-kept-3dp-draft-only |
 | 1702Q | `frm1702q:Sched4:txtOthrTxCrdtAmnt0` | schedule-row | `1702q-input-001` | 1000.005 | refused: Needs item 5 = an ATC | — | 0.00 | inconclusive-gated |
 | 1702Q | `frm1702q:Sched4:txtOthrTxCrdtAmnt0` | schedule-row | `1702q-input-001` | 1.005 | refused: Needs item 5 = an ATC | — | 0.00 | inconclusive-gated |
 | 1702Q | `frm1702q:Sched4:txtOthrTxCrdtAmnt0` | schedule-row | `1702q-input-001` | 2.675 | refused: Needs item 5 = an ATC | — | 0.00 | inconclusive-gated |
@@ -327,9 +329,9 @@ Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.
 | 1700 | `frm1700:txtPg1I29A` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 1700 | `frm1700:txtPg1I29A` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 1700 | `frm1700:txtPg1I29A` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
-| 1700 | `frm1700:txtPg1I31A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 1700 | `frm1700:txtPg1I31A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 1700 | `frm1700:txtPg1I31A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 1700 | `frm1700:txtPg1I31A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 1700 | `frm1700:txtPg1I31A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 1700 | `frm1700:txtPg1I31A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 1700 | `frm1700:txtPg2I48A` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | accepted-no-numeric-store | — | 0.00 | inconclusive-no-numeric-store |
 | 1700 | `frm1700:txtPg2I48A` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | accepted-no-numeric-store | — | 0.00 | inconclusive-no-numeric-store |
 | 1700 | `frm1700:txtPg2I48A` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | accepted-no-numeric-store | — | 0.00 | inconclusive-no-numeric-store |
@@ -342,80 +344,50 @@ Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.
 | 0605 | `frm0605:txtTax19` | ordinary-item | `0605-input-001-amount-format` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | mismatch-different-rounding |
 | 0605 | `frm0605:txtTax19` | ordinary-item | `0605-input-001-amount-format` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | mismatch-different-rounding |
 | 0605 | `frm0605:txtTax19` | ordinary-item | `0605-input-001-amount-format` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | mismatch-different-rounding |
-| 0605 | `frm0605:txtTax20A` | penalty-item | `0605-input-001-amount-format` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 0605 | `frm0605:txtTax20A` | penalty-item | `0605-input-001-amount-format` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 0605 | `frm0605:txtTax20A` | penalty-item | `0605-input-001-amount-format` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 0605 | `frm0605:txtTax20A` | penalty-item | `0605-input-001-amount-format` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 0605 | `frm0605:txtTax20A` | penalty-item | `0605-input-001-amount-format` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 0605 | `frm0605:txtTax20A` | penalty-item | `0605-input-001-amount-format` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 0619E | `frm0619E:txtTax15` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 0619E | `frm0619E:txtTax15` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 0619E | `frm0619E:txtTax15` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
-| 0619E | `frm0619E:txtTax17A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 0619E | `frm0619E:txtTax17A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 0619E | `frm0619E:txtTax17A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 0619E | `frm0619E:txtTax17A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 0619E | `frm0619E:txtTax17A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 0619E | `frm0619E:txtTax17A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 0619F | `frm0619F:txtTax16` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 0619F | `frm0619F:txtTax16` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
 | 0619F | `frm0619F:txtTax16` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-other:0 | 0 | 0.00 | inconclusive-dropped-in-incomplete-draft |
-| 0619F | `frm0619F:txtTax18A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 0619F | `frm0619F:txtTax18A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 0619F | `frm0619F:txtTax18A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 0619F | `frm0619F:txtTax18A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 0619F | `frm0619F:txtTax18A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 0619F | `frm0619F:txtTax18A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 1701Q | `frm1701q:txt55A` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 1,000.01 | match |
 | 1701Q | `frm1701q:txt55A` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 1.01 | match |
 | 1701Q | `frm1701q:txt55A` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 2.68 | match |
-| 1701Q | `frm1701q:txt64A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 1701Q | `frm1701q:txt64A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 1701Q | `frm1701q:txt64A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
-| 1702RT | `frm1702RT:txtPg1Pt2I17Surcharge` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000 | mismatch-kept-3dp |
-| 1702RT | `frm1702RT:txtPg1Pt2I17Surcharge` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1 | mismatch-kept-3dp |
-| 1702RT | `frm1702RT:txtPg1Pt2I17Surcharge` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 3 | mismatch-kept-3dp |
-| 1701 | `frm1701:txtPg1I27A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp |
-| 1701 | `frm1701:txtPg1I27A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp |
-| 1701 | `frm1701:txtPg1I27A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp |
+| 1701Q | `frm1701q:txt64A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 1701Q | `frm1701q:txt64A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 1701Q | `frm1701q:txt64A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
+| 1702RT | `frm1702RT:txtPg1Pt2I17Surcharge` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000 | mismatch-kept-3dp-draft-only |
+| 1702RT | `frm1702RT:txtPg1Pt2I17Surcharge` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1 | mismatch-kept-3dp-draft-only |
+| 1702RT | `frm1702RT:txtPg1Pt2I17Surcharge` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 3 | mismatch-kept-3dp-draft-only |
+| 1701 | `frm1701:txtPg1I27A` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.01 | mismatch-kept-3dp-draft-only |
+| 1701 | `frm1701:txtPg1I27A` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.01 | mismatch-kept-3dp-draft-only |
+| 1701 | `frm1701:txtPg1I27A` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.68 | mismatch-kept-3dp-draft-only |
 | 1701 | `frm1701:txtPg2IShed1c_1CI` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | rounded-formatCurrency/round | 1000.01 | 0.00 | match |
 | 1701 | `frm1701:txtPg2IShed1c_1CI` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | rounded-formatCurrency/round | 1.01 | 0.00 | match |
 | 1701 | `frm1701:txtPg2IShed1c_1CI` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | rounded-formatCurrency/round | 2.68 | 0.00 | match |
-| 1702MX | `frm1702MX:txtPg1Pt2I17` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1000 | mismatch-kept-3dp |
-| 1702MX | `frm1702MX:txtPg1Pt2I17` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1 | mismatch-kept-3dp |
-| 1702MX | `frm1702MX:txtPg1Pt2I17` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 3 | mismatch-kept-3dp |
-| 2550Q | `frm2550qv2024:addInputVat` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.00 | mismatch-kept-3dp |
-| 2550Q | `frm2550qv2024:addInputVat` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.00 | mismatch-kept-3dp |
-| 2550Q | `frm2550qv2024:addInputVat` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.67 | mismatch-kept-3dp |
-| 2550Q | `frm2550qv2024:totalTaxPayableNo19Amount0` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.00 | mismatch-kept-3dp |
-| 2550Q | `frm2550qv2024:totalTaxPayableNo19Amount0` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.00 | mismatch-kept-3dp |
-| 2550Q | `frm2550qv2024:totalTaxPayableNo19Amount0` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.67 | mismatch-kept-3dp |
+| 1702MX | `frm1702MX:txtPg1Pt2I17` | penalty-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1000 | mismatch-kept-3dp-draft-only |
+| 1702MX | `frm1702MX:txtPg1Pt2I17` | penalty-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1 | mismatch-kept-3dp-draft-only |
+| 1702MX | `frm1702MX:txtPg1Pt2I17` | penalty-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 3 | mismatch-kept-3dp-draft-only |
+| 2550Q | `frm2550qv2024:addInputVat` | ordinary-item | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.00 | mismatch-kept-3dp-draft-only |
+| 2550Q | `frm2550qv2024:addInputVat` | ordinary-item | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.00 | mismatch-kept-3dp-draft-only |
+| 2550Q | `frm2550qv2024:addInputVat` | ordinary-item | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.67 | mismatch-kept-3dp-draft-only |
+| 2550Q | `frm2550qv2024:totalTaxPayableNo19Amount0` | schedule-row | `no validation rule; fields.json normalization` | 1000.005 | kept-3dp | 1000.005 | 1,000.00 | mismatch-kept-3dp-draft-only |
+| 2550Q | `frm2550qv2024:totalTaxPayableNo19Amount0` | schedule-row | `no validation rule; fields.json normalization` | 1.005 | kept-3dp | 1.005 | 1.00 | mismatch-kept-3dp-draft-only |
+| 2550Q | `frm2550qv2024:totalTaxPayableNo19Amount0` | schedule-row | `no validation rule; fields.json normalization` | 2.675 | kept-3dp | 2.675 | 2.67 | mismatch-kept-3dp-draft-only |
 
 ## Forms that differ, worst first
 
-| Rank | Form | Box | Kind | Ours | Why (1 stored three decimals, 2 wrong refusal, 3 different rounding) |
+| Rank | Form | Box | Kind | Ours | Why (1 effective three decimals, 2 wrong refusal, 3 different rounding, 4 draft-only) |
 |---:|---|---|---|---|---|
-| 1 | 0605 | `frm0605:txtTax20A` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 0619E | `frm0619E:txtTax17A` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 0619F | `frm0619F:txtTax18A` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1600WP | `frm1600WP:txtTax15A` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1601EQ | `frm1601EQ:txtTax26` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1601FQ | `frm1601FQ:txtTax28` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1602Q | `frm1602Q:txt24` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1606 | `frm1606:txtCompromise` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1700 | `frm1700:txtPg1I31A` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1701 | `frm1701:txtPg1I27A` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1701MS | `frm1701MS:txtCompromise28a` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1701Q | `frm1701q:txt64A` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1702MX | `frm1702MX:txtPg1Pt2I17` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1702Q | `frm1702q:txtTax21` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1702RT | `frm1702RT:txtPg1Pt2I17Surcharge` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1706 | `frm1706:txtCompromise` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1800 | `frm1800v2018:Compromise` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 1801 | `frm1801v2018:txtPen_Compromise` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 2000 | `frm2000:txtTax17A` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 2000OT | `frm2000OT:txtTax20A` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 2200AN | `frm2200ANv2018:txt21A` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 2200C | `frm2200C:txtPg1P3I21ASurcharge` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 2200M | `frm2200M:txtPg1P3I21ASurcharge` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 2200P | `frm2200P:txtPg1P3I21ASurcharge` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 2550M | `frm2550m:txtTax25A` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 2550Q | `frm2550qv2024:addInputVat` | ordinary-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 2550Q | `frm2550qv2024:totalTaxPayableNo19Amount0` | schedule-row | kept-3dp | mismatch-kept-3dp |
-| 1 | 2551Q | `frm2551Qv2018:txt15` | ordinary-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 2551Q | `frm2551Qv2018:txt20` | penalty-item | kept-3dp | mismatch-kept-3dp |
-| 1 | 2553 | `frm2553:txt22A` | penalty-item | kept-3dp | mismatch-kept-3dp |
 | 2 | 2551Q | `txtATCAmt1` | schedule-row | refused | mismatch-wrong-refusal |
 | 3 | 0605 | `frm0605:txtTax19` | ordinary-item | rounded-formatCurrency/round | mismatch-different-rounding |
 | 3 | 1601FQ | `frm1601FQ:txtTax23` | ordinary-item | rounded-formatCurrency/round | mismatch-different-rounding |
@@ -423,57 +395,87 @@ Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.
 | 3 | 2200C | `frm2200C:txtPg1P3I17ABalCarriedOver` | ordinary-item | rounded-formatCurrency/round | mismatch-different-rounding |
 | 3 | 2550M | `frm2550m:txtTax13A` | ordinary-item | rounded-formatCurrency/round | mismatch-different-rounding |
 | 3 | 2550M | `txtAmountPaidSch70` | schedule-row | rounded-formatCurrency/round | mismatch-different-rounding |
+| 4 | 0605 | `frm0605:txtTax20A` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 0619E | `frm0619E:txtTax17A` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 0619F | `frm0619F:txtTax18A` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1600WP | `frm1600WP:txtTax15A` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1601EQ | `frm1601EQ:txtTax26` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1601FQ | `frm1601FQ:txtTax28` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1602Q | `frm1602Q:txt24` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1606 | `frm1606:txtCompromise` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1700 | `frm1700:txtPg1I31A` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1701 | `frm1701:txtPg1I27A` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1701MS | `frm1701MS:txtCompromise28a` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1701Q | `frm1701q:txt64A` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1702MX | `frm1702MX:txtPg1Pt2I17` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1702Q | `frm1702q:txtTax21` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1702RT | `frm1702RT:txtPg1Pt2I17Surcharge` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1706 | `frm1706:txtCompromise` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1800 | `frm1800v2018:Compromise` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 1801 | `frm1801v2018:txtPen_Compromise` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 2000 | `frm2000:txtTax17A` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 2000OT | `frm2000OT:txtTax20A` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 2200AN | `frm2200ANv2018:txt21A` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 2200C | `frm2200C:txtPg1P3I21ASurcharge` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 2200M | `frm2200M:txtPg1P3I21ASurcharge` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 2200P | `frm2200P:txtPg1P3I21ASurcharge` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 2550M | `frm2550m:txtTax25A` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 2550Q | `frm2550qv2024:addInputVat` | ordinary-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 2550Q | `frm2550qv2024:totalTaxPayableNo19Amount0` | schedule-row | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 2551Q | `frm2551Qv2018:txt15` | ordinary-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 2551Q | `frm2551Qv2018:txt20` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
+| 4 | 2553 | `frm2553:txt22A` | penalty-item | kept-3dp | mismatch-kept-3dp-draft-only |
 
 ## Official-rule and probe caveats
 
 These rows are not counted as mismatches: the rules corpus does not settle the exact blur rounding, the first representative was gated, or an incomplete draft dropped/held the value before the probe could measure entry rounding.
 
-| Rank | Form | Box | Kind | Ours | Why (4 official rule unclear, 5 probe gated, 6 value dropped, 7 no numeric stored value) |
+| Rank | Form | Box | Kind | Ours | Why (5 official rule unclear, 6 probe gated, 7 value dropped, 8 no numeric stored value) |
 |---:|---|---|---|---|---|
-| 4 | 1600PT | `frm1600PT:txtPg1P2I23Surcharge` | penalty-item | kept-3dp | unclear-official |
-| 4 | 1600PT | `frm1600PT:Pg2Sc1AmtOfIncPmt1` | schedule-row | rounded-formatCurrency/round | unclear-official |
-| 4 | 1600VT | `frm1600VT:txtPg1P2I23Surcharge` | penalty-item | kept-3dp | unclear-official |
-| 4 | 1600VT | `frm1600VT:Pg2Sc1AmtOfIncPmt1` | schedule-row | rounded-formatCurrency/round | unclear-official |
-| 4 | 1601C | `frm1601c:txtTax14` | ordinary-item | kept-3dp | unclear-official |
-| 4 | 1601C | `frm1601c:txtTax32` | penalty-item | kept-3dp | unclear-official |
-| 4 | 1601C | `frm1601c:sched1:txtShouldTaxDue0` | schedule-row | kept-3dp | unclear-official |
-| 4 | 1603Q | `frm1603Q:txtTax19` | penalty-item | kept-3dp | unclear-official |
-| 4 | 1603Q | `frm1603Q:Sched1:txtValue1` | schedule-row | rounded-formatCurrency/round | unclear-official |
-| 4 | 1604F | `frm1604f:txtSched1Pen1` | schedule-row | rounded-formatCurrency/round | unclear-official |
-| 4 | 1701A | `frm1701A:txt23A` | ordinary-item | rounded-formatCurrency/round | unclear-official |
-| 4 | 1701A | `frm1701A:txt25A` | penalty-item | kept-3dp | unclear-official |
-| 4 | 1702EX | `frm1702EX:txtPg1Pt2I21PenaltyCompromise` | ordinary-item | rounded-formatCurrency/round | unclear-official |
-| 4 | 1702EX | `frm1702EX:txtPg2Pt4I48OtherTaxCrPmtAmt` | schedule-row | rounded-formatCurrency/round | unclear-official |
-| 4 | 1707 | `frm1707:txtPg1P2I17Compromise` | penalty-item | kept-3dp | unclear-official |
-| 4 | 1707 | `frm1707:txtPg2P4Sch3Amount1` | schedule-row | rounded-formatCurrency/round | unclear-official |
-| 4 | 1707A | `frm1707Av2021:txtI18ASurcharge` | penalty-item | kept-3dp | unclear-official |
-| 4 | 1707A | `frm1707Av2021:txtS1C3SellingPriceI1` | schedule-row | rounded-parseFloat/toFixed(2) | unclear-official |
-| 4 | 2200A | `frm2200Av2020:txtLess_Balance` | ordinary-item | rounded-formatCurrency/round | unclear-official |
-| 4 | 2200A | `frm2200Av2020:txtPen_Compromise` | penalty-item | kept-3dp | unclear-official |
-| 4 | 2200A | `frm2200Av2020:txtSched1_1A_2020_Export` | schedule-row | rounded-formatCurrency/round | unclear-official |
-| 4 | 2200S | `frm2200S:txtTax17A` | ordinary-item | rounded-parseFloat/toFixed(2) | unclear-official |
-| 4 | 2200T | `frm2200Tv2020:txtLess_Balance` | ordinary-item | rounded-formatCurrency/round | unclear-official |
-| 4 | 2200T | `frm2200Tv2020:txtPen_Compromise` | penalty-item | kept-3dp | unclear-official |
-| 4 | 2200T | `frm2200Tv2020:txtSched1_1A_2020_Due` | schedule-row | rounded-formatCurrency/round | unclear-official |
-| 4 | 2552 | `frm2552:txtPg1P2I18CredTaxWthhld` | ordinary-item | rounded-formatCurrency/round | unclear-official |
-| 4 | 2552 | `frm2552:txtPg1P2I21Surcharge` | penalty-item | kept-3dp | unclear-official |
-| 4 | 2552 | `frm2552:txtPg2P4I1Amount` | schedule-row | rounded-formatCurrency/round | unclear-official |
-| 5 | 1601EQ | `frm1601EQ:txtTaxBase9` | schedule-row | refused | inconclusive-gated |
-| 5 | 1604C | `frm1604c:txt12` | ordinary-item | refused | inconclusive-gated |
-| 5 | 1702Q | `frm1702q:Sched1:txtTax1A` | ordinary-item | refused | inconclusive-gated |
-| 5 | 1702Q | `frm1702q:Sched4:txtOthrTxCrdtAmnt0` | schedule-row | refused | inconclusive-gated |
-| 5 | 2200C | `frm2200C:CPPexcise1` | schedule-row | refused | inconclusive-gated |
-| 5 | 2200S | `frm2200S:txtTax21A` | penalty-item | refused | inconclusive-gated |
-| 6 | 0619E | `frm0619E:txtTax15` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
-| 6 | 0619F | `frm0619F:txtTax16` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
-| 6 | 1600PT | `frm1600PT:txtPg1P2I19TaxRemittedInRtrn` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
-| 6 | 1600VT | `frm1600VT:txtPg1P2I19TaxRemittedInRtrn` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
-| 6 | 1600WP | `frm1600WP:txtTax13` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
-| 6 | 1603Q | `frm1603Q:txtTax15` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
-| 6 | 1700 | `frm1700:txtPg1I29A` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
-| 6 | 1701MS | `frm1701MS:txtAllowableItemizedDeductionsNo10a` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
-| 6 | 1707 | `frm1707:txtPg2P4Sch1I1SellPrice` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
-| 6 | 2000 | `frm2000:txtTax15A` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
-| 7 | 1700 | `frm1700:txtPg2I48A` | schedule-row | accepted-no-numeric-store | inconclusive-no-numeric-store |
-| 7 | 1701A | `frm1701A:txtmodalPartIVA_1C2` | schedule-row | accepted-no-numeric-store | inconclusive-no-numeric-store |
-| 7 | 2200S | `frm2200S:txtsched1SalesValue12` | schedule-row | accepted-no-numeric-store | inconclusive-no-numeric-store |
+| 5 | 1600PT | `frm1600PT:txtPg1P2I23Surcharge` | penalty-item | kept-3dp | unclear-official |
+| 5 | 1600PT | `frm1600PT:Pg2Sc1AmtOfIncPmt1` | schedule-row | rounded-formatCurrency/round | unclear-official |
+| 5 | 1600VT | `frm1600VT:txtPg1P2I23Surcharge` | penalty-item | kept-3dp | unclear-official |
+| 5 | 1600VT | `frm1600VT:Pg2Sc1AmtOfIncPmt1` | schedule-row | rounded-formatCurrency/round | unclear-official |
+| 5 | 1601C | `frm1601c:txtTax14` | ordinary-item | kept-3dp | unclear-official |
+| 5 | 1601C | `frm1601c:txtTax32` | penalty-item | kept-3dp | unclear-official |
+| 5 | 1601C | `frm1601c:sched1:txtShouldTaxDue0` | schedule-row | kept-3dp | unclear-official |
+| 5 | 1603Q | `frm1603Q:txtTax19` | penalty-item | kept-3dp | unclear-official |
+| 5 | 1603Q | `frm1603Q:Sched1:txtValue1` | schedule-row | rounded-formatCurrency/round | unclear-official |
+| 5 | 1604F | `frm1604f:txtSched1Pen1` | schedule-row | rounded-formatCurrency/round | unclear-official |
+| 5 | 1701A | `frm1701A:txt23A` | ordinary-item | rounded-formatCurrency/round | unclear-official |
+| 5 | 1701A | `frm1701A:txt25A` | penalty-item | kept-3dp | unclear-official |
+| 5 | 1702EX | `frm1702EX:txtPg1Pt2I21PenaltyCompromise` | ordinary-item | rounded-formatCurrency/round | unclear-official |
+| 5 | 1702EX | `frm1702EX:txtPg2Pt4I48OtherTaxCrPmtAmt` | schedule-row | rounded-formatCurrency/round | unclear-official |
+| 5 | 1707 | `frm1707:txtPg1P2I17Compromise` | penalty-item | kept-3dp | unclear-official |
+| 5 | 1707 | `frm1707:txtPg2P4Sch3Amount1` | schedule-row | rounded-formatCurrency/round | unclear-official |
+| 5 | 1707A | `frm1707Av2021:txtI18ASurcharge` | penalty-item | kept-3dp | unclear-official |
+| 5 | 1707A | `frm1707Av2021:txtS1C3SellingPriceI1` | schedule-row | rounded-parseFloat/toFixed(2) | unclear-official |
+| 5 | 2200A | `frm2200Av2020:txtLess_Balance` | ordinary-item | rounded-formatCurrency/round | unclear-official |
+| 5 | 2200A | `frm2200Av2020:txtPen_Compromise` | penalty-item | kept-3dp | unclear-official |
+| 5 | 2200A | `frm2200Av2020:txtSched1_1A_2020_Export` | schedule-row | rounded-formatCurrency/round | unclear-official |
+| 5 | 2200S | `frm2200S:txtTax17A` | ordinary-item | rounded-parseFloat/toFixed(2) | unclear-official |
+| 5 | 2200T | `frm2200Tv2020:txtLess_Balance` | ordinary-item | rounded-formatCurrency/round | unclear-official |
+| 5 | 2200T | `frm2200Tv2020:txtPen_Compromise` | penalty-item | kept-3dp | unclear-official |
+| 5 | 2200T | `frm2200Tv2020:txtSched1_1A_2020_Due` | schedule-row | rounded-formatCurrency/round | unclear-official |
+| 5 | 2552 | `frm2552:txtPg1P2I18CredTaxWthhld` | ordinary-item | rounded-formatCurrency/round | unclear-official |
+| 5 | 2552 | `frm2552:txtPg1P2I21Surcharge` | penalty-item | kept-3dp | unclear-official |
+| 5 | 2552 | `frm2552:txtPg2P4I1Amount` | schedule-row | rounded-formatCurrency/round | unclear-official |
+| 6 | 1601EQ | `frm1601EQ:txtTaxBase9` | schedule-row | refused | inconclusive-gated |
+| 6 | 1604C | `frm1604c:txt12` | ordinary-item | refused | inconclusive-gated |
+| 6 | 1702Q | `frm1702q:Sched1:txtTax1A` | ordinary-item | refused | inconclusive-gated |
+| 6 | 1702Q | `frm1702q:Sched4:txtOthrTxCrdtAmnt0` | schedule-row | refused | inconclusive-gated |
+| 6 | 2200C | `frm2200C:CPPexcise1` | schedule-row | refused | inconclusive-gated |
+| 6 | 2200S | `frm2200S:txtTax21A` | penalty-item | refused | inconclusive-gated |
+| 7 | 0619E | `frm0619E:txtTax15` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
+| 7 | 0619F | `frm0619F:txtTax16` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
+| 7 | 1600PT | `frm1600PT:txtPg1P2I19TaxRemittedInRtrn` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
+| 7 | 1600VT | `frm1600VT:txtPg1P2I19TaxRemittedInRtrn` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
+| 7 | 1600WP | `frm1600WP:txtTax13` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
+| 7 | 1603Q | `frm1603Q:txtTax15` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
+| 7 | 1700 | `frm1700:txtPg1I29A` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
+| 7 | 1701MS | `frm1701MS:txtAllowableItemizedDeductionsNo10a` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
+| 7 | 1707 | `frm1707:txtPg2P4Sch1I1SellPrice` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
+| 7 | 2000 | `frm2000:txtTax15A` | ordinary-item | rounded-other:0 | inconclusive-dropped-in-incomplete-draft |
+| 8 | 1700 | `frm1700:txtPg2I48A` | schedule-row | accepted-no-numeric-store | inconclusive-no-numeric-store |
+| 8 | 1701A | `frm1701A:txtmodalPartIVA_1C2` | schedule-row | accepted-no-numeric-store | inconclusive-no-numeric-store |
+| 8 | 2200S | `frm2200S:txtsched1SalesValue12` | schedule-row | accepted-no-numeric-store | inconclusive-no-numeric-store |

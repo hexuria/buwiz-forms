@@ -18,6 +18,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -32,6 +33,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -46,6 +48,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -60,6 +63,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -74,6 +78,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.00",
       "upload": "1.00",
       "upload_error": null
@@ -88,6 +93,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -102,6 +108,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -116,6 +123,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -130,6 +138,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -144,6 +153,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -158,6 +168,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -172,6 +183,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -186,6 +198,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -200,6 +213,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.00",
       "upload": "1.00",
       "upload_error": null
@@ -214,6 +228,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -228,6 +243,7 @@
       "outcome": "refused",
       "refusal": "Exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.",
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -242,6 +258,7 @@
       "outcome": "refused",
       "refusal": "Exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.",
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -256,6 +273,7 @@
       "outcome": "refused",
       "refusal": "Exceeds the official 12-character input limit (at most 999,999,999,999 without centavos, or 999,999,999.99 with centavos); enter a smaller amount.",
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -270,6 +288,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -284,6 +303,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -298,6 +318,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null,
@@ -313,6 +334,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -327,6 +349,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -341,6 +364,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -355,6 +379,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -369,6 +394,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -383,6 +409,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -397,6 +424,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -411,6 +439,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -425,6 +454,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -439,6 +469,7 @@
       "outcome": "refused",
       "refusal": "Needs item 11 = Yes",
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null,
@@ -454,6 +485,7 @@
       "outcome": "refused",
       "refusal": "Needs item 11 = Yes",
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -468,6 +500,7 @@
       "outcome": "refused",
       "refusal": "Needs item 11 = Yes",
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -482,6 +515,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -496,6 +530,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -510,6 +545,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -524,6 +560,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -538,6 +575,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -552,6 +590,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -566,6 +605,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "",
       "upload": "",
       "upload_error": null
@@ -580,6 +620,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "",
       "upload": "",
       "upload_error": null
@@ -594,6 +635,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "",
       "upload": "",
       "upload_error": null
@@ -608,6 +650,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -622,6 +665,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -636,6 +680,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -650,6 +695,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -664,6 +710,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -678,6 +725,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -692,6 +740,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -706,6 +755,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -720,6 +770,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -734,6 +785,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -748,6 +800,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -762,6 +815,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -776,6 +830,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -790,6 +845,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -804,6 +860,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -818,6 +875,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -832,6 +890,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -846,6 +905,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -860,6 +920,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -874,6 +935,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -888,6 +950,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -902,6 +965,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -916,6 +980,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -930,6 +995,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -944,6 +1010,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -958,6 +1025,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -972,6 +1040,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -986,6 +1055,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1000,6 +1070,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1014,6 +1085,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null,
@@ -1029,6 +1101,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1043,6 +1116,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1057,6 +1131,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1071,6 +1146,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1085,6 +1161,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1099,6 +1176,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1113,6 +1191,7 @@
       "outcome": "refused",
       "refusal": "Choose this row's ATC first.",
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": null,
       "upload": null,
       "upload_error": null,
@@ -1128,6 +1207,7 @@
       "outcome": "refused",
       "refusal": "Choose this row's ATC first.",
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": null,
       "upload": null,
       "upload_error": null
@@ -1142,6 +1222,7 @@
       "outcome": "refused",
       "refusal": "Choose this row's ATC first.",
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": null,
       "upload": null,
       "upload_error": null
@@ -1156,6 +1237,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1170,6 +1252,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1184,6 +1267,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1198,6 +1282,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1212,6 +1297,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1226,6 +1312,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1240,6 +1327,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -1254,6 +1342,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -1268,6 +1357,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -1282,6 +1372,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -1296,6 +1387,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -1310,6 +1402,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -1324,6 +1417,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1338,6 +1432,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1352,6 +1447,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1366,6 +1462,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1380,6 +1477,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1394,6 +1492,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1408,6 +1507,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1422,6 +1522,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1436,6 +1537,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1450,6 +1552,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1464,6 +1567,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1478,6 +1582,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1492,6 +1597,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1506,6 +1612,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1520,6 +1627,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1534,6 +1642,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1548,6 +1657,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1562,6 +1672,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null,
@@ -1577,6 +1688,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1591,6 +1703,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1605,6 +1718,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1619,6 +1733,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1633,6 +1748,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1647,6 +1763,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1661,6 +1778,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1675,6 +1793,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1689,6 +1808,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1703,6 +1823,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1717,6 +1838,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1731,6 +1853,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1745,6 +1868,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1759,6 +1883,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1773,6 +1898,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1787,6 +1913,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1801,6 +1928,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1815,6 +1943,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1829,6 +1958,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1843,6 +1973,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1857,6 +1988,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1871,6 +2003,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -1885,6 +2018,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -1899,6 +2033,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -1913,6 +2048,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1927,6 +2063,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1941,6 +2078,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1955,6 +2093,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -1969,6 +2108,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -1983,6 +2123,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -1997,6 +2138,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.00",
       "upload": "1,000.00",
       "upload_error": null
@@ -2011,6 +2153,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.00",
       "upload": "1.00",
       "upload_error": null
@@ -2025,6 +2168,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.67",
       "upload": "2.67",
       "upload_error": null
@@ -2039,6 +2183,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.00",
       "upload": "1,000.00",
       "upload_error": null
@@ -2053,6 +2198,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.00",
       "upload": "1.00",
       "upload_error": null
@@ -2067,6 +2213,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.67,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.67",
       "upload": "2.67",
       "upload_error": null
@@ -2081,6 +2228,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2095,6 +2243,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2109,6 +2258,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2123,6 +2273,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2137,6 +2288,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2151,6 +2303,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2165,6 +2318,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2179,6 +2333,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2193,6 +2348,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2207,6 +2363,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2221,6 +2378,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2235,6 +2393,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2249,6 +2408,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2263,6 +2423,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2277,6 +2438,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2291,6 +2453,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2305,6 +2468,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2319,6 +2483,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2333,6 +2498,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -2347,6 +2513,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -2361,6 +2528,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -2375,6 +2543,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2389,6 +2558,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2403,6 +2573,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2417,6 +2588,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2431,6 +2603,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2445,6 +2618,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2459,6 +2633,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2473,6 +2648,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2487,6 +2663,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2501,6 +2678,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2515,6 +2693,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2529,6 +2708,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2543,6 +2723,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2557,6 +2738,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2571,6 +2753,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2585,6 +2768,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.00",
       "upload": "1,000.00",
       "upload_error": null
@@ -2599,6 +2783,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.00",
       "upload": "1.00",
       "upload_error": null
@@ -2613,6 +2798,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.67,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.67",
       "upload": "2.67",
       "upload_error": null
@@ -2627,6 +2813,7 @@
       "outcome": "refused",
       "refusal": "`frm2200S:txtTax21A` is computed; not part of this return as it stands",
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null,
@@ -2642,6 +2829,7 @@
       "outcome": "refused",
       "refusal": "`frm2200S:txtTax21A` is computed; not part of this return as it stands",
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -2656,6 +2844,7 @@
       "outcome": "refused",
       "refusal": "`frm2200S:txtTax21A` is computed; not part of this return as it stands",
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -2670,6 +2859,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": null,
       "upload": null,
       "upload_error": null
@@ -2684,6 +2874,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": null,
       "upload": null,
       "upload_error": null
@@ -2698,6 +2889,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": null,
       "upload": null,
       "upload_error": null,
@@ -2713,6 +2905,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2727,6 +2920,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2741,6 +2935,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2755,6 +2950,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2769,6 +2965,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2783,6 +2980,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2797,6 +2995,7 @@
       "outcome": "refused",
       "refusal": "Needs item 13 or item 15",
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null,
@@ -2812,6 +3011,7 @@
       "outcome": "refused",
       "refusal": "Needs item 13 or item 15",
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -2826,6 +3026,7 @@
       "outcome": "refused",
       "refusal": "Needs item 13 or item 15",
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -2840,6 +3041,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2854,6 +3056,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2868,6 +3071,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2882,6 +3086,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2896,6 +3101,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2910,6 +3116,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2924,6 +3131,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2938,6 +3146,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2952,6 +3161,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -2966,6 +3176,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -2980,6 +3191,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -2994,6 +3206,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3008,6 +3221,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3022,6 +3236,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3036,6 +3251,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3050,6 +3266,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3064,6 +3281,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3078,6 +3296,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3092,6 +3311,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3106,6 +3326,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3120,6 +3341,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3134,6 +3356,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3148,6 +3371,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3162,6 +3386,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3176,6 +3401,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3190,6 +3416,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3204,6 +3431,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3218,6 +3446,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3232,6 +3461,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3246,6 +3476,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3260,6 +3491,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3274,6 +3506,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3288,6 +3521,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3302,6 +3536,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3316,6 +3551,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3330,6 +3566,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3344,6 +3581,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3358,6 +3596,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3372,6 +3611,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3386,6 +3626,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3400,6 +3641,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3414,6 +3656,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3428,6 +3671,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3442,6 +3686,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3456,6 +3701,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3470,6 +3716,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0",
       "upload": "0",
       "upload_error": null
@@ -3484,6 +3731,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0",
       "upload": "0",
       "upload_error": null
@@ -3498,6 +3746,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0",
       "upload": "0",
       "upload_error": null
@@ -3512,6 +3761,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000",
       "upload": "1,000",
       "upload_error": null
@@ -3526,6 +3776,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1",
       "upload": "1",
       "upload_error": null
@@ -3540,6 +3791,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "3",
       "upload": "3",
       "upload_error": null
@@ -3554,6 +3806,7 @@
       "outcome": "refused",
       "refusal": "Needs item 5 = an ATC",
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null,
@@ -3569,6 +3822,7 @@
       "outcome": "refused",
       "refusal": "Needs item 5 = an ATC",
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -3583,6 +3837,7 @@
       "outcome": "refused",
       "refusal": "Needs item 5 = an ATC",
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -3597,6 +3852,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.00",
       "upload": "1,000.00",
       "upload_error": null
@@ -3611,6 +3867,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.00",
       "upload": "1.00",
       "upload_error": null
@@ -3625,6 +3882,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "3.00",
       "upload": "3.00",
       "upload_error": null
@@ -3639,6 +3897,7 @@
       "outcome": "refused",
       "refusal": "Needs item 5 = an ATC",
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null,
@@ -3654,6 +3913,7 @@
       "outcome": "refused",
       "refusal": "Needs item 5 = an ATC",
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -3668,6 +3928,7 @@
       "outcome": "refused",
       "refusal": "Needs item 5 = an ATC",
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -3682,6 +3943,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3696,6 +3958,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3710,6 +3973,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3724,6 +3988,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3738,6 +4003,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3752,6 +4018,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3766,6 +4033,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": null,
       "upload": null,
       "upload_error": null
@@ -3780,6 +4048,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": null,
       "upload": null,
       "upload_error": null
@@ -3794,6 +4063,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": null,
       "upload": null,
       "upload_error": null
@@ -3808,6 +4078,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -3822,6 +4093,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -3836,6 +4108,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -3850,6 +4123,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3864,6 +4138,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3878,6 +4153,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3892,6 +4168,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -3906,6 +4183,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -3920,6 +4198,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": null,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -3934,6 +4213,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3948,6 +4228,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -3962,6 +4243,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -3976,6 +4258,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -3990,6 +4273,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -4004,6 +4288,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -4018,6 +4303,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -4032,6 +4318,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -4046,6 +4333,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -4060,6 +4348,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -4074,6 +4363,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -4088,6 +4378,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -4102,6 +4393,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -4116,6 +4408,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -4130,6 +4423,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null,
@@ -4145,6 +4439,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -4159,6 +4454,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -4173,6 +4469,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -4187,6 +4484,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -4201,6 +4499,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -4215,6 +4514,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 0,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null,
@@ -4230,6 +4530,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -4244,6 +4545,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -4258,6 +4560,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -4272,6 +4575,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -4286,6 +4590,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -4300,6 +4605,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null,
@@ -4315,6 +4621,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -4329,6 +4636,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -4343,6 +4651,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -4357,6 +4666,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000",
       "upload": "1,000",
       "upload_error": null
@@ -4371,6 +4681,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1",
       "upload": "1",
       "upload_error": null
@@ -4385,6 +4696,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "3",
       "upload": "3",
       "upload_error": null
@@ -4399,6 +4711,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.01",
       "upload": "1,000.01",
       "upload_error": null
@@ -4413,6 +4726,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.01",
       "upload": "1.01",
       "upload_error": null
@@ -4427,6 +4741,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.68",
       "upload": "2.68",
       "upload_error": null
@@ -4441,6 +4756,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -4455,6 +4771,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.01,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -4469,6 +4786,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.68,
+      "changed_subcent_elsewhere": [],
       "displayed": "0.00",
       "upload": "0.00",
       "upload_error": null
@@ -4483,6 +4801,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1000",
       "upload": "1000",
       "upload_error": null
@@ -4497,6 +4816,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1",
       "upload": "1",
       "upload_error": null
@@ -4511,6 +4831,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "3",
       "upload": "3",
       "upload_error": null
@@ -4525,6 +4846,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.00",
       "upload": "1,000.00",
       "upload_error": null
@@ -4539,6 +4861,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.00",
       "upload": "1.00",
       "upload_error": null
@@ -4553,6 +4876,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.67",
       "upload": "2.67",
       "upload_error": null
@@ -4567,6 +4891,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1000.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1,000.00",
       "upload": "1,000.00",
       "upload_error": null
@@ -4581,6 +4906,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 1.005,
+      "changed_subcent_elsewhere": [],
       "displayed": "1.00",
       "upload": "1.00",
       "upload_error": null
@@ -4595,6 +4921,7 @@
       "outcome": "accepted",
       "refusal": null,
       "stored": 2.675,
+      "changed_subcent_elsewhere": [],
       "displayed": "2.67",
       "upload": "2.67",
       "upload_error": null

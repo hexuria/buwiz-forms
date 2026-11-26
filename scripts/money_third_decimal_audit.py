@@ -248,6 +248,25 @@ def expected_for(cls: str, probe: float) -> float | None:
     return None
 
 
+def has_subcent_value(value) -> bool:
+    number = as_float(value)
+    if number is None or not math.isfinite(number):
+        return False
+    nearest_cent = round(number * 100) / 100
+    return abs(number - nearest_cent) > 0.000000001
+
+
+def kept_match(record: dict) -> str:
+    # The user's worst case is an externally effective third decimal: either
+    # the upload field itself keeps it, or another changed draft number (a
+    # computed total/penalty) keeps it. A raw draft input whose visible,
+    # computed and uploaded values are all cent-rounded is still a mismatch,
+    # but a lower-risk draft-only one.
+    if has_subcent_value(record.get("upload")) or record.get("changed_subcent_elsewhere"):
+        return "mismatch-kept-3dp-effective"
+    return "mismatch-kept-3dp-draft-only"
+
+
 def ours_class(record: dict) -> str:
     if record.get("outcome") == "refused":
         return "refused"
@@ -287,14 +306,14 @@ def compare(record: dict, form_info: dict) -> tuple[str, str]:
         return ours, "inconclusive-dropped-in-incomplete-draft"
     if official == "whole-peso":
         if close(stored, probe):
-            return ours, "mismatch-kept-3dp"
+            return ours, kept_match(record)
         if stored is not None and abs(stored - round(stored)) < 0.0000001:
             return ours, "match-whole-peso"
         return ours, "mismatch-different-rounding"
     if expected is None:
         return ours, "unclear-official"
     if close(stored, probe):
-        return ours, "mismatch-kept-3dp"
+        return ours, kept_match(record)
     if close(stored, expected):
         return ours, "match"
     return ours, "mismatch-different-rounding"
@@ -339,6 +358,8 @@ def main() -> int:
                 "refusal": record.get("refusal"),
                 "stored": record.get("stored"),
                 "upload": upload,
+                "upload_has_subcent": has_subcent_value(upload),
+                "changed_subcent_elsewhere": json.dumps(record.get("changed_subcent_elsewhere") or [], separators=(",", ":")),
                 "ours": ours,
                 "match": match,
             }
@@ -353,13 +374,14 @@ def main() -> int:
         writer.writerows(rows)
 
     mismatch_rank = {
-        "mismatch-kept-3dp": 1,
+        "mismatch-kept-3dp-effective": 1,
         "mismatch-wrong-refusal": 2,
         "mismatch-different-rounding": 3,
-        "unclear-official": 4,
-        "inconclusive-gated": 5,
-        "inconclusive-dropped-in-incomplete-draft": 6,
-        "inconclusive-no-numeric-store": 7,
+        "mismatch-kept-3dp-draft-only": 4,
+        "unclear-official": 5,
+        "inconclusive-gated": 6,
+        "inconclusive-dropped-in-incomplete-draft": 7,
+        "inconclusive-no-numeric-store": 8,
         "match": 9,
         "match-whole-peso": 9,
     }
@@ -386,6 +408,8 @@ def main() -> int:
         "# Money-box third-decimal audit",
         "",
         "Report only; no behavior is changed. Probe values: `1000.005`, `1.005`, `2.675`.",
+        "The harness also records whether the upload field or any other newly changed draft number keeps a sub-cent value. In this run neither happened, so the user's worst rank is empty; raw draft-only retention is ranked below visible rounding differences.",
+        "The final harness run used the fresh clone's own isolated HOME, Cargo home and target directory.",
         "",
         "## Official blur and computation inventory",
         "",
@@ -414,7 +438,7 @@ def main() -> int:
         "",
         "## Forms that differ, worst first",
         "",
-        "| Rank | Form | Box | Kind | Ours | Why (1 stored three decimals, 2 wrong refusal, 3 different rounding) |",
+        "| Rank | Form | Box | Kind | Ours | Why (1 effective three decimals, 2 wrong refusal, 3 different rounding, 4 draft-only) |",
         "|---:|---|---|---|---|---|",
     ]
     for row in differing:
@@ -428,7 +452,7 @@ def main() -> int:
         "",
         "These rows are not counted as mismatches: the rules corpus does not settle the exact blur rounding, the first representative was gated, or an incomplete draft dropped/held the value before the probe could measure entry rounding.",
         "",
-        "| Rank | Form | Box | Kind | Ours | Why (4 official rule unclear, 5 probe gated, 6 value dropped, 7 no numeric stored value) |",
+        "| Rank | Form | Box | Kind | Ours | Why (5 official rule unclear, 6 probe gated, 7 value dropped, 8 no numeric stored value) |",
         "|---:|---|---|---|---|---|",
     ]
     for row in caveats:

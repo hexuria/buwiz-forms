@@ -102,6 +102,43 @@ fn amountish_refusal(message: &str) -> bool {
     .any(|word| lower.contains(word))
 }
 
+fn collect_subcent(value: &Value, path: String, out: &mut BTreeMap<String, f64>) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map {
+                collect_subcent(child, format!("{path}/{key}"), out);
+            }
+        }
+        Value::Array(items) => {
+            for (index, child) in items.iter().enumerate() {
+                collect_subcent(child, format!("{path}/{index}"), out);
+            }
+        }
+        _ => {
+            if let Some(number) = value.as_f64() {
+                let nearest_cent = (number * 100.0).round() / 100.0;
+                if number.is_finite() && (number - nearest_cent).abs() > 0.000000001 {
+                    out.insert(path, number);
+                }
+            }
+        }
+    }
+}
+
+fn changed_subcent_values(before: &Value, after: &Value, input_path: &str) -> Vec<Value> {
+    let mut before_values = BTreeMap::new();
+    let mut after_values = BTreeMap::new();
+    collect_subcent(before, String::new(), &mut before_values);
+    collect_subcent(after, String::new(), &mut after_values);
+    after_values
+        .into_iter()
+        .filter(|(path, number)| {
+            path != input_path && before_values.get(path).copied() != Some(*number)
+        })
+        .map(|(path, number)| json!({"path": path, "value": number}))
+        .collect()
+}
+
 fn probe_once(
     kind: AgentFormKind,
     opened: &Value,
@@ -131,6 +168,7 @@ fn probe_once(
         "outcome": if rejected.is_some() { "refused" } else { "accepted" },
         "refusal": rejected,
         "stored": stored,
+        "changed_subcent_elsewhere": changed_subcent_values(&opened["draft"], &filled["draft"], path),
         "displayed": filled["values"][key].clone(),
         "upload": upload,
         "upload_error": upload_error,
