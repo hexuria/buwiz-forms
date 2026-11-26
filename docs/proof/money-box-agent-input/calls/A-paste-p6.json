@@ -1,0 +1,10 @@
+{
+  "call": "{\n  \"delivery_status\": \"not_delivered\",\n  \"error\": \"unsupported_op: this host does not list `paste` in hello.features\",\n  \"error_code\": \"unsupported_op\",\n  \"hint\": \"check hello.features; this host does not offer the operation\",\n  \"ok\": false\n}\nerror: unsupported_op: this host does not list `paste` in hello.features\n",
+  "output": {
+    "delivery_status": "not_delivered",
+    "error": "unsupported_op: this host does not list `paste` in hello.features",
+    "error_code": "unsupported_op",
+    "hint": "check hello.features; this host does not offer the operation",
+    "ok": false
+  }
+}

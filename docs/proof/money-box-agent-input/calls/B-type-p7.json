@@ -1,0 +1,16 @@
+{
+  "call": "{\n  \"v\": 2,\n  \"id\": \"2\",\n  \"ok\": true,\n  \"delivery_status\": \"delivered_verified\",\n  \"after\": {\n    \"exists\": true,\n    \"value\": \"500.2565.4321\",\n    \"focused\": true,\n    \"enabled\": true,\n    \"changed\": true\n  }\n}\n",
+  "output": {
+    "v": 2,
+    "id": "2",
+    "ok": true,
+    "delivery_status": "delivered_verified",
+    "after": {
+      "exists": true,
+      "value": "500.2565.4321",
+      "focused": true,
+      "enabled": true,
+      "changed": true
+    }
+  }
+}

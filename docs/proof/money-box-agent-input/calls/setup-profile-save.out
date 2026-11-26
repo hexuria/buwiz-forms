@@ -1,0 +1,12 @@
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "created": true,
+    "name": "Probe Taxpayer",
+    "status": "ok",
+    "tin": "12345678800000"
+  },
+  "delivery_status": "delivered_unverified"
+}

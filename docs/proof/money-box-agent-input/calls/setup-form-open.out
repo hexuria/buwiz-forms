@@ -1,0 +1,15 @@
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "dry_run": null,
+    "form": "1601C",
+    "period": 3,
+    "send": null,
+    "status": "Draft",
+    "tin": "12345678800000",
+    "year": 2025
+  },
+  "delivery_status": "delivered_unverified"
+}

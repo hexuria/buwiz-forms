@@ -1,0 +1,335 @@
+{
+  "sha": "542e484401494623a7ccbae9e25832985739a3a8",
+  "results": [
+    {
+      "box": "A",
+      "call": "type",
+      "period": 4,
+      "field": "fp-frm1601c:txtTax14",
+      "exact_call": "{\n  \"v\": 2,\n  \"id\": \"2\",\n  \"ok\": true,\n  \"delivery_status\": \"delivered_verified\",\n  \"after\": {\n    \"exists\": true,\n    \"value\": \"500.25\",\n    \"focused\": true,\n    \"enabled\": true,\n    \"changed\": true\n  }\n}",
+      "before_text": "",
+      "after_text_focused": "500.25",
+      "focus_stayed": true,
+      "after_text_left": "500.25",
+      "stored": {
+        "tax_14_total_compensation": 500.25,
+        "tax_16_holiday_pay": 0.0,
+        "tax_21_total_non_taxable": 0.0,
+        "tax_22_total_taxable": 500.25,
+        "tax_24_net_taxable": 500.25
+      },
+      "onchange_inferred_from_dependent_totals": true,
+      "precondition_db": {
+        "tax_14_total_compensation": 0.0,
+        "tax_16_holiday_pay": 0.0,
+        "tax_21_total_non_taxable": 0.0,
+        "tax_22_total_taxable": 0.0,
+        "tax_24_net_taxable": 0.0
+      },
+      "screens_before": "A-type-p4-before.png",
+      "screens_after": [
+        "A-type-p4-after-focused.png",
+        "A-type-p4-after-left.png"
+      ],
+      "output_ok": true,
+      "output": {
+        "v": 2,
+        "id": "2",
+        "ok": true,
+        "delivery_status": "delivered_verified",
+        "after": {
+          "exists": true,
+          "value": "500.25",
+          "focused": true,
+          "enabled": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "box": "A",
+      "call": "set-value",
+      "period": 5,
+      "field": "fp-frm1601c:txtTax14",
+      "exact_call": "{\n  \"v\": 2,\n  \"id\": \"2\",\n  \"ok\": true,\n  \"delivery_status\": \"delivered_verified\",\n  \"after\": {\n    \"exists\": true,\n    \"value\": \"500.25\",\n    \"focused\": true,\n    \"enabled\": true,\n    \"changed\": true\n  }\n}",
+      "before_text": "",
+      "after_text_focused": "500.25",
+      "focus_stayed": true,
+      "after_text_left": "500.25",
+      "stored": {
+        "tax_14_total_compensation": 500.25,
+        "tax_16_holiday_pay": 0.0,
+        "tax_21_total_non_taxable": 0.0,
+        "tax_22_total_taxable": 500.25,
+        "tax_24_net_taxable": 500.25
+      },
+      "onchange_inferred_from_dependent_totals": true,
+      "precondition_db": {
+        "tax_14_total_compensation": 0.0,
+        "tax_16_holiday_pay": 0.0,
+        "tax_21_total_non_taxable": 0.0,
+        "tax_22_total_taxable": 0.0,
+        "tax_24_net_taxable": 0.0
+      },
+      "screens_before": "A-set-value-p5-before.png",
+      "screens_after": [
+        "A-set-value-p5-after-focused.png",
+        "A-set-value-p5-after-left.png"
+      ],
+      "output_ok": true,
+      "output": {
+        "v": 2,
+        "id": "2",
+        "ok": true,
+        "delivery_status": "delivered_verified",
+        "after": {
+          "exists": true,
+          "value": "500.25",
+          "focused": true,
+          "enabled": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "box": "A",
+      "call": "paste",
+      "period": 6,
+      "field": "fp-frm1601c:txtTax14",
+      "exact_call": "{\n  \"delivery_status\": \"not_delivered\",\n  \"error\": \"unsupported_op: this host does not list `paste` in hello.features\",\n  \"error_code\": \"unsupported_op\",\n  \"hint\": \"check hello.features; this host does not offer the operation\",\n  \"ok\": false\n}\nerror: unsupported_op: this host does not list `paste` in hello.features",
+      "before_text": "",
+      "after_text_focused": "",
+      "focus_stayed": false,
+      "after_text_left": "",
+      "stored": {
+        "tax_14_total_compensation": 0.0,
+        "tax_16_holiday_pay": 0.0,
+        "tax_21_total_non_taxable": 0.0,
+        "tax_22_total_taxable": 0.0,
+        "tax_24_net_taxable": 0.0
+      },
+      "onchange_inferred_from_dependent_totals": false,
+      "precondition_db": {
+        "tax_14_total_compensation": 0.0,
+        "tax_16_holiday_pay": 0.0,
+        "tax_21_total_non_taxable": 0.0,
+        "tax_22_total_taxable": 0.0,
+        "tax_24_net_taxable": 0.0
+      },
+      "screens_before": "A-paste-p6-before.png",
+      "screens_after": [
+        "A-paste-p6-after-focused.png",
+        "A-paste-p6-after-left.png"
+      ],
+      "output_ok": false,
+      "output": {
+        "delivery_status": "not_delivered",
+        "error": "unsupported_op: this host does not list `paste` in hello.features",
+        "error_code": "unsupported_op",
+        "hint": "check hello.features; this host does not offer the operation",
+        "ok": false
+      }
+    },
+    {
+      "box": "B",
+      "call": "type",
+      "period": 7,
+      "field": "fp-frm1601c:txtTax16",
+      "exact_call": "{\n  \"v\": 2,\n  \"id\": \"2\",\n  \"ok\": true,\n  \"delivery_status\": \"delivered_verified\",\n  \"after\": {\n    \"exists\": true,\n    \"value\": \"500.2565.4321\",\n    \"focused\": true,\n    \"enabled\": true,\n    \"changed\": true\n  }\n}",
+      "before_text": "65.4321",
+      "after_text_focused": "500.2565.4321",
+      "focus_stayed": true,
+      "after_text_left": "500.2565.4321",
+      "stored": {
+        "tax_14_total_compensation": 0.0,
+        "tax_16_holiday_pay": 65.43,
+        "tax_21_total_non_taxable": 65.43,
+        "tax_22_total_taxable": -65.43,
+        "tax_24_net_taxable": -65.43
+      },
+      "onchange_inferred_from_dependent_totals": true,
+      "precondition_db": {
+        "tax_14_total_compensation": 0.0,
+        "tax_16_holiday_pay": 65.4321,
+        "tax_21_total_non_taxable": 65.43,
+        "tax_22_total_taxable": -65.43,
+        "tax_24_net_taxable": -65.43
+      },
+      "screens_before": "B-type-p7-before.png",
+      "screens_after": [
+        "B-type-p7-after-focused.png",
+        "B-type-p7-after-left.png"
+      ],
+      "output_ok": true,
+      "output": {
+        "v": 2,
+        "id": "2",
+        "ok": true,
+        "delivery_status": "delivered_verified",
+        "after": {
+          "exists": true,
+          "value": "500.2565.4321",
+          "focused": true,
+          "enabled": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "box": "B",
+      "call": "set-value",
+      "period": 8,
+      "field": "fp-frm1601c:txtTax16",
+      "exact_call": "{\n  \"v\": 2,\n  \"id\": \"2\",\n  \"ok\": true,\n  \"delivery_status\": \"delivered_verified\",\n  \"after\": {\n    \"exists\": true,\n    \"value\": \"500.25\",\n    \"focused\": true,\n    \"enabled\": true,\n    \"changed\": true\n  }\n}",
+      "before_text": "65.4321",
+      "after_text_focused": "500.25",
+      "focus_stayed": true,
+      "after_text_left": "500.25",
+      "stored": {
+        "tax_14_total_compensation": 0.0,
+        "tax_16_holiday_pay": 500.25,
+        "tax_21_total_non_taxable": 500.25,
+        "tax_22_total_taxable": -500.25,
+        "tax_24_net_taxable": -500.25
+      },
+      "onchange_inferred_from_dependent_totals": true,
+      "precondition_db": {
+        "tax_14_total_compensation": 0.0,
+        "tax_16_holiday_pay": 65.4321,
+        "tax_21_total_non_taxable": 65.43,
+        "tax_22_total_taxable": -65.43,
+        "tax_24_net_taxable": -65.43
+      },
+      "screens_before": "B-set-value-p8-before.png",
+      "screens_after": [
+        "B-set-value-p8-after-focused.png",
+        "B-set-value-p8-after-left.png"
+      ],
+      "output_ok": true,
+      "output": {
+        "v": 2,
+        "id": "2",
+        "ok": true,
+        "delivery_status": "delivered_verified",
+        "after": {
+          "exists": true,
+          "value": "500.25",
+          "focused": true,
+          "enabled": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "box": "B",
+      "call": "paste",
+      "period": 9,
+      "field": "fp-frm1601c:txtTax16",
+      "exact_call": "{\n  \"delivery_status\": \"not_delivered\",\n  \"error\": \"unsupported_op: this host does not list `paste` in hello.features\",\n  \"error_code\": \"unsupported_op\",\n  \"hint\": \"check hello.features; this host does not offer the operation\",\n  \"ok\": false\n}\nerror: unsupported_op: this host does not list `paste` in hello.features",
+      "before_text": "1",
+      "after_text_focused": "1",
+      "focus_stayed": true,
+      "after_text_left": "1",
+      "stored": {
+        "tax_14_total_compensation": 0.0,
+        "tax_16_holiday_pay": 1.0,
+        "tax_21_total_non_taxable": 1.0,
+        "tax_22_total_taxable": -1.0,
+        "tax_24_net_taxable": -1.0
+      },
+      "onchange_inferred_from_dependent_totals": true,
+      "precondition_db": {
+        "tax_14_total_compensation": 0.0,
+        "tax_16_holiday_pay": 1.0,
+        "tax_21_total_non_taxable": 1.0,
+        "tax_22_total_taxable": -1.0,
+        "tax_24_net_taxable": -1.0
+      },
+      "screens_before": "B-paste-p9-before.png",
+      "screens_after": [
+        "B-paste-p9-after-focused.png",
+        "B-paste-p9-after-left.png"
+      ],
+      "output_ok": false,
+      "output": {
+        "delivery_status": "not_delivered",
+        "error": "unsupported_op: this host does not list `paste` in hello.features",
+        "error_code": "unsupported_op",
+        "hint": "check hello.features; this host does not offer the operation",
+        "ok": false
+      }
+    },
+    {
+      "box": "A",
+      "call": "realkeys",
+      "period": 11,
+      "field": "fp-frm1601c:txtTax14",
+      "exact_call": "{\"ok\": true, \"key_count\": 6, \"last\": {\"v\": 2, \"id\": \"2\", \"ok\": true, \"delivery_status\": \"delivered_verified\", \"after\": {\"exists\": true, \"value\": \"52.005\", \"focused\": true, \"enabled\": true, \"changed\": true}}}",
+      "before_text": "",
+      "after_text_focused": "52.005",
+      "focus_stayed": true,
+      "after_text_left": "52.005",
+      "stored": {
+        "tax_14_total_compensation": 52.005,
+        "tax_16_holiday_pay": 0.0,
+        "tax_21_total_non_taxable": 0.0,
+        "tax_22_total_taxable": 52.01,
+        "tax_24_net_taxable": 52.01
+      },
+      "onchange_inferred_from_dependent_totals": false,
+      "precondition_db": {
+        "tax_14_total_compensation": 0.0,
+        "tax_16_holiday_pay": 0.0,
+        "tax_21_total_non_taxable": 0.0,
+        "tax_22_total_taxable": 0.0,
+        "tax_24_net_taxable": 0.0
+      },
+      "screens_before": "A-realkeys-p11-before.png",
+      "screens_after": [
+        "A-realkeys-p11-after-focused.png",
+        "A-realkeys-p11-after-left.png"
+      ],
+      "output_ok": true,
+      "output": {
+        "ok": true,
+        "key_count": 6,
+        "last": {
+          "v": 2,
+          "id": "2",
+          "ok": true,
+          "delivery_status": "delivered_verified",
+          "after": {
+            "exists": true,
+            "value": "52.005",
+            "focused": true,
+            "enabled": true,
+            "changed": true
+          }
+        }
+      }
+    },
+    {
+      "box": "A",
+      "call": "form.fill",
+      "period": 12,
+      "field": "frm1601c:txtTax14",
+      "exact_call": "gpui-agent --addr 127.0.0.1:17422 invoke form.fill --arg 'fields={\"frm1601c:txtTax14\":\"500.25\"}' --arg 'source=\"ai\"'",
+      "before_text": "",
+      "after_text_focused": "500.25",
+      "focus_stayed": false,
+      "after_text_left": "500.25",
+      "stored": {
+        "tax_14_total_compensation": 500.25,
+        "tax_22_total_taxable": 500.25,
+        "tax_24_total_taxable": 500.25
+      },
+      "onchange_inferred_from_dependent_totals": true,
+      "screens_before": "A-form.fill-p12-before.png",
+      "screens_after": [
+        "A-form.fill-p12-after.png"
+      ],
+      "output_ok": true,
+      "oddities": "app-owned fill applied and unfocused; data-plane invoke"
+    }
+  ]
+}
