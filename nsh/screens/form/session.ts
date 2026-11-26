@@ -833,10 +833,14 @@ export class FormSession {
    * F1: the focused amount box leaves now. flushNow (before quit or navigation) and dispose save in the same turn, where a blur would
    * come too late: a decimal-comma text ("1500,50") reads only on leaving, so the save would store the older amount the box last reported.
    */
-  private leaveFocusedNow() {
+  private leaveFocusedNow(blur = false) {
     const held = this.st.focusKey;
     const kind = held ? this.kindOf.get(held) : undefined;
-    if (held && (kind === "money" || kind === "num")) this.leavers.get(held)?.();
+    if (!held || (kind !== "money" && kind !== "num")) return;
+    this.leavers.get(held)?.();
+    // F1-1: a page that stays after the flush (a refused save, a navigation the frame did not take) must not leave the keys in a box
+    // the session and the box both count as left: the box is blurred too. Its blur is the same leave, already run: it adds nothing.
+    if (blur) this.blurers.get(held)?.();
   }
   /** Queue, a Delete row, Print or Save is waiting for a focused amount box to let go. */
   private settling = false;
@@ -4573,7 +4577,7 @@ export class FormSession {
     if (this.disposed) return true;
     if (this.reopening || this.st.loading) await this.ready();
     if (this.reopening) await this.idle();
-    this.leaveFocusedNow();
+    this.leaveFocusedNow(true);
     const failed = this.finish();
     this.publish();
     if (failed) this.toast(failed, "triangle-alert");

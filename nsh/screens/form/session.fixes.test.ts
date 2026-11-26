@@ -1342,7 +1342,8 @@ for (const [period, door, name] of [[4, "screen_form_save", "Save"], [2, "screen
  */
 function leavingBox(s: FormSession, k: string, live: string, reads: string) {
   let focused = true;
-  s.registerBlur(k, () => {});
+  let blurred = 0;
+  s.registerBlur(k, () => void blurred++);
   s.registerLeave(k, () => {
     if (!focused) return;
     focused = false;
@@ -1351,6 +1352,7 @@ function leavingBox(s: FormSession, k: string, live: string, reads: string) {
   });
   s.focus(k);
   s.edit(k, live);
+  return { blurred: () => blurred };
 }
 
 for (const how of ["flushNow", "dispose"] as const) {
@@ -1362,10 +1364,12 @@ for (const how of ["flushNow", "dispose"] as const) {
     const saves = recordAt("screen_form_save", () => s.valueOf(key));
     let back: FormSession | undefined;
     try {
-      leavingBox(s, key, "1500", "1500.50");
+      const box = leavingBox(s, key, "1500", "1500.50");
       if (how === "flushNow") expect(await s.flushNow()).toBe(true);
       else s.dispose();
       expect(saves.seen[saves.seen.length - 1]).toBe("1,500.50");
+      // [F1-1] flushNow also takes the keys out of the box (the page may stay); the page going needs no blur.
+      expect(box.blurred()).toBe(how === "flushNow" ? 1 : 0);
       s.dispose();
       back = new FormSession(target);
       expect(await back.open()).toBe(null);
