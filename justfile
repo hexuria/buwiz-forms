@@ -1285,7 +1285,9 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     scripts/build-line.sh --strict
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     export GPUI_AGENT=1 GPUI_AGENT_ADDR="${GPUI_AGENT_ADDR:-127.0.0.1:17421}"
-    unset BIR_SFTP_LIVE
+    # .env (dotenv-load) may hold the live SFTP account and relay: none of it reaches an agent run, dry run or not.
+    unset BIR_SFTP_LIVE BIR_SFTP_HOST BIR_SFTP_PORT BIR_SFTP_USERNAME BIR_SFTP_PASSWORD BIR_SFTP_ACCEPT_ANY_HOST_KEY \
+        BIR_RELAY_URL BUWIZ_RELAY_SEND
     # The guard read a relative path from here, and the app starts in nsh/: hand it the same file, as an absolute path.
     db={{quote(db)}}
     if [ -n "$db" ]; then
@@ -1373,7 +1375,10 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     if (-not $env:GPUI_AGENT_TOKEN) { "nsh-run-agent: set GPUI_AGENT_TOKEN first"; exit 1 }
     $root = (Get-Location).ProviderPath
     $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_AUTH_BYPASS = '1'; $env:BIR_SFTP_DRY_RUN = '1'
-    Remove-Item Env:BIR_SFTP_LIVE -ErrorAction SilentlyContinue
+    # .env (dotenv-load) may hold the live SFTP account and relay: none of it reaches an agent run, dry run or not.
+    foreach ($name in 'BIR_SFTP_LIVE', 'BIR_SFTP_HOST', 'BIR_SFTP_PORT', 'BIR_SFTP_USERNAME', 'BIR_SFTP_PASSWORD', 'BIR_SFTP_ACCEPT_ANY_HOST_KEY', 'BIR_RELAY_URL', 'BUWIZ_RELAY_SEND') {
+        Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+    }
     $env:GPUI_AGENT = '1'
     if (-not $env:GPUI_AGENT_ADDR) { $env:GPUI_AGENT_ADDR = '127.0.0.1:17421' }
     $writer = $null
@@ -1538,7 +1543,7 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
 # send (Queue) runs only with --allow-send under EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1. See docs/proof/E2E.md.
 # End to end: run a suite of gpui-agent recipes against the real app (just e2e <target> [suite] [--allow-send])
 e2e target="check" suite="smoke" *args="":
-    {{PYTHON}} scripts/e2e {{target}} {{suite}} {{args}}
+    {{PYTHON}} scripts/e2e {{quote(target)}} {{quote(suite)}} {{args}}
 
 # NSH: the Android device choice and token hand-off of nsh-run-agent, against a stand-in adb (no device needed).
 [unix]

@@ -124,9 +124,98 @@ class SafetyTests(unittest.TestCase):
                    "allow_send": False, "env": {"EBIR_TEST_ENV": "1", "BIR_SFTP_DRY_RUN": "1"}}
         self.assertEqual(E2E.plan_entry(entry, {}, context)[2], "refused")
         context["allow_send"] = True
+        # The app must say it runs on a test database.
+        self.assertEqual(E2E.plan_entry(entry, {}, context)[2], "refused")
+        context["database"] = "real"
+        self.assertEqual(E2E.plan_entry(entry, {}, context)[2], "refused")
+        context["database"] = "test"
         self.assertEqual(E2E.plan_entry(entry, {}, context), ("queue.wants", None, None))
         context["env"] = {"EBIR_TEST_ENV": "1"}
         self.assertEqual(E2E.plan_entry(entry, {}, context)[2], "refused")
+
+    def test_keys_code_boxes_and_camel_case_ids_are_caught(self):
+        for step in [{"op": "key", "target": "auth-tp-pin", "words": ["auth-tp-pin", "1"]},
+                     {"op": "type", "target": "gate-code-boxes"}, {"op": "type", "target": "auth-tp-totp"},
+                     {"op": "set_value", "target": "settings-totp-cells"},
+                     {"op": "type", "target": "setup-change-code-cells"}, {"op": "type", "target": "loginPassword"},
+                     {"op": "type", "target": "x", "words": ["x", "--id", "otp-box"]},
+                     {"op": "click", "target": "system-keyboard-key-1"}]:
+            self.assertTrue(E2E.is_secret_entry(step), step)
+        for step in [{"op": "type", "target": "new-tp-zip_code-search"}, {"op": "type", "target": "fp-frm1601FQ:txtAtcCode1"},
+                     {"op": "type", "target": "fp-frm2551Qv2018:txt15", "text": "my pin"}]:
+            self.assertFalse(E2E.is_secret_entry(step), step)
+        self.assertTrue(E2E.is_send_step({"op": "click", "target": "fpQueue"}))
+        self.assertTrue(E2E.is_send_step({"op": "click", "target": "x", "words": ["x", "--id", "form-submit"]}))
+
+    def test_a_resolved_id_is_checked_by_what_its_node_says(self):
+        step = {"op": "type", "target": "$box"}
+        params = {"box": "n42"}
+        self.assertFalse(E2E.is_secret_entry(step, params))
+        self.assertTrue(E2E.is_secret_entry(step, params, {"n42": "n42 Enter your PIN textbox"}))
+        with tempfile.TemporaryDirectory() as folder:
+            path = write(folder, "r.wants", "type $box 1234\n")
+            problems = E2E.step_problems(E2E.recipe_steps(path), params, "r.wants", {},
+                                         {"n42": "n42 Authenticator code textbox"})
+        self.assertEqual(len(problems), 1, problems)
+        self.assertFalse(E2E.is_secret_text("Postal code"))
+        self.assertTrue(E2E.is_secret_text("6-digit code"))
+
+    def test_sign_in_presses_need_a_marked_recipe_and_the_local_mock(self):
+        for target in ("gate-continue", "gate-resend", "signInContinue", "sign-in-continue", "auth-verify"):
+            self.assertTrue(E2E.is_sign_in_step({"op": "click", "target": target}), target)
+        for target in ("queue-continue", "removal-continue", "gate-change-email"):
+            self.assertFalse(E2E.is_sign_in_step({"op": "click", "target": target}), target)
+        entry = {"name": "s", "file": "s.wants", "sign_in": True}
+        base = {"target": "macos", "form_factor": "desktop", "features": [], "cli_version": "0.4.1",
+                "allow_send": False}
+        self.assertEqual(E2E.plan_entry(entry, {}, {**base, "launched": False, "env": {}})[2], "refused")
+        self.assertEqual(E2E.plan_entry(entry, {}, {**base, "launched": True,
+                                                   "env": {"BUWIZ_SERVER_URL": "https://api.buwiz.com"}})[2], "refused")
+        self.assertIsNone(E2E.plan_entry(entry, {}, {**base, "launched": True,
+                                                    "env": {"BUWIZ_SERVER_URL": "http://localhost:3008"}})[2])
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, "s.wants", "type gate-email a@example.com\nclick gate-continue\n")
+            suite = suite_of(folder, [{"name": "s", "file": "s.wants"}])
+            self.assertIn("sign-in screen", "\n".join(E2E.check_suite(suite)))
+
+    def test_the_launch_environment_has_no_live_settings(self):
+        env = E2E.launch_env({"BIR_SFTP_HOST": "sftp.example", "BIR_SFTP_PASSWORD": "pw", "BIR_SFTP_LIVE": "1",
+                              "BIR_RELAY_URL": "https://relay.example", "BUWIZ_RELAY_SEND": "1",
+                              "BUWIZ_SERVER_URL": "https://api.buwiz.com", "BUWIZ_ACCOUNT_URL": "http://127.0.0.1:3008",
+                              "PATH": "/bin"}, "tok", "127.0.0.1:1")
+        for name in E2E.LIVE_SEND_VARS + ("BUWIZ_SERVER_URL",):
+            self.assertNotIn(name, env)
+        self.assertEqual(env["BUWIZ_ACCOUNT_URL"], "http://127.0.0.1:3008")
+        self.assertTrue(E2E.send_env_ok(env))
+        self.assertEqual((env["GPUI_AGENT_TOKEN"], env["PATH"]), ("tok", "/bin"))
+
+
+class FileTests(unittest.TestCase):
+    def test_files_other_programs_wrote_are_masked_and_the_scratch_database_removed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            log = E2E.RunLog(None, secrets_=["s3cret"], echo=False)
+            receipt = write(folder, "receipt.json", '{"error": "token s3cret refused"}')
+            E2E.redact_file(receipt, log)
+            self.assertNotIn("s3cret", receipt.read_text())
+            db = folder / "e2e.db"
+            for path in (db, Path(f"{db}-wal"), Path(f"{db}-shm")):
+                path.write_text("x")
+            E2E.remove_scratch(db, log)
+            self.assertEqual(sorted(p.name for p in folder.iterdir()), ["receipt.json"])
+
+    def test_app_database_reads_app_info(self):
+        class Data:
+            def json(self, *args, timeout=0):
+                return 0, {"ok": True, "result": {"app": "bir-shell", "database": "test"}}, ""
+
+        class Silent:
+            def json(self, *args, timeout=0):
+                return 1, None, "approval required: the app is locked"
+
+        log = E2E.RunLog(None, echo=False)
+        self.assertEqual(E2E.app_database(Data(), log), "test")
+        self.assertIsNone(E2E.app_database(Silent(), log))
 
 
 class SuiteTests(unittest.TestCase):

@@ -6,12 +6,20 @@ platform, so that no machine writes a driver of its own. A run starts the app, r
 
 ```sh
 just e2e check smoke                                                   # no app: is every recipe of the suite sound?
-EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1 just e2e macos smoke --allow-send   # the whole smoke suite in a real window
+just e2e macos smoke --allow-send                                      # the whole smoke suite in a real window
 just e2e android smoke --only sign-up --only navigate                  # a part of it (no Queue: no --allow-send)
 ```
 
 `target` is `macos`, `linux`, `windows`, `ios` (the Simulator) or `android` (the emulator). The command is
-`python3 scripts/e2e <target> [suite] [options]` under the hood; `--help` lists the options.
+`python3 scripts/e2e <target> [suite] [options]` under the hood; `--help` lists the options. `just` passes the
+options on as words (this justfile supports `just` releases without per-argument quoting): an option value with a
+space in it (an `--out` folder) goes to `python3 scripts/e2e` directly.
+
+The run does not depend on `.env`: the runner launches the app in the dry-run test environment itself, and removes
+the live SFTP and relay variables (`BIR_SFTP_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`, `_LIVE`,
+`_ACCEPT_ANY_HOST_KEY`, `BIR_RELAY_URL`, `BUWIZ_RELAY_SEND`) that `just` reads from `.env`; `nsh-run-agent` removes
+them again after its own read of `.env`. An account server that is not on this machine (`BUWIZ_SERVER_URL`,
+`BUWIZ_ACCOUNT_URL`) is removed too, so a debug build talks to the local mock.
 
 ## The rule
 
@@ -62,11 +70,26 @@ The exit status is 0 only when every recipe passed or was skipped.
 
 ## Safety, in code (`scripts/e2e/runner.py`)
 
+The checks read every word of a step (flag values included) and every string of a JSON step, split camelCase ids
+(`fpQueue` is fp, queue), and run again on each id resolved from the tree, with the node's id, name and role.
+
 - **Send steps.** A recipe that presses Queue, Send, Submit or File (or invokes a send) must be marked `"send": true`
-  in its suite, or the suite does not run. It runs only with `--allow-send`, and only while the runner's own
-  environment says `EBIR_TEST_ENV=1` and `BIR_SFTP_DRY_RUN=1` with no `BIR_SFTP_LIVE`. Otherwise it is `refused`.
-- **Secret boxes.** No step may type, set or paste into a box whose id says password, PIN, passcode, secret or token.
-- **The token** stays in the environment of the processes that need it, and is masked in every log line.
+  in its suite, or the suite does not run. It runs only with `--allow-send`, in the dry-run test environment
+  (`EBIR_TEST_ENV=1`, `BIR_SFTP_DRY_RUN=1`, no `BIR_SFTP_LIVE`: the launch environment, or the runner's own with
+  `--no-launch`), and only when the app's data plane answers `app.info` with `"database": "test"`. Otherwise it is
+  `refused`.
+- **`--no-launch`** drives an app that is already running only when it answers `app.info` with `"database":
+  "test"`; otherwise nothing runs.
+- **Secret boxes.** No step types, sets, pastes or keys into a box that says password, PIN, passcode, secret,
+  token, OTP, TOTP or authenticator, or a code box (`…-code-boxes`, `…-code-cells`, a node named "6-digit code" or
+  "Verification code"), and no step presses the software keyboard's keys (`system-keyboard…`). The store review
+  account's fixed code never goes in a file.
+- **Sign-in.** Continue, Verify or Resend on a sign-in screen (`gate-continue`, `gate-resend`, …) only in a recipe
+  marked `"sign_in": true`, in an app this run launched, against an account server on this machine.
+- **The token** stays in the environment of the processes that need it, and is masked in `run.log`, the receipts,
+  the failure trees and `app.log`.
+- **Afterwards** the app is stopped, on the Simulator or emulator too (and the emulator's forwarded ports removed),
+  and the run's scratch database is deleted; the evidence folder stays.
 
 ## Per machine type
 
@@ -125,7 +148,7 @@ A suite is `agent-recipes/e2e/<name>.json`:
 
 **Flow.**
 - `required`: a failure stops the suite.
-- `send`: see Safety.
+- `send`, `sign_in`: see Safety.
 - `plane`: `"data"` for data-plane invokes.
 - `timeout_s`: the recipe's time limit (900 s by default).
 

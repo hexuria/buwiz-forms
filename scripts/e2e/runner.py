@@ -19,10 +19,17 @@ Everything goes through gpui-agent: no OS input, no fixed coordinates. Typing at
 `software_keyboard` puts in the tree. A recipe that needs either runs its `fallback` on an older client or host, or
 is reported as "needs ...", never silently passed.
 
-Safety, enforced here: a recipe whose steps press Queue / Send / Submit / File (or invoke a send) must be marked
-"send" in its suite, and runs only with --allow-send while EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1 are set and
-BIR_SFTP_LIVE is not; a step that types into a box whose id or name says password, PIN, passcode, secret or token is
-refused; the token never reaches a log or the screen.
+Safety, enforced here (on every word of a step, camelCase split, and again on ids resolved from the tree):
+- a recipe whose steps press Queue / Send / Submit / File (or invoke a send) must be marked "send" in its suite, and
+  runs only with --allow-send, in a dry-run test environment (EBIR_TEST_ENV=1, BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE),
+  against an app whose app.info says "database": "test"; with --no-launch no recipe runs against any other app;
+- no step types, sets, pastes or keys into a password, PIN, passcode, secret, token, OTP / TOTP or code box, or
+  presses the software keyboard's keys;
+- Continue / Resend on a sign-in screen only in a recipe marked "sign_in", in an app this run launched, against an
+  account server on this machine (a debug build's default is the local mock);
+- the app's environment has none of the live SFTP or relay variables (BIR_SFTP_HOST, _PASSWORD, ... BIR_RELAY_URL);
+- the token is masked in run.log, the receipts, the failure trees and app.log;
+- afterwards the app is stopped (on the Simulator or emulator too) and the scratch database removed.
 """
 import argparse
 import datetime as dt
@@ -45,13 +52,29 @@ SUITES = RECIPES / "e2e"
 SCHEMA = RECIPES / "bir.schema.json"
 TARGETS = ("macos", "linux", "windows", "ios", "android")
 DEFAULT_ADDR = "127.0.0.1:17421"
+# The NSH development host's id on Android and on the iOS Simulator.
 ANDROID_HOST = "com.longbridge.nsh.host"
 # The Android development build's guarded test database (EBIR_TEST_ENV): a fresh run removes it.
 ANDROID_TEST_DB = "files/nsh/dev.goldcoders.bir/test-data/bir_data.db"
 
 SEND_WORDS = {"queue", "send", "submit", "file", "filing"}
-SECRET_WORDS = {"password", "passcode", "pin", "secret", "token"}
-TYPING_OPS = {"type", "set_value", "paste"}
+SECRET_WORDS = {"password", "passcode", "pin", "secret", "token", "otp", "totp"}
+# A code box is a secret too (the email sign-in code, an authenticator's): "code" then one of these words.
+CODE_BOX_WORDS = {"box", "boxes", "cell", "cells"}
+# ... or one of these, then "code" (a node's name: "Authenticator code", "6-digit code", "Verification code").
+CODE_KIND_WORDS = {"authenticator", "verification", "security", "confirmation", "login", "email", "sign", "time",
+                   "digit", "access", "one"}
+SIGN_IN_WORDS = {"gate", "signin", "login", "auth"}
+# Ops that put text or keys into a box.
+TYPING_OPS = {"type", "set_value", "paste", "key"}
+# Step fields that are what is typed or expected, not what is acted on.
+VALUE_FIELDS = {"text", "value", "id", "needs", "screenshot", "key_delay_ms", "timeout_ms", "op", "line", "words"}
+# The variables that point the app at a real SFTP server or relay: never in a run's environment. The app stays in dry
+# run under the runner anyway (its own guard), but the live host and its password must not reach the process.
+LIVE_SEND_VARS = ("BIR_SFTP_LIVE", "BIR_SFTP_HOST", "BIR_SFTP_PORT", "BIR_SFTP_USERNAME", "BIR_SFTP_PASSWORD",
+                  "BIR_SFTP_ACCEPT_ANY_HOST_KEY", "BIR_RELAY_URL", "BUWIZ_RELAY_SEND")
+# The account server a debug build signs in to: unset, it is the local mock (http://localhost:3008).
+ACCOUNT_VARS = ("BUWIZ_SERVER_URL", "BUWIZ_ACCOUNT_URL")
 TARGET_OPS = {"click", "press", "type", "set_value", "key", "paste", "long_press", "assert", "wait_until", "scroll",
               "hover", "swipe"}
 PRESS_OPS = {"click", "press", "long_press", "key"}
@@ -126,6 +149,8 @@ def recipe_steps(path):
         op = tokens[0].replace("-", "_")
         step = {"op": op, "line": number}
         rest = []
+        # Every word after the op, flag values included, but the text a typing op types.
+        typed_index = None
         skip = False
         for index, token in enumerate(tokens[1:], 1):
             if skip:
@@ -141,8 +166,10 @@ def recipe_steps(path):
             rest.append(token)
         if op in TARGET_OPS and rest:
             step["target"] = rest[0]
-            if op in TYPING_OPS and len(rest) > 1:
+            if op in TYPING_OPS and op != "key" and len(rest) > 1:
                 step["text"] = rest[1]
+                typed_index = tokens.index(rest[1], tokens.index(rest[0], 1) + 1)
+        step["words"] = [token for index, token in enumerate(tokens[1:], 1) if index != typed_index]
         if op == "invoke" and rest:
             step["name"] = rest[0]
         steps.append(step)
@@ -168,31 +195,127 @@ def bind(text, params):
         "\0", "$")
 
 
+def word_list(text):
+    """The words of an id or a name, in order: split at anything but a letter or digit and where a lowercase letter or
+    a digit meets an uppercase one (`fpQueue` is fp, queue)."""
+    text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", str(text or ""))
+    return [word for word in re.split(r"[^a-z0-9]+", text.lower()) if word]
+
+
 def words(text):
-    return {word for word in re.split(r"[^a-z0-9]+", str(text or "").lower()) if word}
+    return set(word_list(text))
+
+
+def selectors(step, params=None):
+    """Every string a step acts on, bound: its target and every other word or field, but the text it types and the
+    values it expects."""
+    params = params or {}
+    found = []
+    if "words" in step:
+        found += step["words"]
+
+    def walk(value, key=None):
+        if key in VALUE_FIELDS:
+            return
+        if isinstance(value, str):
+            found.append(value)
+        elif isinstance(value, dict):
+            for inner, item in value.items():
+                walk(item, inner)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item)
+
+    for key, value in step.items():
+        if key != "words":
+            walk(value, key)
+    return [bind(item, params) for item in found]
+
+
+def is_secret_text(text):
+    """An id, name or role that says password, PIN, passcode, secret, token, OTP or TOTP, or a code box."""
+    listed = word_list(text)
+    if set(listed) & SECRET_WORDS:
+        return True
+    pairs = list(zip(listed, listed[1:]))
+    return any(word == "code" and following in CODE_BOX_WORDS for word, following in pairs) or any(
+        following == "code" and word in CODE_KIND_WORDS for word, following in pairs)
 
 
 def is_send_step(step, params=None):
     """A step that would queue, send, submit or file a return: a press on a control so named, or such an invoke."""
-    params = params or {}
     op = step.get("op", "")
-    if op in PRESS_OPS:
-        return bool(words(bind(step.get("target"), params)) & SEND_WORDS)
-    if op == "invoke":
-        return bool(words(bind(step.get("name"), params)) & SEND_WORDS)
+    if op in PRESS_OPS or op == "invoke":
+        return any(words(item) & SEND_WORDS for item in selectors(step, params))
     return False
 
 
-def is_secret_entry(step, params=None):
-    """A step that would type into a password, PIN, passcode, secret or token box."""
-    if step.get("op") not in TYPING_OPS:
+def is_secret_entry(step, params=None, names=None):
+    """A step that would type or key into a password, PIN, passcode, secret, token or code box, or press a key of the
+    software keyboard. `names` maps a resolved id to the name and role its node has."""
+    op = step.get("op", "")
+    found = selectors(step, params)
+    if op in PRESS_OPS | TYPING_OPS and any(item.startswith("system-keyboard") for item in found):
+        return True
+    if op not in TYPING_OPS:
         return False
-    return bool(words(bind(step.get("target"), params or {})) & SECRET_WORDS)
+    names = names or {}
+    return any(is_secret_text(item) or is_secret_text(names.get(item, "")) for item in found)
+
+
+def is_sign_in_step(step, params=None):
+    """A press that asks the account server for something: Continue or Resend on a sign-in screen."""
+    if step.get("op") not in PRESS_OPS:
+        return False
+    for item in selectors(step, params):
+        listed = word_list(item)
+        if "resend" in listed:
+            return True
+        joined = set(listed) | ({"signin"} if any(a == "sign" and b == "in" for a, b in zip(listed, listed[1:]))
+                                else set())
+        if joined & SIGN_IN_WORDS and listed and listed[-1] in ("continue", "verify"):
+            return True
+    return False
+
+
+def step_problems(steps, params, file, entry, names=None):
+    """What a recipe's steps must not do, as sentences, with `params` bound."""
+    problems = []
+    for step in steps:
+        what = step.get("target") or step.get("name") or step.get("op")
+        if is_send_step(step, params) and not entry.get("send"):
+            problems.append(f"{file} presses {what!r}, a send step, but the suite does not mark the recipe "
+                            "\"send\": true")
+        if is_secret_entry(step, params, names):
+            problems.append(f"{file} types into or keys {what!r}: never a password, PIN, passcode, secret, token, "
+                            "code box or the software keyboard")
+        if is_sign_in_step(step, params) and not entry.get("sign_in"):
+            problems.append(f"{file} presses {what!r} on a sign-in screen: only a recipe marked \"sign_in\": true, "
+                            "against the local mock account server")
+    return problems
+
+
+def is_loopback_url(url):
+    return bool(re.match(r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(/|$)", url or ""))
 
 
 def send_env_ok(env):
     """The environment of a dry-run test build: EBIR_TEST_ENV=1, BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE."""
     return env.get("EBIR_TEST_ENV") == "1" and env.get("BIR_SFTP_DRY_RUN") == "1" and not env.get("BIR_SFTP_LIVE")
+
+
+def launch_env(environ, token, addr):
+    """The environment the app is launched with: the dry-run test settings, the agent's address and token, none of
+    the live SFTP or relay variables, and no account server that is not on this machine."""
+    env = dict(environ)
+    env.update({"EBIR_TEST_ENV": "1", "BIR_SFTP_DRY_RUN": "1", "BUWIZ_NO_KEYCHAIN": "1", "BIR_AUTH_BYPASS": "1",
+                "GPUI_AGENT_TOKEN": token, "GPUI_AGENT_ADDR": addr})
+    for name in LIVE_SEND_VARS:
+        env.pop(name, None)
+    for name in ACCOUNT_VARS:
+        if not is_loopback_url(env.get(name)):
+            env.pop(name, None)
+    return env
 
 
 # --- Suites -------------------------------------------------------------------------------------------------------
@@ -268,12 +391,7 @@ def check_suite(suite):
             for step in steps:
                 if step.get("key_delay_ms") is not None and step.get("op") != "type":
                     problems.append(f"{where}: {file}: key_delay_ms on {step.get('op')} (only type is paced)")
-                if is_send_step(step, bound) and not entry.get("send"):
-                    problems.append(f"{where}: {file} presses {step.get('target') or step.get('name')!r}, a send "
-                                    "step, but the suite does not mark the recipe \"send\": true")
-                if is_secret_entry(step, bound):
-                    problems.append(f"{where}: {file} types into {step.get('target')!r}: never into a password, "
-                                    "PIN, passcode, secret or token box")
+            problems += [f"{where}: {problem}" for problem in step_problems(steps, bound, file, entry)]
             if any(step.get("key_delay_ms") is not None for step in steps) and not entry.get("needs_cli"):
                 problems.append(f"{where}: {file} paces typing (key_delay_ms): mark it \"needs_cli\": \"0.4.1\" "
                                 "with a fallback")
@@ -387,6 +505,11 @@ def for_host(value, context):
 def resolve(spec, snapshot):
     """The value a resolve spec picks from a snapshot: the id (or the `group` of `id_regex`) of the first node that
     matches every given field: `id`, `id_regex`, `role` (one or a list), `name`, `name_regex`, `visible`. None when none does."""
+    return resolve_node(spec, snapshot)[0]
+
+
+def resolve_node(spec, snapshot):
+    """(value, node) of [`resolve`]; (None, None) when no node matches."""
     for node in tree_nodes(snapshot):
         if "id" in spec and node.get("id") != spec["id"]:
             continue
@@ -405,9 +528,20 @@ def resolve(spec, snapshot):
         if "visible" in spec and bool(node.get("visible", True)) != bool(spec["visible"]):
             continue
         if match and spec.get("group") is not None:
-            return match.group(spec["group"])
-        return node.get("id")
-    return None
+            return match.group(spec["group"]), node
+        return node.get("id"), node
+    return None, None
+
+
+def redact_file(path, log):
+    """`path` rewritten with every secret of `log` masked (a file another program wrote: the receipt, the app's log)."""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    masked = log.redact(text)
+    if masked != text:
+        Path(path).write_text(masked, encoding="utf-8")
 
 
 def failing_step(receipt):
@@ -460,6 +594,16 @@ def plan_entry(entry, suite, context):
         if not send_env_ok(context["env"]):
             return None, "presses a send control: needs EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE", \
                 "refused"
+        if context.get("database") != "test":
+            return None, "presses a send control: the app does not answer app.info with \"database\": \"test\"", \
+                "refused"
+    if entry.get("sign_in"):
+        if not context.get("launched"):
+            return None, "signs in: only in an app this run launched, against the local mock account server", \
+                "refused"
+        servers = [context["env"].get(name) for name in ACCOUNT_VARS]
+        if any(server and not is_loopback_url(server) for server in servers):
+            return None, "signs in: the account server is not on this machine", "refused"
     return file, None, None
 
 
@@ -477,20 +621,30 @@ def run_entry(index, entry, suite, context, agent, log, out):
     folder = out / f"{index:02d}-{entry['name']}"
     folder.mkdir(parents=True, exist_ok=True)
     params = {**(suite.get("params") or {}), **(entry.get("set") or {})}
+    names = {}
     for param, spec in (entry.get("resolve") or {}).items():
         t0 = time.monotonic()
+        node = None
         try:
-            value = resolve(spec, agent.snapshot())
+            value, node = resolve_node(spec, agent.snapshot())
         except SuiteError as error:
             value, why = None, str(error)
         else:
             why = "no node matches " + json.dumps(spec)
+        if node:
+            names[value] = f"{node.get('id', '')} {node.get('name', '')} {node.get('role', '')}"
         log.line("resolve", f"${param}", value or why, (time.monotonic() - t0) * 1000)
         if not value:
             result.update(status="setup", step=None, error=f"${param}: {why}")
             result["ms"] = round((time.monotonic() - started) * 1000)
             return result
         params[param] = value
+    # The suite was checked before the run; what a resolved id names is known only now.
+    problems = step_problems(recipe_steps(path), params, file, entry, names)
+    if problems:
+        result.update(status="refused", error="; ".join(problems))
+        log.line("recipe", entry["name"], f"refused: {result['error']}", 0)
+        return result
     used = placeholders(path)
     args = ["recipe", "--schema", SCHEMA, "run", path]
     for key in sorted(used):
@@ -502,6 +656,7 @@ def run_entry(index, entry, suite, context, agent, log, out):
     code, stdout, stderr = agent.run(*args, timeout=entry.get("timeout_s", 900))
     if recorder:
         result["video"] = recorder.stop()
+    redact_file(folder / "receipt.json", log)
     receipt = first_json(stdout)
     result["ms"] = round((time.monotonic() - started) * 1000)
     if code == 0 and isinstance(receipt, dict) and receipt.get("ok"):
@@ -527,7 +682,7 @@ def run_entry(index, entry, suite, context, agent, log, out):
     else:
         result["screenshot_error"] = log.redact(shot_err.strip())[-200:]
     try:
-        (folder / "failure-tree.json").write_text(json.dumps(agent.snapshot(), indent=1), encoding="utf-8")
+        (folder / "failure-tree.json").write_text(log.redact(json.dumps(agent.snapshot(), indent=1)), encoding="utf-8")
         result["tree"] = str(folder / "failure-tree.json")
     except SuiteError:
         pass
@@ -755,25 +910,26 @@ def run(args):
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     out = Path(args.out) if args.out else Path.home() / "BuwizNsh" / "evidence" / "e2e" / f"{args.target}-{stamp}"
     out.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ)
-    token = env.get("GPUI_AGENT_TOKEN") or secrets.token_hex(16)
-    env["GPUI_AGENT_TOKEN"] = token
-    addr = args.addr or env.get("GPUI_AGENT_ADDR") or DEFAULT_ADDR
-    env["GPUI_AGENT_ADDR"] = addr
-    # What the app is launched with: a dry-run test build (nsh-run-agent sets the same; this is the runner's word).
-    env.update({"EBIR_TEST_ENV": "1", "BIR_SFTP_DRY_RUN": "1", "BUWIZ_NO_KEYCHAIN": "1", "BIR_AUTH_BYPASS": "1"})
-    env.pop("BIR_SFTP_LIVE", None)
-    log = RunLog(out / "run.log", secrets_=[token])
+    token = os.environ.get("GPUI_AGENT_TOKEN") or secrets.token_hex(16)
+    addr = args.addr or os.environ.get("GPUI_AGENT_ADDR") or DEFAULT_ADDR
+    # What the app (and every gpui-agent call) gets: a dry-run test build, no live SFTP or relay settings, no remote
+    # account server. nsh-run-agent sets and unsets the same again after `just` reads .env.
+    env = launch_env(os.environ, token, addr)
+    secret_values = [token] + [os.environ[name] for name in ("BIR_SFTP_PASSWORD", "BIR_SFTP_USERNAME")
+                               if os.environ.get(name)]
+    log = RunLog(out / "run.log", secrets_=secret_values)
     header = {"suite": suite["_path"].stem, "target": args.target, "started": stamp, "out": str(out),
               "cli_version": installed_cli_version(), "app_commit": git_head()}
     proc = None
     results = []
+    made_db = None
     try:
         if not args.no_launch:
             if port_answers(addr) or port_answers(data_plane(addr)):
                 raise SuiteError(f"something already listens on {addr} or {data_plane(addr)}: stop it, or pass "
                                  "--no-launch to drive it")
             db = Path(args.db) if args.db else Path.home() / "BuwizNsh" / "agents" / f"e2e-{args.target}-{stamp}.db"
+            made_db = None if args.db else db
             db.parent.mkdir(parents=True, exist_ok=True)
             if args.target == "android" and not args.keep_data:
                 fresh_android(env, log)
@@ -787,7 +943,13 @@ def run(args):
         header.update(platform=hello.get("platform"), os=hello.get("os"), features=features, form_factor=form_factor)
         data = Agent(args.cli, data_plane(addr), env, log, args.reply_timeout_ms)
         header["data_plane"] = bool(wait_for(data, None, 60, log, "data plane"))
-        context = {"target": args.target, "form_factor": form_factor, "features": features, "env": os.environ,
+        header["database"] = app_database(data, log) if header["data_plane"] else None
+        if args.no_launch and header["database"] != "test":
+            raise SuiteError(f"the app on {addr} does not answer app.info with \"database\": \"test\" "
+                             f"({header['database'] or 'no answer'}): drive only a test build on a scratch database")
+        context = {"target": args.target, "form_factor": form_factor, "features": features,
+                   "env": os.environ if args.no_launch else env, "launched": not args.no_launch,
+                   "database": header["database"],
                    "allow_send": args.allow_send, "cli_version": header["cli_version"],
                    "recorder": (lambda folder: Recorder(args.target, folder, env, log)) if args.record else None}
         stopped = None
@@ -805,9 +967,67 @@ def run(args):
                 stopped = entry["name"]
     finally:
         stop(proc, log)
+        if proc is not None:
+            close_device(args.target, addr, env, log)
+        redact_file(out / "app.log", log)
         write_report(out, header, results)
+        if made_db:
+            remove_scratch(made_db, log)
     print(f"e2e {header['suite']} on {args.target}: {summary(results)}. Report: {out / 'report.md'}")
     return 0 if all(r["status"] in ("pass", "skipped") for r in results) else 1
+
+
+def app_database(data, log):
+    """What the app's data plane says its database is (`app.info` -> `database`: `test` or `real`), or None."""
+    t0 = time.monotonic()
+    code, reply, err = data.json("invoke", "app.info", timeout=30)
+
+    def find(value):
+        if isinstance(value, dict):
+            if isinstance(value.get("database"), str):
+                return value["database"]
+            return next((found for found in map(find, value.values()) if found), None)
+        if isinstance(value, list):
+            return next((found for found in map(find, value) if found), None)
+        return None
+
+    kind = find(reply) if code == 0 else None
+    log.line("app.info", "database", kind or f"no answer: {err[-200:]}", (time.monotonic() - t0) * 1000)
+    return kind
+
+
+def close_device(target, addr, env, log):
+    """The app stopped on the Simulator or the emulator too, and the emulator's forwarded ports removed: the next run
+    must not find this one's control plane."""
+    t0 = time.monotonic()
+    commands = []
+    if target == "ios":
+        commands.append(["xcrun", "simctl", "terminate", "booted", ANDROID_HOST])
+    elif target == "android":
+        adb = android_adb(env)
+        if adb:
+            port = int(addr.rpartition(":")[2])
+            commands += [[adb, "shell", "am", "force-stop", ANDROID_HOST],
+                         [adb, "forward", "--remove", f"tcp:{port}"], [adb, "forward", "--remove", f"tcp:{port + 1}"]]
+    for command in commands:
+        try:
+            subprocess.run(command, capture_output=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    if commands:
+        log.line("close", target, "the app stopped on the device", (time.monotonic() - t0) * 1000)
+
+
+def remove_scratch(db, log):
+    """The run's scratch database and its SQLite side files; the evidence stays."""
+    for path in (db, Path(f"{db}-wal"), Path(f"{db}-shm"), Path(f"{db}-journal")):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as error:
+            log.line("clean", path, f"not removed: {error}", 0)
+    log.line("clean", db, "scratch database removed", 0)
 
 
 def fresh_android(env, log):
