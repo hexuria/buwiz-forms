@@ -1,0 +1,19 @@
+{
+  "count_visible": 60,
+  "first": [
+    "001",
+    "002",
+    "003"
+  ],
+  "last": [
+    "064",
+    "065",
+    "066"
+  ],
+  "has000": false,
+  "template": false,
+  "shot": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/1701q-spouse-catalog-open.png",
+  "search000_none": true,
+  "shot000": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/1701q-spouse-search000.png",
+  "has132": true
+}

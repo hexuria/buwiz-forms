@@ -1,0 +1,17 @@
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "applied": [
+      "frm1601c:txtRDOCode"
+    ],
+    "filled": [
+      "frm1601c:txtRDOCode"
+    ],
+    "form": "1601C",
+    "kept_user_boxes": [],
+    "source": "ai"
+  },
+  "delivery_status": "delivered_unverified"
+}

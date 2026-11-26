@@ -1,0 +1,9 @@
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "shutdown": true
+  },
+  "delivery_status": "delivered_unverified"
+}

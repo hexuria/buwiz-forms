@@ -1,0 +1,37 @@
+{
+  "picker": {
+    "count_visible": 60,
+    "first": [
+      "001",
+      "002",
+      "003"
+    ],
+    "has000": false,
+    "shot": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/1801-rdo-picker.png"
+  },
+  "found040": true,
+  "picked": "RDO code, row 1: 040 \u2014 Cubao",
+  "messages": [
+    [
+      "fp-label-5:10",
+      "Schedule 4 \u2014 Business interest"
+    ],
+    [
+      "fp-msg-5:10",
+      "Please enter a valid RDO Code on Item 6."
+    ],
+    [
+      "fp-pill-open",
+      "All sections \u00b7 5 to do \u00b7 Part V \u00b7 Schedules \u00b7 5 items need attention"
+    ],
+    [
+      "fp-pill-count",
+      "5 items need attention"
+    ],
+    [
+      "n21404",
+      "RDO"
+    ]
+  ],
+  "validation_shot": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/1801-040-validation.png"
+}

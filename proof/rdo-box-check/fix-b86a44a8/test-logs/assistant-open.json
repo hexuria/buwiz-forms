@@ -1,0 +1,12 @@
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "form": "1601C",
+    "period": 11,
+    "tin": "00011124500000",
+    "year": 2026
+  },
+  "delivery_status": "delivered_unverified"
+}

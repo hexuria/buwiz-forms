@@ -1,0 +1,24 @@
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "hello": {
+    "protocol": 2,
+    "app": "bir-shell",
+    "platform": "headless",
+    "os": "linux",
+    "ready": true,
+    "deliveries": [
+      "semantic"
+    ],
+    "auth": "required",
+    "executable": "bir",
+    "features": [
+      "snapshot_since",
+      "snapshot_compact",
+      "expect_fingerprint",
+      "secret_redaction",
+      "screenshot_inline"
+    ]
+  }
+}
