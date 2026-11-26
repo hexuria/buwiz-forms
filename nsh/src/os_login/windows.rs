@@ -276,7 +276,11 @@ mod tests {
         // Our process but not an NSH window: not taken.
         let ours_other_class = window(14, OURS, "#32770", true, false);
         assert_eq!(
-            pick_window(Some(&ours_other_class), std::slice::from_ref(&ours_other_class), OURS),
+            pick_window(
+                Some(&ours_other_class),
+                std::slice::from_ref(&ours_other_class),
+                OURS
+            ),
             None
         );
         // Nothing: none.
