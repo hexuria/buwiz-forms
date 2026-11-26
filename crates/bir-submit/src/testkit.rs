@@ -16,6 +16,7 @@ pub(crate) struct Seen {
     pub method: String,
     pub path: String,
     pub headers: Vec<(String, String)>,
+    pub body: String,
 }
 
 impl Seen {
@@ -108,6 +109,7 @@ pub(crate) fn serve(
                 method,
                 path,
                 headers,
+                body: String::from_utf8_lossy(&body).into_owned(),
             };
             let reply = answer(&request);
             let key = request.header("sec-websocket-key").map(str::to_owned);
@@ -242,6 +244,8 @@ pub(crate) fn submitter_tokens(
         server_url: url.to_owned(),
         device_name: "test".into(),
         trust_keys,
+        install_id: None,
+        platform: None,
     };
     let tokens = FakeTokens::new(signed_in.then_some("juana@example.test"));
     (

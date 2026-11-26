@@ -44,9 +44,10 @@ test("desktop: Print preview opens one window, again focuses it, edits follow, l
   await app.type("id:fp-frm2551Qv2018:txtSheets", "2");
   await app.waitFor("text:/^preview 2551Q: revision [3-9]/", { timeout: 5000 });
 
-  // Leaving the form ends its preview.
+  // Leaving the form ends its preview. The move first waits for the form page to save the edit just typed (flushNow, up to
+  // LEAVE_HOOKS_CAP_MS = 3 s in shell/app.ts), then Home renders and the window closes: 15 s, so a slow runner has room.
   await app.press("id:px-home");
-  await app.waitUntil(() => app.window(WINDOW).state() === null, { timeout: 5000 });
+  await app.waitUntil(() => app.window(WINDOW).state() === null, { timeout: 15_000 });
   await app.waitFor("text:no preview of 2551Q");
 }, 120_000);
 

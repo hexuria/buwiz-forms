@@ -578,9 +578,36 @@ pub fn database_refusal(path: &Path, protected: &[PathBuf]) -> Option<String> {
     None
 }
 
+/// The folder under an Android engine's data folder where a test run may keep a named database that outlives its
+/// process (`BIR_DATABASE_PATH`, an opted-in development build's dev list).
+pub const ANDROID_TEST_DATA: &str = "test-data";
+
+/// On Android in a test run, a database named with `BIR_DATABASE_PATH` must sit inside `<data_dir>/test-data`: never the
+/// app's own database (`<data_dir>/bir_data.db`), nor anywhere else. Pure, so it runs on any system.
+#[cfg_attr(not(target_os = "android"), allow(dead_code, reason = "called on Android; tested everywhere"))]
+pub(crate) fn android_test_database_refusal(path: &Path, data_dir: &Path) -> Option<String> {
+    let allowed = canonical_target(&data_dir.join(ANDROID_TEST_DATA));
+    let canonical = canonical_target(path);
+    if canonical != allowed && inside(&canonical, &allowed) {
+        return None;
+    }
+    Some(format!(
+        "Refusing to open {}: a test run names a database only inside {}.",
+        canonical.display(),
+        allowed.display()
+    ))
+}
+
 /// [`database_refusal`] for the owner's real folders. With no home folder to name them, the answer is a
 /// refusal.
 pub fn database_refusal_here(path: &Path) -> Option<String> {
+    #[cfg(target_os = "android")]
+    if crate::door::test_environment()
+        && bir_core::config::var(DATABASE_PATH_ENV).is_ok_and(|value| !value.is_empty())
+        && let Some(why) = android_test_database_refusal(path, &bir_core::platform::data_dir())
+    {
+        return Some(why);
+    }
     // A test that names its own "home" (the seam) checks the by-name rules on any system.
     #[cfg(test)]
     let seamed = TEST_PROTECTED.with(|slot| slot.borrow().is_some());
@@ -836,6 +863,22 @@ mod tests {
     use std::net::TcpListener;
 
     use super::*;
+
+    #[test]
+    fn an_android_test_run_opens_a_named_database_only_inside_test_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path().join("files/nsh/dev.goldcoders.bir");
+        assert_eq!(android_test_database_refusal(&data.join("test-data/bir_data.db"), &data), None);
+        for refused in [
+            data.join("bir_data.db"),
+            data.join("test-data"),
+            data.join("test-data/../bir_data.db"),
+            data.join("other/bir_data.db"),
+            dir.path().join("elsewhere.db"),
+        ] {
+            assert!(android_test_database_refusal(&refused, &data).is_some(), "{}", refused.display());
+        }
+    }
 
     /// Every variable the send guard reads or writes, so a test runs with exactly the ones it names.
     fn sending_env<R>(set: &[(&str, &str)], body: impl FnOnce() -> R) -> R {
@@ -1683,6 +1726,22 @@ mod tests {
         assert_eq!(database_refusal(&default, &shipped), None, "the shipped app opens its own database");
         // A scratch database and the agents folder are untouched either way.
         assert_eq!(database_refusal(&home.path("BuwizNsh/agents/door.db"), &in_test), None);
+    }
+
+    /// The Simulator check of `docs/platforms/ios.md`: a database named under the app container's `Documents/`
+    /// survives relaunches and a test-environment run may open it, while the app's own data folder
+    /// (`Library/Application Support/dev.goldcoders.bir`) stays refused. On iOS the container is HOME and the guard
+    /// verifies (Unix), so nothing else is asked.
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[test]
+    fn a_test_run_may_open_a_database_in_the_containers_documents() {
+        let home = Home::new();
+        let in_test = protected_folders_for(home.root.path(), true);
+        let stable = home.path("Documents/buwiz-check/bir_data.db");
+        assert_eq!(database_refusal(&stable, &in_test), None);
+        assert_eq!(unverified_refusal(cfg!(any(unix, windows)), &stable, None), None);
+        let own = home.path("Library/Application Support/dev.goldcoders.bir/bir_data.db");
+        assert!(database_refusal(&own, &in_test).is_some(), "the app's own folder stays refused");
     }
 
     /// On Windows the guard verifies now: with nothing named, a scratch database opens and the owner's real data

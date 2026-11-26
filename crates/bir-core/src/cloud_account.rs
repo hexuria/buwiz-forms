@@ -9,6 +9,9 @@
 //!
 //! The saved account is also what `bir-mcp` reads. There is one keychain
 //! entry and one private file. `bir-mcp` does not keep a second sign-in.
+//! On Android and on iPhone and iPad there is no keychain entry: the private
+//! file alone holds the sign-in, in the app's own folder (on iOS excluded
+//! from backups and protected "complete until first user authentication").
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -102,6 +105,9 @@ pub enum ServerUrlError {
     HasPath,
     HasQuery,
     Invalid,
+    /// Plain `http://` to a host that is not this computer: the sign-in code and the tokens would cross the
+    /// network unencrypted.
+    PlainHttp,
 }
 
 impl std::fmt::Display for ServerUrlError {
@@ -121,6 +127,10 @@ impl std::fmt::Display for ServerUrlError {
                 "The server address cannot include a query or a fragment."
             ),
             Self::Invalid => write!(f, "That server address is not a valid URL."),
+            Self::PlainHttp => write!(
+                f,
+                "The server address must start with https://. Plain http:// is only for a server on this computer."
+            ),
         }
     }
 }
@@ -130,7 +140,11 @@ pub enum CloudError {
     Network(String),
     InvalidGrant,
     TimedOut,
-    Server { description: String },
+    /// The person stopped the wait (Cancel). Not a failure: nothing is shown for it.
+    Cancelled,
+    Server {
+        description: String,
+    },
     Unexpected(String),
     Url(ServerUrlError),
 }
@@ -143,7 +157,11 @@ impl std::fmt::Display for CloudError {
                 "The Buwiz server is unreachable ({message}). Filing on this computer still works."
             ),
             Self::InvalidGrant => write!(f, "This sign-in is no longer valid. Sign in again."),
-            Self::TimedOut => write!(f, "Sign-in timed out before it was approved. Start again."),
+            Self::TimedOut => write!(
+                f,
+                "The sign-in code expired before it was approved. Press Sign in again for a new code."
+            ),
+            Self::Cancelled => write!(f, "Sign-in was cancelled."),
             Self::Server { description } => write!(f, "{description}"),
             Self::Unexpected(message) => write!(f, "{message}"),
             Self::Url(error) => write!(f, "{error}"),
@@ -379,7 +397,8 @@ pub fn unix_now() -> i64 {
         .unwrap_or(0)
 }
 
-/// API origin. `runtime` is the process environment (`BUWIZ_SERVER_URL`).
+/// API origin. `runtime` is the process's `BUWIZ_SERVER_URL` as [`crate::config::var`] reads it (the
+/// environment, or an Android development build's baked list).
 /// `compiled` is `option_env!("BUWIZ_SERVER_URL")`. A runtime value wins.
 /// Neither is a secret, and neither is something the person at the keyboard types.
 pub fn resolve_server_url(
@@ -402,7 +421,7 @@ pub fn resolve_account_url(
 
 /// The API origin for this process.
 pub fn configured_server() -> Result<ResolvedServer, ServerUrlError> {
-    let runtime = std::env::var(ENV_SERVER_URL).ok();
+    let runtime = crate::config::var(ENV_SERVER_URL).ok();
     resolve_server_url(
         runtime.as_deref(),
         option_env!("BUWIZ_SERVER_URL"),
@@ -412,7 +431,7 @@ pub fn configured_server() -> Result<ResolvedServer, ServerUrlError> {
 
 /// Where the browser opens login and signup.
 pub fn configured_account() -> Result<ResolvedServer, ServerUrlError> {
-    let runtime = std::env::var(ENV_ACCOUNT_URL).ok();
+    let runtime = crate::config::var(ENV_ACCOUNT_URL).ok();
     resolve_account_url(
         runtime.as_deref(),
         option_env!("BUWIZ_ACCOUNT_URL"),
@@ -467,6 +486,11 @@ pub fn normalize_server_url(raw: &str) -> Result<String, ServerUrlError> {
         .host_str()
         .ok_or(ServerUrlError::Invalid)?
         .trim_matches(|character| character == '[' || character == ']');
+    // The sign-in code and the tokens travel to this address. Unencrypted, only to this computer itself (a local
+    // development or mock server); to anywhere else it must be https, in every build.
+    if url.scheme() == "http" && !this_computer(host) {
+        return Err(ServerUrlError::PlainHttp);
+    }
     let host = if host.contains(':') {
         format!("[{host}]")
     } else {
@@ -478,6 +502,14 @@ pub fn normalize_server_url(raw: &str) -> Result<String, ServerUrlError> {
         out.push_str(&port.to_string());
     }
     Ok(out)
+}
+
+/// `host` (no brackets) is this computer: `localhost` or a loopback address.
+fn this_computer(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
 }
 
 pub fn status_from(resolved: &ResolvedServer, secrets: Option<&AccountSecrets>) -> AccountStatus {
@@ -515,17 +547,19 @@ pub fn status_from(resolved: &ResolvedServer, secrets: Option<&AccountSecrets>) 
     }
 }
 
+/// Starts the browser's device flow. `install_id` ([`crate::install_id`]) is sent from this first request.
 pub fn start_device(
     http: &mut dyn Http,
     server_url: &str,
     now_unix: i64,
+    install_id: &str,
 ) -> Result<DeviceChallenge, CloudError> {
     let response = http.exchange(&HttpRequest {
         method: "POST",
         url: format!("{server_url}/auth/device/start"),
         content_type: "application/json",
         bearer: None,
-        body: json!({ "client_id": DESKTOP_CLIENT_ID }).to_string(),
+        body: json!({ "client_id": DESKTOP_CLIENT_ID, "install_id": install_id }).to_string(),
     })?;
     let value = expect_json(response.status, &response.body)?;
     if !(200..300).contains(&response.status) {
@@ -565,8 +599,24 @@ pub fn poll_until(
     now: &mut dyn FnMut() -> i64,
     sleep: &mut dyn FnMut(Duration),
 ) -> Result<TokenSet, CloudError> {
+    poll_until_stopped(http, challenge, now, sleep, &mut || false)
+}
+
+/// [`poll_until`] that the person can stop: `stopped` is asked before every
+/// try, and a stopped wait ends as [`CloudError::Cancelled`]. A caller that
+/// wants a prompt stop sleeps in short slices ([`sleep_unless_stopped`]).
+pub fn poll_until_stopped(
+    http: &mut dyn Http,
+    challenge: &DeviceChallenge,
+    now: &mut dyn FnMut() -> i64,
+    sleep: &mut dyn FnMut(Duration),
+    stopped: &mut dyn FnMut() -> bool,
+) -> Result<TokenSet, CloudError> {
     // 900s / 1s, with room for slow_down. A frozen clock still stops.
     for _ in 0..1000 {
+        if stopped() {
+            return Err(CloudError::Cancelled);
+        }
         if now() >= challenge.expires_at_unix {
             return Err(CloudError::TimedOut);
         }
@@ -579,6 +629,33 @@ pub fn poll_until(
         }
     }
     Err(CloudError::TimedOut)
+}
+
+/// Sleeps `total` in pieces of at most `slice`, and stops early once
+/// `stopped` says so: a Cancel is answered within one slice.
+pub fn sleep_unless_stopped(
+    total: Duration,
+    slice: Duration,
+    stopped: &mut dyn FnMut() -> bool,
+    sleep: &mut dyn FnMut(Duration),
+) {
+    let mut left = total;
+    while !left.is_zero() && !stopped() {
+        let piece = left.min(slice);
+        sleep(piece);
+        left = left.saturating_sub(piece);
+    }
+}
+
+/// The approval page's address as a person reads and types it: no scheme,
+/// no trailing slash (`account.buwiz.com/device`, `localhost:3008/device`).
+pub fn short_address(uri: &str) -> String {
+    let trimmed = uri.trim();
+    let rest = trimmed
+        .strip_prefix("https://")
+        .or_else(|| trimmed.strip_prefix("http://"))
+        .unwrap_or(trimmed);
+    rest.trim_end_matches('/').to_owned()
 }
 
 fn poll_device(http: &mut dyn Http, challenge: &DeviceChallenge) -> Result<Poll, CloudError> {
@@ -737,7 +814,21 @@ pub fn revoke_session(http: &mut dyn Http, secrets: &AccountSecrets) {
     });
 }
 
+/// Opens the account site in the system browser. On a phone the app's
+/// registered opener does it ([`crate::platform::set_url_opener`]), and only
+/// for an address [`crate::platform::browser_url_allowed`] accepts: the
+/// `open` crate starts a helper program there (`xdg-open` on Android,
+/// `uiopen` on iOS), which a phone app has none of and may not start.
 pub fn open_browser(url: &str) -> Result<(), String> {
+    if let Some(open) = crate::platform::url_opener() {
+        if !crate::platform::browser_url_allowed(url) {
+            return Err(format!("This address is not opened in the browser: {url}"));
+        }
+        return open(url);
+    }
+    if cfg!(any(target_os = "ios", target_os = "android")) {
+        return Err("This app cannot open the browser here.".into());
+    }
     open::that(url).map_err(|error| error.to_string())
 }
 
@@ -811,10 +902,12 @@ fn write_secret_file(raw: &str) -> Result<(), CloudError> {
     file.write_all(raw.as_bytes()).map_err(|error| {
         CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
     })?;
+    drop(file);
+    bir_submit::ios_storage::protect_file(&path);
     Ok(())
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn keyring_entry() -> Result<keyring::Entry, keyring::Error> {
     keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
 }
@@ -823,7 +916,7 @@ fn keyring_entry() -> Result<keyring::Entry, keyring::Error> {
 // nothing (the private file, if any, still answers), a write reports failure
 // (the private file is still written), a delete has nothing to delete.
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn keyring_load() -> Option<String> {
     if crate::platform::keychain_disabled() {
         return None;
@@ -835,7 +928,7 @@ fn keyring_load() -> Option<String> {
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn keyring_save(raw: &str) -> bool {
     if crate::platform::keychain_disabled() {
         return false;
@@ -845,7 +938,7 @@ fn keyring_save(raw: &str) -> bool {
         .is_ok()
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn keyring_delete() {
     if crate::platform::keychain_disabled() {
         return;
@@ -858,17 +951,17 @@ fn keyring_delete() {
     }
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 fn keyring_load() -> Option<String> {
     None
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 fn keyring_save(_raw: &str) -> bool {
     false
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 fn keyring_delete() {}
 
 pub struct BlockingHttp {
@@ -956,6 +1049,10 @@ fn interpret_token_response(
     }
     if error == "invalid_grant" || error == "invalid_token" || status == 401 {
         return Err(CloudError::InvalidGrant);
+    }
+    if allow_pending && error == "expired_token" {
+        // The device code ran out on the server's own clock.
+        return Err(CloudError::TimedOut);
     }
     if error == "expired_token" || error == "access_denied" {
         let description = value
@@ -1166,6 +1263,31 @@ mod tests {
             normalize_server_url("http://[::1]:3008").unwrap(),
             "http://[::1]:3008"
         );
+        // Plain http is for this computer only: the sign-in code and the tokens go to this address.
+        for local in [
+            "http://localhost:3008",
+            "http://127.0.0.1:3008",
+            "http://LOCALHOST",
+        ] {
+            assert!(normalize_server_url(local).is_ok(), "{local}");
+        }
+        for elsewhere in [
+            "http://api.buwiz.com",
+            "http://192.0.2.1:3008",
+            "http://10.0.2.2:3008",
+            "http://localhost.example",
+            "http://[2001:db8::1]:3008",
+        ] {
+            assert_eq!(
+                normalize_server_url(elsewhere),
+                Err(ServerUrlError::PlainHttp),
+                "{elsewhere}"
+            );
+        }
+        assert_eq!(
+            normalize_server_url("https://192.0.2.1:3008").unwrap(),
+            "https://192.0.2.1:3008"
+        );
         assert!(matches!(
             normalize_server_url(""),
             Err(ServerUrlError::Empty)
@@ -1244,7 +1366,7 @@ mod tests {
     #[test]
     fn configured_origins_follow_runtime_then_compile_time_then_profile() {
         let profile = active_build_profile();
-        let server_runtime = std::env::var(ENV_SERVER_URL).ok();
+        let server_runtime = crate::config::var(ENV_SERVER_URL).ok();
         let server = configured_server().unwrap();
         assert_eq!(
             server,
@@ -1255,7 +1377,7 @@ mod tests {
             )
             .unwrap()
         );
-        let account_runtime = std::env::var(ENV_ACCOUNT_URL).ok();
+        let account_runtime = crate::config::var(ENV_ACCOUNT_URL).ok();
         let account = configured_account().unwrap();
         assert_eq!(
             account,
@@ -1310,6 +1432,7 @@ mod tests {
             },
             "http://localhost:3008",
             1_000,
+            "install-id-of-this-test-0001",
         )
         .unwrap();
         assert_eq!(started.user_code, "ABCD-EFGH");
@@ -1361,6 +1484,165 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error, CloudError::TimedOut);
+    }
+
+    /// A phone freezes the app while the person is in the browser: the wall clock jumps, and the first poll after
+    /// the app comes back can fail on a dead connection. That poll is tried again, and the sign-in finishes.
+    #[test]
+    fn a_network_error_after_a_frozen_gap_is_tried_again() {
+        let mut http = Scripted {
+            // Popped from the end: pending, then a dead connection after the gap, then approved.
+            steps: vec![
+                Ok(HttpResponse {
+                    status: 200,
+                    body: r#"{"access_token":"access-secret","refresh_token":"refresh-secret","expires_in":900}"#
+                        .into(),
+                }),
+                Err(CloudError::Network("connection reset by peer".into())),
+                Ok(HttpResponse {
+                    status: 400,
+                    body: r#"{"error":"authorization_pending"}"#.into(),
+                }),
+            ],
+            seen: Vec::new(),
+        };
+        let now = Cell::new(9_000i64);
+        let mut sleeps = 0;
+        let tokens = poll_until(&mut http, &challenge(), &mut || now.get(), &mut |delay| {
+            sleeps += 1;
+            // The first wait is the frozen one: four minutes pass on the wall clock.
+            let gap = if sleeps == 1 {
+                240
+            } else {
+                delay.as_secs() as i64
+            };
+            now.set(now.get() + gap);
+        })
+        .unwrap();
+        assert_eq!(tokens.access_token, "access-secret");
+        assert_eq!(http.seen.len(), 3);
+    }
+
+    /// A gap that outlasts the code's expiry (by the wall clock) ends with the expired message, without another poll.
+    #[test]
+    fn a_frozen_gap_past_the_codes_expiry_ends_as_expired() {
+        let mut http = Scripted {
+            steps: vec![Ok(HttpResponse {
+                status: 400,
+                body: r#"{"error":"authorization_pending"}"#.into(),
+            })],
+            seen: Vec::new(),
+        };
+        let now = Cell::new(9_000i64);
+        let error = poll_until(&mut http, &challenge(), &mut || now.get(), &mut |_| {
+            now.set(now.get() + 2_000)
+        })
+        .unwrap_err();
+        assert_eq!(error, CloudError::TimedOut);
+        assert_eq!(http.seen.len(), 1);
+        assert!(error.to_string().contains("code expired"));
+    }
+
+    /// A clock that never moves and a server that is never reached still end: the wait has a bound of its own.
+    #[test]
+    fn endless_network_errors_with_a_stuck_clock_still_end() {
+        struct Unreachable(usize);
+        impl Http for Unreachable {
+            fn exchange(&mut self, _: &HttpRequest) -> Result<HttpResponse, CloudError> {
+                self.0 += 1;
+                Err(CloudError::Network("no route to host".into()))
+            }
+        }
+        let mut http = Unreachable(0);
+        let error = poll_until(&mut http, &challenge(), &mut || 1_000, &mut |_| {}).unwrap_err();
+        assert_eq!(error, CloudError::TimedOut);
+        assert_eq!(http.0, 1000);
+    }
+
+    #[test]
+    fn a_stopped_wait_ends_as_cancelled_before_the_next_try() {
+        struct AlwaysPending(usize);
+        impl Http for AlwaysPending {
+            fn exchange(&mut self, _: &HttpRequest) -> Result<HttpResponse, CloudError> {
+                self.0 += 1;
+                Ok(HttpResponse {
+                    status: 400,
+                    body: r#"{"error":"authorization_pending"}"#.into(),
+                })
+            }
+        }
+        let mut http = AlwaysPending(0);
+        let mut tries_left = 2;
+        let error = poll_until_stopped(
+            &mut http,
+            &challenge(),
+            &mut || 1_000,
+            &mut |_| {},
+            &mut || {
+                if tries_left == 0 {
+                    return true;
+                }
+                tries_left -= 1;
+                false
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error, CloudError::Cancelled);
+        assert_eq!(http.0, 2);
+    }
+
+    #[test]
+    fn a_sliced_sleep_stops_within_one_slice() {
+        let mut slept = Vec::new();
+        let mut asked = 0;
+        sleep_unless_stopped(
+            Duration::from_secs(5),
+            Duration::from_millis(200),
+            &mut || {
+                asked += 1;
+                asked > 3
+            },
+            &mut |piece| slept.push(piece),
+        );
+        assert_eq!(slept, vec![Duration::from_millis(200); 3]);
+        let mut whole = Duration::ZERO;
+        sleep_unless_stopped(
+            Duration::from_millis(450),
+            Duration::from_millis(200),
+            &mut || false,
+            &mut |piece| whole += piece,
+        );
+        assert_eq!(whole, Duration::from_millis(450));
+    }
+
+    #[test]
+    fn the_servers_expired_code_ends_as_expired() {
+        let mut http = Scripted {
+            steps: vec![Ok(HttpResponse {
+                status: 400,
+                body: r#"{"error":"expired_token","error_description":"unknown or expired device code"}"#.into(),
+            })],
+            seen: Vec::new(),
+        };
+        let error = poll_until(&mut http, &challenge(), &mut || 1_000, &mut |_| {}).unwrap_err();
+        assert_eq!(error, CloudError::TimedOut);
+    }
+
+    #[test]
+    fn the_short_address_drops_the_scheme_and_the_last_slash() {
+        assert_eq!(
+            short_address("https://account.buwiz.com/device"),
+            "account.buwiz.com/device"
+        );
+        assert_eq!(
+            short_address("https://account.buwiz.com/device/"),
+            "account.buwiz.com/device"
+        );
+        assert_eq!(
+            short_address("http://localhost:3008/device"),
+            "localhost:3008/device"
+        );
+        assert_eq!(short_address(" http://127.0.0.1:3008/ "), "127.0.0.1:3008");
     }
 
     #[test]

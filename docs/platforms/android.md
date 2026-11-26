@@ -49,7 +49,7 @@ Windows and Linux. Real filing on Android waits for the relay's phone switch-on.
 
 Three steps on the owner's Mac. The first needs no secret; the second is the only one that touches the upload key.
 
-1. **Build** (`just play-bundle`, or `just play-bundle build=28` to choose the number). It builds the bundle, removes
+1. **Build** (`just play-bundle`, or `just play-bundle 28` to choose the number). It builds the bundle, removes
    the debug signature `nsh package` puts on it and the updater's source, and checks the result: package
    `com.buwiz.ebirforms`, the expected `versionCode`, `targetSdkVersion` from `nsh.json`, backup off, not debuggable,
    phone ABIs only (`scripts/android_bundle.py check`). It writes
