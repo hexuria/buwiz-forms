@@ -2382,15 +2382,25 @@ pub(crate) fn after_path_prompt(
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     let answer: crate::hooks::PathAnswer = Box::new(move |choice| {
         let result = match choice {
-            PathChoice::Picked(path) => work(path),
+            PathChoice::Picked(path) => {
+                let done = work(path);
+                if let Err(error) = &done {
+                    tracing::warn!("Working with the file picked failed: {error}");
+                }
+                done
+            }
             PathChoice::Cancelled => Ok(HostObject::new().field("kind", "cancelled").into()),
-            PathChoice::Failed(error) => Err(HostError::new(format!(
-                "The file dialog could not open: {error}"
-            ))),
+            PathChoice::Failed(error) => {
+                tracing::warn!("The file dialog could not open: {error}");
+                Err(HostError::new(format!(
+                    "The file dialog could not open: {error}"
+                )))
+            }
         };
         let _ = sender.send(result);
     });
     if !prompt(answer) {
+        tracing::warn!("The file dialog could not open: no app is running to open it");
         return Err(HostError::new("no app is running to open the file dialog"));
     }
     Ok(Box::pin(async move {
