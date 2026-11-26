@@ -1,0 +1,135 @@
+{
+ "foreground": 852800,
+ "windows": [
+  {
+   "hwnd": 65556,
+   "title": "",
+   "cls": "#32774",
+   "visible": true,
+   "rect": [
+    847,
+    151,
+    882,
+    170
+   ],
+   "owner": 0
+  },
+  {
+   "hwnd": 852800,
+   "title": "Save as PDF",
+   "cls": "#32770",
+   "visible": true,
+   "rect": [
+    86,
+    109,
+    886,
+    709
+   ],
+   "owner": 590488
+  },
+  {
+   "hwnd": 590488,
+   "title": "BIR Form 2551Q \u00b7 Q4 2026 \u2014 Juana Santos",
+   "cls": "NshWindow",
+   "visible": true,
+   "rect": [
+    78,
+    78,
+    1034,
+    1217
+   ],
+   "owner": 0
+  },
+  {
+   "hwnd": 131752,
+   "title": "eBIRForms",
+   "cls": "NshWindow",
+   "visible": true,
+   "rect": [
+    -8,
+    -8,
+    1608,
+    1168
+   ],
+   "owner": 0
+  },
+  {
+   "hwnd": 131790,
+   "title": "Administrator: Windows PowerShell",
+   "cls": "ConsoleWindowClass",
+   "visible": true,
+   "rect": [
+    -32000,
+    -32000,
+    -31840,
+    -31972
+   ],
+   "owner": 0
+  },
+  {
+   "hwnd": 196644,
+   "title": "Containers - Docker Desktop",
+   "cls": "Chrome_WidgetWin_1",
+   "visible": true,
+   "rect": [
+    157,
+    220,
+    1443,
+    948
+   ],
+   "owner": 0
+  },
+  {
+   "hwnd": 66304,
+   "title": "New Tab - Google Chrome for Testing",
+   "cls": "Chrome_WidgetWin_1",
+   "visible": true,
+   "rect": [
+    0,
+    0,
+    1600,
+    1122
+   ],
+   "owner": 0
+  },
+  {
+   "hwnd": 65974,
+   "title": "Shutdown Event Tracker",
+   "cls": "#32770",
+   "visible": true,
+   "rect": [
+    586,
+    398,
+    1013,
+    762
+   ],
+   "owner": 0
+  },
+  {
+   "hwnd": 65888,
+   "title": "Windows Input Experience",
+   "cls": "Windows.UI.Core.CoreWindow",
+   "visible": true,
+   "rect": [
+    0,
+    0,
+    1600,
+    1200
+   ],
+   "owner": 0
+  },
+  {
+   "hwnd": 65738,
+   "title": "Program Manager",
+   "cls": "Progman",
+   "visible": true,
+   "rect": [
+    0,
+    0,
+    1600,
+    1200
+   ],
+   "owner": 0
+  }
+ ]
+}
