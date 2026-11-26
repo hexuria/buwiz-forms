@@ -407,7 +407,9 @@ class WorkflowTests(unittest.TestCase):
 
     def test_ci_ok_is_the_single_gate(self):
         gate = job(CI, "ci-ok")
-        self.assertIn(f"    if: ${{{{ always() && {NOT_CLOSED_OR_DRAFT} }}}}\n", gate)
+        # Not always(): in a run being cancelled (a newer push, or the pull request closing) it would run and report a
+        # red ci-ok on the commit.
+        self.assertIn(f"    if: ${{{{ !cancelled() && {NOT_CLOSED_OR_DRAFT} }}}}\n", gate)
         needs = re.search(r"(?m)^    needs: \[(.*)\]\s*$", gate)
         assert needs is not None
         self.assertEqual([name.strip() for name in needs.group(1).split(",")],
@@ -431,7 +433,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_a_closed_or_draft_pull_request_takes_no_runner(self):
         """Every job's `if` is false for a closed or draft pull request: it carries the condition itself, or needs a
-        job that does (without always()), or runs only for a push or the schedule."""
+        job that does (with no status function in its `if`), or runs only for a push or the schedule."""
         names = re.findall(r"(?m)^  ([a-z][a-z0-9-]*):\n", CI.split("\njobs:\n", 1)[1])
         self.assertIn("ci-ok", names)
         guarded: set[str] = set()
@@ -442,7 +444,8 @@ class WorkflowTests(unittest.TestCase):
                 needs = re.search(r"(?m)^    needs: (.*)$", text)
                 needed = re.findall(r"[a-z][a-z0-9-]*", needs.group(1)) if needs else []
                 if (NOT_CLOSED_OR_DRAFT in condition
-                        or (needed and "always()" not in condition and set(needed) <= guarded)
+                        or (needed and not re.search(r"\b(always|cancelled|failure)\(\)", condition)
+                            and set(needed) <= guarded)
                         or "(github.event_name == 'schedule' || github.event_name == 'push')" in condition):
                     guarded.add(name)
         self.assertEqual(sorted(set(names) - guarded), [])

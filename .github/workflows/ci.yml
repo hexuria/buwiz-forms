@@ -698,7 +698,7 @@ jobs:
 
   main-report:
     needs: [ ci-ok ]
-    # `failure` only: a cancelled run is not a break.
+    # `failure` only: a cancelled run is not a break (and its ci-ok is skipped).
     if: always() && needs.ci-ok.result == 'failure' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'push')
     runs-on: ubuntu-22.04
     permissions:
@@ -730,8 +730,11 @@ jobs:
   # when `changes` decided, every job it asked for passed (the validation-rules
   # audits included: their old summary job is folded in here), and
   # legacy-guard passed. A job skipped because something it needs failed is a
-  # failure here, not a skip. It cannot hang: `always()` runs it once every job
-  # it needs has finished or been skipped.
+  # failure here, not a skip. It cannot hang: `!cancelled()` runs it once
+  # every job it needs has finished or been skipped. Not `always()`: that also
+  # runs it in a run being cancelled, where it reported red on the commit (a
+  # newer push, or the pull request closing, cancels the older run). A
+  # cancelled run now reports no `ci-ok` at all.
   #
   # Not on a closed or draft pull request (see `changes`): it is skipped
   # there, as every other job is, so no runner is taken. GitHub does not
@@ -748,7 +751,7 @@ jobs:
   ci-ok:
     name: ${{ (github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok' }}
     needs: [ changes, check, nsh-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
-    if: ${{ always() && (github.event_name != 'pull_request' || (github.event.action != 'closed' && !github.event.pull_request.draft)) }}
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.event.action != 'closed' && !github.event.pull_request.draft)) }}
     runs-on: ubuntu-22.04
     steps:
     - name: Result

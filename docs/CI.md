@@ -40,7 +40,8 @@ The quick checks are:
 - The validation-rules audits on Linux, only when their paths change (see the table below).
 - `changes` decides all of this. `ci-ok` sums it up.
 
-`ci-ok` is the one required status. It fails if any job it asked for did not pass. A `test/**` push, a manual run
+`ci-ok` is the one required status. It fails if any job it asked for did not pass. A cancelled run (a newer push
+replaced it, or the pull request closed) reports no `ci-ok`. A `test/**` push, a manual run
 and the nightly run report `tests-ok` instead, so a test run on a pull request's commit never adds a second `ci-ok`
 result.
 
@@ -62,8 +63,8 @@ already going. The next push to it does: that push runs nothing, and it cancels 
 
 When a pull request closes or merges, its `closed` event cancels the pull request's runs that are still queued or
 running, and runs nothing itself. A pull request's runs share one concurrency group, keyed on its number, and a new
-run in that group cancels the older ones. The `closed` run reports no check named `ci-ok`, so the pull request keeps
-the `ci-ok` of its last real run, and nothing turns red.
+run in that group cancels the older ones. Neither the `closed` run nor a cancelled run reports a check named
+`ci-ok`, so nothing turns red: the pull request keeps the `ci-ok` of its last finished run, if it had one.
 
 This does not reach `test/**` runs. Those are pushes to their own branch, in that branch's group. A newer push to the
 same `test/...` branch replaces its run, and `gh run cancel <run id>` stops one. `just ci-test-clean` deletes the
