@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/brand/buwiz-forms.svg" alt="Buwiz Forms logo" width="240">
+</p>
+
 # E-BIRForms
 
 [![CI](https://github.com/hexuria/buwiz-forms/actions/workflows/ci.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/ci.yml)
