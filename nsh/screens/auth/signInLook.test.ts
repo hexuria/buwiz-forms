@@ -117,6 +117,15 @@ test("the keyboard: the room is what shows above it, counted once", () => {
   expect(androidGuess).toBe(842);
   expect(keyboardCover(336, androidGuess, androidGuess - 336)).toBe(0);
   expect(logoStep(LOGO_STEPS_PHONE, blockRoom(androidGuess - 336), 300)).toEqual({ logo: 150, fits: true });
+  // An iOS host whose surface already ends at the keyboard (the page measures 417 under the back row): nothing more comes off,
+  // and the same 300-point page gets the same 112 step as when the page took the keyboard off itself.
+  expect(keyboardCover(300, iosUnder, iosUnder - 300)).toBe(0);
+  expect(logoStep(LOGO_STEPS_PHONE, blockRoom(iosUnder - 300, keyboardCover(300, iosUnder, iosUnder - 300)), 300)).toEqual({ logo: 112, fits: true });
+  // iPhone SE (375x667, top inset 20) with the number pad (216) on the code page: tight, and a 238-point page fits at 112.
+  const se = underBackRowGuess(667, 20, true, false);
+  expect(se).toBe(603);
+  expect(openSpacing(blockRoom(se, 216)).tight).toBe(true);
+  expect(logoStep(LOGO_STEPS_PHONE, blockRoom(se, 216, 0, 8), 238)).toEqual({ logo: 112, fits: true });
   // A window that resizes and reports no keyboard, and the keyboard down: nothing.
   expect(keyboardCover(0, 753, 417)).toBe(0);
   expect(keyboardCover(0, 753, 753)).toBe(0);

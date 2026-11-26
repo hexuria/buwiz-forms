@@ -3,8 +3,8 @@
 // button, and what the PIN sign-in, setup and locked pages put on it. The kit has no text link and no pressable tile, so
 // TextLink, ChoiceTile, BackControl and PageButton wrap one nsh/base Button here, as screens/filings/PressCard.tsx does;
 // everything else is the kit.
-import type { JSX } from "nsh";
-import { effect, keyboardFrame, platform, safeArea, Scroll, signal, Text as NText, View, windowSize } from "nsh";
+import type { JSX, ScrollRef } from "nsh";
+import { effect, keyboardFrame, platform, safeArea, Scroll, signal, Text as NText, untracked, View, windowSize } from "nsh";
 import { Button } from "nsh/base";
 import { BREAK, SIZE } from "../../theme/tokens";
 import { deviceCopy, Icon, type IconName, Spinner, T_MIN_H, Text, TOUCH } from "../../ui";
@@ -61,8 +61,8 @@ function tighter(gap: string, tight: boolean): string {
  * The block is in a scroll view, so it is what NSH pads and scrolls when the keyboard covers its focused field (nsh docs, Forms
  * and the keyboard: "Inside scroll views: automatic"); a tap on a button while the keyboard is up presses it. While the software
  * keyboard is up the room is what shows above it (signInLook.ts keyboardCover: the keyboard less what the platform already took
- * off the page, so an Android window laid out above the keyboard is not lifted twice), and the scroll view ends at the
- * keyboard's top: the logo steps down first, and only then does the block scroll, under the back row, never into it.
+ * off the page, so an Android window laid out above the keyboard is not lifted twice), and the block centres above the keyboard
+ * (its bottom padding): the logo steps down first, and only then does the block scroll, under the back row, never into it.
  */
 export function OpenPage(props: { testID: string; back?: JSX.Element; footer?: JSX.Element; gap?: string; wide?: boolean; children?: JSX.Element }) {
   const row = () => backRow(TOUCH, ANDROID, safeArea().left);
@@ -83,8 +83,26 @@ export function OpenPage(props: { testID: string; back?: JSX.Element; footer?: J
     tightNow.set(spacing().tight);
     openFit.set({ page: props.testID, room: room(), rest: rest(), logo: now.logo, fits: now.fits });
   });
-  // Under the block: its padding and the bottom safe area ("Just me"'s long page keeps the frame's 56 under its end).
-  const padBottom = () => Math.max(props.wide ? 56 : 0, bottomPad(spacing().pad, cover(), safeArea().bottom));
+  // Under the block: its padding and the bottom safe area ("Just me"'s long page keeps the frame's 56 under its end), and the
+  // keyboard's part, so the block centres in what shows above the keyboard. The scroll view itself keeps its frame: the kit
+  // gives it a bottom inset for the keyboard and scrolls to the focused field when the keyboard comes, from the layout before
+  // the app answers; a scroll view the app shrank as well kept that inset and that scroll (the iOS proof of 1cf908a6: an empty
+  // band over the keyboard, the logo and heading scrolled away).
+  const padBottom = () => Math.max(props.wide ? 56 : 0, bottomPad(spacing().pad, cover(), safeArea().bottom)) + cover();
+  // When the block fits, nothing should be scrolled: after the keyboard moves (the kit scrolled to the field from the layout
+  // before the logo stepped down), and whenever the fit changes, the scroll goes back to its top, once at once and once the
+  // keyboard's own motion is over. A block that does not fit keeps the kit's scroll to the focused field.
+  let scroller: ScrollRef | undefined;
+  effect(() => {
+    const keyboard = keyboardFrame();
+    const fits = fit().fits;
+    untracked(() => {
+      if (!fits) return;
+      const top = () => scroller?.scrollTo({ y: 0, animated: false });
+      setTimeout(top, 0);
+      if (keyboard.duration > 0) setTimeout(top, keyboard.duration + 50);
+    });
+  });
   const side = () => (props.wide ? (windowSize().width < BREAK.narrowContent ? 16 : 32) : OPEN_SIDE);
   const column = () => (props.wide ? SIZE.contentMax : openColumnMax(TOUCH)) + 2 * side();
   return (
@@ -92,13 +110,13 @@ export function OpenPage(props: { testID: string; back?: JSX.Element; footer?: J
       <View testID="open-back-row" class="w-full shrink-0 flex-row items-center" style={{ height: row().height, paddingLeft: row().left, paddingRight: safeArea().right }}>
         {props.back}
       </View>
-      {/* Measured without the keyboard's margin, which is the scroll view's: the margin never changes what is measured. */}
+      {/* The height under the back row as the page lays out: the platform's own shrinking for the keyboard (Android) shows here. */}
       <View class="min-h-0 flex-1" onLayout={(e) => e.bounds.size.height > 0 && under.set(Math.round(e.bounds.size.height))}>
         <Scroll
           testID="auth-scroll"
+          ref={(r: ScrollRef) => (scroller = r)}
           keyboardShouldPersistTaps="handled"
           class="min-h-0 flex-1"
-          style={{ marginBottom: cover() }}
           contentClass="grow items-center justify-center"
         >
           <View

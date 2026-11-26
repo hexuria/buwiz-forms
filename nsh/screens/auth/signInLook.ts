@@ -121,12 +121,15 @@ export const SAID_SLOT = "min-h-5 w-full";
 
 /**
  * How much of the software keyboard the open page must still keep itself clear of: the keyboard's height over the surface
- * (`keyboardFrame().height`, the bottom safe area under it included), less what the platform already took off the page. iOS
- * lays the page out at the full height under the keyboard: all of it. An Android window that lays the app's content out above
- * the keyboard (the pin's NshView child ends at the keyboard's top while `windowSize()` and the keyboard's height stay the full
- * screen's, the "double lift" of #410) already shrank the page by the keyboard: none of it, where `env(keyboard-inset-height)`
- * would lift the page a second time. A host that resizes its window reports no keyboard: none. `guess` is the height under the
- * back row the window gives (underBackRowGuess), `measured` the height the page laid out at.
+ * (`keyboardFrame().height`, the bottom safe area under it included), less what the platform already took off the page. One
+ * rule, from what the page measures against what the window gives (`guess`, underBackRowGuess, from the page's own top):
+ * - iOS (pin 8c78cfd6): the surface keeps its full height under the keyboard (surface.rs `keyboard_changed` only reports it);
+ *   the kit gives the focused field's scroll view a bottom content inset instead (mount.rs `avoid_keyboard`). The page
+ *   measures its full height: all of the keyboard comes off.
+ * - Android at the pin: the window lays the app's content out above the keyboard while `windowSize()` and the keyboard's height
+ *   stay the full screen's (the "double lift" of #410). The page already measures the shorter height: none comes off again.
+ * - A host that resizes its window reports no keyboard: none.
+ * The page pads its block by this (parts.tsx OpenPage); it never shrinks its scroll view, whose keyboard inset is the kit's.
  */
 export function keyboardCover(keyboard: number, guess: number, measured: number): number {
   return Math.max(0, keyboard - Math.max(0, guess - measured));
