@@ -851,7 +851,8 @@ export class FormSession {
    */
   private settleFocused(then: () => void, id: string): boolean {
     if (this.settling) {
-      this.settleNext = id === this.settlingId ? null : { id, run: then };
+      // The settling request pressed again is that same request: it keeps whatever other one was kept.
+      if (id !== this.settlingId) this.settleNext = { id, run: then };
       return true;
     }
     const held = this.st.focusKey;

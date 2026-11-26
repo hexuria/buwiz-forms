@@ -1594,3 +1594,27 @@ test("[B8-1] Continue with a focused amount box left unreadable: Queue stops on 
     s?.dispose();
   }
 });
+
+test("[S1-1] the settling Queue pressed again keeps the Print pressed before it: Queue runs once, then Print", async () => {
+  const checks = countQueueChecks();
+  const s = await opened(at("2550Q", 2024, 3));
+  const prints = recordAt("screen_form_print", () => String(checks.count));
+  const unstub = previewHere();
+  try {
+    fillSched3Row(s, 0, "A0", "1000");
+    await s.idle();
+    heldBox(s, "txtIncomePayment30", "500", "later");
+    s.queue();
+    s.print();
+    s.queue();
+    await s.idle();
+    expect(checks.count).toBe(1);
+    // Print ran once, after Queue had reached the host's check.
+    expect(prints.seen).toEqual(["1"]);
+  } finally {
+    unstub();
+    prints.restore();
+    checks.restore();
+    s.dispose();
+  }
+});
