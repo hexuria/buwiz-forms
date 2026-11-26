@@ -1,0 +1,72 @@
+diff --git a/nsh/ui/fields.tsx b/nsh/ui/fields.tsx
+index 150278ea..21797753 100644
+--- a/nsh/ui/fields.tsx
++++ b/nsh/ui/fields.tsx
+@@ -233,6 +233,16 @@ function MaskedField(props: MaskedProps) {
+   let boxText: string | undefined;
+   // A value that arrives while the box has the keys: applied on blur only when the filer made no edit of their own.
+   let outsideValue: string | undefined;
++  // A text written into the box from outside while it was unfocused leaves the input's stored caret at the end, and
++  // on keyboard focus the platform applies it after its own select-all (or the select-all never comes): the keys
++  // append where the filer meant to replace. When such a write happened since the box last took focus, the first
++  // caret-collapsed-at-end selection within 150 ms of focus is that enforcement, not the filer's key (measured:
++  // the collapse arrives ~42 ms after focus; a key after a deliberate End comes hundreds of ms later): re-select
++  // the whole text once. Any key or edit before it disarms.
++  let wroteUnfocused = false;
++  let armReselect = false;
++  let reselectDone = false;
++  let focusAt = 0;
+   const writeText = (value: string) => {
+     if (untracked(text) !== value) props.field.writeProbe?.("text");
+     text.set(value);
+@@ -251,9 +261,13 @@ function MaskedField(props: MaskedProps) {
+       return;
+     }
+     const now = untracked(text);
+-    if (!same(props.valueOf(now), value)) writeText(props.shown(value, false));
++    if (!same(props.valueOf(now), value)) {
++      wroteUnfocused = true;
++      writeText(props.shown(value, false));
++    }
+   });
+   const change = (raw: string) => {
++    armReselect = false;
+     const prev = untracked(text);
+     const from = editFrom;
+     const typed = editTyped;
+@@ -320,6 +334,17 @@ function MaskedField(props: MaskedProps) {
+       onSubmit={props.field.onSubmit}
+       testID={props.field.testID}
+       onSelectionChange={(e) => {
++        if (armReselect && !reselectDone) {
++          const len = untracked(text).length;
++          const now = Date.now();
++          if (len > 0 && e.start === len && e.end === len && now - focusAt <= 150) {
++            reselectDone = true;
++            armReselect = false;
++            input?.setSelection(0, len);
++          } else if (now - focusAt > 150) {
++            armReselect = false;
++          }
++        }
+         selected = { start: e.start, end: e.end };
+         props.field.onSelectionChange?.(e);
+       }}
+@@ -332,6 +357,8 @@ function MaskedField(props: MaskedProps) {
+         focused.set(true);
+         boxText = undefined;
+         edited = false;
++        if (wroteUnfocused && !reselectDone) { armReselect = true; focusAt = Date.now(); }
++        wroteUnfocused = false;
+         if (props.noLiveFormat) {
+           const before = untracked(text);
+           const plain = props.shown(props.value ?? "", true);
+@@ -342,6 +369,8 @@ function MaskedField(props: MaskedProps) {
+         props.field.onFocus?.();
+       }}
+       onBlur={() => {
++        reselectDone = false;
++        armReselect = false;
+         if (!edited && outsideValue !== undefined) writeText(props.shown(outsideValue, false));
+         outsideValue = undefined;
+         focused.set(false);
