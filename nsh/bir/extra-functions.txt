@@ -25,3 +25,7 @@ cloud_account_email_verify
 cloud_account_email_resend
 cloud_account_email_cancel
 cloud_account_email_pending
+
+# Track D: the account's TINs for the tax-profile page, the picker and Queue (chips, Activate this TIN to send).
+account_tins
+activate_tin

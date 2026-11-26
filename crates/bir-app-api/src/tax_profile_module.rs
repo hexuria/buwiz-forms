@@ -1,10 +1,14 @@
 //! Tax-profile host functions: taxpayers, branches, tax years, yearly forms,
 //! starter packs and form templates. Every rule (TIN shape, tax-year bound,
 //! one template per form, the carry rule a snapshot pins by, the one-transaction TIN
-//! move) lives in bir-core; this file only converts JSON in and out.
+//! move) lives in bir-core; this file only converts JSON in and out. The
+//! account's TINs (`account_tins`, `activate_tin`) are read and added
+//! through bir-submit's client.
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use bir_core::bir_submit::tins::{AccountTin, AccountTins, Next, TinKind};
+use bir_core::bir_submit::{Submitter, TinKey};
 use bir_core::db::Database;
 use bir_core::forms::agent::AgentFormKind;
 use bir_core::forms::agent::carry;
@@ -274,6 +278,37 @@ export interface SendGrant { tin: string; form: string; granted_at: string; }
 export function list_send_grants(tin: string): SendGrant[];
 export function grant_send(tin: string, form: string): SendGrant;
 export function revoke_send(tin: string, form: string): void;
+/** Where a TIN stands for sending on the Buwiz account: "activated" sends, "pending" waits for Buwiz (in review or paused), "fix" has a step on the account site (`action_url`), "not_activated" is a tax profile on this device whose TIN and branch the account does not have. */
+export type TinState = "activated" | "pending" | "fix" | "not_activated";
+export interface TinStatusRow {
+    /** 9 digits. */
+    tin_root: string;
+    /** 5 digits. */
+    branch: string;
+    state: TinState;
+    /** The server's line for the row; null for "not_activated". */
+    message: string | null;
+    /** The row's Verify or Fix page, only on the account site and only for "fix"; open it as it is. */
+    action_url: string | null;
+    /** A test TIN: its sends are dry runs, never sent to the BIR. */
+    test_only: boolean;
+    /** Answered from an earlier read (offline, or the server asked to wait). */
+    stale: boolean;
+    /** When the list was read, in seconds since the epoch. */
+    fetched_at: number;
+}
+/** The account's TINs, then a "not_activated" row for each tax profile branch on this device the account lacks: those only when the list is complete. */
+export interface TinStatusList {
+    rows: TinStatusRow[];
+    /** The server listed every state: a TIN missing from it is not on the account. */
+    complete: boolean;
+    stale: boolean;
+    fetched_at: number;
+}
+/** The account's TINs, from memory when the last read is younger than `max_age` seconds (screens 60, Queue 0). Never on a timer. Throws the reason when there is no list (signed out, offline with no list, the server's refusal). */
+export function account_tins(max_age: number): Promise<TinStatusList>;
+/** "Activate this TIN to send": adds the tax profile's TIN and branch (14 digits) to the account as not verified, with the profile's kind and registered name. Only from that button, never when a profile is created. The added row (null when the answer could not be read), or throws the refusal's sentence; after one saying the account already holds the TIN, the next account_tins asks the server. */
+export function activate_tin(tin_full: string): Promise<TinStatusRow | null>;
 "#;
 
 pub fn register(module: HostModule) -> HostModule {
@@ -325,6 +360,8 @@ pub fn register(module: HostModule) -> HostModule {
         .function("list_send_grants", list_send_grants)
         .function("grant_send", grant_send)
         .function("revoke_send", revoke_send)
+        .async_function("account_tins", account_tins)
+        .async_function("activate_tin", activate_tin)
 }
 
 // ---------- reference lists ----------
@@ -1551,6 +1588,192 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
     static TEST_INBOX_OAUTH: std::cell::RefCell<Option<TestInboxOAuth>> =
         const { std::cell::RefCell::new(None) };
+}
+
+// ---------- the account's TINs (Track D) ----------
+
+/// The client the account's TINs are read and added through: the relay's,
+/// one per process ([`bir_core::relay::submitter`]); in tests, one a test
+/// installed on its thread ([`TEST_ACCOUNT_SUBMITTER`]), else none, so no
+/// test reaches a server it did not start.
+fn account_submitter() -> Result<std::sync::Arc<Submitter>, HostError> {
+    #[cfg(test)]
+    {
+        TEST_ACCOUNT_SUBMITTER
+            .with(|slot| slot.borrow().clone())
+            .ok_or_else(|| HostError::new("The Buwiz account is not available in tests."))
+    }
+    #[cfg(not(test))]
+    {
+        bir_core::relay::submitter().map_err(|error| HostError::new(error.to_string()))
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_ACCOUNT_SUBMITTER: std::cell::RefCell<Option<std::sync::Arc<Submitter>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Run the client's `work` on a thread and a runtime of its own, as the
+/// account verbs do, and answer it to the page.
+fn on_account_thread<T: Send + 'static>(
+    name: &str,
+    work: impl std::future::Future<Output = T> + Send + 'static,
+    answer: impl FnOnce(T) -> HostResult + Send + 'static,
+) -> Result<std::pin::Pin<Box<dyn std::future::Future<Output = HostResult> + Send>>, HostError> {
+    crate::cloud_account::spawn_account(name, move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|error| HostError::new(error.to_string()))?;
+        answer(runtime.block_on(work))
+    })
+}
+
+/// Every branch of every tax profile on this device: `(tin_root, branch_code)`.
+fn local_branches(db: &Database) -> Result<Vec<(String, String)>, HostError> {
+    Ok(db
+        .list_taxpayers()
+        .map_err(host_error)?
+        .into_iter()
+        .flat_map(|taxpayer| taxpayer.branches)
+        .map(|branch| (branch.tin_root, branch.branch_code))
+        .collect())
+}
+
+fn tin_state(next: Next) -> &'static str {
+    match next {
+        Next::Send => "activated",
+        Next::Wait => "pending",
+        Next::Fix => "fix",
+    }
+}
+
+/// A row reduced to what the screens show. `action_url` is the row's, which
+/// the client kept only when it is a page of the account site
+/// (`pinned_account_url`), and only for a row to fix.
+fn tin_status_row(row: &AccountTin, stale: bool, fetched_at: i64) -> Value {
+    serde_json::json!({
+        "tin_root": row.key.root(),
+        "branch": row.key.branch(),
+        "state": tin_state(row.next),
+        "message": row.message,
+        "action_url": row.action_url.as_deref().filter(|_| row.next == Next::Fix),
+        "test_only": row.test_only,
+        "stale": stale,
+        "fetched_at": fetched_at,
+    })
+}
+
+/// The account's rows, one per TIN and branch, then, when the list is
+/// complete, a `not_activated` row for each of `local` the list lacks (a
+/// TIN missing from an incomplete list may be on the account).
+fn tin_status_list(list: &AccountTins, local: &[(String, String)]) -> Value {
+    let mut seen = BTreeSet::new();
+    let mut rows = Vec::new();
+    for row in &list.rows {
+        if seen.insert(row.key.clone())
+            && let Some(row) = list.find(&row.key)
+        {
+            rows.push(tin_status_row(row, list.stale, list.fetched_at));
+        }
+    }
+    if list.complete {
+        for (root, branch) in local {
+            let Some(key) = TinKey::parse(&format!("{root}{branch}")) else {
+                continue;
+            };
+            if seen.insert(key.clone()) {
+                rows.push(serde_json::json!({
+                    "tin_root": key.root(),
+                    "branch": key.branch(),
+                    "state": "not_activated",
+                    "message": null,
+                    "action_url": null,
+                    "test_only": false,
+                    "stale": list.stale,
+                    "fetched_at": list.fetched_at,
+                }));
+            }
+        }
+    }
+    serde_json::json!({
+        "rows": rows,
+        "complete": list.complete,
+        "stale": list.stale,
+        "fetched_at": list.fetched_at,
+    })
+}
+
+/// `account_tins(max_age)`. Needs the filing data open, as every verb that
+/// reads tax profiles does ([`with_reader`]: signed in to Buwiz); the room
+/// lock adds its owner check here.
+fn account_tins(
+    arguments: &HostArguments,
+) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
+    let max_age = arguments.integer(0)?;
+    let local = with_reader(local_branches)?;
+    let submitter = account_submitter()?;
+    on_account_thread(
+        "buwiz-account-tins",
+        async move { submitter.account_tins(max_age).await },
+        move |read| {
+            let list = read.map_err(|error| HostError::new(error.to_string()))?;
+            Ok(crate::bir_module::json(tin_status_list(&list, &local)))
+        },
+    )
+}
+
+/// `activate_tin(tin_full)`: the explicit "Activate this TIN to send". The
+/// kind is the tax profile's type (an individual is personal, any other
+/// type a business) and the registered name its name; the room keeps no
+/// trade name, so none is sent. Needs the filing data open as
+/// [`account_tins`] does; the room lock adds its owner check here.
+fn activate_tin(
+    arguments: &HostArguments,
+) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
+    let tin = arguments.string(0)?.to_owned();
+    let key = TinKey::parse(&tin)
+        .filter(|_| tin.chars().filter(char::is_ascii_digit).count() == 14)
+        .ok_or_else(|| HostError::new("Give the tax profile's TIN with its branch: 14 digits."))?;
+    let (kind, registered_name) = with_reader(|db| {
+        let taxpayer = db
+            .get_taxpayer(key.root())
+            .map_err(host_error)?
+            .filter(|taxpayer| {
+                taxpayer
+                    .branches
+                    .iter()
+                    .any(|branch| branch.branch_code == key.branch())
+            })
+            .ok_or_else(|| HostError::new("This tax profile is not on this device."))?
+            .taxpayer;
+        let kind = if taxpayer.taxpayer_type == TaxpayerType::Individual {
+            TinKind::Individual
+        } else {
+            TinKind::NonIndividual
+        };
+        Ok((kind, taxpayer.name))
+    })?;
+    let submitter = account_submitter()?;
+    on_account_thread(
+        "buwiz-account-activate-tin",
+        async move {
+            submitter
+                .add_account_tin(kind, &key, &registered_name, None)
+                .await
+        },
+        |added| match added {
+            Ok(Some(row)) => Ok(crate::bir_module::json(tin_status_row(
+                &row,
+                false,
+                bir_core::bir_submit::device::now(),
+            ))),
+            Ok(None) => Ok(HostValue::Null),
+            Err(error) => Err(HostError::new(error.to_string())),
+        },
+    )
 }
 
 fn connect_inbox_oauth(
@@ -3040,5 +3263,296 @@ mod tests {
                 return to_json(&output.unwrap());
             }
         }
+    }
+
+    // ---------- the account's TINs (Track D) ----------
+
+    /// A fixed access token, as the host's sign-in would give it.
+    struct FixedToken(String);
+    impl bir_core::bir_submit::TokenSource for FixedToken {
+        fn access_token(
+            &self,
+            _force_refresh: bool,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<String, bir_core::bir_submit::ClientError>>
+                    + Send
+                    + '_,
+            >,
+        > {
+            let token = self.0.clone();
+            Box::pin(async move { Ok(token) })
+        }
+        fn login(&self) -> Option<String> {
+            Some("filer@example.test".into())
+        }
+        fn session_ended(&self) {}
+    }
+
+    /// The in-repo mock account on a runtime of its own, its rows linking to
+    /// the app's account site, and a client for it installed on this thread
+    /// for the account verbs.
+    fn against_the_account(body: impl FnOnce(&bir_core::mock_account::MockAccount)) {
+        use bir_core::mock_account::{MockAccount, MockOptions};
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let mock = runtime
+            .block_on(MockAccount::start_with(
+                "127.0.0.1:0".parse().unwrap(),
+                MockOptions {
+                    account_origin: Some(bir_core::bir_submit::tins::account_site()),
+                    ..MockOptions::default()
+                },
+            ))
+            .unwrap();
+        let token = mock.app_token("filer@example.test");
+        let submitter = Submitter::new(
+            bir_core::bir_submit::SubmitConfig::new(&mock.url()).unwrap(),
+            Box::new(bir_core::bir_submit::secrets::MemoryStore::default()),
+            std::sync::Arc::new(FixedToken(token)),
+        );
+        TEST_ACCOUNT_SUBMITTER
+            .with(|slot| *slot.borrow_mut() = Some(std::sync::Arc::new(submitter)));
+        struct Uninstall;
+        impl Drop for Uninstall {
+            fn drop(&mut self) {
+                TEST_ACCOUNT_SUBMITTER.with(|slot| slot.borrow_mut().take());
+            }
+        }
+        let _uninstall = Uninstall;
+        body(&mock);
+    }
+
+    /// Calls the registered async verb `name` with `values`, as the page does.
+    fn call_verb(name: &str, values: Vec<Value>) -> Result<Value, String> {
+        let future = crate::bir_module::module()
+            .begin(name, &args(values))
+            .map_err(|error| error.message().to_string())?;
+        futures::executor::block_on(future)
+            .map(|value| to_json(&value))
+            .map_err(|error| error.message().to_string())
+    }
+
+    /// "Juana Santos", an individual, beside the corporation of [`setup`].
+    fn add_juana() {
+        ok(
+            create_taxpayer,
+            vec![
+                json!({"tin_root": "000-123-453", "name": "Juana Santos", "taxpayer_type": "Individual", "head_office": {}}),
+            ],
+        );
+    }
+
+    /// One row per TIN and branch on the account, reduced to what screens
+    /// show, then a `not_activated` row for each branch on this device the
+    /// account lacks.
+    #[test]
+    fn account_tins_lists_the_account_and_marks_local_profiles_not_activated() {
+        use bir_core::mock_account::TinState;
+        setup();
+        add_branch("00001");
+        add_juana();
+        against_the_account(|mock| {
+            let email = "filer@example.test";
+            mock.add_tin(email, "123-456-788-00000", TinState::Approved);
+            mock.add_tin(
+                email,
+                "000-123-453-00000",
+                TinState::NeedsFix {
+                    reasons: vec![("blurry".into(), "A photo is too blurry to read.".into())],
+                    note: None,
+                },
+            );
+            mock.add_tin(email, "000-123-460-00000", TinState::Pending);
+            mock.add_tin(email, "111-111-114-00000", TinState::Approved);
+            let list = call_verb("account_tins", vec![json!(0)]).unwrap();
+            assert_eq!(list["complete"], true);
+            assert_eq!(list["stale"], false);
+            let fetched_at = list["fetched_at"].as_f64().unwrap();
+            let rows = list["rows"].as_array().unwrap();
+            let states: Vec<(&str, &str, &str)> = rows
+                .iter()
+                .map(|row| {
+                    (
+                        row["tin_root"].as_str().unwrap(),
+                        row["branch"].as_str().unwrap(),
+                        row["state"].as_str().unwrap(),
+                    )
+                })
+                .collect();
+            assert_eq!(
+                states,
+                [
+                    ("123456788", "00000", "activated"),
+                    ("111111114", "00000", "activated"),
+                    ("000123453", "00000", "fix"),
+                    ("000123460", "00000", "pending"),
+                    ("123456788", "00001", "not_activated"),
+                ]
+            );
+            for row in rows {
+                assert_eq!(row["stale"], false);
+                assert_eq!(row["fetched_at"].as_f64().unwrap(), fetched_at);
+                assert_eq!(row["action_url"].is_null(), row["state"] != "fix", "{row}");
+                assert_eq!(row["test_only"], row["tin_root"] == "111111114", "{row}");
+            }
+            assert!(
+                rows[2]["action_url"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with("https://account.buwiz.com/tins/claims/")
+            );
+            assert_eq!(
+                rows[2]["message"],
+                "Sent back for a fix: A photo is too blurry to read."
+            );
+            assert!(rows[4]["message"].is_null());
+            assert_eq!(mock.tax_profile_posts(), 0, "a read never adds");
+        });
+    }
+
+    /// A list that is not complete says nothing about a TIN missing from it:
+    /// no `not_activated` row. A link off the account site was never kept.
+    #[test]
+    fn an_incomplete_list_marks_nothing_not_activated() {
+        let body = json!({"profiles":[
+            {"tin":"123-456-788-00000","registered_name":"X","status":"needs_fix","can_send":false,"next":"fix",
+             "action":{"label":"Fix","url":"https://evil.example/fix"}}
+        ]});
+        let list = AccountTins::parse(&body, 7);
+        let local = [("123456788".to_owned(), "00001".to_owned())];
+        let shown = tin_status_list(&list, &local);
+        assert_eq!(shown["complete"], false);
+        let rows = shown["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["state"], "fix");
+        assert!(rows[0]["action_url"].is_null());
+        let complete = AccountTins::parse(
+            &json!({"include":"all","profiles":body["profiles"].clone()}),
+            7,
+        );
+        let rows = tin_status_list(&complete, &local)["rows"].clone();
+        assert_eq!(rows[1]["state"], "not_activated");
+        assert_eq!(rows[1]["fetched_at"], 7);
+    }
+
+    /// "Activate this TIN to send" posts the profile's kind and registered
+    /// name for its 14-digit TIN, and the row comes back to fix; pressed
+    /// again, the account's answer is the app's sentence and the list then
+    /// shows the row.
+    #[test]
+    fn activate_tin_posts_the_profiles_kind_and_name() {
+        setup();
+        add_branch("00001");
+        add_juana();
+        against_the_account(|mock| {
+            let row = call_verb("activate_tin", vec![json!("12345678800001")]).unwrap();
+            assert_eq!(row["state"], "fix");
+            assert_eq!(
+                (row["tin_root"].as_str(), row["branch"].as_str()),
+                (Some(ROOT), Some("00001"))
+            );
+            assert!(row["action_url"].as_str().unwrap().ends_with("/verify"));
+            call_verb("activate_tin", vec![json!("00012345300000")]).unwrap();
+            let held: Vec<(String, String, String)> = mock
+                .tins_of("filer@example.test")
+                .into_iter()
+                .map(|(kind, tin, name, _)| (kind, tin, name))
+                .collect();
+            assert_eq!(
+                held,
+                [
+                    (
+                        "business".into(),
+                        "123-456-788-00001".into(),
+                        "Example Trading Corp".into()
+                    ),
+                    (
+                        "personal".into(),
+                        "000-123-453-00000".into(),
+                        "Juana Santos".into()
+                    ),
+                ]
+            );
+            assert_eq!(
+                call_verb("activate_tin", vec![json!("12345678800001")]),
+                Err("This TIN is already on your account, waiting to be verified.".into())
+            );
+            let list = call_verb("account_tins", vec![json!(60)]).unwrap();
+            let states: Vec<&str> = list["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|row| row["state"].as_str().unwrap())
+                .collect();
+            assert_eq!(states, ["fix", "fix", "not_activated"]);
+            // Only a tax profile on this device, by its 14 digits.
+            assert_eq!(
+                call_verb("activate_tin", vec![json!("12345678800002")]),
+                Err("This tax profile is not on this device.".into())
+            );
+            assert!(call_verb("activate_tin", vec![json!("123456788")]).is_err());
+            assert_eq!(mock.tax_profile_posts(), 3);
+        });
+    }
+
+    /// Making, changing and listing tax profiles never adds a TIN to the
+    /// account: only "Activate this TIN to send" posts.
+    #[test]
+    fn profile_creation_never_posts() {
+        against_the_account(|mock| {
+            setup();
+            add_branch("00001");
+            add_juana();
+            ok(
+                update_taxpayer,
+                vec![json!(ROOT), json!({"name": "Example Trading Corporation"})],
+            );
+            ok(
+                update_branch,
+                vec![
+                    json!("12345678800001"),
+                    json!({"name": "Example Store Two"}),
+                ],
+            );
+            ok(list_taxpayers_fn, vec![]);
+            call_verb("account_tins", vec![json!(0)]).unwrap();
+            assert_eq!(mock.tax_profile_posts(), 0, "no profile change posts");
+            assert!(mock.tins_of("filer@example.test").is_empty());
+            call_verb("activate_tin", vec![json!(HEAD)]).unwrap();
+            assert_eq!(mock.tax_profile_posts(), 1);
+        });
+    }
+
+    fn list_taxpayers_fn(_: &HostArguments) -> HostResult {
+        list_taxpayers()
+    }
+
+    /// Both verbs need the filing data open (signed in), and then ask
+    /// nothing of the account.
+    #[test]
+    fn the_account_verbs_need_the_data_open() {
+        setup();
+        against_the_account(|mock| {
+            crate::account_gate::force_locked(|| {
+                for (verb, value) in [("account_tins", json!(0)), ("activate_tin", json!(HEAD))] {
+                    assert_eq!(
+                        call_verb(verb, vec![value]),
+                        Err(crate::account_gate::LOCKED_MESSAGE.into()),
+                        "{verb}"
+                    );
+                }
+            });
+            assert_eq!(mock.tax_profile_posts(), 0);
+        });
+    }
+
+    /// Without a client installed, a test reaches no account server.
+    #[test]
+    fn the_account_verbs_reach_no_server_in_tests() {
+        setup();
+        assert_eq!(
+            call_verb("account_tins", vec![json!(0)]),
+            Err("The Buwiz account is not available in tests.".into())
+        );
     }
 }
