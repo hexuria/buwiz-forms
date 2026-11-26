@@ -44,6 +44,24 @@ bump-build:
     }
     uv run scripts/bump_build.py
 
+# Covers iPhone, iPad, Mac, Windows, Linux, Android, the tray and the menu-row mark, and lists each file it wrote.
+# With a path, that SVG is copied in as the new source first: `just icons ~/new-logo.svg`.
+# Needs uv (it fetches Pillow) and rsvg-convert (brew install librsvg).
+# Rebuild every app icon from assets/brand/buwiz-forms.svg
+icons svg="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{svg}}" ]; then
+        cp "{{svg}}" assets/brand/buwiz-forms.svg
+        echo "new source: {{svg}} -> assets/brand/buwiz-forms.svg"
+    fi
+    uv run -q --no-project --with 'pillow>=11.1' python assets/brand/make_icons.py
+
+# Local only, not a CI job: another machine's librsvg can draw edges differently. `just icons` fixes a failure.
+# Exit 1 when a committed icon is not what assets/brand/buwiz-forms.svg gives
+icons-check:
+    uv run -q --no-project --with 'pillow>=11.1' python assets/brand/make_icons.py --check
+
 # Show available commands
 help:
     @just --list
