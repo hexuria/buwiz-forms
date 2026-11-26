@@ -1,0 +1,1718 @@
+{
+  "pr": 361,
+  "commit": "b52eefcb9dead3614d2d8ff1e9d21583166e4cb9",
+  "label": "b52eefcb",
+  "started": "2026-11-26T07:01:31.893720+00:00",
+  "workspace": "C:\\ciw\\work\\b52eefcb",
+  "target": "C:\\ciw\\targets\\b52eefcb",
+  "probes": {
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "cargo_rc": 0,
+    "nsh": "nsh 0.6.1 (8c78cfd)",
+    "nsh_rc": 0,
+    "just": "just 1.45.0",
+    "just_rc": 0,
+    "python": "Python 3.13.12",
+    "python_rc": 0
+  },
+  "jobs": {
+    "nsh-shard-0": {
+      "files": [
+        {
+          "name": "shard0__bir__DoorProbe.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__bir__DoorProbe.test.tsx.log",
+          "elapsed": 164.6915798187256,
+          "timed_out": false,
+          "file": "bir/DoorProbe.test.tsx",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__lib__dashboard.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__lib__dashboard.test.ts.log",
+          "elapsed": 4.049079179763794,
+          "timed_out": false,
+          "file": "lib/dashboard.test.ts",
+          "counts": {
+            "total": 24,
+            "passed": 24,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__lib__facts.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__lib__facts.test.ts.log",
+          "elapsed": 2.364292860031128,
+          "timed_out": false,
+          "file": "lib/facts.test.ts",
+          "counts": {
+            "total": 25,
+            "passed": 25,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__lib__periods.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__lib__periods.test.ts.log",
+          "elapsed": 2.779160499572754,
+          "timed_out": false,
+          "file": "lib/periods.test.ts",
+          "counts": {
+            "total": 14,
+            "passed": 14,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__lib__settings_model.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__lib__settings_model.test.ts.log",
+          "elapsed": 2.7639949321746826,
+          "timed_out": false,
+          "file": "lib/settings_model.test.ts",
+          "counts": {
+            "total": 42,
+            "passed": 42,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__auth__gate.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__auth__gate.test.tsx.log",
+          "elapsed": 4.181379556655884,
+          "timed_out": false,
+          "file": "screens/auth/gate.test.tsx",
+          "counts": {
+            "total": 3,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__auth__logic.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__auth__logic.test.ts.log",
+          "elapsed": 2.319504976272583,
+          "timed_out": false,
+          "file": "screens/auth/logic.test.ts",
+          "counts": {
+            "total": 5,
+            "passed": 5,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__auth__sessionHooks.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__auth__sessionHooks.test.tsx.log",
+          "elapsed": 7.417910099029541,
+          "timed_out": false,
+          "file": "screens/auth/sessionHooks.test.tsx",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__base__ThemePage.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__base__ThemePage.test.tsx.log",
+          "elapsed": 2.9998106956481934,
+          "timed_out": false,
+          "file": "screens/base/ThemePage.test.tsx",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__calendar__rows.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__calendar__rows.test.ts.log",
+          "elapsed": 2.2834603786468506,
+          "timed_out": false,
+          "file": "screens/calendar/rows.test.ts",
+          "counts": {
+            "total": 11,
+            "passed": 11,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__filings__LegacyGroup.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__filings__LegacyGroup.test.tsx.log",
+          "elapsed": 7.9540934562683105,
+          "timed_out": false,
+          "file": "screens/filings/LegacyGroup.test.tsx",
+          "counts": {
+            "total": 10,
+            "passed": 10,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__FormPage.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__FormPage.test.tsx.log",
+          "elapsed": 9.33502197265625,
+          "timed_out": false,
+          "file": "screens/form/FormPage.test.tsx",
+          "counts": {
+            "total": 6,
+            "passed": 6,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__FormPageF9Shots.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__FormPageF9Shots.test.tsx.log",
+          "elapsed": 17.750218152999878,
+          "timed_out": false,
+          "file": "screens/form/FormPageF9Shots.test.tsx",
+          "counts": {
+            "total": 9,
+            "passed": 9,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__FormPageGated.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__FormPageGated.test.tsx.log",
+          "elapsed": 9.079963207244873,
+          "timed_out": false,
+          "file": "screens/form/FormPageGated.test.tsx",
+          "counts": {
+            "total": 6,
+            "passed": 6,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__FormPageProfile.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__FormPageProfile.test.tsx.log",
+          "elapsed": 7.066411018371582,
+          "timed_out": false,
+          "file": "screens/form/FormPageProfile.test.tsx",
+          "counts": {
+            "total": 3,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__all43.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__all43.test.ts.log",
+          "elapsed": 6.516123056411743,
+          "timed_out": false,
+          "file": "screens/form/all43.test.ts",
+          "counts": {
+            "total": 45,
+            "passed": 45,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__controls__controls.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__controls__controls.test.tsx.log",
+          "elapsed": 27.079018354415894,
+          "timed_out": false,
+          "file": "screens/form/controls/controls.test.tsx",
+          "counts": {
+            "total": 31,
+            "passed": 31,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__fieldPage.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__fieldPage.test.tsx.log",
+          "elapsed": 14.481191396713257,
+          "timed_out": false,
+          "file": "screens/form/fieldPage.test.tsx",
+          "counts": {
+            "total": 18,
+            "passed": 18,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__pickDate.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__pickDate.test.ts.log",
+          "elapsed": 22.697158336639404,
+          "timed_out": false,
+          "file": "screens/form/pickDate.test.ts",
+          "counts": {
+            "total": 15,
+            "passed": 15,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__refusals.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__refusals.test.ts.log",
+          "elapsed": 2.3585705757141113,
+          "timed_out": false,
+          "file": "screens/form/refusals.test.ts",
+          "counts": {
+            "total": 10,
+            "passed": 10,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__rowLine.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__rowLine.test.tsx.log",
+          "elapsed": 5.169960975646973,
+          "timed_out": false,
+          "file": "screens/form/rowLine.test.tsx",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__session.dryRun.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__session.dryRun.test.ts.log",
+          "elapsed": 3.294975519180298,
+          "timed_out": false,
+          "file": "screens/form/session.dryRun.test.ts",
+          "counts": {
+            "total": 6,
+            "passed": 6,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__session.fold.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__session.fold.test.ts.log",
+          "elapsed": 8.001220703125,
+          "timed_out": false,
+          "file": "screens/form/session.fold.test.ts",
+          "counts": {
+            "total": 18,
+            "passed": 18,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__session.navigation.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__session.navigation.test.ts.log",
+          "elapsed": 3.0498106479644775,
+          "timed_out": false,
+          "file": "screens/form/session.navigation.test.ts",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__session.queueFirst.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__session.queueFirst.test.ts.log",
+          "elapsed": 5.255791902542114,
+          "timed_out": false,
+          "file": "screens/form/session.queueFirst.test.ts",
+          "counts": {
+            "total": 10,
+            "passed": 10,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__session.rework.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__session.rework.test.ts.log",
+          "elapsed": 9.244894027709961,
+          "timed_out": false,
+          "file": "screens/form/session.rework.test.ts",
+          "counts": {
+            "total": 5,
+            "passed": 5,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__session.yearEnd.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__session.yearEnd.test.ts.log",
+          "elapsed": 10.785353899002075,
+          "timed_out": false,
+          "file": "screens/form/session.yearEnd.test.ts",
+          "counts": {
+            "total": 4,
+            "passed": 4,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__form__tinShapes.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__form__tinShapes.test.ts.log",
+          "elapsed": 3.3040974140167236,
+          "timed_out": false,
+          "file": "screens/form/tinShapes.test.ts",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__home__rows.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__home__rows.test.ts.log",
+          "elapsed": 2.284259557723999,
+          "timed_out": false,
+          "file": "screens/home/rows.test.ts",
+          "counts": {
+            "total": 3,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__print__PreviewWindow.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__print__PreviewWindow.test.tsx.log",
+          "elapsed": 5.381443738937378,
+          "timed_out": false,
+          "file": "screens/print/PreviewWindow.test.tsx",
+          "counts": {
+            "total": 5,
+            "passed": 5,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__print__titles.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__print__titles.test.ts.log",
+          "elapsed": 2.2678043842315674,
+          "timed_out": false,
+          "file": "screens/print/titles.test.ts",
+          "counts": {
+            "total": 10,
+            "passed": 10,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__settings__ebirImport.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__settings__ebirImport.test.tsx.log",
+          "elapsed": 18.06665849685669,
+          "timed_out": false,
+          "file": "screens/settings/ebirImport.test.tsx",
+          "counts": {
+            "total": 18,
+            "passed": 18,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__settings__settings.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__settings__settings.test.tsx.log",
+          "elapsed": 24.333593368530273,
+          "timed_out": false,
+          "file": "screens/settings/settings.test.tsx",
+          "counts": {
+            "total": 15,
+            "passed": 15,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__taxpayer__logic.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__taxpayer__logic.test.ts.log",
+          "elapsed": 2.305696487426758,
+          "timed_out": false,
+          "file": "screens/taxpayer/logic.test.ts",
+          "counts": {
+            "total": 7,
+            "passed": 7,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__taxpayer__profile.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__taxpayer__profile.test.tsx.log",
+          "elapsed": 22.714080572128296,
+          "timed_out": false,
+          "file": "screens/taxpayer/profile.test.tsx",
+          "counts": {
+            "total": 8,
+            "passed": 8,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__screens__taxpayer__yearEdit.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__screens__taxpayer__yearEdit.test.ts.log",
+          "elapsed": 2.8069565296173096,
+          "timed_out": false,
+          "file": "screens/taxpayer/yearEdit.test.ts",
+          "counts": {
+            "total": 3,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shell__agent__lock.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shell__agent__lock.test.ts.log",
+          "elapsed": 2.7874982357025146,
+          "timed_out": false,
+          "file": "shell/agent/lock.test.ts",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shell__desktop__app_keys.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shell__desktop__app_keys.test.ts.log",
+          "elapsed": 2.2844083309173584,
+          "timed_out": false,
+          "file": "shell/desktop/app_keys.test.ts",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shell__desktop__hotkeyRecorder.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shell__desktop__hotkeyRecorder.test.tsx.log",
+          "elapsed": 7.050529479980469,
+          "timed_out": false,
+          "file": "shell/desktop/hotkeyRecorder.test.tsx",
+          "counts": {
+            "total": 4,
+            "passed": 4,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shell__desktop__sending.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shell__desktop__sending.test.ts.log",
+          "elapsed": 2.719759464263916,
+          "timed_out": false,
+          "file": "shell/desktop/sending.test.ts",
+          "counts": {
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shell__devCommand.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shell__devCommand.test.ts.log",
+          "elapsed": 2.7822515964508057,
+          "timed_out": false,
+          "file": "shell/devCommand.test.ts",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shell__history.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shell__history.test.tsx.log",
+          "elapsed": 4.38584303855896,
+          "timed_out": false,
+          "file": "shell/history.test.tsx",
+          "counts": {
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shell__ipad.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shell__ipad.test.tsx.log",
+          "elapsed": 3.9332327842712402,
+          "timed_out": false,
+          "file": "shell/ipad.test.tsx",
+          "counts": {
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shell__navigation.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shell__navigation.test.ts.log",
+          "elapsed": 9.098233222961426,
+          "timed_out": false,
+          "file": "shell/navigation.test.ts",
+          "counts": {
+            "total": 8,
+            "passed": 8,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shell__paletteIndex.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shell__paletteIndex.test.tsx.log",
+          "elapsed": 10.027196884155273,
+          "timed_out": false,
+          "file": "shell/paletteIndex.test.tsx",
+          "counts": {
+            "total": 4,
+            "passed": 4,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shell__queuedWatch.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shell__queuedWatch.test.ts.log",
+          "elapsed": 9.374521732330322,
+          "timed_out": false,
+          "file": "shell/queuedWatch.test.ts",
+          "counts": {
+            "total": 5,
+            "passed": 5,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shell__routes.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shell__routes.test.ts.log",
+          "elapsed": 2.381387948989868,
+          "timed_out": false,
+          "file": "shell/routes.test.ts",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shell__startGate.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shell__startGate.test.ts.log",
+          "elapsed": 2.739191770553589,
+          "timed_out": false,
+          "file": "shell/startGate.test.ts",
+          "counts": {
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shots__agent.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shots__agent.test.tsx.log",
+          "elapsed": 3.3634445667266846,
+          "timed_out": false,
+          "file": "shots/agent.test.tsx",
+          "counts": {
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shots__calendar.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shots__calendar.test.tsx.log",
+          "elapsed": 40.37764382362366,
+          "timed_out": false,
+          "file": "shots/calendar.test.tsx",
+          "counts": {
+            "total": 6,
+            "passed": 6,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shots__desktop.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shots__desktop.test.tsx.log",
+          "elapsed": 13.188658237457275,
+          "timed_out": false,
+          "file": "shots/desktop.test.tsx",
+          "counts": {
+            "total": 8,
+            "passed": 8,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shots__f18.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shots__f18.test.tsx.log",
+          "elapsed": 20.563271045684814,
+          "timed_out": false,
+          "file": "shots/f18.test.tsx",
+          "counts": {
+            "total": 4,
+            "passed": 4,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shots__f21.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shots__f21.test.tsx.log",
+          "elapsed": 3.426466703414917,
+          "timed_out": false,
+          "file": "shots/f21.test.tsx",
+          "counts": {
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shots__ffdates.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shots__ffdates.test.tsx.log",
+          "elapsed": 46.019044637680054,
+          "timed_out": false,
+          "file": "shots/ffdates.test.tsx",
+          "counts": {
+            "total": 4,
+            "passed": 4,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shots__ffprofile.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shots__ffprofile.test.tsx.log",
+          "elapsed": 66.72726559638977,
+          "timed_out": false,
+          "file": "shots/ffprofile.test.tsx",
+          "counts": {
+            "total": 5,
+            "passed": 5,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shots__fftin.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shots__fftin.test.tsx.log",
+          "elapsed": 33.75526404380798,
+          "timed_out": false,
+          "file": "shots/fftin.test.tsx",
+          "counts": {
+            "total": 15,
+            "passed": 15,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shots__forms43.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shots__forms43.test.tsx.log",
+          "elapsed": 85.4089241027832,
+          "timed_out": false,
+          "file": "shots/forms43.test.tsx",
+          "counts": {
+            "total": 43,
+            "passed": 43,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shots__library.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shots__library.test.tsx.log",
+          "elapsed": 17.54900860786438,
+          "timed_out": false,
+          "file": "shots/library.test.tsx",
+          "counts": {
+            "total": 4,
+            "passed": 4,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__shots__settings.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__shots__settings.test.tsx.log",
+          "elapsed": 41.773555755615234,
+          "timed_out": false,
+          "file": "shots/settings.test.tsx",
+          "counts": {
+            "total": 10,
+            "passed": 10,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__theme__theme.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__theme__theme.test.ts.log",
+          "elapsed": 2.3386354446411133,
+          "timed_out": false,
+          "file": "theme/theme.test.ts",
+          "counts": {
+            "total": 19,
+            "passed": 19,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__ui__cells.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__ui__cells.test.tsx.log",
+          "elapsed": 10.202766180038452,
+          "timed_out": false,
+          "file": "ui/cells.test.tsx",
+          "counts": {
+            "total": 4,
+            "passed": 4,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__ui__fields.select.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__ui__fields.select.test.tsx.log",
+          "elapsed": 4.214420795440674,
+          "timed_out": false,
+          "file": "ui/fields.select.test.tsx",
+          "counts": {
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__ui__focus.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__ui__focus.test.tsx.log",
+          "elapsed": 4.122221946716309,
+          "timed_out": false,
+          "file": "ui/focus.test.tsx",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__ui__mask.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__ui__mask.test.ts.log",
+          "elapsed": 2.2958247661590576,
+          "timed_out": false,
+          "file": "ui/mask.test.ts",
+          "counts": {
+            "total": 34,
+            "passed": 34,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard0__ui__rows.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\files\\shard0__ui__rows.test.tsx.log",
+          "elapsed": 5.116702556610107,
+          "timed_out": false,
+          "file": "ui/rows.test.tsx",
+          "counts": {
+            "total": 4,
+            "passed": 4,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        }
+      ],
+      "steps": [
+        {
+          "name": "shard0-nsh-check",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\shard0-nsh-check.log",
+          "elapsed": 1061.3044457435608,
+          "timed_out": false
+        },
+        {
+          "name": "shard0-nsh-build",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\shard0-nsh-build.log",
+          "elapsed": 2.3244714736938477,
+          "timed_out": false
+        },
+        {
+          "name": "shard0-rust-tests",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\shard0-rust-tests.log",
+          "elapsed": 160.64329075813293,
+          "timed_out": false,
+          "cargo_counts": {
+            "passed": 148,
+            "failed": 0,
+            "ignored": 0,
+            "measured": 0
+          }
+        },
+        {
+          "name": "shard0-agent-feature",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\shard0-agent-feature.log",
+          "elapsed": 675.6607511043549,
+          "timed_out": false,
+          "cargo_counts": {
+            "passed": 8,
+            "failed": 0,
+            "ignored": 0,
+            "measured": 0
+          }
+        },
+        {
+          "name": "shard0-windows-dev-host",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard0\\shard0-windows-dev-host.log",
+          "elapsed": 539.243088722229,
+          "timed_out": false
+        }
+      ],
+      "totals": {
+        "files_ran": 65,
+        "files_failed": 0,
+        "tests_passed": 599,
+        "tests_failed": 0,
+        "tests_total": 599
+      }
+    },
+    "nsh-shard-1": {
+      "files": [
+        {
+          "name": "shard1__bir__door.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__bir__door.test.ts.log",
+          "elapsed": 2.9436516761779785,
+          "timed_out": false,
+          "file": "bir/door.test.ts",
+          "counts": {
+            "total": 11,
+            "passed": 11,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__lib__dates.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__lib__dates.test.ts.log",
+          "elapsed": 2.284280300140381,
+          "timed_out": false,
+          "file": "lib/dates.test.ts",
+          "counts": {
+            "total": 44,
+            "passed": 44,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__lib__format.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__lib__format.test.ts.log",
+          "elapsed": 2.2227914333343506,
+          "timed_out": false,
+          "file": "lib/format.test.ts",
+          "counts": {
+            "total": 16,
+            "passed": 16,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__lib__poll.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__lib__poll.test.ts.log",
+          "elapsed": 2.611025333404541,
+          "timed_out": false,
+          "file": "lib/poll.test.ts",
+          "counts": {
+            "total": 5,
+            "passed": 5,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__lib__statusWord.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__lib__statusWord.test.ts.log",
+          "elapsed": 2.2636256217956543,
+          "timed_out": false,
+          "file": "lib/statusWord.test.ts",
+          "counts": {
+            "total": 3,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__auth__lockGuard.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__auth__lockGuard.test.tsx.log",
+          "elapsed": 8.476860284805298,
+          "timed_out": false,
+          "file": "screens/auth/lockGuard.test.tsx",
+          "counts": {
+            "total": 3,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__auth__scope.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__auth__scope.test.tsx.log",
+          "elapsed": 8.23154592514038,
+          "timed_out": false,
+          "file": "screens/auth/scope.test.tsx",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__auth__setup.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__auth__setup.test.tsx.log",
+          "elapsed": 7.871521711349487,
+          "timed_out": false,
+          "file": "screens/auth/setup.test.tsx",
+          "counts": {
+            "total": 3,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__calendar__Calendar.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__calendar__Calendar.test.tsx.log",
+          "elapsed": 12.888872623443604,
+          "timed_out": false,
+          "file": "screens/calendar/Calendar.test.tsx",
+          "counts": {
+            "total": 10,
+            "passed": 10,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__calendar__today.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__calendar__today.test.tsx.log",
+          "elapsed": 3.5488874912261963,
+          "timed_out": false,
+          "file": "screens/calendar/today.test.tsx",
+          "counts": {
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__filings__legacy.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__filings__legacy.test.ts.log",
+          "elapsed": 2.2572591304779053,
+          "timed_out": false,
+          "file": "screens/filings/legacy.test.ts",
+          "counts": {
+            "total": 9,
+            "passed": 9,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__FormPageF5.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__FormPageF5.test.tsx.log",
+          "elapsed": 10.665724515914917,
+          "timed_out": false,
+          "file": "screens/form/FormPageF5.test.tsx",
+          "counts": {
+            "total": 5,
+            "passed": 5,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__FormPageFixes.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__FormPageFixes.test.tsx.log",
+          "elapsed": 10.373546838760376,
+          "timed_out": false,
+          "file": "screens/form/FormPageFixes.test.tsx",
+          "counts": {
+            "total": 3,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__FormPageHeavy.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__FormPageHeavy.test.tsx.log",
+          "elapsed": 10.607790231704712,
+          "timed_out": false,
+          "file": "screens/form/FormPageHeavy.test.tsx",
+          "counts": {
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__FormPageQueued.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__FormPageQueued.test.tsx.log",
+          "elapsed": 15.241682529449463,
+          "timed_out": false,
+          "file": "screens/form/FormPageQueued.test.tsx",
+          "counts": {
+            "total": 16,
+            "passed": 16,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__atc2551q.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__atc2551q.test.tsx.log",
+          "elapsed": 9.95013689994812,
+          "timed_out": false,
+          "file": "screens/form/atc2551q.test.tsx",
+          "counts": {
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__controls__model.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__controls__model.test.ts.log",
+          "elapsed": 2.318697214126587,
+          "timed_out": false,
+          "file": "screens/form/controls/model.test.ts",
+          "counts": {
+            "total": 12,
+            "passed": 12,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__nolco1702mx.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__nolco1702mx.test.tsx.log",
+          "elapsed": 6.119049787521362,
+          "timed_out": false,
+          "file": "screens/form/nolco1702mx.test.tsx",
+          "counts": {
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__pr2dates.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__pr2dates.test.ts.log",
+          "elapsed": 11.994669437408447,
+          "timed_out": false,
+          "file": "screens/form/pr2dates.test.ts",
+          "counts": {
+            "total": 6,
+            "passed": 6,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__rowAlign.test.tsx",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__rowAlign.test.tsx.log",
+          "elapsed": 2.72373104095459,
+          "timed_out": false,
+          "file": "screens/form/rowAlign.test.tsx",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__session.cancelQueue.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__session.cancelQueue.test.ts.log",
+          "elapsed": 3.049999952316284,
+          "timed_out": false,
+          "file": "screens/form/session.cancelQueue.test.ts",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__session.facts.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__session.facts.test.ts.log",
+          "elapsed": 7.250335454940796,
+          "timed_out": false,
+          "file": "screens/form/session.facts.test.ts",
+          "counts": {
+            "total": 4,
+            "passed": 4,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__session.followWorker.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__session.followWorker.test.ts.log",
+          "elapsed": 5.01779580116272,
+          "timed_out": false,
+          "file": "screens/form/session.followWorker.test.ts",
+          "counts": {
+            "total": 6,
+            "passed": 6,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__session.prerequisites.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__session.prerequisites.test.ts.log",
+          "elapsed": 3.500093460083008,
+          "timed_out": false,
+          "file": "screens/form/session.prerequisites.test.ts",
+          "counts": {
+            "total": 3,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        },
+        {
+          "name": "shard1__screens__form__session.queueRefused.test.ts",
+          "rc": 0,
+          "log": "C:\\ciw\\logs\\b52eefcb\\nsh\\shard1\\files\\shard1__screens__form__session.queueRefused.test.ts.log",
+          "elapsed": 3.0279295444488525,
+          "timed_out": false,
+          "file": "screens/form/session.queueRefused.test.ts",
+          "counts": {
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "skipped": 0,
+            "todo": 0,
+            "summary_found": true
+          },
+          "failures": [],
+          "status": "PASS"
+        }
+      ],
+      "steps": [],
+      "totals": {
+        "files_ran": 25,
+        "files_failed": 0,
+        "tests_passed": 171,
+        "tests_failed": 0,
+        "tests_total": 171
+      }
+    },
+    "nsh-shard-2": {
+      "files": [],
+      "steps": [],
+      "totals": {}
+    }
+  },
+  "test_file_count": 195
+}
