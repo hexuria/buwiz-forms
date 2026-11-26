@@ -1,0 +1,21 @@
+--------- beginning of main
+11-26 05:46:18.227  1266  1266 I StylusModule: StylusModule.onUpdateToolType():770 Update tool type = 0
+11-26 05:46:18.235  1266  1266 I StylusModule: StylusModule.onUpdateToolType():770 Update tool type = 0
+11-26 05:46:18.271  1266  1765 D EGL_emulation: app_time_stats: avg=6812.58ms min=54.12ms max=13571.04ms count=2
+11-26 05:46:19.234  3092  3106 D EGL_emulation: app_time_stats: avg=988.52ms min=979.25ms max=997.79ms count=2
+11-26 05:46:19.829  3329  3329 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+11-26 05:46:19.830  3329  3329 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+11-26 05:46:19.843   165   165 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+11-26 05:46:19.843  3329  3330 I Gralloc4: mapper 4.x is not supported
+--------- beginning of kernel
+11-26 05:46:20.077     0     0 I servicemanager: Caller(pid=3329,uid=2000,sid=u:r:shell:s0) Could not find android.hardware.graphics.allocator.IAllocator/default in the VINTF manifest. No alternative instances declared in VINTF.
+11-26 05:46:20.265     0     0 I logd    : logdr: UID=2000 GID=2000 PID=3331 n tail=0 logMask=99 pid=0 start=0ns deadline=0ns
+11-26 05:46:20.060  1266  1266 I StylusModule: StylusModule.onUpdateToolType():770 Update tool type = 0
+11-26 05:46:20.255  3092  3106 D EGL_emulation: app_time_stats: avg=510.34ms min=28.79ms max=991.89ms count=2
+11-26 05:46:20.895  1266  1266 I StylusModule: StylusModule.onUpdateToolType():770 Update tool type = 0
+11-26 05:46:22.236  3092  3106 D EGL_emulation: app_time_stats: avg=493.03ms min=10.95ms max=978.34ms count=4
+11-26 05:46:22.299  3346  3346 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+11-26 05:46:22.299  3346  3346 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+11-26 05:46:22.314   165   165 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+11-26 05:46:22.314  3346  3347 I Gralloc4: mapper 4.x is not supported
+11-26 05:46:22.548     0     0 I servicemanager: Caller(pid=3346,uid=2000,sid=u:r:shell:s0) Could not find android.hardware.graphics.allocator.IAllocator/default in the VINTF manifest. No alternative instances declared in VINTF.

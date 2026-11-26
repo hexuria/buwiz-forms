@@ -1,0 +1,2 @@
+package:dev.goldcoders.bir
+package:com.longbridge.nsh.host

@@ -1,0 +1,1 @@
+image.sysdir.1 = system-images/android-35/google_apis/x86_64/

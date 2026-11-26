@@ -1,0 +1,4 @@
+--- default_input_method ---
+com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME
+ime pkg: com.google.android.inputmethod.latin
+    versionName=14.2.09.629370537-preload-x86_64

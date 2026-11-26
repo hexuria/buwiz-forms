@@ -1,0 +1,6 @@
+35
+sdk_gphone64_x86_64
+google/sdk_gphone64_x86_64/emu64xa:15/AE3A.240806.043/12960925:userdebug/dev-keys
+Android emulator version 37.3.10.0 (build_id 16970787) (CL:N/A)
+Copyright (C) 2006-2024 The Android Open Source Project and many others.
+This program is a derivative of the QEMU CPU emulator (www.qemu.org).

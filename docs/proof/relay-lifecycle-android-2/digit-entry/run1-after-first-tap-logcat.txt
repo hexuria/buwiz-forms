@@ -1,0 +1,5 @@
+--------- beginning of main
+11-26 05:45:39.241  3092  3106 D EGL_emulation: app_time_stats: avg=988.05ms min=969.20ms max=1006.89ms count=2
+11-26 05:45:39.883  1353  1905 I BistoHotwordHelper: (REDACTED) getHotwordActive::active query: %s, watch: %s, devices connected: %s
+11-26 05:45:40.258  3092  3106 D EGL_emulation: app_time_stats: avg=337.54ms min=15.75ms max=973.53ms count=3
+11-26 05:45:40.325  1266  1466 I VoiceInputManagerWrapper: VoiceInputManagerWrapper.shutdownVoiceInternal():140 shutdownVoiceInternal()
