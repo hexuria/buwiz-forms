@@ -763,7 +763,10 @@ export function PinCells(props: PinCellsProps) {
   // Once the cells had the focus (asked for, or a tap), or are gone, nothing asks again: a person who moved on keeps it.
   let hadFocus = false;
   let gone = false;
+  const me = Math.random().toString(36).slice(2, 6);
+  console.log(`PINPROBE body ${me} t=${Date.now()}`);
   cleanup(() => {
+    console.log(`PINPROBE cleanup ${me} t=${Date.now()}`);
     gone = true;
   });
   return (
@@ -771,18 +774,24 @@ export function PinCells(props: PinCellsProps) {
       testID={props.testID}
       ref={(r: OtpInputRef) => {
         props.focusRef?.(() => r.focus());
+        console.log(`PINPROBE ref ${me} autoFocus=${props.autoFocus} t=${Date.now()}`);
         if (!props.autoFocus) return;
         for (const ms of AUTO_FOCUS_TRIES) {
           setTimeout(() => {
+            console.log(`PINPROBE try ${me} ${ms} hadFocus=${hadFocus} gone=${gone} t=${Date.now()}`);
             if (!hadFocus && !gone) r.focus();
           }, ms);
         }
       }}
       onFocus={() => {
+        console.log(`PINPROBE focus ${me} t=${Date.now()}`);
         hadFocus = true;
         props.onFocus?.();
       }}
-      onBlur={() => props.onBlur?.()}
+      onBlur={() => {
+        console.log(`PINPROBE blur ${me} t=${Date.now()}`);
+        props.onBlur?.();
+      }}
       length={props.length}
       value={props.value}
       onChange={(e) => props.onChange(digitsOnly(e.value))}
