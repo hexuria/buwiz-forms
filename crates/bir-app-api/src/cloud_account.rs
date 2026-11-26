@@ -111,6 +111,7 @@ pub(crate) fn save_signed_in(
             "The server did not return a refresh token. Sign in again.",
         ));
     }
+    let mark = bir_core::account_session::sign_in_mark();
     let (user_id, email, practice) =
         cloud_account::load_profile(http, server_url, &tokens.access_token).map_err(host_error)?;
     let secrets = AccountSecrets {
@@ -125,8 +126,14 @@ pub(crate) fn save_signed_in(
     };
     {
         let _one = bir_core::account_session::lock();
-        bir_core::transport::set_practice_account(practice);
-        save_stored(&stored_from(secrets, now))?;
+        // A sign-out pressed while the profile was read ends this sign-in too.
+        bir_core::account_session::write_if_unchanged(&mark, || {
+            bir_core::transport::set_practice_account(practice);
+            save_stored(&stored_from(secrets, now))
+        })
+        .ok_or_else(|| {
+            HostError::new("Signed out before this sign-in finished. Sign in again.")
+        })??;
     }
     // A new sign-in registers a new device key with the relay (the old one belonged to the old sign-in).
     bir_core::relay::forget_device();
@@ -152,27 +159,28 @@ fn refresh_account(
     _arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     spawn_account("buwiz-account-refresh", || {
+        refresh_with(&mut BlockingHttp::new())
+    })
+}
+
+fn refresh_with(http: &mut dyn cloud_account::Http) -> HostResult {
+    {
         let _one = bir_core::account_session::lock();
         let Some(stored) = load_stored()? else {
             return status_now();
         };
+        let mark = bir_core::account_session::SignInMark::of(Some(&stored));
         let resolved = resolve()?;
         if stored.server_url != resolved.url {
             clear_stored();
             return status_now();
         }
-        let mut http = BlockingHttp::new();
         let now = cloud_account::unix_now();
-        match cloud_account::refresh_session(&mut http, &stored.to_secrets(), now)
-            .map_err(host_error)?
-        {
-            SessionUpdate::Online(secrets) => {
-                bir_core::transport::set_practice_account(secrets.practice);
-                save_stored(&stored_from(secrets, now))?;
-            }
+        match cloud_account::refresh_session(http, &stored.to_secrets(), now).map_err(host_error)? {
+            // A sign-out while the request was out wins: nothing is saved back, and the status says signed out.
+            SessionUpdate::Online(secrets) => save_unless_signed_out(&mark, secrets, now)?,
             SessionUpdate::Offline(secrets) => {
-                bir_core::transport::set_practice_account(secrets.practice);
-                save_stored(&stored_from(secrets, stored.last_refresh_unix))?;
+                save_unless_signed_out(&mark, secrets, stored.last_refresh_unix)?
             }
             SessionUpdate::SignedOut => {
                 clear_stored();
@@ -180,8 +188,21 @@ fn refresh_account(
                 bir_core::transport::set_practice_account(false);
             }
         }
-        status_now()
+    }
+    status_now()
+}
+
+/// Saves a refreshed sign-in and its practice flag, unless the saved sign-in is no longer `mark` (signed out).
+fn save_unless_signed_out(
+    mark: &bir_core::account_session::SignInMark,
+    secrets: AccountSecrets,
+    last_refresh_unix: i64,
+) -> Result<(), HostError> {
+    bir_core::account_session::write_if_unchanged(mark, || {
+        bir_core::transport::set_practice_account(secrets.practice);
+        save_stored(&stored_from(secrets, last_refresh_unix))
     })
+    .unwrap_or(Ok(()))
 }
 
 fn sign_out(
@@ -208,17 +229,19 @@ fn sign_out_with(http: Box<dyn cloud_account::Http + Send>) -> HostResult {
     status
 }
 
-/// Takes the saved sign-in's tokens into memory and removes it (the private file and the keychain entry) under
-/// the account-session lock, so a refresh running now cannot save it back. An unreadable record is removed
+/// Takes the saved sign-in's tokens into memory and removes it (the private file and the keychain entry) at
+/// once, without waiting for a refresh that holds the account-session lock across its request: that refresh
+/// finds the sign-in gone when its answer comes, and does not save it back. An unreadable record is removed
 /// too: nothing can be revoked with it, and it must not outlive the sign-out.
 fn forget_stored_sign_in() -> Option<AccountSecrets> {
-    let _one = bir_core::account_session::lock();
-    let secrets = load_stored()
-        .ok()
-        .flatten()
-        .map(|stored| stored.to_secrets());
-    clear_stored();
-    secrets
+    bir_core::account_session::sign_out_now(|| {
+        let secrets = load_stored()
+            .ok()
+            .flatten()
+            .map(|stored| stored.to_secrets());
+        clear_stored();
+        secrets
+    })
 }
 
 /// Sends the logout on a thread of its own, without the account-session lock, so a new sign-in never waits on
@@ -264,10 +287,15 @@ fn session_ended_by_server() {
 /// Whether the gate opens, and whether the account is a practice account.
 /// Offline, the saved value stands.
 fn restore_saved_session() -> (bool, bool) {
+    restore_saved_session_with(&mut BlockingHttp::new())
+}
+
+fn restore_saved_session_with(http: &mut dyn cloud_account::Http) -> (bool, bool) {
     let _one = bir_core::account_session::lock();
     let Ok(Some(stored)) = load_stored() else {
         return (false, false);
     };
+    let mark = bir_core::account_session::SignInMark::of(Some(&stored));
     let Ok(resolved) = resolve() else {
         return (false, false);
     };
@@ -275,20 +303,21 @@ fn restore_saved_session() -> (bool, bool) {
         return (false, false);
     }
     let now = cloud_account::unix_now();
-    let mut http = BlockingHttp::new();
     let previous_refresh = stored.last_refresh_unix;
     let mut practice = stored.practice;
-    let outcome = match cloud_account::refresh_session(&mut http, &stored.to_secrets(), now) {
+    let outcome = match cloud_account::refresh_session(http, &stored.to_secrets(), now) {
         Ok(SessionUpdate::Online(secrets)) => {
             practice = secrets.practice;
-            if save_stored(&stored_from(secrets, now)).is_err() {
+            if save_restored(&mark, &stored_from(secrets, now)) != Some(true) {
                 return (false, false);
             }
             RefreshOutcome::Online
         }
         Ok(SessionUpdate::Offline(secrets)) => {
             practice = secrets.practice;
-            let _ = save_stored(&stored_from(secrets, previous_refresh));
+            if save_restored(&mark, &stored_from(secrets, previous_refresh)).is_none() {
+                return (false, false);
+            }
             RefreshOutcome::Offline
         }
         Ok(SessionUpdate::SignedOut) => RefreshOutcome::Revoked,
@@ -296,6 +325,10 @@ fn restore_saved_session() -> (bool, bool) {
         Err(_) => RefreshOutcome::Offline,
     };
     match cloud_account::gate_after_refresh(outcome) {
+        // A sign-out while the request was out keeps the gate closed, also when nothing was saved (offline).
+        GateDecision::Open { .. } if !bir_core::account_session::still_saved(&mark) => {
+            (false, false)
+        }
         GateDecision::Open { .. } => (true, practice),
         GateDecision::Closed {
             clear_secrets: true,
@@ -307,6 +340,15 @@ fn restore_saved_session() -> (bool, bool) {
             clear_secrets: false,
         } => (false, false),
     }
+}
+
+/// The launch restore's save: `None` when the saved sign-in is no longer `mark` (signed out; nothing written),
+/// else whether the write went through.
+fn save_restored(
+    mark: &bir_core::account_session::SignInMark,
+    stored: &StoredAccount,
+) -> Option<bool> {
+    bir_core::account_session::write_if_unchanged(mark, || save_stored(stored).is_ok())
 }
 
 fn stored_from(secrets: AccountSecrets, last_refresh_unix: i64) -> StoredAccount {
@@ -774,6 +816,144 @@ mod tests {
                 assert!(signed_in_now());
                 clear_stored();
             });
+        }
+
+        const ME: &str = r#"{"user_id":"u1","email":"filer@example.test"}"#;
+
+        /// The account server's `/me`, which a refresh of a still-valid sign-in and a new sign-in both ask. It
+        /// answers a success only once the test lets it go (or drops the sender); until then a refresh holds the
+        /// account-session lock across the request.
+        struct HeldProfile {
+            arrived: mpsc::Sender<()>,
+            release: mpsc::Receiver<()>,
+        }
+
+        impl cloud_account::Http for HeldProfile {
+            fn exchange(&mut self, _: &HttpRequest) -> Result<HttpResponse, CloudError> {
+                let _ = self.arrived.send(());
+                let _ = self.release.recv();
+                Ok(HttpResponse {
+                    status: 200,
+                    body: ME.into(),
+                })
+            }
+        }
+
+        /// Runs `work` against a held `/me` on a thread of its own, under this thread's database name, and
+        /// returns once its request is out: the sender lets the request go, the receiver gets what `work` gave.
+        fn while_a_request_hangs<T: Send + 'static>(
+            work: fn(&mut dyn cloud_account::Http) -> T,
+        ) -> (mpsc::Sender<()>, mpsc::Receiver<T>) {
+            let (arrived, out) = mpsc::channel();
+            let (release, held) = mpsc::channel();
+            let (sender, done) = mpsc::channel();
+            let database = bir_core::db::capture_database_path_override();
+            std::thread::spawn(move || {
+                let mut http = HeldProfile {
+                    arrived,
+                    release: held,
+                };
+                let _ = sender.send(database.run(|| work(&mut http)));
+            });
+            out.recv_timeout(WAIT).expect("the request went out");
+            (release, done)
+        }
+
+        fn sign_out_at_once(file: &std::path::Path) {
+            let (fake, _heard) = logout(file, answered);
+            let status = sign_out_on_a_thread(fake)
+                .recv_timeout(WAIT)
+                .expect("sign-out returned while a request held the account-session lock");
+            assert!(!signed_in_in(status), "sign-out answered signed in");
+            assert!(!file.exists(), "the account file outlived the sign-out");
+        }
+
+        fn new_tokens() -> cloud_account::TokenSet {
+            cloud_account::TokenSet {
+                access_token: "new-access".into(),
+                refresh_token: "new-refresh".into(),
+                expires_in: 900,
+            }
+        }
+
+        /// Settings' refresh holds the lock across its request. A sign-out pressed then returns at once with the
+        /// file gone, the refresh's successful answer does not save the sign-in back, and a new sign-in saves.
+        #[test]
+        fn sign_out_during_a_hanging_refresh_returns_at_once_and_the_refresh_does_not_save_it_back()
+        {
+            signed_in(|file| {
+                let (release, refreshed) = while_a_request_hangs(refresh_with);
+                sign_out_at_once(&file);
+                release.send(()).unwrap();
+                let after = refreshed.recv_timeout(WAIT).expect("the refresh finished");
+                assert!(!signed_in_in(after), "the refresh answered signed in");
+                assert!(!file.exists(), "the refresh saved the sign-in back");
+                assert!(!signed_in_now(), "a relaunch would read signed in");
+                a_new_sign_in_saves();
+            });
+        }
+
+        /// A sign-in started after the sign-out saves as always, and shows as signed in.
+        fn a_new_sign_in_saves() {
+            save_signed_in(&mut Profile, SERVER, new_tokens(), 3_000)
+                .expect("a sign-in after the sign-out saves");
+            let saved = load_stored().unwrap().expect("the new sign-in is saved");
+            assert_eq!(saved.access_token, "new-access");
+            assert!(
+                signed_in_now(),
+                "the new sign-in does not show as signed in"
+            );
+            clear_stored();
+        }
+
+        /// The launch restore holds the lock across its request (offline at launch, for minutes). A sign-out
+        /// pressed then returns at once, and the restore neither saves the sign-in back nor opens the gate.
+        #[test]
+        fn sign_out_during_a_hanging_launch_restore_returns_at_once_and_the_gate_stays_closed() {
+            signed_in(|file| {
+                let (release, restored) = while_a_request_hangs(restore_saved_session_with);
+                sign_out_at_once(&file);
+                release.send(()).unwrap();
+                let gate = restored.recv_timeout(WAIT).expect("the restore finished");
+                assert_eq!(gate, (false, false), "the restore opened the gate");
+                assert!(!file.exists(), "the restore saved the sign-in back");
+                assert!(!signed_in_now(), "a relaunch would read signed in");
+            });
+        }
+
+        /// A sign-in whose profile read was still out when the person signed out is not saved; the next sign-in,
+        /// started after the sign-out, saves as always.
+        #[test]
+        fn a_sign_in_finishing_after_a_sign_out_is_dropped_and_the_next_one_saves() {
+            signed_in(|file| {
+                let (release, signing_in) =
+                    while_a_request_hangs(|http| save_signed_in(http, SERVER, new_tokens(), 2_000));
+                sign_out_at_once(&file);
+                release.send(()).unwrap();
+                let late = signing_in.recv_timeout(WAIT).expect("the sign-in finished");
+                assert!(
+                    late.is_err(),
+                    "a sign-in started before the sign-out was saved"
+                );
+                assert!(
+                    !file.exists(),
+                    "a sign-in started before the sign-out was saved"
+                );
+                assert!(!signed_in_now());
+                a_new_sign_in_saves();
+            });
+        }
+
+        /// `/me` answering at once.
+        struct Profile;
+
+        impl cloud_account::Http for Profile {
+            fn exchange(&mut self, _: &HttpRequest) -> Result<HttpResponse, CloudError> {
+                Ok(HttpResponse {
+                    status: 200,
+                    body: ME.into(),
+                })
+            }
         }
     }
 

@@ -6,6 +6,12 @@
 //! from the saved account as it is now: the separate `bir-mcp` process can
 //! rotate the same saved token at any time.
 //!
+//! A sign-out is the one exception: it never waits for [`lock`], which a refresh
+//! holds across its request (up to 20 s, offline). It removes the saved account
+//! at once under a short lock of its own ([`sign_out_now`]), and every write
+//! that follows a request saves only while the saved account is still the one
+//! the request started from ([`write_if_unchanged`]).
+//!
 //! The relay client ([`bir_submit::Submitter`]) asks [`AccountTokens`] for an
 //! access token. Tokens are never logged.
 
@@ -22,12 +28,72 @@ const RECENT_REFRESH_SECONDS: i64 = 10;
 static ACCOUNT_LOCK: Mutex<()> = Mutex::new(());
 static SESSION_ENDED: OnceLock<fn()> = OnceLock::new();
 
-/// Serializes every token refresh and every write of the saved sign-in in this process. Hold it across
-/// "read the saved account, call the server, write it back". Blocking; never hold it across an `.await`.
+/// Serializes every token refresh and every write of the saved sign-in in this process, a sign-out excepted
+/// ([`sign_out_now`]). Hold it across "read the saved account, call the server, write it back", and write back
+/// through [`write_if_unchanged`]. Blocking; never hold it across an `.await`.
 pub fn lock() -> MutexGuard<'static, ()> {
     ACCOUNT_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Held only to read and write the saved account, never across a request: a sign-out takes it to remove the
+/// saved account, and a write after a request takes it to check that nothing removed it meanwhile.
+static WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+fn write_lock() -> MutexGuard<'static, ()> {
+    WRITE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Which saved sign-in a refresh or a sign-in started from: its refresh token, or none. Not `Debug`: it holds
+/// a token.
+#[derive(Clone, PartialEq, Eq)]
+pub struct SignInMark(Option<String>);
+
+impl SignInMark {
+    pub fn of(stored: Option<&StoredAccount>) -> Self {
+        Self(stored.map(|stored| stored.refresh_token.clone()))
+    }
+}
+
+/// The saved sign-in as it is now, for a sign-in to take before its first request.
+pub fn sign_in_mark() -> SignInMark {
+    mark_in(&SavedAccount)
+}
+
+/// Runs `forget` (read the saved account, remove it) at once, without waiting for [`lock`]: a refresh that holds
+/// it across a request finds the account gone when its answer comes, and does not save it back.
+pub fn sign_out_now<T>(forget: impl FnOnce() -> T) -> T {
+    let _write = write_lock();
+    forget()
+}
+
+/// Runs `write` only while the saved account is still `mark`; `None` when a sign-out (or anything else)
+/// replaced it meanwhile, and nothing was written.
+pub fn write_if_unchanged<T>(mark: &SignInMark, write: impl FnOnce() -> T) -> Option<T> {
+    write_if_unchanged_in(&SavedAccount, mark, write)
+}
+
+/// Whether the saved account is still `mark`: a request that writes nothing (offline) asks before it opens
+/// the gate.
+pub fn still_saved(mark: &SignInMark) -> bool {
+    let _write = write_lock();
+    mark_in(&SavedAccount) == *mark
+}
+
+fn mark_in(store: &dyn AccountStore) -> SignInMark {
+    SignInMark::of(store.load().ok().flatten().as_ref())
+}
+
+fn write_if_unchanged_in<T>(
+    store: &dyn AccountStore,
+    mark: &SignInMark,
+    write: impl FnOnce() -> T,
+) -> Option<T> {
+    let _write = write_lock();
+    (mark_in(store) == *mark).then(write)
 }
 
 /// Why no access token is available.
@@ -207,6 +273,7 @@ fn token_under_lock(
         }
         match cloud_account::refresh_tokens(http, &stored.server_url, &stored.refresh_token) {
             Ok(tokens) => {
+                let mark = SignInMark::of(Some(&stored));
                 let next = StoredAccount {
                     access_token: tokens.access_token,
                     refresh_token: tokens.refresh_token,
@@ -215,8 +282,9 @@ fn token_under_lock(
                     last_refresh_unix: now_unix,
                     ..stored
                 };
-                store
-                    .save(&next)
+                // A sign-out while the request was out wins: the rotated pair is dropped, not saved back.
+                write_if_unchanged_in(store, &mark, || store.save(&next))
+                    .ok_or(TokenError::SignedOut)?
                     .map_err(|error| TokenError::Other(error.to_string()))?;
                 return Ok(next.access_token);
             }
@@ -565,6 +633,64 @@ mod tests {
         assert_eq!(server.requests(), 1);
         assert_eq!(hook.load(Ordering::SeqCst), 0);
         assert_eq!(store.current().unwrap().refresh_token, "refresh-1");
+    }
+
+    /// The token endpoint of [`FakeServer`], answering only once the test lets it go (or drops the sender).
+    struct Held {
+        server: Arc<FakeServer>,
+        arrived: std::sync::mpsc::Sender<()>,
+        release: std::sync::mpsc::Receiver<()>,
+    }
+
+    impl Http for Held {
+        fn exchange(&mut self, request: &HttpRequest) -> Result<HttpResponse, CloudError> {
+            let _ = self.arrived.send(());
+            let _ = self.release.recv();
+            FakeHttp(self.server.clone()).exchange(request)
+        }
+    }
+
+    /// A refresh holds [`lock`] across its request. A sign-out then does not wait for it, and the refresh's
+    /// successful answer is not saved back: the relay is told the sign-in is gone.
+    #[test]
+    fn a_sign_out_during_a_hanging_refresh_does_not_wait_and_the_refresh_does_not_save_it_back() {
+        use std::sync::mpsc;
+        let wait = std::time::Duration::from_secs(10);
+        let store = Arc::new(MemoryStore::with(account(0, 0)));
+        let server = FakeServer::new(&["refresh-0"]);
+        let (arrived, out) = mpsc::channel();
+        let (release, held) = mpsc::channel();
+        let refreshing = {
+            let (store, server) = (store.clone(), server.clone());
+            std::thread::spawn(move || {
+                let mut http = Held {
+                    server,
+                    arrived,
+                    release: held,
+                };
+                ask(&store, &mut http, 1_000, false, &AtomicUsize::new(0))
+            })
+        };
+        out.recv_timeout(wait)
+            .expect("the refresh request went out");
+        let (signed_out, done) = mpsc::channel();
+        {
+            let store = store.clone();
+            std::thread::spawn(move || {
+                sign_out_now(|| store.clear());
+                let _ = signed_out.send(());
+            });
+        }
+        done.recv_timeout(wait)
+            .expect("sign-out returned while a refresh held the lock");
+        assert!(store.current().is_none(), "the sign-out left the sign-in");
+        release.send(()).unwrap();
+        assert_eq!(refreshing.join().unwrap(), Err(TokenError::SignedOut));
+        assert_eq!(server.requests(), 1);
+        assert!(
+            store.current().is_none(),
+            "the refresh saved the sign-in back"
+        );
     }
 
     #[test]
