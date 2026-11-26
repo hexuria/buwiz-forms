@@ -1,0 +1,11 @@
+row detail open
+probe2 start box=[0.00]
+after key 1: box=[10.00]
+probe2 sequence: 1→[10.00] 5→[150.00] comma→[150.00] 5→[1,550.00] 0→[15,500.00]
+after check: box=[15,500.00]
+row summary after done: [PT010 · 15,500.00 · 3.0 · 465.00]
+probe1b held value before focus: [15,500.00]
+probe1b focused: box=[15,500.00] kbd=True
+probe1b MAIN after home+5s+return: box=[15,500.00] (was [15,500.00]) focused-edittext=True kbd=True
+probe1b trial2: box=[15,500.00]
+probe1b trial3: box=[15,500.00]

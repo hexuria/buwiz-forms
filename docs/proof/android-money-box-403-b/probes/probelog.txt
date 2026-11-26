@@ -1,0 +1,15 @@
+probe setup: focused box=[1,234.56] kbd=True
+PROBE1 F3: after return box=[1,234.56] kbd_up=True focused-edittext=True
+PROBE1 exact first-edittext text=[1,234.56]
+PROBE1 trial2: box=[123.46] kbd=True
+PROBE1 trial3: box=[1,234.56] kbd=True
+PROBE1 trial4: box=[123.46] kbd=True
+probe1 repeats done
+PROBE3 setup box=[1,234.56] bounds=(110,50)-(1007,171)
+PROBE3a long-press: menu-visible=[]
+PROBE3a after-digit9 box=[91,234.56]  (9 alone=replaced-all; 91,234.56-ish=inserted)
+PROBE3b tapping at (838,1581) box bounds x1=110 x2=1007
+PROBE3b after-tap-on-4 + digit7: box=[1,234.56] (1,7234.56-ish or 1,274.56 patterns reveal caret)
+probe3 done
+PROBE3b-redo tap (866,1581) bounds y=1521-1642
+PROBE3b-redo after-focus box=[1,234.56] after-digit7 box=[71,234.56]

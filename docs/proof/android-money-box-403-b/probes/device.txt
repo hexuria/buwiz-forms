@@ -1,0 +1,6 @@
+35
+com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME
+buwiz
+buwiz_api35
+    versionName=14.2.09.629370537-preload-x86_64
+image.sysdir.1 = system-images/android-35/google_apis/x86_64/
