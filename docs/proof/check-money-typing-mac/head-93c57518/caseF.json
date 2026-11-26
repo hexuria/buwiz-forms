@@ -1,0 +1,152 @@
+[
+ {
+  "label": "F first key 0ms",
+  "runs": [
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   }
+  ]
+ },
+ {
+  "label": "F first key 120ms",
+  "runs": [
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   },
+   {
+    "Btyping": "999",
+    "Bafter": "999.00",
+    "savedA": 1000.0,
+    "savedB": 999.0,
+    "replaced": true
+   }
+  ]
+ }
+]

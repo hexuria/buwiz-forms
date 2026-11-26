@@ -1,0 +1,200 @@
+[
+ {
+  "label": "E first key 0ms",
+  "wrong": 0,
+  "runs": [
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   }
+  ]
+ },
+ {
+  "label": "E first key 50ms",
+  "wrong": 0,
+  "runs": [
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   }
+  ]
+ },
+ {
+  "label": "E first key 100ms",
+  "wrong": 0,
+  "runs": [
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   },
+   {
+    "states_end": "15000.50",
+    "shown": "15,000.50",
+    "saved": 15000.5,
+    "verdict": "right"
+   }
+  ]
+ }
+]

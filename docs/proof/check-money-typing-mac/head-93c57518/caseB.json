@@ -1,0 +1,54 @@
+[
+ {
+  "label": "B1 tab-in type 7",
+  "states": [
+   "1,234.56",
+   "7"
+  ],
+  "shown": "7.00",
+  "saved": 7.0,
+  "msgs": []
+ },
+ {
+  "label": "B2 tab-in right type 9",
+  "states": [
+   "1,234.56",
+   "1,234.569"
+  ],
+  "shown": "1,234.57",
+  "saved": 1234.57,
+  "msgs": []
+ },
+ {
+  "label": "B3 first-click x1335 type 9",
+  "states": [
+   "1,234.56",
+   "1,2934.56"
+  ],
+  "shown": "12,934.56",
+  "saved": 12934.56,
+  "msgs": []
+ },
+ {
+  "label": "B4 cmd+a backspace leave",
+  "states": [
+   ""
+  ],
+  "shown": "0.00",
+  "saved": 0.0,
+  "msgs": []
+ },
+ {
+  "label": "B5 end 4xbackspace tab",
+  "states": [
+   "1,234.56",
+   "1,234.5",
+   "1,234.",
+   "1,234",
+   "1,23"
+  ],
+  "shown": "123.00",
+  "saved": 123.0,
+  "msgs": []
+ }
+]

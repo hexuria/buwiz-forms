@@ -1,0 +1,36 @@
+[
+ {
+  "label": "D1p paste 1500x",
+  "pasted": "1500x",
+  "shown": "1,234.56",
+  "saved": 1234.56,
+  "shot": "pd1"
+ },
+ {
+  "label": "D2p paste 12a3",
+  "pasted": "12a3",
+  "shown": "1,234.56",
+  "saved": 1234.56,
+  "shot": "pd2"
+ },
+ {
+  "label": "D3p paste 15000..50",
+  "pasted": "15000..50",
+  "shown": "1,234.56",
+  "saved": 1234.56,
+  "shot": "pd3"
+ },
+ {
+  "label": "D4p paste 20 digits",
+  "pasted": "12345678901234567890",
+  "shown": "1,234.56",
+  "saved": 1234.56,
+  "shot": "pd4"
+ },
+ {
+  "label": "letter probe",
+  "after12": "12",
+  "afterA": "12a",
+  "after3": "12a3"
+ }
+]

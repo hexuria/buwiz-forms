@@ -1,0 +1,85 @@
+[
+ {
+  "label": "C1 1500,50",
+  "states": [
+   "",
+   "1",
+   "15",
+   "150",
+   "1500",
+   "1500,",
+   "1500,5",
+   "1500,50"
+  ],
+  "shown": "1,500.50",
+  "saved": 1500.5,
+  "msgs": [
+   "Theme: system, press to change",
+   "Schedule 1 \u00b7 Computation of Tax (Attach additional sheet/s, if necessary)",
+   "Row 1, PT010 \u00b7 1,500.50 \u00b7 3.0 \u00b7 45.02. Open",
+   "Total Tax Due (Sum of Items 1 to 6): 45.02",
+   "Schedule 1 \u00b7 Computation of Tax (Attach additional sheet/s, if necessary)",
+   "Alphanumeric Tax Code (ATC), row 1: PT010 \u2014 PERSON EXEMPT FROM VAT UNDER SEC. 109(BB) (SEC. 116) (3.0%)"
+  ]
+ },
+ {
+  "label": "C2 1,500",
+  "states": [
+   "",
+   "1",
+   "1,",
+   "1,5",
+   "1,50",
+   "1,500"
+  ],
+  "shown": "1,500.00",
+  "saved": 1500.0,
+  "msgs": [
+   "Theme: system, press to change",
+   "Schedule 1 \u00b7 Computation of Tax (Attach additional sheet/s, if necessary)",
+   "Row 1, PT010 \u00b7 1,500.00 \u00b7 3.0 \u00b7 45.00. Open",
+   "Total Tax Due (Sum of Items 1 to 6): 45.00",
+   "Schedule 1 \u00b7 Computation of Tax (Attach additional sheet/s, if necessary)",
+   "Alphanumeric Tax Code (ATC), row 1: PT010 \u2014 PERSON EXEMPT FROM VAT UNDER SEC. 109(BB) (SEC. 116) (3.0%)"
+  ]
+ },
+ {
+  "label": "C3 15,00,50",
+  "states": [
+   "",
+   "1",
+   "15",
+   "15,",
+   "15,0",
+   "15,00",
+   "15,00,",
+   "15,00,5",
+   "15,00,50"
+  ],
+  "shown": "0.00",
+  "saved": 0.0,
+  "msgs": [
+   "Theme: system, press to change",
+   "Schedule 1 \u00b7 Computation of Tax (Attach additional sheet/s, if necessary)",
+   "Total Tax Due (Sum of Items 1 to 6): 0.00",
+   "Schedule 1 \u00b7 Computation of Tax (Attach additional sheet/s, if necessary)",
+   "Alphanumeric Tax Code (ATC), row 1: PT010 \u2014 PERSON EXEMPT FROM VAT UNDER SEC. 109(BB) (SEC. 116) (3.0%)"
+  ]
+ },
+ {
+  "label": "C4 paste 1500,50 over 1234.56",
+  "states": [
+   "1500,50"
+  ],
+  "shown": "1,234.56",
+  "saved": 1234.56,
+  "msgs": [
+   "Theme: system, press to change",
+   "Schedule 1 \u00b7 Computation of Tax (Attach additional sheet/s, if necessary)",
+   "Row 1, PT010 \u00b7 1,234.56 \u00b7 3.0 \u00b7 37.04. Open",
+   "Total Tax Due (Sum of Items 1 to 6): 37.04",
+   "Schedule 1 \u00b7 Computation of Tax (Attach additional sheet/s, if necessary)",
+   "Alphanumeric Tax Code (ATC), row 1: PT010 \u2014 PERSON EXEMPT FROM VAT UNDER SEC. 109(BB) (SEC. 116) (3.0%)"
+  ]
+ }
+]
