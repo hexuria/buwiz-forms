@@ -239,6 +239,8 @@ export interface HeaderInfo {
   accountFix: boolean;
   /** The send's outcome is unknown: the page offers "The email came" and "It did not arrive". */
   canResolve: boolean;
+  /** The worker is asking Buwiz how a send it did not see end went (`send` checking): nothing for the person to answer or cancel. */
+  checkingSend: boolean;
   profileUpdates: string[];
   profileDiffers: string[];
   profileChanged: string[];
@@ -4157,6 +4159,7 @@ export class FormSession {
       sendNotice: send?.stage === "refused" && s.editable ? send.line : "",
       accountFix: send?.stage === "refused" && s.editable && ACCOUNT_FIX_CODES.includes(send.code ?? ""),
       canResolve: Boolean(send?.can_resolve) && s.status === "Queued" && !s.editable,
+      checkingSend: send?.stage === "checking" && s.status === "Queued" && !s.editable,
       profileUpdates: s.profileUpdates,
       profileDiffers: s.editable ? s.profileDiffers : [],
       profileChanged: !s.editable ? s.profileChanged : [],

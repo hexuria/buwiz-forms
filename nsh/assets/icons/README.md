@@ -1,6 +1,6 @@
 # Icons
 
-The 55 SVGs from app/icons, copied byte for byte (checked with cmp). Most are Lucide icons. Two are brand artwork and not Lucide: bagong-pilipinas and e_logo. Use one by its name without .svg, for example "check".
+The SVGs from app/icons, copied byte for byte (checked with cmp). Most are Lucide icons. One is brand artwork and not Lucide: bagong-pilipinas. (The old "e" mark is gone: the Windows menu row shows the Buwiz Forms logo, nsh/shell/app-mark.png, made by assets/brand/make_icons.py.) Use one by its name without .svg, for example "check".
 
 Names:
 
@@ -19,7 +19,6 @@ Names:
 - chevrons-up-down
 - circle-check
 - copy
-- e_logo
 - eye-off
 - eye
 - file-text

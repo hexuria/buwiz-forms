@@ -1,15 +1,22 @@
-// Settings > Account > Buwiz (old AccountCard): the cloud account. Separate from the PIN that unlocks this computer. Filing keeps
-// working when the server is unreachable.
-import { openUrl } from "nsh";
-import { AppButton, Card, deviceCopy, Line, SettingRow } from "../../ui";
+// Settings > Account > Buwiz account (old AccountCard): the cloud account. Separate from the profile on this computer (the PIN
+// that unlocks it, Identity.tsx). Filing keeps working when the server is unreachable. Signing in happens on the gate only
+// (screens/auth/Gate.tsx): Sign in here shows it. Sign out of Buwiz asks once first, since signing back in costs an email and a
+// code.
+import { openUrl, signal, View } from "nsh";
+import { AppButton, Card, deviceCopy, Dialog, Line, SettingRow, Text } from "../../ui";
 import { cloud, openAccount, signIn, signOut } from "./cloud";
 import { accountHint, deletionPageUrl, serverHint, showsServer } from "./logic";
 
+/** What signing out of Buwiz does, said before it does it ("this device" on touch). */
+export const SIGN_OUT_SENTENCE = "You will go back to the sign-in page. Your drafts and returns stay on this computer.";
+
+/** The account: who is signed in (or Sign in), the server, a practice account, deletion. */
 export function BuwizCard() {
   openAccount();
+  const asking = signal(false);
   const status = () => cloud.status();
-  const who = () => (status().signed_in ? status().email || status().user_id || "Signed in" : "Not signed in");
-  const hint = () => deviceCopy(cloud.busy() ? status().detail || "Waiting…" : cloud.failure() || accountHint(who(), status().detail || ""));
+  const who = () => (status().signed_in ? status().email || status().user_id || "Signed in" : "Not signed in to Buwiz");
+  const hint = () => deviceCopy(cloud.failure() ?? accountHint(status().signed_in ? who() : "Not signed in", status().detail || ""));
   return (
     <Card testID="settings-account">
       <If when={showsServer(status())}>
@@ -20,24 +27,15 @@ export function BuwizCard() {
       <SettingRow testID="settings-account-who" title={who()} hint={hint()}>
         <If
           when={status().signed_in}
-          else={
-            <AppButton
-              testID="settings-account-sign-in"
-              label={cloud.busy() ? "Waiting…" : "Sign in"}
-              variant="primary"
-              size="sm"
-              disabled={cloud.busy()}
-              onPress={() => void signIn()}
-            />
-          }
+          else={<AppButton testID="settings-account-sign-in" label="Sign in" variant="primary" size="sm" onPress={signIn} />}
         >
           <AppButton
             testID="settings-account-sign-out"
-            label={cloud.busy() ? "Signing out…" : "Sign out"}
+            label={cloud.busy() ? "Signing out…" : "Sign out of Buwiz"}
             variant="ghost"
             size="sm"
             disabled={cloud.busy()}
-            onPress={() => void signOut()}
+            onPress={() => asking.set(true)}
           />
         </If>
       </SettingRow>
@@ -55,6 +53,22 @@ export function BuwizCard() {
           />
         </SettingRow>
       </If>
+      <Dialog testID="settings-sign-out-confirm" width={420} open={asking()} onOpenChange={(open) => !open && asking.set(false)}>
+        <View class="gap-3 p-5">
+          <Text variant="title" testID="settings-sign-out-sentence">{deviceCopy(SIGN_OUT_SENTENCE)}</Text>
+          <AppButton
+            testID="settings-sign-out-yes"
+            variant="primary"
+            block
+            label="Sign out of Buwiz"
+            onPress={() => {
+              asking.set(false);
+              void signOut();
+            }}
+          />
+          <AppButton testID="settings-sign-out-cancel" block label="Cancel" onPress={() => asking.set(false)} />
+        </View>
+      </Dialog>
     </Card>
   );
 }

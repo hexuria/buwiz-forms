@@ -44,6 +44,29 @@ bump-build:
     }
     uv run scripts/bump_build.py
 
+# Covers iPhone, iPad, Mac, Windows, Linux, Android, the tray and the menu-row mark, and lists each file it wrote.
+# With a path, that SVG is copied in as the new source first: `just icons ~/new-logo.svg`.
+# Needs uv (it fetches Pillow) and rsvg-convert (brew install librsvg).
+# Rebuild every app icon from assets/brand/buwiz-forms.svg
+icons svg="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{svg}}" ]; then
+        cp "{{svg}}" assets/brand/buwiz-forms.svg
+        echo "new source: {{svg}} -> assets/brand/buwiz-forms.svg"
+    fi
+    uv run -q --no-project --with 'pillow>=11.1' python assets/brand/make_icons.py
+
+# Local only, not a CI job: another machine's librsvg can draw edges differently. `just icons` fixes a failure.
+# Exit 1 when a committed icon is not what assets/brand/buwiz-forms.svg gives
+icons-check:
+    uv run -q --no-project --with 'pillow>=11.1' --with numpy python assets/brand/make_icons.py --check
+
+# Then `just icons`. Needs uv (it fetches Pillow and NumPy) and rsvg-convert. assets/brand/parts/README.md says what each part is.
+# Rebuild assets/brand/buwiz-forms.svg from the logo's eight parts in assets/brand/parts/
+logo *args:
+    uv run -q --no-project --with 'pillow>=11.1' --with numpy python assets/brand/parts/merge.py assets/brand/buwiz-forms.svg {{args}}
+
 # Show available commands
 help:
     @just --list
@@ -564,7 +587,38 @@ _package-mac-appstore args="": build-frozen-html-identity
             exit 1
         fi
     fi
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    # A store package is built in this checkout's own folder, never the shared ~/BuwizNsh/target-nsh: Cargo cannot tell two
+    # checkouts of the same crate version apart, so a shared folder can link another worktree's bir-core (its forms) with no
+    # error, and the package would carry another branch's form data. A CARGO_TARGET_DIR set by the caller still wins.
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/nsh-store}"
+    # A store package comes only from the pinned NSH: the nsh tool built at NSH_PINNED_REF (NSH_TOOLS names its folder,
+    # docs/platforms/ios.md) and the ../nsh checkout beside this one at that commit. Anything else is refused.
+    pin="$(sed -n 's/^ *NSH_PINNED_REF: *//p' "$root/.github/workflows/nsh.yml" | head -1)"
+    tool="$(nsh --version 2>/dev/null || echo missing)"
+    tool_ref="$(printf '%s' "$tool" | sed -n 's/.*(\([0-9a-f]\{7,\}\)).*/\1/p')"
+    kit="$(git -C "$root/../nsh" rev-parse HEAD 2>/dev/null || true)"
+    if [ -z "$pin" ] || [ -z "$tool_ref" ] || [ "${pin#"$tool_ref"}" = "$pin" ]; then
+        echo "❌ The nsh tool ($tool) is not built at the NSH pin ${pin:0:8}: set NSH_TOOLS to a tools folder built at the pin (docs/platforms/ios.md)." >&2; exit 1
+    fi
+    if [ "$kit" != "$pin" ]; then
+        echo "❌ ../nsh beside this checkout is at ${kit:-nothing}, not the NSH pin $pin: check it out there first." >&2; exit 1
+    fi
+    dirty=""
+    git -C "$root" diff --quiet HEAD -- || dirty=" (with uncommitted changes)"
+    # The pinned toolchain's own cargo, first on PATH (the nsh tool and nsh/mas/cargo-with-mas.sh call `cargo`): it honours
+    # CARGO_TARGET_DIR. The owner's cargo fork (huacnlee/cargo) stays everyone's everyday cargo, but it ignores CARGO_TARGET_DIR and
+    # shares one build folder between every checkout, so a store package is refused if it is the cargo found here.
+    toolchain_cargo="$(rustup which cargo 2>/dev/null || true)"
+    if [ -z "$toolchain_cargo" ]; then
+        echo "❌ rustup finds no cargo for this checkout's toolchain (rust-toolchain.toml)." >&2; exit 1
+    fi
+    export PATH="$(dirname "$toolchain_cargo"):$PATH"
+    cargo_v="$(cargo --version 2>/dev/null || echo "cargo missing")"
+    case "$cargo_v" in
+        *huacnlee*) echo "❌ $cargo_v is the cargo fork, which shares one build folder between checkouts: a store package needs the toolchain's own cargo." >&2; exit 1 ;;
+    esac
+    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, $cargo_v, folder $CARGO_TARGET_DIR"
+    echo "$PROVENANCE" >&2
     echo "Building the NSH app for the Mac App Store ($ARCH, build {{BUILD_NUMBER}}, agent=$NSH_MAS_AGENT)..."
     rm -rf "$OUT"
     mkdir -p "$OUT"
@@ -620,6 +674,93 @@ _package-mac-appstore args="": build-frozen-html-identity
         echo "✅ Unsigned PKG created: $PKG_PATH"
         echo "⚠️  Note: You must also codesign the .pkg with an 'Apple Distribution' certificate before submitting."
     fi
+    echo "$PROVENANCE, build {{BUILD_NUMBER}}" > "${PKG_PATH%.pkg}.provenance.txt"
+    echo "   $PROVENANCE"
+
+# Google Play bundle (docs/platforms/android.md): an Android App Bundle for phones and tablets with the Play application
+# id com.buwiz.ebirforms (nsh.json keeps dev.goldcoders.bir for every other system and for development builds), the
+# target API level and backup switch of nsh.json's "android", and versionCode = the build number (App Store Connect's
+# next, as `just app` uses, or the number given: `just play-bundle 28`). Needs no secret: the bundle comes out UNSIGNED, and the owner signs it with the
+# upload key (`just play-sign`). nsh package always signs, with the debug key here; `android_bundle.py prepare` takes that
+# signature off with the updater's source (Google Play updates the app; the updater never starts on a phone).
+[macos]
+play-bundle build="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    umask 022
+    root="$(pwd)"
+    BUILD="{{build}}"
+    if [ -z "$BUILD" ]; then
+        set -a && source .env && set +a
+        BUILD="$(uv run scripts/bump_build.py --print-next)"
+    fi
+    case "$BUILD" in ''|*[!0-9]*) echo "Invalid build number: $BUILD" >&2; exit 1 ;; esac
+    TARGET_SDK="$({{PYTHON}} -c 'import json; print(json.load(open("nsh/nsh.json"))["android"]["targetSdk"])')"
+    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one.
+    unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV
+    # nsh builds libnsh.so in its generated workspace, which has no [profile.release]: this repository's own profile never
+    # applies there, and Cargo's defaults make a 116 MB library. These make it 84 MB (24 MB to download) on arm64.
+    # Not opt-level z and not panic=abort until such a build has been used on a real phone (docs/platforms/android.md).
+    export CARGO_PROFILE_RELEASE_LTO=fat CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 CARGO_PROFILE_RELEASE_OPT_LEVEL=s
+    OUT="$root/{{RELEASE_DIR}}/android"
+    AAB="$root/{{RELEASE_DIR}}/{{APP_NAME}}-Android-{{VERSION}}-$BUILD.aab"
+    rm -rf "$OUT" "$AAB"
+    mkdir -p "$OUT"
+    (cd nsh && nsh package --target android --format aab --abi arm64-v8a,armeabi-v7a --id com.buwiz.ebirforms \
+        --build "$BUILD" --app-version "{{VERSION}}" -o "$OUT")
+    {{PYTHON}} scripts/android_bundle.py prepare "$OUT/{{APP_NAME}}.aab" "$AAB"
+    {{PYTHON}} scripts/android_bundle.py check "$AAB" --package com.buwiz.ebirforms --version-code "$BUILD" --target-sdk "$TARGET_SDK"
+    echo "✅ $AAB ({{VERSION}}, versionCode $BUILD, unsigned): the owner signs it with just play-sign"
+
+# Once, by the owner: the Google Play upload key (docs/platforms/android.md, "The upload key"). keytool asks for the
+# password on the keyboard; it goes into the password manager with the file, and nowhere else.
+[macos]
+play-upload-key:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    KEYSTORE="${PLAY_UPLOAD_KEYSTORE:-$HOME/Keys/ebirforms-android/upload.jks}"
+    [ ! -e "$KEYSTORE" ] || { echo "❌ $KEYSTORE exists: the upload key is made once." >&2; exit 1; }
+    JDK="$(just _play-jdk)"
+    mkdir -p "$(dirname "$KEYSTORE")" && chmod 700 "$(dirname "$KEYSTORE")"
+    "$JDK/keytool" -genkeypair -v -keystore "$KEYSTORE" -storetype PKCS12 -alias upload -keyalg RSA -keysize 2048 \
+        -validity 10000 -dname "CN=eBIRForms upload, O=Buwiz, C=PH"
+    chmod 600 "$KEYSTORE"
+    echo "✅ $KEYSTORE: attach it to the password manager entry that holds its password."
+
+# The owner signs the bundle `just play-bundle` made with the upload key; jarsigner asks for the password on the keyboard.
+# Writes <bundle>-signed.aab beside it and shows it in Finder, ready to drag into the Play Console.
+[macos]
+play-sign bundle="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    KEYSTORE="${PLAY_UPLOAD_KEYSTORE:-$HOME/Keys/ebirforms-android/upload.jks}"
+    [ -f "$KEYSTORE" ] || { echo "❌ No upload key at $KEYSTORE (just play-upload-key, once)." >&2; exit 1; }
+    AAB="{{bundle}}"
+    if [ -z "$AAB" ]; then
+        AAB="$(ls -t {{RELEASE_DIR}}/{{APP_NAME}}-Android-*.aab 2>/dev/null | grep -v -- '-signed\.aab$' | head -1 || true)"
+    fi
+    [ -f "$AAB" ] || { echo "❌ No bundle to sign: run just play-bundle first." >&2; exit 1; }
+    if unzip -l "$AAB" | grep -q ' META-INF/'; then
+        echo "❌ $AAB is already signed: sign the unsigned bundle play-bundle wrote." >&2; exit 1
+    fi
+    JDK="$(just _play-jdk)"
+    SIGNED="${AAB%.aab}-signed.aab"
+    cp "$AAB" "$SIGNED"
+    "$JDK/jarsigner" -sigalg SHA256withRSA -digestalg SHA-256 -keystore "$KEYSTORE" "$SIGNED" upload
+    "$JDK/jarsigner" -verify "$SIGNED" | grep -q "jar verified" || { echo "❌ $SIGNED does not verify." >&2; exit 1; }
+    echo "✅ $SIGNED: drag it into the Play Console (Test and release > the track > Create new release)."
+    open -R "$SIGNED"
+
+# The JDK's bin folder: JAVA_HOME's, Homebrew's or Android Studio's. Never /usr/bin's, which is macOS's stub.
+[macos]
+_play-jdk:
+    #!/usr/bin/env bash
+    for bin in "${JAVA_HOME:+$JAVA_HOME/bin}" /opt/homebrew/opt/openjdk/bin "/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin"; do
+        if [ -n "$bin" ] && [ -x "$bin/jarsigner" ] && "$bin/jarsigner" -help >/dev/null 2>&1; then echo "$bin"; exit 0; fi
+    done
+    echo "❌ No JDK: brew install openjdk" >&2
+    exit 1
 
 # App Store iOS package (the devices are nsh.json's ios.infoPlist.UIDeviceFamily): nsh signs it with the App Store profile,
 # then the store's additions go in and the bundle is signed again with the same entitlements. CODESIGN_IDENTITY is the
@@ -644,7 +785,38 @@ ios-appstore: build-frozen-html-identity
     set -a && source .env && set +a
     BUILD="$(uv run scripts/bump_build.py --print-next)"
     case "$BUILD" in ''|*[!0-9]*) echo "Invalid App Store build number: $BUILD" >&2; exit 1 ;; esac
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    # A store package is built in this checkout's own folder, never the shared ~/BuwizNsh/target-nsh: Cargo cannot tell two
+    # checkouts of the same crate version apart, so a shared folder can link another worktree's bir-core (its forms) with no
+    # error, and the package would carry another branch's form data. A CARGO_TARGET_DIR set by the caller still wins.
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/nsh-store}"
+    # A store package comes only from the pinned NSH: the nsh tool built at NSH_PINNED_REF (NSH_TOOLS names its folder,
+    # docs/platforms/ios.md) and the ../nsh checkout beside this one at that commit. Anything else is refused.
+    pin="$(sed -n 's/^ *NSH_PINNED_REF: *//p' "$root/.github/workflows/nsh.yml" | head -1)"
+    tool="$(nsh --version 2>/dev/null || echo missing)"
+    tool_ref="$(printf '%s' "$tool" | sed -n 's/.*(\([0-9a-f]\{7,\}\)).*/\1/p')"
+    kit="$(git -C "$root/../nsh" rev-parse HEAD 2>/dev/null || true)"
+    if [ -z "$pin" ] || [ -z "$tool_ref" ] || [ "${pin#"$tool_ref"}" = "$pin" ]; then
+        echo "❌ The nsh tool ($tool) is not built at the NSH pin ${pin:0:8}: set NSH_TOOLS to a tools folder built at the pin (docs/platforms/ios.md)." >&2; exit 1
+    fi
+    if [ "$kit" != "$pin" ]; then
+        echo "❌ ../nsh beside this checkout is at ${kit:-nothing}, not the NSH pin $pin: check it out there first." >&2; exit 1
+    fi
+    dirty=""
+    git -C "$root" diff --quiet HEAD -- || dirty=" (with uncommitted changes)"
+    # The pinned toolchain's own cargo, first on PATH (the nsh tool and nsh/mas/cargo-with-mas.sh call `cargo`): it honours
+    # CARGO_TARGET_DIR. The owner's cargo fork (huacnlee/cargo) stays everyone's everyday cargo, but it ignores CARGO_TARGET_DIR and
+    # shares one build folder between every checkout, so a store package is refused if it is the cargo found here.
+    toolchain_cargo="$(rustup which cargo 2>/dev/null || true)"
+    if [ -z "$toolchain_cargo" ]; then
+        echo "❌ rustup finds no cargo for this checkout's toolchain (rust-toolchain.toml)." >&2; exit 1
+    fi
+    export PATH="$(dirname "$toolchain_cargo"):$PATH"
+    cargo_v="$(cargo --version 2>/dev/null || echo "cargo missing")"
+    case "$cargo_v" in
+        *huacnlee*) echo "❌ $cargo_v is the cargo fork, which shares one build folder between checkouts: a store package needs the toolchain's own cargo." >&2; exit 1 ;;
+    esac
+    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, $cargo_v, folder $CARGO_TARGET_DIR"
+    echo "$PROVENANCE" >&2
     OUT="$root/{{RELEASE_DIR}}/ios"
     APP="$OUT/{{APP_NAME}}.app"
     IPA="$root/{{RELEASE_DIR}}/{{APP_NAME}}-iOS-{{VERSION}}.ipa"
@@ -671,7 +843,9 @@ ios-appstore: build-frozen-html-identity
     ditto "$APP" "$STAGE/Payload/{{APP_NAME}}.app"
     (cd "$STAGE" && zip -qry "$IPA" Payload)
     rm -rf "$STAGE"
+    echo "$PROVENANCE, build $BUILD" > "${IPA%.ipa}.provenance.txt"
     echo "✅ $IPA ({{VERSION}}, build $BUILD)"
+    echo "   $PROVENANCE"
 
 # Uploads the iOS package `just ios-appstore` made, with the App Store Connect key in .env (as testflight-upload does).
 [macos]
@@ -681,7 +855,7 @@ ios-appstore-upload:
     set -a && source .env && set +a
     IPA="{{RELEASE_DIR}}/{{APP_NAME}}-iOS-{{VERSION}}.ipa"
     [ -f "$IPA" ] || { echo "❌ No $IPA: run just ios-appstore first." >&2; exit 1; }
-    ~/BuwizNsh/tools/bin/nsh publish ios "$IPA" --app-id 6767850225 \
+    "${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin/nsh" publish ios "$IPA" --app-id 6767850225 \
         --issuer-id "$APP_STORE_ISSUER_ID" --key-id "$APP_STORE_KEY_ID" --private-key "$APP_STORE_P8_PATH"
 
 [unix]

@@ -19,6 +19,22 @@ pub(super) fn is_audited_2551q_receipt_form_type(form_type: &str) -> bool {
     matches!(form_type, "2551Qv2018" | "2551Q")
 }
 
+/// Where a receipt came from: a BIR email (the matcher), or Dev Mode's
+/// simulated confirmation of a send it knows only simulated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReceiptSource {
+    BirEmail,
+    DevSimulation,
+}
+
+impl ReceiptSource {
+    /// A BIR email never confirms a dry run (it reached nobody); Dev Mode's
+    /// simulation confirms one on purpose.
+    pub(crate) fn may_confirm(self, dry_run: bool) -> bool {
+        !dry_run || self == Self::DevSimulation
+    }
+}
+
 impl Database {
     pub fn save_submission_receipt(
         &self,
@@ -156,9 +172,20 @@ impl Database {
         }
     }
 
+    /// A BIR email's receipt confirms the period's Submitted 2551Q, never a
+    /// dry run (it reached nobody; the receipt is then Ignored, as one with
+    /// no return is).
     pub fn confirm_2551q_from_receipt(
         &self,
         receipt: &SubmissionReceipt,
+    ) -> Result<ReceiptConfirmationOutcome, DbError> {
+        self.confirm_2551q_from_receipt_as(receipt, ReceiptSource::BirEmail)
+    }
+
+    fn confirm_2551q_from_receipt_as(
+        &self,
+        receipt: &SubmissionReceipt,
+        source: ReceiptSource,
     ) -> Result<ReceiptConfirmationOutcome, DbError> {
         if !is_audited_2551q_receipt_form_type(&receipt.form_type) {
             return Ok(ReceiptConfirmationOutcome::Ignored);
@@ -175,6 +202,13 @@ impl Database {
 
         // Only confirm forms that are currently in Submitted status
         if !matches!(draft.status, FilingStatus::Submitted) {
+            return Ok(ReceiptConfirmationOutcome::Ignored);
+        }
+        if !source.may_confirm(draft.submitted_dry_run) {
+            tracing::info!(
+                "Ignoring receipt {}: the 2551Q for its period was a dry run",
+                receipt.filename
+            );
             return Ok(ReceiptConfirmationOutcome::Ignored);
         }
         let receipt_id = receipt.id.ok_or_else(|| {
@@ -226,9 +260,19 @@ impl Database {
         Ok(ReceiptConfirmationOutcome::Confirmed)
     }
 
+    /// A BIR email's receipt confirms the period's Submitted 1601C, never a
+    /// dry run (see [`Self::confirm_2551q_from_receipt`]).
     pub fn confirm_1601c_from_receipt(
         &self,
         receipt: &SubmissionReceipt,
+    ) -> Result<ReceiptConfirmationOutcome, DbError> {
+        self.confirm_1601c_from_receipt_as(receipt, ReceiptSource::BirEmail)
+    }
+
+    fn confirm_1601c_from_receipt_as(
+        &self,
+        receipt: &SubmissionReceipt,
+        source: ReceiptSource,
     ) -> Result<ReceiptConfirmationOutcome, DbError> {
         if !is_audited_1601c_receipt_form_type(&receipt.form_type) {
             return Ok(ReceiptConfirmationOutcome::Ignored);
@@ -244,6 +288,13 @@ impl Database {
         };
 
         if !matches!(draft.status, FilingStatus::Submitted) {
+            return Ok(ReceiptConfirmationOutcome::Ignored);
+        }
+        if !source.may_confirm(draft.submitted_dry_run) {
+            tracing::info!(
+                "Ignoring receipt {}: the 1601C for its period was a dry run",
+                receipt.filename
+            );
             return Ok(ReceiptConfirmationOutcome::Ignored);
         }
         let receipt_id = receipt.id.ok_or_else(|| {
@@ -292,19 +343,40 @@ impl Database {
         Ok(ReceiptConfirmationOutcome::Confirmed)
     }
 
-    /// Confirm whichever queued form the receipt belongs to.
+    /// Confirm whichever queued form the receipt of a BIR email belongs to.
+    /// A dry run is never confirmed: the receipt is Ignored, exactly as a
+    /// receipt with no matching return is (it stays saved, unmatched; no
+    /// alert, no notice).
     pub fn confirm_submission_from_receipt(
         &self,
         receipt: &SubmissionReceipt,
     ) -> Result<ReceiptConfirmationOutcome, DbError> {
+        self.confirm_submission_from_receipt_as(receipt, ReceiptSource::BirEmail)
+    }
+
+    /// Dev Mode's simulated BIR email ([`crate::dev_mode::simulate_bir_confirmation`],
+    /// debug builds only): the same matching, and it may confirm a dry run,
+    /// which is what it simulates. A real BIR email never comes this way.
+    pub(crate) fn confirm_simulated_submission_from_receipt(
+        &self,
+        receipt: &SubmissionReceipt,
+    ) -> Result<ReceiptConfirmationOutcome, DbError> {
+        self.confirm_submission_from_receipt_as(receipt, ReceiptSource::DevSimulation)
+    }
+
+    fn confirm_submission_from_receipt_as(
+        &self,
+        receipt: &SubmissionReceipt,
+        source: ReceiptSource,
+    ) -> Result<ReceiptConfirmationOutcome, DbError> {
         if is_audited_1601c_receipt_form_type(&receipt.form_type) {
-            self.confirm_1601c_from_receipt(receipt)
+            self.confirm_1601c_from_receipt_as(receipt, source)
         } else if is_audited_2551q_receipt_form_type(&receipt.form_type) {
-            self.confirm_2551q_from_receipt(receipt)
+            self.confirm_2551q_from_receipt_as(receipt, source)
         } else if let Some(kind) =
             crate::forms::queueable::QueueableKind::from_form_type(&receipt.form_type)
         {
-            crate::with_queueable_kind!(kind, F => self.confirm_queueable_from_receipt::<F>(receipt))
+            crate::with_queueable_kind!(kind, F => self.confirm_queueable_from_receipt_as::<F>(receipt, source))
         } else {
             Ok(ReceiptConfirmationOutcome::Ignored)
         }

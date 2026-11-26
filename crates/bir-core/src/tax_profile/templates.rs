@@ -100,7 +100,9 @@ pub enum TemplateSource {
     Filed {
         draft_id: i64,
     },
-    /// Snapshot of a return that was not filed (Draft or Queued) at the time.
+    /// Snapshot of a return that was not filed at the time: a Draft, a Queued
+    /// one, or a dry run (a Submitted return the worker only simulated,
+    /// [`crate::forms::dry_run`]).
     Return {
         draft_id: i64,
     },
@@ -657,7 +659,16 @@ mod tests {
         ] {
             assert_eq!(TemplateSource::from_db(&source.to_db()).unwrap(), source);
         }
-        for bad in ["", "filed:", "filed:x", "return:", "copy:", "kept"] {
+        for bad in [
+            "",
+            "filed:",
+            "filed:x",
+            "dry_run:",
+            "dry_run:x",
+            "return:",
+            "copy:",
+            "kept",
+        ] {
             assert!(TemplateSource::from_db(bad).is_err(), "{bad}");
         }
     }

@@ -270,6 +270,22 @@ const FILER_TYPED: &[(&str, &str)] = &[
         "Part IV item 2B Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered while Schedule A (Part IV.A) is open and clears it when Schedule A closes",
     ),
     (
+        "frm2552:txtPg1P2I17TaxPaidInPrevRtrn",
+        "Item 17 Tax Paid in Return Previously Filed: disabled at load (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json source line 866) until Amended Return is Yes; form_2552.rs recompute zeroes tax_paid_previous unless is_amended",
+    ),
+    (
+        "frm2200Av2020:txtSched1_xa_others1_Due",
+        "Schedule 1 Others row 1 Basic Excise Tax Due: enabled at load (rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json source line 2200, disabled=false, readonly=false); form_2200a.rs keeps row.amounts.tax_due as entered",
+    ),
+    (
+        "frm2200Av2020:txtSched1_xa_others2_Due",
+        "Schedule 1 Others row 2 Basic Excise Tax Due: enabled at load (rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json source line 2226, disabled=false, readonly=false); form_2200a.rs keeps row.amounts.tax_due as entered",
+    ),
+    (
+        "frm2200Av2020:txtSched1_xa_others3_Due",
+        "Schedule 1 Others row 3 Basic Excise Tax Due: enabled at load (rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json source line 2252, disabled=false, readonly=false); form_2200a.rs keeps row.amounts.tax_due as entered",
+    ),
+    (
         "frm2550m:txtTax13B",
         "Item 13B Output Tax on Sales to Government: enabled at load (rules/forms/2550m-v2007/fixtures/runtime-control-inventory-v796.json source line 738, disabled=false, readonly=false); compute13B fills 12% on blur of 13A and leaves 13B editable",
     ),
@@ -1179,6 +1195,7 @@ fn skipped(top: &str) -> bool {
             submission_claimed_at: Some(String::new()),
             submission_claim_lease_until: Some(String::new()),
             submission_put_started_at: Some(String::new()),
+            relay_pending: Some(String::new()),
             submission_error: Some(String::new()),
             next_retry_at: Some(String::new()),
             trigger_date_entered: true,
@@ -1296,7 +1313,15 @@ fn echoes(kind: ValueKind, probe: &Value, official: &str) -> bool {
                 || value == AMOUNT_PROBE.round()
                 || (value - (AMOUNT_PROBE * 10.0).round() / 10.0).abs() < 0.005
         }),
-        ValueKind::Whole => official.trim().parse::<i64>().ok() == probe.as_i64(),
+        ValueKind::Whole => {
+            official.trim().parse::<i64>().ok() == probe.as_i64()
+                // 1702MX's NOLCO amounts file through the page's two-decimal
+                // formatCurrency (`7.00`): a whole probe still echoes when the
+                // shown number is the probe's integer.
+                || probe.as_i64().is_some_and(|probe_value| {
+                    parse_amount(official).is_some_and(|shown| shown == probe_value as f64)
+                })
+        }
         ValueKind::DatePart(date, part) => date.part_shown_by(official) == Some(part),
     }
 }
@@ -1815,6 +1840,96 @@ const MAX_GATE_VALUES: usize = 4;
 /// sampled, not walked).
 const MAX_CODES: usize = 24;
 
+/// Selects the official form carries as a 1-based option position while the
+/// draft keeps the option's code: `(form code, key prefix, array path, leaf
+/// field, rows, evidence)`. The position never echoes the code, so the probe
+/// derives these as "derived by the app" and the page refuses them as
+/// unfillable. The official option list is pinned data from the package
+/// itself; even so a binding is emitted only after the field map shows the
+/// position the pinned list promises, probed on a draft the leaf is set in.
+const INDEXED_SELECTS: &[(&str, &str, &str, &str, usize, &str)] = &[(
+    "2551Q",
+    "drpATC",
+    "/schedule_1",
+    "atc",
+    6,
+    "2551Q Schedule 1 rows 1-6: data/official-xml/2551q-v2018-atc-options.json \
+     (the package's own xml/atcCodes.xml); form_2551q_xml.rs writes drpATC{n} \
+     as the option's 1-based list position, never the code",
+)];
+
+/// One pinned indexed select's official options: `(position, code)`.
+fn indexed_select_options(form: &str) -> Vec<(String, String)> {
+    match form {
+        "2551Q" => crate::forms::form_2551q_xml::official_atc_options()
+            .iter()
+            .map(|option| (option.value.clone(), option.code.clone()))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Bind the [`INDEXED_SELECTS`] boxes the echo probe cannot see, verifying
+/// each against the field map first: a draft with the leaf set to a probed
+/// code must carry the position the pinned official list promises. Rows past
+/// the seed's last are probed by repeating it, as `grow_rows` does. A box
+/// whose verification fails keeps its unmapped reason.
+fn bind_indexed_selects(kind: AgentFormKind, seeds: &[Value], def: &mut AgentFormDef) {
+    for (form, prefix, array, field, rows, _evidence) in INDEXED_SELECTS {
+        if *form != def.form_code {
+            continue;
+        }
+        let options = indexed_select_options(form);
+        if options.is_empty() {
+            continue;
+        }
+        let Some(seed) = seeds.first() else {
+            continue;
+        };
+        let probes: Vec<(String, String)> = options.iter().take(2).cloned().collect();
+        for row in 0..*rows {
+            let key = format!("{prefix}{}", row + 1);
+            if def.bindings.contains_key(&key) || !def.boxes.iter().any(|entry| entry.key == key) {
+                continue;
+            }
+            let leaf = format!("{array}/{row}/{field}");
+            let verified = probes.iter().all(|(value, code)| {
+                let mut draft = seed.clone();
+                if let Some(Value::Array(items)) = draft.pointer_mut(array) {
+                    while items.len() <= row {
+                        let Some(last) = items.last().cloned() else {
+                            break;
+                        };
+                        items.push(last);
+                    }
+                }
+                pointer_set(&mut draft, &leaf, Value::from(code.as_str()));
+                probe_eval(kind, &draft).is_some_and(|(_, map)| map.get(&key) == Some(value))
+            });
+            if !verified {
+                continue;
+            }
+            let binding = Binding::Choice {
+                options: options
+                    .iter()
+                    .map(|(value, code)| ChoiceOption {
+                        value: value.clone(),
+                        set: BTreeMap::from([(leaf.clone(), Value::from(code.as_str()))]),
+                    })
+                    .collect(),
+            };
+            def.bindings.insert(
+                key.clone(),
+                BoundBox {
+                    binding,
+                    lock: None,
+                },
+            );
+            def.unmapped.remove(&key);
+        }
+    }
+}
+
 /// Derive the bindings of `kind`'s boxes from sample drafts.
 ///
 /// `profile_values` are the sample taxpayer profile's strings (name,
@@ -1928,6 +2043,7 @@ pub fn derive(
             }
         }
     }
+    bind_indexed_selects(kind, seeds, &mut def);
     extend_rows(&mut def);
     let real: Vec<&Value> = probed_seeds
         .iter()
@@ -2312,7 +2428,7 @@ fn verify(kind: AgentFormKind, def: &mut AgentFormDef, seeds: &[&Value]) {
                     Binding::Text { .. } => shown.to_ascii_uppercase().contains(expected.as_str()),
                     Binding::Amount { .. } => echoes(ValueKind::Amount, &Value::Null, &shown),
                     Binding::Whole { .. } => {
-                        shown.trim().parse::<i64>().ok() == Some(WHOLE_PROBES[0])
+                        echoes(ValueKind::Whole, &Value::from(WHOLE_PROBES[0]), &shown)
                     }
                     Binding::Choice { .. } => shown == *expected,
                 };

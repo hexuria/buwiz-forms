@@ -260,6 +260,13 @@ pub(crate) async fn preview(url: String, title: String, generation: u64, request
             &[JValue::Bool(0)],
         ))?;
         java(env.call_method(&settings, "setAllowFileAccess", "(Z)V", &[JValue::Bool(1)]))?;
+        // The sheet prints at its own sizes. A WebView draws no text smaller than 8 px unless told otherwise (both
+        // minimums default to 8), and the page's scale counts: an official sheet's 5 to 6.5 pt captions, and a value
+        // the app shrank to fit its cell, came out larger than the sheet gives them and ran over their neighbours.
+        // The text zoom is pinned at 100 % so no system or WebView text setting scales a printed return.
+        for (setter, value) in crate::print_android_policy::TEXT_SETTINGS {
+            java(env.call_method(&settings, setter, "(I)V", &[JValue::Int(value)]))?;
+        }
         let url = JObject::from(java(env.new_string(url))?);
         java(env.call_method(
             &view,

@@ -17,14 +17,29 @@ import { TabButton } from "./parts";
 import { ROUTES, TABS } from "./routes";
 import { themeIcon } from "./theme";
 import type { FormTarget } from "../screens/form/FormPage";
+import { backToSettingsList, sectionTitle } from "../screens/settings";
 
 const TAB_VIEWS: string[] = TABS.map((t) => t.view);
 
-/** What the header calls the page: the view's name, or the form code on a return. */
+/** The Settings section the route names (its own page in this layout), or null. */
+function settingsSection(): string | null {
+  const section = app.view() === "settings" ? app.params().section : null;
+  return typeof section === "string" ? section : null;
+}
+
+/** What the header calls the page: the view's name, the form code on a return, the section on a page of Settings. */
 function pageTitle(): string {
   const view = app.view();
   if (view === "form") return `Form ${(app.route().params.target as FormTarget | undefined)?.formCode ?? ""}`;
+  const section = settingsSection();
+  if (section) return sectionTitle(section);
   return view === "home" ? "eBIRForms" : ROUTES[view].label;
+}
+
+/** Back from the header: one step of history; a Settings section opened by name has none behind it and goes to the list. */
+function headerBack(): void {
+  if (settingsSection()) backToSettingsList();
+  else app.back();
 }
 
 export function NarrowBar() {
@@ -41,8 +56,8 @@ export function NarrowBar() {
       <If when={chromeNow().hamburger}>
         <MenuListButton testID="nb-menu" />
       </If>
-      <If when={app.canBack() && !TAB_VIEWS.includes(app.view())}>
-        <IconButton testID="nb-back" icon="arrow-left" tooltip="Back" onPress={() => app.back()} />
+      <If when={(app.canBack() || settingsSection() !== null) && !TAB_VIEWS.includes(app.view())}>
+        <IconButton testID="nb-back" icon="arrow-left" tooltip="Back" onPress={headerBack} />
       </If>
       <Text testID="nb-title" variant="emph" class="min-w-0 flex-1 pl-1" lines={1}>{pageTitle()}</Text>
       <AccountMenu />

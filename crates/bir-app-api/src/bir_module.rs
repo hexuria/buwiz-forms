@@ -2382,15 +2382,25 @@ pub(crate) fn after_path_prompt(
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     let answer: crate::hooks::PathAnswer = Box::new(move |choice| {
         let result = match choice {
-            PathChoice::Picked(path) => work(path),
+            PathChoice::Picked(path) => {
+                let done = work(path);
+                if let Err(error) = &done {
+                    tracing::warn!("Working with the file picked failed: {error}");
+                }
+                done
+            }
             PathChoice::Cancelled => Ok(HostObject::new().field("kind", "cancelled").into()),
-            PathChoice::Failed(error) => Err(HostError::new(format!(
-                "The file dialog could not open: {error}"
-            ))),
+            PathChoice::Failed(error) => {
+                tracing::warn!("The file dialog could not open: {error}");
+                Err(HostError::new(format!(
+                    "The file dialog could not open: {error}"
+                )))
+            }
         };
         let _ = sender.send(result);
     });
     if !prompt(answer) {
+        tracing::warn!("The file dialog could not open: no app is running to open it");
         return Err(HostError::new("no app is running to open the file dialog"));
     }
     Ok(Box::pin(async move {
@@ -2912,14 +2922,16 @@ pub fn module() -> HostModule {
         .function("pull_device_filings", |_| pull_device_filings())
         .function("shell_set_chrome", shell_set_chrome);
     let module = crate::cloud_account::register(module);
+    let module = crate::cloud_email::register(module);
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
     let module = crate::legacy_import_module::register(module);
     // bir-shell appends its scroll exports (GPUI elements) after these.
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}{}{}",
         crate::cloud_account::DECLARATIONS,
+        crate::cloud_email::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
         crate::screen_form_module::DECLARATIONS,
         crate::dashboard_module::DECLARATIONS,
@@ -3366,6 +3378,37 @@ mod tests {
         }
     }
 
+    /// While the worker asks Buwiz how the send went (`checking`), neither answer is taken and nothing moves.
+    #[test]
+    fn a_send_being_checked_with_buwiz_takes_no_answer() {
+        setup();
+        for (code, period, reason_key) in SHAPES {
+            let id = unknown_outcome(code, period, reason_key);
+            with_database(|db| {
+                db.conn_for_tests()
+                    .execute(
+                        "UPDATE form_drafts SET data_json = json_set(data_json, '$.relay_pending', ?1) WHERE id = ?2",
+                        (r#"{"submission_id":"s1"}"#, id),
+                    )
+                    .unwrap();
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(send_of(id)["stage"], "checking", "{code}");
+            assert_eq!(send_of(id)["can_resolve"], false, "{code}");
+            let before = stored_row(id);
+            for answer in ["received", "not_received"] {
+                let refused = resolve(code, period, answer).unwrap_err();
+                assert_eq!(
+                    refused.message(),
+                    NOT_WAITING_FOR_AN_ANSWER,
+                    "{code} {answer}"
+                );
+            }
+            assert_eq!(stored_row(id), before, "{code}");
+        }
+    }
+
     #[test]
     fn it_did_not_arrive_puts_each_shape_back_to_draft() {
         setup();
@@ -3451,7 +3494,10 @@ mod tests {
                 })
                 .unwrap();
             }
-            // This process's worker is sending it now.
+            // This process's worker is sending it now. The set of jobs in flight is one per process, and the other
+            // tests here answer for the same taxpayer and periods on their own threads: a period no other test uses,
+            // so marking this one in flight can never make their returns read as being sent.
+            let period = period + SHAPES.len() as i64;
             let id = unknown_outcome(code, period, reason_key);
             let before = stored_row(id);
             let (summary, _) =

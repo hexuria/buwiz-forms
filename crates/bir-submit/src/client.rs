@@ -48,8 +48,15 @@ pub struct SubmitConfig {
     /// Shown on the account site's device list.
     pub device_name: String,
     /// Public keys (base64url) the signed trust list must verify with:
-    /// [`trust::pinned_keys`] unless a test or lab sets its own in code.
+    /// [`trust::pinned_keys`] unless a test or lab sets its own in code, or
+    /// the host sets [`trust::pinned_keys_from`] with the value it read.
     pub trust_keys: Vec<String>,
+    /// This install's id, sent with the registration (the host's own; never
+    /// a raw hardware value).
+    pub install_id: Option<String>,
+    /// `ios`, `ipados`, `android`, `macos`, `windows` or `linux`, sent with
+    /// the registration.
+    pub platform: Option<String>,
 }
 
 /// An https URL, or an http one whose host is this machine.
@@ -83,6 +90,8 @@ impl SubmitConfig {
             server_url: url.trim_end_matches('/').to_owned(),
             device_name: format!("eBIRForms on {}", std::env::consts::OS),
             trust_keys: trust::pinned_keys(),
+            install_id: None,
+            platform: None,
         })
     }
 }
@@ -106,6 +115,17 @@ pub enum ClientError {
         code: String,
         message: String,
     },
+    /// A second registration on this sign-in was refused (`409
+    /// device_registered`) while the app holds no registered key: it lost
+    /// its device key (the key file or Keychain item is gone). Only a new
+    /// sign-in can register one. Not a try, and never tried again by itself.
+    #[error("This device's key is missing. Sign out and sign in again to send returns.")]
+    DeviceKeyMissing,
+    /// `409 install_in_use`: this install's device belongs to another live
+    /// sign-in. This client sends its install id from the start, so it should
+    /// never see it. Not a try, never tried again by itself.
+    #[error("Sign out and sign in again on this device.")]
+    InstallInUse,
     #[error("{0}")]
     Other(String),
     /// The server says this was not a try and nothing reached the BIR: a
@@ -140,6 +160,8 @@ impl ClientError {
             ClientError::NotATry { .. }
                 | ClientError::SignedOut
                 | ClientError::DeviceRevoked
+                | ClientError::DeviceKeyMissing
+                | ClientError::InstallInUse
                 | ClientError::Network(_)
         )
     }
@@ -210,6 +232,52 @@ pub struct Sent {
     pub receipt: Receipt,
 }
 
+/// What the host keeps about a send in progress, so a later process can ask
+/// the server how it ended ([`Submitter::settle`]) when this one dies first.
+/// It holds no token, no key and no part of the return: the submission's id,
+/// the ticket's id and the hash of the XML the receipt must name.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PendingSend {
+    /// The Buwiz server the submission was made on ([`SubmitConfig::server_url`]).
+    pub server: String,
+    pub submission_id: String,
+    /// The ticket's id, which the receipt must carry.
+    pub jti: String,
+    /// Lowercase hex SHA-256 of the plain XML that was sealed.
+    pub xml_sha256: String,
+    /// The app was about to open, or had opened, a connection toward the BIR.
+    pub opening: bool,
+    /// When the submission was made (the first note).
+    pub noted_at: DateTime<Utc>,
+}
+
+/// The host's note of a send's progress ([`Submitter::send_noting`]). An
+/// error stops the send before anything more leaves this computer.
+pub type Note<'a> = &'a (dyn Fn(&PendingSend) -> Result<(), String> + Send + Sync);
+
+/// What the server says of a [`PendingSend`] ([`Submitter::settle`]).
+#[derive(Clone, Debug)]
+pub enum Settled {
+    /// It reached the BIR (or the server's dry run): its receipt verified
+    /// against the trust list, the XML hash and the ticket id.
+    Sent(Box<Sent>),
+    /// It ended without a receipt, as the send itself would have said.
+    Failed(SendError),
+    /// The server could not be asked (offline, an error, signed out, another
+    /// server) or the submission is not final yet: ask again later.
+    NotYet,
+    /// The server does not know the submission (404).
+    Gone,
+}
+
+/// The statuses a submission ends in. Anything else is still under way.
+fn is_final_status(status: &str) -> bool {
+    matches!(
+        status,
+        "sent" | "dry_run" | "failed" | "expired" | "unknown"
+    )
+}
+
 /// The parts of an eBIRForms file name, `{TIN}-{form}-{period}#{email}#.xml`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileName {
@@ -237,6 +305,15 @@ impl FileName {
 
 /// The longest the relay WebSocket may take to open.
 const RELAY_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// What [`Submitter::register_device`] did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Registered {
+    /// This sign-in's device was registered now.
+    New,
+    /// It already was (a kept id, or `409 device_registered`).
+    AlreadyDone,
+}
 
 /// One app's connection to buwiz-server. Cheap to share behind an `Arc`.
 pub struct Submitter {
@@ -267,7 +344,7 @@ const OPEN_DEFAULT: chrono::Duration = chrono::Duration::seconds(330);
 const OPEN_MOST: chrono::Duration = chrono::Duration::seconds(900);
 
 /// What `send_return` learned about the server's open submission, for
-/// [`Submitter::settle`].
+/// `keep_floor`.
 #[derive(Default)]
 struct OpenTry {
     /// The floor once a ticket was obtained.
@@ -445,7 +522,31 @@ impl Submitter {
         Ok(())
     }
 
-    /// Registers the device key once per sign-in; answers its id.
+    /// Registers this device right after a sign-in (the host calls it once
+    /// the tokens are saved): [`Registered::New`], or
+    /// [`Registered::AlreadyDone`] when this sign-in already has its device
+    /// (`409 device_registered`, or an id is kept). An error is the host's to
+    /// log: the first send registers as it always did.
+    pub async fn register_device(&self) -> Result<Registered, ClientError> {
+        let _guard = self.session_lock.lock().await;
+        if self.store.get(DEVICE_ID)?.is_some() {
+            return Ok(Registered::AlreadyDone);
+        }
+        match self.post_registration().await {
+            Ok(_) => Ok(Registered::New),
+            Err(ClientError::Server {
+                status: 409, code, ..
+            }) if code == "device_registered" => Ok(Registered::AlreadyDone),
+            Err(ClientError::Server {
+                status: 409, code, ..
+            }) if code == "install_in_use" => Err(ClientError::InstallInUse),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Registers the device key once per sign-in; answers its id. A `409
+    /// device_registered` here means the sign-in has a device whose key this
+    /// app no longer holds: [`ClientError::DeviceKeyMissing`], once.
     async fn ensure_device(&self) -> Result<String, ClientError> {
         if let Some(id) = self.store.get(DEVICE_ID)? {
             return Ok(id);
@@ -454,12 +555,30 @@ impl Submitter {
         if let Some(id) = self.store.get(DEVICE_ID)? {
             return Ok(id);
         }
+        match self.post_registration().await {
+            Err(ClientError::Server {
+                status: 409, code, ..
+            }) if code == "device_registered" => Err(ClientError::DeviceKeyMissing),
+            Err(ClientError::Server {
+                status: 409, code, ..
+            }) if code == "install_in_use" => Err(ClientError::InstallInUse),
+            other => other,
+        }
+    }
+
+    /// `POST /api/devices` with this device's key, name, install id and
+    /// platform, signed with the key; keeps and answers the id.
+    async fn post_registration(&self) -> Result<String, ClientError> {
         let access_token = self.tokens.access_token(false).await?;
         let key = self.device_key()?;
-        let body = serde_json::to_vec(
-            &json!({ "public_key": key.public_key(), "name": self.config.device_name }),
-        )
-        .expect("json");
+        let mut fields = json!({ "public_key": key.public_key(), "name": self.config.device_name });
+        if let Some(install_id) = &self.config.install_id {
+            fields["install_id"] = json!(install_id);
+        }
+        if let Some(platform) = &self.config.platform {
+            fields["platform"] = json!(platform);
+        }
+        let body = serde_json::to_vec(&fields).expect("json");
         let path = "/api/devices";
         let mut request = self
             .request(reqwest::Method::POST, path)
@@ -607,7 +726,21 @@ impl Submitter {
     /// Sends one return: ticket, sealed envelope, relay, verified receipt.
     /// A refusal for the TIN makes the next TIN list read ask the server.
     pub async fn send(&self, filename: &str, xml: &[u8]) -> Result<Sent, SendError> {
-        let sent = self.send_return(filename, xml).await;
+        self.send_noting(filename, xml, &|_| Ok(())).await
+    }
+
+    /// [`Self::send`], telling the host its progress through `note`, and
+    /// waiting for it: once the server made the submission and before the
+    /// pipe opens (`opening: false`), and again before the first connection
+    /// toward the BIR is attempted (`opening: true`). A note that fails ends
+    /// the send there, not sent: nothing more leaves this computer.
+    pub async fn send_noting(
+        &self,
+        filename: &str,
+        xml: &[u8],
+        note: Note<'_>,
+    ) -> Result<Sent, SendError> {
+        let sent = self.send_return(filename, xml, note).await;
         if let Err(error) = &sent
             && error.refusal().is_some()
         {
@@ -616,7 +749,12 @@ impl Submitter {
         sent
     }
 
-    async fn send_return(&self, filename: &str, xml: &[u8]) -> Result<Sent, SendError> {
+    async fn send_return(
+        &self,
+        filename: &str,
+        xml: &[u8],
+        note: Note<'_>,
+    ) -> Result<Sent, SendError> {
         let name = FileName::parse(filename)
             .ok_or_else(|| SendError::NotSent(format!("not an eBIRForms file name: {filename}")))?;
         let xml_sha256 = hex(&Sha256::digest(xml));
@@ -637,9 +775,9 @@ impl Submitter {
         }
         let mut open = OpenTry::default();
         let sent = self
-            .send_open(&name, xml, &xml_sha256, &idempotency_key, &mut open)
+            .send_open(&name, xml, &xml_sha256, &idempotency_key, &mut open, note)
             .await;
-        self.settle(&idempotency_key, sent, open)
+        self.keep_floor(&idempotency_key, sent, open)
     }
 
     /// The floor still in the future for `key`, if any.
@@ -656,7 +794,7 @@ impl Submitter {
     /// a [`SendError::NotATry`]'s `wait_until` to it. Once a ticket was
     /// obtained, only a success, a maybe-sent or a server status of
     /// `failed` or `expired` leaves the key free to try again at once.
-    fn settle(
+    fn keep_floor(
         &self,
         key: &str,
         sent: Result<Sent, SendError>,
@@ -690,6 +828,7 @@ impl Submitter {
         xml_sha256: &str,
         idempotency_key: &str,
         open: &mut OpenTry,
+        note: Note<'_>,
     ) -> Result<Sent, SendError> {
         let not_sent = |error: ClientError| {
             if error.is_not_a_try() {
@@ -750,12 +889,47 @@ impl Submitter {
             ));
         };
 
-        let ended = self.relay_with(&list, relay_path).await.map_err(not_sent)?;
+        // Kept by the host before the pipe opens, so a later process can ask
+        // how the send ended if this one dies.
+        let pending = PendingSend {
+            server: self.config.server_url.clone(),
+            submission_id: id.to_owned(),
+            jti: jti.to_owned(),
+            xml_sha256: xml_sha256.to_owned(),
+            opening: false,
+            noted_at: Utc::now(),
+        };
+        note(&pending).map_err(|error| {
+            SendError::NotSent(format!(
+                "The send could not be recorded on this computer, so nothing was relayed: {error}"
+            ))
+        })?;
+        let opening = PendingSend {
+            opening: true,
+            ..pending
+        };
+        let before_first_open = || match note(&opening) {
+            Ok(()) => true,
+            Err(error) => {
+                tracing::warn!("relay: the send could not be recorded: {error}");
+                false
+            }
+        };
+        let ended = self
+            .relay_with(&list, relay_path, &before_first_open)
+            .await
+            .map_err(not_sent)?;
         let mut relay_class = None;
         let mut hold_until = None;
         let mut held = false;
         let touched;
         let (ending, status, error, receipt_jws) = match ended {
+            Ended::Stopped => {
+                return Err(SendError::NotSent(
+                    "The send could not be recorded on this computer, so nothing was opened toward the BIR."
+                        .into(),
+                ));
+            }
             Ended::Result {
                 status,
                 error,
@@ -828,10 +1002,15 @@ impl Submitter {
     /// hosts of the verified trust list, until the server's result.
     pub async fn relay(&self, relay_path: &str) -> Result<Ended, ClientError> {
         let list = self.trust_list().await?;
-        self.relay_with(&list, relay_path).await
+        self.relay_with(&list, relay_path, &|| true).await
     }
 
-    async fn relay_with(&self, list: &TrustList, relay_path: &str) -> Result<Ended, ClientError> {
+    async fn relay_with(
+        &self,
+        list: &TrustList,
+        relay_path: &str,
+        before_first_open: &(dyn Fn() -> bool + Send + Sync),
+    ) -> Result<Ended, ClientError> {
         let device_id = self.ensure_device().await?;
         let key = self.device_key()?;
         let access_token = self.tokens.access_token(false).await?;
@@ -867,7 +1046,78 @@ impl Submitter {
             },
             other => ClientError::Network(other.to_string()),
         })?;
-        Ok(pipe::serve(socket, list).await)
+        Ok(pipe::serve_noting(socket, list, pipe::Limits::default(), before_first_open).await)
+    }
+
+    /// How a send this app noted ([`Self::send_noting`]) ended, asked of the
+    /// server after the process that made it is gone. A final status is
+    /// decided exactly as a dropped relay's read-back is ([`outcome`], then
+    /// [`relay_failure`]), with the ending `pending.opening` says; a receipt
+    /// counts only when it verifies against the trust list, `pending`'s XML
+    /// hash and ticket id. A status that is not final yet, or a server that
+    /// cannot be asked, is [`Settled::NotYet`].
+    pub async fn settle(&self, pending: &PendingSend) -> Settled {
+        if pending.server.trim_end_matches('/') != self.config.server_url {
+            return Settled::NotYet;
+        }
+        let view = match self
+            .bearer_get(&format!("/api/submissions/{}", pending.submission_id))
+            .await
+        {
+            Ok(view) => view,
+            Err(ClientError::Server { status: 404, .. }) => return Settled::Gone,
+            Err(_) => return Settled::NotYet,
+        };
+        let Some(status) = view["status"]
+            .as_str()
+            .filter(|status| is_final_status(status))
+        else {
+            return Settled::NotYet;
+        };
+        let receipt_jws = view["receipt_jws"].as_str().map(str::to_owned);
+        let list = if receipt_jws.is_some() && matches!(status, "sent" | "dry_run") {
+            match self.trust_list().await {
+                Ok(list) => Some(list),
+                Err(_) => return Settled::NotYet,
+            }
+        } else {
+            None
+        };
+        let ending = if pending.opening {
+            Ending::DroppedAfterOpening
+        } else {
+            Ending::DroppedBeforeOpening
+        };
+        let decided = outcome(
+            ending,
+            status,
+            view["error"].as_str().map(str::to_owned),
+            receipt_jws,
+            |receipt_jws| match &list {
+                Some(list) => list
+                    .verify_receipt(receipt_jws, &pending.xml_sha256, Some(&pending.jti))
+                    .map_err(|error| error.to_string()),
+                None => Err("no trust list".to_owned()),
+            },
+        );
+        match decided {
+            Ok((receipt_jws, receipt)) => Settled::Sent(Box::new(Sent {
+                submission_id: pending.submission_id.clone(),
+                receipt_jws,
+                receipt,
+            })),
+            Err(failure) => Settled::Failed(relay_failure(
+                failure,
+                None,
+                false,
+                None,
+                Touched {
+                    opened: pending.opening,
+                    path_down: false,
+                    dropped: true,
+                },
+            )),
+        }
     }
 }
 
@@ -1576,6 +1826,142 @@ mod tests {
         assert_eq!(paths, ["/api/tickets", "/api/devices", "/api/tickets"]);
     }
 
+    // ----------------------------------------------- registration after a sign-in
+
+    /// Right after a sign-in: one registration with the install id and the
+    /// platform; a second is already done, by the kept id or by `409`.
+    #[tokio::test]
+    async fn a_new_sign_in_registers_its_device_once_with_the_install_id() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url2, seen2) = serve(|request| match request.path.as_str() {
+            "/api/devices" => Answer::json(200, &json!({"id": "d7"})),
+            _ => Answer::json(404, &json!({})),
+        });
+        let (mut client, _) = submitter_tokens(&url2, true, Vec::new());
+        client.store.delete(DEVICE_ID).unwrap();
+        client.config.install_id = Some("install-id-of-this-test-0001".into());
+        client.config.platform = Some("macos".into());
+        assert_eq!(client.register_device().await.unwrap(), Registered::New);
+        assert_eq!(client.store.get(DEVICE_ID).unwrap().as_deref(), Some("d7"));
+        assert_eq!(
+            client.register_device().await.unwrap(),
+            Registered::AlreadyDone
+        );
+        let sent = seen2.lock().unwrap();
+        assert_eq!(sent.len(), 1, "one registration");
+        let body: Value = serde_json::from_str(&sent[0].body).unwrap();
+        assert_eq!(body["install_id"], "install-id-of-this-test-0001");
+        assert_eq!(body["platform"], "macos");
+        assert_eq!(body["name"], "test");
+        for later in ["model", "os_version", "computer_name"] {
+            assert!(body.get(later).is_none(), "{later} is a later change");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_409_after_the_sign_in_is_already_done_and_other_failures_are_errors() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, _) = serve(|_| {
+            Answer::json(
+                409,
+                &json!({"error": "device_registered", "message": "already"}),
+            )
+        });
+        let (client, _) = submitter_tokens(&url, true, Vec::new());
+        client.store.delete(DEVICE_ID).unwrap();
+        assert_eq!(
+            client.register_device().await.unwrap(),
+            Registered::AlreadyDone
+        );
+        let (url, _) = serve(|_| Answer::json(500, &json!({"error": "oops"})));
+        let (client, _) = submitter_tokens(&url, true, Vec::new());
+        client.store.delete(DEVICE_ID).unwrap();
+        assert!(client.register_device().await.is_err());
+    }
+
+    /// `409 install_in_use`: a plain sentence where the send is held, after
+    /// the sign-in and on a send alike; one request each, no loop.
+    #[tokio::test]
+    async fn an_install_in_use_says_sign_in_again_and_never_loops() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, seen) = serve(|request| match request.path.as_str() {
+            "/api/devices" => Answer::json(
+                409,
+                &json!({"error": "install_in_use", "message": "in use"}),
+            ),
+            _ => Answer::json(404, &json!({})),
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        client.store.delete(DEVICE_ID).unwrap();
+        let after_sign_in = client.register_device().await.unwrap_err();
+        assert!(
+            matches!(after_sign_in, ClientError::InstallInUse),
+            "{after_sign_in:?}"
+        );
+        let on_send = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            on_send.to_string(),
+            "Sign out and sign in again on this device."
+        );
+        assert!(on_send.is_not_a_try());
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            2,
+            "one registration each, no loop"
+        );
+        assert_eq!(tokens.ended(), 0);
+    }
+
+    /// The device key is gone while still signed in: the server does not
+    /// know the new key (`401 unknown_device`), the one registration again is
+    /// refused (`409`): one plain sentence, held, never a loop.
+    #[tokio::test]
+    async fn a_lost_device_key_says_so_once_and_never_loops() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, seen) = serve(|request| match request.path.as_str() {
+            "/api/devices" => Answer::json(
+                409,
+                &json!({"error": "device_registered", "message": "already"}),
+            ),
+            _ => Answer::json(
+                401,
+                &json!({"error": {"code": "unknown_device", "message": "who?"}}),
+            ),
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        let error = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ClientError::DeviceKeyMissing), "{error:?}");
+        assert_eq!(
+            error.to_string(),
+            "This device's key is missing. Sign out and sign in again to send returns."
+        );
+        assert!(error.is_not_a_try());
+        let paths: Vec<String> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|r| r.path.clone())
+            .collect();
+        assert_eq!(paths, ["/api/tickets", "/api/devices"]);
+        assert_eq!(tokens.ended(), 0, "not signed out by itself");
+        // The next send asks once more and says the same; still no loop.
+        assert!(matches!(
+            client.signed("POST", "/api/tickets", &json!({})).await,
+            Err(ClientError::DeviceKeyMissing)
+        ));
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            3,
+            "one registration try per send"
+        );
+    }
+
     // ----------------------------------------------- the version header
 
     #[tokio::test]
@@ -2172,7 +2558,17 @@ mod tests {
         relay: Answer,
         read_back: Answer,
     ) -> (Submitter, std::sync::Arc<Mutex<Vec<Seen>>>, i64) {
-        let (public, jws, sealing) = trust_documents(&["127.0.0.1:9"]);
+        filing_to(&["127.0.0.1:9"], submission, relay, read_back)
+    }
+
+    /// [`filing`] with a trust list of `hosts`.
+    fn filing_to(
+        hosts: &[&str],
+        submission: Answer,
+        relay: Answer,
+        read_back: Answer,
+    ) -> (Submitter, std::sync::Arc<Mutex<Vec<Seen>>>, i64) {
+        let (public, jws, sealing) = trust_documents(hosts);
         let expires_at = Utc::now().timestamp() + 300;
         let (url, seen) = serve(move |request| match request.path.as_str() {
             "/.well-known/buwiz-trust.json" => Answer {
@@ -2386,17 +2782,17 @@ mod tests {
             until: Some(later),
             closed: false,
         };
-        let kept = client.settle("k", Err(SendError::NotSent("x".into())), open());
+        let kept = client.keep_floor("k", Err(SendError::NotSent("x".into())), open());
         assert!(matches!(kept, Err(SendError::NotSent(_))));
         assert_eq!(client.open_floor_for("k", Utc::now()), Some(later));
-        let maybe = client.settle("k", Err(SendError::MaybeSent("x".into())), open());
+        let maybe = client.keep_floor("k", Err(SendError::MaybeSent("x".into())), open());
         assert!(matches!(maybe, Err(SendError::MaybeSent(_))));
         assert_eq!(client.open_floor_for("k", Utc::now()), None);
         client
-            .settle("k", Err(SendError::NotSent("x".into())), open())
+            .keep_floor("k", Err(SendError::NotSent("x".into())), open())
             .ok();
         client
-            .settle(
+            .keep_floor(
                 "k",
                 Err(SendError::NotSent("y".into())),
                 OpenTry {
@@ -2412,7 +2808,7 @@ mod tests {
         );
         // Before a ticket there is nothing to hold.
         client
-            .settle(
+            .keep_floor(
                 "k",
                 Err(SendError::NotATry {
                     reason: "x".into(),
@@ -2443,5 +2839,342 @@ mod tests {
             open_floor(&json!({"expires_at": at(86_400)}), now).timestamp(),
             at(900)
         );
+    }
+
+    // ------------------------------------------- the host's notes and settle
+
+    /// The SHA-256 of the test return `<xml/>`.
+    fn xml_hash() -> String {
+        hex(&Sha256::digest(b"<xml/>"))
+    }
+
+    /// A loopback "BIR host" the trust list carries, and how many
+    /// connections it took.
+    fn bir_host() -> (String, std::net::TcpListener) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        (
+            format!("127.0.0.1:{}", listener.local_addr().unwrap().port()),
+            listener,
+        )
+    }
+
+    fn connections(listener: &std::net::TcpListener) -> usize {
+        std::iter::from_fn(|| listener.accept().ok()).count()
+    }
+
+    /// A relay that opens one stream toward `host`, then ends with a receipt.
+    fn relay_to(host: &str) -> Answer {
+        let (name, port) = host.split_once(':').unwrap();
+        let open = format!(r#"{{"type":"open","stream":1,"host":"{name}","port":{port}}}"#);
+        let receipt = crate::testkit::receipt_jws(&xml_hash(), "jti-1", "live");
+        let result =
+            format!(r#"{{"type":"result","status":"sent","error":null,"receipt":"{receipt}"}}"#);
+        Answer::relay(&[&open, &result])
+    }
+
+    /// The host's notes, in order, and a switch that makes the note with
+    /// `opening == fail_at` fail.
+    #[allow(clippy::type_complexity)]
+    fn notes(
+        fail_at: Option<bool>,
+    ) -> (
+        std::sync::Arc<Mutex<Vec<PendingSend>>>,
+        impl Fn(&PendingSend) -> Result<(), String> + Send + Sync,
+    ) {
+        let seen = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let log = seen.clone();
+        let note = move |pending: &PendingSend| {
+            log.lock().unwrap().push(pending.clone());
+            if fail_at == Some(pending.opening) {
+                Err("the disk is full".to_owned())
+            } else {
+                Ok(())
+            }
+        };
+        (seen, note)
+    }
+
+    #[tokio::test]
+    async fn a_send_is_noted_before_the_pipe_opens_and_before_the_first_connection_toward_the_bir()
+    {
+        let (host, listener) = bir_host();
+        let (client, seen, _) = filing_to(&[&host], created(), relay_to(&host), Answer::hang_up());
+        let (noted, note) = notes(None);
+        let sent = client.send_noting(RETURN, b"<xml/>", &note).await;
+        assert!(sent.is_ok(), "{sent:?}");
+        let noted = noted.lock().unwrap().clone();
+        assert_eq!(noted.len(), 2, "{noted:?}");
+        assert_eq!(
+            noted[0],
+            PendingSend {
+                server: client.config().server_url.clone(),
+                submission_id: "s1".into(),
+                jti: "jti-1".into(),
+                xml_sha256: xml_hash(),
+                opening: false,
+                noted_at: noted[0].noted_at,
+            }
+        );
+        assert_eq!(
+            noted[1],
+            PendingSend {
+                opening: true,
+                ..noted[0].clone()
+            },
+            "the same record, about to open toward the BIR"
+        );
+        assert_eq!(connections(&listener), 1);
+        assert!(
+            seen.lock()
+                .unwrap()
+                .iter()
+                .any(|request| request.path == "/relay/s1")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_first_note_stops_the_send_before_the_pipe() {
+        let (host, listener) = bir_host();
+        let (client, seen, _) = filing_to(&[&host], created(), relay_to(&host), Answer::hang_up());
+        let (noted, note) = notes(Some(false));
+        let sent = client.send_noting(RETURN, b"<xml/>", &note).await;
+        let Err(SendError::NotSent(reason)) = &sent else {
+            panic!("{sent:?}")
+        };
+        assert!(reason.contains("nothing was relayed"), "{reason}");
+        assert_eq!(noted.lock().unwrap().len(), 1);
+        assert!(
+            !seen
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|request| request.path == "/relay/s1")
+        );
+        assert_eq!(connections(&listener), 0);
+    }
+
+    #[tokio::test]
+    async fn a_failed_opening_note_opens_nothing_toward_the_bir() {
+        let (host, listener) = bir_host();
+        let (client, _, _) = filing_to(&[&host], created(), relay_to(&host), Answer::hang_up());
+        let (noted, note) = notes(Some(true));
+        let sent = client.send_noting(RETURN, b"<xml/>", &note).await;
+        let Err(SendError::NotSent(reason)) = &sent else {
+            panic!("{sent:?}")
+        };
+        assert!(
+            reason.contains("nothing was opened toward the BIR"),
+            "{reason}"
+        );
+        assert_eq!(noted.lock().unwrap().len(), 2);
+        assert_eq!(connections(&listener), 0, "no connection toward the BIR");
+    }
+
+    /// A pending send of `<xml/>` on ticket `jti-1`, noted `age_minutes` ago.
+    fn pending(client: &Submitter, opening: bool) -> PendingSend {
+        PendingSend {
+            server: client.config().server_url.clone(),
+            submission_id: "s1".into(),
+            jti: "jti-1".into(),
+            xml_sha256: xml_hash(),
+            opening,
+            noted_at: Utc::now(),
+        }
+    }
+
+    /// A server whose `GET /api/submissions/s1` answers `read_back`.
+    fn settling(read_back: Answer) -> (Submitter, std::sync::Arc<Mutex<Vec<Seen>>>) {
+        let (client, seen, _) = filing(created(), Answer::hang_up(), read_back);
+        (client, seen)
+    }
+
+    fn view(body: Value) -> Answer {
+        Answer::json(200, &body)
+    }
+
+    /// What `settle` answers, as a word.
+    fn settled_word(settled: &Settled) -> &'static str {
+        match settled {
+            Settled::Sent(_) => "sent",
+            Settled::Failed(SendError::NotSent(_)) => "not sent",
+            Settled::Failed(SendError::NotATry { .. }) => "not a try",
+            Settled::Failed(SendError::Counted { .. }) => "counted",
+            Settled::Failed(SendError::MaybeSent(_)) => "maybe sent",
+            Settled::NotYet => "not yet",
+            Settled::Gone => "gone",
+        }
+    }
+
+    async fn settle_word(read_back: Answer, opening: bool) -> &'static str {
+        let (client, _) = settling(read_back);
+        settled_word(&client.settle(&pending(&client, opening)).await)
+    }
+
+    /// Every status the server ends a submission in, both ways the app may
+    /// have left it, through the one decision table; anything not final is
+    /// asked again later.
+    #[tokio::test]
+    async fn settle_decides_every_final_status_and_waits_for_the_rest() {
+        let good = crate::testkit::receipt_jws(&xml_hash(), "jti-1", "live");
+        let dry = crate::testkit::receipt_jws(&xml_hash(), "jti-1", "dry_run");
+        let forged = crate::testkit::receipt_signed_by(&[9; 32], &xml_hash(), "jti-1", "live");
+        let other_xml = crate::testkit::receipt_jws(&"0".repeat(64), "jti-1", "live");
+        let other_ticket = crate::testkit::receipt_jws(&xml_hash(), "jti-2", "live");
+        let rows: Vec<(Value, [&str; 2])> = vec![
+            (
+                json!({"status": "sent", "receipt_jws": good}),
+                ["sent", "sent"],
+            ),
+            (
+                json!({"status": "dry_run", "receipt_jws": dry}),
+                ["sent", "sent"],
+            ),
+            (
+                json!({"status": "sent", "receipt_jws": forged}),
+                ["maybe sent", "maybe sent"],
+            ),
+            (
+                json!({"status": "sent", "receipt_jws": other_xml}),
+                ["maybe sent", "maybe sent"],
+            ),
+            (
+                json!({"status": "sent", "receipt_jws": other_ticket}),
+                ["maybe sent", "maybe sent"],
+            ),
+            (json!({"status": "sent"}), ["maybe sent", "maybe sent"]),
+            (
+                json!({"status": "failed", "error": "the connection ended before sending"}),
+                ["not a try", "counted"],
+            ),
+            (
+                json!({"status": "expired", "error": "the ticket expired"}),
+                ["not a try", "maybe sent"],
+            ),
+            (json!({"status": "unknown"}), ["maybe sent", "maybe sent"]),
+            // The server's two states that are not final: stored with the pipe not opened yet, and relay under way.
+            (json!({"status": "ready"}), ["not yet", "not yet"]),
+            (json!({"status": "sending"}), ["not yet", "not yet"]),
+            // A name this client does not know, or none at all, is asked again, never settled.
+            (
+                json!({"status": "some-later-state"}),
+                ["not yet", "not yet"],
+            ),
+            (json!({"id": "s1"}), ["not yet", "not yet"]),
+        ];
+        for (body, want) in rows {
+            for (opening, want) in [false, true].into_iter().zip(want) {
+                assert_eq!(
+                    settle_word(view(body.clone()), opening).await,
+                    want,
+                    "{body}, opening {opening}"
+                );
+            }
+        }
+    }
+
+    /// A verified receipt comes back whole, for the queue to keep.
+    #[tokio::test]
+    async fn a_settled_send_carries_its_verified_receipt() {
+        let good = crate::testkit::receipt_jws(&xml_hash(), "jti-1", "live");
+        let (client, _) = settling(view(json!({"status": "sent", "receipt_jws": good})));
+        let Settled::Sent(sent) = client.settle(&pending(&client, true)).await else {
+            panic!("sent")
+        };
+        assert_eq!(sent.submission_id, "s1");
+        assert_eq!(sent.receipt_jws, good);
+        assert_eq!(sent.receipt.jti.as_deref(), Some("jti-1"));
+        assert_eq!(sent.receipt.mode, "live");
+    }
+
+    /// `failed` is safe to send again whatever the app had opened; `expired`
+    /// before opening is not even a try.
+    #[tokio::test]
+    async fn a_failed_or_expired_settle_is_safe_to_send_again() {
+        for (status, opening) in [("failed", false), ("failed", true), ("expired", false)] {
+            let (client, _) = settling(view(json!({"status": status})));
+            let Settled::Failed(error) = client.settle(&pending(&client, opening)).await else {
+                panic!("{status} {opening}")
+            };
+            assert!(
+                matches!(error, SendError::NotATry { .. } | SendError::Counted { .. }),
+                "{status} {opening}: {error:?}"
+            );
+        }
+        // A refusal code in the server's error is final, as in the send.
+        let (client, _) = settling(view(
+            json!({"status": "failed", "error": "Sending is paused for this TIN. (tin_paused)"}),
+        ));
+        let Settled::Failed(error) = client.settle(&pending(&client, true)).await else {
+            panic!("failed")
+        };
+        assert_eq!(error.refusal(), Some(TinRefusal::Paused));
+    }
+
+    #[tokio::test]
+    async fn settle_waits_when_the_server_cannot_be_asked_and_knows_a_404() {
+        let not_found = Answer::json(
+            404,
+            &json!({"error": {"code": "not_found", "message": "x"}}),
+        );
+        assert_eq!(settle_word(not_found, true).await, "gone");
+        let broken = Answer::json(500, &json!({"error": {"code": "internal", "message": "x"}}));
+        assert_eq!(settle_word(broken, true).await, "not yet");
+        let held = Answer::json(
+            503,
+            &json!({"error": {"code": "restarting", "message": "x"}}),
+        );
+        assert_eq!(settle_word(held, false).await, "not yet");
+        assert_eq!(settle_word(Answer::hang_up(), true).await, "not yet");
+
+        // Offline: nothing listens.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        drop(listener);
+        let client = submitter(&url, true, Vec::new());
+        assert!(matches!(
+            client.settle(&pending(&client, true)).await,
+            Settled::NotYet
+        ));
+
+        // Signed out: no request at all.
+        let (url, seen) = serve(|_| Answer::json(200, &json!({"status": "failed"})));
+        let client = submitter(&url, false, Vec::new());
+        assert!(matches!(
+            client.settle(&pending(&client, false)).await,
+            Settled::NotYet
+        ));
+        assert!(seen.lock().unwrap().is_empty());
+
+        // A record from another server: never asked of this one.
+        let (url, seen) = serve(|_| Answer::json(200, &json!({"status": "failed"})));
+        let client = submitter(&url, true, Vec::new());
+        let elsewhere = PendingSend {
+            server: "https://api.buwiz.example".into(),
+            ..pending(&client, false)
+        };
+        assert!(matches!(client.settle(&elsewhere).await, Settled::NotYet));
+        assert!(seen.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_pending_send_holds_no_secret_and_reads_back() {
+        let record = PendingSend {
+            server: "https://api.buwiz.com".into(),
+            submission_id: "s1".into(),
+            jti: "jti-1".into(),
+            xml_sha256: xml_hash(),
+            opening: true,
+            noted_at: DateTime::from_timestamp(1_800_000_000, 0).unwrap(),
+        };
+        let json = serde_json::to_string(&record).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&json).unwrap(),
+            json!({
+                "server": "https://api.buwiz.com", "submission_id": "s1", "jti": "jti-1",
+                "xml_sha256": xml_hash(), "opening": true, "noted_at": "2027-01-15T08:00:00Z",
+            })
+        );
+        assert_eq!(serde_json::from_str::<PendingSend>(&json).unwrap(), record);
     }
 }

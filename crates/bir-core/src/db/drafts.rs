@@ -1306,6 +1306,7 @@ impl Database {
         draft.submission_claim_lease_until =
             Some(crate::filing_queue::claim_lease_until(claimed_at));
         draft.submission_put_started_at = None;
+        draft.relay_pending = None;
         draft.last_error = Some(
             "Submission outcome pending. Automatic retry is disabled unless the claim lease expires before PUT starts; keep any BIR confirmation or receipt and contact support for manual reconciliation before taking another submission action."
                 .to_string(),
@@ -1415,6 +1416,7 @@ impl Database {
         existing.submission_claimed_at = None;
         existing.submission_claim_lease_until = None;
         existing.submission_put_started_at = None;
+        existing.relay_pending = None;
         existing.updated_at = chrono::Utc::now().to_rfc3339();
         let json = serde_json::to_string(&existing)?;
         let period_key = FilingPeriod::Quarterly(draft.quarter).to_period_key();
@@ -1462,6 +1464,51 @@ impl Database {
         if draft.submission_put_started_at.is_none() {
             draft.submission_put_started_at = Some(chrono::Utc::now().to_rfc3339());
         }
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
+    /// Keep (`Some`) or clear (`None`) the relay's pending send on a 2551Q
+    /// this worker claimed ([`crate::forms::queueable::SubmissionLifecycle::relay_pending`]).
+    /// `false` when the claim is no longer `claim_token`'s.
+    pub(crate) fn note_claimed_2551q_relay_pending(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        quarter: u8,
+        claim_token: &str,
+        pending: Option<&str>,
+    ) -> Result<bool, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json)) = tx
+            .query_row(
+                "SELECT id, data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3 AND status = 'Queued'",
+                params![tin, i64::from(taxable_year), i64::from(quarter)],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        let mut draft: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if !matches!(draft.status, FilingStatus::Queued)
+            || draft.submission_claim_token.as_deref() != Some(claim_token)
+            || draft.submission_claimed_at.is_none()
+        {
+            return Ok(false);
+        }
+        draft.relay_pending = pending.map(str::to_owned);
         let json = serde_json::to_string(&draft)?;
         let updated = tx.execute(
             "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
@@ -2542,6 +2589,7 @@ impl Database {
         draft.submission_claim_lease_until =
             Some(crate::filing_queue::claim_lease_until(claimed_at));
         draft.submission_put_started_at = None;
+        draft.relay_pending = None;
         draft.submission_error = Some(
             "Submission outcome pending. Automatic retry is disabled unless the claim lease expires before PUT starts; keep any BIR confirmation or receipt and contact support for manual reconciliation before taking another submission action."
                 .to_string(),
@@ -2629,6 +2677,7 @@ impl Database {
         finished.submission_claimed_at = None;
         finished.submission_claim_lease_until = None;
         finished.submission_put_started_at = None;
+        finished.relay_pending = None;
         let json = serde_json::to_string(&finished)?;
         let period_key = FilingPeriod::Monthly(finished.month).to_period_key();
         let updated = tx.execute(
@@ -2677,6 +2726,51 @@ impl Database {
         if draft.submission_put_started_at.is_none() {
             draft.submission_put_started_at = Some(chrono::Utc::now().to_rfc3339());
         }
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
+    /// Keep (`Some`) or clear (`None`) the relay's pending send on a 1601C
+    /// this worker claimed ([`crate::forms::queueable::SubmissionLifecycle::relay_pending`]).
+    /// `false` when the claim is no longer `claim_token`'s.
+    pub(crate) fn note_claimed_1601c_relay_pending(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        month: u8,
+        claim_token: &str,
+        pending: Option<&str>,
+    ) -> Result<bool, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json)) = tx
+            .query_row(
+                "SELECT id, data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3 AND status = 'Queued'",
+                params![tin, i64::from(taxable_year), i64::from(month)],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        let mut draft: Form1601CDraft = serde_json::from_str(&raw_json)?;
+        if !matches!(draft.status, FilingStatus::Queued)
+            || draft.submission_claim_token.as_deref() != Some(claim_token)
+            || draft.submission_claimed_at.is_none()
+        {
+            return Ok(false);
+        }
+        draft.relay_pending = pending.map(str::to_owned);
         let json = serde_json::to_string(&draft)?;
         let updated = tx.execute(
             "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
@@ -3238,6 +3332,24 @@ impl Database {
             summaries.push(row?);
         }
         Ok(summaries)
+    }
+
+    /// Whether `tin` holds a return of `year` that waits for the BIR's
+    /// confirmation email: Submitted (or the legacy "Filed") and not a dry
+    /// run, which reached nobody and is sent no email
+    /// ([`crate::forms::dry_run`]).
+    pub fn has_return_awaiting_bir_email(&self, tin: &str, year: u16) -> Result<bool, DbError> {
+        Ok(self.conn.query_row(
+            &format!(
+                "SELECT EXISTS(SELECT 1 FROM form_drafts
+                  WHERE tin = ?1 AND taxable_year = ?2
+                    AND status IN ('Submitted', 'Filed')
+                    AND NOT {})",
+                crate::forms::dry_run::STORED_DRY_RUN_SQL
+            ),
+            params![tin, i64::from(year)],
+            |row| row.get(0),
+        )?)
     }
 
     /// Every form draft summary for a TIN, whatever its taxable year.
@@ -5940,6 +6052,69 @@ mod tests {
         assert_eq!(
             persisted.confirmed_at.as_deref(),
             Some("2026-04-25T11:59:00+08:00")
+        );
+    }
+
+    /// A dry run reached nobody: a BIR email naming its file is Ignored (as
+    /// one with no return is); the same return sent for real is confirmed.
+    #[test]
+    fn a_bir_email_never_confirms_a_dry_run_2551q() {
+        let db = test_db();
+        let submitted = submitted_2551q_draft(&db, &test_profile());
+        let mark = |dry: bool| {
+            db.conn
+                .execute(
+                    &format!(
+                        "UPDATE form_drafts SET data_json = json_set(data_json, '$.submitted_dry_run', json('{dry}'))
+                         WHERE form_code = '2551Q'"
+                    ),
+                    [],
+                )
+                .unwrap();
+        };
+        mark(true);
+        let receipt_filename = submitted
+            .submission_filename
+            .clone()
+            .unwrap()
+            .replace("#test@example.com#", "");
+        let receipt_id =
+            insert_2551q_receipt(&db, &submitted, &receipt_filename, "2026-04-25", "12:00:00");
+        let receipt = db
+            .get_submission_receipt_by_id(receipt_id)
+            .unwrap()
+            .unwrap();
+        for outcome in [
+            db.confirm_2551q_from_receipt(&receipt).unwrap(),
+            db.confirm_submission_from_receipt(&receipt).unwrap(),
+        ] {
+            assert_eq!(outcome, crate::db::ReceiptConfirmationOutcome::Ignored);
+        }
+        let kept = db
+            .get_2551q_draft(&submitted.tin, submitted.taxable_year, submitted.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(kept.status, FilingStatus::Submitted);
+        assert_eq!(kept.receipt_id, None);
+        // Dev Mode's simulated email confirms it on purpose.
+        assert_eq!(
+            db.confirm_simulated_submission_from_receipt(&receipt)
+                .unwrap(),
+            crate::db::ReceiptConfirmationOutcome::Confirmed
+        );
+
+        // The same return sent for real: the email confirms it.
+        let db = test_db();
+        let submitted = submitted_2551q_draft(&db, &test_profile());
+        let receipt_id =
+            insert_2551q_receipt(&db, &submitted, &receipt_filename, "2026-04-25", "12:00:00");
+        let receipt = db
+            .get_submission_receipt_by_id(receipt_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            db.confirm_2551q_from_receipt(&receipt).unwrap(),
+            crate::db::ReceiptConfirmationOutcome::Confirmed
         );
     }
 

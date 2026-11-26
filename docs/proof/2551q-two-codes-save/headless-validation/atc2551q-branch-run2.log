@@ -1,0 +1,42 @@
+✓ built the Rust crate nsh-app-ebirforms (9m 38s)
+✓ built the headless runner of nsh-app-ebirforms (8m 45s)
+✓ bundled screens/form/FormPagePreview.tsx (498916 B in 179.1 ms)
+[2m2026-11-25T23:04:06.756828Z[0m [32m INFO[0m [2mbir_core::logging[0m[2m:[0m 🔍 Tracing initialized (developer_mode: false)
+[2m2026-11-25T23:04:06.789638Z[0m [32m INFO[0m [2mnsh_app_ebirforms::door[0m[2m:[0m eBIRForms started
+[2m2026-11-25T23:04:06.806182Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v1
+[2m2026-11-25T23:04:06.812863Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v2
+[2m2026-11-25T23:04:06.813406Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v3
+[2m2026-11-25T23:04:06.813846Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v4
+[2m2026-11-25T23:04:06.814163Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v5
+[2m2026-11-25T23:04:06.814975Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v5 migration: added period_key column to form_drafts
+[2m2026-11-25T23:04:06.815344Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v6
+[2m2026-11-25T23:04:06.815535Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v7
+[2m2026-11-25T23:04:06.816000Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v8
+[2m2026-11-25T23:04:06.816264Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v9
+[2m2026-11-25T23:04:06.816483Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v10
+[2m2026-11-25T23:04:06.817120Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v11
+[2m2026-11-25T23:04:06.817351Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v12
+[2m2026-11-25T23:04:06.817561Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v13
+[2m2026-11-25T23:04:06.817787Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v14
+[2m2026-11-25T23:04:06.818297Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v15
+[2m2026-11-25T23:04:06.822226Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v15 migration: added 6 missing form-rule state columns
+[2m2026-11-25T23:04:06.822542Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v16
+[2m2026-11-25T23:04:06.823960Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v16 migration: added 2 checked Final Copy proof columns
+[2m2026-11-25T23:04:06.824224Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v17
+[2m2026-11-25T23:04:06.831038Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v17 migration: added 12 exact form-rule identity columns
+[2m2026-11-25T23:04:06.831462Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v18
+[2m2026-11-25T23:04:06.831833Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v19
+[2m2026-11-25T23:04:06.832313Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v20
+[2m2026-11-25T23:04:06.833657Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v21
+[2m2026-11-25T23:04:06.834283Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v22
+[2m2026-11-25T23:04:06.836278Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v23
+[2m2026-11-25T23:04:06.836766Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v24
+[2m2026-11-25T23:04:06.840231Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v11 migration: added 5 missing Forms Set provenance columns
+[2m2026-11-25T23:04:06.844022Z[0m [33m WARN[0m [2mbir_core::db::google_calendar[0m[2m:[0m Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred [3mreason[0m[2m=[0m"the background worker is not running yet"
+[2m2026-11-25T23:04:06.847849Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine started
+[2m2026-11-25T23:04:11.283608Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:04:14.958856Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:04:15.014549Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:04:15.015044Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine stopped
+✓ screens/form/atc2551q.test.tsx › phone: row 1's ATC changes and row 2 takes a pick (8.6s)
+✓ 1 test: 1 passed, 0 failed (8m 53s)
