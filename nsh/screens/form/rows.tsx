@@ -379,7 +379,12 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
           <If when={!hid().includes(f.k)}>
             <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }}>
               {sub && f.t !== "chk" ? <Text variant="meta" tone="fg2">{f.l}</Text> : null}
-              <FieldControl {...fieldProps(s, f, props.narrow, f.t === "chk" ? f.l || it.l : f.l)} />
+              <View class="flex-row items-center gap-1.5">
+                <FieldControl {...fieldProps(s, f, props.narrow, f.t === "chk" ? f.l || it.l : f.l)} />
+                {/* A penalty box whose component the filer never typed shows the computed
+                    amounts; the mark says so. A typed component carries no mark. */}
+                {s.penaltyComputed(f.k) ? <Mark icon="lock" id={f.k} tip="Computed from other items" /> : null}
+              </View>
             </View>
           </If>
         );

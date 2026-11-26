@@ -80,6 +80,14 @@ pub(super) fn json(kind: AgentFormKind, draft: &Value) -> Value {
             .map(|group| {
                 json!({
                     "keys": group.keys,
+                    // Each box whose component the filer typed (its override
+                    // is set): the others show the computed amounts, and the
+                    // page marks them as computed.
+                    "typed": group.keys.iter().filter(|key| {
+                        path_of(kind, key).is_some_and(|path| {
+                            draft.pointer(&path).is_some_and(|value| !value.is_null())
+                        })
+                    }).collect::<Vec<_>>(),
                     "edited": edited(group, draft),
                     // A kept 8% amount opens with Edit so a blank can clear it.
                     "applies": applies(kind, group, draft)
