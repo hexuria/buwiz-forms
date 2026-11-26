@@ -3746,13 +3746,19 @@ export class FormSession {
     const s = this.st;
     if (!s.queueWarn) return;
     // B8: Continue queues, which cannot be taken back: an amount box that has the keys again under the question is left first, as
-    // Queue leaves it.
-    if (this.settleFocused(() => this.confirmQueue(), "confirmQueue")) return;
+    // Queue leaves it. Its leave may have changed the return under the question (its blur already flushed what it read, so nothing is
+    // pending by then, but nothing is saved either, and 1601C's and 2551Q's Queue reads the stored row) or raised a note: after any
+    // settle the question closes and Queue runs again from the start (saved first, its notes stop it, the checks, the question).
+    if (this.settleFocused(() => {
+      if (this.st !== s || !s.queueWarn) return;
+      s.queueWarn = null;
+      s.overlay = null;
+      this.publish();
+      this.queue();
+    }, "confirmQueue")) return;
     s.queueWarn = null;
     s.overlay = null;
     this.publish();
-    // The box's leave changed the return under the question: Queue judges it again from the start (saved, its notes, the checks).
-    if (Object.keys(s.pending).length) return this.queue();
     this.queueNow();
   }
 

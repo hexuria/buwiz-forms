@@ -1518,3 +1518,79 @@ test("[S1] Queue pressed twice while it settles a focused amount box runs once",
     s.dispose();
   }
 });
+
+/** Stubs the host's Queue check (nothing stops it; it asks its question) and its Queue, which records `read()` instead of queueing. */
+function stubQueue(read: () => string): { queued: string[]; restore: () => void } {
+  const door = bir as unknown as Record<string, unknown>;
+  const real = { check: door.screen_form_queue_check, period: door.queue_form_draft, plain: door.screen_form_queue };
+  const out = {
+    queued: [] as string[],
+    restore: () => {
+      door.screen_form_queue_check = real.check;
+      door.queue_form_draft = real.period;
+      door.screen_form_queue = real.plain;
+    },
+  };
+  door.screen_form_queue_check = () => ({ blocks: [], warns: ["A question to confirm."] });
+  door.queue_form_draft = () => void out.queued.push(read());
+  door.screen_form_queue = () => void out.queued.push(read());
+  return out;
+}
+
+test("[B8-1] Continue with a focused amount box: the stored row 2551Q's Queue reads holds what the box reads (saved before it is queued)", async () => {
+  const key = "frm2551Qv2018:txt15";
+  let s: FormSession | undefined;
+  // What the database holds for the box: the amount the last save stored (2551Q's Queue reads the stored row, not the page).
+  const saves = recordAt("screen_form_save", () => s?.valueOf(key) ?? "");
+  const host = stubQueue(() => saves.seen[saves.seen.length - 1] ?? "nothing saved");
+  try {
+    s = await opened(at("2551Q", 2022, 2));
+    s.jumpTo(2);
+    s.queue();
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("queue-confirm");
+    heldBox(s, key, "1500", "later", "1500.50");
+    s.confirmQueue();
+    await s.idle();
+    // Queue ran again from the start after the box was left: saved, then its question again; Continue then queues.
+    expect(host.queued).toEqual([]);
+    expect(s.overlay()?.kind).toBe("queue-confirm");
+    s.confirmQueue();
+    await s.idle();
+    expect(host.queued).toEqual(["1,500.50"]);
+  } finally {
+    host.restore();
+    saves.restore();
+    s?.dispose();
+  }
+});
+
+test("[B8-1] Continue with a focused amount box left unreadable: Queue stops on the box's note and queues nothing", async () => {
+  const key = "frm2551Qv2018:txt15";
+  const h = hooks();
+  let s: FormSession | undefined;
+  const host = stubQueue(() => s?.valueOf(key) ?? "");
+  try {
+    s = await opened(at("2551Q", 2022, 3), h);
+    s.jumpTo(2);
+    s.edit(key, "1000");
+    await s.idle();
+    s.queue();
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("queue-confirm");
+    // The box holds "1500x": on leaving it puts 1,000.00 back and says so.
+    s.registerBlur(key, () => void setTimeout(() => {
+      s!.leftUnreadable(key, "1500x", "1,000.00");
+      s!.blur(key);
+    }, 60));
+    s.focus(key);
+    s.confirmQueue();
+    await s.idle();
+    expect(host.queued).toEqual([]);
+    expect(h.said.toasts.map((t) => t.message)).toContain("Item 15: 1500x is not an amount. The box kept 1,000.00.");
+    expect(s.overlay()?.kind ?? "").not.toBe("queue-confirm");
+  } finally {
+    host.restore();
+    s?.dispose();
+  }
+});
