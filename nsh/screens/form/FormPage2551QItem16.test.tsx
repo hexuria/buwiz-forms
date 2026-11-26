@@ -36,6 +36,10 @@ test("2551Q Item 16: shut with its sentence, opens at Amended Yes, and Amended N
   expect(app.shows(BOX)).toBe(true);
   expect(app.texts()).toContain(SHUT);
   expect(app.texts()).toContain("0.00");
+  await app.type(BOX, "42").catch(() => {});
+  await app.submit(BOX).catch(() => {});
+  expect(String(app.value(BOX))).not.toContain("42");
+  expect(app.texts()).not.toContain("42.00");
 
   // Amended Yes without the 8% option opens it; typing 42 is kept and shown.
   await reachUp(app, YES);
