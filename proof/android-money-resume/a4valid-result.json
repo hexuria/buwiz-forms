@@ -1,0 +1,68 @@
+{
+  "name": "a4valid",
+  "method": "recents",
+  "pid_before": "5140",
+  "pid_after": "5140",
+  "before": {
+    "focused": [
+      [
+        "1,234.56",
+        "android.widget.EditText",
+        ""
+      ]
+    ],
+    "ime": "    fallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@91001fa mDeactivateRequested=false mServedView=null}\n  mInputShown=true\n  mFallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@f8baee3 mDeactivateRequested=false mServedView=null}\n  mServedView=com.longbridge.nsh.InputBox$1{80fa61c VFED..CL. .F...... 0,0-897,121 aid=1073741861}\n  mServedInputConnection=RemoteInputConnectionImpl{connection=com.longbridge.nsh.InputBox$KeyConnection@1b99876 mDeactivateRequested=false mServedView=com.longbridge.nsh.InputBox$1{80fa61c VFED..CL. .F...... 0,0-897,121 aid=1073741861}}\n  mIsInputViewShown=true mStatusIcon=0\n",
+    "texts": [
+      [
+        "Taxable Amount",
+        "false",
+        "android.view.ViewGroup"
+      ],
+      [
+        "1,234.56",
+        "true",
+        "android.widget.EditText"
+      ],
+      [
+        "Done",
+        "false",
+        "android.view.ViewGroup"
+      ]
+    ]
+  },
+  "after": {
+    "focused": [
+      [
+        "1,234.56",
+        "android.widget.EditText",
+        ""
+      ]
+    ],
+    "ime": "    fallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@91001fa mDeactivateRequested=false mServedView=null}\n  mInputShown=true\n  mFallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@f8baee3 mDeactivateRequested=false mServedView=null}\n  mServedView=com.longbridge.nsh.InputBox$1{80fa61c VFED..CL. .F...... 0,0-897,121 aid=1073741861}\n  mServedInputConnection=RemoteInputConnectionImpl{connection=com.longbridge.nsh.InputBox$KeyConnection@158b3b2 mDeactivateRequested=false mServedView=com.longbridge.nsh.InputBox$1{80fa61c VFED..CL. .F...... 0,0-897,121 aid=1073741861}}\n  mIsInputViewShown=true mStatusIcon=0\n",
+    "texts": [
+      [
+        "1,234.56",
+        "true",
+        "android.widget.EditText"
+      ],
+      [
+        "Done",
+        "false",
+        "android.view.ViewGroup"
+      ]
+    ]
+  },
+  "db": {
+    "path": "/home/ubuntu/forms-validation/android-home-proof/a4valid-draft.db",
+    "taxable_amount": 1234.56,
+    "tax_due": 37.04,
+    "total_tax_due": 37.04,
+    "row": {
+      "atc": "PT010",
+      "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+      "taxable_amount": 1234.56,
+      "tax_rate": 0.03,
+      "tax_due": 37.04
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "name": "bvalid",
+  "method": "recents",
+  "pid_before": "5140",
+  "pid_after": "5140",
+  "before": {
+    "focused": [
+      [
+        "12,345,678.90",
+        "android.widget.EditText",
+        ""
+      ]
+    ],
+    "ime": "    fallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@91001fa mDeactivateRequested=false mServedView=null}\n  mInputShown=true\n  mFallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@f8baee3 mDeactivateRequested=false mServedView=null}\n  mServedView=com.longbridge.nsh.InputBox$1{e835a5f VFED..CL. .F...... 0,0-897,121 aid=1073741845}\n  mServedInputConnection=RemoteInputConnectionImpl{connection=com.longbridge.nsh.InputBox$KeyConnection@5271361 mDeactivateRequested=false mServedView=com.longbridge.nsh.InputBox$1{e835a5f VFED..CL. .F...... 0,0-897,121 aid=1073741845}}\n  mIsInputViewShown=true mStatusIcon=0\n",
+    "texts": [
+      [
+        "Taxable Amount",
+        "false",
+        "android.view.ViewGroup"
+      ],
+      [
+        "12,345,678.90",
+        "true",
+        "android.widget.EditText"
+      ],
+      [
+        "Done",
+        "false",
+        "android.view.ViewGroup"
+      ]
+    ]
+  },
+  "after": {
+    "focused": [
+      [
+        "12,345,678.90",
+        "android.widget.EditText",
+        ""
+      ]
+    ],
+    "ime": "    fallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@91001fa mDeactivateRequested=false mServedView=null}\n  mInputShown=true\n  mFallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@f8baee3 mDeactivateRequested=false mServedView=null}\n  mServedView=com.longbridge.nsh.InputBox$1{e835a5f VFED..CL. .F...... 0,0-897,121 aid=1073741845}\n  mServedInputConnection=RemoteInputConnectionImpl{connection=com.longbridge.nsh.InputBox$KeyConnection@b0f45a4 mDeactivateRequested=false mServedView=com.longbridge.nsh.InputBox$1{e835a5f VFED..CL. .F...... 0,0-897,121 aid=1073741845}}\n  mIsInputViewShown=true mStatusIcon=0\n",
+    "texts": [
+      [
+        "Taxable Amount",
+        "false",
+        "android.view.ViewGroup"
+      ],
+      [
+        "12,345,678.90",
+        "true",
+        "android.widget.EditText"
+      ],
+      [
+        "Done",
+        "false",
+        "android.view.ViewGroup"
+      ]
+    ]
+  },
+  "db": {
+    "path": "/home/ubuntu/forms-validation/android-home-proof/bvalid-draft.db",
+    "taxable_amount": 12345678.9,
+    "tax_due": 370370.37,
+    "total_tax_due": 370370.37,
+    "row": {
+      "atc": "PT010",
+      "atc_description": "Persons exempt from VAT under Sec. 109(BB) [Sec. 116]",
+      "taxable_amount": 12345678.9,
+      "tax_rate": 0.03,
+      "tax_due": 370370.37
+    }
+  }
+}
