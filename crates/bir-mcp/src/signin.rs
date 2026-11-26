@@ -440,15 +440,27 @@ pub fn status(origin: &str, store: &impl SessionStore, now: i64) -> Result<Strin
 }
 
 pub fn logout(origin: &str, store: &impl SessionStore) -> Result<String, String> {
-    if let Some(session) = store.load()? {
-        let mut http = BlockingHttp::new();
+    logout_with(origin, store, &mut BlockingHttp::new())
+}
+
+/// [`logout`] against `http`. The saved session is removed before the server is asked, so a command stopped
+/// while a slow or absent network holds the logout still leaves this computer signed out. A store that could
+/// not be cleared is reported after the logout is sent, so the server still ends the session.
+fn logout_with(
+    origin: &str,
+    store: &impl SessionStore,
+    http: &mut dyn cloud_account::Http,
+) -> Result<String, String> {
+    let session = store.load()?;
+    let cleared = store.clear();
+    if let Some(session) = session {
         let mut secrets = session.to_stored().to_secrets();
         if secrets.server_url.is_empty() {
             secrets.server_url = trim_origin(origin);
         }
-        cloud_account::revoke_session(&mut http, &secrets);
+        cloud_account::revoke_session(http, &secrets);
     }
-    store.clear()?;
+    cleared?;
     Ok("Signed out.".to_string())
 }
 
@@ -838,5 +850,63 @@ mod tests {
         assert_eq!(logout(&origin, &store).unwrap(), "Signed out.");
         assert!(store.load().unwrap().is_none());
         assert_eq!(logout(&origin, &store).unwrap(), "Signed out.");
+    }
+
+    /// A logout endpoint that notes whether the session was still saved when the request arrived, and what it
+    /// carried, then answers as `answer` says.
+    struct Logout<'a> {
+        store: &'a MemoryStore,
+        seen: Vec<(String, Option<String>, bool)>,
+        answer: fn() -> Result<cloud_account::HttpResponse, CloudError>,
+    }
+
+    impl cloud_account::Http for Logout<'_> {
+        fn exchange(
+            &mut self,
+            request: &cloud_account::HttpRequest,
+        ) -> Result<cloud_account::HttpResponse, CloudError> {
+            let left = self.store.load().unwrap().is_some();
+            self.seen
+                .push((request.url.clone(), request.bearer.clone(), left));
+            (self.answer)()
+        }
+    }
+
+    #[test]
+    fn logout_clears_the_store_before_the_request_and_sends_the_old_token_whatever_the_answer() {
+        let answers: [fn() -> Result<cloud_account::HttpResponse, CloudError>; 2] = [
+            || {
+                Ok(cloud_account::HttpResponse {
+                    status: 204,
+                    body: String::new(),
+                })
+            },
+            || Err(CloudError::Network("connection refused".into())),
+        ];
+        for answer in answers {
+            let store = MemoryStore::default();
+            store
+                .save(&bare("access-secret", "refresh-secret", 10_000))
+                .unwrap();
+            let mut http = Logout {
+                store: &store,
+                seen: Vec::new(),
+                answer,
+            };
+            assert_eq!(
+                logout_with("http://127.0.0.1:9/", &store, &mut http).unwrap(),
+                "Signed out."
+            );
+            assert_eq!(
+                http.seen,
+                [(
+                    "http://127.0.0.1:9/api/auth/logout".to_string(),
+                    Some("access-secret".to_string()),
+                    false
+                )],
+                "the session was still saved when the logout went out"
+            );
+            assert!(store.load().unwrap().is_none());
+        }
     }
 }

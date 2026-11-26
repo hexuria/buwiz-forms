@@ -188,20 +188,49 @@ fn sign_out(
     _arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     spawn_account("buwiz-account-sign-out", || {
-        crate::cloud_email::cancel();
-        {
-            let _one = bir_core::account_session::lock();
-            if let Some(stored) = load_stored()? {
-                let mut http = BlockingHttp::new();
-                cloud_account::revoke_session(&mut http, &stored.to_secrets());
-            }
-            clear_stored();
-        }
-        crate::account_gate::set_unlocked(false);
-        bir_core::transport::set_practice_account(false);
-        bir_core::relay::forget_device();
-        status_now()
+        sign_out_with(Box::new(BlockingHttp::new()))
     })
+}
+
+/// Signs out on this device first and tells the server afterwards. The saved sign-in is gone before any
+/// request starts, so an app closed while a slow or absent network holds the logout is still signed out on
+/// relaunch, and the page shows the gate without waiting for the server.
+fn sign_out_with(http: Box<dyn cloud_account::Http + Send>) -> HostResult {
+    crate::cloud_email::cancel();
+    let secrets = forget_stored_sign_in();
+    crate::account_gate::set_unlocked(false);
+    bir_core::transport::set_practice_account(false);
+    bir_core::relay::forget_device();
+    let status = status_now();
+    if let Some(secrets) = secrets {
+        revoke_soon(http, secrets);
+    }
+    status
+}
+
+/// Takes the saved sign-in's tokens into memory and removes it (the private file and the keychain entry) under
+/// the account-session lock, so a refresh running now cannot save it back. An unreadable record is removed
+/// too: nothing can be revoked with it, and it must not outlive the sign-out.
+fn forget_stored_sign_in() -> Option<AccountSecrets> {
+    let _one = bir_core::account_session::lock();
+    let secrets = load_stored()
+        .ok()
+        .flatten()
+        .map(|stored| stored.to_secrets());
+    clear_stored();
+    secrets
+}
+
+/// Sends the logout on a thread of its own, without the account-session lock, so a new sign-in never waits on
+/// it. It carries the old sign-in's access token, which cannot end a newer sign-in. Its answer is ignored, as it
+/// always was: the sign-in is already gone on this device whatever the server says.
+fn revoke_soon(mut http: Box<dyn cloud_account::Http + Send>, secrets: AccountSecrets) {
+    let started = std::thread::Builder::new()
+        .name("buwiz-account-logout".into())
+        .spawn(move || cloud_account::revoke_session(http.as_mut(), &secrets));
+    if let Err(error) = started {
+        tracing::warn!("logout not sent ({error}); the sign-in is already gone on this device");
+    }
 }
 
 fn session_opened() -> HostResult {
@@ -500,6 +529,252 @@ mod tests {
             .unwrap();
         let _ = std::fs::remove_dir_all(&scratch);
         assert!(status.success(), "startup did not drop buwiz_server_url");
+    }
+
+    mod sign_out {
+        use super::*;
+        use bir_core::cloud_account::{HttpRequest, HttpResponse};
+        use std::path::PathBuf;
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        const SERVER: &str = "http://127.0.0.1:9";
+        const WAIT: Duration = Duration::from_secs(10);
+
+        /// What was still on this device when the logout reached the fake server, and what the request carried.
+        struct Seen {
+            url: String,
+            bearer: Option<String>,
+            file_left: bool,
+            sign_in_left: bool,
+        }
+
+        /// The server's logout endpoint. It notes what is left on this device the moment the request arrives,
+        /// then, when `release` is given, hangs until the test lets it go (or drops the sender), and answers.
+        struct Logout {
+            file: PathBuf,
+            seen: mpsc::Sender<Seen>,
+            release: Option<mpsc::Receiver<()>>,
+            answer: fn() -> Result<HttpResponse, CloudError>,
+        }
+
+        impl cloud_account::Http for Logout {
+            fn exchange(&mut self, request: &HttpRequest) -> Result<HttpResponse, CloudError> {
+                let _ = self.seen.send(Seen {
+                    url: request.url.clone(),
+                    bearer: request.bearer.clone(),
+                    file_left: self.file.exists(),
+                    sign_in_left: cloud_account::load_stored_account()
+                        .ok()
+                        .flatten()
+                        .is_some(),
+                });
+                if let Some(release) = &self.release {
+                    let _ = release.recv();
+                }
+                (self.answer)()
+            }
+        }
+
+        fn answered() -> Result<HttpResponse, CloudError> {
+            Ok(HttpResponse {
+                status: 200,
+                body: "{}".into(),
+            })
+        }
+
+        fn refused() -> Result<HttpResponse, CloudError> {
+            Ok(HttpResponse {
+                status: 500,
+                body: r#"{"error":"server_error"}"#.into(),
+            })
+        }
+
+        fn unreachable() -> Result<HttpResponse, CloudError> {
+            Err(CloudError::Network("connection refused".into()))
+        }
+
+        /// A scratch folder with a saved sign-in for [`SERVER`] (keychain off, so the private file is the record).
+        fn signed_in<R>(body: impl FnOnce(PathBuf) -> R) -> R {
+            let dir = tempfile::tempdir().unwrap();
+            let file = dir.path().join("account.json");
+            bir_core::db::set_database_path_override(Some(dir.path().join("bir_data.db")));
+            let result = temp_env::with_vars(
+                [
+                    ("BUWIZ_NO_KEYCHAIN", Some("1")),
+                    ("BUWIZ_SERVER_URL", Some(SERVER)),
+                    (
+                        bir_core::email_sign_in::ENV_PENDING_FILE,
+                        Some(dir.path().join("pending.json").to_str().unwrap()),
+                    ),
+                    (
+                        cloud_account::ENV_ACCOUNT_FILE,
+                        Some(file.to_str().unwrap()),
+                    ),
+                ],
+                || {
+                    save_stored(&stored("old-access", "old-refresh")).unwrap();
+                    assert!(signed_in_now(), "the scratch sign-in did not take");
+                    body(file.clone())
+                },
+            );
+            bir_core::db::set_database_path_override(None);
+            result
+        }
+
+        fn stored(access: &str, refresh: &str) -> StoredAccount {
+            StoredAccount {
+                server_url: SERVER.into(),
+                access_token: access.into(),
+                refresh_token: refresh.into(),
+                access_expires_at_unix: i64::MAX / 2,
+                user_id: "u1".into(),
+                email: Some("filer@example.test".into()),
+                offline: false,
+                last_refresh_unix: 1_000,
+                practice: false,
+            }
+        }
+
+        fn signed_in_now() -> bool {
+            signed_in_in(status_now())
+        }
+
+        fn signed_in_in(status: HostResult) -> bool {
+            crate::bir_module::to_json(&status.expect("a status"))["signed_in"] == true
+        }
+
+        /// Runs the sign-out as the host does, on a thread of its own under this thread's database name, so a
+        /// sign-out that waits on the server shows as a timeout here instead of a hung test.
+        fn sign_out_on_a_thread(http: Logout) -> mpsc::Receiver<HostResult> {
+            let (sender, receiver) = mpsc::channel();
+            let database = bir_core::db::capture_database_path_override();
+            std::thread::spawn(move || {
+                let _ = sender.send(database.run(|| sign_out_with(Box::new(http))));
+            });
+            receiver
+        }
+
+        fn logout(
+            file: &std::path::Path,
+            answer: fn() -> Result<HttpResponse, CloudError>,
+        ) -> (Logout, mpsc::Receiver<Seen>) {
+            let (seen, heard) = mpsc::channel();
+            let fake = Logout {
+                file: file.to_path_buf(),
+                seen,
+                release: None,
+                answer,
+            };
+            (fake, heard)
+        }
+
+        /// (a), (d), (e): when the logout request goes out, the saved sign-in is already gone; the request
+        /// carries the old access token; the status, and what a relaunch reads, say signed out.
+        #[test]
+        fn the_saved_sign_in_is_gone_before_the_logout_request_and_the_request_carries_the_old_token()
+         {
+            signed_in(|file| {
+                let (fake, heard) = logout(&file, answered);
+                let status = sign_out_on_a_thread(fake)
+                    .recv_timeout(WAIT)
+                    .expect("sign-out returned");
+                let seen = heard.recv_timeout(WAIT).expect("the logout was sent");
+                assert!(
+                    !seen.file_left,
+                    "the account file was still there at the logout request"
+                );
+                assert!(
+                    !seen.sign_in_left,
+                    "the sign-in was still readable at the logout request"
+                );
+                assert_eq!(seen.url, format!("{SERVER}/api/auth/logout"));
+                assert_eq!(seen.bearer.as_deref(), Some("old-access"));
+                assert!(!signed_in_in(status), "sign-out answered signed in");
+                assert!(!file.exists());
+                assert!(!signed_in_now(), "a relaunch would read signed in");
+            });
+        }
+
+        /// (b), (d): a logout the server never answers does not hold the sign-out: it returns signed out, with
+        /// nothing left on this device, while the request still hangs.
+        #[test]
+        fn sign_out_returns_signed_out_while_the_logout_request_still_hangs() {
+            signed_in(|file| {
+                let (mut fake, heard) = logout(&file, answered);
+                let (release, held) = mpsc::channel();
+                fake.release = Some(held);
+                let done = sign_out_on_a_thread(fake);
+                let seen = heard.recv_timeout(WAIT).expect("the logout was sent");
+                let status = done
+                    .recv_timeout(WAIT)
+                    .expect("sign-out returned while the logout request still hangs");
+                assert!(
+                    !seen.file_left,
+                    "the account file was still there at the logout request"
+                );
+                assert_eq!(seen.bearer.as_deref(), Some("old-access"));
+                assert!(!signed_in_in(status), "sign-out answered signed in");
+                assert!(!file.exists(), "the account file outlived a hanging logout");
+                assert!(!signed_in_now(), "a relaunch would read signed in");
+                release.send(()).unwrap();
+            });
+        }
+
+        /// (c), (d): a server that refuses the logout, or cannot be reached, changes nothing on this device: the
+        /// sign-in was gone before the request, and stays gone.
+        #[test]
+        fn a_refused_or_unreachable_logout_leaves_the_device_signed_out() {
+            for answer in [refused, unreachable] {
+                signed_in(|file| {
+                    let (fake, heard) = logout(&file, answer);
+                    let status = sign_out_on_a_thread(fake)
+                        .recv_timeout(WAIT)
+                        .expect("sign-out returned");
+                    let seen = heard.recv_timeout(WAIT).expect("the logout was sent");
+                    assert!(
+                        !seen.file_left,
+                        "the account file was still there at the logout request"
+                    );
+                    assert_eq!(seen.bearer.as_deref(), Some("old-access"));
+                    assert!(!signed_in_in(status), "sign-out answered signed in");
+                    assert!(!file.exists());
+                    assert!(!signed_in_now(), "a relaunch would read signed in");
+                });
+            }
+        }
+
+        /// A new sign-in saved while the old logout still hangs is not held up by it (the account-session lock is
+        /// free), and survives it: the old logout carries only the old token.
+        #[test]
+        fn a_new_sign_in_while_the_old_logout_hangs_is_saved_and_kept() {
+            signed_in(|file| {
+                let (mut fake, heard) = logout(&file, answered);
+                let (release, held) = mpsc::channel();
+                fake.release = Some(held);
+                let done = sign_out_on_a_thread(fake);
+                let seen = heard.recv_timeout(WAIT).expect("the logout was sent");
+                let (saved, was_saved) = mpsc::channel();
+                let database = bir_core::db::capture_database_path_override();
+                std::thread::spawn(move || {
+                    let _ = saved.send(database.run(|| {
+                        let _one = bir_core::account_session::lock();
+                        save_stored(&stored("new-access", "new-refresh"))
+                    }));
+                });
+                was_saved
+                    .recv_timeout(WAIT)
+                    .expect("a new sign-in waited on the old logout")
+                    .unwrap();
+                release.send(()).unwrap();
+                done.recv_timeout(WAIT).expect("sign-out returned").unwrap();
+                assert_eq!(seen.bearer.as_deref(), Some("old-access"));
+                let kept = load_stored().unwrap().expect("the new sign-in is kept");
+                assert_eq!(kept.access_token, "new-access");
+                assert!(signed_in_now());
+                clear_stored();
+            });
+        }
     }
 
     fn delete_saved_server_url_on_startup() {
