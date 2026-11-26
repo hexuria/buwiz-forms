@@ -127,8 +127,8 @@ mod os {
         IUserConsentVerifierInterop, RO_INIT_MULTITHREADED, RoInitialize, RoUninitialize,
     };
     use ::windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GW_OWNER, GetClassNameW, GetForegroundWindow, GetWindow, GetWindowTextW,
-        GetWindowThreadProcessId, IsWindowVisible,
+        EnumWindows, GW_OWNER, GetClassNameW, GetForegroundWindow, GetWindow,
+        GetWindowThreadProcessId, InternalGetWindowText, IsWindowVisible,
     };
     use ::windows::core::{BOOL, HSTRING, factory};
     use windows_future::IAsyncOperation;
@@ -233,8 +233,10 @@ mod os {
         let class = String::from_utf16_lossy(&class[..usize::try_from(length).unwrap_or(0)]);
         let title = if pid == our_pid && class == NSH_WINDOW_CLASS {
             let mut text = [0u16; 256];
-            // SAFETY: GetWindowTextW writes at most `text.len()` units into the buffer.
-            let length = unsafe { GetWindowTextW(hwnd, &mut text) };
+            // InternalGetWindowText reads the stored title without a WM_GETTEXT round trip to the UI thread, so a busy
+            // UI thread never holds this up.
+            // SAFETY: it writes at most `text.len()` units into the buffer.
+            let length = unsafe { InternalGetWindowText(hwnd, &mut text) };
             String::from_utf16_lossy(&text[..usize::try_from(length).unwrap_or(0)])
         } else {
             String::new()
@@ -259,7 +261,7 @@ mod tests {
 
     /// The main window's title, from the build (nsh.json `window.title`), never a copy of the string.
     fn main_title() -> &'static str {
-        super::super::APP_WINDOW_TITLE.as_str()
+        super::super::APP_WINDOW_TITLE
     }
 
     fn window(

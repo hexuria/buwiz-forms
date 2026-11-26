@@ -17,19 +17,11 @@
 #[cfg(any(windows, test))]
 mod windows;
 
-/// The app's main window title: nsh/nsh.json `window.title`, the value the kit gives the window, read from the file
-/// compiled into this build (never a second copy of the string, PLAN W4). A3a-2 passes it to `prove_owner`, so the
-/// sheet belongs to the main window and never to a print preview (titled with the taxpayer). An unreadable value is
-/// empty, which no window has: no prompt.
-pub static APP_WINDOW_TITLE: std::sync::LazyLock<String> =
-    std::sync::LazyLock::new(|| window_title_from(include_str!("../nsh.json")));
-
-fn window_title_from(config: &str) -> String {
-    serde_json::from_str::<serde_json::Value>(config)
-        .ok()
-        .and_then(|config| config.pointer("/window/title")?.as_str().map(str::to_owned))
-        .unwrap_or_default()
-}
+/// The app's main window title: nsh/nsh.json `window.title`, the value the kit gives the window, set by the build
+/// script (build.rs), which stops the build unless it is a non-empty, one-line string. Never a second copy of the
+/// string (PLAN W4). A3a-2 passes it to `prove_owner`, so the sheet belongs to the main window and never to a print
+/// preview (titled with the taxpayer).
+pub const APP_WINDOW_TITLE: &str = env!("APP_WINDOW_TITLE");
 
 /// What this device can do to prove its owner, checked without prompting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
@@ -193,13 +185,15 @@ mod tests {
 
     #[test]
     fn the_main_window_title_comes_from_nsh_json() {
-        assert!(!APP_WINDOW_TITLE.is_empty(), "nsh.json window.title");
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../nsh.json")).expect("nsh.json is JSON");
         assert_eq!(
-            window_title_from(r#"{"window":{"title":"Focus"},"tailwind":{"title":[1]}}"#),
-            "Focus"
+            config
+                .pointer("/window/title")
+                .and_then(serde_json::Value::as_str),
+            Some(APP_WINDOW_TITLE)
         );
-        assert_eq!(window_title_from(r#"{"title":"not the window's"}"#), "");
-        assert_eq!(window_title_from("not json"), "");
+        assert!(!APP_WINDOW_TITLE.is_empty());
     }
 
     #[test]

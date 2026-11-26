@@ -30,6 +30,10 @@ lopdf = "0.34"
 # Agent remote control (feature `agent`, off by default): the gpui-agent protocol at the one version bir-app-api and bir-mcp use.
 gpui-agent = { version = "=0.4.0", optional = true }
 
+# The build script reads nsh.json window.title into APP_WINDOW_TITLE (src/os_login.rs, PLAN W4).
+[build-dependencies]
+serde_json = "1"
+
 # The database guard asks the password database (getpwuid_r) for the account's home folder, never $HOME.
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
