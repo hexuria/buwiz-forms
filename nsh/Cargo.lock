@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "bir-app-api"
-version = "0.2.1"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "bir-core",
@@ -575,7 +575,7 @@ dependencies = [
 
 [[package]]
 name = "bir-core"
-version = "0.2.1"
+version = "1.0.0"
 dependencies = [
  "aes 0.8.4",
  "aes-gcm 0.10.3",
@@ -634,11 +634,11 @@ dependencies = [
 
 [[package]]
 name = "bir-host-shim"
-version = "0.2.1"
+version = "1.0.0"
 
 [[package]]
 name = "bir-print"
-version = "0.2.1"
+version = "1.0.0"
 dependencies = [
  "bir-core",
  "lopdf",
@@ -653,7 +653,7 @@ dependencies = [
 
 [[package]]
 name = "bir-rules"
-version = "0.2.1"
+version = "1.0.0"
 dependencies = [
  "num-bigint 0.4.8",
  "serde",
@@ -663,7 +663,7 @@ dependencies = [
 
 [[package]]
 name = "bir-submit"
-version = "0.2.1"
+version = "1.0.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4838,7 +4838,7 @@ dependencies = [
 
 [[package]]
 name = "nsh-app-ebirforms"
-version = "0.2.1"
+version = "1.0.0"
 dependencies = [
  "anyrender",
  "anyrender_vello_cpu",

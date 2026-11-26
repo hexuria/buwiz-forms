@@ -67,7 +67,7 @@ path = "src/bin/sftp_harness.rs"
 required-features = ["direct-bir"]
 
 [dependencies]
-bir-rules = { path = "../bir-rules", version = "0.2.1" }
+bir-rules = { path = "../bir-rules", version = "1.0.0" }
 bir-submit = { path = "../bir-submit" }
 serde = { workspace = true }
 serde_json = { workspace = true }
