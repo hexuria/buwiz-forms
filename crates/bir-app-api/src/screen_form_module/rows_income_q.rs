@@ -554,18 +554,31 @@ pub(super) fn once_notes(
     let Some(id) = draft["id"].as_i64() else {
         return Vec::new();
     };
-    if !q3_charged_under_october(kind, draft) {
-        return Vec::new();
+    let mut wanted = Vec::new();
+    if q3_charged_under_october(kind, draft) {
+        wanted.push((q3_note_seen_key(id), Q3_DEADLINE_NOTE));
     }
-    let key = q3_note_seen_key(id);
-    match db.get_setting(&key) {
-        Ok(None) => vec![json!({"key": key, "text": Q3_DEADLINE_NOTE})],
-        Ok(Some(_)) => Vec::new(),
-        Err(error) => {
-            tracing::warn!("1701Q: reading {key} failed: {error}");
-            Vec::new()
+    // A 2551Q draft saved before Item 16's gate may still hold a nonzero
+    // amount although the gate is closed. Opening recomputes and clears it;
+    // the opening says so once. `draft` is still the stored pre-compute
+    // value here, which is what makes the dormant amount visible.
+    if kind == AgentFormKind::Form2551Q
+        && draft["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005
+        && let Some(text) = bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(draft)
+    {
+        wanted.push((format!("{NOTE_SEEN_PREFIX}2551q_item16_cleared:{id}"), text));
+    }
+    let mut notes = Vec::new();
+    for (key, text) in wanted {
+        match db.get_setting(&key) {
+            Ok(None) => notes.push(json!({"key": key, "text": text})),
+            Ok(Some(_)) => {}
+            Err(error) => {
+                tracing::warn!("{}: reading {key} failed: {error}", kind.form_code());
+            }
         }
     }
+    notes
 }
 
 /// 1702Q's `resultOtherSpecify`: BIR's internal total of the Schedule 4

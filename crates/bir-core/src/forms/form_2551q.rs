@@ -941,6 +941,14 @@ impl Form2551QDraft {
         self.total_tax_due =
             (self.schedule_1.iter().map(|r| r.tax_due).sum::<f64>() * 100.0).round() / 100.0;
 
+        // `2551q-amended-toggle` and `2551q-tax-rate-eight-percent`: the
+        // official page disables and zeros Item 16 unless Amended Return is
+        // Yes without the 8% option. Closing either gate clears the value in
+        // the model too, so no typed amount can lie dormant in a draft.
+        if !self.is_amended || matches!(self.item_13_election, Item13Election::EightPercent) {
+            self.tax_paid_previous = 0.0;
+        }
+
         // Line 18: Total Tax Credits = Line 15 + Line 16 (if amended) + Line 17
         let previous_credit = if self.is_amended {
             round_to_cents(self.tax_paid_previous)
@@ -4160,16 +4168,25 @@ mod tests {
     }
 
     #[test]
-    fn non_amended_item_16_must_be_zero() {
-        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
-        draft.is_amended = false;
-        draft.tax_paid_previous = 500.0;
+    fn item_16_clears_when_unamended_or_the_eight_percent_option_applies() {
+        let mut unamended = make_draft(50_000.0, 0.0, 2026, 1);
+        unamended.is_amended = false;
+        unamended.tax_paid_previous = 500.0;
+        unamended.recompute(None);
+        assert_eq!(unamended.tax_paid_previous, 0.0);
 
-        let errors = draft
-            .transition_to_queued()
-            .expect_err("a non-amended Item 16 value must not queue");
+        let mut amended = make_draft(50_000.0, 0.0, 2026, 1);
+        amended.is_amended = true;
+        amended.tax_paid_previous = 500.0;
+        amended.recompute(None);
+        assert_eq!(amended.tax_paid_previous, 500.0);
 
-        assert!(errors.iter().any(|(field, _)| field == "tax_paid_previous"));
+        let mut eight_percent = make_draft(50_000.0, 0.0, 2026, 1);
+        eight_percent.is_amended = true;
+        eight_percent.item_13_election = Item13Election::EightPercent;
+        eight_percent.tax_paid_previous = 500.0;
+        eight_percent.recompute(None);
+        assert_eq!(eight_percent.tax_paid_previous, 0.0);
     }
 
     #[test]

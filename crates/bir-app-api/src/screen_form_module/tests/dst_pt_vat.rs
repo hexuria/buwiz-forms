@@ -1735,3 +1735,136 @@ fn v2018_2551q_official_sample_row_through_the_page() {
         assert_eq!(xml[format!("drpATC{row}").as_str()], "0");
     }
 }
+
+#[test]
+fn v2018_2551q_item16_is_shut_and_refuses_writes_while_gated() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let opened = open("2551Q", 1);
+    assert_eq!(opened["locks"][item16::KEY], item16::AMENDED_LOCK);
+    assert_eq!(opened["lock_notes"][item16::KEY], item16::AMENDED_LOCK);
+    assert_eq!(opened["values"][item16::KEY], "0.00");
+
+    // Unanswered (the opening state) and No both refuse a write with the
+    // gate's reason.
+    let refused = fill("2551Q", &opened["draft"], json!({item16::KEY: "42"}));
+    assert_eq!(refused["rejected"][item16::KEY], item16::AMENDED_LOCK);
+    assert_eq!(refused["draft"]["tax_paid_previous"], 0.0);
+    let unanswered_no = fill(
+        "2551Q",
+        &refused["draft"],
+        json!({"frm2551Qv2018:amendedRtn_2": "true"}),
+    );
+    let refused_no = fill("2551Q", &unanswered_no["draft"], json!({item16::KEY: "42"}));
+    assert_eq!(refused_no["rejected"][item16::KEY], item16::AMENDED_LOCK);
+    // Amended Yes without the 8% option opens the box; 8% shuts it again.
+    let yes = fill(
+        "2551Q",
+        &refused_no["draft"],
+        json!({"frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    assert_eq!(yes["relocks"][item16::KEY], Value::Null);
+    let typed = fill("2551Q", &yes["draft"], json!({item16::KEY: "42"}));
+    assert_eq!(typed["rejected"], json!({}));
+    assert_eq!(typed["draft"]["tax_paid_previous"], 42.0);
+    let eight = fill(
+        "2551Q",
+        &typed["draft"],
+        json!({"frm2551Qv2018:taxRate2": "true"}),
+    );
+    assert_eq!(eight["relocks"][item16::KEY], item16::EIGHT_PERCENT_LOCK);
+    let refused_eight = fill("2551Q", &eight["draft"], json!({item16::KEY: "42"}));
+    assert_eq!(
+        refused_eight["rejected"][item16::KEY],
+        item16::EIGHT_PERCENT_LOCK
+    );
+}
+
+#[test]
+fn v2018_2551q_item16_clears_once_when_its_gate_closes() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let yes = fill(
+        "2551Q",
+        &open("2551Q", 1)["draft"],
+        json!({"frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    let typed = fill("2551Q", &yes["draft"], json!({item16::KEY: "42"}));
+    assert_eq!(typed["values"][item16::KEY], "42.00");
+
+    // Yes to No: the model is zero, the shut box carries the clearing note
+    // on this one fill, and reopening the gate brings nothing back.
+    let no = fill(
+        "2551Q",
+        &typed["draft"],
+        json!({"frm2551Qv2018:amendedRtn_2": "true"}),
+    );
+    assert_eq!(no["draft"]["tax_paid_previous"], 0.0);
+    assert_eq!(no["values"][item16::KEY], "0.00");
+    assert_eq!(no["relocks"][item16::KEY], item16::AMENDED_LOCK);
+    assert_eq!(
+        no["relock_notes"][item16::KEY],
+        item16::CLEARED_AMENDED_NOTE
+    );
+    let yes_again = fill(
+        "2551Q",
+        &no["draft"],
+        json!({"frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    assert_eq!(yes_again["draft"]["tax_paid_previous"], 0.0);
+    assert_eq!(yes_again["values"][item16::KEY], "0.00");
+
+    // Choosing the 8% option with 42 typed clears it too, with the 8% note.
+    let typed = fill("2551Q", &yes_again["draft"], json!({item16::KEY: "42"}));
+    let eight = fill(
+        "2551Q",
+        &typed["draft"],
+        json!({"frm2551Qv2018:taxRate2": "true"}),
+    );
+    assert_eq!(eight["draft"]["tax_paid_previous"], 0.0);
+    assert_eq!(eight["values"][item16::KEY], "0.00");
+    assert_eq!(
+        eight["relock_notes"][item16::KEY],
+        item16::CLEARED_EIGHT_PERCENT_NOTE
+    );
+}
+
+#[test]
+fn v2018_2551q_a_legacy_dormant_item16_is_cleared_on_open_and_said_once() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let yes = fill(
+        "2551Q",
+        &open("2551Q", 1)["draft"],
+        json!({"frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    let typed = fill("2551Q", &yes["draft"], json!({item16::KEY: "42"}));
+    let saved = save("2551Q", &typed["draft"]);
+    let id = stored_id(&saved);
+
+    // Make the stored row a pre-fix dormant draft: unamended, yet holding
+    // Item 16. Opening recomputes and clears the value, and offers the
+    // clearing sentence once without rewriting the return in this call.
+    let mut legacy: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    legacy["is_amended"] = json!(false);
+    legacy["tax_paid_previous"] = json!(42.0);
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
+    );
+    let first = open("2551Q", 1);
+    assert_eq!(first["draft"]["tax_paid_previous"], 0.0);
+    assert_eq!(first["values"][item16::KEY], "0.00");
+    assert_eq!(first["locks"][item16::KEY], item16::AMENDED_LOCK);
+    let key = format!("notice_seen:2551q_item16_cleared:{id}");
+    assert_eq!(
+        first["notes"],
+        json!([{"key": key, "text": item16::CLEARED_AMENDED_NOTE}])
+    );
+    assert_eq!(open("2551Q", 1)["notes"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        call("screen_form_notes_seen", vec![json(json!([key]))]).unwrap(),
+        json!([format!("notice_seen:2551q_item16_cleared:{id}")])
+    );
+    assert_eq!(open("2551Q", 1)["notes"], json!([]));
+}

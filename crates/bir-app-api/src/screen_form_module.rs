@@ -3725,6 +3725,13 @@ fn lock_note(reason: &str) -> &'static str {
     if reason == penalties::EIGHT_PERCENT {
         return penalties::EIGHT_PERCENT;
     }
+    // 2551Q Item 16's gate reasons are already the filer's words.
+    if reason == bir_core::forms::agent::draft_locks::item16_2551q::AMENDED_LOCK {
+        return bir_core::forms::agent::draft_locks::item16_2551q::AMENDED_LOCK;
+    }
+    if reason == bir_core::forms::agent::draft_locks::item16_2551q::EIGHT_PERCENT_LOCK {
+        return bir_core::forms::agent::draft_locks::item16_2551q::EIGHT_PERCENT_LOCK;
+    }
     if reason.starts_with("computed") {
         NOTE_COMPUTED
     } else if reason == Lock::Profile.reason() || reason.contains("from the tax profile") {
@@ -3765,6 +3772,13 @@ fn notes_always(kind: AgentFormKind, draft: &Value) -> Vec<String> {
         .flat_map(|group| group.keys)
         .collect();
     keys.extend(rows_annual_corporate::notes_always(kind, draft));
+    // 2551Q Item 16 is zero even while shut, so the blank-only note rule
+    // would never say why. Its gate's sentence is drawn whenever it is shut.
+    if kind == AgentFormKind::Form2551Q
+        && bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft).is_some()
+    {
+        keys.push(bir_core::forms::agent::draft_locks::item16_2551q::KEY.to_string());
+    }
     keys
 }
 
@@ -4926,7 +4940,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     // PR 11: an excise return's penalties kept as entered, then computed),
     // each with its note; `null` opens the box. bir-core's, as the open's.
     let relocks = agent::live_locks(kind, &draft);
-    let relock_notes: Map<String, Value> = relocks
+    let mut relock_notes: Map<String, Value> = relocks
         .iter()
         .map(|(key, lock)| {
             let note = lock.as_str().map_or(Value::Null, |reason| {
@@ -4935,6 +4949,21 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             (key.clone(), note)
         })
         .collect();
+    // 2551Q Item 16's closing gate clears a typed amount in the model. The
+    // one fill where an amount disappears says so once in the box's note;
+    // a shut box that held nothing keeps the gate's own reason.
+    if kind == AgentFormKind::Form2551Q {
+        let item16 = bir_core::forms::agent::draft_locks::item16_2551q::KEY;
+        let was = before["tax_paid_previous"].as_f64().unwrap_or(0.0);
+        let now = draft["tax_paid_previous"].as_f64().unwrap_or(0.0);
+        if was.abs() >= 0.005
+            && now.abs() < 0.005
+            && let Some(note) =
+                bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(&draft)
+        {
+            relock_notes.insert(item16.to_string(), json!(note));
+        }
+    }
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -4991,6 +5020,12 @@ pub(crate) fn page_gate_refusal(
         return None;
     }
     let code = kind.form_code();
+    if kind == AgentFormKind::Form2551Q
+        && key == bir_core::forms::agent::draft_locks::item16_2551q::KEY
+        && let Some(reason) = bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft)
+    {
+        return Some(reason.to_string());
+    }
     if let Some(why) = rows_income_q::closed_refusal(kind, draft, key, value)
         .map(str::to_string)
         .or_else(|| rows_annual_individual::closed_refusal(kind, draft, key, value))
@@ -5318,6 +5353,21 @@ fn apply_screen_edits_here(
             && shown.get(&key).and_then(Value::as_str) == Some("true")
             && !holds_tick(def, draft, &key)
         {
+            continue;
+        }
+        // 2551Q Item 16 is shut unless Amended Return is Yes without the 8%
+        // option. A blank is a clear and is never refused.
+        if kind == AgentFormKind::Form2551Q
+            && key == bir_core::forms::agent::draft_locks::item16_2551q::KEY
+            && let Some(value) = sent.get(&key)
+            && !value.is_null()
+            && value
+                .as_str()
+                .is_none_or(|text| !agent::carry::is_blank_value(text))
+            && let Some(reason) =
+                bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft)
+        {
+            rejected.insert(key.clone(), json!(reason));
             continue;
         }
         // B16: a non-blank write to a box the corpus condition keeps shut is

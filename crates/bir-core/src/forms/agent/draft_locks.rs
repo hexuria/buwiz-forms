@@ -7,7 +7,7 @@
 //! the desktop assistant read one implementation: the page draws them and
 //! [`super::fill`] refuses them.
 //!
-//! [`draft_locks`] applies six layers, in this order, each named after the
+//! [`draft_locks`] applies seven layers, in this order, each named after the
 //! page's row module it came from (the last after the rule it carries):
 //!
 //! 1. [`dst_pt_vat`] (PR 4): 2000's 15B and 15C, computed; 2553's
@@ -26,6 +26,8 @@
 //!    opens them, so no penalty lock stands beside that.
 //! 6. [`item_13`]: 2551Q's Item 13 on a later quarter whose filed Q1 this
 //!    app holds, locked to that Q1's answer.
+//! 7. [`item16_2551q`]: 2551Q Item 16 is shut unless Amended Return is Yes
+//!    without the 8% option.
 //!
 //! [`live_locks`] are the locks a page fill reports back (`relocks`), so a
 //! box shuts or opens as soon as the answer that decides it is typed.
@@ -88,6 +90,8 @@ fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, on
     income_q::relock(kind, draft, locks);
     // 2551Q's Item 13 on a later quarter whose filed Q1 is in this app.
     item_13::relock(kind, draft, locks);
+    // 2551Q Item 16 follows Amended Return and the 8% option.
+    item16_2551q::relock(kind, draft, locks);
 }
 
 /// The locks a fill leaves, each key with its reason or `null` (open), for
@@ -98,6 +102,7 @@ fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, on
 pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
     let mut relocks = annual_corporate::live_locks(kind, draft);
     relocks.extend(excise::live_locks(kind, draft));
+    relocks.extend(item16_2551q::live_locks(kind, draft));
     relocks
 }
 
@@ -1249,6 +1254,76 @@ pub mod excise {
                 };
                 locks.insert(key.clone(), lock);
             }
+        }
+        locks
+    }
+}
+
+pub mod item16_2551q {
+    //! 2551Q Item 16 (tax paid in a previously filed return) is shut unless
+    //! Amended Return is Yes without Item 13's 8% option. The official page
+    //! keeps the box disabled and zeroed in those states
+    //! (`rules/forms/2551q-v2018/validations.json` rules
+    //! `2551q-amended-toggle` and `2551q-tax-rate-eight-percent`).
+
+    use serde_json::{Map, Value, json};
+
+    use crate::forms::agent::AgentFormKind;
+
+    pub const KEY: &str = "frm2551Qv2018:txt16";
+    pub const AMENDED_LOCK: &str = "Item 16 applies only to an amended return.";
+    pub const EIGHT_PERCENT_LOCK: &str =
+        "Item 16 is nil on this return: Item 13 is the 8% income tax rate.";
+    pub const CLEARED_AMENDED_NOTE: &str =
+        "Item 16 was cleared: it applies only to an amended return.";
+    pub const CLEARED_EIGHT_PERCENT_NOTE: &str =
+        "Item 16 was cleared: Item 13 is the 8% income tax rate.";
+
+    /// The reason Item 16 is shut on `draft`, or `None` while it is open.
+    pub fn lock_reason(draft: &Value) -> Option<&'static str> {
+        if draft["item_13_election"] == "eight_percent" {
+            Some(EIGHT_PERCENT_LOCK)
+        } else if draft["is_amended"] != true {
+            Some(AMENDED_LOCK)
+        } else {
+            None
+        }
+    }
+
+    /// The clearing note for a transition into the closed state, by cause.
+    pub fn cleared_note(draft: &Value) -> Option<&'static str> {
+        if draft["item_13_election"] == "eight_percent" {
+            Some(CLEARED_EIGHT_PERCENT_NOTE)
+        } else if draft["is_amended"] != true {
+            Some(CLEARED_AMENDED_NOTE)
+        } else {
+            None
+        }
+    }
+
+    pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
+        if kind != AgentFormKind::Form2551Q {
+            return;
+        }
+        match lock_reason(draft) {
+            Some(reason) => {
+                locks.insert(KEY.to_string(), json!(reason));
+            }
+            None => {
+                locks.remove(KEY);
+            }
+        }
+    }
+
+    /// Item 16's lock as a fill leaves it (`null` opens it), so the page
+    /// shuts or opens the box as soon as Amended Return or Item 13 changes.
+    pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
+        let mut locks = Map::new();
+        if kind == AgentFormKind::Form2551Q {
+            locks.insert(
+                KEY.to_string(),
+                lock_reason(draft).map_or(Value::Null, |reason| json!(reason)),
+            );
         }
         locks
     }
