@@ -453,6 +453,10 @@ function freshState(target: FormTarget): St {
   };
 }
 
+/** The requests kept while a focused amount box settles (S1), run once it has let go; any other is dropped with WAIT_FOR_AMOUNT. */
+const KEPT_WHILE_SETTLING = new Set(["save", "print", "queue", "confirmQueue"]);
+const WAIT_FOR_AMOUNT = "Wait for the amount to finish, then try again.";
+
 /** What a removal's Undo says when typing came after the removal (an edit retires Undo). */
 const UNDO_TYPED_SINCE = "Undo is no longer available: you typed since.";
 
@@ -845,14 +849,19 @@ export class FormSession {
    * return's before anything is judged, moved, printed or saved. True when `then` was put off (or stopped); false when no amount
    * box has the keys and the caller goes on now. The box's blur may come on a later turn: `then` waits until the session has seen
    * the box let go (blur() clears focusKey) and runs one turn after that. `id` names the request (the same press again is the same id).
-   * Q1/S1: a press while a box settles is never run beside it: the same request again does nothing, and the latest other one (Delete
-   * row then Queue) is kept and runs once the settled one has run, unless that one opened a question. Q2: a box that has not let go after QUEUE_SETTLE_MS stops it and
+   * Q1/S1: a press while a box settles is never run beside it: the same request again does nothing; the latest other Save, Print,
+   * Queue or Continue (Delete row then Queue) is kept and runs once the settled one has run, unless that one opened a question; a
+   * Delete row or an Undo is dropped and the filer is asked to wait (S1-2). Q2: a box that has not let go after QUEUE_SETTLE_MS stops it and
    * what was kept: the session does not know what the box holds, so nothing is done and the box is left exactly as it is.
    */
   private settleFocused(then: () => void, id: string): boolean {
     if (this.settling) {
       // The settling request pressed again is that same request: it keeps whatever other one was kept.
-      if (id !== this.settlingId) this.settleNext = { id, run: then };
+      if (id === this.settlingId) return true;
+      // S1-2: only requests that read the page as it is when they run are kept. A Delete row or an Undo was decided on the rows as
+      // they were when pressed (its row's keys, the draft to bring back), which the box's leave can move: it is not kept.
+      if (KEPT_WHILE_SETTLING.has(id)) this.settleNext = { id, run: then };
+      else this.toast(WAIT_FOR_AMOUNT, "triangle-alert");
       return true;
     }
     const held = this.st.focusKey;

@@ -1618,3 +1618,47 @@ test("[S1-1] the settling Queue pressed again keeps the Print pressed before it:
     s.dispose();
   }
 });
+
+test("[S1-2] a Delete row pressed while Queue settles a focused amount box is not kept: the filer is asked to wait, and no row is cleared", async () => {
+  const h = hooks();
+  const checks = countQueueChecks();
+  const s = await opened(at("2550Q", 2024, 4), h);
+  try {
+    fillSched3Row(s, 0, "A0", "1000");
+    fillSched3Row(s, 1, "A1", "2000");
+    await s.idle();
+    heldBox(s, "txtIncomePayment30", "500", "later");
+    s.queue();
+    deleteRow(s, 1);
+    await s.idle();
+    expect(h.said.toasts.map((t) => t.message)).toContain("Wait for the amount to finish, then try again.");
+    expect(sched3Rows(s, 2)).toEqual([["A0", "500.00"], ["A1", "2,000.00"]]);
+    expect(checks.count).toBe(1);
+  } finally {
+    checks.restore();
+    s.dispose();
+  }
+});
+
+test("[S1-2] a Save pressed while a Delete row settles a focused amount box is kept: the row is deleted, then Save runs", async () => {
+  const h = hooks();
+  const s = await opened(at("2550Q", 2021, 2), h);
+  const saves = recordAt("screen_form_save", () => JSON.stringify(sched3Rows(s, 3)));
+  try {
+    fillSched3Row(s, 0, "A0", "1000");
+    fillSched3Row(s, 1, "A1", "2000");
+    fillSched3Row(s, 2, "A2", "3000");
+    await s.idle();
+    heldBox(s, "txtIncomePayment30", "500", "later");
+    const before = saves.seen.length;
+    deleteRow(s, 0);
+    s.saveNow();
+    await s.idle();
+    expect(h.said.toasts.map((t) => t.message)).not.toContain("Wait for the amount to finish, then try again.");
+    expect(h.said.toasts.map((t) => t.message)).toContain("Draft saved.");
+    expect(saves.seen.slice(before)).toContain(JSON.stringify([["A1", "2,000.00"], ["A2", "3,000.00"], ["", ""]]));
+  } finally {
+    saves.restore();
+    s.dispose();
+  }
+});
