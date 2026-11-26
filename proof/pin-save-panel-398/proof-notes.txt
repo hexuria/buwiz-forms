@@ -1,0 +1,195 @@
+pin-save-panel-398 real-input proof notes
+status: completed
+machine time: 2026-11-26 09:35:45
+
+Launch and safety:
+- existing compile/launch originally started from C:\Users\Administrator\builds\pin-save-panel-398\buwiz-forms with exact command: just nsh-run-agent windows C:\Users\Administrator\builds\pin-save-panel-398\scratch\proof.db; attach phase did not restart it
+- env: BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 CARGO_BUILD_JOBS=4 GPUI_AGENT_TOKEN=pin398proof RUST_LOG=debug BIR_LOG_DIR=C:\Users\Administrator\builds\pin-save-panel-398\scratch\logs
+- BIR_SFTP_LIVE and BUWIZ_RELAY_SEND were unset; no Queue press; no account sign-in.
+
+Data-plane setup keys:
+- profile.save tin=00012345300000, name=Juana Santos, taxpayer_type=Individual, rdo_code=039, address=Quezon City, zip_code=1100, phone=09170000000, email=juana@example.com
+- form.open code=2551Q year=2026 period=4 tin=00012345300000
+- form.fill fields={"drpATC1":"1","txtATCAmt1":"100000"}, source=ai
+- form.save_draft no arguments
+
+Real click coordinates (screen pixels, 1600x1200 desktop; clicks and keys delivered by proof-tools\sendinput_ctl.py through Win32 SendInput):
+{
+  "main-print-preview-initial": [
+    1178,
+    114
+  ],
+  "pass-a-save-as-pdf": [
+    996,
+    238
+  ],
+  "pass-a-filename-field": [
+    630,
+    721
+  ],
+  "pass-b-save-as-pdf": [
+    996,
+    238
+  ],
+  "pass-b-filename-field": [
+    630,
+    721
+  ],
+  "settings-import-export-nav": [
+    350,
+    313
+  ],
+  "main-empty-area-before-export": [
+    1450,
+    1000
+  ],
+  "main-export-button": [
+    1289,
+    432
+  ],
+  "main-import-button": [
+    1288,
+    218
+  ],
+  "main-print-preview-reopen": [
+    1178,
+    114
+  ],
+  "preview-print": [
+    958,
+    108
+  ],
+  "print-no-printer-no": [
+    962,
+    673
+  ]
+}
+
+Window owner and z-order answers:
+- Pass A Save as PDF owner: preview (expected preview); owner matches: yes; panel z=1 preview z=2; panel in front of preview: yes; preview in front of main: yes; panel foreground: yes; panel hwnd=262896 owner hwnd=459514.
+- Pass B Save as PDF owner: preview (expected preview); owner matches: yes; panel z=1 preview z=2; panel in front of preview: yes; panel foreground: yes; panel hwnd=262972 owner hwnd=459514.
+- Main Export Save As owner: main (expected main); owner matches: yes; panel z=1 main z=2; panel in front of main: yes; panel foreground: yes.
+- Main Import Open owner: main (expected main); owner matches: yes; panel z=1 main z=2; panel in front of main: yes; panel foreground: yes.
+- Print dialog owner: preview; print panel z=2 preview z=3; print dialog over preview: yes; print dialog foreground: no; no-printer warning present: yes.
+
+Form readback after save:
+- {"drpATC1": "1", "txtATCAmt1": "100,000.00"}
+
+PDFs:
+- pass A: C:\Users\Administrator\builds\pin-save-panel-398\buwiz-forms\proof\pin-save-panel-398\2551Q-save-panel-proof-pass-a.pdf bytes=272094 pages=2 text_has_100000=False text_has_3000=False text_has_PT010=False
+- pass B: C:\Users\Administrator\builds\pin-save-panel-398\buwiz-forms\proof\pin-save-panel-398\2551Q-save-panel-proof-pass-b.pdf bytes=272094 pages=2 text_has_100000=False text_has_3000=False text_has_PT010=False
+
+Deviations:
+- Windows no-printer warning appeared; dismissed with No, no printer installed.
+- The first compile-time harness attempt was discarded and overwritten; final artifacts are from the fresh 32.1-second recording started after the app existed.
+- The separate 127.0.0.1:17421 window plane was unavailable in the final run because the discarded first harness had sent shutdown to it. Export/import and print-preview reopening therefore used real SendInput clicks on visible controls rather than gpui-agent semantic presses; data-plane invokes were still used only for nav.go/form.open setup.
+- pypdf text extraction did not expose the amount/ATC strings (font encoding); the form readback verified drpATC1=1 and txtATCAmt1=100,000.00, and the rendered preview/PDF page count/bytes are recorded.
+- No app log lines containing Save as PDF or Print were found; the full copied ebirforms.2026-11-26.log is included.
+
+Run log:
+09:35:09 data agent answering at 127.0.0.1:17422
+09:35:09 invoke form.open: {
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "form": "2551Q",
+    "period": 4,
+    "tin": "00012345300000",
+    "year": 2026
+  },
+  "delivery_status": "delivered_unverified"
+}
+09:35:11 minimized browser window New Tab - Google Chrome for Testing
+09:35:11 minimized browser window Containers - Docker Desktop
+09:35:12 ffmpeg gdigrab recording started
+09:35:12 fresh proof recording started with the existing maximized app
+09:35:12 real click main-print-preview-initial at 1178,114
+09:35:13 invoke form.fields: {
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "boxes": [
+      {
+        "field": "frm2551Qv2018:forThe",
+        "item": "1",
+        "key": "frm2551Qv2018:forThe",
+        "kind": "radio",
+        "label": "1 For the",
+        "options": [
+          {
+            "label": "Calendar",
+            "value": "1"
+          },
+          {
+            "label": "Fiscal",
+            "value": "2"
+          }
+        ],
+        "required": true,
+        "value": "1"
+      },
+      {
+        "
+09:35:13 form.fields readback: {"drpATC1": "1", "txtATCAmt1": "100,000.00"}
+09:35:14 screenshot 01-preview-open.png (357350 bytes)
+09:35:14 real click pass-a-save-as-pdf at 996,238
+09:35:15 screenshot 02-pass-a-click-plus-1s.png (223962 bytes)
+09:35:16 screenshot 03-pass-a-panel-up.png (223993 bytes)
+09:35:16 enum enumwin-pass-a.json
+09:35:16 pass a panel relation: {"expected_owner_kind": "preview", "foreground_hwnd": 262896, "main_hwnd": 590418, "main_z": 3, "owner_hwnd": 459514, "owner_kind": "preview", "owner_matches_expected": true, "owner_z": 2, "panel_above_owner": true, "panel_hwnd": 262896, "panel_is_foreground": true, "panel_title": "Save as PDF", "panel_z": 1, "preview_above_main": true, "preview_hwnd": 459514, "preview_z": 2}
+09:35:16 real click pass-a-filename-field at 630,721
+09:35:20 screenshot 04-pass-a-after-save.png (360149 bytes)
+09:35:20 pass a PDF: {'path': 'C:\\Users\\Administrator\\builds\\pin-save-panel-398\\buwiz-forms\\proof\\pin-save-panel-398\\2551Q-save-panel-proof-pass-a.pdf', 'bytes': 272094, 'pages': 2, 'text_has_100000': False, 'text_has_3000': False, 'text_has_PT010': False}
+09:35:21 real click pass-b-save-as-pdf at 996,238
+09:35:23 screenshot 05-pass-b-click-plus-1s.png (223993 bytes)
+09:35:23 screenshot 06-pass-b-panel-up.png (223955 bytes)
+09:35:23 enum enumwin-pass-b.json
+09:35:23 pass b panel relation: {"expected_owner_kind": "preview", "foreground_hwnd": 262972, "main_hwnd": 590418, "main_z": 3, "owner_hwnd": 459514, "owner_kind": "preview", "owner_matches_expected": true, "owner_z": 2, "panel_above_owner": true, "panel_hwnd": 262972, "panel_is_foreground": true, "panel_title": "Save as PDF", "panel_z": 1, "preview_above_main": true, "preview_hwnd": 459514, "preview_z": 2}
+09:35:23 real click pass-b-filename-field at 630,721
+09:35:27 screenshot 07-pass-b-after-save.png (360426 bytes)
+09:35:27 pass b PDF: {'path': 'C:\\Users\\Administrator\\builds\\pin-save-panel-398\\buwiz-forms\\proof\\pin-save-panel-398\\2551Q-save-panel-proof-pass-b.pdf', 'bytes': 272094, 'pages': 2, 'text_has_100000': False, 'text_has_3000': False, 'text_has_PT010': False}
+09:35:29 closed proof preview before main-window checks
+09:35:29 invoke nav.go: {
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "view": "settings"
+  },
+  "delivery_status": "delivered_unverified"
+}
+09:35:30 real click settings-import-export-nav at 350,313
+09:35:31 real click main-empty-area-before-export at 1450,1000
+09:35:32 real click main-export-button at 1289,432
+09:35:33 screenshot 08-main-export-panel.png (105624 bytes)
+09:35:33 enum enumwin-main-export.json
+09:35:33 main export relation: {"expected_owner_kind": "main", "foreground_hwnd": 852756, "main_hwnd": 590418, "main_z": 2, "owner_hwnd": 590418, "owner_kind": "main", "owner_matches_expected": true, "owner_z": 2, "panel_above_owner": true, "panel_hwnd": 852756, "panel_is_foreground": true, "panel_title": "Save As", "panel_z": 1, "preview_above_main": false, "preview_hwnd": null, "preview_z": null}
+09:35:35 real click main-import-button at 1288,218
+09:35:36 screenshot 09-main-import-panel.png (114765 bytes)
+09:35:36 enum enumwin-main-import.json
+09:35:36 main import relation: {"expected_owner_kind": "main", "foreground_hwnd": 394060, "main_hwnd": 590418, "main_z": 2, "owner_hwnd": 590418, "owner_kind": "main", "owner_matches_expected": true, "owner_z": 2, "panel_above_owner": true, "panel_hwnd": 394060, "panel_is_foreground": true, "panel_title": "Open", "panel_z": 1, "preview_above_main": false, "preview_hwnd": null, "preview_z": null}
+09:35:37 invoke form.open: {
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "form": "2551Q",
+    "period": 4,
+    "tin": "00012345300000",
+    "year": 2026
+  },
+  "delivery_status": "delivered_unverified"
+}
+09:35:38 real click main-print-preview-reopen at 1178,114
+09:35:40 real click preview-print at 958,108
+09:35:42 screenshot 10-print-dialog-over-preview.png (325458 bytes)
+09:35:42 enum enumwin-print.json
+09:35:42 print relation: {"foreground_hwnd": 787200, "main_hwnd": 590418, "main_z": 4, "owner_kind": "preview", "preview_hwnd": 590674, "preview_z": 3, "print_panel_above_preview": true, "print_panel_hwnd": 590462, "print_panel_is_foreground": false, "print_panel_owner": 590674, "print_panel_z": 2, "warning_hwnd": 787200, "warning_owner": 590462, "warning_present": true, "warning_z": 1}
+09:35:42 real click print-no-printer-no at 962,673
+09:35:43 print dialog cancelled
+09:35:43 stopping ffmpeg gracefully with q
+09:35:43 ffmpeg exited rc=0
+09:35:43 video copied unchanged, duration 32.1s
+09:35:45 collected 1 app log files

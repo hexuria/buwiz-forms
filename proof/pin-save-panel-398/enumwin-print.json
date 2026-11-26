@@ -1,0 +1,201 @@
+{
+ "foreground": 787200,
+ "windows": [
+  {
+   "z": 0,
+   "hwnd": 131138,
+   "title": "",
+   "cls": "Shell_TrayWnd",
+   "visible": true,
+   "rect": [
+    0,
+    1160,
+    1600,
+    1200
+   ],
+   "owner": 0
+  },
+  {
+   "z": 1,
+   "hwnd": 787200,
+   "title": "Print",
+   "cls": "#32770",
+   "visible": true,
+   "rect": [
+    600,
+    528,
+    1015,
+    694
+   ],
+   "owner": 590462
+  },
+  {
+   "z": 2,
+   "hwnd": 590462,
+   "title": "Print",
+   "cls": "#32770",
+   "visible": true,
+   "rect": [
+    68,
+    68,
+    542,
+    498
+   ],
+   "owner": 590674
+  },
+  {
+   "z": 3,
+   "hwnd": 590674,
+   "title": "BIR Form 2551Q · Q4 2026 — Juana Santos",
+   "cls": "NshWindow",
+   "visible": true,
+   "rect": [
+    52,
+    52,
+    1008,
+    1191
+   ],
+   "owner": 0
+  },
+  {
+   "z": 4,
+   "hwnd": 590418,
+   "title": "eBIRForms",
+   "cls": "NshWindow",
+   "visible": true,
+   "rect": [
+    -8,
+    -8,
+    1608,
+    1168
+   ],
+   "owner": 0
+  },
+  {
+   "z": 5,
+   "hwnd": 65980,
+   "title": "Shutdown Event Tracker",
+   "cls": "#32770",
+   "visible": true,
+   "rect": [
+    586,
+    398,
+    1013,
+    762
+   ],
+   "owner": 0
+  },
+  {
+   "z": 6,
+   "hwnd": 131416,
+   "title": "Windows Input Experience",
+   "cls": "Windows.UI.Core.CoreWindow",
+   "visible": true,
+   "rect": [
+    0,
+    0,
+    1600,
+    1200
+   ],
+   "owner": 0
+  },
+  {
+   "z": 7,
+   "hwnd": 65840,
+   "title": "",
+   "cls": "DummyDWMListenerWindow",
+   "visible": true,
+   "rect": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "owner": 0
+  },
+  {
+   "z": 8,
+   "hwnd": 65834,
+   "title": "",
+   "cls": "EdgeUiInputTopWndClass",
+   "visible": true,
+   "rect": [
+    15,
+    0,
+    1600,
+    4
+   ],
+   "owner": 0
+  },
+  {
+   "z": 9,
+   "hwnd": 65810,
+   "title": "",
+   "cls": "DummyDWMListenerWindow",
+   "visible": true,
+   "rect": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "owner": 0
+  },
+  {
+   "z": 10,
+   "hwnd": 131306,
+   "title": "",
+   "cls": "DummyDWMListenerWindow",
+   "visible": true,
+   "rect": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "owner": 0
+  },
+  {
+   "z": 11,
+   "hwnd": 131832,
+   "title": "New Tab - Google Chrome for Testing",
+   "cls": "Chrome_WidgetWin_1",
+   "visible": true,
+   "rect": [
+    -32000,
+    -32000,
+    -31840,
+    -31972
+   ],
+   "owner": 0
+  },
+  {
+   "z": 12,
+   "hwnd": 66098,
+   "title": "Containers - Docker Desktop",
+   "cls": "Chrome_WidgetWin_1",
+   "visible": true,
+   "rect": [
+    -32000,
+    -32000,
+    -31840,
+    -31972
+   ],
+   "owner": 0
+  },
+  {
+   "z": 13,
+   "hwnd": 65754,
+   "title": "Program Manager",
+   "cls": "Progman",
+   "visible": true,
+   "rect": [
+    0,
+    0,
+    1600,
+    1200
+   ],
+   "owner": 0
+  }
+ ]
+}
