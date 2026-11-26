@@ -639,6 +639,38 @@ impl Form2200SDraft {
         ] {
             fields.insert(format!("derived:{key}"), value);
         }
+        // form-review/RULES.md section 7: untouched amount boxes stay blank
+        // even though the upload carries their zero. A fixed row is used when
+        // either input holds a value; then its typed zero and computed tax print.
+        for (index, row) in self.beverages.iter().enumerate().take(10) {
+            if row.sales_value == 0.0 && row.volume == 0.0 {
+                for key in [
+                    format!("frm2200S:txtSalesValue{index}"),
+                    format!("frm2200S:txtVolumeRemovals{index}"),
+                    format!("frm2200S:txtBasicTaxDue{index}"),
+                ] {
+                    fields.insert(key, String::new());
+                }
+            }
+        }
+        for (index, row) in self.others.iter().enumerate() {
+            let unused = row.atc.trim().is_empty()
+                && row.description.trim().is_empty()
+                && row.tax_bracket.trim().is_empty()
+                && row.rate == 0.0
+                && row.sales_value == 0.0
+                && row.volume == 0.0;
+            if unused {
+                for key in [
+                    format!("frm2200S:txtsched1AppTaxRate{index}"),
+                    format!("frm2200S:txtsched1SalesValue{index}"),
+                    format!("frm2200S:txtsched1VolumeRemovals{index}"),
+                    format!("frm2200S:txtsched1BasicTaxDue{index}"),
+                ] {
+                    fields.insert(key, String::new());
+                }
+            }
+        }
         fields
     }
 

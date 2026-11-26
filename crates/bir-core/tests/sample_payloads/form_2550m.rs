@@ -25,7 +25,7 @@ fn apply_screen_edits(draft: Form2550MDraft, edits: &[(&str, &str)]) -> Form2550
 /// No Schedule 1 rows: built through the screen path (only user-typed boxes,
 /// then `agent::compute`) so every computed tax box and downstream total is
 /// derived the same way the form page does.
-fn sample_2550m() -> Form2550MDraft {
+pub(crate) fn sample_2550m() -> Form2550MDraft {
     let mut draft =
         Form2550MDraft::new_from_profile(&dummy_profile("2550M", "Corporation"), 2022, 6);
     draft.schedule_4 = Some(Form2550MAllocation {
@@ -62,7 +62,7 @@ fn sample_2550m() -> Form2550MDraft {
 }
 
 /// Schedule 1 rows (vatable sales per ATC), spliced ahead of the Schedule 1 totals.
-fn sample_2550m_schedule_1() -> Form2550MDraft {
+pub(crate) fn sample_2550m_schedule_1() -> Form2550MDraft {
     let mut draft =
         Form2550MDraft::new_from_profile(&dummy_profile("2550M", "Corporation"), 2022, 7);
     draft.add_sales_atc("VT010").unwrap();
@@ -168,7 +168,7 @@ fn form_2550m_schedule_1_sample_payload_is_current() {
 }
 
 /// Capital goods: Schedule 2 (one input tax edited) and Schedule 3 Parts A and B.
-fn sample_2550m_capital_goods() -> Form2550MDraft {
+pub(crate) fn sample_2550m_capital_goods() -> Form2550MDraft {
     let mut draft =
         Form2550MDraft::new_from_profile(&dummy_profile("2550M", "Corporation"), 2022, 8);
     draft.add_sales_atc("VT010").unwrap();
@@ -229,7 +229,7 @@ fn form_2550m_capital_goods_sample_payload_is_current() {
 }
 
 /// Tax credits: Schedules 6, 7 and 8 (Schedule 8 needs sales to government).
-fn sample_2550m_credits() -> Form2550MDraft {
+pub(crate) fn sample_2550m_credits() -> Form2550MDraft {
     let mut draft =
         Form2550MDraft::new_from_profile(&dummy_profile("2550M", "Corporation"), 2022, 9);
     draft.add_sales_atc("VB010").unwrap();

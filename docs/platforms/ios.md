@@ -18,8 +18,9 @@ The recipe also removes the updater's configuration (an iOS app does not update 
 phone), refuses a bundle whose `Info.plist` has the desktop agent's screen-capture text, and makes every file readable
 by everyone before signing (App Store Connect refuses owner-only files, which a umask of 077 produces).
 
-Sending: on iOS the send guard forces a dry run (`nsh/src/guards.rs`), so a store build prepares and prints returns
-and sends nothing until relay filing ships.
+Sending: a store build files through the Buwiz relay, as on the desktops. A debug or development build, a test
+environment or an agent launch only simulates; it never sends or registers through production (`nsh/src/guards.rs`
+`restricted_launch`).
 
 ## Build and upload
 

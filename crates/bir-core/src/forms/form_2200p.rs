@@ -578,6 +578,7 @@ impl Form2200PDraft {
             "page_header",
             super::print_map::tin_name_header(&self.tin, &self.taxpayer_name),
         );
+        super::print_map::match_upload_case("2200p-v2020", &mut fields, None);
         fields
     }
 
@@ -1286,7 +1287,8 @@ mod tests {
     #[test]
     fn print_map_adds_only_the_shared_comb_lines() {
         let draft = sample();
-        let submit = draft.to_bir_field_map();
+        let mut submit = draft.to_bir_field_map();
+        crate::forms::print_map::match_upload_case("2200p-v2020", &mut submit, None);
         let print = draft.to_print_field_map();
         for (key, value) in &submit {
             assert_eq!(print.get(key), Some(value), "{key}");

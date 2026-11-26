@@ -3,7 +3,7 @@ use crate::{check_sample, dummy_profile};
 use bir_core::forms::form_2200t::{Form2200TDraft, Form2200TPayment, Form2200TPlace};
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_2200t() -> Form2200TDraft {
+pub(crate) fn sample_2200t() -> Form2200TDraft {
     let mut draft =
         Form2200TDraft::new_from_profile(&dummy_profile("2200T", "Corporation"), 2025, 3);
     draft.day = 14;

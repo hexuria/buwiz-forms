@@ -102,8 +102,10 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
             self.assertIn("hexuria/nsh", publish)
             self.assertIn("8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf", publish)
             self.assertIn("cargo install --locked --path", publish)
-        nsh = (REPOSITORY_ROOT / ".github/workflows/nsh.yml").read_text()
-        self.assertEqual(nsh.count('"forms/**"'), 2)
+        # The NSH app reads forms/: a change there runs its type check and tests (scripts/ci_plan.py decides for
+        # both ci.yml and nsh.yml).
+        plan = (REPOSITORY_ROOT / "scripts/ci_plan.py").read_text()
+        self.assertIn("^(nsh/|forms/|", plan)
 
     @unittest.skipIf(sys.platform == "win32", "release preflight runs on Ubuntu")
     def test_nsh_version_preflight_accepts_dispatch_and_rejects_bad_tags(self) -> None:
@@ -149,9 +151,9 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
 
     def test_macos_workflow_preflight_and_publish_shape(self) -> None:
         self.assert_preflight_gates(self.macos_workflow)
-        self.assertIn("pull_request:", self.macos_workflow)
-        self.assertIn("- .github/workflows/nsh.yml", self.macos_workflow)
-        self.assertIn(".github/workflows/release-macos.yml", self.macos_workflow)
+        # A pull request never starts a GitHub macOS job by itself (docs/CI.md).
+        self.assertNotIn("pull_request", self.macos_workflow)
+        self.assertNotIn("pull_request", self.linux_release_workflow)
         self.assertIn("scripts/package_macos_release.sh", self.macos_workflow)
         preflight = self.job("preflight", self.macos_workflow)
         self.assertIn("NSH_VERSION=", preflight)
@@ -163,10 +165,8 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertEqual(self.justfile.count("scripts/set_release_version.py"), 2)
         build_macos = self.job("build-macos", self.macos_workflow)
         self.assertIn("needs: preflight", build_macos)
-        self.assertIn(
-            "github.event.pull_request.head.repo.full_name == github.repository",
-            build_macos,
-        )
+        # Tag and manual runs only, so the old fork-pull-request skip is gone with the trigger.
+        self.assertNotIn("\n    if:", build_macos.split("    steps:", 1)[0])
         publish = self.job("publish", self.macos_workflow)
         self.assertIn("needs: [preflight, build-macos]", publish)
         self.assertIn("github.event_name == 'push'", publish)
@@ -337,15 +337,12 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
             "python -m unittest discover -s scripts/tests -v",
             self.ci_workflow,
         )
-        check = self.ci_workflow.split("  validation-rules-v1:", maxsplit=1)[0]
-        # `changes` picks the systems; an app change runs all three.
-        all_systems = re.search(r"(?m)^\s+all_systems='([^']+)'\s*$", self.ci_workflow)
-        self.assertIsNotNone(all_systems)
-        if all_systems is not None:
-            self.assertEqual(
-                [entry["os"] for entry in json.loads(all_systems.group(1))["include"]],
-                ["macos-15", "ubuntu-22.04", "windows-latest"],
-            )
+        check = self.job("check", self.ci_workflow)
+        # `changes` picks the systems (scripts/ci_plan.py); the test lane can run all three.
+        plan = (REPOSITORY_ROOT / "scripts/ci_plan.py").read_text()
+        self.assertIn('"macos": {"os": "macos-15", "target": "aarch64-apple-darwin"}', plan)
+        self.assertIn('"linux": {"os": "ubuntu-22.04", "target": "x86_64-unknown-linux-gnu"}', plan)
+        self.assertIn('"windows": {"os": "windows-latest", "target": "x86_64-pc-windows-msvc"}', plan)
         self.assertEqual(
             check.count("cargo install just --version 1.45.0 --locked"),
             1,
@@ -382,7 +379,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         setup = self.job("windows-setup", self.ci_workflow)
         self.assertIn("uses: ./.github/workflows/release-windows.yml", setup)
         self.assertNotIn("secrets: inherit", setup)
-        self.assertIn("needs.changes.outputs.windows_pkg", setup)
+        self.assertIn("needs.changes.outputs.installer", setup)
         self.assertNotIn("check_pe_stack_reserve.py", check)
 
     def test_setup_scripts_keep_the_gpui_agent_version_pinned(self) -> None:

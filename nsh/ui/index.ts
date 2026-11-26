@@ -2,7 +2,7 @@
 // Screens import from here ("../../ui"), never from nsh/base. The gallery of every part: screens/base/KitPage.tsx.
 export { AppButton, type AppButtonProps, type ButtonVariant, IconButton, type IconButtonProps, NavRow, type NavRowProps } from "./buttons";
 export {
-  Checkbox, CheckboxLabel, type CheckboxProps, ComboField, type ComboFieldProps, Dropdown, type DropdownOption, type DropdownProps,
+  Checkbox, CheckboxLabel, CheckRow, type CheckboxProps, ComboField, type ComboFieldProps, Dropdown, type DropdownOption, type DropdownProps,
   MultiCombo, type MultiComboOption, type MultiComboProps, RadioGroup, type RadioGroupProps, type RadioOption, Segmented,
   type SegmentedProps, type SegmentOption, Switch, type SwitchProps,
 } from "./choice";

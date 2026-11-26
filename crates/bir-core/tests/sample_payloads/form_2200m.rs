@@ -3,7 +3,7 @@ use crate::sample_payloads::penalty_items::{self, Deadline, day};
 use bir_core::forms::form_2200m::{Form2200MDraft, Form2200MPayment, Form2200MPlace};
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_2200m() -> Form2200MDraft {
+pub(crate) fn sample_2200m() -> Form2200MDraft {
     let mut draft =
         Form2200MDraft::new_from_profile(&dummy_profile("2200M", "Corporation"), 2025, 3);
     draft.day = 14;
@@ -92,7 +92,7 @@ fn form_2200m_sample_payload_is_current() {
 
 /// Six rows past the page's ten: `addRowSched1` has no row limit, and each
 /// added row's controls follow the previous row's in every column table.
-fn sample_2200m_many_rows() -> Form2200MDraft {
+pub(crate) fn sample_2200m_many_rows() -> Form2200MDraft {
     let mut draft = sample_2200m();
     draft.day = 13;
     for (k, index) in (13..=16u32).zip(12usize..) {

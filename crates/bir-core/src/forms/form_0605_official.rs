@@ -1066,7 +1066,10 @@ impl Form0605Draft {
 
 impl QueueableForm for Form0605Draft {
     fn print_field_map(&self) -> BTreeMap<String, String> {
-        self.to_bir_field_map()
+        let mut fields = self.to_bir_field_map();
+        let official = self.to_official_field_map();
+        super::print_map::match_upload_case(FORM_0605_LAYOUT_ID, &mut fields, Some(&official));
+        fields
     }
     fn penalty_items() -> Vec<PenaltyItems<Self>> {
         vec![Self::penalty_declaration()]

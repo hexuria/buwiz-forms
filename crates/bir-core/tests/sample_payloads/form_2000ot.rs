@@ -7,7 +7,7 @@ use bir_core::forms::form_2000ot::{
 };
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_2000ot() -> Form2000OTDraft {
+pub(crate) fn sample_2000ot() -> Form2000OTDraft {
     let mut draft =
         Form2000OTDraft::new_from_profile(&dummy_profile("2000OTv2018", "Corporation"), 2025);
     draft.transaction_date = "06/15/2025".into();
@@ -78,7 +78,7 @@ fn form_2000ot_sample_payload_is_current() {
     );
 }
 
-fn sample_2000ot_shares() -> Form2000OTDraft {
+pub(crate) fn sample_2000ot_shares() -> Form2000OTDraft {
     let mut draft =
         Form2000OTDraft::new_from_profile(&dummy_profile("2000OTv2018", "Corporation"), 2025);
     draft.transaction_date = "06/16/2025".into();

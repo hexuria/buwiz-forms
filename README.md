@@ -1,8 +1,25 @@
+<p align="center">
+  <img src="assets/brand/buwiz-forms.svg" alt="Buwiz Forms logo" width="240">
+</p>
+
 # E-BIRForms
 
 [![CI](https://github.com/hexuria/buwiz-forms/actions/workflows/ci.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/ci.yml)
 [![Release](https://github.com/hexuria/buwiz-forms/actions/workflows/release.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/release.yml)
 [![Release (macOS)](https://github.com/hexuria/buwiz-forms/actions/workflows/release-macos.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/release-macos.yml)
+
+![App version](assets/badges/version.svg)
+![eBIRForms package version](assets/badges/ebirforms.svg)
+[![Number of forms](assets/badges/forms.svg)](docs/FORMS.md)
+![iOS](assets/badges/ios.svg)
+![Android](assets/badges/android.svg)
+![Linux](assets/badges/linux.svg)
+![macOS](assets/badges/macos.svg)
+![Windows](assets/badges/windows.svg)
+
+<p align="center">
+  <img src="assets/readme/showcase.png" alt="eBIRForms on iPhone (sign-in), Mac (home) and iPad (BIR Form 2551Q)" width="100%">
+</p>
 
 E-BIRForms is an offline-first desktop app to prepare, validate, print and
 submit Philippine BIR returns. It is a native app: a Rust back end and screens
@@ -31,7 +48,7 @@ that server is unreachable. Details: [docs/cloud-account.md](docs/cloud-account.
 | --- | --- | --- | --- | --- |
 | macOS | Fully tested | `scripts/setup-macos.sh` | `~/Library/Application Support/dev.goldcoders.bir/bir_data.db` | [macos.md](docs/platforms/macos.md) |
 | Linux | Fully tested | `scripts/setup-linux.sh` | `~/.local/share/dev.goldcoders.bir/bir_data.db` | [linux.md](docs/platforms/linux.md) |
-| Windows | Built and tested in CI on every pull request | `scripts\setup-windows.ps1` | `%LOCALAPPDATA%\dev.goldcoders.bir\bir_data.db` | [windows.md](docs/platforms/windows.md) |
+| Windows | Built and tested in CI (nightly and on request) | `scripts\setup-windows.ps1` | `%LOCALAPPDATA%\dev.goldcoders.bir\bir_data.db` | [windows.md](docs/platforms/windows.md) |
 
 Not every feature works the same on every platform. The full table is in
 [docs/FEATURES.md](docs/FEATURES.md). Each platform page lists the packages,

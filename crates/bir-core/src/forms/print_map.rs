@@ -74,6 +74,30 @@ pub fn tax_relief_label(code: &str) -> &'static str {
     }
 }
 
+/// Apply the same upper-casing the upload applies to each key on `form_id`:
+/// every key marked `uppercase: true` in `official_xml::layout(form_id)`, plus
+/// any key whose `official` upload map holds the same text in a different case.
+/// Email keys and any key the upload does not upper-case stay as held.
+pub fn match_upload_case(
+    form_id: &str,
+    fields: &mut BTreeMap<String, String>,
+    official: Option<&BTreeMap<String, String>>,
+) {
+    crate::official_xml::apply_official_uppercase(form_id, fields);
+    if let Some(official) = official {
+        for (key, value) in fields.iter_mut() {
+            if key.to_ascii_lowercase().contains("email") {
+                continue;
+            }
+            if let Some(off) = official.get(key) {
+                if off.eq_ignore_ascii_case(value) && off != value {
+                    *value = off.clone();
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

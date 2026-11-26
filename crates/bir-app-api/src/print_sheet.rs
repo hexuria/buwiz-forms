@@ -113,6 +113,9 @@ pub fn prepare_html(html: &str) -> String {
 ///    for deb/rpm/pacman installs.
 /// 3. Development checkout `<repo>/print-overrides` — debug builds only,
 ///    because a shipped binary must not resolve a path baked in at build time.
+///
+/// On Android there is no such folder: [`override_css`] reads the copy compiled
+/// into the library ([`embedded`]) after `BIR_PRINT_OVERRIDES`.
 pub fn overrides_dir() -> std::path::PathBuf {
     overrides_dir_from(
         std::env::var_os("BIR_PRINT_OVERRIDES"),
@@ -153,14 +156,46 @@ fn dev_overrides_dir() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from("print-overrides"))
 }
 
+/// The per-form stylesheets compiled into the library: Android's only source,
+/// since an Android app has no folder beside its executable (build.rs).
+#[cfg(any(test, target_os = "android"))]
+pub(crate) mod embedded {
+    include!(concat!(env!("OUT_DIR"), "/print_overrides.rs"));
+
+    /// `slug`'s stylesheet, if `print-overrides/` had one when the library was built.
+    pub(crate) fn css(slug: &str) -> Option<&'static str> {
+        SHEETS
+            .binary_search_by(|(name, _)| (*name).cmp(slug))
+            .ok()
+            .map(|at| SHEETS[at].1)
+    }
+}
+
+/// `slug`'s override stylesheet: `BIR_PRINT_OVERRIDES` first; then, on Android,
+/// the compiled-in copy, and elsewhere the file in [`overrides_dir`].
+fn override_css(slug: &str) -> Option<String> {
+    let file = format!("{slug}.css");
+    if let Some(dir) = std::env::var_os("BIR_PRINT_OVERRIDES") {
+        return std::fs::read_to_string(std::path::Path::new(&dir).join(file)).ok();
+    }
+    #[cfg(target_os = "android")]
+    {
+        embedded::css(slug).map(str::to_owned)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        std::fs::read_to_string(overrides_dir().join(file)).ok()
+    }
+}
+
 /// [`prepare_html`] plus `slug`'s override stylesheet (when `apply_override`
-/// and the file exists).
+/// and there is one).
 pub fn prepare_html_for(slug: &str, html: &str, apply_override: bool) -> String {
     let html = prepare_html(html);
     if !apply_override {
         return html;
     }
-    let Ok(css) = std::fs::read_to_string(overrides_dir().join(format!("{slug}.css"))) else {
+    let Some(css) = override_css(slug) else {
         return html;
     };
     inject_override(slug, &html, &css)
@@ -220,6 +255,27 @@ mod tests {
             .unwrap();
         assert!(out.find("id=\"preview-paper\"").unwrap() < tag);
         assert!(tag < out.find("</head>").unwrap());
+    }
+
+    #[test]
+    fn every_print_override_is_compiled_in_unchanged() {
+        // What Android reads must be the folder's files, all of them, byte for byte.
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../print-overrides");
+        let mut slugs = Vec::new();
+        for entry in std::fs::read_dir(&dir).expect("print-overrides/") {
+            let path = entry.expect("entry").path();
+            if path.extension().is_some_and(|ext| ext == "css") {
+                let slug = path.file_stem().unwrap().to_str().unwrap().to_owned();
+                let file = std::fs::read_to_string(&path).expect("stylesheet");
+                assert_eq!(super::embedded::css(&slug), Some(file.as_str()), "{slug}");
+                slugs.push(slug);
+            }
+        }
+        assert!(!slugs.is_empty(), "no stylesheets in {}", dir.display());
+        assert_eq!(super::embedded::SHEETS.len(), slugs.len());
+        // Sorted, so the lookup's binary search finds every one.
+        assert!(super::embedded::SHEETS.windows(2).all(|w| w[0].0 < w[1].0));
+        assert_eq!(super::embedded::css("no-such-slug-xyz"), None);
     }
 
     #[test]

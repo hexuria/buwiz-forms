@@ -390,6 +390,22 @@ pub struct Form1702MXReliefDetails {
     pub effectivity_until: [String; 3],
 }
 
+fn zero_lexeme(value: &str) -> bool {
+    let mut digit = false;
+    let mut dot = false;
+    value.trim().chars().all(|ch| match ch {
+        '0' => {
+            digit = true;
+            true
+        }
+        '.' if !dot => {
+            dot = true;
+            true
+        }
+        _ => false,
+    }) && digit
+}
+
 impl Form1702MXDraft {
     /// The print sheet's field map: the upload map plus `derived:` keys
     /// that only shape the print.
@@ -400,6 +416,46 @@ impl Form1702MXDraft {
     ///   Ended (MM/20YY) over its four digit boxes.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
+        // Overlay every official field value onto the sheet-aligned print map
+        // so all joined schedules (Part II Items 14-16 and Schedules 1-10) print
+        // the exact official values, skipping only official keys that
+        // `1702mx-2018c/writer-cells.json` does not yet join or list in `not_joined`.
+        let untouched_amount_keys = self.untouched_amount_print_keys();
+        for (k, v) in self.to_official_field_map() {
+            if matches!(
+                k.as_str(),
+                "frm1702MX:drpPg3Sc1I11CB"
+                    | "frm1702MX:txtPg2Pt4I34SpecialTaxRate"
+                    | "frm1702MX:txtPg2Sc2It14B"
+                    | "frm1702MX:txtPg2Sc2It14C"
+                    | "frm1702MX:txtPg3Sc6I1CB"
+                    | "frm1702MX:txtPg3Sc6I2CB"
+                    | "frm1702MX:txtPg4Sc6I3CB"
+            ) || k.starts_with("frm1702MX:txtPg2Pt4I35")
+                || k.starts_with("frm1702MX:txtPg2Pt4I36")
+                || k.starts_with("frm1702MX:txtPg3Sc6I4C")
+                || k.starts_with("frm1702MX:txtPg6Sc6_")
+                || ((k.starts_with("frm1702MX:txtPg6Sc6I1")
+                    || k.starts_with("frm1702MX:txtPg6Sc6I2")
+                    || k.starts_with("frm1702MX:txtPg6Sc6I3"))
+                    && (k.ends_with("CA") || k.ends_with("CC") || k.ends_with("CD")))
+                || (k.starts_with("frm1702MX:txtPg7Sc9I")
+                    && (k.ends_with("CD")
+                        || k.ends_with("CE")
+                        || k.ends_with("CF")
+                        || k.ends_with("CG")))
+            {
+                continue;
+            }
+            // form-review/RULES.md section 7: an untouched amount box stays
+            // blank on print even though the upload carries zero. `amount:
+            // None` marks it untouched; typed or computed zero is `Some(0)`.
+            if untouched_amount_keys.contains(&k) && zero_lexeme(&v) {
+                fields.insert(k, String::new());
+                continue;
+            }
+            fields.insert(k, v);
+        }
         let tin_digits = super::print_map::digits_of(
             &fields,
             &[
@@ -441,6 +497,7 @@ impl Form1702MXDraft {
                 fields.insert(format!("derived:year_end_{name}{}", at + 1), digit.clone());
             }
         }
+        super::print_map::match_upload_case("1702mx-v2018c", &mut fields, None);
         fields
     }
 
