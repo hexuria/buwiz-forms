@@ -3715,9 +3715,14 @@ export class FormSession {
   confirmQueue() {
     const s = this.st;
     if (!s.queueWarn) return;
+    // B8: Continue queues, which cannot be taken back: an amount box that has the keys again under the question is left first, as
+    // Queue leaves it.
+    if (this.settleFocused(() => this.confirmQueue())) return;
     s.queueWarn = null;
     s.overlay = null;
     this.publish();
+    // The box's leave changed the return under the question: Queue judges it again from the start (saved, its notes, the checks).
+    if (Object.keys(s.pending).length) return this.queue();
     this.queueNow();
   }
 

@@ -1399,3 +1399,38 @@ test("[B2] no box focused: Save and Print run in the same turn, as before", asyn
     s.dispose();
   }
 });
+
+test("[B8] Continue on Queue's question with an amount box focused again leaves it first: what is queued holds what the box reads", async () => {
+  const key = "frm2551Qv2018:txt15";
+  const door = bir as unknown as Record<string, unknown>;
+  const real = { check: door.screen_form_queue_check, period: door.queue_form_draft, plain: door.screen_form_queue };
+  const queued: string[] = [];
+  let s: FormSession | undefined;
+  try {
+    s = await opened(at("2551Q", 2022, 1));
+    s.jumpTo(2);
+    // Nothing stops this Queue and the host asks its question; the host's Queue is a stub that records the amount: nothing is queued.
+    door.screen_form_queue_check = () => ({ blocks: [], warns: ["A question to confirm."] });
+    door.queue_form_draft = () => void queued.push(s!.valueOf(key));
+    door.screen_form_queue = () => void queued.push(s!.valueOf(key));
+    s.queue();
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("queue-confirm");
+    // The box has the keys again under the question and holds "1500,50": it reported 1500 and reads 1,500.50 on leaving.
+    const box = heldBox(s, key, "1500", "later", "1500.50");
+    s.confirmQueue();
+    await s.idle();
+    // Its leave changed the return under the question: Queue judged it again from the start, and asks again.
+    if (s.overlay()?.kind === "queue-confirm") {
+      s.confirmQueue();
+      await s.idle();
+    }
+    expect(box.asked()).toBe(1);
+    expect(queued).toEqual(["1,500.50"]);
+  } finally {
+    door.screen_form_queue_check = real.check;
+    door.queue_form_draft = real.period;
+    door.screen_form_queue = real.plain;
+    s?.dispose();
+  }
+});
