@@ -1,0 +1,8 @@
+topResumedActivity=ActivityRecord{6557b59 u0 dev.goldcoders.bir/com.longbridge.nsh.AppActivity t328}
+ResumedActivity: ActivityRecord{6557b59 u0 dev.goldcoders.bir/com.longbridge.nsh.AppActivity t328}
+-- second back --
+topResumedActivity=ActivityRecord{d69a34d u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t144}
+ResumedActivity: ActivityRecord{d69a34d u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t144}
+-- back, keypad down --
+topResumedActivity=ActivityRecord{d69a34d u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t144}
+ResumedActivity: ActivityRecord{d69a34d u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t144}
