@@ -46,7 +46,7 @@ Timeline (device clock, UTC+8):
 - ~60 s down: app shows **"Not sent yet: Could not connect to send this return. It tries again by itself. Next try at 12:28 PM."** (`b-not-sent-yet.png`); never anything like "filed"
 - 12:28:49 reverse restored
 - 12:34:5x the worker's retry lands at the mock relay — **exactly one** `HTTP 202 (979 bytes)` for this return
-- app flips to **"Submitted · read-only — Sent to the mock relay Nov 26, 2026, not to BIR"** (`b-after-restore.png`)
+- the app's status flips to **"Submitted · read-only — Sent to the mock relay Nov 26, 2026, not to BIR"**: the change is on screen by **12:35:0x** (a uiautomator dump at that time reads `Submitted · read-only` plus the toast "1601C for October 2026 was submitted"), i.e. within seconds of the mock's receipt. `b-just-before-send.png` (12:35, mislabeled in the first push) still shows the pre-flip "Queued · read-only — Next try at 12:28 PM". **No frame of the flip moment itself exists**: the b2 video's last frame (12:34) predates it and the (c) recording never shows the October return. What there is: `b-oct-return-submitted-later-capture.png`, the same October return in "Submitted · read-only" state, re-captured from the live app afterwards (same install, same database, still mock-only).
 
 Mock inbox afterwards: exactly one file for the period —
 `inbox/1601Cv2018/12345678800000-1601Cv2018-102026#demo@example.com#.xml` — and exactly one receipt.
