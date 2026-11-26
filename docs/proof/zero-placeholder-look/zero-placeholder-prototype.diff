@@ -1,0 +1,32 @@
+diff --git a/nsh/ui/fields.tsx b/nsh/ui/fields.tsx
+index acd51855..016beccb 100644
+--- a/nsh/ui/fields.tsx
++++ b/nsh/ui/fields.tsx
+@@ -471,9 +471,17 @@ function MaskedField(props: MaskedProps) {
+     if (untracked(focused)) finishLeave(false);
+   });
+ 
++  // LOCAL UNCOMMITTED MOCK-UP for the zero-placeholder look pictures: an editable zero amount shows as an
++  // empty box with the zero rendering as its placeholder; read-only (locked/disabled) and blank boxes are unchanged.
++  const mockZero = () =>
++    !props.field.locked &&
++    !props.field.disabled &&
++    (props.value ?? "") !== "" &&
++    isZeroAmount(props.value ?? "") &&
++    untracked(text) === props.shown(props.value ?? "", false);
+   return (
+     <TextField
+-      value={text()}
++      value={mockZero() ? "" : text()}
+       onChange={change}
+       keyboardType={props.keyboardType}
+       inputRef={(r) => {
+@@ -503,7 +511,7 @@ function MaskedField(props: MaskedProps) {
+       accessibilityLabel={props.field.accessibilityLabel}
+       hint={props.field.hint}
+       error={leftUnreadable() ?? props.field.error}
+-      placeholder={props.field.placeholder ?? props.placeholder}
++      placeholder={mockZero() ? props.shown(props.value ?? "", false) : (props.field.placeholder ?? props.placeholder)}
+       disabled={props.field.disabled}
+       locked={props.field.locked}
+       width={props.field.width}
