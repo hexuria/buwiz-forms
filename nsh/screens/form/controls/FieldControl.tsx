@@ -291,6 +291,7 @@ function TypedBox(props: { p: FieldInput }) {
         onBlur={() => p.onBlur()}
         onLeftUnreadable={(typed, kept) => p.onLeftUnreadable?.(typed, kept)}
         onCommaRead={(typed, shown) => p.onCommaRead?.(typed, shown)}
+        onOutsideKept={(typed, shown) => p.onOutsideKept?.(typed, shown)}
         width={widthOf(p)}
         error={p.box.message?.() || p.box.invalid()}
         whole={!!p.field.w}

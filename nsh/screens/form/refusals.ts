@@ -104,6 +104,8 @@ export function refusalSentence(ctx: RefusalContext): string {
     const kept = unreadable[1] === "" ? "The box was left blank." : `The box kept ${unreadable[1]}.`;
     return `${at} ${unreadable[2]} is not an amount. ${kept}${hint}`;
   }
+  const outside = /^amount outside\|([^|]*)\|([\s\S]*)$/.exec(raw);
+  if (outside) return `${at} the return now holds ${outside[1]}.`;
   const comma = /^amount comma\|([^|]*)\|([\s\S]*)$/.exec(raw);
   if (comma) return `${at} ${comma[2]} was read as ${comma[1]}.`;
   const refused = /^amount refused\|([^|]*)\|([^|]*)\|([\s\S]*)$/.exec(raw);

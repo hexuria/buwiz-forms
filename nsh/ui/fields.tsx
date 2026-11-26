@@ -175,6 +175,8 @@ export type MaskedFieldProps = Omit<TextFieldProps, "value" | "onChange" | "keyb
   onLeftUnreadable?: (typed: string, kept: string) => void;
   /** Money text was left with one comma the filer typed, read as its decimal point ("1500,50" as 1,500.50): what was typed, and what the box shows. */
   onCommaRead?: (typed: string, shown: string) => void;
+  /** Money text the filer typed during this focus came to the amount the box showed, and a value set from outside meanwhile won on leaving: what was typed, and what the box shows now. */
+  onOutsideKept?: (typed: string, shown: string) => void;
 };
 
 interface MaskedProps {
@@ -260,6 +262,8 @@ function MaskedField(props: MaskedProps) {
   let selected: TextSelection | undefined;
   let editFrom: TextSelection | undefined;
   let editTyped = false;
+  // The text changed at the filer's hands during this focus (even back to what it was).
+  let typedThisFocus = false;
   // The text the box last reported while it has the keys. Keys that come faster than the answers (a burst, an agent's
   // typing) are typed on this text, not on the answer: NSH drops an answer the box has typed past.
   let boxText: string | undefined;
@@ -326,6 +330,7 @@ function MaskedField(props: MaskedProps) {
   });
   const change = (raw: string) => {
     armWindowsReselect = false;
+    typedThisFocus = true;
     const prev = untracked(text);
     if (outsideAfterEmpty) outsideAfterEmpty = false;
     const from = editFrom;
@@ -417,12 +422,19 @@ function MaskedField(props: MaskedProps) {
           // reading (no outside value won): the caller may say so under the box.
           const commaRead = props.commaStates && commaState === "filer" && reading.includes(",") && readAmountWithCommas(reading, commaState, props.commaNegative, false) === null;
           if (commaRead && (filerEdited || outsideValue === undefined)) props.field.onCommaRead?.(held, semanticShown);
+          // B3: the filer typed during this focus but came to the amount the box showed (a key and its Backspace, the same amount
+          // typed again), so a value set from outside meanwhile wins: the number changes under the filer's keys, and the caller may
+          // say what the return holds now.
+          if (!filerEdited && !refillWins && outsideValue !== undefined && typedThisFocus && !sameReported(commaValueOf(reading, true), outsideValue)) {
+            props.field.onOutsideKept?.(held, semanticShown);
+          }
         }
         outsideValue = undefined;
         focused.set(false);
         editFrom = undefined;
         editTyped = false;
         edited = false;
+        typedThisFocus = false;
         lastReportEmpty = false;
         outsideAfterEmpty = false;
         programmaticFocus = false;
@@ -511,6 +523,7 @@ function MaskedField(props: MaskedProps) {
         focused.set(true);
         boxText = undefined;
         edited = false;
+        typedThisFocus = false;
         focusValue = props.value ?? "";
         rollbackReported = false;
         invalidActive = false;

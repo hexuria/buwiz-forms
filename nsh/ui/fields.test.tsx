@@ -534,6 +534,35 @@ for (const size of SIZES) {
     expect(readout(app, "Two:")).toBe("Two: 3000.00");
   });
 
+  test(`${size.name}: [B3] an outside value that wins over typing back to the shown amount is said through onOutsideKept; with no typing it is not`, async () => {
+    const app = await open("./masked.fixture.tsx", { ...size.options, clock: {} });
+    // The same amount typed again over the 2,000.00 the box showed, while 3000 arrived from outside.
+    await app.press("id:m-arm-held");
+    await app.clear("id:m-two");
+    await app.type("id:m-two", "2000");
+    await app.type("id:m-other", " ");
+    expect(app.value("id:m-two")).toBe("3,000.00");
+    expect(readout(app, "Outside:")).toBe("Outside: 2000|3,000.00");
+    // A key and its Backspace: no edit, and the number still changed under the filer's keys.
+    const again = await open("./masked.fixture.tsx", { ...size.options, clock: {} });
+    await again.press("id:m-arm-held");
+    await again.type("id:m-two", "");
+    await again.keyboard.press("4");
+    await again.keyboard.press("backspace");
+    await again.type("id:m-other", " ");
+    expect(again.value("id:m-two")).toBe("3,000.00");
+    expect(readout(again, "Outside:")).toBe("Outside: 2,000.00|3,000.00");
+  });
+
+  test(`${size.name}: [B3] focus and leave with no typing while an outside value arrives: the box shows it and says nothing`, async () => {
+    const app = await open("./masked.fixture.tsx", { ...size.options, clock: {} });
+    await app.press("id:m-arm-held");
+    await app.type("id:m-two", "");
+    await app.type("id:m-other", " ");
+    expect(app.value("id:m-two")).toBe("3,000.00");
+    expect(readout(app, "Outside:")).toBe("Outside: none");
+  });
+
   test(`${size.name}: M2-2: an outside refill after the empty report wins when it is left unanswered`, async () => {
     const app = await open("./masked.fixture.tsx", { ...size.options, clock: {} });
     await app.clear("id:m-refill");

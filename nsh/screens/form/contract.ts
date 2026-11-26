@@ -190,6 +190,8 @@ export interface FieldControlProps {
   onLeftUnreadable?(typed: string, kept: string): void;
   /** An amount box was left with one comma read as its decimal point (`typed` "1500,50", `shown` "1,500.50"). The session says so under it. */
   onCommaRead?(typed: string, shown: string): void;
+  /** The filer typed in an amount box but came back to the amount it showed, and a value set from outside meanwhile won on leaving: it shows `shown`. The session says so under it. */
+  onOutsideKept?(typed: string, shown: string): void;
 }
 
 /** One answer of a radio group. */

@@ -386,7 +386,8 @@ interface St {
   /**
    * Notes under amount boxes: the box shows what the return holds, and this says what the filer typed instead: "<kind>|<held>|<typed>"
    * with kind "amount typed" (the host stored another number), "amount unreadable" (the box's text was not an amount), "amount comma"
-   * (one comma was read as the decimal point; Queue does not stop on it) or "amount
+   * (one comma was read as the decimal point; Queue does not stop on it), "amount outside" (an outside value won over typing that came
+   * back to the shown amount) or "amount
    * refused" (the host refused the amount; its reason follows, "|<reason>"). `held` is what the box shows. A note holds no save; it
    * goes when its box is edited, its box is shut, or the amount under it moves (its row moved or was removed); focus keeps it.
    */
@@ -875,6 +876,21 @@ export class FormSession {
     const s = this.st;
     if (!s.draft || !s.editable || this.isShut(k)) return;
     s.amountNotes[k] = `amount comma|${shown}|${typed}`;
+    const id = this.keyIndex.get(k);
+    if (id) s.touched.add(id);
+    this.setErrors(s.errors);
+    this.publish();
+  }
+
+  /**
+   * B3: the filer typed in amount box k but came back to the amount it showed, and a value set from outside while it had the keys
+   * won on leaving (the box shows `shown`): the number changed under the filer's keys, so a note says what the return holds now.
+   * It stops Queue once, as the other notes that say the box holds what was not typed.
+   */
+  outsideKept(k: string, typed: string, shown: string) {
+    const s = this.st;
+    if (!s.draft || !s.editable || this.isShut(k)) return;
+    s.amountNotes[k] = `amount outside|${shown}|${typed}`;
     const id = this.keyIndex.get(k);
     if (id) s.touched.add(id);
     this.setErrors(s.errors);

@@ -805,6 +805,41 @@ test("[comma] a comma read as the decimal point is said under its box and stops 
   }
 });
 
+test("[B3] an outside value that won over typing back to the shown amount: a note says what the return holds now, and stops Queue once", async () => {
+  const key = "frm2551Qv2018:txt15";
+  const sentence = "Item 15: the return now holds 3,000.00.";
+  const checks = countQueueChecks();
+  const h = hooks();
+  let s: FormSession | undefined;
+  try {
+    s = await opened(at("2551Q", 2023, 2), h);
+    s.jumpTo(2);
+    s.edit(key, "2000");
+    await s.idle();
+    // The box had 2,000.00; 3000 came from outside while it had the keys; the filer typed 2000 again and left: it reports 3000.
+    s.focus(key);
+    s.edit(key, "3000");
+    s.outsideKept(key, "2000", "3,000.00");
+    s.blur(key);
+    await s.idle();
+    expect(s.valueOf(key)).toBe("3,000.00");
+    expect(s.boxMessageOf(key)).toBe(sentence);
+    s.queue();
+    await s.idle();
+    expect(checks.count).toBe(0);
+    expect(h.said.toasts.map((t) => t.message)).toContain(sentence);
+    s.queue();
+    await s.idle();
+    expect(checks.count).toBeGreaterThan(0);
+    expect(s.boxMessageOf(key)).toBe(sentence);
+    s.edit(key, "2000");
+    expect(s.boxMessageOf(key) ?? "").toBe("");
+  } finally {
+    checks.restore();
+    s?.dispose();
+  }
+});
+
 test("money note: leaving with a note and other valid edits saves them all; a second session reads them from the database", async () => {
   const key = "frm2551Qv2018:txt15";
   const restore = hostFault(key, "100", "99.00");

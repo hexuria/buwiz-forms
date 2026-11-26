@@ -32,6 +32,7 @@ function App() {
   const cbBlurs = signal(0);
   const comma = signal("none");
   const commaCount = signal(0);
+  const outside = signal("none");
   const showCb = signal(true);
   let twoRef: InputRef | undefined;
   const armHeld = signal(false);
@@ -65,6 +66,7 @@ function App() {
         <Text variant="cap">{`Cb blurs: ${cbBlurs()}`}</Text>
         <Text variant="cap">{`Comma: ${comma()}`}</Text>
         <Text variant="cap">{`Comma count: ${commaCount()}`}</Text>
+        <Text variant="cap">{`Outside: ${outside()}`}</Text>
         <Text variant="cap">{`Cb shown: ${showCb()}`}</Text>
       </View>
       <View class="flex-row flex-wrap gap-2">
@@ -113,6 +115,7 @@ function App() {
         value={two()}
         onChange={(v) => two.set(v === "" ? "0" : v)}
         inputRef={(r) => (twoRef = r)}
+        onOutsideKept={(typed, shown) => outside.set(`${typed}|${shown}`)}
         onFocus={() => {
           if (armHeld()) {
             armHeld.set(false);
