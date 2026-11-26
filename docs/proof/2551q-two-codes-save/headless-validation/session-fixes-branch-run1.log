@@ -1,0 +1,70 @@
+✓ built the Rust crate nsh-app-ebirforms (5m 59s)
+✓ built the headless runner of nsh-app-ebirforms (7m 44s)
+[2m2026-11-25T23:39:35.273869Z[0m [32m INFO[0m [2mbir_core::logging[0m[2m:[0m 🔍 Tracing initialized (developer_mode: false)
+[2m2026-11-25T23:39:35.300908Z[0m [32m INFO[0m [2mnsh_app_ebirforms::door[0m[2m:[0m eBIRForms started
+[2m2026-11-25T23:39:36.094058Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v1
+[2m2026-11-25T23:39:36.098761Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v2
+[2m2026-11-25T23:39:36.099288Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v3
+[2m2026-11-25T23:39:36.101171Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v4
+[2m2026-11-25T23:39:36.101578Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v5
+[2m2026-11-25T23:39:36.102396Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v5 migration: added period_key column to form_drafts
+[2m2026-11-25T23:39:36.102743Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v6
+[2m2026-11-25T23:39:36.103038Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v7
+[2m2026-11-25T23:39:36.103717Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v8
+[2m2026-11-25T23:39:36.104000Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v9
+[2m2026-11-25T23:39:36.104323Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v10
+[2m2026-11-25T23:39:36.105181Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v11
+[2m2026-11-25T23:39:36.105411Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v12
+[2m2026-11-25T23:39:36.105623Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v13
+[2m2026-11-25T23:39:36.105852Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v14
+[2m2026-11-25T23:39:36.106457Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v15
+[2m2026-11-25T23:39:36.111596Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v15 migration: added 6 missing form-rule state columns
+[2m2026-11-25T23:39:36.112008Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v16
+[2m2026-11-25T23:39:36.113986Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v16 migration: added 2 checked Final Copy proof columns
+[2m2026-11-25T23:39:36.114300Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v17
+[2m2026-11-25T23:39:36.124315Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v17 migration: added 12 exact form-rule identity columns
+[2m2026-11-25T23:39:36.124806Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v18
+[2m2026-11-25T23:39:36.125306Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v19
+[2m2026-11-25T23:39:36.126004Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v20
+[2m2026-11-25T23:39:36.127945Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v21
+[2m2026-11-25T23:39:36.128707Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v22
+[2m2026-11-25T23:39:36.131492Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v23
+[2m2026-11-25T23:39:36.132201Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v24
+[2m2026-11-25T23:39:36.137675Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v11 migration: added 5 missing Forms Set provenance columns
+[2m2026-11-25T23:39:36.142677Z[0m [33m WARN[0m [2mbir_core::db::google_calendar[0m[2m:[0m Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred [3mreason[0m[2m=[0m"the background worker is not running yet"
+[2m2026-11-25T23:39:36.149065Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine started
+✓ screens/form/session.fixes.test.ts › F3-1: deleting the first row of a compacting schedule (2550Q Schedule 3) shows the row that moved up, as the draft holds it (2.6s)
+[2m2026-11-25T23:39:45.199753Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:39:46.609839Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.fixes.test.ts › F3-2: a removal's Undo is never outlived by a save: autosave waits out the Undo, then saves and retires it; later saves go through (7.8s)
+[2m2026-11-25T23:39:47.705571Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:39:48.591920Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:39:49.666958Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.fixes.test.ts › F3-3: 1701MS item 11 draws the taxpayer's and the spouse's radios together: each choice reads its own tick (3.1s)
+[2m2026-11-25T23:39:51.000074Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:39:51.236842Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.fixes.test.ts › F3-4: every write through the door is told to the page (the frame drops its cached reads) (1.5s)
+[2m2026-11-25T23:39:52.165078Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.fixes.test.ts › F3-5: a queue refusal shows every message; a radio pick marks its row touched; the last part offers Check (939ms)
+[2m2026-11-25T23:39:52.670998Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:39:53.487208Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.fixes.test.ts › F3-7: a Form library sample keeps what is typed while it reopens as its return (1.3s)
+[2m2026-11-25T23:39:54.633685Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:39:54.675408Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:39:55.783257Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.fixes.test.ts › B19/F3-8: a rejected edit keeps what was typed, its sentence sits on the box, and it clears on the next edit (2.3s)
+[2m2026-11-25T23:39:56.951997Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:39:57.007600Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:39:58.230712Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.fixes.test.ts › F3-9: the save line says Unsaved changes at once; flushNow saves now; a refused save on leaving says why (2.5s)
+[2m2026-11-25T23:39:58.794448Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.fixes.test.ts › F3-10: leaving the page retires a removal's Undo and closes its toast (707ms)
+✓ screens/form/session.fixes.test.ts › F3-10: one definition of an empty schedule cell, the host's (blank text, a zero amount, an unticked box) (29ms)
+[2m2026-11-25T23:40:00.163941Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.fixes.test.ts › B16: a box another answer keeps shut shows its reason, and a write that reaches the host is refused with it (1.2s)
+✓ screens/form/session.fixes.test.ts › B17: a code off a select's list is refused on the box without a host call (328ms)
+[2m2026-11-25T23:40:02.135363Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+✓ screens/form/session.fixes.test.ts › B14: a boxed birth date shows the long month and asks once to save to the profile (1.8s)
+[2m2026-11-25T23:40:02.319301Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-25T23:40:02.319653Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine stopped
+✓ 13 tests: 13 passed, 0 failed (8m 12s)
