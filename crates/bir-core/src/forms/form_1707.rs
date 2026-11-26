@@ -498,6 +498,38 @@ impl Form1707Draft {
             ],
         );
         fields.insert("derived:tin_digits".to_string(), tin_digits);
+        // Items 6A-6C Seller TIN and 7A-7C Buyer TIN print in plain table cells
+        // with no comb ticks or preprinted dashes; upload XML keeps compact digits.
+        for index in 0..FORM_1707_PARTY_ROWS {
+            for prefix in ["6Seller", "7Buyer"] {
+                let key = format!("frm1707:txtPg1I{prefix}TIN{index}");
+                if let Some(value) = fields.get_mut(&key) {
+                    *value = super::print_map::format_tin_dashed(value);
+                }
+            }
+        }
+        // Official upload XML writes `0.00` for empty Schedule 2 rows and 3
+        // decimals (`1,000.000`) for filled rows; print shows blank for empty
+        // rows and trims trailing zeros for share counts.
+        for index in 0..FORM_1707_SCHEDULE_ROWS {
+            let popup_row = index == FORM_1707_SCHEDULE_ROWS - 1 && self.shares_popup();
+            if !popup_row {
+                let n = index + 1;
+                let row = self.main_share_row(index);
+                fields.insert(
+                    format!("frm1707:txtPg2P4Sch2NoOfShares{n}"),
+                    super::print_map::format_count(row.number_of_shares),
+                );
+            }
+        }
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm1707:txtPg1I1Month",
+                "frm1707:txtPg1I1Day",
+                "frm1707:txtPg1I1Year",
+            ],
+        );
         fields
     }
 
@@ -1611,5 +1643,46 @@ mod tests {
         draft.surcharge = 99.0;
         draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
+    }
+
+    #[test]
+    fn print_map_formats_party_tins_with_dashes_while_upload_keeps_digits() {
+        let mut draft = sample();
+        draft.sellers[0].tin = "00012345300000".to_string();
+        draft.buyers[0].tin = "987654321000".to_string();
+        let upload = draft.to_bir_field_map();
+        let print = draft.to_print_field_map();
+        assert_eq!(upload["frm1707:txtPg1I6SellerTIN0"], "00012345300000");
+        assert_eq!(upload["frm1707:txtPg1I7BuyerTIN0"], "987654321000");
+        assert_eq!(print["frm1707:txtPg1I6SellerTIN0"], "000-123-453-00000");
+        assert_eq!(print["frm1707:txtPg1I7BuyerTIN0"], "987-654-321-000");
+    }
+
+    #[test]
+    fn print_map_formats_share_counts_without_money_zeros_while_upload_matches_official() {
+        let mut draft = sample();
+        draft.shares = vec![
+            Form1707Shares {
+                corporation: "ACME CORP".into(),
+                number_of_shares: Some(1000.0),
+                certificate_number: "CERT-1".into(),
+                selling_price: 50_000.0,
+            },
+            Form1707Shares {
+                corporation: "BETA CORP".into(),
+                number_of_shares: Some(12345.678),
+                certificate_number: "CERT-2".into(),
+                selling_price: 60_000.0,
+            },
+        ];
+        let upload = draft.to_bir_field_map();
+        let print = draft.to_print_field_map();
+        assert_eq!(upload["frm1707:txtPg2P4Sch2NoOfShares1"], "1,000.000");
+        assert_eq!(upload["frm1707:txtPg2P4Sch2NoOfShares2"], "12,345.678");
+        assert_eq!(upload["frm1707:txtPg2P4Sch2NoOfShares3"], "0.00");
+        assert_eq!(print["frm1707:txtPg2P4Sch2NoOfShares1"], "1,000");
+        assert_eq!(print["frm1707:txtPg2P4Sch2NoOfShares2"], "12,345.678");
+        assert_eq!(print["frm1707:txtPg2P4Sch2NoOfShares3"], "");
+        assert_eq!(print["frm1707:txtPg2P4Sch2NoOfShares4"], "");
     }
 }

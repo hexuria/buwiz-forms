@@ -1025,7 +1025,11 @@ impl Form1700Draft {
             } else {
                 digits
             };
-            (printed.len() <= slots).then(|| format!("{printed:>slots$}"))
+            Some(if printed.len() <= slots {
+                format!("{printed:>slots$}")
+            } else {
+                printed
+            })
         };
         let mut columns = vec![("A", &self.taxpayer)];
         if self.is_joint() {

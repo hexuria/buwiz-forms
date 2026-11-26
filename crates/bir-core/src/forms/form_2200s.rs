@@ -639,6 +639,14 @@ impl Form2200SDraft {
         ] {
             fields.insert(format!("derived:{key}"), value);
         }
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm2200S:txtMonth1",
+                "frm2200S:txtDate",
+                "frm2200S:txtForYr",
+            ],
+        );
         fields
     }
 

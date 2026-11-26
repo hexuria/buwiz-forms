@@ -876,6 +876,14 @@ impl Form1801Draft {
         let mut tin_digits = super::print_map::tin_digits(&self.tin);
         tin_digits.truncate(9);
         fields.insert("derived:tin_digits".to_string(), tin_digits);
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm1801v2018:txtDateMonth",
+                "frm1801v2018:txtDateDay",
+                "frm1801v2018:txtDateYear",
+            ],
+        );
         fields
     }
 
