@@ -2929,6 +2929,16 @@ fn family_match(parts: &[FamilyPart], key: &str, row: Option<usize>) -> Option<u
 /// long (2200P's 27 rows) still gets rows the filer can add.
 const FAMILY_ROWS: usize = 10;
 
+/// Rows the probe grows to for one kind. 1601C Schedule I and 2200A Others
+/// have no official row cap; twenty rows cover the growable-table contract's
+/// write/read proof while one-row samples grow to exactly twenty rows.
+fn family_rows(kind: AgentFormKind) -> usize {
+    match kind.form_code() {
+        "1601C" | "2200A" => 19,
+        _ => FAMILY_ROWS,
+    }
+}
+
 /// `seed` with each non-empty list grown by `extra` rows past its own
 /// length and past [`PROBE_ROWS`], repeating its last row. A list is grown
 /// only where the draft still parses with it: a fixed-length field
@@ -2987,7 +2997,7 @@ pub fn supplement_row_families(
             continue;
         };
         note(map);
-        let grown = grow_rows_past(kind, &computed, FAMILY_ROWS);
+        let grown = grow_rows_past(kind, &computed, family_rows(kind));
         if grown != computed
             && let Some((_, map)) = probe_eval(kind, &grown)
         {
@@ -3024,7 +3034,12 @@ pub fn supplement_row_families(
                 } else {
                     "checkbox".to_string()
                 },
-                computed: family.computed,
+                // 2200A's runtime Others rows are built with a filer-editable
+                // Due input (`sched1Fields` in BIR-Form2200Av2020.hta); the
+                // family template is marked computed only because editing it
+                // also runs `computeOthers`.
+                computed: family.computed
+                    && family.key != "frm2200Av2020:txtSched1_xa_others{N>=4}_Due",
                 required: family.required.clone(),
                 options: family.options.clone(),
                 layout_only: false,

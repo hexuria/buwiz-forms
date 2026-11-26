@@ -1,0 +1,74 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests/sample_payloads_test.rs (/home/ubuntu/growable/target/debug/deps/sample_payloads_test-708a9f446a1cbc6f)
+
+running 64 tests
+test sample_payloads::form_0619f::form_0619f_sample_payload_is_current ... ok
+test sample_payloads::form_0619e::form_0619e_sample_payload_is_current ... ok
+test sample_payloads::form_0605::form_0605_sample_payload_is_current ... ok
+test sample_payloads::form_1600vt::form_1600vt_private_sample_payload_is_current ... ok
+test sample_payloads::form_1600pt::form_1600pt_private_sample_payload_is_current ... ok
+test sample_payloads::form_1600pt::form_1600pt_sample_payload_is_current ... ok
+test sample_payloads::form_1600vt::form_1600vt_other_atcs_sample_payload_is_current ... ok
+test sample_payloads::form_1600pt::form_1600pt_other_atcs_sample_payload_is_current ... ok
+test sample_payloads::form_1600wp::form_1600wp_no_atc_sample_payload_is_current ... ok
+test sample_payloads::form_1600wp::form_1600wp_one_atc_sample_payload_is_current ... ok
+test sample_payloads::form_1600wp::form_1600wp_two_atc_sample_payload_is_current ... ok
+test sample_payloads::form_1600vt::form_1600vt_sample_payload_is_current ... ok
+test sample_payloads::form_1603q::form_1603q_sample_payload_is_current ... ok
+test sample_payloads::form_1604e::form_1604e_sample_payload_is_current ... ok
+test sample_payloads::form_1604f::form_1604f_sample_payload_is_current ... ok
+test sample_payloads::form_1601eq::form_1601eq_sample_payload_is_current ... ok
+test sample_payloads::form_1602q::form_1602q_sample_payload_is_current ... ok
+test sample_payloads::form_1601fq::form_1601fq_sample_payload_is_current ... ok
+test sample_payloads::form_1604c::form_1604c_sample_payload_is_current ... ok
+test sample_payloads::form_1601c::form_1601c_sample_payload_is_current ... ok
+test sample_payloads::form_1606::form_1606_sample_payload_is_current ... ok
+test sample_payloads::form_1700::form_1700_sample_payload_is_current ... ok
+test sample_payloads::form_1700::form_1700_joint_sample_payload_is_current ... ok
+test sample_payloads::form_1701a::form_1701a_more_sample_payload_is_current ... ok
+test sample_payloads::form_1701a::form_1701a_joint_more_sample_payload_is_current ... ok
+test sample_payloads::form_1701a::form_1701a_sample_payload_is_current ... ok
+test sample_payloads::form_1701ms::form_1701ms_special_rate_sample_payload_is_current ... ok
+test sample_payloads::form_1701a::form_1701a_joint_many_rows_sample_payload_is_current ... ok
+test sample_payloads::form_1701a::form_1701a_joint_sample_payload_is_current ... ok
+test sample_payloads::form_1702ex::form_1702ex_popups_sample_payload_is_current ... ok
+test sample_payloads::form_1701ms::form_1701ms_sample_payload_is_current ... ok
+test sample_payloads::form_1701q::form_1701q_sample_payload_is_current ... ok
+test sample_payloads::form_1702ex::form_1702ex_sample_payload_is_current ... ok
+test sample_payloads::form_1702q::form_1702q_sample_payload_is_current ... ok
+test sample_payloads::form_1702rt::form_1702rt_sample_payload_is_current ... ok
+test sample_payloads::form_1707a::form_1707a_sample_payload_is_current ... ok
+test sample_payloads::form_1706::form_1706_sample_payload_is_current ... ok
+test sample_payloads::form_1702mx::form_1702mx_sample_payload_is_current ... ok
+test sample_payloads::form_1702rt::form_1702rt_more_rows_sample_payload_is_current ... ok
+test sample_payloads::form_1702mx::form_1702mx_fiscal_sample_payload_is_current ... ok
+test sample_payloads::form_1801::form_1801_sample_payload_is_current ... ok
+test sample_payloads::form_1800::form_1800_sample_payload_is_current ... ok
+test sample_payloads::form_1707::form_1707_sample_payload_is_current ... ok
+test sample_payloads::form_2000ot::form_2000ot_sample_payload_is_current ... ok
+test sample_payloads::form_2000::form_2000_sample_payload_is_current ... ok
+test sample_payloads::form_1702mx::form_1702mx_schedule_6_rows_sample_payload_is_current ... ok
+test sample_payloads::form_2200s::form_2200s_sample_payload_is_current ... ok
+test sample_payloads::form_2200c::form_2200c_sample_payload_is_current ... ok
+test sample_payloads::form_2200an::form_2200an_sample_payload_is_current ... ok
+test sample_payloads::form_2550m::form_2550m_capital_goods_sample_payload_is_current ... ok
+test sample_payloads::form_2200t::form_2200t_sample_payload_is_current ... ok
+test sample_payloads::form_2550q::form_2550q_sample_payload_is_current ... ok
+test sample_payloads::form_2200m::form_2200m_sample_payload_is_current ... ok
+test sample_payloads::form_2200a::form_2200a_sample_payload_is_current ... ok
+test sample_payloads::form_2200p::form_2200p_sample_payload_is_current ... ok
+test sample_payloads::form_2551q::form_2551q_sample_payload_is_current ... ok
+test sample_payloads::form_2550q::form_2550q_schedule_rows_sample_payload_is_current ... ok
+test sample_payloads::form_2552::form_2552_sample_payload_is_current ... ok
+test sample_payloads::form_2550q::form_2550q_specify_popup_rows_sample_payload_is_current ... ok
+test sample_payloads::form_2552::form_2552_add_more_sample_payload_is_current ... ok
+test sample_payloads::form_2553::form_2553_sample_payload_is_current ... ok
+test sample_payloads::form_2550m::form_2550m_schedule_1_sample_payload_is_current ... ok
+test sample_payloads::form_2550m::form_2550m_credits_sample_payload_is_current ... ok
+test sample_payloads::form_2550m::form_2550m_sample_payload_is_current ... ok
+
+test result: ok. 64 passed; 0 failed; 0 ignored; 0 measured; 83 filtered out; finished in 0.11s
+
+rc:0

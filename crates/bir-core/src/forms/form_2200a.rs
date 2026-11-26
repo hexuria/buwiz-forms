@@ -656,7 +656,7 @@ pub struct Form2200ADraft {
     /// Fixed rows in [`FORM_2200A_FIXED_ROWS`] order; missing rows are zero.
     #[serde(default)]
     pub schedule: Vec<Form2200AAmounts>,
-    /// "Others (specify)" rows, at most three.
+    /// "Others (specify)" rows; the paper shows three and the official serializer carries every row.
     #[serde(default)]
     pub others: Vec<Form2200AOtherRow>,
     /// `txtSched1_TotalDue`.
@@ -877,9 +877,6 @@ impl Form2200ADraft {
 
     /// "Others" row `index`, growing the list to reach it.
     pub fn other_mut(&mut self, index: usize) -> Option<&mut Form2200AOtherRow> {
-        if index >= FORM_2200A_OTHER_ROWS {
-            return None;
-        }
         if self.others.len() <= index {
             self.others
                 .resize_with(index + 1, Form2200AOtherRow::default);
@@ -1083,7 +1080,7 @@ impl Form2200ADraft {
                 official_amount(row.tax_due),
             );
         }
-        for index in 0..FORM_2200A_OTHER_ROWS {
+        for index in 0..self.others.len().max(FORM_2200A_OTHER_ROWS) {
             let row = self.other(index);
             let base = format!("txtSched1_xa_others{}", index + 1);
             put(&format!("{base}_Check"), flag(!row.is_blank()));
@@ -1259,9 +1256,6 @@ impl Form2200ADraft {
         }
         if self.schedule.len() > FORM_2200A_FIXED_ROW_COUNT {
             err("schedule", "Schedule 1 has 60 fixed rows.");
-        }
-        if self.others.len() > FORM_2200A_OTHER_ROWS {
-            err("others", "Schedule 1 has 3 \"Others\" rows.");
         }
         for (index, row) in self.schedule.iter().enumerate() {
             if row
@@ -1566,6 +1560,49 @@ mod tests {
             print["derived:place_of_removal"],
             "010000000 012800000     012801000"
         );
+    }
+
+    #[test]
+    fn others_rows_past_the_paper_write_official_keys_and_read_back() {
+        for rows in [4, 7, 20] {
+            let mut draft = sample();
+            draft.others = (0..rows)
+                .map(|index| Form2200AOtherRow {
+                    atc_digits: format!("{:03}", index + 1),
+                    description: format!("Invented product {}", index + 1),
+                    bracket: "Per liter".into(),
+                    rate: "5".into(),
+                    amounts: Form2200AAmounts {
+                        export_exempt: 0.0,
+                        taxable: 100.0 + index as f64,
+                        tax_due: 5.0 + index as f64 / 100.0,
+                    },
+                })
+                .collect();
+            draft.recompute();
+            draft.tax_deposit = draft.tax_still_due;
+            draft.recompute();
+            let xml = draft
+                .to_bir_xml_payload()
+                .expect("complete Others rows follow the official uncapped serializer");
+            let key = format!("frm2200Av2020:txtSched1_xa_others{rows}_Atc");
+            assert!(
+                xml.contains(&format!("<div>{key}={rows:03}{key}=</div>")),
+                "{rows} rows: {key}"
+            );
+            assert!(!xml.contains(&format!("txtSched1_xa_others{}_Atc", rows + 1)));
+            let layout = crate::official_xml::layout(FORM_2200A_FORM_ID).unwrap();
+            let read = crate::official_xml::read(layout, &xml).expect("official reader");
+            assert_eq!(read["frm2200Av2020:txtSched1_xa_others4_Atc"], "004");
+            assert_eq!(
+                read[format!("frm2200Av2020:txtSched1_xa_others{rows}_Atc").as_str()],
+                format!("{rows:03}")
+            );
+            assert_eq!(
+                read[format!("frm2200Av2020:txtSched1_xa_others{rows}_Desc").as_str()],
+                format!("Invented product {rows}")
+            );
+        }
     }
 
     #[test]

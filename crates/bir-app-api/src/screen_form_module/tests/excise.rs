@@ -547,7 +547,7 @@ fn pr11_2200a_schedule_1_is_by_atc_with_every_fixed_row_once() {
         .into_iter()
         .find(|it| it["l"] == "Others (specify)")
         .expect("4) Others (specify)");
-    assert_eq!(others["rows"], 3);
+    assert_eq!(others["rows"], 20);
     assert_eq!(others["keys"][0][0], format!("{p}txtSched1_xa_others1_Atc"));
     assert!(captions[&format!("{p}txtSched1_xa_others1_Atc")].starts_with("4 Others (specify)"));
     // The rows' tick boxes are the page's row switch, not printed.
@@ -567,6 +567,54 @@ fn pr11_2200a_schedule_1_is_by_atc_with_every_fixed_row_once() {
             .iter()
             .any(|part| part["n"] == "Page 3")
     );
+}
+
+/// Rows past the paper's three Others rows fill through the page host and
+/// clear again. The schema cap was the three extracted paper rows, not the
+/// official serializer.
+#[test]
+fn form_2200a_others_rows_four_to_seven_fill_and_clear() {
+    setup();
+    setup_taxpayer_filing(&["2200A"]);
+    let mut draft = open("2200A", 9)["draft"].clone();
+    let mut edits = Map::new();
+    for row in 4..=7 {
+        for (suffix, value) in [
+            ("Atc", format!("{row:03}")),
+            ("Desc", format!("Invented product {row}")),
+            ("Bracket", "Per liter".to_string()),
+            ("Rate", "5".to_string()),
+            ("Export", "0".to_string()),
+            ("Taxable", format!("{row}00")),
+            ("Due", format!("{}.00", row * 5)),
+        ] {
+            edits.insert(
+                format!("frm2200Av2020:txtSched1_xa_others{row}_{suffix}"),
+                Value::from(value),
+            );
+        }
+    }
+    let filled = fill("2200A", &draft, Value::Object(edits));
+    assert_eq!(filled["rejected"], json!({}));
+    assert_eq!(filled["draft"]["others"].as_array().unwrap().len(), 7);
+    assert_eq!(filled["draft"]["others"][6]["atc_digits"], "007");
+
+    let mut clear = Map::new();
+    for suffix in ["Atc", "Desc", "Bracket", "Rate", "Export", "Taxable", "Due"] {
+        clear.insert(
+            format!("frm2200Av2020:txtSched1_xa_others7_{suffix}"),
+            Value::from(if matches!(suffix, "Export" | "Taxable" | "Due") {
+                "0"
+            } else {
+                ""
+            }),
+        );
+    }
+    let cleared = fill("2200A", &filled["draft"], Value::Object(clear));
+    assert_eq!(cleared["rejected"], json!({}));
+    assert_eq!(cleared["draft"]["others"].as_array().unwrap().len(), 6);
+    draft = cleared["draft"].clone();
+    assert_eq!(draft["others"][5]["atc_digits"], "006");
 }
 
 /// 2200A Schedule 1 Others rows 1-3 Basic Excise Tax Due: enabled at load in

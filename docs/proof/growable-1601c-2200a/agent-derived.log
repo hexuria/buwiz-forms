@@ -1,0 +1,13 @@
+   Compiling bir-core v0.2.1 (/home/ubuntu/growable/buwiz-forms/crates/bir-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.67s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests/sample_payloads_test.rs (/home/ubuntu/growable/target/debug/deps/sample_payloads_test-708a9f446a1cbc6f)
+
+running 1 test
+test sample_payloads::agent_forms::agent_forms_are_derived_from_the_samples has been running for over 60 seconds
+test sample_payloads::agent_forms::agent_forms_are_derived_from_the_samples ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 146 filtered out; finished in 228.83s
+
+rc:0

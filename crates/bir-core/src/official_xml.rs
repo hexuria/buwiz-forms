@@ -219,6 +219,121 @@ impl OfficialLayout {
     }
 }
 
+fn replace_index(text: &str, old: &str, new: usize) -> String {
+    if let Some(prefix) = text.strip_suffix(old) {
+        format!("{prefix}{new}")
+    } else {
+        text.replace(&format!("others{old}_"), &format!("others{new}_"))
+    }
+}
+
+fn clone_entry_indexed(entry: &Entry, old: &str, new: usize) -> Entry {
+    let mut entry = entry.clone();
+    match &mut entry {
+        Entry::Bool { key, .. } => *key = replace_index(key, old, new),
+        Entry::Value { key, parts, .. } => {
+            *key = replace_index(key, old, new);
+            for part in parts {
+                if let Part::Source { source, .. } = part {
+                    *source = replace_index(source, old, new);
+                }
+            }
+        }
+    }
+    entry
+}
+
+/// The official row builders append continuous rows to the live form before
+/// the same serializer walks it. The packaged layouts record the rows on the
+/// paper; expand those contiguous row blocks for the highest row present.
+/// This is deliberately not expansion per pre-allocated key: one row block is
+/// cloned once per added row, so duplicate keys cannot arise.
+fn expanded_layout(layout: &OfficialLayout, keys: impl Iterator<Item = String>) -> OfficialLayout {
+    let mut expanded = layout.clone();
+    let keys: Vec<String> = keys.collect();
+    match layout.form_id.as_str() {
+        "1601c-v2018" => {
+            let stems = [
+                "frm1601c:sched1:txtMonthYear",
+                "frm1601c:sched1:txtShouldTaxDue",
+            ];
+            let max = keys
+                .iter()
+                .filter_map(|key| {
+                    stems
+                        .iter()
+                        .find_map(|stem| key.strip_prefix(stem)?.parse::<usize>().ok())
+                })
+                .max()
+                .unwrap_or(2);
+            if max <= 2 {
+                return expanded;
+            }
+            let mut out = Vec::with_capacity(expanded.entries.len() + (max - 2) * 8);
+            let mut at = 0;
+            while at < expanded.entries.len() {
+                let key = match &expanded.entries[at] {
+                    Entry::Bool { key, .. } | Entry::Value { key, .. } => key.as_str(),
+                };
+                if key == "chkScheduleDelete2" {
+                    for row in 2..=max {
+                        for source in at..at + 6 {
+                            out.push(clone_entry_indexed(&expanded.entries[source], "2", row));
+                        }
+                    }
+                    at += 6;
+                } else if key == "frm1601c:sched1:txtShouldTaxDue2" {
+                    for row in 2..=max {
+                        for source in at..at + 2 {
+                            out.push(clone_entry_indexed(&expanded.entries[source], "2", row));
+                        }
+                    }
+                    at += 2;
+                } else {
+                    out.push(expanded.entries[at].clone());
+                    at += 1;
+                }
+            }
+            expanded.entries = out;
+        }
+        "2200a-v2020" => {
+            let max = keys
+                .iter()
+                .filter_map(|key| {
+                    let rest = key.strip_prefix("frm2200Av2020:txtSched1_xa_others")?;
+                    let (row, _) = rest.split_once('_')?;
+                    row.parse::<usize>().ok()
+                })
+                .max()
+                .unwrap_or(3);
+            if max <= 3 {
+                return expanded;
+            }
+            let mut out = Vec::with_capacity(expanded.entries.len() + (max - 3) * 8);
+            let mut at = 0;
+            while at < expanded.entries.len() {
+                let key = match &expanded.entries[at] {
+                    Entry::Bool { key, .. } | Entry::Value { key, .. } => key.as_str(),
+                };
+                if key == "frm2200Av2020:txtSched1_xa_others3_Check" {
+                    for row in 3..=max {
+                        for source in at..at + 8 {
+                            out.push(clone_entry_indexed(&expanded.entries[source], "3", row));
+                        }
+                    }
+                    at += 8;
+                } else {
+                    out.push(expanded.entries[at].clone());
+                    at += 1;
+                }
+            }
+            expanded.entries = out;
+        }
+        _ => {}
+    }
+    expanded
+}
+
 /// Write the official plaintext for `values`, keyed by official control id.
 ///
 /// A control with no value keeps the official page default. A key that is not
@@ -228,6 +343,13 @@ pub fn write(
     layout: &OfficialLayout,
     values: &BTreeMap<String, String>,
 ) -> Result<String, OfficialXmlError> {
+    let owned;
+    let layout = if matches!(layout.form_id.as_str(), "1601c-v2018" | "2200a-v2020") {
+        owned = expanded_layout(layout, values.keys().cloned());
+        &owned
+    } else {
+        layout
+    };
     let known = layout.keys();
     if let Some(unknown) = values.keys().find(|key| !known.contains(key.as_str())) {
         return Err(OfficialXmlError::UnknownKey(unknown.clone()));
@@ -353,6 +475,17 @@ pub fn read(
         }
     }
 
+    let owned;
+    let layout = if matches!(layout.form_id.as_str(), "1601c-v2018" | "2200a-v2020") {
+        let keys = plaintext
+            .split("<div>")
+            .skip(1)
+            .filter_map(|part| part.split('=').next().map(str::to_string));
+        owned = expanded_layout(layout, keys);
+        &owned
+    } else {
+        layout
+    };
     let mut values = BTreeMap::new();
     let mut at = 0;
     expect(plaintext, &mut at, &layout.header)?;

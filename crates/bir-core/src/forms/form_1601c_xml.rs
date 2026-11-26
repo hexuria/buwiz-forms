@@ -228,7 +228,7 @@ impl Form1601CDraft {
         );
 
         // Schedule I — the verified 1601-C payload exposes three rows.
-        for i in 0..MAX_SCHEDULE_1_ROWS {
+        for i in 0..self.schedule_1.len().max(MAX_SCHEDULE_1_ROWS) {
             let row = self.schedule_1.get(i);
             insert(&mut fields, &format!("chkScheduleDelete{}", i), "false");
             insert(
@@ -296,7 +296,7 @@ impl Form1601CDraft {
     }
 
     /// Generate XML only when the draft satisfies the verified model and
-    /// three-row Schedule I capacity. Submission remains separately governed
+    /// the verified model. Submission remains separately governed
     /// by the form capability registry.
     pub fn try_to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         let errors = self.validate();
@@ -361,7 +361,12 @@ impl Form1601CDraft {
 
         let mut schedule_1 = Vec::new();
         let mut source_adjustments = Vec::new();
-        for index in 0..MAX_SCHEDULE_1_ROWS {
+        for index in 0.. {
+            if !fields.contains_key(&format!("frm1601c:sched1:txtMonthYear{index}"))
+                && !fields.contains_key(&format!("frm1601c:sched1:txtTaxPaid{index}"))
+            {
+                break;
+            }
             let previous_month = field(fields, &format!("frm1601c:sched1:txtMonthYear{index}"));
             let date_paid = field(fields, &format!("frm1601c:sched1:txtDatePaid{index}"));
             let bank = field(fields, &format!("frm1601c:sched1:txtBankCode{index}"));
@@ -850,8 +855,8 @@ mod tests {
 
     fn valid_schedule_row(index: usize) -> Form1601CSchedule1Row {
         Form1601CSchedule1Row {
-            previous_month: format!("{:02}/2026", index + 1),
-            date_paid: format!("{:02}/10/2026", index + 1),
+            previous_month: "01/2026".to_string(),
+            date_paid: "01/10/2026".to_string(),
             drawee_bank_code_or_agency: format!("AAB-{}", index + 1),
             payment_number: format!("REF-{}", index + 1),
             tax_paid: (index as f64 + 1.0) * 100.0,
@@ -917,18 +922,37 @@ mod tests {
     }
 
     #[test]
-    fn checked_xml_generation_rejects_schedule_overflow_instead_of_truncating() {
+    fn schedule_rows_past_the_paper_write_official_keys_and_round_trip() {
         let profile = test_profile();
-        let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 4);
-        draft.any_taxes_withheld = false;
-        draft.auto_compute_penalties = false;
-        draft.schedule_1 = (0..=MAX_SCHEDULE_1_ROWS).map(valid_schedule_row).collect();
-        draft.compute();
+        for rows in [4, 7, 20] {
+            let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 4);
+            draft.any_taxes_withheld = false;
+            draft.auto_compute_penalties = false;
+            draft.schedule_1 = (0..rows).map(valid_schedule_row).collect();
+            draft.compute();
 
-        let errors = draft
-            .try_to_bir_xml_payload()
-            .expect_err("a fourth XML row must be rejected");
-        assert!(errors.iter().any(|(field, _)| field == "schedule_1"));
+            let xml = draft
+                .try_to_bir_xml_payload()
+                .expect("complete rows now follow the official uncapped serializer");
+            let highest = rows - 1;
+            let key = format!("frm1601c:sched1:txtMonthYear{highest}");
+            assert!(
+                xml.contains(&format!("<div>{key}=01/2026{key}=</div>")),
+                "{rows} rows: {key}"
+            );
+            assert!(!xml.contains(&format!("txtMonthYear{rows}")));
+            let layout = crate::official_xml::layout(FORM_1601C_FORM_ID).expect("layout");
+            let read = crate::official_xml::read(layout, &xml).expect("official reader");
+            assert_eq!(read["frm1601c:sched1:txtMonthYear3"], "01/2026");
+            assert_eq!(
+                read[format!("frm1601c:sched1:txtMonthYear{highest}").as_str()],
+                "01/2026"
+            );
+            let parsed = Form1601CDraft::from_bir_xml_payload(&xml)
+                .expect("the expanded official layout reads back");
+            assert_eq!(parsed.schedule_1.len(), rows);
+            assert_eq!(parsed.schedule_1[highest], draft.schedule_1[highest]);
+        }
     }
 
     #[test]

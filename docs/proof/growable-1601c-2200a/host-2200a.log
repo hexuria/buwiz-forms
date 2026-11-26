@@ -1,0 +1,11 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/lib.rs (/home/ubuntu/growable/target/debug/deps/bir_app_api-327dd945726b3021)
+
+running 1 test
+test screen_form_module::tests::excise::form_2200a_others_rows_four_to_seven_fill_and_clear ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 796 filtered out; finished in 0.20s
+
+rc:0

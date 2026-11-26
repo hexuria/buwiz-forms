@@ -528,6 +528,7 @@ fn build_form(form: &mut Value, fixes: Option<&Value>) {
     rows_annual_corporate::mark_whole_pesos(form, code);
     rows_as_needed::mark_calendar_tables(form, code);
     rows_donor_estate::mark_schema(form, code);
+    grow_schedule_tables(form, code);
     // PR 3: period pairs and from-to ranges join their boxes on one item
     // first, so mark_one_date sees 1600WP's two triples together.
     rows_as_needed::mark_periods(form, code);
@@ -537,6 +538,41 @@ fn build_form(form: &mut Value, fixes: Option<&Value>) {
     rows_annual_individual::mark_pools(form, code);
     // 1701 Part VIII item 6's hint from Part VII item 8 (P4-10).
     rows_annual_individual::mark_from(form, code);
+}
+
+/// 2200A's extracted Others table carries the paper's rows 1-3. The official
+/// page builds rows in script, so rows 4-20 clone row 3's control family.
+fn grow_schedule_tables(form: &mut Value, code: &str) {
+    if code != "2200A" {
+        return;
+    }
+    for item in form["parts"]
+        .as_array_mut()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array_mut().into_iter().flatten())
+    {
+        let Some(rows) = item["keys"].as_array_mut() else {
+            continue;
+        };
+        if rows.first().and_then(|row| row[0].as_str())
+            != Some("frm2200Av2020:txtSched1_xa_others1_Atc")
+        {
+            continue;
+        }
+        while rows.len() < 20 {
+            let mut row = rows[2].clone();
+            for key in row.as_array_mut().into_iter().flatten() {
+                if let Some(text) = key.as_str() {
+                    *key = Value::from(
+                        text.replace("others3_", &format!("others{}_", rows.len() + 1)),
+                    );
+                }
+            }
+            rows.push(row);
+        }
+        item["rows"] = Value::from(rows.len());
+    }
 }
 
 /// What a number box holds, from the draft field it writes and its label:
@@ -9597,7 +9633,7 @@ mod tests {
             .iter()
             .find(|it| it["keys"][0][0] == "frm1601c:sched1:txtMonthYear0")
             .expect("Schedule I table");
-        assert_eq!(table["rows"], 3);
+        assert_eq!(table["rows"], 20);
         assert_eq!(table["cols"][0]["l"], "1 Previous Month/s (MM/YYYY)");
         assert_eq!(table["cols"][4]["t"], "money");
         assert!(table["cols"][6].get("c").is_some());
@@ -9656,6 +9692,36 @@ mod tests {
             json!({"frm1601c:sched1:txtMonthYear2": ""}),
         );
         assert_eq!(blank["draft"]["schedule_1"].as_array().unwrap().len(), 1);
+
+        let row4 = fill(
+            "1601C",
+            &filled["draft"],
+            json!({
+                "frm1601c:sched1:txtMonthYear3": "05/2026",
+                "frm1601c:sched1:txtDatePaid3": "06/10/2026",
+                "frm1601c:sched1:txtBankCode3": "AAB-4",
+                "frm1601c:sched1:txtNumber3": "REF-4",
+                "frm1601c:sched1:txtTaxPaid3": "400",
+                "frm1601c:sched1:txtShouldTaxDue3": "500",
+            }),
+        );
+        assert_eq!(row4["rejected"], json!({}));
+        assert_eq!(row4["draft"]["schedule_1"].as_array().unwrap().len(), 4);
+        let row7 = fill(
+            "1601C",
+            &row4["draft"],
+            json!({"frm1601c:sched1:txtMonthYear6": "05/2026"}),
+        );
+        assert_eq!(row7["draft"]["schedule_1"].as_array().unwrap().len(), 7);
+
+        let clear7 = fill(
+            "1601C",
+            &row7["draft"],
+            json!({"frm1601c:sched1:txtMonthYear6": ""}),
+        );
+        assert_eq!(clear7["rejected"], json!({}));
+        assert_eq!(clear7["draft"]["schedule_1"][6]["previous_month"], "");
+        assert_eq!(clear7["draft"]["schedule_1"][6]["tax_paid"], 0.0);
 
         save("1601C", &filled["draft"]);
         let reopened = open("1601C", 7);
