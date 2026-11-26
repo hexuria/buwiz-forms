@@ -1,0 +1,26 @@
+# Job 34 — otp input long-press fix, rerun of job 30's open items (measure only)
+
+## Header
+
+- App: hexuria/buwiz-forms main at `1b18d668`, folder `~/BuwizNsh/target-1b18d668`.
+- Sibling nsh: hexuria/nsh `fix/otp-input-android-longpress` at `125af95e242d86115c9d677acbdfb60d3bb6397c` (draft nsh#44, two commits on buwiz-next `07313d52`). Used on purpose over the app commit's own pin (`8c78cfd6` in its nsh.yml).
+- Tool and both runtimes built at `125af95e` in `~/BuwizNsh/tools-125af95e` (real copies, `nsh-ref` written); never `nsh update`.
+- classes.dex sha256 inside the APK: `23529ace060d879c6075dc525a45d4918ddd763ad02ae544f9c2333d7343310c`.
+- Build: `nsh package --target android --abi x86_64` with `CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true BUWIZ_ANDROID_DEV=1` and the four safety variables baked (`EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1`) — the docs/relay.md recipe; without it a package build compiles the auth bypass out and the sign-in gate cannot be passed. Demo taxpayer, invented values, never Queue.
+- Device: emulator-5554, API 35, 1080x2400, density 420, gesture navigation, Show taps on. Main `1b18d668` predates #388 (phones-file-for-real), but the emulator's outside network was cut anyway (`svc wifi disable; svc data disable`) before the app first ran.
+- All taps are 150 ms hold-taps; long presses are 1500 ms hold-taps. Recordings: `run-seg-000..002.mp4` cover onboarding and cases 1–4 continuously; `lp-digit1.mp4` and `lp-clean.mp4` are the dedicated case-6 long-press captures.
+
+## One line per case
+
+1. **Long-press the MIDDLE digit — DOES NOT WORK, and the LAST digit — DOES NOT WORK.** Settled state both times: no selection on the boxes, a single caret handle below digit 1 (the left strip), and the caret-style menu — "Select all" + overflow (whose only extra is Autofill) — not the Cut/Copy selection menu (`c1-mid-settled.png`, `c1-mid-menu-open.png`, `c1-last-settled.png`). Frame-by-frame at 20 fps (`lp-clean.mp4` for the last digit): no selection state appears at any time, not even for one frame. The kit's write of the whole-run selection does not survive — or never reaches the screen — when the press is over a cell right of the glyph strip.
+2. **Long-press digit 1 — WORKS.** The menu is Cut/Copy/Paste/Share, two selection handles appear, both near the left strip as the author expects, and all three boxes render shaded (`c2-lp-digit1.png`, frame `d1-t3.3.png`). Cut empties all three boxes (`c2-after-cut.png`) and the clipboard holds exactly what was shown: pasting into Registered name inserts `123` (`c2-pasted.png`; the Gboard clipboard strip visibly read "123" before pasting).
+3. **Tap between digits 1 and 2, type 9 — WORKS.** Boxes before `1 2 3` (`c3-typed123.png`), after `1 9 2 3` (`c3-after9.png`, the 3 shifting past the dash into box 4). The caret is no longer end-pinned.
+4. **Paste in three formats — WORKS for all three.** `123-456-789`, `123 456 789` and `12345678901234` typed into Registered name, selected all, copied, long-pressed on the empty TIN, pasted: dashes/spaces stripped, boxes fill `123-456-789`, and the fourteen-digit paste fills the first nine and drops the trailing five (`c4a-boxes.png`, `c4b-boxes.png`, `c4c-boxes.png`).
+5. **Handle drag — WORKS, and the harness can map it.** After the digit-1 selection, dragging the left handle rightward past digit 2 shrunk the selection to digit 3 alone — proven by Cut then removing only digit 3, leaving `1 2` (`c5-after-drag.png`, `c5-after-cut.png`). Note the handles themselves stay compressed near the left strip during the drag; the selection change is read from the boxes, not the handle positions.
+6. **The race on digit 1, frames at 20 fps (`lp-digit1.mp4`; recording starts ≈1.2 s before the press):** press down ≈t1.2–1.5 s, release ≈t2.9 s. At t≈1.5 s a lone caret handle sits below digit 1 with no selection (`d1-t1.5-press.png`); by t≈2.0 s — still inside the press — Android's text magnifier is up and all three boxes are shaded (`d1-t2.0-press.png`); after release (t≈3.3 s) the settled state is the same selection plus the Cut/Copy/Paste/Share menu (`d1-t3.3.png`). So the settled state is the whole-run selection, and there is no visible flash of the caret/Select-all state after it — the caret-only look exists only within the first ≈0.3–0.5 s of the press itself, before either mechanism's write lands. On the LAST digit (only the kit's write can fire, platform word selection finds no glyph there) no selection ever appears at any frame — the settled state is the caret menu, matching case 1.
+
+## Harness notes
+
+- Tapping outside the TIN raises the form's validation ("TIN is 9 digits", red box borders) which then stays visible in later shots; cosmetic only.
+- After the case-3 insert, the caret sits right after the inserted digit; backspaces there cannot reach the end digits without re-tapping — clearing the field reliably means tapping at the end first. (Observation only; no case needed it twice.)
+- One mis-tap in case 4c hit the menu's "Call" entry (the floating menu gains a Call button when the text looks like a phone number, shifting Copy rightward) and opened a web search; the app state was intact and the step was re-run cleanly. No measured step failed twice.
