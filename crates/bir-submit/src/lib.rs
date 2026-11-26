@@ -28,6 +28,8 @@ pub mod receipt;
 pub mod seal;
 pub mod secrets;
 #[cfg(test)]
+pub(crate) mod test_logs;
+#[cfg(test)]
 mod testkit;
 pub mod tins;
 pub mod trust;

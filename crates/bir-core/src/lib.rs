@@ -65,6 +65,8 @@ pub mod relay;
 pub mod schema;
 pub mod send_in_flight;
 pub mod tax_profile;
+#[cfg(test)]
+pub(crate) mod test_logs;
 pub mod time_utils;
 pub mod transport;
 pub mod validation;
