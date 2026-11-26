@@ -20,6 +20,9 @@ only what a render shows, measured afresh on every run, so a redrawn SVG with ot
 Needs: Python 3 with Pillow (uv fetches it), and rsvg-convert (Homebrew `librsvg`, Debian `librsvg2-bin`). Nothing else:
 the .icns and the Windows .ico are written by Pillow, so no Xcode tool is needed.
 
+The logo itself is made from its eight parts in assets/brand/parts/ (`just logo`, see the README there); --check also
+checks that buwiz-forms.svg is byte for byte what those parts give.
+
 --check renders everything into a scratch folder and compares pixels with the committed files, allowing the small
 anti-aliasing differences between rsvg-convert versions. It is a local command, not a CI job: another machine's librsvg and
 cairo can draw edges differently enough to be noise, and CI would then fail on nothing.
@@ -330,6 +333,27 @@ def same(a: Image.Image, b: Image.Image) -> bool:
     return total / pixels < 1.0 and far / pixels < 0.005
 
 
+def logo_check() -> list[str]:
+    """The logo must be what its parts give: assets/brand/parts/merge.py, run into a scratch file, byte for byte. Skipped
+    (with a line) when the parts are not here or NumPy is missing; `just icons-check` brings NumPy."""
+    merge = os.path.join(HERE, "parts", "merge.py")
+    if not os.path.exists(merge):
+        return []
+    try:
+        import numpy  # noqa: F401  (merge.py needs it)
+    except ImportError:
+        print("logo not checked against its parts: NumPy is missing (run `just icons-check`)")
+        return []
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "logo.svg")
+        subprocess.run([sys.executable, merge, out], check=True, stdout=subprocess.DEVNULL)
+        with open(out, "rb") as a, open(SVG, "rb") as b:
+            if a.read() != b.read():
+                return ["assets/brand/buwiz-forms.svg is not what assets/brand/parts/ give: run `just logo`, then `just icons`"]
+    print("assets/brand/buwiz-forms.svg is exactly what assets/brand/parts/ give")
+    return []
+
+
 def check(made: dict[str, str]) -> int:
     bad = []
     for rel, fresh in sorted(made.items()):
@@ -347,6 +371,7 @@ def check(made: dict[str, str]) -> int:
     for rel in GONE:
         if os.path.exists(os.path.join(ROOT, rel)):
             bad.append(f"left over, delete it: {rel}")
+    bad += logo_check()
     if bad:
         print("\n".join(bad))
         print(f"{len(bad)} icon(s) out of step with assets/brand/buwiz-forms.svg: run `just icons`.")

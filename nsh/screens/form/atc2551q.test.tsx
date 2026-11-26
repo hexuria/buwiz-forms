@@ -33,6 +33,7 @@ test("phone: row 1's ATC changes and row 2 takes a pick", async () => {
   await app.waitFor("text:/PT060/", { timeout: 5000 });
   await app.press("text:/^PT060/");
   await app.wait(400);
+  await app.clear("id:fp-txtATCAmt2");
   await app.type("id:fp-txtATCAmt2", "2000");
   await app.press("text:Done");
   await app.waitFor("text:✓ Saved", { timeout: 8000 });
