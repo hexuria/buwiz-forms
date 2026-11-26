@@ -64,8 +64,18 @@ No picture fails a check.
 
 ## TIN + PIN page
 
-Not yet reached when this README was written: it needs a completed setup with a PIN. Attempted as a follow-up;
-see the session report for whether it was added.
+Reached after completing setup: taxpayer created through the UI (invented values: Demo, TIN 123-456-788-00000,
+ZIP 1004 Malate, RDO 050 South Makati, phone 09171234567), then a 4-digit PIN set in Settings → Account →
+Security ("PIN saved. Sign-in asks for it from now on."), then sign-out. The lock page replaced the email gate:
+
+| mode | light | dark |
+|---|---|---|
+| TIN + PIN base ("Enter your TIN and your PIN.", both links) | after-light-12-tinpin.png | after-dark-12-tinpin.png |
+| "Use an authenticator code" mode (6 authenticator boxes, "Use the PIN instead") | after-light-13-authenticator.png | after-dark-13-authenticator.png |
+| "Forgot PIN?" mode ("The admin can open your account with their PIN.", admin-PIN boxes, "I remember my PIN") | after-light-14-forgotpin.png | after-dark-14-forgotpin.png |
+
+One setup step: after-light-11-setup-step.png (the taxpayer created, Forms tab, "Demo added" toast).
+The same checks pass on these pages: logo whole with its words, nothing falls off the bottom, links reachable.
 
 ## Method notes
 
