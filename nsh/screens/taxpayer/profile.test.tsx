@@ -40,9 +40,9 @@ test("desktop: editing the taxpayer saves the name, shows a bad date once left, 
   await app.clear("id:tp-taxpayer-name");
   await app.type("id:tp-taxpayer-name", "Juana Santos Trading");
   await app.type("id:tp-taxpayer-birth_date", "1990-13-40");
-  expect(app.texts()).not.toContain("Type the date as YYYY-MM-DD, like 1990-05-17.");
+  expect(app.texts()).not.toContain("Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.");
   await app.press("id:tp-taxpayer-save");
-  await app.waitFor("text:Type the date as YYYY-MM-DD, like 1990-05-17.");
+  await app.waitFor("text:Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.");
   expect(app.shows("id:tp-taxpayer-name")).toBe(true); // still editing
   await app.clear("id:tp-taxpayer-birth_date");
   await app.type("id:tp-taxpayer-birth_date", "1990-05-17");

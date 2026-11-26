@@ -1,6 +1,7 @@
 // The taxpayer screens' pure rules (the old shell's taxpayer.js): what a typed value is worth, what each sentence says.
 // No UI and no host calls; the clock comes in as a parameter where a rule needs today.
 import type { BranchFieldName, FormTemplateSummary, InboxState, SendGrant, SetupApplied, Taxpayer } from "../../bir";
+import { DATE_ERROR, formatIso, formatMDY, isTwoDigitDate, parseTypedDate } from "../../lib/dates";
 import { FACT_LABELS, joinNames, type FactName } from "../../lib/facts";
 import { isOpenDeadline } from "../../lib/statusWord";
 
@@ -50,9 +51,41 @@ export function realDate(text: string): boolean {
 /** What is wrong with a typed date that must not be after today, or null. Empty is fine. */
 export function pastDateError(text: string, now: Date = new Date()): string | null {
   if (!text) return null;
-  if (!realDate(text)) return "Type the date as YYYY-MM-DD, like 1990-05-17.";
+  if (!realDate(text)) return isTwoDigitDate(text) ? TWO_DIGIT_YEAR : DATE_ERROR;
   if (text > todayText(now)) return "That date is in the future.";
   return null;
+}
+
+/** The sentence of the form's date boxes for a year written with two digits (ui/dateSheet.tsx says the same). */
+const TWO_DIGIT_YEAR = "Type the four-digit year, for example 08/17/1988.";
+
+// The profile keeps its dates as ISO (YYYY-MM-DD: the host's birth_date and business_start_date), the date boxes speak MM/DD/YYYY as
+// the form page's do. The profile's date box (ProfileTab.tsx EditDate) converts at its edge with these two, and nowhere else.
+
+/** The text a profile date box shows for the stored value: MM/DD/YYYY for an ISO day, anything else (a part-typed date) as it is. */
+export function profileDateShown(stored: string): string {
+  return realDate(stored) ? formatMDY(parseTypedDate(stored)!) : stored;
+}
+
+/** What a profile date stores for the box's text: the ISO day when the text reads as a date, else the text as typed (refused on Save). */
+export function profileDateStored(typed: string): string {
+  const day = parseTypedDate(typed);
+  return day ? formatIso(day) : typed;
+}
+
+/** A date box's refusal of a day after today: "A birth date can't be in the future. The box kept 05/17/1990." */
+export function futureDateNote(noun: string, kept: string): string {
+  const said = realDate(kept) ? `The box kept ${profileDateShown(kept)}.` : "The box stays empty.";
+  return `${noun} can't be in the future. ${said}`;
+}
+
+/** What the phone's date sheet says before it takes a date ("" when it takes it): the form's sentences, and no day after today. */
+export function profileDateProblem(text: string, noun: string, now: Date = new Date()): string {
+  const t = text.trim();
+  if (!t) return "";
+  const day = parseTypedDate(t);
+  if (!day) return isTwoDigitDate(t) ? TWO_DIGIT_YEAR : DATE_ERROR;
+  return formatIso(day) > todayText(now) ? `${noun} can't be in the future.` : "";
 }
 
 /** ATC codes as typed ("wc160, WI010"): the codes, upper case, or null when one is not a code. */
