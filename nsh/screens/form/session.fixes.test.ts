@@ -1525,25 +1525,30 @@ test("[S1] Queue pressed twice while it settles a focused amount box runs once",
   }
 });
 
-/** Stubs the host's Queue check (nothing stops it; it asks its question) and its Queue, which records `read()` instead of queueing. */
-function stubQueue(read: () => string): { queued: string[]; restore: () => void } {
+/**
+ * Stubs the host's Queue check (nothing stops it; it asks its question, `warns()`) and its Queue, which records `read()` instead of
+ * queueing. `checks` counts the checks.
+ */
+function stubQueue(read: () => string, warns: () => string[] = () => ["A question to confirm."]): { queued: string[]; checks: () => number; restore: () => void } {
+  let checks = 0;
   const door = bir as unknown as Record<string, unknown>;
   const real = { check: door.screen_form_queue_check, period: door.queue_form_draft, plain: door.screen_form_queue };
   const out = {
     queued: [] as string[],
+    checks: () => checks,
     restore: () => {
       door.screen_form_queue_check = real.check;
       door.queue_form_draft = real.period;
       door.screen_form_queue = real.plain;
     },
   };
-  door.screen_form_queue_check = () => ({ blocks: [], warns: ["A question to confirm."] });
+  door.screen_form_queue_check = () => (checks++, { blocks: [], warns: warns() });
   door.queue_form_draft = () => void out.queued.push(read());
   door.screen_form_queue = () => void out.queued.push(read());
   return out;
 }
 
-test("[B8-1] Continue with a focused amount box: the stored row 2551Q's Queue reads holds what the box reads (saved before it is queued)", async () => {
+test("[B8-2] Continue with a focused amount box: saved first, queued once with no second question, and the stored row 2551Q's Queue reads holds what the box reads", async () => {
   const key = "frm2551Qv2018:txt15";
   let s: FormSession | undefined;
   // What the database holds for the box: the amount the last save stored (2551Q's Queue reads the stored row, not the page).
@@ -1558,11 +1563,10 @@ test("[B8-1] Continue with a focused amount box: the stored row 2551Q's Queue re
     heldBox(s, key, "1500", "later", "1500.50");
     s.confirmQueue();
     await s.idle();
-    // Queue ran again from the start after the box was left: saved, then its question again; Continue then queues.
-    expect(host.queued).toEqual([]);
-    expect(s.overlay()?.kind).toBe("queue-confirm");
-    s.confirmQueue();
-    await s.idle();
+    // Queue ran again from the start after the box was left (saved, the host's check again), and its question was the one just
+    // accepted: not asked twice.
+    expect(host.checks()).toBe(2);
+    expect(s.overlay()?.kind ?? "").not.toBe("queue-confirm");
     expect(host.queued).toEqual(["1,500.50"]);
   } finally {
     host.restore();
@@ -1666,5 +1670,33 @@ test("[S1-2] a Save pressed while a Delete row settles a focused amount box is k
   } finally {
     saves.restore();
     s.dispose();
+  }
+});
+
+test("[B8-2] Continue with a focused amount box whose leave changes the host's question: the new question is asked", async () => {
+  const key = "frm2551Qv2018:txt15";
+  let s: FormSession | undefined;
+  const saves = recordAt("screen_form_save", () => s?.valueOf(key) ?? "");
+  // No 2551Q question depends on an amount, so the stub's does: its text names the amount the return holds.
+  const host = stubQueue(() => saves.seen[saves.seen.length - 1] ?? "nothing saved", () => [`Confirm Item 15: ${s?.valueOf(key) || "blank"}.`]);
+  try {
+    s = await opened(at("2551Q", 2020, 4));
+    s.jumpTo(2);
+    s.queue();
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("queue-confirm");
+    heldBox(s, key, "1500", "later", "1500.50");
+    s.confirmQueue();
+    await s.idle();
+    // Another question than the one accepted: asked, nothing queued yet.
+    expect(s.overlay()).toEqual({ kind: "queue-confirm", warns: ["Confirm Item 15: 1,500.50."] });
+    expect(host.queued).toEqual([]);
+    s.confirmQueue();
+    await s.idle();
+    expect(host.queued).toEqual(["1,500.50"]);
+  } finally {
+    host.restore();
+    saves.restore();
+    s?.dispose();
   }
 });

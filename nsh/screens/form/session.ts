@@ -3660,12 +3660,14 @@ export class FormSession {
    * Queue: saved first; tax facts not set that change what is filed stop it; then it looks, as Check does, and a return the host will refuse
    * says so (the toast, every message on its row, the pill) and nothing is asked; the others are confirmed once (the tier warning) or queued.
    */
-  queue() {
+  queue(accepted: string[] | null = null) {
     const s = this.st;
+    // `accepted`: the warnings the filer just accepted with Continue, when Queue runs again after a settle (B8-2): the same warnings
+    // again are not asked a second time.
     // Queue cannot be taken back: an amount box that still has the keys is left first, so the amount it puts back and the note it
     // raises exist before anything is judged (Q1, Q2: settleFocused).
-    if (this.settleFocused(() => this.queue(), "queue")) return;
-    if (s.sample) return this.saveSample(() => this.queue());
+    if (this.settleFocused(() => this.queue(accepted), "queue")) return;
+    if (s.sample) return this.saveSample(() => this.queue(accepted));
     // A note Queue has not shown yet stops it once, wherever it is: its part opens (the others fold, as the navigator does), its row
     // is brought into view, and the toast says the note itself, which names the item. Shown, it stops Queue no more.
     const unshown = this.queueNotes();
@@ -3704,7 +3706,7 @@ export class FormSession {
       return this.refuse(check.blocks[0].message, this.refusalAction(check.blocks));
     }
     const warns = check?.warns ?? [];
-    if (!this.looksFirst()) return this.askQueue(warns);
+    if (!this.looksFirst()) return this.askQueue(warns, accepted);
     if (this.lookingAt === this.token) return;
     this.lookingAt = this.token;
     this.looked((n) => {
@@ -3718,7 +3720,7 @@ export class FormSession {
         return void this.refuse(attentionText(n), this.refusalAction(s.errors));
       }
       this.toldRefusal = "";
-      this.askQueue(warns);
+      this.askQueue(warns, accepted);
     });
   }
 
@@ -3769,10 +3771,11 @@ export class FormSession {
   }
 
   /** Nothing left to fix: the tier warning is asked once, else the return is queued. */
-  private askQueue(warns: string[]) {
+  private askQueue(warns: string[], accepted: string[] | null = null) {
     const s = this.st;
     this.retireRefusal();
-    if (warns.length) {
+    // B8-2: the filer accepted exactly these warnings with Continue before the box's leave made Queue run again: not asked twice.
+    if (warns.length && !(accepted && sameJson(warns, accepted))) {
       s.queueWarn = { warns };
       s.overlay = { kind: "queue-confirm", warns };
       return this.publish();
@@ -3789,10 +3792,12 @@ export class FormSession {
     // settle the question closes and Queue runs again from the start (saved first, its notes stop it, the checks, the question).
     if (this.settleFocused(() => {
       if (this.st !== s || !s.queueWarn) return;
+      const accepted = s.queueWarn.warns;
       s.queueWarn = null;
       s.overlay = null;
       this.publish();
-      this.queue();
+      // B8-2: the warnings just accepted go with it: the same ones again are not asked twice; others are asked, notes still stop it.
+      this.queue(accepted);
     }, "confirmQueue")) return;
     s.queueWarn = null;
     s.overlay = null;
