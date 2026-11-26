@@ -134,6 +134,7 @@ enum System {
 }
 
 impl System {
+    #[cfg(test)]
     const ALL: [System; 5] = [System::MacOs, System::Windows, System::Linux, System::Ios, System::Android];
 
     fn this() -> System {
