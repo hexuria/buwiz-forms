@@ -1,0 +1,9 @@
+=== (a) probe decided at start — device times
+guard check 06:47:58: ping 8.8.8.8 = Network is unreachable (cut holds)
+app start (reverse 8787 DOWN): 06:48:05
+reverse re-added (no app restart): 06:48:12
+sign-in attempted: 06:50:43
+code submitted, outcome captured: 06:50:59
+sign-in outcome 06:50:59: REFUSED — red line exactly: 'Not opening the session: The mock relay at http://127.0.0.1:8787 is not listening or /v1/health did not identify a mock; the submission worker was not started.'
+NOTE reverse was UP since 06:48:12 and the account mock was reached through it (code 246816 issued+accepted) — the refusal is the process-lifetime cached verdict, confirming once-at-start.
+restart for (b) with reverse up: 06:51:40
