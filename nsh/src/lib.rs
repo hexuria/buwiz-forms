@@ -23,6 +23,9 @@ mod export_archive;
 mod export_ios;
 pub mod guards;
 mod hooks;
+// Inert until A3a-2 registers its host verbs (features/accounts-and-lock/OS-LOGIN-INTERFACE.md).
+#[allow(dead_code)]
+mod os_login;
 #[cfg(target_os = "android")]
 mod phone_android;
 #[cfg(target_os = "ios")]
