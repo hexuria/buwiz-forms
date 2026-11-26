@@ -1,0 +1,11 @@
+MFTRACE 1795676460093 onFocus-begin "1,234.56" "byFocus" false "pointerDown" true "selected" {"start":8,"end":8}
+MFTRACE 1795676460093 writeText "1234.56"
+MFTRACE 1795676460093 onSelectionChange 0 8 "1234.56"
+MFTRACE 1795676460093 timeout "1234.56" "selectWhole" false "focusCaret" 7
+MFTRACE 1795676460093 timeout-branch-caret
+MFTRACE 1795676460093 writeCaret 7 7
+MFTRACE 1795676460100 onSelectionChange 7 7 "1234.56"
+MFTRACE 1795676474892 onSelectionChange 8 8 "1234.569"
+MFTRACE 1795676474892 onKeyPress "9" "1234.569"
+MFTRACE 1795676475098 onBlur "1234.569"
+MFTRACE 1795676475098 writeText "1,234.57"

@@ -1,0 +1,9 @@
+# extra evidence: a click entry with pointerDown FALSE at focus (no prior click since the last focus).
+# from the fill at 9.00 earlier in the same log - shows the pressdown ordering and the select-all branch:
+MFTRACE 1795676377189 onFocus-begin "9.00" "byFocus" false "pointerDown" false "selected" {"start":4,"end":4}
+MFTRACE 1795676377189 onSelectionChange 0 4 "9.00"
+MFTRACE 1795676377189 onPressDown "9.00"
+MFTRACE 1795676377189 timeout "9.00" "selectWhole" false "focusCaret" (undefined)
+MFTRACE 1795676377189 timeout-branch-selectall
+MFTRACE 1795676377189 writeCaret 0 4
+# note: onPressDown arrives in the SAME millisecond AFTER onFocus, never before.

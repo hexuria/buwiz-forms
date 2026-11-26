@@ -1,0 +1,39 @@
+--- a/nsh/ui/fields.tsx	2026-11-26 07:21:39.184980900 +0000
++++ b/nsh/ui/fields.tsx	2026-11-26 07:22:03.218398900 +0000
+@@ -315,8 +315,11 @@
+     const [on, at] = editBase(prev, boxText, raw, from);
+     let next = reconcile(on, raw, props.mask, undefined, at, typed);
+     if (props.noLiveFormat) {
+-      if (next.rejected || (typed && next.text !== raw)) next = { ...next, text: prev, rejected: true };
+-      if (!next.rejected && next.text === raw) {
++      // The text can hold group separators left over from the unfocused layout: the mask drops them, so the pass-through
++      // test compares the significant characters, not the raw text.
++      const sigRaw = [...raw].filter((ch) => props.mask.significant(ch)).join("");
++      if (next.rejected || (typed && next.text !== sigRaw)) next = { ...next, text: prev, rejected: true };
++      if (!next.rejected && next.text === sigRaw) {
+         // A valid focused amount edit stays exactly as typed: no text or caret answer goes back to the box.
+         boxText = raw;
+         text.set(raw); // exactly the edit the native box already holds: NSH sends no value op for it
+@@ -416,9 +419,19 @@
+         if (props.noLiveFormat) {
+           const before = untracked(text);
+           const plain = props.shown(props.value ?? "", true);
+-          focusMap = { from: before, to: plain };
+-          focusCaret = undefined;
+-          if (plain !== before) writeText(plain);
++          if (props.numeric && !isZeroAmount(before) && before !== "") {
++            // A filled amount is never rewritten on focus: the rewrite destroyed or inverted the platform's own
++            // selection on every entry. The text stays exactly as laid out, separators included; the platform's own
++            // focus behaviour stands (keyboard focus selects all natively, a click keeps its caret). Only the form's
++            // own programmatic focus() selects the whole text, having no caret of its own.
++            focusMap = undefined;
++            focusCaret = undefined;
++            if (byFocus) writeCaret(0, before.length);
++          } else {
++            focusMap = { from: before, to: plain };
++            focusCaret = undefined;
++            if (plain !== before) writeText(plain);
++          }
+         }
+         const selectWhole = byFocus;
+         const byPointer = pointerDown;

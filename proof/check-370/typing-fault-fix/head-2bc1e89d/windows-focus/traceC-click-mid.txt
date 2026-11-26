@@ -1,0 +1,12 @@
+MFTRACE 1795676840989 onFocus-begin "1,234.56" "byFocus" false "pointerDown" true "selected" {"start":8,"end":8}
+MFTRACE 1795676840989 writeText "1234.56"
+MFTRACE 1795676840989 onSelectionChange 0 8 "1234.56"
+MFTRACE 1795676840989 onPressDown "1234.56"
+MFTRACE 1795676840989 timeout "1234.56" "selectWhole" false "focusCaret" 7
+MFTRACE 1795676840989 timeout-branch-caret
+MFTRACE 1795676840989 writeCaret 7 7
+MFTRACE 1795676840999 onSelectionChange 7 7 "1234.56"
+MFTRACE 1795676842404 onSelectionChange 8 8 "1234.569"
+MFTRACE 1795676842404 onKeyPress "9" "1234.569"
+MFTRACE 1795676842404 onBlur-time-not-logged (blur at 1795676842570ish)
+result after leaving: 1,234.57  (the 9 landed at the END, not between 2 and 3)
