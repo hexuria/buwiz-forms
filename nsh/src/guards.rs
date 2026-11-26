@@ -115,10 +115,50 @@ pub fn send_guard() -> SendMode {
 }
 
 fn restrict_sending(debug_build: bool) -> bool {
-    !cfg!(any(target_os = "macos", target_os = "windows", target_os = "linux"))
-        || debug_build
-        || bir_core::db::test_environment()
-        || matches!(bir_core::config::var("GPUI_AGENT").as_deref(), Ok("1" | "true"))
+    restricted_launch(
+        System::this(),
+        debug_build,
+        bir_core::db::test_environment(),
+        matches!(bir_core::config::var("GPUI_AGENT").as_deref(), Ok("1" | "true")),
+    )
+}
+
+/// The system an app build runs on, for [`restricted_launch`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum System {
+    MacOs,
+    Windows,
+    Linux,
+    Ios,
+    Android,
+}
+
+impl System {
+    #[cfg(test)]
+    const ALL: [System; 5] = [System::MacOs, System::Windows, System::Linux, System::Ios, System::Android];
+
+    fn this() -> System {
+        if cfg!(target_os = "ios") {
+            System::Ios
+        } else if cfg!(target_os = "android") {
+            System::Android
+        } else if cfg!(target_os = "windows") {
+            System::Windows
+        } else if cfg!(target_os = "linux") {
+            System::Linux
+        } else {
+            System::MacOs
+        }
+    }
+}
+
+/// Whether this launch may only simulate, or send through a server on this computer: a debug build
+/// (`cfg!(debug_assertions)`), a test environment (`EBIR_TEST_ENV`) or an agent-driven launch (`GPUI_AGENT`). The
+/// system does not change it: a release build (an App Store or TestFlight build, a Play bundle, a desktop package:
+/// all built without `debug_assertions`) files through the Buwiz relay on iPhone, iPad and Android exactly as on
+/// macOS, Windows and Linux, and a development build never sends or registers through production on any of them.
+fn restricted_launch(_system: System, debug_build: bool, test_environment: bool, agent: bool) -> bool {
+    debug_build || test_environment || agent
 }
 
 /// [`send_guard`] with the "is anything listening there" probe given, for tests.
@@ -916,9 +956,30 @@ mod tests {
         std::env::var("BIR_SFTP_DRY_RUN").ok()
     }
 
-    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    /// Every system alike, phones included: only a release launch outside a test or agent environment may file; any
+    /// debug, test or agent launch is restricted.
     #[test]
-    fn desktop_release_leaves_the_filing_transport_in_control() {
+    fn only_a_plain_release_launch_may_file_on_any_system() {
+        for system in System::ALL {
+            assert!(!restricted_launch(system, false, false, false), "{system:?}: a release build files");
+            for debug_build in [false, true] {
+                for test_environment in [false, true] {
+                    for agent in [false, true] {
+                        assert_eq!(
+                            restricted_launch(system, debug_build, test_environment, agent),
+                            debug_build || test_environment || agent,
+                            "{system:?}: debug {debug_build}, test {test_environment}, agent {agent}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// A release launch, on whatever system the test runs, leaves the filing transport in control (it ran on the
+    /// desktops only while phones were held to a dry run).
+    #[test]
+    fn a_release_launch_leaves_the_filing_transport_in_control() {
         // A dry run wins; then a build with nowhere to send is off; only a build that can file itself is live.
         for (transport_is_dry, nowhere_to_send, expected) in [
             (false, false, SendMode::Live),

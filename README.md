@@ -8,6 +8,19 @@
 [![Release](https://github.com/hexuria/buwiz-forms/actions/workflows/release.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/release.yml)
 [![Release (macOS)](https://github.com/hexuria/buwiz-forms/actions/workflows/release-macos.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/release-macos.yml)
 
+![App version](assets/badges/version.svg)
+![eBIRForms package version](assets/badges/ebirforms.svg)
+[![Number of forms](assets/badges/forms.svg)](docs/FORMS.md)
+![iOS](assets/badges/ios.svg)
+![Android](assets/badges/android.svg)
+![Linux](assets/badges/linux.svg)
+![macOS](assets/badges/macos.svg)
+![Windows](assets/badges/windows.svg)
+
+<p align="center">
+  <img src="assets/readme/showcase.png" alt="eBIRForms on iPhone (sign-in), Mac (home) and iPad (BIR Form 2551Q)" width="100%">
+</p>
+
 E-BIRForms is an offline-first desktop app to prepare, validate, print and
 submit Philippine BIR returns. It is a native app: a Rust back end and screens
 built on NSH (Native Shell). It covers 43 eBIRForms 7.9.6.2.1 forms.

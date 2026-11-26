@@ -67,6 +67,12 @@ icons-check:
 logo *args:
     uv run -q --no-project --with 'pillow>=11.1' --with numpy python assets/brand/parts/merge.py assets/brand/buwiz-forms.svg {{args}}
 
+# Counts the forms and reads the eBIRForms package version from the code; the app version is parked in the script.
+# `just badges --check` exits 1 when a committed badge is stale. Needs only uv.
+# Rewrite the README badges in assets/badges/ (our own SVG files, so GitHub shows them without camo)
+badges *args:
+    uv run -q --no-project python assets/badges/make_badges.py {{args}}
+
 # Show available commands
 help:
     @just --list

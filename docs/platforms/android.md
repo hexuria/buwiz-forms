@@ -42,8 +42,9 @@ Not in the package yet: the per-form print fixes (`print-overrides/`). `bir-app-
 the executable on the desktop (`packaged.rs`), and an Android app has no such folder. Until the app reads them from its
 own assets, a printed return on Android has no per-form fixes.
 
-Sending: the send guard (`nsh/src/guards.rs` `restrict_sending`) forces a dry run on every system other than macOS,
-Windows and Linux. Real filing on Android waits for the relay's phone switch-on.
+Sending: a release build files through the Buwiz relay, as on the desktops. A debug or development build, a test
+environment (`EBIR_TEST_ENV`) or an agent launch (`GPUI_AGENT`) only simulates, or sends through a Buwiz server on
+the same computer; it never sends or registers through production (`nsh/src/guards.rs` `restricted_launch`).
 
 ## Build, sign, upload
 
