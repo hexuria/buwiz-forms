@@ -16,8 +16,14 @@ words.
 | Push to `main` (a merge) | quick checks, never cancelled | nothing | Linux |
 | Push to `codex/**` | quick checks | nothing | Linux |
 | Push to `test/**` | workspace tests, Windows installer | app build, app Rust tests, screen tests | from the branch name |
-| Manual run | what the inputs ask | what the inputs ask | from the inputs |
-| Nightly, 18:00 UTC, on `main` | everything | everything | all three |
+| Manual run | what the inputs ask | what the inputs ask; `build` with Linux also builds the Linux release packages | from the inputs |
+| Nightly, 18:00 UTC, on `main` | everything | everything, the Linux release packages included | all three |
+
+The release workflows no longer run on pull requests. A `v*` tag still builds, signs and publishes as before.
+`release-macos.yml` runs only for a tag or a manual run, and a manual run never publishes. `release-linux.yml` runs when `release.yml` calls it for a tag, when someone runs it by
+hand, or when `nsh.yml` calls it (nightly, or a manual run whose suites include `build` on Linux). The `nsh.yml` call
+passes an empty tag (version `<app>-pr`) and no secrets. That workflow only builds, smoke-tests and keeps workflow
+artifacts; publishing is `release.yml`'s job.
 
 The quick checks are:
 
@@ -89,7 +95,8 @@ gh workflow run ci.yml --repo hexuria/buwiz-forms --ref feat/x -f systems=all -f
     tests.
   - `screens`: the headless TSX screen tests.
   - `build`: `nsh build`, the agent build, the iPhone and Android compiles, the development host and the
-    real-window test.
+    real-window test. With Linux chosen, it also builds the Linux release packages (`release-linux.yml`, x64 and
+    arm64), which never run on a pull request.
   - `installer`: the unsigned Windows Setup build and audit.
   - `validation`: the validation-rules corpus audits.
 - `screens`: limits which screen-test files run. A glob such as `screens/form/**` (`*` also crosses folders), or a
@@ -158,7 +165,7 @@ merge that changes `Cargo.lock`, `nsh/Cargo.lock`, the toolchain or the NSH pin,
 (a partial hit) until the next complete run of `main`. Their runs are slower but still correct. Run `just ci-main`
 after merging such a change.
 
-Not covered here: `release-macos.yml` and `release-linux.yml` still run on pull requests that touch their own paths.
-`release-macos.yml` (on a macOS runner) runs for changes to `nsh.yml`, `nsh/nsh.json` or the macOS packaging files.
-`release-linux.yml` runs for any change under `nsh/`. Their per-pull-request caches also count against the
-repository's 10 GB.
+Since `release-macos.yml` and `release-linux.yml` lost their pull-request trigger, they no longer save a cache per
+pull request (about 1.7 GB each for macOS). Their tag and manual runs cache as before. `release-linux.yml` saves its
+dependency builds (`buwiz-nsh-release-linux`, x64 and arm64) whenever it runs on `main`, so the nightly call adds
+those entries to `main`'s caches as well.

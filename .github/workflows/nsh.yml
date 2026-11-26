@@ -87,6 +87,7 @@ jobs:
       build: ${{ steps.decide.outputs.build }}
       nsh_rust: ${{ steps.decide.outputs.nsh_rust }}
       core_plain: ${{ steps.decide.outputs.core_plain }}
+      linux_packages: ${{ steps.decide.outputs.linux_packages }}
       shards: ${{ steps.decide.outputs.shards }}
       shard_count: ${{ steps.decide.outputs.shard_count }}
       lead_shard: ${{ steps.decide.outputs.lead_shard }}
@@ -694,3 +695,15 @@ jobs:
 
       - name: Plain-SQLite tests
         run: just core-plain-test
+
+  # The Linux release packages (deb, rpm and the rest, x64 and arm64), built and smoke-tested by release-linux.yml,
+  # which pull requests no longer start. Here in the nightly run and a manual run whose suites include `build` (Linux
+  # chosen). An empty tag gives the version <app>-pr, as a manual run of that workflow does; no secrets are passed, and
+  # the workflow only keeps workflow artifacts: release.yml is what publishes.
+  linux-packages:
+    name: Linux release packages
+    needs: plan
+    if: needs.plan.outputs.linux_packages == 'true'
+    uses: ./.github/workflows/release-linux.yml
+    with:
+      tag: ""

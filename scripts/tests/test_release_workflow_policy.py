@@ -151,9 +151,9 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
 
     def test_macos_workflow_preflight_and_publish_shape(self) -> None:
         self.assert_preflight_gates(self.macos_workflow)
-        self.assertIn("pull_request:", self.macos_workflow)
-        self.assertIn("- .github/workflows/nsh.yml", self.macos_workflow)
-        self.assertIn(".github/workflows/release-macos.yml", self.macos_workflow)
+        # A pull request never starts a GitHub macOS job by itself (docs/CI.md).
+        self.assertNotIn("pull_request", self.macos_workflow)
+        self.assertNotIn("pull_request", self.linux_release_workflow)
         self.assertIn("scripts/package_macos_release.sh", self.macos_workflow)
         preflight = self.job("preflight", self.macos_workflow)
         self.assertIn("NSH_VERSION=", preflight)
@@ -165,10 +165,8 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertEqual(self.justfile.count("scripts/set_release_version.py"), 2)
         build_macos = self.job("build-macos", self.macos_workflow)
         self.assertIn("needs: preflight", build_macos)
-        self.assertIn(
-            "github.event.pull_request.head.repo.full_name == github.repository",
-            build_macos,
-        )
+        # Tag and manual runs only, so the old fork-pull-request skip is gone with the trigger.
+        self.assertNotIn("\n    if:", build_macos.split("    steps:", 1)[0])
         publish = self.job("publish", self.macos_workflow)
         self.assertIn("needs: [preflight, build-macos]", publish)
         self.assertIn("github.event_name == 'push'", publish)

@@ -222,6 +222,15 @@ class ManualAndNightlyTests(unittest.TestCase):
         self.assertTrue(plan["installer"] and plan["screens"] and plan["build"] and plan["nsh_rust"] and plan["core_plain"])
         self.assertEqual((plan["shards"], plan["shard_count"]), ([0], 1))
 
+    def test_linux_release_packages_only_nightly_or_when_asked_for(self):
+        self.assertTrue(ci_plan.decide(event="schedule", ref="refs/heads/main")["linux_packages"])
+        self.assertTrue(manual(systems="linux", suites="build")["linux_packages"])
+        self.assertTrue(manual(ref="refs/heads/main", systems="all")["linux_packages"])
+        self.assertFalse(manual(systems="linux", suites="screens")["linux_packages"])
+        self.assertFalse(manual(systems="windows", suites="build")["linux_packages"])
+        self.assertFalse(push_to("test/all/x", "crates/bir-core/src/lib.rs")["linux_packages"])
+        self.assertFalse(pr("nsh/screens/x.tsx")["linux_packages"])
+
     def test_macos_runs_only_when_asked_for(self):
         everything = ["crates/bir-core/src/lib.rs", "rules/x.json", "nsh/screens/x.tsx", "packaging/windows/x"]
         asked = [ci_plan.decide(event="schedule", ref="refs/heads/main"), push_to("test/macos/x", *everything),
@@ -357,6 +366,16 @@ class WorkflowTests(unittest.TestCase):
             for save in re.finditer(r"(?ms)^ +- name: Save [^\n]*\n +if: ([^\n]*)\n", workflow):
                 self.assertIn("github.ref == 'refs/heads/main'", save.group(1))
             self.assertNotIn("uses: actions/cache@v4", workflow)
+
+    def test_linux_packages_are_called_without_secrets_or_a_tag(self):
+        call = job(NSH, "linux-packages")
+        self.assertIn("    needs: plan\n    if: needs.plan.outputs.linux_packages == 'true'\n", call)
+        self.assertIn("uses: ./.github/workflows/release-linux.yml", call)
+        self.assertIn('      tag: ""\n', call)
+        self.assertNotIn("secrets", call)
+        linux = (ROOT / ".github/workflows/release-linux.yml").read_text(encoding="utf-8")
+        self.assertNotIn("contents: write", linux)
+        self.assertNotIn("gh release", linux)
 
     def test_nsh_check_reads_the_pin_from_nsh_yml(self):
         self.assertEqual(CI.count("8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf"), 0)

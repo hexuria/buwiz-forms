@@ -233,6 +233,9 @@ def decide(
     if not plan["screens"]:
         # Without screen tests only the lead shard has work.
         plan["shards"], plan["shard_count"] = [0], 1
+    # The Linux release packages (release-linux.yml, x64 and arm64): built only by the nightly run and a manual run
+    # that asks for the build on Linux; never by a pull request or a test/** push.
+    plan["linux_packages"] = lane in ("manual", "nightly") and plan["build"] and "linux" in plan["nsh_systems"]
     plan["reasons"] = reasons
     return plan
 
@@ -262,6 +265,7 @@ def outputs(plan: dict) -> dict[str, str]:
         "build": flag(plan["build"]),
         "nsh_rust": flag(plan["nsh_rust"]),
         "core_plain": flag(plan["core_plain"]),
+        "linux_packages": flag(plan["linux_packages"]),
         "shards": json.dumps(shards),
         "shard_count": str(plan["shard_count"]),
         "lead_shard": str(shards[0]),
