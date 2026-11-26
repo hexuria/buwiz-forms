@@ -1246,8 +1246,96 @@ fn admin_credentials(
     }
 }
 
+/// `pin` against a stored hash in either form: an Argon2id PHC string, or the
+/// old SHA-256 value (accounts-and-lock PLAN §B.1).
 fn pin_matches(stored: Option<&str>, pin: &str) -> bool {
-    stored.is_some_and(|stored| stored == bir_core::crypto::hash_pin(pin))
+    stored.is_some_and(|stored| {
+        bir_core::pin::check(stored, pin).is_ok_and(bir_core::pin::Check::matched)
+    })
+}
+
+/// A client PIN (`taxpayers.pin_hash` of `tin_root`, or a branch copy) against
+/// `pin`. A match against the old SHA-256 value rehashes it to Argon2id in the
+/// room file on its own thread ([`rehash_client_pin`]), so the engine never
+/// waits on the slow hash for it; the answer does not wait either.
+fn client_pin_matches(tin_root: &str, stored: Option<&str>, pin: &str) -> bool {
+    let Some(stored) = stored else {
+        return false;
+    };
+    match bir_core::pin::check(stored, pin) {
+        Ok(bir_core::pin::Check::Match { upgrade }) => {
+            if upgrade {
+                rehash_client_pin(tin_root, stored, pin);
+            }
+            true
+        }
+        Ok(bir_core::pin::Check::Miss) => false,
+        Err(error) => {
+            tracing::warn!("a client PIN is stored in no form this version reads: {error}");
+            false
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The last rehash [`rehash_client_pin`] started on this thread, for a test to wait on.
+    static LAST_REHASH: RefCell<Option<std::thread::JoinHandle<()>>> = const { RefCell::new(None) };
+}
+
+/// Wait for the rehash this thread started last, if any.
+#[cfg(test)]
+fn join_last_rehash() {
+    if let Some(rehash) = LAST_REHASH.with(|slot| slot.borrow_mut().take()) {
+        rehash.join().expect("the rehash thread ends");
+    }
+}
+
+/// The client-PIN rehash (PLAN §B.1), on a thread of its own: hash `pin` with
+/// Argon2id, then store it in place of `matched` in `taxpayers.pin_hash` and
+/// clear the branch copies, unless the PIN changed meanwhile. A failure is
+/// logged; the old value keeps working and the next match tries again.
+fn rehash_client_pin(tin_root: &str, matched: &str, pin: &str) {
+    let handle = match open_database_slot() {
+        Ok(handle) => handle,
+        Err(error) => {
+            tracing::warn!("client PIN not rehashed: {error}");
+            return;
+        }
+    };
+    let (root, matched, pin) = (tin_root.to_owned(), matched.to_owned(), pin.to_owned());
+    let spawned = std::thread::Builder::new()
+        .name("pin-rehash".into())
+        .spawn(move || {
+            let phc = match bir_core::pin::hash(&pin) {
+                Ok(phc) => phc,
+                Err(error) => return tracing::warn!("client PIN not rehashed: {error}"),
+            };
+            let Ok(db) = bir_core::lock_timing::lock(&handle) else {
+                return tracing::warn!("client PIN not rehashed: database lock poisoned");
+            };
+            if let Err(error) = db.upgrade_client_pin_hash(&root, &matched, &phc) {
+                tracing::warn!("client PIN not rehashed: {error}");
+            }
+        });
+    match spawned {
+        #[cfg(test)]
+        Ok(rehash) => LAST_REHASH.with(|slot| *slot.borrow_mut() = Some(rehash)),
+        #[cfg(not(test))]
+        Ok(_) => {}
+        Err(error) => tracing::warn!("client PIN not rehashed: {error}"),
+    }
+}
+
+/// The admin's PIN under `mode`. Solo: the owner taxpayer's PIN, a client PIN
+/// store, rehashed on its first match ([`client_pin_matches`]). Help desk: the
+/// settings PIN, the legacy lock's own credential, read as it is.
+fn admin_pin_matches(db: &Database, mode: &AccessMode, pin: &str) -> Result<bool, HostError> {
+    let credentials = admin_credentials(db, mode)?;
+    Ok(match mode {
+        AccessMode::Solo(root) => client_pin_matches(root, credentials.pin_hash.as_deref(), pin),
+        AccessMode::Helpdesk => pin_matches(credentials.pin_hash.as_deref(), pin),
+    })
 }
 
 fn totp_matches(secret: Option<&str>, token: &str) -> bool {
@@ -1347,10 +1435,14 @@ fn set_taxpayer_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
 fn verify_taxpayer_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin_root = tin_root_argument(arguments.string(0)?)?;
     let pin = arguments.string(1)?;
-    let ok = auth_limiter::guarded(&auth_limiter::taxpayer(&tin_root), || {
+    let ok = auth_limiter::guarded_client(&tin_root, || {
         with_database(|db| {
             let credentials = taxpayer_credentials(db, &tin_root)?;
-            Ok(pin_matches(credentials.pin_hash.as_deref(), pin))
+            Ok(client_pin_matches(
+                &tin_root,
+                credentials.pin_hash.as_deref(),
+                pin,
+            ))
         })
     })?;
     Ok(HostValue::Bool(ok))
@@ -1359,7 +1451,7 @@ fn verify_taxpayer_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
 fn verify_taxpayer_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin_root = tin_root_argument(arguments.string(0)?)?;
     let token = arguments.string(1)?;
-    let ok = auth_limiter::guarded(&auth_limiter::taxpayer(&tin_root), || {
+    let ok = auth_limiter::guarded_client(&tin_root, || {
         with_database(|db| {
             let credentials = taxpayer_credentials(db, &tin_root)?;
             Ok(totp_matches(credentials.totp_secret.as_deref(), token))
@@ -1396,7 +1488,7 @@ fn verify_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     let ok = auth_limiter::guarded(auth_limiter::ADMIN, || {
         with_database(|db| {
             Ok(match access_mode(db)? {
-                Some(mode) => pin_matches(admin_credentials(db, &mode)?.pin_hash.as_deref(), pin),
+                Some(mode) => admin_pin_matches(db, &mode, pin)?,
                 None => false,
             })
         })
@@ -1522,7 +1614,10 @@ fn confirm_admin(
 ) -> Result<(), HostError> {
     let matched = auth_limiter::guarded(auth_limiter::ADMIN, || {
         let credentials = admin_credentials(db, mode)?;
-        let by_pin = pin.is_some_and(|pin| pin_matches(credentials.pin_hash.as_deref(), pin));
+        let by_pin = match pin {
+            Some(pin) => admin_pin_matches(db, mode, pin)?,
+            None => false,
+        };
         let by_code =
             code.is_some_and(|code| totp_matches(credentials.totp_secret.as_deref(), code));
         Ok(by_pin || by_code)
@@ -2964,10 +3059,11 @@ fn export_profile(
     // resolves a branch TIN; an unknown TIN is refused before the dialog.
     let tin_root =
         with_database(|db| Ok(get_profile_by_tin(db, &tin)?.tin.full()[..9].to_string()))?;
-    let authorized = auth_limiter::guarded(&auth_limiter::taxpayer(&tin_root), || {
+    let authorized = auth_limiter::guarded_client(&tin_root, || {
         with_database(|db| {
-            let credentials = taxpayer_credentials(db, &tin_root)?;
-            match credentials.pin_hash {
+            // The taxpayer's PIN, else a branch copy: the PIN the export itself
+            // checks (`bir_core::export::client_pin_hash`).
+            match bir_core::export::client_pin_hash(db, &tin).map_err(db_error)? {
                 // Nothing to check — an authenticator alone is not a PIN —
                 // and nothing counts against the limiter.
                 None => Ok(true),
@@ -2976,7 +3072,7 @@ fn export_profile(
                 )),
                 Some(hash) => Ok(pin
                     .as_deref()
-                    .is_some_and(|pin| pin_matches(Some(hash.as_str()), pin))),
+                    .is_some_and(|pin| client_pin_matches(&tin_root, Some(hash.as_str()), pin))),
             }
         })
     })?;
@@ -3291,15 +3387,17 @@ pub fn module() -> HostModule {
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
     let module = crate::legacy_import_module::register(module);
+    let module = crate::owner_lock_module::register(module);
     // bir-shell appends its scroll exports (GPUI elements) after these.
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}{}{}{}",
         crate::cloud_account::DECLARATIONS,
         crate::cloud_email::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
         crate::screen_form_module::DECLARATIONS,
         crate::dashboard_module::DECLARATIONS,
         crate::legacy_import_module::DECLARATIONS,
+        crate::owner_lock_module::DECLARATIONS,
     ))
 }
 
@@ -5030,6 +5128,119 @@ mod tests {
         round_trip("6666");
         assert!(admin_pin("6666"), "set_admin_pin's help desk PIN");
         assert!(!admin_pin("5555"), "the admin PIN set_admin_pin replaced");
+    }
+
+    /// PLAN §B.1, client PINs: a match against an old SHA-256 value rehashes it to an Argon2id PHC string in
+    /// `taxpayers.pin_hash`, on a thread of its own, and clears the branch copy; both stores. The rehashed PIN
+    /// still opens, a wrong one does not, and a PIN changed before the rehash lands is never overwritten.
+    #[test]
+    fn client_sha_pin_rehashes_on_first_match() {
+        setup();
+        add_branch();
+        let stored_pin = || {
+            with_database(|db| Ok(taxpayer_credentials(db, ROOT)?.pin_hash))
+                .unwrap()
+                .unwrap_or_default()
+        };
+        let branch_copies = || -> i64 {
+            with_database(|db| {
+                Ok(db
+                    .conn_for_tests()
+                    .query_row(
+                        "SELECT count(*) FROM profiles
+                         WHERE substr(tin, 1, 9) = ?1 AND json_type(data_json, '$.profile_pin_hash') = 'text'",
+                        [ROOT],
+                        |row| row.get(0),
+                    )
+                    .unwrap())
+            })
+            .unwrap()
+        };
+
+        // taxpayers.pin_hash, as an earlier version stored it.
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        let old = stored_pin();
+        assert_eq!(old, bir_core::crypto::hash_pin("0817"));
+        assert!(!truthy(verify_taxpayer_pin(&args(vec![
+            s(ROOT),
+            s("1111")
+        ]))));
+        join_last_rehash();
+        assert_eq!(stored_pin(), old, "a miss rehashes nothing");
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("0817")]))));
+        join_last_rehash();
+        let phc = stored_pin();
+        assert!(phc.starts_with("$argon2id$"), "{phc}");
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("0817")]))));
+        assert!(!truthy(verify_taxpayer_pin(&args(vec![
+            s(ROOT),
+            s("1111")
+        ]))));
+        join_last_rehash();
+        assert_eq!(stored_pin(), phc, "an Argon2id match is not rehashed again");
+
+        // The branch copy: the taxpayer has no PIN and a branch row still holds the old value (until the next
+        // open's v22 repair lifts it). Its first match moves a PHC string onto the taxpayer and clears the copy.
+        let legacy = bir_core::crypto::hash_pin("6810");
+        with_database(|db| {
+            db.set_taxpayer_pin_hash(ROOT, None).map_err(db_error)?;
+            let mut profile = get_profile_by_tin(db, BRANCH)?;
+            profile.profile_pin_hash = Some(legacy.clone());
+            db.save_profile(profile).map_err(db_error)?;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(branch_copies(), 1);
+        let hash =
+            with_database(|db| bir_core::export::client_pin_hash(db, BRANCH).map_err(db_error))
+                .unwrap();
+        assert_eq!(hash.as_deref(), Some(legacy.as_str()));
+        assert!(client_pin_matches(ROOT, hash.as_deref(), "6810"));
+        join_last_rehash();
+        let lifted = stored_pin();
+        assert!(lifted.starts_with("$argon2id$"), "{lifted}");
+        assert_eq!(branch_copies(), 0, "the branch copy is cleared");
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("6810")]))));
+
+        // A PIN changed between the match and the rehash is never overwritten.
+        set_taxpayer_pin(&args(vec![s(ROOT), s("2468")])).unwrap();
+        let changed = stored_pin();
+        let written = with_database(|db| {
+            db.upgrade_client_pin_hash(ROOT, &legacy, &bir_core::pin::hash("6810").unwrap())
+                .map_err(db_error)
+        })
+        .unwrap();
+        assert!(!written);
+        assert_eq!(stored_pin(), changed);
+    }
+
+    /// A client's count is kept in the device store (PLAN §B.2), keyed by the room and the TIN root, and a
+    /// wrong authenticator code shares the PIN's count.
+    #[test]
+    fn a_clients_count_is_kept_in_the_device_store() {
+        setup();
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        let count = || {
+            bir_core::rooms::device_store_here()
+                .with(false, |store| {
+                    store.attempts(&bir_core::owner_lock::AttemptKey::client(None, ROOT))
+                })
+                .unwrap()
+                .unwrap()
+                .failures
+        };
+        assert!(!truthy(verify_taxpayer_pin(&args(vec![
+            s(ROOT),
+            s("1111")
+        ]))));
+        assert!(!truthy(verify_taxpayer_totp(&args(vec![
+            s(ROOT),
+            s("000000")
+        ]))));
+        assert_eq!(count(), 2);
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("0817")]))));
+        assert_eq!(count(), 0);
+        join_last_rehash();
     }
 
     // ---------- the page reaches only its own settings ----------
