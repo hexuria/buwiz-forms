@@ -3584,14 +3584,43 @@ fn base64_encode(bytes: &[u8]) -> String {
 /// One read-only input laid over a whole comb cell (`<div id="{cell}">`),
 /// holding `text` left-aligned in a font small enough to fit. Returns the
 /// insert position just inside the cell and the input tag.
+///
+/// Only the drawn cell counts: the `<div>` whose own `id` attribute is
+/// `cell` (not `data-cell-id` or another name ending in `id`), outside any
+/// `<template>` (the band rows a sheet keeps for cloning are never drawn, so
+/// a line put there would print nowhere).
 fn cell_tag<'a>(html: &'a str, cell: &str) -> Option<(usize, &'a str)> {
-    let id = html.find(&format!("id=\"{cell}\""))?;
-    let open = html[..id].rfind("<div")?;
-    let end = open + html[open..].find('>')?;
-    if html[open..id].contains('>') {
-        return None;
+    let needle = format!("id=\"{cell}\"");
+    let mut from = 0;
+    while let Some(rel) = html[from..].find(&needle) {
+        let id = from + rel;
+        from = id + needle.len();
+        // The attribute name must be `id` itself.
+        if !html[..id].ends_with([' ', '\t', '\n', '\r']) {
+            continue;
+        }
+        let Some(open) = html[..id].rfind("<div") else {
+            continue;
+        };
+        if html[open..id].contains('>') {
+            continue;
+        }
+        if inside_template(html, open) {
+            continue;
+        }
+        let end = open + html[open..].find('>')?;
+        return Some((open, &html[open..end]));
     }
-    Some((open, &html[open..end]))
+    None
+}
+
+/// Whether byte `at` of `html` lies between a `<template` and its
+/// `</template>`.
+fn inside_template(html: &str, at: usize) -> bool {
+    match html[..at].rfind("<template") {
+        Some(open) => !html[open..at].contains("</template>"),
+        None => false,
+    }
 }
 
 fn comb_overflow_line(
@@ -6702,6 +6731,84 @@ mod tests {
         "2552-2018",
         "2553-1999",
     ];
+
+    /// Every overflow line a fill writes (`data-overflow-of="X"`) lies inside
+    /// the drawn cell `<div id="X">` itself, never inside a `<template>` (the
+    /// band rows a sheet keeps for cloning, which are never drawn) nor in
+    /// another element. Otherwise a long value prints nowhere while
+    /// `printed_cells`, which reads the text, still counts it, and a golden
+    /// would record the vanished value.
+    #[test]
+    fn every_overflow_line_lies_in_its_drawn_cell() {
+        let mut misplaced = Vec::new();
+        for slug in sheet_slugs() {
+            let cells = writer_cells(&slug).unwrap();
+            for len in [200, 90, 12] {
+                let fields: BTreeMap<String, String> = cells
+                    .joins
+                    .keys()
+                    .map(|key| (key.clone(), words_of(len)))
+                    .collect();
+                let doc = filled_document(&slug, &fields).unwrap();
+                for (cell, place) in overflow_line_places(&doc) {
+                    if place.as_deref() != Some(cell.as_str()) {
+                        misplaced.push(format!("{slug} ({len}): {cell} in {place:?}"));
+                    }
+                }
+            }
+        }
+        misplaced.dedup();
+        assert!(
+            misplaced.is_empty(),
+            "overflow lines outside their drawn cell ({}):\n{}",
+            misplaced.len(),
+            misplaced.join("\n")
+        );
+    }
+
+    /// For every overflow input of `doc`: the cell it names and the real
+    /// `id` of the `<div>` it lies in (`None` inside a `<template>` or
+    /// outside any `<div>`).
+    fn overflow_line_places(doc: &str) -> Vec<(String, Option<String>)> {
+        let mut out = Vec::new();
+        let mut divs: Vec<Option<String>> = Vec::new();
+        let mut templates = 0usize;
+        let mut from = 0;
+        while let Some(rel) = doc[from..].find('<') {
+            let at = from + rel;
+            let Some(end_rel) = doc[at..].find('>') else {
+                break;
+            };
+            let tag = &doc[at..=at + end_rel];
+            from = at + end_rel + 1;
+            if tag.starts_with("<template") {
+                templates += 1;
+            } else if tag.starts_with("</template") {
+                templates = templates.saturating_sub(1);
+            } else if tag.starts_with("<div") {
+                // The `id` attribute itself, not `data-cell-id` or any
+                // other name ending in `id`.
+                let id = tag
+                    .find(" id=\"")
+                    .map(|at| &tag[at + 5..])
+                    .and_then(|rest| rest.split('"').next())
+                    .map(str::to_string);
+                divs.push(id);
+            } else if tag.starts_with("</div") {
+                divs.pop();
+            } else if tag.starts_with("<input") {
+                if let Some(cell) = attr(tag, "data-overflow-of") {
+                    let place = if templates > 0 {
+                        None
+                    } else {
+                        divs.last().cloned().flatten()
+                    };
+                    out.push((cell.to_string(), place));
+                }
+            }
+        }
+        out
+    }
 
     /// Goldens: every sheet's long-text print pinned exactly
     /// (`fixtures/overflow-goldens.json`, `BIR_PRINT_BLESS_OVERFLOW=1`), and

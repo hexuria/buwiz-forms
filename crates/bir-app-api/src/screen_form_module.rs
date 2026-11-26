@@ -17488,6 +17488,33 @@ mod tests {
             .unwrap()
     }
 
+    /// A sheet's HTML without its `<template>` contents: the band rows kept
+    /// for cloning are never drawn, so their cells are not the sheet's.
+    fn drawn_html(html: &str) -> String {
+        let mut out = String::with_capacity(html.len());
+        let mut rest = html;
+        while let Some(open) = rest.find("<template") {
+            out.push_str(&rest[..open]);
+            match rest[open..].find("</template>") {
+                Some(close) => rest = &rest[open + close + "</template>".len()..],
+                None => return out,
+            }
+        }
+        out.push_str(rest);
+        out
+    }
+
+    /// The `id` attribute of a `<div` tag's attributes (`tag` follows
+    /// `"<div "`): the attribute named `id` itself, not `data-cell-id`.
+    fn div_id(tag: &str) -> Option<&str> {
+        let at = if tag.starts_with("id=\"") {
+            4
+        } else {
+            tag.find(" id=\"")? + 5
+        };
+        Some(&tag[at..at + tag[at..].find('"')?])
+    }
+
     /// Every comb cell of a filled sheet, page by page in cell order, as it
     /// prints (`printed_cell`): its boxes, or the plain line over them.
     fn printed_cells_in_order(slug: &str, document: &str) -> String {
@@ -17495,14 +17522,13 @@ mod tests {
             "{}/../../html-frozen/{slug}/index.html",
             env!("CARGO_MANIFEST_DIR")
         );
-        let html = std::fs::read_to_string(path).unwrap();
+        let html = drawn_html(&std::fs::read_to_string(path).unwrap());
         let mut cells: Vec<(u32, u32, String)> = html
             .split("<div ")
             .skip(1)
             .filter_map(|rest| {
                 let tag = &rest[..rest.find('>')?];
-                let id_at = tag.find("id=\"")? + 4;
-                let id = &tag[id_at..id_at + tag[id_at..].find('"')?];
+                let id = div_id(tag)?;
                 if !tag.contains("data-field-kind=\"comb\"") {
                     return None;
                 }
@@ -17525,7 +17551,7 @@ mod tests {
             "{}/../../html-frozen/{slug}/index.html",
             env!("CARGO_MANIFEST_DIR")
         );
-        let html = std::fs::read_to_string(path).unwrap();
+        let html = drawn_html(&std::fs::read_to_string(path).unwrap());
         html.split("<div ")
             .skip(1)
             .filter_map(|rest| {
@@ -17533,8 +17559,7 @@ mod tests {
                 if !tag.contains("data-field-kind=\"comb\"") {
                     return None;
                 }
-                let id_at = tag.find("id=\"")? + 4;
-                let id = &tag[id_at..id_at + tag[id_at..].find('"')?];
+                let id = div_id(tag)?;
                 let at = tag.find("data-comb-slots=\"")? + "data-comb-slots=\"".len();
                 let slots = tag[at..].split('"').next()?.parse().ok()?;
                 Some((id.to_string(), slots))
