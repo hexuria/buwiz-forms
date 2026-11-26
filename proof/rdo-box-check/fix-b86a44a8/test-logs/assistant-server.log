@@ -1,0 +1,7 @@
+gpui-agent listening on 127.0.0.1:17499 (platform=headless, app=bir)
+log file: /home/ubuntu/forms-validation/rdo-fix-deef-proof/logs/bir-headless.log (override with BIR_HEADLESS_LOG)
+opt-in: GPUI_AGENT=1 · bind via from_env · protocol v2 HMAC · GPUI_AGENT_TOKEN required unless GPUI_AGENT_INSECURE_NO_TOKEN=1
+auth: required (GPUI_AGENT_TOKEN set; CLI/MCP send protocol v2 HMAC, never the raw token)
+delivery: semantic only (virtual_unavailable — no GPUI event pipeline)
+database: /home/ubuntu/forms-validation/rdo-fix-deef-proof/assistant-door.db (default_database_path unless BIR_DATABASE_PATH; exclusive owner lock; not ephemeral)
+BIR: no GPU · screenshot_unavailable · form.print errors · in-process SFTP cron. Single bind + single live-DB owner. `serve --wait` resumes after GUI quit. No Op::Yield. launchd KeepAlive is optional.

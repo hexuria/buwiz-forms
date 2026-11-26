@@ -1,0 +1,103 @@
+   Compiling bir-app-api v0.2.1 (/home/ubuntu/forms-validation/rdo-fix-deef60d8/crates/bir-app-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 18.38s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/lib.rs (/home/ubuntu/forms-validation/target-rdo-fix-deef60d8/debug/deps/bir_app_api-f10dc838b96fcaa2)
+
+running 7 tests
+test screen_form_module::tests::rdo_lists::form_1601c_rdo_is_locked_from_the_profile_or_open_with_the_catalog ... FAILED
+test screen_form_module::tests::rdo_lists::form_1601c_refuses_000_as_its_rdo_on_validate_and_queue ... ok
+test screen_form_module::tests::rdo_lists::form_1801_schedule_4_rdo_off_the_catalog_is_refused_on_validate_and_queue ... ok
+test screen_form_module::tests::rdo_lists::a_spouse_rdo_off_the_catalog_or_empty_is_refused_on_validate_and_queue ... ok
+test screen_form_module::tests::rdo_lists::no_select_offers_template_text_and_only_rdo_lists_are_placeholders ... FAILED
+test screen_form_module::tests::rdo_lists::every_rdo_select_offers_the_rdo_catalog ... FAILED
+test screen_form_module::tests::rdo_lists::every_form_flags_000_as_its_rdo ... ok
+
+failures:
+
+---- screen_form_module::tests::rdo_lists::form_1601c_rdo_is_locked_from_the_profile_or_open_with_the_catalog stdout ----
+
+thread 'screen_form_module::tests::rdo_lists::form_1601c_rdo_is_locked_from_the_profile_or_open_with_the_catalog' (63) panicked at crates/bir-app-api/src/screen_form_module/tests/rdo_lists.rs:210:14:
+host RDO list
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- screen_form_module::tests::rdo_lists::no_select_offers_template_text_and_only_rdo_lists_are_placeholders stdout ----
+placeholder-only schema lists: [
+    "1601C frm1601c:txtRDOCode",
+    "1701Q frm1701q:txtRDOCode",
+    "1701Q frm1701q:txtSpouseRDOCode",
+]
+
+thread 'screen_form_module::tests::rdo_lists::no_select_offers_template_text_and_only_rdo_lists_are_placeholders' (66) panicked at crates/bir-app-api/src/screen_form_module/tests/rdo_lists.rs:185:5:
+template text offered: [
+    "1701Q frm1701q:txtRDOCode",
+    "1701Q frm1701q:txtSpouseRDOCode",
+]
+
+---- screen_form_module::tests::rdo_lists::every_rdo_select_offers_the_rdo_catalog stdout ----
+RDO selects swept (44): [
+    "1601C frm1601c:txtRDOCode",
+    "2551Q frm2551Qv2018:txtRDOCode",
+    "2553 frm2553:txtRDOCode",
+    "1604F frm1604f:rdoCode",
+    "1604C frm1604c:rdoCode",
+    "1604E frm1604e:txtRDOCode",
+    "1606 frm1606:txtRDOCode16A",
+    "1600VT frm1600VT:txtPg1I6RDO",
+    "1600PT frm1600PT:txtPg1I6RDO",
+    "1600WP frm1600WP:txtRDOCode",
+    "1601EQ frm1601EQ:txtRDOCode",
+    "1601FQ frm1601FQ:txtRDOCode",
+    "1603Q frm1603Q:rdoCode",
+    "1602Q frm1602Q:txtRDOCode",
+    "2550M frm2550m:txtRDOCode",
+    "1706 frm1706:txtRDOCode14A",
+    "1707 frm1707:rdoPg1Pt1I5RDO",
+    "1707A frm1707Av2021:rdoI6RDO",
+    "1800 frm1800v2018:txtRDOCode",
+    "1801 frm1801v2018:txtRDOCode_1",
+    "1801 frm1801v2018:sched4Rdo_1",
+    "1801 frm1801v2018:sched4Rdo_2",
+    "1801 frm1801v2018:sched4Rdo_3",
+    "1801 frm1801v2018:sched4Rdo_4",
+    "1801 frm1801v2018:sched4Rdo_5",
+    "1801 frm1801v2018:sched4Rdo_6",
+    "1801 frm1801v2018:sched4Rdo_7",
+    "2000 frm2000:txtRDOCode",
+    "2200S frm2200S:txtRDOCode",
+    "2200AN frm2200ANv2018:txtRDOCode",
+    "2200T frm2200Tv2020:rdoCode",
+    "2200A frm2200Av2020:rdoCode",
+    "1701A frm1701A:txtRDOCode",
+    "1701A frm1701A:txtSpouseRDOCode",
+    "1702EX frm1702EX:hdnPg1Pt1I7RDO",
+    "0605 frm0605:txtRDOCode",
+    "0619E frm0619E:txtRDOCode",
+    "0619F frm0619F:txtRDOCode",
+    "1701Q frm1701q:txtRDOCode",
+    "1701Q frm1701q:txtSpouseRDOCode",
+    "1702RT frm1702RT:drpPg1Pt1I7RDOCode",
+    "1701 frm1701:txtPg1I5RDOCode",
+    "1701 frm1701:txtPg2I2SpouseRDOCode",
+    "1702MX frm1702MX:drpPg1Pt1I7RDO",
+]
+
+thread 'screen_form_module::tests::rdo_lists::every_rdo_select_offers_the_rdo_catalog' (62) panicked at crates/bir-app-api/src/screen_form_module/tests/rdo_lists.rs:135:5:
+[
+    "1601C frm1601c:txtRDOCode: 1 offered, not the catalog's 138: [\"000\"]",
+    "1601C frm1601c:txtRDOCode: offers 000 or template text",
+    "1701Q frm1701q:txtRDOCode: 1 offered, not the catalog's 138: [\"[]\"]",
+    "1701Q frm1701q:txtRDOCode: offers 000 or template text",
+    "1701Q frm1701q:txtSpouseRDOCode: 1 offered, not the catalog's 138: [\"[]\"]",
+    "1701Q frm1701q:txtSpouseRDOCode: offers 000 or template text",
+]
+
+
+failures:
+    screen_form_module::tests::rdo_lists::every_rdo_select_offers_the_rdo_catalog
+    screen_form_module::tests::rdo_lists::form_1601c_rdo_is_locked_from_the_profile_or_open_with_the_catalog
+    screen_form_module::tests::rdo_lists::no_select_offers_template_text_and_only_rdo_lists_are_placeholders
+
+test result: FAILED. 4 passed; 3 failed; 0 ignored; 0 measured; 811 filtered out; finished in 1.74s
+
+error: test failed, to rerun pass `-p bir-app-api --lib`

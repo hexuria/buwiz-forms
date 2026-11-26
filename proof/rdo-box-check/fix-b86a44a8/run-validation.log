@@ -1,0 +1,113 @@
+{
+  "open1601": {
+    "ui_dialog": true
+  },
+  "1601_blank_validation": {
+    "messages": [
+      [
+        "fp-boxmsg-frm1601c:txtRDOCode",
+        "RDO is required"
+      ],
+      [
+        "fp-pill-open",
+        "All sections \u00b7 3 to do \u00b7 Part II \u00b7 Computation of Tax \u00b7 3 items need attention"
+      ],
+      [
+        "fp-pill-count",
+        "3 items need attention"
+      ],
+      [
+        "n7276",
+        "3 items need attention."
+      ],
+      [
+        "n7282",
+        "3 items need attention."
+      ]
+    ],
+    "shot": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/1601c-blank-validation.png"
+  },
+  "1601_catalog": {
+    "trigger_found": true,
+    "semantic_visible_count": 60,
+    "codes_visible_first": [
+      "001",
+      "002",
+      "003",
+      "004",
+      "005"
+    ],
+    "codes_visible_last": [
+      "062",
+      "063",
+      "064",
+      "065",
+      "066"
+    ],
+    "has000": false,
+    "template_text": false,
+    "shot_open": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/1601c-catalog-open.png",
+    "search000_none": true,
+    "shot000": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/1601c-catalog-search000.png",
+    "search132_found": true,
+    "search001_found": true,
+    "search040_found": true,
+    "picked_value": "RDO code: 040 \u2014 Cubao"
+  },
+  "1601_040_validation": {
+    "messages": [
+      [
+        "fp-pill-open",
+        "All sections \u00b7 2 to do \u00b7 Part II \u00b7 Computation of Tax \u00b7 2 items need attention"
+      ],
+      [
+        "fp-pill-count",
+        "2 items need attention"
+      ],
+      [
+        "n10814",
+        "2 items need attention."
+      ],
+      [
+        "n10820",
+        "2 items need attention."
+      ]
+    ],
+    "shot": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/1601c-040-validation.png"
+  },
+  "1601_picked_shot": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/1601c-040-picked.png",
+  "1601_reopen_value": "RDO code: 040 \u2014 Cubao",
+  "1601_reopen_shot": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/1601c-040-reopen.png",
+  "profile_rdo_after": "",
+  "profile_shot": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/profile-after-1601c.png",
+  "open1701": {
+    "ui_dialog": true
+  },
+  "1701_filer_catalog": {
+    "trigger_found": true,
+    "semantic_visible_count": 60,
+    "codes_visible_first": [
+      "001",
+      "002",
+      "003",
+      "004",
+      "005"
+    ],
+    "codes_visible_last": [
+      "062",
+      "063",
+      "064",
+      "065",
+      "066"
+    ],
+    "has000": false,
+    "template_text": false,
+    "shot_open": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/1701q-filer-catalog-open.png",
+    "search000_none": true,
+    "shot000": "/home/ubuntu/forms-validation/rdo-fix-deef-proof/1701q-filer-catalog-search000.png",
+    "search132_found": true,
+    "search001_found": true,
+    "search040_found": true
+  },
+  "1701_spouse_found": false
+}
