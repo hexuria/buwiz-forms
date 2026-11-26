@@ -1,6 +1,7 @@
 // A test fixture, not a screen: the preview window's content (PreviewWindow) in the main window, over a made-up preview of
 // the demo form, with buttons that only record what they were asked (the real ones make a PDF and open a panel).
-// `open(entry, { host: { params } })`: `mode` "ok" (default), "fail" (every button fails) or "cancel" (Save as PDF is cancelled).
+// `open(entry, { host: { params } })`: `mode` "ok" (default), "fail" (every button fails), "cancel" (Save as PDF is cancelled)
+// or "hang" (Save as PDF never answers, as a panel that never opens).
 // The recorded calls are the text under the window (testID pd-log).
 import { host, mount, signal, Text, View } from "nsh";
 import "../../theme/fonts";
@@ -36,9 +37,13 @@ function Demo() {
     },
     async savePdf(key) {
       calls.update((all) => [...all, `save ${key}`]);
+      if (mode === "hang") return new Promise<string | null>(() => {});
       await wait(250);
       if (mode === "fail") throw new Error("Could not save the PDF: the disk is full.");
       return mode === "cancel" ? null : "/Users/someone/Documents/BIR Form 2551Q - Juana Santos.pdf";
+    },
+    stoppedWaiting(what) {
+      calls.update((all) => [...all, `stopped ${what}`]);
     },
   };
   return (

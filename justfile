@@ -44,6 +44,24 @@ bump-build:
     }
     uv run scripts/bump_build.py
 
+# Covers iPhone, iPad, Mac, Windows, Linux, Android, the tray and the menu-row mark, and lists each file it wrote.
+# With a path, that SVG is copied in as the new source first: `just icons ~/new-logo.svg`.
+# Needs uv (it fetches Pillow) and rsvg-convert (brew install librsvg).
+# Rebuild every app icon from assets/brand/buwiz-forms.svg
+icons svg="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{svg}}" ]; then
+        cp "{{svg}}" assets/brand/buwiz-forms.svg
+        echo "new source: {{svg}} -> assets/brand/buwiz-forms.svg"
+    fi
+    uv run -q --no-project --with 'pillow>=11.1' python assets/brand/make_icons.py
+
+# Local only, not a CI job: another machine's librsvg can draw edges differently. `just icons` fixes a failure.
+# Exit 1 when a committed icon is not what assets/brand/buwiz-forms.svg gives
+icons-check:
+    uv run -q --no-project --with 'pillow>=11.1' python assets/brand/make_icons.py --check
+
 # Show available commands
 help:
     @just --list
@@ -564,7 +582,38 @@ _package-mac-appstore args="": build-frozen-html-identity
             exit 1
         fi
     fi
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    # A store package is built in this checkout's own folder, never the shared ~/BuwizNsh/target-nsh: Cargo cannot tell two
+    # checkouts of the same crate version apart, so a shared folder can link another worktree's bir-core (its forms) with no
+    # error, and the package would carry another branch's form data. A CARGO_TARGET_DIR set by the caller still wins.
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/nsh-store}"
+    # A store package comes only from the pinned NSH: the nsh tool built at NSH_PINNED_REF (NSH_TOOLS names its folder,
+    # docs/platforms/ios.md) and the ../nsh checkout beside this one at that commit. Anything else is refused.
+    pin="$(sed -n 's/^ *NSH_PINNED_REF: *//p' "$root/.github/workflows/nsh.yml" | head -1)"
+    tool="$(nsh --version 2>/dev/null || echo missing)"
+    tool_ref="$(printf '%s' "$tool" | sed -n 's/.*(\([0-9a-f]\{7,\}\)).*/\1/p')"
+    kit="$(git -C "$root/../nsh" rev-parse HEAD 2>/dev/null || true)"
+    if [ -z "$pin" ] || [ -z "$tool_ref" ] || [ "${pin#"$tool_ref"}" = "$pin" ]; then
+        echo "❌ The nsh tool ($tool) is not built at the NSH pin ${pin:0:8}: set NSH_TOOLS to a tools folder built at the pin (docs/platforms/ios.md)." >&2; exit 1
+    fi
+    if [ "$kit" != "$pin" ]; then
+        echo "❌ ../nsh beside this checkout is at ${kit:-nothing}, not the NSH pin $pin: check it out there first." >&2; exit 1
+    fi
+    dirty=""
+    git -C "$root" diff --quiet HEAD -- || dirty=" (with uncommitted changes)"
+    # The pinned toolchain's own cargo, first on PATH (the nsh tool and nsh/mas/cargo-with-mas.sh call `cargo`): it honours
+    # CARGO_TARGET_DIR. The owner's cargo fork (huacnlee/cargo) stays everyone's everyday cargo, but it ignores CARGO_TARGET_DIR and
+    # shares one build folder between every checkout, so a store package is refused if it is the cargo found here.
+    toolchain_cargo="$(rustup which cargo 2>/dev/null || true)"
+    if [ -z "$toolchain_cargo" ]; then
+        echo "❌ rustup finds no cargo for this checkout's toolchain (rust-toolchain.toml)." >&2; exit 1
+    fi
+    export PATH="$(dirname "$toolchain_cargo"):$PATH"
+    cargo_v="$(cargo --version 2>/dev/null || echo "cargo missing")"
+    case "$cargo_v" in
+        *huacnlee*) echo "❌ $cargo_v is the cargo fork, which shares one build folder between checkouts: a store package needs the toolchain's own cargo." >&2; exit 1 ;;
+    esac
+    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, $cargo_v, folder $CARGO_TARGET_DIR"
+    echo "$PROVENANCE" >&2
     echo "Building the NSH app for the Mac App Store ($ARCH, build {{BUILD_NUMBER}}, agent=$NSH_MAS_AGENT)..."
     rm -rf "$OUT"
     mkdir -p "$OUT"
@@ -620,6 +669,8 @@ _package-mac-appstore args="": build-frozen-html-identity
         echo "✅ Unsigned PKG created: $PKG_PATH"
         echo "⚠️  Note: You must also codesign the .pkg with an 'Apple Distribution' certificate before submitting."
     fi
+    echo "$PROVENANCE, build {{BUILD_NUMBER}}" > "${PKG_PATH%.pkg}.provenance.txt"
+    echo "   $PROVENANCE"
 
 # Google Play bundle (docs/platforms/android.md): an Android App Bundle for phones and tablets with the Play application
 # id com.buwiz.ebirforms (nsh.json keeps dev.goldcoders.bir for every other system and for development builds), the
@@ -729,7 +780,38 @@ ios-appstore: build-frozen-html-identity
     set -a && source .env && set +a
     BUILD="$(uv run scripts/bump_build.py --print-next)"
     case "$BUILD" in ''|*[!0-9]*) echo "Invalid App Store build number: $BUILD" >&2; exit 1 ;; esac
-    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    # A store package is built in this checkout's own folder, never the shared ~/BuwizNsh/target-nsh: Cargo cannot tell two
+    # checkouts of the same crate version apart, so a shared folder can link another worktree's bir-core (its forms) with no
+    # error, and the package would carry another branch's form data. A CARGO_TARGET_DIR set by the caller still wins.
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/nsh-store}"
+    # A store package comes only from the pinned NSH: the nsh tool built at NSH_PINNED_REF (NSH_TOOLS names its folder,
+    # docs/platforms/ios.md) and the ../nsh checkout beside this one at that commit. Anything else is refused.
+    pin="$(sed -n 's/^ *NSH_PINNED_REF: *//p' "$root/.github/workflows/nsh.yml" | head -1)"
+    tool="$(nsh --version 2>/dev/null || echo missing)"
+    tool_ref="$(printf '%s' "$tool" | sed -n 's/.*(\([0-9a-f]\{7,\}\)).*/\1/p')"
+    kit="$(git -C "$root/../nsh" rev-parse HEAD 2>/dev/null || true)"
+    if [ -z "$pin" ] || [ -z "$tool_ref" ] || [ "${pin#"$tool_ref"}" = "$pin" ]; then
+        echo "❌ The nsh tool ($tool) is not built at the NSH pin ${pin:0:8}: set NSH_TOOLS to a tools folder built at the pin (docs/platforms/ios.md)." >&2; exit 1
+    fi
+    if [ "$kit" != "$pin" ]; then
+        echo "❌ ../nsh beside this checkout is at ${kit:-nothing}, not the NSH pin $pin: check it out there first." >&2; exit 1
+    fi
+    dirty=""
+    git -C "$root" diff --quiet HEAD -- || dirty=" (with uncommitted changes)"
+    # The pinned toolchain's own cargo, first on PATH (the nsh tool and nsh/mas/cargo-with-mas.sh call `cargo`): it honours
+    # CARGO_TARGET_DIR. The owner's cargo fork (huacnlee/cargo) stays everyone's everyday cargo, but it ignores CARGO_TARGET_DIR and
+    # shares one build folder between every checkout, so a store package is refused if it is the cargo found here.
+    toolchain_cargo="$(rustup which cargo 2>/dev/null || true)"
+    if [ -z "$toolchain_cargo" ]; then
+        echo "❌ rustup finds no cargo for this checkout's toolchain (rust-toolchain.toml)." >&2; exit 1
+    fi
+    export PATH="$(dirname "$toolchain_cargo"):$PATH"
+    cargo_v="$(cargo --version 2>/dev/null || echo "cargo missing")"
+    case "$cargo_v" in
+        *huacnlee*) echo "❌ $cargo_v is the cargo fork, which shares one build folder between checkouts: a store package needs the toolchain's own cargo." >&2; exit 1 ;;
+    esac
+    PROVENANCE="build: app $(git -C "$root" rev-parse --short=8 HEAD)$dirty, nsh ${kit:0:8} beside it, tool $tool, $cargo_v, folder $CARGO_TARGET_DIR"
+    echo "$PROVENANCE" >&2
     OUT="$root/{{RELEASE_DIR}}/ios"
     APP="$OUT/{{APP_NAME}}.app"
     IPA="$root/{{RELEASE_DIR}}/{{APP_NAME}}-iOS-{{VERSION}}.ipa"
@@ -756,7 +838,9 @@ ios-appstore: build-frozen-html-identity
     ditto "$APP" "$STAGE/Payload/{{APP_NAME}}.app"
     (cd "$STAGE" && zip -qry "$IPA" Payload)
     rm -rf "$STAGE"
+    echo "$PROVENANCE, build $BUILD" > "${IPA%.ipa}.provenance.txt"
     echo "✅ $IPA ({{VERSION}}, build $BUILD)"
+    echo "   $PROVENANCE"
 
 # Uploads the iOS package `just ios-appstore` made, with the App Store Connect key in .env (as testflight-upload does).
 [macos]
@@ -766,7 +850,7 @@ ios-appstore-upload:
     set -a && source .env && set +a
     IPA="{{RELEASE_DIR}}/{{APP_NAME}}-iOS-{{VERSION}}.ipa"
     [ -f "$IPA" ] || { echo "❌ No $IPA: run just ios-appstore first." >&2; exit 1; }
-    ~/BuwizNsh/tools/bin/nsh publish ios "$IPA" --app-id 6767850225 \
+    "${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin/nsh" publish ios "$IPA" --app-id 6767850225 \
         --issuer-id "$APP_STORE_ISSUER_ID" --key-id "$APP_STORE_KEY_ID" --private-key "$APP_STORE_P8_PATH"
 
 [unix]

@@ -3874,7 +3874,8 @@
     },
     "frm1600WP:dtSched:naturePayment1": {
       "label": "Schedule 1.1 row 1 Nature of Payment",
-      "evidence": "P4: printed caption 'Schedule 1.1 row 1 Nature of Payment' (html-frozen/1600wp-2010/writer-cells.json joins)"
+      "computed": true,
+      "evidence": "P4: printed caption 'Schedule 1.1 row 1 Nature of Payment' (html-frozen/1600wp-2010/writer-cells.json joins) | F2: the nature of payment is the chosen ATC's description (form_1600wp.rs AtcOption description, written into the row by the ATC pick), never typed"
     },
     "frm1600WP:dtSched:amount1": {
       "label": "Schedule 1.1 row 1 Amount",
@@ -3882,7 +3883,8 @@
     },
     "frm1600WP:dtSched:txtRatePercent1": {
       "label": "Schedule 1.1 row 1 Tax Rate",
-      "evidence": "P4: printed caption 'Schedule 1.1 row 1 Tax Rate' (html-frozen/1600wp-2010/writer-cells.json joins)"
+      "computed": true,
+      "evidence": "P4: printed caption 'Schedule 1.1 row 1 Tax Rate' (html-frozen/1600wp-2010/writer-cells.json joins) | F2: the rate is the chosen ATC's (form_1600wp.rs:363 form_1600wp_atc(&row.atc_code).rate, getRequiredWithheld base*(rate/100)), never typed"
     },
     "frm1600WP:dtSched:taxWithheld1": {
       "label": "Schedule 1.1 row 1 Tax Required to be Withheld",
@@ -3902,7 +3904,8 @@
     },
     "frm1600WP:dtSched:naturePayment2": {
       "label": "Schedule 1.1 row 2 Nature of Payment",
-      "evidence": "P4: printed caption 'Schedule 1.1 row 2 Nature of Payment' (html-frozen/1600wp-2010/writer-cells.json joins)"
+      "computed": true,
+      "evidence": "P4: printed caption 'Schedule 1.1 row 2 Nature of Payment' (html-frozen/1600wp-2010/writer-cells.json joins) | F2: the nature of payment is the chosen ATC's description (form_1600wp.rs AtcOption description, written into the row by the ATC pick), never typed"
     },
     "frm1600WP:dtSched:amount2": {
       "label": "Schedule 1.1 row 2 Amount",
@@ -3910,7 +3913,8 @@
     },
     "frm1600WP:dtSched:txtRatePercent2": {
       "label": "Schedule 1.1 row 2 Tax Rate",
-      "evidence": "P4: printed caption 'Schedule 1.1 row 2 Tax Rate' (html-frozen/1600wp-2010/writer-cells.json joins)"
+      "computed": true,
+      "evidence": "P4: printed caption 'Schedule 1.1 row 2 Tax Rate' (html-frozen/1600wp-2010/writer-cells.json joins) | F2: the rate is the chosen ATC's (form_1600wp.rs:363 form_1600wp_atc(&row.atc_code).rate, getRequiredWithheld base*(rate/100)), never typed"
     },
     "frm1600WP:dtSched:taxWithheld2": {
       "label": "Schedule 1.1 row 2 Tax Required to be Withheld",
@@ -3930,7 +3934,8 @@
     },
     "frm1600WP:dtSched:naturePayment3": {
       "label": "Schedule 1.1 row 3 Nature of Payment",
-      "evidence": "P4: printed caption 'Schedule 1.1 row 3 Nature of Payment' (html-frozen/1600wp-2010/writer-cells.json joins)"
+      "computed": true,
+      "evidence": "P4: printed caption 'Schedule 1.1 row 3 Nature of Payment' (html-frozen/1600wp-2010/writer-cells.json joins) | F2: the nature of payment is the chosen ATC's description (form_1600wp.rs AtcOption description, written into the row by the ATC pick), never typed"
     },
     "frm1600WP:dtSched:amount3": {
       "label": "Schedule 1.1 row 3 Amount",
@@ -3938,7 +3943,8 @@
     },
     "frm1600WP:dtSched:txtRatePercent3": {
       "label": "Schedule 1.1 row 3 Tax Rate",
-      "evidence": "P4: printed caption 'Schedule 1.1 row 3 Tax Rate' (html-frozen/1600wp-2010/writer-cells.json joins)"
+      "computed": true,
+      "evidence": "P4: printed caption 'Schedule 1.1 row 3 Tax Rate' (html-frozen/1600wp-2010/writer-cells.json joins) | F2: the rate is the chosen ATC's (form_1600wp.rs:363 form_1600wp_atc(&row.atc_code).rate, getRequiredWithheld base*(rate/100)), never typed"
     },
     "frm1600WP:dtSched:taxWithheld3": {
       "label": "Schedule 1.1 row 3 Tax Required to be Withheld",
@@ -3958,7 +3964,8 @@
     },
     "frm1600WP:dtSched:naturePayment4": {
       "label": "Schedule 1.1 row 4 Nature of Payment",
-      "evidence": "P4: printed caption 'Schedule 1.1 row 4 Nature of Payment' (html-frozen/1600wp-2010/writer-cells.json joins)"
+      "computed": true,
+      "evidence": "P4: printed caption 'Schedule 1.1 row 4 Nature of Payment' (html-frozen/1600wp-2010/writer-cells.json joins) | F2: the nature of payment is the chosen ATC's description (form_1600wp.rs AtcOption description, written into the row by the ATC pick), never typed"
     },
     "frm1600WP:dtSched:amount4": {
       "label": "Schedule 1.1 row 4 Amount",
@@ -3966,7 +3973,8 @@
     },
     "frm1600WP:dtSched:txtRatePercent4": {
       "label": "Schedule 1.1 row 4 Tax Rate",
-      "evidence": "P4: printed caption 'Schedule 1.1 row 4 Tax Rate' (html-frozen/1600wp-2010/writer-cells.json joins)"
+      "computed": true,
+      "evidence": "P4: printed caption 'Schedule 1.1 row 4 Tax Rate' (html-frozen/1600wp-2010/writer-cells.json joins) | F2: the rate is the chosen ATC's (form_1600wp.rs:363 form_1600wp_atc(&row.atc_code).rate, getRequiredWithheld base*(rate/100)), never typed"
     },
     "frm1600WP:dtSched:taxWithheld4": {
       "label": "Schedule 1.1 row 4 Tax Required to be Withheld",
@@ -3986,7 +3994,8 @@
     },
     "frm1600WP:dtSched:naturePayment5": {
       "label": "Schedule 1.1 row 5 Nature of Payment",
-      "evidence": "P4: printed caption 'Schedule 1.1 row 5 Nature of Payment' (html-frozen/1600wp-2010/writer-cells.json joins)"
+      "computed": true,
+      "evidence": "P4: printed caption 'Schedule 1.1 row 5 Nature of Payment' (html-frozen/1600wp-2010/writer-cells.json joins) | F2: the nature of payment is the chosen ATC's description (form_1600wp.rs AtcOption description, written into the row by the ATC pick), never typed"
     },
     "frm1600WP:dtSched:amount5": {
       "label": "Schedule 1.1 row 5 Amount",
@@ -3994,7 +4003,8 @@
     },
     "frm1600WP:dtSched:txtRatePercent5": {
       "label": "Schedule 1.1 row 5 Tax Rate",
-      "evidence": "P4: printed caption 'Schedule 1.1 row 5 Tax Rate' (html-frozen/1600wp-2010/writer-cells.json joins)"
+      "computed": true,
+      "evidence": "P4: printed caption 'Schedule 1.1 row 5 Tax Rate' (html-frozen/1600wp-2010/writer-cells.json joins) | F2: the rate is the chosen ATC's (form_1600wp.rs:363 form_1600wp_atc(&row.atc_code).rate, getRequiredWithheld base*(rate/100)), never typed"
     },
     "frm1600WP:dtSched:taxWithheld5": {
       "label": "Schedule 1.1 row 5 Tax Required to be Withheld",
@@ -4014,7 +4024,8 @@
     },
     "frm1600WP:dtSched:naturePayment6": {
       "label": "Schedule 1.1 row 6 Nature of Payment",
-      "evidence": "P4: printed caption 'Schedule 1.1 row 6 Nature of Payment' (html-frozen/1600wp-2010/writer-cells.json joins)"
+      "computed": true,
+      "evidence": "P4: printed caption 'Schedule 1.1 row 6 Nature of Payment' (html-frozen/1600wp-2010/writer-cells.json joins) | F2: the nature of payment is the chosen ATC's description (form_1600wp.rs AtcOption description, written into the row by the ATC pick), never typed"
     },
     "frm1600WP:dtSched:amount6": {
       "label": "Schedule 1.1 row 6 Amount",
@@ -4022,7 +4033,8 @@
     },
     "frm1600WP:dtSched:txtRatePercent6": {
       "label": "Schedule 1.1 row 6 Tax Rate",
-      "evidence": "P4: printed caption 'Schedule 1.1 row 6 Tax Rate' (html-frozen/1600wp-2010/writer-cells.json joins)"
+      "computed": true,
+      "evidence": "P4: printed caption 'Schedule 1.1 row 6 Tax Rate' (html-frozen/1600wp-2010/writer-cells.json joins) | F2: the rate is the chosen ATC's (form_1600wp.rs:363 form_1600wp_atc(&row.atc_code).rate, getRequiredWithheld base*(rate/100)), never typed"
     },
     "frm1600WP:dtSched:taxWithheld6": {
       "label": "Schedule 1.1 row 6 Tax Required to be Withheld",
@@ -4042,7 +4054,8 @@
     },
     "frm1600WP:dtSched:naturePayment7": {
       "label": "Schedule 1.1 row 7 Nature of Payment",
-      "evidence": "P4: same column as frm1600WP:dtSched:naturePayment1 (writer-cells row 1 caption 'Nature of Payment'); continuation row 7"
+      "computed": true,
+      "evidence": "P4: same column as frm1600WP:dtSched:naturePayment1 (writer-cells row 1 caption 'Nature of Payment'); continuation row 7 | F2: the nature of payment is the chosen ATC's description (form_1600wp.rs AtcOption description, written into the row by the ATC pick), never typed"
     },
     "frm1600WP:dtSched:amount7": {
       "label": "Schedule 1.1 row 7 Amount",
@@ -4050,7 +4063,8 @@
     },
     "frm1600WP:dtSched:txtRatePercent7": {
       "label": "Schedule 1.1 row 7 Tax Rate",
-      "evidence": "P4: same column as frm1600WP:dtSched:txtRatePercent1 (writer-cells row 1 caption 'Tax Rate'); continuation row 7"
+      "computed": true,
+      "evidence": "P4: same column as frm1600WP:dtSched:txtRatePercent1 (writer-cells row 1 caption 'Tax Rate'); continuation row 7 | F2: the rate is the chosen ATC's (form_1600wp.rs:363 form_1600wp_atc(&row.atc_code).rate, getRequiredWithheld base*(rate/100)), never typed"
     },
     "frm1600WP:dtSched:taxWithheld7": {
       "label": "Schedule 1.1 row 7 Tax Required to be Withheld",
@@ -4070,7 +4084,8 @@
     },
     "frm1600WP:dtSched:naturePayment8": {
       "label": "Schedule 1.1 row 8 Nature of Payment",
-      "evidence": "P4: same column as frm1600WP:dtSched:naturePayment1 (writer-cells row 1 caption 'Nature of Payment'); continuation row 8"
+      "computed": true,
+      "evidence": "P4: same column as frm1600WP:dtSched:naturePayment1 (writer-cells row 1 caption 'Nature of Payment'); continuation row 8 | F2: the nature of payment is the chosen ATC's description (form_1600wp.rs AtcOption description, written into the row by the ATC pick), never typed"
     },
     "frm1600WP:dtSched:amount8": {
       "label": "Schedule 1.1 row 8 Amount",
@@ -4078,7 +4093,8 @@
     },
     "frm1600WP:dtSched:txtRatePercent8": {
       "label": "Schedule 1.1 row 8 Tax Rate",
-      "evidence": "P4: same column as frm1600WP:dtSched:txtRatePercent1 (writer-cells row 1 caption 'Tax Rate'); continuation row 8"
+      "computed": true,
+      "evidence": "P4: same column as frm1600WP:dtSched:txtRatePercent1 (writer-cells row 1 caption 'Tax Rate'); continuation row 8 | F2: the rate is the chosen ATC's (form_1600wp.rs:363 form_1600wp_atc(&row.atc_code).rate, getRequiredWithheld base*(rate/100)), never typed"
     },
     "frm1600WP:dtSched:taxWithheld8": {
       "label": "Schedule 1.1 row 8 Tax Required to be Withheld",
@@ -4098,7 +4114,8 @@
     },
     "frm1600WP:dtSched:naturePayment9": {
       "label": "Schedule 1.1 row 9 Nature of Payment",
-      "evidence": "P4: same column as frm1600WP:dtSched:naturePayment1 (writer-cells row 1 caption 'Nature of Payment'); continuation row 9"
+      "computed": true,
+      "evidence": "P4: same column as frm1600WP:dtSched:naturePayment1 (writer-cells row 1 caption 'Nature of Payment'); continuation row 9 | F2: the nature of payment is the chosen ATC's description (form_1600wp.rs AtcOption description, written into the row by the ATC pick), never typed"
     },
     "frm1600WP:dtSched:amount9": {
       "label": "Schedule 1.1 row 9 Amount",
@@ -4106,7 +4123,8 @@
     },
     "frm1600WP:dtSched:txtRatePercent9": {
       "label": "Schedule 1.1 row 9 Tax Rate",
-      "evidence": "P4: same column as frm1600WP:dtSched:txtRatePercent1 (writer-cells row 1 caption 'Tax Rate'); continuation row 9"
+      "computed": true,
+      "evidence": "P4: same column as frm1600WP:dtSched:txtRatePercent1 (writer-cells row 1 caption 'Tax Rate'); continuation row 9 | F2: the rate is the chosen ATC's (form_1600wp.rs:363 form_1600wp_atc(&row.atc_code).rate, getRequiredWithheld base*(rate/100)), never typed"
     },
     "frm1600WP:dtSched:taxWithheld9": {
       "label": "Schedule 1.1 row 9 Tax Required to be Withheld",
@@ -4126,7 +4144,8 @@
     },
     "frm1600WP:dtSched:naturePayment10": {
       "label": "Schedule 1.1 row 10 Nature of Payment",
-      "evidence": "P4: same column as frm1600WP:dtSched:naturePayment1 (writer-cells row 1 caption 'Nature of Payment'); continuation row 10"
+      "computed": true,
+      "evidence": "P4: same column as frm1600WP:dtSched:naturePayment1 (writer-cells row 1 caption 'Nature of Payment'); continuation row 10 | F2: the nature of payment is the chosen ATC's description (form_1600wp.rs AtcOption description, written into the row by the ATC pick), never typed"
     },
     "frm1600WP:dtSched:amount10": {
       "label": "Schedule 1.1 row 10 Amount",
@@ -4134,7 +4153,8 @@
     },
     "frm1600WP:dtSched:txtRatePercent10": {
       "label": "Schedule 1.1 row 10 Tax Rate",
-      "evidence": "P4: same column as frm1600WP:dtSched:txtRatePercent1 (writer-cells row 1 caption 'Tax Rate'); continuation row 10"
+      "computed": true,
+      "evidence": "P4: same column as frm1600WP:dtSched:txtRatePercent1 (writer-cells row 1 caption 'Tax Rate'); continuation row 10 | F2: the rate is the chosen ATC's (form_1600wp.rs:363 form_1600wp_atc(&row.atc_code).rate, getRequiredWithheld base*(rate/100)), never typed"
     },
     "frm1600WP:dtSched:taxWithheld10": {
       "label": "Schedule 1.1 row 10 Tax Required to be Withheld",
@@ -7127,7 +7147,8 @@
     },
     "txtNatIncPayment0": {
       "label": "Schedule 1 row 1, Nature of Income Payment",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601FQ.hta Schedule I header 'Nature of Income Payment'; id index 0 prints Seq. No. 1"
+      "computed": true,
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601FQ.hta Schedule I header 'Nature of Income Payment'; id index 0 prints Seq. No. 1 | F2: the nature of income payment is the chosen ATC's text, written by the ATC pick (form_1601fq.rs schedule1 row atc join), never typed"
     },
     "txtAmtIncomePay0": {
       "label": "Schedule 1 row 1, Amount of Income Payment",
@@ -7143,7 +7164,8 @@
     },
     "txtNatIncPayment1": {
       "label": "Schedule 1 row 2, Nature of Income Payment",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601FQ.hta Schedule I header 'Nature of Income Payment'; id index 1 prints Seq. No. 2"
+      "computed": true,
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601FQ.hta Schedule I header 'Nature of Income Payment'; id index 1 prints Seq. No. 2 | F2: the nature of income payment is the chosen ATC's text, written by the ATC pick (form_1601fq.rs schedule1 row atc join), never typed"
     },
     "txtAmtIncomePay1": {
       "label": "Schedule 1 row 2, Amount of Income Payment",
@@ -7159,7 +7181,8 @@
     },
     "txtNatIncPayment2": {
       "label": "Schedule 1 row 3, Nature of Income Payment",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601FQ.hta Schedule I header 'Nature of Income Payment'; id index 2 prints Seq. No. 3"
+      "computed": true,
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601FQ.hta Schedule I header 'Nature of Income Payment'; id index 2 prints Seq. No. 3 | F2: the nature of income payment is the chosen ATC's text, written by the ATC pick (form_1601fq.rs schedule1 row atc join), never typed"
     },
     "txtAmtIncomePay2": {
       "label": "Schedule 1 row 3, Amount of Income Payment",
@@ -7175,7 +7198,8 @@
     },
     "txtNatIncPayment3": {
       "label": "Schedule 1 row 4, Nature of Income Payment",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601FQ.hta Schedule I header 'Nature of Income Payment'; id index 3 prints Seq. No. 4"
+      "computed": true,
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601FQ.hta Schedule I header 'Nature of Income Payment'; id index 3 prints Seq. No. 4 | F2: the nature of income payment is the chosen ATC's text, written by the ATC pick (form_1601fq.rs schedule1 row atc join), never typed"
     },
     "txtAmtIncomePay3": {
       "label": "Schedule 1 row 4, Amount of Income Payment",
@@ -7191,7 +7215,8 @@
     },
     "txtNatIncPayment4": {
       "label": "Schedule 1 row 5, Nature of Income Payment",
-      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601FQ.hta Schedule I header 'Nature of Income Payment'; id index 4 prints Seq. No. 5"
+      "computed": true,
+      "evidence": "P4: official HTA ebirforms-mirror/forms/BIR-Form1601FQ.hta Schedule I header 'Nature of Income Payment'; id index 4 prints Seq. No. 5 | F2: the nature of income payment is the chosen ATC's text, written by the ATC pick (form_1601fq.rs schedule1 row atc join), never typed"
     },
     "txtAmtIncomePay4": {
       "label": "Schedule 1 row 5, Amount of Income Payment",
@@ -12137,7 +12162,8 @@
     },
     "frm1701:txtPg3IShed6_4E": {
       "label": "Net Operating Loss (Unapplied)",
-      "evidence": "agent box label: 'Net Operating Loss (Unapplied)'; writer-cells printed caption: 'Net Operating Loss (Unapplied)'"
+      "computed": true,
+      "evidence": "agent box label: 'Net Operating Loss (Unapplied)'; writer-cells printed caption: 'Net Operating Loss (Unapplied)' | F2: column E Net Operating Loss (Unapplied) is the row's loss less what was applied (form_1701_official.rs:743 row.unapplied computed), never typed"
     },
     "frm1701:txtPg3IShed6_5Year": {
       "label": "Year Incurred",
@@ -12157,7 +12183,8 @@
     },
     "frm1701:txtPg3IShed6_5E": {
       "label": "Net Operating Loss (Unapplied)",
-      "evidence": "agent box label: 'Net Operating Loss (Unapplied)'; writer-cells printed caption: 'Net Operating Loss (Unapplied)'"
+      "computed": true,
+      "evidence": "agent box label: 'Net Operating Loss (Unapplied)'; writer-cells printed caption: 'Net Operating Loss (Unapplied)' | F2: column E Net Operating Loss (Unapplied) is the row's loss less what was applied (form_1701_official.rs:743 row.unapplied computed), never typed"
     },
     "frm1701:txtPg3IShed6_6Year": {
       "label": "Year Incurred",
@@ -12183,7 +12210,8 @@
     },
     "frm1701:txtPg3IShed6_6E": {
       "label": "Net Operating Loss (Unapplied)",
-      "evidence": "agent box label: 'Net Operating Loss (Unapplied)'; writer-cells printed caption: 'Net Operating Loss (Unapplied)'"
+      "computed": true,
+      "evidence": "agent box label: 'Net Operating Loss (Unapplied)'; writer-cells printed caption: 'Net Operating Loss (Unapplied)' | F2: column E Net Operating Loss (Unapplied) is the row's loss less what was applied (form_1701_official.rs:743 row.unapplied computed), never typed"
     },
     "frm1701:txtPg3IShed6_7Year": {
       "label": "Year Incurred",
@@ -12208,7 +12236,8 @@
     },
     "frm1701:txtPg3IShed6_7E": {
       "label": "Net Operating Loss (Unapplied)",
-      "evidence": "agent box label: 'Net Operating Loss (Unapplied)'; writer-cells printed caption: 'Net Operating Loss (Unapplied)'"
+      "computed": true,
+      "evidence": "agent box label: 'Net Operating Loss (Unapplied)'; writer-cells printed caption: 'Net Operating Loss (Unapplied)' | F2: column E Net Operating Loss (Unapplied) is the row's loss less what was applied (form_1701_official.rs:743 row.unapplied computed), never typed"
     },
     "frm1701:txtPg3IShed6_8D": {
       "label": "D. NOLCO Applied (Current Year)",
@@ -20240,11 +20269,13 @@
     },
     "frm1701MS:txtLessNonTaxablea": {
       "label": "A. Taxpayer/Filer",
-      "evidence": "PR 7 (R3.5, manual-2): column A of item 2 (html-frozen/1701ms-2024/writer-cells.json caption \"... A. Taxpayer/Filer\")"
+      "computed": false,
+      "evidence": "PR 7 (R3.5, manual-2): column A of item 2 (html-frozen/1701ms-2024/writer-cells.json caption \"... A. Taxpayer/Filer\") | rules/forms/1701ms-v2024/fixtures/runtime-control-inventory-v47.json L2426: disabled=false, readonly=false (filer-typed input to item 3)"
     },
     "frm1701MS:txtLessNonTaxableb": {
       "label": "B. Spouse",
-      "evidence": "PR 7 (R3.5, manual-2): column B of item 2 (html-frozen/1701ms-2024/writer-cells.json caption \"... B. Spouse\")"
+      "computed": false,
+      "evidence": "PR 7 (R3.5, manual-2): column B of item 2 (html-frozen/1701ms-2024/writer-cells.json caption \"... B. Spouse\") | rules/forms/1701ms-v2024/fixtures/runtime-control-inventory-v47.json L2433: disabled=true, readonly=false (gated on Joint in rows_annual_individual.rs)"
     },
     "frm1701MS:txtTaxableCompensationIncomea": {
       "label": "A. Taxpayer/Filer",
@@ -35553,7 +35584,8 @@
     },
     "frm2000:sched1:txtTaxRate0": {
       "label": "Tax Rate",
-      "evidence": "P4: printed caption 'Tax Rate' (html-frozen/2000-dst-2018/writer-cells.json joins) | PR 4: the rate is text (Form2000Draft::rate_text, e.g. \"P1.5/200 * 90/365 days\"), never pesos.",
+      "computed": true,
+      "evidence": "P4: printed caption 'Tax Rate' (html-frozen/2000-dst-2018/writer-cells.json joins) | PR 4: the rate is text (Form2000Draft::rate_text, e.g. \"P1.5/200 * 90/365 days\"), never pesos. | F2: the rate text is the chosen ATC option's (form_2000.rs rate_text: getATCdrpTaxRate writes it; DS106's is computed from the term days), never typed",
       "kind": "text"
     },
     "frm2000:sched1:txtTaxDue0": {
@@ -35566,7 +35598,8 @@
     },
     "frm2000:sched1:txtTaxRate1": {
       "label": "Tax Rate",
-      "evidence": "P4: printed caption 'Tax Rate' (html-frozen/2000-dst-2018/writer-cells.json joins) | PR 4: the rate is text (Form2000Draft::rate_text, e.g. \"P1.5/200 * 90/365 days\"), never pesos.",
+      "computed": true,
+      "evidence": "P4: printed caption 'Tax Rate' (html-frozen/2000-dst-2018/writer-cells.json joins) | PR 4: the rate is text (Form2000Draft::rate_text, e.g. \"P1.5/200 * 90/365 days\"), never pesos. | F2: the rate text is the chosen ATC option's (form_2000.rs rate_text: getATCdrpTaxRate writes it; DS106's is computed from the term days), never typed",
       "kind": "text"
     },
     "frm2000:sched1:txtTaxDue1": {
@@ -35579,7 +35612,8 @@
     },
     "frm2000:sched1:txtTaxRate2": {
       "label": "Tax Rate",
-      "evidence": "P4: printed caption 'Tax Rate' (html-frozen/2000-dst-2018/writer-cells.json joins) | PR 4: the rate is text (Form2000Draft::rate_text, e.g. \"P1.5/200 * 90/365 days\"), never pesos.",
+      "computed": true,
+      "evidence": "P4: printed caption 'Tax Rate' (html-frozen/2000-dst-2018/writer-cells.json joins) | PR 4: the rate is text (Form2000Draft::rate_text, e.g. \"P1.5/200 * 90/365 days\"), never pesos. | F2: the rate text is the chosen ATC option's (form_2000.rs rate_text: getATCdrpTaxRate writes it; DS106's is computed from the term days), never typed",
       "kind": "text"
     },
     "frm2000:sched1:txtTaxDue2": {
@@ -37775,7 +37809,8 @@
     },
     "frm2200Av2020:txtSched1_xa_others1_Due": {
       "label": "Others (specify), row 1 Due",
-      "evidence": "agent box label: 'Others (specify), row 1 Due'; writer-cells printed caption: 'Others (specify), row 1 Due'"
+      "computed": false,
+      "evidence": "agent box label: 'Others (specify), row 1 Due'; writer-cells printed caption: 'Others (specify), row 1 Due' | rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json L2200: disabled=false, readonly=false (filer-typed)"
     },
     "frm2200Av2020:txtSched1_xa_others2_Atc": {
       "label": "Others (specify), row 2 ATC",
@@ -37803,7 +37838,8 @@
     },
     "frm2200Av2020:txtSched1_xa_others2_Due": {
       "label": "Others (specify), row 2 Due",
-      "evidence": "agent box label: 'Others (specify), row 2 Due'; writer-cells printed caption: 'Others (specify), row 2 Due'"
+      "computed": false,
+      "evidence": "agent box label: 'Others (specify), row 2 Due'; writer-cells printed caption: 'Others (specify), row 2 Due' | rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json L2226: disabled=false, readonly=false (filer-typed)"
     },
     "frm2200Av2020:txtSched1_xa_others3_Atc": {
       "label": "Others (specify), row 3 ATC",
@@ -37831,7 +37867,8 @@
     },
     "frm2200Av2020:txtSched1_xa_others3_Due": {
       "label": "Others (specify), row 3 Due",
-      "evidence": "agent box label: 'Others (specify), row 3 Due'; writer-cells printed caption: 'Others (specify), row 3 Due'"
+      "computed": false,
+      "evidence": "agent box label: 'Others (specify), row 3 Due'; writer-cells printed caption: 'Others (specify), row 3 Due' | rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json L2252: disabled=false, readonly=false (filer-typed)"
     },
     "frm2200Av2020:optPayment_1": {
       "label": "Payment on Actual Removal",
@@ -51881,6 +51918,10 @@
     "frm2552:txtPg1I1Day": {
       "kind": "int",
       "evidence": "fields.json logical_type date-string-mm-dd-yyyy, max_length 2 — one component of a split date"
+    },
+    "frm2552:txtPg1P2I17TaxPaidInPrevRtrn": {
+      "computed": false,
+      "evidence": "Item 17 Tax Paid in Return Previously Filed: disabled at load (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json L866, readonly=false), enabled when Amended Return is Yes (gated in rows_as_needed.rs)"
     },
     "frm2552:txtPg1I1Month": {
       "kind": "sel",

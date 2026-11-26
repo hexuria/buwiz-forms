@@ -1131,6 +1131,8 @@ pub(super) enum Gate {
     Overpaid,
     /// 2552 items 12A and 12B: item 11 an initial public offering.
     Offering2552,
+    /// 2552 item 17: Amended Return is Yes.
+    Amended2552,
     /// 2552 Part IV row `.0` (index 1-4): the row before it used.
     PartIvRow2552(usize),
     /// 0605 item 17's Others box: Others is the manner.
@@ -1142,6 +1144,9 @@ pub(super) enum Gate {
 /// 2552-v2018/fixtures/runtime-control-inventory-v796.json).
 pub(super) const OFFERING_2552: &str =
     "Needs item 11 = Initial Public Offering (Primary or Secondary)";
+
+/// The tag of 2552's Item 17 gate (disabled at load until Amended Return is Yes).
+pub(super) const AMENDED_2552: &str = "Needs Amended Return = Yes";
 
 /// The tag of 2552's Part IV row `row` (1-based, 2-5).
 pub(super) fn part_iv_tag(row: usize) -> String {
@@ -1225,6 +1230,7 @@ fn cell_2552(key: &str) -> Option<Cell> {
         "rdoPg1I11TransactionSecondary" => return Some(Cell::Transaction2552(3)),
         "txtPg1Pt1I12TotShare" => return Some(Cell::OutstandingShares2552),
         "txtPg1Pt1I12NumOfShare" => return Some(Cell::Gate(Gate::Offering2552)),
+        "txtPg1P2I17TaxPaidInPrevRtrn" => return Some(Cell::Gate(Gate::Amended2552)),
         _ => {}
     }
     if let Some(n) = rest
@@ -1416,6 +1422,7 @@ fn gate_of(cell: Cell) -> Option<Gate> {
 fn gate_tag(kind: AgentFormKind, gate: Gate, key: &str) -> String {
     match gate {
         Gate::Offering2552 => OFFERING_2552.to_string(),
+        Gate::Amended2552 => AMENDED_2552.to_string(),
         Gate::PartIvRow2552(row) => part_iv_tag(row + 1),
         // A group key (frm1706:j_id392) has its first member's tag.
         _ => super::conditions::tag(kind.form_code(), key)
@@ -1455,6 +1462,7 @@ fn gated_keys(kind: AgentFormKind) -> Vec<(String, Gate)> {
             let mut keys = vec![
                 "frm2552:txtPg1Pt1I12NumOfShare".to_string(),
                 "frm2552:txtPg1Pt1I12TotShare".to_string(),
+                "frm2552:txtPg1P2I17TaxPaidInPrevRtrn".to_string(),
             ];
             for n in 2..=FORM_2552_ROWS {
                 keys.push(format!("frm2552:txtPg2P4I{n}TransClass"));
@@ -1550,6 +1558,7 @@ fn open(gate: Gate, draft: &Value) -> bool {
         Gate::Overpaid => below_zero("/total_amount_due") || below_zero("/total_amount_payable"),
         Gate::Others0605 => is("/manner_of_payment", &["Others"]),
         Gate::Offering2552 => is("/transaction", &["primary_offering", "secondary_offering"]),
+        Gate::Amended2552 => draft["is_amended"].as_bool() == Some(true),
         // Inferred: the official runtime keeps rows 2-5 disabled at load
         // (runtime-control-inventory-v796.json txtPg2P4I2..I5 disabled:
         // true); what enables them (enablePartIVRow) is tracked as a hash
