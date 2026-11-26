@@ -1,0 +1,21 @@
+✓ built the Rust crate nsh-app-ebirforms (13m 27s, 1 warning: -v shows it)
+✓ built App.tsx (589.8 KB js, 812.6 KB bytecode, 16.5s)
+→ keep `js`: the app has a JS bundle
+→ keep `net`: `fetch` and remote images depend on data, not imports
+→ keep `svg`: an image's format depends on data, not imports
+→ leave out `shader`: nothing reachable uses it
+→ leave out `editor`: nothing reachable uses it
+→ leave out `rich-editor`: nothing reachable uses it
+→ leave out `plot`: nothing reachable uses it
+→ leave out `term`: nothing reachable uses it
+→ leave out `emoji-picker`: nothing reachable uses it
+→ leave out `highlight`: nothing reachable uses it
+→ leave out `math`: nothing reachable uses it
+→ leave out `zlib`: nothing reachable uses it
+→ leave out `crypto`: nothing reachable uses it
+→ leave out `websocket`: nothing imports `websocket`
+→ keep `updater`: the app may import `nsh/updater`
+✓ built the release runner for Windows (14m 29s, 3 warnings: -v shows them)
+✓ update archive C:\ci\msstore\nsh-windows-pkg\eBIRForms-0.2.1-windows-x86_64.zip
+✓ packaged C:\ci\msstore\nsh-windows-pkg\eBIRForms and C:\ci\msstore\nsh-windows-pkg\eBIRForms.zip (4.1s)
+✓ built the installer C:\ci\msstore\nsh-windows-pkg\eBIRForms-setup.exe (27.8s)

@@ -1,0 +1,72 @@
+warning: patch `nsh-bundler v0.6.1 (C:\ci\msstore\nsh\crates\nsh-bundler)` was not used in the crate graph
+warning: patch `nsh-bundler v0.6.1 (C:\ci\msstore\nsh\crates\nsh-bundler)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+warning: function `page_gate_refusal` is never used
+    --> C:\ci\msstore\buwiz-forms\crates\bir-app-api\src\screen_form_module.rs:4981:15
+     |
+4981 | pub(crate) fn page_gate_refusal(
+     |               ^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `bir-app-api` (lib) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.14s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+✓ built the Rust crate nsh-app-ebirforms (1.2s)
+✓ built App.tsx (589.8 KB js, 812.6 KB bytecode, 377ms)
+→ keep `js`: the app has a JS bundle
+→ keep `net`: `fetch` and remote images depend on data, not imports
+→ keep `svg`: an image's format depends on data, not imports
+→ leave out `shader`: nothing reachable uses it
+→ leave out `editor`: nothing reachable uses it
+→ leave out `rich-editor`: nothing reachable uses it
+→ leave out `plot`: nothing reachable uses it
+→ leave out `term`: nothing reachable uses it
+→ leave out `emoji-picker`: nothing reachable uses it
+→ leave out `highlight`: nothing reachable uses it
+→ leave out `math`: nothing reachable uses it
+→ leave out `zlib`: nothing reachable uses it
+→ leave out `crypto`: nothing reachable uses it
+→ leave out `websocket`: nothing imports `websocket`
+→ keep `updater`: the app may import `nsh/updater`
+warning: patch `nsh-bundler v0.6.1 (C:\ci\msstore\nsh\crates\nsh-bundler)` was not used in the crate graph
+warning: patch `nsh-bundler v0.6.1 (C:\ci\msstore\nsh\crates\nsh-bundler)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+warning: function `page_gate_refusal` is never used
+    --> C:\ci\msstore\buwiz-forms\crates\bir-app-api\src\screen_form_module.rs:4981:15
+     |
+4981 | pub(crate) fn page_gate_refusal(
+     |               ^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `MIN_WIDTH` is never used
+    --> C:\ci\msstore\nsh\crates\nsh-platform-windows\src\window.rs:2211:18
+     |
+2211 | pub(crate) const MIN_WIDTH: f32 = 200.0;
+     |                  ^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `MIN_HEIGHT` is never used
+    --> C:\ci\msstore\nsh\crates\nsh-platform-windows\src\window.rs:2213:18
+     |
+2213 | pub(crate) const MIN_HEIGHT: f32 = 150.0;
+     |                  ^^^^^^^^^^
+
+warning: `bir-app-api` (lib) generated 1 warning
+warning: `nsh-platform-windows` (lib) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 1.28s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+✓ built the release runner for Windows (1.4s)
+✓ update archive C:\ci\msstore\nsh-windows-pkg-v\eBIRForms-0.2.1-windows-x86_64.zip
+✓ packaged C:\ci\msstore\nsh-windows-pkg-v\eBIRForms and C:\ci\msstore\nsh-windows-pkg-v\eBIRForms.zip (2.7s)
+✓ built the installer C:\ci\msstore\nsh-windows-pkg-v\eBIRForms-setup.exe (28.6s)

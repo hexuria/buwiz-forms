@@ -1,0 +1,4 @@
+68ad395abc7a38d34deb8fbf95f45d9b3861911cfcae6b9a4fd9a1119bc8295e  eBIRForms-Windows-x64-0.2.1-Setup.exe
+254a994df0f9952384422cd804699faf880c627ce9f349de9d1ef86ee094f552  eBIRForms-Windows-x64-0.2.1.msi
+a52717d647848d36445cb94ac0f2bc9f3a13b27cafa8a474d94819bcd47cbfc6  eBIRForms-Windows-x64-0.2.1.msix
+6092589666bf761d525b8ad60a30a7811dc14d24be23376e7c0437c5e4c0ca65  eBIRForms-0.2.1-windows-x86_64.zip
