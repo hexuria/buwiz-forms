@@ -962,7 +962,7 @@ function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
 
 /**
  * Submissions sent and confirmation emails received, newest first: the return's own status is the record. A send the worker only
- * simulated (`isDryRun`: a dry run, a practice account, a phone build) is a finished dry run, not a submission.
+ * simulated (`isDryRun`: a dry run, a practice account) is a finished dry run, not a submission.
  */
 const notifications = computed<Notification[]>(() => {
   const seen = readIds();
@@ -1426,6 +1426,8 @@ export const app = {
   view,
   params: (): ViewParams => route().params,
   canBack: () => lastAlive(history()) >= 0,
+  /** The page Back would show (a header names it, a sub-page asks whether its parent is there); null when there is none. */
+  previous: (): Route | null => history()[lastAlive(history())]?.route ?? null,
   canForward: () => lastAlive(forward()) >= 0,
   // Selection.
   taxpayers: () => store.taxpayers(),

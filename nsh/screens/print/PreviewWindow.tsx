@@ -81,10 +81,13 @@ export function PreviewWindow(props: { previewKey: string; actions?: PrintAction
     return now ? pageSummary(now) : "";
   };
 
+  // Each press is a ticket; Cancel takes a new one, so a press's answer that comes after its Cancel is dropped.
+  let ticket = 0;
   const run = async (kind: "print" | "save") => {
     const key = props.previewKey;
     if (busy() !== "" || !info()) return;
     const actions = props.actions ?? REAL_ACTIONS;
+    const mine = ++ticket;
     busy.set(kind);
     note.set(null);
     try {
@@ -92,13 +95,24 @@ export function PreviewWindow(props: { previewKey: string; actions?: PrintAction
         await actions.print(key);
       } else {
         const path = await actions.savePdf(key);
-        if (path) note.set({ tone: "fg2", text: `Saved ${baseName(path)}` });
+        if (mine === ticket && path) note.set({ tone: "fg2", text: `Saved ${baseName(path)}` });
       }
     } catch (error) {
-      note.set({ tone: "danger", text: errorText(error) });
+      if (mine === ticket) note.set({ tone: "danger", text: errorText(error) });
     } finally {
-      busy.set("");
+      if (mine === ticket) busy.set("");
     }
+  };
+
+  // The way out of a wait that never ends (a panel that never answers): it always works, the buttons work again, and the
+  // app's log says it was used.
+  const stopWaiting = () => {
+    const kind = busy();
+    if (kind === "") return;
+    ticket++;
+    busy.set("");
+    note.set({ tone: "fg2", text: "Stopped waiting. Press the button again to try once more." });
+    (props.actions ?? REAL_ACTIONS).stoppedWaiting?.(kind === "print" ? "Print" : "Save as PDF");
   };
 
   return (
@@ -126,6 +140,9 @@ export function PreviewWindow(props: { previewKey: string; actions?: PrintAction
           <Line testID="print-note" variant="meta" tone={note()?.tone ?? "fg2"}>
             {busy() !== "" ? "Preparing the PDF…" : (note()?.text ?? "")}
           </Line>
+          <If when={busy() !== ""}>
+            <AppButton testID="print-stop-waiting" label="Cancel" variant="ghost" size="sm" onPress={stopWaiting} />
+          </If>
         </View>
         <AppButton testID="print-save-pdf" label="Save as PDF" icon="save" disabled={busy() !== ""} onPress={() => void run("save")} />
         <AppButton testID="print-print" label="Print" icon="printer" variant="primary" disabled={busy() !== ""} onPress={() => void run("print")} />

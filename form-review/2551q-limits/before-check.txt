@@ -1,0 +1,8 @@
+mode: before
+row1: atc=PT010 taxable_amount=666666666.66 rate=0.0% tax_due=20000000.00
+row2: atc=PT040 taxable_amount=999999999999.00 rate=0.0% tax_due=29999999999.97
+total_tax_due(Item14)=30019999999.97 tax_payable(Item19)=30019999999.97 total_amount_payable(Item24)=39637142054.75
+validation_error_count: 3
+  ERROR [schedule_1_row_1]: Schedule 1 row 1 tax due does not fit the official 7-cell integer field
+  ERROR [schedule_1_row_2]: Schedule 1 row 2 taxable amount does not fit the official 11-cell integer field
+  ERROR [schedule_1_row_2]: Schedule 1 row 2 tax due does not fit the official 7-cell integer field

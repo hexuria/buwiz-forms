@@ -21,6 +21,9 @@ pub const TEST_SENT_LINE: &str = "Test send. Nothing reached the BIR.";
 /// The line of a send the Buwiz relay gave a receipt for.
 pub const SENT_LINE: &str =
     "Sent to the BIR through Buwiz. Waiting for the BIR's confirmation email.";
+/// The line of a claimed return whose relay send the worker is asking Buwiz about.
+pub const CHECKING_LINE: &str =
+    "Checking with Buwiz whether this return was sent. Keep eBIRForms open.";
 
 /// What one stored return says about its send.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,13 +41,16 @@ pub struct SendFacts<'a> {
     pub next_retry_at: Option<&'a str>,
     pub submitted_dry_run: bool,
     pub has_relay_receipt: bool,
+    /// The worker keeps a relay send it did not see end (`relay_pending`): it
+    /// asks Buwiz how it ended.
+    pub relay_pending: bool,
 }
 
 /// What the screens show about a return's send (`send` in `screen_form_open`
 /// and in each `list_returns` row).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SendState {
-    /// queued | sending | waiting | held | needs_attention | refused | sent | test_sent
+    /// queued | sending | checking | waiting | held | needs_attention | refused | sent | test_sent
     pub stage: &'static str,
     /// The sentence the person reads.
     pub line: String,
@@ -129,10 +135,12 @@ pub fn plain_reason(text: &str) -> std::borrow::Cow<'_, str> {
 /// 1. Draft with a reason: `refused` (except the reason a person's own
 ///    "It did not arrive" leaves, which is no refusal: `None`).
 /// 2. Queued, claimed, in flight: `sending`.
-/// 3. Queued, claimed, not in flight: `needs_attention`, resolvable, when
-///    its upload started (the BIR may have it); `queued` when it never did
-///    (nothing left this computer: the worker takes it again by itself when
-///    the claim's time runs out, and there is nothing for a person to answer).
+/// 3. Queued, claimed, not in flight: `checking` while the worker keeps a
+///    relay send it did not see end (it asks Buwiz; nothing for a person to
+///    answer yet); else `needs_attention`, resolvable, when its upload started
+///    (the BIR may have it); `queued` when it never did (nothing left this
+///    computer: the worker takes it again by itself when the claim's time runs
+///    out, and there is nothing for a person to answer).
 /// 4. Queued, unclaimed, a reason, no try counted: `held`.
 /// 5. Queued, unclaimed, a reason, tries counted: `waiting`.
 /// 6. Queued, unclaimed, no reason: `queued`.
@@ -156,6 +164,8 @@ pub fn send_state(facts: &SendFacts) -> Option<SendState> {
         }
         FilingStatus::Queued if facts.claimed => Some(if facts.in_flight {
             SendState::new("sending", SENDING_LINE)
+        } else if facts.relay_pending {
+            SendState::new("checking", CHECKING_LINE)
         } else if !facts.put_started {
             SendState::new("queued", QUEUED_LINE)
         } else {
@@ -211,6 +221,7 @@ pub fn facts_of_lifecycle(lifecycle: &SubmissionLifecycle, in_flight: bool) -> S
         next_retry_at: lifecycle.next_retry_at.as_deref(),
         submitted_dry_run: lifecycle.submitted_dry_run,
         has_relay_receipt: lifecycle.relay_receipt.is_some(),
+        relay_pending: lifecycle.relay_pending.is_some(),
     }
 }
 
@@ -226,6 +237,7 @@ pub fn facts_of_1601c(draft: &Form1601CDraft, in_flight: bool) -> SendFacts<'_> 
         next_retry_at: draft.next_retry_at.as_deref(),
         submitted_dry_run: draft.submitted_dry_run,
         has_relay_receipt: draft.relay_receipt.is_some(),
+        relay_pending: draft.relay_pending.is_some(),
     }
 }
 
@@ -241,6 +253,7 @@ pub fn facts_of_2551q(draft: &Form2551QDraft, in_flight: bool) -> SendFacts<'_> 
         next_retry_at: draft.next_retry_at.as_deref(),
         submitted_dry_run: draft.submitted_dry_run,
         has_relay_receipt: draft.relay_receipt.is_some(),
+        relay_pending: draft.relay_pending.is_some(),
     }
 }
 
@@ -315,6 +328,7 @@ mod tests {
             next_retry_at: None,
             submitted_dry_run: false,
             has_relay_receipt: false,
+            relay_pending: false,
         }
     }
 
@@ -446,6 +460,36 @@ mod tests {
                     ..facts(&Queued)
                 },
                 state("needs_attention", OUTCOME_UNKNOWN, None, None, true),
+            ),
+            (
+                "claimed, not in flight, a relay send noted: Buwiz is asked, nothing to answer",
+                SendFacts {
+                    claimed: true,
+                    put_started: true,
+                    relay_pending: true,
+                    reason: Some(&unknown),
+                    ..facts(&Queued)
+                },
+                state("checking", CHECKING_LINE, None, None, false),
+            ),
+            (
+                "claimed, in flight with a relay send noted: sending",
+                SendFacts {
+                    claimed: true,
+                    put_started: true,
+                    relay_pending: true,
+                    in_flight: true,
+                    ..facts(&Queued)
+                },
+                state("sending", SENDING_LINE, None, None, false),
+            ),
+            (
+                "unclaimed: a stale noted send says nothing",
+                SendFacts {
+                    relay_pending: true,
+                    ..facts(&Queued)
+                },
+                state("queued", QUEUED_LINE, None, None, false),
             ),
             (
                 "claimed, not in flight, no PUT: nothing left this computer, nothing to answer",

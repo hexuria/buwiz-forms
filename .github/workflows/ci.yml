@@ -1,41 +1,63 @@
 name: CI
 
+# Two lanes (docs/CI.md):
+# - The quick lane: a pull request, or a push to main or codex/**, runs the quick checks on Linux only (formatting,
+#   clippy, the production-boundary check, the NSH type check, the Python script tests, legacy-guard). About ten
+#   minutes; this is what `ci-ok`, the one required status, reports.
+# - The test lane: a push to test/** (the branch name picks the systems), a manual run, and the nightly run on main
+#   run the test suites. Checks attach to the commit, so pushing a pull request's head to test/... shows the results
+#   on the pull request. `just ci-test [linux|windows|macos|all]` does that push.
+# scripts/ci_plan.py decides what each run does; nsh.yml uses the same script.
 on:
   push:
-    branches: [ "main", "codex/**" ]
+    branches: [ "main", "codex/**", "test/**" ]
   pull_request:
     branches: [ "main", "gol/**", "codex/**", "feat/**" ]
-  # Nightly safety net: the full CI, validation audits included, on main.
-  # 18:00 UTC is 02:00 in Manila.
+  # Nightly safety net: everything, validation audits included, on all three systems. 18:00 UTC is 02:00 in Manila.
   schedule:
     - cron: "0 18 * * *"
-  # Run by hand from the Actions tab; tick the box to force the validation-rules
-  # corpus audits on any branch.
+  # Run by hand from the Actions tab or `gh workflow run ci.yml` (docs/CI.md); `just ci-main` runs all of it on main.
   workflow_dispatch:
     inputs:
-      validation:
-        description: "Also run the validation-rules corpus audits"
-        type: boolean
-        default: false
+      systems:
+        description: "Systems: all, or a comma list of linux, windows, macos"
+        type: string
+        default: "linux,windows"
+      suites:
+        description: "Suites: all, or a comma list of rust, screens, build, installer, validation"
+        type: string
+        default: "all"
+      screens:
+        description: "Screen-test files to run (nsh.yml), e.g. screens/form/** (empty: all)"
+        type: string
+        default: ""
+      shard:
+        description: "Screen-test shard to run (nsh.yml)"
+        type: choice
+        options: [ "all", "0", "1", "2" ]
+        default: "all"
 
 env:
   CARGO_TERM_COLOR: always
 
-# Superseded runs were previously left to finish: pushing three times in fifteen
-# minutes ran three full ten-job matrices, and only the last one's result was ever
-# read. Cancel the older run on the same ref instead. `main` is included
-# deliberately - a push to main immediately followed by another means the first
-# commit's result is already stale.
+# One run per ref: a newer push to the same pull request or test/... branch cancels the older run, whose result
+# nobody reads. main is the exception: every run there gets a group of its own (its run id) and is never cancelled.
+# Four merges in three minutes used to cancel each other and leave main with no complete run; now each merge gets
+# its quick run, and a merge can no longer cancel the nightly or a manual complete run either.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  # Runs on the systems `changes` picked: all three for app code, Windows
-  # alone for Windows installer files, none for docs, other packaging, setup
-  # scripts or release workflows. Skipping a whole job is safe because the
-  # required status is `ci-ok`, not these per-OS names.
+  # One job for both lanes, so the two never drift apart. In the quick lane it
+  # runs on Linux alone with `tests: false`: the Python script tests,
+  # formatting, clippy, the direct-bir checks, the frozen HTML inventory and
+  # the production-boundary check. In the test lane (`tests: true`) it runs on
+  # the systems `changes` picked and adds the workspace Rust tests and the
+  # page-versus-print audit. Skipping it is safe because the required status
+  # is `ci-ok`, not these per-OS names.
   check:
+    name: ${{ matrix.tests && 'workspace tests' || 'quick checks' }} (${{ matrix.os }})
     needs: changes
     if: needs.changes.outputs.check == 'true'
     strategy:
@@ -87,12 +109,16 @@ jobs:
     # skips saving when the exact key already exists, so reusing the old name
     # would have preserved the wrongly-populated entry forever. The stale
     # host-* and check-* entries are no longer read by anything and age out.
-    # Saving only from main also stops pull requests churning it.
+    # Saving only from main also stops pull requests and test/** branches
+    # churning it. And only the test lane saves: the quick lane builds a subset
+    # (no tests), and saving it first would leave the entry incomplete for
+    # good. main's pushes run the quick lane, so this entry is now refreshed
+    # by the nightly run and `just ci-main`.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
         shared-key: workspace-${{ runner.os }}
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        save-if: ${{ github.ref == 'refs/heads/main' && matrix.tests }}
 
     - name: Install just
       run: cargo install just --version 1.45.0 --locked
@@ -134,7 +160,7 @@ jobs:
     # "Failed to initialize GTK". A virtual framebuffer lets them run for real
     # rather than being skipped.
     - name: Start virtual display
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && matrix.tests
       run: |
         Xvfb :99 -screen 0 1280x1024x24 &
         echo "DISPLAY=:99" >> "$GITHUB_ENV"
@@ -147,9 +173,12 @@ jobs:
     # The env-var detection below still runs unconditionally: GITHUB_ENV does not
     # persist between runs, so OPENSSL_DIR/OPENSSL_LIB_DIR must be re-exported
     # even when the install itself was restored from cache.
-    - name: Cache OpenSSL
+    # Saved from main only (the step after the install), so a test/** run
+    # never stores a second 270 MB copy against the 10 GB limit.
+    - name: Restore OpenSSL
+      id: openssl
       if: runner.os == 'Windows'
-      uses: actions/cache@v4
+      uses: actions/cache/restore@v4
       with:
         path: |
           C:\Program Files\OpenSSL
@@ -188,6 +217,15 @@ jobs:
         } else {
           Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
         }
+
+    - name: Save OpenSSL
+      if: runner.os == 'Windows' && steps.openssl.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          C:\Program Files\OpenSSL
+          C:\Program Files\OpenSSL-Win64
+        key: ${{ steps.openssl.outputs.cache-primary-key }}
 
     - name: Format
       run: cargo fmt --all -- --check
@@ -235,9 +273,11 @@ jobs:
         python3 .ci-html/tools/formgen/stamp_frozen_names.py --self-test
         python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
 
-    # bir-app-api's tests run here. They need the debug-only account-gate bypass
-    # (release builds ignore both), the dry-run sender, and no keychain.
+    # bir-app-api's tests run here (test lane only). They need the debug-only
+    # account-gate bypass (release builds ignore both), the dry-run sender, and
+    # no keychain.
     - name: Test
+      if: matrix.tests
       env:
         EBIR_TEST_ENV: "1"
         BIR_AUTH_BYPASS: "1"
@@ -246,9 +286,10 @@ jobs:
       run: cargo test --locked --workspace
 
     # The page-versus-print audit of all 43 forms is ignored in the run above because it writes a report. It runs here
-    # on every pull request: a form that does not open, build its print map, come back from a fill, a save and a reopen,
+    # in the test lane: a form that does not open, build its print map, come back from a fill, a save and a reopen,
     # or fill its print sheet fails the step; the other classes are the report's findings (the uploaded runtime.md).
     - name: Page-versus-print audit (all 43 forms)
+      if: matrix.tests
       env:
         EBIR_TEST_ENV: "1"
         BIR_AUTH_BYPASS: "1"
@@ -257,73 +298,186 @@ jobs:
       run: cargo test --locked -p bir-app-api --lib -- --ignored audit_all_screen_forms
 
     - name: Upload the page-versus-print audit
-      if: always() && matrix.os == 'ubuntu-22.04'
+      if: always() && matrix.tests && matrix.os == 'ubuntu-22.04'
       uses: actions/upload-artifact@v4
       with:
         name: screen-form-audit
         path: tmp/screen-form-audit/runtime.*
         if-no-files-found: ignore
 
-    # The production-filing boundary stays gating on every PR, whatever the
-    # validation-rules jobs below decide. It scans all of bir-core/src
-    # (transport, import, cron, the 2550Q guards), so almost any
-    # app change can open it; and it reuses this job's build, so it is cheap.
-    # A boundary failure is far more serious than an open validation slice.
+    # The production-filing boundary stays gating on every PR, in the quick
+    # lane, whatever the validation-rules jobs below decide. It scans all of
+    # bir-core/src (transport, import, cron, the 2550Q guards) and nsh/src, so
+    # almost any app change can open it. In the quick lane it builds
+    # bir-rules-codegen from the restored cache; in the test lane it reuses the
+    # test build. A boundary failure is far more serious than an open
+    # validation slice.
     - name: Check validation-rules production boundaries
       run: cargo run -q --locked -p bir-rules-codegen -- status --boundaries-only
 
   windows-setup:
     name: Build and audit unsigned Windows Setup
     needs: changes
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.windows_pkg == 'true'
+    if: needs.changes.outputs.installer == 'true'
     uses: ./.github/workflows/release-windows.yml
 
-  # Decides what this run tests, from the files it changes:
-  #   - check / check_matrix: the systems `check` runs on. All three when any
-  #     app file changed - any path not in the classes below, which is the
-  #     safe default. Windows alone when the only other changes are Windows
-  #     installer files (that leg builds and audits the Setup.exe). None for
-  #     docs, macOS or Linux packaging, setup scripts, release workflows and
-  #     the Python tests themselves.
-  #   - app: app code changed.
-  #   - scripts: run the Python script tests on their own because `check`
-  #     does not (every `check` leg runs them otherwise).
-  #   - linux_pkg / windows_pkg / macos_pkg: that platform's packaging
-  #     changed. Reported in the run summary.
-  #   - validation: whether the validation-rules corpus audits run (below).
-  # Schedules, manual runs, empty and unknown change ranges test everything.
-  # A class may only list files that no crate, build script or Rust test
-  # reads.
-  #
-  # The v1 corpus audit runs on every OS. It used to be a windows-latest-only
-  # PowerShell job, which is exactly why three separate Windows-path defects in
-  # rules/validate.ps1 went undetected: on macOS and Linux the v2 exclusions
-  # never matched, so the wrong file set was audited (and the script exited 1).
-  # Decides whether the validation-rules corpus audits run. They check the
-  # extracted official rule corpus (rules/, bir-rules*, form_rules), which is a
-  # separate objective from the per-form validation the app runs today, so they
-  # only run when that corpus can have changed:
-  #   - a branch named ebirforms-* (work synced from hexuria/buwiz-validation),
-  #   - a change under one of the paths below,
-  #   - a PR carrying the run-validation label,
-  #   - the nightly run on main,
-  #   - a manual run with the "validation" box ticked.
-  # The boundary check that guards production filing is NOT gated: it runs in
-  # `check` on every PR.
+  # The NSH app's type check for the quick lane: `just nsh-check -v`, the
+  # crate (`cargo check --all-targets`) and then the TSX types, exactly as the
+  # NSH app jobs run it, plus the cheap check that the app cannot enable
+  # direct-bir. Linux only; nsh.yml builds and tests the app in the test lane.
+  # It needs the nsh command line and the NSH dependency builds, which it only
+  # restores (from main's nsh.yml runs); it never saves a dependency cache.
+  nsh-check:
+    name: NSH app type check (Linux)
+    needs: changes
+    if: needs.changes.outputs.nsh_check == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      # As nsh.yml, so the restored dependency builds match: one compiler for both checkouts, no incremental builds,
+      # no debug info.
+      RUSTUP_TOOLCHAIN: "1.99.0"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      BUWIZ_NO_KEYCHAIN: "1"
+      EBIR_TEST_ENV: "1"
+      BIR_AUTH_BYPASS: "1"
+      BIR_SFTP_DRY_RUN: "1"
+    steps:
+    - name: Check out buwiz-forms
+      uses: actions/checkout@v4
+      with:
+        path: buwiz-forms
+
+    # The pin lives in nsh.yml only ("change it here and nowhere else").
+    - name: Read the NSH pin from nsh.yml
+      id: pin
+      run: |
+        ref=$(sed -n 's/^  NSH_PINNED_REF: *\([0-9a-f]\{40\}\) *$/\1/p' buwiz-forms/.github/workflows/nsh.yml)
+        [ -n "$ref" ] || { echo "::error::no NSH_PINNED_REF in nsh.yml"; exit 1; }
+        echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+    - name: Check out NSH (the pinned commit, beside buwiz-forms)
+      uses: actions/checkout@v4
+      with:
+        repository: hexuria/nsh
+        ref: ${{ steps.pin.outputs.ref }}
+        token: ${{ secrets.NSH_REPO_TOKEN || github.token }}
+        path: nsh
+        persist-credentials: false
+
+    - name: Check the two checkouts line up
+      run: |
+        test -f nsh/crates/nsh-core/Cargo.toml
+        test -f buwiz-forms/nsh/Cargo.toml
+        git -C nsh log -1 --format='NSH at %H %s'
+
+    # The same packages and package cache as nsh.yml's Linux job (keep the two
+    # lists equal); restored only, nsh.yml's main runs save it.
+    - name: Restore the Linux packages
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/apt-archives
+        key: nsh-linux-apt-${{ runner.arch }}-${{ hashFiles('buwiz-forms/.github/workflows/nsh.yml') }}
+        restore-keys: nsh-linux-apt-${{ runner.arch }}-
+
+    - name: Install GTK 4, WebKitGTK, GStreamer and the build tools
+      timeout-minutes: 45
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        mkdir -p ~/apt-archives/partial
+        sudo apt-get update
+        sudo -E apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" \
+          build-essential pkg-config perl python3 \
+          clang libclang-dev libgtk-4-dev libwebkitgtk-6.0-dev \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+          gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+          libdbus-1-dev libssl-dev \
+          xvfb xauth at-spi2-core libxtst6
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+        components: clippy, rustfmt
+
+    - name: Install just
+      run: cargo install just --version 1.45.0 --locked
+
+    # huacnlee/cargo and the dependency builds nsh.yml's Linux job saves on
+    # main. Not on main itself: the action saves whenever it runs on main, and
+    # a check-only entry saved first would stand in for the complete one the
+    # test jobs need (the first save of a key defines it). A push to main runs
+    # this job with rustup's cargo and no dependency cache: slower, and nobody
+    # waits on it.
+    - name: Install huacnlee/cargo
+      if: github.ref != 'refs/heads/main'
+      uses: ./nsh/.github/actions/cargo
+      with:
+        cache: buwiz-nsh-app
+        lockfiles: buwiz-forms/nsh/Cargo.lock
+
+    # The command line is the same file whoever builds it, so main may save it.
+    - name: Restore the nsh command line
+      id: nsh-cli
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/BuwizNsh/tools
+        key: nsh-cli-${{ runner.os }}-${{ runner.arch }}-${{ steps.pin.outputs.ref }}
+
+    - name: Build the nsh command line
+      if: steps.nsh-cli.outputs.cache-hit != 'true'
+      working-directory: nsh
+      run: cargo install --locked --path crates/nsh-cli --root "$HOME/BuwizNsh/tools"
+
+    - name: Save the nsh command line
+      if: steps.nsh-cli.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/BuwizNsh/tools
+        key: ${{ steps.nsh-cli.outputs.cache-primary-key }}
+
+    - name: Put the nsh command line on the path
+      run: |
+        echo "$HOME/BuwizNsh/tools/bin" >> "$GITHUB_PATH"
+        "$HOME/BuwizNsh/tools/bin/nsh" -V
+
+    - name: nsh check (the crate, then the TSX types)
+      working-directory: buwiz-forms
+      run: just nsh-check -v
+
+    # As nsh.yml's Linux job: with every feature of the app on, on every
+    # target, nothing in its dependency tree enables bir-core's `direct-bir`.
+    - name: The app does not enable direct-bir
+      working-directory: buwiz-forms
+      run: |
+        tree=$(cargo tree --manifest-path nsh/Cargo.toml --all-features --target all -e features -i bir-core)
+        if grep -q 'direct-bir' <<<"$tree"; then
+          echo "$tree" | grep -B2 -A2 'direct-bir'
+          echo "::error::the app enables bir-core's direct-bir feature"
+          exit 1
+        fi
+
+  # Decides what this run does: scripts/ci_plan.py (docs/CI.md has the same
+  # rules in words, and scripts/tests/test_ci_plan.py tests them). The lane
+  # comes from the event, the systems from the branch name or the inputs, and
+  # the suites from the files the change touches. nsh.yml's `plan` job runs the
+  # same script.
   changes:
     runs-on: ubuntu-22.04
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      validation: ${{ steps.decide.outputs.validation }}
+      lane: ${{ steps.decide.outputs.lane }}
       check: ${{ steps.decide.outputs.check }}
       check_matrix: ${{ steps.decide.outputs.check_matrix }}
-      app: ${{ steps.decide.outputs.app }}
+      nsh_check: ${{ steps.decide.outputs.nsh_check }}
       scripts: ${{ steps.decide.outputs.scripts }}
-      linux_pkg: ${{ steps.decide.outputs.linux_pkg }}
-      windows_pkg: ${{ steps.decide.outputs.windows_pkg }}
-      macos_pkg: ${{ steps.decide.outputs.macos_pkg }}
+      installer: ${{ steps.decide.outputs.installer }}
+      validation: ${{ steps.decide.outputs.validation }}
+      validation_matrix: ${{ steps.decide.outputs.validation_matrix }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -331,11 +485,10 @@ jobs:
 
     - name: Decide
       id: decide
-      shell: bash
       env:
         EVENT: ${{ github.event_name }}
+        REF: ${{ github.ref }}
         BRANCH: ${{ github.head_ref || github.ref_name }}
-        FORCE: ${{ inputs.validation }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
@@ -343,125 +496,15 @@ jobs:
         PR_HEAD: ${{ github.event.pull_request.head.sha }}
         PUSH_BEFORE: ${{ github.event.before }}
         PUSH_AFTER: ${{ github.sha }}
-      run: |
-        set -euo pipefail
-
-        range=""
-        changed=""
-        changed_known=false
-        if [[ "$EVENT" == pull_request && -n "$PR_BASE" && -n "$PR_HEAD" ]]; then
-          range="$PR_BASE...$PR_HEAD"
-        elif [[ "$EVENT" == push && -n "$PUSH_BEFORE" && ! "$PUSH_BEFORE" =~ ^0+$ && -n "$PUSH_AFTER" ]]; then
-          range="$PUSH_BEFORE..$PUSH_AFTER"
-        fi
-        if [[ -n "$range" ]] && changed=$(git diff --name-only "$range"); then
-          changed_known=true
-        fi
-
-        docs_re='^(docs/|[^/]+\.md$|crates/[^/]+/docs/|\.github/[^/]+\.md$)'
-        # nsh.yml owns the NSH pin that generates the Windows installer source.
-        windows_pkg_re='^(assets/windows/|packaging/windows/|scripts/(audit_final_setup|package_msix|package_nsh_windows|smoke_msix)\.ps1$|scripts/audit_installer_sources\.py$|\.github/workflows/(nsh|release-windows)\.yml$)'
-        windows_pkg_inputs_re='^(nsh/nsh\.json$|print-overrides/|assets/icon[^/]*\.png$|scripts/audit_no_legacy\.py$)'
-        macos_pkg_re='^(assets/macos/|scripts/(package_macos_release|setup_macos_release_secrets)\.sh$|[^/]*entitlements[^/]*\.plist$)'
-        linux_pkg_re='^packaging/linux/'
-        # The NSH (TSX) app is a workspace of its own that nothing `check` builds or tests reads, and nsh.yml tests it.
-        # nsh/src/ stays app code: the production-boundary check scans it (bir-rules-codegen status.rs,
-        # SHELL_SOURCE_ROOTS). So do nsh/Cargo.toml and nsh/Cargo.lock, to stay on the safe side.
-        nsh_re='^(nsh/|\.github/workflows/nsh\.yml$)'
-        nsh_app_re='^nsh/(src/|Cargo\.(toml|lock)$)'
-        scripts_only_re='^(scripts/tests/|scripts/setup-(linux|linux-nsh|macos|impeccable)\.sh$|scripts/setup-windows\.ps1$|scripts/impeccable\.pin$|\.github/workflows/(release[^/]*|bir|html-candidate-certification)\.yml$)'
-
-        app=false; scripts=false; linux_pkg=false; windows_pkg=false; macos_pkg=false; nsh=false
-        app_reason=""
-        if [[ "$EVENT" != pull_request && "$EVENT" != push ]]; then
-          app=true; app_reason="event $EVENT tests everything"
-        elif [[ "$changed_known" != true ]]; then
-          app=true; app_reason="change range unknown"
-        elif [[ -z "$changed" ]]; then
-          app=true; app_reason="no changed files"
-        else
-          while IFS= read -r path; do
-            [[ -n "$path" ]] || continue
-            if [[ "$path" =~ $windows_pkg_inputs_re ]]; then
-              windows_pkg=true
-            fi
-            if [[ "$path" =~ $docs_re ]]; then
-              :
-            elif [[ "$path" =~ $windows_pkg_re ]]; then
-              windows_pkg=true
-            elif [[ "$path" =~ $macos_pkg_re ]]; then
-              macos_pkg=true
-            elif [[ "$path" =~ $linux_pkg_re ]]; then
-              linux_pkg=true
-            elif [[ "$path" =~ $scripts_only_re ]]; then
-              scripts=true
-            elif [[ "$path" =~ $nsh_re && ! "$path" =~ $nsh_app_re ]]; then
-              nsh=true
-            elif [[ "$app" != true ]]; then
-              app=true; app_reason="app file changed: $path"
-            fi
-          done <<<"$changed"
-        fi
-
-        all_systems='{"include":[{"os":"macos-15","target":"aarch64-apple-darwin"},{"os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"},{"os":"windows-latest","target":"x86_64-pc-windows-msvc"}]}'
-        windows_only='{"include":[{"os":"windows-latest","target":"x86_64-pc-windows-msvc"}]}'
-        if [[ "$app" == true ]]; then
-          check=true; check_matrix="$all_systems"; systems="macos-15, ubuntu-22.04, windows-latest"
-          check_reason="$app_reason"; scripts=false
-        elif [[ "$windows_pkg" == true ]]; then
-          check=true; check_matrix="$windows_only"; systems="windows-latest"
-          check_reason="Windows installer files changed"; scripts=false
-        else
-          check=false; check_matrix='{"include":[]}'; systems="none"
-          if [[ "$scripts" == true || "$linux_pkg" == true || "$macos_pkg" == true ]]; then
-            scripts=true; check_reason="no app code changed"
-          elif [[ "$nsh" == true ]]; then
-            check_reason="NSH app files only (tested by the NSH app workflow)"
-          else
-            check_reason="docs-only changes"
-          fi
-        fi
-
-        run=false
-        reason="no validation-rules path changed"
-        if [[ "$EVENT" == schedule ]]; then
-          run=true; reason="nightly run"
-        # Read the PR's labels now, not from the event payload, so adding the
-        # label and then clicking "Re-run all jobs" picks it up. (Triggering on
-        # `labeled` instead would restart the whole CI for any label.)
-        elif [[ "$EVENT" == pull_request ]] && gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' | grep -qx run-validation; then
-          run=true; reason="run-validation label"
-        elif [[ "$EVENT" == workflow_dispatch ]]; then
-          if [[ "$FORCE" == true ]]; then run=true; reason="manual run"; else reason="manual run, box not ticked"; fi
-        elif [[ "$BRANCH" == ebirforms-* ]]; then
-          run=true; reason="branch $BRANCH"
-        else
-          if [[ "$changed_known" != true ]]; then
-            # Unknown range (new branch, force push): fail safe and run.
-            run=true; reason="change range unknown"
-          elif grep -qE '^(rules/|crates/bir-rules(-codegen|-platform)?/|crates/bir-core/src/form_rules/|crates/bir-core/src/validation_summary\.rs|evidence/validation-rules/|rust-toolchain|\.github/workflows/ci\.yml$)' <<<"$changed"; then
-            run=true; reason="validation-rules paths changed"
-          fi
-        fi
-        {
-          echo "validation=$run"
-          echo "check=$check"
-          echo "check_matrix=$check_matrix"
-          echo "app=$app"
-          echo "scripts=$scripts"
-          echo "linux_pkg=$linux_pkg"
-          echo "windows_pkg=$windows_pkg"
-          echo "macos_pkg=$macos_pkg"
-        } >> "$GITHUB_OUTPUT"
-        echo "validation-rules audits: $run ($reason)" | tee -a "$GITHUB_STEP_SUMMARY"
-        echo "app check on: $systems ($check_reason)" | tee -a "$GITHUB_STEP_SUMMARY"
-        echo "script tests on their own: $scripts" | tee -a "$GITHUB_STEP_SUMMARY"
-        echo "packaging changed: linux=$linux_pkg windows=$windows_pkg macos=$macos_pkg" | tee -a "$GITHUB_STEP_SUMMARY"
-        echo "NSH app files changed (NSH app workflow): $nsh" | tee -a "$GITHUB_STEP_SUMMARY"
+        IN_SYSTEMS: ${{ inputs.systems }}
+        IN_SUITES: ${{ inputs.suites }}
+        IN_SCREENS: ${{ inputs.screens }}
+        IN_SHARD: ${{ inputs.shard }}
+      run: python3 -I scripts/ci_plan.py
 
   # The Python script tests on their own, for changes `check` does not run for
   # (packaging, setup scripts, release workflows, the tests themselves). When
-  # `check` runs, every leg already runs them.
+  # `check` runs, it runs them.
   scripts:
     needs: changes
     if: needs.changes.outputs.scripts == 'true'
@@ -477,13 +520,24 @@ jobs:
     - name: Test Python scripts
       run: python -m unittest discover -s scripts/tests -v
 
+  # The validation-rules audits check the extracted official rule corpus
+  # (rules/, bir-rules*, form_rules), a library the app does not use for
+  # filing today. A pull request runs them on Linux only, and only when it
+  # changes one of those paths, carries the run-validation label or comes from
+  # an ebirforms-* branch (work synced from hexuria/buwiz-validation). All three
+  # systems run them in the nightly run and in a manual run whose suites name
+  # `validation`: the v1 audit once ran on Windows only, which is exactly why
+  # three Windows-path defects in rules/validate.ps1 went undetected on the
+  # other two, so the nightly keeps every system covered.
+  # The boundary check that guards production filing is NOT gated: it runs in
+  # `check` on every PR.
   validation-rules-v1:
     needs: changes
     if: needs.changes.outputs.validation == 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-22.04, macos-15, windows-latest ]
+        os: ${{ fromJSON(needs.changes.outputs.validation_matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
@@ -511,7 +565,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-15, ubuntu-22.04, windows-latest ]
+        os: ${{ fromJSON(needs.changes.outputs.validation_matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
@@ -599,35 +653,15 @@ jobs:
     # subcommands plus the exact-name corpus census, none of which `cargo test
     # --workspace` performs.
 
-  # The one required status for the validation-rules audits. A skipped matrix
-  # job reports no per-OS check names, so requiring "validation-rules-v1
-  # (macos-15)" etc. would leave every PR that skips them waiting forever.
-  # Passes when the audits ran green or were skipped; fails if either one
-  # failed or was cancelled.
-  validation-rules:
-    needs: [ changes, validation-rules-v1, validation-rules-v2 ]
-    if: always()
-    runs-on: ubuntu-22.04
-    steps:
-    - name: Result
-      shell: bash
-      env:
-        DECIDED: ${{ needs.changes.result }}
-        V1: ${{ needs.validation-rules-v1.result }}
-        V2: ${{ needs.validation-rules-v2.result }}
-      run: |
-        echo "changes=$DECIDED v1=$V1 v2=$V2"
-        [[ "$DECIDED" == success ]] || { echo "::error::could not decide whether to run the audits"; exit 1; }
-        for r in "$V1" "$V2"; do
-          [[ "$r" == success || "$r" == skipped ]] || { echo "::error::validation-rules audit $r"; exit 1; }
-        done
 
   # Always-on guard: the painted desktop crate, the JS-shell crate and the
   # legacy app/ tree were retired, and nothing may bring their names or
   # paths back (not even docs).
   # No `needs` on purpose: a docs-only PR must still fail if it brings an
-  # old name back.
+  # old name back. A test/** push skips it: the pull request's run checked the
+  # same commit.
   legacy-guard:
+    if: ${{ !startsWith(github.ref, 'refs/heads/test/') }}
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -646,7 +680,7 @@ jobs:
 
   main-report:
     needs: [ ci-ok ]
-    # `failure` only: a run cancelled by a newer push to main is not a break.
+    # `failure` only: a cancelled run is not a break.
     if: always() && needs.ci-ok.result == 'failure' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'push')
     runs-on: ubuntu-22.04
     permissions:
@@ -674,12 +708,20 @@ jobs:
 
   # The one required status check (ruleset "Main"). Jobs above are skipped on
   # purpose, and a skipped matrix job reports no per-OS check names, so
-  # requiring those names would leave such PRs waiting forever. ci-ok passes
-  # only when `changes` decided, every job it asked for passed, the
-  # validation-rules summary passed, and legacy-guard passed. A job skipped
-  # because something it needs failed is a failure here, not a skip.
+  # requiring those names would leave such PRs waiting forever. It passes only
+  # when `changes` decided, every job it asked for passed (the validation-rules
+  # audits included: their old summary job is folded in here), and
+  # legacy-guard passed. A job skipped because something it needs failed is a
+  # failure here, not a skip. It cannot hang: `always()` runs it once every job
+  # it needs has finished or been skipped.
+  #
+  # Named `ci-ok` in the quick lane only. A test/** push or a manual or nightly
+  # run reports `tests-ok` instead, so a test lane on a pull request's commit
+  # never adds a second `ci-ok` result (green or red) to the one the required
+  # check reads.
   ci-ok:
-    needs: [ changes, check, windows-setup, scripts, validation-rules, legacy-guard ]
+    name: ${{ (github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok' }}
+    needs: [ changes, check, nsh-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
     if: always()
     runs-on: ubuntu-22.04
     steps:
@@ -689,15 +731,20 @@ jobs:
         CHANGES: ${{ needs.changes.result }}
         CHECK: ${{ needs.check.result }}
         WANT_CHECK: ${{ needs.changes.outputs.check }}
+        NSH_CHECK: ${{ needs.nsh-check.result }}
+        WANT_NSH_CHECK: ${{ needs.changes.outputs.nsh_check }}
         WINDOWS_SETUP: ${{ needs.windows-setup.result }}
-        WANT_WINDOWS_SETUP: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.windows_pkg == 'true' }}
+        WANT_WINDOWS_SETUP: ${{ needs.changes.outputs.installer }}
         SCRIPTS: ${{ needs.scripts.result }}
         WANT_SCRIPTS: ${{ needs.changes.outputs.scripts }}
-        VALIDATION: ${{ needs.validation-rules.result }}
+        V1: ${{ needs.validation-rules-v1.result }}
+        V2: ${{ needs.validation-rules-v2.result }}
+        WANT_VALIDATION: ${{ needs.changes.outputs.validation }}
         LEGACY_GUARD: ${{ needs.legacy-guard.result }}
+        WANT_LEGACY_GUARD: ${{ !startsWith(github.ref, 'refs/heads/test/') }}
       run: |
         set -euo pipefail
-        echo "changes=$CHANGES check=$CHECK (wanted $WANT_CHECK) scripts=$SCRIPTS (wanted $WANT_SCRIPTS) validation-rules=$VALIDATION legacy-guard=$LEGACY_GUARD"
+        echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
         fail() { echo "::error::$1"; exit 1; }
         [[ "$CHANGES" == success ]] || fail "could not decide what to test (changes: $CHANGES)"
         expect() {
@@ -708,7 +755,9 @@ jobs:
           fi
         }
         expect check "$CHECK" "$WANT_CHECK"
+        expect nsh-check "$NSH_CHECK" "$WANT_NSH_CHECK"
         expect windows-setup "$WINDOWS_SETUP" "$WANT_WINDOWS_SETUP"
         expect scripts "$SCRIPTS" "$WANT_SCRIPTS"
-        [[ "$VALIDATION" == success ]] || fail "validation-rules finished: $VALIDATION"
-        [[ "$LEGACY_GUARD" == success ]] || fail "legacy-guard finished: $LEGACY_GUARD"
+        expect validation-rules-v1 "$V1" "$WANT_VALIDATION"
+        expect validation-rules-v2 "$V2" "$WANT_VALIDATION"
+        expect legacy-guard "$LEGACY_GUARD" "$WANT_LEGACY_GUARD"

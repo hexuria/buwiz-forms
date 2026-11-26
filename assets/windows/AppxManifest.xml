@@ -15,8 +15,8 @@
   <Properties>
     <DisplayName>eBIRForms</DisplayName>
     <PublisherDisplayName>GoldCoders Corp</PublisherDisplayName>
-    <Logo>assets\icon.png</Logo>
-    <Description>Philippine BIR tax return filing desktop application. Supports form preparation, validation, SFTP submission, email tracking, and PDF generation.</Description>
+    <Logo>assets\icon-store.png</Logo>
+    <Description>Prepare, check, print and file Philippine BIR tax returns. Totals are worked out as you type, returns are checked against the BIR's validation rules, and they print or save as PDF on the official form layout.</Description>
   </Properties>
 
   <Dependencies>
@@ -35,10 +35,10 @@
       <uap:VisualElements
         DisplayName="eBIRForms"
         Description="Philippine BIR tax return filing application"
-        BackgroundColor="#2B2B2B"
-        Square150x150Logo="assets\icon.png"
-        Square44x44Logo="assets\icon.png">
-        <uap:DefaultTile Wide310x150Logo="assets\icon.png" />
+        BackgroundColor="#FFFFFF"
+        Square150x150Logo="assets\icon-tile.png"
+        Square44x44Logo="assets\icon-app.png">
+        <uap:DefaultTile Wide310x150Logo="assets\icon-wide.png" />
       </uap:VisualElements>
     </Application>
   </Applications>

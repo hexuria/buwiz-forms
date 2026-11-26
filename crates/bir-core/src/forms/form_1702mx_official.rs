@@ -66,6 +66,17 @@ fn set(input: &mut WholePesoInput, value: i64) {
     input.set(WholePeso(value));
 }
 
+/// Set a computed whole-peso box whose official page display uses
+/// `formatCurrencyWOC` (`1,234` / `(1,234)` / `0`), keeping `raw` aligned
+/// with `to_official_field_map` for both `to_print_field_map` and
+/// `to_bir_field_map`.
+fn set_display(input: &mut WholePesoInput, value: i64) {
+    *input = WholePesoInput {
+        amount: Some(WholePeso(value)),
+        raw: official_display(value),
+    };
+}
+
 /// `NegativeValue(formatCurrencyWOC(x))`: whole pesos with thousands
 /// separators, negatives in parentheses.
 pub fn official_display(value: i64) -> String {
@@ -198,17 +209,17 @@ fn apply_nolco(
         let loss = gross_income - deductions;
         set(&mut computation.item_3_net_operating_loss, loss);
         row.year_incurred = filing_year.to_string();
-        set(&mut row.amount, loss.abs());
-        set(&mut row.applied_previous_years, 0);
-        set(&mut row.expired, 0);
-        set(&mut row.applied_current_year, 0);
+        set_display(&mut row.amount, loss.abs());
+        set_display(&mut row.applied_previous_years, 0);
+        set_display(&mut row.expired, 0);
+        set_display(&mut row.applied_current_year, 0);
     } else {
         set(&mut computation.item_1_gross_income, 0);
         set(&mut computation.item_2_ordinary_itemized_deductions, 0);
         set(&mut computation.item_3_net_operating_loss, 0);
         row.year_incurred = " ".to_string();
-        set(&mut row.amount, 0);
-        set(&mut row.applied_current_year, 0);
+        set_display(&mut row.amount, 0);
+        set_display(&mut row.applied_current_year, 0);
     }
 }
 
@@ -216,14 +227,14 @@ fn recompute_nolco_rows(table: &mut Form1702MXNolcoTable) {
     for row in &mut table.rows {
         let used = v(&row.applied_previous_years) + v(&row.expired) + v(&row.applied_current_year);
         let unapplied = v(&row.amount) - used;
-        set(&mut row.unapplied, unapplied);
+        set_display(&mut row.unapplied, unapplied);
     }
     let total = table
         .rows
         .iter()
         .map(|row| v(&row.applied_current_year))
         .sum();
-    set(&mut table.item_8_total_applied_current_year, total);
+    set_display(&mut table.item_8_total_applied_current_year, total);
 }
 
 impl Form1702MXDraft {

@@ -650,8 +650,9 @@ pub fn app_database_path() -> PathBuf {
     if let Some(path) = database_path_override() {
         return path;
     }
-    match std::env::var_os("BIR_DATABASE_PATH") {
-        Some(path) if !path.is_empty() => PathBuf::from(path),
+    // The configuration store (an Android development build's dev list) first, then the launch environment.
+    match crate::config::var("BIR_DATABASE_PATH") {
+        Ok(path) if !path.is_empty() => PathBuf::from(path),
         _ => crate::dev_mode::dev_database_path().unwrap_or_else(default_database_path),
     }
 }

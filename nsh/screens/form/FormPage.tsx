@@ -24,7 +24,7 @@ import { cleanup, computed, effect, keymap, List, Scroll, signal, untracked, Vie
 import { BREAK } from "../../theme/tokens";
 import {
   AppButton,
-  Checkbox,
+  CheckboxLabel,
   Chip,
   Code,
   Dialog,
@@ -411,7 +411,7 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
             />
             <AppButton testID="fp-queue" size="sm" icon="send" label="Queue" variant={formUi.reviewing() ? "primary" : undefined} disabled={h().loading} onPress={() => s.queue()} />
           </If>
-          <If when={h().status === "Queued" && !h().sample && !h().canResolve}>
+          <If when={h().status === "Queued" && !h().sample && !h().canResolve && !h().checkingSend}>
             <AppButton testID="fp-cancel-queue" size="sm" label="Cancel queue" onPress={() => s.cancelQueue()} />
           </If>
           <If when={h().editable && h().sample && !h().periodSet}>
@@ -977,18 +977,15 @@ function Dialogs(props: { s: FormSession }) {
                 {(c) => <AppButton testID={`existing-${c().id}`} block variant={c().variant} label={c().label} hint={c().hint} onPress={() => s.takeExisting(c().id)} />}
               </Each>
               <If when={offer().fastLane}>
-                <View class="flex-row items-center gap-2">
-                  <Checkbox
-                    testID="existing-fast-lane"
-                    label="Don't ask again for drafts (this session)"
-                    checked={fast()}
-                    onChange={(on) => {
-                      fast.set(on);
-                      s.setFastLane(on);
-                    }}
-                  />
-                  <Text variant="meta">Don't ask again for drafts (this session)</Text>
-                </View>
+                <CheckboxLabel
+                  testID="existing-fast-lane"
+                  label="Don't ask again for drafts (this session)"
+                  checked={fast()}
+                  onChange={(on) => {
+                    fast.set(on);
+                    s.setFastLane(on);
+                  }}
+                />
               </If>
             </View>
           )}

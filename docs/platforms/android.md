@@ -42,14 +42,15 @@ Not in the package yet: the per-form print fixes (`print-overrides/`). `bir-app-
 the executable on the desktop (`packaged.rs`), and an Android app has no such folder. Until the app reads them from its
 own assets, a printed return on Android has no per-form fixes.
 
-Sending: the send guard (`nsh/src/guards.rs` `restrict_sending`) forces a dry run on every system other than macOS,
-Windows and Linux. Real filing on Android waits for the relay's phone switch-on.
+Sending: a release build files through the Buwiz relay, as on the desktops. A debug or development build, a test
+environment (`EBIR_TEST_ENV`) or an agent launch (`GPUI_AGENT`) only simulates, or sends through a Buwiz server on
+the same computer; it never sends or registers through production (`nsh/src/guards.rs` `restricted_launch`).
 
 ## Build, sign, upload
 
 Three steps on the owner's Mac. The first needs no secret; the second is the only one that touches the upload key.
 
-1. **Build** (`just play-bundle`, or `just play-bundle build=28` to choose the number). It builds the bundle, removes
+1. **Build** (`just play-bundle`, or `just play-bundle 28` to choose the number). It builds the bundle, removes
    the debug signature `nsh package` puts on it and the updater's source, and checks the result: package
    `com.buwiz.ebirforms`, the expected `versionCode`, `targetSdkVersion` from `nsh.json`, backup off, not debuggable,
    phone ABIs only (`scripts/android_bundle.py check`). It writes

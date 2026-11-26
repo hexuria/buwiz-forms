@@ -9,7 +9,7 @@ import { AppButton } from "./buttons";
 import { TextField } from "./fields";
 import { revealAndFocus } from "./focus";
 import type { IconName } from "./icons";
-import { Popover } from "./layers";
+import { Popover, sheetMaxHeight } from "./layers";
 import { NameCell } from "./lists";
 import { matchOptions, multiComboLabel, type MultiComboWords, normalizeSelection, type PickOption } from "./logic";
 import { CTL, cx, FOCUS_RING, SMALL_HIT, TOUCH } from "./look";
@@ -62,8 +62,8 @@ interface CheckboxBaseProps {
   children?: JSX.Element;
 }
 
-/** The one wrapper of nsh/base's Checkbox: a 16-point box, radius 4, the primary fill and a check when on. */
-function CheckboxBase(props: CheckboxBaseProps) {
+/** The one wrapper of nsh/base's Checkbox: a 16-point box, radius 4, the primary fill and a check when on. Exported for row-wide controls (lists.tsx's CheckRow); screens use Checkbox or CheckboxLabel. */
+export function CheckboxBase(props: CheckboxBaseProps) {
   return (
     <BaseCheckbox
       ref={(r: ViewRef) => props.focusRef?.(r)}
@@ -134,6 +134,27 @@ export function CheckboxLabel(props: CheckboxProps & { hint?: string }) {
           <Text variant="meta" tone="fg3">{props.hint}</Text>
         </If>
       </View>
+    </CheckboxBase>
+  );
+}
+
+/** A selectable list row: the whole row is ONE checkbox control — the leading box, then the row's
+   content as the control's label — so a press anywhere in the row (the text, the code, the empty part,
+   the box itself) toggles exactly once, Space or Return toggles it focused, and assistive tools read one
+   control with the row's name and its checked state, not two. Row layout as lists.tsx's ListRow. */
+export function CheckRow(props: CheckboxProps & { children?: JSX.Element }) {
+  return (
+    <CheckboxBase
+      checked={props.checked}
+      onChange={props.onChange}
+      label={props.label}
+      indeterminate={props.indeterminate}
+      disabled={props.disabled}
+      testID={props.testID}
+      focusRef={props.focusRef}
+      class="min-h-13 w-full gap-3 border-t border-border px-4 py-2 first:border-t-0 enabled:hover:bg-hover active:bg-selected"
+    >
+      {props.children}
     </CheckboxBase>
   );
 }
@@ -278,6 +299,13 @@ export function Segmented(props: SegmentedProps) {
 const LIST_POPUP = TOUCH
   ? "rounded-t-(--radius-dialog) bg-card px-2 pt-2 pb-8"
   : "rounded-(--radius-card) border border-border bg-raised p-1 shadow-lg";
+/**
+ * Touch: a list of choices is a bottom sheet, and one with a search field brings the keyboard up under it. The list gives way so the
+ * whole sheet (its field, its padding and the list) stays below the status bar; with room it is the 280 points of `max-h-70`.
+ */
+const SHEET_CHROME = 112;
+const listRoom = () => (TOUCH ? { maxHeight: Math.max(120, Math.min(280, sheetMaxHeight() - SHEET_CHROME)) } : undefined);
+const sheetRoom = () => (TOUCH ? { maxHeight: sheetMaxHeight() } : undefined);
 /** A row of a list of choices: lit where the keys or the pointer are, the chosen one on the selected fill. */
 const LIST_ITEM = cx(
   "justify-center rounded-(--radius-ctl) px-2 focus:bg-hover selected:bg-selected disabled:opacity-50",
@@ -347,8 +375,10 @@ export function Dropdown(props: DropdownProps) {
       offset={4}
       margin={8}
       popupClass={LIST_POPUP}
+      popupStyle={sheetRoom()}
       backdropClass="bg-scrim"
       listClass="max-h-70"
+      listStyle={listRoom()}
       itemClass={LIST_ITEM}
       renderItem={(item: SelectEntry) => <Text testID={props.testID ? `${props.testID}-opt-${item.value}` : undefined}>{item.title}</Text>}
       empty={<Text variant="meta" tone="fg3" class="px-2 py-1.5">Nothing matches.</Text>}
@@ -424,8 +454,10 @@ export function ComboField(props: ComboFieldProps) {
         </View>
       }
       popupClass={LIST_POPUP}
+      popupStyle={sheetRoom()}
       backdropClass="bg-scrim"
       listClass="max-h-70"
+      listStyle={listRoom()}
       itemClass={cx(LIST_ITEM, "py-1")}
       renderItem={(item: SelectEntry) => <Text testID={props.testID ? `${props.testID}-opt-${item.value}` : undefined}>{item.title}</Text>}
       empty={<Text variant="meta" tone="fg3" class="px-2 py-1.5">No match. Try a code or a place name.</Text>}

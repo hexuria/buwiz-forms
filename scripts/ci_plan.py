@@ -1,0 +1,339 @@
+#!/usr/bin/env python3
+"""Decides what a CI run does: the `changes` job of ci.yml and the `plan` job of nsh.yml both run this, so the two
+workflows always agree. docs/CI.md says the same in words.
+
+Four lanes:
+  quick    a pull request, or a push to main or codex/**: the quick checks on Linux only (ci.yml).
+  tests    a push to test/**: the test suites; the branch name picks the systems.
+  manual   workflow_dispatch: the systems, suites, screen-test filter and shard the inputs name.
+  nightly  the schedule: everything, on all three systems.
+
+Within a lane, the changed files decide which suites are needed. A path class may only list files that no crate,
+build script or test reads; everything unlisted is app code and runs everything. An unknown or empty change range
+runs everything too.
+
+Reads the event from the environment (see `main`), writes `name=value` lines to $GITHUB_OUTPUT and a summary to
+$GITHUB_STEP_SUMMARY.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+
+SYSTEMS = ("macos", "linux", "windows")
+SUITES = ("rust", "screens", "build", "installer", "validation")
+# A test/** push and a manual run on a branch split the screen tests over this many runners.
+SHARDS = 3
+
+# The `check` job's runner and toolchain target for each system, in the matrix order ci.yml has always used.
+CHECK_OS = {
+    "macos": {"os": "macos-15", "target": "aarch64-apple-darwin"},
+    "linux": {"os": "ubuntu-22.04", "target": "x86_64-unknown-linux-gnu"},
+    "windows": {"os": "windows-latest", "target": "x86_64-pc-windows-msvc"},
+}
+
+# Read by people only. assets/brand and assets/badges feed local recipes (`just icons`, `just badges`), not a build;
+# Markdown in nsh/ is not bundled or type checked. Markdown under rules/ or scripts/ and crate README files are NOT
+# here: they feed code generation or policy checks.
+DOCS = re.compile(r"^(docs/|[^/]+\.md$|crates/[^/]+/docs/|\.github/[^/]+\.md$|assets/(brand|badges)/|nsh/.*\.md$)")
+# The Windows installer. nsh.yml owns the NSH pin that generates the installer source.
+WINDOWS_PKG = re.compile(
+    r"^(assets/windows/|packaging/windows/|scripts/(audit_final_setup|package_msix|package_nsh_windows|smoke_msix)\.ps1$"
+    r"|scripts/audit_installer_sources\.py$|\.github/workflows/(nsh|release-windows)\.yml$)"
+)
+# App files the installer also packs: they stay app code, and they also ask for the installer audit.
+WINDOWS_PKG_INPUTS = re.compile(r"^(nsh/nsh\.json$|print-overrides/|assets/icon[^/]*\.png$|scripts/audit_no_legacy\.py$)")
+MACOS_PKG = re.compile(r"^(assets/macos/|scripts/(package_macos_release|setup_macos_release_secrets)\.sh$|[^/]*entitlements[^/]*\.plist$)")
+LINUX_PKG = re.compile(r"^packaging/linux/")
+# Files only the Python script tests read (and workflows nothing here runs).
+SCRIPTS_ONLY = re.compile(
+    r"^(scripts/tests/|scripts/setup-(linux|linux-nsh|macos|impeccable)\.sh$|scripts/setup-windows\.ps1$"
+    r"|scripts/impeccable\.pin$|\.github/workflows/(release[^/]*|bir|html-candidate-certification)\.yml$)"
+)
+# The NSH (TSX) app is a workspace of its own; nothing the workspace tests read is under nsh/. nsh/src/ and the
+# app's Cargo files stay app code: the production-boundary check scans nsh/src (bir-rules-codegen status.rs,
+# SHELL_SOURCE_ROOTS).
+NSH_APP = re.compile(r"^nsh/(src/|Cargo\.(toml|lock)$)")
+SCREEN_TEST = re.compile(r"^nsh/.*\.test\.tsx?$")
+# What the NSH app's jobs read (nsh.yml's path filter before the fast lane): the app, the crates it is built on, the
+# workspace it builds in, and the files that run it.
+NSH_INPUTS = re.compile(
+    r"^(nsh/|forms/|crates/bir-(app-api|core|host-shim|print|rules)/|Cargo\.(toml|lock)$|justfile$"
+    r"|rust-toolchain\.toml$|\.github/workflows/nsh\.yml$|scripts/(ci_plan\.py|nsh_screen_tests\.sh)$)"
+)
+# The quick NSH type check lives in ci.yml.
+NSH_CHECK_INPUTS = re.compile(NSH_INPUTS.pattern + r"|^\.github/workflows/ci\.yml$")
+# The extracted validation-rules corpus and what audits it.
+VALIDATION = re.compile(
+    r"^(rules/|crates/bir-rules(-codegen|-platform)?/|crates/bir-core/src/form_rules/"
+    r"|crates/bir-core/src/validation_summary\.rs|evidence/validation-rules/|rust-toolchain"
+    r"|\.github/workflows/ci\.yml$|scripts/ci_plan\.py$)"
+)
+
+
+class PlanError(ValueError):
+    pass
+
+
+def classify(path: str) -> str:
+    if DOCS.match(path):
+        return "docs"
+    if WINDOWS_PKG.match(path):
+        return "windows_pkg"
+    if MACOS_PKG.match(path):
+        return "macos_pkg"
+    if LINUX_PKG.match(path):
+        return "linux_pkg"
+    if SCRIPTS_ONLY.match(path):
+        return "scripts"
+    if path.startswith("nsh/") and not NSH_APP.match(path):
+        return "nsh_ui"
+    return "app"
+
+
+def what_changed(changed: list[str] | None) -> dict[str, bool]:
+    """What the change can affect. None (unknown range) and an empty list mean everything."""
+    if not changed:
+        return dict(app=True, windows_pkg=True, other=True, nsh=True, nsh_check=True, nsh_beyond_tests=True,
+                    core_inputs=True, validation_paths=False, known=False)
+    classes = [classify(path) for path in changed]
+    nsh_paths = [path for path in changed if NSH_INPUTS.match(path) and not DOCS.match(path)]
+    return dict(
+        app="app" in classes,
+        windows_pkg="windows_pkg" in classes or any(WINDOWS_PKG_INPUTS.match(path) for path in changed),
+        other=bool({"windows_pkg", "macos_pkg", "linux_pkg", "scripts"} & set(classes)),
+        nsh=bool(nsh_paths),
+        nsh_check=any(NSH_CHECK_INPUTS.match(path) and not DOCS.match(path) for path in changed),
+        nsh_beyond_tests=any(not SCREEN_TEST.match(path) for path in nsh_paths),
+        # The plain-SQLite core tests: the crates, forms and workspace files, not the app in nsh/.
+        core_inputs=any(not path.startswith("nsh/") for path in nsh_paths),
+        validation_paths=any(VALIDATION.match(path) for path in changed),
+        known=True,
+    )
+
+
+def parse_names(value: str, allowed: tuple[str, ...], default: str, what: str) -> list[str]:
+    names = [name.strip() for name in (value or default).split(",") if name.strip()]
+    if names == ["all"]:
+        return list(allowed)
+    unknown = [name for name in names if name not in allowed]
+    if unknown or not names:
+        raise PlanError(f"unknown {what}: {', '.join(unknown) or '(none)'}; use all or a comma list of {', '.join(allowed)}")
+    return [name for name in allowed if name in names]
+
+
+def branch_systems(ref: str) -> list[str]:
+    """test/linux/**, test/windows/**, test/macos/**: that system; test/all/**: all three; any other: Linux and Windows."""
+    first = ref.removeprefix("refs/heads/test/").split("/", 1)[0]
+    return {"linux": ["linux"], "windows": ["windows"], "macos": ["macos"], "all": list(SYSTEMS)}.get(first, ["linux", "windows"])
+
+
+def decide(
+    *,
+    event: str,
+    ref: str,
+    branch: str = "",
+    changed: list[str] | None = None,
+    labels: tuple[str, ...] = (),
+    systems: str = "",
+    suites: str = "",
+    screens: str = "",
+    shard: str = "all",
+) -> dict:
+    """The whole decision. Returns the outputs (Python values) plus `reasons`, lines for the run summary."""
+    on_main = ref == "refs/heads/main"
+    reasons: list[str] = []
+    test_push = event == "push" and ref.startswith("refs/heads/test/")
+
+    if event in ("pull_request", "push") and not test_push:
+        lane = "quick"
+    elif test_push:
+        lane = "tests"
+    elif event == "workflow_dispatch":
+        lane = "manual"
+    elif event == "schedule":
+        lane = "nightly"
+    else:
+        raise PlanError(f"no lane for event {event}")
+
+    plan = dict(lane=lane, check_systems=[], check_tests=False, nsh_check=False, scripts=False, installer=False,
+                validation_systems=[], nsh_systems=[], screens=False, build=False, nsh_rust=False, core_plain=False,
+                shards=[0], shard_count=1, screens_filter="")
+
+    if lane == "quick":
+        seen = what_changed(changed)
+        if not seen["known"]:
+            reasons.append("change range unknown or empty: every quick check")
+        plan["check_systems"] = ["linux"] if seen["app"] else []
+        plan["nsh_check"] = seen["nsh_check"]
+        # `check` runs the Python script tests itself.
+        plan["scripts"] = not seen["app"] and (seen["other"] or seen["windows_pkg"])
+        # The validation-rules audits: Linux only, and only when asked for by a path, the label or the branch. An
+        # unknown range does not start them (a new branch or a force push must not start six jobs).
+        if seen["validation_paths"]:
+            plan["validation_systems"] = ["linux"]
+            reasons.append("validation-rules audits: validation-rules paths changed")
+        elif event == "pull_request" and "run-validation" in labels:
+            plan["validation_systems"] = ["linux"]
+            reasons.append("validation-rules audits: run-validation label")
+        elif branch.startswith("ebirforms-"):
+            plan["validation_systems"] = ["linux"]
+            reasons.append(f"validation-rules audits: branch {branch}")
+
+    elif lane == "tests":
+        chosen = branch_systems(ref)
+        seen = what_changed(changed)
+        if not seen["known"]:
+            reasons.append("change range against main unknown or empty: every suite")
+        plan["check_systems"] = chosen if seen["app"] else []
+        plan["check_tests"] = True
+        plan["installer"] = seen["windows_pkg"] and "windows" in chosen
+        plan["screens"] = seen["nsh"]
+        plan["build"] = plan["nsh_rust"] = seen["nsh_beyond_tests"]
+        plan["core_plain"] = seen["core_inputs"] and "linux" in chosen
+        plan["nsh_systems"] = chosen if seen["nsh"] else []
+        plan["shards"], plan["shard_count"] = list(range(SHARDS)), SHARDS
+        reasons.append(f"systems from the branch name: {', '.join(chosen)}")
+
+    elif lane == "manual":
+        chosen = parse_names(systems, SYSTEMS, "linux,windows", "system")
+        wanted = parse_names(suites, SUITES, "all", "suite")
+        if on_main and (wanted != list(SUITES) or screens or shard != "all"):
+            # Only main's runs save the caches every branch restores, and the first run to save a cache entry defines
+            # it for good: a partial run on main could save a cache missing what the full jobs need.
+            reasons.append("main: suites, screen filter and shard ignored, so the caches main saves stay complete")
+            wanted, screens, shard = list(SUITES), "", "all"
+        plan["check_systems"] = chosen if "rust" in wanted else []
+        plan["check_tests"] = True
+        plan["installer"] = "installer" in wanted and "windows" in chosen
+        plan["validation_systems"] = chosen if "validation" in wanted else []
+        plan["screens"] = "screens" in wanted
+        plan["build"] = "build" in wanted
+        plan["nsh_rust"] = "rust" in wanted
+        plan["core_plain"] = "rust" in wanted and "linux" in chosen
+        plan["nsh_systems"] = chosen if (plan["screens"] or plan["build"] or plan["nsh_rust"]) else []
+        plan["screens_filter"] = screens.strip()
+        if shard not in ("all", *map(str, range(SHARDS))):
+            raise PlanError(f"unknown shard {shard}: use all or 0 to {SHARDS - 1}")
+        # main runs each system's screen tests on one runner, so the cache it saves holds what every shard needs.
+        if not on_main:
+            plan["shards"] = list(range(SHARDS)) if shard == "all" else [int(shard)]
+            plan["shard_count"] = SHARDS
+        reasons.append(f"manual run: systems {', '.join(chosen)}; suites {', '.join(wanted)}")
+
+    else:  # nightly
+        plan.update(check_systems=list(SYSTEMS), check_tests=True, installer=True, validation_systems=list(SYSTEMS),
+                    screens=True, build=True, nsh_rust=True, core_plain=True, nsh_systems=list(SYSTEMS), shards=[0])
+        reasons.append("nightly run: everything on all three systems")
+
+    if not plan["screens"]:
+        # Without screen tests only the lead shard has work.
+        plan["shards"], plan["shard_count"] = [0], 1
+    # The Linux release packages (release-linux.yml, x64 and arm64): built only by the nightly run and a manual run
+    # that asks for the build on Linux; never by a pull request or a test/** push.
+    plan["linux_packages"] = lane in ("manual", "nightly") and plan["build"] and "linux" in plan["nsh_systems"]
+    plan["reasons"] = reasons
+    return plan
+
+
+def outputs(plan: dict) -> dict[str, str]:
+    """The plan as the string outputs the workflows read."""
+    def flag(value: bool) -> str:
+        return "true" if value else "false"
+
+    check = [dict(CHECK_OS[name], tests=plan["check_tests"]) for name in SYSTEMS if name in plan["check_systems"]]
+    validation = [CHECK_OS[name]["os"] for name in SYSTEMS if name in plan["validation_systems"]]
+    nsh = plan["nsh_systems"]
+    shards = plan["shards"]
+    return {
+        "lane": plan["lane"],
+        "check": flag(bool(check)),
+        "check_matrix": json.dumps({"include": check}, separators=(",", ":")),
+        "nsh_check": flag(plan["nsh_check"]),
+        "scripts": flag(plan["scripts"]),
+        "installer": flag(plan["installer"]),
+        "validation": flag(bool(validation)),
+        "validation_matrix": json.dumps(validation, separators=(",", ":")),
+        "nsh_macos": flag("macos" in nsh),
+        "nsh_linux": flag("linux" in nsh),
+        "nsh_windows": flag("windows" in nsh),
+        "screens": flag(plan["screens"]),
+        "build": flag(plan["build"]),
+        "nsh_rust": flag(plan["nsh_rust"]),
+        "core_plain": flag(plan["core_plain"]),
+        "linux_packages": flag(plan["linux_packages"]),
+        "shards": json.dumps(shards),
+        "shard_count": str(plan["shard_count"]),
+        "lead_shard": str(shards[0]),
+        "screens_filter": plan["screens_filter"],
+    }
+
+
+def changed_files(env: dict[str, str]) -> list[str] | None:
+    """The files this run's change touches, or None when the range is unknown."""
+    event, ref = env.get("EVENT", ""), env.get("REF", "")
+    base, head = env.get("PR_BASE", ""), env.get("PR_HEAD", "")
+    before, after = env.get("PUSH_BEFORE", ""), env.get("PUSH_AFTER", "")
+    if event == "pull_request" and base and head:
+        span = f"{base}...{head}"
+    elif event == "push" and ref.startswith("refs/heads/test/"):
+        # A test branch carries a pull request's head: test what the pull request changes, whatever was there before.
+        span = "origin/main...HEAD"
+    elif event == "push" and before and after and not re.fullmatch(r"0+", before):
+        span = f"{before}..{after}"
+    else:
+        return None
+    result = subprocess.run(["git", "diff", "--name-only", span], capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        return None
+    return [line for line in result.stdout.splitlines() if line]
+
+
+def pull_request_labels(env: dict[str, str]) -> tuple[str, ...]:
+    # Read now, not from the event payload, so adding the label and then "Re-run all jobs" picks it up.
+    if env.get("EVENT") != "pull_request" or not env.get("PR_NUMBER"):
+        return ()
+    result = subprocess.run(
+        ["gh", "pr", "view", env["PR_NUMBER"], "--json", "labels", "--jq", ".labels[].name"],
+        capture_output=True, text=True, check=False,
+    )
+    return tuple(result.stdout.split()) if result.returncode == 0 else ()
+
+
+def main() -> int:
+    env = dict(os.environ)
+    try:
+        plan = decide(
+            event=env.get("EVENT", ""),
+            ref=env.get("REF", ""),
+            branch=env.get("BRANCH", ""),
+            changed=changed_files(env) if env.get("EVENT") in ("pull_request", "push") else None,
+            labels=pull_request_labels(env),
+            systems=env.get("IN_SYSTEMS", ""),
+            suites=env.get("IN_SUITES", ""),
+            screens=env.get("IN_SCREENS", ""),
+            shard=env.get("IN_SHARD", "") or "all",
+        )
+    except PlanError as error:
+        print(f"::error::{error}")
+        return 1
+    values = outputs(plan)
+    with open(env["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+        for name, value in values.items():
+            out.write(f"{name}={value}\n")
+    lines = [f"lane: {plan['lane']}", *plan["reasons"]]
+    lines += [f"{name}: {value}" for name, value in values.items()]
+    summary = "\n".join(lines) + "\n"
+    print(summary, end="")
+    if env.get("GITHUB_STEP_SUMMARY"):
+        with open(env["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+            out.write("```\n" + summary + "```\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

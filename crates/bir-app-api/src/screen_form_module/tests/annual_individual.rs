@@ -1130,6 +1130,162 @@ fn form_1701ms_emails_rates_and_dates_are_typed() {
     assert!(refused["rejected"]["frm1701MS:txtTaxRateb"].is_string());
 }
 
+/// 1701MS Part IV.A items 2A and 2B (Less: Non-Taxable / Exempt Compensation):
+/// neither is marked computed in the page schema; 2A is enabled at load and 2B
+/// opens on a joint return; filling the official sample through the screen path
+/// reproduces every official XML key with no known differences.
+#[test]
+fn form_1701ms_items_2a_2b_are_editable_and_reproduce_official_sample() {
+    setup();
+    assert!(!schema_computed("1701MS", "frm1701MS:txtLessNonTaxablea"));
+    assert!(!schema_computed("1701MS", "frm1701MS:txtLessNonTaxableb"));
+
+    let fresh = opened("1701MS");
+    assert!(
+        fresh["locks"]["frm1701MS:txtLessNonTaxablea"].is_null()
+            && fresh["off"]["frm1701MS:txtLessNonTaxablea"].is_null(),
+        "2A must be enabled at load: locks={:?} off={:?}",
+        fresh["locks"]["frm1701MS:txtLessNonTaxablea"],
+        fresh["off"]["frm1701MS:txtLessNonTaxablea"]
+    );
+    assert!(
+        fresh["off"]["frm1701MS:txtLessNonTaxableb"].is_string(),
+        "2B must be gated until joint filing"
+    );
+
+    let xml = include_str!("../../../../bir-core/tests/sample-payloads/1701MS-122025.official.xml");
+    let mut official = BTreeMap::new();
+    for chunk in xml.split("<div>").skip(1) {
+        let Some((inner, _)) = chunk.split_once("</div>") else {
+            continue;
+        };
+        let Some((k, rest)) = inner.split_once('=') else {
+            continue;
+        };
+        let suffix = format!("{k}=");
+        let v = rest.strip_suffix(&suffix).unwrap_or(rest);
+        official.insert(k.to_string(), v.to_string());
+    }
+    assert!(!official.is_empty());
+
+    // Start from the dummy profile used by the official sample and enter every
+    // filer-typed field through the screen path (non-computed in page schema).
+    let profile: TaxpayerProfile = serde_json::from_value(json!({
+        "id": null,
+        "full_name": "SAMPLE DUMMY TAXPAYER",
+        "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+        "rdo_code": "039",
+        "line_of_business": "GENERAL SERVICES",
+        "registered_address": "123 Sample Street, Makati City",
+        "zip_code": "1200",
+        "phone": "09170000000",
+        "email": "sample.taxpayer@example.com",
+        "default_form_type": "1701MS",
+        "taxpayer_type": "Individual",
+        "is_vat_registered": false,
+        "has_employees": false,
+        "withholds_compensation": false,
+        "withholds_expanded": false,
+        "birth_date": "1985-05-15",
+    }))
+    .unwrap();
+    let mut draft = bir_core::forms::form_1701ms::Form1701MsDraft::new_from_profile(&profile, 2025);
+    draft.keep_entered_penalties();
+    let draft_json = serde_json::to_value(&draft).unwrap();
+
+    // Apply Civil Status / Joint + Source / Tax option / Deduction first so
+    // gated boxes (column B, Part IV.A) open before filling amounts.
+    let step1 = take(
+        "1701MS",
+        &draft_json,
+        json!({
+            "frm1701MS:civilStatus": "Married",
+            "frm1701MS:txtIfMarriedJointlyNo5": "true",
+            "frm1701MS:txtTaxpayerNo11b": "true",
+            "frm1701MS:txtTaxpayerNo11d1": "true",
+            "frm1701MS:txtTaxpayerNo12b": "true",
+            "frm1701MS:txtTaxpayerNo12b1": "true",
+            "frm1701MS:txtTaxpayerNo17b": "true",
+        }),
+    );
+    assert!(
+        step1["locks"]["frm1701MS:txtLessNonTaxableb"].is_null()
+            && step1["off"]["frm1701MS:txtLessNonTaxableb"].is_null(),
+        "2B must unlock on a joint return: locks={:?} off={:?}",
+        step1["locks"]["frm1701MS:txtLessNonTaxableb"],
+        step1["off"]["frm1701MS:txtLessNonTaxableb"]
+    );
+
+    let step2 = take(
+        "1701MS",
+        &step1["draft"],
+        json!({
+            "frm1701MS:txtPg2TIN1Spouse": "123",
+            "frm1701MS:txtPg2TIN2Spouse": "456",
+            "frm1701MS:txtPg2TIN3Spouse": "788",
+            "frm1701MS:txtPg2BranchCodeSpouse": "00000",
+            "frm1701MS:txtRDOCodeb": "039",
+            "frm1701MS:txtTaxpayerNo8b": "SAMPLE DUMMY SPOUSE",
+            "frm1701MS:txtEmailb": "sample.spouse@example.com",
+            "frm1701MS:txtTelNum10b": "09170000001",
+            "frm1701MS:txtGrossa": "900000.50",
+            "frm1701MS:txtLessNonTaxablea": "90000",
+            "frm1701MS:txtGrossb": "600000",
+            "frm1701MS:txtLessNonTaxableb": "90000",
+            "frm1701MS:txtSalesRevenueNo5a": "1500000",
+            "frm1701MS:txtSalesReturnsNo6a": "10000",
+            "frm1701MS:txtTaxPaymentsNo2a": "50000",
+            "frm1701MS:txtCreditableForm2316No5a": "80000",
+            "frm1701MS:txtCreditableForm2316No5b": "44500",
+            "frm1701MS:perjuryClause": "true",
+        }),
+    );
+
+    use bir_core::forms::queueable::QueueableForm as _;
+    let final_draft: bir_core::forms::form_1701ms::Form1701MsDraft =
+        serde_json::from_value(step2["draft"].clone()).unwrap();
+    let payload = final_draft
+        .to_bir_xml_payload()
+        .expect("screen-filled 1701MS must validate");
+    let mut actual = BTreeMap::new();
+    for chunk in payload.split("<div>").skip(1) {
+        let Some((inner, _)) = chunk.split_once("</div>") else {
+            continue;
+        };
+        let Some((k, rest)) = inner.split_once('=') else {
+            continue;
+        };
+        let suffix = format!("{k}=");
+        let v = rest.strip_suffix(&suffix).unwrap_or(rest);
+        actual.insert(k.to_string(), v.to_string());
+    }
+    assert_eq!(actual["frm1701MS:txtLessNonTaxablea"], "90,000");
+    assert_eq!(actual["frm1701MS:txtLessNonTaxableb"], "90,000");
+    assert_eq!(actual["frm1701MS:txtTaxableCompensationIncomea"], "810,001");
+    assert_eq!(actual["frm1701MS:txtTaxableCompensationIncomeb"], "510,000");
+    assert_eq!(actual["frm1701MS:TotalTaxDueCompensationBTP"], "328,500");
+    assert_eq!(actual["frm1701MS:txtAmountPayableNo27a"], "198,500");
+    assert_eq!(actual["frm1701MS:txtAggregateAmountPayable30a"], "198,500");
+
+    let mut diffs = Vec::new();
+    for (k, want) in &official {
+        let got = actual.get(k).map(String::as_str).unwrap_or("<missing>");
+        if got != want {
+            diffs.push(format!("{k}: official={want:?} ours={got:?}"));
+        }
+    }
+    for (k, got) in &actual {
+        if !official.contains_key(k) {
+            diffs.push(format!("{k}: extra ours={got:?}"));
+        }
+    }
+    assert!(
+        diffs.is_empty(),
+        "1701MS screen-path sample diffs:\n{}",
+        diffs.join("\n")
+    );
+}
+
 // ------------------------------------------------------- stored drafts
 
 /// Lesson 6: a stored draft opens and saves back byte for byte on every

@@ -112,6 +112,10 @@ pub enum Ended {
         /// As [`Ended::Result`]'s `path_down`.
         path_down: bool,
     },
+    /// The host's hook ([`serve_noting`]) said no before the first
+    /// connection toward the BIR: the app let go of the pipe and opened
+    /// nothing, so nothing reached the BIR.
+    Stopped,
 }
 
 /// Forwards until the server's `result` or the socket ends, within the
@@ -137,6 +141,26 @@ where
         + Send
         + 'static,
 {
+    serve_noting(socket, allowed, limits, &|| true).await
+}
+
+/// [`serve_within`], asking `before_first_open` once, before the first
+/// connection toward a host of the trust list is attempted. When it answers
+/// false, no connection is attempted and the pipe ends [`Ended::Stopped`].
+pub async fn serve_noting<S>(
+    socket: S,
+    allowed: &TrustList,
+    limits: Limits,
+    before_first_open: &(dyn Fn() -> bool + Send + Sync),
+) -> Ended
+where
+    S: Stream<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
+        + futures_util::Sink<Message, Error = tokio_tungstenite::tungstenite::Error>
+        + Unpin
+        + Send
+        + 'static,
+{
+    let mut asked = false;
     let (mut sink, mut stream) = socket.split();
     let (out, mut outgoing) = mpsc::channel::<Message>(64);
     let writer = tokio::spawn(async move {
@@ -198,6 +222,20 @@ where
                             Some(RefusedKind::NotListed),
                             port,
                         )
+                    } else if !asked && {
+                        asked = true;
+                        !before_first_open()
+                    } {
+                        tracing::warn!("relay: the send could not be noted; opening nothing");
+                        let _ = out
+                            .send(refused(
+                                stream,
+                                "the app could not record the send".into(),
+                                None,
+                                port,
+                            ))
+                            .await;
+                        break Ended::Stopped;
                     } else {
                         attempted += 1;
                         match tokio::time::timeout(
@@ -870,6 +908,67 @@ mod tests {
                     path_down: false
                 }
             );
+        }
+    }
+
+    /// The host's hook runs once, before the first connection toward a listed
+    /// host, never for a host off the list; when it says no, nothing is
+    /// connected and the pipe ends stopped.
+    #[tokio::test]
+    async fn the_hook_runs_once_before_the_first_connection_and_can_stop_it() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let live = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        live.set_nonblocking(true).unwrap();
+        let port = live.local_addr().unwrap().port();
+        let listed = format!("127.0.0.1:{port}");
+        let open = |stream: u8, port: u16| {
+            Message::Text(
+                serde_json::to_string(&Control::Open {
+                    stream,
+                    host: "127.0.0.1".into(),
+                    port,
+                })
+                .unwrap()
+                .into(),
+            )
+        };
+        for allow in [true, false] {
+            let (public, jws, _) = trust_documents(&[&listed]);
+            let list = crate::trust::verify(&[public], &jws, crate::device::now()).unwrap();
+            let (app, server) = tokio::io::duplex(64 * 1024);
+            let app = WebSocketStream::from_raw_socket(app, Role::Client, None).await;
+            let mut server = WebSocketStream::from_raw_socket(server, Role::Server, None).await;
+            let asked = std::sync::Arc::new(AtomicUsize::new(0));
+            let counter = asked.clone();
+            let app = tokio::spawn(async move {
+                let hook = move || {
+                    counter.fetch_add(1, Ordering::SeqCst);
+                    allow
+                };
+                serve_noting(app, &list, Limits::default(), &hook).await
+            });
+            // Off the list first: refused without asking.
+            server.send(open(1, port + 1)).await.unwrap();
+            assert_eq!(next_text(&mut server).await["kind"], "not_listed");
+            assert_eq!(asked.load(Ordering::SeqCst), 0);
+            server.send(open(2, port)).await.unwrap();
+            let answer = next_text(&mut server).await;
+            if allow {
+                assert_eq!(answer["type"], "opened");
+                server.send(open(3, port)).await.unwrap();
+                assert_eq!(next_text(&mut server).await["type"], "opened");
+                server.close(None).await.unwrap();
+                assert!(matches!(
+                    app.await.unwrap(),
+                    Ended::Dropped { opened: true, .. }
+                ));
+                assert_eq!(std::iter::from_fn(|| live.accept().ok()).count(), 2);
+            } else {
+                assert_eq!(answer["type"], "refused");
+                assert_eq!(app.await.unwrap(), Ended::Stopped);
+                assert_eq!(std::iter::from_fn(|| live.accept().ok()).count(), 0);
+            }
+            assert_eq!(asked.load(Ordering::SeqCst), 1, "asked once");
         }
     }
 }
