@@ -1,0 +1,2 @@
+        A: http://schemas.android.com/apk/res/android:icon(0x01010002)=@0x7f020000
+        A: http://schemas.android.com/apk/res/android:roundIcon(0x0101052c)=@0x7f020002

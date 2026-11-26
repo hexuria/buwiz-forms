@@ -1,0 +1,12 @@
+    resource 0x7f010000 color/ic_launcher_background
+    resource 0x7f020000 mipmap/ic_launcher
+      (xxxhdpi) (file) res/mipmap-xxxhdpi-v4/ic_launcher.png type=PNG
+      (anydpi) (file) res/mipmap-anydpi-v26/ic_launcher.xml type=XML
+    resource 0x7f020001 mipmap/ic_launcher_foreground
+      (mdpi) (file) res/mipmap-mdpi-v4/ic_launcher_foreground.png type=PNG
+      (hdpi) (file) res/mipmap-hdpi-v4/ic_launcher_foreground.png type=PNG
+      (xhdpi) (file) res/mipmap-xhdpi-v4/ic_launcher_foreground.png type=PNG
+      (xxhdpi) (file) res/mipmap-xxhdpi-v4/ic_launcher_foreground.png type=PNG
+      (xxxhdpi) (file) res/mipmap-xxxhdpi-v4/ic_launcher_foreground.png type=PNG
+    resource 0x7f020002 mipmap/ic_launcher_round
+      (anydpi) (file) res/mipmap-anydpi-v26/ic_launcher_round.xml type=XML
