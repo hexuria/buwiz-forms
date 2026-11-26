@@ -1,0 +1,15 @@
+	}
+
+	function computeATC(rowIndex) {
+		var taxDue = NumWithComma(d.getElementById('txtATCAmt' + rowIndex).value) * (d.getElementById('txtATCRate' + rowIndex).value / 100);
+
+		d.getElementById('txtATCDue' + rowIndex).value = formatCurrency(taxDue);
+
+		computeTotalSched1();
+	}
+
+	function computeTotalSched1() {
+		var totalSched1 = formatCurrency(NumWithComma(d.getElementById('txtATCDue1').value) + NumWithComma(d.getElementById('txtATCDue2').value) +
+			NumWithComma(d.getElementById('txtATCDue3').value) + NumWithComma(d.getElementById('txtATCDue4').value) +
+			NumWithComma(d.getElementById('txtATCDue5').value) + NumWithComma(d.getElementById('txtATCDue6').value));
+

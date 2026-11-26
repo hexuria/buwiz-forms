@@ -1,0 +1,24 @@
+function blockletter(e) {
+var number = parseFloat(e.value).toFixed(2);
+if (isNaN(number)) {
+var zero = 0;
+e.value = parseFloat(zero).toFixed(2);
+} else {
+e.value = '' + number;
+}
+}
+
+--- txtATCAmt1 control (mirror L1967-1968):
+<input type="text" style="width: 95%; text-align: right;" id="txtATCAmt1" value="0.00" size="17" maxlength="12" onkeypress="return numbersonly(this, event)"
+onblur="round(this,2); computeATC(1); computeAll();" disabled="true" /> </td>
+--- txt15 control (mirror L1080-1081):
+<input type="text" value="0.00" name="frm2551Qv2018:txt15" maxlength="15" id="frm2551Qv2018:txt15" style="text-align: right;" onkeypress="return numbersonly(this, event)"
+onblur="round(this,2); computeAll();" />
+--- computeATC (mirror L3215-3221):
+function computeATC(rowIndex) {
+var taxDue = NumWithComma(d.getElementById('txtATCAmt' + rowIndex).value) * (d.getElementById('txtATCRate' + rowIndex).value / 100);
+
+d.getElementById('txtATCDue' + rowIndex).value = formatCurrency(taxDue);
+
+computeTotalSched1();
+}

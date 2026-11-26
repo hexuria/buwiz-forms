@@ -1,0 +1,2 @@
+dc5c19710400e9bd15ceccd1bbeafc5290074b17b2d460af5f8921c6a7f93186 *pinned-BIR-Form2551Qv2018.hta
+b0aaae7ccf6f0839d0aff54b0b221fbebf67adc7f660a58ebc03b26e1fb40ff5 *pinned-string-util.js
