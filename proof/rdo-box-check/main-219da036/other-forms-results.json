@@ -1,0 +1,1717 @@
+{
+  "2551Q": {
+    "formpage": true,
+    "rdo_nodes": [
+      {
+        "id": "fp-label-1:1",
+        "role": "note",
+        "name": "RDO Code *",
+        "value": null,
+        "enabled": true,
+        "bounds": {
+          "x": 1021.0,
+          "y": 645.0,
+          "w": 730.0,
+          "h": 22.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode",
+        "role": "generic",
+        "name": "fp-frm2551Qv2018:txtRDOCode",
+        "value": null,
+        "enabled": true,
+        "bounds": {
+          "x": 1021.0,
+          "y": 677.0,
+          "w": 260.0,
+          "h": 32.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-trigger",
+        "role": "button",
+        "name": "RDO Code: nothing chosen",
+        "value": null,
+        "enabled": true,
+        "bounds": {
+          "x": 1021.0,
+          "y": 677.0,
+          "w": 260.0,
+          "h": 32.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-sheet",
+        "role": "generic",
+        "name": "fp-frm2551Qv2018:txtRDOCode-sheet",
+        "value": null,
+        "enabled": true,
+        "bounds": {
+          "x": 1021.0,
+          "y": 709.0,
+          "w": 260.0,
+          "h": 0.0
+        }
+      }
+    ],
+    "trigger": "fp-frm2551Qv2018:txtRDOCode-trigger",
+    "shot_closed": "/home/ubuntu/forms-validation/rdo-box-proof/2551q-nordo-rdo-closed.png",
+    "list_nodes": [
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-001",
+        "role": "button",
+        "name": "001 \u2014 Laoag City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 58.0,
+          "w": 352.0,
+          "h": 58.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-002",
+        "role": "button",
+        "name": "002 \u2014 Vigan City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 116.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-003",
+        "role": "button",
+        "name": "003 \u2014 San Fernando, La Union",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 175.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-004",
+        "role": "button",
+        "name": "004 \u2014 Calasiao, Pangasinan",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 234.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-005",
+        "role": "button",
+        "name": "005 \u2014 Alaminos City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 293.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-006",
+        "role": "button",
+        "name": "006 \u2014 Urdaneta City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 352.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-007",
+        "role": "button",
+        "name": "007 \u2014 Bangued, Abra",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 411.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-008",
+        "role": "button",
+        "name": "008 \u2014 Baguio City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 470.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-009",
+        "role": "button",
+        "name": "009 \u2014 La Trinidad, Benguet",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 529.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-010",
+        "role": "button",
+        "name": "010 \u2014 Lagawe, Ifugao",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 588.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-011",
+        "role": "button",
+        "name": "011 \u2014 Tabuk City, Kalinga",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 647.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-012",
+        "role": "button",
+        "name": "012 \u2014 Lagawe, Ifugao",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 706.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-013",
+        "role": "button",
+        "name": "013 \u2014 Tuguegarao City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 765.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-014",
+        "role": "button",
+        "name": "014 \u2014 Bayombong, Nueva Vizcaya",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 824.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-015",
+        "role": "button",
+        "name": "015 \u2014 Ilagan, Isabela",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 883.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-016",
+        "role": "button",
+        "name": "016 \u2014 Cabarroguis, Quirino",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 942.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-018",
+        "role": "button",
+        "name": "018 \u2014 Olongapo City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1001.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-019",
+        "role": "button",
+        "name": "019 \u2014 Subic Bay Freeport Zone",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1060.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-020",
+        "role": "button",
+        "name": "020 \u2014 Balanga City, Bataan",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1119.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-022",
+        "role": "button",
+        "name": "022 \u2014 Baler, Aurora",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1178.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-024",
+        "role": "button",
+        "name": "024 \u2014 Valenzuela City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1237.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-026",
+        "role": "button",
+        "name": "026 \u2014 Malabon and Navotas",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1296.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-027",
+        "role": "button",
+        "name": "027 \u2014 Caloocan City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1355.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-028",
+        "role": "button",
+        "name": "028 \u2014 Novaliches",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1414.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-029",
+        "role": "button",
+        "name": "029 \u2014 San Nicolas",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1473.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-030",
+        "role": "button",
+        "name": "030 \u2014 Binondo",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1532.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-031",
+        "role": "button",
+        "name": "031 \u2014 Sta. Cruz",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1591.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-032",
+        "role": "button",
+        "name": "032 \u2014 Quiapo, Sampaloc",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1650.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-033",
+        "role": "button",
+        "name": "033 \u2014 Intramuros, Ermita, Malate",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1709.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-034",
+        "role": "button",
+        "name": "034 \u2014 Paco, Pandacan, Sta. Ana",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1768.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-035",
+        "role": "button",
+        "name": "035 \u2014 RDO 035",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1827.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-036",
+        "role": "button",
+        "name": "036 \u2014 RDO 036",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1886.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-037",
+        "role": "button",
+        "name": "037 \u2014 RDO 037",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1945.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-038",
+        "role": "button",
+        "name": "038 \u2014 North Quezon City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2004.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-039",
+        "role": "button",
+        "name": "039 \u2014 South Quezon City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2063.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-040",
+        "role": "button",
+        "name": "040 \u2014 Cubao",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2122.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-041",
+        "role": "button",
+        "name": "041 \u2014 Mandaluyong City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2181.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-042",
+        "role": "button",
+        "name": "042 \u2014 San Juan City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2240.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-043",
+        "role": "button",
+        "name": "043 \u2014 RDO 043",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2299.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-044",
+        "role": "button",
+        "name": "044 \u2014 Taguig and Pateros",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2358.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-045",
+        "role": "button",
+        "name": "045 \u2014 Marikina City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2417.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-046",
+        "role": "button",
+        "name": "046 \u2014 Cainta and Taytay",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2476.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-047",
+        "role": "button",
+        "name": "047 \u2014 East Makati",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2535.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-048",
+        "role": "button",
+        "name": "048 \u2014 West Makati",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2594.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-049",
+        "role": "button",
+        "name": "049 \u2014 North Makati",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2653.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-050",
+        "role": "button",
+        "name": "050 \u2014 South Makati",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2712.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-051",
+        "role": "button",
+        "name": "051 \u2014 Pasay City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2771.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-052",
+        "role": "button",
+        "name": "052 \u2014 Para\u00f1aque City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2830.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-055",
+        "role": "button",
+        "name": "055 \u2014 San Pablo City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2889.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-056",
+        "role": "button",
+        "name": "056 \u2014 Calamba City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2948.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-057",
+        "role": "button",
+        "name": "057 \u2014 Bi\u00f1an City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3007.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-058",
+        "role": "button",
+        "name": "058 \u2014 Batangas City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3066.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-059",
+        "role": "button",
+        "name": "059 \u2014 Lipa City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3125.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-060",
+        "role": "button",
+        "name": "060 \u2014 Lucena City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3184.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-061",
+        "role": "button",
+        "name": "061 \u2014 Gumaca, Quezon",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3243.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-062",
+        "role": "button",
+        "name": "062 \u2014 Boac, Marinduque",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3302.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-063",
+        "role": "button",
+        "name": "063 \u2014 Calapan City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3361.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-064",
+        "role": "button",
+        "name": "064 \u2014 San Jose, Occidental Mindoro",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3420.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-065",
+        "role": "button",
+        "name": "065 \u2014 Naga City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3479.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm2551Qv2018:txtRDOCode-opt-066",
+        "role": "button",
+        "name": "066 \u2014 Iriga City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3538.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      }
+    ],
+    "option_texts": [],
+    "option_count": 0,
+    "shot_list": "/home/ubuntu/forms-validation/rdo-box-proof/2551q-nordo-rdo-list.png"
+  },
+  "0619E": {
+    "formpage": true,
+    "rdo_nodes": [
+      {
+        "id": "fp-label-1:1",
+        "role": "note",
+        "name": "RDO Code *",
+        "value": null,
+        "enabled": true,
+        "bounds": {
+          "x": 1021.0,
+          "y": 505.0,
+          "w": 730.0,
+          "h": 22.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode",
+        "role": "generic",
+        "name": "fp-frm0619E:txtRDOCode",
+        "value": null,
+        "enabled": true,
+        "bounds": {
+          "x": 1021.0,
+          "y": 537.0,
+          "w": 260.0,
+          "h": 32.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-trigger",
+        "role": "button",
+        "name": "RDO Code: nothing chosen",
+        "value": null,
+        "enabled": true,
+        "bounds": {
+          "x": 1021.0,
+          "y": 537.0,
+          "w": 260.0,
+          "h": 32.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-sheet",
+        "role": "generic",
+        "name": "fp-frm0619E:txtRDOCode-sheet",
+        "value": null,
+        "enabled": true,
+        "bounds": {
+          "x": 1021.0,
+          "y": 569.0,
+          "w": 260.0,
+          "h": 0.0
+        }
+      }
+    ],
+    "trigger": "fp-frm0619E:txtRDOCode-trigger",
+    "shot_closed": "/home/ubuntu/forms-validation/rdo-box-proof/0619e-nordo-rdo-closed.png",
+    "list_nodes": [
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-001",
+        "role": "button",
+        "name": "001 \u2014 Laoag City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 58.0,
+          "w": 352.0,
+          "h": 58.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-002",
+        "role": "button",
+        "name": "002 \u2014 Vigan City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 116.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-003",
+        "role": "button",
+        "name": "003 \u2014 San Fernando, La Union",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 175.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-004",
+        "role": "button",
+        "name": "004 \u2014 Calasiao, Pangasinan",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 234.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-005",
+        "role": "button",
+        "name": "005 \u2014 Alaminos City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 293.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-006",
+        "role": "button",
+        "name": "006 \u2014 Urdaneta City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 352.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-007",
+        "role": "button",
+        "name": "007 \u2014 Bangued, Abra",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 411.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-008",
+        "role": "button",
+        "name": "008 \u2014 Baguio City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 470.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-009",
+        "role": "button",
+        "name": "009 \u2014 La Trinidad, Benguet",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 529.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-010",
+        "role": "button",
+        "name": "010 \u2014 Lagawe, Ifugao",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 588.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-011",
+        "role": "button",
+        "name": "011 \u2014 Tabuk City, Kalinga",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 647.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-012",
+        "role": "button",
+        "name": "012 \u2014 Lagawe, Ifugao",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 706.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-013",
+        "role": "button",
+        "name": "013 \u2014 Tuguegarao City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 765.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-014",
+        "role": "button",
+        "name": "014 \u2014 Bayombong, Nueva Vizcaya",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 824.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-015",
+        "role": "button",
+        "name": "015 \u2014 Ilagan, Isabela",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 883.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-016",
+        "role": "button",
+        "name": "016 \u2014 Cabarroguis, Quirino",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 942.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-018",
+        "role": "button",
+        "name": "018 \u2014 Olongapo City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1001.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-019",
+        "role": "button",
+        "name": "019 \u2014 Subic Bay Freeport Zone",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1060.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-020",
+        "role": "button",
+        "name": "020 \u2014 Balanga City, Bataan",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1119.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-022",
+        "role": "button",
+        "name": "022 \u2014 Baler, Aurora",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1178.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-024",
+        "role": "button",
+        "name": "024 \u2014 Valenzuela City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1237.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-026",
+        "role": "button",
+        "name": "026 \u2014 Malabon and Navotas",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1296.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-027",
+        "role": "button",
+        "name": "027 \u2014 Caloocan City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1355.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-028",
+        "role": "button",
+        "name": "028 \u2014 Novaliches",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1414.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-029",
+        "role": "button",
+        "name": "029 \u2014 San Nicolas",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1473.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-030",
+        "role": "button",
+        "name": "030 \u2014 Binondo",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1532.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-031",
+        "role": "button",
+        "name": "031 \u2014 Sta. Cruz",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1591.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-032",
+        "role": "button",
+        "name": "032 \u2014 Quiapo, Sampaloc",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1650.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-033",
+        "role": "button",
+        "name": "033 \u2014 Intramuros, Ermita, Malate",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1709.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-034",
+        "role": "button",
+        "name": "034 \u2014 Paco, Pandacan, Sta. Ana",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1768.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-035",
+        "role": "button",
+        "name": "035 \u2014 RDO 035",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1827.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-036",
+        "role": "button",
+        "name": "036 \u2014 RDO 036",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1886.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-037",
+        "role": "button",
+        "name": "037 \u2014 RDO 037",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 1945.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-038",
+        "role": "button",
+        "name": "038 \u2014 North Quezon City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2004.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-039",
+        "role": "button",
+        "name": "039 \u2014 South Quezon City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2063.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-040",
+        "role": "button",
+        "name": "040 \u2014 Cubao",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2122.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-041",
+        "role": "button",
+        "name": "041 \u2014 Mandaluyong City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2181.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-042",
+        "role": "button",
+        "name": "042 \u2014 San Juan City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2240.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-043",
+        "role": "button",
+        "name": "043 \u2014 RDO 043",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2299.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-044",
+        "role": "button",
+        "name": "044 \u2014 Taguig and Pateros",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2358.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-045",
+        "role": "button",
+        "name": "045 \u2014 Marikina City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2417.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-046",
+        "role": "button",
+        "name": "046 \u2014 Cainta and Taytay",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2476.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-047",
+        "role": "button",
+        "name": "047 \u2014 East Makati",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2535.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-048",
+        "role": "button",
+        "name": "048 \u2014 West Makati",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2594.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-049",
+        "role": "button",
+        "name": "049 \u2014 North Makati",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2653.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-050",
+        "role": "button",
+        "name": "050 \u2014 South Makati",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2712.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-051",
+        "role": "button",
+        "name": "051 \u2014 Pasay City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2771.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-052",
+        "role": "button",
+        "name": "052 \u2014 Para\u00f1aque City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2830.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-055",
+        "role": "button",
+        "name": "055 \u2014 San Pablo City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2889.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-056",
+        "role": "button",
+        "name": "056 \u2014 Calamba City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 2948.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-057",
+        "role": "button",
+        "name": "057 \u2014 Bi\u00f1an City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3007.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-058",
+        "role": "button",
+        "name": "058 \u2014 Batangas City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3066.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-059",
+        "role": "button",
+        "name": "059 \u2014 Lipa City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3125.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-060",
+        "role": "button",
+        "name": "060 \u2014 Lucena City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3184.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-061",
+        "role": "button",
+        "name": "061 \u2014 Gumaca, Quezon",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3243.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-062",
+        "role": "button",
+        "name": "062 \u2014 Boac, Marinduque",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3302.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-063",
+        "role": "button",
+        "name": "063 \u2014 Calapan City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3361.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-064",
+        "role": "button",
+        "name": "064 \u2014 San Jose, Occidental Mindoro",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3420.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-065",
+        "role": "button",
+        "name": "065 \u2014 Naga City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3479.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      },
+      {
+        "id": "fp-frm0619E:txtRDOCode-opt-066",
+        "role": "button",
+        "name": "066 \u2014 Iriga City",
+        "value": null,
+        "bounds": {
+          "x": 1035.0,
+          "y": 3538.0,
+          "w": 352.0,
+          "h": 59.0
+        }
+      }
+    ],
+    "option_texts": [],
+    "option_count": 0,
+    "shot_list": "/home/ubuntu/forms-validation/rdo-box-proof/0619e-nordo-rdo-list.png"
+  },
+  "1701Q": {
+    "formpage": true,
+    "rdo_nodes": [
+      {
+        "id": "fp-label-1:1",
+        "role": "note",
+        "name": "RDO Code *",
+        "value": null,
+        "enabled": true,
+        "bounds": {
+          "x": 1021.0,
+          "y": 505.0,
+          "w": 730.0,
+          "h": 22.0
+        }
+      },
+      {
+        "id": "fp-frm1701q:txtRDOCode",
+        "role": "generic",
+        "name": "fp-frm1701q:txtRDOCode",
+        "value": null,
+        "enabled": true,
+        "bounds": {
+          "x": 1021.0,
+          "y": 537.0,
+          "w": 260.0,
+          "h": 32.0
+        }
+      },
+      {
+        "id": "fp-frm1701q:txtRDOCode-trigger",
+        "role": "combobox",
+        "name": "RDO Code, required",
+        "value": "Choose\u2026",
+        "enabled": true,
+        "bounds": {
+          "x": 1021.0,
+          "y": 537.0,
+          "w": 260.0,
+          "h": 32.0
+        }
+      }
+    ],
+    "trigger": "fp-frm1701q:txtRDOCode-trigger",
+    "shot_closed": "/home/ubuntu/forms-validation/rdo-box-proof/1701q-nordo-rdo-closed.png",
+    "list_nodes": [
+      {
+        "id": "n553",
+        "role": "listbox",
+        "name": "",
+        "value": null,
+        "bounds": {
+          "x": 1026.0,
+          "y": 578.0,
+          "w": 250.0,
+          "h": 56.0
+        }
+      },
+      {
+        "id": "n563",
+        "role": "option",
+        "name": "Choose\u2026",
+        "value": null,
+        "bounds": {
+          "x": 1026.0,
+          "y": 578.0,
+          "w": 250.0,
+          "h": 28.0
+        }
+      },
+      {
+        "id": "fp-frm1701q:txtRDOCode-opt-",
+        "role": "note",
+        "name": "Choose\u2026",
+        "value": null,
+        "bounds": {
+          "x": 1034.0,
+          "y": 581.0,
+          "w": 234.0,
+          "h": 22.0
+        }
+      },
+      {
+        "id": "n561",
+        "role": "option",
+        "name": "[]",
+        "value": null,
+        "bounds": {
+          "x": 1026.0,
+          "y": 606.0,
+          "w": 250.0,
+          "h": 28.0
+        }
+      },
+      {
+        "id": "fp-frm1701q:txtRDOCode-opt-[]",
+        "role": "note",
+        "name": "[]",
+        "value": null,
+        "bounds": {
+          "x": 1034.0,
+          "y": 609.0,
+          "w": 234.0,
+          "h": 22.0
+        }
+      }
+    ],
+    "option_texts": [
+      "Choose\u2026",
+      "[]"
+    ],
+    "option_count": 2,
+    "shot_list": "/home/ubuntu/forms-validation/rdo-box-proof/1701q-nordo-rdo-list.png"
+  },
+  "2550Q": {
+    "formpage": true,
+    "rdo_nodes": [
+      {
+        "id": "fp-label-1:1",
+        "role": "note",
+        "name": "RDO Code *",
+        "value": null,
+        "enabled": true,
+        "bounds": {
+          "x": 1021.0,
+          "y": 473.0,
+          "w": 730.0,
+          "h": 22.0
+        }
+      },
+      {
+        "id": "fp-frm2550qv2024:txtRDOCode",
+        "role": "textbox",
+        "name": "RDO Code, required",
+        "value": "",
+        "enabled": true,
+        "bounds": {
+          "x": 1032.0,
+          "y": 506.0,
+          "w": 66.0,
+          "h": 30.0
+        }
+      }
+    ],
+    "trigger": null,
+    "shot_closed": "/home/ubuntu/forms-validation/rdo-box-proof/2550q-nordo-rdo-closed.png"
+  }
+}
