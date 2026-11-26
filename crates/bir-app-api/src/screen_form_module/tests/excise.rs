@@ -476,11 +476,11 @@ fn pr11_2200a_and_2200t_part_iv_rows_take_and_file_their_details() {
             );
             assert_eq!(captions[&format!("{p}othersNum")], "28 Others: Number");
         } else {
-            assert!(
-                not_joined("2200a-2020", &format!("{p}cashBank"))
-                    .unwrap()
-                    .contains("Part IV payment detail")
-            );
+            let captions = printed_captions("2200a-2020");
+            assert!(captions.contains_key("derived:part4_cash"));
+            assert!(captions.contains_key("derived:part4_check"));
+            assert!(captions.contains_key("derived:part4_tdm"));
+            assert!(captions.contains_key("derived:part4_others"));
         }
         let filled = fill(code, &opened["draft"], Value::Object(edits.clone()));
         assert_eq!(filled["rejected"], json!({}), "{code}");

@@ -418,7 +418,7 @@ fn pr9_0605_others_box_waits_for_others() {
         typed["rejected"]
     );
     assert_eq!(typed["draft"]["other_manner_description"], "Bank transfer");
-    assert_eq!(printed("0605", &typed["draft"])[key], "Bank transfer");
+    assert_eq!(printed("0605", &typed["draft"])[key], "BANK TRANSFER");
     let checked = call_async(
         "screen_form_validate",
         vec!["0605".into(), json(typed["draft"].clone())],

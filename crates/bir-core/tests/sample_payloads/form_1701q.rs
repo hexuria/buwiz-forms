@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 /// A professional on graduated rates (itemized) with a spouse on the 8%
 /// rate, an amended return, a loss on Item 42 and centavos to round.
-fn sample_1701q() -> Form1701QDraft {
+pub(crate) fn sample_1701q() -> Form1701QDraft {
     let mut draft =
         Form1701QDraft::new_from_profile(&dummy_profile("1701Qv2018", "Individual"), 2025, 2);
     let t = Form1701QParty::Taxpayer;
@@ -68,7 +68,7 @@ fn sample_1701q() -> Form1701QDraft {
 /// The rates the other way round, for the probe: the taxpayer on the 8%
 /// rate and the spouse on graduated rates with itemized deductions, so
 /// every A and B input of Schedules I and II, and Item 25A, is written.
-fn sample_1701q_rates_swapped() -> Form1701QDraft {
+pub(crate) fn sample_1701q_rates_swapped() -> Form1701QDraft {
     let mut draft =
         Form1701QDraft::new_from_profile(&dummy_profile("1701Qv2018", "Individual"), 2025, 3);
     let t = Form1701QParty::Taxpayer;

@@ -11,7 +11,7 @@ use bir_core::forms::form_1700::{
 };
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_1700() -> Form1700Draft {
+pub(crate) fn sample_1700() -> Form1700Draft {
     let mut draft = Form1700Draft::new_from_profile(&dummy_profile("1700", "Individual"), 2025);
     draft.taxpayer_name = "Dummy, Sample Taxpayer".to_string();
     draft.taxpayer_type = Form1700TaxpayerType::Employee;
@@ -58,7 +58,7 @@ fn form_1700_sample_payload_is_current() {
 }
 
 /// Joint filing: the spouse is an employee with their own employer row.
-fn sample_1700_joint() -> Form1700Draft {
+pub(crate) fn sample_1700_joint() -> Form1700Draft {
     let mut draft = sample_1700();
     draft.civil_status = Form1700CivilStatus::Married;
     draft.spouse_has_income = Some(true);
@@ -108,7 +108,7 @@ fn form_1700_joint_sample_payload_is_current() {
 /// leaves them in `frmMain`. The steps first give the popup's empty tables
 /// the `<tbody>` IE inserts implicitly (jsdom does not), which the page's
 /// `$("#tbl… tbody").append(...)` needs.
-fn sample_1700_others() -> Form1700Draft {
+pub(crate) fn sample_1700_others() -> Form1700Draft {
     let mut draft = sample_1700();
     draft.employers.resize_with(3, Form1700Employer::default);
     for (name, tin, regular, withheld) in [
@@ -172,7 +172,7 @@ pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
     ]
 }
 
-fn sample_1700_joint_amended_credits() -> Form1700Draft {
+pub(crate) fn sample_1700_joint_amended_credits() -> Form1700Draft {
     let mut draft = sample_1700_joint();
     draft.is_amended = true;
     draft.foreign_tax_credits = Some(true);

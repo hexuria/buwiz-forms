@@ -667,6 +667,8 @@ impl Form1702RTDraft {
                 fields.insert(format!("derived:year_end_{name}{}", at + 1), digit.clone());
             }
         }
+        let official = self.to_official_field_map();
+        super::print_map::match_upload_case("1702rt-v2018c", &mut fields, Some(&official));
         fields
     }
 

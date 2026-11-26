@@ -14,7 +14,7 @@ fn row(date: &str, name: &str, selling: f64, cost: f64, tax_paid: f64) -> Form17
     }
 }
 
-fn sample_1707a() -> Form1707ADraft {
+pub(crate) fn sample_1707a() -> Form1707ADraft {
     let mut draft =
         Form1707ADraft::new_from_profile(&dummy_profile("1707A", "Individual"), 2025, 1);
     draft.set_atc(Form1707AAtc::Individual);
@@ -61,7 +61,7 @@ fn form_1707a_sample_payload_is_current() {
 
 /// Schedules 1 and 2 past row 4: the "More" pop-ups. The layout is the generated one
 /// extended by `Form1707ADraft::official_layout`.
-fn sample_1707a_with_popup() -> Form1707ADraft {
+pub(crate) fn sample_1707a_with_popup() -> Form1707ADraft {
     let mut draft = sample_1707a();
     draft.year_end_year = 2024;
     for row in draft.gains.iter_mut().chain(draft.losses.iter_mut()) {
@@ -99,7 +99,7 @@ fn form_1707a_sample_with_popup_is_current() {
 }
 
 /// More than ten rows in both schedules: the pop-ups have no row limit.
-fn sample_1707a_many_rows() -> Form1707ADraft {
+pub(crate) fn sample_1707a_many_rows() -> Form1707ADraft {
     let mut draft = sample_1707a();
     draft.year_end_year = 2023;
     for row in draft.gains.iter_mut().chain(draft.losses.iter_mut()) {

@@ -559,6 +559,7 @@ impl Form1707ADraft {
         ] {
             fields.insert(format!("derived:{key}"), value);
         }
+        super::print_map::match_upload_case("1707a-v2021", &mut fields, None);
         fields
     }
 

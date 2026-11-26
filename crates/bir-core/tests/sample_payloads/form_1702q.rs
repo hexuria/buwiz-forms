@@ -13,7 +13,7 @@ use bir_core::forms::form_1702q::{
 };
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_1702q() -> Form1702qDraft {
+pub(crate) fn sample_1702q() -> Form1702qDraft {
     let mut draft =
         Form1702qDraft::new_from_profile(&dummy_profile("1702Q", "Corporation"), 2025, 2);
     draft.taxpayer_name = "Sample Dummy Corporation".to_string();
