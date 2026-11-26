@@ -1531,6 +1531,15 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     }
     exit $code
 
+# Starts the app with nsh-run-agent on a new scratch database (a debug build, dry run), waits for gpui-agent, runs a
+# suite of recipes (agent-recipes/e2e/<suite>.json) and writes report.md, report.json and run.log to
+# ~/BuwizNsh/evidence/e2e/<target>-<time>/. target is macos, linux, windows, ios or android; `just e2e check smoke`
+# checks a suite with no app. Everything goes through gpui-agent: no OS input, no fixed coordinates. A recipe marked
+# send (Queue) runs only with --allow-send under EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1. See docs/proof/E2E.md.
+# End to end: run a suite of gpui-agent recipes against the real app (just e2e <target> [suite] [--allow-send])
+e2e target="check" suite="smoke" *args="":
+    {{PYTHON}} scripts/e2e {{target}} {{suite}} {{args}}
+
 # NSH: the Android device choice and token hand-off of nsh-run-agent, against a stand-in adb (no device needed).
 [unix]
 nsh-agent-handoff-test:

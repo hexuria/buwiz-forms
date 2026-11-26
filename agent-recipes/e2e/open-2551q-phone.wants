@@ -1,0 +1,11 @@
+# Smoke 5, phone: Search > 2551 > New return > 2551Q, the default period, opened.
+click nb-avatar
+wait_until nb-menu-search --timeout-ms 5000
+click nb-menu-search
+wait_until palette-input --timeout-ms 5000
+set_value palette-input 2551
+key palette-input Enter
+wait_until new-return-2551Q --timeout-ms 5000
+click new-return-2551Q
+click new-return-open
+wait_until form-page --timeout-ms 20000 --screenshot
