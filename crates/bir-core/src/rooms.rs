@@ -411,7 +411,7 @@ impl DeviceStore {
     /// A device store in memory, with the whole schema: for tests and [`use_ephemeral_device_store`].
     pub fn open_in_memory() -> Result<Self, DeviceStoreError> {
         let mut conn = Connection::open_in_memory()?;
-        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+        conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA secure_delete = ON;")?;
         initialise(&mut conn)?;
         Ok(Self { conn })
     }
@@ -581,10 +581,13 @@ fn room_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Option<RoomRecord>> {
 
 fn configure(conn: &Connection) -> rusqlite::Result<()> {
     conn.busy_timeout(BUSY_TIMEOUT)?;
+    // secure_delete: a PIN hash or count that is overwritten or deleted is zeroed in the file, not left in a free
+    // page (F5). Per connection: the held read one and every write one go through here.
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
          PRAGMA synchronous = FULL;
-         PRAGMA foreign_keys = ON;",
+         PRAGMA foreign_keys = ON;
+         PRAGMA secure_delete = ON;",
     )?;
     // On Apple systems `fsync` does not reach the disk's platter or flash; F_FULLFSYNC does. The rows here are markers
     // and lock counts that must survive a power loss.
@@ -1009,6 +1012,35 @@ mod tests {
                 .as_deref(),
             Some("v")
         );
+    }
+
+    /// F5: every device.db connection, made, reopened, the held one and the in-memory one, has secure_delete on.
+    #[test]
+    fn device_db_connections_use_secure_delete() {
+        let folder = tempfile::tempdir().unwrap();
+        let layout = Layout::at(folder.path());
+        let secure = |store: &DeviceStore| -> i64 {
+            store
+                .conn
+                .query_row("PRAGMA secure_delete", [], |row| row.get(0))
+                .unwrap()
+        };
+        assert_eq!(secure(&DeviceStore::open(&layout).unwrap()), 1, "made");
+        assert_eq!(secure(&DeviceStore::open(&layout).unwrap()), 1, "reopened");
+        assert_eq!(
+            secure(&DeviceStore::open_existing(&layout).unwrap().unwrap()),
+            1,
+            "read"
+        );
+        assert_eq!(
+            secure(&DeviceStore::open_in_memory().unwrap()),
+            1,
+            "in memory"
+        );
+        let held = DeviceStoreRef::File(layout.clone())
+            .with(false, |store| Ok(secure(store)))
+            .unwrap();
+        assert_eq!(held, Some(1), "the held connection");
     }
 
     /// On Apple systems the device store asks for F_FULLFSYNC, so a committed marker is on the disk, not in its cache.

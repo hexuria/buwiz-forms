@@ -390,9 +390,48 @@ fn subject_lock(key: &AttemptKey) -> std::sync::Arc<std::sync::Mutex<()>> {
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     locks
         .get_or_insert_with(Default::default)
-        .entry((key.room_id.clone(), key.subject.key()))
+        .entry(subject_id(key))
         .or_default()
         .clone()
+}
+
+fn subject_id(key: &AttemptKey) -> (String, String) {
+    (key.room_id.clone(), key.subject.key())
+}
+
+thread_local! {
+    /// The subjects whose lock this thread holds inside [`guarded`] (F4). The per-subject `Mutex` is not
+    /// re-entrant: taking the same subject's lock again on this thread would deadlock.
+    static HELD_SUBJECTS: std::cell::RefCell<Vec<(String, String)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Whether this thread is inside [`guarded`] for `key`.
+fn inside_guarded(key: &AttemptKey) -> bool {
+    let id = subject_id(key);
+    HELD_SUBJECTS.with(|held| held.borrow().contains(&id))
+}
+
+/// Marks `key` as held by this thread for as long as it lives (and through an unwind).
+struct HeldSubject((String, String));
+
+impl HeldSubject {
+    fn enter(key: &AttemptKey) -> Self {
+        let id = subject_id(key);
+        HELD_SUBJECTS.with(|held| held.borrow_mut().push(id.clone()));
+        Self(id)
+    }
+}
+
+impl Drop for HeldSubject {
+    fn drop(&mut self) {
+        HELD_SUBJECTS.with(|held| {
+            let mut held = held.borrow_mut();
+            if let Some(at) = held.iter().rposition(|id| *id == self.0) {
+                held.remove(at);
+            }
+        });
+    }
 }
 
 /// Run `check` for `key` under the limit, in the order above (L5): refuse during a wait; run the check (the hash);
@@ -407,6 +446,7 @@ pub fn guarded<E>(
 ) -> Result<Attempt, GuardError<E>> {
     let lock = subject_lock(key);
     let _one_at_a_time = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _held = HeldSubject::enter(key);
     let pending = match store
         .with(true, |store| store.begin_try(key, now))
         .map_err(GuardError::Store)?
@@ -458,6 +498,8 @@ pub enum OwnerPinError {
     NotAPin,
     /// The device store was lost (I2, N6): no PIN may be set until the emailed reset code (§B.6, B3).
     StoreLost,
+    /// The device was locked after the set was asked for and before the PIN was stored (F2): nothing was stored.
+    LockedMeanwhile,
     Hash(pin::PinError),
     Store(DeviceStoreError),
 }
@@ -468,6 +510,9 @@ impl std::fmt::Display for OwnerPinError {
             Self::NoRoom => f.write_str("This account's room is not set up yet."),
             Self::NoPin => f.write_str("No PIN is set for this account on this device."),
             Self::NotAPin => f.write_str("A PIN is 4 digits."),
+            Self::LockedMeanwhile => f.write_str(
+                "This device was locked before the new PIN was saved. Unlock it and set the PIN again.",
+            ),
             Self::StoreLost => f.write_str(
                 "This device's lock was lost. Reset it with the code we email you before setting a PIN.",
             ),
@@ -542,9 +587,28 @@ pub fn set_owner_pin(
     room: &RoomId,
     typed: &str,
 ) -> Result<(), OwnerPinError> {
+    set_owner_pin_with(store, room, typed, |write| write())
+}
+
+/// [`set_owner_pin`], with the write handed to `commit` once the hash is made: `commit` calls `write` to store the
+/// PIN, or refuses without calling it. A caller holds its own state across the call, so a lock it records can
+/// never land between its check and the write (F2).
+///
+/// Takes the owner's per-subject lock, which is not re-entrant: never call it (nor [`adopt_legacy_pin`]) from
+/// inside [`guarded`] for this room's owner (F4; a debug build asserts it).
+pub fn set_owner_pin_with(
+    store: &DeviceStoreRef,
+    room: &RoomId,
+    typed: &str,
+    commit: impl FnOnce(&dyn Fn() -> Result<(), OwnerPinError>) -> Result<(), OwnerPinError>,
+) -> Result<(), OwnerPinError> {
     if !is_pin(typed) {
         return Err(OwnerPinError::NotAPin);
     }
+    debug_assert!(
+        !inside_guarded(&AttemptKey::owner(room)),
+        "set_owner_pin inside guarded(owner) would deadlock on the owner's lock"
+    );
     let lock = subject_lock(&AttemptKey::owner(room));
     let _one_at_a_time = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     if store_lost(store, room)? {
@@ -554,8 +618,10 @@ pub fn set_owner_pin(
         return Err(OwnerPinError::NoRoom);
     }
     let phc = pin::hash(typed)?;
-    found(store.with(true, |store| store.store_owner_pin_phc(room, &phc))?)?;
-    Ok(())
+    commit(&|| {
+        found(store.with(true, |store| store.store_owner_pin_phc(room, &phc))?)?;
+        Ok(())
+    })
 }
 
 /// Check `typed` against `room`'s owner PIN under the limit ([`guarded`]); hashed on the caller's thread. The PIN
@@ -598,7 +664,9 @@ pub fn verify_owner_pin(
 /// The legacy upgrade (L1): the old credential, typed once at the legacy unlock, against the hash the legacy file
 /// stored (the old SHA-256 form, or a client PIN already rehashed). On a match the typed PIN becomes `room`'s owner
 /// PIN, hashed afresh with Argon2id and its own salt; the old value is never copied. Answers whether it matched.
-/// The limit is the caller's (the legacy lock's subject).
+/// The limit is the caller's (the legacy lock's subject): it may run inside [`guarded`] for the legacy subject,
+/// never inside [`guarded`] for this room's owner, whose lock it takes and which is not re-entrant (F4; a debug
+/// build asserts it).
 pub fn adopt_legacy_pin(
     store: &DeviceStoreRef,
     room: &RoomId,
@@ -608,6 +676,10 @@ pub fn adopt_legacy_pin(
     if !is_pin(typed) {
         return Err(OwnerPinError::NotAPin);
     }
+    debug_assert!(
+        !inside_guarded(&AttemptKey::owner(room)),
+        "adopt_legacy_pin inside guarded(owner) would deadlock on the owner's lock"
+    );
     if !pin::check(legacy_stored, typed)?.matched() {
         return Ok(false);
     }
@@ -1189,6 +1261,33 @@ mod tests {
             .unwrap();
         assert!(!store_lost(&store, &room).unwrap());
         set_owner_pin(&store, &room, "2468").unwrap();
+    }
+
+    /// F4: the legacy adoption may run inside the legacy subject's try, and a debug build refuses it inside the
+    /// owner's own try (whose lock is not re-entrant) instead of deadlocking.
+    #[test]
+    fn adopt_legacy_pin_never_runs_inside_the_owners_try() {
+        let store = memory_store();
+        let room = with_room(&store);
+        let legacy = crate::crypto::hash_pin("0817");
+        let now = reading(1_000_000, None);
+        let adopted = guarded(&store, &AttemptKey::legacy(), &now, || {
+            adopt_legacy_pin(&store, &room, "0817", &legacy)
+        })
+        .unwrap();
+        assert_eq!(adopted, Attempt::Matched);
+        if cfg!(debug_assertions) {
+            let inside_owner = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _ = guarded(&store, &AttemptKey::owner(&room), &now, || {
+                    adopt_legacy_pin(&store, &room, "0817", &legacy)
+                });
+            }));
+            assert!(inside_owner.is_err(), "the debug assertion fired");
+            assert!(
+                !inside_guarded(&AttemptKey::owner(&room)),
+                "the mark went with the unwind"
+            );
+        }
     }
 
     /// N2: an old SHA-256 value in the owner store is refused, and counts nothing.

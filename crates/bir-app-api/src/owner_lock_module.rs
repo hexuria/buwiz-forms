@@ -192,8 +192,8 @@ fn off_the_engine(
 }
 
 /// Set the owner PIN of the open room: a room with no PIN yet, or one this process unlocked with its PIN; never
-/// while its lock store is lost (I2). The room counts as unlocked afterwards (the owner just chose it), unless a
-/// lock came in while it hashed (N7).
+/// while its lock store is lost (I2). The room counts as unlocked afterwards (the owner just chose it). A lock that
+/// came in after the set was asked for wins: no PIN is stored, and the answer says the device was locked (N7, F2).
 fn set_owner_pin(arguments: &HostArguments) -> Result<HostFuture, HostError> {
     crate::account_gate::ensure_unlocked()?;
     let typed = pin_text(arguments)?;
@@ -210,8 +210,18 @@ fn set_owner_pin(arguments: &HostArguments) -> Result<HostFuture, HostError> {
     }
     let locks_then = locks_so_far();
     off_the_engine(move || {
-        owner_lock::set_owner_pin(&store, &room, &typed).map_err(host_error)?;
-        unlock_unless_locked_since(room, locks_then);
+        // F2: the lock counter is read again once the hash is made, and held across the write and the unlock, so a
+        // lock_now that came after this set was queued means no PIN is stored.
+        owner_lock::set_owner_pin_with(&store, &room, &typed, |write| {
+            let mut state = unlock_state();
+            if state.locks != locks_then {
+                return Err(OwnerPinError::LockedMeanwhile);
+            }
+            write()?;
+            state.room = Some(room.clone());
+            Ok(())
+        })
+        .map_err(host_error)?;
         Ok(HostValue::Null)
     })
 }
@@ -563,13 +573,14 @@ mod tests {
         assert_eq!(state()["wait_secs"].as_f64().unwrap() > 50.0, true);
     }
 
-    /// N7: a lock that comes in while a set or a check is hashing wins. The set still stores the new PIN, and the
-    /// check still answers, but the room stays locked.
+    /// N7 and F2: a lock that comes in after a set or a check was queued wins. The set stores no PIN and says the
+    /// device was locked; the check still answers, but the room stays locked.
     #[test]
     fn a_lock_during_the_hash_wins() {
         let _room = Room::open("user-lock-race");
         call("set_owner_pin", pin("0817")).unwrap();
         assert_eq!(state()["unlocked"], true);
+        let set_at = state()["set_at"].clone();
         let module = register(HostModule::new("bir"));
 
         let held = Hold::on();
@@ -578,25 +589,40 @@ mod tests {
             .unwrap();
         assert_eq!(call("lock_now", vec![]).unwrap(), HostValue::Bool(true));
         drop(held);
-        assert_eq!(futures::executor::block_on(set).unwrap(), HostValue::Null);
+        let refused = futures::executor::block_on(set).unwrap_err();
+        assert!(
+            refused.message().contains("was locked"),
+            "{}",
+            refused.message()
+        );
         let after_set = state();
         assert_eq!(after_set["unlocked"], false, "the lock won over the set");
-        assert_eq!(after_set["has_pin"], true);
+        assert_eq!(after_set["set_at"], set_at, "no PIN was stored");
 
         let held = Hold::on();
         let check = module
             .begin("verify_owner_pin", &HostArguments::new(pin("2468")))
             .unwrap();
+        drop(held);
+        assert_eq!(
+            futures::executor::block_on(check).unwrap(),
+            HostValue::Bool(false),
+            "the PIN asked for after the lock was never stored"
+        );
+
+        let held = Hold::on();
+        let check = module
+            .begin("verify_owner_pin", &HostArguments::new(pin("0817")))
+            .unwrap();
         assert_eq!(call("lock_now", vec![]).unwrap(), HostValue::Bool(true));
         drop(held);
         assert_eq!(
             futures::executor::block_on(check).unwrap(),
-            HostValue::Bool(true),
-            "the new PIN was stored"
+            HostValue::Bool(true)
         );
         assert_eq!(state()["unlocked"], false, "the lock won over the check");
         assert_eq!(
-            call("verify_owner_pin", pin("2468")).unwrap(),
+            call("verify_owner_pin", pin("0817")).unwrap(),
             HostValue::Bool(true)
         );
         assert_eq!(state()["unlocked"], true);
