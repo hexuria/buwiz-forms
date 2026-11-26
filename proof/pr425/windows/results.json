@@ -1,0 +1,65 @@
+{
+  "pr": 425,
+  "head": "c42626973461a21a2e8ab58caca2405ff0891252",
+  "branch": "feat/searchpick-followups",
+  "nsh_pin": "8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf",
+  "nsh_pin_verified": true,
+  "target": "C:\\Users\\Administrator\\pr425-click-proof\\target-c4262697",
+  "scratch_db": "C:\\Users\\Administrator\\pr425-click-proof\\scratch-c4262697.db",
+  "window_size": "900x700",
+  "manual_video_editing": false,
+  "results": {
+    "row_pick": {
+      "passed": 0,
+      "total": 5,
+      "strict_count": "0/5",
+      "runs": [
+        {"run": 1, "clicked": "047 — East Makati", "result": "fail", "observed": "box empty"},
+        {"run": 2, "clicked": "048 — West Makati", "result": "fail", "observed": "box empty"},
+        {"run": 3, "clicked": "049 — North Makati", "result": "fail", "observed": "box empty"},
+        {"run": 4, "clicked": "050 — South Makati", "result": "fail", "observed": "box empty; note: “makati” fits 4 choices. Pick one from the list. The box stays empty."},
+        {"run": 5, "clicked": "047 — East Makati", "result": "fail", "observed": "box empty"}
+      ]
+    },
+    "chevron": {
+      "passed": 0,
+      "total": 3,
+      "strict_count": "0/3",
+      "observed": "first click did not close filtered list; it restored/selected last pick text and opened full list; second click left list open in all runs"
+    },
+    "click_away": {
+      "passed": 0,
+      "total": 3,
+      "strict_count": "0/3",
+      "partial": {
+        "closed_list": 3,
+        "restored_last_pick": 3,
+        "note_present": 0
+      },
+      "observed": "all runs restored 047 — East Makati and closed the list, but required not-taken note never appeared"
+    },
+    "alt_tab": {
+      "observation": "Alt+Tab switched to the system Shutdown Event Tracker window due window ordering; after Alt+Tab back, RDO box still showed typed text makati and filtered list remained open",
+      "box_after_return": "makati",
+      "list_open_after_return": true
+    }
+  },
+  "defects": [
+    "real mouse clicks on rows do not commit the clicked row",
+    "chevron clicks do not toggle close/open as required",
+    "click-away restores last pick but does not show the required not-taken note"
+  ],
+  "artifacts": {
+    "video": "C:\\Users\\Administrator\\pr425-proof-artifacts\\pr425-clicks.mp4",
+    "alt_tab_png": "C:\\Users\\Administrator\\pr425-proof-artifacts\\alt-tab-back.png",
+    "row_click_failure_png": "C:\\Users\\Administrator\\pr425-proof-artifacts\\row-click-failure-note.png",
+    "click_away_missing_note_png": "C:\\Users\\Administrator\\pr425-proof-artifacts\\click-away-no-note.png"
+  },
+  "safety": {
+    "suites_run": false,
+    "queue_pressed": false,
+    "live_submit": false,
+    "pushed_or_committed": false,
+    "env": "BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1; GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/BIR_SFTP_LIVE unset"
+  }
+}
