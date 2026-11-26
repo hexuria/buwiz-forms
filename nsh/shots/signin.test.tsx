@@ -6,7 +6,7 @@
 // wide and narrow (the narrow looks are the macOS build at phone width: `nsh test --target` draws no phone without a Simulator).
 // `just nsh-shots signin` saves ~/BuwizNsh/evidence/signin/*.png. Headless (plain nsh test) it takes no pictures and passes.
 import { type App, open, test } from "nsh/test";
-import { LOOKS, shoot } from "./shoot";
+import { AUTH_LOOKS, shoot } from "./shoot";
 
 const GATE = "../AuthDemo.tsx";
 const SETTINGS = "../SettingsDemo.tsx";
@@ -24,7 +24,7 @@ async function toCode(app: App): Promise<void> {
   await app.waitFor("id:gate-code-page", { timeout: 15000 });
 }
 
-for (const look of LOOKS) {
+for (const look of AUTH_LOOKS) {
   const size = { width: look.width, height: look.height, platform: look.platform, colorScheme: look.colorScheme };
   const gate = (params: Record<string, unknown> = {}) => open(GATE, { ...size, host: { params: { gate: true, ...params } } });
   const name = (step: string) => `signin-${look.name}-${step}`;
