@@ -734,9 +734,12 @@ jobs:
   # it needs has finished or been skipped.
   #
   # Not on a closed or draft pull request (see `changes`): it is skipped
-  # there, as every other job is, so no runner is taken. GitHub shows the
-  # skipped check, and a skipped required check never blocks; a draft cannot
-  # be merged, and marking it ready starts a run whose `ci-ok` is the real one.
+  # there, as every other job is, so no runner is taken. GitHub does not
+  # evaluate a skipped job's name, so that run adds no check named `ci-ok`
+  # (it lists one named after the expression below): a draft shows the
+  # required `ci-ok` as not reported yet, and a closed pull request keeps the
+  # `ci-ok` its last real run reported. Marking a draft ready starts the run
+  # whose `ci-ok` counts.
   #
   # Named `ci-ok` in the quick lane only. A test/** push or a manual or nightly
   # run reports `tests-ok` instead, so a test lane on a pull request's commit

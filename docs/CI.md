@@ -50,9 +50,11 @@ macOS, and the nightly run. Proof for the Mac normally comes from the Devin Macs
 ## Drafts and closed pull requests
 
 A draft pull request runs nothing. Every job of `ci.yml` is skipped before it takes a runner, so the pull request's
-checks list only shows them as skipped, `ci-ok` included. A skipped check is not a failure and is not left pending,
-and a draft cannot be merged anyway. Marking the pull request ready for review starts the quick checks, and their
-`ci-ok` is the one that counts. After that, every push runs them as before.
+checks list shows only skipped jobs, and none is red. GitHub does not work out a skipped job's name, so two of them
+are listed under the expression their name is made from, `ci-ok`'s among them. No check named `ci-ok` is reported, so
+the required `ci-ok` shows as not reported yet. That is expected: a draft cannot be merged anyway. Marking the pull
+request ready for review starts the quick checks, and their `ci-ok` is the one that counts. After that, every push
+runs them as before.
 
 Open a pull request as a draft while you are still pushing to it, and mark it ready when you want its checks
 (`gh pr create --draft`, then `gh pr ready`). Turning a ready pull request back into a draft does not stop the run
@@ -60,7 +62,8 @@ already going. The next push to it does: that push runs nothing, and it cancels 
 
 When a pull request closes or merges, its `closed` event cancels the pull request's runs that are still queued or
 running, and runs nothing itself. A pull request's runs share one concurrency group, keyed on its number, and a new
-run in that group cancels the older ones.
+run in that group cancels the older ones. The `closed` run reports no check named `ci-ok`, so the pull request keeps
+the `ci-ok` of its last real run, and nothing turns red.
 
 This does not reach `test/**` runs. Those are pushes to their own branch, in that branch's group. A newer push to the
 same `test/...` branch replaces its run, and `gh run cancel <run id>` stops one. `just ci-test-clean` deletes the
