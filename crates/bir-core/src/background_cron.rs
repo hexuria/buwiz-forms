@@ -5099,7 +5099,9 @@ mod tests {
         use crate::cloud_account;
         let mut http = cloud_account::BlockingHttp::new();
         let now = cloud_account::unix_now();
-        let challenge = cloud_account::start_device(&mut http, server, now).expect("device start");
+        let challenge =
+            cloud_account::start_device(&mut http, server, now, &crate::install_id::install_id())
+                .expect("device start");
         let cookie = std::fs::read_to_string(cookie_file).expect("the test session cookie");
         let approved = reqwest::blocking::Client::builder()
             .redirect(reqwest::redirect::Policy::none())

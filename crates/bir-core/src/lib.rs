@@ -39,6 +39,8 @@ pub mod ipc;
 pub mod job_display;
 // Its master-key half (`resolve_master_key`, `KeyMode`, add-only writes) is
 // used only by the SQLCipher build; Google Calendar uses the rest in both.
+pub mod email_sign_in;
+pub mod install_id;
 #[cfg(target_os = "macos")]
 #[cfg_attr(not(feature = "sqlcipher"), allow(dead_code))]
 mod keychain;
@@ -60,6 +62,7 @@ pub mod receipt;
 pub mod reference;
 pub mod relay;
 pub mod schema;
+pub mod send_in_flight;
 pub mod tax_profile;
 pub mod time_utils;
 pub mod transport;

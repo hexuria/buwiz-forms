@@ -13,12 +13,13 @@ for (const look of LOOKS) {
   const name = (step: string) => `auth-${look.name}-${step}`;
 
   test(`account gate, ${look.name}`, async () => {
-    const app = await at({ gate: true, begin: "refuse" });
+    const app = await at({ gate: true, email: "offline" });
     await app.waitFor("id:gate-card");
     await app.wait(400);
     await shoot(app, name("gate"));
-    await app.press("id:gate-sign-in");
-    await app.waitFor("text:/^Could not reach the Buwiz server/");
+    await app.type("id:gate-email", "juana@example.com");
+    await app.press("id:gate-continue");
+    await app.waitFor("text:No connection. Check your internet and try again.");
     await app.wait(300);
     await shoot(app, name("gate-refused"));
   }, 120_000);

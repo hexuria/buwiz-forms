@@ -17,3 +17,11 @@ screen_form_profile_asked
 
 # Relay filing: a person answers whether the BIR's email came for a send with an unknown outcome (the form page).
 resolve_unknown_send
+
+
+# The email-and-code sign-in: start with an address, check the code, Resend, end the request, and the request after a relaunch.
+cloud_account_email_start
+cloud_account_email_verify
+cloud_account_email_resend
+cloud_account_email_cancel
+cloud_account_email_pending

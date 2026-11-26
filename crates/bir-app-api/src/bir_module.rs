@@ -2922,14 +2922,16 @@ pub fn module() -> HostModule {
         .function("pull_device_filings", |_| pull_device_filings())
         .function("shell_set_chrome", shell_set_chrome);
     let module = crate::cloud_account::register(module);
+    let module = crate::cloud_email::register(module);
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
     let module = crate::legacy_import_module::register(module);
     // bir-shell appends its scroll exports (GPUI elements) after these.
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}{}{}",
         crate::cloud_account::DECLARATIONS,
+        crate::cloud_email::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
         crate::screen_form_module::DECLARATIONS,
         crate::dashboard_module::DECLARATIONS,

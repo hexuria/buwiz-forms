@@ -23,6 +23,10 @@ mod export_archive;
 mod export_ios;
 pub mod guards;
 mod hooks;
+#[cfg(target_os = "android")]
+mod phone_android;
+#[cfg(target_os = "ios")]
+mod phone_ios;
 mod print;
 #[cfg(target_os = "android")]
 mod print_android;
@@ -139,6 +143,9 @@ impl Door {
     /// host's message on a host error. A sync function, or an unknown name, rejects too.
     pub async fn call_async(name: String, args: Vec<JsonValue>, _system: System) -> Result<JsonValue, String> {
         prepare_door(_system)?;
+        // On the engine thread: the UI thread's job pipe (the sign-in's browser, the screen kept on during a send).
+        #[cfg(target_os = "android")]
+        phone_android::install();
         door::call_async(name, args).await
     }
 
