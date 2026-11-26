@@ -1226,6 +1226,16 @@ impl Form2551QDraft {
             "Cannot queue form in {:?} status — must be Draft",
             self.status
         );
+        // A dormant Item 16 reaching the queue outside the normal fill path is
+        // refused before recompute can clear it; the queue never carries a
+        // non-amended previous payment.
+        if !self.is_amended && self.tax_paid_previous.abs() >= 0.005 {
+            return Err(vec![(
+                "tax_paid_previous".to_string(),
+                "Tax paid in a previously filed return must be zero unless Amended Return is selected"
+                    .to_string(),
+            )]);
+        }
         self.recompute(None);
         // Same checks as the page's Validate (`agent::validate` → `filing_errors`).
         let errors = self.filing_errors();
@@ -4165,6 +4175,19 @@ mod tests {
         assert_eq!(draft.total_tax_due, 1_500.0);
         assert_eq!(draft.tax_payable, 1_500.0);
         assert_eq!(draft.total_amount_payable, 1_500.0);
+    }
+
+    #[test]
+    fn non_amended_item_16_must_be_zero() {
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
+        draft.is_amended = false;
+        draft.tax_paid_previous = 500.0;
+
+        let errors = draft
+            .transition_to_queued()
+            .expect_err("a non-amended Item 16 value must not queue");
+
+        assert!(errors.iter().any(|(field, _)| field == "tax_paid_previous"));
     }
 
     #[test]
