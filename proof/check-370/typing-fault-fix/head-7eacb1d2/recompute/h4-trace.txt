@@ -1,0 +1,64 @@
+MFTRACE fp-frm2550m:txtTax13A 1795686160519 effect 1000.00 focused false same true
+MFTRACE fp-frm2550m:txtTax13B 1795686160519 effect 120.01 focused false same true
+MFTRACE fp-frm2550m:txtTax13A 1795686160535 selChange 8 8 1,000.00
+MFTRACE fp-frm2550m:txtTax13B 1795686160535 selChange 6 6 120.01
+MFTRACE fp-frm2550m:txtTax13A 1795686209648 onFocus-begin 1,000.00 value 1000.00 outside undefined focused-was false
+MFTRACE fp-frm2550m:txtTax13A 1795686209648 selChange 0 8 1,000.00
+MFTRACE fp-frm2550m:txtTax13A 1795686209982 change 1
+MFTRACE fp-frm2550m:txtTax13A 1795686209982 effect-hold 1 focused true
+MFTRACE fp-frm2550m:txtTax13A 1795686209982 selChange 1 1 1
+MFTRACE fp-frm2550m:txtTax13A 1795686210103 change 10
+MFTRACE fp-frm2550m:txtTax13A 1795686210103 effect-hold 10 focused true
+MFTRACE fp-frm2550m:txtTax13A 1795686210108 selChange 2 2 10
+MFTRACE fp-frm2550m:txtTax13A 1795686210234 change 100
+MFTRACE fp-frm2550m:txtTax13A 1795686210234 effect-hold 100 focused true
+MFTRACE fp-frm2550m:txtTax13A 1795686210234 selChange 3 3 100
+MFTRACE fp-frm2550m:txtTax13A 1795686210355 change 1000
+MFTRACE fp-frm2550m:txtTax13A 1795686210355 effect-hold 1000 focused true
+MFTRACE fp-frm2550m:txtTax13A 1795686210355 selChange 4 4 1000
+MFTRACE fp-frm2550m:txtTax13B 1795686210676 effect 120.00 focused false same false
+MFTRACE fp-frm2550m:txtTax13B 1795686210676 writeText 120.00 by effect
+MFTRACE fp-frm2550m:txtTax13A 1795686210707 onBlur 1000 outside 1000 edited true
+MFTRACE fp-frm2550m:txtTax13A 1795686210707 writeText 1,000.00 by ?
+MFTRACE fp-frm2550m:txtTax13A 1795686210707 effect 1000.00 focused false same true
+MFTRACE fp-frm2550m:txtTax13B 1795686210730 onFocus-begin 120.00 value 120.00 outside undefined focused-was false
+MFTRACE fp-frm2550m:txtTax13B 1795686210730 selChange 0 6 120.00
+MFTRACE fp-frm2550m:txtTax13B 1795686210730 selChange 6 6 120.00
+MFTRACE fp-frm2550m:txtTax13A 1795686210771 selChange 8 8 1,000.00
+MFTRACE fp-frm2550m:txtTax13B 1795686211706 change 120.009
+MFTRACE fp-frm2550m:txtTax13B 1795686211706 effect-hold 120.009 focused true
+MFTRACE fp-frm2550m:txtTax13B 1795686211706 selChange 7 7 120.009
+MFTRACE fp-frm2550m:txtTax13B 1795686212023 effect-hold 120.01 focused true
+MFTRACE fp-frm2550m:txtTax13B 1795686212039 onBlur 120.009 outside 120.01 edited true
+MFTRACE fp-frm2550m:txtTax13B 1795686212039 writeText 120.01 by ?
+MFTRACE fp-frm2550m:txtTax13B 1795686212097 selChange 6 6 120.01
+MFTRACE fp-frm2550m:txtTax13A 1795686213584 onFocus-begin 1,000.00 value 1000.00 outside undefined focused-was false
+MFTRACE fp-frm2550m:txtTax13A 1795686213584 selChange 0 8 1,000.00
+MFTRACE fp-frm2550m:txtTax13A 1795686213809 change 2
+MFTRACE fp-frm2550m:txtTax13A 1795686213809 effect-hold 2 focused true
+MFTRACE fp-frm2550m:txtTax13A 1795686213809 selChange 1 1 2
+MFTRACE fp-frm2550m:txtTax13A 1795686213938 change 20
+MFTRACE fp-frm2550m:txtTax13A 1795686213938 effect-hold 20 focused true
+MFTRACE fp-frm2550m:txtTax13A 1795686213938 selChange 2 2 20
+MFTRACE fp-frm2550m:txtTax13A 1795686214073 change 200
+MFTRACE fp-frm2550m:txtTax13A 1795686214073 effect-hold 200 focused true
+MFTRACE fp-frm2550m:txtTax13A 1795686214073 selChange 3 3 200
+MFTRACE fp-frm2550m:txtTax13A 1795686214208 change 2000
+MFTRACE fp-frm2550m:txtTax13A 1795686214208 effect-hold 2000 focused true
+MFTRACE fp-frm2550m:txtTax13A 1795686214208 selChange 4 4 2000
+MFTRACE fp-frm2550m:txtTax13B 1795686214526 effect 240.00 focused false same false
+MFTRACE fp-frm2550m:txtTax13B 1795686214526 writeText 240.00 by effect
+MFTRACE fp-frm2550m:txtTax13A 1795686214548 onBlur 2000 outside 2000 edited true
+MFTRACE fp-frm2550m:txtTax13A 1795686214548 writeText 2,000.00 by ?
+MFTRACE fp-frm2550m:txtTax13A 1795686214548 effect 2000.00 focused false same true
+MFTRACE fp-frm2550m:txtTax13B 1795686214570 onFocus-begin 240.00 value 240.00 outside undefined focused-was false
+MFTRACE fp-frm2550m:txtTax13B 1795686214570 selChange 0 6 240.00
+MFTRACE fp-frm2550m:txtTax13B 1795686214570 selChange 6 6 240.00
+MFTRACE fp-frm2550m:txtTax13A 1795686214605 selChange 8 8 2,000.00
+MFTRACE fp-frm2550m:txtTax13B 1795686215553 change 240.009
+MFTRACE fp-frm2550m:txtTax13B 1795686215553 effect-hold 240.009 focused true
+MFTRACE fp-frm2550m:txtTax13B 1795686215555 selChange 7 7 240.009
+MFTRACE fp-frm2550m:txtTax13B 1795686215873 effect-hold 240.01 focused true
+MFTRACE fp-frm2550m:txtTax13B 1795686215891 onBlur 240.009 outside 240.01 edited true
+MFTRACE fp-frm2550m:txtTax13B 1795686215891 writeText 240.01 by ?
+MFTRACE fp-frm2550m:txtTax13B 1795686215948 selChange 6 6 240.01

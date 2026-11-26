@@ -1,0 +1,2 @@
+# recompute trace at 7eacb1d2 (2550M 13A->13B)
+order: recompute writeText lands BEFORE onFocus (effect, focused=false). platform select-all (selChange 0 6) fires on focus then collapses to caret-end (selChange 6 6) same ms - platform enforces the write's stored caret AFTER its own select-all. keys append -> silent corruption (999 -> 120.01). trace supports candidate (b): re-select whole once after such a write; (a) apply-before-focus already happens and is insufficient.
