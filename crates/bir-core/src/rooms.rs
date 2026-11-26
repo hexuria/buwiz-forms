@@ -18,7 +18,7 @@
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, ErrorCode, OpenFlags, OptionalExtension, TransactionBehavior, params};
 use sha2::{Digest, Sha256};
@@ -360,7 +360,7 @@ pub struct RoomRecord {
 /// and lock counts, which must survive a power loss). No exclusive owner lock: the app and `bir-headless` both
 /// read it.
 pub struct DeviceStore {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl DeviceStore {
@@ -497,6 +497,20 @@ impl DeviceStore {
                 "SELECT room_id, origin, user_id, email, created_at, from_legacy
                  FROM rooms WHERE origin = ?1 AND user_id = ?2",
                 params![origin, user_id],
+                room_row,
+            )
+            .optional()?
+            .flatten())
+    }
+
+    /// The `rooms` row of `room_id`, if there is one.
+    pub fn room(&self, room_id: &RoomId) -> Result<Option<RoomRecord>, DeviceStoreError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT room_id, origin, user_id, email, created_at, from_legacy
+                 FROM rooms WHERE room_id = ?1",
+                params![room_id.as_str()],
                 room_row,
             )
             .optional()?
@@ -663,8 +677,9 @@ fn initialise(conn: &mut Connection) -> Result<(), DeviceStoreError> {
 // ---------------------------------------------------------------------------------- the device-wide settings
 
 thread_local! {
-    /// A device store in memory for this thread ([`use_ephemeral_device_store`]), in place of `device.db`.
-    static EPHEMERAL: RefCell<Option<Rc<DeviceStore>>> = const { RefCell::new(None) };
+    /// A device store in memory for this thread ([`use_ephemeral_device_store`]), in place of `device.db`. Shared
+    /// (not per connection) so a thread this one starts can be handed it ([`device_store_here`]).
+    static EPHEMERAL: RefCell<Option<Arc<Mutex<DeviceStore>>>> = const { RefCell::new(None) };
 }
 
 /// Give this thread a device store in memory, in place of the file in the device folder: for a test (or the
@@ -675,7 +690,7 @@ pub fn use_ephemeral_device_store() {
         return;
     }
     let store = match DeviceStore::open_in_memory() {
-        Ok(store) => Some(Rc::new(store)),
+        Ok(store) => Some(Arc::new(Mutex::new(store))),
         Err(error) => {
             tracing::warn!("in-memory device store not opened: {error}");
             None
@@ -689,50 +704,81 @@ pub fn forget_ephemeral_device_store() {
     EPHEMERAL.with(|slot| slot.borrow_mut().take());
 }
 
-fn ephemeral() -> Option<Rc<DeviceStore>> {
-    EPHEMERAL.with(|slot| slot.borrow().clone())
-}
-
 /// The device stores this process has open, by `device.db` path: one connection each, held for the life of the
 /// process, so a setting read on the UI thread is a query, not a fresh open with its pragmas and schema checks. A
 /// held connection still sees what another process commits.
-static HELD_STORES: std::sync::Mutex<std::collections::BTreeMap<PathBuf, DeviceStore>> =
-    std::sync::Mutex::new(std::collections::BTreeMap::new());
+static HELD_STORES: Mutex<std::collections::BTreeMap<PathBuf, DeviceStore>> =
+    Mutex::new(std::collections::BTreeMap::new());
 
-/// Run `work` on this thread's device store: the in-memory one ([`use_ephemeral_device_store`]), else the held
-/// connection to `device.db` in the device folder, opened on first use. `create`: make `device.db` where
-/// [`DeviceStore::open`] would (a write); otherwise a missing file answers `Ok(None)` and nothing is made (a read).
-/// A held connection whose file is gone is dropped first, so a lost store is found lost, never written unseen.
+/// Which device store a thread uses, taken on that thread ([`device_store_here`]) so work it hands to another
+/// thread (the PIN hash, PLAN §B.1) reaches the same store: this thread's in-memory one, or `device.db` of
+/// its device folder.
+#[derive(Clone)]
+pub enum DeviceStoreRef {
+    /// The in-memory store of [`use_ephemeral_device_store`].
+    Ephemeral(Arc<Mutex<DeviceStore>>),
+    /// `device.db` of this layout, through the process's held connection.
+    File(Layout),
+}
+
+/// This thread's device store: the in-memory one ([`use_ephemeral_device_store`]), else `device.db` in the
+/// device folder ([`Layout::here`]).
+pub fn device_store_here() -> DeviceStoreRef {
+    match EPHEMERAL.with(|slot| slot.borrow().clone()) {
+        Some(store) => DeviceStoreRef::Ephemeral(store),
+        None => DeviceStoreRef::File(Layout::here()),
+    }
+}
+
+impl DeviceStoreRef {
+    /// Run `work` on this store. `create`: make `device.db` where [`DeviceStore::open`] would (a write);
+    /// otherwise a missing file answers `Ok(None)` and nothing is made (a read). A held connection whose file is
+    /// gone is dropped first, so a lost store is found lost, never written unseen.
+    pub fn with<T>(
+        &self,
+        create: bool,
+        work: impl FnOnce(&DeviceStore) -> Result<T, DeviceStoreError>,
+    ) -> Result<Option<T>, DeviceStoreError> {
+        let layout = match self {
+            Self::Ephemeral(store) => {
+                let store = store
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                return work(&store).map(Some);
+            }
+            Self::File(layout) => layout,
+        };
+        let path = layout.device_db();
+        let mut held = HELD_STORES
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !path.exists() {
+            held.remove(&path);
+        }
+        if !held.contains_key(&path) {
+            let store = if create {
+                DeviceStore::open(layout)?
+            } else {
+                match DeviceStore::open_existing(layout)? {
+                    Some(store) => store,
+                    None => return Ok(None),
+                }
+            };
+            held.insert(path.clone(), store);
+        }
+        match held.get(&path) {
+            Some(store) => work(store).map(Some),
+            None => Ok(None),
+        }
+    }
+}
+
+/// [`DeviceStoreRef::with`] on this thread's store ([`device_store_here`]).
 fn with_store_here<T>(
     create: bool,
     work: impl FnOnce(&DeviceStore) -> Result<T, DeviceStoreError>,
 ) -> Result<Option<T>, DeviceStoreError> {
-    if let Some(store) = ephemeral() {
-        return work(&store).map(Some);
-    }
-    let layout = Layout::here();
-    let path = layout.device_db();
-    let mut held = HELD_STORES
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if !path.exists() {
-        held.remove(&path);
-    }
-    if !held.contains_key(&path) {
-        let store = if create {
-            DeviceStore::open(&layout)?
-        } else {
-            match DeviceStore::open_existing(&layout)? {
-                Some(store) => store,
-                None => return Ok(None),
-            }
-        };
-        held.insert(path.clone(), store);
-    }
-    match held.get(&path) {
-        Some(store) => work(store).map(Some),
-        None => Ok(None),
-    }
+    device_store_here().with(create, work)
 }
 
 /// The `device_settings` value of `key` here, without the fallback. Never makes `device.db`: no file, a lost

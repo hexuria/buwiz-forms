@@ -48,6 +48,22 @@ pub fn export_profile_backup_as_admin(
 /// the taxpayer — gates the export the same way, so a PIN is never bypassed
 /// between the save that sets it and the open that lifts it.
 fn check_export_pin(db: &Database, tin: &str, pin: Option<&str>) -> Result<(), DbError> {
+    let Some(pin_hash) = client_pin_hash(db, tin)? else {
+        return Ok(());
+    };
+    match pin {
+        None => Err(DbError::PinRequired),
+        // Either form: the Argon2id string, or the old SHA-256 value until its first match rehashes it.
+        Some(pin) if crate::pin::check(&pin_hash, pin).is_ok_and(crate::pin::Check::matched) => {
+            Ok(())
+        }
+        Some(_) => Err(DbError::PinMismatch),
+    }
+}
+
+/// The PIN that gates the profile `tin`, as stored: its taxpayer's `pin_hash`, else a branch copy
+/// (`profile_pin_hash`) still on the profile row ([`check_export_pin`]). `None`: no PIN to check.
+pub fn client_pin_hash(db: &Database, tin: &str) -> Result<Option<String>, DbError> {
     let root: String = tin.chars().filter(|c| c.is_ascii_digit()).take(9).collect();
     let stored = match db.taxpayer_credentials(&root) {
         Ok(credentials) => credentials.pin_hash,
@@ -55,20 +71,12 @@ fn check_export_pin(db: &Database, tin: &str, pin: Option<&str>) -> Result<(), D
         Err(TaxProfileError::Db(error)) => return Err(error),
         Err(error) => return Err(DbError::Other(error.to_string())),
     };
-    let required = match stored {
+    Ok(match stored {
         Some(hash) => Some(hash),
         None => db
             .get_profile(tin)?
             .and_then(|mut profile| profile.profile_pin_hash.take()),
-    };
-    let Some(pin_hash) = required else {
-        return Ok(());
-    };
-    match pin {
-        None => Err(DbError::PinRequired),
-        Some(pin) if crate::crypto::hash_pin(pin) == pin_hash => Ok(()),
-        Some(_) => Err(DbError::PinMismatch),
-    }
+    })
 }
 
 fn write_profile_zip(db: &Database, tin: &str, export_file: &Path) -> Result<(), DbError> {

@@ -707,6 +707,18 @@ fn open_room_database() -> Option<PathBuf> {
     OPEN_ROOM_DATABASE.with(|slot| slot.borrow().clone())
 }
 
+/// The id of the room open on this thread ([`set_open_room_database`]): its folder's name under `rooms/`.
+/// `None` while no room is open (the legacy file, single-room mode, or before A3a opens one).
+pub fn open_room_id() -> Option<crate::rooms::RoomId> {
+    let file = open_room_database()?;
+    let folder = file.parent()?;
+    let rooms = folder.parent()?;
+    if rooms.file_name()? != crate::rooms::ROOMS_DIR {
+        return None;
+    }
+    crate::rooms::RoomId::parse(folder.file_name()?.to_str()?)
+}
+
 /// Live DB file painted `bir` and `bir-headless serve` open.
 ///
 /// In order:

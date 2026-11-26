@@ -98,6 +98,9 @@ tracing-appender = "0.2.3"
 tracing-log = "0.2"
 dotenvy = { workspace = true }
 rand = "0.10.1"
+# The PIN hash (accounts-and-lock PLAN §B.1). The version already in the lockfile (through ssh-key); the salt
+# comes from `rand`'s system generator, so no getrandom feature is needed here.
+argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "password-hash"] }
 hex = "0.4.3"
 imap = "2.4.1"
 native-tls = "0.2.18"
@@ -138,6 +141,8 @@ objc2-user-notifications = { version = "0.3.2", default-features = false, featur
 # makes the existing database unreadable and gets it quarantined.
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { workspace = true, features = ["windows-native"] }
+# The boot id and time since boot of the PIN wait (boot_clock.rs). Already in the lockfile.
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry", "Win32_System_SystemInformation"] }
 
 # sync-secret-service is required for the same reason as windows-native above:
 # without a backend feature keyring 3.x uses its in-memory mock and the master
