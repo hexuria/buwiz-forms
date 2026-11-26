@@ -1,0 +1,33 @@
+trial1 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial2 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial3 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial4 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial5 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial6 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial7 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial8 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial9 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial10 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial11 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial12 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial13 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial14 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial15 launcher: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+trial16 recents: pre='1,234.56' post='1,234.56' kbd=True CHANGED=False
+=== changed in 0 of 16 valid (16 trials) ===
+  t1 launcher: ('1,234.56', '1,234.56')
+  t2 recents: ('1,234.56', '1,234.56')
+  t3 launcher: ('1,234.56', '1,234.56')
+  t4 recents: ('1,234.56', '1,234.56')
+  t5 launcher: ('1,234.56', '1,234.56')
+  t6 recents: ('1,234.56', '1,234.56')
+  t7 launcher: ('1,234.56', '1,234.56')
+  t8 recents: ('1,234.56', '1,234.56')
+  t9 launcher: ('1,234.56', '1,234.56')
+  t10 recents: ('1,234.56', '1,234.56')
+  t11 launcher: ('1,234.56', '1,234.56')
+  t12 recents: ('1,234.56', '1,234.56')
+  t13 launcher: ('1,234.56', '1,234.56')
+  t14 recents: ('1,234.56', '1,234.56')
+  t15 launcher: ('1,234.56', '1,234.56')
+  t16 recents: ('1,234.56', '1,234.56')

@@ -1,0 +1,18 @@
+run1 launcher: pre='1,234.56' post='1,234.56' SAME loglines=0
+run2 recents: pre='1,234.56' post='1,234.56' SAME loglines=0
+run3 launcher: pre='1,234.56' post='1,234.56' SAME loglines=0
+run4 recents: pre='1,234.56' post='1,234.56' SAME loglines=0
+run5 launcher: pre='1,234.56' post='1,234.56' SAME loglines=0
+run6 recents: pre='1,234.56' post='1,234.56' SAME loglines=0
+run7 launcher: pre='1,234.56' post='1,234.56' SAME loglines=0
+run8 recents: pre='1,234.56' post='1,234.56' SAME loglines=0
+run9 launcher: pre='1,234.56' post='1,234.56' SAME loglines=0
+run10 recents: pre='1,234.56' post='1,234.56' SAME loglines=0
+run11 launcher: pre='1,234.56' post='1,234.56' SAME loglines=0
+run12 recents: pre='1,234.56' post='1,234.56' SAME loglines=0
+run13 launcher: pre='1,234.56' post='1,234.56' SAME loglines=0
+run14 recents: pre='1,234.56' post='1,234.56' SAME loglines=0
+run15 launcher: pre='1,234.56' post='1,234.56' SAME loglines=0
+run15 launcher: pre='1,234.56' post='1,234.56' SAME loglines=0
+run16 recents: pre='1,234.56' post='?' CHANGED loglines=0
+done: changed=True
