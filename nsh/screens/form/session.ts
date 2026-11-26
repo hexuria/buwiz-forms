@@ -943,7 +943,9 @@ export class FormSession {
   outsideKept(k: string, typed: string, shown: string) {
     const s = this.st;
     if (!s.draft || !s.editable || this.isShut(k)) return;
-    s.amountNotes[k] = `amount outside|${shown}|${typed}`;
+    // What was typed, in its money form, as "you typed ...; the return holds ..." names it.
+    const whole = this.kindOf.get(k) === "money" && this.wholeKeys.has(k);
+    s.amountNotes[k] = `amount outside|${shown}|${exactMoney(typed.trim(), whole)}`;
     const id = this.keyIndex.get(k);
     if (id) s.touched.add(id);
     this.setErrors(s.errors);

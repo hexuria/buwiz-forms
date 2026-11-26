@@ -807,7 +807,7 @@ test("[comma] a comma read as the decimal point is said under its box and stops 
 
 test("[B3] an outside value that won over typing back to the shown amount: a note says what the return holds now, and stops Queue once", async () => {
   const key = "frm2551Qv2018:txt15";
-  const sentence = "Item 15: the return now holds 3,000.00.";
+  const sentence = "Item 15: you typed 2,000.00; the return now holds 3,000.00.";
   const checks = countQueueChecks();
   const h = hooks();
   let s: FormSession | undefined;

@@ -105,7 +105,7 @@ export function refusalSentence(ctx: RefusalContext): string {
     return `${at} ${unreadable[2]} is not an amount. ${kept}${hint}`;
   }
   const outside = /^amount outside\|([^|]*)\|([\s\S]*)$/.exec(raw);
-  if (outside) return `${at} the return now holds ${outside[1]}.`;
+  if (outside) return `${at} you typed ${outside[2]}; the return now holds ${outside[1]}.`;
   const comma = /^amount comma\|([^|]*)\|([\s\S]*)$/.exec(raw);
   if (comma) return `${at} ${comma[2]} was read as ${comma[1]}.`;
   const refused = /^amount refused\|([^|]*)\|([^|]*)\|([\s\S]*)$/.exec(raw);
