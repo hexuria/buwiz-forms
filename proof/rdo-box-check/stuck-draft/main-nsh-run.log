@@ -1,0 +1,12 @@
+✓ built the Rust crate nsh-app-ebirforms (942ms)
+✓ built App.tsx (1.4 MB js, 5.1 MB bytecode, 235ms)
+✓ built the development host for Linux (718ms)
+• Linux (devin-box) connected, build 1
+warn Linux: nsh: no session bus for the tray icon: Could not connect: No such file or directory
+• Linux (devin-box) disconnected
+✓ built the Rust crate nsh-app-ebirforms (939ms)
+✓ built App.tsx (1.4 MB js, 5.1 MB bytecode, 228ms)
+✓ built the development host for Linux (704ms)
+• Linux (devin-box) connected, build 1
+warn Linux: nsh: no session bus for the tray icon: Could not connect: No such file or directory
+• Linux (devin-box) disconnected

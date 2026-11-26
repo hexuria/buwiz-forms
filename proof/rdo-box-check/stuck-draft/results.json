@@ -1,0 +1,164 @@
+{
+  "commits": {
+    "deef": "deef60d83efbe1bf6b82a476d407595973d1d82f",
+    "main": "134c2e4e1d159feafebf500a4030c8b64a3f4ac6"
+  },
+  "method": {
+    "seed": "MAIN 134c2e4e real window: Invented NoRdo Person 00011124500000, new 1601C Nov 2026, picked 000 through the old picker. That exact row was exported before direct scratch setup.",
+    "direct_db_setup": "Copied template rdo-fix-validation.db to main-validation.db and deef-validation.db; deleted drafts; set Invented NoRdo Person rdo_code empty; cloned the exported row into Jan/Feb; stripped baseline/edit metadata from Jan legacy S1; Feb kept baseline empty and no edits; copied rows to deef; created Mar 040 with baseline empty and frm1601c:txtRDOCode in profile_edits; then set profile rdo_code to 050 in both scratch DBs. No product code/data outside scratch DBs changed.",
+    "windows": "real visible maximized X11 NSH windows, semantic tree for location/reading, coordinate clicks; no Queue; safety env only"
+  },
+  "deef": {
+    "S1_before": {
+      "stored_rdo": "000",
+      "baseline": null,
+      "edits": null
+    },
+    "S1_open": {
+      "notice": "Differs from your profile: RDO 000 (profile 050)",
+      "visible_box": "blank grey locked box",
+      "semantic": "RDO code, required: empty, from tax profile",
+      "edit": "Edit RDO Code on this return",
+      "use_profile": "Use profile values",
+      "validation": "Please enter a valid RDO Code on Item 7.",
+      "stored_after_open": "000"
+    },
+    "S1_edit": {
+      "catalog": "searchable real catalog, 050 found",
+      "picked": "050 \u2014 South Makati",
+      "validation_after": "no RDO box message",
+      "db_after": {
+        "id": 1,
+        "quarter": 1,
+        "period_key": "M01",
+        "status": "Draft",
+        "rdo": "050",
+        "month": 1,
+        "profile_edits": [
+          "frm1601c:txtRDOCode"
+        ],
+        "profile_baseline": {
+          "/contact_number": "09170000000",
+          "/email_address": "nordo@example.com",
+          "/line_of_business": "",
+          "/rdo_code": "050",
+          "/registered_address": "Quezon City",
+          "/taxpayer_name": "Invented NoRdo Person",
+          "/zip_code": "1100"
+        },
+        "updated_at": "2026-11-26T11:42:55.402382401+00:00"
+      },
+      "reopen": "050 \u2014 South Makati locked/from profile; kept"
+    },
+    "S2": {
+      "before": {
+        "stored_rdo": "",
+        "baseline_rdo": "",
+        "edits": []
+      },
+      "notice": "Updated from your tax profile: RDO blank \u2192 050",
+      "shown": "050 \u2014 South Makati locked/from profile",
+      "after": {
+        "id": 2,
+        "quarter": 2,
+        "period_key": "M02",
+        "status": "Draft",
+        "rdo": "050",
+        "month": 2,
+        "profile_edits": null,
+        "profile_baseline": {
+          "/contact_number": "09170000000",
+          "/email_address": "nordo@example.com",
+          "/line_of_business": "",
+          "/rdo_code": "050",
+          "/registered_address": "Quezon City",
+          "/taxpayer_name": "Invented NoRdo Person",
+          "/zip_code": "1100"
+        },
+        "updated_at": "2026-11-26T11:43:28.618592250+00:00"
+      }
+    },
+    "S3": {
+      "before": {
+        "stored_rdo": "040",
+        "baseline_rdo": "",
+        "edits": [
+          "frm1601c:txtRDOCode"
+        ]
+      },
+      "shown": "040 \u2014 Cubao locked, labelled from tax profile",
+      "notice": null,
+      "edit": "Edit RDO Code on this return",
+      "after": {
+        "id": 3,
+        "quarter": 3,
+        "period_key": "M3",
+        "status": "Draft",
+        "rdo": "040",
+        "month": 3,
+        "profile_edits": [
+          "frm1601c:txtRDOCode"
+        ],
+        "profile_baseline": {
+          "/contact_number": "09170000000",
+          "/email_address": "nordo@example.com",
+          "/line_of_business": "",
+          "/rdo_code": "",
+          "/registered_address": "Quezon City",
+          "/taxpayer_name": "Invented NoRdo Person",
+          "/zip_code": "1100"
+        },
+        "updated_at": "2026-11-26T11:00:00+00:00"
+      }
+    },
+    "S4": {
+      "shown": "050 \u2014 South Makati locked/from tax profile",
+      "profile_note": "From tax profile. Edit changes this return only; the profile stays as it is.",
+      "edit": "Edit RDO Code on this return",
+      "save_note": "no row autosaves until an edit, so visual state was captured but no November row existed yet"
+    }
+  },
+  "main": {
+    "S1": {
+      "stored_after_open": "000",
+      "notice": "Differs from your profile: RDO 000 (profile 050)",
+      "shown": "000 locked/from tax profile",
+      "edit": "Edit RDO Code on this return",
+      "edit_options": [
+        "Choose\u2026",
+        "000"
+      ],
+      "use_profile": "Use profile values"
+    },
+    "S2": {
+      "notice": "Updated from your tax profile: RDO blank \u2192 050",
+      "shown": "050 locked/from tax profile",
+      "after": {
+        "id": 6,
+        "quarter": 2,
+        "period_key": "M02",
+        "status": "Draft",
+        "rdo": "050",
+        "month": 2,
+        "profile_edits": null,
+        "profile_baseline": {
+          "/contact_number": "09170000000",
+          "/email_address": "nordo@example.com",
+          "/line_of_business": "",
+          "/rdo_code": "050",
+          "/registered_address": "Quezon City",
+          "/taxpayer_name": "Invented NoRdo Person",
+          "/zip_code": "1100"
+        },
+        "updated_at": "2026-11-26T11:45:27.239933401+00:00"
+      }
+    }
+  },
+  "s6": {
+    "application": "screen_form_open builds draft and from_profile, carry first for a new draft, then calls follow_profile on every non-sample open; profile_differs is applied later in opened_json for legacy no-baseline drafts.",
+    "follow": "follow_profile only for Draft with profile_baseline: unedited profile boxes follow when current draft value still equals baseline; edited keys in profile_edits never move. Changes are quietly saved and page receives profile_updates.",
+    "legacy": "A Draft with no baseline is never changed on open; profile_differs lists differing unedited boxes and sets baseline in memory; page offers Use profile values.",
+    "lock": "host emits locks/profile/profile_edit in opened_json. TS session isLocked uses host lock unless key is in profileEdit and currently editing. startProfileEdit adds keys to editing/opened; end keeps value but restores locked look.",
+    "differing_locked_box": "page shows the differs banner with Use profile values plus per-item Edit; Edit opens the box/catalog on this return only."
+  }
+}
