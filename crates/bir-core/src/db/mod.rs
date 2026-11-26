@@ -757,7 +757,7 @@ pub fn live_owner_lock_path(db_path: &Path) -> PathBuf {
 
 /// A taken owner lock (`<database>.owner.lock`). The system lock goes when
 /// the last copy of it is dropped (or the process ends).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OwnerLock {
     _file: std::sync::Arc<File>,
 }
