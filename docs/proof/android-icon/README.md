@@ -6,7 +6,7 @@ Measure only; no code changes.
 
 | | BEFORE | AFTER |
 |---|---|---|
-| app commit | `ee3e649d` (main) | `f9c604e3` (feat/ios-store-icon) |
+| app commit | `ee3e649d` (main) | `f9c604e3` (#369's head), tree-identical to main `a1a86ded` |
 | icon source | `assets/icon.png` | `assets/android/icon.png` (1024px white square, whole logo) |
 | build folder | `~/BuwizNsh/target-ee3e649d` | `~/BuwizNsh/target-f9c604e3` |
 | build command | `nsh package --target android` (dev.env safeties: BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1 BIR_AUTH_BYPASS=1) | same |
