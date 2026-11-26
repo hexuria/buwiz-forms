@@ -1,0 +1,22 @@
+{
+  "chkt_sha256": "c00bd4131a725af53f48c6385d3332c4b789e15441bf52bbac73117c96c1b0ac",
+  "chkt_source": "hexuria/buwiz-validation app/chkt.exe, official eBIRForms offline package manifest 7.9.6.2.1 (https://www.bir.gov.ph/ebirforms)",
+  "date_utc": "2026-11-26",
+  "total_compared": 5420015,
+  "different": 0,
+  "differences_first50": [],
+  "counts_compared_by_category": {
+    "fixed": 14,
+    "random_200000": 200000,
+    "range_900000000_905200000": 5200001,
+    "prefix_ladders": 20000
+  },
+  "valid_in_900000000_905200000": 1038001,
+  "recorded_rows": 1043029,
+  "random_seed": 20261126,
+  "random_count": 200000,
+  "workers": 24,
+  "seconds": 232.224,
+  "ranges": "200000 fixed-seed random roots stratified over first digits; every root 900000000-905200000 inclusive; 2000 fixed-seed 8-digit prefixes x all last digits; repeated-digit and named fixed roots",
+  "note": "range results recovered from the complete first run after its final table-write step failed before writing results; non-range roots were run again natively"
+}
