@@ -3,7 +3,7 @@
 // pages' record of them.
 import { expect, test } from "nsh/test";
 import {
-  authScrollStyle, backRow, blockRoom, codeBoxWidth, LOGO_STEPS_LARGE, LOGO_STEPS_PHONE, logoStep, logoSteps, openColumnMax, SAID_SLOT,
+  backRow, blockRoom, codeBoxWidth, keyboardCover, LOGO_STEPS_LARGE, LOGO_STEPS_PHONE, logoStep, logoSteps, openColumnMax, SAID_SLOT,
   signInHeights, underBackRowGuess,
 } from "./signInLook";
 import { accountKey, welcomedAfter } from "./welcome";
@@ -73,9 +73,25 @@ test("the line under the field and under the boxes keeps one line's room", () =>
   expect(SAID_SLOT).toContain("min-h-5");
 });
 
-test("touch: the open pages' scroll view ends at the keyboard's top (so the whole page scrolls above it); a pointer keeps it", () => {
-  expect(authScrollStyle(true)).toEqual({ marginBottom: "env(keyboard-inset-height)" });
-  expect(authScrollStyle(false)).toEqual({});
+test("the keyboard: the room is what shows above it, counted once", () => {
+  // iOS, a 390x844 phone (top inset 47) with a 300-point keyboard: the page is laid out under the keyboard, so all of it is
+  // taken off, and a 300-point email page gets the 112 step and fits.
+  const iosUnder = underBackRowGuess(844, 47, true, false);
+  expect(iosUnder).toBe(753);
+  expect(keyboardCover(300, iosUnder, iosUnder)).toBe(300);
+  expect(blockRoom(iosUnder - 300)).toBe(421);
+  expect(logoStep(LOGO_STEPS_PHONE, blockRoom(iosUnder - 300), 300)).toEqual({ logo: 112, fits: true });
+  // Android (#417's emulator: 411x914 dp, top inset 24, keyboard 336): the window lays the content out above the keyboard, so
+  // the page already measures 506 under the back row and nothing more is taken off; 150 still fits a 300-point page.
+  const androidGuess = underBackRowGuess(914, 24, true, true);
+  expect(androidGuess).toBe(842);
+  expect(keyboardCover(336, androidGuess, androidGuess - 336)).toBe(0);
+  expect(logoStep(LOGO_STEPS_PHONE, blockRoom(androidGuess - 336), 300)).toEqual({ logo: 150, fits: true });
+  // A window that resizes and reports no keyboard, and the keyboard down: nothing.
+  expect(keyboardCover(0, 753, 417)).toBe(0);
+  expect(keyboardCover(0, 753, 753)).toBe(0);
+  // Part of it already taken (a note over the page): the rest.
+  expect(keyboardCover(300, 753, 700)).toBe(247);
 });
 
 test("welcome: the first sign-in of an account here is new and written down; the second is not", () => {

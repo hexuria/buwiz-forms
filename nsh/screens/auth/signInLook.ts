@@ -98,12 +98,14 @@ export function underBackRowGuess(windowHeight: number, safeTop: number, touch: 
 export const SAID_SLOT = "min-h-5 w-full";
 
 /**
- * The open pages' scroll view on touch ends at the keyboard's top: a bottom margin as tall as the keyboard
- * (`env(keyboard-inset-height)`, 0 while it is down, moving with it). Without it the only room to scroll is what the platform
- * makes for the focused field (the field, not the button under it): "Continue" stayed under the keyboard and could not be
- * scrolled out. With it the whole page is in a viewport above the keyboard and scrolls in it. Nothing changes while the
- * keyboard is down, nor with a pointer.
+ * How much of the software keyboard the open page must still keep itself clear of: the keyboard's height over the surface
+ * (`keyboardFrame().height`, the bottom safe area under it included), less what the platform already took off the page. iOS
+ * lays the page out at the full height under the keyboard: all of it. An Android window that lays the app's content out above
+ * the keyboard (the pin's NshView child ends at the keyboard's top while `windowSize()` and the keyboard's height stay the full
+ * screen's, the "double lift" of #410) already shrank the page by the keyboard: none of it, where `env(keyboard-inset-height)`
+ * would lift the page a second time. A host that resizes its window reports no keyboard: none. `guess` is the height under the
+ * back row the window gives (underBackRowGuess), `measured` the height the page laid out at.
  */
-export function authScrollStyle(touch: boolean): { marginBottom?: "env(keyboard-inset-height)" } {
-  return touch ? { marginBottom: "env(keyboard-inset-height)" } : {};
+export function keyboardCover(keyboard: number, guess: number, measured: number): number {
+  return Math.max(0, keyboard - Math.max(0, guess - measured));
 }

@@ -4,13 +4,13 @@
 // TextLink, ChoiceTile, BackControl and PageButton wrap one nsh/base Button here, as screens/filings/PressCard.tsx does;
 // everything else is the kit.
 import type { JSX } from "nsh";
-import { effect, platform, safeArea, Scroll, signal, Text as NText, View, windowSize } from "nsh";
+import { effect, keyboardFrame, platform, safeArea, Scroll, signal, Text as NText, View, windowSize } from "nsh";
 import { Button } from "nsh/base";
 import { BREAK, SIZE } from "../../theme/tokens";
 import { deviceCopy, Icon, type IconName, Spinner, T_MIN_H, Text, TOUCH } from "../../ui";
 import { BrandLogo } from "./brand";
 import {
-  authScrollStyle, BLOCK_PAD_Y, blockRoom, backRow, LOGO_GAP, logoStep, logoSteps, OPEN_SIDE, openColumnMax, signInHeights, underBackRowGuess,
+  BLOCK_PAD_Y, blockRoom, backRow, keyboardCover, LOGO_GAP, logoStep, logoSteps, OPEN_SIDE, openColumnMax, signInHeights, underBackRowGuess,
 } from "./signInLook";
 
 export { deviceCopy };
@@ -40,16 +40,21 @@ export function lastOpenFit(): OpenFit | null {
  * a pointer, 400 on touch (`wide`: the frame's page column, for "Just me"'s New taxpayer page).
  *
  * The block is in a scroll view, so it is what NSH pads and scrolls when the keyboard covers its focused field (nsh docs, Forms
- * and the keyboard: "Inside scroll views: automatic"); a tap on a button while the keyboard is up presses it. On touch the room
- * also ends at the keyboard's top (signInLook.ts authScrollStyle), so the logo steps down first and the whole page can be
- * scrolled above it.
+ * and the keyboard: "Inside scroll views: automatic"); a tap on a button while the keyboard is up presses it. While the software
+ * keyboard is up the room is what shows above it (signInLook.ts keyboardCover: the keyboard less what the platform already took
+ * off the page, so an Android window laid out above the keyboard is not lifted twice), and the scroll view ends at the
+ * keyboard's top: the logo steps down first, and only then does the block scroll, under the back row, never into it.
  */
 export function OpenPage(props: { testID: string; back?: JSX.Element; footer?: JSX.Element; gap?: string; wide?: boolean; children?: JSX.Element }) {
   const row = () => backRow(TOUCH, ANDROID, safeArea().left);
   // The height under the back row (measured; before that, the window's) and the block's height under the logo (measured).
   const under = signal(0);
   const rest = signal(0);
-  const room = () => blockRoom(under() > 0 ? under() : underBackRowGuess(windowSize().height, safeArea().top, TOUCH, ANDROID));
+  const guess = () => underBackRowGuess(windowSize().height, safeArea().top, TOUCH, ANDROID);
+  const measured = () => (under() > 0 ? under() : guess());
+  // The keyboard's part the page still has to end above (0 while it is down, and on a pointer).
+  const cover = () => keyboardCover(keyboardFrame().height, guess(), measured());
+  const room = () => blockRoom(measured() - cover());
   const fit = () => logoStep(logoSteps(TOUCH, windowSize()), room(), rest());
   effect(() => {
     const now = fit();
@@ -62,8 +67,15 @@ export function OpenPage(props: { testID: string; back?: JSX.Element; footer?: J
       <View testID="open-back-row" class="w-full shrink-0 flex-row items-center" style={{ height: row().height, paddingLeft: row().left, paddingRight: safeArea().right }}>
         {props.back}
       </View>
-      <View class="min-h-0 flex-1" style={authScrollStyle(TOUCH)} onLayout={(e) => e.bounds.size.height > 0 && under.set(Math.round(e.bounds.size.height))}>
-        <Scroll testID="auth-scroll" keyboardShouldPersistTaps="handled" class="min-h-0 flex-1" contentClass="grow items-center justify-center">
+      {/* Measured without the keyboard's margin, which is the scroll view's: the margin never changes what is measured. */}
+      <View class="min-h-0 flex-1" onLayout={(e) => e.bounds.size.height > 0 && under.set(Math.round(e.bounds.size.height))}>
+        <Scroll
+          testID="auth-scroll"
+          keyboardShouldPersistTaps="handled"
+          class="min-h-0 flex-1"
+          style={{ marginBottom: cover() }}
+          contentClass="grow items-center justify-center"
+        >
           <View
             testID={props.testID}
             class="w-full"
