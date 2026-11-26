@@ -171,7 +171,7 @@ impl Form2551QDraft {
         insert_money(
             &mut fields,
             "frm2551Qv2018:txt16",
-            if self.is_amended {
+            if self.is_amended && !matches!(self.item_13_election, Item13Election::EightPercent) {
                 self.tax_paid_previous
             } else {
                 0.0
@@ -561,6 +561,10 @@ mod tests {
 
         draft.is_amended = true;
         assert_eq!(draft.to_bir_field_map()["frm2551Qv2018:txt16"], "500.00");
+
+        // Amended Yes does not reopen Item 16 while Item 13 is the 8% rate.
+        draft.item_13_election = Item13Election::EightPercent;
+        assert_eq!(draft.to_bir_field_map()["frm2551Qv2018:txt16"], "0.00");
     }
 
     #[test]

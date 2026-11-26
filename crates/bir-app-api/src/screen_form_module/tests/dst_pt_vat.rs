@@ -1868,3 +1868,206 @@ fn v2018_2551q_a_legacy_dormant_item16_is_cleared_on_open_and_said_once() {
     );
     assert_eq!(open("2551Q", 1)["notes"], json!([]));
 }
+
+#[test]
+fn v2018_2551q_item16_batch_answers_are_judged_before_the_box_and_zero_is_a_noop() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let opened = open("2551Q", 1);
+
+    // The page can send Item 16 before the answer that opens it. The gate's
+    // controlling answers are applied first either way.
+    let opened_batch = fill(
+        "2551Q",
+        &opened["draft"],
+        json!({item16::KEY: "42", "frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    assert_eq!(opened_batch["rejected"], json!({}));
+    assert_eq!(opened_batch["draft"]["tax_paid_previous"], 42.0);
+    assert_eq!(opened_batch["draft"]["is_amended"], true);
+
+    // With the gate shut, a write of zero is already what the box holds: a
+    // no-op, not a refusal; a nonzero write is still refused.
+    let zero = fill("2551Q", &opened["draft"], json!({item16::KEY: "0"}));
+    assert_eq!(zero["rejected"], json!({}));
+    assert_eq!(zero["draft"]["tax_paid_previous"], 0.0);
+    let nonzero = fill("2551Q", &opened["draft"], json!({item16::KEY: "0.01"}));
+    assert_eq!(nonzero["rejected"][item16::KEY], item16::AMENDED_LOCK);
+}
+
+#[test]
+fn v2018_2551q_a_legacy_dormant_item16_survives_a_profile_follow_long_enough_to_be_said() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let yes = fill(
+        "2551Q",
+        &open("2551Q", 1)["draft"],
+        json!({"frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    let typed = fill("2551Q", &yes["draft"], json!({item16::KEY: "42"}));
+    let saved = save("2551Q", &typed["draft"]);
+    let id = stored_id(&saved);
+
+    // A pre-fix dormant amount plus a profile value changed since the
+    // draft's baseline: the follow saves and recomputes before once-notes
+    // run, but the sentence is decided from the stored bytes.
+    let mut legacy: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    legacy["is_amended"] = json!(false);
+    legacy["tax_paid_previous"] = json!(42.0);
+    legacy["zip_code"] = json!("0000");
+    legacy["profile_baseline"]["/zip_code"] = json!("0000");
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
+    );
+
+    let first = open("2551Q", 1);
+    assert_eq!(first["draft"]["tax_paid_previous"], 0.0);
+    assert_eq!(first["draft"]["zip_code"], "1100");
+    assert_eq!(
+        first["notes"],
+        json!([{"key": format!("notice_seen:2551q_item16_cleared:{id}"), "text": item16::CLEARED_AMENDED_NOTE}])
+    );
+}
+
+#[test]
+fn v2018_2551q_an_imported_legacy_dormant_item16_is_cleared_on_open_and_said() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let yes = fill(
+        "2551Q",
+        &open("2551Q", 1)["draft"],
+        json!({"frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    let typed = fill("2551Q", &yes["draft"], json!({item16::KEY: "42"}));
+    let saved = save("2551Q", &typed["draft"]);
+    let id = stored_id(&saved);
+    let mut legacy: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    legacy["is_amended"] = json!(false);
+    legacy["tax_paid_previous"] = json!(42.0);
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
+    );
+
+    let folder = tempfile::tempdir().unwrap();
+    let archive = folder.path().join("profile.zip");
+    with_database(|db| {
+        bir_core::export::export_profile_data(db, TIN, &archive, None)
+            .map_err(|error| host_error(error.to_string()))
+    })
+    .unwrap();
+
+    // Import the archive over a fresh install, then open the imported draft.
+    setup();
+    with_database(|db| {
+        bir_core::import::import_profile_data(db, &archive)
+            .map_err(|error| host_error(error.to_string()))
+    })
+    .unwrap();
+    let first = open("2551Q", 1);
+    assert_eq!(first["draft"]["tax_paid_previous"], 0.0);
+    assert!(
+        first["notes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|note| note["text"] == item16::CLEARED_AMENDED_NOTE),
+        "{}",
+        first["notes"]
+    );
+}
+
+#[test]
+fn v2018_2551q_a_legacy_dormant_item16_under_eight_percent_is_cleared_and_never_revived() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let yes = fill(
+        "2551Q",
+        &open("2551Q", 1)["draft"],
+        json!({"frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    let typed = fill("2551Q", &yes["draft"], json!({item16::KEY: "42"}));
+    let saved = save("2551Q", &typed["draft"]);
+    let id = stored_id(&saved);
+
+    let mut legacy: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    legacy["item_13_election"] = json!("eight_percent");
+    legacy["tax_paid_previous"] = json!(42.0);
+    legacy["zip_code"] = json!("0000");
+    legacy["profile_baseline"]["/zip_code"] = json!("0000");
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
+    );
+    let first = open("2551Q", 1);
+    assert_eq!(first["draft"]["tax_paid_previous"], 0.0);
+    assert_eq!(
+        first["notes"],
+        json!([{"key": format!("notice_seen:2551q_item16_cleared:{id}"), "text": item16::CLEARED_EIGHT_PERCENT_NOTE}])
+    );
+
+    // 8% back to graduated leaves Item 16 at zero: the clear is not a hidden
+    // stored value waiting to come back.
+    let graduated = fill(
+        "2551Q",
+        &first["draft"],
+        json!({"frm2551Qv2018:taxRate1": "true"}),
+    );
+    assert_eq!(graduated["draft"]["tax_paid_previous"], 0.0);
+    assert_eq!(graduated["values"][item16::KEY], "0.00");
+    assert!(graduated["relock_notes"][item16::KEY].is_null());
+}
+
+#[test]
+fn v2018_2551q_print_and_payload_stay_zero_after_item16_is_cleared() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let yes = fill(
+        "2551Q",
+        &open("2551Q", 1)["draft"],
+        json!({"frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    let typed = fill("2551Q", &yes["draft"], json!({item16::KEY: "42"}));
+    let cleared = fill(
+        "2551Q",
+        &typed["draft"],
+        json!({"frm2551Qv2018:taxRate2": "true"}),
+    );
+    assert_eq!(cleared["draft"]["tax_paid_previous"], 0.0);
+    assert_eq!(printed("2551Q", &cleared["draft"])[item16::KEY], "0.00");
+    let kind = kind_of("2551Q").unwrap();
+    assert_eq!(
+        agent::field_map(kind, &cleared["draft"]).unwrap()[item16::KEY],
+        "0.00"
+    );
+}
+
+#[test]
+fn v2018_2551q_an_amendment_of_a_filed_return_opens_item16() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let saved = save("2551Q", &open("2551Q", 1)["draft"]);
+    let id = stored_id(&saved);
+    let mut filed: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    filed["status"] = json!("Submitted");
+    raw_exec(
+        "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&filed).unwrap(), &id.to_string()],
+    );
+
+    let amended = call_async(
+        "screen_form_amend",
+        vec![TIN.into(), "2551Q".into(), YEAR.into(), 1.into()],
+    )
+    .unwrap_or_else(|error| panic!("2551Q amendment opens: {error}"));
+    assert_eq!(amended["draft"]["is_amended"], true);
+    assert!(
+        amended["locks"].get(item16::KEY).is_none(),
+        "{}",
+        amended["locks"]
+    );
+    let typed = fill("2551Q", &amended["draft"], json!({item16::KEY: "42"}));
+    assert_eq!(typed["rejected"], json!({}));
+    assert_eq!(typed["draft"]["tax_paid_previous"], 42.0);
+}

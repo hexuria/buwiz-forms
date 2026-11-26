@@ -550,6 +550,7 @@ pub(super) fn once_notes(
     db: &bir_core::db::Database,
     kind: AgentFormKind,
     draft: &Value,
+    item16_precleared_on_open: bool,
 ) -> Vec<Value> {
     let Some(id) = draft["id"].as_i64() else {
         return Vec::new();
@@ -560,10 +561,11 @@ pub(super) fn once_notes(
     }
     // A 2551Q draft saved before Item 16's gate may still hold a nonzero
     // amount although the gate is closed. Opening recomputes and clears it;
-    // the opening says so once. `draft` is still the stored pre-compute
-    // value here, which is what makes the dormant amount visible.
+    // the opening says so once. `item16_precleared_on_open` is decided from
+    // the stored bytes before a profile follow and quiet save can clear it.
     if kind == AgentFormKind::Form2551Q
-        && draft["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005
+        && (item16_precleared_on_open
+            || draft["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005)
         && let Some(text) = bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(draft)
     {
         wanted.push((format!("{NOTE_SEEN_PREFIX}2551q_item16_cleared:{id}"), text));

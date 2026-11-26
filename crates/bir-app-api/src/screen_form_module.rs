@@ -3400,6 +3400,27 @@ fn open_screen_form(
                 .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
             let mut draft =
                 load_draft(db, kind, &profile, year, period, sample, exact).map_err(host_error)?;
+            // The stored bytes decide whether opening cleared a pre-fix dormant
+            // 2551Q Item 16; the opened draft may already have followed the
+            // profile and been recomputed before the once-notes are read.
+            let item16_precleared_on_open = if kind == AgentFormKind::Form2551Q && !sample {
+                draft["id"]
+                    .as_i64()
+                    .map(|id| db.draft_summary_and_json(id))
+                    .transpose()
+                    .map_err(|error| host_error(error.to_string()))?
+                    .flatten()
+                    .and_then(|(_, data_json)| serde_json::from_str::<Value>(&data_json).ok())
+                    .is_some_and(|stored| {
+                        stored["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005
+                            && bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(
+                                &stored,
+                            )
+                            .is_some()
+                    })
+            } else {
+                false
+            };
             let mut from_profile = if sample {
                 draft.clone()
             } else {
@@ -3507,7 +3528,7 @@ fn open_screen_form(
             let notes = if sample {
                 Vec::new()
             } else {
-                rows_income_q::once_notes(db, kind, &draft)
+                rows_income_q::once_notes(db, kind, &draft, item16_precleared_on_open)
             };
             // The 1604E rows the filer marked checked (D5).
             let checked = rows_1604::checked_rows(db, kind, &draft);
@@ -5180,7 +5201,22 @@ fn apply_screen_edits_here(
     // 0605's split-date groups this batch touches (B1); judged and written
     // below, before the per-key loop.
     let split_groups = rows_as_needed::split_date_groups(kind, &shown, &edits);
-    let planned = plan_choice_edits(kind, draft, &shown, edits);
+    let mut planned = plan_choice_edits(kind, draft, &shown, edits);
+    // 2551Q Item 16's gate is decided by Amended Return and Item 13. Judge
+    // those controlling answers first when they are anywhere in the batch,
+    // so `{txt16: "42", amendedRtn_1: "true"}` opens the box before the 42
+    // is judged; the controls keep their own relative order.
+    if kind == AgentFormKind::Form2551Q {
+        planned.sort_by_key(|(key, _)| {
+            !matches!(
+                key.as_str(),
+                "frm2551Qv2018:amendedRtn_1"
+                    | "frm2551Qv2018:amendedRtn_2"
+                    | "frm2551Qv2018:taxRate1"
+                    | "frm2551Qv2018:taxRate2"
+            )
+        });
+    }
     // The draft paths this batch's picks write — a member's pick, a group
     // box's option, a filer-type step. The value a choice box was sent, as
     // its binding spells it ("true"/"false"/an option value).
@@ -5356,7 +5392,8 @@ fn apply_screen_edits_here(
             continue;
         }
         // 2551Q Item 16 is shut unless Amended Return is Yes without the 8%
-        // option. A blank is a clear and is never refused.
+        // option. A blank is a clear and is never refused; zero is already
+        // what the shut box holds, so it is a no-op rather than a refusal.
         if kind == AgentFormKind::Form2551Q
             && key == bir_core::forms::agent::draft_locks::item16_2551q::KEY
             && let Some(value) = sent.get(&key)
@@ -5364,6 +5401,10 @@ fn apply_screen_edits_here(
             && value
                 .as_str()
                 .is_none_or(|text| !agent::carry::is_blank_value(text))
+            && value
+                .as_str()
+                .and_then(agent::parse_amount)
+                .is_none_or(|amount| amount.abs() >= 0.005)
             && let Some(reason) =
                 bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft)
         {
