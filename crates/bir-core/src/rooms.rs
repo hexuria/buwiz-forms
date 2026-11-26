@@ -66,6 +66,7 @@ CREATE TABLE pin_attempts (
     wait_secs INTEGER NOT NULL DEFAULT 0,
     started_unix INTEGER NOT NULL DEFAULT 0,
     started_boot_secs INTEGER NOT NULL DEFAULT 0,
+    started_boot_id TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (room_id, subject));
 CREATE TABLE migration (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ";
@@ -570,7 +571,12 @@ fn configure(conn: &Connection) -> rusqlite::Result<()> {
         "PRAGMA journal_mode = WAL;
          PRAGMA synchronous = FULL;
          PRAGMA foreign_keys = ON;",
-    )
+    )?;
+    // On Apple systems `fsync` does not reach the disk's platter or flash; F_FULLFSYNC does. The rows here are markers
+    // and lock counts that must survive a power loss.
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    conn.execute_batch("PRAGMA fullfsync = ON;")?;
+    Ok(())
 }
 
 /// The file is not a device store this build reads, said in words; busy and locked stay SQLite errors (a
@@ -687,21 +693,53 @@ fn ephemeral() -> Option<Rc<DeviceStore>> {
     EPHEMERAL.with(|slot| slot.borrow().clone())
 }
 
+/// The device stores this process has open, by `device.db` path: one connection each, held for the life of the
+/// process, so a setting read on the UI thread is a query, not a fresh open with its pragmas and schema checks. A
+/// held connection still sees what another process commits.
+static HELD_STORES: std::sync::Mutex<std::collections::BTreeMap<PathBuf, DeviceStore>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// Run `work` on this thread's device store: the in-memory one ([`use_ephemeral_device_store`]), else the held
+/// connection to `device.db` in the device folder, opened on first use. `create`: make `device.db` where
+/// [`DeviceStore::open`] would (a write); otherwise a missing file answers `Ok(None)` and nothing is made (a read).
+/// A held connection whose file is gone is dropped first, so a lost store is found lost, never written unseen.
+fn with_store_here<T>(
+    create: bool,
+    work: impl FnOnce(&DeviceStore) -> Result<T, DeviceStoreError>,
+) -> Result<Option<T>, DeviceStoreError> {
+    if let Some(store) = ephemeral() {
+        return work(&store).map(Some);
+    }
+    let layout = Layout::here();
+    let path = layout.device_db();
+    let mut held = HELD_STORES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if !path.exists() {
+        held.remove(&path);
+    }
+    if !held.contains_key(&path) {
+        let store = if create {
+            DeviceStore::open(&layout)?
+        } else {
+            match DeviceStore::open_existing(&layout)? {
+                Some(store) => store,
+                None => return Ok(None),
+            }
+        };
+        held.insert(path.clone(), store);
+    }
+    match held.get(&path) {
+        Some(store) => work(store).map(Some),
+        None => Ok(None),
+    }
+}
+
 /// The `device_settings` value of `key` here, without the fallback. Never makes `device.db`: no file, a lost
 /// or unreadable one answer `None` (the last two logged).
 pub fn device_setting(key: &str) -> Option<String> {
-    if let Some(store) = ephemeral() {
-        return store.setting(key).ok().flatten();
-    }
-    match DeviceStore::open_existing(&Layout::here()) {
-        Ok(Some(store)) => match store.setting(key) {
-            Ok(value) => value,
-            Err(error) => {
-                tracing::warn!(key, "device setting not read: {error}");
-                None
-            }
-        },
-        Ok(None) => None,
+    match with_store_here(false, |store| store.setting(key)) {
+        Ok(value) => value.flatten(),
         Err(error) => {
             tracing::warn!(key, "device setting not read: {error}");
             None
@@ -719,22 +757,13 @@ pub fn device_setting_or(key: &str, open: Option<&Database>) -> Option<String> {
 /// Write a device-wide setting to `device_settings` (made on a new install; refused when it was lost while
 /// rooms are on disk, or cannot be read).
 pub fn set_device_setting(key: &str, value: &str) -> Result<(), DeviceStoreError> {
-    if let Some(store) = ephemeral() {
-        return store.set_setting(key, value);
-    }
-    DeviceStore::open(&Layout::here())?.set_setting(key, value)
+    with_store_here(true, |store| store.set_setting(key, value)).map(|_| ())
 }
 
 /// Delete a device-wide setting from `device_settings`. A device with no `device.db` has nothing to delete,
 /// and none is made for it.
 pub fn delete_device_setting(key: &str) -> Result<(), DeviceStoreError> {
-    if let Some(store) = ephemeral() {
-        return store.delete_setting(key);
-    }
-    match DeviceStore::open_existing(&Layout::here())? {
-        Some(store) => store.delete_setting(key),
-        None => Ok(()),
-    }
+    with_store_here(false, |store| store.delete_setting(key)).map(|_| ())
 }
 
 #[cfg(test)]
@@ -909,7 +938,8 @@ mod tests {
                 "failures",
                 "wait_secs",
                 "started_unix",
-                "started_boot_secs"
+                "started_boot_secs",
+                "started_boot_id"
             ]
         );
         assert_eq!(columns("migration"), ["key", "value"]);
@@ -933,6 +963,24 @@ mod tests {
                 .as_deref(),
             Some("v")
         );
+    }
+
+    /// On Apple systems the device store asks for F_FULLFSYNC, so a committed marker is on the disk, not in its cache.
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[test]
+    fn device_db_uses_fullfsync_on_apple() {
+        let folder = tempfile::tempdir().unwrap();
+        let layout = Layout::at(folder.path());
+        for store in [
+            DeviceStore::open(&layout).unwrap(),
+            DeviceStore::open(&layout).unwrap(),
+        ] {
+            let fullfsync: i64 = store
+                .conn
+                .query_row("PRAGMA fullfsync", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(fullfsync, 1, "created and reopened alike");
+        }
     }
 
     #[test]
@@ -1146,6 +1194,52 @@ mod tests {
             Some("control+alt+E")
         );
         forget_ephemeral_device_store();
+    }
+
+    /// Reads go through one held connection per `device.db` (no open per read), still see another connection's
+    /// commits, and a file removed under it is never written unseen: the next write finds it missing and makes it again
+    /// (no rooms here) rather than writing into the removed file.
+    #[test]
+    fn device_setting_reads_use_one_held_connection() {
+        let folder = tempfile::tempdir().unwrap();
+        let database = folder.path().join("bir_data.db");
+        crate::db::set_database_path_override(Some(database));
+        forget_ephemeral_device_store();
+        let layout = Layout::here();
+        set_device_setting("theme_preference", "Dark").unwrap();
+        let held = || {
+            HELD_STORES
+                .lock()
+                .unwrap()
+                .contains_key(&layout.device_db())
+        };
+        assert!(held(), "the write's connection is kept");
+        // Another connection (another process, as headless is) commits: the held one sees it.
+        DeviceStore::open(&layout)
+            .unwrap()
+            .set_setting("theme_preference", "Light")
+            .unwrap();
+        assert_eq!(device_setting("theme_preference").as_deref(), Some("Light"));
+        // The file goes (Unix lets an open file be removed): the read answers nothing and makes nothing; the write
+        // makes a new one.
+        if cfg!(unix) {
+            std::fs::remove_file(layout.device_db()).unwrap();
+            let _ = std::fs::remove_file(folder.path().join("device.db-wal"));
+            let _ = std::fs::remove_file(folder.path().join("device.db-shm"));
+            assert_eq!(device_setting("theme_preference"), None);
+            assert!(!layout.device_db().exists());
+            set_device_setting("theme_preference", "Dark").unwrap();
+            assert!(layout.device_db().is_file());
+            assert_eq!(
+                DeviceStore::open(&layout)
+                    .unwrap()
+                    .setting("theme_preference")
+                    .unwrap()
+                    .as_deref(),
+                Some("Dark")
+            );
+        }
+        crate::db::set_database_path_override(None);
     }
 
     /// The file-backed path of the same rule, in single-room mode (the device folder is the named database's).

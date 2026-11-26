@@ -128,6 +128,9 @@ pub const NOT_SIGNED_IN: &str = "Sign in in the eBIRForms app first.";
 /// Otherwise it refuses with [`NOT_SIGNED_IN`]. It never creates `data_dir()/bir_data.db` or a room, and it never
 /// makes `device.db`.
 pub fn serve_database_path() -> Result<std::path::PathBuf, String> {
+    if let Some(why) = ignored_override_refusal(db::ignored_database_path().as_deref()) {
+        return Err(why);
+    }
     if let Some(named) = db::single_room_database() {
         return Ok(named);
     }
@@ -138,6 +141,19 @@ pub fn serve_database_path() -> Result<std::path::PathBuf, String> {
         .ok()
         .flatten();
     serve_database_for(&bir_core::rooms::Layout::here(), stored.as_ref())
+}
+
+/// Why `serve` refuses a database it was named but would not obey (`BIR_DATABASE_PATH` or the in-process name in a
+/// release build outside a test environment, accounts-and-lock I3): rather than run, and its cron, on the live data the
+/// caller did not ask for. `None` when nothing is named, or the name is obeyed.
+pub(crate) fn ignored_override_refusal(ignored: Option<&std::path::Path>) -> Option<String> {
+    ignored.map(|path| {
+        format!(
+            "refusing to start: BIR_DATABASE_PATH ({}) is ignored in a release build outside a test environment, \
+             so serve would open the live data instead; unset it, or use a debug build or EBIR_TEST_ENV=1.",
+            path.display()
+        )
+    })
 }
 
 /// [`serve_database_path`] after single-room mode: the signed-in room under `layout`, else the legacy file while no
@@ -320,6 +336,11 @@ pub fn live_database_token_required(token_set: bool, using_path_override: bool) 
 }
 
 fn load_serve_config() -> Result<gpui_agent::security::AgentConfig, ExitCode> {
+    // First: a named database this build would not obey opens nothing (accounts-and-lock I3).
+    if let Some(why) = ignored_override_refusal(db::ignored_database_path().as_deref()) {
+        eprintln!("{why}");
+        return Err(ExitCode::from(2));
+    }
     let config = match from_env() {
         Ok(Some(config)) => config,
         Ok(None) => {
@@ -752,6 +773,44 @@ mod tests {
             NOT_SIGNED_IN
         );
         assert!(!layout.legacy_database().exists(), "no bir_data.db");
+    }
+
+    /// Accounts-and-lock A1 (I3): a database named where single-room mode is not allowed (a release build outside a
+    /// test environment) is refused with one line, never ignored for the live data. Checked through the rule itself in
+    /// every build, and through the process in a release build (`cargo test --release`).
+    #[test]
+    fn release_serve_refuses_an_ignored_database_path() {
+        use super::ignored_override_refusal;
+        let named = std::path::Path::new("/tmp/named/bir_data.db");
+        let why = ignored_override_refusal(Some(named)).expect("refused");
+        assert!(
+            why.starts_with(
+                "refusing to start: BIR_DATABASE_PATH (/tmp/named/bir_data.db) is ignored"
+            ),
+            "{why}"
+        );
+        assert_eq!(why.lines().count(), 1, "one line");
+        assert_eq!(ignored_override_refusal(None), None);
+        // Here (a debug test build) a named database is obeyed, so nothing is ignored.
+        if cfg!(debug_assertions) {
+            let folder = tempfile::tempdir().unwrap();
+            let path = folder.path().join("bir_data.db");
+            temp_env::with_var("BIR_DATABASE_PATH", Some(&path), || {
+                assert_eq!(bir_core::db::ignored_database_path(), None);
+                assert_eq!(super::serve_database_path().unwrap(), path);
+            });
+        } else {
+            temp_env::with_vars(
+                [
+                    ("EBIR_TEST_ENV", None),
+                    ("BIR_DATABASE_PATH", Some("/tmp/named/bir_data.db")),
+                ],
+                || {
+                    let refused = super::serve_database_path().unwrap_err();
+                    assert!(refused.starts_with("refusing to start"), "{refused}");
+                },
+            );
+        }
     }
 
     /// Accounts-and-lock A1: until a room exists (no `rooms/` folder, every install before A3a), `serve` opens the

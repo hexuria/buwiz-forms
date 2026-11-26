@@ -6,9 +6,9 @@
 //!   hooks write into it (a menu refresh counter, the "chrome is open" flag, the updater commands) and the
 //!   TSX desktop host (`nsh/shell/desktop`) reads it with `Desktop.poll()` and writes back what the updater is
 //!   doing with `Desktop.publishUpdate()`. `update_status` answers the last thing it published.
-//! * **One copy running.** A lock file in the device folder (`device.db.owner.lock`, beside `device.db`: an exclusive file
-//!   lock the system drops when the process ends, however it ends) says which process is the app for that device folder.
-//!   The process that holds it listens on a loopback port written to `device.db.instance.port`; a second launch
+//! * **One copy running.** A lock file beside the database (`<database>.instance`, an exclusive file lock the
+//!   system drops when the process ends, however it ends) says which process is the app for that database. The
+//!   process that holds it listens on a loopback port written to `<database>.instance.port`; a second launch
 //!   finds the lock taken, sends "show" to that port and exits, and the first copy's host brings its window to
 //!   the front (`Desktop.poll().activate`).
 //! * **The hotkey combo language.** [`hotkey_shortcut`] turns a stored combo (`control+alt+E`) into the keystroke
@@ -395,11 +395,10 @@ fn key_name(word: &str) -> Option<String> {
 /// Set by the listener of the copy that is running when a second launch asks it to come forward.
 static ACTIVATE: AtomicBool = AtomicBool::new(false);
 
-/// The lock file of the guard's key: `<key>.owner.lock`, for `device.db` its own sidecar lock `device.db.owner.lock`
-/// (accounts-and-lock §A.2). `device.db` itself is never opened with that lock, so the two never meet.
+/// The lock file of a database: `<database>.instance`.
 #[cfg(any(not(target_os = "android"), test))]
 pub(crate) fn lock_path(database: &Path) -> PathBuf {
-    bir_core::db::live_owner_lock_path(database)
+    sibling(database, ".instance")
 }
 
 /// The file the running copy writes its loopback port to: `<database>.instance.port`. It is a file of its own
@@ -632,20 +631,21 @@ pub(crate) fn prepare_process_at(database: &Path) -> bool {
     }
 }
 
-/// What the one-copy guard is keyed on for this launch: `device.db` in the device folder (`bir_core::platform::device_dir`,
-/// accounts-and-lock §A.2), which exists before any room is open and does not change when one opens. `None` when no guard
-/// applies: turned off or a test environment by default (`guard_wanted`); a door that makes a scratch database of its own
-/// (a test environment with no `BIR_DATABASE_PATH`, even under `BIR_SINGLE_INSTANCE=1`: that database is made per engine
-/// thread, later, and two copies never share one); or a device folder that is the owner's data (never written beside, as
-/// the door refuses it).
+/// The database the one-copy guard locks for this launch: the one this process opens, decided as the door decides it.
+/// Until rooms open (accounts-and-lock A3a) that is the legacy file, so the guard keeps the key every earlier version
+/// used (`<database>.instance` and its port file) and an older and a newer build still find each other.
+/// `None` when no guard applies: turned off or a test environment by default (`guard_wanted`); a door that makes a
+/// scratch database of its own (a test environment with no `BIR_DATABASE_PATH`, even under `BIR_SINGLE_INSTANCE=1`: that
+/// database is made per engine thread, later, and two copies never share one; locking `app_database_path()` here was
+/// locking a file the process never opens); or the owner's data (never written beside, as the door refuses it).
 #[cfg(any(not(target_os = "android"), test))]
 fn guarded_database() -> Option<PathBuf> {
     let setting = std::env::var("BIR_SINGLE_INSTANCE").ok();
     if !guard_wanted(setting.as_deref(), bir_core::db::test_environment()) || crate::door::scratch_database_wanted() {
         return None;
     }
-    let device = bir_core::rooms::Layout::here().device_db();
-    guards::database_refusal_here(&device).is_none().then_some(device)
+    let database = bir_core::db::app_database_path();
+    guards::database_refusal_here(&database).is_none().then_some(database)
 }
 
 /// The launch's guard, from the registration of the native module (before any window opens): a second copy on
@@ -1241,21 +1241,15 @@ mod tests {
         assert!(!guard_wanted(Some(""), true));
     }
 
-    /// Accounts-and-lock A1: the guard is keyed on the device folder (`device.db` there, its lock
-    /// `device.db.owner.lock`), not on the database path, so it exists before any room is open and stays put when one
-    /// opens. A test environment with no `BIR_DATABASE_PATH` opens a scratch database the door makes per engine thread,
-    /// so even `BIR_SINGLE_INSTANCE=1` locks nothing there. Named (single-room mode), the named file's folder is the device
-    /// folder. Nothing is claimed here: only the decision is asked.
+    /// The guard locks the database this process opens. A test environment with no `BIR_DATABASE_PATH` opens a scratch
+    /// database the door makes per engine thread, so even `BIR_SINGLE_INSTANCE=1` locks nothing there (it used to lock
+    /// `app_database_path()`, a file the process never opens). Named, the named file is locked. Nothing is claimed here:
+    /// only the decision is asked.
     #[test]
-    fn one_copy_guard_keys_on_the_device_folder() {
+    fn the_guard_locks_the_database_the_door_opens() {
         let _turn = serial();
-        let (folder, named_database) = scratch();
-        let named = named_database.display().to_string();
-        let database = named_database.with_file_name(bir_core::rooms::DEVICE_DB_FILE);
-        assert_eq!(
-            lock_path(&database).file_name().and_then(|name| name.to_str()),
-            Some("device.db.owner.lock")
-        );
+        let (folder, database) = scratch();
+        let named = database.display().to_string();
         let decide = |single: Option<&str>, test_env: Option<&str>, path: Option<&str>| {
             let vars = [("BIR_SINGLE_INSTANCE", single), ("EBIR_TEST_ENV", test_env), ("BIR_DATABASE_PATH", path)];
             temp_env::with_vars(vars, || {
@@ -1270,13 +1264,8 @@ mod tests {
             assert_eq!(decide(Some("1"), on, Some(&named)), Some(database.clone()), "{test_env}: the named database");
             assert_eq!(decide(None, on, Some(&named)), None, "{test_env}: not guarded by default");
         }
-        // Not a test environment: the device folder's device.db.
+        // Not a test environment: the database it opens.
         assert_eq!(decide(None, Some("0"), Some(&named)), Some(database.clone()));
-        // A room opening on this thread does not move it.
-        let room = folder.path().join("data").join("rooms").join("0123456789abcdef0123456789abcdef").join("bir_data.db");
-        bir_core::db::set_open_room_database(Some(room));
-        assert_eq!(decide(Some("1"), Some("1"), Some(&named)), Some(database.clone()));
-        bir_core::db::set_open_room_database(None);
         assert!(!database.parent().unwrap().exists(), "deciding wrote nothing");
     }
 
@@ -1405,6 +1394,21 @@ mod tests {
                 prepare_process();
                 say("survived");
             }
+            "run" => {
+                // This build's launch, staying up as the app does, until the parent closes its input.
+                prepare_process();
+                say("running");
+                std::thread::spawn(move || {
+                    loop {
+                        if ACTIVATE.swap(false, Ordering::SeqCst) {
+                            say("activated");
+                        }
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                });
+                let mut line = String::new();
+                let _ = std::io::stdin().read_line(&mut line);
+            }
             _ => {}
         }
     }
@@ -1487,13 +1491,45 @@ mod tests {
         );
     }
 
+    /// Accounts-and-lock A1 keeps the one-copy guard on the key every earlier version used (`<database>.instance`, its
+    /// port beside it), so an older build and this one find each other both ways: the second to start brings the first
+    /// window forward and ends, never reaching the database (where it would meet `LiveDatabaseInUse`).
+    #[test]
+    fn older_version_refused_while_the_new_one_runs() {
+        let _turn = serial();
+        let (_folder, database) = scratch();
+        let path = database.display().to_string();
+        let env = [("BIR_SINGLE_INSTANCE", "1"), ("BIR_DATABASE_PATH", path.as_str())];
+
+        // An older build runs (it holds the guard as earlier versions did): this build's launch shows it and ends.
+        let older = Child2::start("hold", &database, &[]);
+        assert_eq!(older.said(), "held");
+        let newer = Child2::start("launch", &database, &env);
+        let (ended_well, said) = newer.finish();
+        assert!(ended_well, "the newer launch ends quietly");
+        assert_eq!(said, ["began"], "it never went on to open the database");
+        assert_eq!(older.said(), "activated", "the older build's window was asked forward");
+        let (older_ended, _) = older.finish();
+        assert!(older_ended);
+
+        // This build runs: an older build's launch (its claim on the same key) finds it and has it shown.
+        let running = Child2::start("run", &database, &env);
+        assert_eq!(running.said(), "running");
+        assert!(
+            matches!(claim(&database), Claim::Running { notified: true }),
+            "the older build is turned back at the guard, not at the database"
+        );
+        assert_eq!(running.said(), "activated", "this build's window was asked forward");
+        let (running_ended, _) = running.finish();
+        assert!(running_ended);
+    }
+
     #[test]
     fn a_second_launch_ends_without_starting_and_the_first_comes_forward() {
         let _turn = serial();
         let (_folder, database) = scratch();
         ACTIVATE.store(false, Ordering::SeqCst);
-        // The guard is keyed on the device folder's device.db (accounts-and-lock A1), here the named database's folder.
-        let Claim::Primary(_first) = claim(&database.with_file_name(bir_core::rooms::DEVICE_DB_FILE)) else {
+        let Claim::Primary(_first) = claim(&database) else {
             panic!("the first is the app");
         };
         let path = database.display().to_string();
@@ -1529,7 +1565,7 @@ mod tests {
         assert!(ended_well);
 
         // Somebody does, but this launch is a test environment: no guard, no stop.
-        let Claim::Primary(_first) = claim(&database.with_file_name(bir_core::rooms::DEVICE_DB_FILE)) else {
+        let Claim::Primary(_first) = claim(&database) else {
             panic!("the first is the app");
         };
         let test_run = Child2::start(

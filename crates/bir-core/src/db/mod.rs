@@ -661,6 +661,13 @@ fn named_database() -> Option<PathBuf> {
     })
 }
 
+/// A database a caller named ([`set_database_path_override`] or `BIR_DATABASE_PATH`) that this process does
+/// **not** obey, because single-room mode is not allowed here (a release build outside a test environment). A host
+/// that would otherwise run on the live data instead (`bir-headless serve`) refuses with it.
+pub fn ignored_database_path() -> Option<PathBuf> {
+    (!single_room_allowed()).then(named_database).flatten()
+}
+
 /// Single-room mode (PLAN §A.2): one file, named by an explicit override
 /// ([`set_database_path_override`] or `BIR_DATABASE_PATH`), *is* the room.
 /// Only in a debug build or a test environment (I3). In a release build
@@ -772,13 +779,18 @@ static HELD_OWNER_LOCKS: std::sync::Mutex<
 /// The key of a lock path in [`HELD_OWNER_LOCKS`]: its folder resolved, so two
 /// spellings of one file are one key.
 fn held_key(lock_path: &Path) -> PathBuf {
-    match (lock_path.parent(), lock_path.file_name()) {
-        (Some(parent), Some(name)) if !parent.as_os_str().is_empty() => parent
-            .canonicalize()
-            .map(|parent| parent.join(name))
-            .unwrap_or_else(|_| lock_path.to_path_buf()),
-        _ => lock_path.to_path_buf(),
-    }
+    let Some(name) = lock_path.file_name() else {
+        return lock_path.to_path_buf();
+    };
+    // A bare name is in the current folder, as `./name` is.
+    let parent = lock_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    parent
+        .canonicalize()
+        .map(|parent| parent.join(name))
+        .unwrap_or_else(|_| lock_path.to_path_buf())
 }
 
 /// The lock this process already holds for `db_path` with
@@ -3068,7 +3080,18 @@ mod tests {
             let spelled = directory.path().join(".").join("bir_data.db");
             let spelled =
                 try_acquire_live_owner_lock(&spelled).expect("the same file, spelled apart");
-            drop((db, serve, take, spelled, again));
+            // A database import's reopen: the live file is let go (swapped for a placeholder) and opened again. The hold
+            // spans it, so no other process can take the file in between, and the reopen gets the hold back.
+            drop(db);
+            assert!(
+                matches!(
+                    take_owner_lock_file(&live_owner_lock_path(&db_path), &db_path),
+                    Err(DbError::LiveDatabaseInUse(_))
+                ),
+                "held between the release and the reopen"
+            );
+            let (reopened, _, _) = open_live_database().expect("the import's reopen");
+            drop((reopened, serve, take, spelled, again));
             assert!(
                 matches!(
                     take_owner_lock_file(&live_owner_lock_path(&db_path), &db_path),
@@ -3087,6 +3110,16 @@ mod tests {
             drop(first);
             drop(try_acquire_live_owner_lock(&db_path).expect("free again"));
         });
+    }
+
+    /// X1: a bare file name and `./name` are one key, as they are one file.
+    #[test]
+    fn held_key_treats_a_bare_name_as_the_current_folder() {
+        assert_eq!(
+            held_key(Path::new("bir_data.db.owner.lock")),
+            held_key(Path::new("./bir_data.db.owner.lock"))
+        );
+        assert!(held_key(Path::new("bir_data.db.owner.lock")).is_absolute());
     }
 
     /// X1: the holder is keyed by lock path, so two files (the legacy file and a room, later each room) are held at
