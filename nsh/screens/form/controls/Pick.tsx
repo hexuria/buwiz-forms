@@ -290,6 +290,9 @@ function SheetPick(props: { p: SearchPickProps }) {
 
 // ---------------------------------------------------------------- wide: a combobox
 
+/** The longest a press on a row or the chevron holds off the settling of the box's leaving (its press-up may never come). */
+const PRESS_HOLDS_MS = 2000;
+
 /** A wide row is 32 points; the list shows eight before it scrolls. */
 const ROW = 32;
 const ROWS_SHOWN = 8;
@@ -384,8 +387,13 @@ function FieldPick(props: { p: SearchPickProps }) {
   let selectOnCaret = false;
   /** The focus left the box with the list open, not yet settled (settleLeaving). */
   let leaving = false;
-  /** A press is down on a row or the chevron. */
+  /**
+   * A press is down on a row or the chevron, since `pressAt`. Only onPressUp ends it normally, so a press whose view goes away
+   * under it (the list closing, a lock or a sheet unmounting the overlay) is ended by close() and onFocus as well, and counts for
+   * PRESS_HOLDS_MS at most: a lost press-up never keeps a later leaving from settling.
+   */
   let pressing = false;
+  let pressAt = 0;
 
   const current = () => currentOf(p);
   const shown = () => (dirty() ? typed() : current() ? pickLabel(current()!) : "");
@@ -399,11 +407,13 @@ function FieldPick(props: { p: SearchPickProps }) {
       dirty.set(false);
       typed.set("");
     });
-  const close = () =>
+  const close = () => {
+    pressing = false;
     batch(() => {
       open.set(false);
       lit.set(null);
     });
+  };
   const showList = () => {
     if (p.disabled) return;
     const r = pickable();
@@ -468,10 +478,12 @@ function FieldPick(props: { p: SearchPickProps }) {
   // the next turn, as Tab settles it, so the box never shows typed words over a value they are not.
   const settleLeaving = () =>
     setTimeout(() => {
-      if (leaving && !pressing && !focused()) commit();
+      if (leaving && !pressHeld() && !focused()) commit();
     }, 0);
+  const pressHeld = () => pressing && Date.now() - pressAt < PRESS_HOLDS_MS;
   const pressDown = () => {
     pressing = true;
+    pressAt = Date.now();
   };
   // A turn after the release, so the press it makes (a row's pick) comes first; a press that picked nothing (moved off,
   // cancelled) lets the leaving settle.
@@ -518,6 +530,7 @@ function FieldPick(props: { p: SearchPickProps }) {
         onFocus={() => {
           focused.set(true);
           leaving = false;
+          pressing = false;
           note.set("");
           // A click leaves its caret after the focus (AppKit selects all, then puts the caret): select the whole choice again, so
           // typing replaces it rather than adding to "050 — South Makati".

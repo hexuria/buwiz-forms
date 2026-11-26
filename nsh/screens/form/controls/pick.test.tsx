@@ -334,6 +334,27 @@ test("desktop: a row pressed while the list is open picks it; the settling of th
   expect(line(app, "rdo")).toBe("rdo: 047 | picks: 1 | opens: 2");
 });
 
+test("desktop: a press whose row goes away under it never keeps a later leaving from settling", async () => {
+  const app = await probe({ rdo: "050" }, DESKTOP);
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  // A finger goes down on a row and stays down: the press holds off the settling, as it should while it lasts.
+  await app.dragAndHold("id:pp-rdo-opt-047", { y: 1 });
+  // The keys come back to the box and change the words: the row the finger is on goes away, so its press-up never comes.
+  await app.type("id:pp-rdo-search", "zzz");
+  await app.waitFor("id:pp-rdo-opt-047", { state: "gone" });
+  await app.drop();
+  // A later leaving with the list open (the form's focus(), no press): the box settles at once, not after the lost press.
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  await app.host.send("focus-other");
+  await app.waitFor("id:pp-rdo-list", { state: "gone", timeout: 1000 });
+  expect(app.value("id:pp-rdo-search")).toBe("050 — South Makati");
+  expect(line(app, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
+});
+
 test("desktop: the clear row clears a chosen value from the whole list", async () => {
   const app = await probe({ rdo: "050" }, DESKTOP);
   await app.press("id:pp-rdo-trigger");
