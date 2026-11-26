@@ -783,6 +783,8 @@ export class FormSession {
     }
   }
   private periodWaiting = false;
+  /** Money/num keys typed through their own boxes since their fill answer; row clears and host moves are not shown-amount mismatches. */
+  private amountEdited = new Set<string>();
 
   /** A control registers how to put the keyboard in its box (a pill step uses it). Radio groups: "radio:<row id>". */
   registerFocus(k: string, focus: () => void) {
@@ -999,6 +1001,7 @@ export class FormSession {
     if (period) return this.editPeriod(period.period, text);
     const kind = this.kindOf.get(k);
     if (kind === "sel" || kind === "chk" || kind === "radio") return this.choose({ [k]: text });
+    if (kind === "money" || kind === "num") this.amountEdited.add(k);
     this.sValue.get(k).set(text);
     if (s.periodParts.has(k)) return this.setPeriodPart({ [k]: text });
     let value = text;
@@ -1422,6 +1425,7 @@ export class FormSession {
         return;
       }
     }
+    for (const k of Object.keys(edits)) this.amountEdited.delete(k);
     const period = Object.fromEntries(Object.entries(edits).filter(([k]) => s.periodParts.has(k)));
     if (Object.keys(period).length) {
       this.setPeriodPart(period);
@@ -1702,8 +1706,10 @@ export class FormSession {
     for (const k of Object.keys(edits)) {
       const kind = this.kindOf.get(k);
       if ((kind !== "money" && kind !== "num") || k in rej || this.pools.has(k) || this.oneDateParts.has(k) || this.periodPartKeys.has(k)) continue;
+      const typedEdit = this.amountEdited.delete(k);
       const typed = String(edits[k] ?? "");
       const stored = String(s.values[k] ?? "");
+      if (!typedEdit) continue;
       if (sameNumber(typed, stored)) continue;
       const whole = kind === "money" && this.wholeKeys.has(k);
       shownRejected[k] = `${AMOUNT_MISMATCH}|${formatMoney(typed, whole)}|${stored === "" ? "blank" : formatMoney(stored, whole)}`;
