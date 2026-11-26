@@ -291,6 +291,7 @@ function TypedBox(props: { p: FieldInput }) {
         onBlur={() => p.onBlur()}
         onLeftUnreadable={(typed, kept) => p.onLeftUnreadable?.(typed, kept)}
         onCommaRead={(typed, shown) => p.onCommaRead?.(typed, shown)}
+        hint={p.box.note?.() || undefined}
         onOutsideKept={(typed, shown) => p.onOutsideKept?.(typed, shown)}
         leaveRef={(leave) => p.leaveRef?.(leave)}
         width={widthOf(p)}

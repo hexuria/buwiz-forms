@@ -716,6 +716,9 @@ export function ItemRow(props: RowProps) {
           </View>
         </If>
         <Each of={info().notes}>{(note) => <Text variant="meta" tone="fg3" class="mt-1">{note()}</Text>}</Each>
+        <Each of={info().boxNotes ?? []} key={(b: { key: string; sentence: string }) => b.key}>
+          {(b) => <Text variant="meta" tone="fg3" class="mt-1" testID={`fp-boxnote-${b().key}`}>{b().sentence}</Text>}
+        </Each>
         <Each of={info().boxMessages} key={(b: { key: string; sentence: string }) => b.key}>
           {(b) => (
             <View ref={(ref: ViewRef) => messageRefs.get(b().key)?.set(ref)}>

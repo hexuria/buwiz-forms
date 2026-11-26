@@ -787,7 +787,9 @@ test("[comma] a comma read as the decimal point is said under its box and stops 
     s.commaRead(key, "1500,50", "1,500.50");
     await s.idle();
     expect(s.valueOf(key)).toBe("1,500.50");
-    expect(s.boxMessageOf(key)).toBe(sentence);
+    // A note, not a message: nothing red, nothing to fix.
+    expect(s.boxNoteOf(key)).toBe(sentence);
+    expect(s.boxMessageOf(key)).toBe("");
     // Nothing to fix: the to-do list (and the counts it shares) is as it was.
     expect(s.todo().map((r) => r.id)).toEqual(todo);
     // Queue goes straight on to the host's check: it does not stop on this note, nor toast it.
@@ -795,10 +797,10 @@ test("[comma] a comma read as the decimal point is said under its box and stops 
     await s.idle();
     expect(checks.count).toBeGreaterThan(0);
     expect(h.said.toasts.map((t) => t.message)).not.toContain(sentence);
-    expect(s.boxMessageOf(key)).toBe(sentence);
+    expect(s.boxNoteOf(key)).toBe(sentence);
     // An edit of the box ends it.
     s.edit(key, "1500");
-    expect(s.boxMessageOf(key) ?? "").toBe("");
+    expect(s.boxNoteOf(key)).toBe("");
   } finally {
     checks.restore();
     s?.dispose();

@@ -140,6 +140,8 @@ export interface BoxState {
   /** The text the box shows, ready to draw: an amount grouped ("10,000.00"), a date long ("Dec 1, 2020"), a tick "true",
    *  a choice its code ("03"). While the user types it is what they typed; the session reformats it on blur. */
   value: Accessor<string>;
+  /** A note under the box that is nothing to fix (a comma read as the decimal point), drawn in the note style; "" for none. */
+  note?: Accessor<string>;
   /** The box takes no typing: computed, locked by the host, a profile box not opened with Edit, read-only return, a
    *  penalty not opened, or turned off by another answer. A locked box draws as a read-only box (no Input). */
   locked: Accessor<boolean>;

@@ -178,6 +178,9 @@ test("[comma] decimal comma 1500,50: after leaving, the box shows the point amou
   const said = "Item 15: 1500,50 was read as 1,500.50.";
   await app.waitUntil(() => app.texts().includes(said), { timeout: 3000 });
   expect(app.texts().filter((t) => t === said).length).toBe(1);
+  // Drawn as a note (the row's note line), not as the box's red message.
+  expect(app.shows(`id:fp-boxnote-${PROBE}`)).toBe(true);
+  expect(app.shows(`id:fp-boxmsg-${PROBE}`)).toBe(false);
   await app.press("id:fp-save").catch(() => {});
   await app.waitFor("text:✓ Saved", { timeout: 8000 });
   // The note stops nothing: the first Queue goes on to the host's checks, with no toast of it.

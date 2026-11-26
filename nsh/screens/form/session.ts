@@ -157,6 +157,8 @@ export interface RowInfo {
   message: string;
   /** The box-home sentences of this row's split date parts and TIN boxes, in box order (B3/B4). */
   boxMessages: { key: string; sentence: string }[];
+  /** The notes of the boxes whose sentences the row prints (nothing to fix: drawn as notes, fg3), in box order. */
+  boxNotes?: { key: string; sentence: string }[];
   /** G1: every drawn box of the row is one another answer keeps shut — the whole row (number and title too) is not drawn. */
   hidden: boolean;
   /** G1: the row's drawn box keys that are gated away; the rest draw (a schedule's cells are never listed: its grid stays). */
@@ -400,6 +402,8 @@ interface St {
   dirtyBatch: boolean | null;
   /** The plain sentence under each refused box, keyed by draft key (B3/B4's box home). */
   boxMessages: Record<string, string>;
+  /** Notes under boxes that say what a box did with its text and are nothing to fix (a comma read as the decimal point): drawn as notes. */
+  boxNotes: Record<string, string>;
   formErrors: string[];
   checkable: Record<string, { token: string; label: string }[]>;
   electionAt: string | null;
@@ -445,7 +449,7 @@ function freshState(target: FormTarget): St {
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
     profileSave: {}, profileEdited: new Set(), profileAsked: new Set(), profileAskUnknown: false, guessed: new Set(), profileAskSeen: {}, profileAskMsg: {},
     askDone: new Set(), askDoneRaw: new Map(), profileChanged: [], errors: [], messages: {},
-    messageKeys: {}, messageCounts: {}, rejected: {}, amountNotes: {}, notesShown: {}, unfixable: new Set(), dirtyBatch: null, boxMessages: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
+    messageKeys: {}, messageCounts: {}, rejected: {}, amountNotes: {}, notesShown: {}, unfixable: new Set(), dirtyBatch: null, boxMessages: {}, boxNotes: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
     profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, rangeHeld: {}, forget: [], chosenFrom: {}, dirty: false,
     editSeq: 0, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
     touched: new Set(), showAll: false, previewOpen: false, overlay: null, saveState: { state: "idle" },
@@ -556,6 +560,7 @@ export class FormSession {
   private sOptions = new SignalMap<ChoiceOption[]>([], sameJson);
   private sInvalid = new SignalMap<boolean>(false);
   private sBoxMsg = new SignalMap<string>("");
+  private sBoxNote = new SignalMap<string>("");
   private sRefusal = new SignalMap<string>("");
   private sGuessed = signal(0);
   private sRow = new SignalMap<RowInfo>(null as unknown as RowInfo, sameJson);
@@ -682,6 +687,7 @@ export class FormSession {
       const options = this.sOptions.get(k);
       const invalid = this.sInvalid.get(k);
       const boxMsg = this.sBoxMsg.get(k);
+      const boxNote = this.sBoxNote.get(k);
       const refusal = this.sRefusal.get(k);
       b = {
         value: () => value(),
@@ -691,6 +697,7 @@ export class FormSession {
         options: () => options(),
         invalid: () => invalid(),
         message: () => boxMsg(),
+        note: () => boxNote(),
         refusal: () => refusal(),
         zeroWhenBlank: this.kindOf.get(k) === "money" && this.computedKeys.has(k),
       };
@@ -756,6 +763,10 @@ export class FormSession {
   /** The plain sentence under box k (a refused edit, a one-box validation error), "" none. */
   boxMessageOf(k: string): string {
     return this.st.boxMessages[k] || "";
+  }
+  /** Box k's note (nothing to fix), or "". */
+  boxNoteOf(k: string): string {
+    return this.st.boxNotes[k] || "";
   }
   /** Every box's sentence now (tests and the page's grouped lines). */
   boxMessages(): Readonly<Record<string, string>> {
@@ -1567,6 +1578,7 @@ export class FormSession {
       delete s.kept[k];
       delete s.rejected[k];
       delete s.amountNotes[k];
+      delete s.boxNotes[k];
       s.unfixable.delete(k);
       delete s.boxMessages[k];
     }
@@ -1655,6 +1667,7 @@ export class FormSession {
       delete s.kept[k];
       delete s.rejected[k];
       delete s.amountNotes[k];
+      delete s.boxNotes[k];
       s.unfixable.delete(k);
     }
     s.chosenFrom = Object.fromEntries(Object.keys(edits).map((k) => [k, s.values[k] ?? ""]));
@@ -2030,6 +2043,7 @@ export class FormSession {
       // A box whose own edit is still pending (an unreadable box's put-back) is judged once that edit is in.
       if (k in s.pending || (!this.isShut(k) && sameNumber(named === "no amount" ? "" : named, String(s.values[k] ?? "")))) continue;
       delete s.amountNotes[k];
+      delete s.boxNotes[k];
       dropped = true;
     }
     return dropped;
@@ -2253,12 +2267,18 @@ export class FormSession {
     s.messageKeys = {};
     s.messageCounts = {};
     s.boxMessages = {};
+    s.boxNotes = {};
     s.checkable = {};
     s.electionAt = null;
     const items = this.rowIds.map((id) => ({ id, it: this.items.get(id)! }));
     // A refused edit's sentence sits on its box; it counts toward the row it belongs to.
     for (const [k, msg] of [...Object.entries(s.rejected), ...Object.entries(s.amountNotes)]) {
       const sentence = this.refusalText(k, msg);
+      // A comma read as the decimal point is a note, not a message: no red, no count.
+      if (msg.startsWith("amount comma|")) {
+        s.boxNotes[k] = sentence;
+        continue;
+      }
       s.boxMessages[k] = s.boxMessages[k] ? `${s.boxMessages[k]} ${sentence}` : sentence;
       const id = this.keyIndex.get(k);
       if (id) (s.messageKeys[id] ||= []).push(k);
@@ -3354,19 +3374,21 @@ export class FormSession {
     return s.showAll || !id || s.touched.has(id) ? sentence : "";
   }
 
+  /** A box's note as it shows, by the same rule as its sentence. */
+  private shownBoxNote(k: string): string {
+    const s = this.st;
+    const note = s.boxNotes[k];
+    if (!note) return "";
+    const id = this.keyIndex.get(k);
+    return s.showAll || !id || s.touched.has(id) ? note : "";
+  }
+
   /** How many box-home sentences row id carries (each box's message counts once). */
   private boxCountFor(id: string): number {
     const it = this.items.get(id);
     if (!it) return 0;
     const keys = it.rows ? (it.keys || []).flat() : keysOf(it);
-    return keys.filter((k) => this.st.boxMessages[k] && !this.commaOnly(k)).length;
-  }
-
-  /** Whether box k's only sentence is a comma-read note: it is said under the box but is nothing to fix (no count, no Check or Queue stop). */
-  private commaOnly(k: string): boolean {
-    const s = this.st;
-    const note = s.amountNotes[k];
-    return note !== undefined && note.startsWith("amount comma|") && s.boxMessages[k] === this.refusalText(k, note);
+    return keys.filter((k) => this.st.boxMessages[k]).length;
   }
 
   /** How many messages each row with a shown message carries (a date's own sentence counts once). */
@@ -4290,6 +4312,7 @@ export class FormSession {
       this.sInvalid.get(k).set(shownMsgKeys.has(k) || Boolean(boxMsg));
       // A box whose sentence the row prints draws none of its own.
       this.sBoxMsg.get(k).set(this.rowPrints(k) ? "" : boxMsg);
+      this.sBoxNote.get(k).set(this.rowPrints(k) ? "" : this.shownBoxNote(k));
       // A refusal is the host having refused the edit (it was never stored), not any sentence the
       // box shows: a validation message (an over-long value that saved, reported by Check) must not
       // hold the row drawer shut. An unfixable one put the stored value back, so nothing stands.
@@ -4414,6 +4437,7 @@ export class FormSession {
     return {
       message: oneDateShown.length || periodShown.length ? "" : shown[id] || "",
       boxMessages: shownKeys.map((k) => ({ key: k, sentence: s.boxMessages[k] })),
+      boxNotes: keys.filter((k) => this.rowPrints(k) && this.shownBoxNote(k)).map((k) => ({ key: k, sentence: s.boxNotes[k] })),
       hidden: this.rowHidden(id, it, todoHere, Boolean(shown[id])),
       hiddenBoxes,
       notes: this.lockNotesFor(it),
