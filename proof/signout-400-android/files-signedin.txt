@@ -1,0 +1,8 @@
+3578 /data/data/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir/tmp/ebirforms-logs-10933/logs/ebirforms.2026-11-26.log
+0 /data/data/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir/tmp/ebirforms-door/10933-0/bir_data.db.owner.lock
+4096 /data/data/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir/tmp/ebirforms-door/10933-0/bir_data.db
+918792 /data/data/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir/tmp/ebirforms-door/10933-0/bir_data.db-wal
+32768 /data/data/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir/tmp/ebirforms-door/10933-0/bir_data.db-shm
+32 /data/data/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir/tmp/ebirforms-door/10933-0/buwiz-install-id
+322 /data/data/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir/tmp/ebirforms-door/10933-0/buwiz-cloud-account.json
+134 /data/data/dev.goldcoders.bir/files/nsh/dev.goldcoders.bir/storage.json
