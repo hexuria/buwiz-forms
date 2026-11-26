@@ -1,0 +1,11 @@
+txtTax14=1,500.00
+txtTax22=1,500.00
+txtTax24=1,500.00
+txtTax25=97.50
+txtTax27=97.50
+txtTax31=97.50
+txtTax32=9.75
+txtTax33=0.72
+txtTax34=500.00
+txtTax35=510.47
+txtTax36=607.97
