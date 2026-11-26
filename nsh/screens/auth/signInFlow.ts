@@ -325,7 +325,8 @@ function back(): boolean {
     changeEmail();
     return true;
   }
-  if (!emailOpen()) return false;
+  // Signed in (the gate is going or gone): the press is the app's.
+  if (!emailOpen() || now.kind === "approved") return false;
   if (now.kind === "sending") return true;
   batch(() => {
     emailOpen.set(false);

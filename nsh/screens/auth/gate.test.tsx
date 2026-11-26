@@ -558,6 +558,10 @@ for (const { name, size, device } of SIZES) {
     await app.waitUntil(() => app.enabled("id:gate-resend"), { timeout: 5000 });
     await app.press("id:gate-resend");
     await app.waitFor("text:We sent a new code to juana@example.com.");
+    // The boxes take the focus one tick after the new code is out (focusWhenOpen): a person reads the line before typing, so the
+    // test lets the app run that tick (no tap, no press on the boxes) rather than typing in the same instant.
+    await app.waitUntil(() => app.enabled("id:gate-code-boxes"));
+    await app.wait(50);
     await typeKeys(app, "246810");
     await app.waitFor("id:frame", { timeout: 15000 });
   }, 60_000);
@@ -569,6 +573,10 @@ for (const { name, size, device } of SIZES) {
     await app.waitFor(`text:${TOO_MANY}`);
     await app.press("id:gate-resend");
     await app.waitFor("text:We sent a new code to juana@example.com.");
+    // The boxes take the focus one tick after the new code is out (focusWhenOpen): a person reads the line before typing, so the
+    // test lets the app run that tick (no tap, no press on the boxes) rather than typing in the same instant.
+    await app.waitUntil(() => app.enabled("id:gate-code-boxes"));
+    await app.wait(50);
     await typeKeys(app, "246810");
     await app.waitFor("id:frame", { timeout: 15000 });
   }, 60_000);
@@ -586,6 +594,10 @@ for (const { name, size, device } of SIZES) {
     expect(app.enabled("id:gate-code-boxes")).toBe(false);
     await app.press("id:gate-resend");
     await app.waitFor("text:We sent a new code to juana@example.com.");
+    // The boxes take the focus one tick after the new code is out (focusWhenOpen): a person reads the line before typing, so the
+    // test lets the app run that tick (no tap, no press on the boxes) rather than typing in the same instant.
+    await app.waitUntil(() => app.enabled("id:gate-code-boxes"));
+    await app.wait(50);
     await typeKeys(app, "246810");
     await app.waitFor("id:frame", { timeout: 15000 });
   }, 60_000);

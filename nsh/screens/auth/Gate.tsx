@@ -14,10 +14,15 @@ export function AccountGate() {
   effect(() => {
     if (signInFlow.state().kind === "idle") untracked(() => signInFlow.restore());
   });
-  // The newest listener hears the press first (the frame's, Shell.tsx, is older): on the email and code pages it steps back;
-  // on the first page it says nothing, and the press goes on as everywhere else. It goes with the gate.
-  if (mobileAvailable && platform.os === "android") BackHandler.on("press", () => signInFlow.back());
   const page = () => pageOf(signInFlow.state(), signInFlow.emailOpen());
+  // The newest listener hears the press first (the frame's, Shell.tsx, is older). It is made in an effect and only while the
+  // email or code page shows (nsh navigation.md: a listener made in an effect lasts until the effect runs again or its
+  // component goes), so the first page, and every page after sign-in, keep the press as everywhere else.
+  if (mobileAvailable && platform.os === "android") {
+    effect(() => {
+      if (page() !== "start") BackHandler.on("press", () => signInFlow.back());
+    });
+  }
   return (
     <View testID="gate-root" class="min-h-0 flex-1">
       <If when={page() === "start"}>
