@@ -1,0 +1,47 @@
+{
+  "case": "3a-repeat kill during restore-wait",
+  "method": "fresh signed-in launch with mock SIGSTOPped; established app->mock connection recorded before confirming sign-out",
+  "prepress_lsof": "COMMAND     PID  USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\nmock_acco 79739 devin   11u  IPv4 0x8c41809a32d974d8      0t0  TCP 127.0.0.1:3008 (LISTEN)\n",
+  "prepress_established_mock_connection": false,
+  "confirm_tap_call_start": 1795689608.604359,
+  "confirm_tap_call_end": 1795689609.397059,
+  "samples_during_wait": [
+    {
+      "t": 4.0531158447265625e-06,
+      "gate": false,
+      "busy": false
+    },
+    {
+      "t": 0.7896931171417236,
+      "gate": false,
+      "busy": false
+    },
+    {
+      "t": 1.584083080291748,
+      "gate": false,
+      "busy": false
+    },
+    {
+      "t": 2.3854849338531494,
+      "gate": false,
+      "busy": false
+    }
+  ],
+  "gate_within_2_5s": false,
+  "busy_seen": false,
+  "account_file_present_before_kill": true,
+  "kill_delay_after_tap_completion": 3.6598360538482666,
+  "after_relaunch": {
+    "cloud_email_gate": false,
+    "local_profile_signin": false,
+    "home": false
+  },
+  "signed_in_after_relaunch": false,
+  "after_relaunch_corrected_after_longer_wait": {
+    "cloud_email_gate": false,
+    "local_profile_signin": true,
+    "home": false
+  },
+  "signed_in_after_relaunch_corrected": true,
+  "classification_note": "The automatic 3s classification was too early while the stopped-server launch was still blank; a later accessibility inspection showed the local TIN/PIN sign-in, which means the cloud sign-in survived."
+}

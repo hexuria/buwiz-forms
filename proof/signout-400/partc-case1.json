@@ -1,0 +1,24 @@
+{
+  "case": "1 stopped-server sign-out",
+  "method": "mock account server process SIGSTOPped before sign-out; SIGCONT after relaunch evidence",
+  "server_pid": 79739,
+  "recording_started": true,
+  "sigstop_at": 1795688388.0010052,
+  "confirm_tap_call_start": 1795688389.265304,
+  "confirm_tap_call_end": 1795688394.0421052,
+  "gate_detected": true,
+  "gate_seconds_after_tap_call_start_upper_bound": 5.548126935958862,
+  "gate_seconds_after_first_poll_start": 0.7713258266448975,
+  "account_file_present_after_gate": false,
+  "terminate_delay_after_tap_completion": 1.2334249019622803,
+  "terminate_at": 1795688395.049348,
+  "relaunch_output": "com.longbridge.nsh.host: 21410",
+  "relaunch_gate": true,
+  "relaunch_gate_detection_seconds": 2.476573944091797,
+  "sigcont_at": 1795688398.8822389,
+  "logout_lines_after_resume": [
+    "[mock-account] POST /api/auth/logout"
+  ],
+  "mp4_exists": true,
+  "mp4_size": 775635
+}

@@ -1,0 +1,20 @@
+{
+  "case": "2 server-up sign-out",
+  "method": "server left running; logout timing watched by byte-level polling of mock log",
+  "recording_started": true,
+  "confirm_tap_call_start": 1795688721.290963,
+  "confirm_tap_call_end": 1795688722.1121862,
+  "gate_detected": true,
+  "gate_seconds_after_poll_start": 0.786221981048584,
+  "logout_seen_before_first_gate_detection": true,
+  "logout_at_epoch": 1795688722.070827,
+  "logout_minus_gate_detection_seconds": -0.8275890350341797,
+  "account_file_present_after_gate": false,
+  "relaunch_output": "com.longbridge.nsh.host: 23664",
+  "relaunch_gate": true,
+  "relaunch_gate_detection_seconds": 2.768867015838623,
+  "logout_line_count": 2,
+  "last_logout_line": "[mock-account] POST /api/auth/logout",
+  "mp4_exists": true,
+  "mp4_size": 740439
+}

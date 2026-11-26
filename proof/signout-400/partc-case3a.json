@@ -1,0 +1,15 @@
+{
+  "case": "3a kill during restore-wait sign-out",
+  "method": "server SIGSTOPped before launch; account page opened while refresh/restore hung",
+  "confirm_tap_call_start": 1795689002.270905,
+  "confirm_tap_call_end": 1795689003.089843,
+  "busy_label_seen_before_kill": false,
+  "kill_delay_after_tap_completion": 2.0409960746765137,
+  "relaunch_output": "com.longbridge.nsh.host: 26090",
+  "after_relaunch": {
+    "cloud_email_gate": true,
+    "local_profile_signin": false,
+    "home": false
+  },
+  "signed_in_after_kill_during_wait": false
+}

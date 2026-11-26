@@ -1,0 +1,15 @@
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] POST /api/auth/logout
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] POST /api/auth/logout
+[mock-account] GET /me
+[mock-account] POST /api/auth/logout
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] GET /me
+[mock-account] POST /api/auth/logout
+[mock-account] GET /me

@@ -1,0 +1,16 @@
+{
+  "case": "3b sign-out while account refresh hangs",
+  "method": "server SIGSTOPped in current signed-in run; Account opened, 1s allowed for refresh to start, then sign-out pressed",
+  "deviation": "app was not relaunched after SIGSTOP for this measurement",
+  "sigstop_at": 1795689186.1430268,
+  "tap_duration": 0.8149070739746094,
+  "gate_detected": true,
+  "gate_seconds_after_poll_start": 16.25302767753601,
+  "gate_upper_bound_including_tap_call": 17.06793475151062,
+  "account_file_present_after_gate": false,
+  "relaunch": {
+    "cloud_email_gate": true,
+    "local_profile_signin": false,
+    "home": false
+  }
+}
