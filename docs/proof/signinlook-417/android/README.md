@@ -52,15 +52,21 @@ dark sign-in (checking frame after-dark-10).
 
 ## The honest check on every AFTER picture
 
-- Logo whole, with its words: **yes everywhere it renders** (first page, both auth pages, setup). On keyboard-up
-  it shrinks but stays whole.
+- Logo whole, with its words: **FAILS on the keyboard-up email page** — in after-light-03-emailpage-kbup.png,
+  after-dark-03-emailpage-kbup.png and after-light-04-emailpage-badaddr-kb.png the logo's top (sun rays and the
+  eagle's head) is cut off flat just under the Back row. The logo IS whole on the first page, the code page, the
+  keyboard-down email page, the welcome page and the TIN+PIN pages in both themes.
+  after-light-02b-emailpage-empty-kb.png shows the logo whole but lower on the page with no logo in the top part:
+  that frame caught the layout still moving (mid keyboard-opening animation); the settled keyboard-up state is
+  the clipped one in 03/04.
 - Back control top left, inside the safe area, same place on every page, never floating above the logo:
   **yes** — "‹ Back" / "‹ Change email" sit at the same top-left spot on the email and code pages in both themes.
 - Nothing falls off the bottom; with the keyboard up the field and its button are in view: **yes** —
   after-light-03/after-dark-03 show the email field and Continue above Gboard; the code page reserves its keypad.
 - On the first page the button sits close under the logo: **yes** (01 shots, both themes).
 
-No picture fails a check.
+Failing pictures: after-light-03-emailpage-kbup.png, after-dark-03-emailpage-kbup.png,
+after-light-04-emailpage-badaddr-kb.png — all fail the "logo is whole" check with the keyboard up.
 
 ## TIN + PIN page
 
