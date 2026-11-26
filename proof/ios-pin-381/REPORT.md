@@ -86,3 +86,8 @@ Logs: `/Users/devin/ios-pin-381/artifacts/logs/`.
 1. Mac Open/import panel and independent Mac C evidence are now complete.
 2. iPad on-screen Cut/Paste failures are real UI-path failures, but selection in these custom transparent-input cells is generally unavailable; secure-field Cut is separately n/a by platform behavior.
 3. Full six-digit authenticator fast-burst verification is constrained by auto-submit-on-complete; ordered evidence was captured through the first five cells plus completion behavior.
+
+
+## Main regression comparison addendum
+
+See `COMPARISON.md` and `comparison/` for the one-at-main check of regression-looking FAIL cells. Four paste cells pass at main and therefore look like #381 regressions: A4 iPhone on-screen, A4 iPad on-screen, B4 iPad hardware, and C4 iPad on-screen. Most caret/middle-edit failures reproduce at main. One comparison cell (`B5 middle Backspace — iPad hardware`) remains untested for disk-safety reasons; `B5 middle Backspace — iPhone on-screen` is not exactly testable at main.
