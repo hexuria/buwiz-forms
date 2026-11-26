@@ -59,3 +59,13 @@ line-wrapped occurrences rejoin: 1800: 50, 1801: 53 raw (54 flattened — one va
 across a line break inside its additional-sheet cell), 2200T: 19, 2200S: 0 — matching
 the additional-sheet row counts exactly. The flattened recount is in recount-uppercase.txt
 and the per-sheet accounting in shortened-accounting.txt.
+
+## Supplement (same harness, completed later): 1600PT at main ee3e649d
+
+The main-head app print completed after the openssl build was retried (its first failure
+was the disk-full episode, now cleaned). With the same fill at all three heads: main prints
+the 2 paper pages only, 0 overflow warnings (byte-level consistent with #362-alone, whose
+bir-print-level filled document is byte-identical to main's); the merge prints 5 pages with
+15 warnings and its additional sheets. 1600PT-main.pdf added. As noted in the verdicts, the
+schedule rows 13-17 stay empty at all three heads under the generic fill (valid ATC catalog
+entries needed) — a harness limitation, identical everywhere, not a regression.
