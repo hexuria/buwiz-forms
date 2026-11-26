@@ -57,5 +57,5 @@ occurs — count 0 — while the values were there all along. Recounted correctl
 the uppercase needle, additionally flattening `&#10;` newline entities and tags so
 line-wrapped occurrences rejoin: 1800: 50, 1801: 53 raw (54 flattened — one value wraps
 across a line break inside its additional-sheet cell), 2200T: 19, 2200S: 0 — matching
-the additional-sheet row counts exactly. The flattened recount is in fitting-check.txt
+the additional-sheet row counts exactly. The flattened recount is in recount-uppercase.txt
 and the per-sheet accounting in shortened-accounting.txt.
