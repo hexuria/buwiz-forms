@@ -1,0 +1,99 @@
+[
+ {
+  "label": "F1-filled run1",
+  "before": "1234.56",
+  "back": "1234.56",
+  "states": [
+   "1234.56",
+   "71234.56"
+  ],
+  "shown": "71,234.56",
+  "saved": 71234.56
+ },
+ {
+  "label": "F1-filled run2",
+  "before": "1234.56",
+  "back": "1234.56",
+  "states": [
+   "1234.56",
+   "71234.56"
+  ],
+  "shown": "71,234.56",
+  "saved": 71234.56
+ },
+ {
+  "label": "F1-filled run3",
+  "before": "1234.56",
+  "back": "1234.56",
+  "states": [
+   "1234.56",
+   "71234.56"
+  ],
+  "shown": "71,234.56",
+  "saved": 71234.56
+ },
+ {
+  "label": "F1-filled run4",
+  "before": "1234.56",
+  "back": "1234.56",
+  "states": [
+   "1234.56",
+   "71234.56"
+  ],
+  "shown": "71,234.56",
+  "saved": 71234.56
+ },
+ {
+  "label": "F1-filled run5",
+  "before": "1234.56",
+  "back": "1234.56",
+  "states": [
+   "1234.56",
+   "71234.56"
+  ],
+  "shown": "71,234.56",
+  "saved": 71234.56
+ },
+ {
+  "label": "F2-zero run1",
+  "before": "",
+  "back": "",
+  "shown": "",
+  "saved": 0.0
+ },
+ {
+  "label": "F2-zero run2",
+  "before": "",
+  "back": "",
+  "shown": "",
+  "saved": 0.0
+ },
+ {
+  "label": "F2-zero run3",
+  "before": "",
+  "back": "",
+  "shown": "",
+  "saved": 0.0
+ },
+ {
+  "label": "F2-zero run4",
+  "before": "",
+  "back": "",
+  "shown": "",
+  "saved": 0.0
+ },
+ {
+  "label": "F2-zero run5",
+  "before": "",
+  "back": "",
+  "shown": "",
+  "saved": 0.0
+ },
+ {
+  "label": "G fold 2550M 13A",
+  "typed": "12,3 4",
+  "gone": true,
+  "reopen": "1,000.00",
+  "saved": 1000.0
+ }
+]

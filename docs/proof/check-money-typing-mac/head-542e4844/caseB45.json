@@ -1,0 +1,19 @@
+[
+ {
+  "label": "B4 cmda backspace tab",
+  "empty": "",
+  "shown": "",
+  "saved": 0.0
+ },
+ {
+  "label": "B5 end 4xbackspace",
+  "states": [
+   "1,234.5",
+   "1,234.",
+   "1,234",
+   "1,23"
+  ],
+  "shown": "123.00",
+  "saved": 123.0
+ }
+]

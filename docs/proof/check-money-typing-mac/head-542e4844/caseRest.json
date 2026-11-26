@@ -1,0 +1,78 @@
+[
+ {
+  "label": "B1 tab-in type7",
+  "states": [
+   "1,234.56",
+   "7"
+  ],
+  "shown": "7.00",
+  "saved": 7.0
+ },
+ {
+  "label": "B2 tab right 9",
+  "states": [
+   "1,234.56",
+   "1,234.569"
+  ],
+  "shown": "1,234.57",
+  "saved": 1234.57
+ },
+ {
+  "label": "B3 click-between-2-3 type9",
+  "states": [
+   "1234.56",
+   "12934.56"
+  ],
+  "shown": "12,934.56",
+  "saved": 12934.56
+ },
+ {
+  "label": "B4 cmda backspace tab",
+  "states": [
+   "1,234.56"
+  ],
+  "shown": "1,234.56",
+  "saved": 1234.56
+ },
+ {
+  "label": "B5 end 4xbackspace",
+  "states": [
+   "1,234.56"
+  ],
+  "shown": "1,234.56",
+  "saved": 1234.56
+ },
+ {
+  "label": "C1 1500,50",
+  "while": "1500,50",
+  "shown": "1,500.50",
+  "saved": 1500.5
+ },
+ {
+  "label": "C2 1,500",
+  "while": "1,500",
+  "shown": "1,500.00",
+  "saved": 1500.0
+ },
+ {
+  "label": "C3 15,00,50",
+  "while": "15,00,50",
+  "shown": "",
+  "saved": 0.0
+ },
+ {
+  "label": "D1 1500x",
+  "while": "1500x",
+  "shown": "",
+  "saved": 0.0
+ },
+ {
+  "label": "E typed 0 in zero",
+  "states": [
+   "",
+   "0"
+  ],
+  "shown": "",
+  "saved": 0.0
+ }
+]
