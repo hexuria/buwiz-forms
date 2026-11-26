@@ -3572,6 +3572,10 @@ mod tests {
                 x.bearer_send(Method::POST, PLAIN_PATH, None);\r\n\
             }\r\n\
             impl X { pub(crate) fn m(&self) { self.add_account_tin(3) } }\r\n\
+            fn c() { let r = br#\"add_account_tin(\"#; let n = ('\\n', '\\n'\"x\", \"add_account_tin\"); let e = '\\''; }\r\n\
+            #[cfg(test)]\r\n\
+            mod t;\r\n\
+            fn d() { self.add_account_tin(5); }\r\n\
             #[cfg(test)]\r\n\
             #[allow(dead_code)]\r\n\
             fn helper() { add_account_tin(4); }\r\n";
@@ -3580,6 +3584,7 @@ mod tests {
         assert_eq!(
             found,
             [
+                ("f.rs".to_owned(), "d".to_owned(), "add_account_tin"),
                 ("f.rs".to_owned(), "late".to_owned(), "POST"),
                 ("f.rs".to_owned(), "late".to_owned(), "add_account_tin"),
                 ("f.rs".to_owned(), "m".to_owned(), "add_account_tin"),
@@ -3662,9 +3667,16 @@ mod tests {
                     blank(&mut out, i, j);
                     i = j;
                 }
+                // A raw string: `r"…"`, `r#"…"#`, and its byte and C forms
+                // (`br…`, `cr…`), the `r` starting a token.
                 b'r' if (bytes.get(i + 1) == Some(&b'"') || bytes.get(i + 1) == Some(&b'#'))
-                    && (i == 0
-                        || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_')) =>
+                    && {
+                        let ident =
+                            |at: usize| bytes[at].is_ascii_alphanumeric() || bytes[at] == b'_';
+                        i == 0
+                            || !ident(i - 1)
+                            || (matches!(bytes[i - 1], b'b' | b'c') && (i == 1 || !ident(i - 2)))
+                    } =>
                 {
                     let hashes = bytes[i + 1..].iter().take_while(|b| **b == b'#').count();
                     if bytes.get(i + 1 + hashes) != Some(&b'"') {
@@ -3690,14 +3702,20 @@ mod tests {
                 b'\'' => {
                     // A char literal ('x', '\n', '\u{..}') or a lifetime ('a).
                     let rest = &text[i + 1..];
-                    let literal = if let Some(escaped) = rest.strip_prefix('\\') {
-                        escaped.find('\'').map(|n| n + 2)
-                    } else {
-                        rest.chars()
-                            .next()
-                            .filter(|c| rest[c.len_utf8()..].starts_with('\''))
-                            .map(|c| c.len_utf8())
+                    // Its body: one escape (`\\n`, `\\'`, `\\x41`, `\\u{1F600}`) or
+                    // one char, and then the closing quote.
+                    let body = match rest.strip_prefix('\\') {
+                        Some(escape) if escape.starts_with("u{") => {
+                            escape.find('}').map(|close| 1 + close + 1)
+                        }
+                        Some(escape) if escape.starts_with('x') => Some(1 + 3),
+                        Some(escape) => escape.chars().next().map(|c| 1 + c.len_utf8()),
+                        None => rest.chars().next().map(char::len_utf8),
                     };
+                    let literal = body.filter(|len| {
+                        rest.get(*len..)
+                            .is_some_and(|after| after.starts_with('\''))
+                    });
                     match literal {
                         Some(len) => {
                             blank(&mut out, i + 1, i + 1 + len);
