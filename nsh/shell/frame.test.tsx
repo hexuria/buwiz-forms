@@ -98,7 +98,7 @@ test("desktop: the profile panel switches branch and taxpayer, and the pill foll
   await app.waitUntil(() => Object.keys(app.storage()).some((k) => k.startsWith("redesign.selection@")));
   const selection = Object.entries(app.storage()).find(([k]) => k.startsWith("redesign.selection@"))!;
   expect(JSON.parse(selection[1])).toEqual({ root: "000123453", code: "00001" });
-  await app.press("id:panel-tp-000111229");
+  await app.press("id:panel-tp-000111225");
   await app.waitFor("text:Sample Trading Corp");
   await app.waitFor("text:Switched to Sample Trading Corp");
 });

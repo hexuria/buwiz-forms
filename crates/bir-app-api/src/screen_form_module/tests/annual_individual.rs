@@ -3320,3 +3320,417 @@ fn form_1701_screen_path_reproduces_all_official_samples_without_differences() {
         assert_eq!(f2[key], s2[key], "1701-122025-joint mismatch at {key}");
     }
 }
+
+// ---------------------------------------------------------------
+// Schedule 3.A / 4 / 6 gates (fix/1701-schedule-gates): the whole
+// official table, one test per gate kind, and the per-box matrix.
+
+const GRAD_A: &[&str] = &[
+    "frm1701:txtPg2IShed3_19A",
+    "frm1701:txtPg2IShed3_20A",
+    "frm1701:txtPg2IShed3_21A",
+    "frm1701:txtPg2IShed3_8A",
+    "frm1701:txtPg2IShed3_9A",
+];
+const GRAD_B: &[&str] = &[
+    "frm1701:txtPg2IShed3_19B",
+    "frm1701:txtPg2IShed3_20B",
+    "frm1701:txtPg2IShed3_21B",
+    "frm1701:txtPg2IShed3_8B",
+    "frm1701:txtPg2IShed3_9B",
+];
+const GRAD_SHARED: &[&str] = &["frm1701:txtPg2IShed3_19Desc", "frm1701:txtPg2IShed3_20Desc"];
+const ITEM_A: &[&str] = &[
+    "frm1701:txtPg2IShed3_11A",
+    "frm1701:txtPg3IShed4_10A",
+    "frm1701:txtPg3IShed4_11A",
+    "frm1701:txtPg3IShed4_12A",
+    "frm1701:txtPg3IShed4_13A",
+    "frm1701:txtPg3IShed4_14A",
+    "frm1701:txtPg3IShed4_15A",
+    "frm1701:txtPg3IShed4_16A",
+    "frm1701:txtPg3IShed4_17aA",
+    "frm1701:txtPg3IShed4_17bA",
+    "frm1701:txtPg3IShed4_17cA",
+    "frm1701:txtPg3IShed4_17dA",
+    "frm1701:txtPg3IShed4_1A",
+    "frm1701:txtPg3IShed4_2A",
+    "frm1701:txtPg3IShed4_3A",
+    "frm1701:txtPg3IShed4_4A",
+    "frm1701:txtPg3IShed4_5A",
+    "frm1701:txtPg3IShed4_6A",
+    "frm1701:txtPg3IShed4_7A",
+    "frm1701:txtPg3IShed4_8A",
+    "frm1701:txtPg3IShed4_9A",
+    "frm1701:txtPg3IShed6_1A",
+    "frm1701:txtPg3IShed6_2A",
+    "frm1701:txtPg3IShed6_4A",
+    "frm1701:txtPg3IShed6_4B",
+    "frm1701:txtPg3IShed6_4C",
+    "frm1701:txtPg3IShed6_4D",
+    "frm1701:txtPg3IShed6_4Year",
+    "frm1701:txtPg3IShed6_5A",
+    "frm1701:txtPg3IShed6_5B",
+    "frm1701:txtPg3IShed6_5C",
+    "frm1701:txtPg3IShed6_5D",
+    "frm1701:txtPg3IShed6_5Year",
+    "frm1701:txtPg3IShed6_6A",
+    "frm1701:txtPg3IShed6_6B",
+    "frm1701:txtPg3IShed6_6C",
+    "frm1701:txtPg3IShed6_6D",
+    "frm1701:txtPg3IShed6_6Year",
+    "frm1701:txtPg3IShed6_7B",
+    "frm1701:txtPg3IShed6_7C",
+    "frm1701:txtPg3IShed6_7D",
+];
+const ITEM_B: &[&str] = &[
+    "frm1701:txtPg2IShed3_11B",
+    "frm1701:txtPg3IShed4_10B",
+    "frm1701:txtPg3IShed4_11B",
+    "frm1701:txtPg3IShed4_12B",
+    "frm1701:txtPg3IShed4_13B",
+    "frm1701:txtPg3IShed4_14B",
+    "frm1701:txtPg3IShed4_15B",
+    "frm1701:txtPg3IShed4_16B",
+    "frm1701:txtPg3IShed4_17aB",
+    "frm1701:txtPg3IShed4_17bB",
+    "frm1701:txtPg3IShed4_17cB",
+    "frm1701:txtPg3IShed4_17dB",
+    "frm1701:txtPg3IShed4_1B",
+    "frm1701:txtPg3IShed4_2B",
+    "frm1701:txtPg3IShed4_3B",
+    "frm1701:txtPg3IShed4_4B",
+    "frm1701:txtPg3IShed4_5B",
+    "frm1701:txtPg3IShed4_6B",
+    "frm1701:txtPg3IShed4_7B",
+    "frm1701:txtPg3IShed4_8B",
+    "frm1701:txtPg3IShed4_9B",
+    "frm1701:txtPg3IShed6_1B",
+    "frm1701:txtPg3IShed6_2B",
+    "frm1701:txtPg4IShed6_10A",
+    "frm1701:txtPg4IShed6_10B",
+    "frm1701:txtPg4IShed6_10C",
+    "frm1701:txtPg4IShed6_10D",
+    "frm1701:txtPg4IShed6_10Year",
+    "frm1701:txtPg4IShed6_11A",
+    "frm1701:txtPg4IShed6_11B",
+    "frm1701:txtPg4IShed6_11C",
+    "frm1701:txtPg4IShed6_11D",
+    "frm1701:txtPg4IShed6_11Year",
+    "frm1701:txtPg4IShed6_12B",
+    "frm1701:txtPg4IShed6_12C",
+    "frm1701:txtPg4IShed6_12D",
+    "frm1701:txtPg4IShed6_9A",
+    "frm1701:txtPg4IShed6_9B",
+    "frm1701:txtPg4IShed6_9C",
+    "frm1701:txtPg4IShed6_9D",
+    "frm1701:txtPg4IShed6_9Year",
+];
+const ITEM_SHARED: &[&str] = &["frm1701:txtPg3IShed4_17dDesc"];
+/// The page edits putting the taxpayer's column in each regime.
+fn taxpayer_regime(regime: &str) -> Value {
+    match regime {
+        "grad-itemized" => json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II012": "true",
+            "frm1701:rdoPg1I21AMethodDeductionI": "true",
+        }),
+        "grad-osd" => json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II012": "true",
+            "frm1701:rdoPg1I21AMethodDeductionO": "true",
+        }),
+        "eight-percent" => json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II015": "true",
+        }),
+        "compensation" => json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II011": "true",
+        }),
+        _ => json!({}),
+    }
+}
+
+/// The page edits putting a joint return's spouse column in each regime.
+fn spouse_regime(regime: &str) -> Value {
+    let mut edits = joint("1701").as_object().unwrap().clone();
+    edits.insert("frm1701:rdoPg2I3SpouseTypeS".to_string(), json!("true"));
+    let extra: &[&str] = match regime {
+        "grad-itemized" => &[
+            "frm1701:rdoPg2I4ATC_II012",
+            "frm1701:rdoPg2I12AMethodDeductionI",
+        ],
+        "grad-osd" => &[
+            "frm1701:rdoPg2I4ATC_II012",
+            "frm1701:rdoPg2I12AMethodDeductionO",
+        ],
+        "eight-percent" => &["frm1701:rdoPg2I4ATC_II015"],
+        "compensation" => &["frm1701:rdoPg2I4ATC_II011"],
+        _ => &[],
+    };
+    for key in extra {
+        edits.insert(key.to_string(), json!("true"));
+    }
+    Value::Object(edits)
+}
+
+/// A value the box's own kind takes: amounts a number, years a year,
+/// descriptions a text.
+fn sample_value(key: &str) -> &'static str {
+    if key.ends_with("Year") {
+        "2021"
+    } else if key.ends_with("Desc") {
+        "OTHER INCOME"
+    } else {
+        "1000"
+    }
+}
+
+/// One write to `key` from `draft`: whether the page took it, and the
+/// refusal when it did not.
+fn try_write(code: &str, draft: &Value, key: &str) -> (bool, Option<String>) {
+    let filled = fill(code, draft, json!({ key: sample_value(key) }));
+    match filled["rejected"].get(key) {
+        Some(reason) => (false, reason.as_str().map(str::to_string)),
+        None => (true, None),
+    }
+}
+
+/// Gate kind `GraduatedBusiness` (Schedule 3.A items 19-21, like 8-9):
+/// refused with the filer-facing reason before a graduated business ATC,
+/// under the 8% rate and with compensation only; open under graduated rates
+/// with either deduction method; column B open only on a joint return whose
+/// spouse is graduated.
+#[test]
+fn form_1701_schedule_3a_other_income_rows_follow_the_graduated_gate() {
+    setup();
+    let fresh = opened("1701");
+    let (open, reason) = try_write("1701", &fresh["draft"], "frm1701:txtPg2IShed3_19A");
+    assert!(!open, "19A must be shut on a fresh return");
+    assert_eq!(
+        reason.as_deref(),
+        Some(
+            "Open when you choose graduated rates with business, profession, or mixed income (Item 7: II012, II013, or II014)."
+        )
+    );
+    for regime in ["eight-percent", "compensation"] {
+        let draft = take("1701", &fresh["draft"], taxpayer_regime(regime));
+        let (open, _) = try_write("1701", &draft["draft"], "frm1701:txtPg2IShed3_19A");
+        assert!(!open, "19A must be shut under {regime}");
+    }
+    for regime in ["grad-osd", "grad-itemized"] {
+        let draft = take("1701", &fresh["draft"], taxpayer_regime(regime));
+        for key in [
+            "frm1701:txtPg2IShed3_19A",
+            "frm1701:txtPg2IShed3_20A",
+            "frm1701:txtPg2IShed3_21A",
+        ] {
+            let (open, _) = try_write("1701", &draft["draft"], key);
+            assert!(open, "{key} must be open under {regime}");
+        }
+    }
+    // Column B: shut for a single filer even graduated, open on a joint
+    // return whose spouse is graduated.
+    let single = take("1701", &fresh["draft"], taxpayer_regime("grad-osd"));
+    let (open, _) = try_write("1701", &single["draft"], "frm1701:txtPg2IShed3_19B");
+    assert!(!open, "19B must be shut without a joint return");
+    let jointed = take("1701", &fresh["draft"], spouse_regime("grad-osd"));
+    let (open, _) = try_write("1701", &jointed["draft"], "frm1701:txtPg2IShed3_19B");
+    assert!(
+        open,
+        "19B must be open for a graduated spouse on a joint return"
+    );
+}
+
+/// Gate kind `GraduatedItemized` (Schedule 3.A item 11, Schedules 4 and 6):
+/// refused with the filer-facing reason under OSD, the 8% rate, compensation
+/// only and on a fresh return; open under graduated + itemized; Schedule 6's
+/// spouse rows only on a joint return whose spouse is graduated + itemized.
+#[test]
+fn form_1701_schedules_4_and_6_follow_the_itemized_gate() {
+    setup();
+    let fresh = opened("1701");
+    for key in [
+        "frm1701:txtPg3IShed4_1A",
+        "frm1701:txtPg3IShed6_4A",
+        "frm1701:txtPg3IShed6_4Year",
+    ] {
+        let (open, _) = try_write("1701", &fresh["draft"], key);
+        assert!(!open, "{key} must be shut on a fresh return");
+    }
+    let osd = take("1701", &fresh["draft"], taxpayer_regime("grad-osd"));
+    let (open, reason) = try_write("1701", &osd["draft"], "frm1701:txtPg3IShed4_1A");
+    assert!(!open, "Schedule 4 item 1A must be shut under OSD");
+    assert_eq!(
+        reason.as_deref(),
+        Some(
+            "Open when you choose graduated rates and itemized deductions (Item 7: II012, II013, or II014; Item 21A: Itemized Deduction)."
+        )
+    );
+    let (open, _) = try_write("1701", &osd["draft"], "frm1701:txtPg3IShed6_5C");
+    assert!(!open, "a NOLCO row box must be shut under OSD");
+    let itemized = take("1701", &fresh["draft"], taxpayer_regime("grad-itemized"));
+    for key in [
+        "frm1701:txtPg3IShed4_1A",
+        "frm1701:txtPg3IShed4_17aA",
+        "frm1701:txtPg3IShed4_17dDesc",
+        "frm1701:txtPg3IShed6_1A",
+        "frm1701:txtPg3IShed6_2A",
+        "frm1701:txtPg3IShed6_4A",
+        "frm1701:txtPg3IShed6_4Year",
+        "frm1701:txtPg3IShed6_7D",
+    ] {
+        let (open, _) = try_write("1701", &itemized["draft"], key);
+        assert!(open, "{key} must be open under graduated + itemized");
+    }
+    // The spouse's NOLCO rows (page 4): shut for a single filer, open for
+    // a graduated + itemized spouse on a joint return.
+    let (open, _) = try_write("1701", &itemized["draft"], "frm1701:txtPg4IShed6_9A");
+    assert!(
+        !open,
+        "spouse NOLCO rows must be shut without a joint return"
+    );
+    let jointed = take("1701", &fresh["draft"], spouse_regime("grad-itemized"));
+    for key in [
+        "frm1701:txtPg4IShed6_9A",
+        "frm1701:txtPg4IShed6_10Year",
+        "frm1701:txtPg4IShed6_12D",
+    ] {
+        let (open, _) = try_write("1701", &jointed["draft"], key);
+        assert!(
+            open,
+            "{key} must be open for an itemized spouse on a joint return"
+        );
+    }
+    // The shared description boxes (one box for both columns): open when
+    // EITHER column qualifies — a joint return whose taxpayer is on the 8%
+    // rate with a graduated + itemized spouse types them (the official
+    // joint-many sample does exactly this); shut when neither does.
+    let spouse_only = take(
+        "1701",
+        &jointed["draft"],
+        json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II017": "true",
+        }),
+    );
+    for key in [
+        "frm1701:txtPg3IShed4_17dDesc",
+        "frm1701:txtPg2IShed3_19Desc",
+    ] {
+        let (open, _) = try_write("1701", &spouse_only["draft"], key);
+        assert!(open, "{key} must be open when only the spouse qualifies");
+    }
+    let neither = take("1701", &fresh["draft"], spouse_regime("compensation"));
+    let neither = take(
+        "1701",
+        &neither["draft"],
+        json!({
+            "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+            "frm1701:rdoPg1I7ATC_II011": "true",
+        }),
+    );
+    let (open, _) = try_write("1701", &neither["draft"], "frm1701:txtPg3IShed4_17dDesc");
+    assert!(!open, "17dDesc must be shut when neither column qualifies");
+}
+
+/// The whole table: every Schedule 3.A/4/6 input box, in every regime, both
+/// columns, single and joint. Expected state is the official rule the
+//  compute chain enforces (see form-review/check/1701-gates): graduated
+/// boxes open under graduated rates either method, itemized boxes only
+/// graduated + itemized, column B only on a joint return with the spouse in
+/// the regime. At main this fails on 61 boxes.
+#[test]
+fn form_1701_schedule_boxes_match_the_official_table_in_every_state() {
+    setup();
+    let fresh = opened("1701");
+    let regimes = [
+        "fresh",
+        "grad-itemized",
+        "grad-osd",
+        "eight-percent",
+        "compensation",
+    ];
+    let mut failures = Vec::new();
+    let mut check = |draft: &Value, key: &str, expect_open: bool, label: String| {
+        let (open, reason) = try_write("1701", draft, key);
+        if open != expect_open {
+            failures.push(format!(
+                "{key} in {label}: official {} but the page {}",
+                if expect_open { "opens it" } else { "shuts it" },
+                if open {
+                    "takes the write"
+                } else {
+                    "refuses it"
+                },
+            ));
+        }
+        if !expect_open
+            && open == false
+            && let Some(reason) = reason
+        {
+            assert!(
+                rows_annual_individual::is_gate_refusal("1701", &reason),
+                "{key} refusal should be the gate's words, got: {reason}"
+            );
+        }
+    };
+    // Column A (and the shared description boxes, which follow column A).
+    for regime in regimes {
+        let draft = if regime == "fresh" {
+            fresh.clone()
+        } else {
+            take("1701", &fresh["draft"], taxpayer_regime(regime))
+        };
+        let graduated = matches!(regime, "grad-itemized" | "grad-osd");
+        let itemized = regime == "grad-itemized";
+        for key in GRAD_A.iter().chain(GRAD_SHARED) {
+            check(
+                &draft["draft"],
+                key,
+                graduated,
+                format!("taxpayer {regime}"),
+            );
+        }
+        for key in ITEM_A.iter().chain(ITEM_SHARED) {
+            check(&draft["draft"], key, itemized, format!("taxpayer {regime}"));
+        }
+        // Column B without a joint return: shut whatever the regime.
+        for key in GRAD_B.iter().chain(ITEM_B) {
+            check(
+                &draft["draft"],
+                key,
+                false,
+                format!("single filer, spouse {regime}"),
+            );
+        }
+    }
+    // Column B on a joint return, spouse in each regime.
+    for regime in regimes {
+        let draft = if regime == "fresh" {
+            take("1701", &fresh["draft"], joint("1701"))
+        } else {
+            take("1701", &fresh["draft"], spouse_regime(regime))
+        };
+        let graduated = matches!(regime, "grad-itemized" | "grad-osd");
+        let itemized = regime == "grad-itemized";
+        for key in GRAD_B {
+            check(
+                &draft["draft"],
+                key,
+                graduated,
+                format!("joint spouse {regime}"),
+            );
+        }
+        for key in ITEM_B {
+            check(
+                &draft["draft"],
+                key,
+                itemized,
+                format!("joint spouse {regime}"),
+            );
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

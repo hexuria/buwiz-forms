@@ -4,7 +4,7 @@ import { expect, open, test } from "nsh/test";
 
 const ENTRY = "../../AuthDemo.tsx";
 const WIDE = { width: 1440, height: 900, platform: "macos" as const };
-const PARAMS = { demo: true, second: true, years: true, recent: true, mode: "helpdesk", adminPin: "1234", pins: { "000123453": "4321", "000111229": "5555" }, readout: true };
+const PARAMS = { demo: true, second: true, years: true, recent: true, mode: "helpdesk", adminPin: "1234", pins: { "000123453": "4321", "000111225": "5555" }, readout: true };
 
 async function signIn(app: Awaited<ReturnType<typeof open>>, tin: string, pin: string) {
   await app.waitFor("id:auth-card");
@@ -27,8 +27,8 @@ test("desktop: a taxpayer session sees only its own returns, deadlines, palette 
   await app.type("id:palette-input", "Sample");
   expect(app.texts().some((t) => /Sample Trading Corp/.test(t))).toBe(false);
   await app.clear("id:palette-input");
-  await app.type("id:palette-input", "000111229");
-  expect(app.texts().some((t) => /Sample Trading Corp|000-111-229/.test(t))).toBe(false);
+  await app.type("id:palette-input", "000111225");
+  expect(app.texts().some((t) => /Sample Trading Corp|000-111-225/.test(t))).toBe(false);
   await app.back();
   // Calendar and Filings name only her.
   await app.press("id:nav-calendar");
@@ -40,9 +40,9 @@ test("desktop: a taxpayer session sees only its own returns, deadlines, palette 
 
 test("phone: the other taxpayer signs in to its own data only; the admin sees both", async () => {
   const app = await open(ENTRY, { host: { params: PARAMS } });
-  await signIn(app, "000111229", "5555");
-  await app.waitFor("text:session: taxpayer 000111229");
-  expect(app.texts()).toContain("returns: 000111229 | deadlines: 000111229 | taxpayers: 000111229");
+  await signIn(app, "000111225", "5555");
+  await app.waitFor("text:session: taxpayer 000111225");
+  expect(app.texts()).toContain("returns: 000111225 | deadlines: 000111225 | taxpayers: 000111225");
   expect(app.texts().some((t) => /Juana Santos/.test(t))).toBe(false);
   await app.press("id:nb-avatar");
   await app.press("id:nb-menu-profile");
@@ -50,5 +50,5 @@ test("phone: the other taxpayer signs in to its own data only; the admin sees bo
   await app.press("id:sheet-logout");
   await signIn(app, "000000000", "1234");
   await app.waitFor("text:session: admin");
-  expect(app.texts()).toContain("returns: 000111229,000123453 | deadlines: 000111229,000123453 | taxpayers: 000111229,000123453");
+  expect(app.texts()).toContain("returns: 000111225,000123453 | deadlines: 000111225,000123453 | taxpayers: 000111225,000123453");
 });

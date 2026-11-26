@@ -37,12 +37,12 @@ const rows = [
   row({ form_code: "2551Q", due_date: "2026-04-20", frequency: "Quarterly", period: 1, period_label: "Q1 2026" }),
   row({ form_code: "2551Q", due_date: "2026-07-20", frequency: "Quarterly", period: 2, period_label: "Q2 2026" }),
   row({ form_code: "1701A", due_date: "2027-04-15", frequency: "Annual", period: 0, period_label: "TY 2026" }),
-  row({ form_code: "1601C", due_date: "2026-02-10", period: 1, tin: "00011122900000", tin_root: "000111229", taxpayer_name: "Sample Trading Corp" }),
+  row({ form_code: "1601C", due_date: "2026-02-10", period: 1, tin: "00011122500000", tin_root: "000111225", taxpayer_name: "Sample Trading Corp" }),
 ];
 
 test("taxpayer and how-often filters apply to every view", () => {
   expect(byWhoAndHowOften(base, rows)).toHaveLength(6);
-  expect(byWhoAndHowOften({ ...base, tps: new Set(["000111229"]) }, rows)).toHaveLength(1);
+  expect(byWhoAndHowOften({ ...base, tps: new Set(["000111225"]) }, rows)).toHaveLength(1);
   expect(byWhoAndHowOften({ ...base, tps: new Set() }, rows)).toHaveLength(0);
   expect(byWhoAndHowOften({ ...base, freq: "quarterly" }, rows).map((d) => d.form_code)).toEqual(["2551Q", "2551Q"]);
   expect(byWhoAndHowOften({ ...base, freq: "yearly" }, rows).map((d) => d.form_code)).toEqual(["1701A"]);
