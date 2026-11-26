@@ -18,7 +18,7 @@ import { Application } from "nsh/desktop";
 import { bir, dataChangeToken, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
 import { errorText } from "../lib/errors";
-import { isDryRun } from "../lib/statusWord";
+import { DRY_RUN_WORD, isDryRun } from "../lib/statusWord";
 import { POLL, startPolls } from "../lib/poll";
 import { addRecent, bumpRecent, loadRecent, recentEntry, recentOpenOptions, type RecentEntry, type RecentInput } from "../lib/recent";
 import type { FormTarget } from "../screens/form/FormPage";
@@ -962,7 +962,8 @@ function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
 
 /**
  * Submissions sent and confirmation emails received, newest first: the return's own status is the record. A send the worker only
- * simulated (`isDryRun`: a dry run, a practice account) is a finished dry run, not a submission.
+ * simulated (`isDryRun`: a dry run, a practice account, a Buwiz test TIN) is a test send, not a submission: it says the host's one
+ * sentence for it (`send.line`, send_state.rs `TEST_SENT_LINE`: "Test send. Nothing reached the BIR.").
  */
 const notifications = computed<Notification[]>(() => {
   const seen = readIds();
@@ -973,17 +974,18 @@ const notifications = computed<Notification[]>(() => {
     const id = `return:${r.id}:${confirmed ? "confirmed" : "submitted"}`;
     const who = r.branch_count > 1 ? `${r.taxpayer_name} · ${r.branch_name}` : r.taxpayer_name;
     const dry = !confirmed && isDryRun(r);
+    const testLine = r.send?.stage === "test_sent" ? r.send.line : DRY_RUN_WORD;
     items.push({
       id,
       title: confirmed
         ? `BIR confirmed ${r.form_code} for ${r.period_label}`
         : dry
-          ? `${r.form_code} for ${r.period_label}: dry run finished`
+          ? `${r.form_code} for ${r.period_label}: ${testLine}`
           : `${r.form_code} for ${r.period_label} was submitted`,
       sub: confirmed
         ? `Confirmation email received · ${who}`
         : dry
-          ? `Nothing was sent to the BIR · ${who}`
+          ? who
           : r.submitted_via_relay
             ? `Sent to the mock relay, not to BIR: no BIR email will come · ${who}`
             : `Waiting for BIR's confirmation email · ${who}`,

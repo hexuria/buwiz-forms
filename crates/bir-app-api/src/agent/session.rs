@@ -518,9 +518,11 @@ impl Session {
         let profile = load_profile(&db, &tin, year)?;
         let mut draft =
             crate::screen_form_module::load_draft(&db, kind, &profile, year, period, false, None)?;
-        if agent::identity(kind, &draft)?.status == FilingStatus::Draft {
+        let status = agent::identity(kind, &draft)?.status;
+        if status == FilingStatus::Draft {
             agent::save_draft(kind, &db, &mut draft)?;
         }
+        let (dry_run, send) = stored_send_facts(&db, draft.get("id").and_then(Value::as_i64))?;
         drop(db);
         self.selected_tin = Some(tin.clone());
         self.open = Some(OpenForm {
@@ -547,6 +549,9 @@ impl Session {
             "year": year,
             "period": period,
             "tin": tin,
+            "status": format!("{status:?}"),
+            "dry_run": dry_run,
+            "send": send,
         })))
     }
 
@@ -579,9 +584,15 @@ impl Session {
         }
         let questions = def.boxes.iter().filter(|entry| entry.is_question()).count();
         let status = agent::identity(open.kind, &open.draft)?.status;
+        let (dry_run, send) = stored_send_facts(
+            &*self.lock_db()?,
+            open.draft.get("id").and_then(Value::as_i64),
+        )?;
         Ok(DispatchResult::json(json!({
             "form": open.kind.form_code(),
             "status": format!("{status:?}"),
+            "dry_run": dry_run,
+            "send": send,
             "id": open.draft.get("id").cloned().unwrap_or(Value::Null),
             "boxes": boxes,
             "read_only": questions.saturating_sub(boxes.len()),
@@ -1116,17 +1127,20 @@ impl Session {
         let past_returns: Vec<Value> = drafts
             .into_iter()
             .map(|summary| {
-                json!({
+                let (dry_run, send) = stored_send_facts(&db, Some(summary.id))?;
+                Ok(json!({
                     "kind": "saved_return",
                     "form": summary.form_code,
                     "year": summary.taxable_year,
                     "quarter": summary.quarter,
                     "month": summary.month,
                     "status": format!("{:?}", summary.status),
+                    "dry_run": dry_run,
+                    "send": send,
                     "updated_at": summary.updated_at,
-                })
+                }))
             })
-            .collect();
+            .collect::<Result<_, String>>()?;
         let submissions = db
             .list_submissions_for_tin(&tin)
             .map_err(|error| error.to_string())?;
@@ -1982,21 +1996,59 @@ pub fn send_draft(db: &Database, kind: AgentFormKind, draft: &mut Value) -> Resu
         }));
     }
     let id = queue_validated(kind, db, draft)?;
-    let dry = bir_core::transport::is_sftp_dry_run();
-    Ok(json!({
+    Ok(queued_answer(
+        &code,
+        id,
+        bir_core::transport::sends_through_buwiz(),
+        bir_core::transport::is_sftp_dry_run(),
+    ))
+}
+
+/// What `form.send` says of a return it queued, by where the send goes. Through the Buwiz relay the server decides
+/// whether it is a real send or a test send (a test TIN), so `dry_run` is unknown (null) until it is sent; the agent
+/// reads it then from `form.open` (`dry_run`, `send`). Otherwise this build's dry-run setting says it.
+fn queued_answer(code: &str, id: i64, through_buwiz: bool, dry_run: bool) -> Value {
+    let (dry_run, message) = if through_buwiz {
+        (
+            Value::Null,
+            "Queued. It goes to the BIR through the Buwiz relay; whether it is a real send or a test send is known once it is sent: open the form again (form.open) for `dry_run` and `send`.",
+        )
+    } else if dry_run {
+        (
+            json!(true),
+            "Queued. This build is a dry run: nothing is sent to BIR.",
+        )
+    } else {
+        (json!(false), "Queued for upload from this computer.")
+    };
+    json!({
         "ok": true,
         "status": "queued",
         "queued": true,
         "filed": false,
-        "dry_run": dry,
+        "dry_run": dry_run,
         "form": code,
         "id": id,
-        "message": if dry {
-            "Queued. This build is a dry run: nothing is sent to BIR."
-        } else {
-            "Queued for upload from this computer."
-        },
-    }))
+        "message": message,
+    })
+}
+
+/// What the agent reads of the stored return `id`'s send, as the screens get it: `dry_run`, the worker's
+/// `submitted_dry_run` (nothing reached the BIR), and `send`, the send state (send_state.rs: stage, line ...; null
+/// where the screens show the status alone). A return not stored yet has neither.
+fn stored_send_facts(db: &Database, id: Option<i64>) -> Result<(bool, Value), String> {
+    let Some(id) = id else {
+        return Ok((false, Value::Null));
+    };
+    let dry_run = db
+        .draft_summary_and_json(id)
+        .map_err(|error| error.to_string())?
+        .and_then(|(_, json)| serde_json::from_str::<Value>(&json).ok())
+        .is_some_and(|draft| {
+            crate::screen_form_module::lifecycle_flag(&draft, "submitted_dry_run")
+        });
+    let send = crate::send_state::stored_send(db, id).map_err(|error| error.to_string())?;
+    Ok((dry_run, send))
 }
 
 #[cfg(test)]
@@ -4031,6 +4083,85 @@ mod tests {
         let context = call(&mut session, "form.context", json!({})).unwrap();
         assert_eq!(context["profile"]["registered_name"], "TEST");
         assert!(context["past_returns"].as_array().is_some());
+    }
+
+    /// Once the worker has sent a return, `form.open` (called again), `form.fields` and `form.context`'s
+    /// `past_returns` say whether that send reached nobody (`dry_run`, the worker's `submitted_dry_run`) and the send
+    /// state the screens show (`send`: stage, line ...). A Draft has no send to tell of.
+    #[test]
+    fn the_agent_reads_whether_a_send_was_a_test_send() {
+        use crate::send_state::TEST_SENT_LINE;
+        let mut session = session();
+        save_scratch(&mut session);
+        let args = json!({"code": "2551Q", "year": 2026, "period": 1, "tin": TIN});
+        let draft = call(&mut session, "form.open", args.clone()).unwrap();
+        assert_eq!(draft["status"], "Draft");
+        assert_eq!(draft["dry_run"], false);
+        assert!(draft["send"].is_null(), "{draft}");
+        let id = session.open.as_ref().unwrap().draft["id"].as_i64().unwrap();
+        // The worker's store of a relay dry_run result (bir-core: Submitted, submitted_dry_run, its receipt).
+        {
+            let db = session.lock_db().unwrap();
+            let (_, stored) = db.draft_summary_and_json(id).unwrap().unwrap();
+            let mut sent: Value = serde_json::from_str(&stored).unwrap();
+            sent["status"] = json!("Submitted");
+            sent["submitted_at"] = json!("2026-04-10T01:02:03+00:00");
+            sent["submitted_dry_run"] = json!(true);
+            sent["relay_receipt"] = json!("a.b.c");
+            db.conn_for_tests()
+                .execute(
+                    "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+                    (sent.to_string(), id),
+                )
+                .unwrap();
+        }
+        let is_test_send = |answer: &Value, what: &str| {
+            assert_eq!(answer["dry_run"], true, "{what}: {answer}");
+            assert_eq!(answer["send"]["stage"], "test_sent", "{what}: {answer}");
+            assert_eq!(answer["send"]["line"], TEST_SENT_LINE, "{what}: {answer}");
+        };
+        let opened = call(&mut session, "form.open", args).unwrap();
+        assert_eq!(opened["status"], "Submitted");
+        is_test_send(&opened, "form.open");
+        let fields = call(&mut session, "form.fields", json!({})).unwrap();
+        assert_eq!(fields["status"], "Submitted");
+        is_test_send(&fields, "form.fields");
+        let context = call(&mut session, "form.context", json!({})).unwrap();
+        let past = context["past_returns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|past| past["form"] == "2551Q" && past["year"] == 2026 && past["quarter"] == 1)
+            .expect("the sent return")
+            .clone();
+        assert_eq!(past["status"], "Submitted");
+        is_test_send(&past, "form.context");
+    }
+
+    /// `form.send`'s answer never claims a real or a test send it cannot know: through the Buwiz relay the server
+    /// decides (a test TIN), so `dry_run` is null until it is sent, and the return does not go "from this computer".
+    #[test]
+    fn a_queued_answer_says_only_what_its_route_knows() {
+        let relay = queued_answer("2551Q", 7, true, false);
+        assert!(relay["dry_run"].is_null(), "{relay}");
+        let message = relay["message"].as_str().unwrap();
+        assert!(!message.contains("from this computer"), "{message}");
+        assert!(message.contains("Buwiz relay"), "{message}");
+        assert!(message.contains("form.open"), "{message}");
+        assert_eq!(relay["queued"], true);
+        assert_eq!(relay["filed"], false);
+        assert_eq!(relay["id"], 7);
+        // The Buwiz relay wins over this build's dry-run setting: the server decides there.
+        assert!(queued_answer("2551Q", 7, true, true)["dry_run"].is_null());
+        let dry = queued_answer("2551Q", 7, false, true);
+        assert_eq!(dry["dry_run"], true);
+        assert_eq!(
+            dry["message"],
+            "Queued. This build is a dry run: nothing is sent to BIR."
+        );
+        let local = queued_answer("2551Q", 7, false, false);
+        assert_eq!(local["dry_run"], false);
+        assert_eq!(local["message"], "Queued for upload from this computer.");
     }
 
     #[test]
