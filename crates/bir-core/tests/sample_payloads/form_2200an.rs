@@ -6,7 +6,7 @@ use bir_core::forms::form_2200an::{
 };
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_2200an() -> Form2200ANDraft {
+pub(crate) fn sample_2200an() -> Form2200ANDraft {
     let mut draft =
         Form2200ANDraft::new_from_profile(&dummy_profile("2200ANv2018", "Corporation"), 2025, 6);
     draft.month = 6;

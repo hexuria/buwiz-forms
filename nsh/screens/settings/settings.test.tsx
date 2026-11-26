@@ -2,7 +2,7 @@
 // search over rows, who sees what, Import / Export and the old Background tasks address. Against a scratch database with the demo taxpayer
 // (SettingsDemo.tsx; a test asks for variations with open's host params).
 import { expect, test } from "nsh/test";
-import { calls, expectTexts, goSection, openSettings, SIZES, state } from "./testing";
+import { backToList, calls, expectTexts, goSection, openSettings, SIZES, state } from "./testing";
 
 for (const { name, size } of SIZES) {
   test(`${name}: General shows the platform's rows and its controls write what the app keeps`, async () => {
@@ -17,7 +17,9 @@ for (const { name, size } of SIZES) {
     await app.press("text:Dark");
     await app.waitFor("text:/theme=dark/");
     if (name === "phone") {
-      for (const id of ["settings-recent", "settings-compact-form-nav", "settings-auto-update"]) expect(app.shows(`id:${id}`)).toBe(false);
+      // A phone has Recent on Home, so its switch shows; the desktop-only rows do not.
+      expect(app.shows("id:settings-recent")).toBe(true);
+      for (const id of ["settings-compact-form-nav", "settings-auto-update"]) expect(app.shows(`id:${id}`)).toBe(false);
       expect(calls(app)).toEqual([]);
       return;
     }
@@ -53,7 +55,7 @@ for (const { name, size } of SIZES) {
     expect(app.texts()).toContain("My PIN");
 
     // The section's name keeps every row of it. (A phone's search sits on the list, so Back first, and the cards on the section's page.)
-    if (name === "phone") await app.press("id:settings-back");
+    if (name === "phone") await backToList(app);
     await app.clear("id:settings-search");
     await app.type("id:settings-search", "account");
     await app.waitFor("id:settings-nav-account");
@@ -63,7 +65,7 @@ for (const { name, size } of SIZES) {
     expect(app.shows("id:settings-google")).toBe(name === "desktop");
     expect(app.shows("id:settings-security")).toBe(true);
 
-    if (name === "phone") await app.press("id:settings-back");
+    if (name === "phone") await backToList(app);
     await app.clear("id:settings-search");
     await app.type("id:settings-search", "zzzz");
     await app.waitFor("id:settings-nav-empty");
@@ -85,7 +87,7 @@ for (const { name, size } of SIZES) {
     expect(app.shows("id:settings-import-btn")).toBe(false);
     expect(app.texts()).toContain("Export");
     // A search that would keep only admin rows finds nothing for them.
-    if (name === "phone") await app.press("id:settings-back");
+    if (name === "phone") await backToList(app);
     await app.type("id:settings-search", "retention");
     await app.waitFor("id:settings-nav-empty");
   }, 60_000);
@@ -94,19 +96,23 @@ for (const { name, size } of SIZES) {
 test("phone: the list comes first, a section is its own page with Back, and the page shows its title", async () => {
   const app = await openSettings({}, {});
   await app.waitFor("id:settings-nav-account");
-  expect(app.shows("id:settings-back")).toBe(false);
   expect(app.shows("id:settings-appearance")).toBe(false);
   await goSection(app, "account", "id:settings-security");
-  expect(app.shows("id:settings-back")).toBe(true);
+  // One Back control, in the header, which names the section: no second Back line and no second title in the page.
+  expect(app.shows("id:nb-back")).toBe(true);
+  expect(app.shows("id:settings-back")).toBe(false);
+  expect(app.shows("id:settings-title")).toBe(false);
   expect(app.shows("id:settings-nav-account")).toBe(false);
-  expect(app.texts()).toContain("Account");
-  await app.press("id:settings-back");
+  expect(app.texts().filter((t) => t === "Account")).toEqual(["Account"]);
+  await backToList(app);
   await app.waitFor("id:settings-nav-account");
   expect(app.shows("id:settings-security")).toBe(false);
-  // A section asked for by name opens at once.
+  expect(app.texts()).toContain("Settings");
+  // A section asked for by name opens at once; with no list behind it, Back puts the list in its place.
   const direct = await openSettings({}, {}, "computer");
   await direct.waitFor("id:settings-files");
-  expect(direct.shows("id:settings-back")).toBe(true);
+  expect(direct.shows("id:nb-back")).toBe(true);
+  expect(direct.shows("id:settings-back")).toBe(false);
   expect(direct.texts()).toContain("Device");
   expect(direct.texts()).toContain("Device setup");
   expect(direct.shows("id:settings-hotkey-recorder")).toBe(false);
@@ -119,20 +125,21 @@ for (const platform of ["ios", "android"] as const) {
     expect(app.texts()).toContain("Device");
     expect(app.shows("id:settings-nav-keyboard")).toBe(false);
     await goSection(app, "general", "id:settings-theme-row");
-    for (const id of ["settings-recent", "settings-compact-form-nav", "settings-auto-update"]) expect(app.shows(`id:${id}`)).toBe(false);
-    await app.press("id:settings-back");
+    expect(app.shows("id:settings-recent")).toBe(true);
+    for (const id of ["settings-compact-form-nav", "settings-auto-update"]) expect(app.shows(`id:${id}`)).toBe(false);
+    await backToList(app);
     await goSection(app, "computer", "id:settings-files");
     expect(app.shows("id:settings-retention-row")).toBe(true);
     expect(app.shows("id:settings-setup")).toBe(true);
     expect(app.shows("id:settings-hotkey-recorder")).toBe(false);
     expect(app.shows("id:settings-quit-key")).toBe(false);
-    await app.press("id:settings-back");
+    await backToList(app);
     await app.type("id:settings-search", "device");
     await app.waitFor("id:settings-nav-computer");
     await goSection(app, "computer", "id:settings-files");
     expect(app.shows("id:settings-setup")).toBe(true);
-    await app.press("id:settings-back");
-    for (const query of ["keyboard", "hotkey", "sidebar", "compact", "download", "tray", "menu bar", "close window", "launch at login", "file associations"]) {
+    await backToList(app);
+    for (const query of ["keyboard", "hotkey", "compact", "download", "tray", "menu bar", "close window", "launch at login", "file associations"]) {
       await app.clear("id:settings-search");
       await app.type("id:settings-search", query);
       await app.waitFor("id:settings-nav-empty");

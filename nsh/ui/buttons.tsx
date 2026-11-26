@@ -3,7 +3,7 @@ import type { JSX } from "nsh";
 import { View } from "nsh";
 import { Button } from "nsh/base";
 import type { IconName } from "./icons";
-import { CTL, CTL_SM, cx, FOCUS_RING, TOUCH, type Tone } from "./look";
+import { CTL, CTL_SM, cx, FOCUS_RING, T_MIN_H, T_SIZE, TOUCH, type Tone } from "./look";
 import { Tooltip } from "./layers";
 import { Icon, Kbd, Line, Text } from "./text";
 
@@ -112,7 +112,7 @@ export function IconButton(props: IconButtonProps) {
       class={cx(
         "items-center justify-center rounded-(--radius-ctl) enabled:hover:bg-hover active:bg-selected selected:bg-selected disabled:opacity-50",
         FOCUS_RING,
-        TOUCH ? "size-11" : "size-7",
+        TOUCH ? T_SIZE : "size-7",
       )}
       selected={props.pressed}
       disabled={props.disabled}
@@ -161,7 +161,7 @@ export function NavRow(props: NavRowProps) {
       class={cx(
         "group w-full flex-row items-center gap-2.5 rounded-(--radius-row) enabled:hover:bg-hover active:bg-selected selected:bg-selected",
         FOCUS_RING,
-        list() ? (TOUCH ? "min-h-11 px-2.5" : "min-h-9 px-2.5 py-1.5") : props.size === "recent" ? "min-h-8 px-2 py-1" : cx("px-2", CTL),
+        list() ? (TOUCH ? cx(T_MIN_H, "px-2.5") : "min-h-9 px-2.5 py-1.5") : props.size === "recent" ? "min-h-8 px-2 py-1" : cx("px-2", CTL),
       )}
       selected={props.current}
       accessibilityLabel={props.label}

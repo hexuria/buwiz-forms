@@ -13,10 +13,10 @@ const say = (what: string) => ran.set([...ran(), what]);
 
 function Demo() {
   createDemoTaxpayer();
-  bir.create_taxpayer({ tin_root: "000-111-229", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
+  bir.create_taxpayer({ tin_root: "000-111-225", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
   bir.setup_helpdesk("1234");
   bir.set_taxpayer_pin("000123453", "4321");
-  bir.set_taxpayer_pin("000111229", "5555");
+  bir.set_taxpayer_pin("000111225", "5555");
   app.onSessionChange(() => say("never"))();
   app.onSessionChange(() => say("first"));
   app.onSessionChange(() => {

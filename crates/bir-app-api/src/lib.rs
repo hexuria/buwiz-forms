@@ -12,6 +12,7 @@ pub mod agent;
 pub mod auth_limiter;
 pub mod bir_module;
 pub mod cloud_account;
+pub mod cloud_email;
 pub mod dashboard_module;
 pub mod hooks;
 pub mod hotkey_combo;

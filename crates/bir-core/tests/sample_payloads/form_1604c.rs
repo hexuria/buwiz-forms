@@ -20,7 +20,7 @@ fn month(
     }
 }
 
-fn sample_1604c() -> Form1604cDraft {
+pub(crate) fn sample_1604c() -> Form1604cDraft {
     let mut draft = Form1604cDraft::new_from_profile(&dummy_profile("1604C", "Corporation"), 2025);
     draft.agent_category = Form1604cAgentCategory::Private;
     draft.top_withholding_agent = true;

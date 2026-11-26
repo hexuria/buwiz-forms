@@ -17,7 +17,7 @@ fn named(description: &str, amount: i64) -> Form1702RTNamedAmount {
 
 /// Itemized deductions with Schedules I to V, NOLCO and MCIT carry-overs,
 /// credits, penalties and one payment row.
-fn sample_1702rt() -> Form1702RTDraft {
+pub(crate) fn sample_1702rt() -> Form1702RTDraft {
     let mut draft =
         Form1702RTDraft::new_from_profile(&dummy_profile("1702RTv2018C", "Corporation"), 2025, 12);
     draft.deduction_method = Form1702RTDeductionMethod::Itemized;
@@ -131,7 +131,7 @@ fn special(description: &str, legal_basis: &str, amount: i64) -> Form1702RTSpeci
 /// the IE7 document mode of its HTA host (case-insensitive
 /// `getElementById`, no whitespace-only text nodes in the item rows), which
 /// `saveModalTable` and `loadModalTable` rely on.
-fn sample_1702rt_more_rows() -> Form1702RTDraft {
+pub(crate) fn sample_1702rt_more_rows() -> Form1702RTDraft {
     let mut draft = sample_1702rt();
     draft.part_iv.tax_credits.item_54_other = named("Other credit 2", 1_000);
     let s1 = &mut draft.schedule_1;
@@ -221,7 +221,7 @@ fn form_1702rt_more_rows_sample_payload_is_current() {
 
 /// Itemized deductions of 150 over a gross income of 29, with nothing else
 /// on the return.
-fn sample_1702rt_small_loss() -> Form1702RTDraft {
+pub(crate) fn sample_1702rt_small_loss() -> Form1702RTDraft {
     let mut draft =
         Form1702RTDraft::new_from_profile(&dummy_profile("1702RTv2018C", "Corporation"), 2025, 12);
     draft.deduction_method = Form1702RTDeductionMethod::Itemized;
@@ -259,7 +259,7 @@ fn form_1702rt_small_loss_is_dropped_as_the_official_page_drops_it() {
 
 /// The sample before its payment is recorded: Part III must equal Item 21,
 /// which moves with the computed penalties.
-fn sample_1702rt_unpaid() -> Form1702RTDraft {
+pub(crate) fn sample_1702rt_unpaid() -> Form1702RTDraft {
     let mut draft = sample_1702rt();
     draft.payment_details[0] = Default::default();
     draft.recompute();

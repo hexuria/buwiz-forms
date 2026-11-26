@@ -8,7 +8,9 @@ import { loadDashboard, pickedDeadlines, tileSpecs, type HomeView, type TileSpec
 import { MONTHS_LONG } from "../../lib/dates";
 import { app, contentColumn, go, store, today } from "../../shell";
 import { SAVED_RETURNS_KEY } from "../../shell/store";
-import { AppButton, deviceCopy, EmptyRow, Icon, type IconName, ListGroup, ListRow, NameCell, PageHeader, SectionTitle, StepCircle, Text } from "../../ui";
+import { recentLabel, visibleRecent } from "../../shell/Sidebar";
+import { recentOpenOptions } from "../../lib/recent";
+import { AppButton, deviceCopy, EmptyRow, Icon, type IconName, ListGroup, ListRow, NameCell, PageHeader, SectionTitle, StepCircle, Text, TOUCH } from "../../ui";
 import { AsNeededHead, AsNeededUndated, DeadlineStrip, DueRow, FiledRow, StatTile, TaxpayerRow } from "./parts";
 import { homePick } from "./pick";
 import { FILED_STATUSES, openFilings } from "./preset";
@@ -113,6 +115,8 @@ function Dashboard(props: { width: () => number }) {
   const rows = () => picked().rows as DeadlineRow[];
   const specs = computed(() => tileSpecs(data()));
   const filed = computed<ReturnRow[]>(() => store.returns("filed").slice(0, 3));
+  /** The Recent list a phone or tablet shows here (no sidebar): the sidebar's returns, five at most. */
+  const recentRows = computed(() => visibleRecent().slice(0, 5));
   const asNeeded = computed(() => asNeededEntries(store.asNeeded(today().getFullYear())));
   const tileWidth = () => {
     const cols = tileColumns(props.width());
@@ -172,6 +176,25 @@ function Dashboard(props: { width: () => number }) {
               <If when={e().undated} else={<AsNeededHead f={e().form} compact={compact()} />}>
                 <AsNeededUndated f={e().form} r={e().undated as AsNeededReturn} compact={compact()} />
               </If>
+            )}
+          </Each>
+        </ListGroup>
+      </If>
+      {/* A phone or a tablet has no sidebar: its Recent list (the same returns, five at most) is here, above Recently filed. */}
+      <If when={TOUCH && app.prefs().showRecent && recentRows().length > 0}>
+        <SectionTitle>Recent</SectionTitle>
+        <ListGroup testID="home-recent">
+          <Each of={recentRows()} key={(r) => r.key}>
+            {(r) => (
+              <ListRow
+                testID={`home-recent-${String(r().key).replace(/[^A-Za-z0-9]/g, "-")}`}
+                accessibilityLabel={`Open ${recentLabel(r())}`}
+                onPress={() => app.openReturn(recentOpenOptions(r()))}
+              >
+                <Icon name="file-text" tone="fg3" />
+                <NameCell title={recentLabel(r())} />
+                <Icon name="chevron-right" tone="fg3" />
+              </ListRow>
             )}
           </Each>
         </ListGroup>

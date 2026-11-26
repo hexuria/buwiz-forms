@@ -6,7 +6,7 @@ use bir_core::forms::form_2000::{
 };
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_2000() -> Form2000Draft {
+pub(crate) fn sample_2000() -> Form2000Draft {
     let mut draft =
         Form2000Draft::new_from_profile(&dummy_profile("2000v2018", "Corporation"), 2025, 6);
     // A creditor with a mixed-case name: Item 11's blur runs capital().

@@ -56,7 +56,7 @@ test("the store lists the imported returns of a branch it may see, once, and non
   expect(store.legacyFiled(tin)).toEqual([row]);
   expect(asked).toBe(2);
   // A taxpayer's session sees its own and nothing of another's, and the host is not asked.
-  store.setScope("000111229");
+  store.setScope("000111225");
   expect(store.legacyFiled(tin)).toEqual([]);
   expect(asked).toBe(2);
   store.setScope(demo.tin_root);
@@ -133,7 +133,7 @@ test("desktop: a taxpayer in view with nothing imported draws nothing, while ano
 });
 
 test("desktop: the group is the taxpayer in view's: another taxpayer shows their own lines", async () => {
-  const app = await board({ ...WITH, start: "view=filings;tp=000111229" });
+  const app = await board({ ...WITH, start: "view=filings;tp=000111225" });
   await app.waitFor(GROUP);
   expect(app.shows("id:filings-legacy-count >> text:1")).toBe(true);
   expect(app.texts()).toContain("2551Q Q3 2025");

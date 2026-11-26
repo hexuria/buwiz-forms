@@ -285,8 +285,9 @@ for (const size of SIZES) {
     for (const words of ["Payee", "ATC", "Amount", "Withheld"]) expect(app.texts()).toContain(words);
     await app.clear("id:fp-sch1pay");
     await app.type("id:fp-sch1pay", "Santos Realty");
+    await app.clear("id:fp-sch1amt");
     await app.type("id:fp-sch1amt", "5");
-    expect(app.texts().some((t) => t.startsWith("Santos Realty · WI100 · 12000.00"))).toBe(true);
+    expect(app.texts()).toContain("Santos Realty · WI100 · 5 · 600.00");
     expect(edit(app, "sch1pay")).toBeNull();
     // A tick box in the drawer.
     await app.press("id:fp-sch1res");

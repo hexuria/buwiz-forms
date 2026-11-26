@@ -1327,6 +1327,30 @@
    "reason": "the second item 7 comb: the rest of the address; a longer line prints whole in smaller type"
   },
   {
+   "writer_key": "derived:part4_cash",
+   "html_id": "p1c108",
+   "printed": "25 Cash/Bank Debit Memo: Drawee Bank / Number / Date / Amount",
+   "reason": "one 33-slot comb spanning all four Part IV columns (5 bank, 6 number, 8 date MMDDYYYY, 11 peso right-aligned, 1 grey dot slot, 2 centavos)"
+  },
+  {
+   "writer_key": "derived:part4_check",
+   "html_id": "p1c110",
+   "printed": "26 Check: Drawee Bank / Number / Date / Amount",
+   "reason": "one 33-slot comb spanning all four Part IV columns (5 bank, 6 number, 8 date MMDDYYYY, 11 peso right-aligned, 1 grey dot slot, 2 centavos)"
+  },
+  {
+   "writer_key": "derived:part4_tdm",
+   "html_id": "p1c111",
+   "printed": "27 Tax Debit Memo: Number / Date / Amount",
+   "reason": "one 28-slot comb spanning Number, Date and Amount columns (6 number, 8 date MMDDYYYY, 11 peso right-aligned, 1 grey dot slot, 2 centavos)"
+  },
+  {
+   "writer_key": "derived:part4_others",
+   "html_id": "p1c114",
+   "printed": "28 Others: Drawee Bank / Number / Date / Amount",
+   "reason": "one 33-slot comb spanning all four Part IV columns (5 bank, 6 number, 8 date MMDDYYYY, 11 peso right-aligned, 1 grey dot slot, 2 centavos)"
+  },
+  {
    "writer_key": "frm2200Av2020:txtSched1_3A_2020A_Export",
    "html_id": "p3c24",
    "printed": "Fermented liquors XA056 (page 3 top block), Effective January 1, 2020, P26.43 Export",
@@ -1538,7 +1562,7 @@
     "frm2200Av2020:taxDate",
     "frm2200Av2020:taxNum"
    ],
-   "reason": "Part IV payment detail (drawee bank, number, date, amount): each Part IV row is one comb spanning all four columns (not_joined_cells p1c108, p1c110, p1c111, p1c114), so the keys cannot be placed in their columns"
+   "reason": "prints from derived:part4_cash / derived:part4_check / derived:part4_tdm / derived:part4_others (each Part IV row is one shared comb spanning Drawee Bank, Number, Date and Amount)"
   }
  ],
  "not_joined_cells": [
@@ -1553,22 +1577,6 @@
   {
    "html_id": "p1c100",
    "reason": "Tax agent Date of Expiry: no layout key"
-  },
-  {
-   "html_id": "p1c108",
-   "reason": "Part IV row 25 is one 33-slot comb spanning bank, number, date and amount columns; no column cell exists for the cash/bank key split"
-  },
-  {
-   "html_id": "p1c110",
-   "reason": "Part IV row 26 is one 33-slot comb spanning bank, number, date and amount columns; no column cell exists for the check key split"
-  },
-  {
-   "html_id": "p1c111",
-   "reason": "Part IV row 27 is one 28-slot comb spanning the full width; tax debit memo keys cannot be split"
-  },
-  {
-   "html_id": "p1c114",
-   "reason": "Part IV row 28 bank column is one 33-slot comb spanning the full width; no column split for othersBank"
   }
  ]
 }

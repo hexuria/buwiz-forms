@@ -66,6 +66,17 @@ fn set(input: &mut WholePesoInput, value: i64) {
     input.set(WholePeso(value));
 }
 
+/// Set a computed whole-peso box whose official page display uses
+/// `formatCurrencyWOC` (`1,234` / `(1,234)` / `0`), keeping `raw` aligned
+/// with `to_official_field_map` for both `to_print_field_map` and
+/// `to_bir_field_map`.
+fn set_display(input: &mut WholePesoInput, value: i64) {
+    *input = WholePesoInput {
+        amount: Some(WholePeso(value)),
+        raw: official_display(value),
+    };
+}
+
 /// `NegativeValue(formatCurrencyWOC(x))`: whole pesos with thousands
 /// separators, negatives in parentheses.
 pub fn official_display(value: i64) -> String {
@@ -198,17 +209,17 @@ fn apply_nolco(
         let loss = gross_income - deductions;
         set(&mut computation.item_3_net_operating_loss, loss);
         row.year_incurred = filing_year.to_string();
-        set(&mut row.amount, loss.abs());
-        set(&mut row.applied_previous_years, 0);
-        set(&mut row.expired, 0);
-        set(&mut row.applied_current_year, 0);
+        set_display(&mut row.amount, loss.abs());
+        set_display(&mut row.applied_previous_years, 0);
+        set_display(&mut row.expired, 0);
+        set_display(&mut row.applied_current_year, 0);
     } else {
         set(&mut computation.item_1_gross_income, 0);
         set(&mut computation.item_2_ordinary_itemized_deductions, 0);
         set(&mut computation.item_3_net_operating_loss, 0);
         row.year_incurred = " ".to_string();
-        set(&mut row.amount, 0);
-        set(&mut row.applied_current_year, 0);
+        set_display(&mut row.amount, 0);
+        set_display(&mut row.applied_current_year, 0);
     }
 }
 
@@ -216,14 +227,14 @@ fn recompute_nolco_rows(table: &mut Form1702MXNolcoTable) {
     for row in &mut table.rows {
         let used = v(&row.applied_previous_years) + v(&row.expired) + v(&row.applied_current_year);
         let unapplied = v(&row.amount) - used;
-        set(&mut row.unapplied, unapplied);
+        set_display(&mut row.unapplied, unapplied);
     }
     let total = table
         .rows
         .iter()
         .map(|row| v(&row.applied_current_year))
         .sum();
-    set(&mut table.item_8_total_applied_current_year, total);
+    set_display(&mut table.item_8_total_applied_current_year, total);
 }
 
 impl Form1702MXDraft {
@@ -1571,6 +1582,187 @@ impl Form1702MXDraft {
         fields
     }
 
+    /// Print keys backed by an optional amount the filer has never entered
+    /// and the form has not computed. The upload still files those boxes as
+    /// zero; form-review/RULES.md section 7 keeps them blank on paper.
+    pub(crate) fn untouched_amount_print_keys(&self) -> std::collections::BTreeSet<String> {
+        let mut keys = std::collections::BTreeSet::new();
+        let mut put = |key: &str, value: &WholePesoInput| {
+            if value.amount.is_none() {
+                keys.insert(format!("frm1702MX:{key}"));
+            }
+        };
+        let p2 = &self.part_ii;
+        put("txtPg1Pt2I17", &p2.item_17_surcharge);
+        put("txtPg1Pt2I18", &p2.item_18_interest);
+        put("txtPg1Pt2I19", &p2.item_19_compromise);
+        put("txtPg1Pt2I20TotalPenalties", &p2.item_20_total_penalties);
+        put(
+            "txtPg1Pt2I21TotalAmount",
+            &p2.item_21_total_amount_payable_or_overpayment,
+        );
+
+        let cols = ['A', 'B', 'C', 'D'];
+        macro_rules! row {
+            ($key:expr, $amounts:expr, $which:expr $(,)?) => {{
+                for letter in $which.chars() {
+                    let column = cols.iter().position(|c| *c == letter).unwrap_or(3);
+                    put(&format!("{}{}", $key, letter), column_ref($amounts, column));
+                }
+            }};
+        }
+
+        let s2 = &self.schedule_2.items;
+        for item in 1..=9 {
+            row!(&format!("txtPg2Sc2Itm{item}"), &s2[item - 1], "ABCD");
+        }
+        row!("txtPg2Sc2It10", &s2[9], "BCD");
+        row!("txtPg2Sc2It11", &s2[10], "ABCD");
+        row!("txtPg2Sc2It12", &s2[11], "CD");
+        row!("txtPg2Sc2It13", &s2[12], "ABCD");
+        row!("txtPg2Sc2It15", &s2[14], "BCD");
+        row!("txtPg2Sc2It16", &s2[15], "BD");
+        row!("txtPg2Sc2It17", &s2[16], "BCD");
+        row!("txtPg2Sc2It18", &s2[17], "CD");
+        row!("txtPg2Sc2It19", &s2[18], "BCD");
+        row!("txtPg2Sc2Itm10", &self.schedule_10.items[9], "ABCD");
+
+        for (offset, amounts) in self.schedule_3.items_20_to_33.iter().enumerate() {
+            let item = 20 + offset;
+            let which = if item == 21 || item == 23 {
+                "CD"
+            } else {
+                "ABCD"
+            };
+            row!(&format!("txtPg2Sc3It{item}"), amounts, which);
+        }
+        for (offset, amounts) in self.schedule_4.items.iter().enumerate() {
+            let item = offset + 1;
+            match item {
+                1 => row!("txtPg3Sc4Itm1", amounts, "ABD"),
+                4 => row!("txtPg2Sc4Itm4", amounts, "BD"),
+                _ => row!(&format!("txtPg2Sc4Itm{item}"), amounts, "ABCD"),
+            }
+        }
+        let s5_keys = (1..=16).map(|n| n.to_string()).chain(
+            [
+                "17a", "17b", "17c", "17d", "17e", "17f", "17g", "17h", "17i", "18",
+            ]
+            .map(String::from),
+        );
+        for (key, amounts) in s5_keys.zip(self.schedule_5.amounts.iter()) {
+            row!(&format!("txtPg3Sc5Itm{key}"), amounts, "ABCD");
+        }
+
+        let s6_ids = [
+            [
+                "txtPg6Sc6I1CA",
+                "txtPg3Sc6I1CB",
+                "txtPg6Sc6I1CC",
+                "txtPg6Sc6I1CD",
+            ],
+            [
+                "txtPg6Sc6I2CA",
+                "txtPg3Sc6I2CB",
+                "txtPg6Sc6I2CC",
+                "txtPg6Sc6I2CD",
+            ],
+            [
+                "txtPg6Sc6I3CA",
+                "txtPg4Sc6I3CB",
+                "txtPg6Sc6I3CC",
+                "txtPg6Sc6I3CD",
+            ],
+            [
+                "txtPg3Sc6I4CA",
+                "txtPg3Sc6I4CB",
+                "txtPg3Sc6I4CC",
+                "txtPg3Sc6I4CD",
+            ],
+        ];
+        for (ids, entry) in s6_ids.iter().zip(self.schedule_6.rows.iter()) {
+            for (column, id) in ids.iter().enumerate() {
+                put(id, column_ref(&entry.amounts, column));
+            }
+        }
+        for (column, letter) in cols.iter().enumerate() {
+            put(
+                &format!("txtPg6Sc6I5C{letter}"),
+                column_ref(&self.schedule_6.item_5_total, column),
+            );
+        }
+
+        let rn = &self.regular_nolco;
+        put("txtPg6Sc7I1", &rn.item_1_gross_income);
+        put("txtPg6Sc7I2", &rn.item_2_ordinary_itemized_deductions);
+        put("txtPg6Sc7I3", &rn.item_3_net_operating_loss);
+        let sn = &self.special_nolco;
+        put("txtPg4Sc8It1", &sn.item_1_gross_income);
+        put("txtPg4Sc8It2", &sn.item_2_ordinary_itemized_deductions);
+        put("txtPg4Sc8It3", &sn.item_3_net_operating_loss);
+        for (table, prefix) in [(&self.schedule_7_1, '7'), (&self.schedule_8_1, '8')] {
+            for (offset, entry) in table.rows.iter().enumerate() {
+                let item = offset + 4;
+                let page = |column: char| -> &'static str {
+                    match (prefix, item, column) {
+                        ('7', _, _) => "Pg3",
+                        ('8', 7, _) => "Pg4",
+                        ('8', 6, 'C') => "Pg3",
+                        ('8', _, 'Y') => "Pg3",
+                        _ => "Pg4",
+                    }
+                };
+                for (letter, value) in [
+                    ('A', &entry.amount),
+                    ('B', &entry.applied_previous_years),
+                    ('C', &entry.expired),
+                    ('D', &entry.applied_current_year),
+                    ('E', &entry.unapplied),
+                ] {
+                    put(
+                        &format!("txt{}IShed{prefix}_{item}{letter}", page(letter)),
+                        value,
+                    );
+                }
+            }
+            put(
+                &format!("txtPg3IShed{prefix}8D"),
+                &table.item_8_total_applied_current_year,
+            );
+        }
+
+        for (offset, entry) in self.schedule_9.rows.iter().enumerate() {
+            let n = offset + 1;
+            for (letter, value) in [
+                ('A', &entry.normal_income_tax),
+                ('B', &entry.mcit),
+                ('C', &entry.excess_mcit),
+                ('D', &entry.applied_previous_years),
+                ('E', &entry.expired),
+                ('F', &entry.applied_current_year),
+                ('G', &entry.balance),
+            ] {
+                put(&format!("txtPg7Sc9I{n}C{letter}"), value);
+            }
+        }
+        put(
+            "txtPg7Sc9I4",
+            &self.schedule_9.item_4_total_applied_current_year,
+        );
+        for (offset, amounts) in self.schedule_10.items.iter().take(9).enumerate() {
+            row!(&format!("txtPg4Sc10Itm{}", offset + 1), amounts, "ABCD");
+        }
+        for (index, entry) in self.schedule_6.more_rows.iter().enumerate() {
+            for column in 0..4 {
+                put(
+                    &format!("txtPg6Sc6_{}Col{}", index + 1, column + 3),
+                    column_ref(&entry.amounts, column),
+                );
+            }
+        }
+        keys
+    }
+
     /// The exact official submit plaintext.
     pub fn to_official_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         self.official_payload()
@@ -2152,6 +2344,34 @@ mod tests {
         }
     }
 
+    #[test]
+    fn untouched_optional_amount_boxes_print_blank() {
+        let mut d = Form1702MXDraft::new_from_profile(&profile(), 2025);
+        d.deduction_method = Form1702MXDeductionMethod::Itemized;
+        d.recompute();
+        let fields = d.to_print_field_map();
+        for key in d.untouched_amount_print_keys() {
+            assert_eq!(
+                fields.get(&key).map(String::as_str).unwrap_or(""),
+                "",
+                "{key}"
+            );
+        }
+    }
+
+    #[test]
+    fn print_zero_distinguishes_untouched_typed_and_computed_amounts() {
+        let mut d = Form1702MXDraft::new_from_profile(&profile(), 2025);
+        d.deduction_method = Form1702MXDeductionMethod::Itemized;
+        d.schedule_2.items[0].regular.set(WholePeso(0));
+        d.recompute();
+        let fields = d.to_print_field_map();
+        assert_eq!(fields["frm1702MX:txtPg2Sc2Itm1A"], "", "untouched exempt");
+        assert_eq!(fields["frm1702MX:txtPg2Sc2Itm1B"], "", "untouched special");
+        assert_eq!(fields["frm1702MX:txtPg2Sc2Itm1C"], "0", "typed zero");
+        assert_eq!(fields["frm1702MX:txtPg2Sc2Itm1D"], "0", "computed zero");
+    }
+
     /// The print's Item 9: the registered address the return files on its
     /// first line, and a later line printed only when the address does not
     /// already hold it, so nothing prints twice.
@@ -2166,9 +2386,9 @@ mod tests {
         ];
         let fields = d.to_print_field_map();
         let line = |n: &str| fields[&format!("frm1702MX:txtPg1Pt1I10RegisteredAddress{n}")].clone();
-        assert_eq!(line(""), "Unit 5 Bldg A, 123 Ayala Avenue, Makati City");
+        assert_eq!(line(""), "UNIT 5 BLDG A, 123 AYALA AVENUE, MAKATI CITY");
         assert_eq!(line("2"), "", "already in the address");
-        assert_eq!(line("3"), "Annex Tower", "a line of its own still prints");
+        assert_eq!(line("3"), "ANNEX TOWER", "a line of its own still prints");
         // The upload keeps every line as stored.
         let upload = d.to_bir_field_map();
         assert_eq!(

@@ -4,7 +4,7 @@
 //   years     default true: this year with 1601C and 2551Q; false: no tax year yet
 //   solo      true: choose "Just me" for the demo taxpayer (setup_solo), so the admin PIN, recovery key and setup change work
 //   helpdesk  "2468": choose a help desk with this admin PIN instead (the demo taxpayer is then one of its taxpayers)
-//   second    true: add a second taxpayer (generated: Sample Trading Corp, TIN 000-111-229) with the PIN 5678, so it can become the
+//   second    true: add a second taxpayer (generated: Sample Trading Corp, TIN 000-111-225) with the PIN 5678, so it can become the
 //             owner; "nopin": the same without a PIN (it cannot be chosen yet)
 //   totpSecret an authenticator key (base32) to give the admin before the app starts; the test makes the code with screens/auth/testTotp
 //   pin       the admin PIN to set before the app starts ("1234"); needs solo. With a PIN the app starts at the sign-in screen,
@@ -13,8 +13,8 @@
 //   jobs      true: a fake job table (a queued filing, a scheduled job, a failed one, an archived one, a completed one): delete,
 //             archive, purge and cancel_queued change it, and every call is listed in the readout
 //   log       "mixed" (every level), "long" (300 lines, to see the 200 cap), "empty" (no file yet), "error" (the read fails); else the real file
-//   cloud     "out" (signed out; sign-in works), "in" (signed in as juana@example.com; sign-out works), "down" (the server is unreachable),
-//             "practice" (signed in as the app-store reviewers' practice account)
+//   cloud     "out" (signed out; Sign in shows the gate, whose email sign-in is the fake of screens/auth/testEmail.ts), "in" (signed
+//             in as juana@example.com; sign-out works), "practice" (signed in as the app-store reviewers' practice account)
 //   import    "database" | "profile" | "invalid" | "cancelled" | "fail": what import_archive answers (the dialog is the host's)
 //   ebir      F18, the eBIRForms import (the folder dialog is the host's): "found" (a folder with 1 taxpayer, 3 filed returns, 1 draft,
 //             1 file not read; Import creates the committed fixture's taxpayer for real, so the frame's lists re-read), "standard" (the
@@ -22,7 +22,8 @@
 //             (the scan throws), "importfail" (the import throws), "slow" (the scan answers after 1.5 s), "foundonce" (the first folder dialog finds the folder,
 //             every later one is dismissed). The taxpayer count shows as
 //             demo-taxpayers.
-//   google    true: a fake Gmail inbox for the demo taxpayer (connect, disconnect and tracking change it; the browser sign-in is not opened)
+//   google    true: a fake Gmail inbox for the demo taxpayer (connect, disconnect and tracking change it; the browser sign-in is not opened);
+//             "unavailable": the same inbox in a build with no Google client id
 //   hotkey    "refuse": set_global_hotkey is refused, as the host does for a chord it cannot register; "note": it is listed in the calls
 //             readout (noise) and then done by the real host, so the box shows what was stored
 //   status    "refused" | "invalid": where the desktop host says the global hotkey stands (there is no desktop host in this fixture)
@@ -36,6 +37,7 @@ import "./theme/fonts";
 import { bir, type BackgroundJob, type CloudAccountStatus, type InboxState, type UpdateStatus } from "./bir";
 import type { LegacyScanAnswer, LegacyScanSummary } from "./bir";
 import { store } from "./shell/store";
+import { fakeEmail } from "./screens/auth/testEmail";
 import { createDemoTaxpayer } from "./bir/testing";
 import { totpCode } from "./screens/auth/testTotp";
 import { app } from "./shell/app";
@@ -51,12 +53,12 @@ interface Params {
   pin?: string;
   totpSecret?: string;
   signin?: boolean | "taxpayer";
-  google?: boolean;
+  google?: boolean | "unavailable";
   hotkey?: "refuse" | "note";
   readout?: boolean;
   jobs?: boolean;
   log?: "mixed" | "long" | "empty" | "error";
-  cloud?: "out" | "in" | "down" | "practice";
+  cloud?: "out" | "in" | "practice";
   import?: "database" | "profile" | "invalid" | "cancelled" | "fail";
   ebir?: "found" | "standard" | "empty" | "wrong" | "cancelled" | "fail" | "importfail" | "slow" | "foundonce";
   status?: "refused" | "invalid";
@@ -157,23 +159,15 @@ const SIGNED_OUT: CloudAccountStatus = {
 };
 const SIGNED_IN: CloudAccountStatus = { ...SIGNED_OUT, signed_in: true, email: "juana@example.com", user_id: "u-1", detail: "Signed in. Your account is checked now and then." };
 
-function fakeCloud(kind: "out" | "in" | "down" | "practice"): void {
+function fakeCloud(kind: "out" | "in" | "practice"): void {
   let status = kind === "practice" ? { ...SIGNED_IN, practice: true } : kind === "in" ? SIGNED_IN : SIGNED_OUT;
   swap("cloud_account_status", () => () => status);
   swap("cloud_account_refresh", () => async () => {
     note("cloud_account_refresh");
     return status;
   });
-  swap("cloud_account_begin_sign_in", () => async () => {
-    note("cloud_account_begin_sign_in");
-    if (kind === "down") throw new Error("Could not reach the Buwiz server. Check the connection and try again.");
-    return { user_code: "ABCD-1234", verification_uri: "https://buwiz.example.test/device", verification_uri_complete: "https://buwiz.example.test/device?c=ABCD-1234", browser_opened: false };
-  });
-  swap("cloud_account_finish_sign_in", () => async () => {
-    note("cloud_account_finish_sign_in");
-    status = SIGNED_IN;
-    return status;
-  });
+  // The gate that Sign in shows never reaches the host's email sign-in.
+  fakeEmail(bir as unknown as Record<string, unknown>, {}, note, SIGNED_IN);
   swap("cloud_account_sign_out", () => async () => {
     note("cloud_account_sign_out");
     status = SIGNED_OUT;
@@ -247,10 +241,10 @@ function fakeUpdate(): void {
   });
 }
 
-function fakeGoogle(): void {
+function fakeGoogle(available: boolean): void {
   let state: InboxState = {
     tin: "00012345300000", inbox_email: "juana@example.com", auth_method: "AppPassword", tracking_enabled: false, imap_login: "", imap_host: "imap.gmail.com",
-    has_app_password: false, oauth_connected: false, oauth_inbox_email: null, oauth_updated_at: null, still_pending: false, matching_tins: ["00012345300000"],
+    has_app_password: false, oauth_connected: false, google_available: available, oauth_inbox_email: null, oauth_updated_at: null, still_pending: false, matching_tins: ["00012345300000"],
     last_check_at: null, last_check_status: null, last_check_log: null,
   };
   swap("inbox_state", () => () => state);
@@ -293,9 +287,9 @@ function seed(p: Params): void {
     bir.add_tax_year(head.tin, year, false);
     bir.set_yearly_forms(head.tin, year, ["1601C", "2551Q"]);
   }
-  if (p.second && !bir.list_taxpayers().some((t) => t.tin_root === "000111229")) {
-    bir.create_taxpayer({ tin_root: "000-111-229", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100", email: "sample@example.com" } });
-    if (p.second !== "nopin") bir.set_taxpayer_pin("000111229", "5678");
+  if (p.second && !bir.list_taxpayers().some((t) => t.tin_root === "000111225")) {
+    bir.create_taxpayer({ tin_root: "000-111-225", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100", email: "sample@example.com" } });
+    if (p.second !== "nopin") bir.set_taxpayer_pin("000111225", "5678");
   }
   if (bir.auth_state().mode === null) {
     if (p.helpdesk) bir.setup_helpdesk(p.helpdesk);
@@ -315,7 +309,7 @@ function Demo() {
   if (p.import) fakeImport(p.import);
   if (p.ebir) fakeEbir(p.ebir);
   if (p.update) fakeUpdate();
-  if (p.google) fakeGoogle();
+  if (p.google) fakeGoogle(p.google === true);
   if (p.hotkey === "refuse") fakeHotkeyRefusal();
   if (p.hotkey === "note") noteHotkey();
   if (p.status) setHotkeyStatus(p.status);

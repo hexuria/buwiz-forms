@@ -3167,6 +3167,7 @@ fn evaluate_here(
     // whose entry is not the one the sheet prints there).
     if let Value::Array(list) = &mut errors {
         list.extend(rows_dst_pt_vat::notices(kind, draft));
+        list.extend(rows_2550m::notices(kind, draft));
         list.extend(rows_annual_corporate::notices(kind, draft));
         list.extend(rows_annual_individual::notices(kind, draft));
         // PR 9's notices: a stored partial date the page shows blank.
@@ -3247,7 +3248,7 @@ fn lifecycle_text<'a>(draft: &'a Value, name: &str) -> Option<&'a str> {
 }
 
 /// A lifecycle fact that is a yes or no (absent is no); see [`lifecycle_text`].
-fn lifecycle_flag(draft: &Value, name: &str) -> bool {
+pub(crate) fn lifecycle_flag(draft: &Value, name: &str) -> bool {
     draft[name]
         .as_bool()
         .or_else(|| draft["lifecycle"][name].as_bool())
@@ -3648,6 +3649,8 @@ const NOTE_PROFILE: &str = "Comes from the tax profile.";
 const NOTE_IDENTITY: &str = "Set by the return you opened (its taxpayer and period).";
 const NOTE_REPEAT: &str = "Repeats another box on this form; fill it there.";
 const NOTE_NOT_YET: &str = "Can't be filled on this page yet.";
+/// 2553's classification column: the row's ATC decides it.
+const NOTE_FOLLOWS_ATC: &str = "Follows the ATC chosen in this row.";
 /// A box the official page keeps shut from load (PR 7: 1701 Part VIII
 /// column B, probe.rs `SHUT_ON_OFFICIAL_PAGE`).
 const NOTE_SHUT: &str = "The official form keeps this box shut; it files as 0.00.";
@@ -3679,6 +3682,11 @@ fn assigned_to_open(code: &str, key: &str) -> bool {
 fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
     if rows_withholding::preprinted(code, key) {
         return rows_withholding::PREPRINTED;
+    }
+    // A column or box the schema marks computed (the overrides carry each
+    // marking's evidence) never "can't be filled yet": it is the form's own.
+    if schema_computed(code, key) {
+        return NOTE_COMPUTED;
     }
     if let Some(note) = rows_annual_corporate::live_lock_note(reason) {
         return note;
@@ -3727,6 +3735,12 @@ fn lock_note(reason: &str) -> &'static str {
         NOTE_REPEAT
     } else if reason.ends_with(bir_core::forms::agent::probe::SHUT_REASON) {
         NOTE_SHUT
+    } else if reason == bir_core::forms::agent::draft_locks::dst_pt_vat::PRINTED_LOCK {
+        // 2553 rows 14-17: the July 1999 sheet preprints the row's
+        // classification, ATC and rate; only the amounts are typed.
+        rows_withholding::PREPRINTED
+    } else if reason == bir_core::forms::agent::draft_locks::dst_pt_vat::CLASSIFICATION_LOCK {
+        NOTE_FOLLOWS_ATC
     } else {
         // Unmapped, derived, written by the app, or a field this page
         // cannot write: shut until the form's own work opens it.
@@ -4961,6 +4975,70 @@ pub(crate) fn removes(
         .or_else(|| rows_excise::removes(kind, before, after, edits))
 }
 
+/// The reviewed reason a person sees on the form page when `key` is gated
+/// shut on `draft` (corpus `enabled_when` conditions and host module gates).
+/// Blank and untick writes are clears and are never refused by a gate.
+pub(crate) fn page_gate_refusal(
+    kind: AgentFormKind,
+    draft: &Value,
+    key: &str,
+    value: &Value,
+) -> Option<String> {
+    if value.is_null()
+        || value.as_str().is_some_and(agent::carry::is_blank_value)
+        || is_unticked(value)
+    {
+        return None;
+    }
+    let code = kind.form_code();
+    if let Some(why) = rows_income_q::closed_refusal(kind, draft, key, value)
+        .map(str::to_string)
+        .or_else(|| rows_annual_individual::closed_refusal(kind, draft, key, value))
+    {
+        return Some(why);
+    }
+    if let Some((_, tag)) = rows_donor_estate::closed(kind, draft)
+        .into_iter()
+        .find(|(k, _)| k == key)
+    {
+        return Some(tag.to_string());
+    }
+    if rows_withholding::gated(kind, draft, key) == Some(true)
+        || rows_monthly::gated(kind, draft, key) == Some(true)
+    {
+        return conditions::tag(code, key);
+    }
+    if let Some(tag) = rows_income_q::gated(kind, draft, key) {
+        return Some(tag.to_string());
+    }
+    if rows_annual_individual::gated(kind, draft, key) {
+        return conditions::tag(code, key);
+    }
+    let shown = Value::Object(
+        agent::field_map(kind, draft)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(k, v)| (k, Value::String(v)))
+            .collect(),
+    );
+    if let Some(tag) = conditions::off_now(kind, draft, &shown, key) {
+        return Some(tag);
+    }
+    if let Some(tag) = rows_as_needed::off(kind, draft, &shown)
+        .get(key)
+        .and_then(Value::as_str)
+    {
+        return Some(tag.to_string());
+    }
+    if let Some(tag) = rows_excise::off(kind, draft, &shown)
+        .get(key)
+        .and_then(Value::as_str)
+    {
+        return Some(tag.to_string());
+    }
+    None
+}
+
 /// Apply the page's edits to `draft` the one way both the draft fill and the
 /// live print preview use, so the preview never prints a different answer
 /// than the page shows. Returns the rejected keys with their reasons.
@@ -5372,10 +5450,13 @@ fn apply_screen_edits_here(
             }
         };
         // A box the form would clear (its answer does not hold) or past its
-        // official length is refused with its reason (PR 11's forms).
+        // official length is refused with its reason (PR 11's forms, 2551Q).
         let result = result.and_then(|()| {
             written
-                .and_then(|value| rows_excise::refusal(kind, &next, &key, &value))
+                .and_then(|value| {
+                    rows_excise::refusal(kind, &next, &key, &value)
+                        .or_else(|| form_2551q_amount_refusal(kind, &key, &value))
+                })
                 .map_or(Ok(()), Err)
         });
         match result {
@@ -5408,6 +5489,61 @@ fn apply_screen_edits_here(
         penalty_groups.into_iter().map(|(group, _)| group).collect();
     rows_excise::join_if_group_blanked(kind, draft, &groups, &blanked, &rejected);
     Ok(rejected)
+}
+
+/// Refuse 2551Q amount edits at entry when they exceed the official 12-char
+/// typed taxable-amount limit (`txtATCAmt1..6`) or the 12-digit peso comb
+/// (`frm2551Qv2018:txt15..22`), so entry, Check, and Queue agree.
+fn form_2551q_amount_refusal(kind: AgentFormKind, key: &str, value: &Value) -> Option<String> {
+    if kind != AgentFormKind::Form2551Q {
+        return None;
+    }
+    let amount = match value {
+        Value::Number(n) => n.as_f64()?,
+        Value::String(s) => {
+            let clean = s.trim().replace(',', "");
+            if clean.is_empty() {
+                return None;
+            }
+            clean.parse::<f64>().ok()?
+        }
+        _ => return None,
+    };
+    if !amount.is_finite() {
+        return None;
+    }
+    if matches!(
+        key,
+        "txtATCAmt1" | "txtATCAmt2" | "txtATCAmt3" | "txtATCAmt4" | "txtATCAmt5" | "txtATCAmt6"
+    ) {
+        if !bir_core::forms::form_2551q::fits_taxable_amount_input(amount.abs()) {
+            return Some(bir_core::forms::form_2551q::taxable_amount_limit_message(
+                None,
+            ));
+        }
+        if amount < 0.0 {
+            return Some("Must be zero or greater; enter a non-negative amount.".to_string());
+        }
+    } else if matches!(
+        key,
+        "frm2551Qv2018:txt15"
+            | "frm2551Qv2018:txt16"
+            | "frm2551Qv2018:txt17"
+            | "frm2551Qv2018:txt20"
+            | "frm2551Qv2018:txt21"
+            | "frm2551Qv2018:txt22"
+    ) {
+        if !bir_core::forms::form_2551q::fits_decimal_comb(
+            amount,
+            bir_core::forms::form_2551q::FORM_2551Q_AMOUNT_INTEGER_CELLS,
+        ) {
+            return Some(bir_core::forms::form_2551q::amount_comb_limit_message(None));
+        }
+        if amount < 0.0 {
+            return Some("Must be zero or greater; enter a non-negative amount.".to_string());
+        }
+    }
+    None
 }
 
 /// Why a box's direct draft steps (`ChoiceStep::Set`) are refused: it is
@@ -7241,6 +7377,10 @@ mod tests {
     // Form fields PR 1 handoff 2: a code off a select's list is refused
     // on every form (bug B17).
     mod sel_lists;
+    mod unfillable;
+    // Every form's RDO box offers the RDO catalog, never 1601C's leftover
+    // "000" option script; "000" is no RDO.
+    mod rdo_lists;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -9165,6 +9305,167 @@ mod tests {
         let cleared = fill("2551Q", &filled["draft"], json!({"drpATC2": ""}));
         assert!(cleared["rejected"].get("drpATC2").is_none(), "{cleared}");
         assert_eq!(cleared["draft"]["schedule_1"][1]["atc"], "");
+    }
+
+    #[test]
+    fn form_2551q_entry_check_and_queue_agree_on_amount_limits() {
+        setup();
+        let opened = open("2551Q", 3);
+        let validate = |draft: &Value| {
+            call_async(
+                "screen_form_validate",
+                vec!["2551Q".into(), json(draft.clone())],
+            )
+            .unwrap()
+        };
+
+        // Row 1 (default PT010 @ 3%): 666,666,666.66 (12 chars, with centavos) -> tax due 20,000,000.00 (8 digits)
+        // Row 2 (second catalog ATC): 999,999,999,999 (12 chars, 12 integer digits) -> fits 12-digit tax due
+        let row2_atc = opened["options"]["drpATC2"]
+            .as_array()
+            .and_then(|opts| {
+                opts.iter().find(|o| {
+                    o["value"]
+                        .as_str()
+                        .is_some_and(|v| !v.is_empty() && v != "0" && v != "1")
+                })
+            })
+            .and_then(|o| o["value"].as_str())
+            .unwrap_or("2")
+            .to_string();
+        let ok = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({
+                "txtATCAmt1": "666666666.66",
+                "drpATC2": row2_atc,
+                "txtATCAmt2": "999999999999",
+            }),
+        );
+        assert!(ok["rejected"].as_object().unwrap().is_empty(), "{ok}");
+        let validated = validate(&ok["draft"]);
+        let errs = validated["errors"].as_array().unwrap();
+        assert!(
+            !errs.iter().any(|e| {
+                let f = e["field"].as_str().unwrap_or("");
+                f.starts_with("schedule_1_row_") || f == "total_tax_due"
+            }),
+            "expected no amount-limit errors, got {errs:?}"
+        );
+
+        // Over 12-char typed limit with centavos (13 chars): refused AT ENTRY with actionable words
+        let over_cents = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({"txtATCAmt1": "1000000000.01"}),
+        );
+        let msg = over_cents["rejected"]["txtATCAmt1"]
+            .as_str()
+            .expect("1000000000.01 must be refused at entry");
+        assert!(
+            msg.contains("12-character") && msg.contains("enter a smaller amount"),
+            "{msg}"
+        );
+
+        // Over 12-char typed limit without centavos (13 digits): refused AT ENTRY
+        let over_whole = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({"txtATCAmt1": "1000000000000"}),
+        );
+        assert!(
+            over_whole["rejected"]["txtATCAmt1"]
+                .as_str()
+                .is_some_and(|m| m.contains("12-character")),
+            "{over_whole}"
+        );
+
+        // Over 12-digit Part II comb limit on Item 15: refused AT ENTRY
+        let over_item15 = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({"frm2551Qv2018:txt15": "1000000000000"}),
+        );
+        let msg15 = over_item15["rejected"]["frm2551Qv2018:txt15"]
+            .as_str()
+            .expect("Item 15 >= 1e12 must be refused at entry");
+        assert!(
+            msg15.contains("12-digit") && msg15.contains("enter a smaller amount"),
+            "{msg15}"
+        );
+    }
+
+    #[test]
+    fn form_2551q_negative_amounts_agree_across_entry_check_and_queue() {
+        setup();
+        let opened = open("2551Q", 3);
+
+        // Negative over-limit on Schedule 1 taxable amount: refused AT ENTRY with unified wording
+        let neg_over_sched = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({"txtATCAmt1": "-1000000000.01"}),
+        );
+        let msg_sched = neg_over_sched["rejected"]["txtATCAmt1"]
+            .as_str()
+            .expect("-1000000000.01 must be refused at entry");
+        assert!(
+            msg_sched.contains("12-character") && msg_sched.contains("enter a smaller amount"),
+            "{msg_sched}"
+        );
+
+        // Negative within-limit on Schedule 1 taxable amount: refused AT ENTRY as non-negative
+        let neg_small_sched = fill("2551Q", &opened["draft"], json!({"txtATCAmt1": "-0.01"}));
+        assert!(
+            neg_small_sched["rejected"]["txtATCAmt1"]
+                .as_str()
+                .is_some_and(|m| m.contains("non-negative")),
+            "{neg_small_sched}"
+        );
+
+        // Negative over-limit on Item 15 (creditable tax withheld): refused AT ENTRY with unified wording
+        let neg_over_15 = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({"frm2551Qv2018:txt15": "-1000000000000"}),
+        );
+        let msg_15 = neg_over_15["rejected"]["frm2551Qv2018:txt15"]
+            .as_str()
+            .expect("Item 15 <= -1e12 must be refused at entry");
+        assert!(
+            msg_15.contains("at most 999,999,999,999.99")
+                && msg_15.contains("enter a smaller amount"),
+            "{msg_15}"
+        );
+
+        // Negative within-limit on Item 15: refused AT ENTRY as non-negative
+        let neg_small_15 = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({"frm2551Qv2018:txt15": "-100"}),
+        );
+        assert!(
+            neg_small_15["rejected"]["frm2551Qv2018:txt15"]
+                .as_str()
+                .is_some_and(|m| m.contains("non-negative")),
+            "{neg_small_15}"
+        );
+
+        // Check agrees on the same negative over-limit value when present in a draft
+        let mut tampered = opened["draft"].clone();
+        tampered["creditable_tax_withheld"] = json!(-1_000_000_000_000.0);
+        let checked = validated("2551Q", &tampered);
+        let errs = checked["errors"].as_array().unwrap();
+        assert!(
+            errs.iter().any(|e| {
+                e["field"] == "creditable_withheld"
+                    && e["message"].as_str().is_some_and(|m| {
+                        m.contains("at most 999,999,999,999.99")
+                            && m.contains("enter a smaller amount")
+                    })
+            }),
+            "Check must emit unified limit wording for -1e12, got {errs:?}"
+        );
     }
 
     #[test]
@@ -14539,6 +14840,19 @@ mod tests {
                     .clone()
             };
             assert_eq!(offered(), false, "{code}");
+            // A real send of a form with an amended-return answer offers Amend.
+            let amend_offered = || {
+                sample_period(
+                    TIN,
+                    code,
+                    typed_parts(code, 2024, period as u8, 1, period as u8),
+                )["existing"]["actions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|action| action == "amend")
+            };
+            assert!(amend_offered(), "{code}: a real send can be amended");
 
             // The worker's dry-run send, as bir-core stores it.
             let (_, raw) = raw_row(id);
@@ -14557,6 +14871,87 @@ mod tests {
             assert_eq!(dry["submitted_at"], real["submitted_at"], "{code}");
             assert_eq!(dry["submitted_dry_run"], true, "{code}");
             assert_eq!(offered(), true, "{code}");
+            // A dry run reached nobody: there is nothing to amend.
+            assert!(!amend_offered(), "{code}: a dry run is not amended");
+        }
+    }
+
+    /// Link 3 of 3 of "a relay dry_run result never reads as filed" (link 1:
+    /// bir-submit `client::tests::a_relay_dry_run_result_with_its_signed_receipt_is_a_verified_test_send`;
+    /// link 2: bir-core `background_cron::tests::a_relay_dry_run_result_is_stored_as_a_test_send_on_every_path`).
+    /// The shared fixture's result through bir-core's `send_outcome`, stored
+    /// as link 2 proves the worker stores it (Submitted, `submitted_dry_run`,
+    /// the receipt, not the mock relay), for each storage shape: the open,
+    /// the returns list and the deadline rows all say a test send, never a
+    /// send that reached the BIR, and the deadline stays open (its row says
+    /// `submitted_dry_run`, which the screens read as not filed).
+    #[test]
+    fn a_relay_dry_run_result_never_reads_as_filed() {
+        use crate::send_state::{SENT_LINE, TEST_SENT_LINE};
+        let report = bir_core::relay::dry_run_result_fixture_report();
+        let codes = [("1601C", 6i64), ("2551Q", 2), ("0619E", 5)];
+        setup_taxpayer_filing(&codes.map(|(code, _)| code));
+        for (code, period) in codes {
+            let opened = open_for(TIN, code, 2026, period);
+            let id = store_filed(code, &opened["draft"], "Submitted");
+            let (_, raw) = raw_row(id);
+            let mut sent: Value = serde_json::from_str(&raw).unwrap();
+            let lifecycle = if sent["lifecycle"].is_object() {
+                &mut sent["lifecycle"]
+            } else {
+                &mut sent
+            };
+            lifecycle["submitted_dry_run"] = json!(report.simulated);
+            lifecycle["submitted_via_relay"] = json!(false);
+            lifecycle["relay_receipt"] = json!(report.relay_receipt);
+            raw_exec(
+                &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+                &[&serde_json::to_string(&sent).unwrap()],
+            );
+
+            let open = open_for(TIN, code, 2026, period);
+            assert_eq!(open["status"], "Submitted", "{code}: the stored status");
+            assert_eq!(open["submitted_dry_run"], true, "{code}");
+            assert_eq!(open["send"]["stage"], "test_sent", "{code}");
+            assert_eq!(open["send"]["line"], TEST_SENT_LINE, "{code}");
+
+            let rows = call("list_returns", vec!["all".into()]).unwrap();
+            let row = rows
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["id"] == id)
+                .unwrap_or_else(|| panic!("{code}: listed"))
+                .clone();
+            assert_eq!(row["send"]["stage"], "test_sent", "{code}");
+            assert_eq!(row["send"]["line"], TEST_SENT_LINE, "{code}");
+            assert_eq!(row["submitted_via_relay"], false, "{code}");
+
+            let due = call(
+                "deadlines_between",
+                vec!["2026-01-01".into(), "2026-12-31".into()],
+            )
+            .unwrap();
+            let due = due
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|due| due["draft_id"] == id)
+                .unwrap_or_else(|| panic!("{code}: a deadline row"))
+                .clone();
+            assert_eq!(
+                due["submitted_dry_run"], true,
+                "{code}: the deadline stays open"
+            );
+
+            for send in [&open["send"], &row["send"]] {
+                assert_ne!(send["stage"], "sent", "{code}");
+                assert_ne!(send["line"], SENT_LINE, "{code}");
+                let line = send["line"].as_str().unwrap().to_lowercase();
+                for word in ["sent", "filed", "submitted"] {
+                    assert!(!line.contains(word), "{code}: {word:?} in {line:?}");
+                }
+            }
         }
     }
 
@@ -18415,6 +18810,11 @@ mod tests {
                 tag.to_string(),
                 !offering,
             ),
+            (
+                "frm2552:txtPg1P2I17TaxPaidInPrevRtrn".to_string(),
+                "Needs Amended Return = Yes".to_string(),
+                draft["is_amended"].as_bool() != Some(true),
+            ),
         ];
         for n in 2..=5 {
             for stem in ["TransClass", "Amount"] {
@@ -18530,7 +18930,14 @@ mod tests {
                 // column, plus 2 for 1701MS (PR 7 review, round 2): item 16's
                 // rate in each column. At pr0b-push none had an entry.
                 ("1700", 17),
-                ("1701", 35),
+                // Plus 95 for 1701: the schedule input boxes of Schedules
+                // 3.A, 4 and 6 in both columns wait for the graduated and
+                // itemized answers (rows_annual_individual.rs GATED_BOXES):
+                // Schedule 3.A items 8/9/11/19/20/21 A&B plus items 19/20's
+                // descriptions (14), Schedule 4 items 1-17d A&B plus 17dDesc
+                // (41), and Schedule 6's summary and NOLCO rows but the
+                // computed current-year row (40).
+                ("1701", 130),
                 ("1701A", 17),
                 ("1701MS", 52),
                 // 8 for 1706 (PR 9): items 8 and 9, item 11's list,
@@ -18560,9 +18967,10 @@ mod tests {
                 // B16: 2551Q item 12's specify select waits for Item 12 Yes
                 // (CORPUS_GAPS_B16).
                 ("2551Q", 1),
-                // 10 for 2552 (PR 9): items 12A and 12B and Part IV rows
-                // 2-5's two boxes, which the official runtime keeps shut.
-                ("2552", 10),
+                // 11 for 2552 (PR 9 + Item 17): items 12A and 12B, item 17
+                // (while Amended Return is not Yes), and Part IV rows 2-5's
+                // two boxes, which the official runtime keeps shut.
+                ("2552", 11),
                 // PR 4: 2553 item 13's list waits for item 13 Yes too.
                 ("2553", 2),
             ])

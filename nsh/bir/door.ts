@@ -7,9 +7,11 @@ export type { DoorStatus, HostFunction };
 
 /**
  * How sending stands and which database file is named, without opening it. `sending` is "dry_run" (nothing
- * leaves this computer), "mock" (the local mock BIR server), "relay" (the local mock relay, docs/relay.md), "off" (this
- * build cannot send a return and refuses to queue one; everything else works) or "refused" (the submission worker did
- * not start). "live" is a build that files with the BIR itself, which no build that ships is.
+ * leaves this computer), "mock" (the local mock BIR server), "relay" (the local mock relay, docs/relay.md), "buwiz"
+ * (returns go to the BIR through the Buwiz server: every release build on a desktop, and a development build asked to
+ * use one on this computer), "off" (this build cannot send a return and refuses to queue one; everything else works) or
+ * "refused" (the submission worker did not start). "live" is a build that files with the BIR itself, which no build
+ * that ships is.
  * `databasePath` is the file this thread has open, or the file the environment names while none is open.
  */
 export function doorStatus(): DoorStatus {
@@ -32,8 +34,8 @@ export function hostFunctions(): HostFunction[] {
 }
 
 /**
- * The quit path of the old host: stops the submission worker and checkpoints the database. Call it once, when the
- * app quits, and use the door no more afterwards (the owner lock is held until the process exits, as before).
+ * The quit path of the old host: stops the submission worker and closes the database, which frees its owner lock.
+ * Call it once, when the app quits: every door call on this engine after it is refused ("eBIRForms is closing.").
  */
 export function shutdown(): void {
   Door.shutdown();

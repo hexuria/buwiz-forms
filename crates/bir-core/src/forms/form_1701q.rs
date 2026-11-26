@@ -672,6 +672,8 @@ impl Form1701QDraft {
             ],
         );
         fields.insert("derived:tin_digits".to_string(), tin_digits);
+        let official = self.to_official_field_map();
+        super::print_map::match_upload_case("1701q-v2018", &mut fields, Some(&official));
         fields
     }
 

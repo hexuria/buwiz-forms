@@ -1358,16 +1358,18 @@ fn fill_text_input(
         // digits into the slots before the point and put the two centavo
         // digits after it. Spreading the text left-to-right put `0.00` as
         // `0 . 0 0` from the first box (#print-audit decimal mapping).
-        if let Some(writes) = money_comb_values(tags, &ordered, print) {
-            for (offset, (index, ch)) in writes.into_iter().enumerate() {
-                let writer = (via_cell && offset == 0).then_some(print);
-                replacements.push((
-                    tags[index].start,
-                    tags[index].end,
-                    set_value(tags[index].tag, &ch, writer),
-                ));
+        if !name.starts_with("derived:") {
+            if let Some(writes) = money_comb_values(tags, &ordered, print) {
+                for (offset, (index, ch)) in writes.into_iter().enumerate() {
+                    let writer = (via_cell && offset == 0).then_some(print);
+                    replacements.push((
+                        tags[index].start,
+                        tags[index].end,
+                        set_value(tags[index].tag, &ch, writer),
+                    ));
+                }
+                return;
             }
-            return;
         }
         let chars: Vec<char> = print.chars().collect();
         // Text longer than its comb (a long name, an email, a
@@ -7424,7 +7426,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1458, "band boxes");
+        assert_eq!(total, 1472, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 
@@ -7830,19 +7832,19 @@ mod donor_estate_print_tests {
         for (slug, golden) in [
             (
                 "1706-2018",
-                "99f6a45573ad85d627f9632165d5c78f70af88c63e651cd79756dad2cf7d46a3",
+                "9d0acf7d6373d382317b178668b89d039865073411bfd0f7edc5c6ce8b27148f",
             ),
             (
                 "2000-ot-2018",
-                "86f497510e136ed8fc5d40825db719298fba02a4c0d9b62f3546c14423eea198",
+                "a5cfa1eb0b031a4470b0d45c940c3e73d88971b05e882c3c7b9b8aa62aacc2f5",
             ),
             (
                 "1801-2018",
-                "d752c2d04bfce02853f926e45862a30a6ae8371b7cf52c82e1064acc85d44d44",
+                "dda1fda9077c316a860b747d983c65b499cd7da40ffe7727588cc6737e9c0d16",
             ),
             (
                 "1800-2018",
-                "51fd641f9791344fd5ae0c836061fbe06acd42b97bd0a7d827d4295ded37d76f",
+                "1ee1587dbacf834418c9004661fd10f45eddf11116d0800905f3c1c374e1b50b",
             ),
         ] {
             let html = filled_document(slug, &every_join_filled(slug)).unwrap();

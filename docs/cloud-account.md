@@ -47,8 +47,9 @@ The app uses the server's existing device flow for the public client
 The request body is also sent in `x-buwiz-request-body` (`b64`), which is
 how the account server reads small posts on the current Spin host.
 
-Sign out calls `POST /api/auth/logout` with the access token, then deletes
-the local copy even if the server is unreachable.
+Sign out deletes the local copy first, then calls `POST /api/auth/logout`
+with the old access token in the background. Its answer is ignored, so an
+unreachable server never keeps the session on this device.
 
 ## Local mock account server
 

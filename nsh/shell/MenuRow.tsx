@@ -15,9 +15,10 @@ import type { JSX } from "nsh";
 import { computed, effect, Image, keymap, signal, untracked, View, type ViewRef } from "nsh";
 import { Button } from "nsh/base";
 import { Menu, type MenuItem, titleBar } from "nsh/desktop";
-import { Icon, ICONS, IconButton, Text } from "../ui";
+import { Icon, IconButton, Text } from "../ui";
 import { chromeNow, menuOs } from "./chrome";
 import { MENU_ROW, menuKey } from "./chrome_layout";
+import appMark from "./app-mark.png";
 import { menuNow } from "./desktop/menu";
 
 /** The title the keyboard is on (F10), or null. */
@@ -89,7 +90,7 @@ export function MenuRow(): JSX.Element {
     >
       <If when={chromeNow().appIcon}>
         <View testID="menu-app-icon" class="items-center justify-center px-1.5">
-          <Image src={ICONS.e_logo} style={{ width: 16, height: 16 }} />
+          <Image src={appMark} style={{ width: 16, height: 16 }} />
         </View>
       </If>
       <Each of={menus()} key={(m) => m.title}>

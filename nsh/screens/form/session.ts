@@ -239,6 +239,8 @@ export interface HeaderInfo {
   accountFix: boolean;
   /** The send's outcome is unknown: the page offers "The email came" and "It did not arrive". */
   canResolve: boolean;
+  /** The worker is asking Buwiz how a send it did not see end went (`send` checking): nothing for the person to answer or cancel. */
+  checkingSend: boolean;
   profileUpdates: string[];
   profileDiffers: string[];
   profileChanged: string[];
@@ -532,6 +534,7 @@ export class FormSession {
   private sOptions = new SignalMap<ChoiceOption[]>([], sameJson);
   private sInvalid = new SignalMap<boolean>(false);
   private sBoxMsg = new SignalMap<string>("");
+  private sRefusal = new SignalMap<string>("");
   private sGuessed = signal(0);
   private sRow = new SignalMap<RowInfo>(null as unknown as RowInfo, sameJson);
   private sPart = new SignalMap<PartInfo>({ errors: 0, todo: 0, items: 0, open: false, fold: null }, sameJson);
@@ -654,6 +657,7 @@ export class FormSession {
       const options = this.sOptions.get(k);
       const invalid = this.sInvalid.get(k);
       const boxMsg = this.sBoxMsg.get(k);
+      const refusal = this.sRefusal.get(k);
       b = {
         value: () => value(),
         locked: () => locked(),
@@ -662,6 +666,7 @@ export class FormSession {
         options: () => options(),
         invalid: () => invalid(),
         message: () => boxMsg(),
+        refusal: () => refusal(),
         zeroWhenBlank: this.kindOf.get(k) === "money" && this.computedKeys.has(k),
       };
       this.boxes.set(k, b);
@@ -1431,6 +1436,8 @@ export class FormSession {
       const listed = this.listedOptions(k);
       if (listed.length > 0 && !listed.some((o) => o.value === String(v))) {
         s.rejected[k] = "not one of the listed choices";
+        s.boxMessages[k] = "Not one of the listed choices.";
+        this.sBoxMsg.get(k).set("Not one of the listed choices.");
         offList.add(k);
       }
     }
@@ -3204,6 +3211,9 @@ export class FormSession {
       s.saved = true;
       // B19: a refused edit was never in the draft; the return still has it unsaved. An unfixable
       // one (shut/locked) put the stored value back, so it does not count (R7).
+      // A refusal whose text is no longer there (the row was cleared, the drawer discarded it, the
+      // agent put the stored value back) must not hold the return dirty: nothing is left unsaved.
+      // Only a refusal whose typed text still stands keeps the save line honest.
       if (Object.keys(s.rejected).some((k) => !s.unfixable.has(k))) s.dirty = true;
       s.saveState = s.dirty ? this.restingSaveState() : { state: "saved" };
       if (changed) this.hooks.onSaved?.(s.target);
@@ -3934,6 +3944,11 @@ export class FormSession {
       this.sInvalid.get(k).set(shownMsgKeys.has(k) || Boolean(boxMsg));
       // A box whose sentence the row prints draws none of its own.
       this.sBoxMsg.get(k).set(this.rowPrints(k) ? "" : boxMsg);
+      // A refusal is the host having refused the edit (it was never stored), not any sentence the
+      // box shows: a validation message (an over-long value that saved, reported by Check) must not
+      // hold the row drawer shut. An unfixable one put the stored value back, so nothing stands.
+      const liveRefusal = k in s.rejected && !s.unfixable.has(k);
+      this.sRefusal.get(k).set(liveRefusal ? this.refusalText(k, s.rejected[k]) : "");
     }
     for (const [k, { date, row }] of this.oneDates) {
       const parts = [date.month, date.day, date.year].filter(Boolean) as SchemaField[];
@@ -4144,6 +4159,7 @@ export class FormSession {
       sendNotice: send?.stage === "refused" && s.editable ? send.line : "",
       accountFix: send?.stage === "refused" && s.editable && ACCOUNT_FIX_CODES.includes(send.code ?? ""),
       canResolve: Boolean(send?.can_resolve) && s.status === "Queued" && !s.editable,
+      checkingSend: send?.stage === "checking" && s.status === "Queued" && !s.editable,
       profileUpdates: s.profileUpdates,
       profileDiffers: s.editable ? s.profileDiffers : [],
       profileChanged: !s.editable ? s.profileChanged : [],

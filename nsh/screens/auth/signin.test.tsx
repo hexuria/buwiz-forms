@@ -16,7 +16,7 @@ test("phone: the owner's TIN and PIN sign in; wrong ones say why and clear the c
   expect(app.shows("id:frame")).toBe(false);
   await app.press("id:auth-submit");
   await app.waitFor("text:Type all 9 digits of the TIN.");
-  await app.type("id:auth-tin", "000111229");
+  await app.type("id:auth-tin", "000111225");
   await app.waitFor("text:Type all 9 digits of the TIN.", { state: "gone" });
   await app.type("id:auth-tp-pin", "1234");
   await app.waitFor("text:No taxpayer has that TIN on this device.");
@@ -99,7 +99,7 @@ test("desktop: an authenticator code signs a taxpayer in; Lock app and Log out b
   expect(app.shows("id:auth-tp-pin")).toBe(true);
   expect(app.texts()).toContain("session: open");
   // A taxpayer with no PIN cannot sign in with one.
-  await app.type("id:auth-tin", "000111229");
+  await app.type("id:auth-tin", "000111225");
   await app.type("id:auth-tp-pin", "1111");
   await app.waitFor("text:That taxpayer has no PIN yet. Ask the admin to open it.");
   // The help desk admin.

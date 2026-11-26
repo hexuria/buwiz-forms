@@ -21,10 +21,10 @@
 // The pill names the part at the top of the viewport: the scroll offset against the part cards' laid-out tops.
 import type { Accessor, ListRef, ScrollRef, ViewRef } from "nsh";
 import { cleanup, computed, effect, keymap, List, Scroll, signal, untracked, View, windowSize } from "nsh";
-import { BREAK } from "../../theme/tokens";
+import { BREAK, SIZE } from "../../theme/tokens";
 import {
   AppButton,
-  Checkbox,
+  CheckboxLabel,
   Chip,
   Code,
   Dialog,
@@ -41,13 +41,15 @@ import {
   Spinner,
   Text,
   TextField,
+  phoneLayout,
   TOUCH,
   toast as kitToast,
   dismissToast as kitDismissToast,
 } from "../../ui";
 import { app, store } from "../../shell";
+import { DRY_RUN_WORD } from "../../lib/statusWord";
 import { ItemRow, ProfileFold } from "./rows";
-import { ACCOUNT_FIX, existingOfferFor, filedOriginalStrip, FILED_KEPT, PERIOD_PART_LABELS, PROFILE_CHANGED_NOTE, partName, profileDiffersNote, profileUpdatesNote, SAMPLE_NOTE, sectionNames } from "./schema";
+import { ACCOUNT_FIX, existingOfferFor, filedOriginalStrip, FILED_KEPT, PERIOD_PART_LABELS, profileChangedNote, partName, profileDiffersNote, profileUpdatesNote, SAMPLE_NOTE, sectionNames } from "./schema";
 import { formUi } from "./formUi";
 import { FormSession, type FormTarget, type Overlay, type SessionHooks, type ToastAction } from "./session";
 
@@ -133,11 +135,16 @@ export function FormPage(props: FormPageProps) {
   // list from 760 of column, set in by the column's centring edge, and the form 22 beside the list, at most
   // column - 236 wide (820 for a column of 1056), its text starting at the left of its scroll.
   const padX = () => (width() < BREAK.narrowContent ? 16 : 32);
-  const column = () => Math.max(200, Math.min(FORM_COLUMN_MAX, width()) - padX() * 2);
+  // A touch screen always has the phone form (the owner's tablet pick): no side list, the bottom pill, the form in one column, which
+  // on a tablet keeps a page's readable width (the frame's page column, 880 with its padding) and stays centred.
+  const column = () =>
+    TOUCH
+      ? Math.max(200, Math.min(SIZE.contentMax, width()) - padX() * 2)
+      : Math.max(200, Math.min(FORM_COLUMN_MAX, width()) - padX() * 2);
   const edge = () => Math.max(padX(), Math.floor((width() - column()) / 2));
   const formW = () => column() - 208 - 28;
-  const wide = () => column() >= BREAK.formNav;
-  const narrow = () => width() < BREAK.phone;
+  const wide = () => !TOUCH && column() >= BREAK.formNav;
+  const narrow = () => TOUCH || width() < BREAK.phone;
 
   // Not while a text box has the keys: there Cmd/Ctrl+Left/Right move the caret (index.d.ts KeyBindingOptions "notEditing").
   keymap.bind("mod+left", () => s.step(-1), { when: "notEditing" });
@@ -410,7 +417,7 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
             />
             <AppButton testID="fp-queue" size="sm" icon="send" label="Queue" variant={formUi.reviewing() ? "primary" : undefined} disabled={h().loading} onPress={() => s.queue()} />
           </If>
-          <If when={h().status === "Queued" && !h().sample && !h().canResolve}>
+          <If when={h().status === "Queued" && !h().sample && !h().canResolve && !h().checkingSend}>
             <AppButton testID="fp-cancel-queue" size="sm" label="Cancel queue" onPress={() => s.cancelQueue()} />
           </If>
           <If when={h().editable && h().sample && !h().periodSet}>
@@ -461,7 +468,7 @@ function Notes(props: { s: FormSession }) {
       <If when={h().filedOriginalView}>{(v) => <Text variant="meta" tone="fg2">{filedOriginalStrip(v())}</Text>}</If>
       <If when={h().profileChanged.length}>
         <View testID="fp-profile-changed" class="gap-0.5">
-          <Text variant="meta" tone="fg2">{PROFILE_CHANGED_NOTE}</Text>
+          <Text variant="meta" tone="fg2">{profileChangedNote(h().statusWord === DRY_RUN_WORD)}</Text>
           <Each of={h().profileChanged}>{(c) => <Text variant="meta" tone="fg3">{`· ${c()}`}</Text>}</Each>
         </View>
       </If>
@@ -928,8 +935,8 @@ function Dialogs(props: { s: FormSession }) {
     const v = o();
     return v?.kind === "profile-ask" ? v.ask : null;
   };
-  // Under 600 points the ask is a bottom sheet; from there up, a dialog (Q1 P1b).
-  const phone = () => windowSize().width < BREAK.phone;
+  // In the phone layout (every touch screen, and a desktop window under 600 points) the ask is a bottom sheet; else a dialog (Q1 P1b).
+  const phone = () => phoneLayout();
   const askTitle = () => {
     const a = profileAsk();
     return a ? `Save ${a.label.toLowerCase()} to the tax profile?` : "";
@@ -976,18 +983,15 @@ function Dialogs(props: { s: FormSession }) {
                 {(c) => <AppButton testID={`existing-${c().id}`} block variant={c().variant} label={c().label} hint={c().hint} onPress={() => s.takeExisting(c().id)} />}
               </Each>
               <If when={offer().fastLane}>
-                <View class="flex-row items-center gap-2">
-                  <Checkbox
-                    testID="existing-fast-lane"
-                    label="Don't ask again for drafts (this session)"
-                    checked={fast()}
-                    onChange={(on) => {
-                      fast.set(on);
-                      s.setFastLane(on);
-                    }}
-                  />
-                  <Text variant="meta">Don't ask again for drafts (this session)</Text>
-                </View>
+                <CheckboxLabel
+                  testID="existing-fast-lane"
+                  label="Don't ask again for drafts (this session)"
+                  checked={fast()}
+                  onChange={(on) => {
+                    fast.set(on);
+                    s.setFastLane(on);
+                  }}
+                />
               </If>
             </View>
           )}

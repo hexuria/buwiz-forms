@@ -45,6 +45,12 @@ export async function goSection(app: App, id: string, ready: string): Promise<vo
   await app.waitFor(ready, { timeout: 15000 });
 }
 
+/** A phone: from a section's page back to the list, by the header's Back (the section is a page of its own there). */
+export async function backToList(app: App): Promise<void> {
+  await app.press("id:nb-back");
+  await app.waitFor("id:settings-list-scroll", { timeout: 15000 });
+}
+
 /** Every text in `list` is on screen. */
 export function expectTexts(app: App, list: string[]): void {
   const texts = app.texts();

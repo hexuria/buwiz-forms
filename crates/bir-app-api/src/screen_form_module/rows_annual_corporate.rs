@@ -46,13 +46,17 @@ use std::collections::BTreeSet;
 // shut rows — are bir-core's (`agent::draft_locks::annual_corporate`,
 // decision P4-19), so the page and the assistant lock alike. This module
 // reads their keys and reasons from there.
+#[cfg(test)]
+pub(super) use bir_core::forms::agent::draft_locks::annual_corporate::mx_attached_lock;
 use bir_core::forms::agent::draft_locks::annual_corporate::{
     A, EX, EX_ATTACHED_ROWS, EX_FOLDED_LINES, MX, RT, RT_ITEM_57, RT_MCIT_DUE, RT_RATE,
     rt_before_2020_lock, rt_folded_item, rt_item_42_lock, rt_more_rows,
 };
 pub(super) use bir_core::forms::agent::draft_locks::annual_corporate::{
-    EX_ATTACHED_LOCK, RT_57_BEFORE_2020, RT_FOLDED_LOCK, RT_MCIT_BEFORE_2020, RT_MCIT_NO_NET,
-    RT_MCIT_REFUSAL, RT_RATE_BEFORE_2020, ex_attached_keys,
+    EX_ATTACHED_LOCK_ITEM_49, EX_ATTACHED_LOCK_SCHED_1, EX_ATTACHED_LOCK_SCHED_2,
+    MX_ATTACHED_LOCK_SCHED_5, MX_ATTACHED_LOCK_SCHED_6, RT_57_BEFORE_2020, RT_FOLDED_LOCK,
+    RT_MCIT_BEFORE_2020, RT_MCIT_NO_NET, RT_MCIT_REFUSAL, RT_RATE_BEFORE_2020, ex_attached_keys,
+    ex_attached_lock,
 };
 use bir_core::forms::agent::{self, AgentFormKind, Binding};
 use bir_core::forms::form_1702rt::{
@@ -134,11 +138,6 @@ fn ex_attached_amount(key: &str) -> bool {
     key.ends_with("Amt") || key.ends_with("Amount")
 }
 
-/// Whether `key` is one of 1702EX's [`EX_ATTACHED_ROWS`] boxes.
-fn ex_attached(kind: AgentFormKind, key: &str) -> bool {
-    kind.form_code() == "1702EX" && ex_attached_keys().any(|attached| attached == key)
-}
-
 /// Whether the host writes `key` itself (the page shows it open).
 pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
     match kind.form_code() {
@@ -167,7 +166,7 @@ pub(super) fn fill(
             mx_rate(key).map(|(path, decimals)| fill_1702mx_rate(draft, path, decimals, value))
         }
         "1707A" if host_writes(kind, key) => Some(fill_1707a_tax_relief(draft, key, value)),
-        "1702EX" if ex_attached(kind, key) => Some(Err(format!("`{key}` is {EX_ATTACHED_LOCK}"))),
+        "1702EX" => ex_attached_lock(key).map(|lock| Err(format!("`{key}` is {lock}"))),
         _ => None,
     }
 }
@@ -453,7 +452,11 @@ pub(super) fn live_lock_note(reason: &str) -> Option<&'static str> {
         (RT_MCIT_BEFORE_2020, RT_MCIT_BEFORE_2020_NOTE),
         (RT_MCIT_REFUSAL, RT_MCIT_NOT_YET_NOTE),
         (RT_MCIT_NO_NET, RT_MCIT_NO_NET_NOTE),
-        (EX_ATTACHED_LOCK, EX_ATTACHED_NOTE),
+        (EX_ATTACHED_LOCK_ITEM_49, EX_ATTACHED_NOTE),
+        (EX_ATTACHED_LOCK_SCHED_1, EX_ATTACHED_NOTE),
+        (EX_ATTACHED_LOCK_SCHED_2, EX_ATTACHED_NOTE),
+        (MX_ATTACHED_LOCK_SCHED_5, EX_ATTACHED_NOTE),
+        (MX_ATTACHED_LOCK_SCHED_6, EX_ATTACHED_NOTE),
         (RT_RATE_BEFORE_2020, RT_RATE_BEFORE_2020_NOTE),
         (RT_57_BEFORE_2020, RT_57_BEFORE_2020_NOTE),
     ]
@@ -505,6 +508,10 @@ pub(super) fn waits(kind: AgentFormKind) -> Map<String, Value> {
             for key in ex_attached_keys().filter(|key| !ex_attached_amount(key)) {
                 out.insert(key, json!(EX_ATTACHED_NOTE));
             }
+            out.insert(
+                format!("{EX}txtPg3Pt6S2I4LegalBasis"),
+                json!(EX_ATTACHED_NOTE),
+            );
         }
         "1702MX" => {
             out.insert(

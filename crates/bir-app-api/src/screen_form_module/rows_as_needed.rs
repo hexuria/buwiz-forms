@@ -75,10 +75,6 @@ pub(super) enum Cell {
     Gate(Gate),
     /// 2552 item 11: Part V schedule 1-3.
     Transaction2552(u8),
-    /// 2552 Part IV row 2-5's amount (row index 1-4).
-    PartIvAmount2552(usize),
-    /// 2552 item 12B.
-    OutstandingShares2552,
     /// 2552 Part V row 5 of schedule 1-3.
     Row5_2552(u8, Row5),
     /// 1707 item 8 Yes (`true`) or No.
@@ -1131,6 +1127,8 @@ pub(super) enum Gate {
     Overpaid,
     /// 2552 items 12A and 12B: item 11 an initial public offering.
     Offering2552,
+    /// 2552 item 17: Amended Return is Yes.
+    Amended2552,
     /// 2552 Part IV row `.0` (index 1-4): the row before it used.
     PartIvRow2552(usize),
     /// 0605 item 17's Others box: Others is the manner.
@@ -1142,6 +1140,9 @@ pub(super) enum Gate {
 /// 2552-v2018/fixtures/runtime-control-inventory-v796.json).
 pub(super) const OFFERING_2552: &str =
     "Needs item 11 = Initial Public Offering (Primary or Secondary)";
+
+/// The tag of 2552's Item 17 gate (disabled at load until Amended Return is Yes).
+pub(super) const AMENDED_2552: &str = "Needs Amended Return = Yes";
 
 /// The tag of 2552's Part IV row `row` (1-based, 2-5).
 pub(super) fn part_iv_tag(row: usize) -> String {
@@ -1223,27 +1224,23 @@ fn cell_2552(key: &str) -> Option<Cell> {
         "rdoPg1I11TransactionLSE" => return Some(Cell::Transaction2552(1)),
         "rdoPg1I11TransactionPrimary" => return Some(Cell::Transaction2552(2)),
         "rdoPg1I11TransactionSecondary" => return Some(Cell::Transaction2552(3)),
-        "txtPg1Pt1I12TotShare" => return Some(Cell::OutstandingShares2552),
-        "txtPg1Pt1I12NumOfShare" => return Some(Cell::Gate(Gate::Offering2552)),
+        "txtPg1Pt1I12TotShare" | "txtPg1Pt1I12NumOfShare" => {
+            return Some(Cell::Gate(Gate::Offering2552));
+        }
+        "txtPg1P2I17TaxPaidInPrevRtrn" => return Some(Cell::Gate(Gate::Amended2552)),
         _ => {}
     }
     if let Some(n) = rest
         .strip_prefix("txtPg2P4I")
-        .and_then(|r| r.strip_suffix("TransClass"))
+        .and_then(|r| {
+            r.strip_suffix("TransClass")
+                .or_else(|| r.strip_suffix("Amount"))
+        })
         .and_then(|n| n.parse::<usize>().ok())
     {
         return (2..=FORM_2552_ROWS)
             .contains(&n)
             .then_some(Cell::Gate(Gate::PartIvRow2552(n - 1)));
-    }
-    if let Some(n) = rest
-        .strip_prefix("txtPg2P4I")
-        .and_then(|r| r.strip_suffix("Amount"))
-        .and_then(|n| n.parse::<usize>().ok())
-    {
-        return (2..=FORM_2552_ROWS)
-            .contains(&n)
-            .then_some(Cell::PartIvAmount2552(n - 1));
     }
     let rest = rest.strip_prefix("txtPg2Pt5Sch")?;
     let schedule = rest.chars().next()?.to_digit(10)? as u8;
@@ -1268,7 +1265,7 @@ pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
         Cell::Gate(_) => Some(1),
         // Item 11 picks the schedule before its rows are typed.
         Cell::Transaction2552(_) => Some(0),
-        Cell::PartIvAmount2552(_) | Cell::OutstandingShares2552 | Cell::Row5_2552(..) => Some(1),
+        Cell::Row5_2552(..) => Some(1),
         // Item 8's answer before its 8A text in one batch.
         Cell::TaxRelief1707(_) => Some(0),
         Cell::Shares1707(..) | Cell::ExpenseD1707(_) => Some(1),
@@ -1329,8 +1326,6 @@ pub(super) fn fill(
         Cell::SellerTin1606(part) => fill_1606_seller_tin(draft, part, value),
         Cell::BuyerTin1706(part) => fill_1706_buyer_tin(draft, part, value),
         Cell::Transaction2552(schedule) => fill_2552_transaction(draft, schedule, value),
-        Cell::PartIvAmount2552(row) => fill_2552_part_iv(draft, row, value),
-        Cell::OutstandingShares2552 => fill_2552_outstanding(draft, value),
         Cell::Row5_2552(_, column) => fill_2552_row5(draft, key, column, value),
         Cell::TaxRelief1707(yes) => fill_1707_tax_relief(draft, yes, value),
         Cell::Shares1707(row, column) => fill_1707_shares(draft, row, column, value),
@@ -1347,6 +1342,8 @@ pub(super) fn fill(
             // binding's "false" would set the other answer.
             if untick && (gate == Gate::Overpaid || !open(gate, &recomputed(kind, draft))) {
                 Ok(())
+            } else if let Gate::PartIvRow2552(row) = gate {
+                fill_2552_part_iv_cell(draft, key, row, value, ordinary)
             } else {
                 ordinary(draft)
             }
@@ -1403,9 +1400,7 @@ fn recomputed(kind: AgentFormKind, draft: &Value) -> Value {
 fn gate_of(cell: Cell) -> Option<Gate> {
     match cell {
         Cell::Gate(gate) => Some(gate),
-        Cell::OutstandingShares2552 => Some(Gate::Offering2552),
         Cell::Others0605 => Some(Gate::Others0605),
-        Cell::PartIvAmount2552(row) => Some(Gate::PartIvRow2552(row)),
         _ => None,
     }
 }
@@ -1416,6 +1411,7 @@ fn gate_of(cell: Cell) -> Option<Gate> {
 fn gate_tag(kind: AgentFormKind, gate: Gate, key: &str) -> String {
     match gate {
         Gate::Offering2552 => OFFERING_2552.to_string(),
+        Gate::Amended2552 => AMENDED_2552.to_string(),
         Gate::PartIvRow2552(row) => part_iv_tag(row + 1),
         // A group key (frm1706:j_id392) has its first member's tag.
         _ => super::conditions::tag(kind.form_code(), key)
@@ -1455,6 +1451,7 @@ fn gated_keys(kind: AgentFormKind) -> Vec<(String, Gate)> {
             let mut keys = vec![
                 "frm2552:txtPg1Pt1I12NumOfShare".to_string(),
                 "frm2552:txtPg1Pt1I12TotShare".to_string(),
+                "frm2552:txtPg1P2I17TaxPaidInPrevRtrn".to_string(),
             ];
             for n in 2..=FORM_2552_ROWS {
                 keys.push(format!("frm2552:txtPg2P4I{n}TransClass"));
@@ -1550,6 +1547,7 @@ fn open(gate: Gate, draft: &Value) -> bool {
         Gate::Overpaid => below_zero("/total_amount_due") || below_zero("/total_amount_payable"),
         Gate::Others0605 => is("/manner_of_payment", &["Others"]),
         Gate::Offering2552 => is("/transaction", &["primary_offering", "secondary_offering"]),
+        Gate::Amended2552 => draft["is_amended"].as_bool() == Some(true),
         // Inferred: the official runtime keeps rows 2-5 disabled at load
         // (runtime-control-inventory-v796.json txtPg2P4I2..I5 disabled:
         // true); what enables them (enablePartIVRow) is tracked as a hash
@@ -1620,17 +1618,30 @@ fn fill_2552_transaction(draft: &mut Value, schedule: u8, value: &Value) -> Resu
 }
 
 #[inline(never)]
-fn fill_2552_part_iv(draft: &mut Value, row: usize, value: &Value) -> Result<(), String> {
-    let amount = amount(value)?;
+fn fill_2552_part_iv_cell(
+    draft: &mut Value,
+    key: &str,
+    row: usize,
+    value: &Value,
+    ordinary: impl FnOnce(&mut Value) -> Result<(), String>,
+) -> Result<(), String> {
+    if key.ends_with("Amount") && text(value).is_empty() {
+        let mut form: Form2552Draft = typed(draft)?;
+        if row < form.exempt_transactions.len() {
+            form.exempt_transactions[row].amount = 0.0;
+        }
+        trim_2552_exempt_rows(&mut form);
+        form.recompute();
+        return store(draft, &form);
+    }
+    ordinary(draft)?;
     let mut form: Form2552Draft = typed(draft)?;
-    if amount == 0.0 && form.exempt_transactions.len() <= row {
-        return Ok(());
-    }
-    if form.exempt_transactions.len() <= row {
-        form.exempt_transactions
-            .resize(row + 1, Form2552ExemptRow::default());
-    }
-    form.exempt_transactions[row].amount = amount;
+    trim_2552_exempt_rows(&mut form);
+    form.recompute();
+    store(draft, &form)
+}
+
+fn trim_2552_exempt_rows(form: &mut Form2552Draft) {
     while form
         .exempt_transactions
         .last()
@@ -1638,16 +1649,6 @@ fn fill_2552_part_iv(draft: &mut Value, row: usize, value: &Value) -> Result<(),
     {
         form.exempt_transactions.pop();
     }
-    form.recompute();
-    store(draft, &form)
-}
-
-#[inline(never)]
-fn fill_2552_outstanding(draft: &mut Value, value: &Value) -> Result<(), String> {
-    let mut form: Form2552Draft = typed(draft)?;
-    form.outstanding_shares = text(value);
-    form.recompute();
-    store(draft, &form)
 }
 
 /// A typed date as rows 1-4's binding takes it (agent `reformat_date`,

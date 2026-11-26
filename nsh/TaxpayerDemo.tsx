@@ -8,6 +8,7 @@
 //   sent    "dry": every 1601C deadline of the year reads as a Submitted dry run (only simulated: still due); "real": as real sends
 //           (every period filed). Generated reads: nothing is stored
 //   card    "export": only the Export this profile card and a toaster (Settings draws it)
+//   google  true or false: whether this build can start Google's sign-in for mail (else the test process's environment decides)
 // It sits at the nsh root because a real-window run serves assets (fonts, icons) from the entry's folder down.
 import { host, mount, signal, View } from "nsh";
 import "./theme/fonts";
@@ -29,6 +30,7 @@ interface Params {
   start?: string;
   card?: "export";
   sent?: "dry" | "real";
+  google?: boolean;
   exportDownload?: { name?: string; error?: string; cancelled?: boolean };
   exportLayout?: boolean;
   year?: number;
@@ -52,8 +54,8 @@ function seed(p: Params) {
     bir.set_year_facts(head.tin, Number(y), { income_tax_election: election });
   }
   if (p.branch && !taxpayer.branches.some((b) => b.code === "00001")) bir.create_branch(taxpayer.tin_root, { branch_code: "00001", name: "Cebu branch" });
-  if (p.peer && !bir.list_taxpayers().some((t) => t.tin_root === "000111237")) {
-    const peer = bir.create_taxpayer({ tin_root: "000-111-237", name: "Sample Person", taxpayer_type: "Individual", head_office: { rdo_code: "050", registered_address: "Makati City", zip_code: "1226" } });
+  if (p.peer && !bir.list_taxpayers().some((t) => t.tin_root === "000111233")) {
+    const peer = bir.create_taxpayer({ tin_root: "000-111-233", name: "Sample Person", taxpayer_type: "Individual", head_office: { rdo_code: "050", registered_address: "Makati City", zip_code: "1226" } });
     bir.add_tax_year(peer.branches[0].tin, year, false);
     bir.set_yearly_forms(peer.branches[0].tin, year, ["1701Q", "2551Q"]);
   }
@@ -68,10 +70,18 @@ function show1601CAsSent(dry: boolean): void {
   fake.deadlines_between = (from, to) => real(from, to).map((d) => (d.form_code === "1601C" ? { ...d, status: "Submitted", submitted_dry_run: dry } : d));
 }
 
+/** The inbox state as a build with or without a Google client id answers it. */
+function fixGoogle(available: boolean) {
+  const table = bir as unknown as Record<string, unknown>;
+  const real = bir.inbox_state;
+  table.inbox_state = (tin: string) => ({ ...real(tin), google_available: available });
+}
+
 function Demo() {
   const p = host.params as Params;
   if (p.demo !== false) seed(p);
   if (p.sent) show1601CAsSent(p.sent === "dry");
+  if (typeof p.google === "boolean") fixGoogle(p.google);
   const ready = signal(!p.savedReturn);
   if (p.savedReturn) {
     const target = p.savedReturn;

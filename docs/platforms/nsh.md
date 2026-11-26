@@ -7,11 +7,11 @@ The NSH (TSX) app in `nsh/`, updated 2026-11-24. Plan and hard rules: [docs/plan
 
 | Platform | Status |
 |---|---|
-| macOS | Built and tested (NSH 0.6.1, hexuria/nsh `buwiz-next` @ `ca39c0e9`, pinned by `NSH_PINNED_REF` in [.github/workflows/nsh.yml](../../.github/workflows/nsh.yml)): type check, build, headless tests, real-window screenshots; CI on `macos-15`. |
+| macOS | Built and tested (NSH 0.6.1, hexuria/nsh `buwiz-next` @ `8c78cfd6`, pinned by `NSH_PINNED_REF` in [.github/workflows/nsh.yml](../../.github/workflows/nsh.yml)): type check, build, headless tests, real-window screenshots; CI on `macos-15`. |
 | Windows | Built and tested in CI on `windows-2025` (nsh.yml `NSH app (Windows)` jobs: `nsh check`, `nsh build`, crate tests, headless TSX tests). A real window has not been tried. |
 | Linux | Built and tested in CI on `ubuntu-24.04`, including a dev-host build and real-window screenshots (nsh.yml `NSH app (Linux)` jobs). |
 | iOS | Builds and runs in the iOS Simulator (`nsh run --target ios` from `nsh/`, iPhone 17, Xcode 26). Print preview is the system print sheet. Sending goes through the local mock relay ([docs/relay.md](../relay.md)). Store packaging is in progress. |
-| Android | Build tooling exists (`scripts/setup-android-windows.ps1`, `cargo xtask android`); the app itself is not shipped. |
+| Android | Runs in development on emulators (`just nsh-run-agent android`, `scripts/run-android-windows.ps1`); the Google Play bundle is `just play-bundle` ([android.md](android.md)), not yet published. |
 
 Cells below marked "written" were recorded before Windows and Linux CI
 existed (2026-11-15): the code exists and compiles; the CI jobs named
@@ -48,7 +48,7 @@ All systems:
 - Rust 1.99.0 with `rustfmt` and `clippy` (`rust-toolchain.toml`), and a C compiler (SQLite and `ring` are C; OpenSSL is built from source, which needs Perl).
 - [huacnlee/cargo](https://github.com/huacnlee/cargo): what the owner's Mac and NSH's own CI use (`curl -fsSL https://huacnlee.github.io/cargo/install.sh | sh`). Building the app with stock cargo has not been tried.
 - `just` 1.45.0 (the recipes are `[unix]`: bash).
-- **The NSH checkout beside this repository**: `<parent>/buwiz-forms` and `<parent>/nsh`. `nsh/Cargo.toml` names the NSH crates as `../../nsh/crates/...`. The commit is `NSH_PINNED_REF` in `.github/workflows/nsh.yml` (hexuria/nsh branch `buwiz-next`, `ca39c0e9103a389a31ea280799ef34796d7aac70`).
+- **The NSH checkout beside this repository**: `<parent>/buwiz-forms` and `<parent>/nsh`. `nsh/Cargo.toml` names the NSH crates as `../../nsh/crates/...`. The commit is `NSH_PINNED_REF` in `.github/workflows/nsh.yml` (hexuria/nsh branch `buwiz-next`, `8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf`).
 - The `nsh` command line, built from that checkout: `cargo install --locked --path <parent>/nsh/crates/nsh-cli --root ~/BuwizNsh/tools` (10 minutes cold on the owner's Mac). The recipes call `~/BuwizNsh/tools/bin/nsh`.
 - Network on the first `nsh check`: it downloads the TypeScript 7.0.2 compiler from npm.
 
@@ -76,10 +76,11 @@ Without just: `export PATH="$HOME/BuwizNsh/tools/bin:$PATH"; cd nsh; nsh check; 
 `nsh run --target windows` and `--target linux` are NSH's commands for those backends; CI builds and tests on `windows-2025` and `ubuntu-24.04`, while `nsh-run` and `nsh-shots` pass `--target macos` locally.
 On Windows, as on macOS, a test environment's scratch database needs no `BIR_DATABASE_PATH` (the guard verifies there). Engines in one run cannot share one named file.
 
-CI: `.github/workflows/nsh.yml` runs the steps above on `macos-15`,
-`windows-2025` and `ubuntu-24.04` on pull requests that touch `nsh/` or
-the crates it uses; it checks out hexuria/nsh at `NSH_PINNED_REF` (with
-`NSH_REPO_TOKEN` when the fork is private) and has run and passed.
+CI ([docs/CI.md](../CI.md)): a pull request that touches `nsh/` or the crates it uses runs `just nsh-check -v` on
+Linux (ci.yml's `NSH app type check (Linux)`). `.github/workflows/nsh.yml` runs the steps above on `macos-15`,
+`windows-2025` and `ubuntu-24.04`, but only when they are asked for: on a push to `test/...` (`just ci-test`), in a
+manual run, and nightly on `main`. It checks out hexuria/nsh at `NSH_PINNED_REF` (with `NSH_REPO_TOKEN` when the
+fork is private) and has run and passed.
 
 ## Parked
 

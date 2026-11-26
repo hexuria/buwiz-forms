@@ -5,7 +5,7 @@ use bir_core::forms::form_1600pt::{
 };
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_1600pt() -> Form1600PtDraft {
+pub(crate) fn sample_1600pt() -> Form1600PtDraft {
     let mut draft =
         Form1600PtDraft::new_from_profile(&dummy_profile("1600PT", "Corporation"), 2025, 6);
     // Long enough for the official 80-character split into two lines.
@@ -65,7 +65,7 @@ fn form_1600pt_sample_payload_is_current() {
 }
 
 /// A private withholding agent: its ATC popup has 6 rows, not 31.
-fn sample_1600pt_private() -> Form1600PtDraft {
+pub(crate) fn sample_1600pt_private() -> Form1600PtDraft {
     let mut draft =
         Form1600PtDraft::new_from_profile(&dummy_profile("1600PT", "Corporation"), 2025, 7);
     draft.set_agent_category(Form1600PtAgentCategory::Private);
@@ -99,7 +99,7 @@ fn form_1600pt_private_sample_payload_is_current() {
 
 /// More than five ATCs: the sixth onward go to the "Other Selected ATC"
 /// table, written after `hPartIITableSize`.
-fn sample_1600pt_other_atcs() -> Form1600PtDraft {
+pub(crate) fn sample_1600pt_other_atcs() -> Form1600PtDraft {
     let mut draft =
         Form1600PtDraft::new_from_profile(&dummy_profile("1600PT", "Corporation"), 2025, 8);
     draft.set_agent_category(Form1600PtAgentCategory::Government);

@@ -11,16 +11,20 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
-static WAKE_TX: OnceLock<mpsc::Sender<()>> = OnceLock::new();
+/// The wake channel of the worker loop that runs now; empty while none runs. Each loop puts its own in and takes it
+/// out when it ends (or is dropped), so a later loop in the same process is woken, not the one before it.
+static WAKE_TX: Mutex<Option<mpsc::Sender<()>>> = Mutex::new(None);
 static ACTIVE_JOBS: OnceLock<Arc<Mutex<HashSet<String>>>> = OnceLock::new();
-/// Set by [`request_shutdown`]. The cron loop finishes the tick it is already
-/// on, then returns, so the submission worker can drop the database.
-static SHUTDOWN: AtomicBool = AtomicBool::new(false);
+/// Counts [`request_shutdown`] calls. A loop stops when it moves past the value it started with, so a request stops
+/// the loops running then and never one started later.
+static SHUTDOWN_GENERATION: AtomicU64 = AtomicU64::new(0);
+/// The value of [`SHUTDOWN_GENERATION`] the most recent loop started with ([`shutdown_requested`]).
+static LATEST_WORKER_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// The shell holds this until a Buwiz account is signed in. Default false so
 /// bir-core and bir-shell cron tests keep filing. The shell sets it true
 /// before the worker starts.
@@ -32,6 +36,40 @@ pub(crate) enum WakeDispatchStatus {
     AlreadyPending,
     WorkerNotRunning,
     WorkerClosed,
+}
+
+/// One worker loop's own stop signal ([`run_cron_jobs`]). Its owner keeps a clone and calls [`CronStop::stop`]; the loop
+/// returns after the tick it is on, and at once while it waits for its next one. It only ever stops the loop it was
+/// given to, so a worker started after it is not born stopped.
+#[derive(Clone, Default)]
+pub struct CronStop(Arc<CronStopInner>);
+
+#[derive(Default)]
+struct CronStopInner {
+    stopped: AtomicBool,
+    notify: tokio::sync::Notify,
+}
+
+impl CronStop {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Ask the loop to stop. A second call does nothing more.
+    pub fn stop(&self) {
+        self.0.stopped.store(true, Ordering::SeqCst);
+        self.0.notify.notify_one();
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        self.0.stopped.load(Ordering::SeqCst)
+    }
+
+    async fn stopped(&self) {
+        while !self.is_stopped() {
+            self.0.notify.notified().await;
+        }
+    }
 }
 
 pub fn get_active_jobs() -> Arc<Mutex<HashSet<String>>> {
@@ -58,18 +96,21 @@ pub fn submission_job_key(
     )
 }
 
-/// Stop [`start_cron_jobs`] after the tick that is already running.
+/// Stop every [`start_cron_jobs`] / [`run_cron_jobs`] loop running now, after the tick it is already on.
 ///
-/// Wakes a loop that is waiting out its 60 second gap so quit does not sit
-/// there. A second call is a no-op aside from another wake.
+/// Wakes a loop that is waiting out its 60 second gap. A second call is a
+/// no-op aside from another wake. A loop started after this call is not
+/// stopped by it. The app's quit and an engine's end do not call this: they
+/// stop their own worker through its [`CronStop`], so a later engine's loop is
+/// never stopped by an earlier engine's end.
 pub fn request_shutdown() {
-    SHUTDOWN.store(true, Ordering::SeqCst);
+    SHUTDOWN_GENERATION.fetch_add(1, Ordering::SeqCst);
     wake();
 }
 
-/// Whether [`request_shutdown`] has been asked for in this process.
+/// Whether [`request_shutdown`] has been asked for since the most recent loop started.
 pub fn shutdown_requested() -> bool {
-    SHUTDOWN.load(Ordering::SeqCst)
+    SHUTDOWN_GENERATION.load(Ordering::SeqCst) != LATEST_WORKER_GENERATION.load(Ordering::SeqCst)
 }
 
 /// Skip queue ticks while the desktop account gate is locked.
@@ -102,7 +143,10 @@ pub fn wake() {
 }
 
 pub(crate) fn wake_with_status() -> WakeDispatchStatus {
-    let Some(tx) = WAKE_TX.get() else {
+    let slot = WAKE_TX
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let Some(tx) = slot.as_ref() else {
         return WakeDispatchStatus::WorkerNotRunning;
     };
 
@@ -113,26 +157,69 @@ pub(crate) fn wake_with_status() -> WakeDispatchStatus {
     }
 }
 
-pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
-    info!("Background cron engine started");
+/// A loop's wake channel in [`WAKE_TX`] for as long as the loop lives: taken out when it returns or is dropped
+/// mid-tick, unless a later loop has put its own in.
+struct WakeInstalled(mpsc::Sender<()>);
 
+impl WakeInstalled {
+    fn new(tx: mpsc::Sender<()>) -> Self {
+        *WAKE_TX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(tx.clone());
+        Self(tx)
+    }
+}
+
+impl Drop for WakeInstalled {
+    fn drop(&mut self) {
+        let mut slot = WAKE_TX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if slot.as_ref().is_some_and(|tx| tx.same_channel(&self.0)) {
+            *slot = None;
+        }
+    }
+}
+
+/// The queue worker loop until [`request_shutdown`] (the `bir` command line, `bir serve`).
+pub fn start_cron_jobs(db: Arc<Mutex<Database>>) -> impl Future<Output = ()> + Send {
+    run_cron_jobs(db, CronStop::new())
+}
+
+/// The queue worker loop until `stop` is asked (or [`request_shutdown`]). The app's engine owns `stop`, so the next
+/// engine in the same process starts a loop of its own that nothing has stopped.
+///
+/// The loop's place among [`request_shutdown`] calls is taken here, when it is called, not when it is first polled:
+/// a request made after this call stops it even if the runtime has not run it yet.
+pub fn run_cron_jobs(db: Arc<Mutex<Database>>, stop: CronStop) -> impl Future<Output = ()> + Send {
+    let born = SHUTDOWN_GENERATION.load(Ordering::SeqCst);
+    LATEST_WORKER_GENERATION.store(born, Ordering::SeqCst);
+    run_cron_loop(db, stop, born)
+}
+
+async fn run_cron_loop(db: Arc<Mutex<Database>>, stop: CronStop, born: u64) {
+    info!("Background cron engine started");
+    requeue_jobs_left_running(&db);
+
+    let stopping = || stop.is_stopped() || SHUTDOWN_GENERATION.load(Ordering::SeqCst) != born;
     let (tx, mut rx) = mpsc::channel(1);
-    let _ = WAKE_TX.set(tx);
+    let _wake = WakeInstalled::new(tx);
 
     loop {
-        if shutdown_requested() {
+        if stopping() {
             break;
         }
         if submission_paused() {
             tokio::select! {
                 _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {}
                 _ = rx.recv() => {}
+                _ = stop.stopped() => {}
             }
             continue;
         }
         // We run a tick, then wait for either 60 seconds or a wake signal.
-        run_queue_tick(db.clone()).await;
-        if shutdown_requested() {
+        run_queue_tick_until(db.clone(), &stop).await;
+        if stopping() {
             break;
         }
 
@@ -141,6 +228,7 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
             _ = rx.recv() => {
                 info!("Queue explicitly woken up by a wake signal.");
             }
+            _ = stop.stopped() => {}
         }
     }
     info!("Background cron engine stopped");
@@ -150,6 +238,11 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
 /// Extracted from `start_cron_jobs` to allow deterministic unit testing
 /// without being blocked by an infinite loop or thread sleep.
 pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
+    run_queue_tick_until(db, &CronStop::new()).await;
+}
+
+/// One tick whose blocking work (the calendar sync, an inbox poll) checks `stop` between its items and ends early.
+async fn run_queue_tick_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
     // Heartbeat log removed to prevent log spam. Job specific logs are emitted when jobs run.
 
     // Ensure we don't hold the DB lock across async network calls.
@@ -203,9 +296,9 @@ pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
     }
 
     // Task C: Generic Job Queue (Custom Cron & One-off commands)
-    process_generic_jobs(db.clone()).await;
+    process_generic_jobs_until(db.clone(), stop).await;
 
-    process_google_calendar_sync(db.clone()).await;
+    process_google_calendar_sync(db.clone(), stop).await;
 
     // Signal the desktop app that the database was modified.
     // On macOS: instant via NSDistributedNotificationCenter.
@@ -213,7 +306,7 @@ pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
     crate::ipc::post_db_changed();
 }
 
-async fn process_google_calendar_sync(db: Arc<Mutex<Database>>) {
+async fn process_google_calendar_sync(db: Arc<Mutex<Database>>, stop: &CronStop) {
     const SIX_HOURS: i64 = 6 * 60 * 60;
     let should_sync = {
         let db = match lock_timing::lock(&db) {
@@ -253,18 +346,33 @@ async fn process_google_calendar_sync(db: Arc<Mutex<Database>>) {
         return;
     }
 
-    let db_for_sync = db.clone();
-    let results = match tokio::task::spawn_blocking(move || {
-        crate::google_calendar::sync_all_profile_calendars(db_for_sync)
+    // A `Weak` and the stop: a worker that is dropped while this blocking sync runs does not keep the database open
+    // past the calendar it is on.
+    let db_for_sync = Arc::downgrade(&db);
+    let stop_for_sync = stop.clone();
+    let run = match tokio::task::spawn_blocking(move || {
+        crate::google_calendar::sync_all_profile_calendars_until(db_for_sync, &|| {
+            stop_for_sync.is_stopped()
+        })
     })
     .await
     {
-        Ok(results) => results,
+        Ok(run) => run,
         Err(error) => {
             warn!("Google Calendar background sync task failed: {error}");
             return;
         }
     };
+    if !run.complete {
+        // Stopped part way (the worker is ending): not a sync. The last sync time and a pending "sync now" stay as
+        // they were, so the next worker syncs every calendar again.
+        info!(
+            "Google Calendar sync stopped after {} of the linked calendars; not recorded",
+            run.results.len()
+        );
+        return;
+    }
+    let results = run.results;
     if results.is_empty() {
         if let Ok(db) = lock_timing::lock(&db) {
             let _ = db.set_setting(
@@ -461,13 +569,16 @@ trait SubmissionTransport {
     >;
 
     /// Send the return. `payload` is the encrypted IAF file, what the BIR's SFTP server (and the mock relay)
-    /// takes; `xml` is the plain return it was made from, what the Buwiz relay takes and seals itself.
+    /// takes; `xml` is the plain return it was made from, what the Buwiz relay takes and seals itself. A send
+    /// through the Buwiz relay keeps its progress with `note` (on the claimed return) before anything could reach
+    /// the BIR; no other send calls it.
     fn store_session<'a>(
         &'a self,
         session: Self::Session,
         filename: &'a str,
         payload: &'a [u8],
         xml: &'a [u8],
+        note: bir_submit::Note<'a>,
     ) -> Pin<
         Box<
             dyn Future<
@@ -479,6 +590,12 @@ trait SubmissionTransport {
                 + 'a,
         >,
     >;
+
+    /// Ask how the noted Buwiz relay send `pending` (the stored `bir_submit::PendingSend` JSON) ended.
+    fn settle_pending<'a>(
+        &'a self,
+        pending: &'a str,
+    ) -> Pin<Box<dyn Future<Output = crate::relay::Settlement> + Send + 'a>>;
 }
 
 struct NetworkSubmissionTransport;
@@ -526,6 +643,7 @@ impl SubmissionTransport for NetworkSubmissionTransport {
         filename: &'a str,
         payload: &'a [u8],
         xml: &'a [u8],
+        note: bir_submit::Note<'a>,
     ) -> Pin<
         Box<
             dyn Future<
@@ -543,10 +661,97 @@ impl SubmissionTransport for NetworkSubmissionTransport {
                     .store(filename, payload)
                     .await
                     .map(|()| crate::transport::StoreReport::default()),
-                NetworkSession::Buwiz(session) => session.store(filename, xml).await,
+                NetworkSession::Buwiz(session) => session.store(filename, xml, note).await,
             }
         })
     }
+
+    /// Only while sending goes through the Buwiz relay: a practice account, a dry run, the mock relay and SFTP
+    /// never ask it anything.
+    fn settle_pending<'a>(
+        &'a self,
+        pending: &'a str,
+    ) -> Pin<Box<dyn Future<Output = crate::relay::Settlement> + Send + 'a>> {
+        Box::pin(async move {
+            if !crate::transport::sends_through_buwiz() {
+                return crate::relay::Settlement::NotYet;
+            }
+            crate::relay::settle(pending).await
+        })
+    }
+}
+
+/// The worker's note of a Buwiz relay send ([`SubmissionTransport::store_session`]): the client's pending send, as
+/// JSON, written by `write` on the claimed return. It fails when the claim is no longer this worker's.
+fn pending_note<'a, W>(
+    db: &'a Arc<Mutex<Database>>,
+    write: W,
+) -> impl Fn(&bir_submit::PendingSend) -> Result<(), String> + Send + Sync + 'a
+where
+    W: Fn(&Database, &str) -> Result<bool, crate::db::DbError> + Send + Sync + 'a,
+{
+    move |pending| {
+        let json = serde_json::to_string(pending).map_err(|error| error.to_string())?;
+        let db_guard =
+            lock_timing::lock(db).map_err(|_| "the database is unavailable".to_owned())?;
+        match write(&db_guard, &json) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err("the claim on this return is no longer this worker's".to_owned()),
+            Err(error) => Err(error.to_string()),
+        }
+    }
+}
+
+/// How long a noted send may stay without an answer from Buwiz before the person is asked instead.
+const PENDING_PATIENCE: chrono::Duration = chrono::Duration::hours(24);
+
+/// What the worker does with a claimed return whose noted relay send it did not see end, by what Buwiz says.
+#[derive(Debug)]
+enum Reconcile {
+    /// A verified receipt: finish it as a send that went.
+    Finish(crate::transport::StoreReport),
+    /// No receipt: settle the claim as the same failure in this process would. An unknown outcome also drops the
+    /// record: the server was asked and cannot say.
+    Release(crate::transport::TransportError),
+    /// Ask again on a later tick.
+    Keep,
+    /// Drop the record, and with it the waiting: the person answers (`needs_attention`).
+    Clear,
+}
+
+fn reconcile_step(
+    settlement: crate::relay::Settlement,
+    pending: &str,
+    now: chrono::DateTime<Utc>,
+) -> Reconcile {
+    use crate::relay::Settlement;
+    match settlement {
+        Settlement::Sent(report) => Reconcile::Finish(report),
+        Settlement::Failed(error) => Reconcile::Release(error),
+        Settlement::Gone => Reconcile::Clear,
+        Settlement::NotYet => {
+            let waited_long = serde_json::from_str::<bir_submit::PendingSend>(pending)
+                .map_or(true, |pending| now - pending.noted_at >= PENDING_PATIENCE);
+            if waited_long {
+                Reconcile::Clear
+            } else {
+                Reconcile::Keep
+            }
+        }
+    }
+}
+
+/// Of the XML this return may have been sent as, the one the noted send's hash names: what goes in
+/// `submitted_payload`. `None` keeps what the return stores.
+fn sent_payload(pending: &str, candidates: [Option<String>; 2]) -> Option<String> {
+    use sha2::Digest;
+    let wanted = serde_json::from_str::<bir_submit::PendingSend>(pending)
+        .ok()?
+        .xml_sha256;
+    candidates
+        .into_iter()
+        .flatten()
+        .find(|xml| hex::encode(sha2::Sha256::digest(xml.as_bytes())).eq_ignore_ascii_case(&wanted))
 }
 
 async fn process_queued_1601c(
@@ -581,6 +786,11 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
     let loaded_draft = if loaded_draft.submission_claim_token.is_some()
         || loaded_draft.submission_claimed_at.is_some()
     {
+        // A relay send this worker noted and did not see end (the app was stopped during it): Buwiz knows.
+        if let Some(pending) = loaded_draft.relay_pending.clone() {
+            reconcile_1601c(loaded_draft, pending, profile, db, transport).await;
+            return;
+        }
         let recovered = {
             let db_guard = match lock_timing::lock(&db) {
                 Ok(guard) => guard,
@@ -789,7 +999,6 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
     };
 
     let session_source = transport.session_source(&session);
-    let skip_email_poll = session_source.is_dry_run() || session_source.is_relay();
     let put_marked = {
         let db_guard = match lock_timing::lock(&db) {
             Ok(guard) => guard,
@@ -811,80 +1020,31 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         );
         return;
     }
+    let (tin, year, month) = (draft.tin.clone(), draft.taxable_year, draft.month);
+    let note = pending_note(&db, |db_guard, pending| {
+        db_guard.note_claimed_1601c_relay_pending(&tin, year, month, &claim_token, Some(pending))
+    });
     match transport
-        .store_session(session, &filename, &encrypted, xml_payload.as_bytes())
+        .store_session(
+            session,
+            &filename,
+            &encrypted,
+            xml_payload.as_bytes(),
+            &note,
+        )
         .await
     {
-        Ok(report) => {
-            let skip_email_poll = skip_email_poll || report.simulated;
-            if skip_email_poll {
-                info!(
-                    "Cron: dry run: simulated submission of queued 1601C {} (nothing sent to BIR)",
-                    filename
-                );
-            } else {
-                info!("Cron: Successfully submitted queued 1601C {}", filename);
-            }
-            let period_label = monthly_period_label(draft.taxable_year, draft.month);
-            let (notice_title, notice_body) = submission_notice(
-                profile,
-                "1601C",
-                &period_label,
-                &chrono::Local::now(),
-                skip_email_poll,
-            );
-            crate::notification::send_notification(&notice_title, &notice_body);
-            let submitted_file = filename.clone();
-            // Keep the exact bytes that were encrypted for PUT, so an
-            // amendment can later snapshot what BIR received.
-            draft.submitted_payload = Some(xml_payload);
-            draft
-                .transition_to_submitted(filename, session_source.is_dry_run() || report.simulated);
-            draft.submitted_via_relay = session_source.is_relay();
-            draft.relay_receipt = report.relay_receipt;
-            if let Ok(db_guard) = lock_timing::lock(&db) {
-                match db_guard.finish_claimed_1601c_submission(&draft, &claim_token) {
-                    Ok(_) => {
-                        record_submission_alert(
-                            &db_guard,
-                            profile,
-                            "1601C",
-                            &period_label,
-                            &submitted_file,
-                            &notice_title,
-                            &notice_body,
-                        );
-                        if skip_email_poll {
-                            info!(
-                                "Cron: 1601C dry-run PUT succeeded; skipping IMAP poll (source=dry-run)"
-                            );
-                        } else {
-                            schedule_email_poll(
-                                profile,
-                                "1601C",
-                                &draft.tin,
-                                draft.taxable_year,
-                                Some(draft.month),
-                                None,
-                                &db_guard,
-                            );
-                        }
-                        crate::dev_mode::maybe_auto_confirm(
-                            &db_guard,
-                            session_source,
-                            &submitted_file,
-                        );
-                    }
-                    Err(error) => warn!(
-                        "Cron: 1601C {} was transmitted but its submission claim could not be finalized: {}",
-                        draft.period_code(),
-                        error
-                    ),
-                }
-            }
-        }
+        Ok(report) => finish_sent_1601c(
+            draft,
+            profile,
+            &db,
+            &claim_token,
+            filename,
+            Some(xml_payload),
+            session_source,
+            report,
+        ),
         Err(error) => {
-            let (tin, year, month) = (draft.tin.clone(), draft.taxable_year, draft.month);
             release_unaccepted(
                 "1601C",
                 &draft.period_code(),
@@ -1029,6 +1189,11 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
 
     // A held claim is only recoverable when its lease expired before PUT.
     let loaded = if !loaded.lifecycle().is_unclaimed() {
+        // A relay send this worker noted and did not see end (the app was stopped during it): Buwiz knows.
+        if let Some(pending) = loaded.lifecycle().relay_pending.clone() {
+            reconcile_queueable(loaded, pending, profile, db, transport).await;
+            return;
+        }
         let recovered = lock_timing::lock(&db)
             .ok()
             .and_then(|db_guard| {
@@ -1204,7 +1369,6 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
     };
 
     let session_source = transport.session_source(&session);
-    let skip_email_poll = session_source.is_dry_run() || session_source.is_relay();
     let put_marked = lock_timing::lock(&db)
         .ok()
         .and_then(|db_guard| {
@@ -1227,94 +1391,35 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
         return;
     }
 
+    let (tin, year, period) = (
+        draft.tin().to_string(),
+        draft.taxable_year(),
+        draft.period_column(),
+    );
+    let note = pending_note(&db, |db_guard, pending| {
+        db_guard.note_claimed_queueable_relay_pending::<F>(
+            &tin,
+            year,
+            period,
+            &claim_token,
+            Some(pending),
+        )
+    });
     match transport
-        .store_session(session, &filename, &encrypted, payload.as_bytes())
+        .store_session(session, &filename, &encrypted, payload.as_bytes(), &note)
         .await
     {
-        Ok(report) => {
-            let skip_email_poll = skip_email_poll || report.simulated;
-            if skip_email_poll {
-                info!(
-                    "Cron: dry run: simulated submission of queued {} {} (nothing sent to BIR)",
-                    F::FORM_CODE,
-                    filename
-                );
-            } else {
-                info!(
-                    "Cron: Successfully submitted queued {} {}",
-                    F::FORM_CODE,
-                    filename
-                );
-            }
-            let period_label = queueable_period_label(&draft);
-            let (notice_title, notice_body) = submission_notice(
-                profile,
-                F::FORM_CODE,
-                &period_label,
-                &chrono::Local::now(),
-                skip_email_poll,
-            );
-            crate::notification::send_notification(&notice_title, &notice_body);
-            let submitted_file = filename.clone();
-            // Keep the exact bytes that were encrypted for PUT, so an
-            // amendment can later snapshot what BIR received.
-            draft.lifecycle_mut().submitted_payload = Some(payload);
-            draft
-                .lifecycle_mut()
-                .transition_to_submitted(filename, session_source.is_dry_run() || report.simulated);
-            draft.lifecycle_mut().submitted_via_relay = session_source.is_relay();
-            draft.lifecycle_mut().relay_receipt = report.relay_receipt;
-            if let Ok(db_guard) = lock_timing::lock(&db) {
-                match db_guard.finish_claimed_queueable_submission(&draft, &claim_token) {
-                    Ok(_) => {
-                        record_submission_alert(
-                            &db_guard,
-                            profile,
-                            F::FORM_CODE,
-                            &period_label,
-                            &submitted_file,
-                            &notice_title,
-                            &notice_body,
-                        );
-                        if !skip_email_poll {
-                            let (month, quarter) = match draft.filing_period() {
-                                crate::forms::FilingPeriod::Monthly(month) => (Some(month), None),
-                                crate::forms::FilingPeriod::Quarterly(quarter) => {
-                                    (None, Some(quarter))
-                                }
-                                _ => (None, None),
-                            };
-                            schedule_email_poll(
-                                profile,
-                                F::FORM_CODE,
-                                draft.tin(),
-                                draft.taxable_year(),
-                                month,
-                                quarter,
-                                &db_guard,
-                            );
-                        }
-                        crate::dev_mode::maybe_auto_confirm(
-                            &db_guard,
-                            session_source,
-                            &submitted_file,
-                        );
-                    }
-                    Err(error) => warn!(
-                        "Cron: {} {} was transmitted but its submission claim could not be finalized: {}",
-                        F::FORM_CODE,
-                        draft.period_code(),
-                        error
-                    ),
-                }
-            }
-        }
+        Ok(report) => finish_sent_queueable(
+            draft,
+            profile,
+            &db,
+            &claim_token,
+            filename,
+            Some(payload),
+            session_source,
+            report,
+        ),
         Err(error) => {
-            let (tin, year, period) = (
-                draft.tin().to_string(),
-                draft.taxable_year(),
-                draft.period_column(),
-            );
             release_unaccepted(
                 F::FORM_CODE,
                 &draft.period_code(),
@@ -1333,6 +1438,174 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
             );
         }
     }
+}
+
+/// A queued return whose send went: Submitted, with the relay's receipt, the notice and the alert, and the inbox
+/// watched for the BIR's email unless nothing reached the BIR. `payload` is what was sent (`None` keeps the stored
+/// one).
+#[allow(clippy::too_many_arguments)]
+fn finish_sent_queueable<F: QueueableForm>(
+    mut draft: F,
+    profile: &TaxpayerProfile,
+    db: &Arc<Mutex<Database>>,
+    claim_token: &str,
+    filename: String,
+    payload: Option<String>,
+    session_source: crate::transport::SftpEndpointSource,
+    report: crate::transport::StoreReport,
+) {
+    let skip_email_poll =
+        session_source.is_dry_run() || session_source.is_relay() || report.simulated;
+    if skip_email_poll {
+        info!(
+            "Cron: dry run: simulated submission of queued {} {} (nothing sent to BIR)",
+            F::FORM_CODE,
+            filename
+        );
+    } else {
+        info!(
+            "Cron: Successfully submitted queued {} {}",
+            F::FORM_CODE,
+            filename
+        );
+    }
+    let period_label = queueable_period_label(&draft);
+    let (notice_title, notice_body) = submission_notice(
+        profile,
+        F::FORM_CODE,
+        &period_label,
+        &chrono::Local::now(),
+        skip_email_poll,
+    );
+    crate::notification::send_notification(&notice_title, &notice_body);
+    let submitted_file = filename.clone();
+    // Keep the exact bytes that were encrypted for PUT, so an
+    // amendment can later snapshot what BIR received.
+    if let Some(payload) = payload {
+        draft.lifecycle_mut().submitted_payload = Some(payload);
+    }
+    draft
+        .lifecycle_mut()
+        .transition_to_submitted(filename, session_source.is_dry_run() || report.simulated);
+    draft.lifecycle_mut().submitted_via_relay = session_source.is_relay();
+    draft.lifecycle_mut().relay_receipt = report.relay_receipt;
+    if let Ok(db_guard) = lock_timing::lock(db) {
+        match db_guard.finish_claimed_queueable_submission(&draft, claim_token) {
+            Ok(_) => {
+                record_submission_alert(
+                    &db_guard,
+                    profile,
+                    F::FORM_CODE,
+                    &period_label,
+                    &submitted_file,
+                    &notice_title,
+                    &notice_body,
+                );
+                if !skip_email_poll {
+                    let (month, quarter) = match draft.filing_period() {
+                        crate::forms::FilingPeriod::Monthly(month) => (Some(month), None),
+                        crate::forms::FilingPeriod::Quarterly(quarter) => (None, Some(quarter)),
+                        _ => (None, None),
+                    };
+                    schedule_email_poll(
+                        profile,
+                        F::FORM_CODE,
+                        draft.tin(),
+                        draft.taxable_year(),
+                        month,
+                        quarter,
+                        &db_guard,
+                    );
+                }
+                crate::dev_mode::maybe_auto_confirm(&db_guard, session_source, &submitted_file);
+            }
+            Err(error) => warn!(
+                "Cron: {} {} was transmitted but its submission claim could not be finalized: {}",
+                F::FORM_CODE,
+                draft.period_code(),
+                error
+            ),
+        }
+    }
+}
+
+/// A claimed queued return whose noted relay send this worker did not see end: ask Buwiz and act on what it says.
+async fn reconcile_queueable<F: QueueableForm, T: SubmissionTransport>(
+    draft: F,
+    pending: String,
+    profile: &TaxpayerProfile,
+    db: Arc<Mutex<Database>>,
+    transport: &T,
+) {
+    let Some(claim_token) = draft.lifecycle().submission_claim_token.clone() else {
+        return;
+    };
+    let (tin, year, period) = (
+        draft.tin().to_string(),
+        draft.taxable_year(),
+        draft.period_column(),
+    );
+    let clear = |db: &Arc<Mutex<Database>>| {
+        if let Ok(db_guard) = lock_timing::lock(db) {
+            let _ = db_guard.note_claimed_queueable_relay_pending::<F>(
+                &tin,
+                year,
+                period,
+                &claim_token,
+                None,
+            );
+        }
+    };
+    match reconcile_step(
+        transport.settle_pending(&pending).await,
+        &pending,
+        Utc::now(),
+    ) {
+        Reconcile::Keep => return,
+        Reconcile::Clear => clear(&db),
+        Reconcile::Finish(report) => {
+            let filename = draft.submission_filename();
+            let payload = sent_payload(
+                &pending,
+                [
+                    draft.official_payload().ok(),
+                    draft.lifecycle().submitted_payload.clone(),
+                ],
+            );
+            finish_sent_queueable(
+                draft,
+                profile,
+                &db,
+                &claim_token,
+                filename,
+                payload,
+                crate::transport::SftpEndpointSource::Buwiz,
+                report,
+            );
+        }
+        Reconcile::Release(error) => {
+            release_unaccepted(
+                F::FORM_CODE,
+                &draft.period_code(),
+                &error,
+                &db,
+                |db_guard, note, how| {
+                    db_guard.release_unaccepted_claimed_queueable::<F>(
+                        &tin,
+                        year,
+                        period,
+                        &claim_token,
+                        note,
+                        how,
+                    )
+                },
+            );
+            if matches!(error.no_receipt(), NoReceipt::Unknown) {
+                clear(&db);
+            }
+        }
+    }
+    crate::ipc::post_db_changed();
 }
 
 /// Run the generic worker for a queueable form code. `false` when the code
@@ -1402,6 +1675,11 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
 
     if loaded_draft.submission_claim_token.is_some() || loaded_draft.submission_claimed_at.is_some()
     {
+        // A relay send this worker noted and did not see end (the app was stopped during it): Buwiz knows.
+        if let Some(pending) = loaded_draft.relay_pending.clone() {
+            reconcile_2551q(loaded_draft, pending, &current_profile, db_clone, transport).await;
+            return;
+        }
         let recovered = {
             let db_guard = match lock_timing::lock(&db_clone) {
                 Ok(guard) => guard,
@@ -1611,7 +1889,6 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
     };
 
     let session_source = transport.session_source(&session);
-    let skip_email_poll = session_source.is_dry_run() || session_source.is_relay();
     let put_marked = {
         let db_guard = match lock_timing::lock(&db_clone) {
             Ok(guard) => guard,
@@ -1633,76 +1910,31 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
         );
         return;
     }
+    let (tin, year, quarter) = (draft.tin.clone(), draft.taxable_year, draft.quarter);
+    let note = pending_note(&db_clone, |db_guard, pending| {
+        db_guard.note_claimed_2551q_relay_pending(&tin, year, quarter, &claim_token, Some(pending))
+    });
     match transport
-        .store_session(session, &filename, &encrypted, xml_payload.as_bytes())
+        .store_session(
+            session,
+            &filename,
+            &encrypted,
+            xml_payload.as_bytes(),
+            &note,
+        )
         .await
     {
-        Ok(report) => {
-            let skip_email_poll = skip_email_poll || report.simulated;
-            if skip_email_poll {
-                info!(
-                    "Cron: dry run: simulated submission of queued form {} (nothing sent to BIR)",
-                    filename
-                );
-            } else {
-                info!("Cron: Successfully submitted queued form {}", filename);
-            }
-            let period_label = quarterly_period_label(draft.taxable_year, draft.quarter);
-            let (notice_title, notice_body) = submission_notice(
-                &current_profile,
-                "2551Q",
-                &period_label,
-                &chrono::Local::now(),
-                skip_email_poll,
-            );
-            crate::notification::send_notification(&notice_title, &notice_body);
-            // Keep the exact bytes that were encrypted for PUT.
-            draft.submitted_payload = Some(xml_payload);
-            draft.transition_to_submitted(
-                filename.clone(),
-                session_source.is_dry_run() || report.simulated,
-            );
-            draft.submitted_via_relay = session_source.is_relay();
-            draft.relay_receipt = report.relay_receipt;
-            if let Ok(db_guard) = lock_timing::lock(&db_clone) {
-                match db_guard.finish_claimed_2551q_submission(&draft, &claim_token) {
-                    Ok(_) => {
-                        record_submission_alert(
-                            &db_guard,
-                            &current_profile,
-                            "2551Q",
-                            &period_label,
-                            &filename,
-                            &notice_title,
-                            &notice_body,
-                        );
-                        if skip_email_poll {
-                            info!(
-                                "Cron: 2551Q dry-run PUT succeeded; skipping IMAP poll (source=dry-run)"
-                            );
-                        } else {
-                            schedule_email_poll(
-                                &current_profile,
-                                "2551Q",
-                                &draft.tin,
-                                draft.taxable_year,
-                                None,
-                                Some(draft.quarter),
-                                &db_guard,
-                            );
-                        }
-                        crate::dev_mode::maybe_auto_confirm(&db_guard, session_source, &filename);
-                    }
-                    Err(error) => warn!(
-                        "Cron: Form {} was transmitted but its submission claim could not be finalized: {}",
-                        draft.period_code(),
-                        error
-                    ),
-                }
-            }
-        }
+        Ok(report) => finish_sent_2551q(
+            draft,
+            &current_profile,
+            &db_clone,
+            &claim_token,
+            filename,
+            Some(xml_payload),
+            session_source,
+            report,
+        ),
         Err(error) => {
-            let (tin, year, quarter) = (draft.tin.clone(), draft.taxable_year, draft.quarter);
             release_unaccepted(
                 "2551Q",
                 &draft.period_code(),
@@ -1724,11 +1956,263 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
     crate::ipc::post_db_changed();
 }
 
+/// A 2551Q whose send went: Submitted, with the relay's receipt, the notice and the alert, and the inbox watched for
+/// the BIR's email unless nothing reached the BIR. `xml_payload` is what was sent (`None` keeps the stored one).
+#[allow(clippy::too_many_arguments)]
+fn finish_sent_2551q(
+    mut draft: Form2551QDraft,
+    current_profile: &TaxpayerProfile,
+    db: &Arc<Mutex<Database>>,
+    claim_token: &str,
+    filename: String,
+    xml_payload: Option<String>,
+    session_source: crate::transport::SftpEndpointSource,
+    report: crate::transport::StoreReport,
+) {
+    let skip_email_poll =
+        session_source.is_dry_run() || session_source.is_relay() || report.simulated;
+    if skip_email_poll {
+        info!(
+            "Cron: dry run: simulated submission of queued form {} (nothing sent to BIR)",
+            filename
+        );
+    } else {
+        info!("Cron: Successfully submitted queued form {}", filename);
+    }
+    let period_label = quarterly_period_label(draft.taxable_year, draft.quarter);
+    let (notice_title, notice_body) = submission_notice(
+        current_profile,
+        "2551Q",
+        &period_label,
+        &chrono::Local::now(),
+        skip_email_poll,
+    );
+    crate::notification::send_notification(&notice_title, &notice_body);
+    // Keep the exact bytes that were encrypted for PUT.
+    if let Some(xml_payload) = xml_payload {
+        draft.submitted_payload = Some(xml_payload);
+    }
+    draft.transition_to_submitted(
+        filename.clone(),
+        session_source.is_dry_run() || report.simulated,
+    );
+    draft.submitted_via_relay = session_source.is_relay();
+    draft.relay_receipt = report.relay_receipt;
+    if let Ok(db_guard) = lock_timing::lock(db) {
+        match db_guard.finish_claimed_2551q_submission(&draft, claim_token) {
+            Ok(_) => {
+                record_submission_alert(
+                    &db_guard,
+                    current_profile,
+                    "2551Q",
+                    &period_label,
+                    &filename,
+                    &notice_title,
+                    &notice_body,
+                );
+                if skip_email_poll {
+                    info!("Cron: 2551Q dry-run PUT succeeded; skipping IMAP poll (source=dry-run)");
+                } else {
+                    schedule_email_poll(
+                        current_profile,
+                        "2551Q",
+                        &draft.tin,
+                        draft.taxable_year,
+                        None,
+                        Some(draft.quarter),
+                        &db_guard,
+                    );
+                }
+                crate::dev_mode::maybe_auto_confirm(&db_guard, session_source, &filename);
+            }
+            Err(error) => warn!(
+                "Cron: Form {} was transmitted but its submission claim could not be finalized: {}",
+                draft.period_code(),
+                error
+            ),
+        }
+    }
+}
+
+/// A claimed 2551Q whose noted relay send this worker did not see end: ask Buwiz and act on what it says.
+async fn reconcile_2551q<T: SubmissionTransport>(
+    draft: Form2551QDraft,
+    pending: String,
+    current_profile: &TaxpayerProfile,
+    db: Arc<Mutex<Database>>,
+    transport: &T,
+) {
+    let Some(claim_token) = draft.submission_claim_token.clone() else {
+        return;
+    };
+    let (tin, year, quarter) = (draft.tin.clone(), draft.taxable_year, draft.quarter);
+    let clear = |db: &Arc<Mutex<Database>>| {
+        if let Ok(db_guard) = lock_timing::lock(db) {
+            let _ =
+                db_guard.note_claimed_2551q_relay_pending(&tin, year, quarter, &claim_token, None);
+        }
+    };
+    match reconcile_step(
+        transport.settle_pending(&pending).await,
+        &pending,
+        Utc::now(),
+    ) {
+        Reconcile::Keep => return,
+        Reconcile::Clear => clear(&db),
+        Reconcile::Finish(report) => {
+            let filename = draft.default_submission_filename();
+            let payload = sent_payload(
+                &pending,
+                [
+                    draft.to_bir_xml_payload().ok(),
+                    draft.submitted_payload.clone(),
+                ],
+            );
+            finish_sent_2551q(
+                draft,
+                current_profile,
+                &db,
+                &claim_token,
+                filename,
+                payload,
+                crate::transport::SftpEndpointSource::Buwiz,
+                report,
+            );
+        }
+        Reconcile::Release(error) => {
+            release_unaccepted(
+                "2551Q",
+                &draft.period_code(),
+                &error,
+                &db,
+                |db_guard, note, how| {
+                    db_guard.release_unaccepted_claimed_2551q_submission(
+                        &tin,
+                        year,
+                        quarter,
+                        &claim_token,
+                        note,
+                        how,
+                    )
+                },
+            );
+            if matches!(error.no_receipt(), NoReceipt::Unknown) {
+                clear(&db);
+            }
+        }
+    }
+    crate::ipc::post_db_changed();
+}
+
+/// The setting that says the returns queued before this database first met a version that sends through Buwiz
+/// were given back to their owner ([`give_back_returns_queued_before_the_relay`]).
+pub const RELAY_SINCE_SETTING: &str = "relay_filing_since";
+
+/// The reason on a return that was queued before the app could send through Buwiz.
+pub const QUEUED_BEFORE_RELAY: &str = "This return was queued in an earlier version of eBIRForms and was not sent. Check it and queue it again to send it to the BIR through Buwiz.";
+
+/// Once per database, the first time a version that files through Buwiz runs its queue: every return that is
+/// still Queued and unclaimed goes back to Draft with [`QUEUED_BEFORE_RELAY`]. The person queued it for another
+/// way of sending, perhaps long ago; sending it now, unasked, would be filing by accident. A claimed return is
+/// left as it is: its outcome is unknown and the person settles it. Returns queued after this are sent as usual.
+fn give_back_returns_queued_before_the_relay(db: &Arc<Mutex<Database>>) {
+    let queued = {
+        let Ok(db_guard) = lock_timing::lock(db) else {
+            return;
+        };
+        match db_guard.get_setting(RELAY_SINCE_SETTING) {
+            Ok(None) => {}
+            // Done before, or the setting cannot be read: never sweep twice.
+            _ => return,
+        }
+        let queued = db_guard.list_all_queued_submissions().unwrap_or_default();
+        if let Err(error) = db_guard.set_setting(RELAY_SINCE_SETTING, &Utc::now().to_rfc3339()) {
+            warn!("Cron: could not record the first run with relay filing: {error}");
+            return;
+        }
+        queued
+    };
+    for summary in queued
+        .iter()
+        .filter(|summary| summary.status == FilingStatus::Queued)
+    {
+        give_back_one(summary, db);
+    }
+    crate::ipc::post_db_changed();
+}
+
+fn give_back_one(summary: &FormDraftSummary, db: &Arc<Mutex<Database>>) {
+    let note = QUEUED_BEFORE_RELAY.to_string();
+    match summary.form_code.as_str() {
+        "2551Q" => {
+            let Some(quarter) = summary.quarter else {
+                return;
+            };
+            let loaded = lock_timing::lock(db).ok().and_then(|db_guard| {
+                db_guard
+                    .get_2551q_draft(&summary.tin, summary.taxable_year, quarter)
+                    .ok()
+                    .flatten()
+            });
+            if let Some(mut draft) = loaded
+                && let Some(revision) = queued_2551q_revision(&draft)
+            {
+                settle_draft_2551q(&mut draft, &revision, db.clone(), note, NoReceipt::Refused);
+            }
+        }
+        "1601C" => {
+            let Some(month) = summary.month else {
+                return;
+            };
+            let loaded = lock_timing::lock(db).ok().and_then(|db_guard| {
+                db_guard
+                    .get_1601c_draft(&summary.tin, summary.taxable_year, month)
+                    .ok()
+                    .flatten()
+            });
+            if let Some(mut draft) = loaded
+                && let Some(revision) = queued_1601c_revision(&draft)
+            {
+                settle_draft_1601c(&mut draft, &revision, db.clone(), note, NoReceipt::Refused);
+            }
+        }
+        code => {
+            let Some(kind) = QueueableKind::from_form_code(code) else {
+                return;
+            };
+            crate::with_queueable_kind!(kind, F => give_back_queueable::<F>(summary, db, note));
+        }
+    }
+}
+
+fn give_back_queueable<F: QueueableForm>(
+    summary: &FormDraftSummary,
+    db: &Arc<Mutex<Database>>,
+    note: String,
+) {
+    let period = i64::from(summary.month.or(summary.quarter).unwrap_or(0));
+    let loaded = lock_timing::lock(db).ok().and_then(|db_guard| {
+        db_guard
+            .get_queueable_draft::<F>(&summary.tin, summary.taxable_year, period)
+            .ok()
+            .flatten()
+    });
+    if let Some(mut draft) = loaded
+        && let Some(generation) = queue_generation(&draft)
+    {
+        settle_queueable(&mut draft, &generation, db, note, NoReceipt::Refused);
+    }
+}
+
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
     // A build with nowhere to send leaves every queued return as it is: no
     // attempt is counted and none goes back to Draft.
     if crate::transport::sending_unavailable() {
         return;
+    }
+    // The first time this database meets a version that files through Buwiz, what was queued before is given back.
+    if crate::transport::sends_through_buwiz() {
+        give_back_returns_queued_before_the_relay(&db);
     }
     let summaries = {
         let db_guard = match lock_timing::lock(&db) {
@@ -1758,10 +2242,9 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
 
         let active_jobs = get_active_jobs();
         {
-            let mut jobs = match active_jobs.lock() {
-                Ok(j) => j,
-                Err(_) => continue,
-            };
+            let mut jobs = active_jobs
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if !jobs.insert(job_key.clone()) {
                 continue; // Already running
             }
@@ -1769,14 +2252,12 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
 
         let profile_clone = profile.clone();
         let db_clone = db.clone();
-        let active_jobs_clone = active_jobs.clone();
+        let cleanup = JobCleanup {
+            key: job_key,
+            active_jobs: active_jobs.clone(),
+        };
 
-        tokio::spawn(async move {
-            let _cleanup = JobCleanup {
-                key: job_key,
-                active_jobs: active_jobs_clone,
-            };
-
+        spawn_job(cleanup, async move {
             if summary.form_code == "2551Q" {
                 process_queued_2551q(&summary, &profile_clone, db_clone.clone()).await;
                 return;
@@ -1802,12 +2283,20 @@ pub fn quarterly_period_label(taxable_year: u16, quarter: u8) -> String {
     format!("Q{quarter}/{:02}", taxable_year % 100)
 }
 
+/// The app's one sentence for a send that reached nobody (a dry run, a
+/// practice account, a Buwiz test TIN): the OS notice and the screens'
+/// `test_sent` line (bir-app-api `send_state::TEST_SENT_LINE`) say it.
+pub const TEST_SENT_LINE: &str = "Test send. Nothing reached the BIR.";
+
+/// The first words of a test send's notice title.
+const TEST_SEND_TITLE: &str = "Test send";
+
 /// Desktop banner for a successful PUT: who, which return, when — not the
 /// IAF filename, which says none of that at a glance. Returns `(title, body)`.
-/// Appended to the submission notice title and body when the SFTP transport
-/// was the `BIR_SFTP_DRY_RUN` simulator.
-pub const DRY_RUN_NOTICE_SUFFIX: &str = " (dry run \u{2014} nothing was sent to BIR)";
-
+/// A `dry_run` send reached nobody: its title leads with "Test send", so a
+/// phone banner that cuts a long registered name off still shows it, and its
+/// body's first line is [`TEST_SENT_LINE`]. It never says the return was
+/// submitted, sent or filed.
 pub fn submission_notice<Tz: chrono::TimeZone>(
     profile: &TaxpayerProfile,
     form_code: &str,
@@ -1818,22 +2307,27 @@ pub fn submission_notice<Tz: chrono::TimeZone>(
 where
     Tz::Offset: std::fmt::Display,
 {
-    let mut title = format!(
-        "{form_code} {period_label} submitted \u{2014} {}",
-        profile.full_name
-    );
-    let mut body = format!(
-        "TIN {}\nSent {}\nFiled under {}",
-        profile.tin.formatted(),
-        sent_at.format("%I:%M %p, %-d %b %Y"),
-        profile.inbox_email()
-    );
+    let at = sent_at.format("%I:%M %p, %-d %b %Y");
+    let tin = profile.tin.formatted();
     if dry_run {
-        title.push_str(DRY_RUN_NOTICE_SUFFIX);
-        body.push('\n');
-        body.push_str(DRY_RUN_NOTICE_SUFFIX.trim_start());
+        return (
+            format!(
+                "{TEST_SEND_TITLE}: {form_code} {period_label} \u{2014} {}",
+                profile.full_name
+            ),
+            format!("{TEST_SENT_LINE}\nTIN {tin}\nTested {at}"),
+        );
     }
-    (title, body)
+    (
+        format!(
+            "{form_code} {period_label} submitted \u{2014} {}",
+            profile.full_name
+        ),
+        format!(
+            "TIN {tin}\nSent {at}\nFiled under {}",
+            profile.inbox_email()
+        ),
+    )
 }
 
 /// Banner for a BIR receipt confirmation. The date and time are **BIR's**
@@ -1972,6 +2466,153 @@ pub fn schedule_email_poll(
 
 /// The words kept on a return whose send ended with an unknown outcome, before the transport's own reason.
 pub const OUTCOME_UNKNOWN: &str = "The BIR may have received this return. Check for the BIR's confirmation email before sending it again.";
+
+/// A 1601C whose send went: Submitted, with the relay's receipt, the notice and the alert, and the inbox watched for
+/// the BIR's email unless nothing reached the BIR. `xml_payload` is what was sent (`None` keeps the stored one).
+#[allow(clippy::too_many_arguments)]
+fn finish_sent_1601c(
+    mut draft: Form1601CDraft,
+    profile: &TaxpayerProfile,
+    db: &Arc<Mutex<Database>>,
+    claim_token: &str,
+    filename: String,
+    xml_payload: Option<String>,
+    session_source: crate::transport::SftpEndpointSource,
+    report: crate::transport::StoreReport,
+) {
+    let skip_email_poll =
+        session_source.is_dry_run() || session_source.is_relay() || report.simulated;
+    if skip_email_poll {
+        info!(
+            "Cron: dry run: simulated submission of queued 1601C {} (nothing sent to BIR)",
+            filename
+        );
+    } else {
+        info!("Cron: Successfully submitted queued 1601C {}", filename);
+    }
+    let period_label = monthly_period_label(draft.taxable_year, draft.month);
+    let (notice_title, notice_body) = submission_notice(
+        profile,
+        "1601C",
+        &period_label,
+        &chrono::Local::now(),
+        skip_email_poll,
+    );
+    crate::notification::send_notification(&notice_title, &notice_body);
+    let submitted_file = filename.clone();
+    // Keep the exact bytes that were encrypted for PUT, so an
+    // amendment can later snapshot what BIR received.
+    if let Some(xml_payload) = xml_payload {
+        draft.submitted_payload = Some(xml_payload);
+    }
+    draft.transition_to_submitted(filename, session_source.is_dry_run() || report.simulated);
+    draft.submitted_via_relay = session_source.is_relay();
+    draft.relay_receipt = report.relay_receipt;
+    if let Ok(db_guard) = lock_timing::lock(db) {
+        match db_guard.finish_claimed_1601c_submission(&draft, claim_token) {
+            Ok(_) => {
+                record_submission_alert(
+                    &db_guard,
+                    profile,
+                    "1601C",
+                    &period_label,
+                    &submitted_file,
+                    &notice_title,
+                    &notice_body,
+                );
+                if skip_email_poll {
+                    info!("Cron: 1601C dry-run PUT succeeded; skipping IMAP poll (source=dry-run)");
+                } else {
+                    schedule_email_poll(
+                        profile,
+                        "1601C",
+                        &draft.tin,
+                        draft.taxable_year,
+                        Some(draft.month),
+                        None,
+                        &db_guard,
+                    );
+                }
+                crate::dev_mode::maybe_auto_confirm(&db_guard, session_source, &submitted_file);
+            }
+            Err(error) => warn!(
+                "Cron: 1601C {} was transmitted but its submission claim could not be finalized: {}",
+                draft.period_code(),
+                error
+            ),
+        }
+    }
+}
+
+/// A claimed 1601C whose noted relay send this worker did not see end: ask Buwiz and act on what it says.
+async fn reconcile_1601c<T: SubmissionTransport>(
+    draft: Form1601CDraft,
+    pending: String,
+    profile: &TaxpayerProfile,
+    db: Arc<Mutex<Database>>,
+    transport: &T,
+) {
+    let Some(claim_token) = draft.submission_claim_token.clone() else {
+        return;
+    };
+    let (tin, year, month) = (draft.tin.clone(), draft.taxable_year, draft.month);
+    let clear = |db: &Arc<Mutex<Database>>| {
+        if let Ok(db_guard) = lock_timing::lock(db) {
+            let _ =
+                db_guard.note_claimed_1601c_relay_pending(&tin, year, month, &claim_token, None);
+        }
+    };
+    match reconcile_step(
+        transport.settle_pending(&pending).await,
+        &pending,
+        Utc::now(),
+    ) {
+        Reconcile::Keep => return,
+        Reconcile::Clear => clear(&db),
+        Reconcile::Finish(report) => {
+            let filename = draft.default_submission_filename();
+            let payload = sent_payload(
+                &pending,
+                [
+                    draft.try_to_bir_xml_payload().ok(),
+                    draft.submitted_payload.clone(),
+                ],
+            );
+            finish_sent_1601c(
+                draft,
+                profile,
+                &db,
+                &claim_token,
+                filename,
+                payload,
+                crate::transport::SftpEndpointSource::Buwiz,
+                report,
+            );
+        }
+        Reconcile::Release(error) => {
+            release_unaccepted(
+                "1601C",
+                &draft.period_code(),
+                &error,
+                &db,
+                |db_guard, note, how| {
+                    db_guard.release_unaccepted_claimed_1601c_submission(
+                        &tin,
+                        year,
+                        month,
+                        &claim_token,
+                        note,
+                        how,
+                    )
+                },
+            );
+            if matches!(error.no_receipt(), NoReceipt::Unknown) {
+                clear(&db);
+            }
+        }
+    }
+    crate::ipc::post_db_changed();
+}
 
 /// A started send ended without a receipt. What proves that nothing reached the BIR lets the claim go through
 /// `settle` (refused: back to Draft with the reason; failed or held: still Queued, retried later). Anything else is
@@ -2146,7 +2787,12 @@ fn mark_shell_job_unavailable(job: &mut crate::db::Job) -> bool {
     true
 }
 
+#[cfg(all(test, feature = "mas_build"))]
 async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
+    process_generic_jobs_until(db, &CronStop::new()).await;
+}
+
+async fn process_generic_jobs_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
     let jobs = {
         let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
@@ -2233,24 +2879,22 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
         let job_key = format!("job:{}", job.id.unwrap_or(0));
         let active_jobs = get_active_jobs();
         {
-            let mut active = match active_jobs.lock() {
-                Ok(a) => a,
-                Err(_) => continue,
-            };
+            let mut active = active_jobs
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if !active.insert(job_key.clone()) {
                 continue; // Already running
             }
         }
 
         let db_clone = db.clone();
-        let active_jobs_clone = active_jobs.clone();
+        let job_stop = stop.clone();
+        let cleanup = JobCleanup {
+            key: job_key,
+            active_jobs: active_jobs.clone(),
+        };
 
-        tokio::spawn(async move {
-            let _cleanup = JobCleanup {
-                key: job_key,
-                active_jobs: active_jobs_clone,
-            };
-
+        spawn_job(cleanup, async move {
             info!("Cron: Executing job '{}'", job.name);
             let mut success = true;
 
@@ -2260,13 +2904,20 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                 if cmd.starts_with("bir_poll_email ") {
                     let email = cmd.trim_start_matches("bir_poll_email ").trim();
                     let (poll_success, still_pending, err_msg) =
-                        crate::email::fetch_and_process_emails_for_address(email, db_clone.clone());
-                    if poll_success {
-                        let log = "Email polling completed successfully.".to_string();
-                        info!(
-                            "Cron: Email polling job '{}' completed successfully.",
-                            job.name
+                        crate::email::fetch_and_process_emails_for_address_until(
+                            email,
+                            db_clone.clone(),
+                            &|| job_stop.is_stopped(),
                         );
+                    if poll_success {
+                        // Stopped early (the worker is ending), the poll read only part of the inbox; what is still
+                        // waiting for its email keeps the job queued (`still_pending` is read back from the database).
+                        let log = if job_stop.is_stopped() {
+                            "Email polling stopped early: the queue worker is ending.".to_string()
+                        } else {
+                            "Email polling completed successfully.".to_string()
+                        };
+                        info!("Cron: Email polling job '{}': {}", job.name, log);
                         success = true;
                         job.output_log = Some(log);
                         if !still_pending {
@@ -2369,6 +3020,40 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
     }
 }
 
+/// Put back to Queued every job saved as Running: none can be running as a worker starts (a database has one worker
+/// at a time, and the one before ended with its tasks), so such a job was cut off, by an engine's end that dropped its
+/// task or by the process ending. A one-off job left Running would otherwise never run again.
+///
+/// So a job runs at least once, not exactly once: one cut off after its work and before its end was saved (a one-off's
+/// delete, a scheduled job's next run) runs that work again. Jobs never send returns: they poll an inbox (a second poll
+/// reads the same mail) or run a command a person scheduled, which can then run twice.
+fn requeue_jobs_left_running(db: &Arc<Mutex<Database>>) {
+    let Ok(db) = lock_timing::lock(db) else {
+        return;
+    };
+    for mut job in db.list_jobs().unwrap_or_default() {
+        if job.status == "Running" {
+            info!(
+                "Cron: job '{}' was cut off while running; queued again",
+                job.name
+            );
+            job.status = "Queued".to_string();
+            let _ = db.save_job(job);
+        }
+    }
+}
+
+/// Spawn one job on the worker's runtime with its key's `cleanup` inside the task's future: the key leaves
+/// [`get_active_jobs`] however the task ends, finished, panicked, or dropped by a runtime shut down mid-send (an
+/// engine that ended) or before it was ever polled. The next worker then reads the return's own state, never a key a
+/// dead task left behind.
+fn spawn_job(cleanup: JobCleanup, job: impl Future<Output = ()> + Send + 'static) {
+    tokio::spawn(async move {
+        let _cleanup = cleanup;
+        job.await;
+    });
+}
+
 struct JobCleanup {
     key: String,
     active_jobs: Arc<Mutex<HashSet<String>>>,
@@ -2376,9 +3061,10 @@ struct JobCleanup {
 
 impl Drop for JobCleanup {
     fn drop(&mut self) {
-        if let Ok(mut jobs) = self.active_jobs.lock() {
-            jobs.remove(&self.key);
-        }
+        self.active_jobs
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&self.key);
     }
 }
 
@@ -2398,6 +3084,109 @@ mod tests {
             created_at: String::new(),
             output_log: None,
         }
+    }
+
+    /// A job saved as Running whose task went with an engine's end (or the process) is queued again when the next
+    /// worker starts: a one-off job (no schedule) left Running would never run again. Other jobs are left as they are.
+    #[test]
+    fn a_job_cut_off_while_running_is_queued_again_as_a_worker_starts() {
+        use std::sync::{Arc, Mutex};
+        let db = crate::db::Database::open_in_memory_for_tests().expect("db");
+        let mut cut_off = shell_job("bir_poll_email juana@example.com");
+        cut_off.cron_expr = None;
+        cut_off.next_run_at = None;
+        cut_off.status = "Running".into();
+        let cut_off = db.save_job(cut_off).expect("save").id.expect("an id");
+        let mut failed = shell_job("echo hi");
+        failed.status = "Failed".into();
+        let failed = db.save_job(failed).expect("save").id.expect("an id");
+        let db = Arc::new(Mutex::new(db));
+
+        super::requeue_jobs_left_running(&db);
+
+        let jobs = db.lock().unwrap().list_jobs().unwrap();
+        let status = |id| {
+            jobs.iter()
+                .find(|job| job.id == Some(id))
+                .unwrap()
+                .status
+                .clone()
+        };
+        assert_eq!(status(cut_off), "Queued");
+        assert_eq!(status(failed), "Failed");
+    }
+
+    /// The same through a real start: the worker's loop (`run_cron_jobs`, as an engine's launch starts it) queues
+    /// again a job saved as Running before its first tick. The job is a yearly one not due for centuries, so nothing
+    /// runs it after: what is read is the requeue alone. In a child process of its own: the loop's wake channel and
+    /// shutdown generation are the process's.
+    #[test]
+    fn a_real_worker_start_queues_again_a_job_cut_off_while_running() {
+        const CHILD: &str = "BIR_CORE_CRON_REQUEUE_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "background_cron::tests::a_real_worker_start_queues_again_a_job_cut_off_while_running",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .env("EBIR_TEST_ENV", "1")
+                .env("BIR_SFTP_DRY_RUN", "1")
+                .env_remove("BIR_SFTP_LIVE")
+                .env_remove("BIR_RELAY_URL")
+                .status()
+                .unwrap();
+            assert!(status.success(), "the child process failed");
+            return;
+        }
+        use std::sync::{Arc, Mutex};
+        let db = crate::db::Database::open_in_memory_for_tests().expect("db");
+        let mut cut_off = shell_job("bir_poll_email nobody@example.test");
+        cut_off.cron_expr = Some("0 0 0 1 1 *".into());
+        cut_off.next_run_at = Some("2999-01-01T00:00:00+00:00".into());
+        cut_off.status = "Running".into();
+        let cut_off = db.save_job(cut_off).expect("save").id.expect("an id");
+        let db = Arc::new(Mutex::new(db));
+        let status = |db: &Arc<Mutex<crate::db::Database>>| {
+            db.lock()
+                .unwrap()
+                .list_jobs()
+                .unwrap()
+                .into_iter()
+                .find(|job| job.id == Some(cut_off))
+                .map(|job| job.status)
+        };
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let stop = CronStop::new();
+            let worker = tokio::spawn(run_cron_jobs(db.clone(), stop.clone()));
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+            while status(&db).as_deref() == Some("Running") {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "the worker never queued the job again"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            // A tick has had the time to run anything due; this job is not due.
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            assert_eq!(
+                status(&db).as_deref(),
+                Some("Queued"),
+                "queued again, and not run"
+            );
+            stop.stop();
+            tokio::time::timeout(std::time::Duration::from_secs(5), worker)
+                .await
+                .expect("the loop stopped on its signal")
+                .unwrap();
+        });
     }
 
     #[test]
@@ -2471,14 +3260,44 @@ mod tests {
             .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
             .unwrap();
         let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at, true);
-        assert_eq!(
-            title,
-            "1601C 09/26 submitted \u{2014} Juan Dela Cruz (dry run \u{2014} nothing was sent to BIR)"
-        );
+        assert_eq!(title, "Test send: 1601C 09/26 \u{2014} Juan Dela Cruz");
         assert_eq!(
             body,
-            "TIN 000-000-000-00000\nSent 03:17 PM, 12 Sep 2026\nFiled under codeitlikemiley@gmail.com\n(dry run \u{2014} nothing was sent to BIR)"
+            "Test send. Nothing reached the BIR.\nTIN 000-000-000-00000\nTested 03:17 PM, 12 Sep 2026"
         );
+        assert_never_filed_notice(&title, &body);
+    }
+
+    /// A phone banner shows the title's first few words and cuts the rest: a test send's title leads with "Test
+    /// send" whatever the registered name's length, and the body's first line is the app's sentence for it.
+    #[test]
+    fn a_test_send_notice_leads_with_test_send_before_a_long_name() {
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.full_name =
+            "Juan Dela Cruz Trading and General Merchandise Corporation of the Philippines".into();
+        let sent_at = chrono::FixedOffset::east_opt(8 * 3600)
+            .unwrap()
+            .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
+            .unwrap();
+        let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at, true);
+        let banner: String = title.chars().take(20).collect();
+        assert_eq!(banner, "Test send: 1601C 09/");
+        assert_eq!(body.lines().next(), Some(TEST_SENT_LINE));
+        assert_never_filed_notice(&title, &body);
+    }
+
+    /// A test send's notice leads with "Test send" in the title, carries the app's one sentence for it as a line of
+    /// its own (the OS notice's first; the stored alert names the taxpayer above it), and never says the return was
+    /// submitted, sent or filed.
+    fn assert_never_filed_notice(title: &str, body: &str) {
+        assert!(title.starts_with("Test send: "), "{title}");
+        assert!(body.lines().any(|line| line == TEST_SENT_LINE), "{body}");
+        for text in [title, body] {
+            let lower = text.to_lowercase();
+            for word in ["submitted", "sent ", "filed"] {
+                assert!(!lower.contains(word), "{word:?} in {text:?}");
+            }
+        }
     }
 
     #[test]
@@ -2674,6 +3493,9 @@ mod tests {
         BuwizSent,
         /// The Buwiz relay gave a receipt, and the server only simulated the send.
         BuwizSimulated,
+        /// The Buwiz relay's `result` for a test TIN ([`crate::relay::DRY_RUN_RESULT_FIXTURE`]), as the client hands
+        /// it over.
+        BuwizDryRunResult,
         /// The Buwiz relay refused the return itself (a TIN refusal).
         BuwizRefused,
         /// The Buwiz relay tried and the BIR's way in did not take it.
@@ -2684,6 +3506,8 @@ mod tests {
         BuwizHeldBeforeClaim,
         /// The Buwiz relay cannot say whether the BIR has the return.
         BuwizUnknown,
+        /// The app is stopped during the send, after both notes: the send never ends.
+        BuwizKilled,
     }
 
     /// The refusal the Buwiz test outcomes carry.
@@ -2703,6 +3527,12 @@ mod tests {
         calls: Mutex<Vec<RecordedSubmission>>,
         outcome: TestTransportOutcome,
         source: crate::transport::SftpEndpointSource,
+        /// What Buwiz says of a noted send ([`SubmissionTransport::settle_pending`]); not yet by default.
+        settles: fn(&bir_submit::PendingSend) -> crate::relay::Settlement,
+        /// Each noted send it was asked about.
+        asked: Mutex<Vec<bir_submit::PendingSend>>,
+        /// Each note the send made, as the worker kept it (`Err`: the worker refused it).
+        noted: Mutex<Vec<Result<(), String>>>,
     }
 
     impl RecordingSubmissionTransport {
@@ -2712,6 +3542,9 @@ mod tests {
                 calls: Mutex::new(Vec::new()),
                 outcome,
                 source: crate::transport::SftpEndpointSource::Env,
+                settles: |_| crate::relay::Settlement::NotYet,
+                asked: Mutex::new(Vec::new()),
+                noted: Mutex::new(Vec::new()),
             }
         }
 
@@ -2721,6 +3554,9 @@ mod tests {
                 calls: Mutex::new(Vec::new()),
                 outcome,
                 source: crate::transport::SftpEndpointSource::Relay,
+                settles: |_| crate::relay::Settlement::NotYet,
+                asked: Mutex::new(Vec::new()),
+                noted: Mutex::new(Vec::new()),
             }
         }
 
@@ -2730,6 +3566,9 @@ mod tests {
                 calls: Mutex::new(Vec::new()),
                 outcome,
                 source: crate::transport::SftpEndpointSource::DryRun,
+                settles: |_| crate::relay::Settlement::NotYet,
+                asked: Mutex::new(Vec::new()),
+                noted: Mutex::new(Vec::new()),
             }
         }
 
@@ -2739,6 +3578,9 @@ mod tests {
                 calls: Mutex::new(Vec::new()),
                 outcome,
                 source: crate::transport::SftpEndpointSource::Buwiz,
+                settles: |_| crate::relay::Settlement::NotYet,
+                asked: Mutex::new(Vec::new()),
+                noted: Mutex::new(Vec::new()),
             }
         }
 
@@ -2795,6 +3637,7 @@ mod tests {
             filename: &'a str,
             payload: &'a [u8],
             xml: &'a [u8],
+            note: bir_submit::Note<'a>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -2806,6 +3649,17 @@ mod tests {
                     + 'a,
             >,
         > {
+            // Only a send through the Buwiz relay notes its progress, as the client does: once the server made
+            // the submission, then before the first connection toward the BIR.
+            if self.source == crate::transport::SftpEndpointSource::Buwiz {
+                let pending = test_pending(xml, false, Utc::now());
+                let mut noted = self.noted.lock().unwrap();
+                noted.push(note(&pending));
+                noted.push(note(&bir_submit::PendingSend {
+                    opening: true,
+                    ..pending
+                }));
+            }
             self.plain
                 .lock()
                 .expect("recorded plain returns should not be poisoned")
@@ -2830,6 +3684,9 @@ mod tests {
                         relay_receipt: Some(BUWIZ_RECEIPT.into()),
                         simulated: true,
                     }),
+                    TestTransportOutcome::BuwizDryRunResult => {
+                        Ok(crate::relay::dry_run_result_fixture_report())
+                    }
                     TestTransportOutcome::BuwizRefused => Err(
                         crate::transport::TransportError::Refused(BUWIZ_REFUSAL.into()),
                     ),
@@ -2852,6 +3709,7 @@ mod tests {
                     TestTransportOutcome::BuwizHeldBeforeClaim => {
                         panic!("PUT must not run when Buwiz was not ready")
                     }
+                    TestTransportOutcome::BuwizKilled => std::future::pending().await,
                     TestTransportOutcome::UnknownIo => {
                         Err(crate::transport::TransportError::Io(std::io::Error::new(
                             std::io::ErrorKind::ConnectionReset,
@@ -2869,6 +3727,51 @@ mod tests {
                     }
                 }
             })
+        }
+
+        fn settle_pending<'a>(
+            &'a self,
+            pending: &'a str,
+        ) -> Pin<Box<dyn Future<Output = crate::relay::Settlement> + Send + 'a>> {
+            let pending: bir_submit::PendingSend =
+                serde_json::from_str(pending).expect("the worker keeps the client's record");
+            let settled = (self.settles)(&pending);
+            self.asked.lock().unwrap().push(pending);
+            Box::pin(async move { settled })
+        }
+    }
+
+    impl RecordingSubmissionTransport {
+        /// A Buwiz transport whose server says `settles` of a noted send.
+        fn settling(
+            outcome: TestTransportOutcome,
+            settles: fn(&bir_submit::PendingSend) -> crate::relay::Settlement,
+        ) -> Self {
+            Self {
+                settles,
+                ..Self::buwiz(outcome)
+            }
+        }
+
+        fn asked(&self) -> usize {
+            self.asked.lock().unwrap().len()
+        }
+    }
+
+    /// The noted send of the plain return `xml`.
+    fn test_pending(
+        xml: &[u8],
+        opening: bool,
+        noted_at: chrono::DateTime<Utc>,
+    ) -> bir_submit::PendingSend {
+        use sha2::Digest;
+        bir_submit::PendingSend {
+            server: "http://localhost:3008".into(),
+            submission_id: "s1".into(),
+            jti: "jti-1".into(),
+            xml_sha256: hex::encode(sha2::Sha256::digest(xml)),
+            opening,
+            noted_at,
         }
     }
 
@@ -3634,7 +4537,8 @@ mod tests {
         let profile = test_profile();
         let db = test_db();
         let (queued, summary) = queued_test_form(&db);
-        let transport = RecordingSubmissionTransport::dry_run(TestTransportOutcome::Success);
+        // A real send: a BIR email confirms only a return that reached the BIR.
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
         process_queued_queueable::<TestForm, _>(
             &summary,
             &profile,
@@ -3673,6 +4577,57 @@ mod tests {
         );
     }
 
+    /// A dry run reached nobody: a BIR email naming its file (by period or by
+    /// the uploaded filename) confirms nothing, and the receipt is Ignored as
+    /// one with no matching return is.
+    #[tokio::test]
+    async fn a_bir_email_never_confirms_a_dry_run() {
+        let profile = test_profile();
+        let db = test_db();
+        let (queued, summary) = queued_test_form(&db);
+        let transport = RecordingSubmissionTransport::dry_run(TestTransportOutcome::Success);
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &transport,
+            allow_test_form,
+        )
+        .await;
+        let sent = stored_test_form(&db, &queued);
+        assert_eq!(sent.lifecycle.status, FilingStatus::Submitted);
+        assert!(sent.lifecycle.submitted_dry_run);
+        let local_now =
+            chrono::Utc::now() + chrono::Duration::hours(8) + chrono::Duration::minutes(1);
+        let uploaded = queued.submission_filename();
+        let confirmation = crate::receipt::BirReceiptConfirmation {
+            filename: format!("{}.xml", uploaded.split('#').next().unwrap()),
+            date_received: local_now.date_naive(),
+            time_received: local_now.time(),
+            source_from: Some("ebirforms-noreply@bir.gov.ph".to_string()),
+            raw_text: "This confirms receipt".to_string(),
+            raw_html: None,
+        };
+        let guard = db.lock().unwrap();
+        let (saved, _) = guard.save_submission_receipt(&confirmation).unwrap();
+        for receipt in [saved.clone(), {
+            let mut by_name = saved.clone();
+            by_name.period = "03152025_T123456".to_string();
+            by_name
+        }] {
+            assert_eq!(
+                guard.confirm_submission_from_receipt(&receipt).unwrap(),
+                crate::db::ReceiptConfirmationOutcome::Ignored
+            );
+        }
+        drop(guard);
+        let after = stored_test_form(&db, &queued);
+        assert_eq!(after.lifecycle.status, FilingStatus::Submitted);
+        assert!(after.lifecycle.receipt_id.is_none());
+    }
+
+    /// Dev Mode's simulated BIR email (debug builds) confirms a dry run on
+    /// purpose: it is the simulation of the email a dry run never gets.
     #[tokio::test]
     async fn dev_mode_simulated_confirmation_uses_the_email_path() {
         let profile = test_profile();
@@ -3809,16 +4764,7 @@ mod tests {
             .iter()
             .find(|alert| alert.kind.starts_with("form_submitted:"))
             .unwrap();
-        assert!(
-            notice.title.contains(DRY_RUN_NOTICE_SUFFIX),
-            "{}",
-            notice.title
-        );
-        assert!(
-            notice.detail.contains(DRY_RUN_NOTICE_SUFFIX.trim_start()),
-            "{}",
-            notice.detail
-        );
+        assert_never_filed_notice(&notice.title, &notice.detail);
     }
 
     /// A 503 from the relay after the claim: it kept nothing, so the claim goes, the return stays Queued with a
@@ -4039,6 +4985,18 @@ mod tests {
         poll_jobs: usize,
         /// A second run of the worker with a transport that would succeed: how many sends it made.
         sent_again: usize,
+        /// The submission notice's title and detail, as the worker kept them in its alert.
+        notice: Option<(String, String)>,
+    }
+
+    fn submission_alert(db: &Arc<Mutex<Database>>) -> Option<(String, String)> {
+        db.lock()
+            .unwrap()
+            .list_active_alerts(None)
+            .unwrap()
+            .into_iter()
+            .find(|alert| alert.kind.starts_with("form_submitted:"))
+            .map(|alert| (alert.title, alert.detail))
     }
 
     fn retry_time(raw: Option<&str>) -> Option<chrono::DateTime<Utc>> {
@@ -4098,6 +5056,7 @@ mod tests {
             sent: sent_by(&transport),
             poll_jobs: jobs,
             sent_again: again.calls().len(),
+            notice: submission_alert(&db),
         }
     }
 
@@ -4129,6 +5088,7 @@ mod tests {
             sent: sent_by(&transport),
             poll_jobs: jobs,
             sent_again: again.calls().len(),
+            notice: submission_alert(&db),
         }
     }
 
@@ -4169,6 +5129,7 @@ mod tests {
             sent: sent_by(&transport),
             poll_jobs: jobs,
             sent_again: again.calls().len(),
+            notice: submission_alert(&db),
         }
     }
 
@@ -4224,6 +5185,33 @@ mod tests {
                 "{path}"
             );
             assert_eq!(state.poll_jobs, 0, "{path}: no BIR email is coming");
+        }
+    }
+
+    /// Link 2 of 3 of "a relay dry_run result never reads as filed" (link 1: bir-submit
+    /// `client::tests::a_relay_dry_run_result_with_its_signed_receipt_is_a_verified_test_send`; link 3: bir-app-api
+    /// `screen_form_module::tests::a_relay_dry_run_result_never_reads_as_filed`). The shared fixture's result, as the
+    /// client hands it over, through the real `send_outcome` and the real worker on each send path: Submitted as a dry
+    /// run with its receipt, no BIR email watched, never sent again, and a notice that says the test-send sentence
+    /// and never submitted, sent or filed.
+    #[tokio::test]
+    async fn a_relay_dry_run_result_is_stored_as_a_test_send_on_every_path() {
+        let report = crate::relay::dry_run_result_fixture_report();
+        assert!(report.simulated, "the signed claims say dry_run");
+        let fixture: serde_json::Value =
+            serde_json::from_str(crate::relay::DRY_RUN_RESULT_FIXTURE).unwrap();
+        let receipt = report.relay_receipt.clone().expect("a receipt");
+        assert_eq!(receipt_claims(&receipt), fixture["receipt_claims"]);
+        for (path, state) in buwiz_on_every_path(TestTransportOutcome::BuwizDryRunResult).await {
+            assert_eq!(state.status, FilingStatus::Submitted, "{path}");
+            assert!(state.dry_run, "{path}: nothing reached the BIR");
+            assert_eq!(state.relay_receipt.as_ref(), Some(&receipt), "{path}");
+            assert!(!state.claimed, "{path}");
+            assert_eq!(state.error, None, "{path}");
+            assert_eq!(state.poll_jobs, 0, "{path}: no BIR email is coming");
+            assert_eq!(state.sent_again, 0, "{path}");
+            let (title, detail) = state.notice.expect("the submission notice");
+            assert_never_filed_notice(&title, &detail);
         }
     }
 
@@ -4338,6 +5326,106 @@ mod tests {
         assert!(generic.lifecycle.queued_submission_fingerprint.is_some());
     }
 
+    /// The first run with relay filing gives back what was queued before it: each unclaimed Queued return goes to
+    /// Draft with the reason, on all three storage shapes. It happens once: a return queued afterwards stays
+    /// queued, and a claimed return (an unknown outcome) is never touched.
+    #[test]
+    fn returns_queued_before_relay_filing_go_back_to_draft_once() {
+        let profile = test_profile();
+        let (db, monthly, _) = stored_queued_1601c(&profile);
+        let (quarterly, _) = stored_queued_2551q(&db);
+        let (generic, generic_summary) = queued_test_form(&db);
+        assert_eq!(
+            db.lock().unwrap().get_setting(RELAY_SINCE_SETTING).unwrap(),
+            None
+        );
+
+        give_back_returns_queued_before_the_relay(&db);
+
+        let read_monthly = |db: &Arc<Mutex<Database>>| {
+            db.lock()
+                .unwrap()
+                .get_1601c_draft(&monthly.tin, monthly.taxable_year, monthly.month)
+                .unwrap()
+                .unwrap()
+        };
+        let back = read_monthly(&db);
+        assert_eq!(back.status, FilingStatus::Draft);
+        assert_eq!(back.submission_error.as_deref(), Some(QUEUED_BEFORE_RELAY));
+        assert!(back.queued_submission_fingerprint.is_none());
+        let back = db
+            .lock()
+            .unwrap()
+            .get_2551q_draft(&quarterly.tin, quarterly.taxable_year, quarterly.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(back.status, FilingStatus::Draft);
+        assert_eq!(back.last_error.as_deref(), Some(QUEUED_BEFORE_RELAY));
+        // The test form is no registered kind, so the sweep's own dispatch passes it by; its generic step is the
+        // one every registered form goes through.
+        give_back_queueable::<TestForm>(&generic_summary, &db, QUEUED_BEFORE_RELAY.to_string());
+        let back = stored_test_form(&db, &generic);
+        assert_eq!(back.lifecycle.status, FilingStatus::Draft);
+        assert_eq!(
+            back.lifecycle.submission_error.as_deref(),
+            Some(QUEUED_BEFORE_RELAY)
+        );
+        assert!(
+            db.lock()
+                .unwrap()
+                .get_setting(RELAY_SINCE_SETTING)
+                .unwrap()
+                .is_some()
+        );
+
+        // Once: what is queued after the first run is left to the worker.
+        let (db_again, monthly_again, _) = stored_queued_1601c(&profile);
+        db_again
+            .lock()
+            .unwrap()
+            .set_setting(RELAY_SINCE_SETTING, "2026-11-25T00:00:00Z")
+            .unwrap();
+        give_back_returns_queued_before_the_relay(&db_again);
+        let kept = db_again
+            .lock()
+            .unwrap()
+            .get_1601c_draft(
+                &monthly_again.tin,
+                monthly_again.taxable_year,
+                monthly_again.month,
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(kept.status, FilingStatus::Queued);
+        assert_eq!(kept.submission_error, None);
+    }
+
+    /// A claimed return has an unknown outcome: the sweep leaves it for the person to settle.
+    #[tokio::test]
+    async fn the_first_run_sweep_never_touches_a_return_with_an_unknown_outcome() {
+        let profile = test_profile();
+        let (db, queued, summary) = stored_queued_1601c(&profile);
+        let unknown = RecordingSubmissionTransport::buwiz(TestTransportOutcome::BuwizUnknown);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &unknown).await;
+
+        give_back_returns_queued_before_the_relay(&db);
+
+        let stuck = db
+            .lock()
+            .unwrap()
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(stuck.status, FilingStatus::Queued);
+        assert!(stuck.submission_claim_token.is_some(), "the claim stays");
+        assert!(
+            stuck
+                .submission_error
+                .as_deref()
+                .is_some_and(|reason| reason.starts_with(OUTCOME_UNKNOWN))
+        );
+    }
+
     // ===== End to end against a local Buwiz server in dry-run mode =====
 
     /// Sign in to the local server as its test account without a browser: start the device flow, approve the code
@@ -4346,7 +5434,9 @@ mod tests {
         use crate::cloud_account;
         let mut http = cloud_account::BlockingHttp::new();
         let now = cloud_account::unix_now();
-        let challenge = cloud_account::start_device(&mut http, server, now).expect("device start");
+        let challenge =
+            cloud_account::start_device(&mut http, server, now, &crate::install_id::install_id())
+                .expect("device start");
         let cookie = std::fs::read_to_string(cookie_file).expect("the test session cookie");
         let approved = reqwest::blocking::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -5015,5 +6105,967 @@ mod tests {
             "unknown email must not invent a parenthetical"
         );
         assert_eq!(jobs[0].command.as_deref(), Some("bir_poll_email "));
+    }
+
+    // ===== A relay send the app did not see end: noted, then settled with Buwiz =====
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum SendPath {
+        Monthly1601C,
+        Quarterly2551Q,
+        Generic,
+    }
+
+    const SEND_PATHS: [SendPath; 3] = [
+        SendPath::Monthly1601C,
+        SendPath::Quarterly2551Q,
+        SendPath::Generic,
+    ];
+
+    /// One queued return on one send path, and the worker run on it.
+    struct Queue {
+        path: SendPath,
+        db: Arc<Mutex<Database>>,
+        summary: FormDraftSummary,
+        profile: TaxpayerProfile,
+        tin: String,
+        year: u16,
+        period: u8,
+        form_code: &'static str,
+    }
+
+    /// What these tests read off the stored return.
+    #[derive(Debug)]
+    struct Stored {
+        status: FilingStatus,
+        claimed: bool,
+        token: Option<String>,
+        put_started: bool,
+        pending: Option<bir_submit::PendingSend>,
+        attempts: u32,
+        error: Option<String>,
+        next_retry_at: Option<chrono::DateTime<Utc>>,
+        relay_receipt: Option<String>,
+        dry_run: bool,
+        fingerprint: Option<String>,
+    }
+
+    impl Queue {
+        fn new(path: SendPath) -> Self {
+            match path {
+                SendPath::Monthly1601C => {
+                    let profile = test_profile();
+                    let (db, queued, summary) = stored_queued_1601c(&profile);
+                    Self {
+                        path,
+                        db,
+                        summary,
+                        profile,
+                        tin: queued.tin.clone(),
+                        year: queued.taxable_year,
+                        period: queued.month,
+                        form_code: "1601C",
+                    }
+                }
+                SendPath::Quarterly2551Q => {
+                    let db = test_db();
+                    let (queued, summary) = stored_queued_2551q(&db);
+                    Self {
+                        path,
+                        db,
+                        summary,
+                        profile: reviewed_profile(),
+                        tin: queued.tin.clone(),
+                        year: queued.taxable_year,
+                        period: queued.quarter,
+                        form_code: "2551Q",
+                    }
+                }
+                SendPath::Generic => {
+                    let db = test_db();
+                    let (queued, summary) = queued_test_form(&db);
+                    Self {
+                        path,
+                        db,
+                        summary,
+                        profile: test_profile(),
+                        tin: queued.tin.clone(),
+                        year: queued.taxable_year,
+                        period: queued.month,
+                        form_code: TestForm::CODE,
+                    }
+                }
+            }
+        }
+
+        async fn run(&self, transport: &RecordingSubmissionTransport) {
+            let db = self.db.clone();
+            match self.path {
+                SendPath::Monthly1601C => {
+                    process_queued_1601c_with_transport(&self.summary, &self.profile, db, transport)
+                        .await
+                }
+                SendPath::Quarterly2551Q => {
+                    process_queued_2551q_with_transport(&self.summary, &self.profile, db, transport)
+                        .await
+                }
+                SendPath::Generic => {
+                    process_queued_queueable::<TestForm, _>(
+                        &self.summary,
+                        &self.profile,
+                        db,
+                        transport,
+                        allow_test_form,
+                    )
+                    .await
+                }
+            }
+        }
+
+        /// The app is stopped during a Buwiz relay send, after both notes.
+        async fn killed_during_the_send(&self) {
+            let transport = RecordingSubmissionTransport::buwiz(TestTransportOutcome::BuwizKilled);
+            let ran =
+                tokio::time::timeout(std::time::Duration::from_millis(200), self.run(&transport))
+                    .await;
+            assert!(ran.is_err(), "the send never ended");
+            assert_eq!(*transport.noted.lock().unwrap(), [Ok(()), Ok(())]);
+        }
+
+        fn read(&self) -> Stored {
+            let db = self.db.lock().unwrap();
+            let pending = |raw: &Option<String>| {
+                raw.as_deref()
+                    .map(|raw| serde_json::from_str::<bir_submit::PendingSend>(raw).unwrap())
+            };
+            match self.path {
+                SendPath::Monthly1601C => {
+                    let d = db
+                        .get_1601c_draft(&self.tin, self.year, self.period)
+                        .unwrap()
+                        .unwrap();
+                    Stored {
+                        status: d.status.clone(),
+                        claimed: d.submission_claim_token.is_some(),
+                        token: d.submission_claim_token.clone(),
+                        put_started: d.submission_put_started_at.is_some(),
+                        pending: pending(&d.relay_pending),
+                        attempts: d.submission_attempts,
+                        error: d.submission_error.clone(),
+                        next_retry_at: retry_time(d.next_retry_at.as_deref()),
+                        relay_receipt: d.relay_receipt.clone(),
+                        dry_run: d.submitted_dry_run,
+                        fingerprint: d.queued_submission_fingerprint.clone(),
+                    }
+                }
+                SendPath::Quarterly2551Q => {
+                    let d = db
+                        .get_2551q_draft(&self.tin, self.year, self.period)
+                        .unwrap()
+                        .unwrap();
+                    Stored {
+                        status: d.status.clone(),
+                        claimed: d.submission_claim_token.is_some(),
+                        token: d.submission_claim_token.clone(),
+                        put_started: d.submission_put_started_at.is_some(),
+                        pending: pending(&d.relay_pending),
+                        attempts: d.submission_attempts,
+                        error: d.last_error.clone(),
+                        next_retry_at: retry_time(d.next_retry_at.as_deref()),
+                        relay_receipt: d.relay_receipt.clone(),
+                        dry_run: d.submitted_dry_run,
+                        fingerprint: d.queued_submission_fingerprint.clone(),
+                    }
+                }
+                SendPath::Generic => {
+                    let d = db
+                        .get_queueable_draft::<TestForm>(
+                            &self.tin,
+                            self.year,
+                            i64::from(self.period),
+                        )
+                        .unwrap()
+                        .unwrap();
+                    let l = &d.lifecycle;
+                    Stored {
+                        status: l.status.clone(),
+                        claimed: !l.is_unclaimed(),
+                        token: l.submission_claim_token.clone(),
+                        put_started: l.submission_put_started_at.is_some(),
+                        pending: pending(&l.relay_pending),
+                        attempts: l.submission_attempts,
+                        error: l.submission_error.clone(),
+                        next_retry_at: retry_time(l.next_retry_at.as_deref()),
+                        relay_receipt: l.relay_receipt.clone(),
+                        dry_run: l.submitted_dry_run,
+                        fingerprint: l.queued_submission_fingerprint.clone(),
+                    }
+                }
+            }
+        }
+
+        /// Write `pending` on the return's claim as `token` holds it.
+        fn note(&self, token: &str, pending: Option<&str>) -> bool {
+            let db = self.db.lock().unwrap();
+            match self.path {
+                SendPath::Monthly1601C => db.note_claimed_1601c_relay_pending(
+                    &self.tin,
+                    self.year,
+                    self.period,
+                    token,
+                    pending,
+                ),
+                SendPath::Quarterly2551Q => db.note_claimed_2551q_relay_pending(
+                    &self.tin,
+                    self.year,
+                    self.period,
+                    token,
+                    pending,
+                ),
+                SendPath::Generic => db.note_claimed_queueable_relay_pending::<TestForm>(
+                    &self.tin,
+                    self.year,
+                    i64::from(self.period),
+                    token,
+                    pending,
+                ),
+            }
+            .unwrap()
+        }
+
+        /// The noted send, as if it had been noted `hours` ago.
+        fn age_pending(&self, hours: i64) {
+            let stored = self.read();
+            let pending = bir_submit::PendingSend {
+                noted_at: Utc::now() - chrono::Duration::hours(hours),
+                ..stored.pending.unwrap()
+            };
+            let json = serde_json::to_string(&pending).unwrap();
+            assert!(self.note(&stored.token.unwrap(), Some(&json)));
+        }
+    }
+
+    /// After the app was stopped during the send: the return as the next worker leaves it once Buwiz said
+    /// `settles`, how many times it was asked, and whether any run (that one, and one more whose transport would
+    /// send) sent the return again.
+    struct Reconciled {
+        path: SendPath,
+        stored: Stored,
+        asked: usize,
+        sent_again: usize,
+        poll_jobs: usize,
+    }
+
+    async fn reconciled(
+        path: SendPath,
+        settles: fn(&bir_submit::PendingSend) -> crate::relay::Settlement,
+        aged_hours: i64,
+    ) -> Reconciled {
+        let queue = Queue::new(path);
+        queue.killed_during_the_send().await;
+        let killed = queue.read();
+        assert!(killed.claimed && killed.put_started, "{path:?}");
+        let noted = killed.pending.as_ref().expect("the send was noted");
+        assert!(noted.opening, "{path:?}: about to open toward the BIR");
+        if aged_hours > 0 {
+            queue.age_pending(aged_hours);
+        }
+        let next = RecordingSubmissionTransport::settling(TestTransportOutcome::BuwizSent, settles);
+        queue.run(&next).await;
+        let stored = queue.read();
+        let poll_jobs = poll_jobs(&queue.db);
+        let again = RecordingSubmissionTransport::buwiz(TestTransportOutcome::BuwizSent);
+        queue.run(&again).await;
+        Reconciled {
+            path,
+            stored,
+            asked: next.asked(),
+            sent_again: next.calls().len() + again.calls().len(),
+            poll_jobs,
+        }
+    }
+
+    async fn reconciled_on_every_path(
+        settles: fn(&bir_submit::PendingSend) -> crate::relay::Settlement,
+        aged_hours: i64,
+    ) -> Vec<Reconciled> {
+        let mut all = Vec::new();
+        for path in SEND_PATHS {
+            all.push(reconciled(path, settles, aged_hours).await);
+        }
+        all
+    }
+
+    fn sent_receipt(_: &bir_submit::PendingSend) -> crate::relay::Settlement {
+        crate::relay::Settlement::Sent(crate::transport::StoreReport {
+            relay_receipt: Some(BUWIZ_RECEIPT.into()),
+            simulated: false,
+        })
+    }
+
+    #[tokio::test]
+    async fn a_send_buwiz_says_went_is_finished_with_its_receipt_and_never_sent_again() {
+        for r in reconciled_on_every_path(sent_receipt, 0).await {
+            let path = r.path;
+            assert_eq!(r.asked, 1, "{path:?}");
+            assert_eq!(r.stored.status, FilingStatus::Submitted, "{path:?}");
+            assert_eq!(
+                r.stored.relay_receipt.as_deref(),
+                Some(BUWIZ_RECEIPT),
+                "{path:?}"
+            );
+            assert!(!r.stored.dry_run, "{path:?}: a real send");
+            assert!(!r.stored.claimed, "{path:?}");
+            assert!(r.stored.pending.is_none(), "{path:?}");
+            assert_eq!(r.stored.error, None, "{path:?}");
+            assert_eq!(r.sent_again, 0, "{path:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_receipt_buwiz_only_simulated_finishes_as_a_dry_run() {
+        fn simulated(_: &bir_submit::PendingSend) -> crate::relay::Settlement {
+            crate::relay::Settlement::Sent(crate::transport::StoreReport {
+                relay_receipt: Some(BUWIZ_RECEIPT.into()),
+                simulated: true,
+            })
+        }
+        for r in reconciled_on_every_path(simulated, 0).await {
+            assert_eq!(r.stored.status, FilingStatus::Submitted, "{:?}", r.path);
+            assert!(r.stored.dry_run, "{:?}", r.path);
+            assert_eq!(r.poll_jobs, 0, "{:?}: no BIR email is coming", r.path);
+        }
+    }
+
+    /// The settlement the real relay gives for the client's answer.
+    fn failed(error: bir_submit::SendError) -> crate::relay::Settlement {
+        crate::relay::settlement(bir_submit::Settled::Failed(error))
+    }
+
+    #[tokio::test]
+    async fn a_refusal_buwiz_reports_goes_back_to_draft_with_its_sentence() {
+        fn refused(_: &bir_submit::PendingSend) -> crate::relay::Settlement {
+            failed(bir_submit::SendError::NotSent(BUWIZ_REFUSAL.into()))
+        }
+        for r in reconciled_on_every_path(refused, 0).await {
+            assert_eq!(r.stored.status, FilingStatus::Draft, "{:?}", r.path);
+            assert_eq!(
+                r.stored.error.as_deref(),
+                Some(BUWIZ_REFUSAL),
+                "{:?}",
+                r.path
+            );
+            assert!(
+                !r.stored.claimed && r.stored.pending.is_none(),
+                "{:?}",
+                r.path
+            );
+            assert_eq!(r.sent_again, 0, "{:?}", r.path);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_counted_failure_buwiz_reports_waits_on_the_ladder() {
+        fn counted(_: &bir_submit::PendingSend) -> crate::relay::Settlement {
+            failed(bir_submit::SendError::Counted {
+                reason: "BIR's upload server did not answer".into(),
+                blame: bir_submit::Blame::Upload,
+            })
+        }
+        for r in reconciled_on_every_path(counted, 0).await {
+            assert_eq!(r.stored.status, FilingStatus::Queued, "{:?}", r.path);
+            assert!(
+                !r.stored.claimed && r.stored.pending.is_none(),
+                "{:?}",
+                r.path
+            );
+            assert_eq!(r.stored.attempts, 1, "{:?}", r.path);
+            assert!(
+                (4..=5).contains(&minutes_from_now(r.stored.next_retry_at)),
+                "{:?}",
+                r.path
+            );
+            assert_eq!(r.sent_again, 0, "{:?}: not before its time", r.path);
+        }
+    }
+
+    /// `failed` or `expired` before any connection toward the BIR opened: nothing touched the BIR, not a try. The
+    /// return is held, and once its time comes it is sent again.
+    #[tokio::test]
+    async fn a_send_that_never_reached_the_bir_is_held_and_goes_again_later() {
+        fn not_a_try(_: &bir_submit::PendingSend) -> crate::relay::Settlement {
+            failed(bir_submit::SendError::NotATry {
+                reason: "the connection ended before sending".into(),
+                wait_until: None,
+            })
+        }
+        for path in SEND_PATHS {
+            let r = reconciled(path, not_a_try, 0).await;
+            assert_eq!(r.stored.status, FilingStatus::Queued, "{path:?}");
+            assert!(!r.stored.claimed && r.stored.pending.is_none(), "{path:?}");
+            assert_eq!(r.stored.attempts, 0, "{path:?}: nothing is counted");
+            assert!(
+                r.stored.fingerprint.is_some(),
+                "{path:?}: still the reviewed return"
+            );
+            assert!(
+                (4..=5).contains(&minutes_from_now(r.stored.next_retry_at)),
+                "{path:?}"
+            );
+            assert_eq!(r.sent_again, 0, "{path:?}: not before its time");
+        }
+        // Its time come, the worker sends it.
+        for path in SEND_PATHS {
+            let queue = Queue::new(path);
+            queue.killed_during_the_send().await;
+            queue
+                .run(&RecordingSubmissionTransport::settling(
+                    TestTransportOutcome::BuwizSent,
+                    not_a_try,
+                ))
+                .await;
+            make_retry_due(&queue.db, queue.form_code, &queue.tin);
+            let later = RecordingSubmissionTransport::buwiz(TestTransportOutcome::BuwizSent);
+            queue.run(&later).await;
+            assert_eq!(later.calls().len(), 1, "{path:?}");
+            assert_eq!(queue.read().status, FilingStatus::Submitted, "{path:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_hold_buwiz_reports_waits_as_the_server_says() {
+        fn held(_: &bir_submit::PendingSend) -> crate::relay::Settlement {
+            crate::relay::Settlement::Failed(crate::transport::TransportError::RelayHeld {
+                reason: BUWIZ_HOLD.into(),
+                wait_until: Some(buwiz_hold_until()),
+            })
+        }
+        for r in reconciled_on_every_path(held, 0).await {
+            assert_eq!(r.stored.status, FilingStatus::Queued, "{:?}", r.path);
+            assert!(
+                !r.stored.claimed && r.stored.pending.is_none(),
+                "{:?}",
+                r.path
+            );
+            assert_eq!(r.stored.attempts, 0, "{:?}", r.path);
+            assert_eq!(r.stored.error.as_deref(), Some(BUWIZ_HOLD), "{:?}", r.path);
+            assert_eq!(r.sent_again, 0, "{:?}", r.path);
+        }
+    }
+
+    /// Maybe sent (a receipt that does not verify, `unknown`, `expired` after opening): the claim stays, the
+    /// record goes, so the person answers; nothing sends it again.
+    #[tokio::test]
+    async fn an_unknown_outcome_buwiz_reports_keeps_the_claim_and_asks_the_person() {
+        fn unknown(_: &bir_submit::PendingSend) -> crate::relay::Settlement {
+            failed(bir_submit::SendError::MaybeSent(
+                "the server reports the return sent, but its receipt does not check out".into(),
+            ))
+        }
+        for r in reconciled_on_every_path(unknown, 0).await {
+            assert_eq!(r.stored.status, FilingStatus::Queued, "{:?}", r.path);
+            assert!(r.stored.claimed && r.stored.put_started, "{:?}", r.path);
+            assert!(
+                r.stored.pending.is_none(),
+                "{:?}: the buttons appear",
+                r.path
+            );
+            assert_eq!(
+                r.stored.relay_receipt, None,
+                "{:?}: never sent without a receipt",
+                r.path
+            );
+            let error = r.stored.error.clone().unwrap_or_default();
+            assert!(error.starts_with(OUTCOME_UNKNOWN), "{:?}: {error}", r.path);
+            assert_eq!(r.asked, 1, "{:?}", r.path);
+            assert_eq!(r.sent_again, 0, "{:?}", r.path);
+        }
+    }
+
+    #[tokio::test]
+    async fn not_yet_leaves_the_return_as_it_is_until_a_day_has_passed() {
+        fn not_yet(_: &bir_submit::PendingSend) -> crate::relay::Settlement {
+            crate::relay::Settlement::NotYet
+        }
+        for r in reconciled_on_every_path(not_yet, 0).await {
+            assert_eq!(r.stored.status, FilingStatus::Queued, "{:?}", r.path);
+            assert!(r.stored.claimed, "{:?}", r.path);
+            assert!(
+                r.stored.pending.is_some(),
+                "{:?}: asked again later",
+                r.path
+            );
+            assert_eq!(r.asked, 1, "{:?}", r.path);
+            assert_eq!(r.sent_again, 0, "{:?}", r.path);
+        }
+        for r in reconciled_on_every_path(not_yet, 25).await {
+            assert!(r.stored.claimed, "{:?}", r.path);
+            assert!(
+                r.stored.pending.is_none(),
+                "{:?}: the person is asked",
+                r.path
+            );
+            assert_eq!(r.sent_again, 0, "{:?}", r.path);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_submission_buwiz_does_not_know_is_left_to_the_person() {
+        fn gone(_: &bir_submit::PendingSend) -> crate::relay::Settlement {
+            crate::relay::Settlement::Gone
+        }
+        for r in reconciled_on_every_path(gone, 0).await {
+            assert_eq!(r.stored.status, FilingStatus::Queued, "{:?}", r.path);
+            assert!(
+                r.stored.claimed && r.stored.pending.is_none(),
+                "{:?}",
+                r.path
+            );
+            assert_eq!(r.stored.relay_receipt, None, "{:?}", r.path);
+            assert_eq!(r.sent_again, 0, "{:?}", r.path);
+        }
+    }
+
+    /// Once Buwiz said it went, nothing it says later moves the return.
+    #[tokio::test]
+    async fn a_return_buwiz_said_was_sent_is_never_released_for_another_try() {
+        fn counted(_: &bir_submit::PendingSend) -> crate::relay::Settlement {
+            crate::relay::Settlement::Failed(crate::transport::TransportError::RelayFailed(
+                "x".into(),
+            ))
+        }
+        for path in SEND_PATHS {
+            let queue = Queue::new(path);
+            queue.killed_during_the_send().await;
+            queue
+                .run(&RecordingSubmissionTransport::settling(
+                    TestTransportOutcome::BuwizSent,
+                    sent_receipt,
+                ))
+                .await;
+            let later =
+                RecordingSubmissionTransport::settling(TestTransportOutcome::BuwizSent, counted);
+            queue.run(&later).await;
+            assert_eq!(later.asked(), 0, "{path:?}");
+            assert!(later.calls().is_empty(), "{path:?}");
+            let stored = queue.read();
+            assert_eq!(stored.status, FilingStatus::Submitted, "{path:?}");
+            assert_eq!(stored.attempts, 0, "{path:?}");
+        }
+    }
+
+    /// In this process the worker notes every Buwiz send and drops the record when the claim goes; an unknown
+    /// outcome keeps it, for the next tick to ask Buwiz. No other send writes one.
+    #[tokio::test]
+    async fn the_record_lives_exactly_as_long_as_the_claim_of_a_buwiz_send() {
+        for outcome in [
+            TestTransportOutcome::BuwizSent,
+            TestTransportOutcome::BuwizRefused,
+            TestTransportOutcome::BuwizFailed,
+            TestTransportOutcome::BuwizHeld,
+        ] {
+            for path in SEND_PATHS {
+                let queue = Queue::new(path);
+                let transport = RecordingSubmissionTransport::buwiz(outcome);
+                queue.run(&transport).await;
+                assert_eq!(
+                    *transport.noted.lock().unwrap(),
+                    [Ok(()), Ok(())],
+                    "{path:?}"
+                );
+                let stored = queue.read();
+                assert!(!stored.claimed, "{outcome:?} {path:?}");
+                assert!(stored.pending.is_none(), "{outcome:?} {path:?}");
+            }
+        }
+        for path in SEND_PATHS {
+            let queue = Queue::new(path);
+            queue
+                .run(&RecordingSubmissionTransport::buwiz(
+                    TestTransportOutcome::BuwizUnknown,
+                ))
+                .await;
+            let stored = queue.read();
+            assert!(stored.claimed, "{path:?}");
+            let pending = stored.pending.expect("kept for Buwiz to answer");
+            assert!(pending.opening, "{path:?}");
+            // The next tick asks.
+            let next = RecordingSubmissionTransport::settling(
+                TestTransportOutcome::BuwizSent,
+                sent_receipt,
+            );
+            queue.run(&next).await;
+            assert_eq!(next.asked(), 1, "{path:?}");
+            assert!(next.calls().is_empty(), "{path:?}");
+            assert_eq!(queue.read().status, FilingStatus::Submitted, "{path:?}");
+        }
+        for transport in [
+            RecordingSubmissionTransport::new(TestTransportOutcome::Success),
+            RecordingSubmissionTransport::dry_run(TestTransportOutcome::Success),
+            RecordingSubmissionTransport::relay(TestTransportOutcome::UnknownIo),
+        ] {
+            for path in SEND_PATHS {
+                let queue = Queue::new(path);
+                queue.run(&transport).await;
+                assert!(queue.read().pending.is_none(), "{path:?}");
+                assert!(
+                    !stored_json(&queue.db, queue.form_code, &queue.tin).contains("relay_pending"),
+                    "{path:?}"
+                );
+            }
+            assert!(transport.noted.lock().unwrap().is_empty());
+        }
+    }
+
+    /// Only the worker holding the claim writes the record, and a refused note stops the send before anything
+    /// leaves this computer (the client's side of it is tested in bir-submit).
+    #[tokio::test]
+    async fn only_the_claim_holder_notes_a_send() {
+        for path in SEND_PATHS {
+            let queue = Queue::new(path);
+            assert!(
+                !queue.note("not-a-claim", Some("{}")),
+                "{path:?}: unclaimed"
+            );
+            queue.killed_during_the_send().await;
+            assert!(!queue.note("someone-else", None), "{path:?}");
+            assert!(queue.read().pending.is_some(), "{path:?}");
+        }
+    }
+
+    #[test]
+    fn the_step_follows_what_buwiz_said_and_waits_a_day_at_most() {
+        use crate::relay::Settlement;
+        let now = Utc::now();
+        let noted = |hours: i64| {
+            serde_json::to_string(&test_pending(
+                b"<xml/>",
+                true,
+                now - chrono::Duration::hours(hours),
+            ))
+            .unwrap()
+        };
+        assert!(matches!(
+            reconcile_step(Settlement::NotYet, &noted(23), now),
+            Reconcile::Keep
+        ));
+        assert!(matches!(
+            reconcile_step(Settlement::NotYet, &noted(24), now),
+            Reconcile::Clear
+        ));
+        assert!(matches!(
+            reconcile_step(Settlement::NotYet, "not a record", now),
+            Reconcile::Clear
+        ));
+        assert!(matches!(
+            reconcile_step(Settlement::Gone, &noted(0), now),
+            Reconcile::Clear
+        ));
+        assert!(matches!(
+            reconcile_step(Settlement::Sent(Default::default()), &noted(30), now),
+            Reconcile::Finish(_)
+        ));
+        let xml = "<xml/>".to_owned();
+        assert_eq!(
+            sent_payload(&noted(0), [Some("<other/>".into()), Some(xml.clone())]),
+            Some(xml)
+        );
+        assert_eq!(
+            sent_payload(&noted(0), [Some("<other/>".into()), None]),
+            None
+        );
+    }
+
+    // ---------- the worker's lifecycle (one engine after another in one process) ----------
+
+    /// A send that never ends on its own: it says when it has started, then waits forever (the relay that does not
+    /// answer). How many sends started is counted.
+    struct HangingTransport {
+        started: Mutex<std::sync::mpsc::Sender<()>>,
+        sends: std::sync::atomic::AtomicUsize,
+    }
+
+    impl SubmissionTransport for HangingTransport {
+        type Session = String;
+
+        fn session_source(&self, _session: &Self::Session) -> crate::transport::SftpEndpointSource {
+            crate::transport::SftpEndpointSource::Relay
+        }
+
+        fn open_session<'a>(
+            &'a self,
+            form_type: &'a str,
+            _tin: &'a str,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<Self::Session, crate::transport::TransportError>>
+                    + Send
+                    + 'a,
+            >,
+        > {
+            let form_type = form_type.to_string();
+            Box::pin(async move { Ok(form_type) })
+        }
+
+        fn store_session<'a>(
+            &'a self,
+            _session: Self::Session,
+            _filename: &'a str,
+            _payload: &'a [u8],
+            _xml: &'a [u8],
+            _note: bir_submit::Note<'a>,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            crate::transport::StoreReport,
+                            crate::transport::TransportError,
+                        >,
+                    > + Send
+                    + 'a,
+            >,
+        > {
+            self.sends.fetch_add(1, Ordering::SeqCst);
+            let _ = self.started.lock().unwrap().send(());
+            Box::pin(std::future::pending())
+        }
+
+        /// Not a Buwiz send, so nothing is noted and this is never asked; it would not answer either.
+        fn settle_pending<'a>(
+            &'a self,
+            _pending: &'a str,
+        ) -> Pin<Box<dyn Future<Output = crate::relay::Settlement> + Send + 'a>> {
+            Box::pin(std::future::pending())
+        }
+    }
+
+    /// An engine ends while its worker is sending: the worker's runtime is shut down, which drops the send where
+    /// it waits. Nothing of it is left: its job key is gone and no clone of the database handle survives it. The
+    /// return keeps its claim and "upload started", so the next worker finds it claimed and does not send it again
+    /// (what a desktop relaunch after a quit mid-send finds).
+    #[test]
+    fn a_send_dropped_mid_flight_keeps_its_claim_and_frees_its_job_key() {
+        const KEY: &str = "form:1601C:lifecycle-test:dropped-mid-send";
+        let profile = test_profile();
+        let queued = queued_1601c_draft(&profile);
+        let db = Arc::new(Mutex::new(Database::open_in_memory_for_tests().unwrap()));
+        let id = db.lock().unwrap().save_queued_1601c_draft(&queued).unwrap();
+        let summary = queued_1601c_summary(id, &queued);
+        let (started, sending) = std::sync::mpsc::channel();
+        let transport = Arc::new(HangingTransport {
+            started: Mutex::new(started),
+            sends: std::sync::atomic::AtomicUsize::new(0),
+        });
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        assert!(get_active_jobs().lock().unwrap().insert(KEY.to_string()));
+        let cleanup = JobCleanup {
+            key: KEY.to_string(),
+            active_jobs: get_active_jobs(),
+        };
+        let (job_db, job_transport, job_profile) = (db.clone(), transport.clone(), profile.clone());
+        runtime.block_on(async move {
+            spawn_job(cleanup, async move {
+                process_queued_1601c_with_transport(
+                    &summary,
+                    &job_profile,
+                    job_db,
+                    &*job_transport,
+                )
+                .await;
+            });
+        });
+        sending
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .expect("the send started");
+        assert!(get_active_jobs().lock().unwrap().contains(KEY), "sending");
+
+        let ended = std::time::Instant::now();
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+        // Room for a loaded machine: the bound that matters is the worker's 5 s.
+        assert!(
+            ended.elapsed() < std::time::Duration::from_secs(5),
+            "dropped, not waited for"
+        );
+        assert!(
+            !get_active_jobs().lock().unwrap().contains(KEY),
+            "the key went with the task"
+        );
+        assert_eq!(
+            Arc::strong_count(&db),
+            1,
+            "no task kept the database handle"
+        );
+
+        let stored = || {
+            db.lock()
+                .unwrap()
+                .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+                .unwrap()
+                .unwrap()
+        };
+        let claimed = stored();
+        assert_eq!(claimed.status, FilingStatus::Queued);
+        assert!(claimed.submission_claim_token.is_some(), "the claim stays");
+        assert!(
+            claimed.submission_put_started_at.is_some(),
+            "upload started stays"
+        );
+        assert!(claimed.submitted_at.is_none());
+
+        // The next engine's worker: the claim is found, nothing is sent again.
+        let next = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(process_queued_1601c_with_transport(
+                &queued_1601c_summary(id, &queued),
+                &profile,
+                db.clone(),
+                &next,
+            ));
+        assert!(
+            next.calls().is_empty(),
+            "a claimed return is not sent again"
+        );
+        assert_eq!(transport.sends.load(Ordering::SeqCst), 1);
+        let after = stored();
+        assert_eq!(after.status, FilingStatus::Queued);
+        assert_eq!(after.submission_claim_token, claimed.submission_claim_token);
+    }
+
+    /// A job the runtime drops before it ever ran still gives its key back: the guard is part of the task's future,
+    /// not made inside it on the first poll.
+    #[test]
+    fn a_job_dropped_before_it_ever_ran_frees_its_key() {
+        const KEY: &str = "form:1601C:lifecycle-test:never-polled";
+        let ran = Arc::new(AtomicBool::new(false));
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        assert!(get_active_jobs().lock().unwrap().insert(KEY.to_string()));
+        let cleanup = JobCleanup {
+            key: KEY.to_string(),
+            active_jobs: get_active_jobs(),
+        };
+        let job_ran = ran.clone();
+        runtime.block_on(async move {
+            spawn_job(cleanup, async move {
+                job_ran.store(true, Ordering::SeqCst);
+                std::future::pending::<()>().await;
+            });
+        });
+        assert!(
+            get_active_jobs().lock().unwrap().contains(KEY),
+            "spawned, not yet run"
+        );
+        drop(runtime);
+        assert!(
+            !ran.load(Ordering::SeqCst),
+            "the runtime dropped the job before it ran"
+        );
+        assert!(
+            !get_active_jobs().lock().unwrap().contains(KEY),
+            "its key went with it"
+        );
+    }
+
+    /// One loop after another in one process, as one engine after another starts its worker: a loop's own stop
+    /// ends it and nothing else, the next is not born stopped, and each puts its own wake channel in and takes it
+    /// out. `request_shutdown` (the `bir` command line's quit) stops the loop running then, not one started after it.
+    /// In a child process of its own: the wake channel and the shutdown generation are the process's, and no other
+    /// test may share them while this one reads them.
+    #[test]
+    fn each_loop_stops_on_its_own_signal_and_the_next_is_not_born_stopped() {
+        const CHILD: &str = "BIR_CORE_CRON_LOOP_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "background_cron::tests::each_loop_stops_on_its_own_signal_and_the_next_is_not_born_stopped",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .env("EBIR_TEST_ENV", "1")
+                .env("BIR_SFTP_DRY_RUN", "1")
+                .env_remove("BIR_SFTP_LIVE")
+                .env_remove("BIR_RELAY_URL")
+                .status()
+                .unwrap();
+            assert!(status.success(), "the child process failed");
+            return;
+        }
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let db = Arc::new(Mutex::new(Database::open_in_memory_for_tests().unwrap()));
+        let bound = std::time::Duration::from_secs(5);
+        runtime.block_on(async {
+            let until_woken = || async {
+                let deadline = tokio::time::Instant::now() + bound;
+                while wake_with_status() == WakeDispatchStatus::WorkerNotRunning {
+                    assert!(
+                        tokio::time::Instant::now() < deadline,
+                        "the loop never started"
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            };
+            for engine in 1..=3 {
+                let stop = CronStop::new();
+                let job = tokio::spawn(run_cron_jobs(db.clone(), stop.clone()));
+                until_woken().await;
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                assert!(!job.is_finished(), "engine {engine}: the loop runs");
+                stop.stop();
+                tokio::time::timeout(bound, job)
+                    .await
+                    .unwrap_or_else(|_| panic!("engine {engine}: the loop stopped on its signal"))
+                    .unwrap();
+                assert_eq!(
+                    wake_with_status(),
+                    WakeDispatchStatus::WorkerNotRunning,
+                    "engine {engine}: its wake channel went with it"
+                );
+            }
+
+            let job = tokio::spawn(start_cron_jobs(db.clone()));
+            until_woken().await;
+            request_shutdown();
+            assert!(shutdown_requested());
+            tokio::time::timeout(bound, job).await.unwrap().unwrap();
+            let stop = CronStop::new();
+            let job = tokio::spawn(run_cron_jobs(db.clone(), stop.clone()));
+            until_woken().await;
+            assert!(!shutdown_requested(), "a new loop starts unstopped");
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            assert!(
+                !job.is_finished(),
+                "an earlier request does not stop a later loop"
+            );
+            stop.stop();
+            tokio::time::timeout(bound, job).await.unwrap().unwrap();
+
+            // A loop called before a request and first polled after it is stopped by it.
+            let called = start_cron_jobs(db.clone());
+            request_shutdown();
+            tokio::time::timeout(bound, called)
+                .await
+                .expect("a request made after the call stops the loop");
+        });
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+        assert_eq!(
+            Arc::strong_count(&db),
+            1,
+            "no loop kept the database handle"
+        );
     }
 }

@@ -51,8 +51,8 @@ test("phone: Forms keeps code, name and template, and edits the list", async () 
   await app.waitFor("id:tp-form-1601C");
   expect(app.texts().some((t) => t.startsWith("Due "))).toBe(false); // no due column when narrow
   await app.press("id:tp-forms-edit");
-  await app.waitFor("id:tp-form-2551Q-check");
-  await app.press("id:tp-form-2551Q-check");
+  await app.waitFor("id:tp-form-2551Q");
+  await app.press("id:tp-form-2551Q");
   await app.press("id:tp-forms-save");
   await app.waitFor(`text:${YEAR} forms updated: 0 added, 1 removed.`);
   await app.press("label:Templates");
@@ -67,7 +67,7 @@ test("phone: New taxpayer and New branch fill the width and create", async () =>
   await app.waitFor("text:Cebu branch added.");
   const tp = await phone("view=new_taxpayer");
   await tp.waitFor("id:new-tp-card");
-  await tp.type("id:new-tp-tin", "000111245");
+  await tp.type("id:new-tp-tin", "000111240");
   await tp.type("id:new-tp-name", "Sample Owner");
   await tp.press("id:new-tp-rdo_code-trigger");
   await tp.waitFor("id:new-tp-rdo_code-search"); // the pick opens as a sheet when narrow

@@ -270,6 +270,46 @@ const FILER_TYPED: &[(&str, &str)] = &[
         "Part IV item 2B Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered while Schedule A (Part IV.A) is open and clears it when Schedule A closes",
     ),
     (
+        "frm2552:txtPg1P2I17TaxPaidInPrevRtrn",
+        "Item 17 Tax Paid in Return Previously Filed: disabled at load (rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json source line 866) until Amended Return is Yes; form_2552.rs recompute zeroes tax_paid_previous unless is_amended",
+    ),
+    (
+        "frm2200Av2020:txtSched1_xa_others1_Due",
+        "Schedule 1 Others row 1 Basic Excise Tax Due: enabled at load (rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json source line 2200, disabled=false, readonly=false); form_2200a.rs keeps row.amounts.tax_due as entered",
+    ),
+    (
+        "frm2200Av2020:txtSched1_xa_others2_Due",
+        "Schedule 1 Others row 2 Basic Excise Tax Due: enabled at load (rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json source line 2226, disabled=false, readonly=false); form_2200a.rs keeps row.amounts.tax_due as entered",
+    ),
+    (
+        "frm2200Av2020:txtSched1_xa_others3_Due",
+        "Schedule 1 Others row 3 Basic Excise Tax Due: enabled at load (rules/forms/2200a-v2020/fixtures/runtime-control-inventory-v796.json source line 2252, disabled=false, readonly=false); form_2200a.rs keeps row.amounts.tax_due as entered",
+    ),
+    (
+        "frm2550m:txtTax13B",
+        "Item 13B Output Tax on Sales to Government: enabled at load (rules/forms/2550m-v2007/fixtures/runtime-control-inventory-v796.json source line 738, disabled=false, readonly=false); compute13B fills 12% on blur of 13A and leaves 13B editable",
+    ),
+    (
+        "frm2550m:txtTax18F",
+        "Item 18F Input Tax on Domestic Purchases of Goods Other than Capital Goods: enabled at load (inventory source line 857, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18E and leaves 18F editable",
+    ),
+    (
+        "frm2550m:txtTax18H",
+        "Item 18H Input Tax on Importation of Goods Other than Capital Goods: enabled at load (inventory source line 866, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18G and leaves 18H editable",
+    ),
+    (
+        "frm2550m:txtTax18J",
+        "Item 18J Input Tax on Domestic Purchase of Services: enabled at load (inventory source line 876, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18I and leaves 18J editable",
+    ),
+    (
+        "frm2550m:txtTax18L",
+        "Item 18L Input Tax on Services Rendered by Non-residents: enabled at load (inventory source line 886, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18K and leaves 18L editable",
+    ),
+    (
+        "frm2550m:txtTax18O",
+        "Item 18O Input Tax on Others: enabled at load (inventory source line 903, disabled=false, readonly=false); compute18TransactionbyRow fills 12% on blur of 18N and leaves 18O editable",
+    ),
+    (
         "txtTotalTaxWithHeld30",
         "2550Q Schedule 3 row 0 tax withheld: static placeholder is disabled at load in rules/forms/2550q-v2024/fixtures/runtime-control-inventory-v796.json (L3020) before the Schedule 3 modal opens, while txtTotalTaxWithHeld3{N>=0} is a user-typed input for rows 0 onward",
     ),
@@ -292,6 +332,26 @@ const FILER_TYPED: &[(&str, &str)] = &[
     (
         "frm2552:txtPg2Pt6NumShares5",
         "2552 Part VI row 5 number of shares: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L2414) until prior rows are entered, unlike row 1 (L2314); not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg1Pt1I12TotShare",
+        "2552 Part I Item 12 total number of outstanding shares: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L759) until Item 11 Transaction is Primary or Secondary Offering; not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2P4I2Amount",
+        "2552 Part IV Item 2 amount: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L1327) until Item 11 is Primary/Secondary Offering and row 2 is open; not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2P4I3Amount",
+        "2552 Part IV Item 3 amount: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L1337) until Item 11 is Primary/Secondary Offering and row 3 is open; not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2P4I4Amount",
+        "2552 Part IV Item 4 amount: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L1347) until Item 11 is Primary/Secondary Offering and row 4 is open; not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2P4I5Amount",
+        "2552 Part IV Item 5 amount: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L1357) until Item 11 is Primary/Secondary Offering and row 5 is open; not in rules/forms/2552-v2018/calculations.json",
     ),
 ];
 
@@ -999,6 +1059,18 @@ const GATED_ENTRY: &[(&str, &str)] = &[
     ("frm1702MX:txtPg7Sc9I1CA", MX_SCHEDULE_9_ROW_1),
     ("frm1702MX:txtPg7Sc9I1CB", MX_SCHEDULE_9_ROW_1),
     ("frm1702MX:txtPg7Sc9I1CF", MX_SCHEDULE_9_ROW_1),
+    ("frm1702MX:txtPg3IShed7_4A", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_4B", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_4C", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_4D", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_5A", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_5B", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_5C", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_5D", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_6A", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_6B", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_6C", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_6D", MX_NOLCO_SCHED_7_1),
     (
         "frm1702RT:txtPg2Pt4I42MinimumCorporate",
         "Item 42 MCIT Due: an entry (see USER_CHOSEN) that \
@@ -1062,6 +1134,11 @@ const MX_SCHEDULE_9_ROW_1: &str = "1702MX Schedule 9 item 1 (Year, A, B and F): 
      the filer like items 2 and 3; form_1702mx_official.rs recompute clears \
      every Schedule 9 row while the return is not subject to MCIT \
      (enableMCITFields), which the incorporation date decides";
+
+const MX_NOLCO_SCHED_7_1: &str = "1702MX Schedule 7.1 items 4-6 (A-D): enabled at load \
+     (rules/forms/1702mx-v2018c/fixtures/runtime-control-inventory-v796.json L4011-4058); \
+     form_1702mx_official.rs recompute clears Schedule 7.1 rows 4-6 when OSD is chosen \
+     (methodOfDeductionsOptional), which /deduction_method decides";
 
 const RT_ADD_MORE_LINE: &str = "1702RT: the amount of an item with an \"(Add more...)\" \
      table (Part IV item 54, Schedule I item 17i, Schedule II item 4, Schedule V \
@@ -1155,6 +1232,7 @@ fn skipped(top: &str) -> bool {
             submission_claimed_at: Some(String::new()),
             submission_claim_lease_until: Some(String::new()),
             submission_put_started_at: Some(String::new()),
+            relay_pending: Some(String::new()),
             submission_error: Some(String::new()),
             next_retry_at: Some(String::new()),
             trigger_date_entered: true,
@@ -1272,7 +1350,15 @@ fn echoes(kind: ValueKind, probe: &Value, official: &str) -> bool {
                 || value == AMOUNT_PROBE.round()
                 || (value - (AMOUNT_PROBE * 10.0).round() / 10.0).abs() < 0.005
         }),
-        ValueKind::Whole => official.trim().parse::<i64>().ok() == probe.as_i64(),
+        ValueKind::Whole => {
+            official.trim().parse::<i64>().ok() == probe.as_i64()
+                // 1702MX's NOLCO amounts file through the page's two-decimal
+                // formatCurrency (`7.00`): a whole probe still echoes when the
+                // shown number is the probe's integer.
+                || probe.as_i64().is_some_and(|probe_value| {
+                    parse_amount(official).is_some_and(|shown| shown == probe_value as f64)
+                })
+        }
         ValueKind::DatePart(date, part) => date.part_shown_by(official) == Some(part),
     }
 }
@@ -1791,6 +1877,96 @@ const MAX_GATE_VALUES: usize = 4;
 /// sampled, not walked).
 const MAX_CODES: usize = 24;
 
+/// Selects the official form carries as a 1-based option position while the
+/// draft keeps the option's code: `(form code, key prefix, array path, leaf
+/// field, rows, evidence)`. The position never echoes the code, so the probe
+/// derives these as "derived by the app" and the page refuses them as
+/// unfillable. The official option list is pinned data from the package
+/// itself; even so a binding is emitted only after the field map shows the
+/// position the pinned list promises, probed on a draft the leaf is set in.
+const INDEXED_SELECTS: &[(&str, &str, &str, &str, usize, &str)] = &[(
+    "2551Q",
+    "drpATC",
+    "/schedule_1",
+    "atc",
+    6,
+    "2551Q Schedule 1 rows 1-6: data/official-xml/2551q-v2018-atc-options.json \
+     (the package's own xml/atcCodes.xml); form_2551q_xml.rs writes drpATC{n} \
+     as the option's 1-based list position, never the code",
+)];
+
+/// One pinned indexed select's official options: `(position, code)`.
+fn indexed_select_options(form: &str) -> Vec<(String, String)> {
+    match form {
+        "2551Q" => crate::forms::form_2551q_xml::official_atc_options()
+            .iter()
+            .map(|option| (option.value.clone(), option.code.clone()))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Bind the [`INDEXED_SELECTS`] boxes the echo probe cannot see, verifying
+/// each against the field map first: a draft with the leaf set to a probed
+/// code must carry the position the pinned official list promises. Rows past
+/// the seed's last are probed by repeating it, as `grow_rows` does. A box
+/// whose verification fails keeps its unmapped reason.
+fn bind_indexed_selects(kind: AgentFormKind, seeds: &[Value], def: &mut AgentFormDef) {
+    for (form, prefix, array, field, rows, _evidence) in INDEXED_SELECTS {
+        if *form != def.form_code {
+            continue;
+        }
+        let options = indexed_select_options(form);
+        if options.is_empty() {
+            continue;
+        }
+        let Some(seed) = seeds.first() else {
+            continue;
+        };
+        let probes: Vec<(String, String)> = options.iter().take(2).cloned().collect();
+        for row in 0..*rows {
+            let key = format!("{prefix}{}", row + 1);
+            if def.bindings.contains_key(&key) || !def.boxes.iter().any(|entry| entry.key == key) {
+                continue;
+            }
+            let leaf = format!("{array}/{row}/{field}");
+            let verified = probes.iter().all(|(value, code)| {
+                let mut draft = seed.clone();
+                if let Some(Value::Array(items)) = draft.pointer_mut(array) {
+                    while items.len() <= row {
+                        let Some(last) = items.last().cloned() else {
+                            break;
+                        };
+                        items.push(last);
+                    }
+                }
+                pointer_set(&mut draft, &leaf, Value::from(code.as_str()));
+                probe_eval(kind, &draft).is_some_and(|(_, map)| map.get(&key) == Some(value))
+            });
+            if !verified {
+                continue;
+            }
+            let binding = Binding::Choice {
+                options: options
+                    .iter()
+                    .map(|(value, code)| ChoiceOption {
+                        value: value.clone(),
+                        set: BTreeMap::from([(leaf.clone(), Value::from(code.as_str()))]),
+                    })
+                    .collect(),
+            };
+            def.bindings.insert(
+                key.clone(),
+                BoundBox {
+                    binding,
+                    lock: None,
+                },
+            );
+            def.unmapped.remove(&key);
+        }
+    }
+}
+
 /// Derive the bindings of `kind`'s boxes from sample drafts.
 ///
 /// `profile_values` are the sample taxpayer profile's strings (name,
@@ -1904,6 +2080,7 @@ pub fn derive(
             }
         }
     }
+    bind_indexed_selects(kind, seeds, &mut def);
     extend_rows(&mut def);
     let real: Vec<&Value> = probed_seeds
         .iter()
@@ -2288,7 +2465,7 @@ fn verify(kind: AgentFormKind, def: &mut AgentFormDef, seeds: &[&Value]) {
                     Binding::Text { .. } => shown.to_ascii_uppercase().contains(expected.as_str()),
                     Binding::Amount { .. } => echoes(ValueKind::Amount, &Value::Null, &shown),
                     Binding::Whole { .. } => {
-                        shown.trim().parse::<i64>().ok() == Some(WHOLE_PROBES[0])
+                        echoes(ValueKind::Whole, &Value::from(WHOLE_PROBES[0]), &shown)
                     }
                     Binding::Choice { .. } => shown == *expected,
                 };
