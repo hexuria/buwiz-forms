@@ -1472,3 +1472,49 @@ test("[U1] a removal's Undo with an amount box still focused leaves it first: th
   expect(h.said.toasts.map((t) => t.message)).toContain("Undo is no longer available: you typed since.");
   s.dispose();
 });
+
+test("[S1] Queue pressed while a Delete row settles a focused amount box is kept: the row is deleted first, then Queue runs, once", async () => {
+  const s = await opened(at("2550Q", 2024, 1));
+  fillSched3Row(s, 0, "A0", "1000");
+  fillSched3Row(s, 1, "A1", "2000");
+  fillSched3Row(s, 2, "A2", "3000");
+  await s.idle();
+  const check = bir.screen_form_queue_check;
+  const door = bir as { screen_form_queue_check: typeof check };
+  // The rows as the host's queue check finds them, each time Queue reaches it.
+  const seen: string[][][] = [];
+  door.screen_form_queue_check = ((...args: Parameters<typeof check>): ReturnType<typeof check> => {
+    seen.push(sched3Rows(s, 3));
+    return check(...args);
+  }) as typeof check;
+  try {
+    const box = heldBox(s, "txtIncomePayment30", "500", "later");
+    deleteRow(s, 0);
+    s.queue();
+    await s.idle();
+    expect(box.asked()).toBe(1);
+    expect(sched3Rows(s, 3)).toEqual([["A1", "2,000.00"], ["A2", "3,000.00"], ["", ""]]);
+    expect(seen).toEqual([[["A1", "2,000.00"], ["A2", "3,000.00"], ["", ""]]]);
+  } finally {
+    door.screen_form_queue_check = check;
+    s.dispose();
+  }
+});
+
+test("[S1] Queue pressed twice while it settles a focused amount box runs once", async () => {
+  const checks = countQueueChecks();
+  const s = await opened(at("2550Q", 2024, 2));
+  try {
+    fillSched3Row(s, 0, "A0", "1000");
+    await s.idle();
+    const box = heldBox(s, "txtIncomePayment30", "500", "later");
+    s.queue();
+    s.queue();
+    await s.idle();
+    expect(box.asked()).toBe(1);
+    expect(checks.count).toBe(1);
+  } finally {
+    checks.restore();
+    s.dispose();
+  }
+});

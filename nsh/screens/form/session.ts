@@ -836,17 +836,24 @@ export class FormSession {
   }
   /** Queue, a Delete row, Print or Save is waiting for a focused amount box to let go. */
   private settling = false;
+  /** What the settle runs once the box let go (its request), and the latest other request made meanwhile (S1), run after it. */
+  private settlingId = "";
+  private settleNext: { id: string; run: () => void } | null = null;
 
   /**
    * An amount box that still has the keys is left before `then` (Queue, a Delete row, Print, Save), so what it holds is the
    * return's before anything is judged, moved, printed or saved. True when `then` was put off (or stopped); false when no amount
    * box has the keys and the caller goes on now. The box's blur may come on a later turn: `then` waits until the session has seen
-   * the box let go (blur() clears focusKey) and runs one turn after that. Q1: a second press while a box settles does nothing.
-   * Q2: a box that has not let go after QUEUE_SETTLE_MS stops it: the session does not know what the box holds, so nothing is done
-   * and the box is left exactly as it is.
+   * the box let go (blur() clears focusKey) and runs one turn after that. `id` names the request (the same press again is the same id).
+   * Q1/S1: a press while a box settles is never run beside it: the same request again does nothing, and the latest other one (Delete
+   * row then Queue) is kept and runs once the settled one has run, unless that one opened a question. Q2: a box that has not let go after QUEUE_SETTLE_MS stops it and
+   * what was kept: the session does not know what the box holds, so nothing is done and the box is left exactly as it is.
    */
-  private settleFocused(then: () => void): boolean {
-    if (this.settling) return true;
+  private settleFocused(then: () => void, id: string): boolean {
+    if (this.settling) {
+      this.settleNext = id === this.settlingId ? null : { id, run: then };
+      return true;
+    }
     const held = this.st.focusKey;
     const heldKind = held ? this.kindOf.get(held) : undefined;
     if (!held || (heldKind !== "money" && heldKind !== "num")) return false;
@@ -857,20 +864,32 @@ export class FormSession {
       return false;
     }
     this.settling = true;
+    this.settlingId = id;
+    this.settleNext = null;
     blurHeld();
     const token = this.token;
     const started = Date.now();
+    const end = () => {
+      this.settling = false;
+      const next = this.settleNext;
+      this.settleNext = null;
+      return next;
+    };
     const go = () => {
-      if (token !== this.token) return void (this.settling = false);
+      if (token !== this.token) return void end();
       if (this.st.focusKey === held && Date.now() - started < QUEUE_SETTLE_MS) return void this.later(25, go);
       if (this.st.focusKey === held) {
-        this.settling = false;
+        end();
         const ctx = this.refusalCtx(held, "");
         return void this.toast(`Finish the amount in ${ctx.item ? `Item ${ctx.item}` : ctx.label} first.`, "triangle-alert");
       }
       this.later(0, () => {
-        this.settling = false;
-        if (token === this.token) then();
+        const next = end();
+        if (token !== this.token) return;
+        then();
+        // S1: the latest other request pressed during the settle, after the settled one, never beside it; not over a question the
+        // settled one opened (a Delete row that removes rows asks first): that question is answered first.
+        if (next && token === this.token && !this.st.overlay) next.run();
       });
     };
     this.later(0, go);
@@ -1565,7 +1584,7 @@ export class FormSession {
     // amount of the row that moved into its keys and put its own typed amount back over it (or bring back a deleted last row). Left
     // first, its amount is stored on its own row; then the row is cleared and the rows below move up with the box no longer focused.
     // The drawer's Delete row closes the drawer right after: the box going away runs the same leave, before this clear goes on.
-    if (clearsRow && !this.reopening && this.settleFocused(() => this.choose(edits, clear))) return;
+    if (clearsRow && !this.reopening && this.settleFocused(() => this.choose(edits, clear), `choose:${JSON.stringify(edits)}|${clear.join(",")}`)) return;
     if (clearsRow && Object.keys(s.pending).length && !this.reopening) {
       this.flush();
       if (s.removal || Object.keys(s.pending).length) return;
@@ -2108,7 +2127,7 @@ export class FormSession {
       if (this.st !== state) return;
       if (this.removalUndo === undo) return this.undoRemoval(draft, state, undo);
       this.toast(UNDO_TYPED_SINCE, "triangle-alert");
-    })) return;
+    }, "undo")) return;
     // V8: typing still pending is stored first, on its own keys. An edit retires Undo (Undo brings back a whole earlier draft, which
     // would drop what was typed or put it on another row), so the filer is told and the rows stay as they are.
     if (Object.keys(s.pending).length) {
@@ -3454,7 +3473,7 @@ export class FormSession {
     if (!s.draft || !s.editable) return;
     // B2: an amount box that still has the keys is left first: a decimal-comma text ("1500,50") reads only on leaving, so the save
     // would store the older amount the box last reported.
-    if (this.settleFocused(() => this.saveNow())) return;
+    if (this.settleFocused(() => this.saveNow(), "save")) return;
     this.cancelAutosave();
     if (s.sample) return this.saveSample(null);
     this.saveReturn(true);
@@ -3607,7 +3626,7 @@ export class FormSession {
     const s = this.st;
     // Queue cannot be taken back: an amount box that still has the keys is left first, so the amount it puts back and the note it
     // raises exist before anything is judged (Q1, Q2: settleFocused).
-    if (this.settleFocused(() => this.queue())) return;
+    if (this.settleFocused(() => this.queue(), "queue")) return;
     if (s.sample) return this.saveSample(() => this.queue());
     // A note Queue has not shown yet stops it once, wherever it is: its part opens (the others fold, as the navigator does), its row
     // is brought into view, and the toast says the note itself, which names the item. Shown, it stops Queue no more.
@@ -3728,7 +3747,7 @@ export class FormSession {
     if (!s.queueWarn) return;
     // B8: Continue queues, which cannot be taken back: an amount box that has the keys again under the question is left first, as
     // Queue leaves it.
-    if (this.settleFocused(() => this.confirmQueue())) return;
+    if (this.settleFocused(() => this.confirmQueue(), "confirmQueue")) return;
     s.queueWarn = null;
     s.overlay = null;
     this.publish();
@@ -3918,7 +3937,7 @@ export class FormSession {
     if (!s.draft) return;
     if (!hasSecondWindow && !hasNativePreview && !Print.previewsNatively()) return void this.toast(NO_PREVIEW, "printer");
     // B2: an amount box that still has the keys is left first, so the paper shows the amount the box holds, not an older one.
-    if (this.settleFocused(() => this.print())) return;
+    if (this.settleFocused(() => this.print(), "print")) return;
     if (s.sample) {
       try {
         bir.screen_form_print_sample(s.target.formCode, s.draft, s.pending, this.unlockedFor(s.pending));
