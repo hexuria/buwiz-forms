@@ -1,0 +1,58 @@
+    fallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@7ca24b4 mDeactivateRequested=false mServedView=null}
+  mInputShown=true
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0xc001 imeOptions=0x8000006 fieldId=0xffffffff fieldName=null actionId=0 actionLabel=null
+      inputType=0xc001 imeOptions=0x4000006 fieldId=0xffffffff fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x2002 imeOptions=0x8000006 fieldId=0xffffffff fieldName=null actionId=0 actionLabel=null
+      inputType=0x2002 imeOptions=0xc000006 fieldId=0xffffffff fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0xc001 imeOptions=0x4000006 fieldId=0xffffffff fieldName=null actionId=0 actionLabel=null
+      inputType=0xc001 imeOptions=0x6 fieldId=0xffffffff fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0xc001 imeOptions=0x8000006 fieldId=0xffffffff fieldName=null actionId=0 actionLabel=null
+      inputType=0xc001 imeOptions=0xc000006 fieldId=0xffffffff fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x80021 imeOptions=0x2 fieldId=0xffffffff fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x2 imeOptions=0x6 fieldId=0xffffffff fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x80021 imeOptions=0x2 fieldId=0xffffffff fieldName=null actionId=0 actionLabel=null
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+      inputType=0x2 imeOptions=0x6 fieldId=0xffffffff fieldName=null actionId=0 actionLabel=null
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+      editorInfo: inputType=0 privateImeOptions=null fieldId (viewId)=0
+  mFallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@b487a64 mDeactivateRequested=false mServedView=null}
+  mServedView=com.longbridge.nsh.InputBox$1{92e773e VFED..CL. .F...... 0,0-788,126 aid=1073741828}
+    inputType=0x2 imeOptions=0x6 privateImeOptions=null
+  mServedInputConnection=RemoteInputConnectionImpl{connection=com.longbridge.nsh.InputBox$KeyConnection@7b44f6d mDeactivateRequested=false mServedView=com.longbridge.nsh.InputBox$1{92e773e VFED..CL. .F...... 0,0-788,126 aid=1073741828}}
+  mServedInputConnectionHandler=null
+    inputType=0x2 imeOptions=0x6 privateImeOptions=null
+      inputTypeString = Number
+      inputType=0x2 imeOptions=0x6 privateImeOptions=null

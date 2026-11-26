@@ -1,0 +1,13 @@
+EditText nodes: 1
+<node NAF="true" index="0" text="" resource-id="" class="android.widget.EditText" package="dev.goldcoders.bir" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="true" password="false" selected="false" bounds="[146,590][934,716]" />
+
+last EditText dump index: 22 of 38
+--- nodes overlapping box strip y590-716 x146-934, AFTER edittext in dump order:
+idx23 android.view.ViewGroup bounds=[146,590][524,716]
+idx24 android.view.ViewGroup bounds=[146,590][262,716]
+idx25 android.view.ViewGroup bounds=[278,590][393,716]
+idx26 android.view.ViewGroup bounds=[409,590][524,716]
+idx27 android.view.ViewGroup bounds=[556,590][934,716]
+idx28 android.view.ViewGroup bounds=[556,590][671,716]
+idx29 android.view.ViewGroup bounds=[687,590][803,716]
+idx30 android.view.ViewGroup bounds=[818,590][934,716]

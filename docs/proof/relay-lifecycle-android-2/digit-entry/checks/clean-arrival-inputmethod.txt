@@ -1,0 +1,6 @@
+    fallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@7ca24b4 mDeactivateRequested=false mServedView=null}
+  mInputShown=true
+  mFallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@b487a64 mDeactivateRequested=false mServedView=null}
+  mServedView=com.longbridge.nsh.NshView{eff1f50 VFE...... .F...... 0,0-1080,2400 aid=1073741826}
+  mServedInputConnection=null
+  mServedInputConnectionHandler=null

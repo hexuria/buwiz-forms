@@ -1,0 +1,2 @@
+  mCurrentFocus=Window{8b6b66a u0 dev.goldcoders.bir/com.longbridge.nsh.AppActivity}
+  mFocusedApp=ActivityRecord{22e2f26 u0 dev.goldcoders.bir/com.longbridge.nsh.AppActivity t148}
