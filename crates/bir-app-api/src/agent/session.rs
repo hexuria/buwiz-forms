@@ -4032,4 +4032,151 @@ mod tests {
         assert_eq!(context["profile"]["registered_name"], "TEST");
         assert!(context["past_returns"].as_array().is_some());
     }
+
+    #[test]
+    fn form_fill_1702mx_nolco_populates_official_xml() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1702MX", "year": 2025, "period": 0, "tin": TIN}),
+        )
+        .unwrap();
+        let reply = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized": "true",
+                    "frm1702MX:txtPg3IShed7_4Year": "2022",
+                    "frm1702MX:txtPg3IShed7_4A": "300000",
+                    "frm1702MX:txtPg3IShed7_4B": "50000",
+                    "frm1702MX:txtPg3IShed7_4C": "20000",
+                    "frm1702MX:txtPg3IShed7_4D": "80000",
+                    "frm1702MX:txtPg3IShed8_4Year": "2022",
+                    "frm1702MX:txtPg4IShed8_4A": "400000",
+                    "frm1702MX:txtPg4IShed8_4B": "60000",
+                    "frm1702MX:txtPg4IShed8_4C": "25000",
+                    "frm1702MX:txtPg4IShed8_4D": "90000"
+                }
+            }),
+        )
+        .unwrap();
+        assert!(
+            reply.get("refused").is_none(),
+            "unexpected refusals: {reply}"
+        );
+
+        let draft = session.open.as_ref().expect("open 1702MX").draft.clone();
+        let typed: bir_core::forms::form_1702mx::Form1702MXDraft =
+            serde_json::from_value(draft).unwrap();
+        let layout = typed.official_layout().unwrap();
+        let official_xml =
+            bir_core::official_xml::write(&layout, &typed.to_official_field_map()).unwrap();
+        let parsed = bir_core::bir_xml::parse_bir_xml_checked(&official_xml).unwrap();
+        let print_map = typed.to_print_field_map();
+        for (key, expected) in [
+            ("frm1702MX:txtPg3IShed7_4A", "300,000.00"),
+            ("frm1702MX:txtPg3IShed7_4B", "50,000.00"),
+            ("frm1702MX:txtPg3IShed7_4C", "20,000.00"),
+            ("frm1702MX:txtPg3IShed7_4D", "80,000.00"),
+            ("frm1702MX:txtPg3IShed7_4E", "150,000"),
+            ("frm1702MX:txtPg3IShed78D", "80,000"),
+            ("frm1702MX:txtPg4IShed8_4A", "400,000.00"),
+            ("frm1702MX:txtPg4IShed8_4B", "60,000.00"),
+            ("frm1702MX:txtPg4IShed8_4C", "25,000.00"),
+            ("frm1702MX:txtPg4IShed8_4D", "90,000.00"),
+            ("frm1702MX:txtPg4IShed8_4E", "225,000"),
+            ("frm1702MX:txtPg3IShed88D", "90,000"),
+        ] {
+            assert_eq!(
+                parsed.get(key).map(String::as_str),
+                Some(expected),
+                "form.fill official upload XML missing {key}"
+            );
+            assert_eq!(
+                print_map.get(key).map(String::as_str),
+                Some(expected),
+                "form.fill print map missing {key}"
+            );
+        }
+    }
+
+    #[test]
+    fn form_fill_1702mx_nolco_matches_official_sample_xml_byte_for_byte() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1702MX", "year": 2025, "period": 0, "tin": TIN}),
+        )
+        .unwrap();
+        let reply = call(
+            &mut session,
+            "form.fill",
+            json!({
+                "fields": {
+                    "frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized": "true",
+                    "frm1702MX:txtPg3IShed7_4Year": "2022",
+                    "frm1702MX:txtPg3IShed7_4A": "300000",
+                    "frm1702MX:txtPg3IShed7_4B": "100000",
+                    "frm1702MX:txtPg3IShed7_4C": "25000",
+                    "frm1702MX:txtPg3IShed7_4D": "50000"
+                }
+            }),
+        )
+        .unwrap();
+        assert!(
+            reply.get("refused").is_none(),
+            "unexpected refusals: {reply}"
+        );
+        // Clear 4C back to 0 and verify it matches official "0".
+        let cleared = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm1702MX:txtPg3IShed7_4C": "0"}}),
+        )
+        .unwrap();
+        assert!(
+            cleared.get("refused").is_none(),
+            "unexpected refusals on clear: {cleared}"
+        );
+
+        let draft = session.open.as_ref().expect("open 1702MX").draft.clone();
+        let typed: bir_core::forms::form_1702mx::Form1702MXDraft =
+            serde_json::from_value(draft).unwrap();
+        let layout = typed.official_layout().unwrap();
+        let ours_xml =
+            bir_core::official_xml::write(&layout, &typed.to_official_field_map()).unwrap();
+
+        let official_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../bir-core/tests/sample-payloads/1702MX-1225-sched6.official.xml");
+        let official_xml = std::fs::read_to_string(&official_path).unwrap();
+
+        let nolco_block = |xml: &str| -> String {
+            xml.lines()
+                .filter(|line| {
+                    line.contains("IShed7_")
+                        || line.contains("IShed78D")
+                        || line.contains("IShed8_")
+                        || line.contains("IShed88D")
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+
+        let want_block = nolco_block(&official_xml);
+        let got_block = nolco_block(&ours_xml);
+        assert_eq!(want_block.lines().count(), 50);
+        assert_eq!(
+            got_block, want_block,
+            "form.fill official upload XML Schedule 7.1 & 8.1 block must match official sample byte for byte"
+        );
+
+        let print_map = typed.to_print_field_map();
+        assert_eq!(print_map["frm1702MX:txtPg3IShed7_4E"], "150,000");
+        assert_eq!(print_map["frm1702MX:txtPg3IShed78D"], "50,000");
+    }
 }

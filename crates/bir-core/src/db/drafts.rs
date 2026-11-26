@@ -1306,6 +1306,7 @@ impl Database {
         draft.submission_claim_lease_until =
             Some(crate::filing_queue::claim_lease_until(claimed_at));
         draft.submission_put_started_at = None;
+        draft.relay_pending = None;
         draft.last_error = Some(
             "Submission outcome pending. Automatic retry is disabled unless the claim lease expires before PUT starts; keep any BIR confirmation or receipt and contact support for manual reconciliation before taking another submission action."
                 .to_string(),
@@ -1415,6 +1416,7 @@ impl Database {
         existing.submission_claimed_at = None;
         existing.submission_claim_lease_until = None;
         existing.submission_put_started_at = None;
+        existing.relay_pending = None;
         existing.updated_at = chrono::Utc::now().to_rfc3339();
         let json = serde_json::to_string(&existing)?;
         let period_key = FilingPeriod::Quarterly(draft.quarter).to_period_key();
@@ -1462,6 +1464,51 @@ impl Database {
         if draft.submission_put_started_at.is_none() {
             draft.submission_put_started_at = Some(chrono::Utc::now().to_rfc3339());
         }
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
+    /// Keep (`Some`) or clear (`None`) the relay's pending send on a 2551Q
+    /// this worker claimed ([`crate::forms::queueable::SubmissionLifecycle::relay_pending`]).
+    /// `false` when the claim is no longer `claim_token`'s.
+    pub(crate) fn note_claimed_2551q_relay_pending(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        quarter: u8,
+        claim_token: &str,
+        pending: Option<&str>,
+    ) -> Result<bool, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json)) = tx
+            .query_row(
+                "SELECT id, data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3 AND status = 'Queued'",
+                params![tin, i64::from(taxable_year), i64::from(quarter)],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        let mut draft: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if !matches!(draft.status, FilingStatus::Queued)
+            || draft.submission_claim_token.as_deref() != Some(claim_token)
+            || draft.submission_claimed_at.is_none()
+        {
+            return Ok(false);
+        }
+        draft.relay_pending = pending.map(str::to_owned);
         let json = serde_json::to_string(&draft)?;
         let updated = tx.execute(
             "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
@@ -2542,6 +2589,7 @@ impl Database {
         draft.submission_claim_lease_until =
             Some(crate::filing_queue::claim_lease_until(claimed_at));
         draft.submission_put_started_at = None;
+        draft.relay_pending = None;
         draft.submission_error = Some(
             "Submission outcome pending. Automatic retry is disabled unless the claim lease expires before PUT starts; keep any BIR confirmation or receipt and contact support for manual reconciliation before taking another submission action."
                 .to_string(),
@@ -2629,6 +2677,7 @@ impl Database {
         finished.submission_claimed_at = None;
         finished.submission_claim_lease_until = None;
         finished.submission_put_started_at = None;
+        finished.relay_pending = None;
         let json = serde_json::to_string(&finished)?;
         let period_key = FilingPeriod::Monthly(finished.month).to_period_key();
         let updated = tx.execute(
@@ -2677,6 +2726,51 @@ impl Database {
         if draft.submission_put_started_at.is_none() {
             draft.submission_put_started_at = Some(chrono::Utc::now().to_rfc3339());
         }
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
+    /// Keep (`Some`) or clear (`None`) the relay's pending send on a 1601C
+    /// this worker claimed ([`crate::forms::queueable::SubmissionLifecycle::relay_pending`]).
+    /// `false` when the claim is no longer `claim_token`'s.
+    pub(crate) fn note_claimed_1601c_relay_pending(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        month: u8,
+        claim_token: &str,
+        pending: Option<&str>,
+    ) -> Result<bool, DbError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json)) = tx
+            .query_row(
+                "SELECT id, data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '1601C'
+                   AND taxable_year = ?2 AND quarter = ?3 AND status = 'Queued'",
+                params![tin, i64::from(taxable_year), i64::from(month)],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        let mut draft: Form1601CDraft = serde_json::from_str(&raw_json)?;
+        if !matches!(draft.status, FilingStatus::Queued)
+            || draft.submission_claim_token.as_deref() != Some(claim_token)
+            || draft.submission_claimed_at.is_none()
+        {
+            return Ok(false);
+        }
+        draft.relay_pending = pending.map(str::to_owned);
         let json = serde_json::to_string(&draft)?;
         let updated = tx.execute(
             "UPDATE form_drafts SET data_json = ?1, updated_at = datetime('now')
