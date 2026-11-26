@@ -2,7 +2,9 @@
 """Decides what a CI run does: the `changes` job of ci.yml and the `plan` job of nsh.yml both run this, so the two
 workflows always agree. docs/CI.md says the same in words.
 
-Four lanes:
+Five lanes:
+  none     a pull request that closed (or merged), or one that is a draft: nothing. ci.yml's jobs carry the same rule
+           in their `if`, so these events take no runner at all; marking a draft ready starts the quick lane.
   quick    a pull request, or a push to main or codex/**: the quick checks on Linux only (ci.yml).
   tests    a push to test/**: the test suites; the branch name picks the systems.
   manual   workflow_dispatch: the systems, suites, screen-test filter and shard the inputs name.
@@ -136,6 +138,8 @@ def decide(
     *,
     event: str,
     ref: str,
+    action: str = "",
+    draft: bool = False,
     branch: str = "",
     changed: list[str] | None = None,
     labels: tuple[str, ...] = (),
@@ -149,7 +153,11 @@ def decide(
     reasons: list[str] = []
     test_push = event == "push" and ref.startswith("refs/heads/test/")
 
-    if event in ("pull_request", "push") and not test_push:
+    if event == "pull_request" and (action == "closed" or draft):
+        lane = "none"
+        reasons.append("closed pull request: nothing runs" if action == "closed"
+                       else "draft pull request: nothing runs until it is marked ready")
+    elif event in ("pull_request", "push") and not test_push:
         lane = "quick"
     elif test_push:
         lane = "tests"
@@ -225,7 +233,7 @@ def decide(
             plan["shard_count"] = SHARDS
         reasons.append(f"manual run: systems {', '.join(chosen)}; suites {', '.join(wanted)}")
 
-    else:  # nightly
+    elif lane == "nightly":
         plan.update(check_systems=list(SYSTEMS), check_tests=True, installer=True, validation_systems=list(SYSTEMS),
                     screens=True, build=True, nsh_rust=True, core_plain=True, nsh_systems=list(SYSTEMS), shards=[0])
         reasons.append("nightly run: everything on all three systems")
@@ -310,6 +318,8 @@ def main() -> int:
         plan = decide(
             event=env.get("EVENT", ""),
             ref=env.get("REF", ""),
+            action=env.get("ACTION", ""),
+            draft=env.get("DRAFT", "") == "true",
             branch=env.get("BRANCH", ""),
             changed=changed_files(env) if env.get("EVENT") in ("pull_request", "push") else None,
             labels=pull_request_labels(env),
