@@ -51,7 +51,8 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
                     db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
                 install_reader(&mut database);
                 let handle = std::sync::Arc::new(std::sync::Mutex::new(database));
-                // Listed before anything can see it, so the lock never reads free while it is open.
+                // Listed before anything else can use it. (The open itself took the owner lock
+                // earlier: `owner_lock_released` reads true until here.)
                 LIVE_HANDLES
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -533,7 +534,7 @@ fn close_handle(mut handle: std::sync::Arc<std::sync::Mutex<Database>>) {
                     tracing::warn!("database checkpoint failed: {error}");
                 }
                 tracing::warn!(
-                    "database still in use at the engine's end; the owner lock goes when the work holding it ends (30 s at most for a calendar request), or with the process"
+                    "database still in use at the engine's end; the owner lock goes when the work holding it ends (a calendar sync after the Google call in flight, an inbox poll after the message in flight), or with the process"
                 );
                 return;
             }
@@ -553,11 +554,13 @@ pub fn stored_global_hotkey() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-/// Whether no database handle of this process is open any more, so the
-/// owner lock is free: true once every engine's handle has been closed or its
-/// last holder has let go. A handle is listed before its engine can use it.
-/// For the host's checks and tests: nothing refuses on it yet (an update's
-/// relaunch does not wait for it).
+/// Whether no database handle of this process is open any more: true once
+/// every engine's handle has been closed or its last holder has let go.
+/// Informational only, with no caller in the app (an update's relaunch does
+/// not wait for it); the tests use it. It is not exact while an open is under
+/// way: `open_live_database` takes the owner lock (and runs the migrations)
+/// before the new handle is listed, so for that time it reads true although
+/// the lock is held.
 pub fn owner_lock_released() -> bool {
     let mut live = LIVE_HANDLES
         .lock()
@@ -6127,7 +6130,8 @@ mod tests {
 
     /// A quit (or an update's restart) ends the process's sending whoever started the worker: called on a thread that
     /// did not start it, it stops it all the same. Before, it stopped nothing there, and the worker ran on until its
-    /// own engine ended.
+    /// own engine ended. The database is not the quit's to close there: it belongs to its engine's thread, stays open
+    /// (the owner lock held) while that engine lives, and closes at its end.
     #[test]
     fn a_quit_on_another_thread_stops_the_worker() {
         run_engine_child("a_quit_on_another_thread_stops_the_worker");
@@ -6148,10 +6152,20 @@ mod tests {
                         .join()
                         .expect("the quit on another thread");
                     assert!(!submission_worker_started(), "the quit stopped it");
+                    assert!(
+                        !owner_lock_released(),
+                        "the engine's database is still open"
+                    );
+                    assert!(!owner_lock_is_free(), "and its owner lock still held");
+                    assert!(
+                        database_handle().is_ok(),
+                        "the engine still uses its database"
+                    );
                 })
                 .join()
                 .expect("the engine");
         });
+        assert!(owner_lock_released(), "closed at the engine's end");
         assert!(owner_lock_is_free(), "the engine's end freed the lock");
         std::fs::write(scratch.join("child-done"), "ok").unwrap();
     }

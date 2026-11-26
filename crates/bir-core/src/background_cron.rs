@@ -3010,6 +3010,10 @@ async fn process_generic_jobs_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
 /// Put back to Queued every job saved as Running: none can be running as a worker starts (a database has one worker
 /// at a time, and the one before ended with its tasks), so such a job was cut off, by an engine's end that dropped its
 /// task or by the process ending. A one-off job left Running would otherwise never run again.
+///
+/// So a job runs at least once, not exactly once: one cut off after its work and before its end was saved (a one-off's
+/// delete, a scheduled job's next run) runs that work again. Jobs never send returns: they poll an inbox (a second poll
+/// reads the same mail) or run a command a person scheduled, which can then run twice.
 fn requeue_jobs_left_running(db: &Arc<Mutex<Database>>) {
     let Ok(db) = lock_timing::lock(db) else {
         return;
@@ -3097,6 +3101,79 @@ mod tests {
         };
         assert_eq!(status(cut_off), "Queued");
         assert_eq!(status(failed), "Failed");
+    }
+
+    /// The same through a real start: the worker's loop (`run_cron_jobs`, as an engine's launch starts it) queues
+    /// again a job saved as Running before its first tick. The job is a yearly one not due for centuries, so nothing
+    /// runs it after: what is read is the requeue alone. In a child process of its own: the loop's wake channel and
+    /// shutdown generation are the process's.
+    #[test]
+    fn a_real_worker_start_queues_again_a_job_cut_off_while_running() {
+        const CHILD: &str = "BIR_CORE_CRON_REQUEUE_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "background_cron::tests::a_real_worker_start_queues_again_a_job_cut_off_while_running",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .env("EBIR_TEST_ENV", "1")
+                .env("BIR_SFTP_DRY_RUN", "1")
+                .env_remove("BIR_SFTP_LIVE")
+                .env_remove("BIR_RELAY_URL")
+                .status()
+                .unwrap();
+            assert!(status.success(), "the child process failed");
+            return;
+        }
+        use std::sync::{Arc, Mutex};
+        let db = crate::db::Database::open_in_memory_for_tests().expect("db");
+        let mut cut_off = shell_job("bir_poll_email nobody@example.test");
+        cut_off.cron_expr = Some("0 0 0 1 1 *".into());
+        cut_off.next_run_at = Some("2999-01-01T00:00:00+00:00".into());
+        cut_off.status = "Running".into();
+        let cut_off = db.save_job(cut_off).expect("save").id.expect("an id");
+        let db = Arc::new(Mutex::new(db));
+        let status = |db: &Arc<Mutex<crate::db::Database>>| {
+            db.lock()
+                .unwrap()
+                .list_jobs()
+                .unwrap()
+                .into_iter()
+                .find(|job| job.id == Some(cut_off))
+                .map(|job| job.status)
+        };
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let stop = CronStop::new();
+            let worker = tokio::spawn(run_cron_jobs(db.clone(), stop.clone()));
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+            while status(&db).as_deref() == Some("Running") {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "the worker never queued the job again"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            // A tick has had the time to run anything due; this job is not due.
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            assert_eq!(
+                status(&db).as_deref(),
+                Some("Queued"),
+                "queued again, and not run"
+            );
+            stop.stop();
+            tokio::time::timeout(std::time::Duration::from_secs(5), worker)
+                .await
+                .expect("the loop stopped on its signal")
+                .unwrap();
+        });
     }
 
     #[test]

@@ -318,22 +318,43 @@ impl Drop for ShutdownGuard {
     }
 }
 
-thread_local! {
-    /// `Door.shutdown` ran on this engine (a quit, an update's restart): every later call on it is refused, so a timer
-    /// that fires between the quit and the process's end cannot boot the app again and start a worker that sends. Only
-    /// a new engine (a new thread: a relaunch in a process that outlived the quit) boots again. No destructor.
-    static QUIT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+/// One engine's door state. It lives with the engine's VM, not with its thread: NSH keeps one `Locals` per VM, hands it to
+/// every call's `System` and closes it when the VM goes (nsh-js `system_locals`). So it cannot outlive its engine, whichever
+/// thread the host runs the next engine on.
+#[derive(Default)]
+pub struct Engine {
+    /// `Door.shutdown` ran on this engine (a quit, an update's restart).
+    quit: std::cell::Cell<bool>,
+    /// This engine has made its first call.
+    entered: std::cell::Cell<bool>,
 }
+
+impl nsh_core::element::Local for Engine {}
 
 /// What a door call made after `Door.shutdown` on the same engine answers.
 pub const QUITTING: &str = "eBIRForms is closing.";
 
-/// The module of this thread, booted on the first call, with the database guard checked against the
-/// database path as it is now. Refused once this engine has quit.
-fn booted() -> Result<Rc<HostModule>, String> {
-    if QUIT.get() {
+/// Every door call that can boot goes through this first, with the calling engine's `System::locals`.
+/// - Once this engine has quit, it is refused with [`QUITTING`]. A timer that fires between the quit and the process's end
+///   cannot boot the app again and start a worker that sends.
+/// - The first call of an engine on a thread where an earlier engine booted (a host that runs one engine after another on
+///   one thread) ends that one first, as its thread's end would: its worker stops and its database closes (nothing is
+///   left to do when it quit). Then this engine boots, with a launch and a worker of its own.
+pub fn enter(engine: &nsh_core::element::Locals) -> Result<(), String> {
+    let this = engine.get::<Engine>();
+    if this.quit.get() {
         return Err(QUITTING.to_owned());
     }
+    if !this.entered.replace(true) && BOOTED.with(|slot| slot.borrow().is_some()) {
+        bir_app_api::bir_module::shutdown_at_engine_end();
+        BOOTED.with(|slot| slot.borrow_mut().take());
+    }
+    Ok(())
+}
+
+/// The module of this thread, booted on the first call, with the database guard checked against the
+/// database path as it is now. The door's functions reach it after [`enter`].
+fn booted() -> Result<Rc<HostModule>, String> {
     let current = BOOTED.with(|slot| {
         slot.borrow()
             .as_ref()
@@ -539,9 +560,10 @@ pub fn database_path() -> PathBuf {
 }
 
 /// Stop the submission worker and close this engine's database (the old host's quit path). A second call does nothing.
-/// Every door call on this engine after it is refused with [`QUITTING`]: the app is ending.
-pub fn shutdown() {
-    QUIT.set(true);
+/// Every later door call from this engine (`engine`, its `System::locals`) is refused with [`QUITTING`]: the app is
+/// ending. A later engine is not refused, even on the same thread.
+pub fn shutdown(engine: &nsh_core::element::Locals) {
+    engine.get::<Engine>().quit.set(true);
     bir_app_api::bir_module::shutdown_for_quit();
     // The print previews' files (a filled return each) go with the run.
     crate::print::remove_all();
@@ -551,6 +573,7 @@ pub fn shutdown() {
 mod tests {
     use std::path::Path;
 
+    use nsh_core::prelude::System;
     use serde_json::json;
 
     use super::*;
@@ -771,40 +794,100 @@ mod tests {
             });
             assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 5");
 
-            // A quit (`Door.shutdown`) ends engine 6 for good. A door call after it on the same thread (a timer that
-            // fires before the process ends: the shell's poll asks for the data token, the updater for its status) is
-            // refused and boots nothing: no worker starts, and a return queued in the database meanwhile stays queued.
-            // Before, that call booted the app again and the new worker's first tick sent the return.
+            // From here on through the door's own functions (`crate::Door`, as NSH calls them), each engine with a
+            // `System` of its own, as each VM has its own `Locals`.
+            let auth_state = |engine: &System| crate::Door::call("auth_state".into(), vec![], engine.clone());
+
+            // A quit (`Door.shutdown`) ends engine 6 for good. A door call it makes after that (a timer that fires before
+            // the process ends: the shell's poll asks for the data token, the updater for its status) is refused and
+            // boots nothing: no worker starts, and a return queued in the database meanwhile stays queued. Before, that
+            // call booted the app again and the new worker's first tick sent the return.
             std::thread::scope(|scope| {
                 scope
                     .spawn(|| {
-                        call("auth_state", vec![]).expect("engine 6 boots");
-                        assert!(
-                            bir_app_api::bir_module::submission_worker_runs_for_this_engine(),
-                            "engine 6: its own worker"
-                        );
-                        shutdown();
-                        assert!(
-                            !bir_app_api::bir_module::submission_worker_runs_for_this_engine(),
-                            "engine 6: quit stopped its worker"
-                        );
+                        let six = System::default();
+                        auth_state(&six).expect("engine 6 boots");
+                        assert!(worker_runs_here(), "engine 6: its own worker");
+                        crate::Door::shutdown(six.clone());
+                        assert!(!worker_runs_here(), "engine 6: quit stopped its worker");
                         assert!(bir_app_api::bir_module::owner_lock_released(), "engine 6: quit closed it");
-                        queue_a_1601c();
-                        assert_eq!(call("auth_state", vec![]).unwrap_err(), QUITTING, "a call after quit");
-                        assert_eq!(data_change_token().unwrap_err(), QUITTING, "the poll after quit");
-                        assert!(
-                            !bir_app_api::bir_module::submission_worker_runs_for_this_engine(),
-                            "no worker after quit"
-                        );
+                        queue_a_1601c(2024, 1);
+                        assert_eq!(auth_state(&six).unwrap_err(), QUITTING, "a call after quit");
+                        assert_eq!(crate::Door::data_change_token(six.clone()).unwrap_err(), QUITTING, "the poll after quit");
+                        assert!(!worker_runs_here(), "no worker after quit");
                         // A worker's first tick takes a queued return at once; give one the time it would need.
                         std::thread::sleep(std::time::Duration::from_secs(3));
-                        assert_eq!(queued_1601c_status(), "Queued", "the return queued after quit was not sent");
+                        assert_eq!(queued_1601c_status(2024, 1), "Queued", "the return queued after quit was not sent");
                     })
                     .join()
                     .expect("engine 6's thread")
             });
             assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 6");
+
+            // Two engines on ONE thread (a host that runs the next engine on the thread of the last). Engine 7 quits, and a
+            // call it makes after that is refused. Engine 8's first call on the same thread boots again, with a worker of
+            // its own that sends what was queued in between; engine 7 stays refused. Then engine 9 replaces engine 8 on
+            // the thread without a quit (a VM the host dropped): its first call ends engine 8 as a thread's end would
+            // (the worker stopped, the database closed) and boots with a database handle and a worker of its own.
+            std::thread::scope(|scope| {
+                scope
+                    .spawn(|| {
+                        let seven = System::default();
+                        auth_state(&seven).expect("engine 7 boots");
+                        assert!(worker_runs_here(), "engine 7: its own worker");
+                        crate::Door::shutdown(seven.clone());
+                        assert!(!worker_runs_here(), "engine 7: quit stopped its worker");
+                        assert_eq!(auth_state(&seven).unwrap_err(), QUITTING, "engine 7 after its quit");
+                        queue_a_1601c(2024, 2);
+
+                        let eight = System::default();
+                        auth_state(&eight).expect("engine 8 boots on the thread engine 7 quit on");
+                        assert!(worker_runs_here(), "engine 8: a worker of its own");
+                        wait_for_status_here(2024, 2, "Submitted", "engine 8's worker sends the 1601C queued before it");
+                        assert_eq!(auth_state(&seven).unwrap_err(), QUITTING, "engine 7 stays refused");
+                        // Only a weak reference: a strong one would hold the database open past engine 8's end.
+                        let handle_of_eight = std::sync::Arc::downgrade(
+                            &bir_app_api::bir_module::database_handle().expect("engine 8's database"),
+                        );
+
+                        let nine = System::default();
+                        auth_state(&nine).expect("engine 9 boots in place of engine 8");
+                        assert!(handle_of_eight.upgrade().is_none(), "engine 8's end closed its database");
+                        assert!(worker_runs_here(), "engine 9: a worker of its own");
+                        assert!(
+                            crate::Door::data_change_token(nine.clone()).is_ok(),
+                            "engine 9 answers after engine 8's end"
+                        );
+                    })
+                    .join()
+                    .expect("the thread of engines 7, 8 and 9")
+            });
+            assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 9");
         });
+    }
+
+    fn worker_runs_here() -> bool {
+        bir_app_api::bir_module::submission_worker_runs_for_this_engine()
+    }
+
+    /// Waits (20 s at most) for the demo taxpayer's 1601C of `year`/`month` to reach `status`, read through this
+    /// engine's own database handle (the owner lock refuses a second open while it is open).
+    fn wait_for_status_here(year: u16, month: u8, status: &str, what: &str) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            let handle = bir_app_api::bir_module::database_handle().expect("this engine's database");
+            let now = {
+                let db = bir_core::lock_timing::lock(&handle).expect("the database lock");
+                db.get_1601c_draft(&demo_profile().tin.full(), year, month)
+                    .expect("read")
+                    .map(|draft| format!("{:?}", draft.status))
+            };
+            if now.as_deref() == Some(status) {
+                return;
+            }
+            assert!(std::time::Instant::now() < deadline, "{what}: still {now:?} after 20 s");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
     }
 
     /// Juana Santos, TIN 000-123-453-00000, the demo taxpayer.
@@ -826,22 +909,24 @@ mod tests {
         .expect("the demo profile")
     }
 
-    /// The demo taxpayer's January 2024 1601C, queued, written straight into the database (no engine has it open).
-    fn queue_a_1601c() {
+    /// The demo taxpayer's 1601C for `year`/`month`, queued, written straight into the database (no engine has it open).
+    fn queue_a_1601c(year: u16, month: u8) {
         let profile = demo_profile();
-        let mut draft = bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(&profile, 2024, 1);
+        let mut draft = bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(&profile, year, month);
         draft.any_taxes_withheld = false;
         draft.transition_to_queued().expect("the demo 1601C queues");
         let (db, _, _) = bir_core::db::open_live_database().expect("the database, closed by the quit");
-        db.save_profile(profile).expect("the profile");
+        if db.list_profiles().expect("the profiles").is_empty() {
+            db.save_profile(profile).expect("the profile");
+        }
         db.save_queued_1601c_draft(&draft).expect("the queued 1601C");
         db.close().expect("closed again");
     }
 
-    fn queued_1601c_status() -> String {
+    fn queued_1601c_status(year: u16, month: u8) -> String {
         let (db, _, _) = bir_core::db::open_live_database().expect("the database");
         let draft = db
-            .get_1601c_draft(&demo_profile().tin.full(), 2024, 1)
+            .get_1601c_draft(&demo_profile().tin.full(), year, month)
             .expect("read")
             .expect("the 1601C row");
         let status = format!("{:?}", draft.status);

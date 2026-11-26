@@ -118,9 +118,11 @@ fn dev_command_enabled() -> bool {
     false
 }
 
-fn prepare_door(_system: System) -> Result<(), String> {
+/// Before a door call from the engine `system` belongs to: refused once that engine quit (`door::enter`).
+fn prepare_door(system: System) -> Result<(), String> {
+    door::enter(&system.locals)?;
     #[cfg(target_os = "android")]
-    door::prepare_android(_system.data_dir)?;
+    door::prepare_android(system.data_dir)?;
     #[cfg(not(target_os = "android"))]
     door::install_logging();
     Ok(())
@@ -130,15 +132,15 @@ fn prepare_door(_system: System) -> Result<(), String> {
 impl Door {
     /// Calls the synchronous host function `name` with `args` and answers its value. A host error is thrown
     /// as an Error with the host's message; an async function, or an unknown name, throws too.
-    pub fn call(name: String, args: Vec<JsonValue>, _system: System) -> Result<JsonValue, String> {
-        prepare_door(_system)?;
+    pub fn call(name: String, args: Vec<JsonValue>, system: System) -> Result<JsonValue, String> {
+        prepare_door(system)?;
         door::call(&name, args)
     }
 
     /// Calls the asynchronous host function `name` with `args`: a promise of its value, rejected with the
     /// host's message on a host error. A sync function, or an unknown name, rejects too.
-    pub async fn call_async(name: String, args: Vec<JsonValue>, _system: System) -> Result<JsonValue, String> {
-        prepare_door(_system)?;
+    pub async fn call_async(name: String, args: Vec<JsonValue>, system: System) -> Result<JsonValue, String> {
+        prepare_door(system)?;
         door::call_async(name, args).await
     }
 
@@ -157,8 +159,8 @@ impl Door {
     }
 
     /// An opaque database change token; null when changes cannot be determined.
-    pub fn data_change_token(_system: System) -> Result<Option<String>, String> {
-        prepare_door(_system)?;
+    pub fn data_change_token(system: System) -> Result<Option<String>, String> {
+        prepare_door(system)?;
         door::data_change_token()
     }
 
@@ -198,16 +200,17 @@ impl Door {
 
     /// Names the database file this thread opens, before anything else is called (test environments only:
     /// `EBIR_TEST_ENV=1`). Answers the path. The database guard applies.
-    pub fn use_database(path: String, _system: System) -> Result<String, String> {
+    pub fn use_database(path: String, system: System) -> Result<String, String> {
+        door::enter(&system.locals)?;
         #[cfg(target_os = "android")]
-        door::prepare_android(_system.data_dir)?;
+        door::prepare_android(system.data_dir)?;
         door::use_database(&path)
     }
 
     /// The quit path: stops the submission worker and closes the database. Call it once, when the app quits; every
-    /// door call on this engine after it is refused.
-    pub fn shutdown() {
-        door::shutdown();
+    /// door call from this engine after it is refused. A later engine boots again, on any thread.
+    pub fn shutdown(system: System) {
+        door::shutdown(&system.locals);
     }
 }
 
