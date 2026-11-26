@@ -1,0 +1,16 @@
+commit=b5325f680f4aa18ad82c73866b8a707d7fe3f7b4
+command=cargo test --locked -p bir-app-api --lib -- --ignored audit_all_screen_forms
+   Compiling bir-core v0.2.1 (/home/ubuntu/forms-validation/b5325f68/crates/bir-core)
+   Compiling temp-env v0.3.6
+   Compiling bir-print v0.2.1 (/home/ubuntu/forms-validation/b5325f68/crates/bir-print)
+   Compiling bir-app-api v0.2.1 (/home/ubuntu/forms-validation/b5325f68/crates/bir-app-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 02s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/lib.rs (/home/ubuntu/forms-validation/target-b5325f68/debug/deps/bir_app_api-cbb3d8fe5f04a66d)
+
+running 1 test
+test screen_form_module::audit::audit_all_screen_forms ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 759 filtered out; finished in 10.65s
+

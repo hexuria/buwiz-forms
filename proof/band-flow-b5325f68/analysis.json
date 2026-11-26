@@ -1,0 +1,678 @@
+[
+  {
+    "form": "1801",
+    "pages": 3,
+    "rows": [
+      {
+        "row": 1,
+        "marker": "EST-TCT-01",
+        "count": 1,
+        "first_position": 5645,
+        "in_order": true
+      },
+      {
+        "row": 2,
+        "marker": "EST-TCT-02",
+        "count": 1,
+        "first_position": 5682,
+        "in_order": true
+      },
+      {
+        "row": 3,
+        "marker": "EST-TCT-03",
+        "count": 1,
+        "first_position": 5719,
+        "in_order": true
+      },
+      {
+        "row": 4,
+        "marker": "EST-TCT-04",
+        "count": 1,
+        "first_position": 5756,
+        "in_order": true
+      },
+      {
+        "row": 5,
+        "marker": "EST-TCT-05",
+        "count": 1,
+        "first_position": 5793,
+        "in_order": true
+      }
+    ],
+    "all_rows_exactly_once": true,
+    "rows_in_order": true,
+    "expected_total": "750000.00",
+    "total_present": true,
+    "page_info": [
+      {
+        "page": 1,
+        "chars": 2831,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": false,
+        "has_page_word": true
+      },
+      {
+        "page": 2,
+        "chars": 3338,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      },
+      {
+        "page": 3,
+        "chars": 541,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      }
+    ],
+    "no_blank_pages": true,
+    "continuations_have_identity": true
+  },
+  {
+    "form": "1707A",
+    "pages": 3,
+    "rows": [
+      {
+        "row": 1,
+        "marker": "GAINCO-01",
+        "count": 1,
+        "first_position": 3906,
+        "in_order": true
+      },
+      {
+        "row": 2,
+        "marker": "GAINCO-02",
+        "count": 1,
+        "first_position": 3932,
+        "in_order": true
+      },
+      {
+        "row": 3,
+        "marker": "GAINCO-03",
+        "count": 1,
+        "first_position": 3958,
+        "in_order": true
+      },
+      {
+        "row": 4,
+        "marker": "GAINCO-04",
+        "count": 1,
+        "first_position": 4487,
+        "in_order": true
+      },
+      {
+        "row": 5,
+        "marker": "GAINCO-05",
+        "count": 1,
+        "first_position": 4537,
+        "in_order": true
+      },
+      {
+        "row": 6,
+        "marker": "GAINCO-06",
+        "count": 1,
+        "first_position": 4588,
+        "in_order": true
+      },
+      {
+        "row": 7,
+        "marker": "GAINCO-07",
+        "count": 1,
+        "first_position": 4639,
+        "in_order": true
+      }
+    ],
+    "all_rows_exactly_once": true,
+    "rows_in_order": true,
+    "expected_total": "28000.00",
+    "total_present": true,
+    "page_info": [
+      {
+        "page": 1,
+        "chars": 3072,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      },
+      {
+        "page": 2,
+        "chars": 1083,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      },
+      {
+        "page": 3,
+        "chars": 583,
+        "continuation_detected": true,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      }
+    ],
+    "no_blank_pages": true,
+    "continuations_have_identity": true
+  },
+  {
+    "form": "2200P",
+    "pages": 3,
+    "rows": [
+      {
+        "row": 1,
+        "marker": "PDEPOT-01",
+        "count": 1,
+        "first_position": 4881,
+        "in_order": true
+      },
+      {
+        "row": 2,
+        "marker": "PDEPOT-02",
+        "count": 1,
+        "first_position": 4902,
+        "in_order": true
+      },
+      {
+        "row": 3,
+        "marker": "PDEPOT-03",
+        "count": 1,
+        "first_position": 4923,
+        "in_order": true
+      },
+      {
+        "row": 4,
+        "marker": "PDEPOT-04",
+        "count": 1,
+        "first_position": 4944,
+        "in_order": true
+      },
+      {
+        "row": 5,
+        "marker": "PDEPOT-05",
+        "count": 1,
+        "first_position": 4965,
+        "in_order": true
+      },
+      {
+        "row": 6,
+        "marker": "PDEPOT-06",
+        "count": 1,
+        "first_position": 4986,
+        "in_order": true
+      },
+      {
+        "row": 7,
+        "marker": "PDEPOT-07",
+        "count": 1,
+        "first_position": 5007,
+        "in_order": true
+      },
+      {
+        "row": 8,
+        "marker": "PDEPOT-08",
+        "count": 1,
+        "first_position": 5028,
+        "in_order": true
+      },
+      {
+        "row": 9,
+        "marker": "PDEPOT-09",
+        "count": 1,
+        "first_position": 5049,
+        "in_order": true
+      },
+      {
+        "row": 10,
+        "marker": "PDEPOT-10",
+        "count": 1,
+        "first_position": 5070,
+        "in_order": true
+      },
+      {
+        "row": 11,
+        "marker": "PDEPOT-11",
+        "count": 1,
+        "first_position": 5093,
+        "in_order": true
+      },
+      {
+        "row": 12,
+        "marker": "PDEPOT-12",
+        "count": 1,
+        "first_position": 5116,
+        "in_order": true
+      },
+      {
+        "row": 13,
+        "marker": "PDEPOT-13",
+        "count": 1,
+        "first_position": 5139,
+        "in_order": true
+      },
+      {
+        "row": 14,
+        "marker": "PDEPOT-14",
+        "count": 1,
+        "first_position": 5162,
+        "in_order": true
+      },
+      {
+        "row": 15,
+        "marker": "PDEPOT-15",
+        "count": 1,
+        "first_position": 5185,
+        "in_order": true
+      },
+      {
+        "row": 16,
+        "marker": "PDEPOT-16",
+        "count": 1,
+        "first_position": 5208,
+        "in_order": true
+      },
+      {
+        "row": 17,
+        "marker": "PDEPOT-17",
+        "count": 1,
+        "first_position": 5231,
+        "in_order": true
+      },
+      {
+        "row": 18,
+        "marker": "PDEPOT-18",
+        "count": 1,
+        "first_position": 5254,
+        "in_order": true
+      },
+      {
+        "row": 19,
+        "marker": "PDEPOT-19",
+        "count": 1,
+        "first_position": 5277,
+        "in_order": true
+      },
+      {
+        "row": 20,
+        "marker": "PDEPOT-20",
+        "count": 1,
+        "first_position": 5300,
+        "in_order": true
+      },
+      {
+        "row": 21,
+        "marker": "PDEPOT-21",
+        "count": 1,
+        "first_position": 5323,
+        "in_order": true
+      },
+      {
+        "row": 22,
+        "marker": "PDEPOT-22",
+        "count": 1,
+        "first_position": 5346,
+        "in_order": true
+      },
+      {
+        "row": 23,
+        "marker": "PDEPOT-23",
+        "count": 1,
+        "first_position": 5369,
+        "in_order": true
+      },
+      {
+        "row": 24,
+        "marker": "PDEPOT-24",
+        "count": 1,
+        "first_position": 5392,
+        "in_order": true
+      },
+      {
+        "row": 25,
+        "marker": "PDEPOT-25",
+        "count": 1,
+        "first_position": 5415,
+        "in_order": true
+      },
+      {
+        "row": 26,
+        "marker": "PDEPOT-26",
+        "count": 1,
+        "first_position": 5463,
+        "in_order": true
+      },
+      {
+        "row": 27,
+        "marker": "PDEPOT-27",
+        "count": 1,
+        "first_position": 5511,
+        "in_order": true
+      },
+      {
+        "row": 28,
+        "marker": "PDEPOT-28",
+        "count": 1,
+        "first_position": 5987,
+        "in_order": true
+      },
+      {
+        "row": 29,
+        "marker": "PDEPOT-29",
+        "count": 1,
+        "first_position": 6035,
+        "in_order": true
+      },
+      {
+        "row": 30,
+        "marker": "PDEPOT-30",
+        "count": 1,
+        "first_position": 6083,
+        "in_order": true
+      }
+    ],
+    "all_rows_exactly_once": true,
+    "rows_in_order": true,
+    "expected_total": "46,500.00",
+    "total_present": true,
+    "page_info": [
+      {
+        "page": 1,
+        "chars": 3129,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      },
+      {
+        "page": 2,
+        "chars": 2414,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      },
+      {
+        "page": 3,
+        "chars": 650,
+        "continuation_detected": true,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      }
+    ],
+    "no_blank_pages": true,
+    "continuations_have_identity": true
+  },
+  {
+    "form": "1601C",
+    "pages": 2,
+    "rows": [
+      {
+        "row": 1,
+        "marker": "BDO01",
+        "count": 1,
+        "first_position": 4126,
+        "in_order": true
+      },
+      {
+        "row": 2,
+        "marker": "BDO02",
+        "count": 1,
+        "first_position": 4157,
+        "in_order": true
+      },
+      {
+        "row": 3,
+        "marker": "BDO03",
+        "count": 1,
+        "first_position": 4188,
+        "in_order": true
+      },
+      {
+        "row": 4,
+        "marker": "BDO04",
+        "count": 1,
+        "first_position": 4219,
+        "in_order": true
+      },
+      {
+        "row": 5,
+        "marker": "BDO05",
+        "count": 1,
+        "first_position": 4250,
+        "in_order": true
+      },
+      {
+        "row": 6,
+        "marker": "BDO06",
+        "count": 1,
+        "first_position": 4281,
+        "in_order": true
+      }
+    ],
+    "all_rows_exactly_once": true,
+    "rows_in_order": true,
+    "expected_total": "3000.00",
+    "total_present": true,
+    "page_info": [
+      {
+        "page": 1,
+        "chars": 3521,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      },
+      {
+        "page": 2,
+        "chars": 849,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      }
+    ],
+    "no_blank_pages": true,
+    "continuations_have_identity": true
+  },
+  {
+    "form": "2551Q",
+    "pages": 2,
+    "rows": [
+      {
+        "row": 1,
+        "marker": "10113.00",
+        "count": 1,
+        "first_position": 3418,
+        "in_order": true
+      },
+      {
+        "row": 2,
+        "marker": "10226.00",
+        "count": 1,
+        "first_position": 3436,
+        "in_order": true
+      },
+      {
+        "row": 3,
+        "marker": "10339.00",
+        "count": 1,
+        "first_position": 3454,
+        "in_order": true
+      },
+      {
+        "row": 4,
+        "marker": "10452.00",
+        "count": 1,
+        "first_position": 3472,
+        "in_order": true
+      },
+      {
+        "row": 5,
+        "marker": "10565.00",
+        "count": 1,
+        "first_position": 3490,
+        "in_order": true
+      },
+      {
+        "row": 6,
+        "marker": "10678.00",
+        "count": 1,
+        "first_position": 3508,
+        "in_order": true
+      },
+      {
+        "row": 7,
+        "marker": "10791.00",
+        "count": 1,
+        "first_position": 3526,
+        "in_order": true
+      },
+      {
+        "row": 8,
+        "marker": "10904.00",
+        "count": 1,
+        "first_position": 3544,
+        "in_order": true
+      },
+      {
+        "row": 9,
+        "marker": "11017.00",
+        "count": 1,
+        "first_position": 3562,
+        "in_order": true
+      }
+    ],
+    "all_rows_exactly_once": true,
+    "rows_in_order": true,
+    "expected_total": "3284.19",
+    "total_present": true,
+    "page_info": [
+      {
+        "page": 1,
+        "chars": 3118,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      },
+      {
+        "page": 2,
+        "chars": 540,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      }
+    ],
+    "no_blank_pages": true,
+    "continuations_have_identity": true
+  },
+  {
+    "form": "1702MX",
+    "pages": 5,
+    "rows": [
+      {
+        "row": 1,
+        "marker": "MX-SC6-BASE-01",
+        "count": 1,
+        "first_position": 8563,
+        "in_order": true
+      },
+      {
+        "row": 2,
+        "marker": "MX-SC6-BASE-02",
+        "count": 1,
+        "first_position": 8588,
+        "in_order": true
+      },
+      {
+        "row": 3,
+        "marker": "MX-SC6-BASE-03",
+        "count": 1,
+        "first_position": 8613,
+        "in_order": true
+      },
+      {
+        "row": 4,
+        "marker": "MX-SC6-MORE-01",
+        "count": 1,
+        "first_position": 11095,
+        "in_order": true
+      },
+      {
+        "row": 5,
+        "marker": "MX-SC6-MORE-02",
+        "count": 1,
+        "first_position": 11144,
+        "in_order": true
+      },
+      {
+        "row": 6,
+        "marker": "MX-SC6-MORE-03",
+        "count": 1,
+        "first_position": 11193,
+        "in_order": true
+      },
+      {
+        "row": 7,
+        "marker": "MX-SC6-MORE-04",
+        "count": 1,
+        "first_position": 11242,
+        "in_order": true
+      }
+    ],
+    "all_rows_exactly_once": true,
+    "rows_in_order": true,
+    "expected_total": "90000",
+    "total_present": true,
+    "page_info": [
+      {
+        "page": 1,
+        "chars": 2614,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      },
+      {
+        "page": 2,
+        "chars": 3611,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      },
+      {
+        "page": 3,
+        "chars": 2438,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      },
+      {
+        "page": 4,
+        "chars": 2189,
+        "continuation_detected": false,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      },
+      {
+        "page": 5,
+        "chars": 490,
+        "continuation_detected": true,
+        "has_name": true,
+        "has_tin": true,
+        "has_page_word": true
+      }
+    ],
+    "no_blank_pages": true,
+    "continuations_have_identity": true
+  }
+]

@@ -1,0 +1,76 @@
+command=cargo test --locked -p bir-app-api --features headless --lib agent::
+   Compiling bir-app-api v0.2.1 (/home/ubuntu/forms-validation/b5325f68/crates/bir-app-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 30.65s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/lib.rs (/home/ubuntu/forms-validation/target-b5325f68/debug/deps/bir_app_api-7445b2a00fda6764)
+
+running 65 tests
+test agent::drain_interval_tests::fast_while_busy_then_back_to_idle ... ok
+test agent::drain_interval_tests::idle_until_first_request ... ok
+test agent::headless::drain_interval_tests::fast_while_busy_then_back_to_idle ... ok
+test agent::headless::drain_interval_tests::idle_until_first_request ... ok
+test agent::headless_daemon::tests::already_running_message_points_at_status_logs_and_wait ... ok
+test agent::headless_daemon::tests::database_path_override_keeps_pid_and_log_off_the_live_data_dir ... ok
+test agent::headless::tests::parses_wait_detach_and_log_options ... ok
+test agent::headless_daemon::tests::ensure_log_file_creates_parent_and_appends ... ok
+test agent::headless::tests::parses_default_serve_and_subcommands ... ok
+test agent::headless_daemon::tests::dump_tail_and_missing_log ... ok
+test agent::headless_daemon::tests::env_overrides_win_over_data_dir ... ok
+test agent::request_log::tests::assert_logs_target_not_expected_name ... ok
+test agent::request_log::tests::type_and_screenshot_omit_payloads ... ok
+test agent::request_log::tests::set_value_logs_target_not_value ... ok
+test agent::headless_daemon::tests::pid_file_round_trip_and_stale_pid_is_not_live ... ok
+test agent::session::tests::a_held_return_that_cannot_be_reloaded_is_still_dismissed ... ok
+test agent::session::tests::a_fill_refuses_to_drop_a_required_choice_and_keeps_its_fields ... ok
+test agent::session::tests::a_fill_that_only_drops_an_answer_tells_the_window ... ok
+test agent::session::tests::a_fill_that_removes_what_the_filer_typed_waits_for_the_window ... ok
+test agent::session::tests::a_penalty_stop_is_not_a_recipe_input ... ok
+test agent::session::tests::agent_dismiss_with_unsaved_edits_is_refused ... ok
+test agent::session::tests::agent_save_draft_clears_unsaved_edits_so_dismiss_succeeds ... ok
+test agent::headless_daemon::tests::follow_reads_lines_appended_after_start ... ok
+test agent::session::tests::check_of_a_later_2551q_quarter_holds_the_filed_q1_item_13 ... ok
+test agent::session::tests::context_and_review_are_known_invokes ... ok
+test agent::session::tests::dismiss_clean_form_closes_it ... ok
+test agent::session::tests::dues_profile_scope_needs_a_selected_taxpayer ... ok
+test agent::session::tests::eight_percent_recipe_does_not_require_the_deduction_method ... ok
+test agent::session::tests::form_check_validates_without_writing ... ok
+test agent::session::tests::fill_records_source_and_never_overwrites_user_box ... ok
+test agent::session::tests::form_context_exposes_profile_and_past_returns ... ok
+test agent::session::tests::form_dismiss_discard_keeps_another_sessions_saved_value ... ok
+test agent::session::tests::form_fields_can_read_locked_profile_email_without_making_it_fillable ... ok
+test agent::session::tests::form_open_fill_and_validate_use_the_scratch_draft ... ok
+test agent::session::tests::hello_names_bir_shell_and_screenshot_stays_unavailable ... ok
+test agent::session::tests::explicit_stop_on_the_deduction_method_is_asked_again ... ok
+test agent::session::tests::needs_you_lists_required_empty_boxes ... ok
+test agent::session::tests::generated_recipe_runs_an_eight_percent_return_without_the_deduction_method ... ok
+test agent::session::tests::one_form_lock_refuses_second_open ... ok
+test agent::session::tests::generated_recipe_waits_for_approval_before_saving_a_rate_change ... ok
+test agent::session::tests::generated_recipe_stops_on_a_discarded_amount ... ok
+test agent::headless_daemon::tests::spawn_detached_writes_pid_log_and_second_live_pid_is_detectable ... ok
+test agent::request_log::tests::disabled_by_default ... ok
+test agent::request_log::tests::enabled_line_has_id_op_name_ok_not_token_or_args ... ok
+test agent::session::tests::profile_save_lists_and_sets_solo_on_a_scratch_database ... ok
+test agent::session::tests::profile_save_stores_birth_date_on_an_existing_taxpayer ... ok
+test agent::session::tests::refusals_and_forms_set_stay_gated ... ok
+test agent::session::tests::recipe_generate_reads_the_history_before_the_period_named ... ok
+test agent::session::tests::recipe_generate_refuses_a_year_or_period_it_cannot_read ... ok
+test agent::session::tests::recipe_is_generated_from_the_template_and_the_previous_return ... ok
+test agent::session::tests::the_recipe_schema_file_matches_the_invoke_table ... ok
+test agent::session::tests::send_without_a_grant_asks_and_an_invalid_draft_is_not_queued ... ok
+test agent::tests::a_host_gate_refuses_every_posted_tool_and_does_no_host_work ... ok
+test agent::tests::a_host_token_stands_in_only_when_the_environment_opted_in_without_one ... ok
+test agent::tests::a_locked_account_refuses_every_posted_tool ... ok
+test agent::tests::database_kind_is_test_only_for_test_env_or_a_path_outside_the_data_dir ... ok
+test agent::tests::database_kind_reads_the_test_env_as_bir_core_does ... ok
+test agent::tests::debug_tree_ids_become_nodes_with_zero_bounds ... ok
+test agent::session::tests::spouse_eight_percent_recipe_does_not_require_the_spouse_deduction_method ... ok
+test agent::session::tests::validate_returns_field_errors ... ok
+test agent::session::tests::strict_check_accepts_a_spouse_rate_that_replaces_a_stored_one ... ok
+test agent::session::tests::strict_check_is_on_the_stored_draft_and_refuses_discarded_inputs ... ok
+test agent::session::tests::strict_check_refuses_a_tax_rate_the_atc_replaces ... ok
+test agent::session::tests::the_2551q_send_needs_no_confirmed_profile_version ... ok
+test agent::session::tests::schema_choices_are_the_ones_fill_accepts ... ok
+
+test result: ok. 65 passed; 0 failed; 0 ignored; 0 measured; 760 filtered out; finished in 2.14s
+

@@ -1,0 +1,54 @@
+✓ built the Rust crate nsh-app-ebirforms (20.6s)
+✓ built the headless runner of nsh-app-ebirforms (13.7s)
+[2m2026-11-26T04:24:00.930699Z[0m [32m INFO[0m [2mbir_core::logging[0m[2m:[0m 🔍 Tracing initialized (developer_mode: false)
+[2m2026-11-26T04:24:00.948834Z[0m [32m INFO[0m [2mnsh_app_ebirforms::door[0m[2m:[0m eBIRForms started
+[2m2026-11-26T04:24:00.952384Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v1
+[2m2026-11-26T04:24:00.954704Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v2
+[2m2026-11-26T04:24:00.954984Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v3
+[2m2026-11-26T04:24:00.955268Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v4
+[2m2026-11-26T04:24:00.955491Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v5
+[2m2026-11-26T04:24:00.956186Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v5 migration: added period_key column to form_drafts
+[2m2026-11-26T04:24:00.956434Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v6
+[2m2026-11-26T04:24:00.956573Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v7
+[2m2026-11-26T04:24:00.956926Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v8
+[2m2026-11-26T04:24:00.957085Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v9
+[2m2026-11-26T04:24:00.957223Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v10
+[2m2026-11-26T04:24:00.957743Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v11
+[2m2026-11-26T04:24:00.957890Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v12
+[2m2026-11-26T04:24:00.958033Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v13
+[2m2026-11-26T04:24:00.958179Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v14
+[2m2026-11-26T04:24:00.958584Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v15
+[2m2026-11-26T04:24:00.961777Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v15 migration: added 6 missing form-rule state columns
+[2m2026-11-26T04:24:00.961954Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v16
+[2m2026-11-26T04:24:00.963125Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v16 migration: added 2 checked Final Copy proof columns
+[2m2026-11-26T04:24:00.963279Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v17
+[2m2026-11-26T04:24:00.969431Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v17 migration: added 12 exact form-rule identity columns
+[2m2026-11-26T04:24:00.969629Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v18
+[2m2026-11-26T04:24:00.969901Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v19
+[2m2026-11-26T04:24:00.970257Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v20
+[2m2026-11-26T04:24:00.971397Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v21
+[2m2026-11-26T04:24:00.971835Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v22
+[2m2026-11-26T04:24:00.973607Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v23
+[2m2026-11-26T04:24:00.973987Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m Applying database migration v24
+[2m2026-11-26T04:24:00.977313Z[0m [32m INFO[0m [2mbir_core::db::migrations[0m[2m:[0m v11 migration: added 5 missing Forms Set provenance columns
+[2m2026-11-26T04:24:00.980530Z[0m [33m WARN[0m [2mbir_core::db::google_calendar[0m[2m:[0m Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred [3mreason[0m[2m=[0m"the background worker is not running yet"
+[2m2026-11-26T04:24:00.982847Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine started
+[2m2026-11-26T04:24:01.777321Z[0m [33m WARN[0m [2mnsh_app_ebirforms::print[0m[2m:[0m the print preview has no window host (screens/print/host is not loaded) [3mpath[0m[2m=[0m/home/ubuntu/forms-validation/print-artifacts/tmp/bir-1801-2025-1795667041-preview.html
+[2m2026-11-26T04:24:01.777795Z[0m [33m WARN[0m [2mbir_core::lock_timing[0m[2m:[0m held the database lock [3msite[0m[2m=[0m/proc/self/cwd/src/screen_form_module.rs:6655:5 [3mmillis[0m[2m=[0m637
+printed 1801: /home/ubuntu/forms-validation/print-artifacts/tmp/bir-1801-2025-1795667041-preview.html
+[2m2026-11-26T04:24:01.934674Z[0m [33m WARN[0m [2mnsh_app_ebirforms::print[0m[2m:[0m the print preview has no window host (screens/print/host is not loaded) [3mpath[0m[2m=[0m/home/ubuntu/forms-validation/print-artifacts/tmp/bir-1707A-2025-1795667041-preview.html
+printed 1707A: /home/ubuntu/forms-validation/print-artifacts/tmp/bir-1707A-2025-1795667041-preview.html
+[2m2026-11-26T04:24:02.426408Z[0m [33m WARN[0m [2mnsh_app_ebirforms::print[0m[2m:[0m the print preview has no window host (screens/print/host is not loaded) [3mpath[0m[2m=[0m/home/ubuntu/forms-validation/print-artifacts/tmp/bir-2200P-2025-1795667042-preview.html
+[2m2026-11-26T04:24:02.426775Z[0m [33m WARN[0m [2mbir_core::lock_timing[0m[2m:[0m held the database lock [3msite[0m[2m=[0m/proc/self/cwd/src/screen_form_module.rs:6655:5 [3mmillis[0m[2m=[0m489
+printed 2200P: /home/ubuntu/forms-validation/print-artifacts/tmp/bir-2200P-2025-1795667042-preview.html
+[2m2026-11-26T04:24:02.540521Z[0m [33m WARN[0m [2mnsh_app_ebirforms::print[0m[2m:[0m the print preview has no window host (screens/print/host is not loaded) [3mpath[0m[2m=[0m/home/ubuntu/forms-validation/print-artifacts/tmp/bir-1601C-2025-1795667042-preview.html
+printed 1601C: /home/ubuntu/forms-validation/print-artifacts/tmp/bir-1601C-2025-1795667042-preview.html
+[2m2026-11-26T04:24:02.622003Z[0m [33m WARN[0m [2mnsh_app_ebirforms::print[0m[2m:[0m the print preview has no window host (screens/print/host is not loaded) [3mpath[0m[2m=[0m/home/ubuntu/forms-validation/print-artifacts/tmp/bir-2551Q-2025-1795667042-preview.html
+printed 2551Q: /home/ubuntu/forms-validation/print-artifacts/tmp/bir-2551Q-2025-1795667042-preview.html
+[2m2026-11-26T04:24:03.318286Z[0m [33m WARN[0m [2mnsh_app_ebirforms::print[0m[2m:[0m the print preview has no window host (screens/print/host is not loaded) [3mpath[0m[2m=[0m/home/ubuntu/forms-validation/print-artifacts/tmp/bir-1702MX-2025-1795667043-preview.html
+[2m2026-11-26T04:24:03.318994Z[0m [33m WARN[0m [2mbir_core::lock_timing[0m[2m:[0m held the database lock [3msite[0m[2m=[0m/proc/self/cwd/src/screen_form_module.rs:6655:5 [3mmillis[0m[2m=[0m690
+printed 1702MX: /home/ubuntu/forms-validation/print-artifacts/tmp/bir-1702MX-2025-1795667043-preview.html
+✓ proof/bandflow-print.test.ts › band-flow proof: print capacity+3 drafts through the app print-preview host function (2.2s)
+[2m2026-11-26T04:24:03.321954Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Queue explicitly woken up by a wake signal.
+[2m2026-11-26T04:24:03.322228Z[0m [32m INFO[0m [2mbir_core::background_cron[0m[2m:[0m Background cron engine stopped
+✓ 1 test: 1 passed, 0 failed (16.2s)

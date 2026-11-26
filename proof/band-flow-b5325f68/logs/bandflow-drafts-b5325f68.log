@@ -1,0 +1,50 @@
+commit=b5325f680f4aa18ad82c73866b8a707d7fe3f7b4
+proof-only example crates/bir-core/examples/bandflow_proof_drafts.rs
+cargo 1.99.0 (5f94df478 2026-08-27)
+rustc 1.99.0 (b940084d7 2026-09-28)
+   Compiling bitflags v2.13.1
+   Compiling chrono v0.4.45
+   Compiling zvariant_utils v4.2.0
+   Compiling serde_json v1.0.151
+   Compiling time v0.3.55
+   Compiling uuid v1.26.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling serde_bytes v0.11.19
+   Compiling rustix v1.1.4
+   Compiling png v0.18.1
+   Compiling openssl v0.10.81
+   Compiling zvariant v5.15.0
+   Compiling zbus_names v4.3.4
+   Compiling diligent-date-parser v0.1.5
+   Compiling image v0.25.10
+   Compiling nix v0.31.3
+   Compiling native-tls v0.2.18
+   Compiling russh-cryptovec v0.62.0
+   Compiling polling v3.11.0
+   Compiling async-io v2.6.0
+   Compiling atom_syndication v0.12.10
+   Compiling tower-http v0.6.11
+   Compiling async-signal v0.2.14
+   Compiling rss v2.1.1
+   Compiling reqwest v0.12.28
+   Compiling async-process v2.5.0
+   Compiling zbus v5.19.0
+   Compiling qrcodegen-image v1.5.2
+   Compiling totp-rs v5.7.2
+   Compiling tempfile v3.27.0
+   Compiling russh v0.63.3
+   Compiling imap v2.4.1
+   Compiling tracing-appender v0.2.5
+   Compiling zip v2.4.2
+   Compiling russh-sftp v3.0.0
+   Compiling cron v0.16.0
+   Compiling bir-rules v0.2.1 (/home/ubuntu/forms-validation/b5325f68/crates/bir-rules)
+   Compiling rusqlite v0.32.1
+   Compiling notify-rust v4.18.0
+   Compiling insta v1.48.0
+   Compiling bir-core v0.2.1 (/home/ubuntu/forms-validation/b5325f68/crates/bir-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 56s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running `/home/ubuntu/forms-validation/target-b5325f68/debug/examples/bandflow_proof_drafts /home/ubuntu/forms-validation/print-artifacts/drafts`
+wrote 6 capacity+3 proof drafts to /home/ubuntu/forms-validation/print-artifacts/drafts

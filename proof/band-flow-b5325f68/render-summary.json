@@ -1,0 +1,95 @@
+[
+  {
+    "form": "1707A",
+    "pdf": "/home/ubuntu/forms-validation/print-artifacts/rendered/1707A.pdf",
+    "pdf_pages": 3,
+    "png_pages": 3,
+    "contact": "/home/ubuntu/forms-validation/print-artifacts/rendered/1707A-contact.png",
+    "continuation_pages_detected": [
+      3
+    ],
+    "crops": [
+      {
+        "page": 3,
+        "kind": "header",
+        "path": "/home/ubuntu/forms-validation/print-artifacts/rendered/1707A-p3-header.png"
+      },
+      {
+        "page": 3,
+        "kind": "totals",
+        "path": "/home/ubuntu/forms-validation/print-artifacts/rendered/1707A-p3-totals.png"
+      }
+    ]
+  },
+  {
+    "form": "2200P",
+    "pdf": "/home/ubuntu/forms-validation/print-artifacts/rendered/2200P.pdf",
+    "pdf_pages": 3,
+    "png_pages": 3,
+    "contact": "/home/ubuntu/forms-validation/print-artifacts/rendered/2200P-contact.png",
+    "continuation_pages_detected": [
+      3
+    ],
+    "crops": [
+      {
+        "page": 3,
+        "kind": "header",
+        "path": "/home/ubuntu/forms-validation/print-artifacts/rendered/2200P-p3-header.png"
+      },
+      {
+        "page": 3,
+        "kind": "totals",
+        "path": "/home/ubuntu/forms-validation/print-artifacts/rendered/2200P-p3-totals.png"
+      }
+    ]
+  },
+  {
+    "form": "2551Q",
+    "pdf": "/home/ubuntu/forms-validation/print-artifacts/rendered/2551Q.pdf",
+    "pdf_pages": 2,
+    "png_pages": 2,
+    "contact": "/home/ubuntu/forms-validation/print-artifacts/rendered/2551Q-contact.png",
+    "continuation_pages_detected": [],
+    "crops": []
+  },
+  {
+    "form": "1702MX",
+    "pdf": "/home/ubuntu/forms-validation/print-artifacts/rendered/1702MX.pdf",
+    "pdf_pages": 5,
+    "png_pages": 5,
+    "contact": "/home/ubuntu/forms-validation/print-artifacts/rendered/1702MX-contact.png",
+    "continuation_pages_detected": [
+      5
+    ],
+    "crops": [
+      {
+        "page": 5,
+        "kind": "header",
+        "path": "/home/ubuntu/forms-validation/print-artifacts/rendered/1702MX-p5-header.png"
+      },
+      {
+        "page": 5,
+        "kind": "totals",
+        "path": "/home/ubuntu/forms-validation/print-artifacts/rendered/1702MX-p5-totals.png"
+      }
+    ]
+  },
+  {
+    "form": "1801",
+    "pdf": "/home/ubuntu/forms-validation/print-artifacts/rendered/1801.pdf",
+    "pdf_pages": 3,
+    "png_pages": 3,
+    "contact": "/home/ubuntu/forms-validation/print-artifacts/rendered/1801-contact.png",
+    "continuation_pages_detected": [],
+    "crops": []
+  },
+  {
+    "form": "1601C",
+    "pdf": "/home/ubuntu/forms-validation/print-artifacts/rendered/1601C.pdf",
+    "pdf_pages": 2,
+    "png_pages": 2,
+    "contact": "/home/ubuntu/forms-validation/print-artifacts/rendered/1601C-contact.png",
+    "continuation_pages_detected": [],
+    "crops": []
+  }
+]
