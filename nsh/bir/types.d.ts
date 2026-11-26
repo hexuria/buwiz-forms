@@ -512,6 +512,37 @@ export interface SendGrant { tin: string; form: string; granted_at: string; }
 export function list_send_grants(tin: string): SendGrant[];
 export function grant_send(tin: string, form: string): SendGrant;
 export function revoke_send(tin: string, form: string): void;
+/** Where a TIN stands for sending on the Buwiz account: "activated" sends, "pending" waits for Buwiz (in review or paused), "fix" has a step on the account site (`action_url`), "not_activated" is a tax profile on this device whose TIN and branch the account does not have. */
+export type TinState = "activated" | "pending" | "fix" | "not_activated";
+export interface TinStatusRow {
+    /** 9 digits. */
+    tin_root: string;
+    /** 5 digits. */
+    branch: string;
+    state: TinState;
+    /** The server's line for the row; null for "not_activated". */
+    message: string | null;
+    /** The row's Verify or Fix page, only on the account site and only for "fix"; open it as it is. */
+    action_url: string | null;
+    /** A test TIN: its sends are dry runs, never sent to the BIR. */
+    test_only: boolean;
+    /** Answered from an earlier read (offline, or the server asked to wait). */
+    stale: boolean;
+    /** When the list was read, in seconds since the epoch. */
+    fetched_at: number;
+}
+/** The account's TINs, then a "not_activated" row for each tax profile branch on this device the account lacks: those only when the list is complete. */
+export interface TinStatusList {
+    rows: TinStatusRow[];
+    /** The server listed every state: a TIN missing from it is not on the account. */
+    complete: boolean;
+    stale: boolean;
+    fetched_at: number;
+}
+/** The account's TINs, from memory when the last read is younger than `max_age` seconds (screens 60, Queue 0). Never on a timer. Throws the reason when there is no list (signed out, offline with no list, the server's refusal). */
+export function account_tins(max_age: number): Promise<TinStatusList>;
+/** "Activate this TIN to send": adds the tax profile's TIN and branch (14 digits) to the account as not verified, with the profile's kind and registered name. Only from that button, never when a profile is created. The added row (null when the answer could not be read), or throws the refusal's sentence; after one saying the account already holds the TIN, the next account_tins asks the server. */
+export function activate_tin(tin_full: string): Promise<TinStatusRow | null>;
 
 export interface ScreenFormIndexEntry {
     c: string;
