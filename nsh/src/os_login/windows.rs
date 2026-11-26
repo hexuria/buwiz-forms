@@ -31,22 +31,22 @@ struct WindowRecord {
     owned: bool,
 }
 
-/// Which window owns the prompt (§E.3 point 2):
-/// - the foreground window, when it is ours and an NSH window;
-/// - otherwise our one visible, unowned NSH window, only when exactly one matches;
+/// Which window owns the prompt (§E.3 point 2). A candidate is ours, an NSH window, visible and unowned:
+/// - the foreground window, when it is a candidate;
+/// - otherwise our one candidate, only when exactly one matches;
 /// - otherwise none, and the caller does not prompt.
 fn pick_window(
     foreground: Option<&WindowRecord>,
     all: &[WindowRecord],
     our_pid: u32,
 ) -> Option<isize> {
-    let ours = |window: &WindowRecord| window.pid == our_pid && window.class == NSH_WINDOW_CLASS;
-    if let Some(front) = foreground.filter(|front| ours(front)) {
+    let candidate = |window: &WindowRecord| {
+        window.pid == our_pid && window.class == NSH_WINDOW_CLASS && window.visible && !window.owned
+    };
+    if let Some(front) = foreground.filter(|front| candidate(front)) {
         return Some(front.hwnd);
     }
-    let mut candidates = all
-        .iter()
-        .filter(|window| ours(window) && window.visible && !window.owned);
+    let mut candidates = all.iter().filter(|window| candidate(window));
     match (candidates.next(), candidates.next()) {
         (Some(only), None) => Some(only.hwnd),
         _ => None,
@@ -260,7 +260,8 @@ mod tests {
             pick_window(Some(&other_nsh), &[other_nsh.clone(), main.clone()], OURS),
             Some(10)
         );
-        // Two of ours, visible and unowned (the main window and the print preview): none.
+        // Two of ours, visible and unowned (the main window and the print preview, which is an NshWindow of its
+        // own: class NshWindow, owner 0 in #398's window list, try/pin-save-panel-398 enumwin-pass-a.json): none.
         let preview = window(11, OURS, NSH_WINDOW_CLASS, true, false);
         assert_eq!(
             pick_window(Some(&other_app), &[main.clone(), preview], OURS),
@@ -269,6 +270,15 @@ mod tests {
         // An owned window (a dialog of ours) and a hidden one are skipped.
         let dialog = window(12, OURS, NSH_WINDOW_CLASS, true, true);
         let hidden = window(13, OURS, NSH_WINDOW_CLASS, false, false);
+        // ...in front too: an owned or hidden foreground window of ours falls to the list.
+        assert_eq!(
+            pick_window(Some(&dialog), &[dialog.clone(), main.clone()], OURS),
+            Some(10)
+        );
+        assert_eq!(
+            pick_window(Some(&hidden), &[hidden.clone(), main.clone()], OURS),
+            Some(10)
+        );
         assert_eq!(
             pick_window(None, &[dialog, hidden, main.clone()], OURS),
             Some(10)
@@ -355,6 +365,12 @@ mod tests {
             RETRIES_EXHAUSTED
         );
         assert_eq!(UserConsentVerificationResult::Canceled.0, CANCELED);
+        // DeviceBusy stays on the page (Unavailable): pinned so a renumbering would show.
+        assert_eq!(UserConsentVerificationResult::DeviceBusy.0, 4);
+        assert_eq!(
+            map_result(UserConsentVerificationResult::DeviceBusy.0),
+            OwnerCheckResult::Unavailable
+        );
     }
 
     /// `lock_window` on real windows: one visible, unowned `NshWindow` of this process is found; a second one makes

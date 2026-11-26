@@ -184,6 +184,9 @@ mod tests {
             ["robius", "_authentication"].concat(),
             ["Text", "Field"].concat(),
             ["Secure", "Text"].concat(),
+            // WinRT's own user name and password prompt, in the same Security_Credentials_UI feature as Hello.
+            ["Credential", "Picker"].concat(),
+            ["Cred", "Pack"].concat(),
         ];
         for source in [
             include_str!("os_login.rs"),
