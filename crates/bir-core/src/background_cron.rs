@@ -11,16 +11,20 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
-static WAKE_TX: OnceLock<mpsc::Sender<()>> = OnceLock::new();
+/// The wake channel of the worker loop that runs now; empty while none runs. Each loop puts its own in and takes it
+/// out when it ends (or is dropped), so a later loop in the same process is woken, not the one before it.
+static WAKE_TX: Mutex<Option<mpsc::Sender<()>>> = Mutex::new(None);
 static ACTIVE_JOBS: OnceLock<Arc<Mutex<HashSet<String>>>> = OnceLock::new();
-/// Set by [`request_shutdown`]. The cron loop finishes the tick it is already
-/// on, then returns, so the submission worker can drop the database.
-static SHUTDOWN: AtomicBool = AtomicBool::new(false);
+/// Counts [`request_shutdown`] calls. A loop stops when it moves past the value it started with, so a request stops
+/// the loops running then and never one started later.
+static SHUTDOWN_GENERATION: AtomicU64 = AtomicU64::new(0);
+/// The value of [`SHUTDOWN_GENERATION`] the most recent loop started with ([`shutdown_requested`]).
+static LATEST_WORKER_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// The shell holds this until a Buwiz account is signed in. Default false so
 /// bir-core and bir-shell cron tests keep filing. The shell sets it true
 /// before the worker starts.
@@ -32,6 +36,40 @@ pub(crate) enum WakeDispatchStatus {
     AlreadyPending,
     WorkerNotRunning,
     WorkerClosed,
+}
+
+/// One worker loop's own stop signal ([`run_cron_jobs`]). Its owner keeps a clone and calls [`CronStop::stop`]; the loop
+/// returns after the tick it is on, and at once while it waits for its next one. It only ever stops the loop it was
+/// given to, so a worker started after it is not born stopped.
+#[derive(Clone, Default)]
+pub struct CronStop(Arc<CronStopInner>);
+
+#[derive(Default)]
+struct CronStopInner {
+    stopped: AtomicBool,
+    notify: tokio::sync::Notify,
+}
+
+impl CronStop {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Ask the loop to stop. A second call does nothing more.
+    pub fn stop(&self) {
+        self.0.stopped.store(true, Ordering::SeqCst);
+        self.0.notify.notify_one();
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        self.0.stopped.load(Ordering::SeqCst)
+    }
+
+    async fn stopped(&self) {
+        while !self.is_stopped() {
+            self.0.notify.notified().await;
+        }
+    }
 }
 
 pub fn get_active_jobs() -> Arc<Mutex<HashSet<String>>> {
@@ -58,18 +96,21 @@ pub fn submission_job_key(
     )
 }
 
-/// Stop [`start_cron_jobs`] after the tick that is already running.
+/// Stop every [`start_cron_jobs`] / [`run_cron_jobs`] loop running now, after the tick it is already on.
 ///
-/// Wakes a loop that is waiting out its 60 second gap so quit does not sit
-/// there. A second call is a no-op aside from another wake.
+/// Wakes a loop that is waiting out its 60 second gap. A second call is a
+/// no-op aside from another wake. A loop started after this call is not
+/// stopped by it. The app's quit and an engine's end do not call this: they
+/// stop their own worker through its [`CronStop`], so a later engine's loop is
+/// never stopped by an earlier engine's end.
 pub fn request_shutdown() {
-    SHUTDOWN.store(true, Ordering::SeqCst);
+    SHUTDOWN_GENERATION.fetch_add(1, Ordering::SeqCst);
     wake();
 }
 
-/// Whether [`request_shutdown`] has been asked for in this process.
+/// Whether [`request_shutdown`] has been asked for since the most recent loop started.
 pub fn shutdown_requested() -> bool {
-    SHUTDOWN.load(Ordering::SeqCst)
+    SHUTDOWN_GENERATION.load(Ordering::SeqCst) != LATEST_WORKER_GENERATION.load(Ordering::SeqCst)
 }
 
 /// Skip queue ticks while the desktop account gate is locked.
@@ -102,7 +143,10 @@ pub fn wake() {
 }
 
 pub(crate) fn wake_with_status() -> WakeDispatchStatus {
-    let Some(tx) = WAKE_TX.get() else {
+    let slot = WAKE_TX
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let Some(tx) = slot.as_ref() else {
         return WakeDispatchStatus::WorkerNotRunning;
     };
 
@@ -113,26 +157,69 @@ pub(crate) fn wake_with_status() -> WakeDispatchStatus {
     }
 }
 
-pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
-    info!("Background cron engine started");
+/// A loop's wake channel in [`WAKE_TX`] for as long as the loop lives: taken out when it returns or is dropped
+/// mid-tick, unless a later loop has put its own in.
+struct WakeInstalled(mpsc::Sender<()>);
 
+impl WakeInstalled {
+    fn new(tx: mpsc::Sender<()>) -> Self {
+        *WAKE_TX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(tx.clone());
+        Self(tx)
+    }
+}
+
+impl Drop for WakeInstalled {
+    fn drop(&mut self) {
+        let mut slot = WAKE_TX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if slot.as_ref().is_some_and(|tx| tx.same_channel(&self.0)) {
+            *slot = None;
+        }
+    }
+}
+
+/// The queue worker loop until [`request_shutdown`] (the `bir` command line, `bir serve`).
+pub fn start_cron_jobs(db: Arc<Mutex<Database>>) -> impl Future<Output = ()> + Send {
+    run_cron_jobs(db, CronStop::new())
+}
+
+/// The queue worker loop until `stop` is asked (or [`request_shutdown`]). The app's engine owns `stop`, so the next
+/// engine in the same process starts a loop of its own that nothing has stopped.
+///
+/// The loop's place among [`request_shutdown`] calls is taken here, when it is called, not when it is first polled:
+/// a request made after this call stops it even if the runtime has not run it yet.
+pub fn run_cron_jobs(db: Arc<Mutex<Database>>, stop: CronStop) -> impl Future<Output = ()> + Send {
+    let born = SHUTDOWN_GENERATION.load(Ordering::SeqCst);
+    LATEST_WORKER_GENERATION.store(born, Ordering::SeqCst);
+    run_cron_loop(db, stop, born)
+}
+
+async fn run_cron_loop(db: Arc<Mutex<Database>>, stop: CronStop, born: u64) {
+    info!("Background cron engine started");
+    requeue_jobs_left_running(&db);
+
+    let stopping = || stop.is_stopped() || SHUTDOWN_GENERATION.load(Ordering::SeqCst) != born;
     let (tx, mut rx) = mpsc::channel(1);
-    let _ = WAKE_TX.set(tx);
+    let _wake = WakeInstalled::new(tx);
 
     loop {
-        if shutdown_requested() {
+        if stopping() {
             break;
         }
         if submission_paused() {
             tokio::select! {
                 _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {}
                 _ = rx.recv() => {}
+                _ = stop.stopped() => {}
             }
             continue;
         }
         // We run a tick, then wait for either 60 seconds or a wake signal.
-        run_queue_tick(db.clone()).await;
-        if shutdown_requested() {
+        run_queue_tick_until(db.clone(), &stop).await;
+        if stopping() {
             break;
         }
 
@@ -141,6 +228,7 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
             _ = rx.recv() => {
                 info!("Queue explicitly woken up by a wake signal.");
             }
+            _ = stop.stopped() => {}
         }
     }
     info!("Background cron engine stopped");
@@ -150,6 +238,11 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
 /// Extracted from `start_cron_jobs` to allow deterministic unit testing
 /// without being blocked by an infinite loop or thread sleep.
 pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
+    run_queue_tick_until(db, &CronStop::new()).await;
+}
+
+/// One tick whose blocking work (the calendar sync, an inbox poll) checks `stop` between its items and ends early.
+async fn run_queue_tick_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
     // Heartbeat log removed to prevent log spam. Job specific logs are emitted when jobs run.
 
     // Ensure we don't hold the DB lock across async network calls.
@@ -203,9 +296,9 @@ pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
     }
 
     // Task C: Generic Job Queue (Custom Cron & One-off commands)
-    process_generic_jobs(db.clone()).await;
+    process_generic_jobs_until(db.clone(), stop).await;
 
-    process_google_calendar_sync(db.clone()).await;
+    process_google_calendar_sync(db.clone(), stop).await;
 
     // Signal the desktop app that the database was modified.
     // On macOS: instant via NSDistributedNotificationCenter.
@@ -213,7 +306,7 @@ pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
     crate::ipc::post_db_changed();
 }
 
-async fn process_google_calendar_sync(db: Arc<Mutex<Database>>) {
+async fn process_google_calendar_sync(db: Arc<Mutex<Database>>, stop: &CronStop) {
     const SIX_HOURS: i64 = 6 * 60 * 60;
     let should_sync = {
         let db = match lock_timing::lock(&db) {
@@ -253,18 +346,33 @@ async fn process_google_calendar_sync(db: Arc<Mutex<Database>>) {
         return;
     }
 
-    let db_for_sync = db.clone();
-    let results = match tokio::task::spawn_blocking(move || {
-        crate::google_calendar::sync_all_profile_calendars(db_for_sync)
+    // A `Weak` and the stop: a worker that is dropped while this blocking sync runs does not keep the database open
+    // past the calendar it is on.
+    let db_for_sync = Arc::downgrade(&db);
+    let stop_for_sync = stop.clone();
+    let run = match tokio::task::spawn_blocking(move || {
+        crate::google_calendar::sync_all_profile_calendars_until(db_for_sync, &|| {
+            stop_for_sync.is_stopped()
+        })
     })
     .await
     {
-        Ok(results) => results,
+        Ok(run) => run,
         Err(error) => {
             warn!("Google Calendar background sync task failed: {error}");
             return;
         }
     };
+    if !run.complete {
+        // Stopped part way (the worker is ending): not a sync. The last sync time and a pending "sync now" stay as
+        // they were, so the next worker syncs every calendar again.
+        info!(
+            "Google Calendar sync stopped after {} of the linked calendars; not recorded",
+            run.results.len()
+        );
+        return;
+    }
+    let results = run.results;
     if results.is_empty() {
         if let Ok(db) = lock_timing::lock(&db) {
             let _ = db.set_setting(
@@ -2134,10 +2242,9 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
 
         let active_jobs = get_active_jobs();
         {
-            let mut jobs = match active_jobs.lock() {
-                Ok(j) => j,
-                Err(_) => continue,
-            };
+            let mut jobs = active_jobs
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if !jobs.insert(job_key.clone()) {
                 continue; // Already running
             }
@@ -2145,14 +2252,12 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
 
         let profile_clone = profile.clone();
         let db_clone = db.clone();
-        let active_jobs_clone = active_jobs.clone();
+        let cleanup = JobCleanup {
+            key: job_key,
+            active_jobs: active_jobs.clone(),
+        };
 
-        tokio::spawn(async move {
-            let _cleanup = JobCleanup {
-                key: job_key,
-                active_jobs: active_jobs_clone,
-            };
-
+        spawn_job(cleanup, async move {
             if summary.form_code == "2551Q" {
                 process_queued_2551q(&summary, &profile_clone, db_clone.clone()).await;
                 return;
@@ -2669,7 +2774,12 @@ fn mark_shell_job_unavailable(job: &mut crate::db::Job) -> bool {
     true
 }
 
+#[cfg(all(test, feature = "mas_build"))]
 async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
+    process_generic_jobs_until(db, &CronStop::new()).await;
+}
+
+async fn process_generic_jobs_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
     let jobs = {
         let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
@@ -2756,24 +2866,22 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
         let job_key = format!("job:{}", job.id.unwrap_or(0));
         let active_jobs = get_active_jobs();
         {
-            let mut active = match active_jobs.lock() {
-                Ok(a) => a,
-                Err(_) => continue,
-            };
+            let mut active = active_jobs
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if !active.insert(job_key.clone()) {
                 continue; // Already running
             }
         }
 
         let db_clone = db.clone();
-        let active_jobs_clone = active_jobs.clone();
+        let job_stop = stop.clone();
+        let cleanup = JobCleanup {
+            key: job_key,
+            active_jobs: active_jobs.clone(),
+        };
 
-        tokio::spawn(async move {
-            let _cleanup = JobCleanup {
-                key: job_key,
-                active_jobs: active_jobs_clone,
-            };
-
+        spawn_job(cleanup, async move {
             info!("Cron: Executing job '{}'", job.name);
             let mut success = true;
 
@@ -2783,13 +2891,20 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                 if cmd.starts_with("bir_poll_email ") {
                     let email = cmd.trim_start_matches("bir_poll_email ").trim();
                     let (poll_success, still_pending, err_msg) =
-                        crate::email::fetch_and_process_emails_for_address(email, db_clone.clone());
-                    if poll_success {
-                        let log = "Email polling completed successfully.".to_string();
-                        info!(
-                            "Cron: Email polling job '{}' completed successfully.",
-                            job.name
+                        crate::email::fetch_and_process_emails_for_address_until(
+                            email,
+                            db_clone.clone(),
+                            &|| job_stop.is_stopped(),
                         );
+                    if poll_success {
+                        // Stopped early (the worker is ending), the poll read only part of the inbox; what is still
+                        // waiting for its email keeps the job queued (`still_pending` is read back from the database).
+                        let log = if job_stop.is_stopped() {
+                            "Email polling stopped early: the queue worker is ending.".to_string()
+                        } else {
+                            "Email polling completed successfully.".to_string()
+                        };
+                        info!("Cron: Email polling job '{}': {}", job.name, log);
                         success = true;
                         job.output_log = Some(log);
                         if !still_pending {
@@ -2892,6 +3007,40 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
     }
 }
 
+/// Put back to Queued every job saved as Running: none can be running as a worker starts (a database has one worker
+/// at a time, and the one before ended with its tasks), so such a job was cut off, by an engine's end that dropped its
+/// task or by the process ending. A one-off job left Running would otherwise never run again.
+///
+/// So a job runs at least once, not exactly once: one cut off after its work and before its end was saved (a one-off's
+/// delete, a scheduled job's next run) runs that work again. Jobs never send returns: they poll an inbox (a second poll
+/// reads the same mail) or run a command a person scheduled, which can then run twice.
+fn requeue_jobs_left_running(db: &Arc<Mutex<Database>>) {
+    let Ok(db) = lock_timing::lock(db) else {
+        return;
+    };
+    for mut job in db.list_jobs().unwrap_or_default() {
+        if job.status == "Running" {
+            info!(
+                "Cron: job '{}' was cut off while running; queued again",
+                job.name
+            );
+            job.status = "Queued".to_string();
+            let _ = db.save_job(job);
+        }
+    }
+}
+
+/// Spawn one job on the worker's runtime with its key's `cleanup` inside the task's future: the key leaves
+/// [`get_active_jobs`] however the task ends, finished, panicked, or dropped by a runtime shut down mid-send (an
+/// engine that ended) or before it was ever polled. The next worker then reads the return's own state, never a key a
+/// dead task left behind.
+fn spawn_job(cleanup: JobCleanup, job: impl Future<Output = ()> + Send + 'static) {
+    tokio::spawn(async move {
+        let _cleanup = cleanup;
+        job.await;
+    });
+}
+
 struct JobCleanup {
     key: String,
     active_jobs: Arc<Mutex<HashSet<String>>>,
@@ -2899,9 +3048,10 @@ struct JobCleanup {
 
 impl Drop for JobCleanup {
     fn drop(&mut self) {
-        if let Ok(mut jobs) = self.active_jobs.lock() {
-            jobs.remove(&self.key);
-        }
+        self.active_jobs
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&self.key);
     }
 }
 
@@ -2921,6 +3071,109 @@ mod tests {
             created_at: String::new(),
             output_log: None,
         }
+    }
+
+    /// A job saved as Running whose task went with an engine's end (or the process) is queued again when the next
+    /// worker starts: a one-off job (no schedule) left Running would never run again. Other jobs are left as they are.
+    #[test]
+    fn a_job_cut_off_while_running_is_queued_again_as_a_worker_starts() {
+        use std::sync::{Arc, Mutex};
+        let db = crate::db::Database::open_in_memory_for_tests().expect("db");
+        let mut cut_off = shell_job("bir_poll_email juana@example.com");
+        cut_off.cron_expr = None;
+        cut_off.next_run_at = None;
+        cut_off.status = "Running".into();
+        let cut_off = db.save_job(cut_off).expect("save").id.expect("an id");
+        let mut failed = shell_job("echo hi");
+        failed.status = "Failed".into();
+        let failed = db.save_job(failed).expect("save").id.expect("an id");
+        let db = Arc::new(Mutex::new(db));
+
+        super::requeue_jobs_left_running(&db);
+
+        let jobs = db.lock().unwrap().list_jobs().unwrap();
+        let status = |id| {
+            jobs.iter()
+                .find(|job| job.id == Some(id))
+                .unwrap()
+                .status
+                .clone()
+        };
+        assert_eq!(status(cut_off), "Queued");
+        assert_eq!(status(failed), "Failed");
+    }
+
+    /// The same through a real start: the worker's loop (`run_cron_jobs`, as an engine's launch starts it) queues
+    /// again a job saved as Running before its first tick. The job is a yearly one not due for centuries, so nothing
+    /// runs it after: what is read is the requeue alone. In a child process of its own: the loop's wake channel and
+    /// shutdown generation are the process's.
+    #[test]
+    fn a_real_worker_start_queues_again_a_job_cut_off_while_running() {
+        const CHILD: &str = "BIR_CORE_CRON_REQUEUE_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "background_cron::tests::a_real_worker_start_queues_again_a_job_cut_off_while_running",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .env("EBIR_TEST_ENV", "1")
+                .env("BIR_SFTP_DRY_RUN", "1")
+                .env_remove("BIR_SFTP_LIVE")
+                .env_remove("BIR_RELAY_URL")
+                .status()
+                .unwrap();
+            assert!(status.success(), "the child process failed");
+            return;
+        }
+        use std::sync::{Arc, Mutex};
+        let db = crate::db::Database::open_in_memory_for_tests().expect("db");
+        let mut cut_off = shell_job("bir_poll_email nobody@example.test");
+        cut_off.cron_expr = Some("0 0 0 1 1 *".into());
+        cut_off.next_run_at = Some("2999-01-01T00:00:00+00:00".into());
+        cut_off.status = "Running".into();
+        let cut_off = db.save_job(cut_off).expect("save").id.expect("an id");
+        let db = Arc::new(Mutex::new(db));
+        let status = |db: &Arc<Mutex<crate::db::Database>>| {
+            db.lock()
+                .unwrap()
+                .list_jobs()
+                .unwrap()
+                .into_iter()
+                .find(|job| job.id == Some(cut_off))
+                .map(|job| job.status)
+        };
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let stop = CronStop::new();
+            let worker = tokio::spawn(run_cron_jobs(db.clone(), stop.clone()));
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+            while status(&db).as_deref() == Some("Running") {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "the worker never queued the job again"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            // A tick has had the time to run anything due; this job is not due.
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            assert_eq!(
+                status(&db).as_deref(),
+                Some("Queued"),
+                "queued again, and not run"
+            );
+            stop.stop();
+            tokio::time::timeout(std::time::Duration::from_secs(5), worker)
+                .await
+                .expect("the loop stopped on its signal")
+                .unwrap();
+        });
     }
 
     #[test]
@@ -6438,6 +6691,299 @@ mod tests {
         assert_eq!(
             sent_payload(&noted(0), [Some("<other/>".into()), None]),
             None
+        );
+    }
+
+    // ---------- the worker's lifecycle (one engine after another in one process) ----------
+
+    /// A send that never ends on its own: it says when it has started, then waits forever (the relay that does not
+    /// answer). How many sends started is counted.
+    struct HangingTransport {
+        started: Mutex<std::sync::mpsc::Sender<()>>,
+        sends: std::sync::atomic::AtomicUsize,
+    }
+
+    impl SubmissionTransport for HangingTransport {
+        type Session = String;
+
+        fn session_source(&self, _session: &Self::Session) -> crate::transport::SftpEndpointSource {
+            crate::transport::SftpEndpointSource::Relay
+        }
+
+        fn open_session<'a>(
+            &'a self,
+            form_type: &'a str,
+            _tin: &'a str,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<Self::Session, crate::transport::TransportError>>
+                    + Send
+                    + 'a,
+            >,
+        > {
+            let form_type = form_type.to_string();
+            Box::pin(async move { Ok(form_type) })
+        }
+
+        fn store_session<'a>(
+            &'a self,
+            _session: Self::Session,
+            _filename: &'a str,
+            _payload: &'a [u8],
+            _xml: &'a [u8],
+            _note: bir_submit::Note<'a>,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            crate::transport::StoreReport,
+                            crate::transport::TransportError,
+                        >,
+                    > + Send
+                    + 'a,
+            >,
+        > {
+            self.sends.fetch_add(1, Ordering::SeqCst);
+            let _ = self.started.lock().unwrap().send(());
+            Box::pin(std::future::pending())
+        }
+
+        /// Not a Buwiz send, so nothing is noted and this is never asked; it would not answer either.
+        fn settle_pending<'a>(
+            &'a self,
+            _pending: &'a str,
+        ) -> Pin<Box<dyn Future<Output = crate::relay::Settlement> + Send + 'a>> {
+            Box::pin(std::future::pending())
+        }
+    }
+
+    /// An engine ends while its worker is sending: the worker's runtime is shut down, which drops the send where
+    /// it waits. Nothing of it is left: its job key is gone and no clone of the database handle survives it. The
+    /// return keeps its claim and "upload started", so the next worker finds it claimed and does not send it again
+    /// (what a desktop relaunch after a quit mid-send finds).
+    #[test]
+    fn a_send_dropped_mid_flight_keeps_its_claim_and_frees_its_job_key() {
+        const KEY: &str = "form:1601C:lifecycle-test:dropped-mid-send";
+        let profile = test_profile();
+        let queued = queued_1601c_draft(&profile);
+        let db = Arc::new(Mutex::new(Database::open_in_memory_for_tests().unwrap()));
+        let id = db.lock().unwrap().save_queued_1601c_draft(&queued).unwrap();
+        let summary = queued_1601c_summary(id, &queued);
+        let (started, sending) = std::sync::mpsc::channel();
+        let transport = Arc::new(HangingTransport {
+            started: Mutex::new(started),
+            sends: std::sync::atomic::AtomicUsize::new(0),
+        });
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        assert!(get_active_jobs().lock().unwrap().insert(KEY.to_string()));
+        let cleanup = JobCleanup {
+            key: KEY.to_string(),
+            active_jobs: get_active_jobs(),
+        };
+        let (job_db, job_transport, job_profile) = (db.clone(), transport.clone(), profile.clone());
+        runtime.block_on(async move {
+            spawn_job(cleanup, async move {
+                process_queued_1601c_with_transport(
+                    &summary,
+                    &job_profile,
+                    job_db,
+                    &*job_transport,
+                )
+                .await;
+            });
+        });
+        sending
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .expect("the send started");
+        assert!(get_active_jobs().lock().unwrap().contains(KEY), "sending");
+
+        let ended = std::time::Instant::now();
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+        // Room for a loaded machine: the bound that matters is the worker's 5 s.
+        assert!(
+            ended.elapsed() < std::time::Duration::from_secs(5),
+            "dropped, not waited for"
+        );
+        assert!(
+            !get_active_jobs().lock().unwrap().contains(KEY),
+            "the key went with the task"
+        );
+        assert_eq!(
+            Arc::strong_count(&db),
+            1,
+            "no task kept the database handle"
+        );
+
+        let stored = || {
+            db.lock()
+                .unwrap()
+                .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+                .unwrap()
+                .unwrap()
+        };
+        let claimed = stored();
+        assert_eq!(claimed.status, FilingStatus::Queued);
+        assert!(claimed.submission_claim_token.is_some(), "the claim stays");
+        assert!(
+            claimed.submission_put_started_at.is_some(),
+            "upload started stays"
+        );
+        assert!(claimed.submitted_at.is_none());
+
+        // The next engine's worker: the claim is found, nothing is sent again.
+        let next = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(process_queued_1601c_with_transport(
+                &queued_1601c_summary(id, &queued),
+                &profile,
+                db.clone(),
+                &next,
+            ));
+        assert!(
+            next.calls().is_empty(),
+            "a claimed return is not sent again"
+        );
+        assert_eq!(transport.sends.load(Ordering::SeqCst), 1);
+        let after = stored();
+        assert_eq!(after.status, FilingStatus::Queued);
+        assert_eq!(after.submission_claim_token, claimed.submission_claim_token);
+    }
+
+    /// A job the runtime drops before it ever ran still gives its key back: the guard is part of the task's future,
+    /// not made inside it on the first poll.
+    #[test]
+    fn a_job_dropped_before_it_ever_ran_frees_its_key() {
+        const KEY: &str = "form:1601C:lifecycle-test:never-polled";
+        let ran = Arc::new(AtomicBool::new(false));
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        assert!(get_active_jobs().lock().unwrap().insert(KEY.to_string()));
+        let cleanup = JobCleanup {
+            key: KEY.to_string(),
+            active_jobs: get_active_jobs(),
+        };
+        let job_ran = ran.clone();
+        runtime.block_on(async move {
+            spawn_job(cleanup, async move {
+                job_ran.store(true, Ordering::SeqCst);
+                std::future::pending::<()>().await;
+            });
+        });
+        assert!(
+            get_active_jobs().lock().unwrap().contains(KEY),
+            "spawned, not yet run"
+        );
+        drop(runtime);
+        assert!(
+            !ran.load(Ordering::SeqCst),
+            "the runtime dropped the job before it ran"
+        );
+        assert!(
+            !get_active_jobs().lock().unwrap().contains(KEY),
+            "its key went with it"
+        );
+    }
+
+    /// One loop after another in one process, as one engine after another starts its worker: a loop's own stop
+    /// ends it and nothing else, the next is not born stopped, and each puts its own wake channel in and takes it
+    /// out. `request_shutdown` (the `bir` command line's quit) stops the loop running then, not one started after it.
+    /// In a child process of its own: the wake channel and the shutdown generation are the process's, and no other
+    /// test may share them while this one reads them.
+    #[test]
+    fn each_loop_stops_on_its_own_signal_and_the_next_is_not_born_stopped() {
+        const CHILD: &str = "BIR_CORE_CRON_LOOP_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "background_cron::tests::each_loop_stops_on_its_own_signal_and_the_next_is_not_born_stopped",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .env("EBIR_TEST_ENV", "1")
+                .env("BIR_SFTP_DRY_RUN", "1")
+                .env_remove("BIR_SFTP_LIVE")
+                .env_remove("BIR_RELAY_URL")
+                .status()
+                .unwrap();
+            assert!(status.success(), "the child process failed");
+            return;
+        }
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let db = Arc::new(Mutex::new(Database::open_in_memory_for_tests().unwrap()));
+        let bound = std::time::Duration::from_secs(5);
+        runtime.block_on(async {
+            let until_woken = || async {
+                let deadline = tokio::time::Instant::now() + bound;
+                while wake_with_status() == WakeDispatchStatus::WorkerNotRunning {
+                    assert!(
+                        tokio::time::Instant::now() < deadline,
+                        "the loop never started"
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            };
+            for engine in 1..=3 {
+                let stop = CronStop::new();
+                let job = tokio::spawn(run_cron_jobs(db.clone(), stop.clone()));
+                until_woken().await;
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                assert!(!job.is_finished(), "engine {engine}: the loop runs");
+                stop.stop();
+                tokio::time::timeout(bound, job)
+                    .await
+                    .unwrap_or_else(|_| panic!("engine {engine}: the loop stopped on its signal"))
+                    .unwrap();
+                assert_eq!(
+                    wake_with_status(),
+                    WakeDispatchStatus::WorkerNotRunning,
+                    "engine {engine}: its wake channel went with it"
+                );
+            }
+
+            let job = tokio::spawn(start_cron_jobs(db.clone()));
+            until_woken().await;
+            request_shutdown();
+            assert!(shutdown_requested());
+            tokio::time::timeout(bound, job).await.unwrap().unwrap();
+            let stop = CronStop::new();
+            let job = tokio::spawn(run_cron_jobs(db.clone(), stop.clone()));
+            until_woken().await;
+            assert!(!shutdown_requested(), "a new loop starts unstopped");
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            assert!(
+                !job.is_finished(),
+                "an earlier request does not stop a later loop"
+            );
+            stop.stop();
+            tokio::time::timeout(bound, job).await.unwrap().unwrap();
+
+            // A loop called before a request and first polled after it is stopped by it.
+            let called = start_cron_jobs(db.clone());
+            request_shutdown();
+            tokio::time::timeout(bound, called)
+                .await
+                .expect("a request made after the call stops the loop");
+        });
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+        assert_eq!(
+            Arc::strong_count(&db),
+            1,
+            "no loop kept the database handle"
         );
     }
 }

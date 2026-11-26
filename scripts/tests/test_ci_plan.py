@@ -42,6 +42,10 @@ def manual(ref: str = "refs/heads/feat/x", **inputs):
     return ci_plan.decide(event="workflow_dispatch", ref=ref, **inputs)
 
 
+# The condition ci.yml's entry jobs carry: a closed or draft pull request takes no runner.
+NOT_CLOSED_OR_DRAFT = ("(github.event_name != 'pull_request' || (github.event.action != 'closed' "
+                       "&& !github.event.pull_request.draft))")
+
 NOTHING_HEAVY = dict(check_tests=False, installer=False, screens=False, build=False, nsh_rust=False, core_plain=False,
                      nsh_systems=[])
 
@@ -119,6 +123,59 @@ class QuickLaneTests(unittest.TestCase):
                 self.assert_quick(plan, check=True, nsh_check=True)
                 self.assert_quick(ci_plan.decide(event="push", ref=ref, changed=["docs/x.md"]),
                                   check=False, nsh_check=False)
+
+
+class ClosedAndDraftTests(unittest.TestCase):
+    EVERYTHING = ("crates/bir-core/src/lib.rs", "rules/x.json", "nsh/screens/x.tsx", "packaging/windows/x",
+                  "scripts/tests/test_ci_plan.py")
+
+    def assert_nothing(self, plan):
+        self.assertEqual(plan["lane"], "none")
+        out = ci_plan.outputs(plan)
+        for name in ("check", "nsh_check", "scripts", "installer", "validation", "nsh_macos", "nsh_linux",
+                     "nsh_windows", "screens", "build", "nsh_rust", "core_plain", "linux_packages"):
+            self.assertEqual(out[name], "false", name)
+        self.assertEqual(json.loads(out["check_matrix"]), {"include": []})
+        self.assertEqual(json.loads(out["validation_matrix"]), [])
+
+    def test_a_closed_pull_request_plans_nothing(self):
+        for draft in (False, True):
+            with self.subTest(draft=draft):
+                self.assert_nothing(pr(*self.EVERYTHING, action="closed", draft=draft, branch="ebirforms-sync",
+                                       labels=("run-validation",)))
+        self.assert_nothing(ci_plan.decide(event="pull_request", ref="refs/heads/main", action="closed", changed=None))
+
+    def test_a_draft_plans_nothing(self):
+        for action in ("opened", "synchronize", "reopened"):
+            with self.subTest(action=action):
+                self.assert_nothing(pr(*self.EVERYTHING, action=action, draft=True, labels=("run-validation",)))
+
+    def test_ready_for_review_and_a_push_to_a_ready_pull_request_run_the_quick_lane(self):
+        for action in ("ready_for_review", "opened", "synchronize", "reopened"):
+            with self.subTest(action=action):
+                plan = pr("crates/bir-core/src/lib.rs", action=action, draft=False)
+                self.assertEqual(plan["lane"], "quick")
+                self.assertEqual((plan["check_systems"], plan["nsh_check"]), (["linux"], True))
+
+    def test_only_pull_requests_have_drafts(self):
+        self.assertEqual(ci_plan.decide(event="push", ref="refs/heads/main", action="closed", draft=True,
+                                        changed=["crates/bir-core/src/lib.rs"])["lane"], "quick")
+
+    def test_main_reads_the_action_and_the_draft_flag(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp) / "out"
+            base = {**os.environ, "EVENT": "pull_request", "REF": "refs/pull/1/merge", "PR_NUMBER": "",
+                    "PR_BASE": "", "PR_HEAD": "", "GITHUB_OUTPUT": str(out), "GITHUB_STEP_SUMMARY": ""}
+            for extra, lane in ((dict(ACTION="closed", DRAFT="false"), "none"),
+                                (dict(ACTION="synchronize", DRAFT="true"), "none"),
+                                (dict(ACTION="ready_for_review", DRAFT="false"), "quick")):
+                with self.subTest(**extra):
+                    out.write_text("")
+                    result = subprocess.run([sys.executable, "-I", str(ROOT / "scripts/ci_plan.py")],
+                                            env={**base, **extra}, capture_output=True, text=True, check=False)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    values = dict(line.split("=", 1) for line in out.read_text().splitlines())
+                    self.assertEqual(values["lane"], lane)
 
 
 class TestLaneTests(unittest.TestCase):
@@ -304,17 +361,28 @@ class OutputTests(unittest.TestCase):
 
 class WorkflowTests(unittest.TestCase):
     def test_both_workflows_plan_with_the_same_script_and_concurrency(self):
-        concurrency = ("  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}\n"
-                       "  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}\n")
+        # nsh.yml has no pull_request event, so the pull-request number in ci.yml's group is the only difference:
+        # on every other event the two groups are the same.
+        concurrency = {
+            CI: ("  group: ${{ github.workflow }}-${{ github.event.pull_request.number || "
+                 "(github.ref == 'refs/heads/main' && github.run_id) || github.ref }}\n"
+                 "  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}\n"),
+            NSH: ("  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}\n"
+                  "  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}\n"),
+        }
         for workflow in (CI, NSH):
             self.assertIn("run: python3 -I scripts/ci_plan.py", workflow)
-            self.assertIn(concurrency, workflow)
+            self.assertIn(concurrency[workflow], workflow)
             self.assertIn('cron: "0 18 * * *"', workflow)
             for name in ("systems", "suites", "screens", "shard"):
                 self.assertRegex(workflow, rf"(?m)^      {name}:\n        description:")
 
     def test_triggers(self):
         self.assertIn('    branches: [ "main", "codex/**", "test/**" ]\n  pull_request:\n', CI)
+        # `closed` is there to cancel the pull request's runs; the plan and the jobs' `if` make it run nothing.
+        self.assertIn("    types: [ opened, synchronize, reopened, ready_for_review, closed ]\n", CI)
+        self.assertIn("        ACTION: ${{ github.event.action }}\n        DRAFT: ${{ github.event.pull_request.draft }}\n",
+                      job(CI, "changes"))
         self.assertIn('  push:\n    branches: [ "test/**" ]\n  schedule:\n', NSH)
         self.assertNotIn("pull_request", NSH)
         self.assertNotIn("paths:", NSH)
@@ -339,7 +407,9 @@ class WorkflowTests(unittest.TestCase):
 
     def test_ci_ok_is_the_single_gate(self):
         gate = job(CI, "ci-ok")
-        self.assertRegex(gate, r"(?m)^    if: always\(\)\s*$")
+        # Not always(): in a run being cancelled (a newer push, or the pull request closing) it would run and report a
+        # red ci-ok on the commit.
+        self.assertIn(f"    if: ${{{{ !cancelled() && {NOT_CLOSED_OR_DRAFT} }}}}\n", gate)
         needs = re.search(r"(?m)^    needs: \[(.*)\]\s*$", gate)
         assert needs is not None
         self.assertEqual([name.strip() for name in needs.group(1).split(",")],
@@ -360,6 +430,32 @@ class WorkflowTests(unittest.TestCase):
         for name, flag in (("nsh-macos", "nsh_macos"), ("nsh-linux", "nsh_linux"), ("nsh-windows", "nsh_windows"),
                            ("core-plain-test", "core_plain")):
             self.assertIn(f"    needs: plan\n    if: needs.plan.outputs.{flag} == 'true'\n", job(NSH, name))
+
+    def test_a_closed_or_draft_pull_request_takes_no_runner(self):
+        """Every job's `if` is false for a closed or draft pull request: it carries the condition itself, or needs a
+        job that does (with no status function in its `if`), or runs only for a push or the schedule."""
+        names = re.findall(r"(?m)^  ([a-z][a-z0-9-]*):\n", CI.split("\njobs:\n", 1)[1])
+        self.assertIn("ci-ok", names)
+        guarded: set[str] = set()
+        for _ in names:
+            for name in names:
+                text = job(CI, name)
+                condition = (re.search(r"(?m)^    if: (.*)$", text) or [None, ""])[1]
+                needs = re.search(r"(?m)^    needs: (.*)$", text)
+                needed = re.findall(r"[a-z][a-z0-9-]*", needs.group(1)) if needs else []
+                if (NOT_CLOSED_OR_DRAFT in condition
+                        or (needed and not re.search(r"\b(always|cancelled|failure)\(\)", condition)
+                            and set(needed) <= guarded)
+                        or "(github.event_name == 'schedule' || github.event_name == 'push')" in condition):
+                    guarded.add(name)
+        self.assertEqual(sorted(set(names) - guarded), [])
+        for name in ("changes", "legacy-guard", "ci-ok"):
+            self.assertIn(NOT_CLOSED_OR_DRAFT, job(CI, name), name)
+
+    def test_quick_and_test_jobs_build_without_incremental_data(self):
+        self.assertIn('env:\n  CARGO_TERM_COLOR: always\n', CI)
+        self.assertRegex(CI.split("\njobs:\n", 1)[0], r'(?m)^  CARGO_INCREMENTAL: "0"$')
+        self.assertIn('      CARGO_INCREMENTAL: "0"\n      CARGO_PROFILE_DEV_DEBUG: "0"\n', job(CI, "nsh-check"))
 
     def test_branches_never_save_caches(self):
         for workflow in (CI, NSH):

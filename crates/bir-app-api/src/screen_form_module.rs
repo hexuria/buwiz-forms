@@ -7378,6 +7378,9 @@ mod tests {
     // on every form (bug B17).
     mod sel_lists;
     mod unfillable;
+    // Every form's RDO box offers the RDO catalog, never 1601C's leftover
+    // "000" option script; "000" is no RDO.
+    mod rdo_lists;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
