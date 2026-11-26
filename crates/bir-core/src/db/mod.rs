@@ -1573,6 +1573,15 @@ impl Database {
         }
     }
 
+    /// Replace the setting `key` with `new` only while it still holds `old` (a rehash of the same secret: a value
+    /// changed meanwhile is never overwritten). Answers whether it was replaced.
+    pub fn replace_setting_if(&self, key: &str, old: &str, new: &str) -> Result<bool, DbError> {
+        Ok(self.conn.execute(
+            "UPDATE settings SET value = ?3 WHERE key = ?1 AND value = ?2",
+            params![key, old, new],
+        )? == 1)
+    }
+
     /// Set a global setting value.
     pub fn set_setting(&self, key: &str, value: &str) -> Result<(), DbError> {
         self.conn.execute(

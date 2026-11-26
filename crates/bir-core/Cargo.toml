@@ -99,8 +99,9 @@ tracing-log = "0.2"
 dotenvy = { workspace = true }
 rand = "0.10.1"
 # The PIN hash (accounts-and-lock PLAN §B.1). The version already in the lockfile (through ssh-key); the salt
-# comes from `rand`'s system generator, so no getrandom feature is needed here.
-argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "password-hash"] }
+# comes from `rand`'s system generator, so no getrandom feature is needed here. `zeroize` wipes its working
+# memory after each hash (N5).
+argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "password-hash", "zeroize"] }
 hex = "0.4.3"
 imap = "2.4.1"
 native-tls = "0.2.18"

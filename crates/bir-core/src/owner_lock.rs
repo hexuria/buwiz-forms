@@ -12,6 +12,11 @@
 //!   that reaches the threshold starts; a reset to 0 for a match); only then is the page answered. A process
 //!   killed before the commit gave no answer, so an attacker gains nothing, and a crash never costs a try. A check
 //!   that fails (a store or database error, not a wrong PIN) commits nothing, as today.
+//! - **One try at a time per subject (I1).** In this process, the whole read, hash and commit of a try holds that
+//!   subject's lock ([`guarded`]), so tries sent together are checked one after another and the 6-try round
+//!   holds. Across processes, [`DeviceStore::settle_try`] looks at the row again inside its write transaction: a
+//!   wait that began since the try was read wins (the miss still counts; a match resets nothing), and the answer
+//!   is that wait.
 //! - **The clock (L4, X3).** A wait records the wall clock and the boot ([`crate::boot_clock`]) it started in.
 //!   Within the same boot (the same boot id) the time since boot decides, so moving the wall clock changes
 //!   nothing; after a reboot the wall clock does, and a clock set back never shortens a wait. Every read caps the
@@ -160,6 +165,16 @@ pub struct PendingTry {
     now: ClockReading,
 }
 
+/// What [`DeviceStore::settle_try`] committed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Settled {
+    /// The result stands. For a miss: the wait it started, if it started one.
+    Done { wait_started: Option<Duration> },
+    /// A wait began after the try was read (another process's miss): it wins, and this is the time left. A miss
+    /// was still counted; a match reset nothing.
+    Waiting(Duration),
+}
+
 /// How a check ended, to commit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TryOutcome {
@@ -191,25 +206,33 @@ impl DeviceStore {
         })
     }
 
-    /// Commit the result of a check: a match resets the count; a miss adds one and, on the 6th, 12th... in a row,
-    /// starts the wait it reaches. Answers the wait this miss started, if it started one.
+    /// Commit the result of a check, in one write transaction that reads the row as it is now: a match resets the
+    /// count; a miss adds one and, on the 6th, 12th... in a row, starts the wait it reaches. A wait that is running
+    /// now, though none was when the try was read, wins: the miss is counted all the same, a match resets nothing,
+    /// and the answer is [`Settled::Waiting`].
     pub fn settle_try(
         &self,
         pending: &PendingTry,
         outcome: TryOutcome,
-    ) -> Result<Option<Duration>, DeviceStoreError> {
+    ) -> Result<Settled, DeviceStoreError> {
         let key = &pending.key;
-        if outcome == TryOutcome::Matched {
-            self.conn.execute(
-                "DELETE FROM pin_attempts WHERE room_id = ?1 AND subject = ?2",
-                params![key.room_id, key.subject.key()],
-            )?;
-            return Ok(None);
-        }
         let now = &pending.now;
         let transaction =
             rusqlite::Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
         let mut row = read_attempts(&transaction, key)?.unwrap_or_default();
+        let running = row.wait_left(now);
+        if outcome == TryOutcome::Matched {
+            if let Some(wait) = running {
+                transaction.commit()?;
+                return Ok(Settled::Waiting(wait));
+            }
+            transaction.execute(
+                "DELETE FROM pin_attempts WHERE room_id = ?1 AND subject = ?2",
+                params![key.room_id, key.subject.key()],
+            )?;
+            transaction.commit()?;
+            return Ok(Settled::Done { wait_started: None });
+        }
         row.failures += 1;
         let started = wait_after(row.failures);
         if let Some(wait) = started {
@@ -228,7 +251,12 @@ impl DeviceStore {
         }
         write_attempts(&transaction, key, &row)?;
         transaction.commit()?;
-        Ok(started.and_then(|_| row.wait_left(now)))
+        Ok(match running {
+            Some(_) => Settled::Waiting(row.wait_left(now).unwrap_or(Duration::from_secs(1))),
+            None => Settled::Done {
+                wait_started: started.and_then(|_| row.wait_left(now)),
+            },
+        })
     }
 
     /// The owner lock of `room`, if it has a row.
@@ -349,14 +377,36 @@ pub enum GuardError<E> {
     Check(E),
 }
 
+/// The per-subject locks of this process ([`subject_lock`]).
+type SubjectLocks =
+    std::collections::HashMap<(String, String), std::sync::Arc<std::sync::Mutex<()>>>;
+static SUBJECT_LOCKS: std::sync::Mutex<Option<SubjectLocks>> = std::sync::Mutex::new(None);
+
+/// The lock every try of `key` holds from its read to its commit in this process (I1). One small entry per
+/// subject ever tried; never removed.
+fn subject_lock(key: &AttemptKey) -> std::sync::Arc<std::sync::Mutex<()>> {
+    let mut locks = SUBJECT_LOCKS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    locks
+        .get_or_insert_with(Default::default)
+        .entry((key.room_id.clone(), key.subject.key()))
+        .or_default()
+        .clone()
+}
+
 /// Run `check` for `key` under the limit, in the order above (L5): refuse during a wait; run the check (the hash);
-/// commit its result; only then answer. A result that cannot be committed gives no answer.
+/// commit its result; only then answer. A result that cannot be committed gives no answer. The whole try holds
+/// the subject's lock, so tries of one subject in this process never overlap (I1); a wait another process
+/// started meanwhile wins at the commit.
 pub fn guarded<E>(
     store: &DeviceStoreRef,
     key: &AttemptKey,
     now: &ClockReading,
     check: impl FnOnce() -> Result<bool, E>,
 ) -> Result<Attempt, GuardError<E>> {
+    let lock = subject_lock(key);
+    let _one_at_a_time = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let pending = match store
         .with(true, |store| store.begin_try(key, now))
         .map_err(GuardError::Store)?
@@ -371,14 +421,14 @@ pub fn guarded<E>(
     } else {
         TryOutcome::Missed
     };
-    let started = store
+    let settled = store
         .with(true, |store| store.settle_try(&pending, outcome))
         .map_err(GuardError::Store)?
         .ok_or_else(|| GuardError::Store(not_found()))?;
-    Ok(if matched {
-        Attempt::Matched
-    } else {
-        Attempt::Missed { wait: started }
+    Ok(match settled {
+        Settled::Waiting(wait) => Attempt::Waiting(wait),
+        Settled::Done { .. } if matched => Attempt::Matched,
+        Settled::Done { wait_started } => Attempt::Missed { wait: wait_started },
     })
 }
 
@@ -406,6 +456,8 @@ pub enum OwnerPinError {
     NoPin,
     /// Not exactly 4 digits.
     NotAPin,
+    /// The device store was lost (I2, N6): no PIN may be set until the emailed reset code (§B.6, B3).
+    StoreLost,
     Hash(pin::PinError),
     Store(DeviceStoreError),
 }
@@ -416,6 +468,9 @@ impl std::fmt::Display for OwnerPinError {
             Self::NoRoom => f.write_str("This account's room is not set up yet."),
             Self::NoPin => f.write_str("No PIN is set for this account on this device."),
             Self::NotAPin => f.write_str("A PIN is 4 digits."),
+            Self::StoreLost => f.write_str(
+                "This device's lock was lost. Reset it with the code we email you before setting a PIN.",
+            ),
             Self::Hash(error) => write!(f, "{error}"),
             Self::Store(error) => write!(f, "{error}"),
         }
@@ -447,16 +502,41 @@ fn found<T>(answer: Option<T>) -> Result<T, OwnerPinError> {
     )))
 }
 
-/// The owner lock of `room`; `None` while it has no row. Reads only: never makes `device.db`.
+/// The owner lock of `room`; `None` while it has no row. Reads only: never makes `device.db`. A `device.db` that
+/// is missing while `rooms/` is on disk was lost (L2): that is [`DeviceStoreError::Lost`], never "no PIN" (I2).
 pub fn owner_lock(
     store: &DeviceStoreRef,
     room: &RoomId,
 ) -> Result<Option<OwnerLock>, OwnerPinError> {
-    Ok(store.with(false, |store| store.owner_lock(room))?.flatten())
+    match store.with(false, |store| store.owner_lock(room))? {
+        Some(lock) => Ok(lock),
+        None => match store {
+            DeviceStoreRef::File(layout) if layout.has_rooms() => Err(OwnerPinError::Store(
+                DeviceStoreError::Lost(layout.device_db()),
+            )),
+            _ => Ok(None),
+        },
+    }
+}
+
+/// Whether `room`'s lock was lost (I2, N6): `device.db` is missing while rooms are on disk, or it was made again
+/// after a loss ([`DeviceStore::recreate_after_loss`]) and this room has no owner PIN since. Until the emailed
+/// reset (§B.6, B3) sets one, no PIN may be set here.
+pub fn store_lost(store: &DeviceStoreRef, room: &RoomId) -> Result<bool, OwnerPinError> {
+    match owner_lock(store, room) {
+        Err(OwnerPinError::Store(DeviceStoreError::Lost(_))) => Ok(true),
+        Err(error) => Err(error),
+        Ok(Some(lock)) if lock.pin_phc.is_some() => Ok(false),
+        Ok(_) => Ok(store
+            .with(false, |store| store.lost_at())?
+            .flatten()
+            .is_some()),
+    }
 }
 
 /// Set `room`'s owner PIN: Argon2id with its own salt, hashed on the caller's thread (run it off the engine
-/// thread). The owner's count goes back to 0. Whether the caller may set it is the caller's rule.
+/// thread). The owner's count goes back to 0. Refused while the lock is lost ([`store_lost`]). Whether the caller
+/// may set it otherwise is the caller's rule.
 pub fn set_owner_pin(
     store: &DeviceStoreRef,
     room: &RoomId,
@@ -464,6 +544,11 @@ pub fn set_owner_pin(
 ) -> Result<(), OwnerPinError> {
     if !is_pin(typed) {
         return Err(OwnerPinError::NotAPin);
+    }
+    let lock = subject_lock(&AttemptKey::owner(room));
+    let _one_at_a_time = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if store_lost(store, room)? {
+        return Err(OwnerPinError::StoreLost);
     }
     if found(store.with(true, |store| store.room(room))?)?.is_none() {
         return Err(OwnerPinError::NoRoom);
@@ -473,28 +558,31 @@ pub fn set_owner_pin(
     Ok(())
 }
 
-/// Check `typed` against `room`'s owner PIN under the limit ([`guarded`]); hashed on the caller's thread. A match
-/// against a hash cheaper than today's cost is rehashed.
+/// Check `typed` against `room`'s owner PIN under the limit ([`guarded`]); hashed on the caller's thread. The PIN
+/// is read inside the try, so a PIN set meanwhile is the one checked (N7). Only an Argon2id string is accepted
+/// (N2). A match against a hash cheaper than today's cost is rehashed.
 pub fn verify_owner_pin(
     store: &DeviceStoreRef,
     room: &RoomId,
     typed: &str,
     now: &ClockReading,
 ) -> Result<Attempt, OwnerPinError> {
-    let Some(phc) = owner_lock(store, room)?.and_then(|lock| lock.pin_phc) else {
-        return Err(OwnerPinError::NoPin);
-    };
+    let mut checked_phc = None;
     let mut upgrade = false;
     let attempt = guarded(store, &AttemptKey::owner(room), now, || {
-        let checked = pin::check(&phc, typed)?;
+        let Some(phc) = owner_lock(store, room)?.and_then(|lock| lock.pin_phc) else {
+            return Err(OwnerPinError::NoPin);
+        };
+        let checked = pin::check_phc(&phc, typed)?;
         upgrade = matches!(checked, pin::Check::Match { upgrade: true });
-        Ok::<_, pin::PinError>(checked.matched())
+        checked_phc = Some(phc);
+        Ok(checked.matched())
     })
     .map_err(|error| match error {
         GuardError::Store(error) => OwnerPinError::Store(error),
-        GuardError::Check(error) => OwnerPinError::Hash(error),
+        GuardError::Check(error) => error,
     })?;
-    if attempt == Attempt::Matched && upgrade {
+    if let (Attempt::Matched, true, Some(phc)) = (attempt, upgrade, checked_phc) {
         let rehashed = pin::hash(typed)
             .map_err(OwnerPinError::from)
             .and_then(|new| {
@@ -949,6 +1037,175 @@ mod tests {
             verify_owner_pin(&store, &room, "2468", &now).unwrap(),
             Attempt::Matched
         );
+    }
+
+    /// I1: twenty tries sent at once, from 5 wrong in a row. Exactly one more yes/no answer comes back (the 6th
+    /// miss, which starts the wait); the other nineteen answer the wait, and count nothing.
+    #[test]
+    fn twenty_tries_at_once_get_one_answer_before_the_wait() {
+        let folder = tempfile::tempdir().unwrap();
+        let store = file_store(folder.path());
+        let room = with_room(&store);
+        set_owner_pin(&store, &room, "0817").unwrap();
+        let now = crate::boot_clock::read();
+        for _ in 0..5 {
+            verify_owner_pin(&store, &room, "0000", &now).unwrap();
+        }
+        let start = std::sync::Arc::new(std::sync::Barrier::new(20));
+        let tries: Vec<_> = (0..20)
+            .map(|_| {
+                let (store, room, now, start) =
+                    (store.clone(), room.clone(), now.clone(), start.clone());
+                std::thread::spawn(move || {
+                    start.wait();
+                    verify_owner_pin(&store, &room, "0000", &now).unwrap()
+                })
+            })
+            .collect();
+        let answers: Vec<Attempt> = tries.into_iter().map(|t| t.join().unwrap()).collect();
+        let answered = answers
+            .iter()
+            .filter(|a| matches!(a, Attempt::Matched | Attempt::Missed { .. }))
+            .count();
+        assert_eq!(answered, 1, "{answers:?}");
+        assert!(
+            answers
+                .iter()
+                .any(|a| matches!(a, Attempt::Missed { wait: Some(_) }))
+        );
+        assert_eq!(
+            answers
+                .iter()
+                .filter(|a| matches!(a, Attempt::Waiting(_)))
+                .count(),
+            19
+        );
+        let stored = row(&store, &AttemptKey::owner(&room));
+        assert_eq!((stored.failures, stored.wait_secs), (6, 60));
+    }
+
+    /// I1(b), the backstop across processes: a match read before a parallel 6th miss committed must not erase the
+    /// wait that miss started, and answers the wait; a miss settled during a wait it did not see still counts, and
+    /// answers the wait too.
+    #[test]
+    fn a_match_settled_after_a_parallel_sixth_miss_keeps_its_wait() {
+        let store = memory_store();
+        let key = AttemptKey::legacy();
+        let now = reading(1_000_000, Some(("boot-a", 500)));
+        for _ in 0..5 {
+            miss(&store, &key, &now);
+        }
+        let begin = || match store
+            .with(true, |s| s.begin_try(&key, &now))
+            .unwrap()
+            .unwrap()
+        {
+            Begun::Ready(pending) => pending,
+            Begun::Waiting(wait) => panic!("no wait yet, found {wait:?}"),
+        };
+        let the_match = begin();
+        let late_miss = begin();
+        let sixth = begin();
+        let settle = |pending: &PendingTry, outcome| {
+            store
+                .with(true, |s| s.settle_try(pending, outcome))
+                .unwrap()
+                .unwrap()
+        };
+        assert_eq!(
+            settle(&sixth, TryOutcome::Missed),
+            Settled::Done {
+                wait_started: Some(Duration::from_secs(60))
+            }
+        );
+        assert!(matches!(
+            settle(&the_match, TryOutcome::Matched),
+            Settled::Waiting(_)
+        ));
+        let kept = row(&store, &key);
+        assert_eq!(
+            (kept.failures, kept.wait_secs),
+            (6, 60),
+            "the wait was not erased"
+        );
+        assert!(matches!(
+            settle(&late_miss, TryOutcome::Missed),
+            Settled::Waiting(_)
+        ));
+        assert_eq!(row(&store, &key).failures, 7, "the late miss still counts");
+    }
+
+    /// I2: a device.db missing while rooms are on disk is "lost", never "no PIN"; so is one made again after the
+    /// loss, for a room with no PIN since. No PIN may be set there until the emailed reset stores one (B3).
+    #[test]
+    fn a_lost_device_db_is_never_no_pin() {
+        let folder = tempfile::tempdir().unwrap();
+        let layout = Layout::at(folder.path());
+        let store = file_store(folder.path());
+        let room = with_room(&store);
+        set_owner_pin(&store, &room, "0817").unwrap();
+        drop(DeviceStore::open(&layout).unwrap());
+        // Gone, with the room's folder on disk (the held connection is dropped when the file is missing).
+        layout.create_room_dir(&room).unwrap();
+        for file in ["device.db", "device.db-wal", "device.db-shm"] {
+            let _ = std::fs::remove_file(folder.path().join(file));
+        }
+        assert!(matches!(
+            owner_lock(&store, &room),
+            Err(OwnerPinError::Store(DeviceStoreError::Lost(_)))
+        ));
+        assert!(store_lost(&store, &room).unwrap());
+        assert!(matches!(
+            set_owner_pin(&store, &room, "2468"),
+            Err(OwnerPinError::StoreLost)
+        ));
+        assert!(
+            !layout.device_db().exists(),
+            "nothing made it again silently"
+        );
+
+        // Made again after the loss: still lost for this room, and still no set.
+        drop(DeviceStore::recreate_after_loss(&layout).unwrap());
+        assert!(owner_lock(&store, &room).unwrap().is_none());
+        assert!(store_lost(&store, &room).unwrap());
+        assert!(matches!(
+            set_owner_pin(&store, &room, "2468"),
+            Err(OwnerPinError::StoreLost)
+        ));
+        // The reset (B3) stores a PIN: no longer lost, and the PIN can be changed again.
+        let reset = pin::hash("1357").unwrap();
+        store
+            .with(true, |s| {
+                s.add_room(&RoomRecord {
+                    room_id: room.clone(),
+                    origin: "https://api.buwiz.com".into(),
+                    user_id: "user-1".into(),
+                    email: None,
+                    created_at: "2026-11-27T00:00:00+00:00".into(),
+                    from_legacy: false,
+                })?;
+                s.store_owner_pin_phc(&room, &reset)
+            })
+            .unwrap();
+        assert!(!store_lost(&store, &room).unwrap());
+        set_owner_pin(&store, &room, "2468").unwrap();
+    }
+
+    /// N2: an old SHA-256 value in the owner store is refused, and counts nothing.
+    #[test]
+    fn the_owner_check_refuses_an_old_sha_value() {
+        let store = memory_store();
+        let room = with_room(&store);
+        let sha = crate::crypto::hash_pin("0817");
+        store
+            .with(true, |s| s.store_owner_pin_phc(&room, &sha))
+            .unwrap();
+        let now = reading(1_000_000, None);
+        assert!(matches!(
+            verify_owner_pin(&store, &room, "0817", &now),
+            Err(OwnerPinError::Hash(_))
+        ));
+        assert_eq!(row(&store, &AttemptKey::owner(&room)).failures, 0);
     }
 
     /// The owner store never holds an old SHA-256 value. The legacy upgrade takes the old credential typed once
