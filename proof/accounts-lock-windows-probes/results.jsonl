@@ -1,0 +1,56 @@
+{"note":"machine: Microsoft Windows Server 2022 Standard build 20348"}
+{"note":"filesystem of C:\probe-data: "}
+{"note":"fsync and move in C:\probe-data"}
+{"probe":"fsync","dir":"C:\\probe-data\\fsync","handle":"read","result":"Access is denied. (os error 5)","os_error":5}
+{"probe":"fsync","dir":"C:\\probe-data\\fsync","handle":"read+write","result":"ok","os_error":null}
+{"probe":"move","step":"create rooms/r1","result":"ok","os_error":null}
+{"probe":"move","step":"fsync rooms (read+write)","result":"ok","os_error":null}
+{"probe":"move","step":"hard_link legacy -> room file","result":"ok","os_error":null}
+{"probe":"move","step":"identity of both names","legacy":"volume 36c3c1cd index 000a0000000941c4 links 2","room":"volume 36c3c1cd index 000a0000000941c4 links 2","same_file":true}
+{"probe":"move","step":"hard_link again (must fail AlreadyExists, 183)","result":"Cannot create a file when that file already exists. (os error 183)","os_error":183}
+{"probe":"move","step":"fsync room folder","result":"ok","os_error":null}
+{"probe":"move","step":"remove legacy name","result":"ok","os_error":null}
+{"probe":"move","step":"fsync data folder","result":"ok","os_error":null}
+{"probe":"move","step":"room file after unlink","identity":"volume 36c3c1cd index 000a0000000941c4 links 1"}
+{"probe":"move","step":"MoveFileExW onto an existing file (must fail, 183)","result":"Cannot create a file when that file already exists. (os error 183)","os_error":183}
+{"probe":"move","step":"MoveFileExW to a free name","result":"ok","os_error":null}
+{"probe":"move","step":"room file holds the legacy bytes","result":"Ok(true)"}
+{"note":"fsync and move in C:\Users\Administrator\AppData\Local\accounts-lock-probe"}
+{"probe":"fsync","dir":"C:\\Users\\Administrator\\AppData\\Local\\accounts-lock-probe\\fsync","handle":"read","result":"Access is denied. (os error 5)","os_error":5}
+{"probe":"fsync","dir":"C:\\Users\\Administrator\\AppData\\Local\\accounts-lock-probe\\fsync","handle":"read+write","result":"ok","os_error":null}
+{"probe":"move","step":"create rooms/r1","result":"ok","os_error":null}
+{"probe":"move","step":"fsync rooms (read+write)","result":"ok","os_error":null}
+{"probe":"move","step":"hard_link legacy -> room file","result":"ok","os_error":null}
+{"probe":"move","step":"identity of both names","legacy":"volume 36c3c1cd index 00070000000941cc links 2","room":"volume 36c3c1cd index 00070000000941cc links 2","same_file":true}
+{"probe":"move","step":"hard_link again (must fail AlreadyExists, 183)","result":"Cannot create a file when that file already exists. (os error 183)","os_error":183}
+{"probe":"move","step":"fsync room folder","result":"ok","os_error":null}
+{"probe":"move","step":"remove legacy name","result":"ok","os_error":null}
+{"probe":"move","step":"fsync data folder","result":"ok","os_error":null}
+{"probe":"move","step":"room file after unlink","identity":"volume 36c3c1cd index 00070000000941cc links 1"}
+{"probe":"move","step":"MoveFileExW onto an existing file (must fail, 183)","result":"Cannot create a file when that file already exists. (os error 183)","os_error":183}
+{"probe":"move","step":"MoveFileExW to a free name","result":"ok","os_error":null}
+{"probe":"move","step":"room file holds the legacy bytes","result":"Ok(true)"}
+{"note":"holder"}
+{"probe":"holder","step":"raw: first open of A in this process","result":"opened, handle 0xb4"}
+{"probe":"holder","step":"raw: second open of A in the same process (today's code)","result":"refused: The process cannot access the file because it is being used by another process. (os error 32) (os error Some(32))"}
+{"probe":"holder","step":"holder: take A","result":"held, handle 0xb4"}
+{"probe":"holder","step":"holder: take B while A is held","result":"held, handle 0xbc"}
+{"probe":"holder","step":"holder: take A again (same handle, no new open)","result":"held, handle 0xb4"}
+{"probe":"holder","step":"holder: A's second take returned the first handle","result":true}
+{"probe":"holder","step":"another process opens A while held (3 = refused)","result":3}
+{"probe":"holder","step":"another process opens B while held (3 = refused)","result":3}
+{"probe":"holder","step":"another process opens A after release (0 = opened)","result":0}
+{"probe":"holder","step":"another process opens B, still held (3 = refused)","result":3}
+{"note":"clock: before"}
+{"probe":"boot","registry_BootId":"17","wall":"2026-11-26T15:39:37.3740061+00:00"}
+{"probe":"boot","wall_unix_ms":1795707577381,"tick64_ms":281218,"wall_minus_tick_ms":1795707296163,"boot_guid":"3a01280527d8f111b7fbf6f9664c97bf"}
+{"note":"clock: set forward 3 h"}
+{"probe":"boot","registry_BootId":"17","wall":"2026-11-26T18:39:37.6539473+00:00"}
+{"probe":"boot","wall_unix_ms":1795718377668,"tick64_ms":281546,"wall_minus_tick_ms":1795718096122,"boot_guid":"3a01280527d8f111b7fbf6f9664c97bf"}
+{"note":"clock: 10 s later"}
+{"probe":"boot","registry_BootId":"17","wall":"2026-11-26T18:39:47.7869835+00:00"}
+{"probe":"boot","wall_unix_ms":1795718387794,"tick64_ms":291671,"wall_minus_tick_ms":1795718096123,"boot_guid":"3a01280527d8f111b7fbf6f9664c97bf"}
+{"note":"clock: set back and resynced"}
+{"probe":"boot","registry_BootId":"17","wall":"2026-11-26T15:39:49.6917520+00:00"}
+{"probe":"boot","wall_unix_ms":1795707589699,"tick64_ms":293578,"wall_minus_tick_ms":1795707296121,"boot_guid":"3a01280527d8f111b7fbf6f9664c97bf"}
+{"note":"done"}

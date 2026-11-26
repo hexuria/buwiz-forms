@@ -1,0 +1,2 @@
+{"probe":"fsync","dir":"X:\\p","handle":"read","result":"Access is denied. (os error 5)","os_error":5}
+{"probe":"fsync","dir":"X:\\p","handle":"read+write","result":"ok","os_error":null}

@@ -1,0 +1,12 @@
+{"probe":"move","step":"create rooms/r1","result":"ok","os_error":null}
+{"probe":"move","step":"fsync rooms (read+write)","result":"ok","os_error":null}
+{"probe":"move","step":"hard_link legacy -> room file","result":"ok","os_error":null}
+{"probe":"move","step":"identity of both names","legacy":"volume 1e825249 index 3000000000002703 links 2","room":"volume 1e825249 index 3000000000002703 links 2","same_file":true}
+{"probe":"move","step":"hard_link again (must fail AlreadyExists, 183)","result":"Cannot create a file when that file already exists. (os error 183)","os_error":183}
+{"probe":"move","step":"fsync room folder","result":"ok","os_error":null}
+{"probe":"move","step":"remove legacy name","result":"ok","os_error":null}
+{"probe":"move","step":"fsync data folder","result":"ok","os_error":null}
+{"probe":"move","step":"room file after unlink","identity":"volume 1e825249 index 3000000000002703 links 1"}
+{"probe":"move","step":"MoveFileExW onto an existing file (must fail, 183)","result":"Cannot create a file when that file already exists. (os error 183)","os_error":183}
+{"probe":"move","step":"MoveFileExW to a free name","result":"ok","os_error":null}
+{"probe":"move","step":"room file holds the legacy bytes","result":"Ok(true)"}

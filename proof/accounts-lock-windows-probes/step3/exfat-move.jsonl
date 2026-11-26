@@ -1,0 +1,11 @@
+{"probe":"move","step":"create rooms/r1","result":"ok","os_error":null}
+{"probe":"move","step":"fsync rooms (read+write)","result":"ok","os_error":null}
+{"probe":"move","step":"hard_link legacy -> room file","result":"Incorrect function. (os error 1)","os_error":1}
+{"probe":"move","step":"identity","error":"Ok((578745919, 393216, 1)) Err(Os { code: 2, kind: NotFound, message: \"The system cannot find the file specified.\" })"}
+{"probe":"move","step":"hard_link again (must fail AlreadyExists, 183)","result":"Incorrect function. (os error 1)","os_error":1}
+{"probe":"move","step":"fsync room folder","result":"ok","os_error":null}
+{"probe":"move","step":"remove legacy name","result":"ok","os_error":null}
+{"probe":"move","step":"fsync data folder","result":"ok","os_error":null}
+{"probe":"move","step":"MoveFileExW onto an existing file (must fail, 183)","result":"ok","os_error":null}
+{"probe":"move","step":"MoveFileExW to a free name","result":"The system cannot find the file specified. (os error 2)","os_error":2}
+{"probe":"move","step":"room file holds the legacy bytes","result":"Ok(false)"}

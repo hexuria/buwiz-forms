@@ -1,0 +1,7 @@
+OS caption: Microsoft Windows Server 2022 Standard
+OS build: 20348
+Volumes: no-letter FAT32 0.1 GB; C: NTFS 127.9 GB; D: FAT32 0.1 GB
+PowerShell elevated: True
+Registry BootId: 17
+LastBootUpTime: 2026-11-26T15:34:56.5000000+00:00
+git rev-parse HEAD: 83fc03062cbd3b1656837ffb709339b7c106942d

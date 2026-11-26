@@ -1,0 +1,18 @@
+devinbox\prb8ga5b2hi
+LOCALAPPDATA=C:\Users\prb8ga5b2hi\AppData\Local
+{"probe":"fsync","dir":"C:\\Users\\prb8ga5b2hi\\AppData\\Local\\accounts-lock-probe-user\\fsync","handle":"read","result":"Access is denied. (os error 5)","os_error":5}
+{"probe":"fsync","dir":"C:\\Users\\prb8ga5b2hi\\AppData\\Local\\accounts-lock-probe-user\\fsync","handle":"read+write","result":"ok","os_error":null}
+fsync_rc=0
+{"probe":"move","step":"create rooms/r1","result":"ok","os_error":null}
+{"probe":"move","step":"fsync rooms (read+write)","result":"ok","os_error":null}
+{"probe":"move","step":"hard_link legacy -> room file","result":"ok","os_error":null}
+{"probe":"move","step":"identity of both names","legacy":"volume 36c3c1cd index 0007000000094284 links 2","room":"volume 36c3c1cd index 0007000000094284 links 2","same_file":true}
+{"probe":"move","step":"hard_link again (must fail AlreadyExists, 183)","result":"Cannot create a file when that file already exists. (os error 183)","os_error":183}
+{"probe":"move","step":"fsync room folder","result":"ok","os_error":null}
+{"probe":"move","step":"remove legacy name","result":"ok","os_error":null}
+{"probe":"move","step":"fsync data folder","result":"ok","os_error":null}
+{"probe":"move","step":"room file after unlink","identity":"volume 36c3c1cd index 0007000000094284 links 1"}
+{"probe":"move","step":"MoveFileExW onto an existing file (must fail, 183)","result":"Cannot create a file when that file already exists. (os error 183)","os_error":183}
+{"probe":"move","step":"MoveFileExW to a free name","result":"ok","os_error":null}
+{"probe":"move","step":"room file holds the legacy bytes","result":"Ok(true)"}
+move_rc=0
