@@ -9415,6 +9415,15 @@ mod tests {
             "{msg}"
         );
 
+        // A negative amount is still refused for its real reason.
+        let negative = fill("2551Q", &opened["draft"], json!({"txtATCAmt1": "-100"}));
+        assert!(
+            negative["rejected"]["txtATCAmt1"]
+                .as_str()
+                .is_some_and(|m| m.contains("non-negative")),
+            "{negative}"
+        );
+
         // Over 12-char typed limit without centavos (13 digits): refused AT ENTRY
         let over_whole = fill(
             "2551Q",

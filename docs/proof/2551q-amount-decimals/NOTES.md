@@ -30,4 +30,4 @@ For the case in this work, `2000.005` therefore becomes `2000.01` (displayed `2,
 
 `cargo check -p bir-app-api`: PASS. Output: `cargo-check.log` in this directory.
 
-Real-window hand proof for `2000.005` is still pending at this commit.
+Real-window hand proof for `2000.005` is in `manual-proof/`: the box rounded the typed value to `2,000.01`, Done closed the row, the Schedule 1 total became `60.00`, and the scratch database stored `2000.01` / `60.0`.
