@@ -54,8 +54,8 @@ function seed(p: Params) {
     bir.set_year_facts(head.tin, Number(y), { income_tax_election: election });
   }
   if (p.branch && !taxpayer.branches.some((b) => b.code === "00001")) bir.create_branch(taxpayer.tin_root, { branch_code: "00001", name: "Cebu branch" });
-  if (p.peer && !bir.list_taxpayers().some((t) => t.tin_root === "000111237")) {
-    const peer = bir.create_taxpayer({ tin_root: "000-111-237", name: "Sample Person", taxpayer_type: "Individual", head_office: { rdo_code: "050", registered_address: "Makati City", zip_code: "1226" } });
+  if (p.peer && !bir.list_taxpayers().some((t) => t.tin_root === "000111233")) {
+    const peer = bir.create_taxpayer({ tin_root: "000-111-233", name: "Sample Person", taxpayer_type: "Individual", head_office: { rdo_code: "050", registered_address: "Makati City", zip_code: "1226" } });
     bir.add_tax_year(peer.branches[0].tin, year, false);
     bir.set_yearly_forms(peer.branches[0].tin, year, ["1701Q", "2551Q"]);
   }

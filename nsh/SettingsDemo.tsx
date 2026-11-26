@@ -4,7 +4,7 @@
 //   years     default true: this year with 1601C and 2551Q; false: no tax year yet
 //   solo      true: choose "Just me" for the demo taxpayer (setup_solo), so the admin PIN, recovery key and setup change work
 //   helpdesk  "2468": choose a help desk with this admin PIN instead (the demo taxpayer is then one of its taxpayers)
-//   second    true: add a second taxpayer (generated: Sample Trading Corp, TIN 000-111-229) with the PIN 5678, so it can become the
+//   second    true: add a second taxpayer (generated: Sample Trading Corp, TIN 000-111-225) with the PIN 5678, so it can become the
 //             owner; "nopin": the same without a PIN (it cannot be chosen yet)
 //   totpSecret an authenticator key (base32) to give the admin before the app starts; the test makes the code with screens/auth/testTotp
 //   pin       the admin PIN to set before the app starts ("1234"); needs solo. With a PIN the app starts at the sign-in screen,
@@ -287,9 +287,9 @@ function seed(p: Params): void {
     bir.add_tax_year(head.tin, year, false);
     bir.set_yearly_forms(head.tin, year, ["1601C", "2551Q"]);
   }
-  if (p.second && !bir.list_taxpayers().some((t) => t.tin_root === "000111229")) {
-    bir.create_taxpayer({ tin_root: "000-111-229", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100", email: "sample@example.com" } });
-    if (p.second !== "nopin") bir.set_taxpayer_pin("000111229", "5678");
+  if (p.second && !bir.list_taxpayers().some((t) => t.tin_root === "000111225")) {
+    bir.create_taxpayer({ tin_root: "000-111-225", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100", email: "sample@example.com" } });
+    if (p.second !== "nopin") bir.set_taxpayer_pin("000111225", "5678");
   }
   if (bir.auth_state().mode === null) {
     if (p.helpdesk) bir.setup_helpdesk(p.helpdesk);

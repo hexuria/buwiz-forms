@@ -23,7 +23,7 @@ test("desktop: every sign-in, lock and log out runs the hooks once, in order; a 
   await app.keyboard.press("mod+l");
   await app.waitFor("id:auth-card");
   await app.waitFor("text:hooks: " + [ONE, ONE].join(","));
-  await signIn(app, "000111229", "5555");
+  await signIn(app, "000111225", "5555");
   await app.waitFor("text:hooks: " + [ONE, ONE, ONE].join(","));
   // Log out from the account menu.
   await app.press("id:account-row");
