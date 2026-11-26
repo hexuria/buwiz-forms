@@ -276,13 +276,13 @@ mod tests {
         // Our process but not an NSH window: not taken.
         let ours_other_class = window(14, OURS, "#32770", true, false);
         assert_eq!(
-            pick_window(Some(&ours_other_class), &[ours_other_class.clone()], OURS),
+            pick_window(Some(&ours_other_class), std::slice::from_ref(&ours_other_class), OURS),
             None
         );
         // Nothing: none.
         assert_eq!(pick_window(None, &[], OURS), None);
         assert_eq!(
-            pick_window(Some(&other_app), &[other_app.clone()], OURS),
+            pick_window(Some(&other_app), std::slice::from_ref(&other_app), OURS),
             None
         );
     }
