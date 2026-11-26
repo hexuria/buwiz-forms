@@ -260,20 +260,101 @@ fn joined_keys_for_slug(slug: &str) -> std::collections::BTreeSet<String> {
     keys
 }
 
+/// The signed number an amount text holds: commas and spaces dropped,
+/// `(123)` and `-123` both negative. `None` for anything that is not a number.
 fn norm_numeric(s: &str) -> Option<f64> {
     let t = s.trim().replace([',', ' '], "");
     if t.is_empty() {
         return None;
     }
-    let cleaned = if let Some(inner) = t.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
-        format!("-{inner}")
-    } else {
-        t
+    let (negative, inner) = match t.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
+        Some(inner) => (true, inner),
+        None => match t.strip_prefix('-') {
+            Some(rest) => (true, rest),
+            None => (false, t.as_str()),
+        },
     };
-    cleaned.parse::<f64>().ok()
+    if inner.is_empty() || !inner.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        return None;
+    }
+    let magnitude: f64 = inner.parse().ok()?;
+    Some(if negative { -magnitude } else { magnitude })
 }
 
-fn official_matches_print_exact(official: &str, printed: &str) -> bool {
+/// What a joined key holds, which decides how its print is compared.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Kind {
+    /// Compared as a signed number.
+    Amount,
+    /// Compared by its digits.
+    Tin,
+    /// Compared exactly (checkbox truth marks aside).
+    Text,
+}
+
+/// The amount controls of the form printed on `slug`, from its official
+/// layout (`crates/bir-core/data/official-xml/<form_id>.json`, the form id
+/// writer-cells.json names): the `numbertext` entries (`"number"`) and the
+/// controls the official page starts at `0` or `0.00`.
+fn official_amount_keys(slug: &str) -> std::collections::BTreeSet<String> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let cells: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            root.join("../../html-frozen")
+                .join(slug)
+                .join("writer-cells.json"),
+        )
+        .expect("writer-cells.json"),
+    )
+    .expect("valid writer-cells.json");
+    let form_id = cells["form_id"]
+        .as_str()
+        .expect("writer-cells form_id")
+        .to_ascii_lowercase();
+    let path = root
+        .join("data/official-xml")
+        .join(format!("{form_id}.json"));
+    let layout: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("missing {}: {e}", path.display())),
+    )
+    .expect("valid official layout");
+    layout["entries"]
+        .as_array()
+        .expect("layout entries")
+        .iter()
+        .filter(|entry| {
+            entry.get("number").is_some() || matches!(entry["default"].as_str(), Some("0" | "0.00"))
+        })
+        .filter_map(|entry| entry["key"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// An official value written the way `formatCurrency()` writes an amount
+/// (`1,234.50`, `-5.00`): grouped digits with two decimals.
+fn is_currency_text(s: &str) -> bool {
+    let body = s.trim();
+    let body = body.strip_prefix('-').unwrap_or(body);
+    let Some((whole, cents)) = body.split_once('.') else {
+        return false;
+    };
+    cents.len() == 2
+        && cents.bytes().all(|b| b.is_ascii_digit())
+        && !whole.is_empty()
+        && whole.bytes().all(|b| b.is_ascii_digit() || b == b',')
+}
+
+fn kind_of(key: &str, official: &str, amounts: &std::collections::BTreeSet<String>) -> Kind {
+    if amounts.contains(key) || is_currency_text(official) {
+        Kind::Amount
+    } else if key.to_ascii_uppercase().contains("TIN") {
+        Kind::Tin
+    } else {
+        Kind::Text
+    }
+}
+
+fn official_matches_print(official: &str, printed: &str, kind: Kind) -> bool {
     let off = official.trim();
     let prt = printed.trim();
     if off == prt {
@@ -284,24 +365,38 @@ fn official_matches_print_exact(official: &str, printed: &str) -> bool {
     {
         return true;
     }
-    // form-review/RULES.md section 7: an untouched amount box stays blank on
-    // paper even though the upload carries zero; typed or computed zero may print.
-    if norm_numeric(off) == Some(0.0) && prt.is_empty() {
-        return true;
-    }
-    if let (Some(a), Some(b)) = (norm_numeric(off), norm_numeric(prt)) {
-        if (a - b).abs() < 1e-6 {
-            return true;
+    match kind {
+        Kind::Amount => {
+            // form-review/RULES.md section 7: an untouched amount box stays
+            // blank on paper even though the upload carries zero; typed or
+            // computed zero may print.
+            if norm_numeric(off) == Some(0.0) && prt.is_empty() {
+                return true;
+            }
+            match (norm_numeric(off), norm_numeric(prt)) {
+                (Some(a), Some(b)) => (a - b).abs() < 1e-6,
+                _ => false,
+            }
         }
+        Kind::Tin => {
+            let digits = |s: &str| s.chars().filter(char::is_ascii_digit).collect::<String>();
+            off.chars().all(|c| c.is_ascii_digit())
+                && prt
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == '-' || c == ' ')
+                && digits(off) == digits(prt)
+        }
+        Kind::Text => false,
     }
-    false
 }
 
 /// Permanent exact print-map parity test over all 73 official samples:
 /// every joined key in `html-frozen/<slug>/writer-cells.json` that holds a
-/// non-empty value in `<stem>.official.xml` must appear with the exact same
-/// value (case-sensitive, normalized only for numeric commas/decimals and
-/// checkbox truth marks) in the form's print field map.
+/// non-empty value in `<stem>.official.xml` must appear in the form's print
+/// field map: an amount as the same signed number (the print groups
+/// thousands and may show a negative in parentheses), a TIN by the same
+/// digits (the print may dash it), anything else exactly (case-sensitive;
+/// checkbox truth marks aside).
 #[test]
 fn every_official_sample_joined_key_matches_official_xml_exact() {
     use bir_core::forms::queueable::QueueableForm;
@@ -320,9 +415,9 @@ fn every_official_sample_joined_key_matches_official_xml_exact() {
     //    two-digit suffix (`"25"`) while the upload holds the 4-digit year (`"2025"`).
     // 4. `frm1701:txtPg2I2SpouseRDOCode`: when the spouse column is closed the
     //    upload writes `"000"` while `spouse_rdo_shown()` intentionally prints `""`.
-    // 5. Unused zero-valued schedule rows on 1601C (`frm1601c:sched1:*`) and
-    //    2551Q (`txtATCAmt{2..6}`, `txtATCDue{2..6}`): upload writes `"0.00"`
-    //    while paper leaves unused rows blank.
+    // (Unused zero-valued amount rows, the upload's `"0.00"` against a blank
+    // box, need no entry: an amount compares as a number, and an untouched
+    // amount box is blank on paper by form-review/RULES.md section 7.)
     let is_allowed_exception = |key: &str, official: &str, printed: &str| -> bool {
         if key.to_ascii_lowercase().contains("email") && official.eq_ignore_ascii_case(printed) {
             return true;
@@ -337,14 +432,6 @@ fn every_official_sample_joined_key_matches_official_xml_exact() {
             return true;
         }
         if key == "frm1701:txtPg2I2SpouseRDOCode" && official == "000" && printed.is_empty() {
-            return true;
-        }
-        if (key.starts_with("frm1601c:sched1:")
-            || key.starts_with("txtATCAmt")
-            || key.starts_with("txtATCDue"))
-            && official == "0.00"
-            && printed.is_empty()
-        {
             return true;
         }
         false
@@ -647,6 +734,8 @@ fn every_official_sample_joined_key_matches_official_xml_exact() {
 
     let mut slug_cache: std::collections::BTreeMap<&str, std::collections::BTreeSet<String>> =
         std::collections::BTreeMap::new();
+    let mut amount_cache: std::collections::BTreeMap<&str, std::collections::BTreeSet<String>> =
+        std::collections::BTreeMap::new();
     let mut failures = Vec::new();
     let mut total_checked = 0usize;
 
@@ -655,6 +744,9 @@ fn every_official_sample_joined_key_matches_official_xml_exact() {
         let joined = slug_cache
             .entry(slug)
             .or_insert_with(|| joined_keys_for_slug(slug));
+        let amounts = amount_cache
+            .entry(slug)
+            .or_insert_with(|| official_amount_keys(slug));
         let xml_path = samples_dir().join(format!("{stem}.official.xml"));
         let xml = std::fs::read_to_string(&xml_path)
             .unwrap_or_else(|e| panic!("missing {}: {e}", xml_path.display()));
@@ -670,7 +762,7 @@ fn every_official_sample_joined_key_matches_official_xml_exact() {
             }
             total_checked += 1;
             let prt_val = print_map.get(key).map(String::as_str).unwrap_or("");
-            if official_matches_print_exact(off_trim, prt_val)
+            if official_matches_print(off_trim, prt_val, kind_of(key, off_trim, amounts))
                 || is_allowed_exception(key, off_trim, prt_val)
             {
                 continue;
