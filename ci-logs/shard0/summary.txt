@@ -1,0 +1,13 @@
+=== nsh-check: START 19:55:24
+=== nsh-check: rc=0 19:57:02
+=== nsh-build: START 19:57:02
+=== nsh-build: rc=0 19:57:03
+=== rust-tests: START 19:57:03
+=== rust-tests: rc=0 19:57:33
+=== agent-builds: START 19:57:33
+=== agent-builds: rc=0 19:58:43
+=== agent-ios-sim: START 19:58:43
+=== agent-ios-sim: rc=0 19:59:33
+=== iphone-compile: START 19:59:33
+=== iphone-compile: rc=0 20:00:20
+shard 0 ran 65 files, failed: 0
