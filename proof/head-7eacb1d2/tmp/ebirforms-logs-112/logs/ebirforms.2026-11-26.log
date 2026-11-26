@@ -1,0 +1,34 @@
+2026-11-26T09:44:20.934602Z  INFO bir_core::logging: 🔍 Tracing initialized (developer_mode: false)
+2026-11-26T09:44:20.934931Z  INFO nsh_app_ebirforms::door: eBIRForms started
+2026-11-26T09:44:20.941677Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-26T09:44:20.954563Z  INFO bir_app_api::agent: gpui-agent listening (platform=desktop, app=bir-shell, protocol v2 HMAC) addr=127.0.0.1:17434
+2026-11-26T09:48:53.639327Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:48:55.871382Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:48:58.304312Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:49:00.916208Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:49:42.511416Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:49:45.049819Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:49:47.929440Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:50:18.598468Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:50:21.333031Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:50:24.104399Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:50:27.086571Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:50:29.774754Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:50:32.101853Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:00.342923Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:02.923373Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:05.362186Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:08.328485Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:10.478619Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:12.832123Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:34.258828Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:36.238375Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:38.596974Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:40.557107Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:42.905712Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:45.031584Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:47.384671Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:49.368661Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:51:51.732660Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:55:50.270570Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-26T09:55:50.270685Z  INFO bir_core::background_cron: Background cron engine stopped

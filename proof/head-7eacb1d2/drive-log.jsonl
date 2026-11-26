@@ -1,0 +1,229 @@
+{"t": 1795685661.4627383, "event": "click", "id": "setup-solo", "screen": [1280, 958], "logical": [1280.0, 957.5]}
+{"t": 1795685664.9276502, "event": "click", "id": "sb-new", "screen": [226, 92], "logical": [226.0, 92.0]}
+{"t": 1795685666.4396732, "event": "click", "id": "new-return-2551Q", "screen": [1280, 918], "logical": [1280.0, 918.0]}
+{"t": 1795685667.956814, "event": "click", "id": "new-return-open", "screen": [1492, 1045], "logical": [1492.5, 1045.0]}
+{"t": 1795685678.8555005, "event": "click", "id": "fp-parts-toggle", "screen": [1058, 115], "logical": [1058.0, 115.0]}
+{"t": 1795685714.90372, "event": "click", "id": "fp-row-drpATC1-0", "screen": [1542, 1568], "logical": [1542.0, 1568.0]}
+{"t": 1795685724.5556278, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685725.4416656, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795685727.337453, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795685728.8317552, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795685731.1253283, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685732.0073218, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795685733.7037153, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685735.1544938, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795685737.5276299, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685738.4518657, "event": "xdotool-type", "text": "1234.56", "delay": 120, "keys": "1 2 3 4 period 5 6"}
+{"t": 1795685740.2037838, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685741.2026129, "event": "xdotool-type", "text": "15000.50", "delay": 120, "keys": "1 5 0 0 0 period 5 0"}
+{"t": 1795685749.5536175, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685749.705165, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685751.353936, "event": "click-type-burst", "id": "fp-txtATCAmt1", "text": "15000.50", "screen": [2328, 173]}
+{"t": 1795685753.620602, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685753.7738273, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685755.4540014, "event": "click-type-burst", "id": "fp-txtATCAmt1", "text": "15000.50", "screen": [2328, 173]}
+{"t": 1795685757.7095864, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685757.8633635, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685759.5107596, "event": "click-type-burst", "id": "fp-txtATCAmt1", "text": "15000.50", "screen": [2328, 173]}
+{"t": 1795685761.8176186, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685761.9760392, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685763.6257813, "event": "click-type-burst", "id": "fp-txtATCAmt1", "text": "15000.50", "screen": [2328, 173]}
+{"t": 1795685765.977618, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685766.1298656, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685767.7748125, "event": "click-type-burst", "id": "fp-txtATCAmt1", "text": "15000.50", "screen": [2328, 173]}
+{"t": 1795685770.174933, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685770.3299108, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685771.993818, "event": "click-type-burst", "id": "fp-txtATCAmt1", "text": "15000.50", "screen": [2328, 173]}
+{"t": 1795685774.320792, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685774.4764745, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685776.1387143, "event": "click-type-burst", "id": "fp-txtATCAmt1", "text": "15000.50", "screen": [2328, 173]}
+{"t": 1795685778.471867, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685778.6241717, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685780.2796066, "event": "click-type-burst", "id": "fp-txtATCAmt1", "text": "15000.50", "screen": [2328, 173]}
+{"t": 1795685782.5551403, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685782.7074413, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685784.357923, "event": "click-type-burst", "id": "fp-txtATCAmt1", "text": "15000.50", "screen": [2328, 173]}
+{"t": 1795685786.6286254, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685786.7803736, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685788.4439785, "event": "click-type-burst", "id": "fp-txtATCAmt1", "text": "15000.50", "screen": [2328, 173]}
+{"t": 1795685793.1852086, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685793.3388968, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685795.3516402, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795685795.5902805, "event": "tab-type-burst", "text": "15000.50", "delay": 0}
+{"t": 1795685797.8750393, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685798.0273616, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685800.027668, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795685800.2628868, "event": "tab-type-burst", "text": "15000.50", "delay": 0}
+{"t": 1795685802.5305943, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685802.6827219, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685804.6836724, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795685804.922598, "event": "tab-type-burst", "text": "15000.50", "delay": 0}
+{"t": 1795685807.4816422, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685807.6544774, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685809.750617, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795685810.0377946, "event": "tab-type-burst", "text": "15000.50", "delay": 0}
+{"t": 1795685812.546945, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685812.7069364, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685814.7187936, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795685814.9741106, "event": "tab-type-burst", "text": "15000.50", "delay": 0}
+{"t": 1795685817.4448314, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685817.597458, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685819.6766498, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795685819.95452, "event": "tab-type-burst", "text": "15000.50", "delay": 0}
+{"t": 1795685822.2358935, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685822.3881733, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685824.4101775, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795685824.6427104, "event": "tab-type-burst", "text": "15000.50", "delay": 0}
+{"t": 1795685827.0216203, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685827.1956863, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685829.269617, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795685829.5025108, "event": "tab-type-burst", "text": "15000.50", "delay": 0}
+{"t": 1795685831.8135648, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685831.9751847, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685833.9696305, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795685834.2041767, "event": "tab-type-burst", "text": "15000.50", "delay": 0}
+{"t": 1795685836.5480013, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685836.7217681, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685838.76138, "event": "click", "id": "fp-drpATC1-trigger", "screen": [2320, 101], "logical": [2320.5, 101.0]}
+{"t": 1795685838.9955463, "event": "tab-type-burst", "text": "15000.50", "delay": 0}
+{"t": 1795685847.5346487, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685847.7080336, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685849.3618033, "event": "click-type-burst", "id": "fp-txtATCAmt1", "text": "15000..50", "screen": [2328, 173]}
+{"t": 1795685851.7060912, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685851.8635998, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685853.5119693, "event": "click-type-burst", "id": "fp-txtATCAmt1", "text": "150a00.50", "screen": [2328, 173]}
+{"t": 1795685867.5353065, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685867.6881967, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685869.688249, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685870.7862895, "event": "xdotool-type", "text": "15000..50", "delay": 120, "keys": "1 5 0 0 0 period period 5 0"}
+{"t": 1795685873.0796046, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685873.2319603, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795685875.2286642, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795685876.3210592, "event": "xdotool-type", "text": "150a00.50", "delay": 120, "keys": "1 5 0 a 0 0 period 5 0"}
+{"t": 1795685893.5143294, "event": "click", "id": "fp-table-drpATC1-done", "screen": [2514, 378], "logical": [2514.5, 378.0]}
+{"t": 1795685922.3437912, "event": "click", "id": "fp-penalty-2:6", "screen": [1843, 229], "logical": [1843.0, 229.0]}
+{"t": 1795685927.5096517, "event": "click", "id": "fp-frm2551Qv2018:txt20", "screen": [1299, 269], "logical": [1299.0, 269.0]}
+{"t": 1795685928.052571, "event": "xdotool-type", "text": "1500", "delay": 120, "keys": "1 5 0 0"}
+{"t": 1795685932.1656575, "event": "click", "id": "fp-check", "screen": [1793, -1858], "logical": [1793.0, -1858.0]}
+{"t": 1795685933.5900989, "event": "click", "id": "fp-pill-next", "screen": [1741, 1803], "logical": [1741.0, 1803.0]}
+{"t": 1795685935.1199467, "event": "click", "id": "fp-pill-next", "screen": [1741, 1803], "logical": [1741.0, 1803.0]}
+{"t": 1795685936.8579159, "event": "click", "id": "fp-pill-next", "screen": [1741, 1803], "logical": [1741.0, 1803.0]}
+{"t": 1795685938.4901862, "event": "click", "id": "fp-pill-next", "screen": [1741, 1803], "logical": [1741.0, 1803.0]}
+{"t": 1795685939.4297442, "event": "xdotool-type", "text": "2500", "delay": 120, "keys": "2 5 0 0"}
+{"t": 1795685952.1536415, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795685953.1867552, "event": "click", "id": "sb-new", "screen": [226, 92], "logical": [226.0, 92.0]}
+{"t": 1795685954.7131617, "event": "click", "id": "new-return-2550M", "screen": [1280, 880], "logical": [1280.0, 880.0]}
+{"t": 1795685956.350159, "event": "click", "id": "new-return-open", "screen": [1492, 1045], "logical": [1492.5, 1045.0]}
+{"t": 1795685964.9666555, "event": "click", "id": "fp-parts-toggle", "screen": [1058, 115], "logical": [1058.0, 115.0]}
+{"t": 1795685976.7466815, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795685977.2894213, "event": "xdotool-type", "text": "1100", "delay": 120, "keys": "1 1 0 0"}
+{"t": 1795685978.9382951, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795685981.8345575, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795685982.352791, "event": "xdotool-type", "text": "1200", "delay": 120, "keys": "1 2 0 0"}
+{"t": 1795685983.8905182, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795685986.8817449, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795685987.4096093, "event": "xdotool-type", "text": "1300", "delay": 120, "keys": "1 3 0 0"}
+{"t": 1795685988.9149373, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795685991.688605, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795685992.2048538, "event": "xdotool-type", "text": "1400", "delay": 120, "keys": "1 4 0 0"}
+{"t": 1795685993.721321, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795685996.4966493, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795685997.0132737, "event": "xdotool-type", "text": "1500", "delay": 120, "keys": "1 5 0 0"}
+{"t": 1795685998.5236297, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795686001.27678, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795686001.790936, "event": "xdotool-type", "text": "1100", "delay": 120, "keys": "1 1 0 0"}
+{"t": 1795686003.3041952, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795686005.6885839, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795686006.2057226, "event": "xdotool-type", "text": "1200", "delay": 120, "keys": "1 2 0 0"}
+{"t": 1795686007.7096007, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795686010.1597328, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795686010.6761293, "event": "xdotool-type", "text": "1300", "delay": 120, "keys": "1 3 0 0"}
+{"t": 1795686012.194466, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795686014.655039, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795686015.170799, "event": "xdotool-type", "text": "1400", "delay": 120, "keys": "1 4 0 0"}
+{"t": 1795686016.7646272, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795686019.1625888, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795686019.6793618, "event": "xdotool-type", "text": "1500", "delay": 120, "keys": "1 5 0 0"}
+{"t": 1795686021.1812012, "event": "click", "id": "fp-frm2550m:txtTax18E", "screen": [1299, 1349], "logical": [1299.0, 1349.0]}
+{"t": 1795686279.885271, "event": "click", "id": "sb-new", "screen": [226, 92], "logical": [226.0, 92.0]}
+{"t": 1795686281.404163, "event": "click", "id": "new-return-1601FQ", "screen": [1280, 861], "logical": [1280.0, 861.0]}
+{"t": 1795686282.9201396, "event": "click", "id": "new-return-open", "screen": [1492, 1064], "logical": [1492.5, 1064.0]}
+{"t": 1795686290.5313525, "event": "click", "id": "fp-parts-toggle", "screen": [1058, 115], "logical": [1058.0, 115.0]}
+{"t": 1795686338.6238892, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795686339.6337306, "event": "click", "id": "sb-new", "screen": [226, 92], "logical": [226.0, 92.0]}
+{"t": 1795686341.6765163, "event": "click", "id": "new-return-open", "screen": [1492, 1064], "logical": [1492.5, 1064.0]}
+{"t": 1795686362.9595401, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795686363.9741244, "event": "click", "id": "sb-new", "screen": [226, 92], "logical": [226.0, 92.0]}
+{"t": 1795686366.0209246, "event": "click", "id": "new-return-open", "screen": [1492, 1064], "logical": [1492.5, 1064.0]}
+{"t": 1795686380.4955513, "event": "click", "id": "nav-library", "screen": [124, 170], "logical": [124.0, 170.0]}
+{"t": 1795686385.9950175, "event": "click", "id": "library-search", "screen": [1042, 214], "logical": [1042.0, 214.0]}
+{"t": 1795686386.1608775, "event": "xdotool-type", "text": "1702", "delay": 40, "keys": "1 7 0 2"}
+{"t": 1795686392.2006094, "event": "click", "id": "library-scope-all", "screen": [1372, 212], "logical": [1371.5, 212.0]}
+{"t": 1795686398.4779108, "event": "click", "id": "library-1702RT", "screen": [1800, 310], "logical": [1800.5, 310.0]}
+{"t": 1795686414.4269996, "event": "click", "id": "fp-parts-toggle", "screen": [1058, 115], "logical": [1058.0, 115.0]}
+{"t": 1795686478.6036313, "event": "click", "id": "fp-frm1702RT:Pg2Pt4I40IncomeTaxRate", "screen": [1212, 1528], "logical": [1212.0, 1528.0]}
+{"t": 1795686478.75567, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686505.2297838, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795686507.020653, "event": "click", "id": "recent-00012345300000-1601FQ-2026-4", "screen": [124, 312], "logical": [124.0, 312.0]}
+{"t": 1795686508.137795, "event": "click", "id": "fp-parts-toggle", "screen": [1058, 115], "logical": [1058.0, 115.0]}
+{"t": 1795686517.1306622, "event": "click", "id": "fp-row-drpTreatyCode0-0", "screen": [1542, 1257], "logical": [1542.0, 1257.0]}
+{"t": 1795686532.6878302, "event": "click", "id": "fp-txtRate0", "screen": [2312, 389], "logical": [2311.5, 389.0]}
+{"t": 1795686532.8416812, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686534.3863504, "event": "click", "id": "fp-txtRate0", "screen": [2312, 389], "logical": [2311.5, 389.0]}
+{"t": 1795686534.6314697, "event": "xdotool-type", "text": "42", "delay": 120, "keys": "4 2"}
+{"t": 1795686537.300631, "event": "click", "id": "fp-txtRate0", "screen": [2312, 389], "logical": [2311.5, 389.0]}
+{"t": 1795686537.5029342, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686539.027955, "event": "click", "id": "fp-txtRate0", "screen": [2312, 389], "logical": [2311.5, 389.0]}
+{"t": 1795686539.669273, "event": "xdotool-type", "text": "42", "delay": 120, "keys": "4 2"}
+{"t": 1795686569.2936924, "event": "click", "id": "fp-table-drpTreatyCode0-done", "screen": [2514, 522], "logical": [2514.5, 522.0]}
+{"t": 1795686570.5782716, "event": "click", "id": "nav-home", "screen": [124, 136], "logical": [124.0, 136.0]}
+{"t": 1795686572.3553076, "event": "click", "id": "recent-00012345300000-2551Q-2026-4", "screen": [124, 380], "logical": [124.0, 380.0]}
+{"t": 1795686573.494511, "event": "click", "id": "fp-parts-toggle", "screen": [1058, 115], "logical": [1058.0, 115.0]}
+{"t": 1795686579.753646, "event": "click", "id": "fp-frm2551Qv2018:txtSheets", "screen": [1221, 846], "logical": [1221.0, 846.0]}
+{"t": 1795686579.9056494, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686581.4459732, "event": "click", "id": "fp-frm2551Qv2018:txtSheets", "screen": [1221, 846], "logical": [1221.0, 846.0]}
+{"t": 1795686581.6912792, "event": "xdotool-type", "text": "42", "delay": 120, "keys": "4 2"}
+{"t": 1795686584.0977144, "event": "click", "id": "fp-frm2551Qv2018:txtSheets", "screen": [1221, 846], "logical": [1221.0, 846.0]}
+{"t": 1795686584.2504334, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686585.9778247, "event": "click", "id": "fp-frm2551Qv2018:txtSheets", "screen": [1221, 846], "logical": [1221.0, 846.0]}
+{"t": 1795686586.924439, "event": "xdotool-type", "text": "42", "delay": 120, "keys": "4 2"}
+{"t": 1795686611.2026544, "event": "click", "id": "fp-row-drpATC1-0", "screen": [1542, 1604], "logical": [1542.0, 1604.0]}
+{"t": 1795686617.6206546, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686617.8116589, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686619.4540484, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686620.383531, "event": "xdotool-type", "text": "1500,50", "delay": 120, "keys": "1 5 0 0 comma 5 0"}
+{"t": 1795686623.1836143, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686623.3365786, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686624.889284, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686625.864723, "event": "xdotool-type", "text": "1.234,56", "delay": 120, "keys": "1 period 2 3 4 comma 5 6"}
+{"t": 1795686628.8499053, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686629.0022566, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686630.5451143, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686631.1522503, "event": "xdotool-type", "text": "1,2,3", "delay": 120, "keys": "1 comma 2 comma 3"}
+{"t": 1795686659.4236147, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686659.5757842, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686661.1256797, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686661.9797554, "event": "xdotool-type", "text": "1500,50", "delay": 120, "keys": "1 5 0 0 comma 5 0"}
+{"t": 1795686664.4405909, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686664.594317, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686666.138629, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686667.1128259, "event": "xdotool-type", "text": "1.234,56", "delay": 120, "keys": "1 period 2 3 4 comma 5 6"}
+{"t": 1795686669.5615916, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686669.713411, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686671.2585905, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686671.8776577, "event": "xdotool-type", "text": "1,2,3", "delay": 120, "keys": "1 comma 2 comma 3"}
+{"t": 1795686693.3416178, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686693.4931858, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686695.0565991, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686697.6593554, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686697.820491, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686699.3720891, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686701.9466255, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686702.0987134, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686703.842654, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686706.4506717, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686706.6082914, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686708.185194, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686710.8039095, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
+{"t": 1795686710.9658208, "event": "xdotool-type", "text": "0", "delay": 120, "keys": "0"}
+{"t": 1795686712.517645, "event": "click", "id": "fp-txtATCAmt1", "screen": [2328, 173], "logical": [2327.5, 173.0]}
