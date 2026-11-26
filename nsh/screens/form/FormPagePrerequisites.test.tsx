@@ -81,3 +81,34 @@ for (const look of [{}, { width: 1440, height: 900, platform: "macos" as const }
     expect(app.shows("id:fp-set-profile-business_start_date")).toBe(false);
   });
 }
+
+test("a narrow window: the link opens the business start date's sheet once; the row drawn again in the same edit does not reopen it", async () => {
+  // A desktop window under 600 points has the phone layout, and a resize past 600 and back draws the date's row anew in the same
+  // edit (wide: the inline DateField; narrow again: the edit sheet's DateTouchField), as a rotation between layouts does.
+  const app = await open("../../TaxpayerDemo.tsx", {
+    width: 390,
+    height: 844,
+    platform: "macos",
+    host: { params: {
+      start: "form=2551Q/2026/3", year: 2026, selfEmployed: true,
+      savedReturn: { formCode: "2551Q", year: 2026, period: 3 },
+    } },
+  });
+  const dateSheet = "id:tp-branch-business_start_date-sheet-input";
+  await app.waitFor("id:fp-set-profile-business_start_date");
+  await app.press("id:fp-set-profile-business_start_date");
+  // Opened by itself, once (DateTouchField autoOpen), and closed by the filer.
+  await app.waitFor(dateSheet);
+  await app.back();
+  await app.waitFor(dateSheet, { state: "gone" });
+  expect(app.shows("id:tp-edit-sheet-body")).toBe(true);
+  // Wide: the edit goes inline (the edit sheet and its row go). Narrow again: the edit sheet and the row are drawn anew.
+  await app.setViewport(1440, 900);
+  await app.waitFor("id:tp-edit-sheet-body", { state: "gone" });
+  await app.setViewport(390, 844);
+  await app.waitFor("id:tp-edit-sheet-body");
+  await app.waitFor("id:tp-branch-business_start_date");
+  // Past autoOpen's wait (350 ms): the sheet stays shut, because the edit no longer names the field (page.ts focusTaken).
+  await app.wait(700);
+  expect(app.shows(dateSheet)).toBe(false);
+});
