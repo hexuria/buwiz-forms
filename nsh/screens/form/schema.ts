@@ -274,6 +274,13 @@ export const FILED_KEPT = "The filed version is kept in this return's history.";
 
 /** A filed return whose tax profile changed after it. */
 export const PROFILE_CHANGED_NOTE = "The tax profile changed after this return was filed. This return keeps what was filed.";
+/** The same note on a dry run, which was never filed (only simulated). */
+export const PROFILE_CHANGED_DRY_RUN_NOTE = "The tax profile changed after this dry run. This return keeps what the dry run held.";
+
+/** The note above a read-only return's profile changes: a filed return's, or a dry run's (`dryRun`). */
+export function profileChangedNote(dryRun: boolean): string {
+  return dryRun ? PROFILE_CHANGED_DRY_RUN_NOTE : PROFILE_CHANGED_NOTE;
+}
 
 export function profileUpdatesNote(updates: string[]): string {
   return `Updated from your tax profile: ${updates.join("; ")}`;

@@ -457,6 +457,8 @@ export interface InboxState {
     has_app_password: boolean;
     /** A usable Google refresh token exists on the profile or the inbox row. */
     oauth_connected: boolean;
+    /** This build can start Google's sign-in for mail (a client id and secret exist); false: offer the app password only. */
+    google_available: boolean;
     oauth_inbox_email: string | null;
     oauth_updated_at: string | null;
     /** A sibling on this inbox still has a Submitted return awaiting its BIR receipt. */
@@ -824,7 +826,7 @@ export interface ReturnRow {
 }
 /** What a screen says about a return's send (bir-app-api `send_state.rs`). */
 export interface SendState {
-    stage: "queued" | "sending" | "waiting" | "held" | "needs_attention" | "refused" | "sent" | "test_sent";
+    stage: "queued" | "sending" | "checking" | "waiting" | "held" | "needs_attention" | "refused" | "sent" | "test_sent";
     /** The sentence the person reads. */
     line: string;
     /** The code a refusal's reason ended in (`tin_not_active`), else null. */

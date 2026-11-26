@@ -1,8 +1,9 @@
 // Settings: a page in the main area (plan, UI decisions), opened from the account menu, the palette and Cmd/Ctrl+comma. From 600
 // points: a section list on the left (Personal: General, Account; Data: Import / Export, Jobs; System: Keyboard, Computer) with the search
-// over rows, and the section's cards on the right. Under 600: the section list first, then the section as its own page with Back.
+// over rows, and the section's cards on the right. Under 600: the section list first, then the section as its own page: a stop of the
+// app's history, with Back and its name in the narrow header (a stacked page under the wide title bar keeps its own Back line and title).
 // Ported from the old shell's settings.js. Params: `section` opens a section (the old cron_tasks view is `section: "jobs"`).
-import { cleanup, Scroll, signal, View } from "nsh";
+import { cleanup, Scroll, View } from "nsh";
 import { sectionById, settingsView, shownSection } from "../../lib/settings_model";
 import { app } from "../../shell";
 import { masBuild, storeManaged } from "../../shell/desktop/native";
@@ -47,6 +48,19 @@ const shown = () => {
   const id = shownId();
   return id ? sectionById(view(), id) : null;
 };
+
+/** What a section is called here ("Device" on a phone, "Computer" on a desktop): the narrow header names the open section with it. */
+export const sectionTitle = (id: string): string => sectionById(view(), id)?.label ?? "Settings";
+
+/**
+ * From a section's page to the list. The section is a stop of the app's history when it was opened from the list, so this is Back;
+ * a section opened by name (a link from another page, the dev route) has no list behind it, and the list takes its place.
+ */
+export function backToSettingsList(): void {
+  const before = app.previous();
+  if (before?.view === "settings" && typeof before.params.section !== "string") app.back();
+  else app.replace("settings", {});
+}
 
 function Search() {
   return (
@@ -110,7 +124,10 @@ function SectionBody(props: { id: string; rows: string[] }) {
 }
 
 /** The cards of the open section (or the key of a finished setup change), in a column that scrolls by itself. */
-function Pane(props: { narrow: boolean; back?: () => void }) {
+function Pane(props: { narrow: boolean }) {
+  // The narrow layout's header carries Back and the section's name (one Back control, as on a phone); a stacked page under the
+  // wide title bar, which names no page, keeps its own line and title.
+  const ownHeader = () => !app.layout.narrow();
   return (
     <Scroll
       testID="settings-scroll"
@@ -118,14 +135,16 @@ function Pane(props: { narrow: boolean; back?: () => void }) {
       contentClass={props.narrow ? "px-4 pt-3 pb-14" : "items-center px-8 pt-7 pb-14"}
     >
       <View class="w-full min-w-0 gap-5" style={{ maxWidth: COLUMN }}>
-        <If when={props.narrow && props.back && !keyOnly()}>
+        <If when={props.narrow && ownHeader() && !keyOnly()}>
           <View class="self-start">
-            <AppButton testID="settings-back" label="Settings" icon="chevron-left" variant="ghost" size="sm" onPress={() => props.back?.()} />
+            <AppButton testID="settings-back" label="Settings" icon="chevron-left" variant="ghost" size="sm" onPress={backToSettingsList} />
           </View>
         </If>
-        <View testID="settings-title">
-          <PageTitle>{keyOnly() ? (TOUCH ? "Device" : "Computer") : (shown()?.label ?? "Settings")}</PageTitle>
-        </View>
+        <If when={!props.narrow || ownHeader() || keyOnly()}>
+          <View testID="settings-title">
+            <PageTitle>{keyOnly() ? (TOUCH ? "Device" : "Computer") : (shown()?.label ?? "Settings")}</PageTitle>
+          </View>
+        </If>
         <If
           when={keyOnly()}
           else={
@@ -148,11 +167,14 @@ export function Settings() {
   const asked = app.params().section;
   const section = typeof asked === "string" ? asked : null;
   if (section) nav.setSection(section);
-  /** Narrow: the section is open (else the list shows). A section asked for by name opens at once. */
-  const open = signal(section !== null);
+  /**
+   * Stacked: the list shows, or the section the route names. A section picked from the list is a move of its own, so the header's
+   * Back, Android's back button and Forward walk it like any page. Beside the list, a pick only changes which cards show.
+   */
+  const open = section !== null;
   const pick = (id: string) => {
-    nav.setSection(id);
-    open.set(true);
+    if (settingsStacked()) app.go("settings", { section: id });
+    else nav.setSection(id);
   };
   // Leaving Settings: the half-typed codes and the recovery key on screen go; a finished setup change signs the computer out.
   cleanup(app.beforeLeave(leaveSetup));
@@ -180,7 +202,7 @@ export function Settings() {
         }
       >
         <If
-          when={open() || keyOnly()}
+          when={open || keyOnly()}
           else={
             <Scroll testID="settings-list-scroll" class="min-h-0 flex-1" contentClass="gap-2 px-4 pt-4 pb-14">
               <Search />
@@ -188,7 +210,7 @@ export function Settings() {
             </Scroll>
           }
         >
-          <Pane narrow back={() => open.set(false)} />
+          <Pane narrow />
         </If>
       </If>
     </View>

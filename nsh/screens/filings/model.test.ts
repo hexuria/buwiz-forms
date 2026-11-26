@@ -183,11 +183,12 @@ test("a preset keeps the real statuses it names, every status is no filter, and 
   expect(presetFilters({ statuses: ["Submitted"], updatedMonth: "2026-1" })).toEqual({ statuses: new Set(["Submitted"]), updatedMonth: null });
 });
 
-test("a card's send chip: Held, Retrying, Needs attention and Not sent with the host's line; the other stages and none say nothing", () => {
+test("a card's send chip: Checking, Held, Retrying, Needs attention and Not sent with the host's line; the other stages and none say nothing", () => {
   const send = (stage: SendState["stage"], line = `line of ${stage}`): SendState => ({ stage, line, code: null, next_try_at: null, can_resolve: stage === "needs_attention" });
   expect(sendChip(row({ status: "Queued", send: send("held") }))).toEqual({ label: "Held", tone: "neutral", line: "line of held" });
   expect(sendChip(row({ status: "Queued", send: send("waiting") }))).toEqual({ label: "Retrying", tone: "warning", line: "line of waiting" });
   expect(sendChip(row({ status: "Queued", send: send("needs_attention") }))).toEqual({ label: "Needs attention", tone: "warning", line: "line of needs_attention" });
+  expect(sendChip(row({ status: "Queued", send: send("checking") }))).toEqual({ label: "Checking", tone: "neutral", line: "line of checking" });
   expect(sendChip(row({ status: "Draft", send: send("refused") }))).toEqual({ label: "Not sent", tone: "danger", line: "line of refused" });
   for (const stage of ["queued", "sending", "sent", "test_sent"] as const) expect(sendChip(row({ send: send(stage) }))).toBe(null);
   expect(sendChip(row({}))).toBe(null);

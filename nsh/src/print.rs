@@ -2276,50 +2276,20 @@ impl Print {
     /// dialog was cancelled). iOS: makes the same PDF, then shows the system print sheet with its page previews, and
     /// resolves once the sheet is dismissed or finished. Rejects with a sentence.
     pub async fn print(key: String) -> Result<(), String> {
-        #[cfg(all(windows, target_env = "msvc"))]
-        {
-            let (html, _, _) = snapshot(&key).ok_or("The preview is closed.")?;
-            blocking(move || windows_print::print_document(&html)).await.map_err(|error| error.to_string())?
-        }
-        #[cfg(target_os = "linux")]
-        {
-            let (html, _, _) = snapshot(&key).ok_or("The preview is closed.")?;
-            blocking(move || linux_print::print_document(&html)).await.map_err(|error| error.to_string())?
-        }
-        #[cfg(not(any(all(windows, target_env = "msvc"), target_os = "linux")))]
-        {
-            let (pdf, title, dir, request) = pdf_of(&key).await?;
-            let path = write_pdf(&dir, &title, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
-            blocking(move || platform_print(&path, request)).await.map_err(|error| error.to_string())?
-        }
+        logged("Print", print_now(key).await)
     }
 
     /// Saves the PDF of `key`'s document: asks where with the system save panel and resolves with the path it
     /// wrote, or null when the person cancelled. A path given stands in for the panel in a test environment
     /// (EBIR_TEST_ENV) and is ignored anywhere else.
     pub async fn save_pdf(key: String, test_path: Option<String>) -> Result<Option<String>, String> {
-        let (pdf, title, _, request) = pdf_of(&key).await?;
-        let target = match save_target(crate::door::test_environment(), test_path.as_deref()) {
-            Some(path) => path,
-            None => {
-                let mut dialog = SaveDialog::new()
-                    .file_name(format!("{}.pdf", file_stem(&title)))
-                    .filter(FileFilter::new("PDF", ["pdf"]))
-                    .title("Save as PDF")
-                    .button_label("Save");
-                if let Some(folder) = documents() {
-                    dialog = dialog.directory(folder);
-                }
-                match pick_save_path(dialog).await {
-                    Ok(Some(path)) => with_pdf_extension(path),
-                    Ok(None) => return Ok(None),
-                    Err(error) => return Err(format!("The save panel could not open: {error}")),
-                }
-            }
-        };
-        request.check()?;
-        std::fs::write(&target, &pdf).map_err(|error| format!("Could not save the PDF: {error}"))?;
-        Ok(Some(target.display().to_string()))
+        logged("Save as PDF", save_pdf_now(key, test_path).await)
+    }
+
+    /// The person pressed Cancel on the preview's wait for `what` ("Print", "Save as PDF"): a panel that never answered
+    /// leaves the wait open for ever, so the preview offers a way out, and the app's log says it was used.
+    pub fn stopped_waiting(what: String) {
+        tracing::warn!("{what}: the person stopped waiting for it to finish");
     }
 
     /// What the PDF at `path` holds: pages, size, bytes of drawing, and (macOS) the text the system reads in it.
@@ -2327,6 +2297,61 @@ impl Print {
     pub fn inspect_pdf(path: String) -> Result<PdfProbe, String> {
         probe_pdf(Path::new(&path))
     }
+}
+
+/// [`Print::print`]'s work.
+async fn print_now(key: String) -> Result<(), String> {
+    #[cfg(all(windows, target_env = "msvc"))]
+    {
+        let (html, _, _) = snapshot(&key).ok_or("The preview is closed.")?;
+        blocking(move || windows_print::print_document(&html)).await.map_err(|error| error.to_string())?
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let (html, _, _) = snapshot(&key).ok_or("The preview is closed.")?;
+        blocking(move || linux_print::print_document(&html)).await.map_err(|error| error.to_string())?
+    }
+    #[cfg(not(any(all(windows, target_env = "msvc"), target_os = "linux")))]
+    {
+        let (pdf, title, dir, request) = pdf_of(&key).await?;
+        let path = write_pdf(&dir, &title, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
+        blocking(move || platform_print(&path, request)).await.map_err(|error| error.to_string())?
+    }
+}
+
+/// [`Print::save_pdf`]'s work.
+async fn save_pdf_now(key: String, test_path: Option<String>) -> Result<Option<String>, String> {
+    let (pdf, title, _, request) = pdf_of(&key).await?;
+    let target = match save_target(crate::door::test_environment(), test_path.as_deref()) {
+        Some(path) => path,
+        None => {
+            let mut dialog = SaveDialog::new()
+                .file_name(format!("{}.pdf", file_stem(&title)))
+                .filter(FileFilter::new("PDF", ["pdf"]))
+                .title("Save as PDF")
+                .button_label("Save");
+            if let Some(folder) = documents() {
+                dialog = dialog.directory(folder);
+            }
+            match pick_save_path(dialog).await {
+                Ok(Some(path)) => with_pdf_extension(path),
+                Ok(None) => return Ok(None),
+                Err(error) => return Err(format!("The save panel could not open: {error}")),
+            }
+        }
+    };
+    request.check()?;
+    std::fs::write(&target, &pdf).map_err(|error| format!("Could not save the PDF: {error}"))?;
+    Ok(Some(target.display().to_string()))
+}
+
+/// `result` as it is, with a failure also written to the app's log file: the preview shows the person the sentence,
+/// the log keeps it for support. `what` names the button ("Print", "Save as PDF"). A cancel is no failure.
+fn logged<T>(what: &str, result: Result<T, String>) -> Result<T, String> {
+    if let Err(error) = &result {
+        tracing::warn!("{what} failed: {error}");
+    }
+    result
 }
 
 fn forget(key: &str) {
@@ -3058,5 +3083,39 @@ mod tests {
         assert!(probe_pdf(&folder.path().join("missing.pdf")).is_err());
         std::fs::write(folder.path().join("junk.pdf"), "junk").unwrap();
         assert!(probe_pdf(&folder.path().join("junk.pdf")).is_err());
+    }
+
+    #[test]
+    fn a_failed_print_or_save_is_written_to_the_log_and_a_cancel_is_not() {
+        let folder = tempfile::tempdir().unwrap();
+        // The app's own default filter (door.rs install_logging): this crate at info.
+        let options = bir_core::logging::InstallOptions {
+            developer_mode: false,
+            default_filter: "nsh_app_ebirforms=info,bir_app_api=info,bir_core=info,panic=error",
+        };
+        temp_env::with_vars([("BIR_LOG_DIR", Some(folder.path().as_os_str())), ("RUST_LOG", None)], || {
+            bir_core::logging::with_thread_subscriber(options, || {
+                let failed: Result<(), String> = logged("Print", Err("The printer Office is not available.".into()));
+                assert_eq!(failed, Err("The printer Office is not available.".to_owned()));
+                let cancelled: Result<Option<String>, String> = logged("Save as PDF", Ok(None));
+                assert_eq!(cancelled, Ok(None));
+                let saved = logged("Save as PDF", Ok(Some("C:/x.pdf".to_owned())));
+                assert_eq!(saved, Ok(Some("C:/x.pdf".to_owned())));
+                let _: Result<Option<String>, String> =
+                    logged("Save as PDF", Err("The save panel could not open: no owner window".into()));
+                Print::stopped_waiting("Save as PDF".to_owned());
+            });
+        });
+        let log: String = std::fs::read_dir(folder.path())
+            .unwrap()
+            .filter_map(|entry| std::fs::read_to_string(entry.ok()?.path()).ok())
+            .collect();
+        let line = |needle: &str| {
+            log.lines().find(|line| line.contains(needle)).unwrap_or_else(|| panic!("{needle:?} not in {log}"))
+        };
+        assert!(line("Print failed: The printer Office is not available.").contains("WARN"));
+        assert!(line("Save as PDF failed: The save panel could not open: no owner window").contains("WARN"));
+        assert!(line("Save as PDF: the person stopped waiting for it to finish").contains("WARN"));
+        assert_eq!(log.matches(" failed: ").count(), 2, "{log}");
     }
 }

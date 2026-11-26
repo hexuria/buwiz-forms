@@ -46,8 +46,9 @@ import {
   dismissToast as kitDismissToast,
 } from "../../ui";
 import { app, store } from "../../shell";
+import { DRY_RUN_WORD } from "../../lib/statusWord";
 import { ItemRow, ProfileFold } from "./rows";
-import { ACCOUNT_FIX, existingOfferFor, filedOriginalStrip, FILED_KEPT, PERIOD_PART_LABELS, PROFILE_CHANGED_NOTE, partName, profileDiffersNote, profileUpdatesNote, SAMPLE_NOTE, sectionNames } from "./schema";
+import { ACCOUNT_FIX, existingOfferFor, filedOriginalStrip, FILED_KEPT, PERIOD_PART_LABELS, profileChangedNote, partName, profileDiffersNote, profileUpdatesNote, SAMPLE_NOTE, sectionNames } from "./schema";
 import { formUi } from "./formUi";
 import { FormSession, type FormTarget, type Overlay, type SessionHooks, type ToastAction } from "./session";
 
@@ -410,7 +411,7 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
             />
             <AppButton testID="fp-queue" size="sm" icon="send" label="Queue" variant={formUi.reviewing() ? "primary" : undefined} disabled={h().loading} onPress={() => s.queue()} />
           </If>
-          <If when={h().status === "Queued" && !h().sample && !h().canResolve}>
+          <If when={h().status === "Queued" && !h().sample && !h().canResolve && !h().checkingSend}>
             <AppButton testID="fp-cancel-queue" size="sm" label="Cancel queue" onPress={() => s.cancelQueue()} />
           </If>
           <If when={h().editable && h().sample && !h().periodSet}>
@@ -461,7 +462,7 @@ function Notes(props: { s: FormSession }) {
       <If when={h().filedOriginalView}>{(v) => <Text variant="meta" tone="fg2">{filedOriginalStrip(v())}</Text>}</If>
       <If when={h().profileChanged.length}>
         <View testID="fp-profile-changed" class="gap-0.5">
-          <Text variant="meta" tone="fg2">{PROFILE_CHANGED_NOTE}</Text>
+          <Text variant="meta" tone="fg2">{profileChangedNote(h().statusWord === DRY_RUN_WORD)}</Text>
           <Each of={h().profileChanged}>{(c) => <Text variant="meta" tone="fg3">{`· ${c()}`}</Text>}</Each>
         </View>
       </If>

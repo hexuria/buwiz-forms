@@ -1,16 +1,19 @@
 // Settings > Account > Google (old googleBlock): Gmail connect or reconnect, receipt tracking, Disconnect, and the line the last
 // job left. The writes and the "one inbox job at a time" state are the taxpayer screens' (screens/taxpayer/actions.ts), so the
-// Tax profile's confirmation inbox and this card never disagree.
+// Tax profile's confirmation inbox and this card never disagree. A build with no Google client id (the host's
+// google_available) offers no Connect and says to use an app password; a connected inbox can still be disconnected.
 import { View } from "nsh";
 import { app, store } from "../../shell";
 import { AppButton, Card, SettingRow, Switch, Text } from "../../ui";
 import { connectInbox, disconnectInbox, setTracking, shared } from "../taxpayer/actions";
+import { GOOGLE_UNAVAILABLE } from "../taxpayer/logic";
 import { Labeled, NoteRow } from "./parts";
 
 export function GoogleBlock() {
   const branch = () => app.branch();
   const state = () => store.inboxState(branch()?.tin);
   const connected = () => Boolean(state()?.oauth_connected);
+  const available = () => Boolean(state()?.google_available);
   const who = () => state()?.oauth_inbox_email || state()?.inbox_email || "";
   return (
     <If
@@ -39,16 +42,24 @@ export function GoogleBlock() {
               <SettingRow
                 testID="settings-google-gmail"
                 title="Gmail"
-                hint={connected() ? `Connected as ${who()}` : `Not connected. Reads BIR confirmation mail for ${branch()?.name || "this profile"}.`}
+                hint={
+                  connected()
+                    ? `Connected as ${who()}`
+                    : available()
+                      ? `Not connected. Reads BIR confirmation mail for ${branch()?.name || "this profile"}.`
+                      : GOOGLE_UNAVAILABLE
+                }
               >
-                <AppButton
-                  testID="settings-google-connect"
-                  label={connected() ? "Reconnect" : "Connect"}
-                  size="sm"
-                  icon="key-round"
-                  disabled={shared.inboxBusy()}
-                  onPress={() => void connectInbox(branch()?.tin ?? "")}
-                />
+                <If when={available()}>
+                  <AppButton
+                    testID="settings-google-connect"
+                    label={connected() ? "Reconnect" : "Connect"}
+                    size="sm"
+                    icon="key-round"
+                    disabled={shared.inboxBusy()}
+                    onPress={() => void connectInbox(branch()?.tin ?? "")}
+                  />
+                </If>
               </SettingRow>
               <SettingRow testID="settings-google-tracking" title="Receipt tracking" hint="Watch this inbox for BIR confirmation mail">
                 <Switch

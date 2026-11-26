@@ -426,6 +426,14 @@ pub fn amended_copy(kind: AgentFormKind, draft: &Value) -> Result<Value, String>
             kind.form_code()
         ));
     }
+    // A dry run reached nobody: there is no filed return to amend.
+    if crate::forms::dry_run::is_dry_run(&status, crate::forms::dry_run::json_marks_dry_run(draft))
+    {
+        return Err(format!(
+            "this {} return was a dry run: nothing reached the BIR, so it is sent again as the original, not amended",
+            kind.form_code()
+        ));
+    }
     match kind {
         AgentFormKind::Form1601C => amended_1601c(kind, draft),
         AgentFormKind::Form2551Q => amended_2551q(kind, draft),
@@ -1747,7 +1755,22 @@ fn write_bound_box(
                     .map_err(|_| format!("`{key}` must be a whole number (got `{text}`)"))?;
                 Value::from(number)
             };
-            set_path(draft, path, leaf, &def.rows)
+            set_path(draft, path, leaf.clone(), &def.rows)?;
+            // `WholePesoInput` (1702MX) stores `{ amount, raw }` and serializes
+            // `raw` into the official BIR XML and print field map: keep `raw`
+            // in step with `amount` in official format (`1,234.00`, `0`, or ``).
+            if let Some(parent) = path.strip_suffix("/amount")
+                && let Some(Value::Object(slot)) = draft.pointer_mut(parent)
+                && slot.contains_key("raw")
+            {
+                let raw_text = match leaf.as_i64() {
+                    None => String::new(),
+                    Some(0) => "0".to_string(),
+                    Some(number) => crate::official_xml::official_amount(number as f64),
+                };
+                slot.insert("raw".to_string(), Value::String(raw_text));
+            }
+            Ok(())
         }
         // A select's blank official choice ("Select Tax Rate") when the
         // binding lists none: every option sets the same one field, so blank
@@ -2668,6 +2691,59 @@ mod tests {
         assert!(amended_copy(kind, &serde_json::to_value(&draft).unwrap()).is_err());
     }
 
+    /// A dry run reached nobody: there is nothing to amend. A real send, one
+    /// with a relay receipt and a Confirmed return can be amended; Paid never.
+    #[test]
+    fn a_dry_run_has_no_amended_copy() {
+        use crate::forms::form_0619e::Form0619EDraft;
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Example Store",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Example Street",
+            "zip_code": "1600",
+            "phone": "09170000000",
+            "email": "store@example.com",
+            "default_form_type": "0619Ev2018",
+            "taxpayer_type": "Corporation"
+        }))
+        .unwrap();
+        let kind = AgentFormKind::from_code("0619E").unwrap();
+        let mut sent = Form0619EDraft::new_from_profile(&profile, 2025, 6);
+        sent.lifecycle.status = FilingStatus::Submitted;
+        sent.lifecycle.submitted_at = Some("2025-07-10T01:02:03+00:00".into());
+        let json = |draft: &Form0619EDraft| serde_json::to_value(draft).unwrap();
+
+        let mut dry = sent.clone();
+        dry.lifecycle.submitted_dry_run = true;
+        let error = amended_copy(kind, &json(&dry)).unwrap_err();
+        assert!(error.contains("dry run"), "{error}");
+        // The mark under `lifecycle` (another build's shape) reads the same.
+        let mut nested = json(&sent);
+        nested.as_object_mut().unwrap().remove("submitted_dry_run");
+        nested["lifecycle"] = serde_json::json!({"submitted_dry_run": true});
+        assert!(amended_copy(kind, &nested).is_err());
+
+        let mut relay = sent.clone();
+        relay.lifecycle.relay_receipt = Some("a.b.c".into());
+        let mut confirmed = sent.clone();
+        confirmed.lifecycle.status = FilingStatus::Confirmed;
+        // A Confirmed return carrying a stale mark reached the BIR all the same.
+        confirmed.lifecycle.submitted_dry_run = true;
+        for filed in [&sent, &relay, &confirmed] {
+            assert!(
+                amended_copy(kind, &json(filed)).is_ok(),
+                "{:?}",
+                filed.lifecycle.status
+            );
+        }
+        let mut paid = sent.clone();
+        paid.lifecycle.status = FilingStatus::Paid;
+        assert!(amended_copy(kind, &json(&paid)).is_err());
+    }
+
     /// `apply_penalty_profile` resolves the penalty inputs the Calendar
     /// resolves now — an override moves the stored due date — and touches
     /// only a Draft: a return that reached BIR stays byte-for-byte.
@@ -3015,5 +3091,134 @@ mod tests {
         assert!(
             gate(&def, "mA", None).is_some_and(|gate| matches!(gate, Gate::Lock(Lock::Election)))
         );
+    }
+
+    /// Official 1702MX runtime fixture (`rules/forms/1702mx-v2018c/fixtures/
+    /// runtime-control-inventory-v796.json`, lines 4011-4058 and 4205-4252):
+    /// Schedule 7.1 and 8.1 rows 4-6 columns A-D are open NOLCO inputs.
+    /// Filling them via `agent::fill` (used by both the form page and
+    /// `form.fill`) must populate `WholePesoInput.raw` alongside `amount` so
+    /// `Form1702MXDraft::to_bir_xml_payload()` carries every value to BIR.
+    #[test]
+    fn form_1702mx_nolco_fill_populates_official_xml() {
+        let kind = AgentFormKind::from_code("1702MX").unwrap();
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "DEMO CORP",
+            "tin": {"segment1": "000", "segment2": "123", "segment3": "453", "branch": "00000"},
+            "rdo_code": "039",
+            "line_of_business": "Services",
+            "registered_address": "1 Example Street",
+            "zip_code": "1600",
+            "phone": "",
+            "email": "",
+            "default_form_type": "1702MXv2018c"
+        }))
+        .unwrap();
+        let mut draft = serde_json::to_value(
+            crate::forms::form_1702mx::Form1702MXDraft::new_from_profile(&profile, 2025),
+        )
+        .unwrap();
+        fill(
+            kind,
+            &mut draft,
+            "frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized",
+            &Value::from("true"),
+            None,
+        )
+        .unwrap();
+
+        let cases = [
+            ("frm1702MX:txtPg3IShed7_4A", "300000", "300,000.00"),
+            ("frm1702MX:txtPg3IShed7_4B", "50000", "50,000.00"),
+            ("frm1702MX:txtPg3IShed7_4C", "20000", "20,000.00"),
+            ("frm1702MX:txtPg3IShed7_4D", "80000", "80,000.00"),
+            ("frm1702MX:txtPg3IShed7_5A", "200000", "200,000.00"),
+            ("frm1702MX:txtPg3IShed7_5B", "30000", "30,000.00"),
+            ("frm1702MX:txtPg3IShed7_5C", "10000", "10,000.00"),
+            ("frm1702MX:txtPg3IShed7_5D", "40000", "40,000.00"),
+            ("frm1702MX:txtPg3IShed7_6A", "100000", "100,000.00"),
+            ("frm1702MX:txtPg3IShed7_6B", "15000", "15,000.00"),
+            ("frm1702MX:txtPg3IShed7_6C", "5000", "5,000.00"),
+            ("frm1702MX:txtPg3IShed7_6D", "25000", "25,000.00"),
+            ("frm1702MX:txtPg4IShed8_4A", "400000", "400,000.00"),
+            ("frm1702MX:txtPg4IShed8_4B", "60000", "60,000.00"),
+            ("frm1702MX:txtPg4IShed8_4C", "25000", "25,000.00"),
+            ("frm1702MX:txtPg4IShed8_4D", "90000", "90,000.00"),
+            ("frm1702MX:txtPg4IShed8_5A", "250000", "250,000.00"),
+            ("frm1702MX:txtPg4IShed8_5B", "35000", "35,000.00"),
+            ("frm1702MX:txtPg4IShed8_5C", "15000", "15,000.00"),
+            ("frm1702MX:txtPg4IShed8_5D", "45000", "45,000.00"),
+            ("frm1702MX:txtPg4IShed8_6A", "150000", "150,000.00"),
+            ("frm1702MX:txtPg4IShed8_6B", "20000", "20,000.00"),
+            ("frm1702MX:txtPg3IShed8_6C", "10000", "10,000.00"),
+            ("frm1702MX:txtPg4IShed8_6D", "30000", "30,000.00"),
+        ];
+        for (key, value, _) in cases {
+            fill(kind, &mut draft, key, &Value::from(value), None).unwrap();
+        }
+        compute(kind, &mut draft).unwrap();
+
+        let typed: crate::forms::form_1702mx::Form1702MXDraft =
+            serde_json::from_value(draft.clone()).unwrap();
+        let layout = typed.official_layout().unwrap();
+        let official_xml =
+            crate::official_xml::write(&layout, &typed.to_official_field_map()).unwrap();
+        let official_parsed = crate::bir_xml::parse_bir_xml_checked(&official_xml).unwrap();
+        let print_map = typed.to_print_field_map();
+        for (key, _, expected) in cases {
+            assert_eq!(
+                official_parsed.get(key).map(String::as_str),
+                Some(expected),
+                "official upload XML missing or mismatched for {key}"
+            );
+            assert_eq!(
+                print_map.get(key).map(String::as_str),
+                Some(expected),
+                "print field map missing or mismatched for {key}"
+            );
+        }
+        // Computed Col E and Row 8 totals carry thousands commas in BOTH
+        // the official upload XML and the print/raw map.
+        for (key, expected) in [
+            ("frm1702MX:txtPg3IShed7_4E", "150,000"),
+            ("frm1702MX:txtPg3IShed78D", "145,000"),
+            ("frm1702MX:txtPg4IShed8_4E", "225,000"),
+            ("frm1702MX:txtPg3IShed88D", "165,000"),
+        ] {
+            assert_eq!(
+                official_parsed.get(key).map(String::as_str),
+                Some(expected),
+                "official upload XML computed {key}"
+            );
+            assert_eq!(
+                print_map.get(key).map(String::as_str),
+                Some(expected),
+                "print field map computed {key}"
+            );
+        }
+
+        // Clearing back to 0 (what the form page's CLEARED = "0" sends when
+        // emptying a non-nullable number box) keeps amount/raw synchronized and
+        // files "0".
+        fill(
+            kind,
+            &mut draft,
+            "frm1702MX:txtPg3IShed7_4A",
+            &Value::from("0"),
+            None,
+        )
+        .unwrap();
+        let zeroed: crate::forms::form_1702mx::Form1702MXDraft =
+            serde_json::from_value(draft).unwrap();
+        assert_eq!(
+            zeroed.schedule_7_1.rows[0].amount.amount,
+            Some(crate::forms::form_1702mx::WholePeso(0))
+        );
+        assert_eq!(zeroed.schedule_7_1.rows[0].amount.raw, "0");
+        let zeroed_off = zeroed.to_official_field_map();
+        assert_eq!(zeroed_off["frm1702MX:txtPg3IShed7_4A"], "0");
+        // Untouched current-year row also uploads as "0".
+        assert_eq!(zeroed_off["frm1702MX:txtPg3IShed7_7A"], "0");
     }
 }

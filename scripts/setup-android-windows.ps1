@@ -8,8 +8,11 @@
     scripts\setup-windows.ps1 (it needs rustup). Installs:
       * Temurin JDK 17 (sdkmanager, avdmanager and apksigner need Java)
       * Android command-line tools, platform-tools, emulator
-      * platforms;android-35, build-tools;35.0.1 (what `nsh package --target
-        android` asks for), NDK r27 (cross-compiles libnsh.so)
+      * platforms;android-36 (nsh/nsh.json android.targetSdk: what Google Play
+        requires of new apps), build-tools;36.0.0 (which `nsh package --target
+        android` uses, the newest installed), platforms;android-35 and
+        build-tools;35.0.1 (the development host and the x86_64 repack),
+        NDK r27 (cross-compiles libnsh.so)
       * the API 35 Google APIs x86_64 system image and an AVD named buwiz_api35
       * Rust targets x86_64-linux-android and aarch64-linux-android
       * LLVM (bindgen's libclang for QuickJS, as the NSH Windows CI uses)
@@ -21,21 +24,29 @@
 .PARAMETER SdkRoot
     Where the SDK goes. Default C:\Android.
 
+.PARAMETER NoEmulator
+    For a machine that only builds and packages Android (no nested
+    virtualization, so no emulator): emulator acceleration that is not
+    available is a warning, and the NSH command line and the Android runtime
+    are still set up. Without it the script stops there, as a machine meant to
+    run the app must. Not with -Run.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\setup-android-windows.ps1
     # after a reboot, in a NEW PowerShell window:
     #   emulator -avd buwiz_api35
 #>
-param([string]$SdkRoot = 'C:\Android', [switch]$Run)
+param([string]$SdkRoot = 'C:\Android', [switch]$Run, [switch]$NoEmulator)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+if ($Run -and $NoEmulator) { [Console]::Error.WriteLine('-Run needs the emulator: leave -NoEmulator out'); exit 1 }
 
 $CmdlineToolsUrl = 'https://dl.google.com/android/repository/commandlinetools-win-13114758_latest.zip'
 $JdkUrl = 'https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse'
 $Ndk = 'ndk;27.3.13750724'
 $SystemImage = 'system-images;android-35;google_apis;x86_64'
-$Packages = @('platform-tools', 'emulator', 'platforms;android-35', 'build-tools;35.0.1', $Ndk, $SystemImage)
+$Packages = @('platform-tools', 'emulator', 'platforms;android-35', 'platforms;android-36', 'build-tools;35.0.1', 'build-tools;36.0.0', $Ndk, $SystemImage)
 $Avd = 'buwiz_api35'
 
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
@@ -54,6 +65,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     Write-Step "Requesting administrator rights (UAC prompt)"
     $elevationArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`"",'-SdkRoot',"`"$SdkRoot`"")
     if ($Run) { $elevationArgs += '-Run' }
+    if ($NoEmulator) { $elevationArgs += '-NoEmulator' }
     $elevated = Start-Process -FilePath 'powershell' -Verb RunAs -Wait -PassThru -ArgumentList $elevationArgs
     exit $elevated.ExitCode
 }
@@ -174,6 +186,8 @@ if ($restartNeeded) {
 
 if ($LASTEXITCODE -ne 0 -and $restartNeeded) {
     Write-Warning 'Emulator acceleration awaits a reboot; continuing CLI and Android runtime provisioning. Reboot before running Android.'
+} elseif ($LASTEXITCODE -ne 0 -and $NoEmulator) {
+    Write-Warning 'Emulator acceleration unavailable; -NoEmulator: continuing CLI and Android runtime provisioning. This machine builds and packages Android but cannot run it.'
 } else {
     Assert-Native 'Emulator acceleration unavailable; enable nested virtualization and reboot'
 }
