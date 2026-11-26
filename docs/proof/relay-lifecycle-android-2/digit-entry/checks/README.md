@@ -58,10 +58,14 @@ info — the OTP field's own input type, absent before the tap.
 
 - `five-digits.png`: after `input text 24681` — boxes show 2 4 6 8 1 in order, caret in box 6.
 - `after-del.png`: after KEYCODE_DEL — the 1 is gone, boxes show 2 4 6 8, caret in box 5. Backspace works.
-- Sign-in completion: typing the correct mock code submitted automatically on the 6th digit; the
-  app passed the OTP gate (evidence: the session then opened — see the session report; an earlier
-  wrong-code submission rendered "That code is not right. 4 tries left." in `tap204-typed.png`,
-  which also proves submission fires).
+- Sign-in completion: typing the correct mock code submitted automatically on the 6th digit and the
+  app passed the OTP gate. NOTE: `complete-submit.png` does NOT show a completed sign-in — it shows
+  the app back on the email page with the red "Not opening the session: The mock relay at
+  http://127.0.0.1:8787 is not listening …; the submission worker was not started." error. The OTP
+  itself was accepted (the code page is gone and the email is filled in); what failed was the
+  session-open relay probe. The signed-in Home appeared only after a force-stop + relaunch with
+  `adb reverse` up (see the job-19 timeline in the session report). An earlier wrong-code submission
+  rendered "That code is not right. 4 tries left." in `tap204-typed.png`, which proves submission fires.
 
 ## 6. What this means for the earlier finding
 
@@ -75,3 +79,22 @@ arrival (section 3), which on a phone means one extra tap — a UX finding, not 
 
 Timing note (ordered): the boxes first worked at 06:22 device time, emulator uptime ~43 min,
 the moment the first correct-centre tap landed.
+
+## Job-19 timeline: process start vs adb reverse vs the relay refusal
+
+All times device time, 2026-11-26, emulator-5554:
+
+1. ~05:5x — emulator cold boot (`-no-snapshot-load`); adb reverse entries were lost in the boot.
+2. ~06:1x — digit-entry step 1: `am force-stop dev.goldcoders.bir`, relaunch. The app process
+   started here. adb reverse was still DOWN at this moment (first "Continue with email" answered
+   "No connection. Check your internet and try again.", proving the account mock was unreachable).
+3. ~06:19 — `adb reverse tcp:3008 tcp:3008` + `adb reverse tcp:8787 tcp:8787` re-added. The app
+   process from step 2 kept running (never force-stopped again until 06:3x).
+4. ~06:21–06:27 — email → code page → centre-tap evidence → correct code submitted; OTP accepted;
+   session open ran the relay probe and refused: "the submission worker was not started". The door
+   had booted in this process while reverse was down (step 2), consistent with a once-per-process
+   SendMode verdict. Two sign-in completions in this process refused identically.
+5. ~06:33 — `am force-stop` again, relaunch with reverse UP: app opened directly into Home with
+   the taxpayer's data (the sign-in token had persisted). Worker state to be confirmed at the
+   first queue: if the theory holds, this process's door booted with reverse up and the mock
+   relay probe passed.
