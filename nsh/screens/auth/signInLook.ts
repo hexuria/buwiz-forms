@@ -1,5 +1,7 @@
 // The open pages' layout decisions (the Buwiz sign-in's first, email and code pages, and the PIN sign-in, setup and locked
-// pages on the same frame: parts.tsx OpenPage), pure so a test reads them for touch and for a pointer.
+// pages on the same frame: parts.tsx OpenPage), pure so a test reads them for touch and for a pointer. The owner's layout C:
+// a fixed back row at the top, and under it one block (the logo, the page, its button and links) centred in the room left,
+// the logo stepping down in size before anything would scroll.
 
 /**
  * The sign-in pages' own heights, in points: the field and the buttons 46 (48 on Android, its touch target), the code boxes 56
@@ -31,24 +33,62 @@ export function openColumnMax(touch: boolean): number {
 /** The open pages' sides: 24 points each. */
 export const OPEN_SIDE = 24;
 
+/** The room kept over and under the page's block inside its scroll view, so it never touches the back row or the bottom. */
+export const BLOCK_PAD_Y = 16;
+
+/** Between the logo and what is under it. */
+export const LOGO_GAP = 24;
+
 /**
- * Where the column starts, so the logo is in the same place on every page: 12 points under the title bar on touch; with a
- * pointer, from the window's height alone (the page's own height never moves it), as if a 620-point page were centred.
+ * The logo's heights, largest first (the owner's layout C): a phone (a touch screen under 600 points on its short side) 150,
+ * 112, 80; a tablet and a computer 180, 128, 88.
  */
-export function openTop(touch: boolean, windowHeight: number): number {
-  if (touch) return 12;
-  return Math.max(24, Math.round((windowHeight - 40 - 620) / 2));
+export const LOGO_STEPS_PHONE: readonly number[] = [150, 112, 80];
+export const LOGO_STEPS_LARGE: readonly number[] = [180, 128, 88];
+
+/** The logo's steps for this screen. */
+export function logoSteps(touch: boolean, window: { width: number; height: number }): readonly number[] {
+  return touch && Math.min(window.width, window.height) < 600 ? LOGO_STEPS_PHONE : LOGO_STEPS_LARGE;
 }
 
-/** The room over the logo for the back control (on every page, so the logo never moves): 40 points, a touch target on touch. */
+/**
+ * The logo's height for the room the page has: the largest step at which the whole block (the logo and `rest`, everything under
+ * it with the gap above it) fits `room` (the height under the back row, less the block's own padding). When even the smallest
+ * does not fit (a phone's keyboard up, a very short window), the smallest, and `fits` false: the page scrolls.
+ */
+export function logoStep(steps: readonly number[], room: number, rest: number): { logo: number; fits: boolean } {
+  for (const logo of steps) {
+    if (logo + rest <= room) return { logo, fits: true };
+  }
+  return { logo: steps[steps.length - 1], fits: false };
+}
+
+/** The room for the block, from the height under the back row (what the page measures, else what the window gives). */
+export function blockRoom(underBackRow: number): number {
+  return Math.max(0, underBackRow - 2 * BLOCK_PAD_Y);
+}
+
+/**
+ * The back row: a fixed row at the top of the page, under the window's title bar (never in it) and inside the safe area, the
+ * same on every page before the app, with or without a back control in it. Its height is a touch target on touch (44 points on
+ * iOS, a navigation bar's; 48 dp on Android), 40 with a pointer; the control sits `left` points in from the page's left edge.
+ */
+export function backRow(touch: boolean, android: boolean, safeLeft: number): { height: number; left: number } {
+  return { height: backRowHeight(touch, android), left: safeLeft + (touch ? 8 : 12) };
+}
+
+/** The back row's height (backRow). */
 export function backRowHeight(touch: boolean, android: boolean): number {
   if (!touch) return 40;
   return android ? 48 : 44;
 }
 
-/** The first page's button sits this far above the screen's bottom on touch (above the home indicator, which it clears). */
-export function firstPageBottom(safeBottom: number): number {
-  return Math.max(42, safeBottom + 16);
+/**
+ * Before the page has measured itself: the height under the back row as the window gives it (the window, less the locked
+ * frame's 40-point title bar and the top inset, less the back row).
+ */
+export function underBackRowGuess(windowHeight: number, safeTop: number, touch: boolean, android: boolean): number {
+  return windowHeight - 40 - safeTop - backRowHeight(touch, android);
 }
 
 /**

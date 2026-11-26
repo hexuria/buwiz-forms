@@ -2,14 +2,11 @@
 // the admin is. "Just me or my business" makes the owner's own taxpayer the admin (typed here first on an empty computer,
 // on the New taxpayer page with no chrome); "I help other taxpayers" makes the reserved TIN 000-000-000 the admin, with a
 // 4-digit PIN and a recovery key shown once.
-import { effect, platform, Scroll, untracked, View, windowSize } from "nsh";
+import { effect, untracked, View } from "nsh";
 import { app, store } from "../../shell";
-import { BREAK, SIZE } from "../../theme/tokens";
 import { AppButton, Code, PinCells, Text, TOUCH } from "../../ui";
 import { NewTaxpayerPage } from "../taxpayer";
-import { BrandLogo } from "./brand";
-import { Actions, AuthCard, ChoiceTile, deviceCopy, ErrorLine, Heading, Labelled } from "./parts";
-import { backRowHeight, openTop } from "./signInLook";
+import { Actions, AuthCard, ChoiceTile, deviceCopy, ErrorLine, Heading, Labelled, OpenPage } from "./parts";
 import { auth } from "./state";
 
 /** The choice, the help desk's PIN, or its recovery key: the step app.setup() names. */
@@ -106,16 +103,11 @@ export function SoloTaxpayer() {
       else if (reached) auth.cancelSetup();
     });
   });
-  const padX = () => (windowSize().width < BREAK.narrowContent ? 16 : 32);
+  // The frame's page column on the open page: the logo over the New taxpayer page, which is longer than any window, so the
+  // logo takes its smallest step and the page scrolls.
   return (
-    <Scroll testID="setup-taxpayer" keyboardShouldPersistTaps="handled" class="min-h-0 flex-1" contentClass="items-center pb-14" style={{ paddingLeft: padX(), paddingRight: padX() }}>
-      {/* The logo where every page before the app has it (parts.tsx OpenPage: under the back control's row). */}
-      <View class="w-full min-w-0" style={{ maxWidth: SIZE.contentMax, paddingTop: openTop(TOUCH, windowSize().height) + backRowHeight(TOUCH, platform.os === "android") + 18 }}>
-        <View class="mb-6">
-          <BrandLogo />
-        </View>
-        <NewTaxpayerPage />
-      </View>
-    </Scroll>
+    <OpenPage testID="setup-taxpayer" wide>
+      <NewTaxpayerPage />
+    </OpenPage>
   );
 }

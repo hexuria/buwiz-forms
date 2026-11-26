@@ -58,7 +58,10 @@ function focusWhenOpen(focus: () => void): void {
   }, 0);
 }
 
-/** The first page: the logo, the line under it (and why the gate could not open, if it could not), "Continue with email" low. */
+/**
+ * The first page: the logo, the line under it (and why the gate could not open, if it could not), and "Continue with email"
+ * close under them, all one centred block (the owner's pick for the phone; layout C gives every size the same).
+ */
 export function StartPage(props: { prefix: string }) {
   return (
     <OpenPage

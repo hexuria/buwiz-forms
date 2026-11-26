@@ -1,58 +1,85 @@
 // The pieces every page before the app is made of (the old shell's auth.js screen, heading, labelled, errorLine, link,
-// actions, choice): the open page (no card: the Buwiz Forms logo on top, the page under it), its back control and its big
+// actions, choice): the open page (no card: a back row, and the Buwiz Forms logo with the page under it), its back control and its big
 // button, and what the PIN sign-in, setup and locked pages put on it. The kit has no text link and no pressable tile, so
 // TextLink, ChoiceTile, BackControl and PageButton wrap one nsh/base Button here, as screens/filings/PressCard.tsx does;
 // everything else is the kit.
 import type { JSX } from "nsh";
-import { platform, safeArea, Scroll, Text as NText, View, windowSize } from "nsh";
+import { effect, platform, safeArea, Scroll, signal, Text as NText, View, windowSize } from "nsh";
 import { Button } from "nsh/base";
+import { BREAK, SIZE } from "../../theme/tokens";
 import { deviceCopy, Icon, type IconName, Spinner, T_MIN_H, Text, TOUCH } from "../../ui";
 import { BrandLogo } from "./brand";
-import { authScrollStyle, backRowHeight, firstPageBottom, OPEN_SIDE, openColumnMax, openTop, signInHeights } from "./signInLook";
+import {
+  authScrollStyle, BLOCK_PAD_Y, blockRoom, backRow, LOGO_GAP, logoStep, logoSteps, OPEN_SIDE, openColumnMax, signInHeights, underBackRowGuess,
+} from "./signInLook";
 
 export { deviceCopy };
 
 const ANDROID = platform.os === "android";
 
+/** What the open page now showing measured and chose (a fixture's readout prints it; nothing in the app reads it). */
+export interface OpenFit {
+  page: string;
+  room: number;
+  rest: number;
+  logo: number;
+  fits: boolean;
+}
+const openFit = signal<OpenFit | null>(null);
+/** The open page's last fit (AuthDemo.tsx's readout). */
+export function lastOpenFit(): OpenFit | null {
+  return openFit();
+}
+
 /**
- * The open page every page before the app is drawn on (the owner's look B): no card, a column (340 points wide with a pointer,
- * 400 on touch) with a row for the back control, the whole logo under it in the same place on every page, then the page.
- * `footer` is the first sign-in page's button: on touch it sits low (the column fills the screen), with a pointer 28 under the
- * page. A scroll view, so it is what NSH pads and scrolls when the keyboard covers its focused field (nsh docs, Forms and the
- * keyboard: "Inside scroll views: automatic"); a tap on a button while the keyboard is up presses it. On touch it also ends at
- * the keyboard's top (signInLook.ts authScrollStyle), so the whole page can be scrolled above it.
+ * The open page every page before the app is drawn on (the owner's layout C, look B inside it): a fixed back row at the top,
+ * under the window's title bar and inside the safe area, the same on every page (empty where there is no back control); under
+ * it one block, the whole logo, then the page, then `footer` (the first sign-in page's button, close under its line), centred
+ * in the room left. The logo takes the largest of its steps (signInLook.ts logoStep) at which the whole block fits that room,
+ * measured as it lays out; only when even the smallest does not fit does the block scroll. The column is 340 points wide with
+ * a pointer, 400 on touch (`wide`: the frame's page column, for "Just me"'s New taxpayer page).
+ *
+ * The block is in a scroll view, so it is what NSH pads and scrolls when the keyboard covers its focused field (nsh docs, Forms
+ * and the keyboard: "Inside scroll views: automatic"); a tap on a button while the keyboard is up presses it. On touch the room
+ * also ends at the keyboard's top (signInLook.ts authScrollStyle), so the logo steps down first and the whole page can be
+ * scrolled above it.
  */
-export function OpenPage(props: { testID: string; back?: JSX.Element; footer?: JSX.Element; gap?: string; children?: JSX.Element }) {
-  const low = TOUCH && props.footer !== undefined;
+export function OpenPage(props: { testID: string; back?: JSX.Element; footer?: JSX.Element; gap?: string; wide?: boolean; children?: JSX.Element }) {
+  const row = () => backRow(TOUCH, ANDROID, safeArea().left);
+  // The height under the back row (measured; before that, the window's) and the block's height under the logo (measured).
+  const under = signal(0);
+  const rest = signal(0);
+  const room = () => blockRoom(under() > 0 ? under() : underBackRowGuess(windowSize().height, safeArea().top, TOUCH, ANDROID));
+  const fit = () => logoStep(logoSteps(TOUCH, windowSize()), room(), rest());
+  effect(() => {
+    const now = fit();
+    openFit.set({ page: props.testID, room: room(), rest: rest(), logo: now.logo, fits: now.fits });
+  });
+  const side = () => (props.wide ? (windowSize().width < BREAK.narrowContent ? 16 : 32) : OPEN_SIDE);
+  const column = () => (props.wide ? SIZE.contentMax : openColumnMax(TOUCH)) + 2 * side();
   return (
-    <Scroll testID="auth-scroll" keyboardShouldPersistTaps="handled" class="min-h-0 flex-1" style={authScrollStyle(TOUCH)} contentClass="grow items-center">
-      <View
-        testID={props.testID}
-        class={low ? "w-full flex-1 justify-between gap-7" : "w-full gap-7"}
-        style={{
-          maxWidth: openColumnMax(TOUCH) + 2 * OPEN_SIDE,
-          paddingLeft: OPEN_SIDE,
-          paddingRight: OPEN_SIDE,
-          paddingTop: openTop(TOUCH, windowSize().height),
-          paddingBottom: low ? firstPageBottom(safeArea().bottom) : 24,
-        }}
-      >
-        <View class="w-full">
-          <View class="w-full flex-row items-center" style={{ height: backRowHeight(TOUCH, ANDROID) }}>
-            {props.back}
-          </View>
-          <View class={`w-full ${props.gap ?? "gap-4"}`} style={{ marginTop: 18 }}>
-            <View class="mb-2">
-              <BrandLogo />
-            </View>
-            {props.children}
-          </View>
-        </View>
-        <If when={props.footer !== undefined}>
-          <View class="w-full gap-2.5">{props.footer}</View>
-        </If>
+    <View testID="open-page" class="min-h-0 flex-1">
+      <View testID="open-back-row" class="w-full shrink-0 flex-row items-center" style={{ height: row().height, paddingLeft: row().left, paddingRight: safeArea().right }}>
+        {props.back}
       </View>
-    </Scroll>
+      <View class="min-h-0 flex-1" style={authScrollStyle(TOUCH)} onLayout={(e) => e.bounds.size.height > 0 && under.set(Math.round(e.bounds.size.height))}>
+        <Scroll testID="auth-scroll" keyboardShouldPersistTaps="handled" class="min-h-0 flex-1" contentClass="grow items-center justify-center">
+          <View
+            testID={props.testID}
+            class="w-full"
+            style={{ maxWidth: column(), paddingLeft: side(), paddingRight: side(), paddingTop: BLOCK_PAD_Y, paddingBottom: BLOCK_PAD_Y }}
+          >
+            <BrandLogo height={fit().logo} />
+            <View class="w-full" style={{ paddingTop: LOGO_GAP }} onLayout={(e) => e.bounds.size.height > 0 && rest.set(Math.round(e.bounds.size.height))}>
+              <View class={`w-full ${props.gap ?? "gap-4"}`}>{props.children}</View>
+              <If when={props.footer !== undefined}>
+                <View class="mt-6 w-full gap-2.5">{props.footer}</View>
+              </If>
+            </View>
+          </View>
+        </Scroll>
+      </View>
+    </View>
   );
 }
 
@@ -68,7 +95,10 @@ export function AuthCard(props: { testID: string; children?: JSX.Element }) {
   );
 }
 
-/** The back control at the top left: a chevron and its words in the accent, 40 points tall (a whole touch target on touch). */
+/**
+ * The back control, in the open page's back row (top left, under the title bar, inside the safe area): a chevron and its words
+ * in the accent, as tall as the row (40 points; a whole touch target on touch).
+ */
 export function BackControl(props: { testID: string; label: string; onPress: () => void }) {
   return (
     <Button
@@ -76,7 +106,7 @@ export function BackControl(props: { testID: string; label: string; onPress: () 
       accessibilityLabel={props.label}
       onPress={props.onPress}
       class="flex-row items-center gap-1 rounded-(--radius-ctl) pr-2 enabled:hover:opacity-80 focus-visible:ring-2 focus-visible:ring-accent-blue"
-      style={{ height: backRowHeight(TOUCH, ANDROID) }}
+      style={{ height: backRow(TOUCH, ANDROID, 0).height }}
     >
       <Icon name="chevron-left" size={18} tone="accent" />
       <NText class="font-medium text-accent-blue" style={{ fontSize: 15 }}>{props.label}</NText>
