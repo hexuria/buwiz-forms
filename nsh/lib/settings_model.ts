@@ -55,7 +55,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
 export const SETTINGS_ROWS: Readonly<Record<string, readonly SettingsRow[]>> = {
   general: [
     { id: "theme", search: "theme appearance light dark system" },
-    { id: "recent", search: "recent returns sidebar", desktopOnly: true },
+    { id: "recent", search: "recent returns sidebar home" },
     { id: "compact", search: "compact form sections", desktopOnly: true },
     { id: "updates", search: "download updates automatically release install", desktopOnly: true },
   ],

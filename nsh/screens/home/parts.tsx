@@ -1,12 +1,12 @@
 // Home's parts: the five status tiles, the 30-day strip, a deadline row, a filed-return row, a taxpayer row, an as-needed row.
 // Built from nsh/ui; the tile is the kit's PressCard and the strip's day its PressCell.
-import { View } from "nsh";
+import { Scroll, View } from "nsh";
 import type { AsNeededForm, AsNeededReturn, DeadlineRow, ReturnRow, Taxpayer } from "../../bir";
 import { nextText, progressText, type DashboardTaxpayerRow, type StripDay, type TileSpec } from "../../lib/dashboard";
 import { daysUntil, MONTHS, shortDate } from "../../lib/dates";
 import { countsAsFiled, isDryRun, isOpenDeadline, statusWord } from "../../lib/statusWord";
 import { store, today } from "../../shell";
-import { AppButton, Avatar, Code, Icon, type IconName, Line, ListRow, NameCell, PressCard, PressCell, StatusChip, Text } from "../../ui";
+import { AppButton, Avatar, Code, Icon, type IconName, Line, ListRow, NameCell, PressCard, PressCell, StatusChip, T_PX, Text, TOUCH } from "../../ui";
 import { cancelQueued, openDeadline, openListed, openUndated, startAsNeeded, useAsTemplate } from "./actions";
 import { deadlineKey, statusKind, whoLine } from "./rows";
 
@@ -64,7 +64,10 @@ function StripDayButton(props: { day: StripDay; index: number; everyDay: boolean
       tooltip={label()}
       onPress={props.onPress}
       tone="outline"
-      class="h-full flex-1 flex-col-reverse items-center gap-0.75 rounded-(--radius-ctl) pb-2"
+      // A day is pressed to show its deadlines: on touch each is a whole target (44 points, 48 dp on Android), so the strip scrolls
+      // sideways; with a pointer the 30 days share the width.
+      class={TOUCH ? "h-full shrink-0 flex-col-reverse items-center gap-0.75 rounded-(--radius-ctl) pb-2" : "h-full flex-1 flex-col-reverse items-center gap-0.75 rounded-(--radius-ctl) pb-2"}
+      style={TOUCH ? { width: T_PX } : undefined}
     >
       <If when={props.everyDay || props.index % 7 === 0} else={<View class="h-3" />}>
         <Text variant="cap" tone={props.index === 0 ? "fg" : "fg3"} class="tabular-nums whitespace-nowrap">{String(props.day.date.getDate())}</Text>
@@ -82,13 +85,26 @@ export function DeadlineStrip(props: { days: StripDay[]; everyDay: boolean; pick
   const last = () => props.days[props.days.length - 1].date;
   return (
     <View class="w-full">
-      <View testID="home-strip" class="w-full flex-row items-end gap-0.75 rounded-(--radius-card) border border-border px-3 pt-2.5" style={{ height: 92 }}>
-        <Each of={props.days} key={(d) => d.iso}>
-          {(day, i) => (
-            <StripDayButton day={day()} index={i()} everyDay={props.everyDay} picked={props.pickedDay === day().iso} onPress={() => props.onPickDay(day().iso)} />
-          )}
-        </Each>
-      </View>
+      <If
+        when={TOUCH}
+        else={
+          <View testID="home-strip" class="w-full flex-row items-end gap-0.75 rounded-(--radius-card) border border-border px-3 pt-2.5" style={{ height: 92 }}>
+            <Each of={props.days} key={(d) => d.iso}>
+              {(day, i) => (
+                <StripDayButton day={day()} index={i()} everyDay={props.everyDay} picked={props.pickedDay === day().iso} onPress={() => props.onPickDay(day().iso)} />
+              )}
+            </Each>
+          </View>
+        }
+      >
+        <Scroll testID="home-strip" horizontal class="w-full rounded-(--radius-card) border border-border" style={{ height: 92 }} contentClass="flex-row items-end gap-0.75 px-3 pt-2.5">
+          <Each of={props.days} key={(d) => d.iso}>
+            {(day, i) => (
+              <StripDayButton day={day()} index={i()} everyDay picked={props.pickedDay === day().iso} onPress={() => props.onPickDay(day().iso)} />
+            )}
+          </Each>
+        </Scroll>
+      </If>
       <View class="w-full flex-row justify-between px-3 pt-1">
         <Text variant="cap" tone="fg3">{`Today, ${MONTHS[first().getMonth()]} ${first().getDate()}`}</Text>
         <Text variant="cap" tone="fg3">{`${MONTHS[last().getMonth()]} ${last().getDate()}`}</Text>

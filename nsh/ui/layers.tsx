@@ -7,10 +7,10 @@ import {
   Button, Collapsible, Dialog as BaseDialog, Menu as BaseMenu, MenuItem as BaseMenuItem, MenuSeparator as BaseMenuSeparator,
   Popover as BasePopover, Sheet as BaseSheet, Toast, type ToastEntry, ToastManager, ToastStack, Tooltip as BaseTooltip,
 } from "nsh/base";
-import { BREAK, SIZE } from "../theme/tokens";
+import { SIZE } from "../theme/tokens";
 import { AppButton, IconButton } from "./buttons";
 import type { IconName } from "./icons";
-import { cx, FOCUS_RING, TOUCH } from "./look";
+import { cx, FOCUS_RING, phoneLayout, T_MIN_H, TOUCH } from "./look";
 import { Icon, Line, Text } from "./text";
 
 type Placement = "top" | "bottom" | "left" | "right";
@@ -93,14 +93,26 @@ export interface SheetProps {
  * there by itself, but a maxHeight in popupStyle takes the place of that limit (the kit's sheet.md, "The software keyboard"), so
  * every sheet of ours that sets one sets this: without it a sheet with a field in it rose under the status bar with the keyboard.
  */
+/** The widest a bottom sheet is: on a tablet it is a sheet centred at the bottom, not a wall across the screen. */
+export const SHEET_MAX_WIDTH = 720;
+
+/** The side margins that centre a bottom sheet no wider than SHEET_MAX_WIDTH (0 on a phone). */
+export function sheetSides(): { marginLeft: number; marginRight: number } {
+  const side = Math.max(0, Math.floor((windowSize().width - SHEET_MAX_WIDTH) / 2));
+  return { marginLeft: side, marginRight: side };
+}
+
 export function sheetMaxHeight(): number {
   const keyboard = Math.max(0, keyboardFrame().height - safeArea().bottom);
   return Math.max(160, windowSize().height - safeArea().top - keyboard - 24);
 }
 
-/** Supplementary work in a panel: a bottom sheet under 600 points wide, a drawer at the right edge from there up. */
+/**
+ * Supplementary work in a panel: a bottom sheet in the phone layout (every phone and tablet, and a desktop window under 600 points),
+ * at most 720 wide and centred; a drawer at the right edge on a wider desktop window.
+ */
 export function Sheet(props: SheetProps) {
-  const narrow = () => windowSize().width < BREAK.phone;
+  const narrow = () => phoneLayout();
   return (
     <BaseSheet
       testID={props.testID}
@@ -117,7 +129,7 @@ export function Sheet(props: SheetProps) {
       }
       popupStyle={
         narrow()
-          ? { maxHeight: Math.min(windowSize().height * 0.9, sheetMaxHeight()) }
+          ? { maxHeight: Math.min(windowSize().height * 0.9, sheetMaxHeight()), ...sheetSides() }
           : { width: Math.min(props.width ?? 480, windowSize().width - 48) }
       }
     >
@@ -238,7 +250,7 @@ export function MenuItem(props: MenuItemProps) {
       checked={props.checked}
       onSelect={props.onSelect}
       accessibilityLabel={props.label}
-      class={cx("flex-row items-center gap-2 rounded-(--radius-ctl) px-2 hover:bg-hover focus:bg-hover disabled:opacity-50", TOUCH ? "min-h-11" : "h-7")}
+      class={cx("flex-row items-center gap-2 rounded-(--radius-ctl) px-2 hover:bg-hover focus:bg-hover disabled:opacity-50", TOUCH ? T_MIN_H : "h-7")}
       indicatorClass={props.checked === undefined ? undefined : "size-4 items-center justify-center"}
       indicator={props.checked === undefined ? undefined : <If when={props.checked}><Icon name="check" size={14} tone="fg" /></If>}
     >
@@ -367,7 +379,7 @@ function ToastCard(props: { entry: ToastEntry }) {
           <Button
             testID="toast-action"
             accessibilityLabel={c()?.action?.label ?? ""}
-            class={cx("shrink-0 rounded-(--radius-ctl) border border-primary-foreground px-2 py-0.5 active:opacity-70", FOCUS_RING, TOUCH && "min-h-11 justify-center")}
+            class={cx("shrink-0 rounded-(--radius-ctl) border border-primary-foreground px-2 py-0.5 active:opacity-70", FOCUS_RING, TOUCH && cx(T_MIN_H, "justify-center"))}
             onPress={() => {
               c()?.action?.onPress();
               dismissToast(props.entry.id);
@@ -494,7 +506,7 @@ export function Disclosure(props: DisclosureProps) {
         <Button
           testID={props.testID ? `${props.testID}-toggle` : undefined}
           accessibilityLabel={props.title}
-          class={cx("min-w-0 flex-1 flex-row items-center gap-2 pr-2 pl-3 focus-visible:bg-hover", TOUCH ? "min-h-11" : "h-11")}
+          class={cx("min-w-0 flex-1 flex-row items-center gap-2 pr-2 pl-3 focus-visible:bg-hover", TOUCH ? T_MIN_H : "h-11")}
           onPress={props.onToggle}
         >
           <Icon name={props.open ? "chevron-down" : "chevron-right"} tone="fg3" />

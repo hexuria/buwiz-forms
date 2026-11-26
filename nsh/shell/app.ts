@@ -23,7 +23,7 @@ import { POLL, startPolls } from "../lib/poll";
 import { addRecent, bumpRecent, loadRecent, recentEntry, recentOpenOptions, type RecentEntry, type RecentInput } from "../lib/recent";
 import type { FormTarget } from "../screens/form/FormPage";
 import { BREAK } from "../theme/tokens";
-import { deviceCopy, dismissToast, ICONS, toast as kitToast, type IconName } from "../ui";
+import { deviceCopy, dismissToast, ICONS, toast as kitToast, type IconName, phoneLayout } from "../ui";
 import { eventToast, takeFresh } from "./events";
 import { isViewName, ROUTES, type Route, type ViewName, type ViewParams } from "./routes";
 import { allowedStart, parseStart, parseStartForm } from "./start";
@@ -181,14 +181,16 @@ function writeLocal(key: string, value: unknown): void {
 
 // ---------------------------------------------------------------- layout (from the window's width)
 
-/** Under 600: the narrow layout (no sidebar, a bottom tab bar). */
-const narrow = computed(() => windowSize().width < BREAK.phone);
-/** Under 860: the sidebar and the panel float over the page. */
-const overlayMode = computed(() => windowSize().width < BREAK.overlays);
+/** The narrow (phone) layout: a header, a bottom tab bar, sheets. Every phone and tablet at any width; a desktop window under 600. */
+const narrow = computed(() => phoneLayout());
+/** The sidebar and the panel float over the page (under 860), and never dock in the narrow layout, which draws neither. */
+const overlayMode = computed(() => narrow() || windowSize().width < BREAK.overlays);
 const sidebarDocked = computed(() => sidebarOpen() && !overlayMode());
 const panelDocked = computed(() => panel() !== null && !overlayMode());
 /** The main surface's width: the window less what is docked beside it and the inset. */
 const mainWidth = computed(() => {
+  // Narrow: the surface is the window's width (no sidebar, no panel, no inset).
+  if (narrow()) return Math.max(240, windowSize().width);
   const left = sidebarDocked() ? 248 : 8;
   const right = panelDocked() ? 320 : 8;
   return Math.max(240, windowSize().width - left - right - 2);

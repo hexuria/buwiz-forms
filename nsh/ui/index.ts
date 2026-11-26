@@ -23,7 +23,7 @@ export {
 } from "./layers";
 export { Card, EmptyRow, ListGroup, ListRow, NameCell, PageHeader, type PageHeaderProps, SettingRow, type TabItem, Tabs } from "./lists";
 export { type ChipTone, type PickOption, type ReturnStatus, hueFor, initials } from "./logic";
-export { deviceCopy, TOUCH, type Tone } from "./look";
+export { deviceCopy, phoneLayout, T_H, T_MIN_H, T_MIN_W, T_PX, T_SIZE, tabletRoom, TOUCH, type Tone } from "./look";
 export {
   applyMask, DATE_ERROR, digitsOnly, formatIso, formatLongDate, formatMDY, formatMoney, formatTin, formatTinDigits, moneyPlain,
   parseTypedDate, shownDate, type Ymd,

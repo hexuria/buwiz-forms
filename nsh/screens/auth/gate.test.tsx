@@ -37,6 +37,14 @@ async function toCode(app: App, address = "juana@example.com"): Promise<void> {
   await app.waitFor("id:gate-code-card", { timeout: 15000 });
 }
 
+/**
+ * Types the digits as keys only, with no press on the boxes first (app.type would press them to take the keys): they reach the
+ * boxes only if the boxes have the focus.
+ */
+async function typeKeys(app: App, digits: string): Promise<void> {
+  for (const digit of digits) await app.keyboard.press(digit);
+}
+
 for (const { name, size, device } of SIZES) {
   const at = (params: Record<string, unknown> = {}) => open(ENTRY, { ...size, host: { params: { gate: true, readout: true, ...params } } });
 
@@ -427,6 +435,65 @@ for (const { name, size, device } of SIZES) {
     // (nsh test docs, app.type), so here the key is added at the end; on a device it replaces the selected address.
     await app.keyboard.press("x");
     expect(app.value("id:gate-email")).toBe("juana@example.comx");
+  }, 60_000);
+
+  test(`${name}: the code page opens with the keys in the boxes: six digits typed with no tap sign in and go Home`, async () => {
+    const app = await at({ demo: true, mode: "solo", firstRun: false });
+    await toCode(app);
+    // The first key lands in the boxes, though nothing pressed them: they have the focus.
+    await typeKeys(app, "2");
+    expect(app.value("id:gate-code-boxes")).toBe("2");
+    await typeKeys(app, "46810");
+    await app.waitFor("id:frame", { timeout: 15000 });
+    expect(calls(app)).toBe("calls: cloud_account_email_start,cloud_account_email_verify 246810,cloud_account_session_opened");
+  }, 60_000);
+
+  test(`${name}: after a wrong code empties the boxes, six digits typed with no tap sign in`, async () => {
+    const app = await at({ demo: true, mode: "solo", firstRun: false });
+    await toCode(app);
+    await app.type("id:gate-code-boxes", "123456");
+    await app.waitFor("text:That code is not right. 4 tries left.", { timeout: 10000 });
+    expect(app.value("id:gate-code-boxes") ?? "").toBe("");
+    await typeKeys(app, "246810");
+    await app.waitFor("id:frame", { timeout: 15000 });
+  }, 60_000);
+
+  test(`${name}: after Resend, six digits typed with no tap sign in`, async () => {
+    const app = await at({ demo: true, mode: "solo", firstRun: false, expiresIn: 1 });
+    await toCode(app);
+    await app.waitUntil(() => app.enabled("id:gate-resend"), { timeout: 5000 });
+    await app.press("id:gate-resend");
+    await app.waitFor("text:We sent a new code to juana@example.com.");
+    await typeKeys(app, "246810");
+    await app.waitFor("id:frame", { timeout: 15000 });
+  }, 60_000);
+
+  test(`${name}: after too many tries and Send a new code, six digits typed with no tap sign in`, async () => {
+    const app = await at({ demo: true, mode: "solo", firstRun: false });
+    await toCode(app);
+    await app.type("id:gate-code-boxes", "999999");
+    await app.waitFor(`text:${TOO_MANY}`);
+    await app.press("id:gate-resend");
+    await app.waitFor("text:We sent a new code to juana@example.com.");
+    await typeKeys(app, "246810");
+    await app.waitFor("id:frame", { timeout: 15000 });
+  }, 60_000);
+
+  test(`${name}: spent boxes kept through Change email take the focus once Send a new code opens them: no tap`, async () => {
+    const app = await at({ demo: true, mode: "solo", firstRun: false });
+    await toCode(app);
+    await app.type("id:gate-code-boxes", "999999");
+    await app.waitFor(`text:${TOO_MANY}`);
+    await app.press("id:gate-change-email");
+    await app.waitFor("id:gate-card");
+    await app.press("id:gate-continue");
+    await app.waitFor(`text:${TOO_MANY}`);
+    // The page opened spent: nothing took the focus then.
+    expect(app.enabled("id:gate-code-boxes")).toBe(false);
+    await app.press("id:gate-resend");
+    await app.waitFor("text:We sent a new code to juana@example.com.");
+    await typeKeys(app, "246810");
+    await app.waitFor("id:frame", { timeout: 15000 });
   }, 60_000);
 
   test(`${name}: the network's limit on code checks and a busy server are said with no try spent, and the same request signs in after`, async () => {

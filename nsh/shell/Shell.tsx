@@ -198,11 +198,15 @@ function Frame() {
       <If when={app.layout.narrow()} else={<WideChrome />}>
         <NarrowBar />
       </If>
-      {/* Wide on an iPad or a phone turned sideways: keep off the home indicator and the sensor housing (the tab bar does it when narrow). */}
+      {/* Keep off a phone's sensor housing turned sideways, and (wide) off the home indicator; narrow, the tab bar keeps off the bottom. */}
       <View
         testID="frame-body"
         class="min-h-0 flex-1 flex-row"
-        style={app.layout.narrow() ? {} : { paddingLeft: safeArea().left, paddingRight: safeArea().right, paddingBottom: safeArea().bottom }}
+        style={
+          app.layout.narrow()
+            ? { paddingLeft: safeArea().left, paddingRight: safeArea().right }
+            : { paddingLeft: safeArea().left, paddingRight: safeArea().right, paddingBottom: safeArea().bottom }
+        }
       >
         <If when={app.layout.sidebarDocked() && !app.layout.narrow()}>
           <Sidebar />

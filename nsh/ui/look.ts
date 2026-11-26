@@ -1,6 +1,7 @@
 // The kit's shared look decisions: density by input (pointer or touch) and the tone names the old app used
 // (fg, fg2, fg3, ...) mapped onto theme token classes. Only the kit reads these; screens pass tones by name.
-import { platform } from "nsh";
+import { platform, windowSize } from "nsh";
+import { BREAK } from "../theme/tokens";
 
 /**
  * Touch targets: true where the platform has no pointer as its main input (`platform.desktop` false: iOS, Android,
@@ -8,6 +9,32 @@ import { platform } from "nsh";
  * tall; with a pointer they are 32 (28 dense). Fixed while the app runs.
  */
 export const TOUCH = !platform.desktop;
+
+/**
+ * The phone layout (a header, four tabs at the bottom, sheets from the bottom): every touch screen, phones and tablets, at any width and
+ * in both orientations (the owner's pick for iPad and Android tablets, 2026-11-25), and a pointer window under 600 points.
+ */
+export function phoneLayout(): boolean {
+  return TOUCH || windowSize().width < BREAK.phone;
+}
+
+/** A tablet with room for more in the header (the taxpayer's name): a touch screen at least 600 points on its short side, and now that wide. */
+export function tabletRoom(): boolean {
+  const { width, height } = windowSize();
+  return TOUCH && Math.min(width, height) >= BREAK.phone && width >= BREAK.phone;
+}
+
+const ANDROID = platform.os === "android";
+/** A touch target's least size in points: 44 on iOS, 48 dp on Android (each platform's own guideline). */
+export const T_PX = ANDROID ? 48 : 44;
+/** A touch target's height: 44 points on iOS, 48 dp on Android (each platform's own guideline). */
+export const T_MIN_H = ANDROID ? "min-h-12" : "min-h-11";
+/** A touch target's fixed height. */
+export const T_H = ANDROID ? "h-12" : "h-11";
+/** A square touch target (an icon button, the avatar). */
+export const T_SIZE = ANDROID ? "size-12" : "size-11";
+/** A touch target's least width. */
+export const T_MIN_W = ANDROID ? "min-w-12" : "min-w-11";
 
 /** Copy that names "this computer" (or "Computer setup"), said as "this device" on a touch platform. */
 export function deviceCopy(text: string): string {
@@ -57,9 +84,9 @@ export const LEADING = "leading-[1.618]";
 export const FOCUS_RING = "focus-visible:ring-2 focus-visible:ring-accent-blue";
 
 /** A control's height: 32 with a pointer, 44 on touch. */
-export const CTL = TOUCH ? "min-h-11" : "h-8";
+export const CTL = TOUCH ? T_MIN_H : "h-8";
 /** A dense control's height: 28 with a pointer, 44 on touch. */
-export const CTL_SM = TOUCH ? "min-h-11" : "h-7";
+export const CTL_SM = TOUCH ? T_MIN_H : "h-7";
 
 /** Extra reach around small targets on touch (a 16-point box answers a finger 14 points away), none with a pointer. */
 export const SMALL_HIT = TOUCH ? 14 : 0;

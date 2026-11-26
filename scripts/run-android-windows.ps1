@@ -71,6 +71,22 @@ $env:CARGO_PROFILE_DEV_DEBUG = '0'
 $env:CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS = 'true'
 $env:BUWIZ_ANDROID_DEV = '1'
 $env:BUWIZ_ANDROID_DEV_ENV = 'EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1'
+# Each runtime must be the copy setup-android-windows.ps1 made at the NSH pin (nsh-ref beside classes.dex), never a link:
+# otherwise every run tests another NSH than the one CI tested.
+$pin = (Select-String -Path "$repo\.github\workflows\nsh.yml" -Pattern '^\s*NSH_PINNED_REF:\s*(\S+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+foreach ($built in 'bin-dev', 'bin') {
+    $dir = "$tools\android\$built"
+    $item = Get-Item $dir -ErrorAction SilentlyContinue
+    $ref = if (Test-Path "$dir\nsh-ref") { (Get-Content "$dir\nsh-ref" -Raw).Trim() } else { '' }
+    if (-not $item -or $item.LinkType -or $ref -ne $pin) {
+        throw "$dir is not a copy recorded as built at the NSH pin $pin; run scripts\setup-android-windows.ps1"
+    }
+    Write-Host "nsh android $built runtime: $($pin.Substring(0, 7)), classes.dex sha256 $((Get-FileHash "$dir\classes.dex" -Algorithm SHA256).Hash.ToLower())"
+}
+foreach ($variant in 'dev', 'release') {
+    $item = Get-Item "$tools\runtime\android\$variant" -ErrorAction SilentlyContinue
+    if ($item -and $item.LinkType) { $item.Delete() }
+}
 # The CLI resolves NSH_RUNTIME/android/dev; keep the requested bin-dev installation too.
 New-Item -ItemType Directory -Force "$tools\runtime\android\dev" | Out-Null
 Copy-Item "$tools\android\bin-dev\*" "$tools\runtime\android\dev" -Recurse -Force

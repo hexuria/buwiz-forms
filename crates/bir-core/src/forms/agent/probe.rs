@@ -333,6 +333,26 @@ const FILER_TYPED: &[(&str, &str)] = &[
         "frm2552:txtPg2Pt6NumShares5",
         "2552 Part VI row 5 number of shares: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L2414) until prior rows are entered, unlike row 1 (L2314); not in rules/forms/2552-v2018/calculations.json",
     ),
+    (
+        "frm2552:txtPg1Pt1I12TotShare",
+        "2552 Part I Item 12 total number of outstanding shares: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L759) until Item 11 Transaction is Primary or Secondary Offering; not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2P4I2Amount",
+        "2552 Part IV Item 2 amount: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L1327) until Item 11 is Primary/Secondary Offering and row 2 is open; not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2P4I3Amount",
+        "2552 Part IV Item 3 amount: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L1337) until Item 11 is Primary/Secondary Offering and row 3 is open; not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2P4I4Amount",
+        "2552 Part IV Item 4 amount: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L1347) until Item 11 is Primary/Secondary Offering and row 4 is open; not in rules/forms/2552-v2018/calculations.json",
+    ),
+    (
+        "frm2552:txtPg2P4I5Amount",
+        "2552 Part IV Item 5 amount: disabled at load in rules/forms/2552-v2018/fixtures/runtime-control-inventory-v796.json (L1357) until Item 11 is Primary/Secondary Offering and row 5 is open; not in rules/forms/2552-v2018/calculations.json",
+    ),
 ];
 
 const EXCESS_MCIT_1702RT: &str = "1702RT Schedule IV column C (Excess MCIT over \
@@ -1039,6 +1059,18 @@ const GATED_ENTRY: &[(&str, &str)] = &[
     ("frm1702MX:txtPg7Sc9I1CA", MX_SCHEDULE_9_ROW_1),
     ("frm1702MX:txtPg7Sc9I1CB", MX_SCHEDULE_9_ROW_1),
     ("frm1702MX:txtPg7Sc9I1CF", MX_SCHEDULE_9_ROW_1),
+    ("frm1702MX:txtPg3IShed7_4A", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_4B", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_4C", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_4D", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_5A", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_5B", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_5C", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_5D", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_6A", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_6B", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_6C", MX_NOLCO_SCHED_7_1),
+    ("frm1702MX:txtPg3IShed7_6D", MX_NOLCO_SCHED_7_1),
     (
         "frm1702RT:txtPg2Pt4I42MinimumCorporate",
         "Item 42 MCIT Due: an entry (see USER_CHOSEN) that \
@@ -1102,6 +1134,11 @@ const MX_SCHEDULE_9_ROW_1: &str = "1702MX Schedule 9 item 1 (Year, A, B and F): 
      the filer like items 2 and 3; form_1702mx_official.rs recompute clears \
      every Schedule 9 row while the return is not subject to MCIT \
      (enableMCITFields), which the incorporation date decides";
+
+const MX_NOLCO_SCHED_7_1: &str = "1702MX Schedule 7.1 items 4-6 (A-D): enabled at load \
+     (rules/forms/1702mx-v2018c/fixtures/runtime-control-inventory-v796.json L4011-4058); \
+     form_1702mx_official.rs recompute clears Schedule 7.1 rows 4-6 when OSD is chosen \
+     (methodOfDeductionsOptional), which /deduction_method decides";
 
 const RT_ADD_MORE_LINE: &str = "1702RT: the amount of an item with an \"(Add more...)\" \
      table (Part IV item 54, Schedule I item 17i, Schedule II item 4, Schedule V \
