@@ -1,0 +1,4 @@
+cut-last-two [1] expect-1
+cut-first-two [3] expect-3
+fwdelete-start [23] expect-23
+fwdelete-sel-middle [13] expect-13

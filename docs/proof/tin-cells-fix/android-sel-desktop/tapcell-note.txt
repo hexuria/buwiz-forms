@@ -1,0 +1,9 @@
+tapcell2-backspace [12] expect-13 — on macOS a mouse click on the cells lands on
+the hosted AppKit text field (nsh-platform-macos input.rs: hosted views get their
+own events; presses and touches never start on them), so the core never sees a
+touch and the component's computed tap-to-caret does not run. The native field's
+own hit-testing maps the click through the hidden text — a tiny glyph run at the
+field's left edge — and every click right of it clamps the caret to the end, so
+Backspace removes the last digit. This behavior is identical at buwiz-next without
+this branch (the branch changes no desktop platform code); keyboard caret movement
+(arrows, shift, cmd) is exact, as the matrix shows.

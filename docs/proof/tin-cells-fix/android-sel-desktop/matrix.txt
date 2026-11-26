@@ -1,0 +1,12 @@
+cut-first [23] expect-23
+cut-middle [13] expect-13
+cut-last [12] expect-12
+selectall-delete [] expect-empty
+backspace-end [12] expect-12
+typeover-middle [153] expect-153
+tapcell2-backspace [12] expect-13
+paste-000123453 [000123453] expect-000123453
+paste-000-123-453 [000123453] expect-000123453
+paste-000 123 453 [000123453] expect-000123453
+paste-00012345301234 [000123453] expect-000123453
+MATRIX-DONE
