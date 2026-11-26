@@ -3495,10 +3495,18 @@ mod tests {
         });
     }
 
-    /// The one road to `POST /api/tax-profiles`: outside tests, the only
-    /// call of `add_account_tin(` in the app's Rust is in `activate_tin`
-    /// (the "Activate this TIN to send" verb), so no other path (a profile
-    /// made or changed, a sign-in, a sync) can add a TIN to the account.
+    /// The one road to `POST /api/tax-profiles`, outside tests, in the
+    /// app's Rust (every `src` under `crates/` and `nsh/src`):
+    /// - the name `add_account_tin` appears only where it is defined
+    ///   (`Submitter::add_account_tin` in bir-submit's tins.rs) and once in
+    ///   `activate_tin` (the "Activate this TIN to send" verb), as a call or
+    ///   as a path taken as a value alike;
+    /// - a `bearer_send` with `POST` to `PLAIN_PATH` or `/api/tax-profiles`
+    ///   appears only inside `add_account_tin`.
+    ///
+    /// So no other path (a profile made or changed, a sign-in, a sync) can
+    /// add a TIN to the account. Comments, strings and every `#[cfg(test)]`
+    /// item are left out, wherever in the file they are.
     #[test]
     fn only_activate_tin_calls_add_account_tin() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -3506,7 +3514,7 @@ mod tests {
         for entry in std::fs::read_dir(root.join("crates")).expect("crates/") {
             dirs.push(entry.expect("a crate").path().join("src"));
         }
-        let mut calls = Vec::new();
+        let mut found = Vec::new();
         while let Some(dir) = dirs.pop() {
             let Ok(entries) = std::fs::read_dir(&dir) else {
                 continue;
@@ -3520,39 +3528,284 @@ mod tests {
                 if path.extension().is_none_or(|extension| extension != "rs") {
                     continue;
                 }
+                let file = path
+                    .strip_prefix(&root)
+                    .unwrap_or(&path)
+                    .display()
+                    .to_string()
+                    .replace('\\', "/");
                 let text = std::fs::read_to_string(&path).expect("a source file");
-                // The test module at the end of the file is not the app.
-                let code = text
-                    .find("\n#[cfg(test)]\nmod tests")
-                    .map_or(text.as_str(), |end| &text[..end]);
-                for (at, _) in code.match_indices("add_account_tin(") {
-                    if code[..at].ends_with("fn ") {
+                found.extend(account_add_roads(&file, &text));
+            }
+        }
+        found.sort();
+        assert_eq!(
+            found,
+            [
+                (
+                    "crates/bir-app-api/src/tax_profile_module.rs".to_owned(),
+                    "activate_tin".to_owned(),
+                    "add_account_tin"
+                ),
+                (
+                    "crates/bir-submit/src/tins.rs".to_owned(),
+                    "add_account_tin".to_owned(),
+                    "POST"
+                ),
+            ],
+            "every road to POST /api/tax-profiles outside tests"
+        );
+    }
+
+    /// The scanner behind [`only_activate_tin_calls_add_account_tin`] finds
+    /// what a first-match cut or a `name(` search would miss.
+    #[test]
+    fn the_road_scanner_sees_past_test_modules_comments_and_paths() {
+        let source = "fn a() {}\r\n\
+            #[cfg(test)]\r\n\
+            mod early { fn t() { s.add_account_tin(1); } }\r\n\
+            // s.add_account_tin(2) in a comment\r\n\
+            /* and add_account_tin in a /* nested */ block */\r\n\
+            fn b() { let s = \"add_account_tin(\"; let c = '{'; }\r\n\
+            pub async fn late<'a>(x: &'a X) {\r\n\
+                let f = Submitter::add_account_tin;\r\n\
+                x.bearer_send(Method::POST, PLAIN_PATH, None);\r\n\
+            }\r\n\
+            impl X { pub(crate) fn m(&self) { self.add_account_tin(3) } }\r\n\
+            #[cfg(test)]\r\n\
+            #[allow(dead_code)]\r\n\
+            fn helper() { add_account_tin(4); }\r\n";
+        let mut found = account_add_roads("f.rs", source);
+        found.sort();
+        assert_eq!(
+            found,
+            [
+                ("f.rs".to_owned(), "late".to_owned(), "POST"),
+                ("f.rs".to_owned(), "late".to_owned(), "add_account_tin"),
+                ("f.rs".to_owned(), "m".to_owned(), "add_account_tin"),
+            ]
+        );
+    }
+
+    /// Every use of the name `add_account_tin` (its definition aside) and
+    /// every `bearer_send(.. POST .. /api/tax-profiles ..)` in `text`
+    /// outside `#[cfg(test)]` items, comments and strings, each with the
+    /// innermost `fn` around it.
+    fn account_add_roads(file: &str, text: &str) -> Vec<(String, String, &'static str)> {
+        let text = text.replace("\r\n", "\n");
+        let blank = blank_out(&text);
+        let blank = drop_test_items(&blank);
+        let functions = functions_in(&blank);
+        let around = |at: usize| {
+            functions
+                .iter()
+                .filter(|(_, open, close)| *open < at && at < *close)
+                .max_by_key(|(_, open, _)| *open)
+                .map_or_else(|| "(none)".to_owned(), |(name, _, _)| name.clone())
+        };
+        let mut found = Vec::new();
+        for at in words(&blank, "add_account_tin") {
+            if blank[..at].trim_end().ends_with("fn") {
+                continue;
+            }
+            found.push((file.to_owned(), around(at), "add_account_tin"));
+        }
+        for at in words(&blank, "bearer_send") {
+            let Some(open) = blank[at..].find('(').map(|i| at + i) else {
+                continue;
+            };
+            let close = matching(&blank, open).unwrap_or(blank.len());
+            let arguments = &text[open..close];
+            if arguments.contains("POST")
+                && (arguments.contains("PLAIN_PATH") || arguments.contains("/api/tax-profiles"))
+            {
+                found.push((file.to_owned(), around(at), "POST"));
+            }
+        }
+        found
+    }
+
+    /// `text` with comments and the insides of string and char literals as
+    /// spaces (same byte offsets), so braces and names there count for
+    /// nothing.
+    fn blank_out(text: &str) -> String {
+        let bytes = text.as_bytes();
+        let mut out = bytes.to_vec();
+        let mut i = 0;
+        let blank = |out: &mut Vec<u8>, from: usize, to: usize| {
+            for b in &mut out[from..to] {
+                if *b != b'\n' {
+                    *b = b' ';
+                }
+            }
+        };
+        while i < bytes.len() {
+            match bytes[i] {
+                b'/' if bytes.get(i + 1) == Some(&b'/') => {
+                    let end = text[i..].find('\n').map_or(bytes.len(), |n| i + n);
+                    blank(&mut out, i, end);
+                    i = end;
+                }
+                b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                    let (mut depth, mut j) = (1, i + 2);
+                    while j < bytes.len() && depth > 0 {
+                        if bytes[j..].starts_with(b"/*") {
+                            depth += 1;
+                            j += 2;
+                        } else if bytes[j..].starts_with(b"*/") {
+                            depth -= 1;
+                            j += 2;
+                        } else {
+                            j += 1;
+                        }
+                    }
+                    blank(&mut out, i, j);
+                    i = j;
+                }
+                b'r' if (bytes.get(i + 1) == Some(&b'"') || bytes.get(i + 1) == Some(&b'#'))
+                    && (i == 0
+                        || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_')) =>
+                {
+                    let hashes = bytes[i + 1..].iter().take_while(|b| **b == b'#').count();
+                    if bytes.get(i + 1 + hashes) != Some(&b'"') {
+                        i += 1;
                         continue;
                     }
-                    let start = code[..at].rfind("\nfn ").map_or(0, |line| line + 4);
-                    let function = code[start..]
-                        .split(|c: char| !(c.is_alphanumeric() || c == '_'))
-                        .next()
-                        .unwrap_or_default()
-                        .to_owned();
-                    let file = path
-                        .strip_prefix(&root)
-                        .unwrap_or(&path)
-                        .display()
-                        .to_string()
-                        .replace('\\', "/");
-                    calls.push((file, function));
+                    let closing = format!("\"{}", "#".repeat(hashes));
+                    let body = i + 2 + hashes;
+                    let end = text[body..]
+                        .find(&closing)
+                        .map_or(bytes.len(), |n| body + n + closing.len());
+                    blank(&mut out, body, end.saturating_sub(closing.len()).max(body));
+                    i = end;
+                }
+                b'"' => {
+                    let mut j = i + 1;
+                    while j < bytes.len() && bytes[j] != b'"' {
+                        j += if bytes[j] == b'\\' { 2 } else { 1 };
+                    }
+                    blank(&mut out, i + 1, j.min(bytes.len()));
+                    i = j + 1;
+                }
+                b'\'' => {
+                    // A char literal ('x', '\n', '\u{..}') or a lifetime ('a).
+                    let rest = &text[i + 1..];
+                    let literal = if let Some(escaped) = rest.strip_prefix('\\') {
+                        escaped.find('\'').map(|n| n + 2)
+                    } else {
+                        rest.chars()
+                            .next()
+                            .filter(|c| rest[c.len_utf8()..].starts_with('\''))
+                            .map(|c| c.len_utf8())
+                    };
+                    match literal {
+                        Some(len) => {
+                            blank(&mut out, i + 1, i + 1 + len);
+                            i += len + 2;
+                        }
+                        None => i += 1,
+                    }
+                }
+                _ => i += 1,
+            }
+        }
+        String::from_utf8(out).expect("only ASCII bytes were replaced")
+    }
+
+    /// `blank` with every `#[cfg(test)]` item (a module, a fn, a `mod x;`)
+    /// turned to spaces, wherever it stands in the file.
+    fn drop_test_items(blank: &str) -> String {
+        let mut out = blank.to_owned();
+        let mut from = 0;
+        while let Some(found) = out[from..].find("#[cfg(test)]") {
+            let start = from + found;
+            let mut at = start + "#[cfg(test)]".len();
+            // Further attributes on the same item.
+            loop {
+                let rest = out[at..].trim_start();
+                at = out.len() - rest.len();
+                if rest.starts_with("#[") {
+                    at = matching(&out, at + 1).map_or(out.len(), |close| close + 1);
+                } else {
+                    break;
+                }
+            }
+            let semicolon = out[at..].find(';').map(|n| at + n);
+            let brace = out[at..].find('{').map(|n| at + n);
+            let end = match (brace, semicolon) {
+                (Some(open), Some(semi)) if semi < open => semi + 1,
+                (Some(open), _) => matching(&out, open).map_or(out.len(), |close| close + 1),
+                (None, Some(semi)) => semi + 1,
+                (None, None) => out.len(),
+            };
+            let spaces: String = out[start..end]
+                .chars()
+                .map(|c| if c == '\n' { '\n' } else { ' ' })
+                .collect();
+            out.replace_range(start..end, &spaces);
+            from = end;
+        }
+        out
+    }
+
+    /// Every `fn` with a body in `blank`: its name and its braces' offsets.
+    fn functions_in(blank: &str) -> Vec<(String, usize, usize)> {
+        let mut functions = Vec::new();
+        for at in words(blank, "fn") {
+            let name: String = blank[at + 2..]
+                .trim_start()
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            if name.is_empty() {
+                continue;
+            }
+            let after = at + 2;
+            let open = blank[after..].find('{').map(|n| after + n);
+            let semi = blank[after..].find(';').map(|n| after + n);
+            if let Some(open) = open.filter(|open| semi.is_none_or(|semi| *open < semi))
+                && let Some(close) = matching(blank, open)
+            {
+                functions.push((name, open, close));
+            }
+        }
+        functions
+    }
+
+    /// The offsets of `word` in `blank` as a whole identifier.
+    fn words<'a>(blank: &'a str, word: &'a str) -> impl Iterator<Item = usize> + 'a {
+        let ident = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        blank
+            .match_indices(word)
+            .map(|(at, _)| at)
+            .filter(move |at| {
+                !ident(blank[..*at].chars().next_back())
+                    && !ident(blank[at + word.len()..].chars().next())
+            })
+    }
+
+    /// The offset of the bracket closing the one at `open` (`{`, `(` or
+    /// `[`), counting only its own kind.
+    fn matching(blank: &str, open: usize) -> Option<usize> {
+        let bytes = blank.as_bytes();
+        let (opening, closing) = match bytes[open] {
+            b'{' => (b'{', b'}'),
+            b'(' => (b'(', b')'),
+            b'[' => (b'[', b']'),
+            _ => return None,
+        };
+        let mut depth = 0;
+        for (i, b) in bytes.iter().enumerate().skip(open) {
+            if *b == opening {
+                depth += 1;
+            } else if *b == closing {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
                 }
             }
         }
-        assert_eq!(
-            calls,
-            [(
-                "crates/bir-app-api/src/tax_profile_module.rs".to_owned(),
-                "activate_tin".to_owned()
-            )],
-            "add_account_tin( outside tests"
-        );
+        None
     }
 
     /// Making, changing and listing tax profiles never adds a TIN to the
