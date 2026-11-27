@@ -45,7 +45,9 @@ pub enum MigrationState {
     Transient { copy_saved: bool, detail: String },
     Permanent { detail: String },
     MovedNotOpened { detail: String },
-    Offered,
+    /// X2: the offer is the account's it was made to — the answer refuses unless the slot is still
+    /// that room, for that user, at that generation.
+    Offered { user_id: String, room_id: RoomId, generation: u64 },
 }
 
 pub fn migration_state() -> Option<MigrationState> {
@@ -91,6 +93,7 @@ pub(crate) fn close_session() {
     crate::open_room::close_room();
     crate::legacy_import_module::forget_scan();
     bir_core::db::set_open_room_database(None);
+    set_migration(None);
 }
 
 /// The room of the account signed in now, claimed or looked up: `session_opened` and the launch
@@ -109,6 +112,8 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
             return SessionRoom::LegacyInPlace;
         }
     }
+    // X2: no migration state outlives the session it belongs to.
+    set_migration(None);
     // F2: whatever a previous session left is closed before this account's claim and open run —
     // no worker tick and no screen of the new sign-in ever meets the old room.
     close_session();
@@ -188,9 +193,20 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
             }
             bir_core::legacy_claim::OfferStart::Open(_open_offer) => {
                 // The offer waits for the page; the account's room opens, never merged (§A.3.6).
-                set_migration(Some(MigrationState::Offered));
+                // X2: never to a practice account — the store-review account is nobody's heir.
                 match open_lookup_room(&layout, stored) {
-                    SessionRoom::Room { room_id } => SessionRoom::Offered { room_id },
+                    SessionRoom::Room { room_id } => {
+                        if !stored.practice
+                            && let Some((_, generation)) = crate::open_room::current()
+                        {
+                            set_migration(Some(MigrationState::Offered {
+                                user_id: stored.user_id.clone(),
+                                room_id: room_id.clone(),
+                                generation,
+                            }));
+                        }
+                        SessionRoom::Offered { room_id }
+                    }
                     other => other,
                 }
             }
@@ -860,6 +876,40 @@ mod a3a_tests {
         );
     }
 
+    /// X2: the offer is the account's it was made to. The practice account (or any other) cannot
+    /// pull the device's pre-rooms data into its own room, however it answers.
+    #[test]
+    fn the_offer_answer_refuses_an_account_it_was_not_made_to() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        // A pre-rooms legacy file with data in it (the fixture every legacy test uses).
+        let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../bir-core/tests/legacy-ebirforms");
+        if fixture.is_dir() {
+            // The claimable file itself: any real database with the legacy shape stands in here.
+        }
+        let db = Database::open(scratch.layout.legacy_database()).unwrap();
+        db.checkpoint().unwrap();
+        drop(db);
+        let mut practice_account = stored("user-practice");
+        practice_account.practice = true;
+        assert!(matches!(
+            open_session_room(&practice_account),
+            SessionRoom::Room { .. }
+        ));
+        // No offer was made to the practice account: its "add them" must be refused, never imported.
+        let arguments = HostArguments::new([HostValue::Bool(true)]);
+        let answered = migration_offer_answer(&arguments);
+                match answered {
+            Err(error) => assert!(
+                error.to_string().contains("offer"),
+                "the refusal is not the offer's: {error}"
+            ),
+            Ok(_) => panic!("the practice account answered the offer and it ran"),
+        }
+    }
+
     /// X1: the room path is process-wide, never per-thread. A second engine thread (the print
     /// preview's) reads the open room's id and path; after B signs in it reads B's, never A's.
     #[test]
@@ -1012,7 +1062,16 @@ fn migration_state_value() -> HostResult {
         Some(MigrationState::Transient { copy_saved, detail }) => ("transient", copy_saved, detail),
         Some(MigrationState::Permanent { detail }) => ("permanent", false, detail),
         Some(MigrationState::MovedNotOpened { detail }) => ("moved_not_opened", false, detail),
-        Some(MigrationState::Offered) => ("offered", false, String::new()),
+        Some(MigrationState::Offered { user_id, room_id, generation }) => {
+            let still = crate::open_room::user_id().as_deref() == Some(user_id.as_str())
+                && crate::open_room::room_id().as_ref() == Some(&room_id.clone())
+                && crate::open_room::generation() == Some(generation);
+            if still {
+                ("offered", false, String::new())
+            } else {
+                ("none", false, String::new())
+            }
+        }
     };
     Ok(HostObject::new()
         .field("kind", kind)
@@ -1039,6 +1098,20 @@ fn migration_offer_answer(arguments: &HostArguments) -> HostResult {
     if !add {
         set_migration(None);
         return Ok(HostValue::Null);
+    }
+    // X2: the answer runs only for the account the offer was made to, in the room it was made in.
+    let bound = match &*MIGRATION.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) {
+        Some(MigrationState::Offered { user_id, room_id, generation }) => {
+            crate::open_room::user_id().as_deref() == Some(user_id.as_str())
+                && crate::open_room::room_id().as_ref() == Some(&room_id.clone())
+                && crate::open_room::generation() == Some(*generation)
+        }
+        _ => false,
+    };
+    if !bound {
+        return Err(HostError::new(
+            "the offer was not made to the account and room open now; the offer is the account's it was made to",
+        ));
     }
     let layout = Layout::here();
     let legacy = layout.legacy_database();
