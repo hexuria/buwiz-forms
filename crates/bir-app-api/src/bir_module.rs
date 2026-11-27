@@ -5050,6 +5050,31 @@ mod tests {
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
     }
 
+    /// What these tests prune or write when they name no folder (`set_log_retention`'s log pruning, the
+    /// files under the data folder) is in the temp folder, never the real data folder.
+    #[test]
+    fn host_tests_keep_out_of_the_real_data_folder() {
+        temp_env::with_vars(
+            [("BIR_LOG_DIR", None::<&str>), ("BIR_DATABASE_PATH", None)],
+            || {
+                db::set_database_path_override(None);
+                let temp = std::env::temp_dir().canonicalize().unwrap();
+                let logs = bir_core::log_files::log_dir();
+                std::fs::create_dir_all(&logs).unwrap();
+                for dir in [
+                    logs,
+                    bir_core::platform::data_dir(),
+                ] {
+                    assert!(
+                        dir.canonicalize().unwrap().starts_with(&temp),
+                        "{} is outside the temp folder",
+                        dir.display()
+                    );
+                }
+            },
+        );
+    }
+
     /// (b) The help desk admin's authenticator secret stays host-side: the
     /// page's read is refused, and the refusal carries no value.
     #[test]
