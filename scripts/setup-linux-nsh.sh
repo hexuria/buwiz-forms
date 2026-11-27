@@ -159,17 +159,39 @@ RANLIB="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib"
 # Unset, the NSH app's own workspace builds full debuginfo: a 4 GB dev APK.
 # The Android app reads test settings baked in at build time, not from the
 # environment it runs in (nsh/src/dev_env.rs).
-# A value from the caller is taken only if it keeps the app a test build: it must say EBIR_TEST_ENV=1 and
-# BIR_SFTP_DRY_RUN=1 and may never name BIR_SFTP_LIVE. Anything else is refused and the safe default is baked in.
+# A value from the caller is taken only if it keeps the app a test build that talks to this machine alone. The app
+# honours every allowed key baked into a development build (nsh/src/dev_env.rs), so each entry is checked here:
+# only keys that file allows, each at most once, EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1 both present and exactly 1,
+# and a server, account or relay address only when it is this machine's own. Anything else is refused and the safe
+# default is baked in.
 dev_env_default="EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1"
+dev_env_refusal() {
+  local entry key value seen=";" test_env="" dry_run=""
+  local local_url='^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(/|$)'
+  case "$1" in *$'\n'*|*$'\r'*) echo "a line break in the value"; return 0;; esac
+  local IFS=';'
+  for entry in $1; do
+    [ -n "$entry" ] || continue
+    case "$entry" in *=*) ;; *) echo "an entry without '='"; return 0;; esac
+    key="${entry%%=*}"; value="${entry#*=}"
+    case "$seen" in *";$key;"*) echo "$key given twice"; return 0;; esac
+    seen="$seen$key;"
+    case "$key" in
+      EBIR_TEST_ENV) [ "$value" = 1 ] || { echo "EBIR_TEST_ENV must be 1"; return 0; }; test_env=1;;
+      BIR_SFTP_DRY_RUN) [ "$value" = 1 ] || { echo "BIR_SFTP_DRY_RUN must be 1"; return 0; }; dry_run=1;;
+      BUWIZ_SERVER_URL|BUWIZ_ACCOUNT_URL|BIR_RELAY_URL)
+        [[ "$value" =~ $local_url ]] || { echo "$key is not a local address"; return 0; };;
+      BIR_AUTH_BYPASS|BUWIZ_NO_KEYCHAIN|GPUI_AGENT|GPUI_AGENT_ADDR|BUWIZ_TRUST_KEYS|BIR_DATABASE_PATH) ;;
+      *) echo "$key is not a key a development build takes"; return 0;;
+    esac
+  done
+  [ -n "$test_env" ] || { echo "EBIR_TEST_ENV=1 is missing"; return 0; }
+  [ -n "$dry_run" ] || { echo "BIR_SFTP_DRY_RUN=1 is missing"; return 0; }
+  return 1
+}
 dev_env="${BUWIZ_ANDROID_DEV_ENV:-$dev_env_default}"
-case ";$dev_env;" in
-  *BIR_SFTP_LIVE*) dev_env="";;
-  *";EBIR_TEST_ENV=1;"*) case ";$dev_env;" in *";BIR_SFTP_DRY_RUN=1;"*) ;; *) dev_env="";; esac;;
-  *) dev_env="";;
-esac
-if [ -z "$dev_env" ]; then
-  echo "nsh2404: BUWIZ_ANDROID_DEV_ENV refused (it must keep EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1 and never name BIR_SFTP_LIVE); using the default" >&2
+if why="$(dev_env_refusal "$dev_env")"; then
+  echo "nsh2404: BUWIZ_ANDROID_DEV_ENV refused ($why); using the default" >&2
   dev_env="$dev_env_default"
 fi
 android=(); case " $* " in *android*) android=(-e CARGO_PROFILE_DEV_DEBUG=0
