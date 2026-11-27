@@ -1513,3 +1513,56 @@ fn two_claims_in_one_process_never_overlap() {
     second.sweep();
     assert!(!scratch.exists());
 }
+
+/// C5 (review of A2): every try at the legacy unlock is counted in device.db (`pin_attempts('', 'legacy')`, B1's
+/// limiter): after 6 wrong ones a wait runs, during which even the right PIN does not open the file, and the count
+/// survives a relaunch.
+#[test]
+fn the_legacy_unlock_is_limited() {
+    let install = Install::new();
+    close(helpdesk(&install, "1357", None));
+    let who = account("a");
+    let claim = install.claim();
+    let Start::Locked(mut locked) = claim.start(&who) else {
+        panic!("not locked")
+    };
+    for (index, wrong) in ["0000", "0001", "0002", "0003", "0004", "0005"]
+        .iter()
+        .enumerate()
+    {
+        let refused = locked
+            .unlock(&claim, LegacyCredential::Pin(wrong))
+            .unwrap_err();
+        let wait_started = if index == 5 {
+            Some(std::time::Duration::from_secs(60))
+        } else {
+            None
+        };
+        assert_eq!(refused.reason(), &RefusedReason::Wrong { wait_started });
+        locked = refused.into_inner();
+    }
+    let refused = locked
+        .unlock(&claim, LegacyCredential::Pin("1357"))
+        .expect_err("the right PIN during the wait");
+    assert!(matches!(refused.reason(), RefusedReason::Waiting(_)));
+    // The authenticator code and the recovery key count against the same wait.
+    let refused = refused
+        .into_inner()
+        .unlock(
+            &claim,
+            LegacyCredential::AuthenticatorCode(&totp_code(TOTP_SECRET)),
+        )
+        .expect_err("a right code during the wait");
+    assert!(matches!(refused.reason(), RefusedReason::Waiting(_)));
+    drop(refused);
+    assert!(install.legacy().exists());
+    // Another launch: the wait is still running.
+    let claim = install.claim();
+    let Start::Locked(locked) = claim.start(&who) else {
+        panic!("not locked")
+    };
+    let refused = locked
+        .unlock(&claim, LegacyCredential::Pin("1357"))
+        .expect_err("the count survives a relaunch");
+    assert!(matches!(refused.reason(), RefusedReason::Waiting(_)));
+}

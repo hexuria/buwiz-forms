@@ -1293,6 +1293,47 @@ impl std::fmt::Debug for Gate {
 
 impl Gate {
     /// Check a credential against the probe's values (PLAN §A.3.1). A client taxpayer's PIN never opens the file.
+    /// One try at the legacy unlock under B1's persisted limit (C5): the PIN, the authenticator code and the
+    /// recovery key each count in `pin_attempts('', 'legacy')`, in B1's order (refuse during a wait, check, commit,
+    /// then answer), so no caller can try without limit. The check reads only the probe's values in memory; nothing
+    /// inside it takes a store or another lock (B1's lock-order rule). "Use this computer's login" is the operating
+    /// system's own check, with its own limit, and once per claim: it is not counted here.
+    fn try_credential(
+        &self,
+        claim: &LegacyClaim,
+        credential: &LegacyCredential<'_>,
+    ) -> Result<UnlockedBy, RefusedReason> {
+        if matches!(credential, LegacyCredential::ComputerLogin) {
+            return self
+                .check(claim, credential)
+                .ok_or(RefusedReason::Wrong { wait_started: None });
+        }
+        let store = crate::rooms::DeviceStoreRef::File(claim.layout.clone());
+        let mut unlocked_by = None;
+        let attempt = crate::owner_lock::guarded(
+            &store,
+            &crate::owner_lock::AttemptKey::legacy(),
+            &crate::boot_clock::read(),
+            || {
+                unlocked_by = self.check(claim, credential);
+                Ok::<bool, std::convert::Infallible>(unlocked_by.is_some())
+            },
+        );
+        match attempt {
+            Ok(crate::owner_lock::Attempt::Matched) => {
+                unlocked_by.ok_or(RefusedReason::Wrong { wait_started: None })
+            }
+            Ok(crate::owner_lock::Attempt::Missed { wait }) => {
+                Err(RefusedReason::Wrong { wait_started: wait })
+            }
+            Ok(crate::owner_lock::Attempt::Waiting(wait)) => Err(RefusedReason::Waiting(wait)),
+            Err(crate::owner_lock::GuardError::Store(error)) => {
+                Err(RefusedReason::Unanswered(error.to_string()))
+            }
+            Err(crate::owner_lock::GuardError::Check(never)) => match never {},
+        }
+    }
+
     fn check(&self, claim: &LegacyClaim, credential: &LegacyCredential<'_>) -> Option<UnlockedBy> {
         match credential {
             LegacyCredential::Pin(pin) => self.probe.pin_matches(pin).then_some(UnlockedBy::Pin),
@@ -1345,14 +1386,34 @@ pub struct LockedClaim {
     empty_room_aside: bool,
 }
 
-/// A wrong credential: the page says so; the limiter is the caller's (§B.2, `pin_attempts('', 'legacy')`). It gives
-/// the page back ([`Refused::into_inner`]) for the next try.
+/// A try that did not open the file: why ([`Refused::reason`]), and the page back for the next try
+/// ([`Refused::into_inner`]). Every try was counted by the limiter (C5), so handing the page back opens nothing.
 #[derive(Debug)]
-pub struct Refused<T>(Box<T>);
+pub struct Refused<T> {
+    page: Box<T>,
+    reason: RefusedReason,
+}
+
+/// Why a try at the legacy unlock did not open the file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RefusedReason {
+    /// Not the old credential; `wait_started`: the wait this miss began (after every 6th in a row).
+    Wrong {
+        wait_started: Option<std::time::Duration>,
+    },
+    /// A wait is running: nothing was checked or counted.
+    Waiting(std::time::Duration),
+    /// The limit could not be read or the result committed: no answer (try again).
+    Unanswered(String),
+}
 
 impl<T> Refused<T> {
+    pub fn reason(&self) -> &RefusedReason {
+        &self.reason
+    }
+
     pub fn into_inner(self) -> T {
-        *self.0
+        *self.page
     }
 }
 
@@ -1373,14 +1434,17 @@ impl LockedClaim {
         claim: &LegacyClaim,
         credential: LegacyCredential<'_>,
     ) -> Result<ReadyClaim, Refused<Self>> {
-        match self.gate.check(claim, &credential) {
-            Some(unlocked_by) => Ok(ReadyClaim {
+        match self.gate.try_credential(claim, &credential) {
+            Ok(unlocked_by) => Ok(ReadyClaim {
                 gate: self.gate,
                 empty_room_aside: self.empty_room_aside,
                 unlocked_by,
                 owner_pin_phc: None,
             }),
-            None => Err(Refused(Box::new(self))),
+            Err(reason) => Err(Refused {
+                page: Box::new(self),
+                reason,
+            }),
         }
     }
 
@@ -1544,9 +1608,12 @@ impl LockedOffer {
         claim: &LegacyClaim,
         credential: LegacyCredential<'_>,
     ) -> Result<Offer, Refused<Self>> {
-        match self.gate.check(claim, &credential) {
-            Some(_) => Ok(Offer { gate: self.gate }),
-            None => Err(Refused(Box::new(self))),
+        match self.gate.try_credential(claim, &credential) {
+            Ok(_) => Ok(Offer { gate: self.gate }),
+            Err(reason) => Err(Refused {
+                page: Box::new(self),
+                reason,
+            }),
         }
     }
 
