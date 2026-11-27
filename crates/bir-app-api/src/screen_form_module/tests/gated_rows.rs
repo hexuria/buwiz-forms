@@ -177,10 +177,15 @@ fn form_2552_tax_relief_specification_is_gated_and_said_once() {
 fn form_2000_other_party_and_balance_are_gated() {
     setup();
     let name = "frm2000:txtOtherName";
+    let tin = "frm2000:txtOtherTIN";
     let balance = "frm2000:txtTax15A";
     let opened = open("2000", 6);
 
-    for (key, value) in [(name, json!("Lender Corp")), (balance, json!("250"))] {
+    for (key, value) in [
+        (name, json!("Lender Corp")),
+        (tin, json!("123-456-789")),
+        (balance, json!("250")),
+    ] {
         let refused = fill("2000", &opened["draft"], json!({ key: value }));
         assert!(
             refused["rejected"].get(key).is_some(),
@@ -194,13 +199,20 @@ fn form_2000_other_party_and_balance_are_gated() {
         &opened["draft"],
         json!({"frm2000:optParty_1": "true"}),
     );
-    let named = fill("2000", &creditor["draft"], json!({ name: "Lender Corp" }));
-    assert!(
-        named["rejected"].get(name).is_none(),
-        "creditor opens the name: {:?}",
-        named["rejected"]
+    let named = fill(
+        "2000",
+        &creditor["draft"],
+        json!({ name: "Lender Corp", tin: "123-456-789" }),
     );
+    for key in [name, tin] {
+        assert!(
+            named["rejected"].get(key).is_none(),
+            "creditor opens {key}: {:?}",
+            named["rejected"]
+        );
+    }
     assert_eq!(named["draft"]["other_party_name"], "Lender Corp");
+    assert_eq!(named["draft"]["other_party_tin"], "123-456-789");
 
     let none = fill(
         "2000",
@@ -208,10 +220,13 @@ fn form_2000_other_party_and_balance_are_gated() {
         json!({"frm2000:optParty_3": "true"}),
     );
     assert_eq!(none["draft"]["other_party_name"], "");
-    assert_eq!(
-        none["relock_notes"][name],
-        json!("The other-party name was cleared: Item 11 names no other party.")
-    );
+    assert_eq!(none["draft"]["other_party_tin"], "");
+    for key in [name, tin] {
+        assert_eq!(
+            none["relock_notes"][key],
+            json!("The other-party details were cleared: Item 11 names no other party.")
+        );
+    }
 
     let amended = fill(
         "2000",
@@ -233,9 +248,16 @@ fn form_1707_other_detail_and_installment_rows_are_gated() {
     let detail = "frm1707:txtPg1I9TransDescSpec";
     let group = "frm1707:rdoPg1I9TransDesc";
     let selling = "frm1707:txtPg2P4Sch1I1SellPrice";
+    let collection_date = "frm1707:txtPg2P4Sch1I8DateCollection";
+    let total_collection = "frm1707:txtPg2P4Sch1I9TotCollection";
     let opened = open("1707", 1);
 
-    for (key, value) in [(detail, json!("OTHER DETAIL")), (selling, json!("1000"))] {
+    for (key, value) in [
+        (detail, json!("OTHER DETAIL")),
+        (selling, json!("1000")),
+        (collection_date, json!("01/02/2026")),
+        (total_collection, json!("250")),
+    ] {
         let refused = fill("1707", &opened["draft"], json!({ key: value }));
         assert!(
             refused["rejected"].get(key).is_some(),
@@ -266,7 +288,12 @@ fn form_1707_other_detail_and_installment_rows_are_gated() {
     let installment = fill(
         "1707",
         &opened["draft"],
-        json!({ group: "Installment", selling: "1000" }),
+        json!({
+            group: "Installment",
+            selling: "1000",
+            collection_date: "01/02/2026",
+            total_collection: "250",
+        }),
     );
     assert!(
         installment["rejected"].get(selling).is_none(),
@@ -277,10 +304,12 @@ fn form_1707_other_detail_and_installment_rows_are_gated() {
 
     let closed = fill("1707", &installment["draft"], json!({ group: "Cash" }));
     assert_eq!(closed["draft"]["installment"]["selling_price"], 0.0);
-    assert_eq!(
-        closed["relock_notes"][selling],
-        json!("Schedule 1 was cleared: Item 9 is not Installment Sale.")
-    );
+    for key in [selling, collection_date, total_collection] {
+        assert_eq!(
+            closed["relock_notes"][key],
+            json!("Schedule 1 was cleared: Item 9 is not Installment Sale.")
+        );
+    }
 }
 
 #[test]
@@ -631,10 +660,23 @@ fn form_1701ms_column_a_boxes_are_gated() {
     let sales = "frm1701MS:txtSalesRevenueNo5a";
     let cost = "frm1701MS:txtCostofSalesNo8a";
     let relief = "frm1701MS:txtTaxpayerNo13a";
+    let relief_from = "frm1701MS:txtTaxpayerNo16a";
+    let relief_to = "frm1701MS:txtTaxpayerNo16a1";
+    let nolco = "frm1701MS:txtNetOperatingLossNo10a";
     let eight = "frm1701MS:txtSalesRevenuesFeesANo19a";
     let previous = "frm1701MS:txtTaxPaidPreviouslyFiledNo6a";
 
-    for key in [gross, sales, cost, relief, eight, previous] {
+    for key in [
+        gross,
+        sales,
+        cost,
+        relief,
+        relief_from,
+        relief_to,
+        nolco,
+        eight,
+        previous,
+    ] {
         let refused = fill("1701MS", &opened["draft"], json!({ key: "100" }));
         assert!(
             refused["rejected"].get(key).is_some(),
@@ -667,12 +709,19 @@ fn form_1701ms_column_a_boxes_are_gated() {
         &typed_sales["draft"],
         json!({"frm1701MS:txtTaxpayerNo17a": "true"}),
     );
-    let typed_cost = fill("1701MS", &itemized["draft"], json!({ cost: "100" }));
-    assert!(
-        typed_cost["rejected"].get(cost).is_none(),
-        "itemized opens cost of sales: {:?}",
-        typed_cost["rejected"]
+    let typed_cost = fill(
+        "1701MS",
+        &itemized["draft"],
+        json!({ cost: "100", nolco: "25" }),
     );
+    for key in [cost, nolco] {
+        assert!(
+            typed_cost["rejected"].get(key).is_none(),
+            "itemized opens {key}: {:?}",
+            typed_cost["rejected"]
+        );
+    }
+    assert_eq!(typed_cost["draft"]["taxpayer"]["nolco"], 25.0);
 
     let mixed = fill(
         "1701MS",
@@ -691,12 +740,18 @@ fn form_1701ms_column_a_boxes_are_gated() {
         &opened["draft"],
         json!({"frm1701MS:txtTaxpayerNo12d": "true"}),
     );
-    let typed_relief = fill("1701MS", &exempt["draft"], json!({ relief: "100" }));
-    assert!(
-        typed_relief["rejected"].get(relief).is_none(),
-        "exempt opens the relief items: {:?}",
-        typed_relief["rejected"]
+    let typed_relief = fill(
+        "1701MS",
+        &exempt["draft"],
+        json!({ relief: "100", relief_from: "01/01/2026", relief_to: "12/31/2026" }),
     );
+    for key in [relief, relief_from, relief_to] {
+        assert!(
+            typed_relief["rejected"].get(key).is_none(),
+            "exempt opens {key}: {:?}",
+            typed_relief["rejected"]
+        );
+    }
 
     let eight_rate = fill(
         "1701MS",

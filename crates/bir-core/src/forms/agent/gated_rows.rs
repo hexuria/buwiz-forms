@@ -201,8 +201,8 @@ const G1702RT_AMENDED: Gate = Gate {
 const G2000_OTHER: Gate = Gate {
     gate: "2000_other_party_name",
     lock: C2000_OTHER,
-    note: "The other-party name needs Item 11 Creditor or Debtor.",
-    cleared: "The other-party name was cleared: Item 11 names no other party.",
+    note: "The other-party details need Item 11 Creditor or Debtor.",
+    cleared: "The other-party details were cleared: Item 11 names no other party.",
 };
 const G2000_BALANCE: Gate = Gate {
     gate: "2000_balance_carried_over",
@@ -305,8 +305,11 @@ fn gate_of(form: &str, key: &str) -> Option<Gate> {
             match rest {
                 "Grossa" => Some(G1701MS_COMPENSATION),
                 "SalesRevenueNo5a" | "SalesReturnsNo6a" => Some(G1701MS_B1),
-                "CostofSalesNo8a" | "AllowableItemizedDeductionsNo10a" => Some(G1701MS_ITEMIZED),
-                "TaxpayerNo13a" | "TaxpayerNo14a" | "TaxpayerNo15a" => Some(G1701MS_RELIEF),
+                "CostofSalesNo8a"
+                | "AllowableItemizedDeductionsNo10a"
+                | "NetOperatingLossNo10a" => Some(G1701MS_ITEMIZED),
+                "TaxpayerNo13a" | "TaxpayerNo14a" | "TaxpayerNo15a" | "TaxpayerNo16a"
+                | "TaxpayerNo16a1" => Some(G1701MS_RELIEF),
                 "SalesRevenuesFeesANo19a" => Some(G1701MS_EIGHT),
                 "TaxPaidPreviouslyFiledNo6a" => Some(G1701MS_PREVIOUS),
                 _ => None,
@@ -324,6 +327,8 @@ fn gate_of(form: &str, key: &str) -> Option<Gate> {
                 "3AssumMortgage",
                 "4NumInstallments",
                 "5InstallmentAmt",
+                "8DateCollection",
+                "9TotCollection",
             ]
             .contains(&rest)
             {
@@ -352,7 +357,7 @@ fn gate_of(form: &str, key: &str) -> Option<Gate> {
             None
         }
         "2000" => match key {
-            "frm2000:txtOtherName" => Some(G2000_OTHER),
+            "frm2000:txtOtherName" | "frm2000:txtOtherTIN" => Some(G2000_OTHER),
             "frm2000:txtTax15A" => Some(G2000_BALANCE),
             _ => None,
         },
