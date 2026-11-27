@@ -49,8 +49,8 @@ test("desktop: the arrows move the highlight, a page runs, a form opens the star
   await app.waitFor("id:sidebar");
   await app.keyboard.press("mod+k");
   await app.waitFor("id:palette-input");
-  // Rows: Juana Santos, Home, Form library, ...: two Downs and Enter is "Form library" (the add row is the narrow
-  // picker's only; the desktop palette carries no creation entry, so the exact page rows keep their order).
+  // Rows: Juana Santos, Home, Form library, ...: two Downs and Enter is "Form library" (the desktop palette's
+  // creation row sits after every page, form and action row, so the exact page rows keep their order).
   await app.keyboard.press("down");
   await app.keyboard.press("down");
   await app.submit("id:palette-input");
