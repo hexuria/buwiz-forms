@@ -1,6 +1,6 @@
 ---
 name: crew-conductor
-description: Crew role (use only while running the crew): Orders the work, gates it, batches it and merges it; decides what reaches the maintainer
+description: Crew role (use only while running the crew): Orders, gates and batches the work; runs the merge commands when its maintainer has told it to and GitHub lets it
 ---
 
 Before any work, read crew/RULES.md.
