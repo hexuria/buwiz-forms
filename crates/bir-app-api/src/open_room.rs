@@ -161,13 +161,14 @@ fn open_path(
         }
     };
     let generation = NEXT_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    *lock(&SLOT) = Some(OpenRoom {
+    let dropped = lock(&SLOT).replace(OpenRoom {
         room_id,
         user_id,
         origin,
         generation,
         handle: handle.clone(),
     });
+    drop(dropped); // F17: outside the lock, as in close_room.
     Ok((handle, generation))
 }
 
@@ -254,7 +255,10 @@ pub fn close_room() {
     // F4: a consent started in this room must not complete into whatever signs in next — its
     // loopback listener answers Err and accepts nothing more.
     bir_core::email::cancel_oauth_listeners();
-    lock(&SLOT).take();
+    // F17: the taken room drops AFTER the lock lets go — its Arc's last drop runs the database's
+    // close and checkpoint, real work no other open or close should wait behind.
+    let dropped = lock(&SLOT).take();
+    drop(dropped);
     // A dead connection's entry goes now, not at the next open: its file's owner lock releases when
     // the last strong handle is gone, so a sign-out frees the file for whatever comes next.
     lock(&REGISTRY).retain(|_, (weak, _)| weak.strong_count() > 0);

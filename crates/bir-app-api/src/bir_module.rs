@@ -60,9 +60,12 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
     // A3a (§A.4): the open room is the slot. The handle is never replaced inside an old Arc; a new
     // room is a new Arc with a new generation, and the reader follows it.
     if let Some((handle, generation)) = crate::open_room::current() {
-        if READER_GENERATION.with(std::cell::Cell::get) != generation
-            && let Ok(mut guard) = bir_core::lock_timing::lock(&handle)
-        {
+        if READER_GENERATION.with(std::cell::Cell::get) != generation {
+            // F15: a poisoned room mutex must not keep the old reader — recover the guard and
+            // reinstall; the database behind a poisoned lock is still the room's one connection.
+            let mut guard = handle
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             install_reader(&mut guard);
             READER_GENERATION.with(|slot| slot.set(generation));
         }
