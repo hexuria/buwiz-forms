@@ -97,12 +97,12 @@ click tp-branch-name
 wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
 assert tp-branch-rdo_code-search value="047 — East Makati"
 wait_until tp-branch-rdo_code-note --timeout-ms 2000 --screenshot
-# Error line under the box: text that fits nothing, then a press on Save below it. The blur adds the box's
+# Error line under the box: text that fits nothing (the list then shows only its "Nothing matches" line, <box>-nothing), then a press on Save below it. The blur adds the box's
 # not-taken line during that press; the press must still save (the section closes) on the first click.
 click tp-branch-rdo_code-search
 key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search zzzz --key-delay-ms 80
-wait_until tp-branch-rdo_code-list --timeout-ms 3000
+wait_until tp-branch-rdo_code-nothing --timeout-ms 3000
 click tp-branch-save --screenshot
 wait_until tp-branch-save --absent --timeout-ms 5000 --screenshot
 click tp-sec-address-edit
@@ -201,7 +201,7 @@ wait_until tp-address-zip_code-note --timeout-ms 2000 --screenshot
 click tp-address-zip_code-search
 key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search zzzz --key-delay-ms 80
-wait_until tp-address-zip_code-list --timeout-ms 3000
+wait_until tp-address-zip_code-nothing --timeout-ms 3000
 click tp-address-save --screenshot
 wait_until tp-address-save --absent --timeout-ms 5000 --screenshot
 click tb-panel

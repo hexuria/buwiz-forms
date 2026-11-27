@@ -88,7 +88,7 @@ wait_until tp-branch-rdo_code-note --timeout-ms 2000 --screenshot
 click tp-branch-rdo_code-search
 key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search zzzz
-wait_until tp-branch-rdo_code-list --timeout-ms 3000
+wait_until tp-branch-rdo_code-nothing --timeout-ms 3000
 click tp-branch-save --screenshot
 wait_until tp-branch-save --absent --timeout-ms 5000 --screenshot
 click tp-sec-address-edit
@@ -175,7 +175,7 @@ wait_until tp-address-zip_code-note --timeout-ms 2000 --screenshot
 click tp-address-zip_code-search
 key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search zzzz
-wait_until tp-address-zip_code-list --timeout-ms 3000
+wait_until tp-address-zip_code-nothing --timeout-ms 3000
 click tp-address-save --screenshot
 wait_until tp-address-save --absent --timeout-ms 5000 --screenshot
 click tb-panel
