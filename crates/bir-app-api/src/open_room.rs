@@ -278,17 +278,14 @@ pub fn release_all_for_quit() {
     lock(&DEVICE_GUARDS).clear();
 }
 
-#[cfg(test)]
-static ROOM_TEST_TURN: Mutex<()> = Mutex::new(());
-
-/// One turn for every test that opens a room in this process (the slot, the open room path,
-/// the account gate and the owner-lock state are all process-wide): tests in different modules
-/// would otherwise write them over each other. Owner-lock module tests take this same turn.
+/// One turn for every test that opens a room in this process (F4: ONE turn for everything —
+/// the machine, the slot's successors, the account gate and the owner-lock state are all
+/// process-wide): tests in different modules would otherwise write them over each other. The
+/// turn is bir-core's room test turn, so bir-core's room tests serialise with these and no two
+/// turns can deadlock.
 #[cfg(test)]
 pub(crate) fn room_test_turn() -> std::sync::MutexGuard<'static, ()> {
-    ROOM_TEST_TURN
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+    bir_core::db::room_path_test_turn()
 }
 
 #[cfg(test)]

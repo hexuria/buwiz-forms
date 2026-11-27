@@ -50,8 +50,9 @@ pub fn is_unlocked() -> bool {
     auth_bypass_enabled() || UNLOCKED.load(Ordering::SeqCst)
 }
 
-/// What sign-in and sign-out set, without the test bypass that [`is_unlocked`] adds (tests run with it on).
-#[cfg(test)]
+/// What sign-in and sign-out set, without the test bypass or the force-locked flag that
+/// [`is_unlocked`] adds. The machine's invariants read this: they are about what the session
+/// wrote, never about the bypass outside it.
 pub(crate) fn unlocked_flag() -> bool {
     UNLOCKED.load(Ordering::SeqCst)
 }

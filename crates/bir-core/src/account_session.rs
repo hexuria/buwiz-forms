@@ -65,7 +65,19 @@ impl std::error::Error for TokenError {}
 ///   by the same rules, refreshing at most once more. If it is the same, the sign-in has ended: clear the
 ///   saved account, call the session-ended hook, return `SignedOut`.
 /// - Network failure: `Offline(reason)`; nothing is cleared or changed.
+/// Test instrumentation: how many token fetches this process ran. A send that must not take a
+/// token is tested by the count not moving.
+#[cfg(any(test, feature = "test-support"))]
+pub static TOKEN_FETCHES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[cfg(any(test, feature = "test-support"))]
+pub fn token_fetch_count() -> u64 {
+    TOKEN_FETCHES.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 pub fn access_token(http: &mut dyn Http, now_unix: i64, force: bool) -> Result<String, TokenError> {
+    #[cfg(any(test, feature = "test-support"))]
+    TOKEN_FETCHES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     access_token_in(&SavedAccount, http, now_unix, force, &run_session_ended)
 }
 
