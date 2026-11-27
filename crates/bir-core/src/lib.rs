@@ -88,6 +88,10 @@ pub mod mock_relay;
 #[cfg(any(test, feature = "mock-account"))]
 pub mod mock_account;
 
+/// The Buwiz relay client, for hosts that read the account's TINs through [`relay::submitter`] without a
+/// dependency of their own on it.
+pub use bir_submit;
+
 // Re-export core types
 pub use bir_rules::{
     BehaviorProfile, CompiledRuleSet, ContextFingerprint, ContextValueSnapshot, EvaluationResult,

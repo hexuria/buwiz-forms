@@ -1,5 +1,6 @@
 //! The TINs on the signed-in Buwiz account, and the state of each:
-//! `GET /api/tax-profiles?include=all,pending`.
+//! `GET /api/tax-profiles?include=all`; and adding one from the app,
+//! `POST /api/tax-profiles` ([`Submitter::add_account_tin`]).
 //!
 //! - One read is shared: concurrent callers wait for one request, and a
 //!   list younger than the caller's `max_age` is answered from memory. A
@@ -12,6 +13,9 @@
 //!   only when the server says so with `"include":"all"`.
 //! - A 400 on the `include` parameter (a server that rejects it) is asked
 //!   again without it; a 403 never is.
+//! - A `429` keeps the last list: until its `Retry-After` the server is not
+//!   asked again, whatever the caller's `max_age`, and the last list of
+//!   this generation is answered, marked `stale`.
 //!
 //! No row, TIN or name is logged, and the types' `Debug` shows none.
 
@@ -30,7 +34,12 @@ pub const STALE_LIMIT_SECS: i64 = 600;
 const FAILURE_SECS: i64 = 30;
 /// The shortest time between two forced reads ("Check again").
 const FORCED_SECS: i64 = 15;
-pub(crate) const PATH: &str = "/api/tax-profiles?include=all,pending";
+/// How long a `429` without a usable `Retry-After` holds requests off.
+const LIMIT_DEFAULT_SECS: i64 = 60;
+/// The unverified TINs an account may hold (the server's cap, in the app's
+/// words for `too_many_unverified`).
+pub const MAX_UNVERIFIED: u32 = 20;
+pub(crate) const PATH: &str = "/api/tax-profiles?include=all";
 
 /// The Buwiz account site: the only host a row's `action.url` may open,
 /// and the site of every link the apps build for a TIN's step.
@@ -103,6 +112,32 @@ impl TinStatus {
     }
 }
 
+/// What the app does next with a row (`next`): send its returns, wait for
+/// Buwiz (in review, or paused), or take the row's step on the account
+/// site (verify it, or fix it: the row's `action`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Next {
+    Send,
+    Wait,
+    Fix,
+}
+
+impl Next {
+    /// The row's `next`. A row without one (a server from before it), or
+    /// with a word this app does not know, falls back: `can_send` is Send,
+    /// an `action` is Fix, anything else Wait.
+    fn parse(next: Option<&str>, can_send: bool, has_action: bool) -> Self {
+        match next {
+            Some("send") => Next::Send,
+            Some("wait") => Next::Wait,
+            Some("fix") => Next::Fix,
+            _ if can_send => Next::Send,
+            _ if has_action => Next::Fix,
+            _ => Next::Wait,
+        }
+    }
+}
+
 /// One TIN on the account.
 #[derive(Clone, PartialEq, Eq)]
 pub struct AccountTin {
@@ -111,6 +146,13 @@ pub struct AccountTin {
     pub registered_name: String,
     pub status: TinStatus,
     pub can_send: bool,
+    /// What the app does next with it ([`Next`]).
+    pub next: Next,
+    /// The server's line for the row: where it stands and what is next.
+    pub message: Option<String>,
+    /// A test TIN (root `000-000-000` or `111-111-114`): its sends are dry
+    /// runs, never sent to the BIR.
+    pub test_only: bool,
     /// The fixed reason sentences of a `needs_fix` row.
     pub reasons: Vec<String>,
     /// Staff's free-text note of a `needs_fix` row. For app-only surfaces:
@@ -134,12 +176,18 @@ impl AccountTin {
                 .filter(|text| !text.is_empty())
                 .map(str::to_owned)
         };
+        let can_send = row["can_send"]
+            .as_bool()
+            .unwrap_or(status == TinStatus::Approved);
         Some(Self {
             key,
             registered_name: text(&row["registered_name"]).unwrap_or_default(),
-            can_send: row["can_send"]
+            can_send,
+            next: Next::parse(row["next"].as_str(), can_send, !row["action"].is_null()),
+            message: text(&row["message"]),
+            test_only: row["test_only"]
                 .as_bool()
-                .unwrap_or(status == TinStatus::Approved),
+                .unwrap_or(status == TinStatus::TestOnly),
             status,
             reasons: row["reasons"]
                 .as_array()
@@ -157,6 +205,8 @@ impl std::fmt::Debug for AccountTin {
             .field("key", &self.key)
             .field("status", &self.status)
             .field("can_send", &self.can_send)
+            .field("next", &self.next)
+            .field("test_only", &self.test_only)
             .field("reasons", &self.reasons.len())
             .field("note", &self.note.is_some())
             .field("action_url", &self.action_url.is_some())
@@ -221,6 +271,10 @@ pub enum TinsError {
     /// server's and is not shown by `Debug`.
     #[error("The Buwiz server could not list your TINs ({code}).")]
     Server { code: String, message: String },
+    /// `429`: Buwiz asked not to be asked again before `until` (seconds
+    /// since the epoch), and there is no earlier list to answer.
+    #[error("Buwiz asked to wait before your TINs are read again.")]
+    RateLimited { until: i64 },
 }
 
 impl std::fmt::Debug for TinsError {
@@ -230,6 +284,7 @@ impl std::fmt::Debug for TinsError {
             TinsError::Banned => f.write_str("Banned"),
             TinsError::Offline => f.write_str("Offline"),
             TinsError::Server { code, .. } => write!(f, "Server({code})"),
+            TinsError::RateLimited { until } => write!(f, "RateLimited({until})"),
         }
     }
 }
@@ -262,6 +317,9 @@ struct CacheState {
     last: Option<(Instant, u64, TinsRead)>,
     /// The last list read, the same way, for answering offline.
     good: Option<(Instant, u64, AccountTins)>,
+    /// A `429`'s `Retry-After`: no request before this instant. With it,
+    /// the same moment on the wall clock, for [`TinsError::RateLimited`].
+    blocked_until: Option<(Instant, i64)>,
 }
 
 /// Whether a read that ended at `at` is younger than `secs` at `now`. A
@@ -285,6 +343,9 @@ impl CacheState {
 
     /// What a failed read answers: offline, the last list (marked stale)
     /// while it is under [`STALE_LIMIT_SECS`] old and of this generation.
+    ///
+    /// Rate limited, the last list of this generation whatever its age: the
+    /// server asked to keep it until `Retry-After`.
     fn fallback(&self, now: Instant, error: TinsError) -> TinsRead {
         match (&error, &self.good) {
             (TinsError::Offline, Some((at, generation, good)))
@@ -295,8 +356,26 @@ impl CacheState {
                     ..good.clone()
                 })
             }
+            (TinsError::RateLimited { .. }, Some((_, generation, good)))
+                if *generation == self.generation =>
+            {
+                Ok(AccountTins {
+                    stale: true,
+                    ..good.clone()
+                })
+            }
             _ => Err(error),
         }
+    }
+
+    /// The answer while a `429` holds requests off at `now`, if one does.
+    fn blocked(&mut self, now: Instant) -> Option<TinsRead> {
+        let (until, wall) = self.blocked_until?;
+        if now >= until {
+            self.blocked_until = None;
+            return None;
+        }
+        Some(self.fallback(now, TinsError::RateLimited { until: wall }))
     }
 }
 
@@ -327,6 +406,9 @@ impl TinsCache {
             state.reset(Some(login.to_owned()));
             return None;
         }
+        if let Some(read) = state.blocked(now) {
+            return Some(read);
+        }
         match &state.last {
             Some((_, generation, _)) if *generation != state.generation => None,
             Some((at, _, Ok(list))) if younger(*at, now, max_age) => Some(Ok(list.clone())),
@@ -350,6 +432,10 @@ impl TinsCache {
             state.reset(Some(login.to_owned()));
         }
         state.last = Some((now, started, read.clone()));
+        if let Err(TinsError::RateLimited { until }) = read {
+            let wait = u64::try_from(until - device::now()).unwrap_or(0);
+            state.blocked_until = Some((now + Duration::from_secs(wait), until));
+        }
         match read {
             Ok(list) => {
                 state.good = Some((now, started, list.clone()));
@@ -378,6 +464,10 @@ impl TinsCache {
         if let Some((at, _, good)) = &mut state.good {
             shift(at);
             good.fetched_at -= secs;
+        }
+        if let Some((at, wall)) = &mut state.blocked_until {
+            shift(at);
+            *wall -= secs;
         }
     }
 }
@@ -437,11 +527,279 @@ impl Submitter {
     pub fn invalidate_account_tins(&self) {
         self.tins.invalidate();
     }
+
+    /// "Activate this TIN to send": `POST /api/tax-profiles` adds `tin` to
+    /// the account as not verified. Only an explicit press in the app calls
+    /// it, never the creation of a tax profile.
+    ///
+    /// - `kind` is sent as `personal` or `business`, the TIN as its 14
+    ///   digits with the branch (`123-456-789-00000`), the names trimmed;
+    ///   `trade_name` only when it is not empty, whatever the kind.
+    /// - A name over [`MAX_NAME_BYTES`] bytes after trimming (counted as the
+    ///   server counts it) is [`AddTinError::NameTooLong`] at once, and an
+    ///   empty registered name [`AddTinError::NameMissing`], without a
+    ///   request; the server's own answer still decides everything else.
+    /// - The added row, as `include=all` lists it (`None` when the answer
+    ///   could not be read: the TIN was added all the same).
+    /// - After an add, after `tin_already_active`, `tin_already_added` or
+    ///   `claim_already_pending`, and after [`AddTinError::Offline`] (a POST
+    ///   that timed out may still have added it), the next list read asks
+    ///   the server.
+    pub async fn add_account_tin(
+        &self,
+        kind: TinKind,
+        tin: &TinKey,
+        registered_name: &str,
+        trade_name: Option<&str>,
+    ) -> Result<Option<AccountTin>, AddTinError> {
+        if self.login().is_none() {
+            return Err(AddTinError::SignedOut);
+        }
+        let registered_name = registered_name.trim();
+        let trade_name = trade_name.map(str::trim).filter(|name| !name.is_empty());
+        if registered_name.len() > MAX_NAME_BYTES
+            || trade_name.is_some_and(|name| name.len() > MAX_NAME_BYTES)
+        {
+            return Err(AddTinError::NameTooLong);
+        }
+        if registered_name.is_empty() {
+            return Err(AddTinError::NameMissing);
+        }
+        let mut body = serde_json::json!({
+            "kind": kind.wire(),
+            "tin": dashed(tin),
+            "registered_name": registered_name,
+        });
+        if let Some(trade_name) = trade_name {
+            body["trade_name"] = Value::from(trade_name);
+        }
+        let added = self
+            .bearer_send(reqwest::Method::POST, PLAIN_PATH, Some(&body))
+            .await
+            .map_err(add_error);
+        // A POST that timed out (`Offline`) may still have added the TIN on
+        // the server: the next read asks rather than trust the list from
+        // before.
+        if added.as_ref().map_or_else(
+            |error| error.refreshes_list() || *error == AddTinError::Offline,
+            |_| true,
+        ) {
+            self.tins.invalidate();
+        }
+        Ok(AccountTin::parse(&added?["profile"]))
+    }
+}
+
+/// The longest registered or trade name the server takes, in bytes after
+/// trimming (as the account site's form counts it: `ñ` is two).
+pub const MAX_NAME_BYTES: usize = 200;
+
+/// What a TIN is on the account site: a person's or a business's. The
+/// app's taxpayer types map onto it: an individual is personal, every
+/// other type (corporation, partnership, cooperative, estate, trust) is a
+/// business.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TinKind {
+    Individual,
+    NonIndividual,
+}
+
+impl TinKind {
+    /// The request's `kind`.
+    pub fn wire(self) -> &'static str {
+        match self {
+            TinKind::Individual => "personal",
+            TinKind::NonIndividual => "business",
+        }
+    }
+}
+
+/// `123-456-789-00000`: the root and the 5-digit branch, as the account
+/// site prints a TIN.
+fn dashed(tin: &TinKey) -> String {
+    let root = tin.root();
+    format!(
+        "{}-{}-{}-{}",
+        &root[..3],
+        &root[3..6],
+        &root[6..],
+        tin.branch()
+    )
+}
+
+/// Why "Activate this TIN to send" did not add the TIN: each refusal of
+/// `POST /api/tax-profiles` is its own case, in the app's own words (the
+/// server's sentence is never shown).
+#[derive(Clone, PartialEq, Eq, thiserror::Error)]
+pub enum AddTinError {
+    /// `bad_tin`
+    #[error("This TIN is not valid.")]
+    BadTin,
+    /// `name_missing`: the registered name is empty.
+    #[error("Add the registered name first.")]
+    NameMissing,
+    /// `name_too_long`: a name over [`MAX_NAME_BYTES`] bytes.
+    #[error("This name is too long. Shorten it and try again.")]
+    NameTooLong,
+    /// `test_tin`: roots `000-000-000` and `111-111-114` are added by staff.
+    #[error("Test TINs are added by Buwiz.")]
+    TestTin,
+    /// `tin_already_active`. The list is read again.
+    #[error("This TIN is already activated on your account.")]
+    TinAlreadyActive,
+    /// `tin_already_added`: not verified yet. The list is read again, and
+    /// its row has the Verify step.
+    #[error("This TIN is already on your account, waiting to be verified.")]
+    TinAlreadyAdded,
+    /// `claim_already_pending`: in review or sent back. The list is read
+    /// again.
+    #[error("Buwiz is checking this TIN.")]
+    ClaimAlreadyPending,
+    /// `too_many_unverified`
+    #[error(
+        "Your account has {MAX_UNVERIFIED} TINs waiting to be verified. Verify or remove one on your account first."
+    )]
+    TooManyUnverified,
+    /// `429 rate_limited`: tried again after `retry_after` seconds.
+    #[error("Too many tries. Try again in {}.", minutes(.retry_after))]
+    RateLimited { retry_after: i64 },
+    /// `bad_request`: the server could not read what the app sent.
+    #[error("Buwiz could not read this request. Update eBIRForms and try again.")]
+    BadRequest,
+    /// `403` (`insufficient_scope`): a sign-in that is not the BIR app's.
+    #[error("This sign-in cannot add TINs. Sign out of Buwiz and sign in again.")]
+    Forbidden,
+    /// `403 account_banned`
+    #[error("This Buwiz account is banned.")]
+    Banned,
+    #[error("Sign in to Buwiz to activate this TIN.")]
+    SignedOut,
+    #[error("Buwiz can't be reached.")]
+    Offline,
+    /// Any other answer; `message` is the server's and is not shown.
+    #[error("The Buwiz server could not add this TIN ({code}).")]
+    Other { code: String, message: String },
+}
+
+impl std::fmt::Debug for AddTinError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AddTinError::RateLimited { retry_after } => write!(f, "RateLimited({retry_after})"),
+            AddTinError::Other { code, .. } => write!(f, "Other({code})"),
+            other => f.write_str(other.code()),
+        }
+    }
+}
+
+impl AddTinError {
+    /// The server's code for it (`signed_out`, `offline` for the two the
+    /// server never sends).
+    pub fn code(&self) -> &str {
+        match self {
+            AddTinError::BadTin => "bad_tin",
+            AddTinError::NameMissing => "name_missing",
+            AddTinError::NameTooLong => "name_too_long",
+            AddTinError::TestTin => "test_tin",
+            AddTinError::TinAlreadyActive => "tin_already_active",
+            AddTinError::TinAlreadyAdded => "tin_already_added",
+            AddTinError::ClaimAlreadyPending => "claim_already_pending",
+            AddTinError::TooManyUnverified => "too_many_unverified",
+            AddTinError::RateLimited { .. } => "rate_limited",
+            AddTinError::BadRequest => "bad_request",
+            AddTinError::Forbidden => "forbidden",
+            AddTinError::Banned => "account_banned",
+            AddTinError::SignedOut => "signed_out",
+            AddTinError::Offline => "offline",
+            AddTinError::Other { code, .. } => code,
+        }
+    }
+
+    /// The account already holds the TIN: its list is read again.
+    pub fn refreshes_list(&self) -> bool {
+        matches!(
+            self,
+            AddTinError::TinAlreadyActive
+                | AddTinError::TinAlreadyAdded
+                | AddTinError::ClaimAlreadyPending
+        )
+    }
+}
+
+/// "N minutes" (at least one, rounded up; "1 minute").
+fn minutes(seconds: &i64) -> String {
+    let minutes = ((*seconds).max(1) + 59) / 60;
+    if minutes == 1 {
+        "1 minute".to_owned()
+    } else {
+        format!("{minutes} minutes")
+    }
+}
+
+fn add_error(error: ClientError) -> AddTinError {
+    match error {
+        ClientError::SignedOut | ClientError::DeviceRevoked => AddTinError::SignedOut,
+        // A second `invalid_token` after the forced refresh: the grant was
+        // revoked on the server.
+        ClientError::Server {
+            status: 401, code, ..
+        } if code == "invalid_token" => AddTinError::SignedOut,
+        ClientError::Network(_) => AddTinError::Offline,
+        ClientError::NotATry {
+            status: 429,
+            wait_until,
+            ..
+        } => AddTinError::RateLimited {
+            retry_after: wait_until.map_or(LIMIT_DEFAULT_SECS, |until| {
+                (until - chrono::Utc::now()).num_seconds().max(1)
+            }),
+        },
+        ClientError::Server {
+            status,
+            code,
+            message,
+        } => match code.as_str() {
+            "bad_tin" => AddTinError::BadTin,
+            "name_missing" => AddTinError::NameMissing,
+            "name_too_long" => AddTinError::NameTooLong,
+            "test_tin" => AddTinError::TestTin,
+            "tin_already_active" => AddTinError::TinAlreadyActive,
+            "tin_already_added" => AddTinError::TinAlreadyAdded,
+            "claim_already_pending" => AddTinError::ClaimAlreadyPending,
+            "too_many_unverified" => AddTinError::TooManyUnverified,
+            "bad_request" => AddTinError::BadRequest,
+            "account_banned" => AddTinError::Banned,
+            _ if status == 403 => AddTinError::Forbidden,
+            _ => AddTinError::Other { code, message },
+        },
+        ClientError::NotATry { code, message, .. } => AddTinError::Other { code, message },
+        error @ (ClientError::DeviceKeyMissing | ClientError::InstallInUse) => AddTinError::Other {
+            code: "device_not_registered".to_owned(),
+            message: error.to_string(),
+        },
+        ClientError::Other(message) => AddTinError::Other {
+            code: "unreadable".to_owned(),
+            message,
+        },
+    }
 }
 
 fn tins_error(error: ClientError) -> TinsError {
     match error {
+        ClientError::NotATry {
+            status: 429,
+            wait_until,
+            ..
+        } => TinsError::RateLimited {
+            until: wait_until
+                .map(|until| until.timestamp())
+                .unwrap_or_else(|| device::now() + LIMIT_DEFAULT_SECS),
+        },
         ClientError::SignedOut | ClientError::DeviceRevoked => TinsError::SignedOut,
+        // A second `invalid_token` after the forced refresh: the grant was
+        // revoked on the server.
+        ClientError::Server {
+            status: 401, code, ..
+        } if code == "invalid_token" => TinsError::SignedOut,
         error @ (ClientError::DeviceKeyMissing | ClientError::InstallInUse) => TinsError::Server {
             code: "device_not_registered".to_owned(),
             message: error.to_string(),
@@ -481,10 +839,29 @@ mod tests {
         delay_ms: u64,
         answer: impl Fn(usize, &str) -> Answer + Send + 'static,
     ) -> (String, Arc<Mutex<Vec<String>>>) {
+        let (url, seen, _) = fake_server_with_headers(delay_ms, move |n, path| {
+            answer(n, path).map(|(status, body)| (status, body, Vec::new()))
+        });
+        (url, seen)
+    }
+
+    /// What [`fake_server_with_headers`] answers: a status, a body and extra
+    /// headers, or `None` to drop the connection.
+    type Reply = Option<(u16, String, Vec<(&'static str, String)>)>;
+
+    /// [`fake_server`] whose answers carry headers too; also the bodies of
+    /// the requests it saw.
+    #[allow(clippy::type_complexity)]
+    fn fake_server_with_headers(
+        delay_ms: u64,
+        answer: impl Fn(usize, &str) -> Reply + Send + 'static,
+    ) -> (String, Arc<Mutex<Vec<String>>>, Arc<Mutex<Vec<String>>>) {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         let seen = Arc::new(Mutex::new(Vec::new()));
+        let bodies = Arc::new(Mutex::new(Vec::new()));
         let log = seen.clone();
+        let body_log = bodies.clone();
         std::thread::spawn(move || {
             for (n, stream) in listener.incoming().enumerate() {
                 let Ok(mut stream) = stream else {
@@ -513,17 +890,25 @@ mod tests {
                     .unwrap_or_default()
                     .to_owned();
                 log.lock().unwrap().push(request);
+                body_log
+                    .lock()
+                    .unwrap()
+                    .push(String::from_utf8_lossy(&body).into_owned());
                 std::thread::sleep(std::time::Duration::from_millis(delay_ms));
-                if let Some((status, json)) = answer(n, &path) {
+                if let Some((status, json, headers)) = answer(n, &path) {
+                    let extra: String = headers
+                        .iter()
+                        .map(|(name, value)| format!("{name}: {value}\r\n"))
+                        .collect();
                     let _ = write!(
                         stream,
-                        "HTTP/1.1 {status} X\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{json}",
+                        "HTTP/1.1 {status} X\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n{extra}\r\n{json}",
                         json.len()
                     );
                 }
             }
         });
-        (format!("http://{addr}"), seen)
+        (format!("http://{addr}"), seen, bodies)
     }
 
     const LOGIN: &str = "juana@example.com";
@@ -646,10 +1031,7 @@ mod tests {
         assert!(row.can_send);
         assert!(!list.complete);
         assert!(!list.stale);
-        assert_eq!(
-            *seen.lock().unwrap(),
-            ["GET /api/tax-profiles?include=all,pending"]
-        );
+        assert_eq!(*seen.lock().unwrap(), ["GET /api/tax-profiles?include=all"]);
     }
 
     #[tokio::test]
@@ -794,6 +1176,7 @@ mod tests {
         for row in &list.rows {
             assert_eq!(row.status, TinStatus::TestOnly);
             assert!(!row.can_send);
+            assert!(row.test_only);
         }
     }
 
@@ -816,10 +1199,7 @@ mod tests {
         );
         assert_eq!(
             *seen.lock().unwrap(),
-            [
-                "GET /api/tax-profiles?include=all,pending",
-                "GET /api/tax-profiles"
-            ]
+            ["GET /api/tax-profiles?include=all", "GET /api/tax-profiles"]
         );
     }
 
@@ -1101,8 +1481,8 @@ mod tests {
         assert_eq!(
             *seen.lock().unwrap(),
             [
-                "GET /api/tax-profiles?include=all,pending",
-                "GET /api/tax-profiles?include=all,pending"
+                "GET /api/tax-profiles?include=all",
+                "GET /api/tax-profiles?include=all"
             ]
         );
         assert_eq!(tokens.asked(), [false, true]);
@@ -1114,11 +1494,9 @@ mod tests {
             ))
         });
         let (submitter, tokens) = submitter_tokens(&url, true);
-        let read = submitter.account_tins(60).await;
-        assert!(
-            matches!(read, Err(TinsError::Server { ref code, .. }) if code == "invalid_token"),
-            "{read:?}"
-        );
+        // A second `invalid_token` after the refresh: the grant was revoked
+        // on the server, which is signed out, not a server failure.
+        assert_eq!(submitter.account_tins(60).await, Err(TinsError::SignedOut));
         assert_eq!(seen.lock().unwrap().len(), 2, "refreshed once, not again");
         assert_eq!(tokens.asked(), [false, true]);
     }
@@ -1308,5 +1686,848 @@ mod tests {
         for secret in ["123", "453", "SYNTHETIC", "daylight", "claims"] {
             assert!(!shown.contains(secret), "{secret} in {shown}");
         }
+    }
+
+    /// A row without `next` (a server from before it), or with a word this
+    /// app does not know, reads it from `can_send` and `action`; a row's own
+    /// `next` is taken as it is.
+    #[test]
+    fn row_without_next_falls_back() {
+        let action = json!({"label":"Verify to send","url":"https://account.buwiz.com/tins/claims/c1/verify"});
+        let rows = json!({"include":"all","profiles":[
+            {"tin":"000-123-453-00000","registered_name":"A","status":"approved","can_send":true},
+            {"tin":"000-123-455-00000","registered_name":"B","status":"unverified","can_send":false,"action":action},
+            {"tin":"000-123-456-00000","registered_name":"C","status":"pending","can_send":false},
+            {"tin":"000-123-454-00002","registered_name":"D","status":"paused","can_send":false,"action":null},
+            {"tin":"000-123-457-00000","registered_name":"E","status":"needs_fix","can_send":false,"next":"later","action":action},
+            {"tin":"000-123-458-00000","registered_name":"F","status":"approved","can_send":true,"next":"later"},
+            {"tin":"000-123-459-00000","registered_name":"G","status":"pending","can_send":false,"next":"fix"},
+            {"tin":"000-123-460-00000","registered_name":"H","status":"approved","can_send":true,"next":"wait"}
+        ]});
+        let list = AccountTins::parse(&rows, 1);
+        let next: Vec<Next> = list.rows.iter().map(|row| row.next).collect();
+        assert_eq!(
+            next,
+            [
+                Next::Send,
+                Next::Fix,
+                Next::Wait,
+                Next::Wait,
+                Next::Fix,
+                Next::Send,
+                Next::Fix,
+                Next::Wait
+            ]
+        );
+        // An action link off the account site is dropped, but the row still
+        // has an action: it is Fix.
+        let off_site = json!({"include":"all","profiles":[
+            {"tin":"000-123-455-00000","registered_name":"B","status":"unverified","can_send":false,
+             "action":{"label":"Verify","url":"https://evil.example/verify"}}
+        ]});
+        let row = &AccountTins::parse(&off_site, 1).rows[0];
+        assert_eq!(row.next, Next::Fix);
+        assert_eq!(row.action_url, None);
+    }
+
+    /// The golden answer of the server's pull request carries `next`, the
+    /// row's `message` and `test_only`.
+    #[test]
+    fn the_golden_rows_read_next_message_and_test_only() {
+        let body: Value =
+            serde_json::from_str(include_str!("../tests/fixtures/tax_profiles_all.json")).unwrap();
+        let list = AccountTins::parse(&body, 1);
+        let next: Vec<Next> = list.rows.iter().map(|row| row.next).collect();
+        assert_eq!(
+            next,
+            [Next::Send, Next::Wait, Next::Fix, Next::Wait, Next::Fix]
+        );
+        for row in &list.rows {
+            assert_eq!(row.next == Next::Fix, row.action_url.is_some(), "{row:?}");
+            assert_eq!(row.next == Next::Send, row.can_send, "{row:?}");
+            assert!(row.message.is_some(), "{row:?}");
+            assert!(!row.test_only, "{row:?}");
+        }
+        let test = json!({"include":"all","profiles":[
+            {"tin":"111-111-114-00000","registered_name":"T","status":"approved","can_send":true,"next":"send","test_only":true}
+        ]});
+        let row = &AccountTins::parse(&test, 1).rows[0];
+        assert!(row.test_only && row.can_send);
+        assert_eq!(row.status, TinStatus::Approved);
+    }
+
+    fn limited(seconds: u64) -> Reply {
+        Some((
+            429,
+            json!({"error":{"code":"rate_limited","message":"Too many requests. Try again in 5 minutes."}})
+                .to_string(),
+            vec![("retry-after", seconds.to_string())],
+        ))
+    }
+
+    /// A `429` keeps the last list: until `Retry-After` nothing asks the
+    /// server, not even `max_age` 0 (Queue), and the list is answered
+    /// marked stale; after it, the next read asks.
+    #[tokio::test]
+    async fn rate_limited_keeps_the_list_and_waits_retry_after() {
+        let (url, seen, _) = fake_server_with_headers(0, |n, _| {
+            match n {
+            0 => Some((
+                200,
+                json!({"include":"all","profiles":[{"tin":"000123453","registered_name":"X","can_send":true,"next":"send"}]}).to_string(),
+                Vec::new(),
+            )),
+            1 => limited(300),
+            _ => Some((
+                200,
+                json!({"include":"all","profiles":[
+                    {"tin":"000123453","registered_name":"X","can_send":true,"next":"send"},
+                    {"tin":"000123455","registered_name":"Y","status":"unverified","can_send":false,"next":"fix"}
+                ]})
+                .to_string(),
+                Vec::new(),
+            )),
+        }
+        });
+        let submitter = submitter(&url, true);
+        let first = submitter.account_tins(60).await.unwrap();
+        assert_eq!(first.rows.len(), 1);
+
+        let kept = submitter.account_tins(0).await.unwrap();
+        assert!(kept.stale, "the kept list is marked stale");
+        assert_eq!(kept.rows, first.rows);
+        assert_eq!(kept.fetched_at, first.fetched_at);
+        assert_eq!(list_reads(&seen), 2);
+
+        for max_age in [0, 15, 60, 300] {
+            let kept = submitter.account_tins(max_age).await.unwrap();
+            assert!(kept.stale);
+            assert_eq!(kept.rows, first.rows);
+        }
+        assert!(submitter.refresh_account_tins().await.unwrap().stale);
+        assert_eq!(
+            list_reads(&seen),
+            2,
+            "nothing asks before Retry-After, whatever max_age"
+        );
+        // Still held well past the 30 seconds a failure is kept, and past
+        // the 10 minutes a list is answered offline.
+        submitter.tins.age_for_tests(200);
+        assert!(submitter.account_tins(0).await.unwrap().stale);
+        assert_eq!(list_reads(&seen), 2);
+
+        // A refusal seen on a send: the kept list is no longer answered, and
+        // the server is still not asked.
+        submitter.invalidate_account_tins();
+        let read = submitter.account_tins(0).await;
+        let Err(TinsError::RateLimited { until }) = read else {
+            panic!("{read:?}");
+        };
+        assert!((until - device::now() - 100).abs() <= 5, "{until}");
+        assert_eq!(list_reads(&seen), 2);
+
+        submitter.tins.age_for_tests(101);
+        let fresh = submitter.account_tins(0).await.unwrap();
+        assert!(!fresh.stale);
+        assert_eq!(fresh.rows.len(), 2);
+        assert_eq!(
+            list_reads(&seen),
+            3,
+            "after Retry-After the server is asked"
+        );
+    }
+
+    /// A `429` with no list read before: the error, and still no request
+    /// before `Retry-After`. A new sign-in is a new token: it asks.
+    #[tokio::test]
+    async fn rate_limited_with_no_list_waits_too() {
+        let (url, seen, _) = fake_server_with_headers(0, |_, _| limited(120));
+        let (submitter, tokens) = submitter_tokens(&url, true);
+        for _ in 0..3 {
+            assert!(matches!(
+                submitter.account_tins(0).await,
+                Err(TinsError::RateLimited { .. })
+            ));
+        }
+        assert_eq!(list_reads(&seen), 1);
+        tokens.sign_in(Some("pedro@example.com"));
+        submitter.forget_device().unwrap();
+        assert!(submitter.account_tins(0).await.is_err());
+        assert_eq!(list_reads(&seen), 2);
+    }
+
+    /// The row `POST /api/tax-profiles` answers for an added TIN.
+    fn added_row(tin: &str) -> String {
+        json!({"profile":{
+            "id":"c9","tin":tin,"tin_masked":"***-***-453-00000","registered_name":"Dela Cruz Juan",
+            "activated_at":null,"permissions":["profile.view","filing.prepare"],"status":"unverified",
+            "can_send":false,"next":"fix","message":"Not verified. Verify it with its papers to send returns.",
+            "action":{"label":"Verify to send","url":"https://account.buwiz.com/tins/claims/c9/verify"}
+        }})
+        .to_string()
+    }
+
+    /// The kind is `personal` or `business`, the TIN its 14 digits with the
+    /// branch, the names trimmed and a trade name only when there is one.
+    #[tokio::test]
+    async fn post_maps_kind_and_sends_14_digits() {
+        let (url, seen, bodies) = fake_server_with_headers(0, |_, path| match path {
+            "/api/tax-profiles" => Some((201, added_row("000-123-453-00000"), Vec::new())),
+            _ => Some((
+                200,
+                json!({"include":"all","profiles":[]}).to_string(),
+                Vec::new(),
+            )),
+        });
+        let submitter = submitter(&url, true);
+        assert!(submitter.account_tins(60).await.is_ok());
+        let added = submitter
+            .add_account_tin(
+                TinKind::Individual,
+                &key("000123453"),
+                "  Dela Cruz Juan ",
+                None,
+            )
+            .await
+            .unwrap()
+            .expect("the row");
+        assert_eq!(added.status, TinStatus::Unverified);
+        assert_eq!(added.next, Next::Fix);
+        assert_eq!(
+            added.action_url.as_deref(),
+            Some("https://account.buwiz.com/tins/claims/c9/verify")
+        );
+        submitter
+            .add_account_tin(
+                TinKind::NonIndividual,
+                &key("000-123-453-002"),
+                "Dela Cruz Trading Corp.",
+                Some(" Juan's Store "),
+            )
+            .await
+            .unwrap();
+        submitter
+            .add_account_tin(
+                TinKind::NonIndividual,
+                &key("00012345300003"),
+                "X Corp",
+                Some("  "),
+            )
+            .await
+            .unwrap();
+        submitter
+            .add_account_tin(
+                TinKind::Individual,
+                &key("000123453"),
+                "Dela Cruz Juan",
+                Some("Juan's"),
+            )
+            .await
+            .unwrap();
+        let requests = seen.lock().unwrap().clone();
+        let bodies = bodies.lock().unwrap().clone();
+        let posts: Vec<Value> = requests
+            .iter()
+            .zip(&bodies)
+            .filter(|(request, _)| request.as_str() == "POST /api/tax-profiles")
+            .map(|(_, body)| serde_json::from_str(body).unwrap())
+            .collect();
+        assert_eq!(
+            posts,
+            [
+                json!({"kind":"personal","tin":"000-123-453-00000","registered_name":"Dela Cruz Juan"}),
+                json!({"kind":"business","tin":"000-123-453-00002","registered_name":"Dela Cruz Trading Corp.","trade_name":"Juan's Store"}),
+                json!({"kind":"business","tin":"000-123-453-00003","registered_name":"X Corp"}),
+                json!({"kind":"personal","tin":"000-123-453-00000","registered_name":"Dela Cruz Juan","trade_name":"Juan's"}),
+            ]
+        );
+        // An add changes the list: the next read asks.
+        assert!(submitter.account_tins(60).await.is_ok());
+        assert_eq!(list_reads(&seen), 2);
+    }
+
+    /// Every refusal of `POST /api/tax-profiles` is its own case in the
+    /// app's own words; the three that say the account holds the TIN make
+    /// the next list read ask.
+    /// A refusal's status, code and `Retry-After`; the error, its words and
+    /// whether the list is read again.
+    type RefusalCase = (
+        u16,
+        &'static str,
+        Option<u64>,
+        AddTinError,
+        &'static str,
+        bool,
+    );
+
+    #[tokio::test]
+    async fn each_refusal_has_its_own_words() {
+        let cases: [RefusalCase; 14] = [
+            (
+                400,
+                "bad_tin",
+                None,
+                AddTinError::BadTin,
+                "This TIN is not valid.",
+                false,
+            ),
+            (
+                400,
+                "name_missing",
+                None,
+                AddTinError::NameMissing,
+                "Add the registered name first.",
+                false,
+            ),
+            (
+                400,
+                "name_too_long",
+                None,
+                AddTinError::NameTooLong,
+                "This name is too long. Shorten it and try again.",
+                false,
+            ),
+            (
+                400,
+                "test_tin",
+                None,
+                AddTinError::TestTin,
+                "Test TINs are added by Buwiz.",
+                false,
+            ),
+            (
+                409,
+                "tin_already_active",
+                None,
+                AddTinError::TinAlreadyActive,
+                "This TIN is already activated on your account.",
+                true,
+            ),
+            (
+                409,
+                "tin_already_added",
+                None,
+                AddTinError::TinAlreadyAdded,
+                "This TIN is already on your account, waiting to be verified.",
+                true,
+            ),
+            (
+                409,
+                "claim_already_pending",
+                None,
+                AddTinError::ClaimAlreadyPending,
+                "Buwiz is checking this TIN.",
+                true,
+            ),
+            (
+                409,
+                "too_many_unverified",
+                None,
+                AddTinError::TooManyUnverified,
+                "Your account has 20 TINs waiting to be verified. Verify or remove one on your account first.",
+                false,
+            ),
+            (
+                429,
+                "rate_limited",
+                Some(1500),
+                AddTinError::RateLimited { retry_after: 1500 },
+                "Too many tries. Try again in 25 minutes.",
+                false,
+            ),
+            (
+                429,
+                "rate_limited",
+                Some(30),
+                AddTinError::RateLimited { retry_after: 30 },
+                "Too many tries. Try again in 1 minute.",
+                false,
+            ),
+            (
+                400,
+                "bad_request",
+                None,
+                AddTinError::BadRequest,
+                "Buwiz could not read this request. Update eBIRForms and try again.",
+                false,
+            ),
+            (
+                403,
+                "insufficient_scope",
+                None,
+                AddTinError::Forbidden,
+                "This sign-in cannot add TINs. Sign out of Buwiz and sign in again.",
+                false,
+            ),
+            (
+                403,
+                "account_banned",
+                None,
+                AddTinError::Banned,
+                "This Buwiz account is banned.",
+                false,
+            ),
+            (
+                500,
+                "internal",
+                None,
+                AddTinError::Other {
+                    code: "internal".into(),
+                    message: "something went wrong".into(),
+                },
+                "The Buwiz server could not add this TIN (internal).",
+                false,
+            ),
+        ];
+        let mut words = std::collections::HashSet::new();
+        for (status, code, retry_after, expected, sentence, refreshes) in cases {
+            let (url, seen, _) = fake_server_with_headers(0, move |_, path| match path {
+                "/api/tax-profiles" => Some((
+                    status,
+                    json!({"error":{"code":code,"message":"something went wrong"}}).to_string(),
+                    retry_after
+                        .map(|seconds| vec![("retry-after", seconds.to_string())])
+                        .unwrap_or_default(),
+                )),
+                _ => Some((
+                    200,
+                    json!({"include":"all","profiles":[]}).to_string(),
+                    Vec::new(),
+                )),
+            });
+            let submitter = submitter(&url, true);
+            assert!(submitter.account_tins(60).await.is_ok());
+            let refused = submitter
+                .add_account_tin(
+                    TinKind::Individual,
+                    &key("000123453"),
+                    "Dela Cruz Juan",
+                    None,
+                )
+                .await
+                .unwrap_err();
+            match (&refused, &expected) {
+                // The wait is counted from the answer: a second may pass.
+                (
+                    AddTinError::RateLimited { retry_after: got },
+                    AddTinError::RateLimited { retry_after: want },
+                ) => assert!((want - got).abs() <= 2, "{code}: {got}"),
+                _ => assert_eq!(refused, expected, "{code}"),
+            }
+            assert_eq!(refused.to_string(), sentence, "{code}");
+            assert_eq!(refused.refreshes_list(), refreshes, "{code}");
+            assert!(submitter.account_tins(60).await.is_ok());
+            assert_eq!(list_reads(&seen), if refreshes { 2 } else { 1 }, "{code}");
+            if !matches!(refused, AddTinError::RateLimited { .. }) {
+                assert!(words.insert(sentence), "{code}: its own words");
+            }
+        }
+    }
+
+    /// A name over 200 bytes after trimming is refused at once, as too long,
+    /// counting bytes as the server does: 150 letters `Ñ` are 300 bytes. It
+    /// is never "add the name". An empty name is "add the name", at once
+    /// too. Neither asks the server; 200 bytes exactly is sent.
+    #[tokio::test]
+    async fn a_long_multibyte_name_is_too_long_and_never_missing() {
+        let (url, seen, bodies) = fake_server_with_headers(0, |_, _| {
+            Some((201, added_row("000-123-453-00000"), Vec::new()))
+        });
+        let submitter = submitter(&url, true);
+        let long = "Ñ".repeat(150);
+        assert!(long.chars().count() < MAX_NAME_BYTES && long.len() > MAX_NAME_BYTES);
+        for (registered, trade) in [
+            (long.as_str(), None),
+            ("Dela Cruz Trading", Some(long.as_str())),
+        ] {
+            let refused = submitter
+                .add_account_tin(TinKind::NonIndividual, &key("000123453"), registered, trade)
+                .await
+                .unwrap_err();
+            assert_eq!(refused, AddTinError::NameTooLong);
+            assert_ne!(refused, AddTinError::NameMissing);
+            assert_eq!(
+                refused.to_string(),
+                "This name is too long. Shorten it and try again."
+            );
+            assert_ne!(refused.to_string(), "Add the registered name first.");
+        }
+        for empty in ["", "   "] {
+            assert_eq!(
+                submitter
+                    .add_account_tin(TinKind::Individual, &key("000123453"), empty, None)
+                    .await,
+                Err(AddTinError::NameMissing)
+            );
+        }
+        assert!(seen.lock().unwrap().is_empty(), "no request");
+        let exactly = format!("  {}  ", "ñ".repeat(100));
+        assert!(
+            submitter
+                .add_account_tin(TinKind::Individual, &key("000123453"), &exactly, None)
+                .await
+                .is_ok()
+        );
+        let body: Value = serde_json::from_str(&bodies.lock().unwrap()[0]).unwrap();
+        assert_eq!(body["registered_name"].as_str().unwrap().len(), 200);
+    }
+
+    /// A grant revoked on the server answers `invalid_token` again after
+    /// the forced refresh: the add is signed out, not "could not add".
+    #[tokio::test]
+    async fn a_revoked_grant_adds_as_signed_out() {
+        let (url, seen) = fake_server(0, |_, _| {
+            Some((
+                401,
+                r#"{"error":{"code":"invalid_token","message":"revoked"}}"#.into(),
+            ))
+        });
+        let (submitter, tokens) = submitter_tokens(&url, true);
+        assert_eq!(
+            submitter
+                .add_account_tin(TinKind::Individual, &key("000123453"), "X", None)
+                .await,
+            Err(AddTinError::SignedOut)
+        );
+        assert_eq!(seen.lock().unwrap().len(), 2, "refreshed once, not again");
+        assert_eq!(tokens.asked(), [false, true]);
+    }
+
+    /// A POST that gets no answer may still have added the TIN: the next
+    /// read asks the server instead of answering the list from before.
+    #[tokio::test]
+    async fn an_add_with_no_answer_makes_the_next_read_ask() {
+        let (url, seen) = fake_server(0, |n, _| match n {
+            0 | 2 => {
+                ok(json!({"include":"all","profiles":[{"tin":"000123453","registered_name":"X"}]}))
+            }
+            _ => None,
+        });
+        let submitter = submitter(&url, true);
+        assert!(submitter.account_tins(60).await.is_ok());
+        assert_eq!(
+            submitter
+                .add_account_tin(TinKind::Individual, &key("000123462"), "Y", None)
+                .await,
+            Err(AddTinError::Offline)
+        );
+        assert!(submitter.account_tins(60).await.is_ok());
+        assert_eq!(
+            *seen.lock().unwrap(),
+            [
+                "GET /api/tax-profiles?include=all",
+                "POST /api/tax-profiles",
+                "GET /api/tax-profiles?include=all"
+            ],
+            "the read after the unanswered add asked the server"
+        );
+    }
+
+    #[tokio::test]
+    async fn adding_signed_out_makes_no_request() {
+        let (url, seen) = fake_server(0, |_, _| ok(json!({})));
+        let submitter = submitter(&url, false);
+        assert_eq!(
+            submitter
+                .add_account_tin(TinKind::Individual, &key("000123453"), "X", None)
+                .await,
+            Err(AddTinError::SignedOut)
+        );
+        assert!(seen.lock().unwrap().is_empty());
+    }
+
+    /// End to end against a local buwiz-com (TRACK-D-CONTRACT.md), never by
+    /// default: `BUWIZ_TRACKD_E2E_URL=http://127.0.0.1:3028
+    /// BUWIZ_TRACKD_E2E_LOG=<its server.log> cargo test -p bir-submit --lib
+    /// trackd_e2e_against_a_local_server -- --ignored`. Only a server on this
+    /// computer is taken. It signs a new `example.test` address in with the
+    /// email code (read from the server's log, `MAIL_TRANSPORT=log`), the
+    /// way bir-core's `email_sign_in` does: bir-submit never signs in and
+    /// cannot use that crate. `BUWIZ_TRACKD_E2E_TOKEN` skips the sign-in;
+    /// `BUWIZ_TRACKD_E2E_ACCOUNT_URL` is the server's account site
+    /// (`http://account.localhost:3028` by default).
+    #[tokio::test]
+    #[ignore = "needs a local buwiz-com: BUWIZ_TRACKD_E2E_URL"]
+    async fn trackd_e2e_against_a_local_server() {
+        use base64::Engine;
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use sha2::{Digest, Sha256};
+
+        let url = std::env::var("BUWIZ_TRACKD_E2E_URL")
+            .expect("BUWIZ_TRACKD_E2E_URL")
+            .trim_end_matches('/')
+            .to_owned();
+        let host = url::Url::parse(&url).unwrap();
+        assert!(
+            matches!(host.host_str(), Some("127.0.0.1" | "localhost" | "[::1]")),
+            "only a server on this computer: {url}"
+        );
+        let account_site = std::env::var("BUWIZ_TRACKD_E2E_ACCOUNT_URL")
+            .unwrap_or_else(|_| "http://account.localhost:3028".into());
+        let http = reqwest::Client::new();
+        let tag = crate::device::hex(&rand::random::<[u8; 4]>());
+        let email = format!("trackd-{tag}@example.test");
+
+        let token = match std::env::var("BUWIZ_TRACKD_E2E_TOKEN") {
+            Ok(token) => token,
+            Err(_) => {
+                let log = std::env::var("BUWIZ_TRACKD_E2E_LOG").expect("BUWIZ_TRACKD_E2E_LOG");
+                let secret = URL_SAFE_NO_PAD.encode(rand::random::<[u8; 32]>());
+                let started: Value = http
+                    .post(format!("{url}/auth/email/start"))
+                    .json(&json!({
+                        "client_id": "buwiz-desktop",
+                        "email": email,
+                        "intent": "create",
+                        "secret_hash": URL_SAFE_NO_PAD.encode(Sha256::digest(secret.as_bytes())),
+                        "platform": "macos",
+                        "install_id": format!("install-id-of-trackd-e2e-{tag}"),
+                    }))
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+                let request_id = started["request_id"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{started}"));
+                let mut code = None;
+                for _ in 0..50 {
+                    let text = std::fs::read_to_string(&log).unwrap_or_default();
+                    code = text
+                        .lines()
+                        .rev()
+                        .find(|line| line.contains(&email) && line.contains("sign-in code"))
+                        .and_then(|line| {
+                            let line: String = line
+                                .split('\u{1b}')
+                                .map(|part| part.split_once('m').map_or(part, |(_, rest)| rest))
+                                .collect();
+                            let after = &line[line.find("code=")? + 5..];
+                            let digits: String = after
+                                .trim_start_matches('"')
+                                .chars()
+                                .take_while(char::is_ascii_digit)
+                                .collect();
+                            (!digits.is_empty()).then_some(digits)
+                        });
+                    if code.is_some() {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                }
+                let code = code.expect("the sign-in code in the server's log");
+                let tokens: Value = http
+                    .post(format!("{url}/auth/email/verify"))
+                    .json(&json!({"request_id": request_id, "secret": secret, "code": code}))
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+                assert_eq!(tokens["scope"], "app", "{tokens}");
+                tokens["access_token"].as_str().unwrap().to_owned()
+            }
+        };
+        /// The token the sign-in gave, as the host would hand it.
+        struct Signed(String, String);
+        impl crate::TokenSource for Signed {
+            fn access_token(
+                &self,
+                _force_refresh: bool,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<String, ClientError>> + Send + '_>,
+            > {
+                let token = self.0.clone();
+                Box::pin(async move { Ok(token) })
+            }
+            fn login(&self) -> Option<String> {
+                Some(self.1.clone())
+            }
+            fn session_ended(&self) {}
+        }
+        let client = Submitter::new(
+            SubmitConfig {
+                server_url: url.clone(),
+                device_name: "trackd e2e".into(),
+                trust_keys: Vec::new(),
+                install_id: None,
+                platform: None,
+            },
+            Box::new(SharedStore::default()),
+            Arc::new(Signed(token.clone(), email.clone())),
+        );
+        let raw_get = || {
+            http.get(format!("{url}/api/tax-profiles?include=all"))
+                .bearer_auth(&token)
+                .send()
+        };
+        let raw_post = |body: Value| {
+            http.post(format!("{url}/api/tax-profiles"))
+                .bearer_auth(&token)
+                .json(&body)
+                .send()
+        };
+        let invariants = |body: &Value| {
+            let rows = body["profiles"].as_array().expect("profiles");
+            for row in rows {
+                let next = row["next"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("next on {row}"));
+                assert_eq!(next == "fix", !row["action"].is_null(), "{row}");
+                assert_eq!(next == "send", row["can_send"] == true, "{row}");
+            }
+            rows.len()
+        };
+
+        // GET ?include=all: a new account lists nothing, completely.
+        let list = client.account_tins(0).await.unwrap();
+        assert!(list.complete && list.rows.is_empty(), "{list:?}");
+
+        // POST a new TIN: 201, unverified, Fix, linking to the account site.
+        let root = format!(
+            "2{:08}",
+            u32::from_le_bytes(rand::random::<[u8; 4]>()) % 100_000_000
+        );
+        let tin = key(&format!("{root}00000"));
+        let added = client
+            .add_account_tin(TinKind::Individual, &tin, "Dela Cruz Juan", None)
+            .await
+            .unwrap()
+            .expect("the added row");
+        assert_eq!(added.status, TinStatus::Unverified);
+        assert_eq!(added.next, Next::Fix);
+        assert!(!added.can_send && !added.test_only);
+        let answer: Value = raw_get().await.unwrap().json().await.unwrap();
+        assert_eq!(answer["include"], "all");
+        assert_eq!(invariants(&answer), 1);
+        let row = &answer["profiles"][0];
+        let link = row["action"]["url"].as_str().unwrap();
+        assert!(
+            link.starts_with(&format!("{account_site}/tins/claims/")) && link.ends_with("/verify"),
+            "{link}"
+        );
+        let list = client.account_tins(0).await.unwrap();
+        assert!(list.complete);
+        let listed = list.find(&tin).unwrap();
+        assert_eq!(
+            (listed.status.clone(), listed.next),
+            (TinStatus::Unverified, Next::Fix)
+        );
+
+        // The refusals this account can reach.
+        assert_eq!(
+            client
+                .add_account_tin(TinKind::Individual, &tin, "Dela Cruz Juan", None)
+                .await,
+            Err(AddTinError::TinAlreadyAdded)
+        );
+        assert_eq!(
+            client
+                .add_account_tin(
+                    TinKind::Individual,
+                    &key("111111114"),
+                    "Dela Cruz Juan",
+                    None
+                )
+                .await,
+            Err(AddTinError::TestTin)
+        );
+        let refusal = |answer: Value| {
+            answer["error"]["code"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned()
+        };
+        let bad: Value = raw_post(json!({"kind":"personal","tin":"12345","registered_name":"X"}))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(refusal(bad), "bad_tin");
+        let empty: Value = raw_post(
+            json!({"kind":"personal","tin":format!("{root}00001"),"registered_name":"   "}),
+        )
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+        assert_eq!(refusal(empty), "name_missing");
+        let long: Value = raw_post(
+            json!({"kind":"personal","tin":format!("{root}00001"),"registered_name":"Ñ".repeat(150)}),
+        )
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+        match refusal(long).as_str() {
+            "name_too_long" => eprintln!("name_too_long: answered"),
+            "name_missing" => {
+                eprintln!("name_too_long: EXPECTED-MISSING (this server answers name_missing)")
+            }
+            other => panic!("a long name answered {other}"),
+        }
+
+        // The add limit: 10 tries per sign-in an hour, then 429 with Retry-After.
+        let mut limited = None;
+        for _ in 0..12 {
+            let response =
+                raw_post(json!({"kind":"personal","tin":tin_text(&tin),"registered_name":"X"}))
+                    .await
+                    .unwrap();
+            if response.status() == 429 {
+                limited = Some(response);
+                break;
+            }
+        }
+        let limited = limited.expect("a 429 within 10 adds");
+        let retry_after: i64 = limited.headers()["retry-after"]
+            .to_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!((1..=3600).contains(&retry_after), "{retry_after}");
+        let body: Value = limited.json().await.unwrap();
+        assert_eq!(refusal(body), "rate_limited");
+        let refused = client
+            .add_account_tin(TinKind::Individual, &tin, "X", None)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(refused, AddTinError::RateLimited { .. }),
+            "{refused:?}"
+        );
+        assert!(
+            refused
+                .to_string()
+                .starts_with("Too many tries. Try again in ")
+        );
+
+        // The read limit: 120 per sign-in in 10 minutes, then 429; the client keeps its list.
+        let kept = client.account_tins(0).await.unwrap();
+        let mut read_limited = None;
+        for _ in 0..125 {
+            let response = raw_get().await.unwrap();
+            if response.status() == 429 {
+                read_limited = Some(response);
+                break;
+            }
+        }
+        let read_limited = read_limited.expect("a 429 within 120 reads");
+        assert!(read_limited.headers().contains_key("retry-after"));
+        let body: Value = read_limited.json().await.unwrap();
+        assert_eq!(body["error"]["code"], "rate_limited");
+        let stale = client.account_tins(0).await.unwrap();
+        assert!(stale.stale, "the kept list, marked stale");
+        assert_eq!(stale.rows, kept.rows);
+    }
+
+    fn tin_text(tin: &TinKey) -> String {
+        dashed(tin)
     }
 }
