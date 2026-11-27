@@ -32,6 +32,11 @@ fn main() {
 }
 '''
 
+# `cargo`: only its version line, which is all the recipe asks of it before `nsh` takes over.
+FAKE_CARGO = r'''
+print('cargo 0.0.0 (a stand-in for the tests)')
+'''
+
 # `adb`: answers `devices` from FAKE_DEVICES and keeps each device's "private files" in FAKE_STATE. Like the real
 # one, it refuses a command that names no device when several are online.
 FAKE_ADB = r'''
@@ -202,6 +207,14 @@ class NshRunAgentWindowsTests(unittest.TestCase):
         for folder in (self.state, self.temp, self.home / 'BuwizNsh/tools/bin', self.local):
             folder.mkdir(parents=True)
         self.fake(self.home / 'BuwizNsh/tools/bin', 'nsh', FAKE_NSH)
+        # The recipe asks `cargo --version` for its build line. The real `cargo` here is rustup's proxy, and with the
+        # home folder moved to the test's own it has no toolchain to answer with: on CI's Windows runners it then
+        # stalled past the wait (run 46070842821: the step timeline ends after `after-nsh-version`, with
+        # `cargo.exe --version` still running). The tests are about the recipe, so `cargo` is a stand-in too, first
+        # on the PATH.
+        self.bin = self.root / 'bin'
+        self.bin.mkdir()
+        self.fake(self.bin, 'cargo', FAKE_CARGO)
         self.sdk = self.root / 'sdk'
         tools = self.sdk / 'platform-tools'
         tools.mkdir(parents=True)
@@ -215,8 +228,8 @@ class NshRunAgentWindowsTests(unittest.TestCase):
     def env(self, mode, devices=TWO_DEVICES, sdk=True, **extra):
         # A PATH with pwsh and just but no adb, and a home, a temporary folder and a local application data folder
         # of the test's own.
-        path = os.pathsep.join([str(Path(shutil.which(tool)).parent) for tool in ('pwsh', 'just')]
-                               + [str(Path(os.environ['SystemRoot']) / 'System32')])
+        tools = [str(Path(shutil.which(tool)).parent) for tool in ('pwsh', 'just')]
+        path = os.pathsep.join([str(self.bin)] + tools + [str(Path(os.environ['SystemRoot']) / 'System32')])
         env = {key: value for key, value in os.environ.items()
                if key.upper() not in ('ANDROID_HOME', 'ANDROID_SDK_ROOT', 'ANDROID_SERIAL', 'BIR_DATABASE_PATH', 'PATH')}
         env.update(PATH=path, USERPROFILE=str(self.home), HOMEDRIVE=self.home.drive, HOMEPATH=str(self.home)[2:],
