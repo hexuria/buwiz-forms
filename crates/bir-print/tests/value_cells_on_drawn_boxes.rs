@@ -3,18 +3,23 @@
 //!
 //! The sheet's drawing is its SVG layer: black rules (`layer-structural`,
 //! `layer-band`) and the grey and white fills (`layer-decorative`,
-//! `layer-knockout`) whose edges outline boxes and comb slots. Hand
-//! corrections draw some boxes in the cells themselves: a cell with a fill
-//! and an inset border (the TIN rows of 0605, 1600WP, 2550M and 2553), and a
-//! slot with a gradient tick at its right; those count as drawing too. A
-//! value cell (any cell something prints into: joined to a writer key, or
-//! holding an input stamped with a filing key; a drawn `<div>` with its own
-//! `id`, outside any `<template>`) passes when
+//! `layer-knockout`) whose edges outline boxes and comb slots. A value cell
+//! (any cell something prints into: joined to a writer key, or holding an
+//! input stamped with a filing key; a drawn `<div>` with its own `id`,
+//! outside any `<template>`) passes when
 //!
 //! - each of its four edges lies within [`TOL`] of a drawn edge running along
 //!   at least half of that side, and
 //! - for a comb, at least [`TICKS`] of the boundaries between its slots lie
 //!   on a drawn vertical edge (a tick or a fill's side) beside the cell.
+//!
+//! Hand corrections draw some boxes in the cells themselves: a cell with a
+//! fill and an inset border (the TIN rows of 0605, 1600WP, 2550M and 2553),
+//! whose slots draw their ticks as a gradient at their right. Such a
+//! self-boxed cell is its own box for its sides and slots, but its top and
+//! bottom must still lie on printed horizontals, its row within the printed
+//! line's extent (±[`TOL`]). Its own edges and ticks are no drawing for any
+//! other cell.
 //!
 //! A hand-placed cell a few points off its box fails both. [`KNOWN`] lists
 //! the cells a little off whose values were seen to print inside their box;
@@ -59,6 +64,10 @@ struct Cell {
     rect: Rect,
     /// Absolute left edge of every slot of a comb.
     slot_lefts: Vec<f64>,
+    /// The cell draws its own box (a fill with an inset border).
+    self_boxed: bool,
+    /// Ticks its own slots draw (a gradient at a slot's right), absolute x.
+    own_ticks: Vec<f64>,
 }
 
 fn frozen_root() -> PathBuf {
@@ -205,17 +214,13 @@ fn page(body: &str, joined: &BTreeSet<String>) -> (Vec<Edge>, Vec<Edge>, Vec<Cel
                 if let Some(left) = pt(style, "left") {
                     let cell = &mut cells[index];
                     cell.slot_lefts.push(cell.rect.x + left);
-                    // A slot that draws its own tick (a gradient at its right).
+                    // A slot that draws its own tick (a gradient at its right):
+                    // it vouches for this comb's slots only.
                     if let (true, Some(width)) = (
                         style.contains("linear-gradient") && style.contains("right"),
                         pt(style, "width"),
                     ) {
-                        down.push(Edge {
-                            at: cell.rect.x + left + width,
-                            half: 0.0,
-                            from: cell.rect.y,
-                            to: cell.rect.y + cell.rect.h,
-                        });
+                        cell.own_ticks.push(cell.rect.x + left + width);
                     }
                 }
             }
@@ -234,25 +239,10 @@ fn page(body: &str, joined: &BTreeSet<String>) -> (Vec<Edge>, Vec<Edge>, Vec<Cel
             continue;
         };
         // A cell that draws its own box (a fill with an inset border, the
-        // sheets' hand corrections of a TIN row) is part of the drawing.
-        if style.contains("background:") && style.contains("box-shadow:inset") {
-            for at in [y, y + h] {
-                across.push(Edge {
-                    at,
-                    half: 0.0,
-                    from: x,
-                    to: x + w,
-                });
-            }
-            for at in [x, x + w] {
-                down.push(Edge {
-                    at,
-                    half: 0.0,
-                    from: y,
-                    to: y + h,
-                });
-            }
-        }
+        // sheets' hand corrections of a TIN row) is its own box for its sides
+        // and slots, but must still sit on the printed row (below); its edges
+        // are no drawing for any other cell.
+        let self_boxed = style.contains("background:") && style.contains("box-shadow:inset");
         // A value cell is a cell something prints into, whatever its kind
         // (`field`, `mixed` caption-and-boxes, even `label`): a cell a writer
         // key is joined to (`joined_cell_ids`, the engine's own joins
@@ -289,6 +279,8 @@ fn page(body: &str, joined: &BTreeSet<String>) -> (Vec<Edge>, Vec<Edge>, Vec<Cel
             comb: is_comb,
             rect: Rect { x, y, w, h },
             slot_lefts: Vec::new(),
+            self_boxed,
+            own_ticks: Vec::new(),
         });
     }
     (across, down, cells)
@@ -303,13 +295,22 @@ fn misplacement(cell: &Cell, across: &[Edge], down: &[Edge]) -> Option<String> {
     let Rect { x, y, w, h } = cell.rect;
     let (x1, y1) = (x + w, y + h);
     let on_across = |at: f64| {
-        across
-            .iter()
-            .any(|e| (e.at - at).abs() <= TOL + e.half && overlap(x, x1, e.from, e.to) >= 0.5 * w)
+        across.iter().any(|e| {
+            (e.at - at).abs() <= TOL + e.half
+                && if cell.self_boxed {
+                    // A self-boxed cell's row lies within the printed line.
+                    e.from - TOL <= x && x1 <= e.to + TOL
+                } else {
+                    overlap(x, x1, e.from, e.to) >= 0.5 * w
+                }
+        })
     };
+    // A self-boxed cell's own sides are its box.
     let on_down = |at: f64| {
-        down.iter()
-            .any(|e| (e.at - at).abs() <= TOL + e.half && overlap(y, y1, e.from, e.to) >= 0.5 * h)
+        cell.self_boxed
+            || down.iter().any(|e| {
+                (e.at - at).abs() <= TOL + e.half && overlap(y, y1, e.from, e.to) >= 0.5 * h
+            })
     };
     let mut wrong: Vec<&str> = [
         ("top", on_across(y)),
@@ -326,10 +327,11 @@ fn misplacement(cell: &Cell, across: &[Edge], down: &[Edge]) -> Option<String> {
         let hit = bounds
             .iter()
             .filter(|&&b| {
-                down.iter().any(|e| {
-                    (e.at - b).abs() <= 1.6 + e.half
-                        && overlap(y - 2.0, y1 + 2.0, e.from, e.to) > 0.0
-                })
+                cell.own_ticks.iter().any(|&t| (t - b).abs() <= 1.6)
+                    || down.iter().any(|e| {
+                        (e.at - b).abs() <= 1.6 + e.half
+                            && overlap(y - 2.0, y1 + 2.0, e.from, e.to) > 0.0
+                    })
             })
             .count();
         if (hit as f64) < TICKS * bounds.len() as f64 {
@@ -417,4 +419,19 @@ fn a_cell_a_few_points_off_its_box_fails() {
     yes.rect.x += 3.12;
     yes.rect.y += 11.7;
     assert!(misplacement(&yes, &across, &down).is_some());
+}
+
+/// A self-boxed cell (0605's hand-drawn TIN 4-6 box) must still sit on the
+/// printed row: on it, it passes; moved 4 pt down off the printed lines, its
+/// own box does not save it.
+#[test]
+fn a_self_boxed_cell_off_the_printed_row_fails() {
+    let html = std::fs::read_to_string(frozen_root().join("0605-1999/index.html")).unwrap();
+    let joined = bir_print::frozen_html::joined_cell_ids("0605-1999");
+    let (across, down, cells) = pages(&html, &joined).into_iter().next().unwrap();
+    let mut tin = cells.into_iter().find(|c| c.id == "p1c25").unwrap();
+    assert!(tin.self_boxed);
+    assert_eq!(misplacement(&tin, &across, &down), None);
+    tin.rect.y += 4.0;
+    assert!(misplacement(&tin, &across, &down).is_some());
 }

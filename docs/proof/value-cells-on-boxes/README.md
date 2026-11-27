@@ -11,8 +11,13 @@ sheets do:
   cells between the groups likewise), and each slot draws its tick as a
   gradient at its right. The SVG layer still holds the PDF's original row,
   4 to 15 pt away. What prints, and what the filer sees, is the box the cell
-  draws, with the digits inside it. The test now counts those boxes and
-  ticks as drawing.
+  draws, with the digits inside it. Such a self-boxed cell is its own box
+  for its sides and slot ticks, but its top and bottom must lie on the
+  printed horizontals, its row within the printed line's extent ±2 pt, and
+  its edges vouch for no other cell. All 20 self-boxed value cells (0605
+  p1c23-29, 1600WP p1c10-16 and p1c68-74, 2550M p1c9-13 and p1c127, 2553
+  p1c18-24) sit on the printed row; moving one 4 pt off it fails
+  (`a_self_boxed_cell_off_the_printed_row_fails`).
 - A value cell is a cell something prints into, whatever its
   `data-cell-kind` (`field`, `mixed` caption-and-boxes, even `label`): a cell
   a writer key is joined to (`bir_print::frozen_html::joined_cell_ids`, which
