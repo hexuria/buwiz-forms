@@ -38,8 +38,7 @@ const C1701A_EIGHT: &str = "The column's ATC is II015, II016 or II017 (8% rate).
 const C1701A_FOREIGN: &str = "Item 13 is Yes.";
 const C1701MS_COMPENSATION: &str = "Column A has compensation income at Item 11.";
 const C1701MS_B1: &str = "Column A has business income at Item 11 and Graduated, Exempt or Special/Preferential Rate at Item 12.";
-const C1701MS_ITEMIZED: &str =
-    "Column A has business income, Graduated at Item 12, and Itemized Deduction at Item 17.";
+const C1701MS_ITEMIZED: &str = "Column A has business income at Item 11 and either Exempt or Special/Preferential Rate at Item 12, or Graduated there with Itemized Deduction at Item 17.";
 const C1701MS_RELIEF: &str = "Item 12 column A is Exempt or Special/Preferential Rate.";
 const C1701MS_EIGHT: &str =
     "Column A has business income at Item 11 and the 8% income tax rate at Item 12.";
@@ -136,8 +135,8 @@ const G1701MS_B1: Gate = Gate {
 const G1701MS_ITEMIZED: Gate = Gate {
     gate: "1701ms_itemized",
     lock: C1701MS_ITEMIZED,
-    note: "This deduction needs graduated rates with itemized deductions.",
-    cleared: "This deduction was cleared: it needs graduated rates with itemized deductions.",
+    note: "This deduction needs business income at exempt, special or graduated itemized rates.",
+    cleared: "This deduction was cleared: it needs business income at exempt, special or graduated itemized rates.",
 };
 const G1701MS_RELIEF: Gate = Gate {
     gate: "1701ms_relief_items",

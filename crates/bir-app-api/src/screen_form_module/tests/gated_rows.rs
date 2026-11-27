@@ -727,6 +727,36 @@ fn form_1701ms_column_a_boxes_are_gated() {
 }
 
 #[test]
+fn form_1701ms_special_rate_business_keeps_cost_of_sales() {
+    setup();
+    let cost = "frm1701MS:txtCostofSalesNo8a";
+    let sales = "frm1701MS:txtSalesRevenueNo5a";
+    let opened = open("1701MS", 0);
+    let special = fill(
+        "1701MS",
+        &opened["draft"],
+        json!({
+            "frm1701MS:txtTaxpayerNo11a": "true",
+            "frm1701MS:txtTaxpayerNo12e": "true",
+        }),
+    );
+    assert_eq!(special["draft"]["taxpayer"]["tax_option"], "special");
+    assert_eq!(
+        special["draft"]["taxpayer"]["deduction"], "unanswered",
+        "the official special-rate branch disables Item 17 rather than picking it"
+    );
+    let with_sales = fill("1701MS", &special["draft"], json!({ sales: "1000" }));
+    let typed = fill("1701MS", &with_sales["draft"], json!({ cost: "400" }));
+    assert!(
+        typed["rejected"].get(cost).is_none(),
+        "special-rate business income opens cost of sales: {:?}",
+        typed["rejected"]
+    );
+    assert_eq!(typed["draft"]["taxpayer"]["cost_of_sales"], 400.0);
+    assert_eq!(typed["draft"]["taxpayer"]["gross_income"], 600.0);
+}
+
+#[test]
 fn form_1702rt_mcit_and_prior_payment_boxes_are_gated() {
     setup();
     let opened = open("1702RT", 0);
