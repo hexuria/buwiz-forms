@@ -1,5 +1,5 @@
 // Real-window screenshots of Filings: light and dark, wide (the board) and narrow (the list under status tabs), with the
-// filters open, the Filters sheet, the empty states and a Home tile's preset. `just nsh-shots filings` saves
+// filters open, the Filters sheet, the empty states and a navigation preset. `just nsh-shots filings` saves
 // ~/BuwizNsh/evidence/filings/*.png. Headless (plain nsh test) it takes no pictures and passes. Demo taxpayer and generated returns only.
 import { expect, open, test } from "nsh/test";
 import { LOOKS, shoot } from "./shoot";
@@ -58,7 +58,7 @@ for (const look of LOOKS) {
     expect(app.shows("id:filings")).toBe(true);
   }, 120_000);
 
-  test(`filings, a Home tile's preset, ${look.name}`, async () => {
+  test(`filings, a navigation preset, ${look.name}`, async () => {
     const d = new Date();
     const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const app = await open(ENTRY, {

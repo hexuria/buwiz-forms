@@ -116,6 +116,15 @@ export function createPageState() {
     });
   }
 
+  /**
+   * The field a link came to set got there (the phone date sheet opened by itself): the edit stops naming it, so a later remount of
+   * its row in the same edit (a resize between the wide and phone layouts) does not open the sheet or take the keys again.
+   */
+  function focusTaken(field: string): void {
+    const e = edit();
+    if (e?.focusField === field) edit.set({ ...e, focusField: undefined });
+  }
+
   function cancelEdit(): void {
     edit.set(null);
   }
@@ -447,7 +456,7 @@ export function createPageState() {
 
   return {
     edit, factEdit, saveSetup, deleteArmed, inbox, forms, query, freq, addYear, addYearSel, addYearCopy, yearFacts,
-    startEdit, cancelEdit, setValue, touch, setType, setInherit, errors, saveSection,
+    startEdit, focusTaken, cancelEdit, setValue, touch, setType, setInherit, errors, saveSection,
     startFactEdit, pickFact, setAtc, cancelFactEdit, saveFactEdit, openSaveSetup, saveSetupNow,
     startInboxEdit, pickInboxMethod, setInbox, saveInbox, editForms, toggleForm, toggleAddYear, reset, leaveYear,
   };

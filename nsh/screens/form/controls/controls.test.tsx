@@ -74,15 +74,15 @@ for (const size of SIZES) {
     expect(edit(app, "email")).toBe("juana@example.test" + "x");
   });
 
-  test(`${size.name}: money groups while typing, reports the plain number, two decimals on leaving`, async () => {
+  test(`${size.name}: money stays plain while typing, reports the plain number, groups with two decimals on leaving`, async () => {
     const app = await gallery(size.options);
     expect(app.value("id:fp-money")).toBe("1,250,000.50");
     await app.clear("id:fp-money");
     await app.type("id:fp-money", "1250000");
-    expect(app.value("id:fp-money")).toBe("1,250,000");
+    expect(app.value("id:fp-money")).toBe("1250000");
     expect(edit(app, "money")).toBe("1250000");
     await app.type("id:fp-money", ".5");
-    expect(app.value("id:fp-money")).toBe("1,250,000.5");
+    expect(app.value("id:fp-money")).toBe("1250000.5");
     expect(edit(app, "money")).toBe("1250000.5");
     await app.type("id:fp-name", " ");
     expect(blurs(app, "money")).toBe(1);
@@ -145,6 +145,17 @@ for (const size of SIZES) {
     expect(edit(app, "disabled")).toBe("");
     // A box another answer turns off is drawn (faded) and still shows.
     expect(app.count("id:fp-off")).toBe(1);
+  });
+
+  test(`${size.name}: V5: zero TIN parts and branch codes keep their text on focus`, async () => {
+    if (size.name !== "phone") return; // the grid is the TIN-part layout under 600 pt
+    const app = await gallery(size.options);
+    for (const [id, text] of [["fp-gtin1", "000"], ["fp-gbranch", "00000"]] as const) {
+      expect(app.value(`id:${id}`)).toBe(text);
+      await app.type(`id:${id}`, "");
+      await app.wait(150);
+      expect(app.value(`id:${id}`)).toBe(text);
+    }
   });
 
   test(`${size.name}: a TIN keeps its dashes while typing and reports its digits`, async () => {
@@ -219,7 +230,7 @@ for (const size of SIZES) {
     const app = await gallery(size.options);
     await app.press("id:fp-atc-trigger");
     await app.waitFor("id:fp-atc-search");
-    expect(app.count("id:fp-atc-opt-WI010")).toBe(1);
+    await app.waitFor("id:fp-atc-opt-WI010");
     // Words in any order and a code both match; nothing else does.
     await app.type("id:fp-atc-search", "juridical fees");
     await app.waitFor("id:fp-atc-opt-WC011");
@@ -232,7 +243,9 @@ for (const size of SIZES) {
     await app.press("id:fp-atc-opt-WX150");
     expect(edit(app, "atc")).toBe("WX150");
     expect(blurs(app, "atc")).toBe(1);
-    await app.waitFor("text:WX150 — Sample withholding category 51");
+    // The phone's trigger says the choice; the wide combobox's box holds it as its text.
+    if (size.name === "phone") await app.waitFor("text:WX150 — Sample withholding category 51");
+    else await app.waitUntil(() => app.value("id:fp-atc-search") === "WX150 — Sample withholding category 51");
   });
 
   test(`${size.name}: a tick box reports true then false, a locked one does not`, async () => {
@@ -326,13 +339,14 @@ for (const size of SIZES) {
   });
 }
 
-test("desktop: a pill step's focus function puts the keys in a long-list select's trigger and in a group's first tick box", async () => {
+test("desktop: a pill step's focus function puts the keys in a long-list combobox's box and in a group's first tick box", async () => {
   const app = await gallery(SIZES[1].options);
   await app.press("id:gallery-focus-atc");
+  // The box has the keys: Return opens the whole list, Escape closes it.
   await app.keyboard.press("enter");
-  await app.waitFor("id:fp-atc-search");
-  await app.back();
-  await app.waitFor("id:fp-atc-search", { state: "gone" });
+  await app.waitFor("id:fp-atc-list");
+  await app.keyboard.press("escape");
+  await app.waitFor("id:fp-atc-list", { state: "gone" });
   await app.press("id:gallery-focus-regime");
   await app.keyboard.press("space");
   await app.waitFor("text:edit regime: regime1=true");

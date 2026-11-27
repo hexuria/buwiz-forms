@@ -2283,12 +2283,20 @@ pub fn quarterly_period_label(taxable_year: u16, quarter: u8) -> String {
     format!("Q{quarter}/{:02}", taxable_year % 100)
 }
 
+/// The app's one sentence for a send that reached nobody (a dry run, a
+/// practice account, a Buwiz test TIN): the OS notice and the screens'
+/// `test_sent` line (bir-app-api `send_state::TEST_SENT_LINE`) say it.
+pub const TEST_SENT_LINE: &str = "Test send. Nothing reached the BIR.";
+
+/// The first words of a test send's notice title.
+const TEST_SEND_TITLE: &str = "Test send";
+
 /// Desktop banner for a successful PUT: who, which return, when — not the
 /// IAF filename, which says none of that at a glance. Returns `(title, body)`.
-/// Appended to the submission notice title and body when the SFTP transport
-/// was the `BIR_SFTP_DRY_RUN` simulator.
-pub const DRY_RUN_NOTICE_SUFFIX: &str = " (dry run \u{2014} nothing was sent to BIR)";
-
+/// A `dry_run` send reached nobody: its title leads with "Test send", so a
+/// phone banner that cuts a long registered name off still shows it, and its
+/// body's first line is [`TEST_SENT_LINE`]. It never says the return was
+/// submitted, sent or filed.
 pub fn submission_notice<Tz: chrono::TimeZone>(
     profile: &TaxpayerProfile,
     form_code: &str,
@@ -2299,22 +2307,27 @@ pub fn submission_notice<Tz: chrono::TimeZone>(
 where
     Tz::Offset: std::fmt::Display,
 {
-    let mut title = format!(
-        "{form_code} {period_label} submitted \u{2014} {}",
-        profile.full_name
-    );
-    let mut body = format!(
-        "TIN {}\nSent {}\nFiled under {}",
-        profile.tin.formatted(),
-        sent_at.format("%I:%M %p, %-d %b %Y"),
-        profile.inbox_email()
-    );
+    let at = sent_at.format("%I:%M %p, %-d %b %Y");
+    let tin = profile.tin.formatted();
     if dry_run {
-        title.push_str(DRY_RUN_NOTICE_SUFFIX);
-        body.push('\n');
-        body.push_str(DRY_RUN_NOTICE_SUFFIX.trim_start());
+        return (
+            format!(
+                "{TEST_SEND_TITLE}: {form_code} {period_label} \u{2014} {}",
+                profile.full_name
+            ),
+            format!("{TEST_SENT_LINE}\nTIN {tin}\nTested {at}"),
+        );
     }
-    (title, body)
+    (
+        format!(
+            "{form_code} {period_label} submitted \u{2014} {}",
+            profile.full_name
+        ),
+        format!(
+            "TIN {tin}\nSent {at}\nFiled under {}",
+            profile.inbox_email()
+        ),
+    )
 }
 
 /// Banner for a BIR receipt confirmation. The date and time are **BIR's**
@@ -3247,14 +3260,44 @@ mod tests {
             .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
             .unwrap();
         let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at, true);
-        assert_eq!(
-            title,
-            "1601C 09/26 submitted \u{2014} Juan Dela Cruz (dry run \u{2014} nothing was sent to BIR)"
-        );
+        assert_eq!(title, "Test send: 1601C 09/26 \u{2014} Juan Dela Cruz");
         assert_eq!(
             body,
-            "TIN 000-000-000-00000\nSent 03:17 PM, 12 Sep 2026\nFiled under codeitlikemiley@gmail.com\n(dry run \u{2014} nothing was sent to BIR)"
+            "Test send. Nothing reached the BIR.\nTIN 000-000-000-00000\nTested 03:17 PM, 12 Sep 2026"
         );
+        assert_never_filed_notice(&title, &body);
+    }
+
+    /// A phone banner shows the title's first few words and cuts the rest: a test send's title leads with "Test
+    /// send" whatever the registered name's length, and the body's first line is the app's sentence for it.
+    #[test]
+    fn a_test_send_notice_leads_with_test_send_before_a_long_name() {
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.full_name =
+            "Juan Dela Cruz Trading and General Merchandise Corporation of the Philippines".into();
+        let sent_at = chrono::FixedOffset::east_opt(8 * 3600)
+            .unwrap()
+            .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
+            .unwrap();
+        let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at, true);
+        let banner: String = title.chars().take(20).collect();
+        assert_eq!(banner, "Test send: 1601C 09/");
+        assert_eq!(body.lines().next(), Some(TEST_SENT_LINE));
+        assert_never_filed_notice(&title, &body);
+    }
+
+    /// A test send's notice leads with "Test send" in the title, carries the app's one sentence for it as a line of
+    /// its own (the OS notice's first; the stored alert names the taxpayer above it), and never says the return was
+    /// submitted, sent or filed.
+    fn assert_never_filed_notice(title: &str, body: &str) {
+        assert!(title.starts_with("Test send: "), "{title}");
+        assert!(body.lines().any(|line| line == TEST_SENT_LINE), "{body}");
+        for text in [title, body] {
+            let lower = text.to_lowercase();
+            for word in ["submitted", "sent ", "filed"] {
+                assert!(!lower.contains(word), "{word:?} in {text:?}");
+            }
+        }
     }
 
     #[test]
@@ -3450,6 +3493,9 @@ mod tests {
         BuwizSent,
         /// The Buwiz relay gave a receipt, and the server only simulated the send.
         BuwizSimulated,
+        /// The Buwiz relay's `result` for a test TIN ([`crate::relay::DRY_RUN_RESULT_FIXTURE`]), as the client hands
+        /// it over.
+        BuwizDryRunResult,
         /// The Buwiz relay refused the return itself (a TIN refusal).
         BuwizRefused,
         /// The Buwiz relay tried and the BIR's way in did not take it.
@@ -3638,6 +3684,9 @@ mod tests {
                         relay_receipt: Some(BUWIZ_RECEIPT.into()),
                         simulated: true,
                     }),
+                    TestTransportOutcome::BuwizDryRunResult => {
+                        Ok(crate::relay::dry_run_result_fixture_report())
+                    }
                     TestTransportOutcome::BuwizRefused => Err(
                         crate::transport::TransportError::Refused(BUWIZ_REFUSAL.into()),
                     ),
@@ -4715,16 +4764,7 @@ mod tests {
             .iter()
             .find(|alert| alert.kind.starts_with("form_submitted:"))
             .unwrap();
-        assert!(
-            notice.title.contains(DRY_RUN_NOTICE_SUFFIX),
-            "{}",
-            notice.title
-        );
-        assert!(
-            notice.detail.contains(DRY_RUN_NOTICE_SUFFIX.trim_start()),
-            "{}",
-            notice.detail
-        );
+        assert_never_filed_notice(&notice.title, &notice.detail);
     }
 
     /// A 503 from the relay after the claim: it kept nothing, so the claim goes, the return stays Queued with a
@@ -4945,6 +4985,18 @@ mod tests {
         poll_jobs: usize,
         /// A second run of the worker with a transport that would succeed: how many sends it made.
         sent_again: usize,
+        /// The submission notice's title and detail, as the worker kept them in its alert.
+        notice: Option<(String, String)>,
+    }
+
+    fn submission_alert(db: &Arc<Mutex<Database>>) -> Option<(String, String)> {
+        db.lock()
+            .unwrap()
+            .list_active_alerts(None)
+            .unwrap()
+            .into_iter()
+            .find(|alert| alert.kind.starts_with("form_submitted:"))
+            .map(|alert| (alert.title, alert.detail))
     }
 
     fn retry_time(raw: Option<&str>) -> Option<chrono::DateTime<Utc>> {
@@ -5004,6 +5056,7 @@ mod tests {
             sent: sent_by(&transport),
             poll_jobs: jobs,
             sent_again: again.calls().len(),
+            notice: submission_alert(&db),
         }
     }
 
@@ -5035,6 +5088,7 @@ mod tests {
             sent: sent_by(&transport),
             poll_jobs: jobs,
             sent_again: again.calls().len(),
+            notice: submission_alert(&db),
         }
     }
 
@@ -5075,6 +5129,7 @@ mod tests {
             sent: sent_by(&transport),
             poll_jobs: jobs,
             sent_again: again.calls().len(),
+            notice: submission_alert(&db),
         }
     }
 
@@ -5130,6 +5185,33 @@ mod tests {
                 "{path}"
             );
             assert_eq!(state.poll_jobs, 0, "{path}: no BIR email is coming");
+        }
+    }
+
+    /// Link 2 of 3 of "a relay dry_run result never reads as filed" (link 1: bir-submit
+    /// `client::tests::a_relay_dry_run_result_with_its_signed_receipt_is_a_verified_test_send`; link 3: bir-app-api
+    /// `screen_form_module::tests::a_relay_dry_run_result_never_reads_as_filed`). The shared fixture's result, as the
+    /// client hands it over, through the real `send_outcome` and the real worker on each send path: Submitted as a dry
+    /// run with its receipt, no BIR email watched, never sent again, and a notice that says the test-send sentence
+    /// and never submitted, sent or filed.
+    #[tokio::test]
+    async fn a_relay_dry_run_result_is_stored_as_a_test_send_on_every_path() {
+        let report = crate::relay::dry_run_result_fixture_report();
+        assert!(report.simulated, "the signed claims say dry_run");
+        let fixture: serde_json::Value =
+            serde_json::from_str(crate::relay::DRY_RUN_RESULT_FIXTURE).unwrap();
+        let receipt = report.relay_receipt.clone().expect("a receipt");
+        assert_eq!(receipt_claims(&receipt), fixture["receipt_claims"]);
+        for (path, state) in buwiz_on_every_path(TestTransportOutcome::BuwizDryRunResult).await {
+            assert_eq!(state.status, FilingStatus::Submitted, "{path}");
+            assert!(state.dry_run, "{path}: nothing reached the BIR");
+            assert_eq!(state.relay_receipt.as_ref(), Some(&receipt), "{path}");
+            assert!(!state.claimed, "{path}");
+            assert_eq!(state.error, None, "{path}");
+            assert_eq!(state.poll_jobs, 0, "{path}: no BIR email is coming");
+            assert_eq!(state.sent_again, 0, "{path}");
+            let (title, detail) = state.notice.expect("the submission notice");
+            assert_never_filed_notice(&title, &detail);
         }
     }
 

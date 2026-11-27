@@ -14,7 +14,7 @@ wait_until tp-profile-years --timeout-ms 5000 --screenshot
 click panel-open-forms
 wait_until tp-forms-edit --timeout-ms 5000 --screenshot
 click panel-open-templates
-wait_until tp-template-1701-create --timeout-ms 5000 --screenshot
+wait_until tp-template-2551Q-create --timeout-ms 5000 --screenshot
 click account-row
 wait_until menu-account --timeout-ms 5000
 click menu-account

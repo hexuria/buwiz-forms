@@ -4,14 +4,14 @@
 // the selection the input reported before each edit goes to the mask so the edit is read exactly (NSH: onKeyPress comes
 // before the text changes, onSelectionChange has the selection; nsh/.nsh/types/nsh/types.d.ts InputHostProps).
 import type { InputRef, JSX, ViewRef } from "nsh";
-import { effect, signal, Text as NText, untracked, View } from "nsh";
+import { cleanup, effect, platform, signal, Text as NText, untracked, View } from "nsh";
 import { Calendar, type CalendarEntry, DatePicker, Input, OtpInput, type OtpInputRef } from "nsh/base";
 import { AppButton } from "./buttons";
 import type { IconName } from "./icons";
-import { cx, T_H, T_MIN_H, T_MIN_W, T_SIZE, TOUCH } from "./look";
+import { cx, T_H, T_MIN_H, T_MIN_W, T_PX, T_SIZE, TOUCH } from "./look";
 import {
-  DATE_ERROR, digitsOnly, editBase, formatIso, formatLongDate, formatMDY, formatMoney, formatTinDigits, intMask, type Mask, moneyMask, moneyPlain,
-  isZeroAmount, parseTypedDate, PERCENT_MASK, reconcile, sameAmount, shownMoney, TIN_LENGTH, TIN_MASK, type TextSelection,
+  DATE_ERROR, digitsOnly, editBase, formatIso, formatLongDate, formatMDY, formatMoney, formatTinDigits, intMask, isZeroAmount, type Mask, moneyEntryMask,
+  parseTypedDate, PERCENT_MASK, readAmount, readAmountWithCommas, reconcile, sameAmount, shownMoney, TIN_LENGTH, TIN_MASK, type CommaState, initialCommaState, nextCommaState, validAmountWithCommas, type TextSelection, validAmountText,
 } from "./mask";
 import { Chip } from "./status";
 import { Icon, Text } from "./text";
@@ -47,6 +47,8 @@ export interface TextFieldProps {
    * in a row of its own (the command palette's, whose icon and Esc key are beside it); the row draws the frame.
    */
   bare?: boolean;
+  /** The sign-in pages' field: 46 points tall (48 on Android), radius 10, a 13-point label and 14-point text. */
+  large?: boolean;
   /** Right-aligned text (amounts, percents), centred (the phone TIN grid's digits). */
   align?: "left" | "right" | "center";
   /** Tabular figures (TINs, amounts, dates). */
@@ -88,7 +90,7 @@ export function TextField(props: TextFieldProps) {
   return (
     <View class="min-w-0 gap-1" style={{ width: props.width }}>
       <If when={props.label}>
-        <Text variant="meta" tone="fg2">{props.label}</Text>
+        <Text variant={props.large ? "body" : "meta"} tone="fg2">{props.label}</Text>
       </If>
       <View
         class={cx(
@@ -96,11 +98,12 @@ export function TextField(props: TextFieldProps) {
           props.bare
             ? TOUCH ? T_MIN_H : "h-8"
             : cx(
-                "rounded-(--radius-row) border",
+                props.large ? "rounded-[10px] border" : "rounded-(--radius-row) border",
                 // A centred box is a cell of the phone TIN grid: 47 pt wide on a 320 pt phone, where 10 pt sides cut
                 // the third digit. It keeps 4 pt, like the locked cell (controls/model.ts readBoxPad).
-                props.align === "center" ? "px-1" : "px-2.5",
-                TOUCH ? T_MIN_H : sm() ? "h-7" : "h-8",
+                props.align === "center" ? "px-1" : props.large ? "px-0" : "px-2.5",
+                // The large field is one fixed height, so its input (h-full) fills it: a press anywhere in the box focuses it.
+                props.large ? (T_PX > 46 ? "h-12" : "h-11.5") : TOUCH ? T_MIN_H : sm() ? "h-7" : "h-8",
                 flat() ? "border-border bg-hover" : "bg-card",
                 props.error ? "border-danger" : !flat() && "border-border-strong focus-within:border-accent-blue",
               ),
@@ -138,7 +141,9 @@ export function TextField(props: TextFieldProps) {
           onKeyPress={props.onKeyPress}
           class={cx(
             "h-full min-w-0 flex-1 bg-transparent caret-accent-blue placeholder:text-subtle-foreground selection:bg-accent-blue-soft",
-            props.bare ? "text-emph font-normal" : "text-body",
+            props.bare || props.large ? "text-emph font-normal" : "text-body",
+            // The large field's sides are the input's own, so the whole box takes the press.
+            props.large && "px-3",
             flat() ? "text-muted-foreground" : "text-foreground",
             props.align === "right" && "text-right",
             props.align === "center" && "text-center",
@@ -168,7 +173,18 @@ export function TextField(props: TextFieldProps) {
 // ---------------------------------------------------------------- masked fields
 
 /** What the masked fields share with TextField (the value and its events are theirs). `inputRef` gives the box's InputRef (focus(), setSelection()). */
-export type MaskedFieldProps = Omit<TextFieldProps, "value" | "onChange" | "keyboardType" | "masked" | "maxLength">;
+export type MaskedFieldProps = Omit<TextFieldProps, "value" | "onChange" | "keyboardType" | "masked" | "maxLength"> & {
+  /** Test hook: each text or caret operation this field sends to its native box. */
+  writeProbe?: (write: "text" | "caret", start?: number, end?: number) => void;
+  /** Money text was left unreadable: what was typed, and the amount text the box kept ("" when it was left blank). */
+  onLeftUnreadable?: (typed: string, kept: string) => void;
+  /** Money text was left with one comma the filer typed, read as its decimal point ("1500,50" as 1,500.50): what was typed, and what the box shows. */
+  onCommaRead?: (typed: string, shown: string) => void;
+  /** Money text the filer typed during this focus came to the amount the box showed, and a value set from outside meanwhile won on leaving: what was typed, and what the box shows now. */
+  onOutsideKept?: (typed: string, shown: string) => void;
+  /** Receives how to leave the box at once, in this turn, as unmount does (no write to the native box): a page that saves before quit or navigation. */
+  leaveRef?: (leave: () => void) => void;
+};
 
 interface MaskedProps {
   /** The caller's TextField props (read where used, so they stay live). */
@@ -185,11 +201,16 @@ interface MaskedProps {
   /** The text a box the filer edited settles on when left (the amount rounded to centavos); unset: the shown one. */
   settle?: (text: string) => string;
   keyboardType: KeyboardType;
-  /**
-   * A number box (money, percent, integer): a box of zero is selected as it takes the keys by a click, so the first digit
-   * replaces it; the box's own focus() (the form's step) selects the whole text whatever it holds.
-   */
-  numeric?: boolean;
+  /** No live formatting: focused text is left exactly as the box holds it. */
+  noLiveFormat?: boolean;
+  /** Whether focused text reads as a value; when false nothing is reported and the error state shows. */
+  valid?: (text: string) => boolean;
+  /** Money comma attribution is tracked for this box. */
+  commaStates?: boolean;
+  /** Money comma reading allows a negative. */
+  commaNegative?: boolean;
+  /** The zero rendering an untouched zero amount carries as its placeholder instead of text. */
+  zeroPlaceholder?: string;
   /** Defaults where the caller sets none. */
   placeholder?: string;
   prefix?: string;
@@ -197,12 +218,25 @@ interface MaskedProps {
   align?: "left" | "right" | "center";
 }
 
+// Windows and Linux lose the platform select-all when a recompute writes a box just before keyboard focus: the caret
+// collapses to the end after focus, so the first key is appended to the recomputed amount (old on main on both).
+// Measured: Windows, the collapse 41-43 ms after focus for a write about 20 ms before it, none at 85-110 ms; Linux, the
+// write 17-18 ms before focus and the collapse 34-35 ms after it. macOS replaces as it should and is left alone. The
+// bounds are in time because End and the arrow keys do not reach the page as key events; under heavy CPU load the gaps
+// can pass them, and then the old append is what happens (the kit's own cause is #405).
+const RESELECT_COLLAPSE_MS = 150;
+const RESELECT_WRITE_MS = 300;
+const RECOMPUTE_RESELECT = platform.os === "windows" || platform.os === "linux";
+
 /**
- * A click's caret follows the focus it gave (the same mouse press): within this many ms of the focus handler's end, which can be
- * a long turn on a heavy page in a debug build. A caret later than that is the user's own move (an arrow after Tab). A caret
- * the window wrongly takes for a click's only selects a zero amount whole, which is what typing there wants anyway.
+ * Whether a selection the input reported is the recompute collapse the guard repairs (Windows, Linux; the box armed by an outside
+ * write just before its focus): the caret collapsed to the end of a nonempty text within RESELECT_COLLAPSE_MS of that focus, and no
+ * key has been seen in the box since its focus. A key, even one that changed no text (Enter, a refused key), makes the caret the
+ * filer's. Exported for its test: headless input reports a selection only after a text change, so the box cannot be driven there.
  */
-const CLICK_MS = 500;
+export function isRecomputeCollapse(selection: TextSelection, length: number, sinceFocus: number, keySeen: boolean): boolean {
+  return !keySeen && length > 0 && selection.start === length && selection.end === length && sinceFocus <= RESELECT_COLLAPSE_MS;
+}
 
 /**
  * A TextField whose text goes through a mask on every edit, the caret kept beside the same digit. The box always shows
@@ -215,90 +249,226 @@ const CLICK_MS = 500;
  * key press (the typed text, or "Backspace" for any deletion, Cut included) BEFORE the change, with the selection the edit
  * started from known from the last onSelectionChange; an emptied box reports "" like any other value.
  *
- * Where the caret goes as the box takes the keys (macOS, onFocus then onSelectionChange; a click gives the focus, AppKit
- * selects all, then the click's caret follows within the same mouse press; Tab gives the focus and the whole text stays selected):
- * a Tab keeps the whole text selected; a click puts the caret where it landed, but in a number box holding zero the whole text is
- * selected so the first digit replaces it (typing at the caret of "0.00" gave "1,000.00" for 100); a box focused by its own
- * focus() (the form's step, which NSH gives a caret at the end) is selected whole.
+ * An untouched zero number is empty text with its zero rendering as the placeholder, focused or not, so focus writes
+ * nothing and the first digit starts the amount. Platform focus keeps the platform's own selection or click caret; the page's own focus() selects
+ * the whole text after focus has landed. Besides that deliberate selection write, Windows and Linux have exactly one more: the narrowly
+ * guarded recompute-collapse repair below. No other caret or text is written while the box has the keys.
  */
 function MaskedField(props: MaskedProps) {
   let input: InputRef | undefined;
   const focused = signal(false);
-  const text = signal(props.shown(props.value ?? "", false));
+  const zeroRule = () => props.zeroPlaceholder !== undefined && !props.field.disabled && !props.field.locked;
+  const zeroAmount = (value: string) => zeroRule() && isZeroAmount(value);
+  const shownUnfocused = (value: string) => (zeroAmount(value) ? "" : props.shown(value, false));
+  const displayShown = (shown: string) => (zeroRule() && isZeroAmount(shown) ? "" : shown);
+  const text = signal(shownUnfocused(props.value ?? ""));
   const same = (a: string, b: string) => (props.same ? props.same(a, b) : a === b);
+  const zeroSame = (a: string, b: string) => zeroRule() && isZeroAmount(a) && isZeroAmount(b);
+  const sameLiveReport = (a: string, b: string) => a === b || zeroSame(a, b);
+  const sameReported = (a: string, b: string) => same(a, b) || zeroSame(a, b);
   // The value last reported or last given: a report is made only when it changes. `edited`: the filer changed it since the
   // box took the keys.
   let last = props.value ?? "";
   let edited = false;
+  // Whether the box's last report was empty, and whether a nonzero outside value answered that report during
+  // this focus. The first later edit is the filer's answer instead.
+  let lastReportEmpty = false;
+  let outsideAfterEmpty = false;
   // The selection the input last reported, and what the current edit started from (taken at its key press): that
   // selection, and whether the key typed a character (a paste or any edit without a key is judged as a paste).
   let selected: TextSelection | undefined;
   let editFrom: TextSelection | undefined;
   let editTyped = false;
+  // The text changed at the filer's hands during this focus (even back to what it was).
+  let typedThisFocus = false;
   // The text the box last reported while it has the keys. Keys that come faster than the answers (a burst, an agent's
   // typing) are typed on this text, not on the answer: NSH drops an answer the box has typed past.
   let boxText: string | undefined;
-  // The box took the keys by itself (not through its focus()): until this time (Date.now(), 0: never) a caret is the click's that
-  // gave them, and a key press ends it. A click's caret can come twice (AppKit places it as the press goes down and again when
-  // it ends), so every caret in the window counts, not only the first.
-  let clickUntil = 0;
-  // The page's focus() was called: the box is selected whole, there is no click to wait for.
-  let byFocus = false;
-  // What the page gets as the box's ref: in a number box its focus() selects the whole text (NSH puts the caret at the end).
-  const handle = (r: InputRef): InputRef =>
-    props.numeric
-      ? {
-          focus() {
-            byFocus = true;
-            r.focus();
-            r.setSelection(0, untracked(text).length);
-          },
-          blur: () => r.blur(),
-          measure: () => r.measure(),
-          reveal: (options) => r.reveal(options),
-          setSelection: (start, end) => r.setSelection(start, end),
-          insertText: (t) => r.insertText(t),
-          animateLayout: (transition) => r.animateLayout(transition),
-        }
-      : r;
+  // A value that arrives while the box has the keys: applied on blur only when the filer made no edit of their own.
+  let outsideValue: string | undefined;
+  // The sentence this box draws itself when no form session does it for it; null while focused or readable.
+  const leftUnreadable = signal<string | null>(null);
+  // The value shown when this focus began: an unreadable edit rolls the report back to it once.
+  let focusValue = props.value ?? "";
+  let invalidActive = false;
+  let rollbackReported = false;
+  // F6 (Windows and Linux): an outside write into the unfocused box, followed closely by keyboard focus, can collapse select-all.
+  let outsideWriteAt = 0;
+  let armWindowsReselect = false;
+  let windowsReselectDone = false;
+  let windowsFocusAt = 0;
+  // A key press reached the box since its focus (onKeyPress comes before any text change).
+  let keySeen = false;
+  // Set only through the wrapped ref the page receives; a platform Tab, click or tap never sets it.
+  let programmaticFocus = false;
+  let programmaticFocusToken = 0;
+  // Whose comma the money text holds for this focus: the box's grouping, the filer's, none yet, or not attributable.
+  let commaState: CommaState = initialCommaState(untracked(text));
+  const commaValueOf = (reading: string, leaving: boolean) =>
+    props.commaStates ? (readAmountWithCommas(reading, commaState, props.commaNegative, leaving) ?? "") : props.valueOf(reading);
+  const commaValid = (reading: string, leaving: boolean) =>
+    props.commaStates ? validAmountWithCommas(reading, commaState, props.commaNegative, leaving) : props.valid ? props.valid(reading) : true;
+  const writeText = (value: string) => {
+    if (untracked(text) !== value) props.field.writeProbe?.("text");
+    text.set(value);
+  };
+  const writeCaret = (start: number, end = start) => {
+    props.field.writeProbe?.("caret", start, end);
+    input?.setSelection(start, end);
+  };
+  const report = (value: string) => {
+    last = value;
+    lastReportEmpty = value === "";
+    props.onChange(value);
+  };
   // A value set from outside (another box, a reload) shows; the field's own edits come back equal and change nothing.
   effect(() => {
     const value = props.value ?? "";
+    // Focused text is never rewritten. A change equal to what this box just reported is its own echo; only a different
+    // value is outside, and is held for blur until the filer's own edit supersedes it.
+    if (untracked(focused)) {
+      // A zero that only answers this box's own empty report is not a new outside edit; it is read again on leaving,
+      // where a host that truly holds blank still shows blank and a host that holds zero shows zero.
+      const ownEmptyEcho = last === "" && isZeroAmount(value);
+      if (!same(value, last) && !ownEmptyEcho) {
+        if (lastReportEmpty && last === "") outsideAfterEmpty = true;
+        outsideValue = value;
+        last = value;
+      }
+      return;
+    }
     last = value;
     const now = untracked(text);
-    if (!same(props.valueOf(now), value)) {
-      // The filer emptied this box, and an amount comes back in it (a form that cannot hold a blank amount shows the draft's
-      // again): selected whole, so the digits typed next replace it instead of being appended to it.
-      const refilled = props.numeric && now === "" && edited && untracked(focused);
-      const shown = props.shown(value, untracked(focused));
-      text.set(shown);
-      if (refilled && shown !== "") input?.setSelection(0, shown.length);
+    const emptyIsZero = now === "" && zeroAmount(value);
+    if (!same(props.valueOf(now), value) && !emptyIsZero) {
+      if (RECOMPUTE_RESELECT) outsideWriteAt = Date.now();
+      writeText(shownUnfocused(value));
+      invalidActive = false;
+      rollbackReported = false;
     }
   });
   const change = (raw: string) => {
+    armWindowsReselect = false;
+    typedThisFocus = true;
     const prev = untracked(text);
+    if (outsideAfterEmpty) outsideAfterEmpty = false;
     const from = editFrom;
     const typed = editTyped;
     editFrom = undefined;
     editTyped = false;
+    if (props.noLiveFormat) {
+      // Focused text is authoritative: strict reading decides the report; no mask rewrite or refusal answer is computed for it.
+      boxText = raw;
+      text.set(raw);
+      if (props.commaStates) commaState = nextCommaState(commaState, prev, raw);
+      const reading = raw;
+      const valid = commaValid(reading, false);
+      if (!valid) {
+        invalidActive = true;
+        if (!rollbackReported) {
+          rollbackReported = true;
+          // A newer value held for this focus is the fallback, not the older value the box had when focus began.
+          const fallback = untracked(focused) ? (outsideValue ?? focusValue) : last;
+          if (!same(fallback, last)) {
+            report(fallback);
+          }
+        }
+        return;
+      }
+      if (invalidActive) {
+        invalidActive = false;
+        rollbackReported = false;
+      }
+      const value = commaValueOf(reading, false);
+      // A key and its Backspace are no edit: a value held from outside still wins on leaving.
+      edited = !same(value, focusValue);
+      if (sameLiveReport(value, last)) return;
+      report(value);
+      return;
+    }
     const [on, at] = editBase(prev, boxText, raw, from);
     const next = reconcile(on, raw, props.mask, undefined, at, typed);
     // An edit that changes nothing is taken back: what the box holds after it is the text shown.
     boxText = next.rejected || next.text === prev ? next.text : raw;
     // The native box holds `raw`. A signal that already holds the answer would send nothing: show `raw` first so the
     // answer is a change the box must take.
-    if (next.text === prev && raw !== prev) text.set(raw);
-    text.set(next.text);
+    if (next.text === prev && raw !== prev) writeText(raw);
+    writeText(next.text);
     // The box puts the caret at the end of a text it takes, so a caret that belongs there is not sent: sent, it would
     // arrive after the keys typed since this edit and put the next ones inside the number.
-    if (next.rejected || (next.text !== raw && next.caret !== next.text.length)) input?.setSelection(next.caret);
+    if (next.rejected || (next.text !== raw && next.caret !== next.text.length)) writeCaret(next.caret);
     if (next.rejected) return;
     const value = props.valueOf(next.text);
-    if (value === last) return;
-    last = value;
-    edited = true;
-    props.onChange(value);
+    edited = !same(value, focusValue);
+    if (sameLiveReport(value, last)) return;
+    report(value);
   };
+  // Blur and unmount are the same leave. Unmount cannot write the native box away, but the value, unreadable-note
+  // callback and the box's blur callback are exactly the blur ones.
+  const finishLeave = (write: boolean) => {
+        armWindowsReselect = false;
+        windowsReselectDone = false;
+        const held = text();
+        const reading = held;
+        const validBlur = commaValid(reading, true);
+        if (!validBlur) {
+          // The return keeps the fallback amount. A newer outside value held during this focus is that fallback.
+          const fallback = outsideValue ?? focusValue;
+          // What the box shows again: "" when the fallback is blank (a nullable schedule cell that held no amount), unless the host
+          // answered the box's own empty report with its zero (a started row's cell): then it holds that zero.
+          const kept = props.shown(fallback === "" && isZeroAmount(props.value ?? "") ? (props.value ?? "") : fallback, false);
+          if (write) writeText(displayShown(kept));
+          const hint = held.includes(",") ? " Use a point for centavos, and commas only between thousands." : "";
+          if (props.field.onLeftUnreadable) props.field.onLeftUnreadable(held, kept);
+          else leftUnreadable.set(`${held} is not an amount. ${kept === "" ? "The box was left blank." : `The box kept ${kept}.`}${hint}`);
+          invalidActive = false;
+          rollbackReported = false;
+        } else {
+          const refillWins = outsideAfterEmpty && reading.trim() === "";
+          const filerEdited = edited && !refillWins;
+          if (write && !filerEdited && outsideValue !== undefined) writeText(shownUnfocused(outsideValue));
+          const heldZero = reading.trim() === "" && isZeroAmount(props.value ?? "") ? (props.value ?? "") : commaValueOf(reading, true);
+          const laidOut = filerEdited ? props.shown(heldZero, false) : props.shown(outsideValue ?? props.value ?? "", false);
+          const semanticShown = filerEdited && props.settle ? props.settle(laidOut) : laidOut;
+          // Blank is what nullable amounts hold; a zero amount is its placeholder outside focus.
+          const shownText = displayShown(semanticShown);
+          if (write && shownText !== text()) writeText(shownText);
+          const value = commaValueOf(semanticShown, true);
+          if (!sameReported(value, last)) {
+            report(value);
+          }
+          // A lone comma of the filer's read as the decimal point only now (strictly it is no amount), and the box shows that
+          // reading (no outside value won): the caller may say so under the box.
+          const commaRead = props.commaStates && commaState === "filer" && reading.includes(",") && readAmountWithCommas(reading, commaState, props.commaNegative, false) === null;
+          if (commaRead && (filerEdited || outsideValue === undefined)) props.field.onCommaRead?.(held, semanticShown);
+          // B3: the filer typed during this focus but came to the amount the box showed (a key and its Backspace, the same amount
+          // typed again), so a value set from outside meanwhile wins: the number changes under the filer's keys, and the caller may
+          // say what the return holds now.
+          if (!filerEdited && !refillWins && outsideValue !== undefined && typedThisFocus && !sameReported(commaValueOf(reading, true), outsideValue)) {
+            props.field.onOutsideKept?.(held, semanticShown);
+          }
+        }
+        outsideValue = undefined;
+        focused.set(false);
+        editFrom = undefined;
+        editTyped = false;
+        edited = false;
+        typedThisFocus = false;
+        lastReportEmpty = false;
+        outsideAfterEmpty = false;
+        programmaticFocus = false;
+        programmaticFocusToken++;
+        props.field.onBlur?.();
+  };
+
+  cleanup(() => {
+    if (untracked(focused)) finishLeave(false);
+  });
+  // The same leave, asked for by the page (its flush before quit or navigation, its going) while the box has the keys.
+  props.field.leaveRef?.(() => {
+    if (untracked(focused)) finishLeave(false);
+  });
+
   return (
     <TextField
       value={text()}
@@ -306,14 +476,32 @@ function MaskedField(props: MaskedProps) {
       keyboardType={props.keyboardType}
       inputRef={(r) => {
         input = r;
-        props.field.inputRef?.(handle(r));
+        props.field.inputRef?.({
+          focus: () => {
+            programmaticFocus = !untracked(focused);
+            r.focus();
+            if (programmaticFocus) {
+              // Native focus gives no "did not land" answer; this bounded request token is the only deterministic age-out.
+              const token = ++programmaticFocusToken;
+              setTimeout(() => {
+                if (token === programmaticFocusToken) programmaticFocus = false;
+              }, 250);
+            }
+          },
+          blur: () => r.blur(),
+          measure: () => r.measure(),
+          reveal: (options?: Parameters<typeof r.reveal>[0]) => r.reveal(options),
+          animateLayout: (transition?: Parameters<typeof r.animateLayout>[0]) => r.animateLayout(transition),
+          setSelection: (start: number, end?: number) => r.setSelection(start, end),
+          insertText: (value: string) => r.insertText(value),
+        });
       }}
       tabular
       label={props.field.label}
       accessibilityLabel={props.field.accessibilityLabel}
       hint={props.field.hint}
-      error={props.field.error}
-      placeholder={props.field.placeholder ?? props.placeholder}
+      error={leftUnreadable() ?? props.field.error}
+      placeholder={zeroAmount(props.value ?? "") ? props.zeroPlaceholder : (props.field.placeholder ?? props.placeholder)}
       disabled={props.field.disabled}
       locked={props.field.locked}
       width={props.field.width}
@@ -328,43 +516,63 @@ function MaskedField(props: MaskedProps) {
       onSubmit={props.field.onSubmit}
       testID={props.field.testID}
       onSelectionChange={(e) => {
-        selected = { start: e.start, end: e.end };
-        if (e.start === e.end && clickUntil > 0 && Date.now() <= clickUntil && props.numeric) {
-          const now = untracked(text);
-          if (isZeroAmount(now)) input?.setSelection(0, now.length);
+        if (RECOMPUTE_RESELECT && armWindowsReselect && !windowsReselectDone) {
+          const len = untracked(text).length;
+          const now = Date.now();
+          if (isRecomputeCollapse(e, len, now - windowsFocusAt, keySeen)) {
+            // The second and only other deliberate selection write: the measured recompute collapse repair (Windows, Linux).
+            windowsReselectDone = true;
+            armWindowsReselect = false;
+            writeCaret(0, len);
+          } else if (keySeen || now - windowsFocusAt > RESELECT_COLLAPSE_MS) {
+            armWindowsReselect = false;
+          }
         }
+        selected = { start: e.start, end: e.end };
         props.field.onSelectionChange?.(e);
       }}
       onKeyPress={(e) => {
-        clickUntil = 0;
+        keySeen = true;
         editFrom = selected;
         editTyped = [...e.key].length === 1;
         props.field.onKeyPress?.(e);
       }}
       onFocus={() => {
+        // A duplicate focus without a blur is not a new edit session: no reset, rewrite, reselect or renotify.
+        if (untracked(focused)) {
+          programmaticFocus = false;
+          programmaticFocusToken++;
+          return;
+        }
         focused.set(true);
+        keySeen = false;
         boxText = undefined;
         edited = false;
+        typedThisFocus = false;
+        focusValue = props.value ?? "";
+        rollbackReported = false;
+        invalidActive = false;
+        leftUnreadable.set(null);
+        lastReportEmpty = false;
+        outsideAfterEmpty = false;
+        if (RECOMPUTE_RESELECT && outsideWriteAt > 0 && Date.now() - outsideWriteAt <= RESELECT_WRITE_MS && !windowsReselectDone) {
+          armWindowsReselect = true;
+          windowsFocusAt = Date.now();
+        }
+        outsideWriteAt = 0;
+        const before = untracked(text);
+        commaState = initialCommaState(before);
+        // One of exactly two deliberate selection writes in typed boxes: the page's own focus(), never platform focus.
+        if (programmaticFocus) {
+          const length = untracked(text).length;
+          if (length > 0) writeCaret(0, length);
+        }
+        programmaticFocus = false;
+        programmaticFocusToken++;
         props.field.onFocus?.();
-        clickUntil = byFocus ? 0 : Date.now() + CLICK_MS;
-        byFocus = false;
       }}
       onBlur={() => {
-        focused.set(false);
-        clickUntil = 0;
-        byFocus = false;
-        editFrom = undefined;
-        editTyped = false;
-        const laidOut = props.shown(props.valueOf(text()), false);
-        const shown = edited && props.settle ? props.settle(laidOut) : laidOut;
-        edited = false;
-        if (shown !== text()) text.set(shown);
-        const value = props.valueOf(shown);
-        if (!same(value, last)) {
-          last = value;
-          props.onChange(value);
-        }
-        props.field.onBlur?.();
+        if (untracked(focused)) finishLeave(true);
       }}
     />
   );
@@ -413,7 +621,7 @@ export interface MoneyInputProps extends MaskedFieldProps {
 }
 
 /**
- * An amount: digits and one decimal point, thousands separators while typing, right-aligned in tabular figures, a ₱
+ * An amount: digits and one decimal point, plain digits while it has the keys, thousands separators when left, right-aligned in tabular figures, a ₱
  * before it; leaving the box writes two decimals (formatMoney, on the digits: decimal rounding half up, any length). The
  * value out is the plain numeric string, and the box never shows a number other than the one reported.
  */
@@ -425,13 +633,17 @@ export function MoneyInput(props: MoneyInputProps) {
       onChange={props.onChange}
       prefix={props.prefix ?? "₱"}
       align="right"
-      mask={moneyMask({ negative: props.negative })}
-      shown={(v, focused) => shownMoney(v, focused, props.whole)}
+      mask={moneyEntryMask({ negative: props.negative })}
+      shown={(v) => shownMoney(v, props.whole)}
+      zeroPlaceholder={props.whole ? "0" : "0.00"}
       settle={(t) => formatMoney(t, props.whole)}
-      valueOf={(t) => moneyPlain(t)}
+      valueOf={(t) => readAmount(t, props.negative) ?? ""}
+      valid={(t) => validAmountText(t, props.negative)}
       same={sameAmount}
       keyboardType="decimal-pad"
-      numeric
+      noLiveFormat
+      commaStates
+      commaNegative={props.negative}
     />
   );
 }
@@ -453,15 +665,15 @@ export function PercentInput(props: NumberTextProps) {
       align="right"
       mask={PERCENT_MASK}
       shown={(v) => v}
+      zeroPlaceholder="0"
       valueOf={(t) => t}
       keyboardType="decimal-pad"
-      numeric
     />
   );
 }
 
 /** A whole number or a code: digits only (leading zeros kept), at most `maxDigits`, tabular figures. Reports the digits ("0123"). */
-export function IntInput(props: NumberTextProps & { maxDigits?: number }) {
+export function IntInput(props: NumberTextProps & { maxDigits?: number; zeroEmpty?: boolean }) {
   return (
     <MaskedField
       field={props}
@@ -469,9 +681,9 @@ export function IntInput(props: NumberTextProps & { maxDigits?: number }) {
       onChange={props.onChange}
       mask={intMask(props.maxDigits)}
       shown={(v) => v}
+      zeroPlaceholder={props.zeroEmpty !== false ? "0" : undefined}
       valueOf={(t) => t}
       keyboardType="number-pad"
-      numeric
     />
   );
 }
@@ -636,6 +848,7 @@ export function DateField(props: DateFieldProps) {
   const edited = signal(false);
   const open = signal(false);
   let box: InputRef | undefined;
+  let programmaticFocus = false;
   const long = (v: string) => {
     const d = parseTypedDate(v);
     return d ? props.numericDisplay ? formatMDY(d) : formatLongDate(d) : v;
@@ -669,7 +882,18 @@ export function DateField(props: DateFieldProps) {
       onSubmit={props.onSubmit}
       inputRef={(r) => {
         box = r;
-        props.inputRef?.(r);
+        props.inputRef?.({
+          focus: () => {
+            programmaticFocus = true;
+            r.focus();
+          },
+          blur: () => r.blur(),
+          measure: () => r.measure(),
+          reveal: (options?: Parameters<typeof r.reveal>[0]) => r.reveal(options),
+          animateLayout: (transition?: Parameters<typeof r.animateLayout>[0]) => r.animateLayout(transition),
+          setSelection: (start: number, end?: number) => r.setSelection(start, end),
+          insertText: (value: string) => r.insertText(value),
+        });
       }}
       tabular
       value={text()}
@@ -693,9 +917,15 @@ export function DateField(props: DateFieldProps) {
         // The long form becomes the numeric date while the box has the keys.
         const d = parseTypedDate(text());
         if (d) text.set(formatMDY(d));
+        if (programmaticFocus) {
+          const length = text().length;
+          if (length > 0) box?.setSelection(0, length);
+        }
+        programmaticFocus = false;
         props.onFocus?.();
       }}
       onBlur={() => {
+        programmaticFocus = false;
         focused.set(false);
         text.set(long(text()));
         props.onBlur?.();
@@ -747,6 +977,11 @@ export interface PinCellsProps {
   focusRef?: (focus: () => void) => void;
   onFocus?: () => void;
   onBlur?: () => void;
+  /**
+   * The sign-in code page's large boxes: this many points wide, 56 tall, 23-point digits, 6 apart and 14 between the two
+   * groups. Unset: the kit's boxes.
+   */
+  large?: { width: number };
 }
 
 /** PIN and one-time-code cells: 32-point boxes (44 on touch), radius 8, the accent on the cell that takes the next digit. */
@@ -765,14 +1000,15 @@ export function PinCells(props: PinCellsProps) {
       disabled={props.disabled}
       groups={props.length === 6 ? 2 : 1}
       accessibilityLabel={`${props.label}, ${props.length} digits`}
-      class="flex-row gap-3 disabled:opacity-50"
+      class={cx("flex-row disabled:opacity-50", props.large ? "gap-3.5" : "gap-3")}
       groupClass="flex-row gap-1.5"
       cellClass={cx(
-        "items-center justify-center rounded-(--radius-row) border bg-card text-emph font-semibold tabular-nums text-foreground focus:border-accent-blue",
+        "items-center justify-center rounded-(--radius-row) border bg-card font-semibold tabular-nums text-foreground focus:border-accent-blue",
         props.error ? "border-danger" : "border-border-strong",
-        TOUCH ? "h-12 w-11" : "size-8",
+        props.large ? undefined : cx("text-emph", TOUCH ? "h-12 w-11" : "size-8"),
       )}
-      caretClass="h-4 w-0.5 rounded-full bg-foreground"
+      cellStyle={props.large ? { width: props.large.width, height: 56, fontSize: 23 } : undefined}
+      caretClass={props.large ? "h-6 w-0.5 rounded-full bg-foreground" : "h-4 w-0.5 rounded-full bg-foreground"}
     />
   );
 }

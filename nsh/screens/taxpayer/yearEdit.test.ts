@@ -82,3 +82,18 @@ test("a form's business-start-date link focuses the year's activity editor and r
   expect(s.edit()).toBeNull();
   expect(bir.year_facts(DEMO.tin, YEAR).facts.business_start_date).toBe("2020-01-01");
 });
+
+test("once the link's field got there (the phone date sheet opened), the edit stops naming it and keeps the rest", () => {
+  seed();
+  const s = createPageState();
+  s.startEdit("branch", { focusField: "business_start_date", fromForm: true });
+  s.setValue("business_start_date", "2020-01-01");
+  // Another field's report changes nothing.
+  s.focusTaken("line_of_business");
+  expect(s.edit()?.focusField).toBe("business_start_date");
+  s.focusTaken("business_start_date");
+  expect(s.edit()?.focusField).toBeUndefined();
+  expect(s.edit()?.fromForm).toBe(true);
+  expect(s.edit()?.values.business_start_date).toBe("2020-01-01");
+  s.cancelEdit();
+});

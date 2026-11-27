@@ -18,6 +18,7 @@
 pub mod account_session;
 pub mod background_cron;
 pub mod bir_xml;
+pub mod boot_clock;
 pub mod calendar_ics;
 pub mod calendar_rules;
 pub mod cloud_account;
@@ -55,16 +56,21 @@ pub mod notification;
 pub mod official_holidays;
 pub mod official_import;
 pub mod official_xml;
+pub mod owner_lock;
 pub mod penalties;
+pub mod pin;
 pub mod platform;
 mod private_temp;
 pub mod profile;
 pub mod receipt;
 pub mod reference;
 pub mod relay;
+pub mod rooms;
 pub mod schema;
 pub mod send_in_flight;
 pub mod tax_profile;
+#[cfg(test)]
+pub(crate) mod test_logs;
 pub mod time_utils;
 pub mod transport;
 pub mod validation;
@@ -85,6 +91,10 @@ pub mod mock_relay;
 /// In-memory development account server. Never enabled in shipping apps.
 #[cfg(any(test, feature = "mock-account"))]
 pub mod mock_account;
+
+/// The Buwiz relay client, for hosts that read the account's TINs through [`relay::submitter`] without a
+/// dependency of their own on it.
+pub use bir_submit;
 
 // Re-export core types
 pub use bir_rules::{

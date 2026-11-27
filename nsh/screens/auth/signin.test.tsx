@@ -160,3 +160,28 @@ test("phone: with no admin code the sign-in offers Open without signing in, and 
   await app.waitFor("text:Set your PIN in Settings first. With no PIN there is nothing to sign back in with.");
   expect(app.shows("id:auth-card")).toBe(false);
 });
+
+test("phone: the badge's menu locks the app and logs out, each back at the sign-in", async () => {
+  const app = await open(ENTRY, { host: { params: SOLO } });
+  await app.waitFor("id:auth-card");
+  await app.type("id:auth-tin", "000123453");
+  await app.type("id:auth-tp-pin", "1234");
+  await app.waitFor("id:frame");
+  await app.waitFor("text:session: admin");
+  // Lock app from the badge's menu: the sign-in again, nothing of the frame left.
+  await app.press("id:nb-avatar");
+  await app.waitFor("id:nb-menu-lock");
+  await app.press("id:nb-menu-lock");
+  await app.waitFor("id:auth-card");
+  expect(app.shows("id:frame")).toBe(false);
+  expect(app.texts()).toContain("session: open");
+  // Back in, then Log out: the sign-in, with "Signed out.".
+  await app.type("id:auth-tin", "000123453");
+  await app.type("id:auth-tp-pin", "1234");
+  await app.waitFor("id:frame");
+  await app.press("id:nb-avatar");
+  await app.waitFor("id:nb-menu-logout");
+  await app.press("id:nb-menu-logout");
+  await app.waitFor("id:auth-card");
+  await app.waitFor("text:Signed out.");
+});

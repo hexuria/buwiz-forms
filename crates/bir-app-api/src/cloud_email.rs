@@ -497,7 +497,7 @@ mod tests {
                 (
                     r#"{"error":"code_expired"}"#,
                     "expired",
-                    "This code has expired. Press Resend for a new one.",
+                    "This code has expired. Send a new code to try again.",
                     true,
                 ),
                 (

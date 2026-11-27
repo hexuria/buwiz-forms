@@ -29,4 +29,6 @@ tiny_http = { version = "0.12", default-features = false }
 bir-core = { path = "../bir-core", default-features = false }
 
 [dev-dependencies]
+# Tests keep out of the real data folder and keychain (bir-core's test-build rule).
+bir-core = { path = "../bir-core", default-features = false, features = ["test-support"] }
 tempfile = "3"

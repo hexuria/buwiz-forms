@@ -1,0 +1,118 @@
+{
+ "suite": "smoke",
+ "target": "macos",
+ "started": "20261126-234011",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-234011",
+ "cli_version": "0.4.1",
+ "app_commit": "33d82b40",
+ "platform": "desktop",
+ "os": "macos",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 737,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 7440,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 6265,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 8983,
+   "note": null,
+   "file": "agent-recipes/ui/ui-navigate-app.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 1977,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q.wants"
+  },
+  {
+   "name": "money-boxes",
+   "status": "known gap",
+   "ms": 8014,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-paced.json",
+   "step": "s6",
+   "error": "node `fp-frm2551Qv2018:txt16` value: expected \"500.25\", got Some(\"0.25\")",
+   "error_code": "assert_failed",
+   "line": null,
+   "known_gap": "gap 2: under the old in-process macOS listener the money box refused agent text; this branch moves macOS to the strict adapter, not yet proven on a Mac",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-234011/06-money-boxes/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-234011/06-money-boxes/failure-tree.json"
+  },
+  {
+   "name": "queue",
+   "status": "fail",
+   "ms": 14176,
+   "note": "precondition: Queue validates first: a 2551Q holding only Items 15 and 16 may stop at its to-do list instead of the confirm dialog",
+   "file": "agent-recipes/e2e/queue.wants",
+   "step": "s2",
+   "error": "wait_until timed out: node `queue-continue` not found",
+   "error_code": "timeout",
+   "line": "wait_until queue-continue --timeout-ms 10000 --screenshot",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-234011/07-queue/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-234011/07-queue/failure-tree.json"
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 194,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 4353,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date.wants"
+  },
+  {
+   "name": "sign-out",
+   "status": "fail",
+   "ms": 12165,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out.wants",
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-234011/10-sign-out/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-234011/10-sign-out/failure-tree.json"
+  }
+ ]
+}

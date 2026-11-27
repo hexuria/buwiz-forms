@@ -117,7 +117,15 @@ pub fn install(options: InstallOptions) -> bool {
 ///
 /// Tests use this so one case does not capture every later test in the process.
 pub fn with_thread_subscriber<T>(options: InstallOptions, body: impl FnOnce() -> T) -> T {
-    tracing::subscriber::with_default(subscriber(options), body)
+    tracing::subscriber::with_default(subscriber(options), || {
+        // Callsite interest and the max level are cached process-wide over the
+        // dispatchers alive when they were computed. Other tests creating and
+        // dropping their own thread-local dispatchers in parallel (or running
+        // under a global one) can leave a callsite cached as disabled for this
+        // thread; recompute now that this thread's default is in place.
+        tracing::callsite::rebuild_interest_cache();
+        body()
+    })
 }
 
 fn subscriber(options: InstallOptions) -> impl tracing::Subscriber + Send + Sync {

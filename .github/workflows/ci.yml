@@ -92,9 +92,6 @@ jobs:
       with:
         python-version: '3.13'
 
-    - name: Test Python scripts
-      run: python -m unittest discover -s scripts/tests -v
-
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@master
       with:
@@ -133,6 +130,12 @@ jobs:
 
     - name: Install just
       run: cargo install just --version 1.45.0 --locked
+
+    # After rustc and just are installed, never before: the Windows launcher tests (test_nsh_run_agent_windows) run
+    # the justfile's recipes for real and are skipped unless pwsh, just and rustc are on the path. While this step
+    # ran first, GitHub's Windows runner skipped all ten of them on every run.
+    - name: Test Python scripts
+      run: python -m unittest discover -s scripts/tests -v
 
     - name: Validate justfile
       run: just --summary

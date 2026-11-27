@@ -2,7 +2,7 @@
 // message line, fact cards, Item 13's card), and a part's "From tax profile" fold. Each row reads its own RowInfo
 // signal and its boxes' signals only, so an edit re-runs the rows it changed and nothing else.
 import type { Accessor, JSX, Signal, ViewRef } from "nsh";
-import { signal, untracked, View } from "nsh";
+import { effect, signal, untracked, View } from "nsh";
 import { AppButton, CalendarButton, Chip, Code, DateField, DateTouchField, Dropdown, Icon, type IconName, ListRow, Segmented, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
@@ -38,6 +38,11 @@ export function fieldProps(s: FormSession, f: SchemaField, narrow: Accessor<bool
     onFocus: () => s.focus(f.k),
     onBlur: () => s.blur(f.k),
     focusRef: (focus) => s.registerFocus(f.k, focus),
+    blurRef: (blur) => s.registerBlur(f.k, blur),
+    leaveRef: (leave) => s.registerLeave(f.k, leave),
+    onLeftUnreadable: (typed, kept) => s.leftUnreadable(f.k, typed, kept),
+    onCommaRead: (typed, shown) => s.commaRead(f.k, typed, shown),
+    onOutsideKept: (typed, shown) => s.outsideKept(f.k, typed, shown),
   };
 }
 
@@ -59,7 +64,7 @@ export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: S
     checked: (k) => s.box(k).value() === "true",
     locked: () => boxes.every((b) => b.locked()),
     choiceLocked: (k) => s.box(k).locked(),
-    hint: () => (boxes.every((b) => b.locked()) && !boxes.some((b) => b.value() === "true") ? boxes.map((b) => b.hint()).find(Boolean) || "" : ""),
+    hint: () => s.periodLockReason(keys) || (boxes.every((b) => b.locked()) && !boxes.some((b) => b.value() === "true") ? boxes.map((b) => b.hint()).find(Boolean) || "" : ""),
     // A shut choice draws nothing, so its reason must not fade the choices that do draw.
     off: () => boxes.filter((_, i) => !(hidden?.() ?? []).includes(keys[i])).map((b) => b.off()).find(Boolean) || "",
     narrow,
@@ -88,6 +93,20 @@ export function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow
   const numbered = !it.row_labels || it.numbered !== false;
   const rowName = (r: number) => (numbered ? String((it.start ?? 1) + r) : it.row_labels?.rows[r] || String((it.start ?? 1) + r));
   const openRow = signal<number | null>(null);
+  // Queue brings a note in a closed row drawer into view: the row holding the cell the session names opens, here or once this
+  // schedule is drawn, and only then is the note marked shown. An open drawer that holds a refused box stays (it must not close
+  // over it); the note then stops the next Queue again.
+  effect(() => {
+    const k = s.drawerAsk();
+    const r = k ? keys.findIndex((row) => row.includes(k)) : -1;
+    if (r < 0) return;
+    untracked(() => {
+      const cur = openRow();
+      if (cur !== null && cur !== r && columns.some((c) => Boolean(s.box(keys[cur][c.index]).refusal?.()))) return;
+      openRow.set(r);
+      s.drawerOpened(k!);
+    });
+  });
   const filled = (r: number) =>
     columns.some((c) => !s.box(keys[r][c.index]).refusal?.() && !emptyCell(s.box(keys[r][c.index]).value(), c.col.t));
   return {
@@ -697,6 +716,9 @@ export function ItemRow(props: RowProps) {
           </View>
         </If>
         <Each of={info().notes}>{(note) => <Text variant="meta" tone="fg3" class="mt-1">{note()}</Text>}</Each>
+        <Each of={info().boxNotes ?? []} key={(b: { key: string; sentence: string }) => b.key}>
+          {(b) => <Text variant="meta" tone="fg3" class="mt-1" testID={`fp-boxnote-${b().key}`}>{b().sentence}</Text>}
+        </Each>
         <Each of={info().boxMessages} key={(b: { key: string; sentence: string }) => b.key}>
           {(b) => (
             <View ref={(ref: ViewRef) => messageRefs.get(b().key)?.set(ref)}>

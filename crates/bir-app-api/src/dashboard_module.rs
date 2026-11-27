@@ -1467,8 +1467,9 @@ mod tests {
 
     /// Each row says what the screens say about its send (send_state.rs):
     /// a Queued return the worker holds, one that waits for its next try, a
-    /// Draft the server refused; a plain Draft and a Confirmed return say
-    /// nothing; stored JSON its shape cannot read says nothing too.
+    /// Draft the server refused, a Submitted test send; a plain Draft and a
+    /// Confirmed return say nothing; stored JSON its shape cannot read says
+    /// nothing too.
     #[test]
     fn list_returns_says_what_each_send_is() {
         setup();
@@ -1480,6 +1481,7 @@ mod tests {
                 (4, "Draft", r#"json_set(data_json, '$.submission_error', 'Not on your account. (tin_not_active)')"#),
                 (5, "Confirmed", r#"json_set(data_json, '$.relay_receipt', 'a.b.c')"#),
                 (6, "Queued", r#"'{broken'"#),
+                (7, "Submitted", r#"json_set(data_json, '$.submitted_dry_run', json('true'), '$.relay_receipt', 'a.b.c')"#),
             ] {
                 let draft = bir_core::forms::Form1601CDraft::new_from_profile(&profile, 2026, month);
                 let id = db.save_1601c_draft(&draft).unwrap();
@@ -1527,6 +1529,12 @@ mod tests {
         assert_eq!(send(4)["code"], "tin_not_active");
         assert!(send(5).is_null(), "confirmed");
         assert!(send(6).is_null(), "unreadable stored JSON");
+        assert_eq!(
+            send(7)["stage"],
+            "test_sent",
+            "a test send, receipt and all"
+        );
+        assert_eq!(send(7)["line"], "Test send. Nothing reached the BIR.");
     }
 
     /// A deadline row says whether its Submitted send was only simulated

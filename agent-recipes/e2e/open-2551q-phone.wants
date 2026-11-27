@@ -1,0 +1,7 @@
+# Smoke 5, phone: New return > 2551Q, the default period, opened. The narrow bar has New return directly
+# (nb-new), so the flow is the desktop one; the Search palette detour was wrong (Enter there only closed it).
+click nb-new
+wait_until new-return-2551Q --timeout-ms 5000
+click new-return-2551Q
+click new-return-open
+wait_until form-page --timeout-ms 20000 --screenshot

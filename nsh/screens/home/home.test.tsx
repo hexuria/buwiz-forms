@@ -1,4 +1,4 @@
-// Home at phone size (390 x 844) and at desktop size (1440 x 900, macOS): the dashboard, the five tiles and what each does, the
+// Home at phone size (390 x 844) and at desktop size (1440 x 900, macOS): the dashboard, the four tiles and what each does, the
 // strip, the picked list, every row's action, the as-needed list, the empty states and the welcome. Against a scratch database
 // with the demo taxpayer (HomeDemo.tsx; a test asks for variations with open's host params).
 import { type App, expect, open, test } from "nsh/test";
@@ -32,7 +32,7 @@ async function backHome(app: App, size: string): Promise<void> {
 const dueRows = (app: App) => app.count("id:home-due >> role:button");
 
 for (const { name, size } of SIZES) {
-  test(`${name}: the dashboard greets, shows the five tiles, the strip, the open deadlines and each taxpayer`, async () => {
+  test(`${name}: the dashboard greets, shows the four tiles, the strip, the open deadlines and each taxpayer`, async () => {
     const app = await open(ENTRY, { ...size, ...asking() });
     await app.waitFor("id:home-dashboard", { timeout: 30000 });
     const now = new Date();
@@ -40,9 +40,9 @@ for (const { name, size } of SIZES) {
     const texts = app.texts();
     expect(texts).toContain(h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening");
     expect(texts).toContain(`${WEEKDAYS[now.getDay()]}, ${MONTHS_LONG[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}.`);
-    for (const label of ["Overdue", "Due in 7 days", "Drafts", "Waiting to send", "Filed this month"]) expect(texts).toContain(label);
+    for (const label of ["Overdue", "Due in 7 days", "Drafts", "Waiting to send"]) expect(texts).toContain(label);
     for (const caption of ["past the due date", "started, not queued", "queued to send"]) expect(texts).toContain(caption);
-    expect(app.count("id:home-tiles >> role:button")).toBe(5);
+    expect(app.count("id:home-tiles >> role:button")).toBe(4);
     for (const heading of ["Next 30 days", "Open deadlines", "Each taxpayer at a glance", "As needed", "Recently filed"]) expect(texts).toContain(heading);
     expect(texts).toContain("Today, " + texts.find((t) => /^Today, [A-Z][a-z]{2} \d+$/.test(t))!.slice(7));
     expect(texts).toContain("Open Calendar");
@@ -155,12 +155,11 @@ for (const { name, size } of SIZES) {
     expect(app.texts().filter((t) => t === "Overdue").length).toBe(2);
   }, 90_000);
 
-  test(`${name}: Drafts, Waiting to send and Filed this month open Filings with their preset`, async () => {
+  test(`${name}: Drafts and Waiting to send open Filings with their preset`, async () => {
     const app = await open(ENTRY, { ...size, ...asking({ drafts: 2, queued: true, filed: 1, readout: true }) });
     await app.waitFor("id:home-dashboard", { timeout: 60000 });
     expect(tileCount(app, "Drafts")).toBe(2);
     expect(tileCount(app, "Waiting to send")).toBe(1);
-    expect(tileCount(app, "Filed this month")).toBe(1);
 
     await app.press("id:home-tile-drafts");
     await app.waitFor("id:filings");
@@ -171,14 +170,6 @@ for (const { name, size } of SIZES) {
     await app.waitFor("id:filings");
     expect(app.texts()).toContain('filings {"statuses":["Queued"]}');
     await backHome(app, name);
-
-    const now = new Date();
-    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    await app.press("id:home-tile-filed");
-    await app.waitFor("id:filings");
-    expect(app.texts()).toContain(`filings {"statuses":["Submitted","Confirmed","Paid"],"updatedMonth":"${month}","filedOnly":true}`);
-    expect(app.shows("id:filings-month-chip")).toBe(true);
-    expect(app.shows("id:filings-filed-only-chip")).toBe(true);
   }, 120_000);
 
   test(`${name}: a dry run leaves its deadline open with a Dry run chip and is not filed; a real send closes it and is filed`, async () => {
@@ -188,7 +179,6 @@ for (const { name, size } of SIZES) {
     const dry = await open(ENTRY, { ...size, ...asking({ drafts: 2, dueSent: "dry", filed: 1, sent: "dry" }) });
     await dry.waitFor("id:home-dashboard", { timeout: 60000 });
     await dry.waitUntil(() => dry.texts().includes("Recently filed"), { timeout: 20000 });
-    expect(tileCount(dry, "Filed this month")).toBe(0);
     const dryOverdue = tileCount(dry, "Overdue");
     const dryProgress = dry.texts().find((t) => /^\d+ of \d+ filed this year$/.test(t));
     // The Overdue tile's list holds the dry runs: still due, each with its "Dry run" chip.
@@ -197,23 +187,17 @@ for (const { name, size } of SIZES) {
     expect(dry.shows(`${january} >> text:Dry run`)).toBe(true);
     const real = await open(ENTRY, { ...size, ...asking({ drafts: 2, dueSent: "real", filed: 1, sent: "real" }) });
     await real.waitFor("id:home-dashboard", { timeout: 60000 });
-    await real.waitUntil(() => tileCount(real, "Filed this month") === 1, { timeout: 20000 });
     // Three saved returns' deadlines read as sent: January and February, and the filed December of last year (due in January).
     // As dry runs they are still overdue and not filed; sent for real, they are filed and no longer overdue.
-    expect(dryOverdue).toBe(tileCount(real, "Overdue") + 3);
+    await real.waitUntil(() => tileCount(real, "Overdue") === dryOverdue - 3, { timeout: 20000 });
+    const done = Number(dryProgress?.split(" ")[0]) + 3;
+    await real.waitUntil(() => real.texts().some((t) => new RegExp(`^${done} of \\d+ filed this year$`).test(t)), { timeout: 20000 });
     const realProgress = real.texts().find((t) => /^\d+ of \d+ filed this year$/.test(t));
-    expect(Number(realProgress?.split(" ")[0])).toBe(Number(dryProgress?.split(" ")[0]) + 3);
+    expect(Number(realProgress?.split(" ")[0])).toBe(done);
     await real.press("id:home-tile-overdue");
     await real.waitFor("text:Overdue");
     await real.waitUntil(() => real.count("text:Overdue") === 2);
     expect(real.shows(january)).toBe(false);
-    // The tile's number and the list it opens agree: the dry run is in neither.
-    await dry.press("id:home-tile-filed");
-    await dry.waitFor("id:filings-filed-only-chip");
-    await dry.waitFor("text:No returns match these filters.");
-    await real.press("id:home-tile-filed");
-    await real.waitFor("id:filings-filed-only-chip");
-    await real.waitFor("id:filings-count >> text:1 return");
   }, 120_000);
 }
 

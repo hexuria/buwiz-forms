@@ -312,6 +312,18 @@ pub(crate) fn receipt_signed_by(
     jti: &str,
     mode: &str,
 ) -> String {
+    let status = if mode == "dry_run" { "dry_run" } else { "sent" };
+    let claims = json!({
+        "sub": "u1", "tin": "000000000000", "form_type": "1601Cv2018", "period": "102026",
+        "filename": "f.xml", "xml_sha256": xml_sha256, "payload_sha256": "00",
+        "remote_path": "/1601Cv2018/f.xml", "mode": mode, "status": status, "iat": 1, "jti": jti,
+    });
+    sign_receipt_claims(seed, &claims)
+}
+
+/// A receipt of `claims`, signed by the key with `seed` (`[7; 32]` is the
+/// key the trust list of [`trust_documents`] carries).
+pub(crate) fn sign_receipt_claims(seed: &[u8; 32], claims: &Value) -> String {
     use base64::Engine;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use ed25519_dalek::{Signer, SigningKey};
@@ -320,17 +332,11 @@ pub(crate) fn receipt_signed_by(
     let listed = SigningKey::from_bytes(&[7; 32]);
     let kid = crate::device::hex(&Sha256::digest(listed.verifying_key().as_bytes())[..8]);
     let key = SigningKey::from_bytes(seed);
-    let status = if mode == "dry_run" { "dry_run" } else { "sent" };
-    let claims = json!({
-        "sub": "u1", "tin": "000000000000", "form_type": "1601Cv2018", "period": "102026",
-        "filename": "f.xml", "xml_sha256": xml_sha256, "payload_sha256": "00",
-        "remote_path": "/1601Cv2018/f.xml", "mode": mode, "status": status, "iat": 1, "jti": jti,
-    });
     let header = json!({ "alg": "EdDSA", "kid": kid, "typ": crate::receipt::TYP });
     let input = format!(
         "{}.{}",
         URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap()),
-        URL_SAFE_NO_PAD.encode(serde_json::to_vec(&claims).unwrap())
+        URL_SAFE_NO_PAD.encode(serde_json::to_vec(claims).unwrap())
     );
     format!(
         "{input}.{}",

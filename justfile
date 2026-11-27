@@ -96,39 +96,13 @@ mock-account *args="":
 mock-bir *args="":
     cargo run --locked -p bir-core --features mock-bir --bin mock_bir -- {{args}}
 
-# Refuses the live data folder and a mock that is not listening, so the
-# queue can never fall through to the BIR (docs/mock-bir.md).
-# Run an installed app on a database COPY against a running `just mock-bir`.
+# Refused since accounts-and-lock A1 (I3): a release app ignores BIR_DATABASE_PATH, so it would open the owner's live
+# data folder, not the copy, against the mock. Needs rework before it runs again (docs/mock-bir.md).
 [macos]
 mock-bir-app db app="/Applications/eBIRForms.app":
     #!/usr/bin/env bash
-    set -euo pipefail
-    live_dirs=(
-        "$HOME/Library/Group Containers/group.dev.goldcoders.bir"
-        "$HOME/Library/Application Support/dev.goldcoders.bir"
-    )
-    [ -f "{{db}}" ] || { echo "no database copy at {{db}}"; exit 1; }
-    db="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "{{db}}")"
-    for live_dir in "${live_dirs[@]}"; do
-        case "$db" in
-            "$live_dir"/*) echo "refusing $db: that is the app's live data folder; use a copy elsewhere"; exit 1 ;;
-        esac
-    done
-    env_file=target/mock-bir/app.env
-    [ -f "$env_file" ] || { echo "start the mock first: just mock-bir"; exit 1; }
-    unset EBIR_TEST_ENV BIR_SFTP_DRY_RUN BIR_SFTP_LIVE BIR_SFTP_HOST BIR_SFTP_PORT \
-        BIR_SFTP_USERNAME BIR_SFTP_USER BIR_SFTP_PASSWORD BIR_SFTP_FOLDER \
-        BIR_SFTP_HOST_KEY_SHA256 BIR_SFTP_ACCEPT_ANY_HOST_KEY
-    set -a; . "$env_file"; set +a
-    case "$BIR_SFTP_HOST" in
-        127.0.0.1|::1) ;;
-        *) echo "refusing BIR_SFTP_HOST=$BIR_SFTP_HOST: the mock is loopback only"; exit 1 ;;
-    esac
-    nc -z "$BIR_SFTP_HOST" "$BIR_SFTP_PORT" || { echo "nothing listening on $BIR_SFTP_HOST:$BIR_SFTP_PORT: start just mock-bir"; exit 1; }
-    export BIR_DATABASE_PATH="$db"
-    executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "{{app}}/Contents/Info.plist")"
-    echo "Running {{app}} on $db against the mock at $BIR_SFTP_HOST:$BIR_SFTP_PORT"
-    exec "{{app}}/Contents/MacOS/$executable"
+    echo "mock-bir-app refused: since accounts-and-lock A1 a release app ignores BIR_DATABASE_PATH, so {{app}} would open the live data folder instead of {{db}}; the recipe needs rework (docs/mock-bir.md)." >&2
+    exit 1
 
 # bir-app-api's agent tests need the `headless` feature (was the shell-check
 # recipe's last line); the four safety variables keep it off keychain, a real
@@ -263,6 +237,24 @@ ci-test-clean:
             echo "keeping $branch: $busy run(s) not finished"
         fi
     done
+
+# Several pull requests proven together (docs/CI.md, "Proving several pull requests together"): main plus the squash
+# of each, in the given order, pushed to test/<system>/batch-<pr>-<pr>... Default system: Linux and Windows.
+# Prove pull requests together: `just ci-batch [linux|windows|macos|all|linux-windows] <pr> <pr> ...`
+ci-batch *args:
+    {{PYTHON}} scripts/ci_batch.py build {{args}}
+
+# A batch's runs: green or red per workflow; for red, the failed jobs and the two halves to re-run
+ci-batch-status branch:
+    {{PYTHON}} scripts/ci_batch.py status {{quote(branch)}}
+
+# Prints (never runs) a green batch's merge commands, after checking main and every head are unchanged
+ci-batch-merge branch:
+    {{PYTHON}} scripts/ci_batch.py merge {{quote(branch)}}
+
+# After the merges: is main's tree the tree the batch proved?
+ci-batch-verify branch:
+    {{PYTHON}} scripts/ci_batch.py verify {{quote(branch)}}
 
 # After a batch of merges: a push to main runs only the quick checks. Also what the nightly run does, on demand.
 # Start a complete run of main: every suite of ci.yml and nsh.yml on all three systems
@@ -1040,7 +1032,12 @@ nsh-test *args="":
     $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
     $env:PATH = "$tools\bin;$env:PATH"
     if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
-    $app = git rev-parse --short=8 HEAD; $kit = git -C ..\nsh rev-parse --short=8 HEAD; $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
+    # The provenance line is information, never a reason to stop: without git on the PATH (a source copy, or a
+    # caller's own narrow PATH) it says so instead of ending the recipe under ErrorActionPreference Stop (#412).
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    $app = if ($git) { (git rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
+    $kit = if ($git) { (git -C ..\nsh rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
+    $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
     [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, $cargoVersion, folder $env:CARGO_TARGET_DIR")
     $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_AUTH_BYPASS = '1'; $env:BIR_SFTP_DRY_RUN = '1'
     Remove-Item Env:BIR_SFTP_LIVE -ErrorAction SilentlyContinue
@@ -1267,7 +1264,13 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     scripts/build-line.sh --strict
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     export GPUI_AGENT=1 GPUI_AGENT_ADDR="${GPUI_AGENT_ADDR:-127.0.0.1:17421}"
-    unset BIR_SFTP_LIVE
+    # .env (dotenv-load) may hold the live SFTP account and relay: none of it reaches an agent run, dry run or not.
+    unset BIR_SFTP_LIVE BIR_SFTP_HOST BIR_SFTP_PORT BIR_SFTP_USERNAME BIR_SFTP_PASSWORD BIR_SFTP_ACCEPT_ANY_HOST_KEY \
+        BIR_RELAY_URL BUWIZ_RELAY_SEND
+    # An account server that is not on this machine neither: a debug build then talks to the local mock.
+    for name in BUWIZ_SERVER_URL BUWIZ_ACCOUNT_URL; do
+        if [ -n "${!name:-}" ] && [[ ! "${!name}" =~ ^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(/|$) ]]; then unset "$name"; fi
+    done
     # The guard read a relative path from here, and the app starts in nsh/: hand it the same file, as an absolute path.
     db={{quote(db)}}
     if [ -n "$db" ]; then
@@ -1350,12 +1353,25 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
     $env:PATH = "$tools\bin;$env:PATH"
     if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
-    $app = git rev-parse --short=8 HEAD; $kit = git -C ..\nsh rev-parse --short=8 HEAD; $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
+    # The provenance line is information, never a reason to stop: without git on the PATH (a source copy, or a
+    # caller's own narrow PATH) it says so instead of ending the recipe under ErrorActionPreference Stop (#412).
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    $app = if ($git) { (git rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
+    $kit = if ($git) { (git -C ..\nsh rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
+    $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
     [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, $cargoVersion, folder $env:CARGO_TARGET_DIR")
     if (-not $env:GPUI_AGENT_TOKEN) { "nsh-run-agent: set GPUI_AGENT_TOKEN first"; exit 1 }
     $root = (Get-Location).ProviderPath
     $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_AUTH_BYPASS = '1'; $env:BIR_SFTP_DRY_RUN = '1'
-    Remove-Item Env:BIR_SFTP_LIVE -ErrorAction SilentlyContinue
+    # .env (dotenv-load) may hold the live SFTP account and relay: none of it reaches an agent run, dry run or not.
+    foreach ($name in 'BIR_SFTP_LIVE', 'BIR_SFTP_HOST', 'BIR_SFTP_PORT', 'BIR_SFTP_USERNAME', 'BIR_SFTP_PASSWORD', 'BIR_SFTP_ACCEPT_ANY_HOST_KEY', 'BIR_RELAY_URL', 'BUWIZ_RELAY_SEND') {
+        Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+    }
+    # An account server that is not on this machine neither: a debug build then talks to the local mock.
+    foreach ($name in 'BUWIZ_SERVER_URL', 'BUWIZ_ACCOUNT_URL') {
+        $value = [Environment]::GetEnvironmentVariable($name)
+        if ($value -and $value -notmatch '^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(/|$)') { Remove-Item "Env:$name" -ErrorAction SilentlyContinue }
+    }
     $env:GPUI_AGENT = '1'
     if (-not $env:GPUI_AGENT_ADDR) { $env:GPUI_AGENT_ADDR = '127.0.0.1:17421' }
     $writer = $null
@@ -1512,6 +1528,15 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         }
     }
     exit $code
+
+# Starts the app with nsh-run-agent on a new scratch database (a debug build, dry run), waits for gpui-agent, runs a
+# suite of recipes (agent-recipes/e2e/<suite>.json) and writes report.md, report.json and run.log to
+# ~/BuwizNsh/evidence/e2e/<target>-<time>/. target is macos, linux, windows, ios or android; `just e2e check smoke`
+# checks a suite with no app. Everything goes through gpui-agent: no OS input, no fixed coordinates. A recipe marked
+# send (Queue) runs only with --allow-send under EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1. See docs/proof/E2E.md.
+# End to end: run a suite of gpui-agent recipes against the real app (just e2e <target> [suite] [--allow-send])
+e2e target="check" suite="smoke" *args="":
+    {{PYTHON}} scripts/e2e {{quote(target)}} {{quote(suite)}} {{args}}
 
 # NSH: the Android device choice and token hand-off of nsh-run-agent, against a stand-in adb (no device needed).
 [unix]

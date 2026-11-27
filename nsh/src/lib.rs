@@ -23,6 +23,9 @@ mod export_archive;
 mod export_ios;
 pub mod guards;
 mod hooks;
+// Inert until A3a-2 registers its host verbs (features/accounts-and-lock/OS-LOGIN-INTERFACE.md).
+#[allow(dead_code)]
+mod os_login;
 #[cfg(target_os = "android")]
 mod phone_android;
 #[cfg(target_os = "ios")]
@@ -291,6 +294,9 @@ mod tests {
             [
                 ("HOME", Some(home.path().as_os_str())),
                 ("XDG_DATA_HOME", None),
+                // Windows reads the data folder from LOCALAPPDATA: point it at the temp home too, so bir-core's
+                // test-build rule keeps this temp folder instead of its own scratch one.
+                ("LOCALAPPDATA", Some(home.path().as_os_str())),
                 ("BIR_DATABASE_PATH", None),
             ],
             || {
