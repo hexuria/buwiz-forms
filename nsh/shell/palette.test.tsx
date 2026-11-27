@@ -49,7 +49,8 @@ test("desktop: the arrows move the highlight, a page runs, a form opens the star
   await app.waitFor("id:sidebar");
   await app.keyboard.press("mod+k");
   await app.waitFor("id:palette-input");
-  // Rows: Juana Santos, Home, Form library, ...: two Downs and Enter is "Form library".
+  // Rows: Juana Santos, New tax profile, Home, Form library, ...: three Downs and Enter is "Form library".
+  await app.keyboard.press("down");
   await app.keyboard.press("down");
   await app.keyboard.press("down");
   await app.submit("id:palette-input");
@@ -165,7 +166,7 @@ test("desktop: the showRecent preference hides Recent", async () => {
   expect(app.texts()).not.toContain("Recent");
 }, 60_000);
 
-test("phone: search lists only tax profiles, and a taxpayer opens its profile", async () => {
+test("phone: search lists tax profiles and the add row, and a taxpayer opens its profile", async () => {
   const app = await open(ENTRY, asking({ branch: true }));
   await app.waitFor("id:narrow-bar");
   await app.press("id:nb-search");
@@ -173,7 +174,10 @@ test("phone: search lists only tax profiles, and a taxpayer opens its profile", 
   expect(app.texts()).toContain("TAXPAYERS");
   expect(app.texts()).toContain("Juana Santos");
   for (const word of ["BRANCHES", "GO TO", "ACTIONS", "Toggle sidebar", "Change theme"]) expect(app.texts()).not.toContain(word);
-  expect(app.shows("id:palette-item-1")).toBe(false);
+  // The picker's add row follows the one taxpayer; nothing after it.
+  expect(app.texts()).toContain("New tax profile");
+  expect(app.shows("id:palette-item-1")).toBe(true);
+  expect(app.shows("id:palette-item-2")).toBe(false);
 
   await app.type("id:palette-input", "00012345300001");
   await app.waitFor("text:Juana Santos · Cebu branch");

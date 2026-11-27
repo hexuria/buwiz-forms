@@ -56,8 +56,8 @@ test("macOS signed in: the same menus, items and accelerators as the old native 
   expect(linesOf(s, "eBIRForms")).toContain("Settings…  mod+,");
   expect(linesOf(s, "eBIRForms")).toContain("Hide eBIRForms  mod+h");
   expect(linesOf(s, "eBIRForms")).toContain("Quit eBIRForms  mod+q");
-  expect(shape(s, "File")).toEqual(["New Tax Profile…", "New Return…", "-", "Close Window"]);
-  expect(linesOf(s, "File")).toEqual(["New Tax Profile…", "New Return…  mod+n", "Close Window  mod+w"]); // Cmd+N stays New Return…
+  expect(shape(s, "File")).toEqual(["New tax profile…", "New Return…", "-", "Close Window"]);
+  expect(linesOf(s, "File")).toEqual(["New tax profile…", "New Return…  mod+n", "Close Window  mod+w"]); // Cmd+N stays New Return…
   expect(shape(s, "Edit")).toEqual(["role:undo", "role:redo", "-", "role:cut", "role:copy", "role:paste", "-", "role:selectAll"]);
   expect(shape(s, "View")).toEqual(["Toggle Sidebar", "Toggle Tax Profile", "Toggle Notifications", "Toggle Theme", "-", "Command Palette…"]);
   expect(linesOf(s, "View")).toEqual([
@@ -76,7 +76,7 @@ test("macOS signed in: the same menus, items and accelerators as the old native 
 test("Windows and Linux signed in: the eBIRForms menu first, File holds the app commands, Help holds About, View has Full Screen on F11", () => {
   const win = state("windows");
   expect(titles(win)).toEqual(["eBIRForms", "File", "Edit", "View", "Window", "Help", "Profiles"]);
-  expect(shape(win, "File")).toEqual(["New Tax Profile…", "New Return…", "-", "Settings…", "Sign Out", "-", "Hide eBIRForms", "-", "Quit eBIRForms"]);
+  expect(shape(win, "File")).toEqual(["New tax profile…", "New Return…", "-", "Settings…", "Sign Out", "-", "Hide eBIRForms", "-", "Quit eBIRForms"]);
   expect(linesOf(win, "File")).toContain("Settings…  mod+,");
   // Hide and Quit keep their keys in the eBIRForms menu (Ctrl+Q quits on Windows too); File's copies carry none.
   expect(linesOf(win, "File")).toContain("Quit eBIRForms");
@@ -89,7 +89,7 @@ test("Windows and Linux signed in: the eBIRForms menu first, File holds the app 
 
   const linux = state("linux");
   expect(titles(linux)).toEqual(["eBIRForms", "File", "Edit", "View", "Window", "Help", "Profiles"]);
-  expect(shape(linux, "File")).toEqual(["New Tax Profile…", "New Return…", "-", "Close Window", "Hide eBIRForms", "-", "Sign Out", "Quit eBIRForms"]);
+  expect(shape(linux, "File")).toEqual(["New tax profile…", "New Return…", "-", "Close Window", "Hide eBIRForms", "-", "Sign Out", "Quit eBIRForms"]);
   expect(linesOf(linux, "File")).toContain("Quit eBIRForms");
   expect(linesOf(linux, "eBIRForms")).toContain("Quit eBIRForms  mod+q");
   expect(linesOf(linux, "eBIRForms")).toContain("Hide eBIRForms  mod+h");
@@ -134,7 +134,7 @@ test("locked (first-run setup, sign-in, the account gate): only About, Hide, Qui
     "Toggle Notifications",
     "Toggle Theme",
     "Close Window",
-    "New Tax Profile…",
+    "New tax profile…",
     "No taxpayers yet",
   ];
   for (const os of OSES) {
@@ -196,9 +196,9 @@ test("each item runs the action its label says", () => {
     "eBIRForms > Hide eBIRForms": "hide",
     "eBIRForms > Sign Out": "sign-out",
     "eBIRForms > Quit eBIRForms": "quit",
-    "File > New Tax Profile…": "new-tax-profile",
+    "File > New tax profile…": "new-tax-profile",
     "File > New Return…": "new-return",
-    "Profiles > New Tax Profile…": "new-tax-profile",
+    "Profiles > New tax profile…": "new-tax-profile",
     "File > Close Window": "close-window",
     "View > Toggle Sidebar": "toggle-sidebar",
     "View > Toggle Tax Profile": "toggle-profile",
@@ -353,16 +353,16 @@ test("Windows and Linux: the eBIRForms menu is About, Settings…, Hide, Sign Ou
   }
 });
 
-test("Profiles: the taxpayers as a switcher, the current one checked, then New Tax Profile…", () => {
+test("Profiles: the taxpayers as a switcher, the current one checked, then New tax profile…", () => {
   for (const os of OSES) {
     const s = state(os, { taxpayers: [JUANA, PEDRO], currentTaxpayer: JUANA.root });
     expect(titles(s)[titles(s).length - 1]).toBe("Profiles");
-    expect(shape(s, "Profiles")).toEqual(["Juana Santos", "Pedro Reyes", "-", "New Tax Profile…"]);
-    expect(linesOf(s, "Profiles")).toEqual(["Juana Santos  (checked)", "Pedro Reyes", "New Tax Profile…"]);
+    expect(shape(s, "Profiles")).toEqual(["Juana Santos", "Pedro Reyes", "-", "New tax profile…"]);
+    expect(linesOf(s, "Profiles")).toEqual(["Juana Santos  (checked)", "Pedro Reyes", "New tax profile…"]);
     const picked: [MenuAction, string | undefined][] = [];
     const lines = flatten(buildMenu(s, (a, root) => picked.push([a, root])));
     lines.find((l) => l.path === "Profiles > Pedro Reyes")?.select?.();
-    lines.find((l) => l.path === "Profiles > New Tax Profile…")?.select?.();
+    lines.find((l) => l.path === "Profiles > New tax profile…")?.select?.();
     expect(picked).toEqual([
       ["switch-taxpayer", PEDRO.root],
       ["new-tax-profile", undefined],
@@ -371,20 +371,20 @@ test("Profiles: the taxpayers as a switcher, the current one checked, then New T
   }
 });
 
-test("Profiles with no taxpayers: a disabled note, then New Tax Profile…", () => {
+test("Profiles with no taxpayers: a disabled note, then New tax profile…", () => {
   for (const os of OSES) {
     const s = state(os, { hasTaxpayer: false, taxpayers: [], currentTaxpayer: null });
-    expect(shape(s, "Profiles")).toEqual(["No taxpayers yet", "-", "New Tax Profile…"]);
-    expect(linesOf(s, "Profiles")).toEqual(["No taxpayers yet  (disabled)", "New Tax Profile…"]);
+    expect(shape(s, "Profiles")).toEqual(["No taxpayers yet", "-", "New tax profile…"]);
+    expect(linesOf(s, "Profiles")).toEqual(["No taxpayers yet  (disabled)", "New tax profile…"]);
   }
 });
 
-test("New Tax Profile… follows who may add a taxpayer; the switcher follows who may switch", () => {
+test("New tax profile… follows who may add a taxpayer; the switcher follows who may switch", () => {
   for (const os of OSES) {
     const s = state(os, { taxpayers: [JUANA, PEDRO], currentTaxpayer: JUANA.root, canAddTaxpayer: false, canSwitchTaxpayer: false });
     const disabled = flatten(menusOf(s)).filter((l) => l.disabled).map((l) => l.path);
-    expect(disabled).toEqual(["File > New Tax Profile…", "Profiles > Pedro Reyes", "Profiles > New Tax Profile…"]);
-    // New Tax Profile… never takes a shortcut: Ctrl/Cmd+N is New Return….
-    expect(flatten(menusOf(s)).filter((l) => l.path.endsWith("New Tax Profile…")).map((l) => l.shortcut)).toEqual([null, null]);
+    expect(disabled).toEqual(["File > New tax profile…", "Profiles > Pedro Reyes", "Profiles > New tax profile…"]);
+    // New tax profile… never takes a shortcut: Ctrl/Cmd+N is New Return….
+    expect(flatten(menusOf(s)).filter((l) => l.path.endsWith("New tax profile…")).map((l) => l.shortcut)).toEqual([null, null]);
   }
 });

@@ -69,7 +69,7 @@ function Welcome() {
             )}
           </Each>
           <ListRow testID="welcome-cta">
-            <AppButton testID="welcome-add-taxpayer" label="Add your first taxpayer" variant="primary" icon="plus" onPress={() => go("new_taxpayer")} />
+            <AppButton testID="welcome-add-taxpayer" label="New tax profile" variant="primary" icon="plus" onPress={() => go("new_taxpayer")} />
           </ListRow>
         </ListGroup>
       </View>

@@ -33,7 +33,7 @@ const TABLE = {
   profile: { label: "Tax profile", icon: "user", needsTaxpayer: true, layout: "page" },
   forms: { label: "Forms", icon: "file-text", needsTaxpayer: true, layout: "page" },
   templates: { label: "Templates", icon: "layout-template", needsTaxpayer: true, layout: "page" },
-  new_taxpayer: { label: "New taxpayer", icon: "user", needsTaxpayer: false, layout: "page" },
+  new_taxpayer: { label: "New tax profile", icon: "user", needsTaxpayer: false, layout: "page" },
   new_branch: { label: "New branch", icon: "git-branch", needsTaxpayer: true, layout: "page" },
   form: { label: "Return", icon: "file-text", needsTaxpayer: true, layout: "self" },
   kit: { label: "UI kit", icon: "layout-template", needsTaxpayer: false, layout: "self", dev: true },

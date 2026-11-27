@@ -89,6 +89,11 @@ export const paletteItems = computed<PaletteItem[]>(() => {
       run: () => app.openTaxpayer(t.tin_root),
     });
   }
+  // The picker's add row: the owner and the help desk admin always start a new tax profile (a client session may only
+  // ever add the first one — app.canAddTaxpayer decides); the typed query still narrows it away like any other row.
+  if (app.canAddTaxpayer()) {
+    items.push({ group: "Taxpayers", label: "New tax profile", icon: "plus", run: () => app.go("new_taxpayer") });
+  }
   if (!profilesOnly) {
     // The open taxpayer's branches are one step away.
     if (current && current.branches.length > 1 && !byTin) {

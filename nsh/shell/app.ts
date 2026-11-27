@@ -203,7 +203,9 @@ const isHelpdesk = () => authState().mode === "helpdesk";
 const adminHasCode = () => Boolean(authState().has_admin_pin || authState().has_admin_totp);
 /** Admin rights: signed in as the admin, or nobody while the admin has no code (the owner is at the keyboard). */
 const isAdmin = () => session().kind === "admin" || (session().kind === "open" && !adminHasCode());
-const canAddTaxpayer = () => !store.taxpayers().length || (isAdmin() && isHelpdesk());
+// The owner ("Just me") and the help desk admin always start a new tax profile; a help desk
+// client (a taxpayer signed in with their own TIN and PIN) may only ever add the first one.
+const canAddTaxpayer = () => session().kind !== "taxpayer" || !store.taxpayers().length;
 
 /** Toolbar, sidebar, taxpayer picker and filing menus: false on the account gate, first launch and the sign-in screen. */
 const chromeVisible = computed(
