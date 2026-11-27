@@ -1,0 +1,56 @@
+{
+ "suite": "otp",
+ "target": "android",
+ "started": "20261127-152042",
+ "out": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-152042",
+ "cli_version": "0.4.1",
+ "app_commit": "91a8a3e6",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "prep",
+   "status": "pass",
+   "ms": 2908,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-prep.json",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-152042/01-prep/recording.mp4"
+  },
+  {
+   "name": "tin-after-tap",
+   "status": "pass",
+   "ms": 10816,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-tin-after-tap.json",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-152042/04-tin-after-tap/recording.mp4"
+  },
+  {
+   "name": "lp-after-tap",
+   "status": "pass",
+   "ms": 4301,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-lp-after-tap.json",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-152042/05-lp-after-tap/recording.mp4"
+  }
+ ]
+}

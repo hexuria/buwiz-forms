@@ -1,0 +1,40 @@
+{
+ "v": 1,
+ "name": "otp-tin-scroll",
+ "params": [
+  "tin_field",
+  "tin"
+ ],
+ "steps": [
+  {
+   "id": "s4",
+   "op": "type",
+   "target": "$tin_field",
+   "text": "$tin",
+   "key_delay_ms": 80
+  },
+  {
+   "id": "s5",
+   "op": "click",
+   "target": "new-tp-name"
+  },
+  {
+   "id": "s6",
+   "op": "scroll",
+   "dy": 300,
+   "screenshot": true,
+   "x": 185,
+   "y": 369
+  },
+  {
+   "id": "s7",
+   "op": "click",
+   "target": "$tin_field",
+   "screenshot": true
+  },
+  {
+   "id": "s8",
+   "op": "snapshot"
+  }
+ ]
+}

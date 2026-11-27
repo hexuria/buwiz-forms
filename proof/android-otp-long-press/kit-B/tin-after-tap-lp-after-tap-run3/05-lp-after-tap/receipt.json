@@ -1,0 +1,44 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "otp-lp-after-tap",
+  "fingerprint": "fnv1a64:cc0218e99912b167",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1961,
+      "screenshot": {
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-152042/05-lp-after-tap/001-s7.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s7w",
+      "ok": true,
+      "elapsed_ms": 164,
+      "screenshot": {
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-152042/05-lp-after-tap/002-s7w.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 32
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-152042/05-lp-after-tap/001-s7.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-152042/05-lp-after-tap/002-s7w.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 2158
+}

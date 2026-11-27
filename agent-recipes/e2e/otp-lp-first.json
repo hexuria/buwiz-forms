@@ -1,0 +1,25 @@
+{
+ "v": 1,
+ "name": "otp-lp-first",
+ "params": [],
+ "steps": [
+  {
+   "id": "s7",
+   "op": "long_press",
+   "x": "$tin_field_cx",
+   "y": "$tin_field_cy",
+   "duration_ms": 1100,
+   "screenshot": true
+  },
+  {
+   "id": "s7w",
+   "op": "wait",
+   "timeout_ms": 2500,
+   "screenshot": true
+  },
+  {
+   "id": "s8",
+   "op": "snapshot"
+  }
+ ]
+}

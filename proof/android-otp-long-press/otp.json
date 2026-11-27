@@ -1,0 +1,106 @@
+{
+ "v": 1,
+ "description": "Job 57: the Android long press on the digit boxes, paced typing. One recipe per cell-state; each run is a cold relaunch (--only).",
+ "params": {
+  "tin": "123456788",
+  "tin14": "12345678800000"
+ },
+ "recipes": [
+  {
+   "name": "prep",
+   "file": "otp-prep.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-prep.json"
+  },
+  {
+   "name": "tin-first",
+   "file": "otp-tin-first.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-tin-first.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "lp-first",
+   "file": "otp-lp-first.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-lp-first.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "tin-after-tap",
+   "file": "otp-tin-after-tap.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-tin-after-tap.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "lp-after-tap",
+   "file": "otp-lp-after-tap.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-lp-after-tap.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "tin-scroll",
+   "file": "otp-tin-scroll.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-tin-scroll.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "probe",
+   "file": "otp-probe.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-probe.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  }
+ ]
+}

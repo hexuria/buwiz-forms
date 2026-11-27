@@ -382,6 +382,9 @@ def check_suite(suite):
         if not files:
             problems.append(f"{where}: names no recipe file (file, phone, desktop or windows)")
         supplied = set(params) | set(entry.get("set") or {}) | set(entry.get("resolve") or {})
+        for resolved in (entry.get("resolve") or {}):
+            supplied.add(resolved + "_cx")
+            supplied.add(resolved + "_cy")
         for file in files:
             path = (base / file).resolve()
             if not path.is_file():
@@ -615,6 +618,45 @@ def plan_entry(entry, suite, context):
     return file, None, None
 
 
+def instantiate_numeric(path, params, folder):
+    """A copy of a JSON recipe with every step value that is exactly "$param" replaced by the param's number when it
+    parses as one (the recipe format takes x/y only as numbers, so a placeholder can never reach them through --set).
+    The copy is written beside the run's evidence: it is the file that drove the app. Anything not numeric, missing
+    or not a JSON recipe leaves the step untouched and the original path is returned."""
+    try:
+        text = Path(path).read_text()
+        data = json.loads(text)
+    except Exception:
+        return path
+    if not isinstance(data, dict) or not isinstance(data.get("steps"), list):
+        return path
+
+    numeric_keys = {"x", "y", "dx", "dy", "scale"}
+
+    def walk(node):
+        if isinstance(node, dict):
+            out = {}
+            for key, val in node.items():
+                if key in numeric_keys and isinstance(val, str) and val.startswith("$"):
+                    raw = params.get(val[1:])
+                    if raw is not None:
+                        try:
+                            val = float(raw)
+                        except (TypeError, ValueError):
+                            pass
+                    out[key] = val
+                else:
+                    out[key] = walk(val)
+            return out
+        if isinstance(node, list):
+            return [walk(item) for item in node]
+        return node
+
+    out = folder / (Path(path).stem + ".instantiated.json")
+    out.write_text(json.dumps(walk(data), indent=1))
+    return out
+
+
 def run_entry(index, entry, suite, context, agent, log, out):
     started = time.monotonic()
     result = {"name": entry["name"], "status": None, "ms": 0, "note": None, "file": None}
@@ -641,6 +683,10 @@ def run_entry(index, entry, suite, context, agent, log, out):
             why = "no node matches " + json.dumps(spec)
         if node:
             names[value] = f"{node.get('id', '')} {node.get('name', '')} {node.get('role', '')}"
+            box = node.get("bounds") or {}
+            if box:
+                params[param + "_cx"] = str(round(box.get("x", 0) + box.get("w", 0) / 2, 1))
+                params[param + "_cy"] = str(round(box.get("y", 0) + box.get("h", 0) / 2, 1))
         log.line("resolve", f"${param}", value or why, (time.monotonic() - t0) * 1000)
         if not value:
             result.update(status="setup", step=None, error=f"${param}: {why}")
@@ -654,8 +700,11 @@ def run_entry(index, entry, suite, context, agent, log, out):
         log.line("recipe", entry["name"], f"refused: {result['error']}", 0)
         return result
     used = placeholders(path)
-    args = ["recipe", "--schema", SCHEMA, "run", path]
+    inst = instantiate_numeric(path, params, folder)
+    args = ["recipe", "--schema", SCHEMA, "run", inst]
     for key in sorted(used):
+        if key.endswith(("_cx", "_cy")):
+            continue
         args += ["--set", f"{key}={params[key]}"]
     args += ["--receipt-out", folder / "receipt.json", "--screenshot-dir", folder, "--screenshot-flagged"]
     if entry.get("yes"):
@@ -864,8 +913,26 @@ def check(suite_name, cli):
                 if paced and not version_at_least(cli_version, entry.get("needs_cli") or "999.0.0"):
                     print(f"skip  {file}: paced typing needs gpui-agent-cli {entry.get('needs_cli')}")
                     continue
-                done = subprocess.run([cli, "recipe", "--schema", str(SCHEMA), "validate", str(path)],
+                validate_path = path
+                try:
+                    raw = json.loads(path.read_text())
+                    numeric_keys = {"x", "y", "dx", "dy", "scale", "duration_ms"}
+                    def blank(node):
+                        if isinstance(node, dict):
+                            return {k: (0 if k in numeric_keys and isinstance(v, str) and v.startswith("$") else blank(v))
+                                    for k, v in node.items()}
+                        if isinstance(node, list):
+                            return [blank(i) for i in node]
+                        return node
+                    tmp = path.parent / (path.stem + ".validate-tmp.json")
+                    tmp.write_text(json.dumps(blank(raw)))
+                    validate_path = tmp
+                except Exception:
+                    pass
+                done = subprocess.run([cli, "recipe", "--schema", str(SCHEMA), "validate", str(validate_path)],
                                       capture_output=True, text=True)
+                if validate_path != path:
+                    validate_path.unlink(missing_ok=True)
                 validated += 1
                 if done.returncode:
                     problems.append(f"{entry['name']}: {file}: {(done.stderr or done.stdout).strip()[-300:]}")

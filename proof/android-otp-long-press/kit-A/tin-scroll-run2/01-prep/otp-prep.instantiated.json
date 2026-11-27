@@ -1,0 +1,25 @@
+{
+ "v": 1,
+ "name": "otp-prep",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "wait_until",
+   "target": "setup-solo",
+   "timeout_ms": 30000,
+   "exists": true
+  },
+  {
+   "id": "s2",
+   "op": "click",
+   "target": "setup-solo"
+  },
+  {
+   "id": "s3",
+   "op": "wait_until",
+   "target": "new-tp-name",
+   "timeout_ms": 8000,
+   "exists": true
+  }
+ ]
+}

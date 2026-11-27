@@ -1,0 +1,28 @@
+{
+ "v": 1,
+ "name": "otp-tin-after-tap",
+ "params": [
+  "tin_field",
+  "tin"
+ ],
+ "steps": [
+  {
+   "id": "s4",
+   "op": "type",
+   "target": "$tin_field",
+   "text": "$tin",
+   "key_delay_ms": 80
+  },
+  {
+   "id": "s5",
+   "op": "click",
+   "target": "new-tp-name",
+   "screenshot": true
+  },
+  {
+   "id": "s6",
+   "op": "click",
+   "target": "$tin_field"
+  }
+ ]
+}

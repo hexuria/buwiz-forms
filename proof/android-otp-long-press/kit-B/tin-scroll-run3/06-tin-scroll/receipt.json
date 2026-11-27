@@ -1,0 +1,57 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "otp-tin-scroll",
+  "fingerprint": "fnv1a64:3b5feb223fc2d13e",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 6465
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 799
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 876,
+      "screenshot": {
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-152157/06-tin-scroll/003-s6.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2546,
+      "screenshot": {
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-152157/06-tin-scroll/004-s7.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 32
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-152157/06-tin-scroll/003-s6.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-152157/06-tin-scroll/004-s7.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 10720
+}
