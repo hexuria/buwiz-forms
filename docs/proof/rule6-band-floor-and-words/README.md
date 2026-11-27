@@ -1,26 +1,34 @@
-# Rule 6 band floor and whole-word truncation
+# Rule 6 band floor and whole-word truncation — before/after renders
 
-Renders from the print engine (`bir_print::frozen_html::filled_document`, no app
-driving): the official sample payload of each form (dummy data) plus the
-200-character words fill in the band's own cell, Chrome `print-to-pdf` of the
-print HTML rasterized at 3x. `before-*` is the behaviour at 3c57ed74 (#355 as
-merged), `after-*` this follow-up.
+Print-engine renders (no app driving) of the three sheets whose Rule 6 bands
+narrow under the placement rule: the printable html of each form is filled
+with a long entry in the band's own box, printed to PDF with Chrome headless
+(`--print-to-pdf --no-pdf-header-footer`, `@page` 612x936 pt margin 0) and
+rendered at 3x around the band row.
 
-## Whole-word truncation
+- **before-*.png** — rendered from commit `3c57ed74` (the PR #355 head:
+  narrowing without the whole-word truncation). Each band's text runs to the
+  clip edge and is cut **mid-word**: "…BONIFACIO AAAA" clipped inside the As.
+- **after-*.png** — rendered from this branch's commit (band floor, one width
+  for fit and drawing, whole-word truncation). The same fill ends on the
+  **whole word** followed by "…" inside the band — "…BONIFACIO..." — with the
+  whole value carried to the additional sheet.
 
-- `before-1701-item9.png`: the narrowed band's second line ends mid-word
-  ("...TAGUIGME"), a fragment reading as a word of its own.
-- `after-1701-item9.png`: the same line ends on a whole word, then the
-  ellipsis ("...BONIFACIO..."); the whole value prints in the additional
-  sheet as before.
-- `before/after-1701ms-other-credits.png`, `before/after-2000ot-sched2-rowC.png`:
-  the same pair for the 1701MS other-credits band and the 2000-OT Schedule 2
-  row C band.
+## Fills
 
-## The floor
+In print the band input renders its value as one clipped line, so the visible
+window is the first line plus a few characters of wrap slack. The fills are
+tuned to place the truncation backoff inside that slack: a padding word
+positions the wrap so that the line-2 remainder is one short whole word plus
+one long unbreakable word. Before the fix the cut lands mid-word inside the
+long word; after the fix the long word is backed off whole and the band ends
+on the whole word before it. Verbatim (python repr; \u2003 is an em-space):
 
-No render shows the floor: no real band comes near it (the narrowest today is
-311.6 pt of the 120 pt floor), so nothing moves. The floor is pinned by the
-assertion over every sheet's bands in `every_overflow_line_lies_in_its_drawn_cell`
-(no band narrower than 120 pt) and by the unit test
-`a_value_cell_just_right_of_the_band_cell_moves_the_band_down_not_shrinks`.
+```
+1701 + 1701ms: 'UNIT 1203 TWELFTH FLOOR CURVE BUILDING PiPiPiPiPiPiPiPiPiPiPi\u2003\u2003BONIFACIO AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+2000ot:        'UNIT 1203 TWELFTH FLOOR CURVE BUILDING PiPiPiPiPiPiPiPiPiPiPiPiPiPiPiPiPiPiPiPiPiPiPi\u2003\u2003BONIFACIO AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+```
+
+Every before/after pair differs (sha256 values in the handover report); the
+truncation itself is asserted by `a_truncated_rule6_band_ends_on_a_whole_word`
+in `crates/bir-print/src/frozen_html.rs`.
