@@ -63,13 +63,40 @@ pub const OS_LOGIN_USED_KEY: &str = "legacy.os_login_used";
 static STARTED_THIS_SESSION: std::sync::Mutex<std::collections::BTreeSet<std::path::PathBuf>> =
     std::sync::Mutex::new(std::collections::BTreeSet::new());
 
-/// Whether the claim's `start()` ran for `device_dir` in this session (R1), whatever it answered: the point is
-/// that the claim looked at the disk before anything opened a room's database.
-pub fn claim_started_this_session(device_dir: &std::path::Path) -> bool {
+/// R1(d): the set's key is canonical — a folder reached through a symlinked parent, or a differently cased
+/// path on a case-insensitive filesystem, is the same folder, so a person is never refused their own room.
+/// Canonicalized on insert and on lookup, the same way, as `ClaimRun::begin` keys its set.
+fn started_key(device_dir: &std::path::Path) -> std::path::PathBuf {
+    device_dir
+        .canonicalize()
+        .unwrap_or_else(|_| device_dir.to_path_buf())
+}
+
+/// Tests simulate a new session — a kill and relaunch — by forgetting what this session answered.
+#[cfg(test)]
+pub(crate) fn clear_started_for_test(device_dir: &std::path::Path) {
+    let key = started_key(device_dir);
     STARTED_THIS_SESSION
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .contains(device_dir)
+        .remove(&key);
+}
+
+fn started_insert(device_dir: &std::path::Path) {
+    STARTED_THIS_SESSION
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(started_key(device_dir));
+}
+
+/// Whether the claim's `start()` ran to a definitive answer for `device_dir` in this session (R1): the point
+/// is that the claim looked at the disk — and finished looking — before anything opened a room's database.
+pub fn claim_started_this_session(device_dir: &std::path::Path) -> bool {
+    let key = started_key(device_dir);
+    STARTED_THIS_SESSION
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .contains(&key)
 }
 /// The scratch folder under the device folder: probe copies, swept at every launch.
 pub const SCRATCH_DIR: &str = "scratch";
@@ -655,7 +682,19 @@ impl LegacyClaim {
     /// was cut after the move. Before the unlock no record names a room, and nothing is written beside the legacy file
     /// but its `.owner.lock` (made by any earlier version too, and by the holder here).
     pub fn start(&self, who: &Claimant) -> Start {
-        match self.start_inner(who) {
+        let inner = self.start_inner(who);
+        // R1(a): the folder goes into the process-wide set only when start() has a definitive answer. Never on
+        // a transient — in M1's own case (the record at Copied, the legacy file gone, the room read failing) an
+        // open room would migrate its bytes, and the next start() would close the move unfinished. A permanent
+        // failure is definitive: the claim is over, and the account opens its empty room.
+        let definitive = match &inner {
+            Ok(_) | Err(Failure::Permanent(_)) => true,
+            Err(Failure::Transient(_)) => false,
+        };
+        if definitive {
+            started_insert(self.layout.device_dir());
+        }
+        match inner {
             Ok(start) => start,
             Err(failure) => Start::Failed(failure),
         }
@@ -670,10 +709,6 @@ impl LegacyClaim {
                 detail: "another claim of this device folder is running in this process".into(),
             })
         })?;
-        STARTED_THIS_SESSION
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(self.layout.device_dir().to_path_buf());
         let legacy = self.layout.legacy_database();
         let record = self.record().map_err(store_failure)?;
         // L1, the orchestrator's ruling: the mark protects nothing and can strand a person, so it clears

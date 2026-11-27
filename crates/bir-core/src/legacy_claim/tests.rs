@@ -1985,3 +1985,71 @@ fn a_second_use_within_one_live_claim_is_refused() {
     );
     drop(ready);
 }
+
+// ------------------------------------------------------------------------- R1, the reviewer's holes
+
+/// R1(a): a start() that answers a transient failure never opens the room of the record. In M1's
+/// own case — the record at Copied, the legacy file gone, the room read failing — opening the room
+/// would migrate its bytes and close the move unfinished: the open is refused.
+#[test]
+fn a_transient_room_check_does_not_open_the_room() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterCopyRecorded);
+    let claim = install.claim();
+    let room = room_of(&claim, &a);
+    install.layout.create_room_dir(&room).unwrap();
+    std::fs::rename(install.legacy(), install.room_file(&room)).unwrap();
+    // The cut claim ran in a previous session — a kill: this session has answered nothing yet.
+    crate::legacy_claim::clear_started_for_test(install.layout.device_dir());
+    ROOM_CHECK_ERR.with(|err| err.set(true));
+    let started = claim.start(&a);
+    assert!(
+        matches!(started, Start::Failed(Failure::Transient(_))),
+        "not transient: {started:?}"
+    );
+    assert!(
+        !crate::legacy_claim::claim_started_this_session(install.layout.device_dir()),
+        "a transient answer must not open the room"
+    );
+    let refused = std::panic::catch_unwind(|| {
+        crate::rooms::open_room_guarded(&install.layout, &room)
+    });
+    match refused {
+        Ok(result) => assert!(
+            result.is_err(),
+            "the room opened after a transient answer"
+        ),
+        Err(_) => {} // the debug_assert fired: refused either way
+    }
+    // The error gone, the claim finishes — and now the room opens.
+    let finished = claim.start(&a);
+    assert!(
+        matches!(finished, Start::Finished(Outcome::Done { .. })),
+        "{finished:?}"
+    );
+    crate::rooms::open_room_guarded(&install.layout, &room)
+        .expect("the room opens once the claim has a definitive answer");
+}
+
+/// R1(d): the set's key is canonical — a device folder reached through a symlinked parent is the
+/// same folder, so the owner is never refused their own room.
+#[test]
+fn a_symlinked_device_folder_is_the_same_for_the_guard() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_unlocked(&install, &a);
+    assert!(crate::legacy_claim::claim_started_this_session(
+        install.layout.device_dir()
+    ));
+    // The same folder through a symlinked parent.
+    let link = install.dir().parent().unwrap().join("a3a-linked-data");
+    std::os::unix::fs::symlink(install.dir(), &link).unwrap();
+    assert!(
+        crate::legacy_claim::claim_started_this_session(&link),
+        "the symlinked path is not the same folder for the guard"
+    );
+    std::fs::remove_file(&link).unwrap();
+}
