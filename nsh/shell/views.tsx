@@ -6,6 +6,8 @@ import { Filings } from "../screens/filings/Filings";
 import { flushNow, FormPage, type FormTarget } from "../screens/form/FormPage";
 import { Home } from "../screens/home/Home";
 import { Library } from "../screens/library/Library";
+import { DebugLockPages } from "../screens/auth/DebugLockPages";
+import type { BiometricKind } from "../screens/auth/lockInterface";
 import { Placeholder } from "../screens/placeholder/Placeholder";
 import { Settings } from "../screens/settings";
 import { NewBranchPage, NewTaxpayerPage, TaxpayerPage } from "../screens/taxpayer";
@@ -46,6 +48,16 @@ function FormView(props: { target: FormTarget }) {
 /** The screen for a route. */
 export function renderView(route: Route): JSX.Element {
   switch (route.view) {
+    case "lockdebug":
+      return (
+        <DebugLockPages
+          page={String(route.params.page ?? "lock")}
+          biometric={(route.params.biometric as BiometricKind | undefined) ?? "face_id"}
+          wrong={route.params.wrong === true || route.params.wrong === "1"}
+          wait={Number(route.params.wait ?? 0)}
+          lost={route.params.lost === true || route.params.lost === "1"}
+        />
+      );
     case "form":
       return <FormView target={route.params.target as FormTarget} />;
     case "library":
