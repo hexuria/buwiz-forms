@@ -280,9 +280,24 @@ pub fn drain_gated(
         refuse(batch, &message);
         return false;
     }
+    // A3a §A.5: the cached handle is compared with the open room's generation on each batch. On a
+    // change the session is rebuilt — selected_tin = None, open = None, a new db.
+    {
+        let current = crate::open_room::generation();
+        let stale = {
+            let session = session.borrow();
+            session.cached_generation() != current && (session.cached_generation().is_some() || current.is_some())
+        };
+        if stale {
+            tracing::info!("agent session rebuilt: the open room changed");
+            session.borrow_mut().rebuild();
+        }
+    }
     if session.borrow().needs_db() {
         match crate::bir_module::database_handle() {
-            Ok(handle) => session.borrow_mut().set_db(handle),
+            Ok(handle) => session
+                .borrow_mut()
+                .set_db(handle, crate::open_room::generation()),
             Err(error) => {
                 let message = error.to_string();
                 for posted in batch {

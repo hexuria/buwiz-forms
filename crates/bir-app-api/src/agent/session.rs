@@ -89,6 +89,10 @@ struct OpenForm {
 
 pub struct Session {
     db: Option<Arc<Mutex<Database>>>,
+    /// The open room's generation `db` was cached for (A3a): a batch under another generation
+    /// rebuilds the session — `selected_tin` and the open form belong to the old room. `None`
+    /// matches an unversioned slot (single-room mode), which never rebuilds.
+    db_generation: Option<u64>,
     commands: UiQueue,
     selected_tin: Option<String>,
     open: Option<OpenForm>,
@@ -101,6 +105,7 @@ impl Session {
     pub fn new(commands: UiQueue) -> Self {
         Self {
             db: None,
+            db_generation: None,
             commands,
             selected_tin: None,
             open: None,
@@ -116,8 +121,23 @@ impl Session {
         session
     }
 
-    pub fn set_db(&mut self, db: Arc<Mutex<Database>>) {
+    pub fn set_db(&mut self, db: Arc<Mutex<Database>>, generation: Option<u64>) {
         self.db = Some(db);
+        self.db_generation = generation;
+    }
+
+    /// The generation of the cached db, if the session has one.
+    pub fn cached_generation(&self) -> Option<u64> {
+        self.db_generation
+    }
+
+    /// The room changed under this session (A3a §A.5): a new db is cached on the next batch, and
+    /// nothing of the old room survives — not the selection, not the open form.
+    pub fn rebuild(&mut self) {
+        self.db = None;
+        self.db_generation = None;
+        self.selected_tin = None;
+        self.open = None;
     }
 
     pub fn needs_db(&self) -> bool {
@@ -2134,7 +2154,7 @@ mod tests {
             Database::open_ephemeral().expect("ephemeral database"),
         ));
         let mut session = Session::new(UiQueue::new());
-        session.set_db(db);
+        session.set_db(db, None);
         session
     }
 

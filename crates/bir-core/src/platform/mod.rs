@@ -225,6 +225,9 @@ pub fn browser_url_allowed(url: &str) -> bool {
 /// - Else [`data_dir`]. On a normal install that is where those files always
 ///   were, so nothing moves.
 pub fn device_dir() -> std::path::PathBuf {
+    if let Some(named) = device_dir_override() {
+        return named;
+    }
     match crate::db::single_room_database() {
         Some(named) => named
             .parent()
@@ -233,6 +236,31 @@ pub fn device_dir() -> std::path::PathBuf {
             .unwrap_or_else(|| std::path::PathBuf::from(".")),
         None => data_dir(),
     }
+}
+
+thread_local! {
+    /// A test's device folder (A3a's host tests): rooms, `device.db` and the legacy file of a
+    /// scratch install, never the real one. Same thread discipline as the database-path override.
+    static DEVICE_DIR_OVERRIDE: std::cell::RefCell<Option<std::path::PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// A test's device folder, or None. Test environments only: outside them the override is ignored.
+pub fn set_device_dir_override(path: Option<std::path::PathBuf>) {
+    DEVICE_DIR_OVERRIDE.with(|slot| *slot.borrow_mut() = path);
+}
+
+/// Whether a test device-folder override is set (A3a's host tests): then the legacy single-file
+/// slot never opens — outside single-room mode the room is the only slot.
+pub fn device_dir_override_active() -> bool {
+    device_dir_override().is_some()
+}
+
+fn device_dir_override() -> Option<std::path::PathBuf> {
+    if !crate::db::test_environment() {
+        return None;
+    }
+    DEVICE_DIR_OVERRIDE.with(|slot| slot.borrow().clone())
 }
 
 /// The folder [`prepare_app_storage`] excludes from backups on iOS and gives

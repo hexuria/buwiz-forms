@@ -25,6 +25,8 @@ thread_local! {
     /// writer and dropped with it. Only this thread reads through it, so it
     /// needs no mutex: that is what keeps its reads off the worker's lock.
     static READER: RefCell<Option<std::rc::Rc<Database>>> = const { RefCell::new(None) };
+    /// The open room's generation the reader belongs to (A3a): a new generation reinstalls it.
+    static READER_GENERATION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 /// The shared handle behind [`with_database`], exposed for host functions
@@ -42,6 +44,38 @@ thread_local! {
 /// the database held ([`open_database_at_launch`]) once the gate is open.
 /// Cloud-account settings use this while the filing UI is still locked.
 fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+    // A test's ephemeral injection, or this thread's already-open single-room handle, first: rooms
+    // mode never populates the thread-local slot, so a filled one is never a room's stale twin.
+    if let Some(handle) = DATABASE.with(|slot| slot.borrow().clone()) {
+        if RELEASED.get() {
+            let (mut database, _path, _recovered) =
+                db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
+            install_reader(&mut database);
+            *bir_core::lock_timing::lock(&handle)
+                .map_err(|_| HostError::new("database lock poisoned"))? = database;
+            RELEASED.set(false);
+        }
+        return Ok(handle);
+    }
+    // A3a (§A.4): the open room is the slot. The handle is never replaced inside an old Arc; a new
+    // room is a new Arc with a new generation, and the reader follows it.
+    if let Some((handle, generation)) = crate::open_room::current() {
+        if READER_GENERATION.with(std::cell::Cell::get) != generation
+            && let Ok(mut guard) = bir_core::lock_timing::lock(&handle)
+        {
+            install_reader(&mut guard);
+            READER_GENERATION.with(|slot| slot.set(generation));
+        }
+        return Ok(handle);
+    }
+    // Rooms mode (every real install): the room is the only slot — nothing opens the legacy file
+    // off the slot, before the claim or behind the gate's back. Single-room mode (a named database
+    // in a debug or test run) keeps the file path open of before.
+    if bir_core::db::single_room_database().is_none() {
+        return Err(HostError::new(
+            "no room is open: the filing UI is behind a migration page or the gate",
+        ));
+    }
     let mut opened = false;
     let handle = DATABASE.with(|slot| {
         let mut slot = slot.borrow_mut();

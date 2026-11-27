@@ -73,6 +73,11 @@ pub fn prepare_launch() {
     // Set before the gate opens, so no send can start ahead of it.
     bir_core::transport::set_practice_account(unlocked && practice);
     crate::account_gate::set_unlocked(unlocked);
+    if unlocked && let Ok(Some(stored)) = load_stored() {
+        // The launch resume (§A.4): a claim cut mid-move finishes here, before anything opens the
+        // room. R1's order is the room open's own guard.
+        crate::room_session::open_session_room(&stored);
+    }
 }
 
 pub(crate) fn status_now() -> HostResult {
@@ -202,10 +207,21 @@ fn sign_out(
 /// remove is an error the page shows, never "signed out"; the gate locks and the logout goes out either way.
 fn sign_out_with(http: Box<dyn cloud_account::Http + Send>) -> HostResult {
     crate::cloud_email::cancel();
+    bir_core::background_cron::set_submission_paused(true);
     let (logout, removed) = forget_stored_sign_in();
     crate::account_gate::set_unlocked(false);
     bir_core::transport::set_practice_account(false);
     bir_core::relay::forget_device();
+    // §A.5 step 6: close the room. The slot's Arc and the generation go (the reader follows it:
+    // with_reader never serves a generation that is not the open room's). Sends already in flight
+    // finish against their own Arc. The room's file and its PIN stay.
+    crate::open_room::close_room();
+    crate::legacy_import_module::forget_scan();
+    bir_core::db::set_open_room_database(None);
+    // TODO(B2): clear ROOM_UNLOCKED once B2 lands it in this tree.
+    if let Ok(submitter) = bir_core::relay::submitter() {
+        submitter.invalidate_account_tins();
+    }
     let status = status_now();
     if let Some((server_url, access_token)) = logout {
         logout_soon(http, server_url, access_token);
@@ -261,6 +277,12 @@ fn session_opened() -> HostResult {
         bir_core::transport::set_practice_account(stored.practice);
     }
     crate::account_gate::set_unlocked(true);
+    // A3a (§A.4), in this order: the saved sign-in is read; the legacy claim runs or resumes; the
+    // account's room opens; the worker starts or wakes (the launch path below); the agent session
+    // rebuilds (its generation check does, on the next batch).
+    if let Ok(Some(stored)) = load_stored() {
+        crate::room_session::open_session_room(&stored);
+    }
     crate::bir_module::open_database_at_launch();
     crate::hooks::hooks().start_updater();
     crate::hooks::hooks().refresh_menu();
