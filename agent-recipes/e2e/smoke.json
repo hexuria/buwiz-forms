@@ -74,9 +74,7 @@
     "phone": "money-boxes-phone.json",
     "file": "money-boxes.wants"
    },
-   "known_gap": {
-    "phone": "gpui-agent cannot press the Amended No radio on Android: the press reaches the row but is refused as occluded by the radio's own 16x16 child (exact run error: occluded_by: <node>)"
-   }
+   "known_gap": {}
   },
   {
    "name": "sheet-press",

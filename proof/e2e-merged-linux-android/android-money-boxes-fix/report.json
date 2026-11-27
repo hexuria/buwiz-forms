@@ -1,0 +1,73 @@
+{
+ "suite": "smoke",
+ "target": "android",
+ "started": "20261127-213035",
+ "out": "/home/ubuntu/j58/android-mbfix2",
+ "cli_version": "0.4.1",
+ "app_commit": "7e7db827",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 3321,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "/home/ubuntu/j58/android-mbfix2/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 14453,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-android.json",
+   "video": "/home/ubuntu/j58/android-mbfix2/02-sign-up/recording.mp4"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 11422,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-android.json",
+   "video": "/home/ubuntu/j58/android-mbfix2/03-tax-year/recording.mp4"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 5671,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants",
+   "video": "/home/ubuntu/j58/android-mbfix2/05-open-2551q/recording.mp4"
+  },
+  {
+   "name": "money-boxes",
+   "status": "pass",
+   "ms": 26133,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-paced-phone.json",
+   "video": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/recording.mp4"
+  }
+ ]
+}

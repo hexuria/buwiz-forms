@@ -31,14 +31,18 @@ No local plug patch was needed or used: this app's own `nsh/Cargo.toml` and `nsh
 | tax-year | pass | |
 | navigate | pass | |
 | open-2551q | pass | |
-| money-boxes | known gap | s14 click `fp-frm2551Qv2018:amendedRtn_2`: `occluded_by: 5584` — the radio's own 16x16 child occludes the press in the strict adapter |
+| money-boxes | pass | the first attempt correctly refused because the floating section pill `fp-pill-list` covered the radio; the recipe now scrolls the form clear before clicking |
 | sheet-press | skipped | no phone variant |
 | delete-row | pass | |
 | queue | refused | `presses a send control: run with --allow-send` (as required: nothing queued or sent) |
 | birth-date | pass | |
 | sign-out | known gap | s4: `wait_until timed out: node \`locked-screen\` not found` under mandatory `BIR_AUTH_BYPASS=1` |
 
-Totals: 7 pass, 2 known gap, 1 refused, 1 skipped.
+Totals for the original full Android run were 7 pass, 2 known gap, 1 refused, 1 skipped; after the money-boxes recipe fix the focused Android rerun is 5/5 pass through money-boxes. The remaining full-suite rows are unchanged: sign-out known gap, queue refused, sheet-press skipped.
+
+## Focused Android money-boxes rerun
+
+`android-money-boxes-fix/` is the rerun at the same app/plug with only the prerequisite recipes and money-boxes (`setup-start`, `sign-up`, `tax-year`, `open-2551q`, `money-boxes`). All five passed; money-boxes passed in 26,133 ms. Its recording is `android-money-boxes-fix/06-money-boxes/recording.mp4`.
 
 ## Linux table (`linux/report.json`, `linux/report.md`)
 
@@ -62,7 +66,7 @@ Totals: 8 pass, 1 known gap, 1 refused, 1 skipped.
 
 - `sign-up-android.json`: converted the Android variant to JSON and hides the software keyboard after each `set_value`; the low fields/save button otherwise refuse as keyboard-occluded.
 - `tax-year-android.json`: same narrow flow with keyboard hides after palette/search input.
-- `money-boxes-paced-phone.json`: added the narrow-layout scroll/part-2 navigation already present in the fallback, and a keyboard hide before returning to Amended No.
+- `money-boxes-paced-phone.json`: added the narrow-layout scroll/part-2 navigation already present in the fallback, a keyboard hide before returning to Amended No, and a final `form-scroll` (`dy: 1000`) so the radios are clear of the floating section pill `fp-pill-list` before the click. The pill's 16x16 list icon was the real occluder in the first failure (`occluded_by: 5584`), not a child of the radio.
 - `money-boxes-phone.json` / `money-boxes-paced-phone.json`: final position normalized so delete-row starts deterministically.
 - `delete-row.json`: converted to JSON, uses the known 2551Q Schedule 1 table id, scrolls the narrow form, opens part IV, then exercises add/fill/delete through the sheet. This fixes the old resolver setup failure caused by the collapsed/culled table.
 - `smoke.json`: points Android at the fixed variants and updates stale known-gap wording. No app source was changed.

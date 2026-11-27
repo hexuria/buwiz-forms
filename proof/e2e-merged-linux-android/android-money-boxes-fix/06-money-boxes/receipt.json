@@ -1,0 +1,189 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-money-boxes-paced-phone",
+  "fingerprint": "fnv1a64:219cff839a21a0b6",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1771,
+      "screenshot": {
+        "path": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/001-s1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s1a",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 983
+    },
+    {
+      "id": "s1b",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 700
+    },
+    {
+      "id": "s1c",
+      "ok": true,
+      "elapsed_ms": 336
+    },
+    {
+      "id": "s1d",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 980
+    },
+    {
+      "id": "s1e",
+      "ok": true,
+      "elapsed_ms": 89
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 795
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 1036
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3162
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 296,
+      "screenshot": {
+        "path": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/010-s5.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 399
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 106
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3825
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 270,
+      "screenshot": {
+        "path": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/014-s9.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 453
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 418,
+      "screenshot": {
+        "path": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/016-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 521
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 384,
+      "screenshot": {
+        "path": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/018-s13.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13h",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 317
+    },
+    {
+      "id": "s13r",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3609
+    },
+    {
+      "id": "s13p",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1330
+    },
+    {
+      "id": "s13w",
+      "ok": true,
+      "elapsed_ms": 105
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2123,
+      "screenshot": {
+        "path": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/023-s14.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/001-s1.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/010-s5.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/014-s9.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/016-s11.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/018-s13.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j58/android-mbfix2/06-money-boxes/023-s14.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 24019
+}
