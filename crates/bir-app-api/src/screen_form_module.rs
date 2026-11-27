@@ -3248,7 +3248,7 @@ fn lifecycle_text<'a>(draft: &'a Value, name: &str) -> Option<&'a str> {
 }
 
 /// A lifecycle fact that is a yes or no (absent is no); see [`lifecycle_text`].
-fn lifecycle_flag(draft: &Value, name: &str) -> bool {
+pub(crate) fn lifecycle_flag(draft: &Value, name: &str) -> bool {
     draft[name]
         .as_bool()
         .or_else(|| draft["lifecycle"][name].as_bool())
@@ -14873,6 +14873,85 @@ mod tests {
             assert_eq!(offered(), true, "{code}");
             // A dry run reached nobody: there is nothing to amend.
             assert!(!amend_offered(), "{code}: a dry run is not amended");
+        }
+    }
+
+    /// Link 3 of 3 of "a relay dry_run result never reads as filed" (link 1:
+    /// bir-submit `client::tests::a_relay_dry_run_result_with_its_signed_receipt_is_a_verified_test_send`;
+    /// link 2: bir-core `background_cron::tests::a_relay_dry_run_result_is_stored_as_a_test_send_on_every_path`).
+    /// The shared fixture's result through bir-core's `send_outcome`, stored
+    /// as link 2 proves the worker stores it (Submitted, `submitted_dry_run`,
+    /// the receipt, not the mock relay), for each storage shape: the open,
+    /// the returns list and the deadline rows all say a test send, never a
+    /// send that reached the BIR, and the deadline stays open (its row says
+    /// `submitted_dry_run`, which the screens read as not filed).
+    #[test]
+    fn a_relay_dry_run_result_never_reads_as_filed() {
+        use crate::send_state::{SENT_LINE, TEST_SENT_LINE};
+        let report = bir_core::relay::dry_run_result_fixture_report();
+        let codes = [("1601C", 6i64), ("2551Q", 2), ("0619E", 5)];
+        setup_taxpayer_filing(&codes.map(|(code, _)| code));
+        for (code, period) in codes {
+            let opened = open_for(TIN, code, 2026, period);
+            let id = store_filed(code, &opened["draft"], "Submitted");
+            let (_, raw) = raw_row(id);
+            let mut sent: Value = serde_json::from_str(&raw).unwrap();
+            let lifecycle = if sent["lifecycle"].is_object() {
+                &mut sent["lifecycle"]
+            } else {
+                &mut sent
+            };
+            lifecycle["submitted_dry_run"] = json!(report.simulated);
+            lifecycle["submitted_via_relay"] = json!(false);
+            lifecycle["relay_receipt"] = json!(report.relay_receipt);
+            raw_exec(
+                &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+                &[&serde_json::to_string(&sent).unwrap()],
+            );
+
+            let open = open_for(TIN, code, 2026, period);
+            assert_eq!(open["status"], "Submitted", "{code}: the stored status");
+            assert_eq!(open["submitted_dry_run"], true, "{code}");
+            assert_eq!(open["send"]["stage"], "test_sent", "{code}");
+            assert_eq!(open["send"]["line"], TEST_SENT_LINE, "{code}");
+
+            let rows = call("list_returns", vec!["all".into()]).unwrap();
+            let row = rows
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["id"] == id)
+                .unwrap_or_else(|| panic!("{code}: listed"))
+                .clone();
+            assert_eq!(row["send"]["stage"], "test_sent", "{code}");
+            assert_eq!(row["send"]["line"], TEST_SENT_LINE, "{code}");
+            assert_eq!(row["submitted_via_relay"], false, "{code}");
+
+            let due = call(
+                "deadlines_between",
+                vec!["2026-01-01".into(), "2026-12-31".into()],
+            )
+            .unwrap();
+            let due = due
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|due| due["draft_id"] == id)
+                .unwrap_or_else(|| panic!("{code}: a deadline row"))
+                .clone();
+            assert_eq!(
+                due["submitted_dry_run"], true,
+                "{code}: the deadline stays open"
+            );
+
+            for send in [&open["send"], &row["send"]] {
+                assert_ne!(send["stage"], "sent", "{code}");
+                assert_ne!(send["line"], SENT_LINE, "{code}");
+                let line = send["line"].as_str().unwrap().to_lowercase();
+                for word in ["sent", "filed", "submitted"] {
+                    assert!(!line.contains(word), "{code}: {word:?} in {line:?}");
+                }
+            }
         }
     }
 

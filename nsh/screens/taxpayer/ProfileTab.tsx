@@ -3,7 +3,7 @@
 // inbox, Agent filing), each editable one with an inline Edit; then Archive or delete for the admin. Narrow: the sections
 // stack full width and an edit opens in a sheet with Save pinned at its foot.
 import type { JSX } from "nsh";
-import { View } from "nsh";
+import { signal, untracked, View } from "nsh";
 import type { BranchFieldName } from "../../bir";
 import { shownDate } from "../../lib/dates";
 import { joinNames, readerChips, type FactName } from "../../lib/facts";
@@ -11,15 +11,18 @@ import { formatTin } from "../../lib/format";
 import { app, go, store } from "../../shell";
 import { revealAndFocus } from "../../ui/focus";
 import {
-  AppButton, Card, Chip, Code, DigitCells, Disclosure, DisclosureGroup, Dropdown, Field, FieldCell, FieldGrid, FormActions, Line,
-  SectionTitle, Segmented, SettingRow, Sheet, Switch, Text, TextField,
+  AppButton, Card, Chip, Code, DateField, DateTouchField, DigitCells, Disclosure, DisclosureGroup, Dropdown, Field, FieldCell, FieldGrid,
+  FormActions, Line, phoneLayout, SectionTitle, Segmented, SettingRow, Sheet, Switch, Text, TextField,
 } from "../../ui";
 import { SearchPick } from "../form/controls";
 import { canRemove, deleteTaxpayer, setGrant, setSectionOpen, shared, toggleArchive } from "./actions";
 import { ReplaceBanner } from "./Banners";
 import { FactsBody, factsSummary } from "./Facts";
 import { InboxBody } from "./Inbox";
-import { ADDRESS_FIELDS, addressMeta, agentMeta, inboxMeta, plural, TAXPAYER_TYPES, type EditableSection, type SectionId } from "./logic";
+import {
+  ADDRESS_FIELDS, addressMeta, agentMeta, futureDateNote, inboxMeta, plural, profileDateProblem, profileDateShown, profileDateStored, realDate,
+  TAXPAYER_TYPES, todayText, type EditableSection, type SectionId,
+} from "./logic";
 import type { PageState } from "./page";
 
 const TITLES: Record<EditableSection, string> = { taxpayer: "Taxpayer", branch: "Registered activity", address: "Address and contact" };
@@ -75,6 +78,8 @@ const inherits = (f: BranchFieldName) => {
 };
 const inheritable = () => Boolean(app.branch() && !app.branch()?.is_head_office && headOffice());
 const startLabel = () => (app.taxpayer()?.taxpayer_type === "Individual" ? "Business start date" : "Date of incorporation");
+/** The start date as a refusal names it ("A business start date can't be in the future."). */
+const startNoun = () => (app.taxpayer()?.taxpayer_type === "Individual" ? "A business start date" : "A date of incorporation");
 
 // ---------------------------------------------------------------- read mode
 
@@ -133,13 +138,13 @@ function AddressRead() {
 // ---------------------------------------------------------------- edit mode
 
 /** A control in a section being edited: the label, the "Same as head office" switch, the error once shown. */
-function EditCell(props: { s: PageState; field: string; label: string; full?: boolean; inherit?: boolean; children?: JSX.Element }) {
+function EditCell(props: { s: PageState; field: string; label: string; full?: boolean; inherit?: boolean; note?: string; children?: JSX.Element }) {
   const f = props.field as BranchFieldName;
   return (
     <FieldCell full={props.full}>
       <Field
         label={props.label}
-        error={props.s.errors()[props.field]}
+        error={props.note || props.s.errors()[props.field]}
         inheritSwitch={
           props.inherit && inheritable() ? (
             <Switch
@@ -181,6 +186,79 @@ function EditText(props: { s: PageState; field: string; label: string; full?: bo
   );
 }
 
+/**
+ * A date of the section being edited, in the form page's date controls: the kit's DateField (typed MM/DD/YYYY or 08171990, a
+ * calendar, "May 17, 1990" once left) in a wide window, the kit's DateTouchField (a row and its date sheet) in the phone layout,
+ * as periodField.tsx does. The section keeps ISO (YYYY-MM-DD); profileDateShown and profileDateStored (logic.ts) convert here.
+ * A day after today is not taken: the box goes back to the date it held and says so under it.
+ */
+function EditDate(props: { s: PageState; field: "birth_date" | "business_start_date"; label: string; noun: string }) {
+  const e = () => props.s.edit();
+  const stored = () => e()?.values[props.field] ?? "";
+  const testID = () => `tp-${e()?.sec}-${props.field}`;
+  const note = signal("");
+  const past = (v: string) => realDate(v) && v <= todayText();
+  // The date the box goes back to: the last past day it held.
+  let kept = untracked(() => (past(stored()) ? stored() : ""));
+  const take = (typed: string) => {
+    const v = profileDateStored(typed);
+    note.set("");
+    if (past(v)) kept = v;
+    props.s.setValue(props.field, v);
+  };
+  const settle = () => {
+    const v = stored();
+    if (realDate(v) && !past(v)) {
+      props.s.setValue(props.field, kept);
+      note.set(futureDateNote(props.noun, kept));
+    } else if (past(v)) kept = v;
+    props.s.touch(props.field);
+  };
+  const error = () => Boolean(note()) || Boolean(props.s.errors()[props.field]);
+  return (
+    <EditCell s={props.s} field={props.field} label={props.label} note={note()}>
+      <If
+        when={phoneLayout()}
+        else={
+          // The kit's DateField prints its own "Type the date as ..." under its box; the cell prints the same sentence, so the box is
+          // clipped to its height and the sentence shows once (as FieldControl's DateBox does).
+          <View class="h-8 min-w-0 overflow-hidden">
+            <DateField
+              testID={testID()}
+              accessibilityLabel={props.label}
+              value={profileDateShown(stored())}
+              max={todayText()}
+              calendarStart={past(stored()) ? stored() : undefined}
+              error={error()}
+              inputRef={(r) => {
+                if (e()?.focusField === props.field) revealAndFocus(r);
+              }}
+              onChange={take}
+              onBlur={settle}
+            />
+          </View>
+        }
+      >
+        <DateTouchField
+          testID={testID()}
+          label={props.label}
+          value={profileDateShown(stored())}
+          start={past(stored()) ? stored() : todayText()}
+          max={todayText()}
+          error={error()}
+          validate={(text) => profileDateProblem(text, props.noun)}
+          // A form's link to this date (TaxpayerPage: focusField) opens its sheet, as the wide box takes the keys.
+          autoOpen={e()?.focusField === props.field}
+          onChange={(text) => {
+            take(text);
+            settle();
+          }}
+        />
+      </If>
+    </EditCell>
+  );
+}
+
 /** An RDO or ZIP pick of the section being edited. */
 function EditPick(props: { s: PageState; field: "rdo_code" | "zip_code"; label: string }) {
   const e = () => props.s.edit();
@@ -190,6 +268,7 @@ function EditPick(props: { s: PageState; field: "rdo_code" | "zip_code"; label: 
         testID={`tp-${e()?.sec}-${props.field}`}
         label={props.label}
         options={pickOptions(props.field)}
+        searchKeyboard={props.field === "zip_code" ? "digits-first" : "default"}
         value={e()?.values[props.field] ?? ""}
         onPick={(v) => {
           props.s.setValue(props.field, v);
@@ -237,7 +316,7 @@ function SectionEditor(props: { s: PageState }) {
             </View>
           </EditCell>
           <If when={e()?.values.birth_date !== undefined}>
-            <EditText s={s} field="birth_date" label="Birth date" placeholder="YYYY-MM-DD" tabular />
+            <EditDate s={s} field="birth_date" label="Birth date" noun="A birth date" />
           </If>
         </FieldGrid>
         <Text variant="meta" tone="fg3" class="mt-4">Changing the TIN moves every branch, tax year, return and template to the new number.</Text>
@@ -261,7 +340,7 @@ function SectionEditor(props: { s: PageState }) {
           <EditPick s={s} field="rdo_code" label="RDO" />
           <If when={e()?.yearFields}>
             <EditText s={s} field="line_of_business" label="Line of business" full placeholder="As on the Certificate of Registration" />
-            <EditText s={s} field="business_start_date" label={startLabel()} placeholder="YYYY-MM-DD" tabular />
+            <EditDate s={s} field="business_start_date" label={startLabel()} noun={startNoun()} />
           </If>
         </FieldGrid>
       </If>

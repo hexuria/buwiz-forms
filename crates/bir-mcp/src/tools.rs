@@ -130,21 +130,21 @@ pub static TOOLS: &[Tool] = &[
     Tool {
         name: "bir_form_open",
         action: Action::Host(HostCall::Invoke("form.open")),
-        description: "Open a draft return in BIR for one taxpayer and period, exactly as the form's page in BIR opens it (prefilled from the taxpayer profile; the saved draft if there is one). Any of BIR's 43 forms, by code (e.g. 1601C, 2551Q, 2550Q, 0619E, 1701, 1702RT). `period`: month 1-12 for monthly forms, quarter 1-4 for quarterly forms, 0 (or omitted) for annual returns, the return number for as-needed forms (0605, 1707). Only one form can be open at a time: if BIR answers \"form already open\", do NOT retry; ask the user to save the open draft (bir_form_save_draft) or dismiss it (bir_form_dismiss) first.",
+        description: "Open a draft return in BIR for one taxpayer and period, exactly as the form's page in BIR opens it (prefilled from the taxpayer profile; the saved draft if there is one). Any of BIR's 43 forms, by code (e.g. 1601C, 2551Q, 2550Q, 0619E, 1701, 1702RT). `period`: month 1-12 for monthly forms, quarter 1-4 for quarterly forms, 0 (or omitted) for annual returns, the return number for as-needed forms (0605, 1707). Only one form can be open at a time: if BIR answers \"form already open\", do NOT retry; ask the user to save the open draft (bir_form_save_draft) or dismiss it (bir_form_dismiss) first. `status` is the saved return's (Draft, Queued, Submitted, Confirmed, Paid). `dry_run` is null until a send has finished; then true for a test send (nothing reached the BIR) and false for a real one. `send` is the send state the app shows (stage, line), or null.",
         schema: open_schema,
         build_args: open_args,
     },
     Tool {
         name: "bir_form_fields",
         action: Action::Host(HostCall::Invoke("form.fields")),
-        description: "Read every box of the open form that you may fill, from the form's official definition: official key, item number, label (as printed on the form), kind (text, radio, checkbox, select), options, current value and where it came from (profile, past_return, document, user, ai). A radio item is one box (its group key, e.g. frm0619E:optWithheld) whose options are its choices and whose value is the chosen option. Computed boxes, hidden controls and boxes owned by the profile or the period are left out (counted in `read_only`). Use these keys with bir_form_fill. 1601C and 2551Q also list their older short keys under `boxes`.",
+        description: "Read every box of the open form that you may fill, from the form's official definition: official key, item number, label (as printed on the form), kind (text, radio, checkbox, select), options, current value and where it came from (profile, past_return, document, user, ai). A radio item is one box (its group key, e.g. frm0619E:optWithheld) whose options are its choices and whose value is the chosen option. Computed boxes, hidden controls and boxes owned by the profile or the period are left out (counted in `read_only`). Use these keys with bir_form_fill. 1601C and 2551Q also list their older short keys under `boxes`. `status` is the saved return's (Draft, Queued, Submitted, Confirmed, Paid). `dry_run` is null until a send has finished; then true for a test send (nothing reached the BIR) and false for a real one. `send` is the send state the app shows (stage, line), or null.",
         schema: empty_schema,
         build_args: no_args,
     },
     Tool {
         name: "bir_form_context",
         action: Action::Host(HostCall::Invoke("form.context")),
-        description: "Read what BIR knows that can ground the open form: the taxpayer profile (COR facts), tax elections the user has stored (e.g. 8% option) - these are never inferred, past returns for this TIN, and uploaded documents (OCR) for the period. Fill only what this context supports.",
+        description: "Read what BIR knows that can ground the open form: the taxpayer profile (COR facts), tax elections the user has stored (e.g. 8% option) - these are never inferred, past returns for this TIN, and uploaded documents (OCR) for the period. Fill only what this context supports. Each past return carries `status`, `dry_run` (null until its send has finished; then true for a test send, false for a real one) and `send`.",
         schema: empty_schema,
         build_args: no_args,
     },
@@ -172,7 +172,7 @@ pub static TOOLS: &[Tool] = &[
     Tool {
         name: "bir_form_send",
         action: Action::Host(HostCall::Invoke("form.send")),
-        description: "Queue the open form for upload from this computer, after the same validation as bir_form_validate. Requires a standing OK for this taxpayer and form, granted in the app. Without that OK the result is approval_required and pending, and nothing is queued. An invalid form is not queued: field_errors are the page's Validate errors. A dry-run build queues without contacting BIR.",
+        description: "Queue the open form to be sent to the BIR, after the same validation as bir_form_validate. Requires a standing OK for this taxpayer and form, granted in the app. Without that OK the result is approval_required and pending, and nothing is queued. An invalid form is not queued: field_errors are the page's Validate errors. A queued return is not filed yet (`filed` false). Through the Buwiz relay `dry_run` is null: whether it is a real send or a test send is known once it is sent; read `dry_run` and `send` then from bir_form_open. A development build that sends nothing answers `dry_run` true.",
         schema: empty_schema,
         build_args: no_args,
     },

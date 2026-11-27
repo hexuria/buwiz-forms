@@ -9,10 +9,13 @@
 //   gate      true: the Buwiz account gate is closed (the host's gate answer is replaced; the dev bypass would open it)
 //   email, expiresIn, resendIn, pending, resend: the email-and-code sign-in, which the gate opens on (screens/auth/testEmail.ts);
 //             the readout counts the reads of the kept request ("pending reads: N")
+//   signOut   true (with gate): the button "Test: sign out" signs out as the desktop menu's Sign Out does (the host's sign-out,
+//             faked to answer at once, then app.lockCloud), for a second sign-in in the same run
 //   drop      true: the button "Test: drop the sign-in" forgets the sign-in flow's state in memory (signInFlow.reset), as an
 //             engine made anew starts without it
 //   lock      true: the sign-in screen once the frame is up, whatever the codes (to show "Open without signing in")
-//   readout   true: print the session and what the session can see (returns, deadlines by TIN root) at the top right
+//   readout   true: print the session and what the session can see (returns, deadlines by TIN root) at the top right, and
+//             what the open page before the app measured and chose ("fit: <page> logo=<points> fits=<bool> rest=.. room=..")
 //   start     the dev route            firstRun  default true
 //   authFails a sentence: the host's auth_state throws it (the access state cannot be read) until "Test: heal auth" is pressed
 //   polls     true: the buttons "Test: toast" (a toast, as any screen shows one) and "Test: filing event" (the first taxpayer's
@@ -23,8 +26,9 @@ import { effect, host, mount, signal, Text, untracked, View } from "nsh";
 import "./theme/fonts";
 import { bir } from "./bir";
 import { createDemoTaxpayer } from "./bir/testing";
+import { lastOpenFit } from "./screens/auth/parts";
 import { signInFlow } from "./screens/auth/signInFlow";
-import { type EmailParams, fakeEmail } from "./screens/auth/testEmail";
+import { type EmailParams, fakeEmail, SIGNED_IN } from "./screens/auth/testEmail";
 import { totpCode } from "./screens/auth/testTotp";
 import { app, pollSteps } from "./shell/app";
 import { Shell } from "./shell/Shell";
@@ -47,6 +51,7 @@ interface Params extends EmailParams {
   authFails?: string;
   polls?: boolean;
   drop?: boolean;
+  signOut?: boolean;
   start?: string;
   firstRun?: boolean;
 }
@@ -89,19 +94,35 @@ async function seed(p: Params): Promise<void> {
 }
 
 /** The gate and the email sign-in as a test needs them (the dev bypass opens the real gate; a test never reaches the network). */
+/** Whether the fake gate is open (gate): the right code opens it, "Test: sign out" closes it. */
+let gateOpen = false;
+
 function fakeAccount(p: Params): void {
   const h = bir as unknown as Record<string, unknown>;
   if (p.gate) {
-    let open = false;
     const realOpened = bir.cloud_account_session_opened;
-    h.cloud_account_gate = () => ({ unlocked: open, offline: false, server_url: "http://localhost:3008", email: null, detail: "" });
+    h.cloud_account_gate = () => ({ unlocked: gateOpen, offline: false, server_url: "http://localhost:3008", email: null, detail: "" });
     h.cloud_account_session_opened = () => {
       called("cloud_account_session_opened");
-      open = true;
+      gateOpen = true;
       return realOpened();
     };
   }
   if (p.gate) fakeEmail(h, p, called, undefined, () => pendingReads.set(pendingReads() + 1));
+  if (p.gate && p.signOut) {
+    // Signed out at once, no network: the gate's answer is closed again.
+    h.cloud_account_sign_out = async () => {
+      gateOpen = false;
+      return { ...SIGNED_IN, signed_in: false, email: null, user_id: null };
+    };
+  }
+}
+
+/** What the open page now showing measured and chose (screens/auth/parts.tsx OpenPage). */
+function fitLine(): string {
+  const fit = lastOpenFit();
+  if (!fit) return "fit: none";
+  return `fit: ${fit.page} logo=${fit.logo} fits=${fit.fits} rest=${fit.rest} room=${fit.room}`;
 }
 
 function Readout() {
@@ -113,6 +134,7 @@ function Readout() {
       <Text testID="demo-visible">{`returns: ${roots(store.savedReturns())} | deadlines: ${roots(store.deadlines(`${year}-01-01`, `${year + 1}-12-31`))} | taxpayers: ${roots(store.taxpayers())}`}</Text>
       <Text testID="demo-calls">{`calls: ${calls().join(",") || "none"}`}</Text>
       <Text testID="demo-pending-reads">{`pending reads: ${pendingReads()}`}</Text>
+      <Text testID="demo-fit">{fitLine()}</Text>
       <Text testID="demo-key">{`key: ${recoveryKey}`}</Text>
     </View>
   );
@@ -193,6 +215,21 @@ function Demo() {
       <View class="absolute bottom-0 right-0 flex-row gap-1">
         <If when={Boolean(p.authFails)}>
           <AppButton testID="demo-auth-heal" label="Test: heal auth" size="sm" onPress={() => authBroken.set(false)} />
+        </If>
+        <If when={p.signOut === true}>
+          <AppButton
+            testID="demo-sign-out"
+            label="Test: sign out"
+            size="sm"
+            onPress={() => {
+              // The menu's Sign Out (shell/desktop/actions.ts signOutOfTheAccount): the host signs out, then app.lockCloud. Nothing
+              // here resets the sign-in flow: the gate's coming back must do that itself.
+              void (async () => {
+                await bir.cloud_account_sign_out();
+                app.lockCloud();
+              })();
+            }}
+          />
         </If>
         <If when={p.drop === true}>
           <AppButton testID="demo-drop-sign-in" label="Test: drop the sign-in" size="sm" onPress={() => signInFlow.reset()} />

@@ -4870,6 +4870,7 @@ dependencies = [
  "peniko",
  "png 0.17.16",
  "robius-authentication",
+ "serde",
  "serde_json",
  "temp-env",
  "tempfile",
@@ -4877,6 +4878,7 @@ dependencies = [
  "webkit6",
  "webview2-com",
  "windows 0.62.2",
+ "windows-future",
  "windows-sys 0.61.2",
 ]
 

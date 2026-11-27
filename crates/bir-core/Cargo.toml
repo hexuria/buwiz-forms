@@ -156,6 +156,8 @@ keyring = { workspace = true, features = ["sync-secret-service", "crypto-rust"] 
 keyring = { workspace = true, features = ["apple-native"] }
 
 [dev-dependencies]
+# Its own integration tests (tests/*.rs) get the test-build rule too.
+bir-core = { path = ".", default-features = false, features = ["test-support"] }
 insta = "1"
 tempfile = "3"
 temp-env = { version = "0.3", features = ["async_closure"] }

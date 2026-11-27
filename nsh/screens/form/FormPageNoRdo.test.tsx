@@ -33,5 +33,6 @@ test("desktop: 1601C with no profile RDO lists the real RDOs and not 000, and ta
   await app.waitFor(`${RDO}-opt-040`, { timeout: 10000 });
   await app.press(`${RDO}-opt-040`);
   await app.waitFor(`${RDO}-opt-040`, { state: "gone", timeout: 10000 });
-  await app.waitUntil(() => app.texts().some((t) => /^040\b/.test(t)), { timeout: 10000 });
+  // On desktop the RDO box is a combobox (#406): the pick shows in its text box as "040 — <name>", not as a label.
+  await app.waitUntil(() => /^040\b/.test(app.value(`${RDO}-search`) ?? ""), { timeout: 10000 });
 }, 90_000);

@@ -23,6 +23,16 @@ export const LOOKS = [
 ] as const;
 
 /**
+ * The pages before the app are shot in more window shapes than the rest: a tall desktop window (does the page use the
+ * height?) and a short one (does the fullest page scroll rather than clip?), light; then the four usual looks.
+ */
+export const AUTH_LOOKS = [
+  ...LOOKS,
+  { name: "tall-light", width: 1100, height: 1300, platform: "macos", colorScheme: "light" },
+  { name: "short-light", width: 1280, height: 640, platform: "macos", colorScheme: "light" },
+] as const;
+
+/**
  * Empties digit cells (the TIN and branch code of the sign-in and the taxpayer pages) in a real window: `app.clear` does nothing to an
  * OtpInput there (headless it does), so the cells take the keys and Backspace takes each digit.
  */

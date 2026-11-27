@@ -1562,29 +1562,8 @@ mod tests {
     #[cfg(any(debug_assertions, feature = "mock-relay"))]
     #[tokio::test]
     async fn relay_logs_form_and_length_without_iaf_names_or_reflected_pii() {
-        use std::io::Write;
-        use std::sync::Mutex;
-        use tracing::instrument::WithSubscriber;
-
-        #[derive(Clone)]
-        struct Capture(Arc<Mutex<Vec<u8>>>);
-        impl Write for Capture {
-            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                self.0.lock().unwrap().extend_from_slice(bytes);
-                Ok(bytes.len())
-            }
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
-        let captured = Capture(Arc::new(Mutex::new(Vec::new())));
-        let writer = captured.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .without_time()
-            .with_ansi(false)
-            .with_max_level(tracing::Level::INFO)
-            .with_writer(move || writer.clone())
-            .finish();
+        // The test runs on a current-thread runtime, so every poll is on this thread.
+        let capture = crate::test_logs::start_capture(tracing::Level::INFO);
         async {
             assert!(
                 http_reply(
@@ -1606,9 +1585,8 @@ mod tests {
                 warn!(%error, "the worker can log the returned error safely");
             }
         }
-        .with_subscriber(subscriber)
         .await;
-        let logs = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
+        let logs = capture.finish();
         assert!(
             logs.contains("1601C") && logs.contains("payload_len=0"),
             "{logs}"
