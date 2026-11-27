@@ -2,55 +2,27 @@
 // page after it (Home, or the first-run setup or PIN sign-in when one comes first), never a page of its own.
 //
 // "The first time" is the first sign-in of this account on this device: the host's verify answer does not say whether the
-// account was just made, so each account (its user id, else its address) is written to the setting `welcomed_accounts` the
-// first time it signs in here, and the note shows only when it was not there yet. It shows on that one page and goes once the
-// person leaves it; it never shows again for that account on this device.
+// account was just made, so the page asks the host (`welcome_first_time`), which checks and records the signed-in account
+// itself and answers only true or false. The page never names an account and reads no list of them (accounts-and-lock W3).
+// The note shows on that one page and goes once the person leaves it; it never shows again for that account on this device.
 import { cleanup, effect, signal, View } from "nsh";
-import type { CloudAccountStatus } from "../../bir";
-import { store } from "../../shell";
+import { bir } from "../../bir";
 import { Icon, Text, TOUCH } from "../../ui";
 import { setAbovePage } from "./parts";
 import { signInFlow } from "./signInFlow";
 import { openColumnMax } from "./signInLook";
 
-/** The setting that lists the accounts welcomed on this device (a JSON array of user ids or addresses). */
-export const WELCOMED_KEY = "welcomed_accounts";
 export const WELCOME_TEXT = "Welcome. Your Buwiz account is ready.";
-
-/** The account as this device knows it: its user id, else its address in lower case; null when the answer has neither. */
-export function accountKey(status: Pick<CloudAccountStatus, "user_id" | "email">): string | null {
-  if (status.user_id) return status.user_id;
-  const email = status.email?.trim().toLowerCase();
-  return email ? email : null;
-}
-
-/** Whether `key` is new to the stored list, and the list to store then (a list that does not read is taken as empty). */
-export function welcomedAfter(stored: string | null, key: string): { first: boolean; next: string } {
-  let list: string[] = [];
-  try {
-    const parsed: unknown = stored ? JSON.parse(stored) : [];
-    if (Array.isArray(parsed)) list = parsed.filter((v): v is string => typeof v === "string");
-  } catch {
-    list = [];
-  }
-  if (list.includes(key)) return { first: false, next: stored ?? "[]" };
-  return { first: true, next: JSON.stringify([...list, key]) };
-}
 
 /** The note waits for the first page after the first sign-in. */
 const pending = signal(false);
 
-/** Signed in: the first time for this account here, it is written down and the note waits for the page. */
-function noteSignIn(status: CloudAccountStatus): void {
-  const key = accountKey(status);
-  if (!key) return;
+/** Signed in: the first time for this account here (the host's answer, recorded there), the note waits for the page. */
+function noteSignIn(): void {
   try {
-    const { first, next } = welcomedAfter(store.setting(WELCOMED_KEY), key);
-    if (!first) return;
-    store.writeFor(`setting:${WELCOMED_KEY}`, "set_setting", WELCOMED_KEY, next);
-    pending.set(true);
+    if (bir.welcome_first_time()) pending.set(true);
   } catch {
-    // Not written down: no note rather than a note that could come again.
+    // No answer: no note rather than a note that could come again.
   }
 }
 
