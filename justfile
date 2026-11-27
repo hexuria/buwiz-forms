@@ -80,7 +80,7 @@ help:
 # The launch crew runner: `just crew doctor`, `just crew run ...`.
 [positional-arguments]
 crew *args:
-    {{PYTHON}} crew/bin/crew {{args}}
+    {{PYTHON}} crew/bin/crew "$@"
 
 # `just run` is the NSH app (nsh-run, a macOS dev window); the old gpui-shell host is gone.
 [macos]
