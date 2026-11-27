@@ -542,16 +542,36 @@ fn close_handle(mut handle: std::sync::Arc<std::sync::Mutex<Database>>) {
     }
 }
 
-/// The stored global-show chord, if the database is already open and a key
-/// is saved. Does not open the database: a missing handle means "not set".
+/// The stored global-show chord, if a key is saved: `device_settings` first,
+/// then the database this engine already has open (accounts-and-lock O1).
+/// Does not open the database: a missing handle means "not set" there.
 #[cfg(not(feature = "mas_build"))]
 pub fn stored_global_hotkey() -> Option<String> {
+    device_setting(GLOBAL_HOTKEY_SETTING).filter(|value| !value.is_empty())
+}
+
+/// The stored global-show chord's settings key.
+const GLOBAL_HOTKEY_SETTING: &str = "global_hotkey_key";
+
+/// A device-wide setting (accounts-and-lock PLAN §A.2, O1): the
+/// `device_settings` value first; until one is there, the same key in the
+/// database this engine has open (the legacy file before rooms). Never opens
+/// the database. `Some("")` is a value.
+pub fn device_setting(key: &str) -> Option<String> {
+    if let Some(value) = bir_core::rooms::device_setting(key) {
+        return Some(value);
+    }
     let handle = DATABASE.with(|slot| slot.borrow().clone())?;
     let db = bir_core::lock_timing::lock(&handle).ok()?;
-    db.get_setting("global_hotkey_key")
-        .ok()
-        .flatten()
-        .filter(|value| !value.is_empty())
+    db.get_setting(key).ok().flatten()
+}
+
+/// Write a device-wide setting: to `device_settings` from A1 on. Refused
+/// while the account gate is locked, as the database write it replaces was.
+fn set_device_setting(key: &str, value: &str) -> Result<(), HostError> {
+    crate::account_gate::ensure_unlocked()?;
+    bir_core::rooms::set_device_setting(key, value)
+        .map_err(|error| HostError::new(error.to_string()))
 }
 
 /// Whether no database handle of this process is open any more: true once
@@ -598,11 +618,14 @@ fn launch_on(handle: std::sync::Arc<std::sync::Mutex<Database>>) {
         .ok()
         .map(|guard| bir_core::log_files::retention_days(&guard));
     if let Some(days) = days {
+        // The round below reads the device store; until it has a value, this one.
+        bir_core::log_files::remember_retention(days);
         let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), days);
     }
-    // Not in test processes: the thread sleeps six hours between rounds.
+    // Not in test processes: the thread sleeps six hours between rounds. It
+    // holds no database handle (accounts-and-lock I5).
     #[cfg(not(test))]
-    bir_core::log_files::spawn_retention(std::sync::Arc::downgrade(&handle));
+    bir_core::log_files::spawn_retention();
 }
 
 /// Whether a submission worker runs in this process.
@@ -696,6 +719,8 @@ pub(crate) fn with_reader<R>(
 /// the live database through `BIR_DATABASE_PATH`.
 #[cfg(test)]
 pub(crate) fn use_ephemeral_database() {
+    // Its device settings in memory too: never a device.db in a real folder.
+    bir_core::rooms::use_ephemeral_device_store();
     drop_reader();
     DATABASE.with(|slot| {
         *slot.borrow_mut() = Some(std::sync::Arc::new(std::sync::Mutex::new(
@@ -754,21 +779,15 @@ pub fn to_json(value: &HostValue) -> serde_json::Value {
     }
 }
 
-/// Hotkey, log retention, and the paths Settings shows. A database that is
-/// not open yet answers the defaults; this must not fail the boot read.
+/// Hotkey, log retention, and the paths Settings shows. Device-wide settings:
+/// `device_settings` first, then the database if it is open; neither answers
+/// the defaults. This must not fail the boot read, and opens no database.
 fn computer_snapshot() -> (Option<String>, u32) {
-    let Some(handle) = DATABASE.with(|slot| slot.borrow().clone()) else {
-        return (None, bir_core::log_files::DEFAULT_RETENTION_DAYS);
-    };
-    let Ok(db) = bir_core::lock_timing::lock(&handle) else {
-        return (None, bir_core::log_files::DEFAULT_RETENTION_DAYS);
-    };
-    let hotkey = db
-        .get_setting("global_hotkey_key")
-        .ok()
-        .flatten()
-        .filter(|value| !value.trim().is_empty());
-    (hotkey, bir_core::log_files::retention_days(&db))
+    let hotkey = device_setting(GLOBAL_HOTKEY_SETTING).filter(|value| !value.trim().is_empty());
+    let retention = bir_core::log_files::parse_retention(
+        device_setting(bir_core::log_files::RETENTION_SETTING).as_deref(),
+    );
+    (hotkey, retention)
 }
 
 /// Chords the Settings picker offers. The same combo language as
@@ -831,11 +850,8 @@ fn set_global_hotkey(arguments: &gpui_shell::HostArguments) -> HostResult {
     if !combo.is_empty() && !crate::hooks::hooks().global_hotkey_registrable(&combo) {
         return Err(HostError::new(crate::hotkey_combo::NOT_REGISTRABLE));
     }
-    with_database(|db| {
-        db.set_setting("global_hotkey_key", &combo)
-            .map(|_| HostValue::Null)
-            .map_err(|error| HostError::new(error.to_string()))
-    })
+    set_device_setting(GLOBAL_HOTKEY_SETTING, &combo)?;
+    Ok(HostValue::Null)
 }
 
 /// How many days of `ebirforms.*.log` to keep. Out of range is refused.
@@ -851,12 +867,11 @@ fn set_log_retention(arguments: &gpui_shell::HostArguments) -> HostResult {
             bir_core::log_files::MAX_RETENTION_DAYS
         )));
     }
-    let days = with_database(|db| {
-        db.set_setting(bir_core::log_files::RETENTION_SETTING, &days.to_string())
-            .map_err(|error| HostError::new(error.to_string()))?;
-        Ok(bir_core::log_files::retention_days(db))
-    })?;
-    // File work, after the lock: the worker waits on it.
+    set_device_setting(bir_core::log_files::RETENTION_SETTING, &days.to_string())?;
+    let days = bir_core::log_files::parse_retention(
+        device_setting(bir_core::log_files::RETENTION_SETTING).as_deref(),
+    );
+    bir_core::log_files::remember_retention(days);
     let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), days);
     Ok(HostValue::Null)
 }
@@ -897,15 +912,12 @@ fn check_for_updates() -> HostResult {
 
 fn set_auto_update_download(arguments: &gpui_shell::HostArguments) -> HostResult {
     let enabled = arguments.boolean(0)?;
-    with_database(|db| {
-        db.set_setting(
-            crate::hooks::AUTO_DOWNLOAD_SETTING,
-            if enabled { "1" } else { "0" },
-        )
-        .map_err(|error| HostError::new(error.to_string()))?;
-        crate::hooks::hooks().set_auto_update_download(enabled);
-        Ok(HostValue::Null)
-    })
+    set_device_setting(
+        crate::hooks::AUTO_DOWNLOAD_SETTING,
+        if enabled { "1" } else { "0" },
+    )?;
+    crate::hooks::hooks().set_auto_update_download(enabled);
+    Ok(HostValue::Null)
 }
 
 fn list_profiles() -> HostResult {
@@ -982,8 +994,14 @@ fn page_setting_key(arguments: &gpui_shell::HostArguments) -> Result<String, Hos
     }
 }
 
+/// The page's settings are device-wide (the theme, accounts-and-lock §A.2):
+/// `device_settings` first, then the same key in the open database (O1).
 fn get_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     let key = page_setting_key(arguments)?;
+    if let Some(value) = bir_core::rooms::device_setting(&key) {
+        crate::account_gate::ensure_unlocked()?;
+        return Ok(HostValue::from(value));
+    }
     with_database(|db| {
         db.get_setting(&key)
             .map(HostValue::from)
@@ -991,14 +1009,12 @@ fn get_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     })
 }
 
+/// Written to `device_settings` (accounts-and-lock A1).
 fn set_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     let key = page_setting_key(arguments)?;
     let value = arguments.string(1)?.to_owned();
-    with_database(|db| {
-        db.set_setting(&key, &value)
-            .map(|_| HostValue::Null)
-            .map_err(|error| HostError::new(error.to_string()))
-    })
+    set_device_setting(&key, &value)?;
+    Ok(HostValue::Null)
 }
 
 // ---------- S2: auth + profile management ----------
@@ -1231,8 +1247,143 @@ fn admin_credentials(
     }
 }
 
-fn pin_matches(stored: Option<&str>, pin: &str) -> bool {
-    stored.is_some_and(|stored| stored == bir_core::crypto::hash_pin(pin))
+/// Where a PIN hash lives in the room file, for its rehash to Argon2id.
+#[derive(Debug, Clone)]
+enum PinStore {
+    /// A client PIN: `taxpayers.pin_hash` of this TIN root (or a branch copy, cleared by the rehash).
+    Taxpayer(String),
+    /// A PIN kept in a setting: the help-desk admin's `app_lock_pin_hash`.
+    Setting(&'static str),
+}
+
+/// A rehash to Argon2id waiting to start: `matched` is the stored value it replaces, only while it is still there.
+/// Started after the try's result is committed (N4), or right after an old-form write (N3).
+struct Rehash {
+    store: PinStore,
+    matched: String,
+    pin: bir_core::pin::Zeroizing<String>,
+}
+
+/// A PIN of the room file (`store`) against `pin`, in either form. A match against the old SHA-256 value (or a
+/// cheaper cost) gives the rehash to start once the try is committed ([`Rehash::start`]); the answer never waits
+/// on it.
+fn stored_pin_check(store: PinStore, stored: Option<&str>, pin: &str) -> (bool, Option<Rehash>) {
+    let Some(stored) = stored else {
+        return (false, None);
+    };
+    match bir_core::pin::check(stored, pin) {
+        Ok(bir_core::pin::Check::Match { upgrade }) => (
+            true,
+            upgrade.then(|| Rehash {
+                store,
+                matched: stored.to_owned(),
+                pin: bir_core::pin::Zeroizing::new(pin.to_owned()),
+            }),
+        ),
+        Ok(bir_core::pin::Check::Miss) => (false, None),
+        Err(error) => {
+            tracing::warn!("a PIN is stored in no form this version reads: {error}");
+            (false, None)
+        }
+    }
+}
+
+/// A client PIN (`taxpayers.pin_hash` of `tin_root`, or a branch copy) against `pin`; see [`stored_pin_check`].
+fn client_pin_check(tin_root: &str, stored: Option<&str>, pin: &str) -> (bool, Option<Rehash>) {
+    stored_pin_check(PinStore::Taxpayer(tin_root.to_owned()), stored, pin)
+}
+
+/// Start `rehash` if the try it came from matched: only after its result was committed (N4).
+fn start_rehash_after(matched: bool, rehash: Option<Rehash>) {
+    if let (true, Some(rehash)) = (matched, rehash) {
+        rehash.start();
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The last rehash [`Rehash::start`] started on this thread, for a test to wait on.
+    static LAST_REHASH: RefCell<Option<std::thread::JoinHandle<()>>> = const { RefCell::new(None) };
+}
+
+/// Wait for the rehash this thread started last, if any.
+#[cfg(test)]
+fn join_last_rehash() {
+    if let Some(rehash) = LAST_REHASH.with(|slot| slot.borrow_mut().take()) {
+        rehash.join().expect("the rehash thread ends");
+    }
+}
+
+impl Rehash {
+    /// A PIN just written in the old form by one of the page's synchronous verbs (N3): rehashed to Argon2id at once.
+    fn written(store: PinStore, old_form: &str, pin: &str) -> Self {
+        Self {
+            store,
+            matched: old_form.to_owned(),
+            pin: bir_core::pin::Zeroizing::new(pin.to_owned()),
+        }
+    }
+
+    /// The rehash (PLAN §B.1), on a thread of its own: hash the PIN with Argon2id, then store it in place of
+    /// `matched` (for a client, clearing the branch copies), unless the PIN changed meanwhile. A failure is logged;
+    /// the old value keeps working and its next match tries again.
+    fn start(self) {
+        let handle = match open_database_slot() {
+            Ok(handle) => handle,
+            Err(error) => {
+                tracing::warn!("PIN not rehashed: {error}");
+                return;
+            }
+        };
+        let spawned = std::thread::Builder::new()
+            .name("pin-rehash".into())
+            .spawn(move || {
+                let phc = match bir_core::pin::hash(&self.pin) {
+                    Ok(phc) => phc,
+                    Err(error) => return tracing::warn!("PIN not rehashed: {error}"),
+                };
+                let Ok(db) = bir_core::lock_timing::lock(&handle) else {
+                    return tracing::warn!("PIN not rehashed: database lock poisoned");
+                };
+                let written = match &self.store {
+                    PinStore::Taxpayer(root) => db
+                        .upgrade_client_pin_hash(root, &self.matched, &phc)
+                        .map_err(|error| error.to_string()),
+                    PinStore::Setting(key) => db
+                        .replace_setting_if(key, &self.matched, &phc)
+                        .map_err(|error| error.to_string()),
+                };
+                if let Err(error) = written {
+                    tracing::warn!("PIN not rehashed: {error}");
+                }
+            });
+        match spawned {
+            #[cfg(test)]
+            Ok(rehash) => LAST_REHASH.with(|slot| *slot.borrow_mut() = Some(rehash)),
+            #[cfg(not(test))]
+            Ok(_) => {}
+            Err(error) => tracing::warn!("PIN not rehashed: {error}"),
+        }
+    }
+}
+
+/// The admin's PIN under `mode`, and the rehash its match calls for. Solo: the owner taxpayer's PIN, a client PIN
+/// store. Help desk: the settings PIN.
+fn admin_pin_check(
+    db: &Database,
+    mode: &AccessMode,
+    pin: &str,
+) -> Result<(bool, Option<Rehash>), HostError> {
+    let credentials = admin_credentials(db, mode)?;
+    let store = match mode {
+        AccessMode::Solo(root) => PinStore::Taxpayer(root.clone()),
+        AccessMode::Helpdesk => PinStore::Setting(ADMIN_PIN_HASH),
+    };
+    Ok(stored_pin_check(
+        store,
+        credentials.pin_hash.as_deref(),
+        pin,
+    ))
 }
 
 fn totp_matches(secret: Option<&str>, token: &str) -> bool {
@@ -1248,9 +1399,13 @@ fn generate_totp_secret(arguments: &gpui_shell::HostArguments) -> HostResult {
         .into())
 }
 
+/// Deleted from `device_settings` and from the open database, so the
+/// fallback cannot bring an old value back.
 fn delete_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     let key = page_setting_key(arguments)?;
     with_database(|db| {
+        bir_core::rooms::delete_device_setting(&key)
+            .map_err(|error| HostError::new(error.to_string()))?;
         db.delete_setting(&key)
             .map(|_| HostValue::Null)
             .map_err(db_error)
@@ -1307,11 +1462,25 @@ fn set_taxpayer_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     with_database(|db| write_taxpayer_pin(db, &tin_root, pin.as_deref()))
 }
 
+/// The PIN is stored in the old form so the verb answers at once, then rehashed to Argon2id on its own thread
+/// straight after (N3): the page calls this synchronously, and the engine never waits on the slow hash.
 fn write_taxpayer_pin(db: &Database, tin_root: &str, pin: Option<&str>) -> HostResult {
     let hash = pin.map(bir_core::crypto::hash_pin);
     db.set_taxpayer_pin_hash(tin_root, hash.as_deref())
-        .map(|_| HostValue::Null)
-        .map_err(db_error)
+        .map_err(db_error)?;
+    if let (Some(pin), Some(hash)) = (pin, &hash) {
+        Rehash::written(PinStore::Taxpayer(tin_root.to_owned()), hash, pin).start();
+    }
+    Ok(HostValue::Null)
+}
+
+/// The help-desk admin PIN in its setting: the old form at once, then Argon2id on its own thread (N3), as
+/// [`write_taxpayer_pin`].
+fn write_admin_setting_pin(db: &Database, pin: &str) -> Result<(), HostError> {
+    let hash = bir_core::crypto::hash_pin(pin);
+    db.set_setting(ADMIN_PIN_HASH, &hash).map_err(db_error)?;
+    Rehash::written(PinStore::Setting(ADMIN_PIN_HASH), &hash, pin).start();
+    Ok(())
 }
 
 /// Set (with a current code) or clear (`null`) a taxpayer's authenticator.
@@ -1328,19 +1497,24 @@ fn set_taxpayer_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
 fn verify_taxpayer_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin_root = tin_root_argument(arguments.string(0)?)?;
     let pin = arguments.string(1)?;
-    let ok = auth_limiter::guarded(&auth_limiter::taxpayer(&tin_root), || {
+    let mut rehash = None;
+    let ok = auth_limiter::guarded_client(&tin_root, || {
         with_database(|db| {
             let credentials = taxpayer_credentials(db, &tin_root)?;
-            Ok(pin_matches(credentials.pin_hash.as_deref(), pin))
+            let (matched, upgrade) =
+                client_pin_check(&tin_root, credentials.pin_hash.as_deref(), pin);
+            rehash = upgrade;
+            Ok(matched)
         })
     })?;
+    start_rehash_after(ok, rehash);
     Ok(HostValue::Bool(ok))
 }
 
 fn verify_taxpayer_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin_root = tin_root_argument(arguments.string(0)?)?;
     let token = arguments.string(1)?;
-    let ok = auth_limiter::guarded(&auth_limiter::taxpayer(&tin_root), || {
+    let ok = auth_limiter::guarded_client(&tin_root, || {
         with_database(|db| {
             let credentials = taxpayer_credentials(db, &tin_root)?;
             Ok(totp_matches(credentials.totp_secret.as_deref(), token))
@@ -1374,14 +1548,20 @@ fn set_profile_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
 
 fn verify_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     let pin = arguments.string(0)?;
+    let mut rehash = None;
     let ok = auth_limiter::guarded(auth_limiter::ADMIN, || {
         with_database(|db| {
             Ok(match access_mode(db)? {
-                Some(mode) => pin_matches(admin_credentials(db, &mode)?.pin_hash.as_deref(), pin),
+                Some(mode) => {
+                    let (matched, upgrade) = admin_pin_check(db, &mode, pin)?;
+                    rehash = upgrade;
+                    matched
+                }
                 None => false,
             })
         })
     })?;
+    start_rehash_after(ok, rehash);
     Ok(HostValue::Bool(ok))
 }
 
@@ -1410,16 +1590,16 @@ fn set_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     with_database(|db| match require_access_mode(db)? {
         AccessMode::Solo(root) => write_taxpayer_pin(db, &root, pin.as_deref()),
         AccessMode::Helpdesk => match pin {
-            Some(pin) => db.set_setting(ADMIN_PIN_HASH, &bir_core::crypto::hash_pin(&pin)),
+            Some(pin) => write_admin_setting_pin(db, &pin).map(|_| HostValue::Null),
             None => {
                 if setting(db, ADMIN_TOTP_SECRET)?.is_none() {
                     return Err(HostError::new(KEEP_ONE_WAY_IN));
                 }
                 db.delete_setting(ADMIN_PIN_HASH)
+                    .map(|_| HostValue::Null)
+                    .map_err(db_error)
             }
-        }
-        .map(|_| HostValue::Null)
-        .map_err(db_error),
+        },
     })
 }
 
@@ -1474,8 +1654,7 @@ fn setup_helpdesk(arguments: &gpui_shell::HostArguments) -> HostResult {
         if setting(db, ACCESS_MODE)?.is_some() {
             return Err(HostError::new(ALREADY_SET_UP));
         }
-        db.set_setting(ADMIN_PIN_HASH, &bir_core::crypto::hash_pin(&pin))
-            .map_err(db_error)?;
+        write_admin_setting_pin(db, &pin)?;
         db.set_setting(ACCESS_MODE, "helpdesk").map_err(db_error)?;
         db.delete_setting(ADMIN_TIN_ROOT).map_err(db_error)?;
         store_new_recovery_key(db)
@@ -1501,13 +1680,22 @@ fn confirm_admin(
     pin: Option<&str>,
     code: Option<&str>,
 ) -> Result<(), HostError> {
+    let mut rehash = None;
     let matched = auth_limiter::guarded(auth_limiter::ADMIN, || {
         let credentials = admin_credentials(db, mode)?;
-        let by_pin = pin.is_some_and(|pin| pin_matches(credentials.pin_hash.as_deref(), pin));
+        let by_pin = match pin {
+            Some(pin) => {
+                let (matched, upgrade) = admin_pin_check(db, mode, pin)?;
+                rehash = upgrade;
+                matched
+            }
+            None => false,
+        };
         let by_code =
             code.is_some_and(|code| totp_matches(credentials.totp_secret.as_deref(), code));
         Ok(by_pin || by_code)
     })?;
+    start_rehash_after(matched, rehash);
     if matched {
         Ok(())
     } else {
@@ -1600,8 +1788,7 @@ fn change_to_helpdesk(arguments: &gpui_shell::HostArguments) -> HostResult {
         confirm_admin(db, &mode, pin.as_deref(), code.as_deref())?;
         // The admin PIN first, then the mode: a failure in between leaves a
         // working solo setup.
-        db.set_setting(ADMIN_PIN_HASH, &bir_core::crypto::hash_pin(&new_pin))
-            .map_err(db_error)?;
+        write_admin_setting_pin(db, &new_pin)?;
         db.delete_setting(ADMIN_TOTP_SECRET).map_err(db_error)?;
         db.set_setting(ACCESS_MODE, "helpdesk").map_err(db_error)?;
         db.delete_setting(ADMIN_TIN_ROOT).map_err(db_error)?;
@@ -2945,22 +3132,27 @@ fn export_profile(
     // resolves a branch TIN; an unknown TIN is refused before the dialog.
     let tin_root =
         with_database(|db| Ok(get_profile_by_tin(db, &tin)?.tin.full()[..9].to_string()))?;
-    let authorized = auth_limiter::guarded(&auth_limiter::taxpayer(&tin_root), || {
+    let mut rehash = None;
+    let authorized = auth_limiter::guarded_client(&tin_root, || {
         with_database(|db| {
-            let credentials = taxpayer_credentials(db, &tin_root)?;
-            match credentials.pin_hash {
+            // The taxpayer's PIN, else a branch copy: the PIN the export itself
+            // checks (`bir_core::export::client_pin_hash`).
+            match bir_core::export::client_pin_hash(db, &tin).map_err(db_error)? {
                 // Nothing to check — an authenticator alone is not a PIN —
                 // and nothing counts against the limiter.
                 None => Ok(true),
                 Some(_) if pin.is_none() => Err(HostError::new(
                     "This profile's PIN is required to export it.",
                 )),
-                Some(hash) => Ok(pin
-                    .as_deref()
-                    .is_some_and(|pin| pin_matches(Some(hash.as_str()), pin))),
+                Some(hash) => Ok(pin.as_deref().is_some_and(|pin| {
+                    let (matched, upgrade) = client_pin_check(&tin_root, Some(hash.as_str()), pin);
+                    rehash = upgrade;
+                    matched
+                })),
             }
         })
     })?;
+    start_rehash_after(authorized, rehash);
     if !authorized {
         return Err(HostError::new("Wrong PIN."));
     }
@@ -3272,15 +3464,17 @@ pub fn module() -> HostModule {
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
     let module = crate::legacy_import_module::register(module);
+    let module = crate::owner_lock_module::register(module);
     // bir-shell appends its scroll exports (GPUI elements) after these.
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}{}{}{}",
         crate::cloud_account::DECLARATIONS,
         crate::cloud_email::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
         crate::screen_form_module::DECLARATIONS,
         crate::dashboard_module::DECLARATIONS,
         crate::legacy_import_module::DECLARATIONS,
+        crate::owner_lock_module::DECLARATIONS,
     ))
 }
 
@@ -5013,6 +5207,166 @@ mod tests {
         assert!(!admin_pin("5555"), "the admin PIN set_admin_pin replaced");
     }
 
+    /// PLAN §B.1, client PINs: a match against an old SHA-256 value rehashes it to an Argon2id PHC string in
+    /// `taxpayers.pin_hash`, on a thread of its own, and clears the branch copy; both stores. The rehashed PIN
+    /// still opens, a wrong one does not, and a PIN changed before the rehash lands is never overwritten.
+    #[test]
+    fn client_sha_pin_rehashes_on_first_match() {
+        setup();
+        add_branch();
+        let stored_pin = || {
+            with_database(|db| Ok(taxpayer_credentials(db, ROOT)?.pin_hash))
+                .unwrap()
+                .unwrap_or_default()
+        };
+        let branch_copies = || -> i64 {
+            with_database(|db| {
+                Ok(db
+                    .conn_for_tests()
+                    .query_row(
+                        "SELECT count(*) FROM profiles
+                         WHERE substr(tin, 1, 9) = ?1 AND json_type(data_json, '$.profile_pin_hash') = 'text'",
+                        [ROOT],
+                        |row| row.get(0),
+                    )
+                    .unwrap())
+            })
+            .unwrap()
+        };
+
+        // taxpayers.pin_hash, as an earlier version stored it.
+        let old = bir_core::crypto::hash_pin("0817");
+        with_database(|db| db.set_taxpayer_pin_hash(ROOT, Some(&old)).map_err(db_error)).unwrap();
+        assert!(!truthy(verify_taxpayer_pin(&args(vec![
+            s(ROOT),
+            s("1111")
+        ]))));
+        join_last_rehash();
+        assert_eq!(stored_pin(), old, "a miss rehashes nothing");
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("0817")]))));
+        join_last_rehash();
+        let phc = stored_pin();
+        assert!(phc.starts_with("$argon2id$"), "{phc}");
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("0817")]))));
+        assert!(!truthy(verify_taxpayer_pin(&args(vec![
+            s(ROOT),
+            s("1111")
+        ]))));
+        join_last_rehash();
+        assert_eq!(stored_pin(), phc, "an Argon2id match is not rehashed again");
+
+        // The branch copy: the taxpayer has no PIN and a branch row still holds the old value (until the next
+        // open's v22 repair lifts it). Its first match moves a PHC string onto the taxpayer and clears the copy.
+        let legacy = bir_core::crypto::hash_pin("6810");
+        with_database(|db| {
+            db.set_taxpayer_pin_hash(ROOT, None).map_err(db_error)?;
+            let mut profile = get_profile_by_tin(db, BRANCH)?;
+            profile.profile_pin_hash = Some(legacy.clone());
+            db.save_profile(profile).map_err(db_error)?;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(branch_copies(), 1);
+        let hash =
+            with_database(|db| bir_core::export::client_pin_hash(db, BRANCH).map_err(db_error))
+                .unwrap();
+        assert_eq!(hash.as_deref(), Some(legacy.as_str()));
+        let (matched, rehash) = client_pin_check(ROOT, hash.as_deref(), "6810");
+        assert!(matched);
+        start_rehash_after(matched, rehash);
+        join_last_rehash();
+        let lifted = stored_pin();
+        assert!(lifted.starts_with("$argon2id$"), "{lifted}");
+        assert_eq!(branch_copies(), 0, "the branch copy is cleared");
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("6810")]))));
+
+        // A PIN changed between the match and the rehash is never overwritten.
+        set_taxpayer_pin(&args(vec![s(ROOT), s("2468")])).unwrap();
+        join_last_rehash();
+        let changed = stored_pin();
+        let written = with_database(|db| {
+            db.upgrade_client_pin_hash(ROOT, &legacy, &bir_core::pin::hash("6810").unwrap())
+                .map_err(db_error)
+        })
+        .unwrap();
+        assert!(!written);
+        assert_eq!(stored_pin(), changed);
+    }
+
+    /// N3: a client or help-desk admin PIN set through the page's synchronous verbs is stored in the old form for a
+    /// moment and rehashed to Argon2id on its own thread straight after; it opens either way.
+    #[test]
+    fn pins_written_from_b1_on_become_argon2id() {
+        setup();
+        let stored_pin = || {
+            with_database(|db| Ok(taxpayer_credentials(db, ROOT)?.pin_hash))
+                .unwrap()
+                .unwrap_or_default()
+        };
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        join_last_rehash();
+        assert!(stored_pin().starts_with("$argon2id$"));
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("0817")]))));
+
+        setup_helpdesk(&args(vec![s("2468")])).unwrap();
+        join_last_rehash();
+        let admin = stored_setting(ADMIN_PIN_HASH).unwrap_or_default();
+        assert!(admin.starts_with("$argon2id$"), "setup_helpdesk");
+        assert!(truthy(verify_admin_pin(&args(vec![s("2468")]))));
+
+        set_admin_pin(&args(vec![s("1357")])).unwrap();
+        join_last_rehash();
+        assert!(
+            stored_setting(ADMIN_PIN_HASH)
+                .unwrap_or_default()
+                .starts_with("$argon2id$"),
+            "set_admin_pin"
+        );
+        assert!(truthy(verify_admin_pin(&args(vec![s("1357")]))));
+        assert!(!truthy(verify_admin_pin(&args(vec![s("2468")]))));
+
+        // A help-desk admin PIN an earlier version stored is rehashed on its first match.
+        let old = bir_core::crypto::hash_pin("1357");
+        with_database(|db| db.set_setting(ADMIN_PIN_HASH, &old).map_err(db_error)).unwrap();
+        assert!(truthy(verify_admin_pin(&args(vec![s("1357")]))));
+        join_last_rehash();
+        assert!(
+            stored_setting(ADMIN_PIN_HASH)
+                .unwrap_or_default()
+                .starts_with("$argon2id$"),
+            "on its match"
+        );
+    }
+
+    /// A client's count is kept in the device store (PLAN §B.2), keyed by the room and the TIN root, and a
+    /// wrong authenticator code shares the PIN's count.
+    #[test]
+    fn a_clients_count_is_kept_in_the_device_store() {
+        setup();
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        let count = || {
+            bir_core::rooms::device_store_here()
+                .with(false, |store| {
+                    store.attempts(&bir_core::owner_lock::AttemptKey::client(None, ROOT))
+                })
+                .unwrap()
+                .unwrap()
+                .failures
+        };
+        assert!(!truthy(verify_taxpayer_pin(&args(vec![
+            s(ROOT),
+            s("1111")
+        ]))));
+        assert!(!truthy(verify_taxpayer_totp(&args(vec![
+            s(ROOT),
+            s("000000")
+        ]))));
+        assert_eq!(count(), 2);
+        assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("0817")]))));
+        assert_eq!(count(), 0);
+        join_last_rehash();
+    }
+
     // ---------- the page reaches only its own settings ----------
 
     /// The host's own read of `key`.
@@ -5034,7 +5388,8 @@ mod tests {
     }
 
     /// (a) The page's one setting round-trips through the three verbs, and
-    /// each step reaches the database.
+    /// each step reaches the device store (accounts-and-lock A1: the theme
+    /// is device-wide).
     #[test]
     fn the_theme_preference_round_trips_through_the_page_verbs() {
         setup();
@@ -5044,15 +5399,113 @@ mod tests {
             set_setting(&args(vec![key(), s("Dark")])).unwrap(),
             HostValue::Null
         );
-        assert_eq!(stored_setting("theme_preference").as_deref(), Some("Dark"));
+        assert_eq!(
+            bir_core::rooms::device_setting("theme_preference").as_deref(),
+            Some("Dark")
+        );
+        assert_eq!(stored_setting("theme_preference"), None, "not the room's");
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), s("Dark"));
         assert_eq!(delete_setting(&args(vec![key()])).unwrap(), HostValue::Null);
-        assert_eq!(stored_setting("theme_preference"), None);
+        assert_eq!(bir_core::rooms::device_setting("theme_preference"), None);
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
     }
 
+    /// What these tests prune, open or write when they name no folder (`set_log_retention`'s log pruning, the
+    /// device store `system_info` reads, the device files) is in the temp folder, never the real data folder.
+    #[test]
+    fn host_tests_keep_out_of_the_real_data_folder() {
+        temp_env::with_vars(
+            [("BIR_LOG_DIR", None::<&str>), ("BIR_DATABASE_PATH", None)],
+            || {
+                db::set_database_path_override(None);
+                let temp = std::env::temp_dir().canonicalize().unwrap();
+                let logs = bir_core::log_files::log_dir();
+                std::fs::create_dir_all(&logs).unwrap();
+                for dir in [
+                    logs,
+                    bir_core::platform::data_dir(),
+                    bir_core::platform::device_dir(),
+                ] {
+                    assert!(
+                        dir.canonicalize().unwrap().starts_with(&temp),
+                        "{} is outside the temp folder",
+                        dir.display()
+                    );
+                }
+            },
+        );
+    }
+
+    /// Accounts-and-lock A1 (O1): the device-wide settings a person set
+    /// before A1 live in the open database. Each reader answers them until
+    /// `device_settings` has a value; every write goes to `device_settings`.
+    #[test]
+    fn device_settings_fall_back_to_the_open_database() {
+        setup();
+        with_database(|db| {
+            for (key, value) in [
+                ("theme_preference", "Dark"),
+                ("global_hotkey_key", "control+alt+B"),
+                ("log_retention_days", "30"),
+                (crate::hooks::AUTO_DOWNLOAD_SETTING, "0"),
+            ] {
+                db.set_setting(key, value).map_err(db_error)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        let theme = || get_setting(&args(vec![s("theme_preference")])).unwrap();
+        assert_eq!(theme(), s("Dark"));
+        let info = to_json(&system_info().unwrap());
+        assert_eq!(info["global_hotkey"], "control+alt+B");
+        assert_eq!(info["log_retention_days"], 30);
+        #[cfg(not(feature = "mas_build"))]
+        assert_eq!(stored_global_hotkey().as_deref(), Some("control+alt+B"));
+        assert_eq!(
+            device_setting(crate::hooks::AUTO_DOWNLOAD_SETTING).as_deref(),
+            Some("0"),
+            "auto-download off in the legacy file reads off"
+        );
+
+        set_setting(&args(vec![s("theme_preference"), s("Light")])).unwrap();
+        set_global_hotkey(&args(vec![s("control+alt+E")])).unwrap();
+        set_log_retention(&args(vec![14_i64.into()])).unwrap();
+        set_auto_update_download(&args(vec![HostValue::Bool(true)])).unwrap();
+        assert_eq!(theme(), s("Light"));
+        let info = to_json(&system_info().unwrap());
+        assert_eq!(info["global_hotkey"], "control+alt+E");
+        assert_eq!(info["log_retention_days"], 14);
+        assert_eq!(
+            device_setting(crate::hooks::AUTO_DOWNLOAD_SETTING).as_deref(),
+            Some("1")
+        );
+        for (key, legacy) in [
+            ("theme_preference", "Dark"),
+            ("global_hotkey_key", "control+alt+B"),
+            ("log_retention_days", "30"),
+            (crate::hooks::AUTO_DOWNLOAD_SETTING, "0"),
+        ] {
+            assert_eq!(
+                stored_setting(key).as_deref(),
+                Some(legacy),
+                "{key}: the write went to device_settings"
+            );
+            assert!(bir_core::rooms::device_setting(key).is_some(), "{key}");
+        }
+        // A delete leaves no legacy value to fall back to.
+        delete_setting(&args(vec![s("theme_preference")])).unwrap();
+        assert_eq!(theme(), HostValue::Null);
+        // A cleared hotkey stays cleared: the device row wins.
+        set_global_hotkey(&args(vec![s("")])).unwrap();
+        assert_eq!(
+            to_json(&system_info().unwrap())["global_hotkey"],
+            serde_json::Value::Null
+        );
+        bir_core::log_files::remember_retention(bir_core::log_files::DEFAULT_RETENTION_DAYS);
+    }
+
     /// The accounts welcomed on this device round-trip through the page
-    /// verbs too.
+    /// verbs too, and live in the device store (A1), not the room's file.
     #[test]
     fn the_welcomed_accounts_round_trip_through_the_page_verbs() {
         setup();
@@ -5060,10 +5513,13 @@ mod tests {
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
         set_setting(&args(vec![key(), s("[\"demo\"]")])).unwrap();
         assert_eq!(
-            stored_setting("welcomed_accounts").as_deref(),
+            bir_core::rooms::device_setting("welcomed_accounts").as_deref(),
             Some("[\"demo\"]")
         );
+        assert_eq!(stored_setting("welcomed_accounts"), None, "not the room's");
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), s("[\"demo\"]"));
+        delete_setting(&args(vec![key()])).unwrap();
+        assert_eq!(bir_core::rooms::device_setting("welcomed_accounts"), None);
     }
 
     /// (b) The help desk admin's authenticator secret stays host-side: the

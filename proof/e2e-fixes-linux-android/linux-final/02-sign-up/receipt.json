@@ -1,0 +1,162 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "sign-up",
+  "fingerprint": "fnv1a64:0312296303cca392",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 400
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 7
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 368
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 895
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 821
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 599
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 688
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 17
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 498
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 9
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1341,
+      "screenshot": {
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/011-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1127
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 22
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 489
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 14
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1325,
+      "screenshot": {
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/016-s16.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 529,
+      "screenshot": {
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/017-s17.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 6
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 471
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "elapsed_ms": 19
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "elapsed_ms": 42,
+      "screenshot": {
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/021-s21.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/011-s11.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/016-s16.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/017-s17.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/021-s21.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 9696
+}

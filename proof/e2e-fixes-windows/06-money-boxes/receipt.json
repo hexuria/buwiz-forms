@@ -1,0 +1,139 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-money-boxes-paced",
+  "fingerprint": "fnv1a64:44d2f90b4ac80cb5",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 584,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\06-money-boxes\\001-s1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s1a",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 611
+    },
+    {
+      "id": "s1b",
+      "ok": true,
+      "elapsed_ms": 104
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4641
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 287,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\06-money-boxes\\005-s3.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3866
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 249,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\06-money-boxes\\007-s5.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 392
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 272,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\06-money-boxes\\009-s7.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 490
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 266,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\06-money-boxes\\011-s9.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 595,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\06-money-boxes\\012-s10.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2798
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3222
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\06-money-boxes\\001-s1.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\06-money-boxes\\005-s3.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\06-money-boxes\\007-s5.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\06-money-boxes\\009-s7.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\06-money-boxes\\011-s9.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\06-money-boxes\\012-s10.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 18384
+}

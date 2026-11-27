@@ -473,6 +473,7 @@ export type {
   LegacyStandardFolder,
   LegacyImportReport,
   LegacyFiledReturn,
+  OwnerLockState,
 } from "./types";
 
 /** Every wrapper above, for bir.system_info()-style calls. */
@@ -755,10 +756,14 @@ export const NOT_WRAPPED: readonly string[] = [
   "list_drafts",
   "list_profiles",
   "list_queued",
+  "lock_now",
+  "owner_lock_state",
   "profile_detail",
   "save_profile",
+  "set_owner_pin",
   "set_profile_archived",
   "set_profile_pin",
   "set_profile_totp",
   "template_stops",
+  "verify_owner_pin",
 ];

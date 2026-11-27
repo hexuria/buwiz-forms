@@ -6,7 +6,9 @@ click panel-open-profile
 wait_until tp-sec-taxpayer-edit --timeout-ms 5000
 click tp-sec-taxpayer-edit
 wait_until tp-taxpayer-birth_date --timeout-ms 5000
+click tp-taxpayer-birth_date
 type tp-taxpayer-birth_date $birth --screenshot
+assert tp-taxpayer-birth_date value=$birth
 click tp-taxpayer-save
 wait_until tp-taxpayer-save --absent --timeout-ms 5000 --screenshot
 click tb-panel

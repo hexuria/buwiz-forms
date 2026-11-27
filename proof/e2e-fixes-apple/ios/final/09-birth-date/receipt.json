@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "e2e-birth-date-phone",
+  "fingerprint": "fnv1a64:122781aeae06717a",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": false,
+      "error": "target_gone: tp-tabs-profile",
+      "error_code": "target_gone",
+      "delivery_status": "not_delivered",
+      "elapsed_ms": 130
+    }
+  ],
+  "elapsed_ms": 130
+}
