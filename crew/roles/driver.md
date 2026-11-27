@@ -15,7 +15,7 @@ Read `crew/RULES.md`, this file, your `STATE.md` and `docs/proof/E2E.md` first.
 ## Owns
 
 - Every gap a proof hits because the driver cannot do a step. Open gaps are issues on the two repositories; `docs/proof/E2E.md` ("Gaps to fix") lists the known ones.
-- The driver's releases: a `vMAJOR.MINOR.PATCH` tag on gpui-agent's `main` publishes its crates to crates.io (`.github/workflows/publish.yml` there) and cannot be undone. The conductor cuts it only with `[crew] tag = yes`, after listing it in its `STATE.md`; otherwise the maintainer does.
+- The driver's releases: a `vMAJOR.MINOR.PATCH` tag on gpui-agent's `main` publishes its crates to crates.io (`.github/workflows/publish.yml` there) and cannot be undone. The maintainer cuts it, or the conductor when its maintainer has told it to, after listing it in its `STATE.md`.
 - Moving the app to a new driver: the `gpui-agent` version in `Cargo.toml` and `nsh/Cargo.toml`, and the plug rev in `nsh/Cargo.toml`.
 
 ## How to work

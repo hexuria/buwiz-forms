@@ -23,14 +23,14 @@ The maintainer is the person named in the repository's ownership (`crew/README.m
 - Never send anything to the production relay or the real BIR. Every run of the app uses `BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1`, never `BIR_SFTP_LIVE`, and a scratch database.
 - Never press Queue, Send or Submit in a release build: a release build of `main` files for real.
 - Use only the demo taxpayer and invented values. Real taxpayer data never enters a test, a proof or a file.
-- No builds or app runs on the conductor's computer unless `crew.local.ini` says local builds are allowed (`[crew] local_builds = yes`). Python, git and reading code are fine anywhere. Builds load the computer and mix build folders; the machines exist for them.
+- No builds or app runs on the conductor's computer unless its person said so when they started the conductor. Python, git and reading code are fine anywhere. Builds load the computer and mix build folders; the machines exist for them.
 - Never run `nsh update`. It installs the upstream release over our pinned fork, and every later check then tests another NSH than the pin.
 
 ## Pull requests
 
 - One pull request per change, opened from the repository's work branch (`main`; `buwiz-next` on the NSH fork). Never open one that contains another open pull request's commits: squash merges make the second conflict or strand. A change that needs an unmerged one is built on it on a `try/` branch and opened after it lands.
 - Open as a draft while you are still pushing (a draft runs no checks), and mark it ready when you want its checks.
-- A crew member commits with the identity its `crew.local.ini` sets (`[crew] commit_identity`). It must be a GitHub noreply address (`…@users.noreply.github.com`), never a real e-mail. This project's own maintainers use `hexuria <295542929+hexuria@users.noreply.github.com>`; a contributor running the crew on a fork uses their own GitHub noreply identity. Check `git log -1 --format='%an <%ae> | %cn <%ce>'` before every push. No `Co-authored-by` lines; squash merges carry an explicit `--body`.
+- A crew member commits with the identity its settings name (`[crew] commit_identity` in `crew.local.ini`). It must be a GitHub noreply address (`…@users.noreply.github.com`), never a real e-mail. This project's own maintainers use `hexuria <295542929+hexuria@users.noreply.github.com>`; a contributor running the crew on a fork uses their own GitHub noreply identity. Check `git log -1 --format='%an <%ae> | %cn <%ce>'` before every push. No `Co-authored-by` lines; squash merges carry an explicit `--body`.
 - A pull request goes to the reviewer the moment it exists (`crew/playbooks/review.md`).
 
 ## Ready, merge and tag
@@ -40,13 +40,15 @@ This is the one definition of "ready"; every other crew file refers to it.
 A pull request is **ready** when all three hold at its exact head:
 1. its own `ci-ok` is green;
 2. both test workflows (`CI` and `NSH app`) ran at that head with every planned job green, the results read job by job and the run ids named (a `just ci-test` push, a green batch, or a machine's run for a system GitHub does not cover);
-3. a reviewer verdict of MERGE at that head, written as a verdict file (see "Engines").
+3. a reviewer verdict of MERGE at that head, from a review that may clear it (see "Engines").
 
 `ci-ok` alone is only the quick checks. A pull request that touches the app enters a batch only when it is ready: the batch proves the combined tree, not each head.
 
-- **Merge.** Only the conductor batches and merges (`crew/playbooks/batch.md`), and only when `crew.local.ini` says `[crew] merge = yes`. Without it, the launcher prints the merge commands and merges nothing. The launcher's merge commands also refuse a pull request without a matching verdict file. While a batch runs, nobody pushes to its pull requests and nothing else merges into `main`.
+**Who merges, tags and deploys.** The launcher never merges, tags or deploys. `crew batchwatch` waits for a batch and prints the merge commands. Whoever GitHub lets merge runs them: this repository's maintainers, or a conductor session that its maintainer has told to merge and that runs with that person's GitHub rights. GitHub's permissions and branch protection are the gate, not these files. A person running the crew on a fork can merge only where GitHub lets them: their fork.
+
+- The conductor merges only what is ready, in the batch's order (`crew/playbooks/batch.md`). While a batch runs, nobody pushes to its pull requests and nothing else merges into `main`.
 - **The solo tier** never merges into the default branch without a human review: it opens pull requests and stops.
-- **Tags.** A tag that publishes (a crates.io release, an app release) needs `[crew] tag = yes`, and the tag is listed in the conductor's `STATE.md` before it is cut (`crew/playbooks/release.md`).
+- **Tags.** A tag that publishes (a crates.io release, an app release) cannot be undone. The conductor cuts one only when its maintainer has told it to, and writes the tag (repository, name, commit) into its `STATE.md` before it cuts it (`crew/playbooks/release.md`).
 - **Production deploys** always stay with the maintainer.
 
 ## Results, locks and pins
@@ -87,13 +89,14 @@ A pull request is **ready** when all three hold at its exact head:
 
 ## Local workers (started by `crew run`)
 
-Start one from the repository root: `python3 crew/bin/crew run <role> <task-file> [--worktree DIR]`. The task file path is relative to the repository root, or absolute (`crew/playbooks/worker-task.md`).
+Start one from the repository root: `python3 crew/bin/crew run <role> <task-file> --worktree DIR`. The task file path is relative to the repository root, or absolute (`crew/playbooks/worker-task.md`).
 
+- **Its own worktree.** A worker runs only in its own git worktree, never in the conductor's checkout: the launcher refuses that. It does not edit `crew/bin/` or git's own files (`.git`).
 - **What a worker may run:** git, python3, read-only shell tools, the read-only `gh` subset (`gh pr view|list|checks|diff|create`, `gh run view|list`, `gh issue list|view|create`), and `python3 crew/bin/crew push`. Nothing else.
-- **What only the conductor or a machine runs:** `just` recipes, cargo, `nsh`, merges, tags. A task that needs one of these is a machine order or the conductor's own step.
-- **Pushing.** A worker pushes only with `python3 crew/bin/crew push`: its own branch, never the default branch, never a tag, never forced. A plain `git push` is refused by the allow-list.
-- **The allow-list is not a fence.** It keeps an honest worker on the path; python3 and git can still reach past it. The fence is a GitHub token that cannot bypass branch protection (`[worker] gh_token_env` names that restricted token), or a sandbox (`crew/playbooks/sandbox.md`).
-- Workers get a scrubbed environment: no tokens or keys beyond the restricted one.
+- **What only the conductor or a machine runs:** `just` recipes, cargo, `nsh`, test runs on GitHub (`just ci-test`, `just ci-batch`), merges, tags. A worker does not start test runs. A task that needs one of these is a machine order or the conductor's own step.
+- **Pushing.** A worker pushes only with `python3 crew/bin/crew push`: its own branch, never the default branch, never a tag, never forced. It refuses a commit whose author or committer is not the `[crew] commit_identity` of the settings. A plain `git push` is refused by the allow-list.
+- **The allow-list is not a fence.** It keeps an honest worker on the path; python3 and git can still reach past it. The fence is a restricted GitHub token in place of the person's own (`[worker] gh_token_env` names it), branch protection, or a sandbox (`crew/playbooks/sandbox.md`).
+- **The scrubbed environment.** A worker's environment has tokens removed: it keeps safe defaults, the variables `[worker] pass_env` adds, and the restricted token. The scrub covers the environment only: credentials that git and gh keep in the home folder stay reachable. To make them unreachable, run workers under a separate account or in a sandbox.
 - Never start a worker in a checkout of a pull request from outside the project: its files can carry agent settings that the worker would load.
 - A refusal is final: record it in your result and go on. Write each command plainly, with no environment variable in front: a prefixed command does not match the allow-list.
 
@@ -106,7 +109,9 @@ Start one from the repository root: `python3 crew/bin/crew run <role> <task-file
 
 Any role may be run by either engine; when Claude is unavailable the Devin CLI conducts too.
 
-Reviews and what they clear:
-- The worker model does the worker tasks. A review by the worker model is labelled as such and clears scripts, tests, docs and recipes only.
-- A change to accounts, sign-in, filing, printing, or anything that sends data out, is cleared only by the reviewer role run on Claude (an Opus-class or stronger model, named in the verdict), in a session that did not write the change. When no such review is available, those changes wait.
-- Every verdict is also a file: `<state>/roles/reviewer/outbox/<owner>-<repo>-<n>.verdict`, with the lines `verdict:`, `head:`, `engine:` and `model:`. The launcher's merge commands refuse a pull request without a verdict file whose `verdict:` is MERGE and whose `head:` is the head being merged.
+Reviews and what they clear (the conductor follows this before it merges):
+- The worker model does the worker tasks. A review by the worker model is labelled as such.
+- **Deny by default.** Only changes to scripts' tests (`scripts/tests/`), docs and recipes (`agent-recipes/`) are cleared by a worker-model review. Everything else needs the reviewer role run on Claude (an Opus-class or stronger model, named in the verdict) in a session that did not write the change. That always includes: accounts, sign-in, filing, printing, anything that sends data out, locks and PINs, device and install ids, crypto, e-mail sending, the printed sheets and their overrides (`html-frozen/`, `print-overrides/`), form rules (`forms/`, `rules/`), release and CI workflows, signing and packaging scripts, Cargo files, and the crew's own launcher and the batch tool (`crew/bin/`, `scripts/ci_batch.py`).
+- When no such review is available, those changes wait.
+
+**Verdict files are notes.** The reviewer, or the conductor recording the reviewer's answer, writes `<state>/roles/reviewer/outbox/<owner>-<repo>-<n>.verdict` with the lines `verdict:`, `head:`, `engine:`, `model:` and `note:`, so the next session and a dashboard know where each pull request stands. They gate nothing: GitHub's permissions do.

@@ -1,6 +1,6 @@
 # Playbook: a batch
 
-A batch proves several ready pull requests together, on exactly the tree `main` will have once they are all merged, in one complete run. Then they merge in that order. Only the conductor batches and merges.
+A batch proves several ready pull requests together, on exactly the tree `main` will have once they are all merged, in one complete run. Then they merge in that order. The conductor batches; the merge commands are run by whoever GitHub lets merge (`crew/RULES.md`, "Ready, merge and tag").
 The tool is `scripts/ci_batch.py` through the `just ci-batch*` recipes; `docs/CI.md` ("Proving several pull requests together") is its full description.
 
 ## 1. The entry gate
@@ -10,7 +10,7 @@ A pull request enters a batch only when it is **ready** as `crew/RULES.md` ("Rea
 - it is open, not a draft, and based on `main`;
 - nobody expects to push to it again (any push voids the batch).
 
-The batch tool refuses a pull request whose `ci-ok` is not green at its head; it does not check the suites or the verdict, so you do. Leave out anything that fails a line, and say which line in `LOG.md`.
+The batch tool refuses a pull request whose `ci-ok` is not green at its head; it does not check the suites or the review, so you do. Leave out anything that fails a line, and say which line in `LOG.md`.
 
 ## 2. Dry run
 
@@ -29,13 +29,13 @@ just ci-batch all <pr> <pr> ...        # every system
 
 It pushes `test/<system>/batch-<pr>-<pr>...`, which starts the full suites. Write the branch and each head into `queue.json` under the batch. From now on nobody pushes to those pull requests and nothing else merges into `main`.
 
-## 4. Watch, without merging
+## 4. Watch
 
 ```sh
-python3 crew/bin/crew batchwatch --no-merge <branch> <pr> <pr> ...
+python3 crew/bin/crew batchwatch <branch> <pr> <pr> ...
 ```
 
-Run it in the background. It returns when the batch settles and merges nothing. `just ci-batch-status <branch>` shows the state at any time.
+Run it in the background. It waits for the batch to settle and prints the result and, on green, the merge commands. It merges nothing. `just ci-batch-status <branch>` shows the state at any time.
 
 ## 5. Read every job
 
@@ -55,12 +55,12 @@ Put the lines that settle each one in `LOG.md` with the run id. Merge only when 
 ## 6. Merge at the tested heads
 
 ```sh
-python3 crew/bin/crew batchwatch <branch> <pr> <pr> ...
+just ci-batch-merge <branch>
 ```
 
-Without `--no-merge`, on a green batch it runs the merge commands `just ci-batch-merge <branch>` prints, in order, then verifies. The launcher merges only when `crew.local.ini` says `[crew] merge = yes` and each pull request has a verdict file of MERGE at its recorded head (`crew/playbooks/review.md`). Without `merge = yes`, it prints the commands and merges nothing; whoever may merge runs them in that order, each with an explicit `--body`.
+It refuses unless the batch is green and `main` and every head are still as recorded, then prints one `gh pr merge ... --squash --match-head-commit <sha>` per pull request (`crew batchwatch` prints the same). The launcher runs none of them. Whoever GitHub lets merge runs them, in that order, each with an explicit `--body` so no `Co-authored-by` line is added: this repository's maintainers, or a conductor its maintainer has told to merge, with that person's GitHub rights. Before running them, check that each pull request has a MERGE verdict at its recorded head from a review that may clear it (`crew/RULES.md`, "Engines").
 
-`just ci-batch-merge <branch>` refuses unless the batch is green and `main` and every head are still as recorded. Each printed command carries `--match-head-commit <sha>`. Merge nothing else in between. If one merge fails, stop: note which pull requests merged and which did not, and verify nothing until that is settled.
+Merge nothing else in between. If one merge fails, stop: note which pull requests merged and which did not, and verify nothing until that is settled.
 
 ## 7. Verify
 

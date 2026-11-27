@@ -5,7 +5,7 @@ This is experimental. Use it, measure it, and change this file by pull request w
 ## What it is
 
 ```sh
-python3 crew/bin/crew run <role> <task-file> --sandbox [--worktree DIR]
+python3 crew/bin/crew run <role> <task-file> --worktree DIR --sandbox
 ```
 
 starts the worker inside a Docker `sbx` sandbox instead of on the computer itself. Without a sandbox, a worker is limited by an allow-list of commands (`crew/RULES.md`, "Local workers"). In a sandbox the worker may run any command, and the sandbox's own limits decide what that command can reach. Before you trust it with a task, check what your sandbox can see: which folders, which network, which credentials.

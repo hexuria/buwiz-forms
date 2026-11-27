@@ -10,7 +10,7 @@ python3 crew/bin/crew doctor
 python3 crew/bin/crew state pull
 ```
 
-`crew doctor` says which engine and tier this is, where the state folder is, and what is missing.
+`crew doctor` says which engine and tier this is, where the state folder is, and what is missing. Two things are not settings: whether builds may run on this computer, and whether you may run merge commands. The person who started you says them when they start you; write their answer into your `STATE.md`.
 `crew state pull` brings the live state from its remote, if `crew.local.ini` names one. Without a remote, the state folder on this computer is the state.
 
 ## 2. Read, in this order

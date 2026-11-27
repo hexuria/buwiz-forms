@@ -4,10 +4,10 @@ eBIRForms is built from five repositories. This one, hexuria/buwiz-forms, is the
 
 | Repository | What it is | Work branch | How the app pins it | Who merges |
 | --- | --- | --- | --- | --- |
-| hexuria/buwiz-forms | The app: Rust crates, the NSH screens in `nsh/`, forms, print, packaging, CI. | `main` | (the app itself) | the maintainer, or the conductor by batch with `[crew] merge = yes` (`crew/RULES.md`) |
-| hexuria/nsh | Our fork of NSH (Native Shell), the runtime the screens run on. Default branch `main`; the app's line is `buwiz-next`. | `buwiz-next` | `NSH_PINNED_REF` in `.github/workflows/nsh.yml`: an exact commit on `buwiz-next` | the maintainer, or the conductor with `[crew] merge = yes` when ready |
-| hexuria/gpui-agent | The UI driver: protocol, recipe runner, CLI. Releases publish crates. | `main` | the `gpui-agent` version in `Cargo.toml` and `nsh/Cargo.toml`; `gpui-agent-cli` at the version `Cargo.lock` pins | the maintainer, or the conductor with `[crew] merge = yes` when ready |
-| hexuria/nsh-gpui-agent | The driver's NSH plug: puts the app's windows into the tree, delivers presses and keys. | `main` | the `rev` of every `nsh-gpui-agent*` dependency in `nsh/Cargo.toml` (all the same rev) | the maintainer, or the conductor with `[crew] merge = yes` when ready |
+| hexuria/buwiz-forms | The app: Rust crates, the NSH screens in `nsh/`, forms, print, packaging, CI. | `main` | (the app itself) | whoever GitHub lets merge: the maintainers, or a conductor they told to (by batch, `crew/RULES.md`) |
+| hexuria/nsh | Our fork of NSH (Native Shell), the runtime the screens run on. Default branch `main`; the app's line is `buwiz-next`. | `buwiz-next` | `NSH_PINNED_REF` in `.github/workflows/nsh.yml`: an exact commit on `buwiz-next` | whoever GitHub lets merge, when ready (`crew/RULES.md`) |
+| hexuria/gpui-agent | The UI driver: protocol, recipe runner, CLI. Releases publish crates. | `main` | the `gpui-agent` version in `Cargo.toml` and `nsh/Cargo.toml`; `gpui-agent-cli` at the version `Cargo.lock` pins | whoever GitHub lets merge, when ready (`crew/RULES.md`) |
+| hexuria/nsh-gpui-agent | The driver's NSH plug: puts the app's windows into the tree, delivers presses and keys. | `main` | the `rev` of every `nsh-gpui-agent*` dependency in `nsh/Cargo.toml` (all the same rev) | whoever GitHub lets merge, when ready (`crew/RULES.md`) |
 | buwiz-com/buwiz-com | The Buwiz account server (`account.buwiz.com`, `api.buwiz.com`). | `main` | not pinned: the app speaks to it by the contracts in `docs/cloud-account.md` | the maintainer; deploys to production are always the maintainer's |
 
 Read each pin from its file when you need it. Never copy a pin value into another document: it goes stale.

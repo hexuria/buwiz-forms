@@ -30,16 +30,17 @@ The verdict is the first line of the result. Each finding follows with its file 
 
 ## The verdict file
 
-Every verdict is also written as a file the launcher reads: `<state>/roles/reviewer/outbox/<owner>-<repo>-<n>.verdict`, for example `hexuria-buwiz-forms-512.verdict`:
+Every verdict is also written as a note: `<state>/roles/reviewer/outbox/<owner>-<repo>-<n>.verdict`, for example `hexuria-buwiz-forms-512.verdict`. The reviewer writes it, or the conductor writes it when it records the reviewer's answer.
 
 ```
 verdict: MERGE
 head: <full sha read>
 engine: claude
 model: <the model that read it>
+note: <one line: what was read, what is left>
 ```
 
-The launcher's merge commands refuse a pull request without a verdict file whose `verdict:` is MERGE and whose `head:` is the exact head being merged. A push after the verdict makes it stale: a delta review writes a new file.
+It tells the next session and a dashboard where each pull request stands. It gates nothing: GitHub's permissions and branch protection do (`crew/RULES.md`). A push after the verdict makes it stale: a delta review writes a new file.
 
 ## Delta reviews
 
@@ -49,8 +50,8 @@ When the author pushes fixes, the next request names the old head and the new on
 
 - The reviewer is never the session that wrote the change. A pull request written in one session is read in another.
 - The reviewer reads the code with git, never from the description or the author's report alone.
-- A review by the worker model (Devin's `swe-2-1` family) is labelled as such and clears scripts, tests, docs and recipes only.
-- A change to accounts, sign-in, filing, printing, or anything that sends data out, is cleared only by the reviewer role run on Claude (an Opus-class or stronger model, named in the verdict) in a session that did not write the change. When no such review is available, the change waits.
+- A review by the worker model (Devin's `swe-2-1` family) is labelled as such. It clears only scripts' tests, docs and recipes.
+- Everything else is deny-by-default: it is cleared only by the reviewer role run on Claude (an Opus-class or stronger model, named in the verdict) in a session that did not write the change. `crew/RULES.md` ("Engines") lists what that always covers, from accounts and filing to the crew's own launcher. When no such review is available, the change waits. The conductor checks this before it runs any merge command.
 - The reviewer runs nothing that builds. When a claim needs a run, the reviewer asks for one through the conductor.
 
 ## After the verdict

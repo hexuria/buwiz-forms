@@ -19,7 +19,7 @@ Both engines read the root `AGENTS.md` (Claude Code through `CLAUDE.md`) and the
 
 ## Three tiers
 
-Pick the tier that matches what you have. Set it in `crew.local.ini` (git-ignored, your own settings; `crew/local.example.ini` lists the keys).
+Pick the tier that matches what you have: `crew doctor` reports which tier this checkout can run. Your own settings go in `crew.local.ini` (git-ignored; `crew/local.example.ini` lists the keys). Two environment variables override it for one shell: `CREW_STATE_DIR` (the state folder, over `[crew] state_dir`) and `CREW_ENGINE` (over `[crew] engine`). Whether builds may run on the conductor's computer is not a setting: tell the conductor when you start it.
 
 | Tier | What you have | What it can prove | What it cannot prove |
 | --- | --- | --- | --- |
@@ -31,13 +31,16 @@ Pick the tier that matches what you have. Set it in `crew.local.ini` (git-ignore
 
 The maintainer is the person named in the repository's ownership. For this repository that is the owner of the hexuria organisation. A person who starts the crew on their own fork is the maintainer of that fork's crew only.
 
+GitHub's permissions and branch protection are the gate, not these files. The launcher never merges, tags or deploys (`crew/RULES.md`, "Ready, merge and tag").
+
 | Who | Merge | Tag (publishes) | Deploy to production | Push |
 | --- | --- | --- | --- | --- |
-| The maintainer | yes | yes | yes | yes |
-| A conductor with `[crew] merge = yes` | yes, when ready (`crew/RULES.md`) and a MERGE verdict file matches the head | only with `[crew] tag = yes`, the tag listed in its `STATE.md` first | no | its own branches |
-| A conductor without `merge = yes` | no: the launcher prints the merge commands | only with `[crew] tag = yes`, the tag listed in its `STATE.md` first | no | its own branches |
+| This repository's maintainers | yes | yes | yes | yes |
+| A conductor its maintainer told to merge, running with that person's GitHub rights | runs the printed merge commands for ready pull requests | only when told, with the tag in its `STATE.md` first | no | its own branches |
+| Any other conductor | no: it prepares, reviews, and passes on the printed merge commands | no | no | its own branches |
 | A worker | no | no | no | its own branch, through `python3 crew/bin/crew push` only |
-| A contributor's own crew on a fork | only in the fork | only in the fork | no | the fork; pull requests to this repository like any contributor |
+| The launcher itself | never: `crew batchwatch` waits and prints the merge commands | never | never | the state remote, and a worker's branch through `crew push` |
+| A contributor's own crew on a fork | only in the fork, where GitHub lets them | only in the fork | no | the fork; pull requests here like any contributor |
 
 ## One turn
 
@@ -90,6 +93,6 @@ A rule that lives only in a chat is not a rule: the next session will not see it
 ## Without a fleet
 
 Run the `solo` or `workers` tier. Prove code with tests and the GitHub suites (`just ci-test`).
-For screen work, run `just e2e <target>` on a machine you own, if `crew.local.ini` allows local builds.
+For screen work, run `just e2e <target>` on a machine you own, if you have told the conductor that builds may run there.
 Leave work you cannot prove as a draft pull request that says what proof is missing.
 Each role file has a "Without a fleet" section that says what that role does instead.

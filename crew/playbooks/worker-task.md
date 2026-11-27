@@ -7,11 +7,11 @@ A worker starts with no memory and no chat. It gets its role file, its `STATE.md
 `roles/<role>/inbox/NNN-<name>.md` in the state folder, numbered after the role's last task. Start it from the repository root, exactly as the launcher takes it:
 
 ```sh
-python3 crew/bin/crew run <role> <task-file> [--worktree DIR]
+python3 crew/bin/crew run <role> <task-file> --worktree DIR
 python3 crew/bin/crew run tools .crew/state/roles/tools/inbox/014-batch-draft-reason.md --worktree ../buwiz-forms-draft-reason
 ```
 
-The task file path is relative to the repository root, or absolute; with the default state folder that is `.crew/state/roles/<role>/inbox/NNN-<name>.md` (`python3 crew/bin/crew state path` prints the folder). `--worktree` is the checkout the worker works in; without it, the repository root. The worker writes its result to `roles/<role>/outbox/NNN-<name>.md`. Add `--sandbox` only for work the sandbox suits (`crew/playbooks/sandbox.md`).
+The task file path is relative to the repository root, or absolute; with the default state folder that is `.crew/state/roles/<role>/inbox/NNN-<name>.md` (`python3 crew/bin/crew state path` prints the folder). `--worktree` is the worker's own git worktree, made for the task (for example `git worktree add ../buwiz-forms-draft-reason -b fix/batch-draft-reason origin/main`). A worker never runs in the conductor's checkout: the launcher refuses that. Inside its worktree it does not edit `crew/bin/` or git's own files. The worker writes its result to `roles/<role>/outbox/NNN-<name>.md`. Add `--sandbox` only for work the sandbox suits (`crew/playbooks/sandbox.md`).
 
 Never point `--worktree` at a checkout of a pull request from outside the project: its files can carry agent settings the worker would load.
 
@@ -22,8 +22,8 @@ Never point `--worktree` at a checkout of a pull request from outside the projec
 3. **Which files** the worker may change. Name them. Anything else is out of scope.
 4. **What to do,** as numbered points. Each point says what is true when it is done, with the reason in one line.
 5. **Tests first:** which test to add for each point, and that it must be seen failing before the fix.
-6. **Commands to run,** each a plain single command with no environment variable in front, so the allow-list matches it. A worker runs only git, python3, read-only shell tools, the read-only `gh` subset and `python3 crew/bin/crew push`. A step that needs a `just` recipe, cargo or `nsh` is not a worker task: make it a machine order or the conductor's step. Give the exact test commands and what their last line must say.
-7. **The commit:** the identity the conductor's settings name (`[crew] commit_identity`, `crew/RULES.md`), checked with `git log -1 --format='%an <%ae> | %cn <%ce>'`; then `python3 crew/bin/crew push`, which pushes the worker's own branch only.
+6. **Commands to run,** each a plain single command with no environment variable in front, so the allow-list matches it. A worker runs only git, python3, read-only shell tools, the read-only `gh` subset and `python3 crew/bin/crew push`. A step that needs a `just` recipe, cargo, `nsh` or a test run on GitHub is not a worker task: make it a machine order or the conductor's step. Give the exact test commands and what their last line must say.
+7. **The commit:** the identity the conductor's settings name (`[crew] commit_identity`, `crew/RULES.md`), checked with `git log -1 --format='%an <%ae> | %cn <%ce>'`; then `python3 crew/bin/crew push`, which pushes the worker's own branch only and refuses a commit whose author or committer is not that identity.
 8. **What not to do,** only where a worker could reasonably do it: open, merge or close pull requests; touch another branch.
 9. **The result file:** what it must contain.
 

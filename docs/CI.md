@@ -144,9 +144,10 @@ A pull request is ready to merge when both of these hold:
    or from a Devin machine at the pull request's head. Or the pull request is in a green batch, merged as the batch
    says (next section).
 
-The maintainer merges, or the crew's conductor when its `crew.local.ini` says `[crew] merge = yes` and the pull
-request is ready as `crew/RULES.md` defines it (these two checks plus a reviewer's MERGE verdict at that head): never
-anyone else, and never with a red or unread check.
+Whoever GitHub lets merge does: the maintainers, or a crew conductor its maintainer has told to merge, running with
+that person's GitHub rights, once the pull request is ready as `crew/RULES.md` defines it (these two checks plus a
+reviewer's MERGE at that head). GitHub's permissions and branch protection are the gate; nobody merges with a red or
+unread check.
 
 ## Proving several pull requests together
 
