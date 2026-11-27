@@ -1592,7 +1592,12 @@ pub mod schedule1_1601fq {
                 }
             }
             None => {
-                for key in keys() {
+                // Opening Item 13 lifts this gate only from the cells the
+                // filer may edit. Nature of Income Payment and Required
+                // Withheld keep their base computed locks; removing them here
+                // would draw an already-Yes return editable until a fill's
+                // live-lock layer put them back.
+                for key in stem_keys(&EDITABLE_STEMS) {
                     locks.remove(&key);
                 }
             }
