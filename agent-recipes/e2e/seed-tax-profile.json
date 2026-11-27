@@ -51,14 +51,19 @@
    ]
   },
   {
-   "id": "home",
-   "op": "invoke",
-   "name": "nav.go",
-   "args": {
-    "page": "home"
-   },
+   "id": "background",
+   "op": "system",
+   "action": "background",
    "needs": [
     "listed"
+   ]
+  },
+  {
+   "id": "foreground",
+   "op": "system",
+   "action": "foreground",
+   "needs": [
+    "background"
    ]
   }
  ]
