@@ -1,0 +1,1735 @@
+{
+ "v": 2,
+ "id": "1",
+ "ok": true,
+ "tree": {
+  "app": "Native Shell",
+  "platform": "desktop",
+  "ready": true,
+  "nodes": [
+   {
+    "id": "n1",
+    "role": "generic",
+    "name": "",
+    "enabled": true,
+    "focused": false,
+    "bounds": {
+     "x": 0.0,
+     "y": 0.0,
+     "w": 1200.0,
+     "h": 800.0
+    },
+    "children": [
+     {
+      "id": "n2",
+      "role": "generic",
+      "name": "",
+      "enabled": true,
+      "focused": false,
+      "bounds": {
+       "x": 0.0,
+       "y": 0.0,
+       "w": 1200.0,
+       "h": 800.0
+      },
+      "children": [
+       {
+        "id": "shell",
+        "role": "generic",
+        "name": "shell",
+        "enabled": true,
+        "focused": false,
+        "bounds": {
+         "x": 0.0,
+         "y": 0.0,
+         "w": 1200.0,
+         "h": 800.0
+        },
+        "children": [
+         {
+          "id": "frame",
+          "role": "generic",
+          "name": "frame",
+          "enabled": true,
+          "focused": false,
+          "bounds": {
+           "x": 0.0,
+           "y": 0.0,
+           "w": 1200.0,
+           "h": 800.0
+          },
+          "children": [
+           {
+            "id": "title-bar",
+            "role": "generic",
+            "name": "title-bar",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+             "x": 0.0,
+             "y": 0.0,
+             "w": 1200.0,
+             "h": 40.0
+            },
+            "children": [
+             {
+              "id": "n7120",
+              "role": "generic",
+              "name": "",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 0.0,
+               "y": 6.0,
+               "w": 431.0,
+               "h": 28.0
+              },
+              "children": [
+               {
+                "id": "tb-sidebar",
+                "role": "button",
+                "name": "Hide sidebar",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 87.0,
+                 "y": 6.0,
+                 "w": 28.0,
+                 "h": 28.0
+                },
+                "children": [
+                 {
+                  "id": "n7134",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 93.0,
+                   "y": 12.0,
+                   "w": 16.0,
+                   "h": 16.0
+                  }
+                 }
+                ]
+               },
+               {
+                "id": "tb-back",
+                "role": "button",
+                "name": "Back",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 119.0,
+                 "y": 6.0,
+                 "w": 28.0,
+                 "h": 28.0
+                },
+                "children": [
+                 {
+                  "id": "n7148",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 125.0,
+                   "y": 12.0,
+                   "w": 16.0,
+                   "h": 16.0
+                  }
+                 }
+                ]
+               },
+               {
+                "id": "tb-forward",
+                "role": "button",
+                "name": "Forward",
+                "enabled": false,
+                "focused": false,
+                "bounds": {
+                 "x": 151.0,
+                 "y": 6.0,
+                 "w": 28.0,
+                 "h": 28.0
+                },
+                "states": [
+                 "disabled"
+                ],
+                "children": [
+                 {
+                  "id": "n7162",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": false,
+                  "focused": false,
+                  "bounds": {
+                   "x": 157.0,
+                   "y": 12.0,
+                   "w": 16.0,
+                   "h": 16.0
+                  },
+                  "states": [
+                   "disabled"
+                  ]
+                 }
+                ]
+               }
+              ]
+             },
+             {
+              "id": "n7164",
+              "role": "generic",
+              "name": "",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 431.0,
+               "y": 5.0,
+               "w": 415.0,
+               "h": 30.0
+              },
+              "children": [
+               {
+                "id": "context-pill",
+                "role": "button",
+                "name": "Tax profile: E2E SMOKE TAXPAYER1 TEST ST",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 431.0,
+                 "y": 5.0,
+                 "w": 415.0,
+                 "h": 30.0
+                },
+                "children": [
+                 {
+                  "id": "n7168",
+                  "role": "image",
+                  "name": "E2E SMOKE TAXPAYER1 TEST ST [grouped]",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 436.0,
+                   "y": 10.0,
+                   "w": 20.0,
+                   "h": 20.0
+                  },
+                  "states": [
+                   "grouped"
+                  ]
+                 },
+                 {
+                  "id": "n7176",
+                  "role": "note",
+                  "name": "E2E SMOKE TAXPAYER1 TEST ST",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 464.0,
+                   "y": 9.0,
+                   "w": 208.0,
+                   "h": 22.0
+                  }
+                 },
+                 {
+                  "id": "context-pill-tin",
+                  "role": "note",
+                  "name": "123-456-788-00000",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 680.0,
+                   "y": 10.0,
+                   "w": 133.0,
+                   "h": 20.0
+                  }
+                 },
+                 {
+                  "id": "n7184",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 821.0,
+                   "y": 13.0,
+                   "w": 14.0,
+                   "h": 14.0
+                  }
+                 }
+                ]
+               }
+              ]
+             },
+             {
+              "id": "n7186",
+              "role": "generic",
+              "name": "",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 846.0,
+               "y": 6.0,
+               "w": 354.0,
+               "h": 28.0
+              },
+              "children": [
+               {
+                "id": "tb-notifications",
+                "role": "button",
+                "name": "Notifications",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 1098.0,
+                 "y": 6.0,
+                 "w": 28.0,
+                 "h": 28.0
+                },
+                "children": [
+                 {
+                  "id": "n7200",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 1104.0,
+                   "y": 12.0,
+                   "w": 16.0,
+                   "h": 16.0
+                  }
+                 }
+                ]
+               },
+               {
+                "id": "tb-theme",
+                "role": "button",
+                "name": "Theme: system, press to change",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 1130.0,
+                 "y": 6.0,
+                 "w": 28.0,
+                 "h": 28.0
+                },
+                "children": [
+                 {
+                  "id": "n7214",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 1136.0,
+                   "y": 12.0,
+                   "w": 16.0,
+                   "h": 16.0
+                  }
+                 }
+                ]
+               },
+               {
+                "id": "tb-panel",
+                "role": "button",
+                "name": "Show tax profile",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 1162.0,
+                 "y": 6.0,
+                 "w": 28.0,
+                 "h": 28.0
+                },
+                "children": [
+                 {
+                  "id": "n7228",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 1168.0,
+                   "y": 12.0,
+                   "w": 16.0,
+                   "h": 16.0
+                  }
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "id": "frame-body",
+            "role": "generic",
+            "name": "frame-body",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+             "x": 0.0,
+             "y": 40.0,
+             "w": 1200.0,
+             "h": 760.0
+            },
+            "children": [
+             {
+              "id": "sidebar",
+              "role": "generic",
+              "name": "sidebar",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 0.0,
+               "y": 40.0,
+               "w": 248.0,
+               "h": 760.0
+              },
+              "children": [
+               {
+                "id": "n6650",
+                "role": "generic",
+                "name": "",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 8.0,
+                 "y": 44.0,
+                 "w": 232.0,
+                 "h": 32.0
+                },
+                "children": [
+                 {
+                  "id": "sb-search",
+                  "role": "button",
+                  "name": "Search",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 8.0,
+                   "y": 44.0,
+                   "w": 200.0,
+                   "h": 32.0
+                  },
+                  "children": [
+                   {
+                    "id": "n6654",
+                    "role": "generic",
+                    "name": "",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 19.0,
+                     "y": 52.0,
+                     "w": 16.0,
+                     "h": 16.0
+                    }
+                   },
+                   {
+                    "id": "n6656",
+                    "role": "note",
+                    "name": "Search",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 43.0,
+                     "y": 49.0,
+                     "w": 119.0,
+                     "h": 22.0
+                    }
+                   },
+                   {
+                    "id": "n6660",
+                    "role": "generic",
+                    "name": "",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 170.0,
+                     "y": 51.0,
+                     "w": 29.0,
+                     "h": 18.0
+                    },
+                    "children": [
+                     {
+                      "id": "n6662",
+                      "role": "note",
+                      "name": "\u2318K",
+                      "enabled": true,
+                      "focused": false,
+                      "bounds": {
+                       "x": 175.0,
+                       "y": 51.0,
+                       "w": 19.0,
+                       "h": 18.0
+                      }
+                     }
+                    ]
+                   }
+                  ]
+                 },
+                 {
+                  "id": "sb-new",
+                  "role": "button",
+                  "name": "New return",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 212.0,
+                   "y": 46.0,
+                   "w": 28.0,
+                   "h": 28.0
+                  },
+                  "children": [
+                   {
+                    "id": "n6674",
+                    "role": "generic",
+                    "name": "",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 218.0,
+                     "y": 52.0,
+                     "w": 16.0,
+                     "h": 16.0
+                    }
+                   }
+                  ]
+                 }
+                ]
+               },
+               {
+                "id": "sb-nav",
+                "role": "generic",
+                "name": "sb-nav",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 8.0,
+                 "y": 76.0,
+                 "w": 232.0,
+                 "h": 146.0
+                },
+                "children": [
+                 {
+                  "id": "nav-home",
+                  "role": "button",
+                  "name": "Home",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 8.0,
+                   "y": 88.0,
+                   "w": 232.0,
+                   "h": 32.0
+                  },
+                  "children": [
+                   {
+                    "id": "n6684",
+                    "role": "generic",
+                    "name": "",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 16.0,
+                     "y": 96.0,
+                     "w": 16.0,
+                     "h": 16.0
+                    }
+                   },
+                   {
+                    "id": "n6680",
+                    "role": "note",
+                    "name": "Home",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 42.0,
+                     "y": 93.0,
+                     "w": 190.0,
+                     "h": 22.0
+                    }
+                   }
+                  ]
+                 },
+                 {
+                  "id": "nav-library",
+                  "role": "button",
+                  "name": "Form library",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 8.0,
+                   "y": 122.0,
+                   "w": 232.0,
+                   "h": 32.0
+                  },
+                  "children": [
+                   {
+                    "id": "n6692",
+                    "role": "generic",
+                    "name": "",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 16.0,
+                     "y": 130.0,
+                     "w": 16.0,
+                     "h": 16.0
+                    }
+                   },
+                   {
+                    "id": "n6688",
+                    "role": "note",
+                    "name": "Form library",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 42.0,
+                     "y": 127.0,
+                     "w": 190.0,
+                     "h": 22.0
+                    }
+                   }
+                  ]
+                 },
+                 {
+                  "id": "nav-calendar",
+                  "role": "button",
+                  "name": "Calendar",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 8.0,
+                   "y": 156.0,
+                   "w": 232.0,
+                   "h": 32.0
+                  },
+                  "children": [
+                   {
+                    "id": "n6700",
+                    "role": "generic",
+                    "name": "",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 16.0,
+                     "y": 164.0,
+                     "w": 16.0,
+                     "h": 16.0
+                    }
+                   },
+                   {
+                    "id": "n6696",
+                    "role": "note",
+                    "name": "Calendar",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 42.0,
+                     "y": 161.0,
+                     "w": 190.0,
+                     "h": 22.0
+                    }
+                   }
+                  ]
+                 },
+                 {
+                  "id": "nav-filings",
+                  "role": "button",
+                  "name": "Filings",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 8.0,
+                   "y": 190.0,
+                   "w": 232.0,
+                   "h": 32.0
+                  },
+                  "children": [
+                   {
+                    "id": "n6708",
+                    "role": "generic",
+                    "name": "",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 16.0,
+                     "y": 198.0,
+                     "w": 16.0,
+                     "h": 16.0
+                    }
+                   },
+                   {
+                    "id": "n6704",
+                    "role": "note",
+                    "name": "Filings",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 42.0,
+                     "y": 195.0,
+                     "w": 190.0,
+                     "h": 22.0
+                    }
+                   }
+                  ]
+                 }
+                ]
+               },
+               {
+                "id": "sb-recent",
+                "role": "scroll",
+                "name": "sb-recent",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 8.0,
+                 "y": 222.0,
+                 "w": 232.0,
+                 "h": 508.0
+                },
+                "children": [
+                 {
+                  "id": "n6712",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "visible": false,
+                  "bounds": {
+                   "x": 8.0,
+                   "y": 222.0,
+                   "w": 232.0,
+                   "h": 0.0
+                  }
+                 }
+                ]
+               },
+               {
+                "id": "sb-foot",
+                "role": "generic",
+                "name": "sb-foot",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 8.0,
+                 "y": 730.0,
+                 "w": 232.0,
+                 "h": 62.0
+                },
+                "children": [
+                 {
+                  "id": "account-menu",
+                  "role": "generic",
+                  "name": "account-menu",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 8.0,
+                   "y": 738.0,
+                   "w": 232.0,
+                   "h": 54.0
+                  },
+                  "children": [
+                   {
+                    "id": "n6740",
+                    "role": "generic",
+                    "name": "",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 8.0,
+                     "y": 738.0,
+                     "w": 232.0,
+                     "h": 54.0
+                    },
+                    "children": [
+                     {
+                      "id": "account-row",
+                      "role": "button",
+                      "name": "Account menu",
+                      "enabled": true,
+                      "focused": false,
+                      "bounds": {
+                       "x": 8.0,
+                       "y": 738.0,
+                       "w": 232.0,
+                       "h": 54.0
+                      },
+                      "states": [
+                       "collapsed"
+                      ],
+                      "children": [
+                       {
+                        "id": "n6718",
+                        "role": "image",
+                        "name": "E2E SMOKE TAXPAYER1 TEST ST [grouped]",
+                        "enabled": true,
+                        "focused": false,
+                        "bounds": {
+                         "x": 16.0,
+                         "y": 751.0,
+                         "w": 28.0,
+                         "h": 28.0
+                        },
+                        "states": [
+                         "grouped"
+                        ]
+                       },
+                       {
+                        "id": "n6726",
+                        "role": "generic",
+                        "name": "",
+                        "enabled": true,
+                        "focused": false,
+                        "bounds": {
+                         "x": 54.0,
+                         "y": 744.0,
+                         "w": 152.0,
+                         "h": 42.0
+                        },
+                        "children": [
+                         {
+                          "id": "n6728",
+                          "role": "note",
+                          "name": "E2E SMOKE TAXPAYER1 TEST ST",
+                          "enabled": true,
+                          "focused": false,
+                          "bounds": {
+                           "x": 54.0,
+                           "y": 744.0,
+                           "w": 152.0,
+                           "h": 22.0
+                          }
+                         },
+                         {
+                          "id": "n6732",
+                          "role": "note",
+                          "name": "Admin \u00b7 this computer",
+                          "enabled": true,
+                          "focused": false,
+                          "bounds": {
+                           "x": 54.0,
+                           "y": 766.0,
+                           "w": 152.0,
+                           "h": 20.0
+                          }
+                         }
+                        ]
+                       },
+                       {
+                        "id": "n6736",
+                        "role": "generic",
+                        "name": "",
+                        "enabled": true,
+                        "focused": false,
+                        "bounds": {
+                         "x": 216.0,
+                         "y": 757.0,
+                         "w": 16.0,
+                         "h": 16.0
+                        }
+                       }
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             },
+             {
+              "id": "main-surface",
+              "role": "generic",
+              "name": "main-surface",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 248.0,
+               "y": 40.0,
+               "w": 944.0,
+               "h": 752.0
+              },
+              "children": [
+               {
+                "id": "n6744",
+                "role": "generic",
+                "name": "",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 249.0,
+                 "y": 41.0,
+                 "w": 942.0,
+                 "h": 750.0
+                },
+                "children": [
+                 {
+                  "id": "main-scroll",
+                  "role": "scroll",
+                  "name": "main-scroll",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 249.0,
+                   "y": 41.0,
+                   "w": 942.0,
+                   "h": 750.0
+                  },
+                  "children": [
+                   {
+                    "id": "n7232",
+                    "role": "generic",
+                    "name": "",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 249.0,
+                     "y": 41.0,
+                     "w": 942.0,
+                     "h": 346.0
+                    },
+                    "children": [
+                     {
+                      "id": "content-column",
+                      "role": "generic",
+                      "name": "content-column",
+                      "enabled": true,
+                      "focused": false,
+                      "bounds": {
+                       "x": 312.0,
+                       "y": 69.0,
+                       "w": 816.0,
+                       "h": 262.0
+                      },
+                      "children": [
+                       {
+                        "id": "tp-page-forms",
+                        "role": "generic",
+                        "name": "tp-page-forms",
+                        "enabled": true,
+                        "focused": false,
+                        "bounds": {
+                         "x": 312.0,
+                         "y": 69.0,
+                         "w": 816.0,
+                         "h": 262.0
+                        },
+                        "children": [
+                         {
+                          "id": "tp-header",
+                          "role": "generic",
+                          "name": "tp-header",
+                          "enabled": true,
+                          "focused": false,
+                          "bounds": {
+                           "x": 312.0,
+                           "y": 69.0,
+                           "w": 816.0,
+                           "h": 136.0
+                          },
+                          "children": [
+                           {
+                            "id": "n7240",
+                            "role": "generic",
+                            "name": "",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                             "x": 312.0,
+                             "y": 69.0,
+                             "w": 816.0,
+                             "h": 55.0
+                            },
+                            "children": [
+                             {
+                              "id": "n7298",
+                              "role": "image",
+                              "name": "E2E SMOKE TAXPAYER1 TEST ST [grouped]",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 312.0,
+                               "y": 77.0,
+                               "w": 40.0,
+                               "h": 40.0
+                              },
+                              "states": [
+                               "grouped"
+                              ]
+                             },
+                             {
+                              "id": "n7242",
+                              "role": "generic",
+                              "name": "",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 366.0,
+                               "y": 69.0,
+                               "w": 524.0,
+                               "h": 55.0
+                              },
+                              "children": [
+                               {
+                                "id": "n7244",
+                                "role": "note",
+                                "name": "E2E SMOKE TAXPAYER1 TEST ST",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 366.0,
+                                 "y": 69.0,
+                                 "w": 524.0,
+                                 "h": 33.0
+                                }
+                               },
+                               {
+                                "id": "n7272",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 366.0,
+                                 "y": 104.0,
+                                 "w": 524.0,
+                                 "h": 20.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n7274",
+                                  "role": "generic",
+                                  "name": "",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 366.0,
+                                   "y": 104.0,
+                                   "w": 524.0,
+                                   "h": 20.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n7280",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 366.0,
+                                     "y": 104.0,
+                                     "w": 133.0,
+                                     "h": 20.0
+                                    },
+                                    "children": [
+                                     {
+                                      "id": "n7276",
+                                      "role": "note",
+                                      "name": "123-456-788-00000",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 366.0,
+                                       "y": 104.0,
+                                       "w": 133.0,
+                                       "h": 20.0
+                                      }
+                                     }
+                                    ]
+                                   },
+                                   {
+                                    "id": "n7282",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 507.0,
+                                     "y": 104.0,
+                                     "w": 77.0,
+                                     "h": 20.0
+                                    },
+                                    "children": [
+                                     {
+                                      "id": "n7284",
+                                      "role": "generic",
+                                      "name": "",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 507.0,
+                                       "y": 113.0,
+                                       "w": 3.0,
+                                       "h": 3.0
+                                      }
+                                     },
+                                     {
+                                      "id": "n7286",
+                                      "role": "note",
+                                      "name": "Head office",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 518.0,
+                                       "y": 104.0,
+                                       "w": 66.0,
+                                       "h": 20.0
+                                      }
+                                     }
+                                    ]
+                                   },
+                                   {
+                                    "id": "n7290",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 592.0,
+                                     "y": 104.0,
+                                     "w": 66.0,
+                                     "h": 20.0
+                                    },
+                                    "children": [
+                                     {
+                                      "id": "n7292",
+                                      "role": "generic",
+                                      "name": "",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 592.0,
+                                       "y": 113.0,
+                                       "w": 3.0,
+                                       "h": 3.0
+                                      }
+                                     },
+                                     {
+                                      "id": "n7294",
+                                      "role": "note",
+                                      "name": "Individual",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 603.0,
+                                       "y": 104.0,
+                                       "w": 55.0,
+                                       "h": 20.0
+                                      }
+                                     }
+                                    ]
+                                   }
+                                  ]
+                                 }
+                                ]
+                               }
+                              ]
+                             },
+                             {
+                              "id": "n7322",
+                              "role": "generic",
+                              "name": "",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 904.0,
+                               "y": 83.0,
+                               "w": 224.0,
+                               "h": 28.0
+                              },
+                              "children": [
+                               {
+                                "id": "tp-copy-tin",
+                                "role": "button",
+                                "name": "Copy TIN",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 904.0,
+                                 "y": 83.0,
+                                 "w": 102.0,
+                                 "h": 28.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n7330",
+                                  "role": "generic",
+                                  "name": "",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 915.0,
+                                   "y": 89.0,
+                                   "w": 16.0,
+                                   "h": 16.0
+                                  }
+                                 },
+                                 {
+                                  "id": "n7326",
+                                  "role": "note",
+                                  "name": "Copy TIN",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 937.0,
+                                   "y": 86.0,
+                                   "w": 58.0,
+                                   "h": 22.0
+                                  }
+                                 }
+                                ]
+                               },
+                               {
+                                "id": "tp-new-return",
+                                "role": "button",
+                                "name": "New return",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 1014.0,
+                                 "y": 83.0,
+                                 "w": 114.0,
+                                 "h": 28.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n7338",
+                                  "role": "generic",
+                                  "name": "",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 1025.0,
+                                   "y": 89.0,
+                                   "w": 16.0,
+                                   "h": 16.0
+                                  }
+                                 },
+                                 {
+                                  "id": "n7334",
+                                  "role": "note",
+                                  "name": "New return",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 1047.0,
+                                   "y": 86.0,
+                                   "w": 70.0,
+                                   "h": 22.0
+                                  }
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           },
+                           {
+                            "id": "tp-tabs",
+                            "role": "tablist",
+                            "name": "tp-tabs",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                             "x": 312.0,
+                             "y": 144.0,
+                             "w": 816.0,
+                             "h": 37.0
+                            },
+                            "children": [
+                             {
+                              "id": "tp-tabs-profile",
+                              "role": "tab",
+                              "name": "Profile",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 312.0,
+                               "y": 144.0,
+                               "w": 61.0,
+                               "h": 36.0
+                              },
+                              "children": [
+                               {
+                                "id": "n7344",
+                                "role": "note",
+                                "name": "Profile",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 322.0,
+                                 "y": 151.0,
+                                 "w": 41.0,
+                                 "h": 22.0
+                                }
+                               }
+                              ]
+                             },
+                             {
+                              "id": "tp-tabs-forms",
+                              "role": "tab",
+                              "name": "Forms",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 377.0,
+                               "y": 144.0,
+                               "w": 85.0,
+                               "h": 36.0
+                              },
+                              "states": [
+                               "selected"
+                              ],
+                              "children": [
+                               {
+                                "id": "n7350",
+                                "role": "note",
+                                "name": "Forms",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 387.0,
+                                 "y": 151.0,
+                                 "w": 39.0,
+                                 "h": 22.0
+                                }
+                               },
+                               {
+                                "id": "n7354",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 432.0,
+                                 "y": 153.0,
+                                 "w": 20.0,
+                                 "h": 18.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n7356",
+                                  "role": "note",
+                                  "name": "0",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 438.0,
+                                   "y": 153.0,
+                                   "w": 8.0,
+                                   "h": 18.0
+                                  }
+                                 }
+                                ]
+                               }
+                              ]
+                             },
+                             {
+                              "id": "tp-tabs-templates",
+                              "role": "tab",
+                              "name": "Templates",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 466.0,
+                               "y": 144.0,
+                               "w": 111.0,
+                               "h": 36.0
+                              },
+                              "children": [
+                               {
+                                "id": "n7362",
+                                "role": "note",
+                                "name": "Templates",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 476.0,
+                                 "y": 151.0,
+                                 "w": 65.0,
+                                 "h": 22.0
+                                }
+                               },
+                               {
+                                "id": "n7366",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 547.0,
+                                 "y": 153.0,
+                                 "w": 20.0,
+                                 "h": 18.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n7368",
+                                  "role": "note",
+                                  "name": "0",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 553.0,
+                                   "y": 153.0,
+                                   "w": 8.0,
+                                   "h": 18.0
+                                  }
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           }
+                          ]
+                         },
+                         {
+                          "id": "tp-forms-tab",
+                          "role": "generic",
+                          "name": "tp-forms-tab",
+                          "enabled": true,
+                          "focused": false,
+                          "bounds": {
+                           "x": 312.0,
+                           "y": 205.0,
+                           "w": 816.0,
+                           "h": 126.0
+                          },
+                          "children": [
+                           {
+                            "id": "n7374",
+                            "role": "generic",
+                            "name": "",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                             "x": 312.0,
+                             "y": 205.0,
+                             "w": 816.0,
+                             "h": 126.0
+                            },
+                            "children": [
+                             {
+                              "id": "n7376",
+                              "role": "note",
+                              "name": "Head office has no tax year yet. Add one to choose the forms it files.",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 312.0,
+                               "y": 205.0,
+                               "w": 816.0,
+                               "h": 22.0
+                              }
+                             },
+                             {
+                              "id": "n7380",
+                              "role": "generic",
+                              "name": "",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 312.0,
+                               "y": 243.0,
+                               "w": 816.0,
+                               "h": 72.0
+                              },
+                              "children": [
+                               {
+                                "id": "tp-add-year",
+                                "role": "generic",
+                                "name": "tp-add-year",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 312.0,
+                                 "y": 243.0,
+                                 "w": 816.0,
+                                 "h": 56.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n7384",
+                                  "role": "note",
+                                  "name": "Add tax year",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 328.0,
+                                   "y": 260.0,
+                                   "w": 80.0,
+                                   "h": 22.0
+                                  }
+                                 },
+                                 {
+                                  "id": "tp-add-year-select",
+                                  "role": "generic",
+                                  "name": "tp-add-year-select",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 420.0,
+                                   "y": 255.0,
+                                   "w": 96.0,
+                                   "h": 32.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n7390",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 420.0,
+                                     "y": 255.0,
+                                     "w": 96.0,
+                                     "h": 32.0
+                                    },
+                                    "children": [
+                                     {
+                                      "id": "tp-add-year-select-trigger",
+                                      "role": "combobox",
+                                      "name": "Tax year to add",
+                                      "value": "2026",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 420.0,
+                                       "y": 255.0,
+                                       "w": 96.0,
+                                       "h": 32.0
+                                      },
+                                      "states": [
+                                       "collapsed"
+                                      ],
+                                      "children": [
+                                       {
+                                        "id": "n7394",
+                                        "role": "note",
+                                        "name": "2026",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                         "x": 431.0,
+                                         "y": 260.0,
+                                         "w": 54.0,
+                                         "h": 22.0
+                                        }
+                                       },
+                                       {
+                                        "id": "n7398",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                         "x": 493.0,
+                                         "y": 264.0,
+                                         "w": 14.0,
+                                         "h": 14.0
+                                        }
+                                       }
+                                      ]
+                                     }
+                                    ]
+                                   }
+                                  ]
+                                 },
+                                 {
+                                  "id": "n7406",
+                                  "role": "generic",
+                                  "name": "",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 528.0,
+                                   "y": 271.0,
+                                   "w": 488.0,
+                                   "h": 0.0
+                                  }
+                                 },
+                                 {
+                                  "id": "tp-add-year-add",
+                                  "role": "button",
+                                  "name": "Add 2026",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 1028.0,
+                                   "y": 257.0,
+                                   "w": 84.0,
+                                   "h": 28.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n7410",
+                                    "role": "note",
+                                    "name": "Add 2026",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 1039.0,
+                                     "y": 260.0,
+                                     "w": 62.0,
+                                     "h": 22.0
+                                    }
+                                   }
+                                  ]
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           }
+                          ]
+                         }
+                        ]
+                       }
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": "toaster",
+      "role": "generic",
+      "name": "toaster",
+      "enabled": true,
+      "focused": false,
+      "bounds": {
+       "x": 0.0,
+       "y": 717.0,
+       "w": 1200.0,
+       "h": 83.0
+      },
+      "children": [
+       {
+        "id": "n8",
+        "role": "generic",
+        "name": "",
+        "enabled": true,
+        "focused": false,
+        "bounds": {
+         "x": 380.0,
+         "y": 717.0,
+         "w": 440.0,
+         "h": 63.0
+        },
+        "children": [
+         {
+          "id": "n911",
+          "role": "generic",
+          "name": "",
+          "enabled": true,
+          "focused": false,
+          "bounds": {
+           "x": 380.0,
+           "y": 717.0,
+           "w": 440.0,
+           "h": 63.0
+          },
+          "children": [
+           {
+            "id": "n7414",
+            "role": "alert",
+            "name": "E2E SMOKE TAXPAYER1 TEST ST added. Add a tax year to choose its forms.",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+             "x": 380.0,
+             "y": 717.0,
+             "w": 440.0,
+             "h": 63.0
+            },
+            "children": [
+             {
+              "id": "n7416",
+              "role": "generic",
+              "name": "",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 380.0,
+               "y": 717.0,
+               "w": 440.0,
+               "h": 63.0
+              },
+              "children": [
+               {
+                "id": "n7418",
+                "role": "generic",
+                "name": "",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 394.0,
+                 "y": 741.0,
+                 "w": 16.0,
+                 "h": 16.0
+                }
+               },
+               {
+                "id": "n7420",
+                "role": "note",
+                "name": "E2E SMOKE TAXPAYER1 TEST ST added. Add a tax year to choose its forms.",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 420.0,
+                 "y": 727.0,
+                 "w": 386.0,
+                 "h": 43.0
+                }
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": "n913",
+      "role": "generic",
+      "name": "",
+      "enabled": true,
+      "focused": false,
+      "visible": false,
+      "bounds": {
+       "x": 0.0,
+       "y": 0.0,
+       "w": 0.0,
+       "h": 0.0
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

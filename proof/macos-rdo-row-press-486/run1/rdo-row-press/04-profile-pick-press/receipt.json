@@ -1,0 +1,61 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "profile-pick-press",
+  "fingerprint": "fnv1a64:644e624e18b13403",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 389
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 64
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 447
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 137
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 377
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 236,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-150928/04-profile-pick-press/006-s6.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s7",
+      "ok": false,
+      "error": "occluded_by: 7416",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 347
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-150928/04-profile-pick-press/006-s6.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 2000
+}

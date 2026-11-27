@@ -1,0 +1,101 @@
+{
+ "suite": "smoke",
+ "target": "macos",
+ "started": "20261127-150712",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-150712",
+ "cli_version": "0.4.1",
+ "app_commit": "04fa6dab",
+ "platform": "desktop",
+ "os": "macos",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 701,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "fail",
+   "ms": 7463,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up.wants",
+   "step": "s20",
+   "error": "node `context-pill` name: expected \"Tax profile: E2E SMOKE TAXPAYER\", got \"Tax profile: E2E SMOKE TAXPAYER1 TEST ST\"",
+   "error_code": "assert_failed",
+   "line": "assert context-pill name=\"Tax profile: $name\" --screenshot",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-150712/02-sign-up/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-150712/02-sign-up/failure-tree.json"
+  },
+  {
+   "name": "tax-year",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "navigate",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "open-2551q",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "money-boxes",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "sheet-press",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "delete-row",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "queue",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "birth-date",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "sign-out",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  }
+ ]
+}
