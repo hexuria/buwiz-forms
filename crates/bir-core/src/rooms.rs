@@ -831,10 +831,12 @@ impl DeviceStoreRef {
             let Some(store) = DeviceStore::open_existing(layout)? else {
                 return Ok(None);
             };
-            // The identity of the file this connection opened (read after the open, so a swap in between is seen at
-            // the next read and opens again).
-            let id = crate::safe_fs::file_id(&path)?;
-            held.insert(path.clone(), HeldStore { store, id });
+            #[cfg(test)]
+            AFTER_HELD_OPEN.with(|hook| hook.borrow_mut().take().map(|hook| hook()));
+            // Recorded with the identity read before the open (H1'): a swap in between makes the next read find
+            // another file and open again. An identity read after the open could pair this connection to the old
+            // file with the new file's identity, and every later read would stay on the old one.
+            held.insert(path.clone(), HeldStore { store, id: current });
         }
         let Some(entry) = held.get(&path) else {
             return Ok(None);
@@ -850,6 +852,12 @@ impl DeviceStoreRef {
             }
         }
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Runs once right after a held read connection is opened, before it is recorded: a test swaps the file there.
+    static AFTER_HELD_OPEN: RefCell<Option<Box<dyn FnOnce()>>> = const { RefCell::new(None) };
 }
 
 /// A SQLite error that says the file itself is not a store (not a database, corrupt) as [`DeviceStoreError::Unreadable`].
@@ -1031,8 +1039,8 @@ pub fn set_aside_unusable(layout: &Layout) -> Result<Option<PathBuf>, DeviceStor
     let aside = layout
         .device_dir()
         .join(format!("{DEVICE_DB_FILE}.unusable-{stamp}"));
-    crate::safe_fs::rename_no_replace(&path, &aside)?;
-    // A log left at the old name would be read into the fresh store as if it were its own.
+    // The side files first (R3): a log left at the old name, if the process stopped between the renames, would be
+    // read into the fresh store as if it were its own.
     for suffix in ["-wal", "-shm"] {
         let mut side = path.as_os_str().to_os_string();
         side.push(suffix);
@@ -1044,6 +1052,7 @@ pub fn set_aside_unusable(layout: &Layout) -> Result<Option<PathBuf>, DeviceStor
             Err(error) => return Err(error.into()),
         }
     }
+    crate::safe_fs::rename_no_replace(&path, &aside)?;
     crate::safe_fs::sync_dir(layout.device_dir())?;
     tracing::warn!(aside = %aside.display(), "device store set aside: {reason}");
     Ok(Some(aside))
@@ -1750,6 +1759,38 @@ mod tests {
         std::fs::rename(&older, layout.device_db()).unwrap();
         assert_eq!(device_setting("theme_preference").as_deref(), Some("Older"));
 
+        HELD_STORES.lock().unwrap().clear();
+        crate::db::set_database_path_override(None);
+    }
+
+    /// H1' (review of A2): a `device.db` swapped while the held read connection is being opened is the swapped-in
+    /// file at the next read: the connection is recorded with the identity read before its open, never one read
+    /// after it, which would pair a connection to the old file with the new file's identity for good.
+    #[cfg(unix)]
+    #[test]
+    fn a_swap_during_the_held_open_is_seen_at_the_next_read() {
+        let folder = tempfile::tempdir().unwrap();
+        crate::db::set_database_path_override(Some(folder.path().join("bir_data.db")));
+        forget_ephemeral_device_store();
+        let layout = Layout::here();
+        set_device_setting("theme_preference", "Old").unwrap();
+        HELD_STORES.lock().unwrap().clear();
+        // The file another process puts in its place while this one opens its read connection.
+        let other = Layout::at(folder.path().join("other"));
+        DeviceStore::open(&other)
+            .unwrap()
+            .set_setting("theme_preference", "New")
+            .unwrap();
+        let (from, to) = (other.device_db(), layout.device_db());
+        AFTER_HELD_OPEN.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                std::fs::rename(&from, &to).unwrap();
+            }))
+        });
+        // This read is of the file it opened (either answer is fair at that instant)...
+        let _ = device_setting("theme_preference");
+        // ...and every later one is of the file now at the path.
+        assert_eq!(device_setting("theme_preference").as_deref(), Some("New"));
         HELD_STORES.lock().unwrap().clear();
         crate::db::set_database_path_override(None);
     }
