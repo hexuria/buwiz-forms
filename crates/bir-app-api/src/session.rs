@@ -237,6 +237,9 @@ pub enum Reason {
     ServerEnded,
     Replaced,
     PageClosed,
+    /// The disk's owner changed under the app — another process (bir-mcp's door) signed someone
+    /// else in. Counts as an owner change at the I/O points; the app closes its owner's session.
+    SignedInElsewhere,
 }
 
 /// What a close decided, for the steps that run outside SESSION.
@@ -360,23 +363,22 @@ pub fn join_device_forget_threads() {
 }
 
 fn finish_close(outcome: &CloseOutcome, mode: ForgetMode) {
-    // F2'c: the forget runs under the DEVICE_KEY lock, never nested in SESSION (we are outside
-    // it here), and only while the epoch this close produced is still current — a newer epoch
-    // means a newer session answered already, and its key is not this close's to take. The
-    // check-and-delete inside forget_device_key_for is the second gate: a key already recorded
-    // for the newer owner is never touched.
+    // F2'c/F7: the forget runs under the DEVICE_KEY lock, never nested in SESSION (we are
+    // outside it here). Its condition — the epoch this close produced is still current — is
+    // re-checked INSIDE the lock by forget_device_key_at_epoch itself: a newer epoch means a
+    // newer session answered already, and its key is not this close's to take. The owner check
+    // beside it is the second gate: a key already recorded for the newer owner is never touched.
     if !outcome.owner_ended {
         return;
     }
     let epoch = outcome.epoch;
     let ended = outcome.ended_owner.clone();
     let forget = move || {
-        if bir_core::session_epoch::current() != epoch {
-            return;
-        }
+        // F7: the epoch is re-checked INSIDE DEVICE_KEY by the forget itself — a registration
+        // that won the lock first under a newer epoch is never taken by this close's forget.
         if let Some(ended) = &ended {
-            bir_core::relay::forget_device_key_for(ended);
-        } else {
+            bir_core::relay::forget_device_key_at_epoch(ended, epoch);
+        } else if bir_core::session_epoch::current() == epoch {
             bir_core::relay::forget_device();
         }
     };
@@ -585,8 +587,9 @@ pub(crate) fn sign_out_inner(
 /// token's 401: only if the stored sign-in is that owner AND its refresh token IS the failed
 /// one does anything happen at all. Otherwise nothing is cleared and NOTHING closes.
 ///  1. under account_session::lock(), OUTSIDE SESSION: the credential check and the disk delete;
-///  2. then ONE SESSION section, only if the epoch still matches and the cache is still that
-///     owner: the cache goes to None plus the close with the owner-ending steps;
+///  2. then ONE SESSION section, WHATEVER the epoch (F5 — the credential match above is the
+///     evidence the ending is the current sign-in's), if the cache is still that owner: the
+///     cache goes to None plus the close with the owner-ending steps;
 ///  3. the device-key forget after SESSION, epoch-checked (a background thread — see sign_out).
 pub fn server_ended(
     owner: bir_core::account_session::OwnerKey,
@@ -619,12 +622,15 @@ pub fn server_ended(
         );
         return;
     }
-    // Step 2: the one SESSION section — cache and close together, only if both still match.
+    // Step 2: the one SESSION section — cache and close together. F5: WHATEVER the epoch — the
+    // disk held the exact failed credential, so this ending IS about the current sign-in, from
+    // whenever it was sent: a stale-epoch guard would strand a session the server has ended,
+    // never Open again with no sign-in. Only the cache's ownership still gates the close: if the
+    // cache moved to another owner the session answered already.
     let outcome = {
         let mut session = locked();
         let cache_key = bir_core::account_session::stored_owner();
-        let cache_is_owner = cache_key.as_ref() == Some(&owner);
-        if session.epoch != epoch || !cache_is_owner {
+        if cache_key.as_ref() != Some(&owner) {
             tracing::info!(
                 "server_ended for epoch {epoch}: the disk is cleared, the session moved on already"
             );
@@ -756,10 +762,6 @@ pub(crate) fn commit(epoch: u64, target: Target, handle: Option<(Arc<Mutex<Datab
     report_invariants();
 }
 
-/// I2's re-read (§3 step 3): the stored sign-in, read under `account_session::lock()` — taken
-/// inside SESSION, which is the lock order, and held for this file read only (§3's rule [D2]) —
-/// is this owner: the same normalised origin and the same user id.
-#[cfg_attr(not(test), allow(dead_code))]
 /// I2's half in commit: the stored owner cache answers — never the account lock, the file or
 /// the keychain (F8, F3c). The cache is current because every write of the stored sign-in
 /// updates it inside the same account-lock section as the write.
@@ -1392,6 +1394,196 @@ mod tests {
             snapshot().phase_kind,
             PhaseKind::Opening,
             "Try again retries the guard and opens"
+        );
+        assert_invariants();
+    }
+
+    /// F6: a stale registration's discard deletes only its OWN key. A's registration is parked
+    /// inside its network step while the session moves to B and B's registration completes;
+    /// when A's step finally lands its gate fails — and the discard must leave B's key and
+    /// owner record exactly as they are.
+    #[test]
+    fn a_stale_registrations_discard_leaves_the_newer_key() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch_a = snapshot().epoch;
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        // A's registration parks inside its register step, its key already created.
+        let (parked_sender, parked) = std::sync::mpsc::channel();
+        let (release_sender, release) = std::sync::mpsc::channel();
+        let device_dir = scratch.layout.device_dir().to_path_buf();
+        let key_a_thread = key_a.clone();
+        let registration_a = std::thread::spawn(move || {
+            bir_core::platform::set_device_dir_override(Some(device_dir));
+            bir_core::relay::register_device_key_for_test(&key_a_thread, epoch_a, move || {
+                assert!(bir_core::relay::lazy_first_key_for_test());
+                let _ = parked_sender.send(());
+                let _ = release.recv();
+                bir_core::relay::Registration::Registered
+            })
+        });
+        parked
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("A's registration never reached its network step");
+        // The session moves to B — epoch and cache both.
+        let owner_b = seed_stored("user-b", false);
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        let epoch_b = snapshot().epoch;
+        assert!(epoch_b > epoch_a);
+        // B's registration completes whole: its key and owner record are the install's now.
+        let key_b = bir_core::account_session::OwnerKey {
+            origin: owner_b.origin.clone(),
+            user_id: owner_b.user_id.clone(),
+        };
+        let done_b = bir_core::relay::register_device_key_for_test(&key_b, epoch_b, move || {
+            assert!(bir_core::relay::lazy_first_key_for_test());
+            bir_core::relay::Registration::Registered
+        });
+        assert_eq!(done_b, bir_core::relay::Registration::Registered);
+        assert!(
+            bir_core::relay::device_key_owner().as_ref() == Some(&key_b),
+            "B's registration wrote no owner record"
+        );
+        let key_of_b = std::fs::read_to_string(
+            scratch
+                .layout
+                .device_dir()
+                .join("buwiz_submit_device_key.txt"),
+        )
+        .unwrap();
+        // A's step lands now: stale, its gate fails, its discard runs.
+        let _ = release_sender.send(());
+        registration_a.join().expect("A's registration panicked");
+        assert_eq!(
+            std::fs::read_to_string(
+                scratch
+                    .layout
+                    .device_dir()
+                    .join("buwiz_submit_device_key.txt"),
+            )
+            .unwrap(),
+            key_of_b,
+            "A's stale discard took B's key — the discard deleted a key that was never its own"
+        );
+        assert!(
+            bir_core::relay::device_key_owner().as_ref() == Some(&key_b),
+            "A's stale discard cleared B's owner record"
+        );
+        assert_invariants();
+    }
+
+    /// F7: a forget already WAITING on DEVICE_KEY loses to a first send's key creation — the
+    /// creation goes through the same lock with the owner recorded, so when the forget gets its
+    /// turn it meets the newer owner's record and skips: B's key survives A's forget.
+    #[test]
+    fn a_first_sends_key_survives_the_waiting_forget() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        // B is the signed-in owner now; A's close is the one whose forget is still waiting.
+        let owner_b = seed_stored("user-b", false);
+        let epoch_now = snapshot().epoch;
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_b.origin.clone(),
+            user_id: "user-a".into(),
+        };
+        // Hold DEVICE_KEY: the forget waits, then the creation queues behind it.
+        let guard = bir_core::relay::device_key_lock_for_test();
+        let (forgot, forget_done) = std::sync::mpsc::channel();
+        let key_a_thread = key_a.clone();
+        let device_dir = scratch.layout.device_dir().to_path_buf();
+        let forget_dir = device_dir.clone();
+        let forget = std::thread::spawn(move || {
+            // The device-folder override is thread-local: the forget thread runs under the
+            // scratch install, as the real forget thread resumes its closer's.
+            bir_core::platform::set_device_dir_override(Some(forget_dir));
+            bir_core::relay::forget_device_key_at_epoch(&key_a_thread, epoch_now);
+            let _ = forgot.send(());
+        });
+        std::thread::yield_now();
+        let (made, create_done) = std::sync::mpsc::channel();
+        let creation = std::thread::spawn(move || {
+            bir_core::platform::set_device_dir_override(Some(device_dir));
+            let created = bir_core::relay::lazy_first_key_for_test();
+            let _ = made.send(created);
+        });
+        // Neither can run while the lock is held.
+        assert!(
+            forget_done
+                .recv_timeout(std::time::Duration::from_millis(300))
+                .is_err()
+        );
+        assert!(
+            create_done
+                .recv_timeout(std::time::Duration::from_millis(300))
+                .is_err()
+        );
+        drop(guard);
+        forget.join().expect("the forget thread panicked");
+        creation.join().expect("the creation thread panicked");
+        let created = create_done
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("the creation never answered");
+        assert!(created, "the first send created no key");
+        // B's key AND its owner record survive: the forget met the newer owner's record inside
+        // the lock and skipped, exactly as it must however the two ordered.
+        assert!(
+            bir_core::relay::device_key_owner().as_ref()
+                == Some(&bir_core::account_session::OwnerKey {
+                    origin: owner_b.origin.clone(),
+                    user_id: "user-b".into(),
+                }),
+            "B's owner record is gone — the forget took a key that was never A's"
+        );
+        assert_invariants();
+    }
+
+    /// F5: the credential-matched server_ended closes WHATEVER the epoch. A Blocked at e1, a
+    /// Try again to e2, then A's InvalidGrant sent at e1: the disk held the exact failed
+    /// credential, so the ending is the current sign-in's — the close runs and the session is
+    /// SignedOut, never stranded in a phase with no sign-in behind it.
+    #[test]
+    fn a_credential_matched_server_ended_closes_whatever_the_epoch() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let owner_a = seed_stored("user-a", false);
+        // Blocked at e1: another copy holds the guard.
+        let other_copy =
+            bir_core::db::take_device_instance_lock(scratch.layout.device_dir()).unwrap();
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        assert_eq!(snapshot().phase_kind, PhaseKind::Blocked);
+        let epoch_one = snapshot().epoch;
+        // Try again to e2: the epoch moves on.
+        drop(other_copy);
+        begin_open(owner_a.clone(), 1, OpenWhy::TryAgain);
+        assert!(snapshot().epoch > epoch_one, "the retry bumped the epoch");
+        // A's InvalidGrant sent at e1 arrives now: the disk still holds the exact credential.
+        server_ended(
+            bir_core::account_session::OwnerKey {
+                origin: owner_a.origin.clone(),
+                user_id: owner_a.user_id.clone(),
+            },
+            epoch_one,
+            "refresh-user-a".to_string(),
+        );
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::SignedOut,
+            "the credential-matched ending was refused for its stale epoch — the session is stranded"
+        );
+        assert!(
+            bir_core::cloud_account::load_stored_account()
+                .ok()
+                .flatten()
+                .is_none(),
+            "the ended sign-in is still on disk"
         );
         assert_invariants();
     }
@@ -2077,60 +2269,340 @@ mod tests {
         files
     }
 
+    /// F4: a device_revoked on a send ends the session on the REAL path — the send's context
+    /// carries the owner, the epoch and the credential; the bearer arm's session_ended reads
+    /// them, the credential matches the disk, and the close is owner-ending: signed out, the
+    /// room closed (F2's close), the device key forgotten.
+    #[test]
+    fn a_device_revoked_on_a_send_ends_the_session() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch_a = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
+        bir_core::account_session::on_session_ended(server_ended);
+        // The device key, registered as A's — the revocation must forget it.
+        bir_core::relay::lazy_first_key_for_test();
+        assert!(!device_key_files(&scratch).is_empty());
+        // The send's fetch records the credential, as the real send does.
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        let context = bir_core::account_session::SendContext::new(key_a, epoch_a);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(
+            bir_core::account_session::SEND_CONTEXT.scope(context.clone(), async {
+                let tokens = bir_core::account_session::AccountTokens;
+                let _ = bir_core::bir_submit::TokenSource::access_token(&tokens, false).await;
+                // The bearer arm of the real client on a 403 device_revoked: the session ends
+                // inside the send's own context.
+                bir_core::bir_submit::TokenSource::session_ended(&tokens);
+            }),
+        );
+        join_device_forget_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::SignedOut,
+            "the device_revoked on the send did not end the session"
+        );
+        assert!(
+            crate::open_room::current().is_none(),
+            "the room survived the device_revoked ending"
+        );
+        assert!(
+            device_key_files(&scratch).is_empty(),
+            "the revoked device's key was not forgotten"
+        );
+    }
+
+    /// F4's other half: after the revocation ended the session, a registration — whenever it
+    /// was started — writes nothing: the cache names no owner and the epoch has moved, so the
+    /// gate refuses and a revoked device is never re-registered behind the ending's back.
+    #[test]
+    fn a_revoked_device_is_not_re_registered_afterwards() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch_a = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
+        bir_core::relay::lazy_first_key_for_test();
+        sign_out();
+        join_device_forget_threads();
+        assert!(device_key_files(&scratch).is_empty());
+        // A registration that was in flight for A at A's epoch completes now — the register
+        // step itself "succeeds", but the gate must refuse the write and discard the key.
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        let registration = bir_core::relay::register_device_key_for_test(&key_a, epoch_a, || {
+            bir_core::relay::lazy_first_key_for_test();
+            bir_core::relay::Registration::Registered
+        });
+        assert!(matches!(
+            registration,
+            bir_core::relay::Registration::Registered
+        ));
+        assert!(
+            device_key_files(&scratch).is_empty(),
+            "the revoked device was re-registered: a key is on disk after the ending"
+        );
+    }
+
+    /// bir-mcp's condition: bir-mcp's door signs in B — the raw disk write, no cache update,
+    /// exactly what a process without the machine does — while the app is Open(A). At the next
+    /// I/O point (the refresh verb) the disk owner is not the cache owner, and the app closes A
+    /// as signed in elsewhere. B's stored sign-in is never touched: it is the legitimate one.
+    #[test]
+    fn bir_mcps_sign_in_of_another_owner_closes_the_apps_session() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch_a = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        // bir-mcp's door: the RAW writer, bypassing the machine — the cache still names A.
+        let stored_b = bir_core::cloud_account::StoredAccount {
+            server_url: owner_a.origin.clone(),
+            access_token: "access-user-b".into(),
+            refresh_token: "refresh-user-b".into(),
+            access_expires_at_unix: bir_core::cloud_account::unix_now() + 3600,
+            user_id: "user-b".into(),
+            email: None,
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        };
+        // The raw write itself, as bir-mcp's process performs it — no cache update of ours.
+        std::fs::write(
+            bir_core::platform::device_dir().join("buwiz-cloud-account.json"),
+            stored_b.encode().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            bir_core::account_session::stored_owner().map(|key| key.user_id),
+            Some("user-a".to_string()),
+            "the cache still names A — bir-mcp's write never updated it"
+        );
+        // The next I/O point: the real refresh verb, with the build resolving the stored
+        // sign-in's own server (as production's does) so the verb reaches the owner check.
+        temp_env::with_vars(
+            [("BUWIZ_SERVER_URL", Some("https://buwiz.example.test"))],
+            || {
+                let verb =
+                    crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
+                        .expect("the refresh verb spawns");
+                futures::executor::block_on(verb);
+            },
+        );
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::SignedOut,
+            "the app did not close A at the I/O point after bir-mcp signed in B"
+        );
+        assert!(
+            crate::open_room::current().is_none(),
+            "A's room survived the owner change on disk"
+        );
+        let disk = bir_core::cloud_account::load_stored_account()
+            .unwrap()
+            .expect("B's stored sign-in is untouched");
+        assert_eq!(disk.user_id, "user-b");
+    }
+
+    /// The writer guards' scanner (F14): every `.rs` file under the root, walked RECURSIVELY,
+    /// production lines only. A `mod tests`/`mod test` module is skipped by brace matching —
+    /// and the scan CONTINUES after it, so production code following a test module is still
+    /// caught. Returns (path, line number, line) triples of every production line.
+    fn production_lines(root: &std::path::Path) -> Vec<(std::path::PathBuf, usize, String)> {
+        let mut files = Vec::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
+                    files.push(path);
+                }
+            }
+        }
+        files.sort();
+        let mut lines = Vec::new();
+        for path in files {
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let mut skipping_cfg_test_item = false;
+            let mut pending_test_attr = false;
+            let mut item_saw_brace = false;
+            let mut attr_lines_pending = 0usize;
+            for (index, line) in text.lines().enumerate() {
+                let trimmed = line.trim_start();
+                if skipping_cfg_test_item {
+                    // A cfg(test) item — module, function or helper — is test-only however it is
+                    // shaped. rustfmt closes a top-level item at column zero; a braceless item
+                    // (a static) ends at its `;`.
+                    if item_saw_brace {
+                        if line.starts_with('}') {
+                            skipping_cfg_test_item = false;
+                        }
+                    } else {
+                        if line.contains('{') {
+                            item_saw_brace = true;
+                        }
+                        if trimmed.ends_with(';') {
+                            skipping_cfg_test_item = false;
+                        }
+                    }
+                    continue;
+                }
+                if trimmed.starts_with("#[cfg(test") {
+                    pending_test_attr = true;
+                    attr_lines_pending += 1;
+                    continue;
+                }
+                if pending_test_attr {
+                    // cfg(test) attributes can stack or sit above doc lines; the item itself is
+                    // whatever non-attribute line follows.
+                    if trimmed.starts_with("#[") || trimmed.starts_with("//") || trimmed.is_empty()
+                    {
+                        continue;
+                    }
+                    skipping_cfg_test_item = true;
+                    item_saw_brace = false;
+                    pending_test_attr = false;
+                    attr_lines_pending = 0;
+                    if line.contains('{') {
+                        item_saw_brace = true;
+                    }
+                    if trimmed.ends_with(';') && !line.contains('{') {
+                        skipping_cfg_test_item = false;
+                    }
+                    continue;
+                }
+                if trimmed.starts_with("#[test]") {
+                    // A bare #[test] fn: test-only too — skip it as an item.
+                    skipping_cfg_test_item = true;
+                    item_saw_brace = false;
+                    continue;
+                }
+                lines.push((path.clone(), index + 1, line.to_string()));
+            }
+        }
+        lines
+    }
+
+    /// The positive control of the writer guards (F14): a planted tree with a violation in a
+    /// NESTED directory and one in production code AFTER a test module — the scan must catch
+    /// both, or the guard proves nothing about the real tree.
+    fn assert_scanner_positive_control(scan: impl Fn(&std::path::Path) -> Vec<String>) {
+        let planted = tempfile::tempdir().unwrap();
+        let nested = planted.path().join("nested/deeper");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(
+            nested.join("violation.rs"),
+            "fn production() {\n    account_session::save_stored(&x).unwrap();\n    save_stored_account(&y).unwrap();\n}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            planted.path().join("after_tests.rs"),
+            "fn before() {}\n#[cfg(test)]\nmod tests {\n    fn a() { account_session::save_stored(&x).unwrap(); }\n}\nfn production_after() {\n    account_session::clear_stored();\n    clear_stored_account().unwrap();\n}\n",
+        )
+        .unwrap();
+        let found = scan(planted.path());
+        assert!(
+            found.iter().any(|line| line.contains("violation.rs")),
+            "the scanner missed the nested violation: {found:?}"
+        );
+        assert!(
+            found.iter().any(|line| line.contains("after_tests.rs")),
+            "the scanner missed production code after a test module: {found:?}"
+        );
+        assert!(
+            !found.iter().any(|line| line.contains("mod tests")),
+            "the scanner reported a line inside the test module: {found:?}"
+        );
+    }
+
     /// The writer guard (§4 item 1): no direct call of the raw cloud_account writers outside
     /// account_session — every write of the stored sign-in routes through the one path, or the
     /// owner cache lies. bir-core's own cloud_account.rs (the definition and its storage tests)
     /// and account_session.rs (the one path) are the only allowed homes.
     #[test]
     fn no_writer_bypasses_the_owner_cache() {
-        // CARGO_MANIFEST_DIR is crates/bir-app-api — the crates' src dirs are beside it.
         let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .to_path_buf();
+        let scan = |root: &std::path::Path| -> Vec<String> {
+            production_lines(root)
+                .into_iter()
+                .filter(|(_, _, text)| {
+                    let trimmed = text.trim_start();
+                    if trimmed.starts_with("//") {
+                        return false;
+                    }
+                    [
+                        "save_stored_account(",
+                        "clear_stored_account(",
+                        "forget_stored_account(",
+                    ]
+                    .iter()
+                    .any(|writer| text.contains(writer))
+                        && !text.contains("fn ")
+                })
+                .map(|(path, line, text)| format!("{}:{}: {}", path.display(), line, text.trim()))
+                .collect()
+        };
+        // The positive control first: the scan itself must catch a planted violation, nested
+        // and after a test module, or the guard below proves nothing.
+        assert_scanner_positive_control(&scan);
         let mut offenders = Vec::new();
+        let mut files_seen = 0usize;
         for crate_dir in ["bir-app-api/src", "bir-core/src", "bir-mcp/src"] {
             let dir = crates.join(crate_dir);
             if !dir.exists() {
                 continue;
             }
-            for entry in std::fs::read_dir(&dir).unwrap() {
-                let entry = entry.unwrap();
-                let path = entry.path();
-                if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
-                    continue;
-                }
-                let text = std::fs::read_to_string(&path).unwrap();
+            files_seen += 1;
+            for (path, line, text) in production_lines(&dir) {
                 let name = path.file_name().unwrap().to_string_lossy().to_string();
+                let in_account_session = path
+                    .components()
+                    .any(|part| part.as_os_str() == "account_session");
                 let allowed = (crate_dir.contains("bir-core")
                     && (name == "cloud_account.rs" || name == "account_session.rs"))
-                    || name == "mod.rs" && crate_dir.contains("account_session");
+                    || in_account_session;
                 if allowed {
                     continue;
                 }
-                for (line, text) in text.lines().enumerate() {
-                    for writer in [
-                        "save_stored_account",
-                        "clear_stored_account",
-                        "forget_stored_account",
-                    ] {
-                        // The scan is textual: a call, not a doc mention or a comment.
-                        let trimmed = text.trim_start();
-                        if trimmed.starts_with("//") || trimmed.starts_with("///") {
-                            continue;
-                        }
-                        if text.contains(&format!("{writer}(")) && !text.contains("fn ") {
-                            offenders.push(format!(
-                                "{}:{}: {}",
-                                path.display(),
-                                line + 1,
-                                text.trim()
-                            ));
-                        }
+                let trimmed = text.trim_start();
+                if trimmed.starts_with("//") {
+                    continue;
+                }
+                for writer in [
+                    "save_stored_account",
+                    "clear_stored_account",
+                    "forget_stored_account",
+                ] {
+                    if text.contains(&format!("{writer}(")) && !text.contains("fn ") {
+                        offenders.push(format!("{}:{}: {}", path.display(), line, text.trim()));
                     }
                 }
             }
         }
+        assert!(files_seen > 0, "the guard scanned no directories at all");
         assert!(
             offenders.is_empty(),
             "writes of the stored sign-in bypassing account_session:\n{}",
@@ -2150,50 +2622,61 @@ mod tests {
             .parent()
             .unwrap()
             .to_path_buf();
+        let scan = |root: &std::path::Path| -> Vec<String> {
+            production_lines(root)
+                .into_iter()
+                .filter(|(_, _, text)| {
+                    let trimmed = text.trim_start();
+                    if trimmed.starts_with("//") {
+                        return false;
+                    }
+                    [
+                        "account_session::save_stored(",
+                        "account_session::clear_stored(",
+                        "account_session::forget_stored(",
+                    ]
+                    .iter()
+                    .any(|writer| text.contains(writer))
+                })
+                .map(|(path, line, text)| format!("{}:{}: {}", path.display(), line, text.trim()))
+                .collect()
+        };
+        assert_scanner_positive_control(&scan);
         let mut offenders = Vec::new();
+        let mut files_seen = 0usize;
         for crate_dir in ["bir-app-api/src", "bir-core/src"] {
             let dir = crates.join(crate_dir);
             if !dir.exists() {
                 continue;
             }
-            for entry in std::fs::read_dir(&dir).unwrap() {
-                let entry = entry.unwrap();
-                let path = entry.path();
-                if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
-                    continue;
-                }
+            files_seen += 1;
+            for (path, line, text) in production_lines(&dir) {
                 let name = path.file_name().unwrap().to_string_lossy().to_string();
-                // account_session.rs is the door itself; session.rs is the machine.
-                if name == "account_session.rs" || name == "session.rs" {
+                let in_account_session = path
+                    .components()
+                    .any(|part| part.as_os_str() == "account_session");
+                // account_session is the door itself; session.rs is the machine.
+                let allowed = in_account_session
+                    || (crate_dir.contains("bir-app-api") && name == "session.rs");
+                if allowed {
                     continue;
                 }
-                let text = std::fs::read_to_string(&path).unwrap();
-                // The scan is textual; test modules at a file's end set up fixtures through the
-                // doors directly — they are not writers in the machine's sense. Everything
-                // before `mod tests` is production code and must not write.
-                let production = text.split("mod tests").next().unwrap_or("");
-                for (line, text) in production.lines().enumerate() {
-                    let trimmed = text.trim_start();
-                    if trimmed.starts_with("//") || trimmed.starts_with("///") {
-                        continue;
-                    }
-                    for writer in [
-                        "account_session::save_stored(",
-                        "account_session::clear_stored(",
-                        "account_session::forget_stored(",
-                    ] {
-                        if text.contains(writer) {
-                            offenders.push(format!(
-                                "{}:{}: {}",
-                                path.display(),
-                                line + 1,
-                                text.trim()
-                            ));
-                        }
+                let trimmed = text.trim_start();
+                if trimmed.starts_with("//") {
+                    continue;
+                }
+                for writer in [
+                    "account_session::save_stored(",
+                    "account_session::clear_stored(",
+                    "account_session::forget_stored(",
+                ] {
+                    if text.contains(writer) {
+                        offenders.push(format!("{}:{}: {}", path.display(), line, text.trim()));
                     }
                 }
             }
         }
+        assert!(files_seen > 0, "the guard scanned no directories at all");
         assert!(
             offenders.is_empty(),
             "writes of the stored sign-in outside the machine:\n{}",
@@ -2494,12 +2977,10 @@ mod tests {
         let scratch_dir = scratch.layout.device_dir().to_path_buf();
         let registration =
             bir_core::relay::register_device_key_for_test(&key_a, epoch, move || {
-                // As bir-submit's device_key() does on a success: the key written inside the step.
-                std::fs::write(
-                    scratch_dir.join("buwiz_submit_device_key.txt"),
-                    "key-made-late",
-                )
-                .unwrap();
+                // As bir-submit's device_key() does on a success: the key created inside the
+                // step, through the same gate the client's lazy creation uses.
+                let _ = &scratch_dir;
+                assert!(bir_core::relay::lazy_first_key_for_test());
                 bir_core::relay::Registration::Registered
             });
         assert_eq!(registration, bir_core::relay::Registration::Registered);
@@ -2717,30 +3198,36 @@ mod tests {
         open_hand(&scratch, &owner_a, epoch, "a-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
 
-        // A stale EPOCH: the session moved past it. Per the page's order the disk's
-        // delete-if-owner runs first — the disk record goes (the safe direction) — but the
-        // SESSION section is the epoch check's: no close, no cache clear, the gate holds.
+        // A stale CREDENTIAL: the failed refresh token is not the stored one — the sign-in was
+        // rotated or re-signed-in since — so nothing is cleared and nothing closes, whatever the
+        // epoch (F5: the credential match is the condition; a match closes whatever the epoch, a
+        // mismatch never does).
         server_ended(
             bir_core::account_session::OwnerKey {
                 origin: owner_a.origin.clone(),
                 user_id: owner_a.user_id.clone(),
             },
             epoch + 99,
-            format!("refresh-{}", owner_a.user_id),
+            "refresh-rotated-away".to_string(),
         );
         assert_eq!(snapshot().phase_kind, PhaseKind::Open, "the phase holds");
         assert!(
             gate_unlocked(),
-            "the gate holds — the epoch check stopped the close"
+            "the gate holds — the credential mismatch stopped everything"
         );
         assert!(
             bir_core::account_session::stored_owner().is_some(),
-            "the cache holds — the epoch check stopped the SESSION section"
+            "the cache holds — the credential mismatch stopped the SESSION section"
+        );
+        assert!(
+            bir_core::cloud_account::load_stored_account()
+                .unwrap()
+                .is_some(),
+            "the disk holds — a mismatched credential clears nothing"
         );
         assert_invariants();
 
-        // A stale OWNER never even touches the disk. Re-seed first: the stale-epoch case above
-        // cleared it, as ordered.
+        // A stale OWNER never even touches the disk.
         let owner_a = seed_stored("user-a", false);
         let before = bir_core::cloud_account::load_stored_account().unwrap();
         server_ended(
@@ -3148,7 +3635,19 @@ mod tests {
         // cache, the gate and the phase have all moved — the one-section shape means no
         // interleaving inside the machine can observe them apart, and the invariants (which
         // read the cache, not the disk) hold at every step the harness can pause.
-        sign_out();
+        // d1 at the hook point itself: paused between the persist and the SESSION section,
+        // the disk is already empty and the cache still set — and check_invariants holds even
+        // there, because it reads the cache, never the disk.
+        let persist_gate = hooks::pause("sign_out.after_persist");
+        let device = scratch.layout.device_dir().to_path_buf();
+        let signing_out = std::thread::spawn(move || {
+            bir_core::platform::set_device_dir_override(Some(device));
+            sign_out();
+        });
+        persist_gate.reached();
+        check_invariants().expect("the invariants broke at sign_out.after_persist");
+        persist_gate.release();
+        signing_out.join().expect("the sign-out thread panicked");
         assert!(!gate_unlocked(), "the gate locked in the same step");
         assert!(
             bir_core::cloud_account::load_stored_account()

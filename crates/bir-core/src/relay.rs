@@ -106,8 +106,54 @@ pub(crate) fn secrets_dir() -> std::path::PathBuf {
     crate::platform::device_dir()
 }
 
+thread_local! {
+    /// The key material of the key the gate created ON THIS THREAD, if it just did (F6): the
+    /// registration's discard deletes only a key it knows is its own — never whatever the disk
+    /// happens to hold after another registration interleaved, which a disk read back could
+    /// not tell apart.
+    static CREATED_ON_THIS_THREAD: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+fn note_key_created_here(raw: String) {
+    CREATED_ON_THIS_THREAD.with(|slot| *slot.borrow_mut() = Some(raw));
+}
+
+fn take_key_created_here() -> Option<String> {
+    CREATED_ON_THIS_THREAD.with(|slot| slot.borrow_mut().take())
+}
+
+/// The creation gate of F7, installed once: bir-submit's lazy first key is created under
+/// DEVICE_KEY, and the owner record is written in the same step from the owner cache — no key
+/// is ever created outside the funnel or, while anyone is signed in, without its owner. The
+/// cache is the only owner source allowed here: the disk read would take the account lock,
+/// which is never taken under DEVICE_KEY. A creation with nobody cached — no send should ever
+/// reach one — leaves the key unowned for the adoption at the next sign-in's first commit.
+pub fn install_device_key_gate() {
+    bir_submit::client::set_device_key_gate(std::sync::Arc::new(|create| {
+        let _device_key = DEVICE_KEY
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let key = create()?;
+        // The creation marker: inside DEVICE_KEY on the creating thread, the stored key IS the
+        // one just made — a discard on this thread can only ever mean this one.
+        if let Some(raw) = stored_device_key_raw() {
+            note_key_created_here(raw);
+        }
+        if let Some(owner) = crate::account_session::stored_owner() {
+            write_device_owner(&owner);
+        } else {
+            tracing::warn!(
+                "a device key was created with nobody signed in: unowned until adoption"
+            );
+        }
+        Ok(key)
+    }));
+}
+
 /// The client for the configured Buwiz server, made once per server.
 pub fn submitter() -> Result<Arc<Submitter>, TransportError> {
+    install_device_key_gate();
     let server = crate::cloud_account::configured_server()
         .map_err(|error| TransportError::Config(error.to_string()))?;
     server_allowed(&server.url, cfg!(debug_assertions))?;
@@ -201,9 +247,40 @@ fn clear_device_owner() {
 /// sign-in's until adoption). A key already recorded for a NEWER owner is never touched: someone
 /// got there first, and it is not this ending's to take.
 pub fn forget_device_key_for(owner: &crate::account_session::OwnerKey) {
+    match device_key_owner() {
+        Some(recorded) if recorded != *owner => {
+            tracing::info!("device key forget skipped: the key is a newer owner's already");
+            return;
+        }
+        _ => {}
+    }
     let _device_key = DEVICE_KEY
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
+    // The owner is re-read inside the lock: a registration in the gap may have re-recorded it.
+    match device_key_owner() {
+        Some(recorded) if recorded != *owner => {
+            tracing::info!("device key forget skipped: the key is a newer owner's already");
+            return;
+        }
+        _ => {}
+    }
+    forget_device_key_local();
+    clear_device_owner();
+}
+
+/// The close's forget (F7): the epoch is re-checked INSIDE DEVICE_KEY, so a key registered after
+/// the epoch moved — the newer session's — is never taken by the old session's forget, however
+/// the wait ordered them. Deletes only its own owner's key: a key recorded for a newer owner is
+/// never touched.
+pub fn forget_device_key_at_epoch(owner: &crate::account_session::OwnerKey, epoch: u64) {
+    let _device_key = DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if crate::session_epoch::current() != epoch {
+        tracing::info!("device key forget skipped: the epoch moved on while the lock was waited");
+        return;
+    }
     match device_key_owner() {
         Some(recorded) if recorded != *owner => {
             tracing::info!("device key forget skipped: the key is a newer owner's already");
@@ -218,6 +295,23 @@ pub fn forget_device_key_for(owner: &crate::account_session::OwnerKey) {
 /// The key and id deleted from the device store directly — never through the submitter's
 /// construction, so the forget cannot be skipped for want of a server config (the deletion is
 /// local in bir-submit too; nothing here reaches the network).
+/// The public half of the key in the device store, if one is stored and parseable.
+#[cfg(any(test, feature = "test-support"))]
+fn stored_device_public_key() -> Option<String> {
+    stored_device_key_raw()
+        .and_then(|raw| bir_submit::device::DeviceKey::from_stored(&raw))
+        .map(|key| key.public_key())
+}
+
+/// The stored key material verbatim — the identity a discard compares (F6: the public key IS
+/// the key, so the raw compares identically, parseable or not), so it deletes only its own
+/// registration's key, never a newer one.
+fn stored_device_key_raw() -> Option<String> {
+    let store =
+        bir_submit::secrets::platform_store(secrets_dir(), !crate::platform::keychain_disabled());
+    store.get(bir_submit::DEVICE_KEY).ok().flatten()
+}
+
 fn forget_device_key_local() {
     let store =
         bir_submit::secrets::platform_store(secrets_dir(), !crate::platform::keychain_disabled());
@@ -285,37 +379,57 @@ fn register_device_key_with(
     epoch: u64,
     register: impl FnOnce() -> Registration,
 ) -> Registration {
-    let _device_key = DEVICE_KEY
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if device_key_owner().as_ref() != Some(owner) {
-        forget_device_key_local();
-        clear_device_owner();
+    // F6: DEVICE_KEY is never held across the network. Step 1, a short locked section: the
+    // pre-clean — a key recorded for ANOTHER owner, or one with no owner, is forgotten before
+    // this owner's registration, so a failed or crashed forget never hands A's key to B.
+    {
+        let _device_key = DEVICE_KEY
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if device_key_owner().as_ref() != Some(owner) {
+            forget_device_key_local();
+            clear_device_owner();
+        }
     }
+    // Step 2: the token fetch and the register with NO LOCK of any kind. The InvalidGrant hook
+    // the fetch may run therefore never fires under DEVICE_KEY either — it takes the account
+    // lock and SESSION freely, and a forget waiting its turn is never deadlocked against it.
+    let _ = take_key_created_here();
     let started = std::time::Instant::now();
     let registration = register();
     let elapsed = started.elapsed();
-    if matches!(
+    if !matches!(
         registration,
         Registration::Registered | Registration::AlreadyDone
     ) {
-        // The write gate (the page, revision 5's C): before the owner record is written —
-        // the cache is still this owner AND the session is still at the registration's epoch
-        // AND the register step came back inside its bound. Otherwise the registration is
-        // discarded: no owner record, and no key either — nothing of it outlives the session
-        // it was made for.
-        let cache_is_owner = crate::account_session::stored_owner().as_ref() == Some(owner);
-        let epoch_current = crate::session_epoch::current() == epoch;
-        let inside_bound = elapsed < register_bound();
-        if cache_is_owner && epoch_current && inside_bound {
-            write_device_owner(owner);
-        } else {
+        return registration;
+    }
+    // The key THIS registration created, if it created one — the gate's own record on this
+    // thread, immune to whatever another registration wrote in between. A registration that
+    // reused an existing key created nothing, and its discard deletes nothing either: the key
+    // was never its own.
+    let key_created_here = take_key_created_here();
+    // Step 3, under DEVICE_KEY: the write gate (the page, revision 5's C) — the cache is still
+    // this owner AND the session is still at the registration's epoch AND the register step
+    // came back inside its bound. Only then is the owner record written. Otherwise the
+    // registration is discarded: no owner record, and the key deleted ONLY if it is still this
+    // registration's own — a newer registration's key and record are never taken.
+    let _device_key = DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let cache_is_owner = crate::account_session::stored_owner().as_ref() == Some(owner);
+    let epoch_current = crate::session_epoch::current() == epoch;
+    let inside_bound = elapsed < register_bound();
+    if cache_is_owner && epoch_current && inside_bound {
+        write_device_owner(owner);
+    } else {
+        if key_created_here.is_some() && stored_device_key_raw() == key_created_here {
             forget_device_key_local();
             clear_device_owner();
-            tracing::info!(
-                "device registration discarded: the session moved on or the register step overran (cache {cache_is_owner}, epoch {epoch_current}, elapsed {elapsed:?})"
-            );
         }
+        tracing::info!(
+            "device registration discarded: the session moved on or the register step overran (cache {cache_is_owner}, epoch {epoch_current}, elapsed {elapsed:?})"
+        );
     }
     registration
 }
@@ -337,6 +451,20 @@ pub fn device_key_lock_for_test() -> std::sync::MutexGuard<'static, ()> {
     DEVICE_KEY
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// The test door of the lazy creation: a first key exactly as a send's client creates it —
+/// through the installed gate — in this thread's device folder.
+#[cfg(any(test, feature = "test-support"))]
+pub fn lazy_first_key_for_test() -> bool {
+    install_device_key_gate();
+    let store =
+        bir_submit::secrets::platform_store(secrets_dir(), !crate::platform::keychain_disabled());
+    let before = stored_device_public_key();
+    let created = bir_submit::client::device_key_or_create(store.as_ref())
+        .map(|key| key.public_key())
+        .ok();
+    before.is_none() && created.is_some()
 }
 
 /// Adoption (F2'): an existing install's key has no owner recorded. The stored sign-in's owner

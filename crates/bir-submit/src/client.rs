@@ -28,6 +28,63 @@ pub const CLIENT_HEADER: &str = "buwiz-client";
 pub const DEVICE_KEY: &str = "device_key";
 pub const DEVICE_ID: &str = "device_id";
 
+/// The gate a host installs around the lazy device-key creation (bir-core's relay does): the
+/// creation closure runs INSIDE the host's device-key lock, so no key is ever created outside
+/// the funnel the registration and the forget already use — and the host records the key's
+/// owner in the same step. With no gate installed the creation runs ungated, as before (tests
+/// of bir-submit alone).
+pub type DeviceKeyGate = std::sync::Arc<
+    dyn Fn(&mut dyn FnMut() -> Result<DeviceKey, ClientError>) -> Result<DeviceKey, ClientError>
+        + Send
+        + Sync,
+>;
+
+static DEVICE_KEY_GATE: std::sync::RwLock<Option<DeviceKeyGate>> = std::sync::RwLock::new(None);
+
+/// Install the creation gate. The first install wins; later calls are ignored (the host wires
+/// it once at startup).
+pub fn set_device_key_gate(gate: DeviceKeyGate) {
+    let mut slot = DEVICE_KEY_GATE
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if slot.is_none() {
+        *slot = Some(gate);
+    }
+}
+
+fn device_key_gate() -> Option<DeviceKeyGate> {
+    DEVICE_KEY_GATE
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+}
+
+/// The lazy first key, as every client creates it: the stored key when there is one, else a
+/// generated one — created through the host's gate when one is installed (F7): under the
+/// device-key lock, with the owner recorded in the same step, so no key is ever created
+/// without an owner record, and a forget can never delete a key whose owner record it would
+/// have skipped, nor miss one it should take.
+pub fn device_key_or_create(
+    store: &dyn crate::secrets::SecretStore,
+) -> Result<DeviceKey, ClientError> {
+    if let Some(key) = store
+        .get(DEVICE_KEY)?
+        .as_deref()
+        .and_then(DeviceKey::from_stored)
+    {
+        return Ok(key);
+    }
+    let mut create = || {
+        let key = DeviceKey::generate();
+        store.set(DEVICE_KEY, &key.to_stored())?;
+        Ok(key)
+    };
+    if let Some(gate) = device_key_gate() {
+        return gate(&mut create);
+    }
+    create()
+}
+
 /// The app's one Buwiz sign-in. This crate never signs in, refreshes or stores a token.
 pub trait TokenSource: Send + Sync {
     /// An access token for the signed-in account; `force_refresh` after the server answered 401 `invalid_token`.
@@ -515,17 +572,7 @@ impl Submitter {
     // -------------------------------------------------------- device key
 
     fn device_key(&self) -> Result<DeviceKey, ClientError> {
-        if let Some(key) = self
-            .store
-            .get(DEVICE_KEY)?
-            .as_deref()
-            .and_then(DeviceKey::from_stored)
-        {
-            return Ok(key);
-        }
-        let key = DeviceKey::generate();
-        self.store.set(DEVICE_KEY, &key.to_stored())?;
-        Ok(key)
+        device_key_or_create(self.store.as_ref())
     }
 
     /// Forgets this device's key and id, and the TIN list: a new sign-in

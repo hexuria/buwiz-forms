@@ -2328,28 +2328,44 @@ async fn process_submission_queue(
             .flatten()
             .map(|account| account.user_id);
 
+        // F4: the send's context is scoped at the spawn — the owner from the stored sign-in of
+        // this moment, the epoch current now — so a 401 the send meets ends exactly that
+        // session, never whoever signed in since. The token fetch records the credential its
+        // access token came from into the same context.
+        let send_context = crate::account_session::stored_owner().map(|owner| {
+            crate::account_session::SendContext::new(owner, crate::session_epoch::current())
+        });
         spawn_job(cleanup, async move {
-            let user_now = crate::cloud_account::load_stored_account()
-                .ok()
-                .flatten()
-                .map(|account| account.user_id);
-            if user_now != user_at_spawn {
-                warn!(
-                    "Cron: the account changed since this send was queued; the return stays queued                      for its own account's next tick"
-                );
-                return;
-            }
-            if summary.form_code == "2551Q" {
-                process_queued_2551q(&summary, &profile_clone, db_clone.clone()).await;
-                return;
-            }
-            if summary.form_code == "1601C" {
-                process_queued_1601c(&summary, &profile_clone, db_clone.clone()).await;
-            } else {
-                process_queued_by_kind(&summary, &profile_clone, db_clone.clone()).await;
-            }
+            let job = async move {
+                let user_now = crate::cloud_account::load_stored_account()
+                    .ok()
+                    .flatten()
+                    .map(|account| account.user_id);
+                if user_now != user_at_spawn {
+                    warn!(
+                        "Cron: the account changed since this send was queued; the return stays queued                      for its own account's next tick"
+                    );
+                    return;
+                }
+                if summary.form_code == "2551Q" {
+                    process_queued_2551q(&summary, &profile_clone, db_clone.clone()).await;
+                    return;
+                }
+                if summary.form_code == "1601C" {
+                    process_queued_1601c(&summary, &profile_clone, db_clone.clone()).await;
+                } else {
+                    process_queued_by_kind(&summary, &profile_clone, db_clone.clone()).await;
+                }
 
-            crate::ipc::post_db_changed();
+                crate::ipc::post_db_changed();
+            };
+            if let Some(context) = send_context {
+                crate::account_session::SEND_CONTEXT
+                    .scope(context, job)
+                    .await;
+            } else {
+                job.await;
+            }
         });
     }
 }

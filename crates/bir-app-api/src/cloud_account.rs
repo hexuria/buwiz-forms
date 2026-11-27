@@ -313,6 +313,29 @@ fn verb_refresh(
     }
 }
 
+/// bir-mcp's condition (the guard exemption's price): another process can write the stored
+/// sign-in — bir-mcp's door signs in without this app's machine. At the I/O points outside
+/// SESSION, a disk owner that is NOT the cache owner counts as an owner change: the app's
+/// session is for an owner who is no longer stored, so it closes "signed in elsewhere". Only a
+/// cache that NAMES an owner judges — an unfilled or cleared cache closes nothing (a fresh
+/// launch's restore would otherwise close the sign-in it is restoring).
+fn close_if_disk_owner_changed(stored: &StoredAccount) -> bool {
+    let (Some(cache), Some(disk)) = (
+        bir_core::account_session::stored_owner(),
+        bir_core::account_session::OwnerKey::of(stored),
+    ) else {
+        return false;
+    };
+    if cache == disk {
+        return false;
+    }
+    tracing::info!(
+        "the stored sign-in's owner changed outside the app: closing as signed in elsewhere"
+    );
+    crate::session::close(crate::session::Reason::SignedInElsewhere);
+    true
+}
+
 pub(crate) fn refresh_account(
     _arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
@@ -345,6 +368,9 @@ pub(crate) fn refresh_account(
             crate::session::sign_out();
             return status_now();
         };
+        if close_if_disk_owner_changed(&stored) {
+            return status_now();
+        }
         let mut http = refresh_http();
         let now = cloud_account::unix_now();
         match verb_refresh(http.as_mut(), &stored, &owner, epoch, now)? {
@@ -465,6 +491,9 @@ pub(crate) fn restore_saved_session_with(http: &mut dyn cloud_account::Http) -> 
         };
         (stored, owner)
     };
+    if close_if_disk_owner_changed(&stored) {
+        return (false, false);
+    }
     let now = cloud_account::unix_now();
     let mut practice = stored.practice;
     let outcome = match verb_refresh(http, &stored, &owner, epoch, now) {

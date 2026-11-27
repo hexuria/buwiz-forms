@@ -89,7 +89,7 @@ impl OwnerKey {
     }
 }
 
-/// F8: who is stored, cached in memory. Filled once at first use from the stored sign-in; every
+/// F8: who is stored, cached in memory. Filled ONCE at process start by fill_owner_cache; every
 /// save and clear of the stored sign-in updates it inside the same account_session::lock()
 /// section as the file or keychain write, so a reader never needs the file, the keychain or the
 /// account lock. Its own small lock, no I/O.
@@ -339,7 +339,12 @@ enum FlightOutcome {
     /// The credential itself was rejected: the sign-in ended. The leader ran the session-ended
     /// hook EXACTLY ONCE for all of the flight's waiters — they only answer SignedOut.
     Ended,
-    /// A network or other failure: nobody signs out, and every waiter answers this error.
+    /// The server was unreachable: nobody signs out, and every waiter answers Offline, as the
+    /// leader does.
+    Unreachable(String),
+    /// Anything but the network — a store failure, the leader's unfinished flight (F6): it
+    /// reaches the waiters as the failure it is, never as Offline, which would say the server
+    /// could not be reached when nobody knows that.
     Failed(String),
 }
 
@@ -566,6 +571,10 @@ fn access_token_in(
     ended: &dyn Fn(OwnerKey, u64, String),
 ) -> Result<(String, String), TokenError> {
     let mut retried = false;
+    // F6: every re-read of this loop is bounded — a flight that keeps rotating under the ask
+    // fails rather than spins. At most 2 more tries after the first evaluation.
+    const MAX_REREADS: u32 = 2;
+    let mut rereads = 0u32;
     loop {
         // The load under the lock — the fast paths (a valid token, a just-refreshed one)
         // never leave it.
@@ -625,11 +634,22 @@ fn access_token_in(
                 };
                 match outcome {
                     // Re-read and re-evaluate: the leader's save — or the rotation it met —
-                    // is in the record now.
-                    FlightOutcome::ReRead => continue,
+                    // is in the record now — bounded like every re-read of this loop (F6).
+                    FlightOutcome::ReRead => {
+                        rereads += 1;
+                        if rereads > MAX_REREADS {
+                            return Err(TokenError::Other(
+                                "the saved Buwiz sign-in keeps changing; try again".into(),
+                            ));
+                        }
+                        continue;
+                    }
                     // The credential was rejected. The leader ran the hook exactly once ((c)).
                     FlightOutcome::Ended => return Err(TokenError::SignedOut),
-                    FlightOutcome::Failed(reason) => return Err(TokenError::Offline(reason)),
+                    FlightOutcome::Unreachable(reason) => {
+                        return Err(TokenError::Offline(reason));
+                    }
+                    FlightOutcome::Failed(reason) => return Err(TokenError::Other(reason)),
                 }
             }
             let flight = Arc::new(Flight {
@@ -666,8 +686,14 @@ fn access_token_in(
         }
         if stored.refresh_token != leader.key.refresh_token {
             // The credential rotated while the flight was being taken: this flight's refresh
-            // would burn a token nobody holds. Re-read and start over.
+            // would burn a token nobody holds. Re-read and start over — bounded (F6).
             leader.outcome = Some(FlightOutcome::ReRead);
+            rereads += 1;
+            if rereads > MAX_REREADS {
+                return Err(TokenError::Other(
+                    "the saved Buwiz sign-in keeps changing; try again".into(),
+                ));
+            }
             continue;
         }
         if !force && stored.access_expires_at_unix > now_unix.saturating_add(EXPIRY_MARGIN_SECONDS)
@@ -728,7 +754,7 @@ fn access_token_in(
             }
             Err(CloudError::Network(reason)) => {
                 // (c): a network error signs nobody out — not the leader, not a waiter.
-                leader.outcome = Some(FlightOutcome::Failed(reason.clone()));
+                leader.outcome = Some(FlightOutcome::Unreachable(reason.clone()));
                 return Err(TokenError::Offline(reason));
             }
             Err(CloudError::InvalidGrant) => {
