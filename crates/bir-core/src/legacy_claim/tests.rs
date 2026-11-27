@@ -1861,3 +1861,30 @@ fn the_used_mark_is_cleared_in_record_permanent() {
         "the used mark is cleared in record_permanent"
     );
 }
+
+/// R1: a room's database is never opened before the claim's start() ran in this session — a migration or a
+/// checkpoint would change the bytes the move's hash check still needs. The open is refused before start(),
+/// the claim then still finishes, and the open is allowed after.
+#[test]
+fn a_room_open_is_refused_before_start_and_the_claim_still_finishes() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    let claim = install.claim();
+    let room = room_of(&claim, &a);
+    install.layout.create_room_dir(&room).unwrap();
+    let before = std::panic::catch_unwind(|| {
+        crate::rooms::open_room_guarded(&install.layout, &room)
+    });
+    match before {
+        Ok(result) => assert!(
+            result.is_err(),
+            "the room opened before the claim's start() ran"
+        ),
+        Err(_) => {} // the debug_assert fired: refused either way
+    }
+    let outcome = claim_unlocked(&install, &a);
+    assert_eq!(done_room(&outcome), room);
+    crate::rooms::open_room_guarded(&install.layout, &room)
+        .expect("the room opens once the claim ran");
+}

@@ -56,6 +56,21 @@ pub const NOT_MINE_KEY: &str = "legacy.not_mine";
 /// [`LegacyClaim::clear_permanent`], and on any transient or permanent failure before the move (a pre-move resume
 /// needs a new unlock, so that counts as the claim ending: the person is never left without their fallback).
 pub const OS_LOGIN_USED_KEY: &str = "legacy.os_login_used";
+
+/// The device folders whose claim ran `start()` in this session (R1). A room's database is never opened before
+/// its folder is in here: the open runs migrations and a checkpoint, and those writes change the bytes the
+/// move's hash check still needs as evidence — the move would close unfinished.
+static STARTED_THIS_SESSION: std::sync::Mutex<std::collections::BTreeSet<std::path::PathBuf>> =
+    std::sync::Mutex::new(std::collections::BTreeSet::new());
+
+/// Whether the claim's `start()` ran for `device_dir` in this session (R1), whatever it answered: the point is
+/// that the claim looked at the disk before anything opened a room's database.
+pub fn claim_started_this_session(device_dir: &std::path::Path) -> bool {
+    STARTED_THIS_SESSION
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .contains(device_dir)
+}
 /// The scratch folder under the device folder: probe copies, swept at every launch.
 pub const SCRATCH_DIR: &str = "scratch";
 /// What the pre-rooms safety zips are called, before `<stamp>-<sha16>.zip`.
@@ -646,6 +661,10 @@ impl LegacyClaim {
                 detail: "another claim of this device folder is running in this process".into(),
             })
         })?;
+        STARTED_THIS_SESSION
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(self.layout.device_dir().to_path_buf());
         let legacy = self.layout.legacy_database();
         let record = self.record().map_err(store_failure)?;
         // L1: a kill or a dropped ReadyClaim between the used mark's write and the Unlocked record must not hide
