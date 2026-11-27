@@ -7,7 +7,7 @@ const SHELL = "../../ShellDemo.tsx";
 const AUTH = "../../AuthDemo.tsx";
 const WIDE = { width: 1440, height: 900, platform: "macos" as const };
 const asking = (params: Record<string, unknown> = {}) => ({ host: { params } });
-const HELPDESK = { demo: true, second: true, years: true, mode: "helpdesk", adminPin: "1234", pins: { "000123453": "4321" } };
+const HELPDESK = { demo: true, second: true, years: true, mode: "helpdesk", adminPin: "1234", pins: { "000123453": "4321" }, readout: true };
 
 async function signIn(app: Awaited<ReturnType<typeof open>>, tin: string, pin: string) {
   await app.waitFor("id:auth-card");
@@ -28,10 +28,11 @@ test("desktop: the owner with profiles sees the same label in the panel, the men
   expect(app.texts()).toContain("New tax profile");
   await app.press("text:Cancel");
   await app.waitFor("id:home");
-  // The picker's add row.
+  // The desktop palette deliberately has no creation row: it would outrank the exact "Tax profile" page, and the
+  // wide layout already carries the entry in the panel and the menu.
   await app.keyboard.press("mod+k");
   await app.waitFor("id:palette-input");
-  expect(app.texts()).toContain("New tax profile");
+  expect(app.texts()).not.toContain("New tax profile");
   await app.back();
   await app.waitFor("id:palette-input", { state: "gone" });
 });
@@ -70,7 +71,7 @@ test("phone: a help desk client never sees the entry with profiles present; the 
   await admin.back();
 });
 
-test("desktop: a help desk client has no add control in Settings, the panel or the menu; the admin keeps it everywhere", async () => {
+test("desktop: a help desk client has no add control in Settings or the panel; the admin keeps both", async () => {
   const client = await open(AUTH, { ...WIDE, host: { params: HELPDESK } });
   await signIn(client, "000123453", "4321");
   await client.waitFor("id:sidebar");
@@ -78,6 +79,15 @@ test("desktop: a help desk client has no add control in Settings, the panel or t
   await client.waitFor("id:panel-profile");
   expect(client.shows("id:panel-new-tp")).toBe(false);
   expect(client.shows("id:panel-new-taxpayer")).toBe(false);
+  // Settings > Account: no add control for a client either.
+  await client.keyboard.press("mod+k");
+  await client.waitFor("id:palette-input");
+  await client.type("id:palette-input", "settings");
+  await client.submit("id:palette-input");
+  await client.waitFor("id:settings");
+  await client.press("id:settings-nav-account");
+  await client.waitFor("id:settings-account-card");
+  expect(client.shows("id:settings-add-account")).toBe(false);
 
   const admin = await open(AUTH, { ...WIDE, host: { params: HELPDESK } });
   await signIn(admin, "000000000", "1234");
@@ -86,6 +96,42 @@ test("desktop: a help desk client has no add control in Settings, the panel or t
   await admin.waitFor("id:panel-profile");
   expect(admin.shows("id:panel-new-tp")).toBe(true);
   // Settings > Account: the add control, same label.
-  await admin.press("text:New tax profile");
+  await admin.keyboard.press("mod+k");
+  await admin.waitFor("id:palette-input");
+  await admin.type("id:palette-input", "settings");
+  await admin.submit("id:palette-input");
+  await admin.waitFor("id:settings");
+  await admin.press("id:settings-nav-account");
+  await admin.waitFor("id:settings-account-card");
+  expect(admin.shows("id:settings-add-account")).toBe(true);
+  await admin.press("id:settings-add-account");
   await admin.waitFor("id:new-tp");
+});
+
+test("desktop: the entry is never there while the app is locked", async () => {
+  // Help desk with a PIN boots locked at the sign-in: session kind open would pass the kind check, so only the lock
+  // clause keeps adding hidden here. Signed in as the admin it is back.
+  const app = await open(AUTH, { ...WIDE, host: { params: HELPDESK } });
+  await app.waitFor("id:auth-card");
+  await app.waitFor("text:/canAdd: false/");
+  await signIn(app, "000000000", "1234");
+  await app.waitFor("text:/canAdd: true/");
+});
+
+test("desktop/windows: the menu's New tax profile… is disabled for a client, enabled for the admin", async () => {
+  const client = await open(AUTH, { width: 1440, height: 900, platform: "windows", host: { params: HELPDESK } });
+  await signIn(client, "000123453", "4321");
+  await client.waitFor("id:menu-File");
+  await client.press("id:menu-File");
+  await client.waitUntil(() => client.menu() !== null);
+  expect((client.menu() ?? []).find((e) => e.label === "New tax profile…")?.disabled).toBe(true);
+  await client.closeMenu();
+
+  const admin = await open(AUTH, { width: 1440, height: 900, platform: "windows", host: { params: HELPDESK } });
+  await signIn(admin, "000000000", "1234");
+  await admin.waitFor("id:menu-File");
+  await admin.press("id:menu-File");
+  await admin.waitUntil(() => admin.menu() !== null);
+  expect((admin.menu() ?? []).find((e) => e.label === "New tax profile…")?.disabled).toBe(false);
+  await admin.closeMenu();
 });

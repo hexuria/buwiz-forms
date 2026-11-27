@@ -44,15 +44,20 @@ for (const look of LOOKS) {
   }, 120_000);
 }
 
-// A tablet's own shape: the tax-profile sheet from the header carries the entry too.
+// A tablet's own shape: the tax-profile sheet from the header carries the entry, and it opens the page.
 for (const scheme of ["light", "dark"] as const) {
-  test(`new tax profile: the tablet's sheet entry, ${scheme}`, async () => {
+  test(`new tax profile: the tablet entry, ${scheme}`, async () => {
     const app = await open(ENTRY, { width: 1376, height: 1032, platform: "ios", colorScheme: scheme, ...asking({ second: true }) });
     await app.waitFor("id:nb-taxpayer");
     await app.press("id:nb-taxpayer");
     await app.waitFor("id:sheet-extras");
     await app.wait(400);
+    expect(app.shows("id:panel-new-tp")).toBe(true);
     await shoot(app, `newprofile-tablet-${scheme}-sheet`);
+    await app.press("id:panel-new-tp");
+    await app.waitFor("id:new-tp");
+    await app.wait(400);
+    await shoot(app, `newprofile-tablet-${scheme}-page`);
     expect(app.texts()).toContain("New tax profile");
   }, 120_000);
 }

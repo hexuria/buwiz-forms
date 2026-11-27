@@ -89,9 +89,11 @@ export const paletteItems = computed<PaletteItem[]>(() => {
       run: () => app.openTaxpayer(t.tin_root),
     });
   }
-  // The picker's add row: the owner and the help desk admin always start a new tax profile (a client session may only
-  // ever add the first one — app.canAddTaxpayer decides); the typed query still narrows it away like any other row.
-  if (app.canAddTaxpayer()) {
+  // The narrow picker's add row: the owner and the help desk admin always start a new tax profile (a client session
+  // may only ever add the first one — app.canAddTaxpayer decides); the typed query still narrows it away like any
+  // other row. Phone only: on the desktop palette it would rank above the exact "Tax profile" page row, and the wide
+  // layout already carries the entry in the sidebar's panel and the menu.
+  if (profilesOnly && app.canAddTaxpayer()) {
     items.push({ group: "Taxpayers", label: "New tax profile", icon: "plus", run: () => app.go("new_taxpayer") });
   }
   if (!profilesOnly) {

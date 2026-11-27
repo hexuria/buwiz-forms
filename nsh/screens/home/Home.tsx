@@ -44,7 +44,7 @@ const TILE_GAP = 8;
 // ---------------------------------------------------------------- welcome
 
 const STEPS: { icon: IconName; title: string; line: string }[] = [
-  { icon: "user", title: "Add a taxpayer", line: "TIN, registered name and head-office address" },
+  { icon: "user", title: "New tax profile", line: "TIN, registered name and head-office address" },
   { icon: "calendar", title: "Add a tax year", line: "Any year up to next year, per branch" },
   { icon: "file-text", title: "Choose its forms", line: "All 43 BIR forms, or start from a pack" },
 ];
