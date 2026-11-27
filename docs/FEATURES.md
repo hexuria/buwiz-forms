@@ -40,7 +40,9 @@ there, but nobody has run it on that platform.
   `nsh build`, the Rust crate tests and the headless TSX tests on
   `windows-2025`, and `check` in
   [.github/workflows/ci.yml](../.github/workflows/ci.yml) runs
-  `cargo test --locked --workspace` on `windows-latest`. Those jobs exercise
+  `cargo test --locked --workspace` on `windows-latest`. They run nightly and
+  when a `test/...` push or a manual run asks for Windows, not on every pull
+  request ([CI.md](CI.md)). Those jobs exercise
   the shared Rust and TypeScript code, not a real Windows window, so every
   Windows cell that needs a person looking at a desktop stays "untested".
 - The macOS cells were checked against the running app on this commit's

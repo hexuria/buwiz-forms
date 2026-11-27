@@ -75,7 +75,7 @@ for (const look of LOOKS) {
       await app.wait(500);
       await shoot(app, `calendar-${look.name}-filters`);
       await app.press("label:Quarterly");
-      await app.press("id:calendar-tp-000111229");
+      await app.press("id:calendar-tp-000111225");
       await app.wait(300);
       await shoot(app, `calendar-${look.name}-filters-on`);
       await app.press("id:calendar-sheet-done");

@@ -3,8 +3,9 @@
 import type { JSX } from "nsh";
 import { View } from "nsh";
 import { Button, Tab, Tabs as BaseTabs } from "nsh/base";
-import { cx, TOUCH } from "./look";
-import { Line, PageTitle, Text } from "./text";
+import { Tooltip } from "./layers";
+import { cx, T_H, TOUCH } from "./look";
+import { Icon, Line, PageTitle, Text } from "./text";
 
 /** A bordered list (radius 12) whose rows are divided by hairlines. */
 export function ListGroup(props: { children?: JSX.Element; testID?: string }) {
@@ -38,6 +39,55 @@ export function ListRow(props: { children?: JSX.Element; onPress?: () => void; a
         {props.children}
       </Button>
     </If>
+  );
+}
+
+/** Props of ChoiceRow. */
+export interface ChoiceRowProps {
+  /** What screen readers say of the row. */
+  label: string;
+  testID?: string;
+  /** Picks it; a disabled row has none. */
+  onPress?: () => void;
+  disabled?: boolean;
+  /** The current value: a check at the end. */
+  chosen?: boolean;
+  /** Where the keys are (a desktop list's highlight): the hover fill. */
+  lit?: boolean;
+  /** The pointer came over it (desktop): move the highlight there. */
+  onHover?: () => void;
+  /** The whole label on hover (desktop rows are one line). */
+  tooltip?: string;
+  children?: JSX.Element;
+}
+
+/**
+ * One choice of a searched list (SearchPick): on touch a 52-point row with a hairline under it, with a pointer a 32-point row that
+ * the keys light (`lit`). The current choice has a check. Rows of a virtualised `List` are cells of their own, so the hairline is
+ * each row's bottom border, not the group's `first:` rule.
+ */
+export function ChoiceRow(props: ChoiceRowProps) {
+  return (
+    <Button
+      testID={props.testID}
+      role="option"
+      accessibilityLabel={props.label}
+      selected={props.chosen}
+      disabled={props.disabled}
+      onPress={props.onPress}
+      onMouseEnter={() => props.onHover?.()}
+      tooltip={props.tooltip ? <Tooltip label={props.tooltip} /> : undefined}
+      class={cx(
+        "w-full flex-row items-center gap-3 disabled:opacity-50",
+        TOUCH ? "min-h-13 border-b border-border px-1 py-1.5 active:bg-selected" : "h-8 rounded-(--radius-ctl) px-2 enabled:hover:bg-hover",
+        props.lit && "bg-hover",
+      )}
+    >
+      <View class="min-w-0 flex-1">{props.children}</View>
+      <If when={props.chosen}>
+        <Icon name="check" tone="fg" />
+      </If>
+    </Button>
   );
 }
 
@@ -152,7 +202,7 @@ export function Tabs(props: { tabs: TabItem[]; value: string; onChange: (value: 
               props.fill ? "grow justify-center gap-0.5 px-1" : "flex-row gap-1.5 px-2.5",
               // The underline is drawn under the tab: a fill over the chosen tab would hide it (hover and focus beat selected:, so say so).
               "selected:hover:bg-transparent selected:focus-visible:bg-transparent",
-              props.fill ? "h-12" : TOUCH ? "h-11" : "h-9",
+              props.fill ? "h-12" : TOUCH ? T_H : "h-9",
             )}
           >
             <Text variant="control" tone="fg2" lines={props.fill ? 1 : undefined} class="group-selected:text-foreground">{t().label}</Text>

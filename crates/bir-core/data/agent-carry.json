@@ -975,7 +975,10 @@
       "frm1702EX:txtPg3Pt6S3I8SpecialDeductAmt",
       "frm1702EX:txtPg3Pt6S3I9Total"
     ],
-    "page_writes": [],
+    "page_writes": [
+      "frm1702EX:txtPg3Pt6I17OthersIDesc",
+      "frm1702EX:txtPg3Pt6S2I4Description"
+    ],
     "period": [
       "frm1702EX:ddlPg1I2Date",
       "frm1702EX:txtPg1I2YearEnd"
@@ -2682,10 +2685,6 @@
       "frm2552:txtPg1P2I20TotTaxStllDueOvrPmnt",
       "frm2552:txtPg1P2I24TotPenalties",
       "frm2552:txtPg1P2I25TotAmntPyable",
-      "frm2552:txtPg2P4I2Amount",
-      "frm2552:txtPg2P4I3Amount",
-      "frm2552:txtPg2P4I4Amount",
-      "frm2552:txtPg2P4I5Amount",
       "frm2552:txtPg2Pt5Sch1TaxBase5",
       "frm2552:txtPg2Pt5Sch1TaxDue1",
       "frm2552:txtPg2Pt5Sch1TaxDue2",

@@ -7,7 +7,7 @@ use bir_core::forms::form_2550q::{
 use bir_core::forms::queueable::QueueableForm;
 use sha2::{Digest, Sha256};
 
-fn sample_2550q() -> Form2550QDraft {
+pub(crate) fn sample_2550q() -> Form2550QDraft {
     let mut draft =
         Form2550QDraft::new_from_profile(&dummy_profile("2550Q", "Corporation"), 2025, 1);
     draft.taxpayer_classification = Some(Form2550QTaxpayerClassification::Small);
@@ -102,7 +102,7 @@ fn date(year: u16, month: u8, day: u8) -> Option<Form2550QDate> {
 
 /// The 2550Q sample with three rows in each of Schedules 1, 3 and 4, entered
 /// through the official `addlistSched1/3/4` modals.
-fn sample_2550q_schedules() -> Form2550QDraft {
+pub(crate) fn sample_2550q_schedules() -> Form2550QDraft {
     let mut draft = sample_2550q();
     let capital = |d, code: &str, what: &str, amount, tax, est, rec| Form2550QCapitalGoodRow {
         purchase_or_import_date: d,
@@ -230,7 +230,7 @@ fn form_2550q_schedule_rows_sample_payload_is_current() {
 /// The 2550Q sample with rows in the item 19, 42, 47 and 56 "(Add more...)"
 /// popups, entered through the official `addTblSpecifyNo*` / `addColNo*` /
 /// `saveAndCloseNo*` functions.
-fn sample_2550q_specify() -> Form2550QDraft {
+pub(crate) fn sample_2550q_specify() -> Form2550QDraft {
     let mut draft = sample_2550q();
     let rows = |rows: &[(&str, f64)]| {
         rows.iter()

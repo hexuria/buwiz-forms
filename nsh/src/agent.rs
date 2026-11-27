@@ -88,8 +88,17 @@ pub struct Agent;
 impl Agent {
     /// Starts the listener once (a later call answers the status), after the door has booted: when the build has
     /// the `agent` feature and `GPUI_AGENT=1` is set. Call it on the engine thread. Never throws: a refusal is in
-    /// `note`.
-    pub fn start() -> AgentStatus {
+    /// `note`. It goes through the door's gate first (`door::enter`), as every call that can boot does: an engine
+    /// that quit starts nothing.
+    pub fn start(system: System) -> AgentStatus {
+        if let Err(refused) = crate::door::enter(&system.locals) {
+            return AgentStatus {
+                built: cfg!(feature = "agent"),
+                active: false,
+                address: None,
+                note: Some(refused),
+            };
+        }
         start()
     }
 
@@ -430,7 +439,8 @@ mod live {
             return Ok(None);
         };
         // The record names the executable `bir`: see RECORD_EXECUTABLE.
-        drop(started.discovery);
+        // `try_start` has already waited out the serve thread's one write,
+        // so this correct record is the last write the hosts folder sees.
         let identity = discovery::detect_identity();
         let record = HostRecord {
             addr: started.addr.to_string(),

@@ -11,7 +11,7 @@ use bir_core::forms::form_1701a::{
 };
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_1701a() -> Form1701ADraft {
+pub(crate) fn sample_1701a() -> Form1701ADraft {
     let mut draft = Form1701ADraft::new_from_profile(&dummy_profile("1701A", "Individual"), 2025);
     draft.taxpayer_name = "Dummy, Sample Taxpayer".to_string();
     draft.birth_date = "01/15/1980".to_string();
@@ -55,7 +55,7 @@ fn form_1701a_sample_payload_is_current() {
 }
 
 /// Joint filing: the spouse uses the 8% rate as a professional.
-fn sample_1701a_joint() -> Form1701ADraft {
+pub(crate) fn sample_1701a_joint() -> Form1701ADraft {
     let mut draft = sample_1701a();
     draft.civil_status = Form1701ACivilStatus::Married;
     draft.spouse_has_income = Some(true);
@@ -106,7 +106,7 @@ fn more_row(description: &str, taxpayer: f64, spouse: f64) -> Form1701AMoreRow {
 }
 
 /// The joint return with three Part IV.A "(add more...)" rows.
-fn sample_1701a_joint_more() -> Form1701ADraft {
+pub(crate) fn sample_1701a_joint_more() -> Form1701ADraft {
     let mut draft = sample_1701a_joint();
     draft.other_income_more = vec![
         more_row("Rental income", 500.0, 0.0),
@@ -119,7 +119,7 @@ fn sample_1701a_joint_more() -> Form1701ADraft {
 }
 
 /// An 8% return with two Part IV.B "(add more...)" rows.
-fn sample_1701a_more() -> Form1701ADraft {
+pub(crate) fn sample_1701a_more() -> Form1701ADraft {
     let mut draft = sample_1701a();
     draft.atc = Form1701AAtc::II015;
     draft.taxpayer.sales = 0.0;
@@ -183,8 +183,7 @@ fn form_1701a_more_sample_payload_is_current() {
 
 /// Part IV.A "(add more...)" with twelve rows: `addRow` has no row limit,
 /// and every row is written in DOM order with `txtCtrmodalPartIVA=12`.
-#[test]
-fn form_1701a_joint_many_rows_sample_payload_is_current() {
+pub(crate) fn sample_1701a_joint_many() -> Form1701ADraft {
     let mut draft = sample_1701a_joint();
     draft.other_income_more = vec![more_row("Rental income", 500.0, 0.0)];
     for n in 2..=12u32 {
@@ -195,6 +194,12 @@ fn form_1701a_joint_many_rows_sample_payload_is_current() {
     }
     draft.keep_entered_penalties();
     draft.recompute();
+    draft
+}
+
+#[test]
+fn form_1701a_joint_many_rows_sample_payload_is_current() {
+    let draft = sample_1701a_joint_many();
     assert_eq!(draft.other_income_more.len(), 12);
     assert_eq!(draft.taxpayer.other_income_42, 77_560.0);
     let payload = draft

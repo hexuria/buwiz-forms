@@ -10,14 +10,14 @@ import { store } from "./store";
 
 const pause = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 
-const SECOND_ROOT = "000111229";
-const SECOND_TIN = "00011122900000";
+const SECOND_ROOT = "000111225";
+const SECOND_TIN = "00011122500000";
 
 /** The demo taxpayer (Juana Santos, selected) and a second one (Sample Trading Corp), the frame on the first. */
 function twoTaxpayers() {
   const juana = createDemoTaxpayer();
   if (!bir.list_taxpayers().some((t) => t.tin_root === SECOND_ROOT)) {
-    bir.create_taxpayer({ tin_root: "000-111-229", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
+    bir.create_taxpayer({ tin_root: "000-111-225", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
   }
   store.bump();
   app.selectTaxpayer(juana.tin_root, { quiet: true });

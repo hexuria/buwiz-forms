@@ -6,9 +6,9 @@
 // a TIN its digits (no dashes); a date MM/DD/YYYY once the text reads as a date, else the text; sel the code; chk
 // "true"/"false". Locked, computed and disabled boxes draw as read-only boxes (no Input) and report nothing.
 import type { ViewRef } from "nsh";
-import { View } from "nsh";
+import { cleanup, View } from "nsh";
 import {
-  CheckboxLabel, DateField, Dropdown, Icon, IntInput, Line, MoneyInput, moneyPlain, PercentInput, Text, TextField, TinInput, Tooltip, TOUCH,
+  CheckboxLabel, DateField, Dropdown, Icon, IntInput, Line, MoneyInput, moneyPlain, PercentInput, T_H, T_MIN_H, Text, TextField, TinInput, Tooltip, TOUCH,
 } from "../../../ui";
 import { SearchPick } from "./Pick";
 import { cx, isOn, listedOptions, mdy, readBoxPad, readText, SEARCH_FROM, selectModel, tinKind, tinSegment } from "./model";
@@ -66,7 +66,7 @@ function ReadBox(props: { p: FieldInput }) {
       class={cx(
         "min-w-0 flex-row items-center gap-1.5 rounded-(--radius-row) border",
         readBoxPad(cellOf(p)) === 4 ? "px-1" : "px-2.5",
-        TOUCH ? "min-h-11" : grows() ? "min-h-8 py-1" : "h-8",
+        TOUCH ? T_MIN_H : grows() ? "min-h-8 py-1" : "h-8",
         grows() && "max-w-full",
         computed() ? "border-transparent bg-hover" : "border-border bg-hover",
         dimmed() && "opacity-60",
@@ -137,7 +137,7 @@ function Choice(props: { p: FieldInput }) {
       when={model().options.length > SEARCH_FROM}
       else={
         // The kit's select root is a few points taller than its trigger: a box of the trigger's own height keeps neighbours aligned.
-        <View class={cx("min-w-0", TOUCH ? "h-11" : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
+        <View class={cx("min-w-0", TOUCH ? T_H : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
           <Dropdown
             testID={p.testID}
             label={nameOf(p)}
@@ -154,7 +154,7 @@ function Choice(props: { p: FieldInput }) {
     >
       {/* SearchPick is a popover and a sheet side by side: in the box's own column the closed sheet took a 4-point gap and
           the trigger sat higher than its neighbours (a multi-control row aligns at the bottom). One box of the trigger's height. */}
-      <View class={cx("min-w-0", TOUCH ? "h-11" : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
+      <View class={cx("min-w-0", TOUCH ? T_H : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
         <SearchPick
           testID={p.testID}
           label={p.label}
@@ -176,7 +176,7 @@ function DateBox(props: { p: FieldInput }) {
   // The kit's DateField prints "Enter a valid date..." under its box; the page prints the same sentence on the item's own
   // message line (and the box's red border), so the box is clipped to its own height and the sentence shows once.
   return (
-    <View class={cx("min-w-0 overflow-hidden", TOUCH ? "h-11" : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
+    <View class={cx("min-w-0 overflow-hidden", TOUCH ? T_H : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
       <DateField
         testID={p.testID}
         accessibilityLabel={nameOf(p)}
@@ -195,6 +195,7 @@ function DateBox(props: { p: FieldInput }) {
 /** The ref a box gives the page (an input's, a select trigger's, a checkbox's), so a pill step can put the keys in it. */
 function giveFocus(p: FieldInput, ref: ViewRef) {
   p.focusRef?.(() => ref.focus());
+  p.blurRef?.(() => ref.blur());
 }
 
 /** The typing boxes: an amount, a percent, a whole number, a TIN, an email, a phone, plain text. */
@@ -202,6 +203,7 @@ function TypedBox(props: { p: FieldInput }) {
   const p = props.p;
   const kind = () => p.field.t;
   const tin = () => tinKind(p.field);
+  const countOnly = () => kind() === "int" && tin() === null && !tinSegment(p.field) && !/code/i.test(`${p.field.k} ${p.field.l}`);
   return (
     <If
       when={kind() === "money" || kind() === "num"}
@@ -258,6 +260,7 @@ function TypedBox(props: { p: FieldInput }) {
                 align={cellOf(p) ? "center" : undefined}
                 error={p.box.message?.() || p.box.invalid()}
                 maxDigits={p.field.m}
+                zeroEmpty={countOnly()}
                 placeholder={p.placeholder}
                 inputRef={(ref) => giveFocus(p, ref)}
               />
@@ -286,6 +289,7 @@ function TypedBox(props: { p: FieldInput }) {
         onChange={(plain) => p.onEdit(plain)}
         onFocus={() => p.onFocus()}
         onBlur={() => p.onBlur()}
+        onLeftUnreadable={(typed, kept) => p.onLeftUnreadable?.(typed, kept)}
         width={widthOf(p)}
         error={p.box.message?.() || p.box.invalid()}
         whole={!!p.field.w}
@@ -303,6 +307,7 @@ function TypedBox(props: { p: FieldInput }) {
  * off is drawn faded. Wide: the box has the width the page gives. Narrow: the whole room, with the kit's touch height.
  */
 export function FieldControl(props: FieldInput) {
+  cleanup(() => props.blurRef?.(null));
   return (
     <View class="min-w-0 gap-1" style={{ opacity: props.box.off() ? OFF_OPACITY : 1 }}>
       <If

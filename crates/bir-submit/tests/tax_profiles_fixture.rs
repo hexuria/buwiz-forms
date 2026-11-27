@@ -1,9 +1,10 @@
 //! The golden `include=all` answer both repos parse
 //! (`tests/fixtures/tax_profiles_all.json`, identical in the server's
 //! repo): every state, the complete-list marker, and a needs-fix row's
-//! reasons, note and id-based link.
+//! reasons, note and id-based link, and each row's `next` (the server's
+//! pull request's copy).
 
-use bir_submit::{AccountTins, TinKey, TinStatus};
+use bir_submit::{AccountTins, Next, TinKey, TinStatus};
 
 #[test]
 fn the_golden_include_all_answer_parses() {
@@ -19,19 +20,19 @@ fn the_golden_include_all_answer_parses() {
         list.find(&TinKey::parse(tin).unwrap())
             .unwrap_or_else(|| panic!("{tin} listed"))
     };
-    let states: Vec<(TinStatus, bool)> = list
+    let states: Vec<(TinStatus, bool, Next)> = list
         .rows
         .iter()
-        .map(|row| (row.status.clone(), row.can_send))
+        .map(|row| (row.status.clone(), row.can_send, row.next))
         .collect();
     assert_eq!(
         states,
         [
-            (TinStatus::Approved, true),
-            (TinStatus::Paused, false),
-            (TinStatus::Unverified, false),
-            (TinStatus::Pending, false),
-            (TinStatus::NeedsFix, false),
+            (TinStatus::Approved, true, Next::Send),
+            (TinStatus::Paused, false, Next::Wait),
+            (TinStatus::Unverified, false, Next::Fix),
+            (TinStatus::Pending, false, Next::Wait),
+            (TinStatus::NeedsFix, false, Next::Fix),
         ]
     );
 

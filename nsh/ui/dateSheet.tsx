@@ -1,10 +1,10 @@
-import { signal, View } from "nsh";
+import { cleanup, signal, untracked, View } from "nsh";
 import { Button } from "nsh/base";
 import { DATE_ERROR, formatIso, formatLongDate, formatMDY, isTwoDigitDate, parseTypedDate } from "../lib/dates";
 import { AppButton } from "./buttons";
 import { CalendarGrid, DateField } from "./fields";
 import { Sheet } from "./layers";
-import { cx, FOCUS_RING } from "./look";
+import { cx, FOCUS_RING, T_MIN_H } from "./look";
 import { Icon, Line } from "./text";
 
 export interface DateTouchFieldProps {
@@ -21,7 +21,16 @@ export interface DateTouchFieldProps {
   validate?: (value: string) => string;
   onFocus?: () => void;
   onBlur?: () => void;
+  /**
+   * Opens the date sheet once, just after the row is drawn: a link that came to set this date (a form's "Set the business start
+   * date") lands in the sheet, as a wide window's link lands with the keys in the DateField. A short wait lets a sheet the row is in
+   * finish coming up first.
+   */
+  autoOpen?: boolean;
 }
+
+/** How long autoOpen waits for a sheet around the row to come in, in milliseconds. */
+const AUTO_OPEN_MS = 350;
 
 /** A touch-sized row whose sheet holds a tentative date until Done or Clear. */
 export function DateTouchField(props: DateTouchFieldProps) {
@@ -43,6 +52,17 @@ export function DateTouchField(props: DateTouchFieldProps) {
     return date ? formatLongDate(date) : props.value;
   };
   const close = () => { open.set(false); props.onBlur?.(); };
+  const openSheet = () => {
+    const date = parseTypedDate(props.value);
+    text.set(date ? formatMDY(date) : props.value);
+    tried.set(false);
+    props.onFocus?.();
+    open.set(true);
+  };
+  if (untracked(() => props.autoOpen && !props.disabled)) {
+    const timer = setTimeout(openSheet, AUTO_OPEN_MS);
+    cleanup(() => clearTimeout(timer));
+  }
   const submit = () => {
     tried.set(true);
     if (problem()) return;
@@ -55,15 +75,9 @@ export function DateTouchField(props: DateTouchFieldProps) {
         testID={props.testID}
         accessibilityLabel={`${props.label}, ${show() || "not set"}${props.errorDescription ? `, ${props.errorDescription}` : ""}`}
         disabled={props.disabled}
-        class={cx("min-h-11 w-full flex-row items-center gap-2 rounded-(--radius-row) border bg-card px-2.5", FOCUS_RING,
+        class={cx(T_MIN_H, "w-full flex-row items-center gap-2 rounded-(--radius-row) border bg-card px-2.5", FOCUS_RING,
           props.error ? "border-danger" : "border-border-strong")}
-        onPress={() => {
-          const date = parseTypedDate(props.value);
-          text.set(date ? formatMDY(date) : props.value);
-          tried.set(false);
-          props.onFocus?.();
-          open.set(true);
-        }}
+        onPress={openSheet}
       >
         <Line tone={show() ? "fg" : "fg3"} class="flex-1 tabular-nums">{show() || "MM/DD/YYYY"}</Line>
         <Icon name="calendar" size={14} tone="fg3" />

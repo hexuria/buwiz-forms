@@ -100,6 +100,12 @@
    "reason": "column (B); row 4"
   },
   {
+   "writer_key": "frm1707Av2021:txtI11ASpecify",
+   "html_id": "p1c207",
+   "printed": "12A If yes, please specify",
+   "reason": "25-slot comb directly below Item 12A caption on page 1"
+  },
+  {
    "writer_key": "frm1707Av2021:txtS1C3SellingPriceI1",
    "html_id": "p2c17",
    "printed": "Schedule 1 row 1 (C) Selling Price",
@@ -579,10 +585,6 @@
   {
    "writer_key": "frm1707Av2021:txtLineOfBusiness",
    "reason": "no line-of-business item on this sheet"
-  },
-  {
-   "writer_key": "frm1707Av2021:txtI11ASpecify",
-   "reason": "12A \"If yes, please specify\" has no fillable cell; the writer holds an option code, not printable text"
   },
   {
    "writer_key": "frm1707Av2021:txtI16ApplicableTaxRate",

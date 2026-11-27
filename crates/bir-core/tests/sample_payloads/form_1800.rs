@@ -5,7 +5,7 @@ use bir_core::forms::form_1800::{
 };
 use bir_core::forms::queueable::QueueableForm as _;
 
-fn sample_1800() -> Form1800Draft {
+pub(crate) fn sample_1800() -> Form1800Draft {
     let mut draft = Form1800Draft::new_from_profile(&dummy_profile("1800", "Individual"), 2025, 1);
     draft.donation_month = 3;
     draft.donation_day = 10;
@@ -68,7 +68,7 @@ fn form_1800_sample_payload_is_current() {
 /// More than five rows in Schedules A and B: `addScheduleA`,
 /// `addScheduleB1` and `addScheduleB2` have no row limit, so rows 6 onwards
 /// follow row 5 of their table.
-fn sample_1800_many_rows() -> Form1800Draft {
+pub(crate) fn sample_1800_many_rows() -> Form1800Draft {
     let mut draft = sample_1800();
     draft.donation_day = 11;
     for k in 3..=8u32 {

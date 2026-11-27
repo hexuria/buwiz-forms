@@ -12,7 +12,6 @@ use std::sync::OnceLock;
 use chrono::NaiveDate;
 
 use crate::db::Database;
-use crate::lock_timing;
 
 pub const LOG_FILE_PREFIX: &str = "ebirforms";
 pub const LOG_FILE_SUFFIX: &str = "log";
@@ -155,20 +154,35 @@ pub fn maintain(dir: &Path, retention_days: u32) -> Vec<PathBuf> {
 }
 
 /// Re-check retention every six hours so a long-running process crosses
-/// midnight without growing past the setting. The caller owns `db` for the
-/// life of the process; the thread sleeps, so only the real binaries should
-/// start it (a test process would not exit).
-pub fn spawn_retention(db: std::sync::Arc<std::sync::Mutex<Database>>) {
+/// midnight without growing past the setting, on the database `db` names.
+///
+/// The thread keeps only a [`std::sync::Weak`]: it never holds the database
+/// open, so an engine that ends can close it and free the owner lock. One
+/// thread per process; a later call (the next engine of the same process)
+/// points it at that engine's database.
+pub fn spawn_retention(db: std::sync::Weak<std::sync::Mutex<Database>>) {
+    static TARGET: std::sync::Mutex<std::sync::Weak<std::sync::Mutex<Database>>> =
+        std::sync::Mutex::new(std::sync::Weak::new());
     static STARTED: std::sync::Once = std::sync::Once::new();
+    *TARGET
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = db;
     STARTED.call_once(|| {
         let spawned = std::thread::Builder::new()
             .name("bir-log-retention".into())
             .spawn(move || {
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(6 * 60 * 60));
-                    let days = lock_timing::lock(&db)
-                        .ok()
-                        .map(|guard| retention_days(&guard));
+                    let target = TARGET
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .upgrade();
+                    let Some(db) = target else {
+                        continue;
+                    };
+                    // Never waits on the database while holding it: busy now, the next round prunes.
+                    let days = db.try_lock().ok().map(|guard| retention_days(&guard));
+                    drop(db);
                     if let Some(days) = days {
                         let _ = maintain(&log_dir(), days);
                     }

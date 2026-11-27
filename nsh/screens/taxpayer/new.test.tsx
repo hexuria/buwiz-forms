@@ -16,7 +16,7 @@ test("desktop: New taxpayer says what is missing on Create, a TIN in use at once
   await app.type("id:new-tp-tin", "000123453");
   await app.waitFor("text:TIN 000-123-453 is already Juana Santos.");
   await app.clear("id:new-tp-tin");
-  await app.type("id:new-tp-tin", "000111245");
+  await app.type("id:new-tp-tin", "000111240");
   await app.waitFor("text:TIN 000-123-453 is already Juana Santos.", { state: "gone" });
   await app.type("id:new-tp-name", "Sample Owner");
   await app.type("id:new-tp-email", "owner-at-example");
@@ -41,13 +41,13 @@ test("desktop: New taxpayer says what is missing on Create, a TIN in use at once
   await app.waitFor("id:tp-page-forms");
   await app.waitFor(`text:/form(s)? for ${YEAR}\\./`);
   expect(app.texts()).toContain("Sample Owner");
-  expect(app.texts()).toContain("000-111-245-00000");
+  expect(app.texts()).toContain("000-111-240-00000");
 });
 
 test("desktop: New taxpayer copies a taxpayer of the same type, and a type change resets the choice", async () => {
   const app = await desk({ peer: true });
   await app.waitFor("id:new-tp-card");
-  await app.type("id:new-tp-tin", "000111253");
+  await app.type("id:new-tp-tin", "000111258");
   await app.type("id:new-tp-name", "Sample Copy");
   await app.press("id:new-tp-start-trigger");
   await app.press("text:Same as a taxpayer I have…");

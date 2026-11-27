@@ -21,7 +21,7 @@ export interface SeedOptions {
 }
 
 /** The TIN root of the second taxpayer, as the host lists it. */
-export const SECOND_ROOT = "000111229";
+export const SECOND_ROOT = "000111225";
 
 /** Creates what `options` ask for. */
 export function seed(options: SeedOptions = {}): void {
@@ -42,7 +42,7 @@ export function seed(options: SeedOptions = {}): void {
   }
   if (options.second && !bir.list_taxpayers().some((t) => t.tin_root === SECOND_ROOT)) {
     const corp = bir.create_taxpayer({
-      tin_root: "000-111-229",
+      tin_root: "000-111-225",
       name: "Sample Trading Corp",
       taxpayer_type: "Corporation",
       head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" },

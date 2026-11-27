@@ -3250,7 +3250,7 @@ fn lifecycle_text<'a>(draft: &'a Value, name: &str) -> Option<&'a str> {
 }
 
 /// A lifecycle fact that is a yes or no (absent is no); see [`lifecycle_text`].
-fn lifecycle_flag(draft: &Value, name: &str) -> bool {
+pub(crate) fn lifecycle_flag(draft: &Value, name: &str) -> bool {
     draft[name]
         .as_bool()
         .or_else(|| draft["lifecycle"][name].as_bool())
@@ -4977,6 +4977,70 @@ pub(crate) fn removes(
         .or_else(|| rows_excise::removes(kind, before, after, edits))
 }
 
+/// The reviewed reason a person sees on the form page when `key` is gated
+/// shut on `draft` (corpus `enabled_when` conditions and host module gates).
+/// Blank and untick writes are clears and are never refused by a gate.
+pub(crate) fn page_gate_refusal(
+    kind: AgentFormKind,
+    draft: &Value,
+    key: &str,
+    value: &Value,
+) -> Option<String> {
+    if value.is_null()
+        || value.as_str().is_some_and(agent::carry::is_blank_value)
+        || is_unticked(value)
+    {
+        return None;
+    }
+    let code = kind.form_code();
+    if let Some(why) = rows_income_q::closed_refusal(kind, draft, key, value)
+        .map(str::to_string)
+        .or_else(|| rows_annual_individual::closed_refusal(kind, draft, key, value))
+    {
+        return Some(why);
+    }
+    if let Some((_, tag)) = rows_donor_estate::closed(kind, draft)
+        .into_iter()
+        .find(|(k, _)| k == key)
+    {
+        return Some(tag.to_string());
+    }
+    if rows_withholding::gated(kind, draft, key) == Some(true)
+        || rows_monthly::gated(kind, draft, key) == Some(true)
+    {
+        return conditions::tag(code, key);
+    }
+    if let Some(tag) = rows_income_q::gated(kind, draft, key) {
+        return Some(tag.to_string());
+    }
+    if rows_annual_individual::gated(kind, draft, key) {
+        return conditions::tag(code, key);
+    }
+    let shown = Value::Object(
+        agent::field_map(kind, draft)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(k, v)| (k, Value::String(v)))
+            .collect(),
+    );
+    if let Some(tag) = conditions::off_now(kind, draft, &shown, key) {
+        return Some(tag);
+    }
+    if let Some(tag) = rows_as_needed::off(kind, draft, &shown)
+        .get(key)
+        .and_then(Value::as_str)
+    {
+        return Some(tag.to_string());
+    }
+    if let Some(tag) = rows_excise::off(kind, draft, &shown)
+        .get(key)
+        .and_then(Value::as_str)
+    {
+        return Some(tag.to_string());
+    }
+    None
+}
+
 /// Apply the page's edits to `draft` the one way both the draft fill and the
 /// live print preview use, so the preview never prints a different answer
 /// than the page shows. Returns the rejected keys with their reasons.
@@ -5350,9 +5414,11 @@ fn apply_screen_edits_here(
             *draft = next;
             continue;
         }
-        // What the batch wrote, for PR 11's host refusals below.
+        // What the batch wrote, for PR 11's host refusals below. 2551Q's
+        // money boxes normalize through the official cent rounding before the
+        // write, as the official page does on blur.
         let written = match &step {
-            ChoiceStep::Fill(value) => Some(value.clone()),
+            ChoiceStep::Fill(value) => Some(form_2551q_amount_entry_value(kind, &key, value)),
             ChoiceStep::Set(_) | ChoiceStep::Untick => None,
         };
         let result = match step {
@@ -5369,10 +5435,11 @@ fn apply_screen_edits_here(
                         .bindings
                         .get(&key)
                         .is_some_and(|bound| matches!(bound.binding, Binding::Whole { .. }));
+                let normalized = written.as_ref().expect("a fill step writes").clone();
                 let value = if numeric_date_clear {
                     json!("0")
                 } else {
-                    value
+                    normalized
                 };
                 catalogs::fill(kind, &mut next, &key, &value, lift(&key))
             }
@@ -5427,6 +5494,53 @@ fn apply_screen_edits_here(
         penalty_groups.into_iter().map(|(group, _)| group).collect();
     rows_excise::join_if_group_blanked(kind, draft, &groups, &blanked, &rejected);
     Ok(rejected)
+}
+
+/// Whether a 2551Q key is one of the money boxes covered by the official
+/// cent normalization and the amount-limit entry check.
+fn is_2551q_amount_entry_key(key: &str) -> bool {
+    matches!(
+        key,
+        "txtATCAmt1"
+            | "txtATCAmt2"
+            | "txtATCAmt3"
+            | "txtATCAmt4"
+            | "txtATCAmt5"
+            | "txtATCAmt6"
+            | "frm2551Qv2018:txt15"
+            | "frm2551Qv2018:txt16"
+            | "frm2551Qv2018:txt17"
+            | "frm2551Qv2018:txt20"
+            | "frm2551Qv2018:txt21"
+            | "frm2551Qv2018:txt22"
+    )
+}
+
+/// The value a 2551Q money box holds once the official page's blur formatting
+/// has run: centavos, rounded half up. Non-numeric text is left to the box's
+/// ordinary amount validation.
+fn form_2551q_amount_entry_value(kind: AgentFormKind, key: &str, value: &Value) -> Value {
+    if kind != AgentFormKind::Form2551Q || !is_2551q_amount_entry_key(key) {
+        return value.clone();
+    }
+    let amount = match value {
+        Value::Number(n) => n.as_f64(),
+        Value::String(s) => {
+            let clean = s.trim().replace(',', "");
+            if clean.is_empty() {
+                return value.clone();
+            }
+            clean.parse::<f64>().ok()
+        }
+        _ => None,
+    };
+    amount
+        .filter(|amount| amount.is_finite())
+        .and_then(|amount| {
+            serde_json::Number::from_f64(bir_core::forms::official_inputs::cents(amount))
+        })
+        .map(Value::Number)
+        .unwrap_or_else(|| value.clone())
 }
 
 /// Refuse 2551Q amount edits at entry when they exceed the official 12-char
@@ -7316,6 +7430,9 @@ mod tests {
     // on every form (bug B17).
     mod sel_lists;
     mod unfillable;
+    // Every form's RDO box offers the RDO catalog, never 1601C's leftover
+    // "000" option script; "000" is no RDO.
+    mod rdo_lists;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -9288,6 +9405,71 @@ mod tests {
             "expected no amount-limit errors, got {errs:?}"
         );
 
+        // A third decimal is not refused: the official money blur formats it
+        // to centavos, half up. The stored draft, the box values and the
+        // upload-facing amounts all hold the rounded amount.
+        for (typed, expected) in [
+            ("2000.005", 2000.01),
+            ("2000.5", 2000.5),
+            ("2000.50", 2000.5),
+        ] {
+            let rounded = fill("2551Q", &opened["draft"], json!({"txtATCAmt1": typed}));
+            assert_eq!(rounded["rejected"], json!({}), "{typed}: {rounded}");
+            assert_eq!(
+                rounded["draft"]["schedule_1"][0]["taxable_amount"].as_f64(),
+                Some(expected),
+                "{typed} stored"
+            );
+            assert_eq!(
+                amount(&rounded["values"], "txtATCAmt1"),
+                expected,
+                "{typed} shown"
+            );
+            if typed == "2000.005" {
+                let map = agent::field_map(AgentFormKind::Form2551Q, &rounded["draft"]).unwrap();
+                assert_eq!(map["txtATCAmt1"], "2,000.01", "{typed} upload");
+            }
+        }
+        let mut amended = opened["draft"].clone();
+        set_draft_path(&mut amended, "/is_amended", json!(true));
+        for (key, path) in [
+            ("frm2551Qv2018:txt15", "creditable_tax_withheld"),
+            ("frm2551Qv2018:txt16", "tax_paid_previous"),
+            ("frm2551Qv2018:txt17", "other_tax_credit"),
+        ] {
+            let rounded = fill("2551Q", &amended, json!({key: "2000.005"}));
+            assert_eq!(rounded["rejected"], json!({}), "{key}: {rounded}");
+            assert_eq!(
+                rounded["draft"][path].as_f64(),
+                Some(2000.01),
+                "{key} stored"
+            );
+            assert_eq!(amount(&rounded["values"], key), 2000.01, "{key} shown");
+            let map = agent::field_map(AgentFormKind::Form2551Q, &rounded["draft"]).unwrap();
+            assert_eq!(map[key], "2,000.01", "{key} upload");
+        }
+        let penalty_keys = [
+            ("frm2551Qv2018:txt20", "surcharge"),
+            ("frm2551Qv2018:txt21", "interest"),
+            ("frm2551Qv2018:txt22", "compromise"),
+        ];
+        let unlocked = penalty_keys.map(|(key, _)| key);
+        let late = open_for(TIN, "2551Q", 2024, 1);
+        let sold = fill("2551Q", &late["draft"], json!({"txtATCAmt1": "500000"}));
+        for (key, component) in penalty_keys {
+            let rounded =
+                fill_unlocked("2551Q", &sold["draft"], json!({key: "2000.005"}), &unlocked);
+            assert_eq!(rounded["rejected"], json!({}), "{key}: {rounded}");
+            assert_eq!(
+                rounded["draft"]["penalty_overrides"][component].as_f64(),
+                Some(2000.01),
+                "{key} stored"
+            );
+            assert_eq!(amount(&rounded["values"], key), 2000.01, "{key} shown");
+            let map = agent::field_map(AgentFormKind::Form2551Q, &rounded["draft"]).unwrap();
+            assert_eq!(map[key], "2,000.01", "{key} upload");
+        }
+
         // Over 12-char typed limit with centavos (13 chars): refused AT ENTRY with actionable words
         let over_cents = fill(
             "2551Q",
@@ -9300,6 +9482,15 @@ mod tests {
         assert!(
             msg.contains("12-character") && msg.contains("enter a smaller amount"),
             "{msg}"
+        );
+
+        // A negative amount is still refused for its real reason.
+        let negative = fill("2551Q", &opened["draft"], json!({"txtATCAmt1": "-100"}));
+        assert!(
+            negative["rejected"]["txtATCAmt1"]
+                .as_str()
+                .is_some_and(|m| m.contains("non-negative")),
+            "{negative}"
         );
 
         // Over 12-char typed limit without centavos (13 digits): refused AT ENTRY
@@ -14811,6 +15002,85 @@ mod tests {
         }
     }
 
+    /// Link 3 of 3 of "a relay dry_run result never reads as filed" (link 1:
+    /// bir-submit `client::tests::a_relay_dry_run_result_with_its_signed_receipt_is_a_verified_test_send`;
+    /// link 2: bir-core `background_cron::tests::a_relay_dry_run_result_is_stored_as_a_test_send_on_every_path`).
+    /// The shared fixture's result through bir-core's `send_outcome`, stored
+    /// as link 2 proves the worker stores it (Submitted, `submitted_dry_run`,
+    /// the receipt, not the mock relay), for each storage shape: the open,
+    /// the returns list and the deadline rows all say a test send, never a
+    /// send that reached the BIR, and the deadline stays open (its row says
+    /// `submitted_dry_run`, which the screens read as not filed).
+    #[test]
+    fn a_relay_dry_run_result_never_reads_as_filed() {
+        use crate::send_state::{SENT_LINE, TEST_SENT_LINE};
+        let report = bir_core::relay::dry_run_result_fixture_report();
+        let codes = [("1601C", 6i64), ("2551Q", 2), ("0619E", 5)];
+        setup_taxpayer_filing(&codes.map(|(code, _)| code));
+        for (code, period) in codes {
+            let opened = open_for(TIN, code, 2026, period);
+            let id = store_filed(code, &opened["draft"], "Submitted");
+            let (_, raw) = raw_row(id);
+            let mut sent: Value = serde_json::from_str(&raw).unwrap();
+            let lifecycle = if sent["lifecycle"].is_object() {
+                &mut sent["lifecycle"]
+            } else {
+                &mut sent
+            };
+            lifecycle["submitted_dry_run"] = json!(report.simulated);
+            lifecycle["submitted_via_relay"] = json!(false);
+            lifecycle["relay_receipt"] = json!(report.relay_receipt);
+            raw_exec(
+                &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+                &[&serde_json::to_string(&sent).unwrap()],
+            );
+
+            let open = open_for(TIN, code, 2026, period);
+            assert_eq!(open["status"], "Submitted", "{code}: the stored status");
+            assert_eq!(open["submitted_dry_run"], true, "{code}");
+            assert_eq!(open["send"]["stage"], "test_sent", "{code}");
+            assert_eq!(open["send"]["line"], TEST_SENT_LINE, "{code}");
+
+            let rows = call("list_returns", vec!["all".into()]).unwrap();
+            let row = rows
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["id"] == id)
+                .unwrap_or_else(|| panic!("{code}: listed"))
+                .clone();
+            assert_eq!(row["send"]["stage"], "test_sent", "{code}");
+            assert_eq!(row["send"]["line"], TEST_SENT_LINE, "{code}");
+            assert_eq!(row["submitted_via_relay"], false, "{code}");
+
+            let due = call(
+                "deadlines_between",
+                vec!["2026-01-01".into(), "2026-12-31".into()],
+            )
+            .unwrap();
+            let due = due
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|due| due["draft_id"] == id)
+                .unwrap_or_else(|| panic!("{code}: a deadline row"))
+                .clone();
+            assert_eq!(
+                due["submitted_dry_run"], true,
+                "{code}: the deadline stays open"
+            );
+
+            for send in [&open["send"], &row["send"]] {
+                assert_ne!(send["stage"], "sent", "{code}");
+                assert_ne!(send["line"], SENT_LINE, "{code}");
+                let line = send["line"].as_str().unwrap().to_lowercase();
+                for word in ["sent", "filed", "submitted"] {
+                    assert!(!line.contains(word), "{code}: {word:?} in {line:?}");
+                }
+            }
+        }
+    }
+
     /// `send` in the open's answer is the stored return's send state
     /// (send_state.rs), for each storage shape: null on a plain Draft and a
     /// Submitted return without a relay receipt, `refused` on a Draft the
@@ -17344,6 +17614,33 @@ mod tests {
             .unwrap()
     }
 
+    /// A sheet's HTML without its `<template>` contents: the band rows kept
+    /// for cloning are never drawn, so their cells are not the sheet's.
+    fn drawn_html(html: &str) -> String {
+        let mut out = String::with_capacity(html.len());
+        let mut rest = html;
+        while let Some(open) = rest.find("<template") {
+            out.push_str(&rest[..open]);
+            match rest[open..].find("</template>") {
+                Some(close) => rest = &rest[open + close + "</template>".len()..],
+                None => return out,
+            }
+        }
+        out.push_str(rest);
+        out
+    }
+
+    /// The `id` attribute of a `<div` tag's attributes (`tag` follows
+    /// `"<div "`): the attribute named `id` itself, not `data-cell-id`.
+    fn div_id(tag: &str) -> Option<&str> {
+        let at = if tag.starts_with("id=\"") {
+            4
+        } else {
+            tag.find(" id=\"")? + 5
+        };
+        Some(&tag[at..at + tag[at..].find('"')?])
+    }
+
     /// Every comb cell of a filled sheet, page by page in cell order, as it
     /// prints (`printed_cell`): its boxes, or the plain line over them.
     fn printed_cells_in_order(slug: &str, document: &str) -> String {
@@ -17351,13 +17648,13 @@ mod tests {
             "{}/../../html-frozen/{slug}/index.html",
             env!("CARGO_MANIFEST_DIR")
         );
-        let html = std::fs::read_to_string(path).unwrap();
+        let html = drawn_html(&std::fs::read_to_string(path).unwrap());
         let mut cells: Vec<(u32, u32, String)> = html
-            .split("<div id=\"")
+            .split("<div ")
             .skip(1)
             .filter_map(|rest| {
-                let id = &rest[..rest.find('"')?];
                 let tag = &rest[..rest.find('>')?];
+                let id = div_id(tag)?;
                 if !tag.contains("data-field-kind=\"comb\"") {
                     return None;
                 }
@@ -17380,15 +17677,15 @@ mod tests {
             "{}/../../html-frozen/{slug}/index.html",
             env!("CARGO_MANIFEST_DIR")
         );
-        let html = std::fs::read_to_string(path).unwrap();
-        html.split("<div id=\"")
+        let html = drawn_html(&std::fs::read_to_string(path).unwrap());
+        html.split("<div ")
             .skip(1)
             .filter_map(|rest| {
                 let tag = &rest[..rest.find('>')?];
                 if !tag.contains("data-field-kind=\"comb\"") {
                     return None;
                 }
-                let id = &tag[..tag.find('"')?];
+                let id = div_id(tag)?;
                 let at = tag.find("data-comb-slots=\"")? + "data-comb-slots=\"".len();
                 let slots = tag[at..].split('"').next()?.parse().ok()?;
                 Some((id.to_string(), slots))
@@ -18786,10 +19083,14 @@ mod tests {
                 // column, plus 2 for 1701MS (PR 7 review, round 2): item 16's
                 // rate in each column. At pr0b-push none had an entry.
                 ("1700", 17),
-                // Plus 34 for 1701: Schedule 3.A items 8/9/11 A&B (6),
-                // Schedule 4 items 3 and 6-13 A&B (18), and Schedule 6
-                // NOLCO filer cells 6A/6B/7B/9A-11B/12B (10).
-                ("1701", 69),
+                // Plus 95 for 1701: the schedule input boxes of Schedules
+                // 3.A, 4 and 6 in both columns wait for the graduated and
+                // itemized answers (rows_annual_individual.rs GATED_BOXES):
+                // Schedule 3.A items 8/9/11/19/20/21 A&B plus items 19/20's
+                // descriptions (14), Schedule 4 items 1-17d A&B plus 17dDesc
+                // (41), and Schedule 6's summary and NOLCO rows but the
+                // computed current-year row (40).
+                ("1701", 130),
                 ("1701A", 17),
                 ("1701MS", 52),
                 // 8 for 1706 (PR 9): items 8 and 9, item 11's list,

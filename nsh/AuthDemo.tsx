@@ -7,10 +7,15 @@
 //   pins      { "<tin root>": "<pin>" } taxpayer PINs          totps  { "<tin root>": "<secret>" } taxpayer authenticators
 //   recent    true: once the frame is up, Recent lists one return of each taxpayer
 //   gate      true: the Buwiz account gate is closed (the host's gate answer is replaced; the dev bypass would open it)
-//   begin     "refuse": Sign in / Create account are refused by the host call (no network in a test); "code": they answer
-//             a device code (browser not opened) and the approval then succeeds
+//   email, expiresIn, resendIn, pending, resend: the email-and-code sign-in, which the gate opens on (screens/auth/testEmail.ts);
+//             the readout counts the reads of the kept request ("pending reads: N")
+//   signOut   true (with gate): the button "Test: sign out" signs out as the desktop menu's Sign Out does (the host's sign-out,
+//             faked to answer at once, then app.lockCloud), for a second sign-in in the same run
+//   drop      true: the button "Test: drop the sign-in" forgets the sign-in flow's state in memory (signInFlow.reset), as an
+//             engine made anew starts without it
 //   lock      true: the sign-in screen once the frame is up, whatever the codes (to show "Open without signing in")
-//   readout   true: print the session and what the session can see (returns, deadlines by TIN root) at the top right
+//   readout   true: print the session and what the session can see (returns, deadlines by TIN root) at the top right, and
+//             what the open page before the app measured and chose ("fit: <page> logo=<points> fits=<bool> rest=.. room=..")
 //   start     the dev route            firstRun  default true
 //   authFails a sentence: the host's auth_state throws it (the access state cannot be read) until "Test: heal auth" is pressed
 //   polls     true: the buttons "Test: toast" (a toast, as any screen shows one) and "Test: filing event" (the first taxpayer's
@@ -21,13 +26,16 @@ import { effect, host, mount, signal, Text, untracked, View } from "nsh";
 import "./theme/fonts";
 import { bir } from "./bir";
 import { createDemoTaxpayer } from "./bir/testing";
+import { lastOpenFit } from "./screens/auth/parts";
+import { signInFlow } from "./screens/auth/signInFlow";
+import { type EmailParams, fakeEmail, SIGNED_IN } from "./screens/auth/testEmail";
 import { totpCode } from "./screens/auth/testTotp";
 import { app, pollSteps } from "./shell/app";
 import { Shell } from "./shell/Shell";
 import { store } from "./shell/store";
 import { AppButton } from "./ui";
 
-interface Params {
+interface Params extends EmailParams {
   demo?: boolean;
   second?: boolean;
   years?: boolean;
@@ -38,28 +46,31 @@ interface Params {
   totps?: Record<string, string>;
   recent?: boolean;
   gate?: boolean;
-  begin?: "refuse" | "code";
   readout?: boolean;
   lock?: boolean;
   authFails?: string;
   polls?: boolean;
+  drop?: boolean;
+  signOut?: boolean;
   start?: string;
   firstRun?: boolean;
 }
 
 /** The second taxpayer (generated data). */
-const SECOND = { root: "000111229", name: "Sample Trading Corp" };
+const SECOND = { root: "000111225", name: "Sample Trading Corp" };
 
 /** The host functions the app called that this fixture answers (the readout lists them). */
 const calls = signal<string[]>([]);
 const called = (name: string) => calls.set([...calls(), name]);
+/** How often the kept email request was read (cloud_account_email_pending). */
+const pendingReads = signal(0);
 /** The help desk's recovery key, as setup_helpdesk answered it (the readout shows it). */
 let recoveryKey = "";
 
 async function seed(p: Params): Promise<void> {
   if (p.demo) createDemoTaxpayer();
   if (p.second && !bir.list_taxpayers().some((t) => t.tin_root === SECOND.root)) {
-    bir.create_taxpayer({ tin_root: "000-111-229", name: SECOND.name, taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
+    bir.create_taxpayer({ tin_root: "000-111-225", name: SECOND.name, taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
   }
   if (p.years) {
     const year = new Date().getFullYear();
@@ -82,32 +93,36 @@ async function seed(p: Params): Promise<void> {
   for (const [root, secret] of Object.entries(p.totps ?? {})) bir.set_taxpayer_totp(root, secret, totpCode(secret));
 }
 
-/** The gate and the device flow as a test needs them (the dev bypass opens the real gate; a test never reaches the network). */
+/** The gate and the email sign-in as a test needs them (the dev bypass opens the real gate; a test never reaches the network). */
+/** Whether the fake gate is open (gate): the right code opens it, "Test: sign out" closes it. */
+let gateOpen = false;
+
 function fakeAccount(p: Params): void {
   const h = bir as unknown as Record<string, unknown>;
   if (p.gate) {
-    let open = false;
     const realOpened = bir.cloud_account_session_opened;
-    h.cloud_account_gate = () => ({ unlocked: open, offline: false, server_url: "http://localhost:3008", email: null, detail: "" });
+    h.cloud_account_gate = () => ({ unlocked: gateOpen, offline: false, server_url: "http://localhost:3008", email: null, detail: "" });
     h.cloud_account_session_opened = () => {
       called("cloud_account_session_opened");
-      open = true;
+      gateOpen = true;
       return realOpened();
     };
   }
-  const begin = (name: string) => async () => {
-    called(name);
-    if (p.begin === "code") return { user_code: "WXYZ-2345", verification_uri: "http://localhost:3008/device", verification_uri_complete: "http://localhost:3008/login?next=%2Fdevice%3Fuser_code%3DWXYZ-2345", browser_opened: false };
-    throw new Error("Could not reach the Buwiz server at http://localhost:3008. Check the connection and try again.");
-  };
-  if (p.begin) {
-    h.cloud_account_begin_sign_in = begin("cloud_account_begin_sign_in");
-    h.cloud_account_begin_sign_up = begin("cloud_account_begin_sign_up");
-    h.cloud_account_finish_sign_in = async () => {
-      called("cloud_account_finish_sign_in");
-      return { server_url: "http://localhost:3008", server_url_source: "build", account_url: "", signed_in: true, email: "demo@example.com", user_id: "demo", offline: false, detail: "" };
+  if (p.gate) fakeEmail(h, p, called, undefined, () => pendingReads.set(pendingReads() + 1));
+  if (p.gate && p.signOut) {
+    // Signed out at once, no network: the gate's answer is closed again.
+    h.cloud_account_sign_out = async () => {
+      gateOpen = false;
+      return { ...SIGNED_IN, signed_in: false, email: null, user_id: null };
     };
   }
+}
+
+/** What the open page now showing measured and chose (screens/auth/parts.tsx OpenPage). */
+function fitLine(): string {
+  const fit = lastOpenFit();
+  if (!fit) return "fit: none";
+  return `fit: ${fit.page} logo=${fit.logo} fits=${fit.fits} rest=${fit.rest} room=${fit.room}`;
 }
 
 function Readout() {
@@ -118,6 +133,8 @@ function Readout() {
       <Text testID="demo-session">{`session: ${app.session().kind}${app.session().kind === "taxpayer" ? ` ${(app.session() as { root: string }).root}` : ""}`}</Text>
       <Text testID="demo-visible">{`returns: ${roots(store.savedReturns())} | deadlines: ${roots(store.deadlines(`${year}-01-01`, `${year + 1}-12-31`))} | taxpayers: ${roots(store.taxpayers())}`}</Text>
       <Text testID="demo-calls">{`calls: ${calls().join(",") || "none"}`}</Text>
+      <Text testID="demo-pending-reads">{`pending reads: ${pendingReads()}`}</Text>
+      <Text testID="demo-fit">{fitLine()}</Text>
       <Text testID="demo-key">{`key: ${recoveryKey}`}</Text>
     </View>
   );
@@ -198,6 +215,24 @@ function Demo() {
       <View class="absolute bottom-0 right-0 flex-row gap-1">
         <If when={Boolean(p.authFails)}>
           <AppButton testID="demo-auth-heal" label="Test: heal auth" size="sm" onPress={() => authBroken.set(false)} />
+        </If>
+        <If when={p.signOut === true}>
+          <AppButton
+            testID="demo-sign-out"
+            label="Test: sign out"
+            size="sm"
+            onPress={() => {
+              // The menu's Sign Out (shell/desktop/actions.ts signOutOfTheAccount): the host signs out, then app.lockCloud. Nothing
+              // here resets the sign-in flow: the gate's coming back must do that itself.
+              void (async () => {
+                await bir.cloud_account_sign_out();
+                app.lockCloud();
+              })();
+            }}
+          />
+        </If>
+        <If when={p.drop === true}>
+          <AppButton testID="demo-drop-sign-in" label="Test: drop the sign-in" size="sm" onPress={() => signInFlow.reset()} />
         </If>
         <If when={p.polls === true}>
           <AppButton testID="demo-toast" label="Test: toast" size="sm" onPress={() => app.toast("A note for the person at the keyboard.")} />

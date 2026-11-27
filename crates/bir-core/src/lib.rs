@@ -33,12 +33,15 @@ pub mod form;
 pub mod form_rules;
 pub mod forms;
 pub mod google_calendar;
+pub mod http_timeouts;
 pub mod import;
 pub mod integration;
 pub mod ipc;
 pub mod job_display;
 // Its master-key half (`resolve_master_key`, `KeyMode`, add-only writes) is
 // used only by the SQLCipher build; Google Calendar uses the rest in both.
+pub mod email_sign_in;
+pub mod install_id;
 #[cfg(target_os = "macos")]
 #[cfg_attr(not(feature = "sqlcipher"), allow(dead_code))]
 mod keychain;
@@ -60,7 +63,10 @@ pub mod receipt;
 pub mod reference;
 pub mod relay;
 pub mod schema;
+pub mod send_in_flight;
 pub mod tax_profile;
+#[cfg(test)]
+pub(crate) mod test_logs;
 pub mod time_utils;
 pub mod transport;
 pub mod validation;
@@ -81,6 +87,10 @@ pub mod mock_relay;
 /// In-memory development account server. Never enabled in shipping apps.
 #[cfg(any(test, feature = "mock-account"))]
 pub mod mock_account;
+
+/// The Buwiz relay client, for hosts that read the account's TINs through [`relay::submitter`] without a
+/// dependency of their own on it.
+pub use bir_submit;
 
 // Re-export core types
 pub use bir_rules::{

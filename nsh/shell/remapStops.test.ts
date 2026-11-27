@@ -11,13 +11,13 @@ import type { FormTarget } from "../screens/form/FormPage";
 
 const YEAR = new Date().getFullYear();
 const MOVED = "000123461";
-const B = "000111229";
+const B = "000111225";
 
 const target = () => app.route().params.target as FormTarget | undefined;
 
 test("after a TIN move, a branch-code move and a delete, Back and Forward open only what still exists", async () => {
   createDemoTaxpayer();
-  bir.create_taxpayer({ tin_root: "000-111-229", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
+  bir.create_taxpayer({ tin_root: "000-111-225", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
   bir.create_branch(DEMO.tin.slice(0, 9), { branch_code: "00001", name: "Cebu branch" });
   store.bump();
   await boot(undefined, { testEnvironment: true, firstRun: false });

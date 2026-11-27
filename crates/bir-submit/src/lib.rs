@@ -22,10 +22,13 @@
 
 pub mod client;
 pub mod device;
+pub mod ios_storage;
 pub mod pipe;
 pub mod receipt;
 pub mod seal;
 pub mod secrets;
+#[cfg(test)]
+pub(crate) mod test_logs;
 #[cfg(test)]
 mod testkit;
 pub mod tins;
@@ -33,8 +36,10 @@ pub mod trust;
 pub mod wire;
 
 pub use client::{
-    CLIENT_HEADER, ClientError, DEFAULT_SERVER_URL, Note, PendingSend, SendError, Sent, Settled,
-    SubmitConfig, Submitter, TokenSource,
+    CLIENT_HEADER, ClientError, DEFAULT_SERVER_URL, Note, PendingSend, Registered, SendError, Sent,
+    Settled, SubmitConfig, Submitter, TokenSource,
 };
-pub use tins::{AccountTin, AccountTins, TinStatus, TinsError, TinsRead};
+pub use tins::{
+    AccountTin, AccountTins, AddTinError, Next, TinKind, TinStatus, TinsError, TinsRead,
+};
 pub use wire::{Blame, TinKey, TinRefusal};

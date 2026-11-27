@@ -35,7 +35,7 @@ RETIRED_PATH_MENTION = re.compile(r"crates/bir-shell|(?<![\w-])app/shell")
 RETIRED_PATH_MENTION_ALLOWED = {
     "scripts/check_no_bir_shell.py",
     "scripts/tests/test_check_no_bir_shell.py",
-    "scripts/tests/test_ci_change_detection.py",
+    "scripts/tests/test_ci_plan.py",
     "scripts/tests/test_release_workflow_policy.py",
 }
 

@@ -1,0 +1,72 @@
+TIN check-digit refusal proof — PR #354 (branch fix/tin-check-digit-at-creation)
+================================================================================
+
+Build/run: /Users/devin/partc-worktree built exactly as found in the working tree
+(uncommitted changes included, nothing edited, nothing committed). Launched with:
+
+  cd /Users/devin/partc-worktree/nsh
+  PATH="$HOME/BuwizNsh/tools/bin:$PATH" \
+  CARGO_TARGET_DIR="$HOME/BuwizNsh/target-partc" \
+  BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 \
+  CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 \
+  BIR_DATABASE_PATH=/tmp/proof354.db \
+  nsh run --target macos
+
+Fresh scratch db /tmp/proof354.db (deleted afterwards). First-run path: "I help
+other taxpayers", admin PIN 1234, sign-in TIN 000-000-000 PIN 1234. Invented data
+only. Queue never pressed. BIR_SFTP_LIVE never set.
+
+Keys: digits typed as REAL OS key events (CGEvent keyDown/keyUp per digit) via the
+keyinject/keybs binaries at ~120 ms spacing — human-speed, so no input corruption;
+what you see in the cells is what was typed.
+
+PART 1 — New taxpayer:
+- Typed the TIN with spaces: "000 123 454". The field STRIPS spaces as typed;
+  what landed in the cells is the digits only: 000-123-454.
+- Filled Registered name "Sample Owner", email owner@example.com. No ZIP/RDO
+  needed — creation does not require them.
+- Pressed Create taxpayer. REFUSAL shown, red cells:
+  "TIN 000-123-454 fails the official check digit. Compare each digit with the
+  registration and type it again."
+- The typed input was KEPT in the cells — not cleared. (refusal-create-desktop.png,
+  refusal-create-phone.png)
+- Corrected the same field to valid 000111240, pressed Create taxpayer again —
+  taxpayer "Sample Owner" 000-111-240-00000 created (toast "Sample Owner added").
+
+PART 2 — profile TIN edit:
+- Taxpayer page → Profile tab → Edit (Taxpayer section). TIN cells input.
+- Cleared and typed wrong 000123454, pressed Save changes. REFUSAL shown, red cells:
+  "Name and type saved. The TIN did not change: TIN 000-123-454 fails the official
+  check digit. Compare each digit with the registration and type it again."
+  NOTE: the edit form's message differs from creation — it is prefixed with
+  "Name and type saved. The TIN did not change:" because name/type were unchanged-but-valid
+  and save partially applies. The required sentence "fails the official check digit"
+  and "type it again" are present verbatim.
+- The typed wrong value was KEPT in the cells (red), edit form stays open.
+  (refusal-edit-desktop.png, refusal-edit-phone.png)
+- Corrected to 000123461 (valid, unused), Save changes — it SAVED. Toast:
+  "TIN changed to 000-123-461. Every branch, tax year, return and template moved
+  with it." Profile and window header now show 000-123-461-00000.
+  (corrected-edit-saved.png)
+
+Widths: window requested 1440x900 desktop — the screen clamps to 1400x900; desktop
+screenshots are at 1400x900 window size. Phone width requested 390 — the app clamps
+its minimum width to 420pt, so phone screenshots are at 420x844. At phone width the
+layout changes: creation is a narrow single column and the profile edit becomes a
+sheet over the profile page — both visible in the phone screenshots. Page state
+(refusal, typed input) persists across the resize; the phone screenshots show the
+same refusal state as the desktop ones.
+
+Recording: proof.mp4 — one continuous recording of the app window covering both
+parts: the create refusal, correction to valid, creation, profile edit refusal,
+correction, save. The annotated edit is 41 s (raw capture ~4 min of careful
+clicking/typing compressed by the recorder's edit). Annotations mark each test and
+assertion.
+
+NOT SHOWN / caveats:
+- Screenshots are full-screen captures (screencapture) including desktop around the
+  window, not window-only crops.
+- The edit-form refusal message carries the extra prefix "Name and type saved. The
+  TIN did not change:" — the mandated sentence is intact within it.
+- Phone width is 420pt, not 390 — the app enforces a 420 minimum.
+- Nothing about validation of OTHER fields; only the TIN check digit was tested.

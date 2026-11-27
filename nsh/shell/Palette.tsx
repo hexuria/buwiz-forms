@@ -1,6 +1,6 @@
-// The command palette (Cmd/Ctrl+K): a search box over grouped rows. Up and Down move, Enter runs, Esc closes. Mounted only
-// while it is open, so its key bindings live exactly that long.
-import { keymap, Scroll, View } from "nsh";
+// The command palette (Cmd/Ctrl+K): a search box over grouped rows; in the narrow layout it is the tax-profile search.
+// Up and Down move, Enter runs, Esc closes. Mounted only while it is open, so its key bindings live exactly that long.
+import { effect, keymap, Scroll, View } from "nsh";
 import { Avatar, Dialog, EmptyRow, Icon, Kbd, NavRow, TextField, Text } from "../ui";
 import { app } from "./app";
 import { indexPalette, movePalette, paletteItems, paletteRow, runPaletteItem, type PaletteItem } from "./paletteItems";
@@ -35,8 +35,11 @@ function PaletteHeading(props: { label: string }) {
 export function Palette() {
   // "always": the search field has the focus, and its Up and Down move the list's highlight (NSH 0.6 leaves them to the field by default).
   keymap.bind({ down: () => movePalette(1), up: () => movePalette(-1) }, { when: "always" });
-  // The forms index is built as the palette opens, so the first typed letter filters at once like the rest.
-  indexPalette();
+  // The desktop palette searches forms too: its index is built as the palette opens, so the first typed letter filters at once
+  // like the rest. The narrow layout's tax-profile search never pays that library build.
+  effect(() => {
+    if (!app.layout.narrow()) indexPalette();
+  });
   return (
     <Dialog testID="palette" open={true} onOpenChange={(open) => !open && app.closeOverlay()} top width={560}>
       {/* The old header: 48 tall, the icon and the Esc key beside a bare input (no box, so no ring while it has the keys). */}
@@ -47,7 +50,7 @@ export function Palette() {
             testID="palette-input"
             bare
             accessibilityLabel="Search"
-            placeholder="Search taxpayers, forms and pages"
+            placeholder={app.layout.narrow() ? "Search tax profiles" : "Search taxpayers, forms and pages"}
             value={app.paletteQuery()}
             onChange={app.setPaletteQuery}
             autoFocus
@@ -58,7 +61,7 @@ export function Palette() {
       </View>
       <Scroll testID="palette-list" class="shrink" style={{ maxHeight: 420 }} contentClass="gap-0.5 p-3">
         <If when={paletteItems().length === 0}>
-          <EmptyRow text="No matches. Try a form code like 2550Q." testID="palette-empty" />
+          <EmptyRow text={app.layout.narrow() ? "No tax profiles match." : "No matches. Try a form code like 2550Q."} testID="palette-empty" />
         </If>
         <Each of={rows()} key={(r) => r.id}>
           {(r) => (

@@ -20,7 +20,7 @@ fn share(date: &str, seller: &str, buyer: &str, shares: f64, base: f64) -> Form2
     }
 }
 
-fn sample_2552() -> Form2552Draft {
+pub(crate) fn sample_2552() -> Form2552Draft {
     let mut draft =
         Form2552Draft::new_from_profile(&dummy_profile("2552", "Corporation"), 2025, 3, 14);
     draft.is_amended = true;
@@ -93,7 +93,7 @@ fn form_2552_sample_payload_is_current() {
 
 /// A primary offering with seven transactions: rows 5–7 go through the
 /// official "(Add More...)" popup and row 5 shows OTHERS.
-fn sample_2552_add_more() -> Form2552Draft {
+pub(crate) fn sample_2552_add_more() -> Form2552Draft {
     let mut draft =
         Form2552Draft::new_from_profile(&dummy_profile("2552", "Corporation"), 2025, 3, 12);
     draft.set_transaction(Form2552Transaction::PrimaryOffering);
@@ -200,7 +200,7 @@ pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
 /// The add-more sample as a secondary offering (Item 11C, Schedule 3), so
 /// the probe reaches Schedule 3's rows and popup too. `set_transaction`
 /// would clear the rows, as the page's `kindOfTransaction` does.
-fn sample_2552_secondary() -> Form2552Draft {
+pub(crate) fn sample_2552_secondary() -> Form2552Draft {
     let mut draft = sample_2552_add_more();
     draft.transaction = Form2552Transaction::SecondaryOffering;
     draft.recompute();

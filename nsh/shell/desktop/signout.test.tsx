@@ -17,6 +17,8 @@ test("desktop: the menu's Sign Out brings the gate back and leaves nothing half 
 
   await app.press("id:run:eBIRForms > Sign Out");
   await app.waitFor("text:gate=closed");
+  // The gate opens on its first page (the sign-in starts over whichever way the gate came back).
+  await app.waitFor("id:gate-start");
   await app.waitFor("text:settings search=");
   expect(app.texts()).not.toContain("settings search=juana");
   // The filing menus went with the gate.

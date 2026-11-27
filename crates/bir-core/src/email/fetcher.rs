@@ -13,6 +13,44 @@ use super::auth_oauth::GoogleOAuthAuth;
 use super::auth_password::AppPasswordAuth;
 use super::inbox::{plan_email_poll_for_address, resolve_inbox_fetch_profile};
 
+/// How long one read or write on the IMAP connection may wait. A stalled server ends the poll with an error
+/// instead of holding the poll (and the database handle it was given) for ever.
+const IMAP_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The TCP connection to an IMAP server, with [`IMAP_IO_TIMEOUT`] on connect, reads and writes, before TLS.
+fn imap_tcp_stream(host: &str, port: u16) -> Result<std::net::TcpStream, anyhow::Error> {
+    use std::net::ToSocketAddrs;
+    let mut last = None;
+    for address in (host, port).to_socket_addrs()? {
+        match std::net::TcpStream::connect_timeout(&address, IMAP_IO_TIMEOUT) {
+            Ok(stream) => {
+                stream.set_read_timeout(Some(IMAP_IO_TIMEOUT))?;
+                stream.set_write_timeout(Some(IMAP_IO_TIMEOUT))?;
+                return Ok(stream);
+            }
+            Err(error) => last = Some(error),
+        }
+    }
+    Err(match last {
+        Some(error) => error.into(),
+        None => anyhow::anyhow!("{host} has no address"),
+    })
+}
+
+/// What `imap::connect` does (TCP, TLS, the greeting), on a stream with timeouts.
+fn imap_connect(
+    host: &str,
+    tls: &native_tls::TlsConnector,
+) -> Result<imap::Client<native_tls::TlsStream<std::net::TcpStream>>, anyhow::Error> {
+    let stream = imap_tcp_stream(host, 993)?;
+    let tls_stream = tls
+        .connect(host, stream)
+        .map_err(|error| anyhow::anyhow!("TLS to {host}: {error}"))?;
+    let mut client = imap::Client::new(tls_stream);
+    client.read_greeting()?;
+    Ok(client)
+}
+
 /// Trait that both auth backends implement.
 pub trait ImapAuthenticator {
     fn authenticate(
@@ -39,12 +77,21 @@ pub fn fetch_and_process_emails(
     profile: &TaxpayerProfile,
     db: std::sync::Arc<std::sync::Mutex<Database>>,
 ) -> Result<Vec<SubmissionReceipt>, anyhow::Error> {
+    fetch_and_process_emails_until(profile, db, &|| false)
+}
+
+/// [`fetch_and_process_emails`] that stops between messages once `stop` says so.
+fn fetch_and_process_emails_until(
+    profile: &TaxpayerProfile,
+    db: std::sync::Arc<std::sync::Mutex<Database>>,
+    stop: &dyn Fn() -> bool,
+) -> Result<Vec<SubmissionReceipt>, anyhow::Error> {
     if !profile.is_email_tracking_active() {
         return Ok(vec![]);
     }
 
     let fetch_profile = overlay_shared_inbox_credentials(profile, &db);
-    fetch_with_resolved_profile(&fetch_profile, db)
+    fetch_with_resolved_profile(&fetch_profile, db, stop)
 }
 
 fn overlay_shared_inbox_credentials(
@@ -63,6 +110,7 @@ fn overlay_shared_inbox_credentials(
 fn fetch_with_resolved_profile(
     profile: &TaxpayerProfile,
     db: std::sync::Arc<std::sync::Mutex<Database>>,
+    stop: &dyn Fn() -> bool,
 ) -> Result<Vec<SubmissionReceipt>, anyhow::Error> {
     let email = profile.inbox_email();
 
@@ -89,7 +137,7 @@ fn fetch_with_resolved_profile(
         }
     };
 
-    fetch_with_auth(authenticator.as_ref(), &host, db, profile)
+    fetch_with_auth(authenticator.as_ref(), &host, db, profile, stop)
 }
 
 /// Test that a connection can be established and authenticated.
@@ -120,7 +168,7 @@ pub fn test_connection(profile: &TaxpayerProfile) -> Result<Option<String>, anyh
     };
 
     let tls = native_tls::TlsConnector::builder().build()?;
-    let client = imap::connect((&*host, 993_u16), &host, &tls)?;
+    let client = imap_connect(&host, &tls)?;
     let (mut session, new_access_token) = authenticator.authenticate(client)?;
     session.select("INBOX")?;
     session.logout()?;
@@ -134,9 +182,10 @@ fn fetch_with_auth(
     host: &str,
     db: std::sync::Arc<std::sync::Mutex<Database>>,
     profile: &TaxpayerProfile,
+    stop: &dyn Fn() -> bool,
 ) -> Result<Vec<SubmissionReceipt>, anyhow::Error> {
     let tls = native_tls::TlsConnector::builder().build()?;
-    let client = imap::connect((host, 993_u16), host, &tls)?;
+    let client = imap_connect(host, &tls)?;
     let (mut session, new_access_token) = auth.authenticate(client)?;
 
     // Save the new access token if it was refreshed. Fan-out so siblings and
@@ -169,6 +218,10 @@ fn fetch_with_auth(
     let mut processed = Vec::new();
 
     for seq in seqs {
+        if stop() {
+            tracing::info!("Email polling stopped early: the queue worker is ending");
+            break;
+        }
         let messages = session.fetch(seq.to_string(), "RFC822")?;
         for msg in messages.iter() {
             if let Some(body) = msg.body()
@@ -315,6 +368,16 @@ pub fn fetch_and_process_emails_for_address(
     email_address: &str,
     db: std::sync::Arc<std::sync::Mutex<Database>>,
 ) -> (bool, bool, Option<String>) {
+    fetch_and_process_emails_for_address_until(email_address, db, &|| false)
+}
+
+/// [`fetch_and_process_emails_for_address`] for the queue worker: it stops between messages once `stop` says so (the
+/// worker is ending), and every read and write on the connection gives up after 30 seconds.
+pub fn fetch_and_process_emails_for_address_until(
+    email_address: &str,
+    db: std::sync::Arc<std::sync::Mutex<Database>>,
+    stop: &dyn Fn() -> bool,
+) -> (bool, bool, Option<String>) {
     let (profile, still_pending) = {
         let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
@@ -333,7 +396,7 @@ pub fn fetch_and_process_emails_for_address(
         // Sibling Submitted drafts (Jane) must still be polled even when the
         // grant lives on Juan and Juan's tracking toggle is off.
         profile.email_tracking_enabled = true;
-        match fetch_and_process_emails(&profile, db.clone()) {
+        match fetch_and_process_emails_until(&profile, db.clone(), stop) {
             Ok(_) => {
                 let db_guard = match lock_timing::lock(&db) {
                     Ok(g) => g,
@@ -459,5 +522,17 @@ mod tests {
         assert_eq!(alerts[0].title, POLL_FAILURE_TITLE);
         assert_eq!(alerts[0].detail, "invalid_grant");
         assert_eq!(alerts[0].occurrences, 2);
+    }
+
+    /// The IMAP connection waits at most 30 seconds on a read or a write (a loopback listener stands in for the server;
+    /// nothing leaves this computer).
+    #[test]
+    fn the_imap_connection_has_read_and_write_timeouts() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let stream = imap_tcp_stream("127.0.0.1", port).expect("connected");
+        assert_eq!(stream.read_timeout().unwrap(), Some(IMAP_IO_TIMEOUT));
+        assert_eq!(stream.write_timeout().unwrap(), Some(IMAP_IO_TIMEOUT));
+        assert_eq!(IMAP_IO_TIMEOUT, std::time::Duration::from_secs(30));
     }
 }

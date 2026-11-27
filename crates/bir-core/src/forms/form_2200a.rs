@@ -726,6 +726,89 @@ fn cents(value: f64) -> f64 {
     parse_official_amount(&official_amount(value)).unwrap_or(0.0)
 }
 
+/// Shape one Part IV payment row into its shared sheet comb (`data-slot-index`
+/// Packs one Part IV payment row into the sheet's single comb cell (the cell
+/// skips the grey decimal-point slot, so the comb has 32 or 27 `<input>`s):
+/// - with `bank`: 32 inputs = 5 bank + 6 number + 8 date (`MMDDYYYY`) + 11 pesos (right-aligned) + 2 cents
+/// - without `bank` (Item 27 Tax Debit Memo): 27 inputs = 6 number + 8 date + 11 pesos + 2 cents.
+///
+/// Any part that does not fit its column width (bank > 5 chars, number > 6 chars,
+/// date > 8 digits, amount > 11 peso digits, > 2 non-zero centavo digits, or negative)
+/// is left blank rather than silently truncated or stripped of its sign.
+/// Follow-up after PR #355 merges: route non-fitting Part IV parts through PR #355's
+/// plain-rectangle / additional-sheet overflow path.
+fn part4_payment_comb_line(bank: Option<&str>, number: &str, date: &str, amount: &str) -> String {
+    let bank_text = bank.map(str::trim).unwrap_or("");
+    let num_text = number.trim();
+    let date_digits: String = date.chars().filter(|c| c.is_ascii_digit()).collect();
+    let amt_trim = amount.trim();
+
+    let (slots, num_off, date_off, peso_off) = if bank.is_some() {
+        (32usize, 5usize, 11usize, 19usize)
+    } else {
+        (27usize, 0usize, 6usize, 14usize)
+    };
+    let mut line = vec![' '; slots];
+    let mut wrote_any = false;
+
+    let put_if_fits = |buf: &mut [char], start: usize, width: usize, text: &str| -> bool {
+        let chars: Vec<char> = text.chars().collect();
+        if chars.is_empty() || chars.len() > width {
+            return false;
+        }
+        for (i, ch) in chars.into_iter().enumerate() {
+            buf[start + i] = ch;
+        }
+        true
+    };
+
+    if bank.is_some() {
+        wrote_any |= put_if_fits(&mut line, 0, 5, bank_text);
+    }
+    wrote_any |= put_if_fits(&mut line, num_off, 6, num_text);
+    wrote_any |= put_if_fits(&mut line, date_off, 8, &date_digits);
+
+    if !amt_trim.is_empty() && !amt_trim.starts_with('-') && !amt_trim.starts_with('(') {
+        let amt_clean: String = amt_trim
+            .chars()
+            .filter(|c| *c != ',' && *c != ' ')
+            .collect();
+        let valid_chars = amt_clean.chars().all(|c| c.is_ascii_digit() || c == '.');
+        let dot_count = amt_clean.chars().filter(|c| *c == '.').count();
+        if valid_chars && dot_count <= 1 {
+            let (whole_raw, frac_raw) = amt_clean.split_once('.').unwrap_or((&amt_clean, ""));
+            if !whole_raw.is_empty() || !frac_raw.is_empty() {
+                let whole_trimmed = whole_raw.trim_start_matches('0');
+                let whole = if whole_trimmed.is_empty() {
+                    "0"
+                } else {
+                    whole_trimmed
+                };
+                let frac_fits = frac_raw.len() <= 2 || frac_raw[2..].chars().all(|c| c == '0');
+                if whole.len() <= 11 && frac_fits {
+                    let whole_chars: Vec<char> = whole.chars().collect();
+                    let dst_start = peso_off + (11 - whole_chars.len());
+                    for (i, ch) in whole_chars.into_iter().enumerate() {
+                        line[dst_start + i] = ch;
+                    }
+                    let mut frac_chars: Vec<char> = frac_raw.chars().take(2).collect();
+                    while frac_chars.len() < 2 {
+                        frac_chars.push('0');
+                    }
+                    line[peso_off + 11] = frac_chars[0];
+                    line[peso_off + 12] = frac_chars[1];
+                    wrote_any = true;
+                }
+            }
+        }
+    }
+
+    if !wrote_any {
+        return String::new();
+    }
+    line.into_iter().collect()
+}
+
 /// JavaScript `x.toFixed(2)` as `amtFormat` uses it: the exact binary value
 /// rounded half up at the cent (not the decimal-text rounding of
 /// `round()`), e.g. `(0.2 * 1.005).toFixed(2)` is `0.20`.
@@ -991,6 +1074,42 @@ impl Form2200ADraft {
         let (line1, line2) = super::print_map::split_print_line(&address, 40);
         put("address_line1", line1);
         put("line:address_line2", line2);
+        put(
+            "part4_cash",
+            part4_payment_comb_line(
+                Some(&self.payment.cash_bank),
+                &self.payment.cash_number,
+                &self.payment.cash_date,
+                &self.payment.cash_amount,
+            ),
+        );
+        put(
+            "part4_check",
+            part4_payment_comb_line(
+                Some(&self.payment.check_bank),
+                &self.payment.check_number,
+                &self.payment.check_date,
+                &self.payment.check_amount,
+            ),
+        );
+        put(
+            "part4_tdm",
+            part4_payment_comb_line(
+                None,
+                &self.payment.tax_number,
+                &self.payment.tax_date,
+                &self.payment.tax_amount,
+            ),
+        );
+        put(
+            "part4_others",
+            part4_payment_comb_line(
+                Some(&self.payment.others_bank),
+                &self.payment.others_number,
+                &self.payment.others_date,
+                &self.payment.others_amount,
+            ),
+        );
         fields
     }
 

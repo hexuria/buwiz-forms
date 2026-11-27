@@ -1,17 +1,20 @@
-// Home (the old shell's home.js and dashboard.js): the greeting, five status tiles, the next 30 days, the deadlines they pick,
+// Home (the old shell's home.js and dashboard.js): the greeting, four status tiles, the next 30 days, the deadlines they pick,
 // each taxpayer at a glance, the as-needed forms, recently filed; on a fresh install, the welcome with three numbered steps.
 // The numbers come from lib/dashboard.ts over the store's cached reads. Tiles: Overdue and Due in 7 days narrow the list under
-// the strip, Drafts, Waiting to send and Filed this month open Filings with a preset (preset.ts).
+// the strip, Drafts and Waiting to send open Filings with a preset (preset.ts).
 import { cleanup, computed, signal, View, windowSize } from "nsh";
 import type { AsNeededForm, AsNeededReturn, DeadlineRow, ReturnRow } from "../../bir";
 import { loadDashboard, pickedDeadlines, tileSpecs, type HomeView, type TileSpec } from "../../lib/dashboard";
 import { MONTHS_LONG } from "../../lib/dates";
 import { app, contentColumn, go, store, today } from "../../shell";
 import { SAVED_RETURNS_KEY } from "../../shell/store";
-import { AppButton, deviceCopy, EmptyRow, Icon, type IconName, ListGroup, ListRow, NameCell, PageHeader, SectionTitle, StepCircle, Text } from "../../ui";
+import { recentLabel, visibleRecent } from "../../shell/Sidebar";
+import { recentOpenOptions } from "../../lib/recent";
+import { AppButton, deviceCopy, EmptyRow, Icon, type IconName, ListGroup, ListRow, NameCell, PageHeader, SectionTitle, StepCircle, Text, TOUCH } from "../../ui";
+import { WelcomeNote } from "../auth/welcome";
 import { AsNeededHead, AsNeededUndated, DeadlineStrip, DueRow, FiledRow, StatTile, TaxpayerRow } from "./parts";
 import { homePick } from "./pick";
-import { FILED_STATUSES, openFilings } from "./preset";
+import { openFilings } from "./preset";
 import { deadlineKey } from "./rows";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -31,9 +34,9 @@ function firstWidth(): number {
   return contentColumn("page", app.layout.mainWidth());
 }
 
-/** Tiles per row: five from 640 wide, three from 420, two under it. */
+/** Tiles per row: four from 640 wide, two under it. */
 function tileColumns(width: number): number {
-  return width >= 640 ? 5 : width >= 420 ? 3 : 2;
+  return width >= 640 ? 4 : 2;
 }
 
 const TILE_GAP = 8;
@@ -94,12 +97,10 @@ function asNeededEntries(forms: AsNeededForm[]): AsNeededEntry[] {
 }
 
 /** The tile's press: Overdue and Due in 7 days narrow the list below; the others open Filings with their preset. */
-function pressTile(spec: TileSpec, today: string): void {
+function pressTile(spec: TileSpec): void {
   if (spec.key === "overdue" || spec.key === "week") homePick.toggleTile(spec.key);
   else if (spec.key === "drafts") openFilings({ statuses: ["Draft"] });
   else if (spec.key === "waiting") openFilings({ statuses: ["Queued"] });
-  // The tile counts what counts as filed (no dry run), and the list it opens keeps exactly those.
-  else openFilings({ statuses: [...FILED_STATUSES], updatedMonth: today.slice(0, 7), filedOnly: true });
 }
 
 function Dashboard(props: { width: () => number }) {
@@ -113,6 +114,8 @@ function Dashboard(props: { width: () => number }) {
   const rows = () => picked().rows as DeadlineRow[];
   const specs = computed(() => tileSpecs(data()));
   const filed = computed<ReturnRow[]>(() => store.returns("filed").slice(0, 3));
+  /** The Recent list a phone or tablet shows here (no sidebar): the sidebar's returns, five at most. */
+  const recentRows = computed(() => visibleRecent().slice(0, 5));
   const asNeeded = computed(() => asNeededEntries(store.asNeeded(today().getFullYear())));
   const tileWidth = () => {
     const cols = tileColumns(props.width());
@@ -128,7 +131,7 @@ function Dashboard(props: { width: () => number }) {
               spec={s()}
               width={tileWidth()}
               picked={homePick.pick() === s().key}
-              onPress={() => pressTile(s(), data().today)}
+              onPress={() => pressTile(s())}
             />
           )}
         </Each>
@@ -176,6 +179,25 @@ function Dashboard(props: { width: () => number }) {
           </Each>
         </ListGroup>
       </If>
+      {/* A phone or a tablet has no sidebar: its Recent list (the same returns, five at most) is here, above Recently filed. */}
+      <If when={TOUCH && app.prefs().showRecent && recentRows().length > 0}>
+        <SectionTitle>Recent</SectionTitle>
+        <ListGroup testID="home-recent">
+          <Each of={recentRows()} key={(r) => r.key}>
+            {(r) => (
+              <ListRow
+                testID={`home-recent-${String(r().key).replace(/[^A-Za-z0-9]/g, "-")}`}
+                accessibilityLabel={`Open ${recentLabel(r())}`}
+                onPress={() => app.openReturn(recentOpenOptions(r()))}
+              >
+                <Icon name="file-text" tone="fg3" />
+                <NameCell title={recentLabel(r())} />
+                <Icon name="chevron-right" tone="fg3" />
+              </ListRow>
+            )}
+          </Each>
+        </ListGroup>
+      </If>
       <SectionTitle>Recently filed</SectionTitle>
       <ListGroup testID="home-filed">
         <If when={filed().length > 0} else={<EmptyRow testID="home-filed-empty" text="Filed returns show here." />}>
@@ -198,6 +220,7 @@ export function Home() {
   const width = signal(firstWidth());
   return (
     <View testID="home" class="w-full" onLayout={(e) => e.bounds.size.width > 0 && width.set(Math.round(e.bounds.size.width))}>
+      <WelcomeNote />
       <If when={app.isFresh()} else={<Dashboard width={width} />}>
         <Welcome />
       </If>

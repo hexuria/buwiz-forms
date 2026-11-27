@@ -145,6 +145,55 @@ export function matchWords(options: readonly ChoiceOption[], text: string, limit
   return out;
 }
 
+/** A choice as a searched list writes it: "050 — South Makati" (the code, a dash, the name), or the label as it is when it has no code. */
+export function pickLabel(o: Pick<ChoiceOption, "label">): string {
+  const [code, name] = splitLabel(o.label);
+  return name ? `${code} — ${name}` : o.label;
+}
+
+/**
+ * The kit keyboard for a searched list's `searchKeyboard` (Pick.tsx) on a system: "digits-first" opens on digits only where letters
+ * stay one key away (iOS's numbers-and-punctuation); Android's number keyboards have no letters, so there it is the ordinary one.
+ */
+export function searchKeyboardType(kind: "default" | "digits-first" | undefined, os: string): "default" | "numbers-and-punctuation" {
+  return kind === "digits-first" && os === "ios" ? "numbers-and-punctuation" : "default";
+}
+
+/** What a desktop pick does with the text left in its box when the keys leave it (or Enter is pressed with no row lit). */
+export type TypedPick =
+  | { kind: "keep" }
+  | { kind: "pick"; value: string }
+  | { kind: "clear" }
+  | { kind: "revert"; note: string };
+
+/**
+ * The rule of a typed pick, as the amount boxes': what the box shows is what is saved. The text of the current choice keeps it; an
+ * emptied box clears a clearable choice; a code or a whole label (either dash, any case, accents ignored) picks that choice, and so
+ * does text that every word of fits exactly one choice. Anything else is not taken: the box goes back to the last pick and the note
+ * says why ("“xyz” is not in the list. The box kept 050 — South Makati.").
+ */
+export function resolveTyped(options: readonly ChoiceOption[], text: string, value: string, clearable = true): TypedPick {
+  const real = options.filter((o) => o.value !== "");
+  const current = real.find((o) => o.value === value);
+  const t = text.trim();
+  const kept = current ? `The box kept ${pickLabel(current)}.` : "The box stays empty.";
+  if (current && t === pickLabel(current)) return { kind: "keep" };
+  if (t === "") {
+    if (!current) return { kind: "keep" };
+    return clearable ? { kind: "clear" } : { kind: "revert", note: `This choice can't be left empty. ${kept}` };
+  }
+  const same = (a: string) => searchText(a.trim()) === searchText(t);
+  const exact = real.find((o) => same(o.value) || same(o.label) || same(pickLabel(o)));
+  if (exact) {
+    if (exact.disabled) return { kind: "revert", note: `“${t}” can't be chosen here. ${kept}` };
+    return exact.value === value ? { kind: "keep" } : { kind: "pick", value: exact.value };
+  }
+  const fits = matchWords(real, t).filter((o) => !o.disabled);
+  if (fits.length === 1) return fits[0].value === value ? { kind: "keep" } : { kind: "pick", value: fits[0].value };
+  if (fits.length === 0) return { kind: "revert", note: `“${t}” is not in the list. ${kept}` };
+  return { kind: "revert", note: `“${t}” fits ${fits.length} choices. Pick one from the list. ${kept}` };
+}
+
 /** A schedule row's number as printed, and its preprinted caption ("" when it has none). */
 export function rowParts(item: Pick<SchemaItem, "start" | "row_labels">, row: number): { n: number; caption: string } {
   return { n: (item.start ?? 1) + row, caption: item.row_labels?.rows[row] ?? "" };

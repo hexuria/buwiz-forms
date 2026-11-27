@@ -1300,6 +1300,7 @@ impl Form1702ExDraft {
             put(&format!("amount:{amount_key}"), text);
         }
         fields.extend(derived);
+        super::print_map::match_upload_case("1702ex-v2018c", &mut fields, None);
         fields
     }
 

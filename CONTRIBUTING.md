@@ -31,27 +31,16 @@ pwsh -NoProfile -File scripts/audit_final_setup.ps1 `
 
 The audit refuses to run when an eBIRForms uninstall registration already
 exists. Never remove a real installation to make the audit pass. CI runs the
-same installer audit on a disposable Windows runner.
+same installer audit on a disposable Windows runner (a `test/...` push that
+includes Windows, a manual run, or the nightly run).
 
-## CI change selection
+## CI
 
-The `changes` job in `.github/workflows/ci.yml` sorts every changed file into a
-class and runs only what those classes need. The one required status is
-`ci-ok`, which passes when every job the decision asked for passed.
-
-| Changed files | What runs |
-| --- | --- |
-| Docs only: `docs/`, top-level Markdown, `crates/<crate>/docs/`, `.github/*.md` | nothing heavy |
-| Windows installer files: `assets/windows/`, `packaging/windows/`, `scripts/audit_final_setup.ps1`, `scripts/audit_installer_sources.py`, `scripts/package_msix.ps1`, `scripts/package_nsh_windows.ps1`, `scripts/smoke_msix.ps1` | `check` on Windows only (it builds and audits the Setup.exe) |
-| macOS packaging (`assets/macos/`, `scripts/package_macos_release.sh`, `scripts/setup_macos_release_secrets.sh`, `*entitlements*.plist`), Linux packaging (`packaging/linux/`), setup scripts, release workflows, `scripts/tests/` | the Python script tests (`scripts` job) |
-| Anything else, including `.github/workflows/ci.yml` | `check` on macOS, Linux and Windows, plus `windows-smoke` |
-
-Scheduled and manual runs and unknown or empty change ranges run everything. A
-path may only join a packaging class if no crate, build script or Rust test
-reads it: `assets/linux/` is read by the Linux packaging's desktop-entry test, so it is
-app code. Markdown under `rules/` or `scripts/`, crate `README.md` files, and
-anything under `evidence/` are app code too, because they feed code generation
-or policy checks.
+Pull requests run only the quick checks, on Linux. The one required status is `ci-ok`. The test suites run when
+you push the commit to a `test/...` branch (`just ci-test [linux|windows|macos|all]`) and every night on `main`. A
+pull request is ready when `ci-ok` is green and the test suites passed at that exact commit, either from a
+`test/...` push or from a Devin machine. [docs/CI.md](docs/CI.md) covers what runs when, how to ask for tests,
+which paths lead to which suites, and the caches.
 
 Branches do not have to be up to date with `main` to merge. A failed run on
 `main` (the push a merge makes, or the nightly run) opens or updates the "CI

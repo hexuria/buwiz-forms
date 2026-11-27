@@ -37,19 +37,20 @@ const rowsOf = (view: ReturnType<typeof settingsView>, id: string) => view.find(
 describe("settingsView", () => {
   test("phones omit desktop-only sections and rows before searching", () => {
     const view = settingsView("", true, true);
-    expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer", "jobs", "computer"]);
-    expect(rowsOf(view, "general")).toEqual(["theme"]);
+    expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer", "jobs", "logs", "computer"]);
+    // Recent returns show on Home on a phone or tablet (no sidebar), so its switch is there too.
+    expect(rowsOf(view, "general")).toEqual(["theme", "recent"]);
     expect(rowsOf(view, "computer")).toEqual(["data", "logs", "setup", "version"]);
     expect(rowsOf(view, "account")).toEqual(["buwiz", "identity", "security"]);
-    for (const query of ["gmail", "oauth", "keyboard", "hotkey", "shortcut", "sidebar", "compact", "download", "tray", "menu bar", "close window", "launch at login", "file associations"]) {
+    for (const query of ["gmail", "oauth", "keyboard", "hotkey", "shortcut", "compact", "download", "tray", "menu bar", "close window", "launch at login", "file associations"]) {
       expect(settingsView(query, true, true)).toEqual([]);
     }
-    expect(rowsOf(settingsView("general", true, true), "general")).toEqual(["theme"]);
+    expect(rowsOf(settingsView("general", true, true), "general")).toEqual(["theme", "recent"]);
     expect(settingsView("device", true, true).find((section) => section.id === "computer")?.label).toBe("Device");
   });
   test("an admin sees every section and every row", () => {
     const view = settingsView("", true);
-    expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer", "jobs", "keyboard", "computer"]);
+    expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer", "jobs", "logs", "keyboard", "computer"]);
     expect(rowsOf(view, "keyboard")).toEqual(["quit", "hide", "close"]);
     expect(rowsOf(view, "general")).toEqual(["theme", "recent", "compact", "updates"]);
     expect(rowsOf(view, "transfer")).toContain("import");
