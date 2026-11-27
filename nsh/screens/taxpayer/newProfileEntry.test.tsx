@@ -113,9 +113,9 @@ test("desktop: the entry is never there while the app is locked", async () => {
   // clause keeps adding hidden here. Signed in as the admin it is back.
   const app = await open(AUTH, { ...WIDE, host: { params: HELPDESK } });
   await app.waitFor("id:auth-card");
-  await app.waitFor("text:/canAdd: false/");
+  await app.waitFor("text:canAdd: false");
   await signIn(app, "000000000", "1234");
-  await app.waitFor("text:/canAdd: true/");
+  await app.waitFor("text:canAdd: true");
 });
 
 test("desktop/windows: the menu's New tax profile… is disabled for a client, enabled for the admin", async () => {
