@@ -45,6 +45,7 @@ class Settings:
     state_dir: Path
     state_remote: str
     state_branch: str
+    commit_identity: str
     holder: str
     engine: str
     devin_command: str
@@ -53,30 +54,68 @@ class Settings:
     claude_command: str
     claude_model: str
     fleet_command: str
-    merge: str
-    tag: str
     pass_env: list
     gh_token_env: str
     deny_words: list
 
 
-CLAUDE_ALLOWED_TOOLS = (
-    "Read,Edit,Write,Glob,Grep,"
-    "Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git add:*),"
-    "Bash(git commit:*),Bash(git switch:*),Bash(git checkout:*),Bash(git fetch:*),Bash(git merge:*),"
-    "Bash(git rebase:*),Bash(git stash:*),Bash(git rev-parse:*),Bash(git ls-files:*),"
-    "Bash(git branch:*),Bash(git restore:*),Bash(python3 crew/bin/crew push:*),"
-    "Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr checks:*),"
-    "Bash(gh pr diff:*),Bash(gh pr create:*),Bash(gh run view:*),"
-    "Bash(gh run list:*),Bash(gh issue list:*),Bash(gh issue view:*),"
-    "Bash(gh issue create:*)"
-)
+VERDICT_NOTE = ("a note for people and dashboards, not a gate: GitHub's own permissions and "
+                "branch protection decide who can merge")
 
-CLAUDE_DISALLOWED_TOOLS = (
-    "Bash(git push:*),Bash(gh pr merge:*),Bash(gh pr close:*),"
-    "Bash(gh run cancel:*),Bash(gh release:*),Bash(git tag:*),"
-    "Bash(cargo:*),Bash(nsh:*)"
-)
+
+def python_command_name():
+    return "python" if os.name == "nt" else "python3"
+
+
+def permission_path(path):
+    return str(Path(path).resolve()).replace(os.sep, "/")
+
+
+def claude_allowed_tools(tree, role_dir):
+    tree = permission_path(tree)
+    role_dir = permission_path(role_dir)
+    git_words = ("status", "diff", "log", "show", "add", "commit", "switch", "checkout", "merge",
+                 "stash", "rev-parse", "ls-files", "branch", "restore")
+    parts = [
+        "Read", "Glob", "Grep",
+        "Edit({0}/**)".format(tree), "Write({0}/**)".format(tree),
+        "Edit({0}/**)".format(role_dir), "Write({0}/**)".format(role_dir),
+    ]
+    parts.extend("Bash(git {0}:*)".format(name) for name in git_words)
+    parts.append("Bash(git fetch origin)")
+    parts.append("Bash({0} crew/bin/crew push:*)".format(python_command_name()))
+    parts.extend([
+        "Bash(gh pr view:*)", "Bash(gh pr list:*)", "Bash(gh pr checks:*)",
+        "Bash(gh pr diff:*)", "Bash(gh pr create:*)", "Bash(gh run view:*)",
+        "Bash(gh run list:*)", "Bash(gh issue list:*)", "Bash(gh issue view:*)",
+        "Bash(gh issue create:*)",
+    ])
+    return ",".join(parts)
+
+
+def claude_disallowed_tools(tree, gitdir, common_dir):
+    tree = permission_path(tree)
+    gitdir = permission_path(gitdir)
+    common_dir = permission_path(common_dir)
+    parts = [
+        "Edit(crew/bin/**)", "Write(crew/bin/**)",
+        "Edit(.git/**)", "Write(.git/**)",
+        "Edit(**/.git/**)", "Write(**/.git/**)",
+        "Edit({0}/crew/bin)".format(tree), "Write({0}/crew/bin)".format(tree),
+        "Edit({0}/crew/bin/**)".format(tree), "Write({0}/crew/bin/**)".format(tree),
+        "Edit({0}/.git)".format(tree), "Write({0}/.git)".format(tree),
+        "Edit({0}/.git/**)".format(tree), "Write({0}/.git/**)".format(tree),
+        "Edit({0}/**/.git)".format(tree), "Write({0}/**/.git)".format(tree),
+        "Edit({0}/**/.git/**)".format(tree), "Write({0}/**/.git/**)".format(tree),
+        "Edit({0})".format(gitdir), "Write({0})".format(gitdir),
+        "Edit({0}/**)".format(gitdir), "Write({0}/**)".format(gitdir),
+        "Edit({0})".format(common_dir), "Write({0})".format(common_dir),
+        "Edit({0}/**)".format(common_dir), "Write({0}/**)".format(common_dir),
+        "Bash(git push:*)", "Bash(gh pr merge:*)", "Bash(gh pr close:*)",
+        "Bash(gh run cancel:*)", "Bash(gh release:*)", "Bash(git tag:*)",
+        "Bash(cargo:*)", "Bash(nsh:*)",
+    ]
+    return ",".join(parts)
 
 
 def repo_root():
@@ -158,6 +197,7 @@ def load_settings(root):
         state_dir=expand_path(state_value, root),
         state_remote=value("crew", "state_remote", ""),
         state_branch=value("crew", "state_branch", "crew-state") or "crew-state",
+        commit_identity=value("crew", "commit_identity", ""),
         holder=value("crew", "holder", "conductor") or "conductor",
         engine=engine,
         devin_command=value("engine.devin", "command", "devin") or "devin",
@@ -166,12 +206,46 @@ def load_settings(root):
         claude_command=value("engine.claude", "command", "claude") or "claude",
         claude_model=value("engine.claude", "model", ""),
         fleet_command=value("fleet", "command", ""),
-        merge=value("crew", "merge", ""),
-        tag=value("crew", "tag", ""),
         pass_env=comma_list(value("worker", "pass_env", "")),
         gh_token_env=value("worker", "gh_token_env", ""),
         deny_words=comma_list(value("lint", "deny_words", "")),
     )
+
+
+def commit_identity_parts(settings):
+    value = settings.commit_identity.strip()
+    match = re.match(r"^(.+?)\s*<([^<>\s]+)>$", value)
+    if not match or not match.group(2).lower().endswith("@users.noreply.github.com"):
+        raise CrewError("[crew] commit_identity must be Name <address@users.noreply.github.com>")
+    return match.group(1).strip(), match.group(2).strip()
+
+
+def mask_address(address):
+    domain = address.rsplit("@", 1)[-1] if "@" in address else address
+    return "hidden@" + domain
+
+
+def unpushed_commits(cwd):
+    result = git_text(cwd, ["rev-list", "HEAD", "--not", "--remotes=origin"], check=False)
+    if result.returncode != 0:
+        raise CrewError("git rev-list failed while finding the commits that are not on origin")
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def validate_unpushed_identity(cwd, settings):
+    name, address = commit_identity_parts(settings)
+    offenders = []
+    for commit in unpushed_commits(cwd):
+        shown = git_text(cwd, ["show", "-s", "--format=%an%x00%ae%x00%cn%x00%ce", commit])
+        parts = shown.stdout.rstrip("\n").split("\x00")
+        if len(parts) != 4:
+            raise CrewError("could not read the author and committer of {0}".format(commit))
+        author_name, author_address, committer_name, committer_address = parts
+        if (author_name, author_address) != (name, address) or (committer_name, committer_address) != (name, address):
+            offenders.append("{0} author {1} <{2}> committer {3} <{4}>".format(
+                commit, author_name, mask_address(author_address), committer_name, mask_address(committer_address)))
+    if offenders:
+        raise CrewError("commits not on origin were not written by [crew] commit_identity\n" + "\n".join(offenders))
 
 
 def read_required(path, label):
@@ -283,8 +357,10 @@ def cmd_doctor(args):
     print("fleet: {0}".format("set" if settings.fleet_command else "not set"))
     print("sbx: {0}".format("found" if shutil.which("sbx") else "not found"))
     print("state: {0} ({1})".format(settings.state_dir, "exists" if settings.state_dir.exists() else "missing"))
-    print("merge: {0}".format(settings.merge or "not set"))
-    print("tag: {0}".format(settings.tag or "not set"))
+    print(VERDICT_NOTE)
+    print("the scrub removes tokens from the ENVIRONMENT only; credentials git and gh keep under "
+          "the home folder remain reachable to a worker; the fence is a restricted token, "
+          "branch protection or the sandbox")
     if found and settings.fleet_command:
         tier = "fleet"
     elif "devin" in found:
@@ -331,9 +407,12 @@ def run_logged(argv, cwd, log_path, env=None, input_text=None):
     return code
 
 
-def git_common_dir(tree):
-    result = subprocess.run([tool_path("git"), "-C", str(tree), "rev-parse", "--git-common-dir"],
-                            capture_output=True, text=True, check=False)
+def git_rev_parse_path(tree, flag):
+    try:
+        result = subprocess.run([tool_path("git"), "-C", str(tree), "rev-parse", flag],
+                                capture_output=True, text=True, check=False)
+    except OSError as exc:
+        raise CrewError("cannot run git to inspect the worktree: {0}".format(exc))
     if result.returncode != 0:
         raise CrewError("not a git worktree: {0}".format(tree))
     value = result.stdout.strip()
@@ -343,33 +422,59 @@ def git_common_dir(tree):
     return path.resolve()
 
 
-def devin_permissions(tree, role_dir, gitdir):
-    git_allow = [
-        "Write({0}/objects/**)".format(gitdir), "Write({0}/refs/**)".format(gitdir),
-        "Write({0}/index)".format(gitdir), "Write({0}/HEAD)".format(gitdir),
-        "Write({0}/logs/**)".format(gitdir), "Write({0}/worktrees/**)".format(gitdir),
-    ]
+def git_common_dir(tree):
+    return git_rev_parse_path(tree, "--git-common-dir")
+
+
+def git_admin_dir(tree):
+    return git_rev_parse_path(tree, "--git-dir")
+
+
+def worker_tree(root, args):
+    if not args.worktree:
+        raise CrewError("crew run refuses the conductor's own checkout; pass --worktree naming a different git worktree")
+    tree = user_path(args.worktree, os.getcwd())
+    if tree.resolve() == Path(root).resolve():
+        raise CrewError("crew run refuses the conductor's own checkout; pass --worktree naming a different git worktree")
+    if git_common_dir(tree) != git_common_dir(root):
+        raise CrewError("crew run worktree must be a different git worktree of the same repository")
+    return tree
+
+
+def devin_permissions(tree, role_dir, gitdir, common_dir):
+    tree = permission_path(tree)
+    role_dir = permission_path(role_dir)
+    gitdir = permission_path(gitdir)
+    common_dir = permission_path(common_dir)
     git_read_commit = ["Exec(git {0})".format(name) for name in (
-        "status", "diff", "log", "show", "add", "commit", "switch", "checkout", "fetch", "merge",
-        "rebase", "stash", "rev-parse", "ls-files", "branch", "restore")]
+        "status", "diff", "log", "show", "add", "commit", "switch", "checkout", "merge",
+        "stash", "rev-parse", "ls-files", "branch", "restore")]
+    git_file_denies = [
+        "Write({0}/.git)".format(tree), "Write({0}/.git/**)".format(tree),
+        "Write({0}/**/.git)".format(tree), "Write({0}/**/.git/**)".format(tree),
+        "Write({0})".format(gitdir), "Write({0}/**)".format(gitdir),
+        "Write({0})".format(common_dir), "Write({0}/**)".format(common_dir),
+    ]
+    crew_file_denies = [
+        "Write({0}/crew/bin)".format(tree), "Write({0}/crew/bin/**)".format(tree),
+    ]
     return {
         "allow": [
             "Write({0})".format(tree), "Write({0})".format(role_dir),
-        ] + git_allow + git_read_commit + [
-            # python3 remains a hole for a dishonest worker: the fence is the restricted token
-            # and branch protection, not this allow-list.
-            "Exec(python3 crew/bin/crew push)", "Exec(grep)", "Exec(sed)", "Exec(ls)", "Exec(cat)",
+        ] + git_read_commit + [
+            # Python remains narrow here, but no command allow-list is a credential fence: the fence is
+            # the restricted token, branch protection or the sandbox.
+            "Exec({0} crew/bin/crew push)".format(python_command_name()),
+            "Exec(grep)", "Exec(sed)", "Exec(ls)", "Exec(cat)",
             "Exec(head)", "Exec(tail)", "Exec(wc)", "Exec(find)", "Exec(diff)", "Exec(sort)",
             "Exec(uniq)", "Exec(mkdir)", "Exec(date)", "Exec(gh pr view)", "Exec(gh pr list)",
             "Exec(gh pr checks)", "Exec(gh pr diff)", "Exec(gh pr create)", "Exec(gh run view)",
             "Exec(gh run list)", "Exec(gh issue list)", "Exec(gh issue view)", "Exec(gh issue create)",
         ],
-        "deny": [
+        "deny": git_file_denies + crew_file_denies + [
             "Exec(git push)", "Exec(gh pr merge)", "Exec(gh pr close)", "Exec(gh run cancel)",
             "Exec(gh release)", "Exec(gh secret)", "Exec(gh auth)", "Exec(cargo)", "Exec(nsh)",
-            "Exec(rm -rf)", "Exec(git tag)", "Exec(git config)",
-            "Write({0}/config)".format(gitdir), "Write({0}/config/**)".format(gitdir),
-            "Write({0}/hooks)".format(gitdir), "Write({0}/hooks/**)".format(gitdir),
+            "Exec(rm -rf)", "Exec(git tag)", "Exec(git config)", "Exec(git fetch)", "Exec(git rebase)",
         ],
     }
 
@@ -389,7 +494,7 @@ def write_devin_config(settings, tree, role_dir):
             data = json.loads(source.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             raise CrewError("cannot read Devin config {0}: {1}".format(source, exc))
-    ours = devin_permissions(str(tree), str(role_dir), str(git_common_dir(tree)))
+    ours = devin_permissions(tree, role_dir, git_admin_dir(tree), git_common_dir(tree))
     old_permissions = data.get("permissions") if isinstance(data.get("permissions"), dict) else {}
     deny = []
     for entry in list(old_permissions.get("deny", [])) + ours["deny"]:
@@ -406,13 +511,18 @@ def write_devin_config(settings, tree, role_dir):
 
 
 # Engine sign-in configuration locations the CLI itself reads. Secrets and tokens are not in this list.
-WORKER_SIGNIN_ENV = ("CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "APPDATA", "USERPROFILE")
+WORKER_SIGNIN_ENV = ("CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME")
+# The scrub removes tokens from the ENVIRONMENT only; credentials git and gh keep under the home folder
+# remain reachable to a worker. The fence is a restricted token, branch protection or the sandbox.
+WORKER_WINDOWS_ENV = ("SYSTEMROOT", "COMSPEC", "PATHEXT", "TEMP", "TMP", "LOCALAPPDATA", "APPDATA",
+                      "USERPROFILE", "HOMEDRIVE", "HOMEPATH")
 WORKER_BASE_ENV = ("PATH", "HOME", "USER", "LANG", "TMPDIR", "TERM", "SHELL")
+WORKER_CREW_ENV = ("CREW_STATE_DIR", "CREW_ENGINE")
 
 
 def worker_environment(settings):
     env = {}
-    for name in WORKER_BASE_ENV + WORKER_SIGNIN_ENV:
+    for name in WORKER_BASE_ENV + WORKER_SIGNIN_ENV + WORKER_WINDOWS_ENV + WORKER_CREW_ENV:
         if name in os.environ:
             env[name] = os.environ[name]
     for name, value in os.environ.items():
@@ -423,6 +533,11 @@ def worker_environment(settings):
             env[name] = os.environ[name]
     if settings.gh_token_env and os.environ.get(settings.gh_token_env):
         env["GH_TOKEN"] = os.environ[settings.gh_token_env]
+    author_name, author_address = commit_identity_parts(settings)
+    env["GIT_AUTHOR_NAME"] = author_name
+    env["GIT_AUTHOR_EMAIL"] = author_address
+    env["GIT_COMMITTER_NAME"] = author_name
+    env["GIT_COMMITTER_EMAIL"] = author_address
     env["GIT_LFS_SKIP_PUSH"] = "1"
     return env
 
@@ -512,7 +627,7 @@ def cmd_run(args):
     root = repo_root()
     settings = load_settings(root)
     role, engine, model = worker_choices(root, settings, args.role, args)
-    tree = user_path(args.worktree, os.getcwd()) if args.worktree else root
+    tree = worker_tree(root, args)
     task_path = user_path(args.task_file, os.getcwd())
     task_text = read_required(task_path, "task file")
     name = task_name(task_path)
@@ -566,8 +681,11 @@ def cmd_run(args):
         argv = engine_command(settings, engine) + ["-p"]
         if model:
             argv += ["--model", model]
-        argv += ["--permission-mode", "acceptEdits", "--allowedTools", CLAUDE_ALLOWED_TOOLS,
-                 "--disallowedTools", CLAUDE_DISALLOWED_TOOLS, "--setting-sources="]
+        gitdir = git_admin_dir(tree)
+        common_dir = git_common_dir(tree)
+        argv += ["--permission-mode", "acceptEdits", "--allowedTools", claude_allowed_tools(tree, role_dir),
+                 "--disallowedTools", claude_disallowed_tools(tree, gitdir, common_dir), "--setting-sources=",
+                 "--add-dir", str(role_dir.resolve())]
         code = run_logged(argv, tree, log, env=env, input_text=prompt)
     print("crew: {0} finished {1} (exit {2}); log {3}".format(role.name, name, code, log))
     return code
@@ -633,140 +751,6 @@ def verdict_file_name(repo, number):
     return repo.strip("/").replace("/", "-") + "-" + str(number) + ".verdict"
 
 
-def read_verdict(settings, repo, number):
-    path = settings.state_dir / "roles" / "reviewer" / "outbox" / verdict_file_name(repo, number)
-    if not path.exists():
-        return path, {}
-    values = {}
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        if ":" in line:
-            key, value = line.split(":", 1)
-            values[key.strip()] = value.strip()
-    return path, values
-
-
-# The sensitive-path rule itself lives in crew/RULES.md; this list is the launcher's enforcement.
-SENSITIVE_WORDS = ("account", "auth", "signin", "sign_in", "session", "relay", "submit", "filing",
-                   "print", "os_login", "keychain")
-
-
-def sensitive_paths(paths):
-    found = []
-    for path in paths:
-        lowered = path.lower()
-        if not (lowered.startswith("crates/") or lowered.startswith("nsh/")):
-            continue
-        if lowered.startswith("crates/bir-core/src/account") or any(word in lowered for word in SENSITIVE_WORDS):
-            found.append(path)
-    return found
-
-
-def verdict_problem(settings, repo, number, head, files):
-    path, verdict = read_verdict(settings, repo, number)
-    if not verdict:
-        return "no verdict for {0} #{1} at {2}".format(repo, number, path)
-    if verdict.get("verdict") != "MERGE":
-        return "verdict for {0} #{1} is not MERGE".format(repo, number)
-    if verdict.get("head") != head:
-        return "stale verdict for {0} #{1}: verdict head {2}, pull request head {3}".format(
-            repo, number, verdict.get("head", ""), head)
-    sensitive = sensitive_paths(files)
-    if sensitive and verdict.get("engine") != "claude":
-        return "sensitive paths need a claude verdict: {0}".format(", ".join(sensitive))
-    return ""
-
-
-def rollup_ci_ok_passes(rollup):
-    for entry in rollup or []:
-        if not isinstance(entry, dict) or entry.get("name") != "ci-ok":
-            continue
-        if entry.get("conclusion") == "SUCCESS" or entry.get("bucket") == "pass" or entry.get("state") == "SUCCESS":
-            return True
-    return False
-
-
-def batch_running(state_dir):
-    try:
-        data = json.loads((Path(state_dir) / "queue.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return False
-    return bool(data.get("batch"))
-
-
-def cmd_automerge(args):
-    root = repo_root()
-    settings = load_settings(root)
-    if settings.merge != "yes":
-        raise CrewError("automerge refuses: missing [crew] merge = yes in crew.local.ini")
-    repo = args.repo or infer_repo(root)
-    gh = shutil.which("gh")
-    if not gh:
-        raise CrewError("gh not found on PATH")
-    if not repo:
-        raise CrewError("pass --repo owner/name or set an origin remote")
-    for _attempt in range(90):
-        repo_data = gh_json([gh, "repo", "view", "--json", "defaultBranchRef"]) or {}
-        default_branch = (repo_data.get("defaultBranchRef") or {}).get("name", "")
-        data = gh_json([gh, "pr", "view", str(args.pr), "--repo", repo, "--json",
-                        "headRefOid,isDraft,state,baseRefName,mergeStateStatus,mergeCommit,files,statusCheckRollup"])
-        if not data:
-            time.sleep(args.interval)
-            continue
-        state = data.get("state", "")
-        if state == "MERGED":
-            commit = data.get("mergeCommit") or {}
-            print("#{0} MERGED {1}".format(args.pr, commit.get("oid", "")))
-            return 0
-        if state != "OPEN":
-            print("#{0} is {1}; not merging".format(args.pr, state))
-            return 5
-        if data.get("isDraft"):
-            print("#{0} is a draft; not merging".format(args.pr))
-            return 5
-        if default_branch and data.get("baseRefName") != default_branch:
-            print("#{0} targets {1}, not the default branch {2}; not merging".format(
-                args.pr, data.get("baseRefName", ""), default_branch))
-            return 5
-        head = data.get("headRefOid", "")
-        if head != args.sha:
-            print("#{0} head moved to {1}; not merging".format(args.pr, head))
-            return 2
-        if batch_running(settings.state_dir):
-            print("a batch is running; not merging #{0}".format(args.pr))
-            return 5
-        files = [entry.get("path", "") for entry in data.get("files") or [] if isinstance(entry, dict)]
-        problem = verdict_problem(settings, repo, args.pr, head, files)
-        if problem:
-            print(problem)
-            return 5
-        rows = pr_check_rows(gh, args.pr, repo)
-        failing = [row for row in rows if row[1] not in ("pass", "pending")]
-        pending = [row for row in rows if row[1] == "pending"]
-        passing = [row for row in rows if row[1] == "pass"]
-        if failing:
-            print("#{0} has {1} failing checks; not merging".format(args.pr, len(failing)))
-            for name, _bucket, _row in failing:
-                print(name)
-            return 3
-        if not rollup_ci_ok_passes(data.get("statusCheckRollup")):
-            print("ci-ok has not passed at {0}; not merging".format(head))
-            return 5
-        if not pending and passing and data.get("mergeStateStatus") == "CLEAN":
-            body = "Merged by the orchestrator: reviewed, GitHub clean and green at this head."
-            merge = capture_combined([gh, "pr", "merge", str(args.pr), "--repo", repo, "--squash",
-                                      "--match-head-commit", args.sha, "--body", body], root)
-            print_lines(last_lines(merge.stdout or "", 1))
-            if merge.returncode != 0:
-                return merge.returncode
-            after = gh_json([gh, "pr", "view", str(args.pr), "--repo", repo, "--json", "state,mergeCommit"]) or {}
-            commit = after.get("mergeCommit") or {}
-            print("#{0} {1} {2}".format(args.pr, after.get("state", ""), commit.get("oid", "")))
-            return 0
-        time.sleep(args.interval)
-    print("#{0} timed out waiting".format(args.pr))
-    return 4
-
-
 def capture_combined(argv, cwd, env=None):
     try:
         return subprocess.run(argv, cwd=str(cwd), env=env, stdout=subprocess.PIPE,
@@ -800,20 +784,8 @@ def batch_status(root, branch):
     raise CrewError("batch {0} did not settle".format(branch))
 
 
-def merge_commands(text):
-    commands = []
-    for line in text.splitlines():
-        if line.startswith("gh pr merge"):
-            try:
-                commands.append(shlex.split(line))
-            except ValueError:
-                continue
-    return commands
-
-
 def cmd_batchwatch(args):
     root = repo_root()
-    settings = load_settings(root)
     output = batch_status(root, args.branch)
     print(datetime.utcnow().strftime("%H:%M UTC"))
     print_lines(last_lines(output, 8))
@@ -824,65 +796,15 @@ def cmd_batchwatch(args):
         return 1
     if not re.search(r"batch: green", output):
         return 1
-    if args.no_merge:
-        print("green")
-        return 0
 
     just = shutil.which("just") or "just"
     env = os.environ.copy()
     env["GIT_LFS_SKIP_PUSH"] = "1"
     merge_result = capture_combined([just, "ci-batch-merge", args.branch], root, env=env)
-    merge_out = merge_result.stdout or ""
-    commands = merge_commands(merge_out)
-    if settings.merge != "yes":
-        print("merge authority is missing: [crew] merge = yes")
-        for argv in commands:
-            print(command_line(argv))
-        return 0 if merge_result.returncode == 0 else merge_result.returncode
-    print_lines(last_lines(merge_out, 5))
-    if merge_result.returncode != 0:
-        return merge_result.returncode
-    gh = shutil.which("gh")
-    if not gh:
-        raise CrewError("gh not found on PATH")
-
-    body = "Merged by the orchestrator: reviewed; proven with main in one batch ({0}).".format(args.branch)
-    merged = []
-    remaining = []
-    for index, original in enumerate(commands):
-        number = original[3] if len(original) > 3 else ""
-        repo = original[original.index("--repo") + 1] if "--repo" in original else infer_repo(root)
-        sha = original[original.index("--match-head-commit") + 1] if "--match-head-commit" in original else ""
-        data = gh_json([gh, "pr", "view", str(number), "--repo", repo, "--json", "files"]) or {}
-        files = [entry.get("path", "") for entry in data.get("files") or [] if isinstance(entry, dict)]
-        problem = verdict_problem(settings, repo, number, sha, files)
-        if problem:
-            print(problem)
-            return 5
-        argv = [gh] + original[1:] + ["--body", body]
-        result = capture_combined(argv, root)
-        print_lines(last_lines(result.stdout or "", 1))
-        if result.returncode != 0:
-            remaining = [command[3] for command in commands[index:] if len(command) > 3]
-            print("merged: {0}".format(", ".join("#" + item for item in merged) if merged else "none"))
-            print("not merged: {0}".format(", ".join("#" + item for item in remaining)))
-            return result.returncode
-        merged.append(number)
-        if index + 1 < len(commands):
-            time.sleep(8)
-
-    for number in args.prs:
-        repo = infer_repo(root) or "owner/repo"
-        data = gh_json([gh, "pr", "view", str(number), "--repo", repo, "--json", "state,mergeCommit"])
-        if data:
-            commit = data.get("mergeCommit") or {}
-            print("#{0} {1} {2}".format(number, data.get("state", ""), commit.get("oid", "")))
-            if data.get("state") != "MERGED":
-                return 1
-    verify = capture_combined([just, "ci-batch-verify", args.branch], root)
-    print_lines(last_lines(verify.stdout or "", 2))
-    return verify.returncode
-
+    merge_out = (merge_result.stdout or "").rstrip("\n")
+    if merge_out:
+        print(merge_out)
+    return merge_result.returncode
 
 def markdown_files(folder):
     if not folder.is_dir():
@@ -1248,11 +1170,18 @@ def cmd_lint(args):
     return 1 if findings else 0
 
 
+SYNC_MARKER = "<!-- generated by crew sync -->"
+REVIEWER_CLAUDE_TOOLS = ("Read, Grep, Glob, Bash(git fetch origin:*), Bash(git diff:*), Bash(git log:*), "
+                         "Bash(git show:*), Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr checks:*), "
+                         "Bash(gh run view:*)")
+
+
 def agent_body(role):
     return "\n".join([
         "Before any work, read crew/RULES.md.",
         "Before any work, read crew/roles/{0}.md.".format(role.name),
-        "Before any work, run `python3 crew/bin/crew state path` and read `<state>/roles/{0}/STATE.md` there.".format(role.name),
+        "Before any work, run `{0} crew/bin/crew state path` and read `<state>/roles/{1}/STATE.md` there.".format(
+            python_command_name(), role.name),
         "Follow those files in that order before any work.",
         "Before you stop, write `<state>/roles/{0}/STATE.md` with what is open and what comes next.".format(role.name),
     ]) + "\n"
@@ -1263,7 +1192,9 @@ def agent_file_text(role, devin=False):
     lines = ["---", "name: {0}".format(agent_name),
              "description: Crew role (use only while running the crew): {0}".format(role.title)]
     tools = role.values.get("tools", "")
-    if not tools and role.name == "reviewer":
+    if role.name == "reviewer" and not devin:
+        tools = REVIEWER_CLAUDE_TOOLS
+    elif not tools and role.name == "reviewer":
         tools = "Read, Grep, Glob"
     if tools:
         if devin:
@@ -1274,7 +1205,7 @@ def agent_file_text(role, devin=False):
             lines.append("tools: {0}".format(tools))
     if devin and role.engine == "devin":
         lines.append("model: {0}".format(role.model or "swe-2-1-max"))
-    lines.extend(["---", "", agent_body(role).rstrip("\n")])
+    lines.extend(["---", "", agent_body(role).rstrip("\n"), SYNC_MARKER])
     return "\n".join(lines) + "\n"
 
 
@@ -1316,22 +1247,42 @@ def cmd_sync(args):
         for line in missing:
             print("{0}: missing {1}".format(skill.relative_to(root).as_posix(), line))
         return 1 if different or missing else 0
-    roles_dir = root / "crew" / "roles"
-    if roles_dir.is_dir():
-        for role_path in roles_dir.glob("*.md"):
-            role = parse_role(role_path)
-            for folder in (root / ".claude" / "agents", root / ".devin" / "agents"):
-                legacy = folder / (role.name + ".md")
+    for folder in (root / ".claude" / "agents", root / ".devin" / "agents"):
+        if not folder.is_dir():
+            continue
+        for old_file in folder.glob("*.md"):
+            try:
+                old_text = old_file.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if SYNC_MARKER in old_text and old_file.relative_to(root) not in targets:
                 try:
-                    legacy.unlink()
+                    old_file.unlink()
                 except OSError:
                     pass
+    blocked = []
     for relative, text in targets.items():
+        path = root / relative
+        if path.exists():
+            try:
+                existing = path.read_text(encoding="utf-8")
+            except OSError:
+                existing = ""
+            if SYNC_MARKER not in existing:
+                blocked.append(relative)
+    for relative in blocked:
+        print("crew: {0} does not carry {1}; refusing to overwrite a file sync did not generate".format(
+            relative.as_posix(), SYNC_MARKER), file=sys.stderr)
+    written = 0
+    for relative, text in targets.items():
+        if relative in blocked:
+            continue
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
-    print("synced {0} agent files".format(len(targets)))
-    return 0
+        written += 1
+    print("synced {0} agent files".format(written))
+    return 1 if blocked else 0
 
 
 def git_text(cwd, argv, check=True):
@@ -1378,17 +1329,20 @@ def remote_identity(value):
     return "path:" + os.path.normpath(os.path.abspath(expanded))
 
 
+def same_remote_identity(first, second):
+    return remote_identity(first).casefold() == remote_identity(second).casefold()
+
+
 def validate_state_remote(root, settings):
     if not settings.state_remote:
         return
     resolved = resolve_state_remote(root, settings.state_remote)
-    state_identity = remote_identity(resolved)
     remotes = git_text(root, ["remote"], check=False)
     if remotes.returncode != 0:
         return
     for name in remotes.stdout.splitlines():
         url = git_text(root, ["remote", "get-url", name], check=False)
-        if url.returncode == 0 and remote_identity(url.stdout.strip()) == state_identity:
+        if url.returncode == 0 and same_remote_identity(url.stdout.strip(), resolved):
             raise CrewError("state_remote must not be the code repository remote: {0}".format(settings.state_remote))
 
 
@@ -1456,16 +1410,33 @@ def require_state_checkout(settings):
     return state
 
 
+def validate_state_checkout_remote(root, settings, state):
+    code_remotes = git_text(root, ["remote"], check=False)
+    if code_remotes.returncode != 0:
+        return
+    actual_urls = []
+    for argv in (["remote", "get-url", "origin"], ["remote", "get-url", "--push", "origin"]):
+        result = git_text(state, argv, check=False)
+        if result.returncode == 0 and result.stdout.strip():
+            actual_urls.append(result.stdout.strip())
+    for name in code_remotes.stdout.splitlines():
+        code = git_text(root, ["remote", "get-url", "--push", name], check=False)
+        if code.returncode != 0 or not code.stdout.strip():
+            code = git_text(root, ["remote", "get-url", name], check=False)
+        if code.returncode != 0:
+            continue
+        for actual in actual_urls:
+            if same_remote_identity(actual, code.stdout.strip()):
+                raise CrewError("state_remote must not be the code repository remote: {0}".format(actual))
+
 def state_push(root, settings):
     validate_state_branch(settings)
     if not settings.state_remote:
         raise CrewError("state push needs state_remote in crew.local.ini")
     validate_state_remote(root, settings)
     state = require_state_checkout(settings)
-    email = git_text(state, ["config", "user.email"], check=False)
-    address = email.stdout.strip() if email.returncode == 0 else ""
-    if not address.endswith("@users.noreply.github.com"):
-        raise CrewError("state push refuses: git user.email in {0} is not a users.noreply.github.com address".format(state))
+    validate_state_checkout_remote(root, settings, state)
+    author_name, author_address = commit_identity_parts(settings)
     branch = settings.state_branch
     git_text(state, ["add", "-A"])
     names = git_text(state, ["diff", "--cached", "--name-only"], check=False)
@@ -1488,15 +1459,18 @@ def state_push(root, settings):
         raise CrewError("state push privacy check failed\n" + "\n".join(findings))
     diff = git_text(state, ["diff", "--cached", "--quiet"], check=False)
     if diff.returncode == 1:
-        git_text(state, ["commit", "-q", "-m", "crew state"])
+        git_text(state, ["-c", "user.name=" + author_name, "-c", "user.email=" + author_address,
+                         "commit", "-q", "-m", "crew state"])
     elif diff.returncode != 0:
         raise CrewError("git diff failed in the state checkout")
-    push = git_text(state, ["push", "origin", branch], check=False)
+    validate_unpushed_identity(state, settings)
+    push = git_text(state, ["push", "origin", "HEAD:refs/heads/" + branch], check=False)
     if push.returncode != 0:
         detail = (push.stderr or push.stdout).lower()
         if "rejected" in detail or "non-fast-forward" in detail or "fetch first" in detail:
-            git_text(state, ["pull", "--rebase", "origin", branch])
-            git_text(state, ["push", "origin", branch])
+            git_text(state, ["-c", "user.name=" + author_name, "-c", "user.email=" + author_address,
+                             "pull", "--rebase", "origin", branch])
+            git_text(state, ["push", "origin", "HEAD:refs/heads/" + branch])
         else:
             detail_text = re.sub(r"(https?://)[^/@\s]+@", r"\1<credentials>@", (push.stderr or push.stdout).strip())
             raise CrewError("git push failed{0}".format(": " + detail_text if detail_text else ""))
@@ -1544,17 +1518,19 @@ def cmd_verdict(args):
 
 def cmd_push(args):
     root = repo_root()
+    settings = load_settings(root)
     branch_result = git_text(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], check=False)
     if branch_result.returncode != 0 or not branch_result.stdout.strip():
         raise CrewError("crew push refuses a detached HEAD")
     branch = branch_result.stdout.strip()
-    allowed = ("feat/", "fix/", "chore/", "ci/", "try/", "docs/", "test/")
+    allowed = ("feat/", "fix/", "chore/", "ci/", "try/", "docs/")
     if branch in ("main", "master", "buwiz-next") or not branch.startswith(allowed) or "+" in branch:
         raise CrewError("crew push refuses branch {0}".format(branch))
     tag = git_text(root, ["rev-parse", "--quiet", "--verify", "refs/tags/" + branch], check=False)
     if tag.returncode == 0:
         raise CrewError("crew push refuses a branch name that is also a tag: {0}".format(branch))
-    push = git_text(root, ["push", "origin", branch], check=False)
+    validate_unpushed_identity(root, settings)
+    push = git_text(root, ["push", "origin", "HEAD:refs/heads/" + branch], check=False)
     if push.returncode != 0:
         detail = (push.stderr or push.stdout).strip()
         detail = re.sub(r"(https?://)[^/@\s]+@", r"\1<credentials>@", detail)
@@ -1598,24 +1574,19 @@ def build_parser():
     watch.add_argument("--interval", type=float, default=120.0)
     watch.add_argument("--once", action="store_true")
     watch.set_defaults(func=cmd_watch)
-    batchwatch = sub.add_parser("batchwatch", help="wait for a ci-batch branch, then merge and verify it")
+    batchwatch = sub.add_parser("batchwatch", help="wait for a ci-batch branch and print its merge commands")
     batchwatch.add_argument("branch")
     batchwatch.add_argument("prs", nargs="+")
-    batchwatch.add_argument("--no-merge", action="store_true")
     batchwatch.set_defaults(func=cmd_batchwatch)
-    automerge = sub.add_parser("automerge", help="merge one pull request once GitHub is clean and green at a head")
-    automerge.add_argument("pr")
-    automerge.add_argument("sha")
-    automerge.add_argument("--repo")
-    automerge.add_argument("--interval", type=float, default=120.0)
-    automerge.set_defaults(func=cmd_automerge)
     state = sub.add_parser("state", help="inspect or maintain the crew state folder")
     state_sub = state.add_subparsers(dest="state_command")
     state_sub.add_parser("path", help="print the state folder").set_defaults(func=cmd_state)
     state_sub.add_parser("init", help="create the state folder layout").set_defaults(func=cmd_state)
     state_sub.add_parser("pull", help="pull the shared state branch").set_defaults(func=cmd_state)
     state_sub.add_parser("push", help="commit and push the shared state branch").set_defaults(func=cmd_state)
-    verdict = sub.add_parser("verdict", help="print the reviewer's verdict for a pull request")
+    verdict = sub.add_parser("verdict", help="print the reviewer's note for a pull request: " + VERDICT_NOTE,
+                             description="print the reviewer's note for a pull request: " + VERDICT_NOTE,
+                             formatter_class=argparse.RawDescriptionHelpFormatter)
     verdict.add_argument("repo")
     verdict.add_argument("pr")
     verdict.set_defaults(func=cmd_verdict)
