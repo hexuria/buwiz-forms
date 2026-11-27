@@ -304,7 +304,8 @@ prebuilt_direct_install() {  # prebuilt_direct_install <crate> <version> <binary
         return 1
     fi
     bin="$(prebuilt_cargo_bin)"
-    if ! mkdir -p "$bin" || ! mv -f "$source" "$bin/$binary"; then
+    # The archive's own mode is not trusted to carry the executable bit.
+    if ! mkdir -p "$bin" || ! mv -f "$source" "$bin/$binary" || ! chmod +x "$bin/$binary"; then
         rm -rf "$tmp"
         PREBUILT_FAILED_STEP="binary install"
         return 1

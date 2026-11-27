@@ -78,6 +78,10 @@ layout the helper does not expect — removes the download and falls back to one
 force every crate tool to build from source. `just`, `cargo-audit`, `cargo-outdated` and `cargo-machete` never take the
 download route; they are plain pinned cargo installs.
 
+On Windows a running `gpui-agent.exe` cannot be replaced: close anything that uses it before a setup run that moves
+the pin, or the install (prebuilt or source) fails and says so. Machines whose C library is musl (Alpine) build the CLI
+from source, because its release archives are glibc builds.
+
 The pins live in `scripts/impeccable.pin`: `GPUI_AGENT_CLI_VERSION` for the CLI (separate from the app's `gpui-agent`
 library pin because recipes can need a newer CLI), `IMPECCABLE_VERSION` and `IMPECCABLE_SKILL_COMMIT` for impeccable,
 and `CARGO_BINSTALL_VERSION` plus the two `CARGO_BINSTALL_SHA256_*_linux_musl` digests for the Linux blueprint's
