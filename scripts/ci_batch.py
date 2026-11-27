@@ -10,10 +10,11 @@
   verify <branch>                 after the merges: is main's tree the batch's tree?
 
 Every pull request's required `ci-ok` must be `success` at its current head; pending, missing or not green refuses,
-and nothing is pushed. When the planner says the pull request's changed files need the app suite, each system the
-batch asks for must have every `NSH app` shard green at that head, or both workflows must have a pull_request run
-there with `tests-ok` green. `--dry-run` proves the same batch without pushing.
-`--allow-unchecked <pr>` and `--allow-unsuited <pr>` (repeatable) are the hand-run escape hatches.
+and nothing is pushed. Every pull request must also have ci.yml's `tests-ok` green at that head, per system the
+batch asks for, from a pull_request suite run or a test/** push. When the planner says the changed files need the app
+suite, each system must also have every `NSH app` shard green at that head, in the same two kinds of proof.
+`--dry-run` proves the same batch without pushing. `--allow-unchecked <pr>` and `--allow-unsuited <pr>` (repeatable)
+are the hand-run escape hatches.
 
 The batch is built with git plumbing only (`git merge-tree`, `git commit-tree`) in the checkout's own object store:
 no working tree, index or local branch is touched and nothing is written outside the repository. Each step merges a
@@ -326,28 +327,84 @@ def infer_job_systems(jobs: Sequence[dict]) -> List[str]:
     return [system for system in ci_plan.SYSTEMS if shard_jobs(jobs, system)]
 
 
-def plan_log_values(log: str) -> Dict[str, str]:
-    """The `name: value` lines ci_plan prints, read from a plan job log with its timestamps stripped."""
-    values = {}
+def plan_log_lines(log: str) -> List[str]:
+    """A plan job log's lines with GitHub's timestamps and terminal colours stripped."""
+    lines = []
     for line in log.splitlines():
         text = line.lstrip("\ufeff")
         text = re.sub(r"^\d{4}-\d{2}-\d{2}T\S+Z\s+", "", text)
         text = re.sub(r"\x1b\[[0-9;]*m", "", text).strip()
+        if text:
+            lines.append(text)
+    return lines
+
+
+def plan_log_values(log: str) -> Dict[str, str]:
+    """The `name: value` lines ci_plan prints, read from a plan job log with its timestamps stripped."""
+    values = {}
+    for text in plan_log_lines(log):
         key, colon, value = text.partition(":")
         if colon and re.fullmatch(r"[A-Za-z_]+", key):
             values[key] = value.strip()
     return values
 
 
+def read_plan_output(github, jobs: Sequence[dict], job_name: str) -> Tuple[Dict[str, str], List[str]]:
+    """The planner's output values and summary lines from one run's plan job log, or empty when it cannot be read."""
+    plan_job = next((job for job in jobs if job.get("name") == job_name), None)
+    if plan_job is None or not isinstance(plan_job.get("id"), int):
+        return {}, []
+    try:
+        log = github.job_log(plan_job["id"])
+    except BatchError:
+        return {}, []
+    return plan_log_values(log), plan_log_lines(log)
+
+
+def parse_system_names(value: str) -> List[str]:
+    """A comma or JSON list of system names, in the planner's canonical order."""
+    names: List[str]
+    try:
+        decoded = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        decoded = None
+    if isinstance(decoded, list):
+        names = [str(name) for name in decoded]
+    else:
+        names = [name for name in re.split(r"\s*,\s*|\s+", value.strip()) if name]
+    return [system for system in ci_plan.SYSTEMS if system in names]
+
+
+def planned_chosen_systems(values: Dict[str, str], lines: Sequence[str]) -> List[str]:
+    """The systems a test lane or suite-label run was asked to cover, before changed-file narrowing."""
+    if "chosen_systems" in values:
+        return parse_system_names(values["chosen_systems"])
+    for line in lines:
+        match = re.fullmatch(r"systems from (?:the label|the branch name): (.+)", line)
+        if match:
+            return parse_system_names(match.group(1))
+    return []
+
+
+def tests_ok_job(jobs: Sequence[dict]) -> Optional[dict]:
+    return next((job for job in jobs if job.get("name") == "tests-ok"), None)
+
+
+def job_state(run: dict, job: dict) -> str:
+    """success, failed, running or missing for one job inside one workflow run."""
+    if run.get("status") != "completed" or job.get("status") != "completed":
+        return "running"
+    conclusion = job.get("conclusion")
+    if conclusion == "success":
+        return "success"
+    if conclusion in (None, "skipped", "cancelled"):
+        return "missing"
+    return "failed"
+
+
 def manual_suite_context(github, jobs: Sequence[dict]) -> dict:
     """What a workflow_dispatch run planned, as far as its plan job log proves it."""
-    values: Dict[str, str] = {}
-    plan_job = next((job for job in jobs if job.get("name") == "plan"), None)
-    if plan_job is not None and isinstance(plan_job.get("id"), int):
-        try:
-            values = plan_log_values(github.job_log(plan_job["id"]))
-        except BatchError:
-            values = {}
+    values, _lines = read_plan_output(github, jobs, "plan")
     if all(f"nsh_{system}" in values for system in ci_plan.SYSTEMS):
         systems = [system for system in ci_plan.SYSTEMS if values.get(f"nsh_{system}") == "true"]
     else:
@@ -416,38 +473,39 @@ def classify_suite_run(run: dict, system: str, jobs: Sequence[dict], context: di
     return "missing" if missing else "success"
 
 
-def suite_states(github, pull: Pull, systems: Sequence[str], changed: Sequence[str]) -> Dict[str, SuiteProof]:
+def shard_run_covers(run: dict, jobs: Sequence[dict], context: dict, system: str) -> bool:
+    if system not in context["systems"]:
+        return False
+    # A finished run without one of the system's app jobs is not a run of that system at all.
+    return run.get("status") != "completed" or bool(shard_jobs(jobs, system))
+
+
+def newest_proof_states(github, runs: Sequence[dict], systems: Sequence[str], context_for, covers, classify
+                        ) -> Dict[str, SuiteProof]:
     """The proof state of each needed system, judging the newest run covering that system."""
-    runs = sorted((run for run in github.workflow_runs(pull.head) if isinstance(run.get("id"), int)),
-                  key=lambda run: run["id"], reverse=True)
+    ordered = sorted((run for run in runs if isinstance(run.get("id"), int)), key=lambda run: run["id"], reverse=True)
     cache: Dict[int, Tuple[List[dict], dict]] = {}
 
     def info(run: dict) -> Tuple[List[dict], dict]:
         run_id = run["id"]
         if run_id not in cache:
             jobs = github.suite_jobs(run_id)
-            cache[run_id] = (jobs, suite_run_context(github, run, jobs, changed))
+            cache[run_id] = (jobs, context_for(run, jobs))
         return cache[run_id]
-
-    def covers(run: dict, jobs: Sequence[dict], context: dict, system: str) -> bool:
-        if system not in context["systems"]:
-            return False
-        # A finished run without one of the system's app jobs is not a run of that system at all.
-        return run.get("status") != "completed" or bool(shard_jobs(jobs, system))
 
     proofs: Dict[str, SuiteProof] = {}
     for system in systems:
         proof = SuiteProof("missing")
-        for index, run in enumerate(runs):
+        for index, run in enumerate(ordered):
             jobs, context = info(run)
             if not covers(run, jobs, context, system):
                 continue
-            state = classify_suite_run(run, system, jobs, context)
+            state = classify(run, system, jobs, context)
             older_green = None
             if state == "running":
-                for older in runs[index + 1:]:
+                for older in ordered[index + 1:]:
                     older_jobs, older_context = info(older)
-                    if covers(older, older_jobs, older_context, system) and classify_suite_run(
+                    if covers(older, older_jobs, older_context, system) and classify(
                             older, system, older_jobs, older_context) == "success":
                         older_green = older["id"]
                         break
@@ -457,23 +515,187 @@ def suite_states(github, pull: Pull, systems: Sequence[str], changed: Sequence[s
     return proofs
 
 
-def pull_request_tests_ok_runs(github, head: str) -> Dict[str, int]:
-    """The pull_request run of each workflow whose tests-ok job is green at this head, keyed by workflow file."""
-    proven: Dict[str, int] = {}
-    for workflow_file, _name in WORKFLOWS:
-        runs = sorted((run for run in github.workflow_runs(head, workflow_file) if isinstance(run.get("id"), int)),
-                      key=lambda run: run["id"], reverse=True)
-        for run in runs:
-            if run.get("event") != "pull_request":
-                continue
-            jobs = github.suite_jobs(run["id"])
-            if any(job.get("name") == "tests-ok" and job.get("status") == "completed"
-                   and job.get("conclusion") == "success" for job in jobs):
-                proven[workflow_file] = run["id"]
-                break
-        if workflow_file not in proven:
-            return {}
-    return proven
+def suite_states(github, pull: Pull, systems: Sequence[str], changed: Sequence[str]) -> Dict[str, SuiteProof]:
+    """The NSH proof state from pushes, manual runs and the nightly run. Pull-request label proof is separate."""
+    runs = [run for run in github.workflow_runs(pull.head) if run.get("event") != "pull_request"]
+    return newest_proof_states(
+        github, runs, systems,
+        lambda run, jobs: suite_run_context(github, run, jobs, changed), shard_run_covers, classify_suite_run)
+
+
+def pull_request_suite_context(github, jobs: Sequence[dict]) -> dict:
+    """What a pull_request suite-label run of nsh.yml planned, from its own plan log or job names."""
+    values, _lines = read_plan_output(github, jobs, "plan")
+    if values and values.get("lane") != "suite":
+        return {"systems": [], "shard_count": ci_plan.SHARDS, "partial": False}
+    if all(f"nsh_{system}" in values for system in ci_plan.SYSTEMS):
+        systems = [system for system in ci_plan.SYSTEMS if values.get(f"nsh_{system}") == "true"]
+    else:
+        systems = infer_job_systems(jobs)
+    try:
+        shard_count = int(values.get("shard_count") or ci_plan.SHARDS)
+    except ValueError:
+        shard_count = ci_plan.SHARDS
+    return {"systems": systems, "shard_count": shard_count, "partial": False}
+
+
+def pull_request_shard_covers(run: dict, jobs: Sequence[dict], context: dict, system: str) -> bool:
+    return system in context["systems"] and tests_ok_job(jobs) is not None
+
+
+def classify_pull_request_suite_run(run: dict, system: str, jobs: Sequence[dict], context: dict) -> str:
+    state = classify_suite_run(run, system, jobs, context)
+    if state != "success":
+        return state
+    gate = tests_ok_job(jobs)
+    return "missing" if gate is None else job_state(run, gate)
+
+
+def pull_request_suite_states(github, pull: Pull, systems: Sequence[str]) -> Dict[str, SuiteProof]:
+    """The NSH proof state from pull_request suite-label runs, newest tests-ok run first per system."""
+    runs = [run for run in github.workflow_runs(pull.head, SUITE_WORKFLOW_FILE) if run.get("event") == "pull_request"]
+    return newest_proof_states(github, runs, systems, lambda run, jobs: pull_request_suite_context(github, jobs),
+                               pull_request_shard_covers, classify_pull_request_suite_run)
+
+
+def empty_ci_context() -> dict:
+    return {"systems": [], "required": {system: [] for system in ci_plan.SYSTEMS}, "lane": ""}
+
+
+def required_from_ci_plan(plan: dict) -> Dict[str, List[str]]:
+    required = {system: [] for system in ci_plan.SYSTEMS}
+    for system in plan["check_systems"]:
+        required[system].append("check")
+    if plan["installer"]:
+        required["windows"].append("installer")
+    return required
+
+
+def required_from_ci_values(values: Dict[str, str]) -> Optional[Dict[str, List[str]]]:
+    if "check_matrix" not in values:
+        return None
+    try:
+        matrix = json.loads(values["check_matrix"])
+        entries = matrix.get("include", []) if isinstance(matrix, dict) else []
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(entries, list):
+        return None
+    os_to_system = {settings["os"]: system for system, settings in ci_plan.CHECK_OS.items()}
+    required = {system: [] for system in ci_plan.SYSTEMS}
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("os") not in os_to_system:
+            return None
+        required[os_to_system[entry["os"]]].append("check")
+    if values.get("installer") == "true":
+        required["windows"].append("installer")
+    return required
+
+
+def ci_run_context(github, run: dict, jobs: Sequence[dict], changed: Sequence[str]) -> dict:
+    """What one ci.yml test-lane or suite-label run was asked to prove, read from its own planner output."""
+    event = run.get("event")
+    if event not in ("push", "pull_request"):
+        return empty_ci_context()
+    values, lines = read_plan_output(github, jobs, "changes")
+    if event == "push":
+        branch = run.get("head_branch") or ""
+        if not branch.startswith("test/") or (values and values.get("lane") != "tests"):
+            return empty_ci_context()
+        chosen = ci_plan.branch_systems(branch)
+        required = required_from_ci_values(values)
+        if required is None:
+            plan = ci_plan.decide(event="push", ref=f"refs/heads/{branch}", branch=branch, changed=list(changed))
+            required = required_from_ci_plan(plan)
+        return {"systems": chosen, "required": required, "lane": "tests"}
+    if values.get("lane") != "suite":
+        return empty_ci_context()
+    chosen = planned_chosen_systems(values, lines)
+    required = required_from_ci_values(values)
+    if required is None:
+        required = {system: [] for system in ci_plan.SYSTEMS}
+    return {"systems": chosen, "required": required, "lane": "suite"}
+
+
+def ci_system_job(jobs: Sequence[dict], system: str, kind: str) -> Optional[dict]:
+    if kind == "check":
+        name = f"workspace tests ({ci_plan.CHECK_OS[system]['os']})"
+    else:
+        name = "Build and audit unsigned Windows Setup"
+    return next((job for job in jobs if job.get("name") == name), None)
+
+
+def ci_run_covers(run: dict, jobs: Sequence[dict], context: dict, system: str) -> bool:
+    return system in context["systems"] and tests_ok_job(jobs) is not None
+
+
+def classify_ci_run(run: dict, system: str, jobs: Sequence[dict], context: dict) -> str:
+    """success, failed, running or missing for one system in one ci.yml test run."""
+    if run.get("status") != "completed":
+        return "running"
+    conclusion = run.get("conclusion")
+    if conclusion in ("skipped", "cancelled"):
+        return "missing"
+    if conclusion != "success":
+        return "failed"
+    gate = tests_ok_job(jobs)
+    if gate is None:
+        return "missing"
+    gate_state = job_state(run, gate)
+    if gate_state != "success":
+        return gate_state
+    missing = False
+    for kind in context["required"].get(system, []):
+        job = ci_system_job(jobs, system, kind)
+        if job is None:
+            missing = True
+            continue
+        state = job_state(run, job)
+        if state == "failed":
+            return "failed"
+        if state == "running":
+            return "running"
+        if state == "missing":
+            missing = True
+    return "missing" if missing else "success"
+
+
+def ci_tests_states(github, pull: Pull, systems: Sequence[str], changed: Sequence[str], event: str
+                    ) -> Dict[str, SuiteProof]:
+    """ci.yml tests-ok proof per system from either pull_request suite runs or test/** pushes."""
+    runs = [run for run in github.workflow_runs(pull.head, CI_WORKFLOW_FILE) if run.get("event") == event]
+    return newest_proof_states(github, runs, systems, lambda run, jobs: ci_run_context(github, run, jobs, changed),
+                               ci_run_covers, classify_ci_run)
+
+
+def combine_proof_sets(systems: Sequence[str], *proof_sets: Dict[str, SuiteProof]) -> Dict[str, SuiteProof]:
+    """Choose a green proof where either source has one; otherwise the newest problem, for the refusal."""
+    combined = {}
+    for system in systems:
+        choices = [proofs[system] for proofs in proof_sets]
+        combined[system] = next((proof for proof in choices if proof.state == "success"),
+                                max(choices, key=lambda proof: proof.run_id or -1))
+    return combined
+
+
+def proof_problems(proofs: Dict[str, SuiteProof], systems: Sequence[str]) -> List[str]:
+    problems = []
+    for name in systems:
+        proof = proofs[name]
+        if proof.state == "success":
+            continue
+        if proof.run_id is None:
+            where = "no run"
+        else:
+            where = f"run {proof.run_id}"
+            if proof.older_green is not None:
+                where += f", older green run {proof.older_green}"
+        problems.append(f"{name} {proof.state} ({where})")
+    return problems
+
+
+def proof_run_ids(proofs: Dict[str, SuiteProof]) -> List[int]:
+    return sorted({proof.run_id for proof in proofs.values() if proof.state == "success" and proof.run_id is not None})
 
 
 def enforce_suite(github, pulls: Sequence[Pull], system: str, changed_by_pr: Dict[int, List[str]],
@@ -487,35 +709,35 @@ def enforce_suite(github, pulls: Sequence[Pull], system: str, changed_by_pr: Dic
     for pull in pulls:
         pull.suite_runs = []
         if pull.number in unsuited:
-            say(f"*** ALLOW-UNSUITED: #{pull.number} at {pull.head}; skipping the NSH app suite gate ***")
+            say(f"*** ALLOW-UNSUITED: #{pull.number} at {pull.head}; skipping the test suite gate ***")
             continue
-        if not needs_suite(changed_by_pr[pull.number]):
-            continue
-        proofs = suite_states(github, pull, needed, changed_by_pr[pull.number])
-        pull.suite_runs = sorted({proof.run_id for proof in proofs.values() if proof.run_id is not None})
+        changed = changed_by_pr[pull.number]
+        ci_label = ci_tests_states(github, pull, needed, changed, "pull_request")
+        ci_push = ci_tests_states(github, pull, needed, changed, "push")
+        ci_proofs = combine_proof_sets(needed, ci_label, ci_push)
         problems = []
-        for name in needed:
-            proof = proofs[name]
-            if proof.state == "success":
-                continue
-            if proof.run_id is None:
-                where = "no run"
-            else:
-                where = f"run {proof.run_id}"
-                if proof.older_green is not None:
-                    where += f", older green run {proof.older_green}"
-            problems.append(f"{name} {proof.state} ({where})")
+        ci_problems = proof_problems(ci_proofs, needed)
+        if ci_problems:
+            problems.append("ci.yml tests-ok is not green: " + "; ".join(ci_problems))
+        run_ids = proof_run_ids(ci_proofs)
+
+        if needs_suite(changed):
+            nsh_label = pull_request_suite_states(github, pull, needed)
+            nsh_push = suite_states(github, pull, needed, changed)
+            nsh_proofs = combine_proof_sets(needed, nsh_label, nsh_push)
+            nsh_problems = proof_problems(nsh_proofs, needed)
+            if nsh_problems:
+                problems.append("NSH app suite is not green: " + "; ".join(nsh_problems))
+            run_ids += proof_run_ids(nsh_proofs)
+
         if problems:
-            label_proof = pull_request_tests_ok_runs(github, pull.head)
-            if label_proof:
-                pull.suite_runs = sorted(label_proof.values())
-                continue
             system_arg = "" if system == DEFAULT_SYSTEM else f" {system}"
-            refusals.append(f"#{pull.number} at {pull.head}: NSH app suite is not green: "
-                            + "; ".join(problems)
+            refusals.append(f"#{pull.number} at {pull.head}: " + "; ".join(problems)
                             + f"; start it with: just ci-suite {pull.number}{system_arg}; nothing was pushed")
+        else:
+            pull.suite_runs = sorted(set(run_ids))
     if refusals:
-        raise BatchError("refused by the NSH app suite gate:\n  " + "\n  ".join(refusals))
+        raise BatchError("refused by the test suite gate:\n  " + "\n  ".join(refusals))
 
 
 def read_pulls(github, numbers: Sequence[int]) -> List[Pull]:

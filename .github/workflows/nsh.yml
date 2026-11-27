@@ -31,8 +31,9 @@ on:
     branches: [ "test/**" ]
   pull_request:
     branches: [ "main", "gol/**", "codex/**", "feat/**" ]
-    # Only a labeled event starts this workflow on a pull request. ci_plan.py decides which label names count.
-    types: [ labeled ]
+    # Only a labeled event starts this workflow's jobs on a pull request. ci_plan.py decides which label names count;
+    # a synchronize event starts an empty run only to cancel the pull request's older suite run.
+    types: [ labeled, synchronize ]
   schedule:
     - cron: "0 18 * * *"
   workflow_dispatch:
@@ -88,7 +89,7 @@ jobs:
   # pull request and a draft plan nothing there, except that a labeled event reaches the planner: a ci:suite* label is
   # a draft's explicit request, and any other label plans nothing.
   plan:
-    if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) }}
+    if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) && github.event.action != 'synchronize' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -117,6 +118,7 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           ACTION: ${{ github.event.action }}
+          PR_SYNC_LANE: none
           LABEL: ${{ github.event.label.name }}
           PR_STATE: ${{ github.event.pull_request.state }}
           DRAFT: ${{ github.event.pull_request.draft }}
@@ -735,7 +737,7 @@ jobs:
   # The suite-label proof the batch gate reads. `always()` is deliberate: tests-ok is not a required status, so a run
   # whose planned suite job failed or was cancelled reports red rather than vanishing.
   tests-ok:
-    name: tests-ok
+    name: ${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' || github.event.label.name == 'ci:suite-windows' || github.event.label.name == 'ci:suite-macos' || github.event.label.name == 'ci:suite-all')) && 'tests-ok' || 'tests-not-requested' }}
     needs: [ plan, nsh-macos, nsh-linux, nsh-windows, core-plain-test, linux-packages ]
     if: ${{ always() && github.event_name == 'pull_request' && needs.plan.outputs.lane == 'suite' }}
     runs-on: ubuntu-24.04

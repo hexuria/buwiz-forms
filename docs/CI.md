@@ -63,11 +63,11 @@ No GitHub macOS job starts by itself. macOS runs only for `ci:suite-macos`, `ci:
 
 A draft pull request runs nothing unless someone adds a `ci:suite*` label to it; that label is an explicit request
 and runs even on the draft. Otherwise every job of `ci.yml` is skipped before it takes a runner, so the pull request's
-checks list shows only skipped jobs, and none is red. GitHub does not work out a skipped job's name, so two of them
-are listed under the expression their name is made from, `ci-ok`'s among them. No check named `ci-ok` is reported, so
-the required `ci-ok` shows as not reported yet. That is expected: a draft cannot be merged anyway. Marking the pull
-request ready for review starts the quick checks, and their `ci-ok` is the one that counts. After that, every push
-runs them as before.
+checks list shows only skipped jobs, and none is red. A skipped job's name is still evaluated; a non-suite label or
+the empty synchronize run uses names other than `ci-ok` and `tests-ok`, so neither check is reported as a skipped
+success there. A draft's empty quick-check job can still carry the `ci-ok` name, but a draft cannot be merged anyway.
+Marking the pull request ready for review starts the quick checks, and their `ci-ok` is the one that counts. After
+that, every push runs them as before.
 
 Open a pull request as a draft while you are still pushing to it, and mark it ready when you want its checks
 (`gh pr create --draft`, then `gh pr ready`). Turning a ready pull request back into a draft does not stop the run
@@ -188,14 +188,17 @@ complete run, on exactly the tree `main` will have once they are all merged, and
 
 - Its `ci-ok` check is green at its exact head. `--allow-unchecked <pr>` skips this gate only when the conductor
   means it.
-- If the planner would run the app suite for its changed files, the `NSH app` suite must have run at that exact head.
-  "The suite ran" is judged per system the batch asks for: that system's app jobs are present in a run, none is
-  skipped, and every shard is green. Different systems may be proved by different runs, but a manual run narrowed by a
-  suite, screen or shard filter is partial proof and does not count. A `pull_request` run of each workflow at that
-  exact head with `tests-ok` green is the other proof. When neither holds, the refusal prints `just ci-suite <n>`.
+- For every pull request, ci.yml's tests-ok must be green at that exact head, from a pull_request suite run
+  or a test-lane push. The proof is judged per needed system: the newest run covering that system has the system's
+  jobs present and green, and a run whose planner asked for no test job on that system is cheap but still counts when
+  its `tests-ok` is green. If the planner would run the app suite for the changed files, `nsh.yml` must pass the same
+  judgment at the exact head too: the system's app jobs are present, none is skipped, and every shard is green.
+  Different systems may be proved by different runs, but a manual run narrowed by a suite, screen or shard filter is
+  partial proof and does not count. When either part is missing or red, the refusal prints `just ci-suite <n>`.
   `just ci-test-pr <n> [system]` remains the branch-push form: it reads the pull request's head from GitHub, fetches
-  exactly that object, pushes it to `test/<system>/pr-<n>` and prints the Actions page. `--allow-unsuited <pr>` skips
-  this gate only when the conductor means it, and its use is written in the batch's record.
+  exactly that object, pushes it to `test/<system>/pr-<n>` and prints the Actions page. `--allow-unsuited <pr>` is
+  the single override for this suite gate, only when the conductor means it, and its use is written in the batch's
+  record.
 
 Use it for a queue of pull requests that are each reviewed and ready: not drafts, based on `main`, with both gates
 green. Leave out a pull request you still expect to push to: any push to it voids the batch.

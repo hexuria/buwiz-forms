@@ -837,20 +837,21 @@ jobs:
   # cancelled run now reports no `ci-ok` at all.
   #
   # Not on a closed or draft pull request (see `changes`): it is skipped
-  # there, as every other job is, so no runner is taken. GitHub does not
-  # evaluate a skipped job's name, so that run adds no check named `ci-ok`
-  # (it lists one named after the expression below): a draft shows the
-  # required `ci-ok` as not reported yet, and a closed pull request keeps the
-  # `ci-ok` its last real run reported. Marking a draft ready starts the run
-  # whose `ci-ok` counts.
+  # there, as every other job is, so no runner is taken. A skipped job's name
+  # is still evaluated, so the expression below also keeps a non-suite label's
+  # empty run from adding a skipped check named `ci-ok` (which GitHub would
+  # treat as passing). A draft's empty quick-check job can still carry the
+  # `ci-ok` name, but a draft cannot merge. Marking a draft ready starts the
+  # run whose `ci-ok` counts.
   #
   # Named `ci-ok` on a pull request (including a suite-label run, whose quick
-  # checks are part of its work) and on a non-test push. A test/** push or a
-  # manual or nightly run reports `tests-ok` instead, so a test lane on a pull
-  # request's commit never adds a second `ci-ok` result to the required check.
-  # The separate tests-ok job below is the suite label's proof.
+  # checks are part of its work) and on a non-test push, but `label-ignored`
+  # on a non-suite label's empty run. A test/** push or a manual or nightly
+  # run reports `tests-ok` instead, so a test lane on a pull request's commit
+  # never adds a second `ci-ok` result to the required check. The separate
+  # tests-ok job below is the suite label's proof.
   ci-ok:
-    name: ${{ (github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok' }}
+    name: ${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'ci:suite' && github.event.label.name != 'ci:suite-linux' && github.event.label.name != 'ci:suite-windows' && github.event.label.name != 'ci:suite-macos' && github.event.label.name != 'ci:suite-all') && 'label-ignored' || ((github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok') }}
     needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
     if: ${{ !cancelled() && needs.changes.outputs.lane != 'none' && (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) }}
     runs-on: ubuntu-22.04
@@ -898,7 +899,7 @@ jobs:
   # The suite-label proof the batch gate reads. Unlike ci-ok it uses always(): tests-ok is not the required status,
   # so a run replaced or cancelled before its suites finished may truthfully report red instead of vanishing.
   tests-ok:
-    name: tests-ok
+    name: ${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' || github.event.label.name == 'ci:suite-windows' || github.event.label.name == 'ci:suite-macos' || github.event.label.name == 'ci:suite-all')) && 'tests-ok' || 'tests-not-requested' }}
     needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
     if: ${{ always() && github.event_name == 'pull_request' && needs.changes.outputs.lane == 'suite' }}
     runs-on: ubuntu-22.04

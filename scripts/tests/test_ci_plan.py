@@ -51,6 +51,19 @@ NOT_CLOSED_OR_DRAFT = ("(github.event_name != 'pull_request' || (github.event.pu
 NOTHING_HEAVY = dict(check_tests=False, installer=False, screens=False, build=False, nsh_rust=False, core_plain=False,
                      nsh_systems=[], nsh_agent_check=False)
 
+NON_SUITE_LABEL = ("github.event_name == 'pull_request' && github.event.action == 'labeled' "
+                   "&& github.event.label.name != 'ci:suite' && github.event.label.name != 'ci:suite-linux' "
+                   "&& github.event.label.name != 'ci:suite-windows' && github.event.label.name != 'ci:suite-macos' "
+                   "&& github.event.label.name != 'ci:suite-all'")
+SUITE_LABEL = ("github.event_name == 'pull_request' && github.event.action == 'labeled' "
+               "&& (github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' "
+               "|| github.event.label.name == 'ci:suite-windows' || github.event.label.name == 'ci:suite-macos' "
+               "|| github.event.label.name == 'ci:suite-all')")
+CI_OK_NAME = ("    name: ${{ (" + NON_SUITE_LABEL + ") && 'label-ignored' || "
+              "((github.event_name == 'pull_request' || (github.event_name == 'push' && "
+              "!startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok') }}\n")
+TESTS_OK_NAME = "    name: ${{ (" + SUITE_LABEL + ") && 'tests-ok' || 'tests-not-requested' }}\n"
+
 
 class AgentGatePolicyTests(unittest.TestCase):
     def test_every_agent_gated_nsh_rust_file_is_an_agent_compile_input(self):
@@ -229,6 +242,7 @@ class SuiteLabelTests(unittest.TestCase):
         self.assertTrue(plan["nsh_check"])
         self.assertTrue(plan["screens"] and plan["build"] and plan["nsh_rust"] and plan["core_plain"])
         out = ci_plan.outputs(plan)
+        self.assertEqual(out["chosen_systems"], "linux,windows")
         self.assertEqual(json.loads(out["check_matrix"])["include"], [
             {"os": "ubuntu-22.04", "target": "x86_64-unknown-linux-gnu", "tests": True},
             {"os": "windows-latest", "target": "x86_64-pc-windows-msvc", "tests": True},
@@ -262,6 +276,12 @@ class SuiteLabelTests(unittest.TestCase):
         self.assertEqual(plan["check_systems"], ["linux"])
         self.assertFalse(plan["check_tests"])
         self.assertEqual(plan["nsh_systems"], [])
+
+    def test_a_synchronize_can_plan_nothing_for_the_nsh_cancel_only_run(self):
+        plan = pr("crates/bir-core/src/lib.rs", action="synchronize", labels=("ci:suite",), sync_lane="none")
+
+        self.assert_nothing(plan)
+        self.assertIn("synchronize", " ".join(plan["reasons"]))
 
     def test_a_suite_label_on_a_draft_is_an_explicit_request_and_runs(self):
         plan = self.labeled("ci:suite", "crates/bir-core/src/lib.rs", draft=True)
@@ -491,8 +511,21 @@ class WorkflowTests(unittest.TestCase):
                       job(CI, "changes"))
         self.assertIn('  push:\n    branches: [ "test/**" ]\n  pull_request:\n', NSH)
         self.assertIn('  pull_request:\n    branches: [ "main", "gol/**", "codex/**", "feat/**" ]\n', NSH)
-        self.assertIn('    types: [ labeled ]\n', NSH)
+        self.assertIn('    types: [ labeled, synchronize ]\n', NSH)
         self.assertNotIn("paths:", NSH)
+
+    def test_nsh_synchronize_is_a_cancel_only_run_with_no_jobs(self):
+        plan = job(NSH, "plan")
+        expected_if = f"    if: ${{{{ {NOT_CLOSED_OR_DRAFT} && github.event.action != 'synchronize' }}}}\n"
+        self.assertIn(expected_if, plan)
+        self.assertIn("          PR_SYNC_LANE: none\n", plan)
+        for name in ("nsh-macos", "nsh-linux", "nsh-windows", "core-plain-test", "linux-packages", "tests-ok"):
+            self.assertIn("needs.plan.outputs", job(NSH, name), name)
+
+    def test_non_suite_labels_never_create_checks_named_ci_ok_or_tests_ok(self):
+        self.assertIn(CI_OK_NAME, job(CI, "ci-ok"))
+        self.assertIn(TESTS_OK_NAME, job(CI, "tests-ok"))
+        self.assertIn(TESTS_OK_NAME, job(NSH, "tests-ok"))
 
     def test_both_workflows_pass_the_label_event_to_the_planner_only_through_env(self):
         for workflow, job_name in ((CI, "changes"), (NSH, "plan")):
@@ -538,7 +571,7 @@ class WorkflowTests(unittest.TestCase):
                          ["changes", "check", "nsh-check", "nsh-agent-check", "windows-setup", "scripts", "validation-rules-v1",
                           "validation-rules-v2", "legacy-guard"])
         self.assertIn('[[ "$CHANGES" == success ]]', gate)
-        self.assertIn("&& 'ci-ok' || 'tests-ok' }}", gate)
+        self.assertIn(CI_OK_NAME, gate)
         for name in ("check", "nsh-check", "nsh-agent-check", "windows-setup", "scripts", "validation-rules-v1", "validation-rules-v2",
                      "legacy-guard"):
             self.assertIn(f"expect {name} ", gate)
@@ -547,7 +580,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_tests_ok_gates_suite_label_runs_in_both_workflows(self):
         ci_gate = job(CI, "tests-ok")
-        self.assertIn("    name: tests-ok\n", ci_gate)
+        self.assertIn(TESTS_OK_NAME, ci_gate)
         self.assertIn("always() && github.event_name == 'pull_request' && needs.changes.outputs.lane == 'suite'", ci_gate)
         self.assertIn("needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, "
                       "validation-rules-v2, legacy-guard ]", ci_gate)
@@ -557,7 +590,7 @@ class WorkflowTests(unittest.TestCase):
 
         self.assertIn("lane: ${{ steps.decide.outputs.lane }}", job(NSH, "plan"))
         nsh_gate = job(NSH, "tests-ok")
-        self.assertIn("    name: tests-ok\n", nsh_gate)
+        self.assertIn(TESTS_OK_NAME, nsh_gate)
         self.assertIn("always() && github.event_name == 'pull_request' && needs.plan.outputs.lane == 'suite'", nsh_gate)
         self.assertIn("needs: [ plan, nsh-macos, nsh-linux, nsh-windows, core-plain-test, linux-packages ]", nsh_gate)
         for name in ("nsh-macos", "nsh-linux", "nsh-windows", "core-plain-test", "linux-packages"):

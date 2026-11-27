@@ -181,6 +181,7 @@ def plan_test_suites(plan: dict, *, chosen: list[str], seen: dict[str, bool], re
     """The test suites the changed files ask for on the chosen systems. test/** pushes and suite labels share this."""
     if not seen["known"]:
         reasons.append("change range against main unknown or empty: every suite")
+    plan["chosen_systems"] = list(chosen)
     plan["check_systems"] = chosen if seen["app"] else []
     plan["check_tests"] = True
     plan["installer"] = seen["windows_pkg"] and "windows" in chosen
@@ -201,6 +202,7 @@ def decide(
     state: str = "",
     draft: bool = False,
     branch: str = "",
+    sync_lane: str = "quick",
     changed: list[str] | None = None,
     labels: tuple[str, ...] = (),
     systems: str = "",
@@ -212,6 +214,8 @@ def decide(
     on_main = ref == "refs/heads/main"
     reasons: list[str] = []
     test_push = event == "push" and ref.startswith("refs/heads/test/")
+    if sync_lane not in ("quick", "none"):
+        raise PlanError(f"unknown pull-request synchronize lane {sync_lane}: use quick or none")
 
     suite_systems = (SUITE_LABEL_SYSTEMS.get(label)
                      if event == "pull_request" and action == "labeled" else None)
@@ -223,6 +227,9 @@ def decide(
     elif event == "pull_request" and action == "labeled" and suite_systems is None:
         lane = "none"
         reasons.append("pull request label is not a suite label: nothing runs")
+    elif event == "pull_request" and action == "synchronize" and sync_lane == "none":
+        lane = "none"
+        reasons.append("pull request synchronize: nothing runs")
     elif event == "pull_request" and draft and suite_systems is None:
         lane = "none"
         reasons.append("draft pull request: nothing runs until it is marked ready")
@@ -239,9 +246,10 @@ def decide(
     else:
         raise PlanError(f"no lane for event {event}")
 
-    plan = dict(lane=lane, check_systems=[], check_tests=False, nsh_check=False, nsh_agent_check=False, scripts=False,
-                installer=False, validation_systems=[], nsh_systems=[], screens=False, build=False, nsh_rust=False,
-                core_plain=False, shards=[0], shard_count=1, screens_filter="")
+    plan = dict(lane=lane, chosen_systems=[], check_systems=[], check_tests=False, nsh_check=False,
+                nsh_agent_check=False, scripts=False, installer=False, validation_systems=[], nsh_systems=[],
+                screens=False, build=False, nsh_rust=False, core_plain=False, shards=[0], shard_count=1,
+                screens_filter="")
 
     if lane in ("quick", "suite"):
         seen = what_changed(changed)
@@ -261,6 +269,7 @@ def decide(
             # it for good: a partial run on main could save a cache missing what the full jobs need.
             reasons.append("main: suites, screen filter and shard ignored, so the caches main saves stay complete")
             wanted, screens, shard = list(SUITES), "", "all"
+        plan["chosen_systems"] = list(chosen)
         plan["check_systems"] = chosen if "rust" in wanted else []
         plan["check_tests"] = True
         plan["installer"] = "installer" in wanted and "windows" in chosen
@@ -280,8 +289,9 @@ def decide(
         reasons.append(f"manual run: systems {', '.join(chosen)}; suites {', '.join(wanted)}")
 
     elif lane == "nightly":
-        plan.update(check_systems=list(SYSTEMS), check_tests=True, installer=True, validation_systems=list(SYSTEMS),
-                    screens=True, build=True, nsh_rust=True, core_plain=True, nsh_systems=list(SYSTEMS), shards=[0])
+        plan.update(chosen_systems=list(SYSTEMS), check_systems=list(SYSTEMS), check_tests=True, installer=True,
+                    validation_systems=list(SYSTEMS), screens=True, build=True, nsh_rust=True, core_plain=True,
+                    nsh_systems=list(SYSTEMS), shards=[0])
         reasons.append("nightly run: everything on all three systems")
 
     if not plan["screens"]:
@@ -305,6 +315,7 @@ def outputs(plan: dict) -> dict[str, str]:
     shards = plan["shards"]
     return {
         "lane": plan["lane"],
+        "chosen_systems": ",".join(plan["chosen_systems"]),
         "check": flag(bool(check)),
         "check_matrix": json.dumps({"include": check}, separators=(",", ":")),
         "nsh_check": flag(plan["nsh_check"]),
@@ -370,6 +381,7 @@ def main() -> int:
             state=env.get("PR_STATE", ""),
             draft=env.get("DRAFT", "") == "true",
             branch=env.get("BRANCH", ""),
+            sync_lane=env.get("PR_SYNC_LANE", "quick"),
             changed=changed_files(env) if env.get("EVENT") in ("pull_request", "push") else None,
             labels=pull_request_labels(env),
             systems=env.get("IN_SYSTEMS", ""),

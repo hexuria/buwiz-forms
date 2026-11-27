@@ -48,10 +48,35 @@ class FakeGitHub(ci_batch.GitHub):
         self.job_pages: dict = {}
         self.job_logs: dict = {}
         self.api_reads: list = []
+        self.unproven_heads: set = set()
+        self.synthetic_ci: dict = {}
 
     def sha(self, ref: str) -> str:
         return subprocess.run(["git", "rev-parse", ref], cwd=self.origin, capture_output=True, text=True,
                               check=True).stdout.strip()
+
+    def add_synthetic_ci_proof(self, sha: str) -> dict:
+        """A default green ci.yml test-lane proof, like the default green ci-ok, for tests not about that gate."""
+        run_id = 900000000 + len(self.synthetic_ci)
+        branch = "test/linux-windows/synthetic"
+        changed = ["scripts/ci_batch.py"]
+        plan = ci_plan.decide(event="push", ref=f"refs/heads/{branch}", branch=branch, changed=changed)
+        run = dict(id=run_id, name="CI", head_sha=sha, status="completed", conclusion="success", event="push",
+                   head_branch=branch, path=".github/workflows/ci.yml", run_attempt=1)
+        plan_id = run_id * 1000 + 999
+        jobs = [dict(id=plan_id, name="changes", status="completed", conclusion="success", steps=[])]
+        for index, system in enumerate(("linux", "windows")):
+            os_name = ci_plan.CHECK_OS[system]["os"]
+            jobs.append(dict(id=run_id * 1000 + 100 + index, name=f"workspace tests ({os_name})",
+                             status="completed", conclusion="success", steps=[]))
+        jobs.append(dict(id=run_id * 1000 + 1, name="tests-ok", status="completed", conclusion="success", steps=[]))
+        values = ci_plan.outputs(plan)
+        lines = [f"lane: {plan['lane']}", *plan["reasons"]] + [f"{name}: {value}" for name, value in values.items()]
+        self.job_logs[plan_id] = "\n".join(lines) + "\n"
+        self.job_lists[run_id] = jobs
+        self.workflow_runs_by_sha.setdefault(sha, []).append(run)
+        self.synthetic_ci[sha] = run_id
+        return run
 
     def _gh(self, *args: str) -> str:
         if len(args) >= 2 and args[0] == "api":
@@ -60,8 +85,13 @@ class FakeGitHub(ci_batch.GitHub):
             runs = re.fullmatch(rf"repos/{re.escape(self.repo)}/actions/workflows/([^/]+)/runs"
                                 rf"\?head_sha=([0-9a-f]{{40}})&per_page=100", endpoint)
             if runs:
-                sha = runs.group(2)
-                return json.dumps({"workflow_runs": self.workflow_runs_by_sha.get(sha, [])})
+                workflow_file, sha = runs.group(1), runs.group(2)
+                existing = self.workflow_runs_by_sha.get(sha, [])
+                if (workflow_file == "ci.yml" and sha not in self.unproven_heads
+                        and not any(run.get("path") == ".github/workflows/ci.yml" for run in existing)):
+                    self.add_synthetic_ci_proof(sha)
+                    existing = self.workflow_runs_by_sha.get(sha, [])
+                return json.dumps({"workflow_runs": existing})
             jobs = re.fullmatch(rf"repos/{re.escape(self.repo)}/actions/runs/(\d+)/jobs\?per_page=100&page=(\d+)",
                                 endpoint)
             if jobs:
@@ -248,13 +278,53 @@ class BuildTests(BatchTestCase):
             self.github.job_logs[run_id * 1000 + 999] = log
         return run
 
+    def labeled_suite_plan(self, systems, changed):
+        wanted = tuple(system for system in ci_plan.SYSTEMS if system in systems)
+        labels = {tuple(label_systems): label for label, label_systems in ci_plan.SUITE_LABEL_SYSTEMS.items()}
+        return ci_plan.decide(event="pull_request", ref="refs/pull/1/merge", action="labeled",
+                              label=labels[wanted], changed=list(changed))
+
+    def labeled_suite_log(self, systems, changed) -> str:
+        plan = self.labeled_suite_plan(systems, changed)
+        values = ci_plan.outputs(plan)
+        lines = [f"lane: {plan['lane']}", *plan["reasons"]]
+        lines += [f"{name}: {value}" for name, value in values.items()]
+        return "\n".join("2026-11-28T00:00:00.0000000Z " + line for line in lines) + "\n"
+
+    def ci_check_job(self, run_id: int, system: str, conclusion: str = "success"):
+        os_name = ci_plan.CHECK_OS[system]["os"]
+        job_id = run_id * 1000 + 100 + ("macos", "linux", "windows").index(system)
+        return dict(id=job_id, name=f"workspace tests ({os_name})", status="completed", conclusion=conclusion,
+                    steps=[])
+
     def add_tests_ok_run(self, head: str, run_id: int, workflow_file: str, *, event: str = "pull_request",
-                         job_conclusion: str = "success"):
+                         job_conclusion: str = "success", systems=("linux", "windows"), changed=None):
+        changed = list(changed if changed is not None else ["nsh/src/app.tsx"])
         path = f".github/workflows/{workflow_file}"
-        run = self.suite_run(head, run_id, event=event, branch="feat/change", path=path)
+        run_conclusion = "success" if job_conclusion == "success" else "failure"
+        run = self.suite_run(head, run_id, event=event, branch="feat/change", path=path,
+                             conclusion=run_conclusion)
+        plan = self.labeled_suite_plan(systems, changed)
+        plan_job_id = run_id * 1000 + 999
+        plan_job_name = "changes" if workflow_file == "ci.yml" else "plan"
+        jobs = [dict(id=plan_job_id, name=plan_job_name, status="completed", conclusion="success", steps=[])]
+        if workflow_file == "ci.yml":
+            os_to_system = {values["os"]: system for system, values in ci_plan.CHECK_OS.items()}
+            matrix = json.loads(ci_plan.outputs(plan)["check_matrix"])["include"]
+            for entry in matrix:
+                jobs.append(self.ci_check_job(run_id, os_to_system[entry["os"]]))
+            if plan["installer"]:
+                jobs.append(dict(id=run_id * 1000 + 90, name="Build and audit unsigned Windows Setup",
+                                 status="completed", conclusion="success", steps=[]))
+        else:
+            wanted = list(range(plan["shard_count"]))
+            for system in plan["nsh_systems"]:
+                jobs.extend(self.shard_job(run_id, system, shard) for shard in wanted)
+        jobs.append(dict(id=run_id * 1000 + 1, name="tests-ok", status="completed", conclusion=job_conclusion,
+                         steps=[]))
         self.github.workflow_runs_by_sha.setdefault(head, []).append(run)
-        self.github.job_lists[run_id] = [dict(id=run_id * 1000 + 1, name="tests-ok", status="completed",
-                                              conclusion=job_conclusion, steps=[])]
+        self.github.job_lists[run_id] = jobs
+        self.github.job_logs[plan_job_id] = self.labeled_suite_log(systems, changed)
         return run
 
     def manual_log(self, systems=("linux", "windows"), suites: str = "all", screens: str = "",
@@ -335,11 +405,12 @@ class BuildTests(BatchTestCase):
         right = self.suite_run(head, 451, name="Renamed workflow")
         self.github.workflow_runs_by_sha[head] = [wrong, right]
         self.github.job_lists[451] = self.green_jobs(451)
+        self.add_tests_ok_run(head, 452, "ci.yml")
 
         code, output = self.main("build", "--dry-run", "52")
 
         self.assertEqual(code, 0)
-        self.assertIn(f"#52      {head}  suite 451  Change 52", output)
+        self.assertIn(f"#52      {head}  suite 451,452  Change 52", output)
 
     def test_suite_green_at_the_head_passes_and_the_dry_run_prints_the_run_id(self):
         head = self.repos.pull_request(35, self.base, {"nsh/src/app.tsx": "app\n"})
@@ -349,7 +420,7 @@ class BuildTests(BatchTestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
-        self.assertIn(f"#35      {head}  suite 456  Change 35", output)
+        self.assertIn(f"#35      {head}  suite 456,{self.github.synthetic_ci[head]}  Change 35", output)
 
     def test_pull_request_tests_ok_in_both_workflows_counts_as_suite_proof(self):
         head = self.repos.pull_request(80, self.base, {"nsh/src/app.tsx": "app\n"})
@@ -367,6 +438,7 @@ class BuildTests(BatchTestCase):
 
     def test_tests_ok_in_only_one_workflow_refuses_and_prints_ci_suite(self):
         head = self.repos.pull_request(81, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.github.unproven_heads.add(head)
         self.add_tests_ok_run(head, 82, "nsh.yml")
 
         with self.assertRaises(ci_batch.BatchError) as caught:
@@ -390,6 +462,47 @@ class BuildTests(BatchTestCase):
 
         self.assertIn("just ci-suite 82", str(caught.exception))
 
+    def test_a_linux_only_label_run_does_not_satisfy_a_batch_needing_windows(self):
+        head = self.repos.pull_request(83, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_tests_ok_run(head, 90, "ci.yml", systems=("linux",))
+        self.add_tests_ok_run(head, 91, "nsh.yml", systems=("linux",))
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(83)
+
+        text = str(caught.exception)
+        self.assertIn("windows", text)
+        self.assertIn("just ci-suite 83", text)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+
+    def test_a_newer_red_label_run_hides_an_older_green_one_at_the_same_head(self):
+        head = self.repos.pull_request(84, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_tests_ok_run(head, 92, "ci.yml")
+        self.add_tests_ok_run(head, 93, "nsh.yml")
+        self.add_tests_ok_run(head, 94, "ci.yml", job_conclusion="failure")
+        self.add_tests_ok_run(head, 95, "nsh.yml", job_conclusion="failure")
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(84)
+
+        text = str(caught.exception)
+        self.assertIn("failed", text)
+        self.assertIn("run 94", text)
+        self.assertIn("run 95", text)
+        self.assertIn("just ci-suite 84", text)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+
+    def test_the_newest_green_label_run_with_both_needed_systems_is_accepted(self):
+        head = self.repos.pull_request(85, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_tests_ok_run(head, 96, "ci.yml")
+        self.add_tests_ok_run(head, 97, "nsh.yml")
+
+        code, output = self.main("build", "--dry-run", "85")
+
+        self.assertEqual(code, 0)
+        self.assertIn(f"#85      {head}  suite 96,97  Change 85", output)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+
     def test_suite_missing_refuses_with_the_ci_suite_command(self):
         head = self.repos.pull_request(36, self.base, {"nsh/src/app.tsx": "app\n"})
 
@@ -397,7 +510,7 @@ class BuildTests(BatchTestCase):
             self.build(36)
 
         text = str(caught.exception)
-        self.assertIn("refused by the NSH app suite gate", text)
+        self.assertIn("refused by the test suite gate", text)
         self.assertIn(f"#36 at {head}", text)
         self.assertIn("linux missing (no run)", text)
         self.assertIn("windows missing (no run)", text)
@@ -431,15 +544,53 @@ class BuildTests(BatchTestCase):
         self.assertIn("running", str(caught.exception))
         self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
 
-    def test_only_scripts_changed_passes_with_no_suite_run(self):
+    def test_a_scripts_only_pull_request_with_only_the_quick_ci_ok_refuses(self):
         head = self.repos.pull_request(39, self.base, {"scripts/ci_batch.py": "# batch\n"})
+        self.github.unproven_heads.add(head)
 
-        code, output = self.main("build", "--dry-run", "39")
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(39)
+
+        text = str(caught.exception)
+        self.assertIn(f"#39 at {head}", text)
+        self.assertIn("ci.yml tests-ok is not green", text)
+        self.assertIn("just ci-suite 39", text)
+        self.assertIn("nothing was pushed", text)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+        self.assertFalse(any("actions/workflows/nsh.yml" in endpoint for endpoint in self.github.api_reads))
+
+    def test_a_scripts_only_pull_request_with_a_green_ci_suite_run_for_the_needed_systems_passes(self):
+        head = self.repos.pull_request(86, self.base, {"scripts/ci_batch.py": "# batch\n"})
+        self.add_tests_ok_run(head, 98, "ci.yml", changed=["scripts/ci_batch.py"])
+
+        code, output = self.main("build", "--dry-run", "86")
 
         self.assertEqual(code, 0)
-        self.assertIn(f"#39      {head}  Change 39", output)
-        self.assertNotIn("suite", output)
+        self.assertIn(f"#86      {head}  suite 98  Change 86", output)
         self.assertFalse(any("actions/workflows/nsh.yml" in endpoint for endpoint in self.github.api_reads))
+
+    def test_a_scripts_only_pull_request_with_a_green_ci_test_lane_push_passes(self):
+        head = self.repos.pull_request(88, self.base, {"scripts/ci_batch.py": "# batch\n"})
+        run = self.github.add_synthetic_ci_proof(head)
+
+        code, output = self.main("build", "--dry-run", "88")
+
+        self.assertEqual(run["event"], "push")
+        self.assertTrue(run["head_branch"].startswith("test/"))
+        self.assertEqual(code, 0)
+        self.assertIn(f"#88      {head}  suite {run['id']}  Change 88", output)
+        self.assertFalse(any("actions/workflows/nsh.yml" in endpoint for endpoint in self.github.api_reads))
+
+    def test_a_docs_only_suite_run_that_planned_no_test_jobs_is_accepted(self):
+        head = self.repos.pull_request(87, self.base, {"docs/CI.md": "# CI\n"})
+        self.add_tests_ok_run(head, 99, "ci.yml", changed=["docs/CI.md"])
+
+        code, output = self.main("build", "--dry-run", "87")
+
+        self.assertEqual(code, 0)
+        jobs = self.github.job_lists[99]
+        self.assertEqual([job["name"] for job in jobs], ["changes", "tests-ok"])
+        self.assertIn(f"#87      {head}  suite 99  Change 87", output)
 
     def test_allow_unsuited_lets_one_through_prints_it_and_records_it(self):
         head = self.repos.pull_request(40, self.base, {"nsh/src/app.tsx": "app\n"})
@@ -450,7 +601,7 @@ class BuildTests(BatchTestCase):
         pushed = git(self.repos.origin, "rev-parse", f"refs/heads/{branch}")
         self.assertEqual(code, 0)
         self.assertRegex(pushed, r"^[0-9a-f]{40}$")
-        self.assertIn(f"*** ALLOW-UNSUITED: #40 at {head}; skipping the NSH app suite gate ***", output)
+        self.assertIn(f"*** ALLOW-UNSUITED: #40 at {head}; skipping the test suite gate ***", output)
         message = git(self.repos.work, "log", "-1", "--format=%B", pushed)
         self.assertIn(f"Batch-Allow-Unsuited: 40 {head}", message)
         self.assertFalse(any("actions/workflows/nsh.yml" in endpoint for endpoint in self.github.api_reads))
@@ -474,7 +625,7 @@ class BuildTests(BatchTestCase):
             self.build(44, 45)
 
         text = str(caught.exception)
-        self.assertEqual(text.count("refused by the NSH app suite gate"), 1)
+        self.assertEqual(text.count("refused by the test suite gate"), 1)
         self.assertIn(f"#44 at {missing}", text)
         self.assertIn(f"#45 at {failed}", text)
         self.assertIn("missing", text)
@@ -551,7 +702,7 @@ class BuildTests(BatchTestCase):
         code, output = self.main("build", "--dry-run", "64")
 
         self.assertEqual(code, 0)
-        self.assertIn(f"#64      {head}  suite 41  Change 64", output)
+        self.assertIn(f"#64      {head}  suite 41,{self.github.synthetic_ci[head]}  Change 64", output)
 
     def test_two_runs_together_covering_both_systems_pass(self):
         head = self.repos.pull_request(65, self.base, {"nsh/src/app.tsx": "app\n"})
@@ -582,7 +733,7 @@ class BuildTests(BatchTestCase):
         code, output = self.main("build", "--dry-run", "72")
 
         self.assertEqual(code, 0)
-        self.assertIn(f"#72      {head}  suite 80  Change 72", output)
+        self.assertIn(f"#72      {head}  suite 80,{self.github.synthetic_ci[head]}  Change 72", output)
 
     def test_a_re_run_without_a_carried_over_shard_is_missing(self):
         head = self.repos.pull_request(73, self.base, {"nsh/src/app.tsx": "app\n"})
@@ -754,7 +905,7 @@ class BuildTests(BatchTestCase):
         self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
         self.assertEqual(git(self.repos.work, "for-each-ref", "refs/ci-batch"), "")
         self.assertIn(f"main     {self.base}", output)
-        self.assertIn(f"#21      {head}  Change 21", output)
+        self.assertIn(f"#21      {head}  suite {self.github.synthetic_ci[head]}  Change 21", output)
         self.assertIn("\ntree     ", "\n" + output)
         self.assertIn("dry-run: nothing was pushed", output)
         self.assertNotIn("https://github.com/hexuria/buwiz-forms/actions", output)
@@ -983,8 +1134,9 @@ class BatchDocsTests(unittest.TestCase):
             self.assertIn(wording, docs)
         self.assertIn("### What a pull request needs before a batch", docs)
         section = docs.split("### What a pull request needs before a batch", 1)[1].split("\n## ", 1)[0]
-        for wording in ("ci-ok", "NSH app", "just ci-suite", "--allow-unchecked", "--allow-unsuited",
-                        "per system", "every shard"):
+        for wording in ("ci-ok", "every pull request", "ci.yml's tests-ok", "pull_request suite run",
+                        "test-lane push", "judged per needed system", "nsh.yml", "just ci-suite",
+                        "--allow-unchecked", "--allow-unsuited", "every shard"):
             self.assertIn(wording, section)
 
 
