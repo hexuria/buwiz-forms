@@ -1,3 +1,4 @@
+// Throwaway line: proves the agent compile check runs on a pull request that touches this file. Never merged.
 //! The NSH host's agent remote control, end to end: an external client (the way `bir-mcp` is one: gpui-agent's
 //! `AgentClient`, a token, `hello` and `invoke`) against the listener of `nsh_app_ebirforms::agent`, on a scratch
 //! database. The test thread is the engine thread: it boots the door, owns the database slot and drains the mailbox,
