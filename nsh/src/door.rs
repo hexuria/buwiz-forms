@@ -56,11 +56,7 @@ pub(crate) fn install_logging() {
     static LOGGING: Once = Once::new();
     LOGGING.call_once(|| {
         if test_environment() {
-            bir_core::log_files::set_default_log_dir(
-                bir_core::platform::temp_dir()
-                    .join(format!("ebirforms-logs-{}", std::process::id()))
-                    .join("logs"),
-            );
+            bir_core::log_files::set_default_log_dir(bir_core::log_files::fresh_test_log_dir());
         }
         let developer_mode = bir_core::logging::developer_mode_enabled();
         let default_filter = if developer_mode {

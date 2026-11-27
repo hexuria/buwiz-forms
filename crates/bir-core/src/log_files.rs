@@ -53,16 +53,21 @@ pub fn log_dir() -> PathBuf {
     unnamed_log_dir(cfg!(any(test, feature = "test-support")) || crate::db::test_environment())
 }
 
-/// The log folder when none is named: for a test run
-/// `<temp>/ebirforms-logs-<pid>/logs` (the NSH app's test-run folder; emptied
-/// on its first use in the process, so a reused pid never sees old logs), else
-/// `<data_dir>/logs`.
+/// The log folder when none is named: for a test run [`fresh_test_log_dir`],
+/// else `<data_dir>/logs`.
 fn unnamed_log_dir(test_run: bool) -> PathBuf {
     if test_run {
-        static EMPTIED: OnceLock<PathBuf> = OnceLock::new();
-        return crate::platform::fresh_scratch_dir(&EMPTIED, "ebirforms-logs").join("logs");
+        return fresh_test_log_dir();
     }
     crate::platform::data_dir().join("logs")
+}
+
+/// A test run's log folder: `<temp>/ebirforms-logs-<pid>/logs`, the one
+/// bir-core and the NSH app both use. `ebirforms-logs-<pid>` is emptied on the
+/// first call in the process, so a reused pid never sees old logs.
+pub fn fresh_test_log_dir() -> PathBuf {
+    static EMPTIED: OnceLock<PathBuf> = OnceLock::new();
+    crate::platform::fresh_scratch_dir(&EMPTIED, "ebirforms-logs").join("logs")
 }
 
 /// `ebirforms.2026-09-12.log` — the name `tracing_appender` gives a daily

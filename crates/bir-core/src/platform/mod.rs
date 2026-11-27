@@ -98,7 +98,8 @@ fn test_data_dir() -> std::path::PathBuf {
 
 /// `<temp>/<prefix>-<pid>` ([`temp_dir`]), emptied the first time `once` is asked in this process: an earlier
 /// process with the same id may have left files there. Only that folder of the temp folder is ever removed, and only
-/// when its name is exactly `<prefix>-<pid>`; a link there is removed, never followed.
+/// when its name is exactly `<prefix>-<pid>`; a link there (a symlink, or on Windows any reparse point such as a
+/// junction) is removed as a link, never followed.
 pub(crate) fn fresh_scratch_dir(
     once: &std::sync::OnceLock<std::path::PathBuf>,
     prefix: &str,
@@ -110,7 +111,11 @@ pub(crate) fn fresh_scratch_dir(
         let own_folder = dir.parent() == Some(temp.as_path())
             && dir.file_name() == Some(std::ffi::OsStr::new(&name));
         if own_folder && let Ok(meta) = std::fs::symlink_metadata(&dir) {
-            let _ = if meta.is_dir() {
+            let _ = if meta.file_type().is_symlink() || is_reparse_point(&meta) {
+                // A directory link (a Windows junction or directory symlink) goes with remove_dir, any other with
+                // remove_file; neither follows it.
+                std::fs::remove_dir(&dir).or_else(|_| std::fs::remove_file(&dir))
+            } else if meta.is_dir() {
                 std::fs::remove_dir_all(&dir)
             } else {
                 std::fs::remove_file(&dir)
@@ -119,6 +124,19 @@ pub(crate) fn fresh_scratch_dir(
         dir
     })
     .clone()
+}
+
+/// Whether `meta` (from `symlink_metadata`) is a Windows reparse point: a junction, a symlink or another link.
+#[cfg(windows)]
+fn is_reparse_point(meta: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(_meta: &std::fs::Metadata) -> bool {
+    false
 }
 
 pub(crate) fn keychain_switch_is_on(value: Option<&str>) -> bool {
@@ -472,6 +490,55 @@ mod tests {
         assert!(
             kept.is_dir(),
             "a folder not named <prefix>-<pid> in the temp folder stays"
+        );
+    }
+
+    /// A link at the scratch folder is removed as a link: the folder it points at, and its files, stay.
+    #[cfg(unix)]
+    #[test]
+    fn a_link_at_the_scratch_folder_is_removed_never_followed() {
+        let prefix = "bir-test-scratch-link";
+        let link = temp_dir().join(format!("{prefix}-{}", std::process::id()));
+        let _ = std::fs::remove_file(&link);
+        let target = tempfile::tempdir().unwrap();
+        std::fs::write(target.path().join("kept"), "not ours").unwrap();
+        std::os::unix::fs::symlink(target.path(), &link).unwrap();
+        assert_eq!(fresh_scratch_dir(&std::sync::OnceLock::new(), prefix), link);
+        assert!(
+            std::fs::symlink_metadata(&link).is_err(),
+            "the link is gone"
+        );
+        assert!(
+            target.path().join("kept").is_file(),
+            "its target is untouched"
+        );
+    }
+
+    /// A junction at the scratch folder is removed as a link: the folder it points at, and its files, stay.
+    #[cfg(windows)]
+    #[test]
+    fn a_junction_at_the_scratch_folder_is_removed_never_followed() {
+        let prefix = "bir-test-scratch-junction";
+        let link = temp_dir().join(format!("{prefix}-{}", std::process::id()));
+        let _ = std::fs::remove_dir(&link);
+        let target = tempfile::tempdir().unwrap();
+        std::fs::write(target.path().join("kept"), "not ours").unwrap();
+        let made = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(&link)
+            .arg(target.path())
+            .output()
+            .unwrap();
+        assert!(made.status.success(), "mklink /J: {made:?}");
+        assert!(is_reparse_point(&std::fs::symlink_metadata(&link).unwrap()));
+        assert_eq!(fresh_scratch_dir(&std::sync::OnceLock::new(), prefix), link);
+        assert!(
+            std::fs::symlink_metadata(&link).is_err(),
+            "the junction is gone"
+        );
+        assert!(
+            target.path().join("kept").is_file(),
+            "its target is untouched"
         );
     }
 
