@@ -1,17 +1,55 @@
 {
  "v": 1,
  "name": "otp-tin-after-tap",
- "app": "bir-shell",
- "params": ["tin", "tin_field"],
+ "params": [
+  "tin_field",
+  "tin"
+ ],
  "steps": [
-  {"id": "s1", "op": "wait_until", "target": "setup-solo", "timeout_ms": 30000},
-  {"id": "s2", "op": "click", "target": "setup-solo"},
-  {"id": "s3", "op": "wait_until", "target": "new-tp-name", "timeout_ms": 5000},
-  {"id": "s4", "op": "type", "target": "$tin_field", "text": "$tin", "key_delay_ms": 80, "screenshot": true},
-  {"id": "s5", "op": "click", "target": "new-tp-name"},
-  {"id": "s6", "op": "click", "target": "$tin_field"},
-  {"id": "s7", "op": "long_press", "target": "$tin_field", "duration_ms": 1200},
-  {"id": "s8", "op": "screenshot", "path": "after-longpress.png"},
-  {"id": "s9", "op": "snapshot"}
+  {
+   "id": "s1",
+   "op": "wait_until",
+   "target": "setup-solo",
+   "timeout_ms": 30000,
+   "exists": true,
+   "screenshot": true
+  },
+  {
+   "id": "s2",
+   "op": "click",
+   "target": "setup-solo"
+  },
+  {
+   "id": "s3",
+   "op": "wait_until",
+   "target": "new-tp-name",
+   "timeout_ms": 8000,
+   "exists": true
+  },
+  {
+   "id": "s4",
+   "op": "type",
+   "target": "$tin_field",
+   "text": "$tin",
+   "key_delay_ms": 80
+  },
+  {
+   "id": "s5",
+   "op": "click",
+   "target": "new-tp-name",
+   "screenshot": true
+  },
+  {
+   "id": "s6",
+   "op": "click",
+   "target": "$tin_field"
+  },
+  {
+   "id": "s7",
+   "op": "long_press",
+   "target": "$tin_field",
+   "duration_ms": 1200,
+   "screenshot": true
+  }
  ]
 }

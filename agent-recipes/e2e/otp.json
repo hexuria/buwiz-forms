@@ -9,6 +9,8 @@
   {
    "name": "tin-first",
    "file": "otp-tin-first.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-tin-first.json",
    "resolve": {
     "tin_field": {
      "role": [
@@ -17,13 +19,13 @@
      ],
      "name_regex": "^TIN, 9 digits"
     }
-   },
-   "needs_cli": "0.4.1",
-   "fallback": "otp-tin-first.json"
+   }
   },
   {
    "name": "tin-after-tap",
    "file": "otp-tin-after-tap.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-tin-after-tap.json",
    "resolve": {
     "tin_field": {
      "role": [
@@ -32,9 +34,22 @@
      ],
      "name_regex": "^TIN, 9 digits"
     }
-   },
+   }
+  },
+  {
+   "name": "tin-scroll",
+   "file": "otp-tin-scroll.json",
    "needs_cli": "0.4.1",
-   "fallback": "otp-tin-after-tap.json"
+   "fallback": "otp-tin-scroll.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
   }
  ]
 }
