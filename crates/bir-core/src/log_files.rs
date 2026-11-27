@@ -38,17 +38,31 @@ pub fn set_default_log_dir(dir: PathBuf) {
 /// On macOS `data_dir` is the App Group container
 /// (`~/Library/Group Containers/group.dev.goldcoders.bir`), so the files land
 /// in that container's `logs` folder. `BIR_LOG_DIR`, when set and non-empty,
-/// replaces the directory — tests point it at a scratch folder.
+/// replaces the directory, then an embedder's [`set_default_log_dir`]. A test
+/// run that named neither (a test build, or `EBIR_TEST_ENV`) gets a scratch
+/// folder of its process, so [`maintain`] never prunes the real logs.
 pub fn log_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("BIR_LOG_DIR")
         && !dir.is_empty()
     {
         return PathBuf::from(dir);
     }
-    DEFAULT_LOG_DIR
-        .get()
-        .cloned()
-        .unwrap_or_else(|| crate::platform::data_dir().join("logs"))
+    if let Some(dir) = DEFAULT_LOG_DIR.get() {
+        return dir.clone();
+    }
+    unnamed_log_dir(cfg!(any(test, feature = "test-support")) || crate::db::test_environment())
+}
+
+/// The log folder when none is named: for a test run
+/// `<temp>/ebirforms-logs-<pid>/logs` (the NSH app's test-run folder), else
+/// `<data_dir>/logs`.
+fn unnamed_log_dir(test_run: bool) -> PathBuf {
+    if test_run {
+        return crate::platform::temp_dir()
+            .join(format!("ebirforms-logs-{}", std::process::id()))
+            .join("logs");
+    }
+    crate::platform::data_dir().join("logs")
 }
 
 /// `ebirforms.2026-09-12.log` — the name `tracing_appender` gives a daily
@@ -322,6 +336,35 @@ mod tests {
         temp_env::with_var("BIR_LOG_DIR", Some(""), || {
             assert_ne!(log_dir(), PathBuf::from(""));
         });
+    }
+
+    /// A test run (`cfg(test)`, another crate's tests through `test-support`, or `EBIR_TEST_ENV`) that names no log
+    /// folder prunes a scratch one: never `data_dir()/logs`, nor anything under the real data folder.
+    #[cfg(not(target_os = "android"))]
+    #[test]
+    fn a_test_run_never_prunes_the_real_log_folder() {
+        for test_env in [None, Some("1")] {
+            temp_env::with_vars(
+                [("BIR_LOG_DIR", None::<&str>), ("EBIR_TEST_ENV", test_env)],
+                || {
+                    let dir = log_dir();
+                    for real in [crate::platform::os_data_dir(), crate::platform::data_dir()] {
+                        assert_ne!(dir, real.join("logs"));
+                        assert!(
+                            !dir.starts_with(&real),
+                            "{} is under the data folder {}",
+                            dir.display(),
+                            real.display()
+                        );
+                    }
+                },
+            );
+        }
+        // Outside a test run (every build that ships, without EBIR_TEST_ENV): the data folder's logs, as before.
+        assert_eq!(
+            unnamed_log_dir(false),
+            crate::platform::data_dir().join("logs")
+        );
     }
 
     #[test]

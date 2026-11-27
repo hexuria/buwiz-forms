@@ -16,9 +16,52 @@ pub const NO_KEYCHAIN_ENV: &str = "BUWIZ_NO_KEYCHAIN";
 /// answers "not found" and every write fails, without calling the OS. Dev,
 /// test and agent runs always set it. Any value except empty, `0`, `false`,
 /// `no` or `off` switches the keychain off, so a typo cannot reach the OS.
+///
+/// A test build (bir-core's own tests, or another crate's through bir-core's
+/// `test-support` feature) has the keychain off whatever the switch says: a
+/// test never reads, writes or deletes the person's real keychain items.
 pub fn keychain_disabled() -> bool {
-    cfg!(target_os = "android")
+    cfg!(any(test, feature = "test-support", target_os = "android"))
         || keychain_switch_is_on(crate::config::var(NO_KEYCHAIN_ENV).ok().as_deref())
+}
+
+/// The app's data folder.
+///
+/// In a test build (bir-core's own tests, or another crate's through
+/// bir-core's `test-support` feature, never an app or release build) a data
+/// folder outside the system temp folder is never used: a test that did not
+/// point `HOME` (`XDG_DATA_HOME`, `LOCALAPPDATA`) at a temp folder of its own
+/// gets this process's scratch folder instead, so nothing a test writes,
+/// renames or deletes lands in the person's real data folder. Every build
+/// that ships answers the system's folder, as before.
+pub fn data_dir() -> std::path::PathBuf {
+    let dir = os_data_dir();
+    #[cfg(all(any(test, feature = "test-support"), not(target_os = "android")))]
+    if !in_temp_folder(&dir) {
+        return test_data_dir();
+    }
+    dir
+}
+
+/// The system's data folder for this app, without the test-build rule of [`data_dir`].
+pub(crate) fn os_data_dir() -> std::path::PathBuf {
+    os::data_dir()
+}
+
+/// Whether `path` is inside the system temp folder (both resolved where they exist).
+#[cfg(all(any(test, feature = "test-support"), not(target_os = "android")))]
+fn in_temp_folder(path: &std::path::Path) -> bool {
+    let resolve =
+        |path: &std::path::Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    resolve(path).starts_with(resolve(&std::env::temp_dir()))
+}
+
+/// The scratch data folder of a test process: `<temp>/bir-test-data-<pid>`.
+#[cfg(all(any(test, feature = "test-support"), not(target_os = "android")))]
+fn test_data_dir() -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("bir-test-data-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    dir
 }
 
 pub(crate) fn keychain_switch_is_on(value: Option<&str>) -> bool {
@@ -193,28 +236,39 @@ impl Pending {
     }
 }
 
+// Each system's `data_dir` is shadowed by [`data_dir`] above and reached as `os::data_dir`.
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "macos")]
+use macos as os;
 #[cfg(target_os = "macos")]
 pub use macos::*;
 
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "windows")]
+use windows as os;
+#[cfg(target_os = "windows")]
 pub use windows::*;
 
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "linux")]
+use linux as os;
 #[cfg(target_os = "linux")]
 pub use linux::*;
 
 #[cfg(target_os = "ios")]
 mod ios;
 #[cfg(target_os = "ios")]
+use ios as os;
+#[cfg(target_os = "ios")]
 pub use ios::*;
 
 #[cfg(target_os = "android")]
 mod android;
+#[cfg(target_os = "android")]
+use android as os;
 #[cfg(target_os = "android")]
 pub use android::*;
 
@@ -304,6 +358,44 @@ mod tests {
         temp_env::with_var(NO_KEYCHAIN_ENV, Some("1"), || {
             assert!(keychain_disabled());
         });
+    }
+
+    #[test]
+    fn a_test_build_has_the_keychain_off_even_when_the_switch_is_off() {
+        temp_env::with_var(NO_KEYCHAIN_ENV, Some("0"), || {
+            assert!(keychain_disabled());
+        });
+    }
+
+    /// A test build never uses a data folder outside the system temp folder: with the account's own home it gets a
+    /// scratch folder, never the real one; a test that points the home at a temp folder keeps that folder.
+    #[cfg(not(target_os = "android"))]
+    #[test]
+    fn a_test_build_never_uses_the_real_data_folder() {
+        let temp = std::env::temp_dir().canonicalize().unwrap();
+        let real = os_data_dir();
+        let dir = data_dir();
+        assert!(
+            dir.canonicalize().unwrap().starts_with(&temp),
+            "{}",
+            dir.display()
+        );
+        assert!(
+            in_temp_folder(&real) || (dir != real && !dir.starts_with(&real)),
+            "{} is the real data folder {}",
+            dir.display(),
+            real.display()
+        );
+
+        let home = tempfile::tempdir().unwrap();
+        temp_env::with_vars(
+            [
+                ("HOME", Some(home.path().as_os_str())),
+                ("XDG_DATA_HOME", None),
+                ("LOCALAPPDATA", Some(home.path().as_os_str())),
+            ],
+            || assert_eq!(data_dir(), os_data_dir()),
+        );
     }
 
     #[cfg(target_os = "android")]

@@ -5075,6 +5075,32 @@ mod tests {
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
     }
 
+    /// What these tests prune, open or write when they name no folder (`set_log_retention`'s log pruning, the
+    /// device store `system_info` reads, the device files) is in the temp folder, never the real data folder.
+    #[test]
+    fn host_tests_keep_out_of_the_real_data_folder() {
+        temp_env::with_vars(
+            [("BIR_LOG_DIR", None::<&str>), ("BIR_DATABASE_PATH", None)],
+            || {
+                db::set_database_path_override(None);
+                let temp = std::env::temp_dir().canonicalize().unwrap();
+                let logs = bir_core::log_files::log_dir();
+                std::fs::create_dir_all(&logs).unwrap();
+                for dir in [
+                    logs,
+                    bir_core::platform::data_dir(),
+                    bir_core::platform::device_dir(),
+                ] {
+                    assert!(
+                        dir.canonicalize().unwrap().starts_with(&temp),
+                        "{} is outside the temp folder",
+                        dir.display()
+                    );
+                }
+            },
+        );
+    }
+
     /// Accounts-and-lock A1 (O1): the device-wide settings a person set
     /// before A1 live in the open database. Each reader answers them until
     /// `device_settings` has a value; every write goes to `device_settings`.
