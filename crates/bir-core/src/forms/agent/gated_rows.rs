@@ -664,26 +664,26 @@ pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<Cle
 
     let mut cleared = Vec::new();
     for (unit_gate, gate, keys, line) in units {
-        let changed = keys.iter().any(|key| {
-            let Some(bound) = kind.definition().bindings.get(*key) else {
-                return false;
-            };
-            let Some((path, probe_kind)) = binding_path(&bound.binding) else {
-                return false;
-            };
-            let held = before
-                .pointer(path)
-                .is_some_and(|value| !empty_for_kind(value, probe_kind));
-            let gone = after
-                .pointer(path)
-                .is_none_or(|value| empty_for_kind(value, probe_kind));
-            held && gone
-        });
-        if changed
-            && keys
-                .iter()
-                .any(|key| lock_reason(kind, after, key).is_some())
-        {
+        let cleared_keys: Vec<&'static str> = keys
+            .iter()
+            .copied()
+            .filter(|key| {
+                let Some(bound) = kind.definition().bindings.get(*key) else {
+                    return false;
+                };
+                let Some((path, probe_kind)) = binding_path(&bound.binding) else {
+                    return false;
+                };
+                let held = before
+                    .pointer(path)
+                    .is_some_and(|value| !empty_for_kind(value, probe_kind));
+                let gone = after
+                    .pointer(path)
+                    .is_none_or(|value| empty_for_kind(value, probe_kind));
+                held && gone && lock_reason(kind, after, key).is_some()
+            })
+            .collect();
+        if !cleared_keys.is_empty() {
             let text = line.map_or_else(
                 || gate.cleared.to_string(),
                 |line| row_cleared_text(gate, line),
@@ -691,7 +691,7 @@ pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<Cle
             cleared.push(Clearance {
                 gate: unit_gate,
                 text,
-                keys,
+                keys: cleared_keys,
             });
         }
     }

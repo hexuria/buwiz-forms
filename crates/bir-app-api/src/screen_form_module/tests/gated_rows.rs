@@ -551,6 +551,54 @@ fn form_1701a_joint_rate_and_foreign_boxes_are_gated() {
 }
 
 #[test]
+fn form_1701a_zeroing_an_open_column_box_is_not_a_shut_column_clearing() {
+    setup();
+    let amount = "frm1701A:txt36A";
+    let spouse_amount = "frm1701A:txt36B";
+    let opened = open("1701A", 0);
+    let graduated = fill(
+        "1701A",
+        &opened["draft"],
+        json!({
+            "frm1701A:optTaxType_1": "true",
+            "frm1701A:optATC_1": "true",
+        }),
+    );
+    assert_eq!(
+        graduated["relocks"][amount],
+        Value::Null,
+        "graduated column A is open"
+    );
+    assert!(
+        graduated["relocks"][spouse_amount].is_string(),
+        "column B is shut without a joint return"
+    );
+    let typed = fill("1701A", &graduated["draft"], json!({ amount: "100" }));
+    assert_eq!(typed["draft"]["taxpayer"]["sales"], 100.0);
+    let zeroed = fill("1701A", &typed["draft"], json!({ amount: "0" }));
+    assert_eq!(zeroed["draft"]["taxpayer"]["sales"], 0.0);
+    let cleared = "This schedule was cleared: it applies only to graduated rates.";
+    assert_ne!(
+        zeroed["relock_notes"][amount],
+        json!(cleared),
+        "zeroing the open box is not the shut column's clearing"
+    );
+    assert_ne!(
+        zeroed["relock_notes"][spouse_amount],
+        json!(cleared),
+        "nothing in the shut column was typed or cleared"
+    );
+    save("1701A", &zeroed["draft"]);
+    assert_eq!(
+        raw_count(
+            "SELECT count(*) FROM settings WHERE key LIKE 'notice_pending:1701a_graduated_schedule:%'"
+        ),
+        0,
+        "the assistant/save path records no false pending notice"
+    );
+}
+
+#[test]
 fn form_1701ms_column_a_boxes_are_gated() {
     setup();
     let opened = open("1701MS", 0);
