@@ -3996,6 +3996,67 @@ mod tests {
     }
 
     #[test]
+    fn form_fill_lets_the_assistant_write_1601fq_schedule1_only_at_item_13_yes() {
+        use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
+        use bir_core::forms::form_1601fq::{Form1601FqDraft, Form1601FqTaxRelief};
+
+        let mut no_session = session();
+        save_scratch(&mut no_session);
+        call(
+            &mut no_session,
+            "form.open",
+            json!({"code": "1601FQ", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let refused = call(
+            &mut no_session,
+            "form.fill",
+            json!({"fields": {"txtAmtIncomePay0": "42"}}),
+        )
+        .unwrap();
+        assert_eq!(
+            refused["refused"]["txtAmtIncomePay0"],
+            gate::LOCK,
+            "{refused}"
+        );
+
+        // Item 13's own radio is the host's editor, so the Yes draft the
+        // assistant writes into is one the page already holds at Yes.
+        let mut yes_session = session();
+        call(
+            &mut yes_session,
+            "profile.save",
+            json!({"tin": TIN, "name": "TEST", "rdo_code": "040", "birth_date": "1990-01-15",
+                   "address": "1 TEST STREET", "zip": "1100", "phone": "09170000000",
+                   "email": "test@example.com"}),
+        )
+        .unwrap();
+        {
+            let db = yes_session.lock_db().unwrap();
+            let profile = db.get_profile_for_year(TIN, 2026).unwrap().unwrap();
+            let mut draft = Form1601FqDraft::new_from_profile(&profile, 2026, 1);
+            draft.set_tax_relief(Some(Form1601FqTaxRelief::SpecialRate));
+            db.save_queueable_draft(&draft).unwrap();
+        }
+        call(
+            &mut yes_session,
+            "form.open",
+            json!({"code": "1601FQ", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let typed = call(
+            &mut yes_session,
+            "form.fill",
+            json!({"fields": {"txtAmtIncomePay0": "42", "txtRate0": "10"}}),
+        )
+        .unwrap();
+        assert!(typed.get("refused").is_none(), "{typed}");
+        let row = &yes_session.open.as_ref().unwrap().draft["schedule1"][0];
+        assert_eq!(row["income_payment"], 42.0);
+        assert_eq!(row["tax_rate"], 10.0);
+    }
+
+    #[test]
     fn form_open_records_a_dormant_1601fq_schedule1_clearing_by_stable_row() {
         use bir_core::forms::form_1601fq::{Form1601FqDraft, Form1601FqTaxRelief};
 

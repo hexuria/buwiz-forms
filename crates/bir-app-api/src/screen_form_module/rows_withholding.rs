@@ -191,8 +191,12 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
 /// does not apply on the page). A 1602Q box Item 13 opens is written by the
 /// ordinary fill once it is open.
 pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
-    cell(kind, key)
-        .is_some_and(|cell| !matches!(cell, Cell::Q2Gated | Cell::FqTax25 | Cell::FqSched1Computed))
+    cell(kind, key).is_some_and(|cell| {
+        !matches!(
+            cell,
+            Cell::Q2Gated | Cell::FqTax25 | Cell::FqSched1Input | Cell::FqSched1Computed
+        )
+    })
 }
 
 /// An ATC is chosen before its row's tax base.
