@@ -526,7 +526,7 @@ pub(crate) fn device_poll_auth() -> Option<(String, String)> {
     Some((stored.server_url, stored.access_token))
 }
 
-fn load_stored() -> Result<Option<StoredAccount>, HostError> {
+pub(crate) fn load_stored() -> Result<Option<StoredAccount>, HostError> {
     cloud_account::load_stored_account().map_err(host_error)
 }
 

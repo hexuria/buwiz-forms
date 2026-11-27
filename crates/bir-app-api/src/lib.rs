@@ -25,6 +25,7 @@ pub mod print_sheet;
 pub mod room_session;
 pub mod screen_form_module;
 pub mod send_state;
+pub mod session;
 pub mod static_html;
 pub mod tax_profile_module;
 

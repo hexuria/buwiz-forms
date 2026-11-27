@@ -70,6 +70,7 @@ pub mod rooms;
 pub mod safe_fs;
 pub mod schema;
 pub mod send_in_flight;
+pub mod session_epoch;
 pub mod tax_profile;
 #[cfg(test)]
 pub(crate) mod test_logs;
