@@ -51,7 +51,8 @@
    "file": "tax-year.wants",
    "linux": "tax-year-narrow.wants",
    "android": "tax-year-narrow.wants",
-   "required": true
+   "required": true,
+   "phone": "tax-year-narrow.wants"
   },
   {
    "name": "navigate",
