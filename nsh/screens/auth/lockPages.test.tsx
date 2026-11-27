@@ -50,6 +50,17 @@ test("desktop: Set PIN mismatch is shown, then matching PINs call set once", asy
   expect(app.value("id:set-pin-again")).toBe("");
 });
 
+test("desktop: a refused set clears both entries and shows the store's sentence", async () => {
+  const app = await open("./LockPagesDemo.tsx", { ...WIDE, host: { params: { page: "set", refuseSet: true } } });
+  await app.type("id:set-pin-first", "1234");
+  await app.type("id:set-pin-again", "1234");
+  await app.press("id:set-pin-done");
+  await app.waitFor("id:set-pin-error");
+  expect(app.texts()).toContain("Unlock with your current PIN first.");
+  expect(app.value("id:set-pin-first")).toBe("");
+  expect(app.value("id:set-pin-again")).toBe("");
+});
+
 test("desktop: windows hello label is the interface's label", async () => {
   const app = await open("./LockPagesDemo.tsx", { ...WIDE, host: { params: { page: "lock", biometric: "windows_hello" } } });
   expect(app.texts()).toContain("Unlock with Windows Hello");

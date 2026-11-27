@@ -11,6 +11,7 @@ export interface DebugLockParams {
   wrong?: boolean;
   wait?: number;
   lost?: boolean;
+  refuseSet?: boolean;
   account?: string;
 }
 
@@ -57,7 +58,10 @@ const stub: LockInterface = {
     const result: VerifyResult = current.wrong ? { kind: "wrong" } : { kind: "ok" };
     return result;
   },
-  set: async (_pin) => { calls.set([...calls(), "set"]); },
+  set: async (_pin) => {
+    calls.set([...calls(), "set"]);
+    if (current.refuseSet === true) throw new Error("Unlock with your current PIN first.");
+  },
   biometric: () => calls.set([...calls(), "biometric"]),
   forgot: () => calls.set([...calls(), "forgot"]),
   signOut: () => calls.set([...calls(), "signOut"]),
@@ -74,7 +78,10 @@ export function DebugLockPages(props: DebugLockParams & { controls?: boolean }) 
   return (
     <View testID="debug-lock-pages" class="flex-1 bg-background">
       <View class="flex-1">
-        <If when={version() >= 0}>
+        <If when={version() % 2 === 0}>
+          {page() === "set" ? <SetPinPage face={stub} /> : <LockPage face={stub} />}
+        </If>
+        <If when={version() % 2 === 1}>
           {page() === "set" ? <SetPinPage face={stub} /> : <LockPage face={stub} />}
         </If>
       </View>

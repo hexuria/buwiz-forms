@@ -20,7 +20,9 @@ export function LockPage(props: { face: LockInterface }) {
   const pin = signal("");
   const wrong = signal(false);
   const reread = () => state.set(props.face.lockState());
-  const timer = setInterval(reread, 1000);
+  const timer = setInterval(() => {
+    if (state().wait_secs > 0) reread();
+  }, 1000);
   cleanup(() => {
     clearInterval(timer);
     pin.set("");

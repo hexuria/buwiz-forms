@@ -9,9 +9,11 @@ export function SetPinPage(props: { face: LockInterface }) {
   const first = signal("");
   const again = signal("");
   const mismatch = signal(false);
+  const storeError = signal<string | null>(null);
   const clear = () => {
     first.set("");
     again.set("");
+    storeError.set(null);
   };
   cleanup(clear);
   const complete = () => first().length === 4 && again().length === 4 && first() === again();
@@ -27,7 +29,12 @@ export function SetPinPage(props: { face: LockInterface }) {
   const done = () => {
     if (!complete()) return;
     const chosen = first();
-    void Promise.resolve(props.face.set(chosen)).then(clear);
+    void Promise.resolve(props.face.set(chosen)).then(clear).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      first.set("");
+      again.set("");
+      storeError.set(message);
+    });
   };
   return (
     <OpenPage testID="set-pin-page">
@@ -40,6 +47,9 @@ export function SetPinPage(props: { face: LockInterface }) {
       </Labelled>
       <If when={mismatch()}>
         <ErrorLine message="The PINs don't match. Try again." testID="set-pin-mismatch" />
+      </If>
+      <If when={storeError() !== null}>
+        <ErrorLine message={storeError() ?? ""} testID="set-pin-error" />
       </If>
       <View style={{ opacity: complete() ? 1 : 0.5 }}>
         <PageButton testID="set-pin-done" label="Done" onPress={done} />
