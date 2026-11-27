@@ -5180,11 +5180,20 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     }
     if kind.form_code() == "1601FQ" {
         use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
-        for clearance in gate::row_clearances(kind, &before, &draft) {
-            inline_clearances.insert(clearance.gate.clone());
-            if let Some(row) = gate::row_index(&before, &clearance.id) {
+        let clearances = gate::row_clearances(kind, &before, &draft);
+        // The page shows this clearing inline, so its one pending notice (the
+        // event's gate, as `clearance_event` keys it) is reported as shown.
+        let event = gate::clearance_event(&clearances);
+        if let Some((event_gate, _)) = event.as_ref() {
+            inline_clearances.insert(event_gate.clone());
+        }
+        let event_text = event.map(|(_, text)| text);
+        for clearance in clearances {
+            if let (Some(row), Some(text)) =
+                (gate::row_index(&before, &clearance.id), event_text.as_ref())
+            {
                 for key in gate::keys_for_row(row) {
-                    relock_notes.insert(key, json!(clearance.text.clone()));
+                    relock_notes.insert(key, json!(text.clone()));
                 }
             }
         }

@@ -3799,15 +3799,11 @@ fn v2018_1601fq_schedule_1_clears_once_when_item_13_closes() {
         json!({"frm1601FQ:SpecialTax_2": "true"}),
     );
     assert_eq!(no["draft"]["schedule1"], json!([]));
-    let row_id = typed["draft"]["schedule1"][0]["instance_id"]
-        .as_str()
-        .expect("a stable row id");
-    let cleared =
-        format!("Schedule 1 row {row_id} was cleared: it applies only when item 13 is Yes.");
+    let cleared = "Schedule 1 row 1 was cleared: it applies only when item 13 is Yes.";
     for key in gate::keys() {
         assert_eq!(no["relocks"][&key], gate::LOCK, "{key}");
         let expected = if gate::keys_for_row(0).contains(&key) {
-            cleared.as_str()
+            cleared
         } else {
             gate::LOCK
         };
@@ -3862,7 +3858,13 @@ fn v2018_1601fq_legacy_dormant_schedule_1_is_cleared_on_open_and_said_once() {
     );
     assert_eq!(
         notes[0]["text"],
-        "Schedule 1 row row-00000000000000000001 was cleared: it applies only when item 13 is Yes."
+        "Schedule 1 row 1 was cleared: it applies only when item 13 is Yes."
+    );
+    assert!(
+        !notes[0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("row-00000000000000000001")
     );
     assert_eq!(open("1601FQ", 1)["notes"].as_array().unwrap().len(), 1);
     assert_eq!(

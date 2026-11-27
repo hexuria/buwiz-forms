@@ -1707,7 +1707,8 @@ pub mod schedule1_1601fq {
     const COMPUTED_STEMS: [&str; 2] = ["txtNatIncPayment", "txtReqWithheld"];
     const COMPUTED_LOCK: &str = "computed by BIR's own formulas";
     pub const LOCK: &str = "You are not availing of tax relief under Special Law or International Tax Treaty. There is no need to fill up schedule 1.";
-    pub const CLEARED_NOTE: &str = "Schedule 1 was cleared: it applies only when item 13 is Yes.";
+    pub const CLEARED_NOTE: &str =
+        "Schedule 1's rows were cleared: they apply only when item 13 is Yes.";
 
     fn stem_keys(stems: &[&str]) -> Vec<String> {
         (0..ROWS)
@@ -1780,6 +1781,7 @@ pub mod schedule1_1601fq {
     pub struct RowClearance {
         pub id: String,
         pub gate: String,
+        pub position: usize,
         pub text: String,
     }
 
@@ -1810,20 +1812,43 @@ pub mod schedule1_1601fq {
                     return None;
                 }
                 let gate = format!("1601fq_schedule1:{id}");
+                let position = index + 1;
                 let text = format!(
-                    "Schedule 1 row {id} was cleared: it applies only when item 13 is Yes."
+                    "Schedule 1 row {position} was cleared: it applies only when item 13 is Yes."
                 );
-                Some(RowClearance { id, gate, text })
+                Some(RowClearance {
+                    id,
+                    gate,
+                    position,
+                    text,
+                })
             })
             .collect()
     }
 
-    /// The helper interface's owned `(gate, sentence)` pairs.
+    /// One clearing event's gate key and sentence. A single row keeps its
+    /// stable id in the unchanged row key; several rows cleared by one edit
+    /// share one event key made of those stable ids, never their positions.
+    pub fn clearance_event(rows: &[RowClearance]) -> Option<(String, String)> {
+        let first = rows.first()?;
+        let (gate, text) = if rows.len() == 1 {
+            (first.gate.clone(), first.text.clone())
+        } else {
+            let ids = rows
+                .iter()
+                .map(|row| row.id.as_str())
+                .collect::<Vec<_>>()
+                .join(",");
+            (format!("1601fq_schedule1:{ids}"), CLEARED_NOTE.to_string())
+        };
+        Some((gate, text))
+    }
+
+    /// The helper interface's owned `(gate, sentence)` pair: one pending
+    /// notice for the whole clearing event.
     pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<(String, String)> {
-        row_clearances(kind, before, after)
-            .into_iter()
-            .map(|row| (row.gate, row.text))
-            .collect()
+        let rows = row_clearances(kind, before, after);
+        clearance_event(&rows).into_iter().collect()
     }
 
     pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
@@ -2456,7 +2481,48 @@ mod tests {
             clearances[0].gate,
             "1601fq_schedule1:row-00000000000000000002"
         );
-        assert!(clearances[0].text.contains("row-00000000000000000002"));
+        assert_eq!(
+            clearances[0].text,
+            "Schedule 1 row 1 was cleared: it applies only when item 13 is Yes."
+        );
+        assert!(!clearances[0].text.contains("row-00000000000000000002"));
+    }
+
+    #[test]
+    fn clearing_five_1601fq_schedule_rows_is_one_positional_notice() {
+        use super::schedule1_1601fq as gate;
+        let row = |index: usize| {
+            json!({
+                "instance_id": format!("row-{:020}", index + 1),
+                "treaty_code": "NA",
+                "atc_code": "NA",
+                "income_payment": 10.0 + index as f64,
+                "tax_rate": 10.0,
+                "tax_withheld": 1.0,
+            })
+        };
+        let before = json!({
+            "tax_relief": "special_rate",
+            "schedule1": (0..5).map(row).collect::<Vec<_>>(),
+        });
+        let after = json!({"tax_relief": null, "schedule1": []});
+        let clearances = gate::clearances(kind("1601FQ"), &before, &after);
+        assert_eq!(clearances.len(), 1, "{clearances:?}");
+        let (gate_key, sentence) = &clearances[0];
+        for index in 0..5 {
+            assert!(
+                gate_key.contains(&format!("row-{:020}", index + 1)),
+                "{gate_key}"
+            );
+            assert!(
+                !sentence.contains(&format!("row-{:020}", index + 1)),
+                "{sentence}"
+            );
+        }
+        assert_eq!(
+            sentence,
+            "Schedule 1's rows were cleared: they apply only when item 13 is Yes."
+        );
     }
 }
 
