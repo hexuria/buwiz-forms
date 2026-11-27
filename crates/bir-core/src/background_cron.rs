@@ -4607,11 +4607,14 @@ mod tests {
         let db = test_db();
         let (queued, _) = stored_queued_2551q(&db);
         let profile = reviewed_profile();
-        let job = format!(
-            "form:2551Q:{}:{}:{}",
-            profile.tin.full(),
-            queued.taxable_year,
-            queued.quarter
+        let job = room_job_key(
+            FIXED_ROOM_KEY,
+            &format!(
+                "form:2551Q:{}:{}:{}",
+                profile.tin.full(),
+                queued.taxable_year,
+                queued.quarter
+            ),
         );
         temp_env::async_with_vars(
             [
@@ -7158,7 +7161,7 @@ mod tests {
     /// (what a desktop relaunch after a quit mid-send finds).
     #[test]
     fn a_send_dropped_mid_flight_keeps_its_claim_and_frees_its_job_key() {
-        const KEY: &str = "form:1601C:lifecycle-test:dropped-mid-send";
+        const KEY: &str = "fixed|form:1601C:lifecycle-test:dropped-mid-send";
         let profile = test_profile();
         let queued = queued_1601c_draft(&profile);
         let db = Arc::new(Mutex::new(Database::open_in_memory_for_tests().unwrap()));
@@ -7256,7 +7259,7 @@ mod tests {
     /// not made inside it on the first poll.
     #[test]
     fn a_job_dropped_before_it_ever_ran_frees_its_key() {
-        const KEY: &str = "form:1601C:lifecycle-test:never-polled";
+        const KEY: &str = "fixed|form:1601C:lifecycle-test:never-polled";
         let ran = Arc::new(AtomicBool::new(false));
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()

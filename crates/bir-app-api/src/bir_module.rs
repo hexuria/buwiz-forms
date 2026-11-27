@@ -4224,6 +4224,12 @@ mod tests {
                 format!("form:{code}:{TIN}:{RESOLVE_YEAR}:{period}"),
                 "the worker's key"
             );
+            // Production keys carry the room (F6); with no room open the slot's prefix is the
+            // fixed key, the same one send_of reads through job_key_prefix.
+            let key = bir_core::background_cron::room_job_key(
+                &bir_core::background_cron::fixed_room_key(),
+                &key,
+            );
             bir_core::background_cron::get_active_jobs()
                 .lock()
                 .unwrap()
@@ -6947,12 +6953,16 @@ mod tests {
     }
 
     fn job_key_1601c(month: u8) -> String {
-        bir_core::background_cron::submission_job_key(
-            "1601C",
-            &demo_profile().tin.full(),
-            ENGINE_YEAR,
-            Some(month),
-            None,
+        // The worker files keys under the fixed room's prefix in single-room and test mode (F6).
+        bir_core::background_cron::room_job_key(
+            &bir_core::background_cron::fixed_room_key(),
+            &bir_core::background_cron::submission_job_key(
+                "1601C",
+                &demo_profile().tin.full(),
+                ENGINE_YEAR,
+                Some(month),
+                None,
+            ),
         )
     }
 
