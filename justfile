@@ -1058,7 +1058,12 @@ nsh-test *args="":
     $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
     $env:PATH = "$tools\bin;$env:PATH"
     if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
-    $app = git rev-parse --short=8 HEAD; $kit = git -C ..\nsh rev-parse --short=8 HEAD; $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
+    # The provenance line is information, never a reason to stop: without git on the PATH (a source copy, or a
+    # caller's own narrow PATH) it says so instead of ending the recipe under ErrorActionPreference Stop (#412).
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    $app = if ($git) { (git rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
+    $kit = if ($git) { (git -C ..\nsh rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
+    $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
     [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, $cargoVersion, folder $env:CARGO_TARGET_DIR")
     $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_AUTH_BYPASS = '1'; $env:BIR_SFTP_DRY_RUN = '1'
     Remove-Item Env:BIR_SFTP_LIVE -ErrorAction SilentlyContinue
@@ -1377,7 +1382,12 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
     $env:PATH = "$tools\bin;$env:PATH"
     if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
-    $app = git rev-parse --short=8 HEAD; $kit = git -C ..\nsh rev-parse --short=8 HEAD; $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
+    # The provenance line is information, never a reason to stop: without git on the PATH (a source copy, or a
+    # caller's own narrow PATH) it says so instead of ending the recipe under ErrorActionPreference Stop (#412).
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    $app = if ($git) { (git rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
+    $kit = if ($git) { (git -C ..\nsh rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
+    $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
     [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, $cargoVersion, folder $env:CARGO_TARGET_DIR")
     if (-not $env:GPUI_AGENT_TOKEN) { "nsh-run-agent: set GPUI_AGENT_TOKEN first"; exit 1 }
     $root = (Get-Location).ProviderPath
