@@ -65,6 +65,8 @@ pub mod relay;
 pub mod schema;
 pub mod send_in_flight;
 pub mod tax_profile;
+#[cfg(test)]
+pub(crate) mod test_logs;
 pub mod time_utils;
 pub mod transport;
 pub mod validation;
@@ -85,6 +87,10 @@ pub mod mock_relay;
 /// In-memory development account server. Never enabled in shipping apps.
 #[cfg(any(test, feature = "mock-account"))]
 pub mod mock_account;
+
+/// The Buwiz relay client, for hosts that read the account's TINs through [`relay::submitter`] without a
+/// dependency of their own on it.
+pub use bir_submit;
 
 // Re-export core types
 pub use bir_rules::{

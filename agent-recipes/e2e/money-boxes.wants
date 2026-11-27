@@ -1,0 +1,13 @@
+# Smoke 6 without pacing (an older gpui-agent-cli or a host without software_keyboard): the same boxes and checks as
+# money-boxes-paced.json, each text sent as one type request. A fault seen only here, not in the paced run, is not a
+# finding: a person never types a whole amount in one keystroke.
+click fp-frm2551Qv2018:amendedRtn_1 --screenshot
+type fp-frm2551Qv2018:txt16 $prior
+assert fp-frm2551Qv2018:txt16 value=$prior --screenshot
+type fp-frm2551Qv2018:txt15 $amount
+assert fp-frm2551Qv2018:txt15 value=$amount --screenshot
+click fp-frm2551Qv2018:txt16
+assert fp-frm2551Qv2018:txt15 value=$amount_shown --screenshot
+click fp-frm2551Qv2018:txt15
+assert fp-frm2551Qv2018:txt15 value=$amount_shown --screenshot
+click fp-frm2551Qv2018:amendedRtn_2 --screenshot

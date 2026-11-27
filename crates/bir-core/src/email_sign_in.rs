@@ -239,7 +239,7 @@ pub fn local_sentence(code: &str, retry_after: Option<i64>, attempts_left: Optio
             Some(n) if n > 1 => format!("That code is not right. {n} tries left."),
             _ => "That code is not right. Check the email and try again.".into(),
         },
-        "code_expired" => "This code has expired. Press Resend for a new one.".into(),
+        "code_expired" => "This code has expired. Send a new code to try again.".into(),
         "too_many_attempts" => "Too many wrong codes. Send a new code to try again.".into(),
         "link_used" => "That sign-in link was already used. Start again.".into(),
         "invalid_request" => "This sign-in request has ended. Start again.".into(),
@@ -1073,7 +1073,7 @@ mod tests {
             (
                 r#"{"error":"code_expired"}"#,
                 "code_expired",
-                "This code has expired. Press Resend for a new one.",
+                "This code has expired. Send a new code to try again.",
             ),
             (
                 r#"{"error":"too_many_attempts"}"#,

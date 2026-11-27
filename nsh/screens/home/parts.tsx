@@ -1,4 +1,4 @@
-// Home's parts: the five status tiles, the 30-day strip, a deadline row, a filed-return row, a taxpayer row, an as-needed row.
+// Home's parts: the four status tiles, the 30-day strip, a deadline row, a filed-return row, a taxpayer row, an as-needed row.
 // Built from nsh/ui; the tile is the kit's PressCard and the strip's day its PressCell.
 import { Scroll, View } from "nsh";
 import type { AsNeededForm, AsNeededReturn, DeadlineRow, ReturnRow, Taxpayer } from "../../bir";
@@ -17,7 +17,7 @@ const BAR = 120;
 
 // ---------------------------------------------------------------- tiles
 
-/** One of the five counts: icon and label, the number, a caption. A press picks it or opens Filings; `picked` is the filled look with an x. */
+/** One of the four counts: icon and label, the number, a caption. A press picks it or opens Filings; `picked` is the filled look with an x. */
 export function StatTile(props: { spec: TileSpec; width: number; picked: boolean; onPress: () => void }) {
   return (
     <PressCard
