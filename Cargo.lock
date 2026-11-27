@@ -452,6 +452,7 @@ dependencies = [
  "aes-gcm 0.10.3",
  "ammonia",
  "anyhow",
+ "bir-print",
  "bir-rules",
  "bir-submit",
  "block2",
