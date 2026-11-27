@@ -24,6 +24,12 @@ struct Gate {
 
 const C1701_EMPLOYER_COMPENSATION: &str =
     "Schedule 1 applies only to compensation income (ATC II011, II013 or II016).";
+const C1701_EMPLOYER_OWNER: &str =
+    "Schedule 1 row 1 or 2 is marked for the taxpayer or the spouse.";
+const C1701_EMPLOYER_TAXPAYER: &str =
+    "The taxpayer's ATC is compensation income (ATC II011, II013 or II016).";
+const C1701_EMPLOYER_SPOUSE: &str =
+    "A joint return and the spouse's ATC is compensation income (ATC II011, II013 or II016).";
 const C1701_EIGHT_ANY: &str = "Item 7 or Part IV Item 4 ATC is II015, II016 or II017 (8% IT rate).";
 const C1701_FOREIGN: &str = "Part I Item 13 is Yes.";
 const C1701_ITEMIZED_A: &str =
@@ -444,9 +450,9 @@ fn empty_for_kind(value: &Value, probe_kind: ProbeKind) -> bool {
 
 /// 1701's spouse employer-name box is open only when its row is marked for
 /// a spouse whose ATC is compensation income on a joint return.
-fn employer_name_open(draft: &Value, key: &str) -> bool {
+fn employer_name_lock_reason(draft: &Value, key: &str) -> Option<&'static str> {
     let Ok(form) = serde_json::from_value::<Form1701Draft>(draft.clone()) else {
-        return false;
+        return Some(C1701_EMPLOYER_COMPENSATION);
     };
     let index = if key.contains("Shed1a") { 0 } else { 1 };
     let compensation = |atc| {
@@ -455,10 +461,17 @@ fn employer_name_open(draft: &Value, key: &str) -> bool {
             Some(Form1701Atc::Ii011 | Form1701Atc::Ii013 | Form1701Atc::Ii016)
         )
     };
-    match form.employers.get(index).and_then(|row| row.owner) {
-        Some(Form1701Party::Taxpayer) => compensation(form.atc),
-        Some(Form1701Party::Spouse) => form.spouse_column_active() && compensation(form.spouse.atc),
-        None => false,
+    let Some(owner) = form.employers.get(index).and_then(|row| row.owner) else {
+        return Some(C1701_EMPLOYER_OWNER);
+    };
+    match owner {
+        Form1701Party::Taxpayer if key.contains("TPName") => {
+            (!compensation(form.atc)).then_some(C1701_EMPLOYER_TAXPAYER)
+        }
+        Form1701Party::Spouse if key.contains("SName") => (!(form.spouse_column_active()
+            && compensation(form.spouse.atc)))
+        .then_some(C1701_EMPLOYER_SPOUSE),
+        _ => Some(C1701_EMPLOYER_OWNER),
     }
 }
 
@@ -489,11 +502,10 @@ fn probe_closed(kind: AgentFormKind, draft: &Value, key: &str) -> bool {
 /// The reviewed lock reason for a shut gated row box.
 pub fn lock_reason(kind: AgentFormKind, draft: &Value, key: &str) -> Option<&'static str> {
     let gate = gate_of(kind.form_code(), key)?;
-    let open = if gate.gate == G1701_SPOUSE_NAME.gate {
-        employer_name_open(draft, key)
-    } else {
-        !probe_closed(kind, draft, key)
-    };
+    if gate.gate == G1701_SPOUSE_NAME.gate {
+        return employer_name_lock_reason(draft, key);
+    }
+    let open = !probe_closed(kind, draft, key);
     (!open).then_some(gate.lock)
 }
 
@@ -541,8 +553,17 @@ pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
 /// The longer sentence drawn under a locked box, looked up by the box
 /// itself. Reasons are shared across forms, so the reason string is never
 /// enough to choose the note.
-pub fn lock_note(form: &str, key: &str) -> Option<&'static str> {
-    gate_of(form, key).map(|gate| gate.note)
+pub fn lock_note(form: &str, key: &str, reason: &str) -> Option<&'static str> {
+    let gate = gate_of(form, key)?;
+    if gate.gate == G1701_SPOUSE_NAME.gate {
+        if reason == C1701_EMPLOYER_OWNER {
+            return Some("Schedule 1 needs the row marked for the taxpayer or the spouse.");
+        }
+        if key.contains("TPName") {
+            return Some("Schedule 1 is for compensation income of the taxpayer.");
+        }
+    }
+    Some(gate.note)
 }
 
 /// One clearing a save or fill just made.

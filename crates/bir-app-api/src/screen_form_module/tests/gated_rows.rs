@@ -110,6 +110,22 @@ fn form_2552_tax_relief_specification_is_gated_and_said_once() {
         json!("The tax-relief specification was cleared: Item 10 is not Yes.")
     );
 
+    // The page reported that clearing inline. Validation may rewrite the
+    // draft, but the save that follows still marks exactly that gate seen:
+    // reopening does not offer the same clearing again.
+    let saved = save("2552", &batch["draft"]);
+    let closed = fill("2552", &saved["draft"], json!({ no: "true" }));
+    let checked = validated("2552", &closed["draft"]);
+    save("2552", &checked["draft"]);
+    let reopened = open("2552", 1);
+    assert!(
+        !note_texts(&reopened)
+            .iter()
+            .any(|text| text.contains("tax-relief specification was cleared")),
+        "inline-reported clearing repeated: {:?}",
+        reopened["notes"]
+    );
+
     // A stored pre-gate draft is the old-draft case: opening clears it, the
     // pending sentence survives a failed first open, and seen once it does
     // not repeat. Write the dormant bytes below the row so this is the old
@@ -340,6 +356,31 @@ fn form_1701_spouse_item27_foreign_and_schedule5_are_gated() {
             refused["rejected"]
         );
     }
+
+    let compensation_without_owner = fill(
+        "1701",
+        &opened["draft"],
+        json!({"frm1701:rdoPg2I4ATC_II011": "true"}),
+    );
+    let unowned = fill(
+        "1701",
+        &compensation_without_owner["draft"],
+        json!({ spouse_name: "SPOUSE EMPLOYER" }),
+    );
+    assert_eq!(
+        unowned["rejected"][spouse_name],
+        json!("Schedule 1 row 1 or 2 is marked for the taxpayer or the spouse.")
+    );
+
+    let taxpayer_key = "frm1701:txtPg2IShed1a_1TPName";
+    assert_eq!(
+        bir_core::forms::agent::gated_rows::lock_note(
+            "1701",
+            taxpayer_key,
+            "The taxpayer's ATC is compensation income (ATC II011, II013 or II016)."
+        ),
+        Some("Schedule 1 is for compensation income of the taxpayer.")
+    );
 
     let joint = fill(
         "1701",
