@@ -1129,7 +1129,10 @@ def lint_candidate_files(root):
         if folder.is_file():
             files.append(folder)
         elif folder.is_dir():
-            for base, _dirs, names in os.walk(str(folder)):
+            for base, dirs, names in os.walk(str(folder)):
+                # Compiled caches are not text and are never committed.
+                dirs[:] = [d for d in dirs if d != "__pycache__"]
+                names = [n for n in names if not n.endswith((".pyc", ".pyo"))]
                 for name in names:
                     files.append(Path(base) / name)
     unique = []
