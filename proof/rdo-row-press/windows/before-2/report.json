@@ -1,0 +1,47 @@
+{
+ "suite": "rdo-row-press",
+ "target": "windows",
+ "started": "20261127-114323",
+ "out": "C:\\Users\\Administrator\\repos\\rdo-row-press\\evidence\\before-2",
+ "cli_version": "0.4.1",
+ "app_commit": "f9e543ce",
+ "platform": "desktop",
+ "os": "windows",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 690,
+   "note": null,
+   "file": "agent-recipes\\e2e\\setup-start.wants"
+  },
+  {
+   "name": "rdo-row-press",
+   "status": "fail",
+   "ms": 3458,
+   "note": null,
+   "file": "agent-recipes\\e2e\\rdo-row-press.wants",
+   "step": "s6",
+   "error": "node `new-tp-rdo_code-search` value: expected \"047 \u2014 East Makati\", got Some(\"\")",
+   "error_code": "assert_failed",
+   "line": "assert new-tp-rdo_code-search value=\"047 \u2014 East Makati\"",
+   "screenshot": "C:\\Users\\Administrator\\repos\\rdo-row-press\\evidence\\before-2\\02-rdo-row-press\\failure.png",
+   "tree": "C:\\Users\\Administrator\\repos\\rdo-row-press\\evidence\\before-2\\02-rdo-row-press\\failure-tree.json"
+  }
+ ]
+}

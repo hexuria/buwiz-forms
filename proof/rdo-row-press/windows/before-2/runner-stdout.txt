@@ -1,0 +1,6 @@
+2026-11-27T11:43:23.871Z	wait	window plane	ready	79ms
+2026-11-27T11:43:23.927Z	wait	data plane	ready	55ms
+2026-11-27T11:43:23.965Z	app.info	database	test	38ms
+2026-11-27T11:43:24.656Z	recipe	setup-start	pass	690ms
+2026-11-27T11:43:28.307Z	recipe	rdo-row-press	fail at s6: node `new-tp-rdo_code-search` value: expected "047 — East Makati", got Some("")	3458ms
+e2e rdo-row-press on windows: 1 fail, 1 pass. Report: C:\Users\Administrator\repos\rdo-row-press\evidence\before-2\report.md

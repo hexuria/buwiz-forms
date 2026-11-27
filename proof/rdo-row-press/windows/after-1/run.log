@@ -1,0 +1,5 @@
+2026-11-27T11:44:29.047Z	wait	window plane	ready	17ms
+2026-11-27T11:44:29.069Z	wait	data plane	ready	21ms
+2026-11-27T11:44:29.118Z	app.info	database	test	48ms
+2026-11-27T11:44:29.830Z	recipe	setup-start	pass	712ms
+2026-11-27T11:44:41.387Z	recipe	rdo-row-press	fail at s10: wait_until timed out: node `new-tp-rdo_code-opt-048` not found	11337ms

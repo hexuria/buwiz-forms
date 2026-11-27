@@ -1,0 +1,47 @@
+{
+ "suite": "rdo-row-press",
+ "target": "windows",
+ "started": "20261127-114516",
+ "out": "C:\\Users\\Administrator\\repos\\rdo-row-press\\evidence\\after-2",
+ "cli_version": "0.4.1",
+ "app_commit": "f9e543ce",
+ "platform": "desktop",
+ "os": "windows",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 663,
+   "note": null,
+   "file": "agent-recipes\\e2e\\setup-start.wants"
+  },
+  {
+   "name": "rdo-row-press",
+   "status": "fail",
+   "ms": 11343,
+   "note": null,
+   "file": "agent-recipes\\e2e\\rdo-row-press.wants",
+   "step": "s10",
+   "error": "wait_until timed out: node `new-tp-rdo_code-opt-048` not found",
+   "error_code": "timeout",
+   "line": "wait_until new-tp-rdo_code-opt-048 --timeout-ms 5000",
+   "screenshot": "C:\\Users\\Administrator\\repos\\rdo-row-press\\evidence\\after-2\\02-rdo-row-press\\failure.png",
+   "tree": "C:\\Users\\Administrator\\repos\\rdo-row-press\\evidence\\after-2\\02-rdo-row-press\\failure-tree.json"
+  }
+ ]
+}

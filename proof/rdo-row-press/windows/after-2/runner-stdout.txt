@@ -1,0 +1,6 @@
+2026-11-27T11:45:18.182Z	wait	window plane	ready	2034ms
+2026-11-27T11:45:18.225Z	wait	data plane	ready	42ms
+2026-11-27T11:45:18.273Z	app.info	database	test	47ms
+2026-11-27T11:45:18.936Z	recipe	setup-start	pass	663ms
+2026-11-27T11:45:30.473Z	recipe	rdo-row-press	fail at s10: wait_until timed out: node `new-tp-rdo_code-opt-048` not found	11343ms
+e2e rdo-row-press on windows: 1 fail, 1 pass. Report: C:\Users\Administrator\repos\rdo-row-press\evidence\after-2\report.md

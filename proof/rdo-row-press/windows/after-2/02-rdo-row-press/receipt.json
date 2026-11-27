@@ -1,0 +1,77 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "rdo-row-press",
+  "fingerprint": "fnv1a64:c85439c219f6b03a",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 423
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2468
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 33
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 565,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\repos\\rdo-row-press\\evidence\\after-2\\02-rdo-row-press\\004-s4.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 31
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 26
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 398
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2330
+    },
+    {
+      "id": "s10",
+      "ok": false,
+      "error": "wait_until timed out: node `new-tp-rdo_code-opt-048` not found",
+      "error_code": "timeout",
+      "elapsed_ms": 5020
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\repos\\rdo-row-press\\evidence\\after-2\\02-rdo-row-press\\004-s4.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 11320
+}
