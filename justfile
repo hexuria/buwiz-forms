@@ -615,6 +615,8 @@ _package-mac-appstore args="": build-frozen-html-identity
     set -euo pipefail
     root="$(pwd)"
     CERT="${CODESIGN_IDENTITY:--}"
+    # Gmail Connect (a restricted Google scope) is out of the store build unless STORE_GMAIL=1: scripts/store_gmail.py.
+    eval "$({{PYTHON}} scripts/store_gmail.py env)"
     # nsh package has no flag for a feature of the app crate: nsh/mas/cargo-with-mas.sh, set as $CARGO, adds `mas_build`
     # (and `agent` for --agent) to the build of the generated macOS host.
     export NSH_MAS_AGENT=0
@@ -697,12 +699,14 @@ _package-mac-appstore args="": build-frozen-html-identity
         /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" "$PLIST" || true
         /usr/libexec/PlistBuddy -c "Add :LSEnvironment:DEVELOPER_MODE string true" "$PLIST" || true
     fi
-    ENTITLEMENTS="$root/entitlements.plist"
+    # The store's entitlements: network.server only with Gmail Connect or the agent (scripts/store_gmail.py entitlements).
+    ENTITLEMENTS="$OUT/store.entitlements"
+    agent_flag=""
+    [ "$NSH_MAS_AGENT" = "1" ] && agent_flag="--agent"
+    {{PYTHON}} scripts/store_gmail.py entitlements "$root/entitlements.plist" "$ENTITLEMENTS" $agent_flag
     if [ "$CERT" = "-" ]; then
         # An ad hoc signature cannot carry the store's application and team identifiers (macOS refuses to launch an app
         # that claims them without a matching profile), so the local build keeps only the sandbox and its permissions.
-        ENTITLEMENTS="$OUT/sandbox.entitlements"
-        cp "$root/entitlements.plist" "$ENTITLEMENTS"
         /usr/libexec/PlistBuddy -c "Delete :com.apple.application-identifier" "$ENTITLEMENTS"
         /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.team-identifier" "$ENTITLEMENTS"
         echo "⚠️  No CODESIGN_IDENTITY: ad hoc signed with the sandbox entitlements, no provisioning profile (local testing only)."
@@ -711,6 +715,7 @@ _package-mac-appstore args="": build-frozen-html-identity
         cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
     fi
     {{PYTHON}} scripts/audit_no_legacy.py --package-root "$APP"
+    {{PYTHON}} scripts/store_gmail.py check "$APP"
     xattr -cr "$APP"
     # App Store Connect refuses a package whose files only their owner can read, which is what a umask of 077 builds.
     chmod -R u+rwX,go+rX "$APP"
@@ -870,6 +875,8 @@ ios-appstore: build-frozen-html-identity
         echo "❌ $PROFILE expired $EXPIRES." >&2; exit 1
     fi
     set -a && source .env && set +a
+    # Gmail Connect (a restricted Google scope) is out of the store build unless STORE_GMAIL=1: scripts/store_gmail.py.
+    eval "$({{PYTHON}} scripts/store_gmail.py env)"
     BUILD="$(uv run scripts/bump_build.py --print-next)"
     case "$BUILD" in ''|*[!0-9]*) echo "Invalid App Store build number: $BUILD" >&2; exit 1 ;; esac
     # A store package is built in this checkout's own folder, never the shared ~/BuwizNsh/target-nsh: Cargo cannot tell two
@@ -921,6 +928,7 @@ ios-appstore: build-frozen-html-identity
         echo "❌ $APP/Info.plist has NSScreenCaptureUsageDescription." >&2; exit 1
     fi
     {{PYTHON}} scripts/audit_no_legacy.py --package-root "$APP"
+    {{PYTHON}} scripts/store_gmail.py check "$APP"
     xattr -cr "$APP"
     chmod -R u+rwX,go+rX "$APP"
     codesign --force --sign "$CERT" --preserve-metadata=entitlements,requirements,flags "$APP"
