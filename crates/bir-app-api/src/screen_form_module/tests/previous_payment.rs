@@ -1,7 +1,6 @@
-//! The amended-return previous-payment gates. Each kept form's in-repository
-//! runtime-control inventory records its box disabled at load; 0619E, 0619F,
-//! 2550M and 1602Q are excluded because their captured pages leave the
-//! surveyed box enabled on a new return.
+//! The amended-return previous-payment gates. Each kept form's official
+//! runtime handlers disable its box on an original return; 1602Q is excluded
+//! because this repository's official evidence has no such handler.
 
 use super::*;
 use bir_core::forms::agent::draft_locks::previous_payment::{self, Spec};
