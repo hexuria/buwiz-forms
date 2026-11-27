@@ -1329,3 +1329,112 @@ fn a_cut_at_every_step_resumes_to_the_same_end() {
 }
 
 use rusqlite::Connection;
+
+// ---------------------------------------------------------------------------------------------- review 1
+
+/// C1 (review of A2): a record that names a room but never moved its file never finishes on that room's own later
+/// file. A's claim is cut after its copy, the legacy file goes, and A then has a room of its own with data: the next
+/// launches leave that room exactly as it is (no from_legacy row, no "moved, not opened"), and the record is closed.
+#[test]
+fn a_stale_record_never_finishes_on_the_accounts_own_room() {
+    for closed_first in [true, false] {
+        let install = Install::new();
+        close(unlocked(&install));
+        let a = account("a");
+        claim_cut_at(&install, &a, Cut::AfterCopyRecorded);
+        // The legacy file goes: moved by hand, or taken by another account's offer.
+        std::fs::rename(install.legacy(), install.dir().join("moved-away.db")).unwrap();
+        let claim = install.claim();
+        if closed_first {
+            assert!(matches!(claim.start(&a), Start::Nothing));
+            assert_eq!(claim.record().unwrap().unwrap().step, Step::Closed);
+        }
+        // A gets a room of its own and adds data to it.
+        let room = room_of(&claim, &a);
+        install.layout.create_room_dir(&room).unwrap();
+        let own = Database::open(install.room_file(&room)).unwrap();
+        taxpayer(&own, "923456788", "A's own");
+        close(own);
+        let before = std::fs::read(install.room_file(&room)).unwrap();
+        for _ in 0..2 {
+            match claim.start(&a) {
+                Start::Nothing => {}
+                other => panic!("closed first {closed_first}: {other:?}"),
+            }
+        }
+        assert_eq!(
+            std::fs::read(install.room_file(&room)).unwrap(),
+            before,
+            "closed first {closed_first}"
+        );
+        let record = claim.record().unwrap().unwrap();
+        assert_eq!(record.step, Step::Closed, "closed first {closed_first}");
+        assert_eq!(record.failure, None, "closed first {closed_first}");
+        assert!(
+            claim.store().rooms().unwrap().is_empty(),
+            "no from_legacy row"
+        );
+    }
+}
+
+/// C2 (review of A2): after a cut between the link and the unlink, another process (an older eBIRForms,
+/// bir-headless) may open bir_data.db before this one starts. The resume unlinks the legacy name only under the
+/// legacy lock and with no -wal or -shm beside it; otherwise it waits (transient), with both names kept.
+#[test]
+fn the_link_window_resume_waits_for_another_opener() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let who = account("a");
+    claim_cut_at(&install, &who, Cut::AfterLink);
+    let claim = install.claim();
+    let room = room_of(&claim, &who);
+
+    // Another program has the file open through its own connection.
+    let other = Connection::open(install.legacy()).unwrap();
+    other
+        .execute_batch("PRAGMA journal_mode = WAL; SELECT count(*) FROM settings;")
+        .unwrap();
+    match claim.start(&who) {
+        Start::Failed(Failure::Transient(transient)) => {
+            assert_eq!(transient.cause, TransientCause::WalReturned)
+        }
+        other => panic!("{other:?}"),
+    }
+    assert!(
+        install.legacy().exists() && install.room_file(&room).exists(),
+        "both names kept"
+    );
+    drop(other);
+
+    // Another process holds the legacy lock.
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        let foreign = std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(crate::db::live_owner_lock_path(&install.legacy()))
+            .unwrap();
+        // SAFETY: a valid descriptor.
+        assert_eq!(
+            unsafe { libc::flock(foreign.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+            0
+        );
+        match claim.start(&who) {
+            Start::Failed(Failure::Transient(transient)) => {
+                assert_eq!(transient.cause, TransientCause::OwnerLockHeld)
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(install.legacy().exists() && install.room_file(&room).exists());
+    }
+
+    // With nobody else on it, the resume finishes.
+    match claim.start(&who) {
+        Start::Finished(Outcome::Done { room: done, .. }) => assert_eq!(done, room),
+        other => panic!("{other:?}"),
+    }
+    assert!(!install.legacy().exists());
+}

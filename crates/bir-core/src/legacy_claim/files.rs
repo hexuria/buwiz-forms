@@ -133,7 +133,7 @@ fn sqlite_transient(what: &str, error: &rusqlite::Error, copy_saved: bool) -> Tr
 }
 
 /// A `-wal` or `-shm` beside `database`.
-fn sidecars_present(database: &Path) -> std::io::Result<bool> {
+pub(super) fn sidecars_present(database: &Path) -> std::io::Result<bool> {
     Ok(exists(&with_suffix(database, "-wal"))? || exists(&with_suffix(database, "-shm"))?)
 }
 

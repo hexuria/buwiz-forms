@@ -17,7 +17,7 @@ pub fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
 
 /// Which file a path names: the device and inode on Unix, the volume serial number and file index on Windows (equal
 /// for two names of one file, as a hard link makes). Read without opening the file for data.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct FileId {
     volume: u64,
     index: u64,

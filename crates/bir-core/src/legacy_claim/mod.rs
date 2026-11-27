@@ -206,6 +206,10 @@ pub struct Record {
     /// The room was opened since `done_at`.
     pub room_opened_since: bool,
     pub zip_deleted_at: Option<String>,
+    /// The legacy file's identity when it was probed (C1). A link or a rename keeps it, so a room file with this
+    /// identity is the legacy file moved; any other room file is not, whatever the record says.
+    #[serde(default)]
+    pub legacy_file: Option<crate::safe_fs::FileId>,
     /// The PHC string of the PIN typed at the legacy unlock, kept only until step 6 writes it into `owner_lock`, so a
     /// claim cut after the move still gives the owner the PIN they typed. Cleared at done.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -590,26 +594,43 @@ impl LegacyClaim {
         let legacy_present = files::exists(&legacy).map_err(io_failure)?;
 
         // The rows the record's room decides: moved, and the link window (N2). They finish whoever is signed in now:
-        // the file is already in the claimer's own room folder.
+        // the file is already in the claimer's own room folder. Only a claim that moved its file, or whose room file
+        // is provably the legacy file, finishes (C1): a Closed or Done record never does, and neither does a record cut
+        // before its move whose room has since got a file of its own.
         if let Some(record) = &record
+            && !matches!(record.step, Step::Done | Step::Closed)
             && let Some(room) = record.claim_room()
         {
             let room_file = self.layout.room_database(&room.room_id);
-            if files::exists(&room_file).map_err(io_failure)? && record.step != Step::Done {
+            if files::exists(&room_file).map_err(io_failure)? {
                 if legacy_present
                     && self
                         .same_file(&legacy, &room_file, record)
                         .map_err(io_failure)?
                 {
-                    // Linked, not yet unlinked: finish step 4's unlink, then steps 5–8.
+                    // Linked, not yet unlinked: finish step 4's unlink, then steps 5–8. Under the legacy lock and with
+                    // no -wal or -shm beside the file (C2): an older version or bir-headless may have opened it since
+                    // the cut, and its log would be left behind, or read twice into one file.
+                    let lock = hold_legacy_lock(&legacy)?;
+                    if files::sidecars_present(&legacy).map_err(io_failure)? {
+                        return Err(Failure::Transient(Transient {
+                            cause: TransientCause::WalReturned,
+                            copy_saved: true,
+                            detail: "a -wal or -shm is beside the legacy file in the link window"
+                                .into(),
+                        }));
+                    }
                     files::remove_and_sync(&legacy, self.layout.device_dir())
                         .map_err(io_failure)?;
+                    drop(lock);
                     let mut record = record.clone();
                     record.step = record.step.max(Step::Moved);
                     self.write_record(&record).map_err(store_failure)?;
                     return Ok(Start::Finished(self.finish_after_move(&room, record)));
                 }
-                if !legacy_present || record.moved() {
+                let moved_here = record.moved()
+                    || (!legacy_present && self.room_is_the_legacy(record, &room_file));
+                if moved_here {
                     let outcome = self.finish_after_move(&room, record.clone());
                     if !legacy_present || !matches!(outcome, Outcome::Done { .. }) {
                         return Ok(Start::Finished(outcome));
@@ -625,8 +646,8 @@ impl LegacyClaim {
                 && !matches!(record.step, Step::Done | Step::Closed)
                 && !matches!(record.failure, Some(RecordedFailure::MovedNotOpened { .. }))
             {
-                // Neither the legacy file nor the room file: nothing to claim. Kept for support, never deleted.
-                tracing::warn!(step = ?record.step, "legacy claim closed: neither the legacy file nor the room file is there");
+                // No legacy file, and no room file that is it: nothing to claim. Kept for support, never deleted.
+                tracing::warn!(step = ?record.step, "legacy claim closed: the legacy file is gone and no room file is it");
                 record.step = Step::Closed;
                 self.write_record(&record).map_err(store_failure)?;
             }
@@ -723,6 +744,18 @@ impl LegacyClaim {
                 }
                 None => false,
             }),
+        }
+    }
+
+    /// Whether `room_file` is the legacy file moved (C1): the identity recorded at the probe (a link or a rename keeps
+    /// it), else, where no identity can be read, the raw SHA-256.
+    fn room_is_the_legacy(&self, record: &Record, room_file: &Path) -> bool {
+        match (record.legacy_file, crate::safe_fs::file_id(room_file)) {
+            (Some(recorded), Ok(id)) => recorded == id,
+            _ => record
+                .raw_sha256
+                .as_ref()
+                .is_some_and(|raw| files::sha256_file(room_file).is_ok_and(|hash| hash == *raw)),
         }
     }
 
@@ -1339,6 +1372,7 @@ impl ReadyClaim {
         record.email = room.email.clone();
         record.unlocked_by = Some(unlocked_by);
         record.empty_room_aside = empty_room_aside;
+        record.legacy_file = probe.identity();
         record.os_login_used = unlocked_by == UnlockedBy::ComputerLogin || record.os_login_used;
         record.failure = None;
         record.step = Step::Unlocked;
