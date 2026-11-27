@@ -1,0 +1,44 @@
+# Desktop: a press on a list row right after typing in the RDO box picks that row (#425: on Windows a person's
+# click lost the pick 0/5 at c4262697; the input's blur ran before the row's press). Five rounds on the New taxpayer
+# form that setup-start.wants opened: type "makati" at a person's pace, press a row, the box holds that row and no
+# not-taken note shows. The "makati" list has four rows, so round 5 presses 047 again.
+# Round 1: 047.
+click new-tp-rdo_code-search
+type new-tp-rdo_code-search makati --key-delay-ms 80
+wait_until new-tp-rdo_code-opt-047 --timeout-ms 5000
+click new-tp-rdo_code-opt-047 --screenshot
+wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
+assert new-tp-rdo_code-search value="047 — East Makati"
+wait_until new-tp-rdo_code-note --absent --timeout-ms 2000
+# Round 2: 048.
+click new-tp-rdo_code-search
+type new-tp-rdo_code-search makati --key-delay-ms 80
+wait_until new-tp-rdo_code-opt-048 --timeout-ms 5000
+click new-tp-rdo_code-opt-048
+wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
+assert new-tp-rdo_code-search value="048 — West Makati"
+wait_until new-tp-rdo_code-note --absent --timeout-ms 2000
+# Round 3: 049.
+click new-tp-rdo_code-search
+type new-tp-rdo_code-search makati --key-delay-ms 80
+wait_until new-tp-rdo_code-opt-049 --timeout-ms 5000
+click new-tp-rdo_code-opt-049
+wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
+assert new-tp-rdo_code-search value="049 — North Makati"
+wait_until new-tp-rdo_code-note --absent --timeout-ms 2000
+# Round 4: 050.
+click new-tp-rdo_code-search
+type new-tp-rdo_code-search makati --key-delay-ms 80
+wait_until new-tp-rdo_code-opt-050 --timeout-ms 5000
+click new-tp-rdo_code-opt-050
+wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
+assert new-tp-rdo_code-search value="050 — South Makati"
+wait_until new-tp-rdo_code-note --absent --timeout-ms 2000
+# Round 5: 047.
+click new-tp-rdo_code-search
+type new-tp-rdo_code-search makati --key-delay-ms 80
+wait_until new-tp-rdo_code-opt-047 --timeout-ms 5000
+click new-tp-rdo_code-opt-047 --screenshot
+wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
+assert new-tp-rdo_code-search value="047 — East Makati"
+wait_until new-tp-rdo_code-note --absent --timeout-ms 2000 --screenshot

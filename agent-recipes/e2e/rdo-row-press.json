@@ -1,0 +1,20 @@
+{
+ "v": 1,
+ "description": "Desktop: five presses on RDO list rows right after typing \"makati\" (the #425 Windows fault: 0/5 by hand at c4262697, 5/5 at fef911cf). Run with `just e2e windows rdo-row-press` (or macos, linux); see docs/proof/E2E.md.",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "rdo-row-press",
+   "desktop": "rdo-row-press.wants",
+   "known_gap": {
+    "phone": "desktop only: on a phone the RDO list is a sheet (gap 1, hexuria/nsh-gpui-agent#13)"
+   },
+   "needs_cli": "0.4.1",
+   "fallback": "rdo-row-press-unpaced.wants"
+  }
+ ]
+}
