@@ -73,6 +73,8 @@ test("phone: New taxpayer and New branch fill the width and create", async () =>
   await tp.waitFor("id:new-tp-rdo_code-search"); // the pick opens as a sheet when narrow
   await tp.type("id:new-tp-rdo_code-search", "050");
   await tp.press("id:new-tp-rdo_code-opt-050");
+  // A pick closes the sheet; until it is gone it covers Create.
+  await tp.waitFor("id:new-tp-rdo_code-sheet", { state: "gone" });
   await tp.press("id:new-tp-save");
   await tp.waitFor("text:Sample Owner added. Add a tax year to choose its forms.");
 });
