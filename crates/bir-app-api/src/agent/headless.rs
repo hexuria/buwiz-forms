@@ -192,15 +192,10 @@ pub(crate) fn signed_in_room_database(
             // migrate its bytes and close the move unfinished, so the room does not answer here.
             // The smaller fix of the two the reviewer offered: refuse, rather than running start()
             // in serve.
-            if let Ok(claim) = bir_core::legacy_claim::LegacyClaim::at(layout.clone())
-                && let Ok(Some(record)) = claim.record()
-                && record.step >= bir_core::legacy_claim::Step::Copied
-                && record.step < bir_core::legacy_claim::Step::HashChecked
+            if let Err(message) =
+                bir_core::legacy_claim::room_move_evidence_clear(layout, &room.room_id)
             {
-                return Err(
-                    "the legacy claim's move is unfinished on this device (the record is not yet hash-checked);                      serve refuses the room until the app finishes it"
-                        .to_owned(),
-                );
+                return Err(format!("{message}; serve refuses the room"));
             }
             if path.is_file() {
                 Ok(path)

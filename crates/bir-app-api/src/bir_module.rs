@@ -3115,6 +3115,18 @@ fn restore_staged_database(
     db_path: &std::path::Path,
     stamp: u64,
 ) -> HostResult {
+    // F1': never replace the room's file while a return is being sent. The send holds the old Arc
+    // and finishes into it; were the install to swap the file under it, its receipt and status
+    // would land in the placeholder and be lost — a return the BIR accepted could be resent.
+    if !bir_core::background_cron::get_active_jobs()
+        .lock()
+        .map(|jobs| jobs.is_empty())
+        .unwrap_or(false)
+    {
+        return Err(HostError::new(
+            "A return is being sent. Try the import again when it has finished.",
+        ));
+    }
     if db_path.exists()
         && let Some(parent) = db_path.parent()
     {

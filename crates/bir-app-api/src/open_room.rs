@@ -15,6 +15,8 @@ use bir_core::rooms::{Layout, RoomId};
 pub struct OpenRoom {
     pub room_id: Option<RoomId>,
     pub user_id: String,
+    /// The normalised server origin the room is keyed by, with the user id (X1's note).
+    pub origin: String,
     pub generation: u64,
     pub handle: Arc<Mutex<Database>>,
 }
@@ -65,6 +67,19 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 /// The open room's handle and generation, if one is open — the worker's tick source (§A.4).
+/// The whole slot in one read (X2's note): the handle, the generation, the room and the user,
+/// never four reads a sign-out could interleave.
+pub fn snapshot() -> Option<(Arc<Mutex<Database>>, u64, Option<RoomId>, String)> {
+    lock(&SLOT).as_ref().map(|room| {
+        (
+            room.handle.clone(),
+            room.generation,
+            room.room_id.clone(),
+            room.user_id.clone(),
+        )
+    })
+}
+
 pub fn current() -> Option<(Arc<Mutex<Database>>, u64)> {
     lock(&SLOT)
         .as_ref()
@@ -80,6 +95,11 @@ pub fn generation() -> Option<u64> {
 /// Whose room is open (the user id of the saved sign-in it was opened for).
 pub fn user_id() -> Option<String> {
     lock(&SLOT).as_ref().map(|room| room.user_id.clone())
+}
+
+/// The normalised origin the open room is keyed by (X1's note), `None` while no room is open.
+pub fn origin() -> Option<String> {
+    lock(&SLOT).as_ref().map(|room| room.origin.clone())
 }
 
 /// The open room's id, `None` in legacy mode and while no room is open. Distinguish with
@@ -101,6 +121,7 @@ fn open_path(
     path: &std::path::Path,
     room_id: Option<RoomId>,
     user_id: String,
+    origin: String,
 ) -> Result<(Arc<Mutex<Database>>, u64), String> {
     // The one-copy guard (item 1): device-wide for the run, and the file's owner lock for as long
     // as its connection lives. The device folder is the room file's great-grandparent — or the
@@ -108,6 +129,13 @@ fn open_path(
     let device_dir = bir_core::db::room_device_dir(path)
         .or_else(|| path.parent().map(std::path::Path::to_path_buf))
         .ok_or_else(|| format!("no device folder for {}", path.display()))?;
+    // G1: the whole room-open rule on the slot's real path — Database::open below migrates and
+    // checkpoints, so a room never opens before start() ran or while its move evidence is
+    // unchecked. Legacy mode passes no room id and is not a room. reopen_fresh comes through
+    // here too (the import's reopen).
+    if let Some(room) = &room_id {
+        bir_core::legacy_claim::room_open_allowed(&bir_core::rooms::Layout::at(&device_dir), room)?;
+    }
     hold_device_guard(&device_dir)?;
     let handle = {
         let mut registry = lock(&REGISTRY);
@@ -128,6 +156,7 @@ fn open_path(
     *lock(&SLOT) = Some(OpenRoom {
         room_id,
         user_id,
+        origin,
         generation,
         handle: handle.clone(),
     });
@@ -148,7 +177,9 @@ pub(crate) fn reopen_fresh(
         let mut registry = lock(&REGISTRY);
         registry.remove(path);
     }
-    open_path(path, room_id, user_id)
+    // The reopen is the same account's room: the origin stands.
+    let origin = origin().unwrap_or_default();
+    open_path(path, room_id, user_id, origin)
 }
 
 /// Open the account's room as the one slot. The open goes through [`bir_core::rooms::open_room_guarded`]
@@ -158,18 +189,9 @@ pub fn open_room(
     layout: &Layout,
     room_id: RoomId,
     user_id: String,
+    origin: String,
 ) -> Result<(Arc<Mutex<Database>>, u64), String> {
-    if !bir_core::legacy_claim::claim_started_this_session(layout.device_dir()) {
-        debug_assert!(
-            false,
-            "a room opened before the claim's start() ran in this session (R1)"
-        );
-        return Err(
-            "the legacy claim's start() has not run for this device folder in this session (R1)"
-                .into(),
-        );
-    }
-    open_path(&layout.room_database(&room_id), Some(room_id), user_id)
+    open_path(&layout.room_database(&room_id), Some(room_id), user_id, origin)
 }
 
 /// Open the legacy file in place as the one slot (§A.3.7 legacy mode): no room, no record, no zip,
@@ -177,8 +199,9 @@ pub fn open_room(
 pub fn open_legacy_in_place(
     layout: &Layout,
     user_id: String,
+    origin: String,
 ) -> Result<(Arc<Mutex<Database>>, u64), String> {
-    open_path(&layout.legacy_database(), None, user_id)
+    open_path(&layout.legacy_database(), None, user_id, origin)
 }
 
 /// The open room's generation, or `None` while no room is open — and in single-room mode, where the
@@ -196,6 +219,19 @@ pub fn close_room() {
     // A dead connection's entry goes now, not at the next open: its file's owner lock releases when
     // the last strong handle is gone, so a sign-out frees the file for whatever comes next.
     lock(&REGISTRY).retain(|_, (weak, _)| weak.strong_count() > 0);
+}
+
+#[cfg(test)]
+static ROOM_TEST_TURN: Mutex<()> = Mutex::new(());
+
+/// One turn for every test that opens a room in this process (the slot, the open room path,
+/// the account gate and the owner-lock state are all process-wide): tests in different modules
+/// would otherwise write them over each other. Owner-lock module tests take this same turn.
+#[cfg(test)]
+pub(crate) fn room_test_turn() -> std::sync::MutexGuard<'static, ()> {
+    ROOM_TEST_TURN
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 #[cfg(test)]

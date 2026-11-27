@@ -698,10 +698,24 @@ static OPEN_ROOM_DATABASE: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex:
 pub fn set_open_room_database(path: Option<PathBuf>) {
     *OPEN_ROOM_DATABASE
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = path;
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = path.clone();
+    #[cfg(test)]
+    TEST_OPEN_ROOM_DATABASE.with(|slot| *slot.borrow_mut() = path);
+}
+
+#[cfg(test)]
+thread_local! {
+    // Tests run in parallel in one process and each names its own room file, so the
+    // process-wide slot would cross them. Production never uses this slot: the
+    // process-wide value above is the only one written outside cfg(test).
+    static TEST_OPEN_ROOM_DATABASE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
 }
 
 fn open_room_database() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(path) = TEST_OPEN_ROOM_DATABASE.with(|slot| slot.borrow().clone()) {
+        return Some(path);
+    }
     OPEN_ROOM_DATABASE
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -983,43 +997,17 @@ pub fn open_live_database() -> Result<(Database, PathBuf, Option<PathBuf>), DbEr
     // migrations and a checkpoint, and those writes change bytes the move's hash check still needs
     // as evidence. The legacy file and single-room files are not rooms and open as before.
     if let Some(device_dir) = room_device_dir(&path) {
-        let ran = crate::legacy_claim::claim_started_this_session(&device_dir);
-        debug_assert!(
-            ran,
-            "a room's database opened before the claim's start() ran in this session (R1)"
-        );
-        if !ran {
-            return Err(DbError::Io(std::io::Error::other(
-                "the legacy claim's start() has not run for this device folder in this session;                  a room's database is never opened before it (R1)",
-            )));
-        }
-        // The widened guard (the orchestrator's ruling): while the record is at Copied or past it but not yet
-        // HashChecked, step 7's hash evidence is still at stake — a migration or a checkpoint here changes the
-        // bytes it must find — so the room does not open even though start() ran. No record (or no claim yet)
-        // is nothing to protect.
-        // …and only while the record names THIS room: another room's unfinished move is not this
-        // open's business (the ruling: "the record names this room").
-        let room_id = path
+        // R1(b) + G1: the choke point every room open in the app passes, and the one rule for all of
+        // them — start() ran this session, and no unchecked move evidence names this room. The legacy
+        // file and single-room files are not rooms and open as before.
+        if let Some(room_id) = path
             .parent()
             .and_then(|folder| folder.file_name())
             .and_then(|name| name.to_str())
-            .map(str::to_owned);
-        let evidence_pending = crate::legacy_claim::LegacyClaim::at(crate::rooms::Layout::at(&device_dir))
-            .ok()
-            .and_then(|claim| claim.record().ok().flatten())
-            .is_some_and(|record| {
-                record.step >= crate::legacy_claim::Step::Copied
-                    && record.step < crate::legacy_claim::Step::HashChecked
-                    && record.room.as_deref() == room_id.as_deref()
-            });
-        debug_assert!(
-            !evidence_pending,
-            "a room's database opened while the claim's move evidence is unchecked (Copied..HashChecked)"
-        );
-        if evidence_pending {
-            return Err(DbError::Io(std::io::Error::other(
-                "the legacy claim's move is unfinished on this device (the record is not yet hash-checked);                  the room does not open until the claim finishes it",
-            )));
+            .and_then(crate::rooms::RoomId::parse)
+        {
+            crate::legacy_claim::room_open_allowed(&crate::rooms::Layout::at(&device_dir), &room_id)
+                .map_err(|message| DbError::Io(std::io::Error::other(message)))?;
         }
     }
     prepare_app_database_file(&path);

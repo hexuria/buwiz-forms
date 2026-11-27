@@ -3917,7 +3917,7 @@ mod tests {
         // The legacy-in-place open populates the slot without the claim guard (legacy mode); every
         // open is a new generation, as a sign-out and sign-in makes one.
         let (_handle, first) =
-            crate::open_room::open_legacy_in_place(&layout, "user-a".into()).unwrap();
+            crate::open_room::open_legacy_in_place(&layout, "user-a".into(), "https://api.buwiz.test".into()).unwrap();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -3931,7 +3931,7 @@ mod tests {
             // The room changed (a close and an open: a new generation): the result is dropped.
             crate::open_room::close_room();
             let (_handle2, second) =
-                crate::open_room::open_legacy_in_place(&layout, "user-b".into()).unwrap();
+                crate::open_room::open_legacy_in_place(&layout, "user-b".into(), "https://api.buwiz.test".into()).unwrap();
             assert_ne!(first, second);
             let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
             sender.send(Ok(HostValue::Null)).unwrap();

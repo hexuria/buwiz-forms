@@ -311,10 +311,6 @@ mod tests {
     use super::*;
     use bir_core::rooms::{DeviceStore, Layout, RoomRecord, room_id_for};
 
-    /// The unlocked room is one slot for the process, as the app has one room open at a time: tests that open a
-    /// room take turns.
-    static ONE_ROOM_AT_A_TIME: Mutex<()> = Mutex::new(());
-
     /// A device folder in a temporary directory with one room open on this thread, and its `rooms` row.
     struct Room {
         _folder: tempfile::TempDir,
@@ -324,9 +320,7 @@ mod tests {
 
     impl Room {
         fn open(user: &str) -> Self {
-            let turn = ONE_ROOM_AT_A_TIME
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let turn = crate::open_room::room_test_turn();
             let folder = tempfile::tempdir().unwrap();
             bir_core::rooms::forget_ephemeral_device_store();
             // Single-room mode names the device folder; the room is open beside it.

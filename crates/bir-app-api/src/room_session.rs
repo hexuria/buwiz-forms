@@ -75,11 +75,20 @@ fn claimant(stored: &StoredAccount) -> Claimant {
 /// Open the account's own room as the one slot: the room the claim names, or the room lookup of a
 /// sign-in with nothing to claim. `create` is whether an empty room file is made when there is
 /// none — a sign-in always may; the room is created on disk by the open itself.
-fn open_own_room(layout: &Layout, room_id: RoomId, user_id: &str) -> Result<SessionRoom, String> {
+fn origin_of(stored: &StoredAccount) -> String {
+    bir_core::rooms::room_origin(&stored.server_url).unwrap_or_default()
+}
+
+fn open_own_room(
+    layout: &Layout,
+    room_id: RoomId,
+    user_id: &str,
+    origin: &str,
+) -> Result<SessionRoom, String> {
     layout
         .create_room_dir(&room_id)
         .map_err(|error| error.to_string())?;
-    open_room::open_room(layout, room_id.clone(), user_id.to_owned())?;
+    open_room::open_room(layout, room_id.clone(), user_id.to_owned(), origin.to_owned())?;
     // The path the screens keep their values under (I4): the open room's file, on this thread.
     bir_core::db::set_open_room_database(Some(layout.room_database(&room_id)));
     Ok(SessionRoom::Room { room_id })
@@ -104,7 +113,12 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
     // X1: once per process. A second engine's boot runs the launch resume again (prepare_launch →
     // here); while the slot already holds this user id, nothing reruns — not the claim, not the
     // open, not the generation.
-    if crate::open_room::user_id().as_deref() == Some(stored.user_id.as_str()) {
+    // X1: once per process, keyed by (origin, user id) as the rooms are (the reviewer's note):
+    // the user id alone would skip a same-user sign-in on another server into the wrong room.
+    if crate::open_room::origin().as_deref()
+        == bir_core::rooms::room_origin(&stored.server_url).ok().as_deref()
+        && crate::open_room::user_id().as_deref() == Some(stored.user_id.as_str())
+    {
         if let Some(room_id) = crate::open_room::room_id() {
             return SessionRoom::Room { room_id };
         }
@@ -156,7 +170,7 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
         Start::Locked(_locked) => {
             // §A.3.7: A3a-2 is absent — a credential in the legacy file means legacy mode. The file
             // opens in place as the one slot; nothing is written beside it.
-            match open_room::open_legacy_in_place(&layout, stored.user_id.clone()) {
+            match open_room::open_legacy_in_place(&layout, stored.user_id.clone(), origin_of(stored)) {
                 Ok(_) => {
                     bir_core::db::set_open_room_database(Some(layout.legacy_database()));
                                     set_migration(None);
@@ -180,7 +194,7 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
         Start::Offer(offer) => match offer {
             bir_core::legacy_claim::OfferStart::Locked(_locked_offer) => {
                 // §A.3.6: the legacy unlock page is A3a-2; until then legacy-mode rules apply.
-                match open_room::open_legacy_in_place(&layout, stored.user_id.clone()) {
+                match open_room::open_legacy_in_place(&layout, stored.user_id.clone(), origin_of(stored)) {
                     Ok(_) => {
                         bir_core::db::set_open_room_database(Some(layout.legacy_database()));
                                             SessionRoom::LegacyInPlace
@@ -225,7 +239,7 @@ fn open_lookup_room(layout: &Layout, stored: &StoredAccount) -> SessionRoom {
     match lookup {
         Ok(bir_core::rooms::RoomLookup::Known(record)) => {
             let room_id = record.room_id.clone();
-            match open_own_room(layout, room_id.clone(), &stored.user_id) {
+            match open_own_room(layout, room_id.clone(), &stored.user_id, &origin_of(stored)) {
                 Ok(room) => room,
                 Err(error) => {
                     tracing::warn!("room {room_id} not opened: {error}");
@@ -237,7 +251,7 @@ fn open_lookup_room(layout: &Layout, stored: &StoredAccount) -> SessionRoom {
             }
         }
         Ok(bir_core::rooms::RoomLookup::New { room_id, .. }) => {
-            match open_own_room(layout, room_id.clone(), &stored.user_id) {
+            match open_own_room(layout, room_id.clone(), &stored.user_id, &origin_of(stored)) {
                 Ok(room) => room,
                 Err(error) => SessionRoom::BlockedTransient {
                     copy_saved: false,
@@ -261,7 +275,7 @@ fn finish_outcome(layout: &Layout, stored: &StoredAccount, outcome: Outcome) -> 
     match outcome {
         Outcome::Done { room, .. } => {
             set_migration(None);
-            match open_own_room(layout, room.clone(), &stored.user_id) {
+            match open_own_room(layout, room.clone(), &stored.user_id, &origin_of(stored)) {
                 Ok(opened) => opened,
                 Err(error) => SessionRoom::BlockedTransient {
                     copy_saved: true,
@@ -310,7 +324,6 @@ pub(crate) fn reset_for_tests() {
 /// One at a time across both test modules: the device-dir override, the slot and the guards are
 /// process-wide, so no two room tests may run in parallel in this process.
 #[cfg(test)]
-static TURNS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[cfg(test)]
 mod tests {
@@ -359,6 +372,12 @@ mod tests {
 
     /// A scratch device folder as this thread's device dir, the override cleared on drop.
     fn scratch() -> Scratch {
+        // Process-wide state the tests before this one left (their order is not fixed): each test
+        // starts from the state's nothing-open nothing-offered baseline, whatever ran before.
+        crate::open_room::reset_for_tests();
+        reset_for_tests();
+        bir_core::db::set_open_room_database(None);
+        crate::account_gate::set_unlocked(false);
         let folder = tempfile::tempdir().unwrap();
         bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
         Scratch {
@@ -399,7 +418,7 @@ mod tests {
     /// profiles (the owner's bug this PR fixes): its room is empty, and it is another room.
     #[test]
     fn a_second_account_gets_an_empty_room() {
-        let _turn = TURNS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _turn = crate::open_room::room_test_turn();
         let scratch = scratch();
         legacy_unlocked(&scratch.layout, "123456788", "A's Trading Corp");
 
@@ -433,7 +452,7 @@ mod tests {
     /// it in place as its one slot, and the practice account gets an empty room.
     #[test]
     fn locked_legacy_is_not_claimed_before_a3a2() {
-        let _turn = TURNS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _turn = crate::open_room::room_test_turn();
         let scratch = scratch();
         // A locked legacy file: the helpdesk access mode with a PIN.
         let db = Database::open(scratch.layout.legacy_database()).unwrap();
@@ -489,7 +508,7 @@ mod tests {
     /// row, backups/ and scratch/ are empty, and no lock is held beyond the process holder.
     #[test]
     fn locked_launch_and_sign_out_leave_no_record_no_zip_no_lock() {
-        let _turn = TURNS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _turn = crate::open_room::room_test_turn();
         let scratch = scratch();
         let db = Database::open(scratch.layout.legacy_database()).unwrap();
         taxpayer(&db, "123456788", "Locked Trading Corp");
@@ -541,7 +560,7 @@ mod a3a_tests {
     use bir_core::db::Database;
 
     fn turn() -> std::sync::MutexGuard<'static, ()> {
-        TURNS.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        crate::open_room::room_test_turn()
     }
 
     fn stored(user: &str) -> StoredAccount {
@@ -564,6 +583,12 @@ mod a3a_tests {
     }
 
     fn scratch() -> Scratch {
+        // Process-wide state the tests before this one left (their order is not fixed): each test
+        // starts from the state's nothing-open nothing-offered baseline, whatever ran before.
+        crate::open_room::reset_for_tests();
+        reset_for_tests();
+        bir_core::db::set_open_room_database(None);
+        crate::account_gate::set_unlocked(false);
         let folder = tempfile::tempdir().unwrap();
         bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
         Scratch {
@@ -623,6 +648,167 @@ mod a3a_tests {
             rusqlite::params![serde_json::to_string(&record).unwrap()],
         )
         .unwrap();
+    }
+
+    /// A record cut at `step`, as the library writes it — for G1's stopped-at-Moved opens.
+    fn write_record_at_step(layout: &Layout, room: &RoomId, who: &Claimant, step: bir_core::legacy_claim::Step) {
+        let store = bir_core::rooms::DeviceStore::open(layout).unwrap();
+        drop(store);
+        let conn = rusqlite::Connection::open(layout.device_db()).unwrap();
+        let record = bir_core::legacy_claim::Record {
+            stamp: "test-stamp".into(),
+            room: Some(room.as_str().to_owned()),
+            origin: Some(bir_core::rooms::room_origin(&who.server_url).unwrap()),
+            user_id: Some(who.user_id.clone()),
+            email: who.email.clone(),
+            unlocked_by: Some(bir_core::legacy_claim::UnlockedBy::NoLock),
+            empty_room_aside: false,
+            empty_room_file: None,
+            os_login_used: false,
+            raw_user_version: None,
+            raw_sha256: None,
+            zip: None,
+            zip_sha256: None,
+            hash_checked: false,
+            open_checked: false,
+            step,
+            failure: None,
+            done_at: None,
+            launch_days: vec![],
+            room_opened_since: false,
+            zip_deleted_at: None,
+            legacy_file: None,
+            owner_pin_phc: None,
+        };
+        conn.execute(
+            "INSERT OR REPLACE INTO migration (key, value) VALUES ('legacy', ?1)",
+            rusqlite::params![serde_json::to_string(&record).unwrap()],
+        )
+        .unwrap();
+    }
+
+    /// G1: the slot's real path refuses a room whose record is at Moved with no hash check, even
+    /// though an earlier claim filled the started set for the folder in this process.
+    #[test]
+    fn open_room_refuses_a_ready_that_stopped_at_moved() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let a = stored("user-a");
+        // The earlier claim: start() runs and finishes, filling the started set for the folder.
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        crate::open_room::close_room();
+        // …and then its move stopped at Moved — the record names the room, no hash check yet.
+        let who = Claimant {
+            server_url: a.server_url.clone(),
+            user_id: a.user_id.clone(),
+            email: a.email.clone(),
+            practice: false,
+        };
+        let room = bir_core::rooms::room_id_for(
+            &bir_core::rooms::room_origin(&a.server_url).unwrap(),
+            &a.user_id,
+        );
+        write_record_at_step(&scratch.layout, &room, &who, bir_core::legacy_claim::Step::Moved);
+        // The debug_assert fires ahead of the Err in a test build: either is the refusal.
+        let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::open_room::open_room(&scratch.layout, room.clone(), a.user_id.clone(), origin_of(&a))
+        }));
+        match refused {
+            Ok(result) => assert!(
+                matches!(&result, Err(message) if message.contains("not yet hash-checked")),
+                "open_room admitted a room at Moved with no hash check"
+            ),
+            Err(_) => {}
+        }
+        // F1's reopen path holds the same rule.
+        let reopened = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::open_room::reopen_fresh(
+                &scratch.layout.room_database(&room),
+                Some(room),
+                a.user_id.clone(),
+            )
+        }));
+        match reopened {
+            Ok(result) => assert!(
+                matches!(&result, Err(message) if message.contains("not yet hash-checked")),
+                "reopen_fresh admitted a room at Moved with no hash check"
+            ),
+            Err(_) => {}
+        }
+    }
+
+    /// G1: the record unreadable fails CLOSED while any rooms exist — an unreadable record can
+    /// hide exactly the unfinished move the rule protects.
+    #[test]
+    fn an_unreadable_record_refuses_the_open_while_rooms_exist() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let a = stored("user-a");
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        crate::open_room::close_room();
+        let room = bir_core::rooms::room_id_for(
+            &bir_core::rooms::room_origin(&a.server_url).unwrap(),
+            &a.user_id,
+        );
+        // device.db damaged beyond reading; the room folder exists.
+        std::fs::write(scratch.layout.device_db(), b"not a sqlite database at all").unwrap();
+        let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::open_room::open_room(&scratch.layout, room.clone(), a.user_id.clone(), origin_of(&a))
+        }));
+        match refused {
+            Ok(result) => assert!(
+                matches!(&result, Err(message) if message.contains("cannot be read")),
+                "an unreadable record with rooms present did not refuse"
+            ),
+            Err(_) => {}
+        }
+    }
+
+    /// F1': the import refuses while a return is being sent, and runs once the send finished.
+    #[test]
+    fn an_import_is_refused_while_a_return_is_being_sent() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        crate::account_gate::set_unlocked(true);
+        let a = stored("user-a");
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        let source = Database::open(scratch.layout.device_dir().join("source.db")).unwrap();
+        source
+            .create_taxpayer(bir_core::tax_profile::NewTaxpayer {
+                tin_root: "987654320".into(),
+                name: "Restored Holdings Inc".into(),
+                taxpayer_type: bir_core::profile::TaxpayerType::Corporation,
+                birth_date: None,
+                head_office: bir_core::tax_profile::BranchFacts {
+                    rdo_code: "040".into(),
+                    registered_address: "1 Example Street, Pasig".into(),
+                    zip_code: "1600".into(),
+                    phone: "0280000000".into(),
+                    email: "office@example.com".into(),
+                },
+            })
+            .unwrap();
+        source.checkpoint().unwrap();
+        let archive = scratch.layout.device_dir().join("backup.zip");
+        bir_core::export::export_database_zip(&source, &archive).unwrap();
+        drop(source);
+        // A send in flight: the worker holds its job key.
+        let jobs = bir_core::background_cron::get_active_jobs();
+        jobs.lock().unwrap().insert(
+            bir_core::background_cron::submission_job_key("1701Q", "12345678900000", 2026, None, Some(3)),
+        );
+        let refused = crate::bir_module::restore_database_archive(&archive, 7);
+        assert!(
+            matches!(&refused, Err(error) if error.message().contains("A return is being sent. Try the import again when it has finished.")),
+            "the import ran while a send was in flight"
+        );
+        // The send finished: nothing was swapped under it, so its receipt is in the real room —
+        // and the import now runs.
+        jobs.lock().unwrap().clear();
+        crate::bir_module::restore_database_archive(&archive, 7).expect("the import runs once the send finished");
     }
 
     /// §A.8, the launch call site: a claim cut mid-move resumes at launch — open_session_room with
@@ -1074,21 +1260,21 @@ mod a3a_tests {
 /// TypeScript declarations of the migration verbs (the pages under sign-in look B).
 pub const DECLARATIONS: &str = r#"
 /** The migration state the sign-in flow shows a page for after session_opened. */
-declare function migration_state(): {
+export function migration_state(): {
     kind: "none" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered";
     copy_saved: boolean;
     detail: string;
 };
 /** The transient page's Try again: the claim and the room open run again for the saved sign-in. */
-declare function migration_try_again(): void;
+export function migration_try_again(): void;
 /** The offer page's answer: `add` runs the whole-profile export of the found file and imports it into
  *  the room, then the file is renamed aside; `false` leaves it for the next launch. */
-declare function migration_offer_answer(add: boolean): void;
+export function migration_offer_answer(add: boolean): void;
 /** How many returns of the open room are Queued or sending now — the sign-out confirm's count, no names. */
-declare function returns_waiting_count(): number;
+export function returns_waiting_count(): number;
 /** The pre-rooms safety copy of the open room's claim, for Settings › Import / Export: kept-until
  *  date (unix), or the reason it is kept, or none when there is no copy. */
-declare function safety_copy_status(): { kind: "none" } | { kind: "until"; stamp: number } | { kind: "kept"; reason: string };
+export function safety_copy_status(): { kind: "none" } | { kind: "until"; stamp: number } | { kind: "kept"; reason: string };
 "#;
 
 /// Register the migration verbs (the moving and failure pages, the offer, the sign-out count, the
@@ -1147,11 +1333,19 @@ fn migration_offer_answer(arguments: &HostArguments) -> HostResult {
         return Ok(HostValue::Null);
     }
     // X2: the answer runs only for the account the offer was made to, in the room it was made in.
-    let bound = match &*MIGRATION.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) {
-        Some(MigrationState::Offered { user_id, room_id, generation }) => {
-            crate::open_room::user_id().as_deref() == Some(user_id.as_str())
-                && crate::open_room::room_id().as_ref() == Some(&room_id.clone())
-                && crate::open_room::generation() == Some(*generation)
+    // The slot is read once (the reviewer's note): four separate reads could interleave a sign-out.
+    let slot = crate::open_room::snapshot();
+    let bound = match (
+        &*MIGRATION.lock().unwrap_or_else(|poisoned| poisoned.into_inner()),
+        &slot,
+    ) {
+        (
+            Some(MigrationState::Offered { user_id, room_id, generation }),
+            Some((_, open_generation, open_room, open_user)),
+        ) => {
+            open_user == user_id
+                && open_room.as_ref() == Some(room_id)
+                && open_generation == generation
         }
         _ => false,
     };
@@ -1175,8 +1369,7 @@ fn migration_offer_answer(arguments: &HostArguments) -> HostResult {
             "This file is locked with a TIN and PIN. Moving locked files comes in a later version; choose Not now.",
         ));
     }
-    let (handle, _generation) = crate::open_room::current()
-        .ok_or_else(|| HostError::new("no room is open to add them to"))?;
+    let (handle, ..) = slot.ok_or_else(|| HostError::new("no room is open to add them to"))?;
     let stamp = bir_core::bir_submit::device::now();
     let scratch_dir = layout.device_dir().join("scratch");
     std::fs::create_dir_all(&scratch_dir).map_err(|error| HostError::new(error.to_string()))?;

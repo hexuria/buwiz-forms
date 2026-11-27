@@ -72,6 +72,13 @@ fn started_key(device_dir: &std::path::Path) -> std::path::PathBuf {
         .unwrap_or_else(|_| device_dir.to_path_buf())
 }
 
+/// Tests fill the started set as a finished claim's start() would (G1: a Ready that stopped at
+/// Moved leaves it filled for the folder).
+#[cfg(test)]
+pub(crate) fn mark_started_for_test(device_dir: &std::path::Path) {
+    started_insert(device_dir);
+}
+
 /// Tests simulate a new session — a kill and relaunch — by forgetting what this session answered.
 #[cfg(test)]
 pub(crate) fn clear_started_for_test(device_dir: &std::path::Path) {
@@ -87,6 +94,76 @@ fn started_insert(device_dir: &std::path::Path) {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .insert(started_key(device_dir));
+}
+
+/// Whether any room folder exists under the layout (a read error answers true: failing closed).
+fn any_rooms_exist(layout: &crate::rooms::Layout) -> bool {
+    match std::fs::read_dir(layout.rooms_dir()) {
+        Ok(mut entries) => entries.next().is_some(),
+        Err(_) => true,
+    }
+}
+
+/// The evidence half of the room-open rule (G1): the room does not open while the claim's record names
+/// it and the step is in [Copied, HashChecked) — a migration or a checkpoint would change the bytes the
+/// hash check still needs. The record unreadable is a refusal whenever any rooms exist (failing closed:
+/// an unreadable record can hide exactly the move this rule protects). bir-headless serve calls this
+/// directly: its process never runs `start()`, so the started half cannot apply to it.
+pub fn room_move_evidence_clear(
+    layout: &crate::rooms::Layout,
+    room_id: &crate::rooms::RoomId,
+) -> Result<(), String> {
+    let unreadable = || {
+        format!(
+            "the legacy claim's record cannot be read while rooms exist on this device; the room {} does not open since the record can hide an unfinished move",
+            room_id
+        )
+    };
+    let record = match LegacyClaim::at(layout.clone()) {
+        Ok(claim) => match claim.record() {
+            Ok(record) => record,
+            Err(_) if any_rooms_exist(layout) => return Err(unreadable()),
+            Err(_) => None,
+        },
+        Err(_) if any_rooms_exist(layout) => return Err(unreadable()),
+        Err(_) => None,
+    };
+    let pending = record.is_some_and(|record| {
+        record.step >= Step::Copied
+            && record.step < Step::HashChecked
+            && record.room.as_deref() == Some(room_id.as_str())
+    });
+    debug_assert!(
+        !pending,
+        "a room's database opened while the claim's move evidence is unchecked (Copied..HashChecked)"
+    );
+    if pending {
+        return Err(
+            "the legacy claim's move is unfinished on this device (the record is not yet hash-checked); the room does not open until the claim finishes it"
+                .into(),
+        );
+    }
+    Ok(())
+}
+
+/// The whole room-open rule (G1): `start()` ran to a definitive answer for the device in this session,
+/// and no unchecked move evidence names this room. Every open of a room's database — the slot's real
+/// path, the restore's reopen, the legacy choke point — goes through here.
+pub fn room_open_allowed(
+    layout: &crate::rooms::Layout,
+    room_id: &crate::rooms::RoomId,
+) -> Result<(), String> {
+    if !claim_started_this_session(layout.device_dir()) {
+        debug_assert!(
+            false,
+            "a room's database opened before the claim's start() ran in this session (R1)"
+        );
+        return Err(
+            "the legacy claim's start() has not run for this device folder in this session; a room's database is never opened before it (R1)"
+                .into(),
+        );
+    }
+    room_move_evidence_clear(layout, room_id)
 }
 
 /// Whether the claim's `start()` ran to a definitive answer for `device_dir` in this session (R1): the point
