@@ -2747,14 +2747,15 @@ pub mod pending_notices {
         {
             return incoming[spec.path].as_f64().unwrap_or(0.0).abs() >= 0.005;
         }
-        if let Some(id) = gate.strip_prefix("1601fq_schedule1:") {
+        if let Some(ids) = gate.strip_prefix("1601fq_schedule1:") {
+            let ids: Vec<&str> = ids.split(',').collect();
             return incoming["schedule1"]
                 .as_array()
                 .into_iter()
                 .flatten()
                 .enumerate()
                 .any(|(index, row)| {
-                    super::schedule1_1601fq::row_id(row, index) == id
+                    ids.contains(&super::schedule1_1601fq::row_id(row, index).as_str())
                         && super::schedule1_1601fq::typed_row(row)
                 });
         }

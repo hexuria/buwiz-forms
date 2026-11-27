@@ -4077,6 +4077,8 @@ mod tests {
             draft.set_tax_relief(Some(Form1601FqTaxRelief::SpecialRate));
             draft.schedule1[0].income_payment = 42.0;
             draft.schedule1[0].tax_rate = 10.0;
+            draft.schedule1[1].income_payment = 24.0;
+            draft.schedule1[1].tax_rate = 10.0;
             draft.recompute();
             id = db.save_queueable_draft(&draft).unwrap();
 
@@ -4116,11 +4118,13 @@ mod tests {
         assert!(
             pending[0]
                 .0
-                .starts_with("notice_pending:1601fq_schedule1:row-00000000000000000001:"),
+                .starts_with("notice_pending:1601fq_schedule1:row-00000000000000000001,row-00000000000000000002:"),
             "{pending:?}"
         );
         assert!(
-            pending[0].1.contains("Schedule 1 row 1 was cleared"),
+            pending[0]
+                .1
+                .contains("Schedule 1's rows were cleared: they apply only when item 13 is Yes."),
             "{pending:?}"
         );
         assert!(

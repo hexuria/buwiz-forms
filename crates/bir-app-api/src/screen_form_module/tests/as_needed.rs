@@ -3859,7 +3859,12 @@ fn v2018_1601fq_legacy_dormant_schedule_1_is_cleared_on_open_and_said_once() {
     let typed = fill(
         "1601FQ",
         &yes["draft"],
-        json!({"txtAmtIncomePay0": "42", "txtRate0": "10"}),
+        json!({
+            "txtAmtIncomePay0": "42",
+            "txtRate0": "10",
+            "txtAmtIncomePay1": "24",
+            "txtRate1": "10",
+        }),
     );
     let saved = save("1601FQ", &typed["draft"]);
     let id = stored_id(&saved);
@@ -3880,13 +3885,13 @@ fn v2018_1601fq_legacy_dormant_schedule_1_is_cleared_on_open_and_said_once() {
     let key = notes[0]["key"].as_str().unwrap().to_string();
     assert!(
         key.starts_with(&format!(
-            "notice_seen:1601fq_schedule1:row-00000000000000000001:{id}:"
+            "notice_seen:1601fq_schedule1:row-00000000000000000001,row-00000000000000000002:{id}:"
         )),
         "{key}"
     );
     assert_eq!(
         notes[0]["text"],
-        "Schedule 1 row 1 was cleared: it applies only when item 13 is Yes."
+        "Schedule 1's rows were cleared: they apply only when item 13 is Yes."
     );
     assert!(
         !notes[0]["text"]
