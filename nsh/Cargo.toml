@@ -42,7 +42,7 @@ libc = "0.2"
 jni = "0.21"
 # The window's own control plane on Android is the plug's nsh-gpui-agent-android crate, linked for the
 # constructor it self-installs with; same rev as the other platform crates.
-nsh-gpui-agent-android = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", optional = true }
+nsh-gpui-agent-android = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "b559e40dc593bd8e8cd78060ddb5a3507a237767", optional = true }
 
 # The database guard on Windows: the account's profile folder from its token (GetUserProfileDirectoryW), never
 # USERPROFILE, and a file or folder known by volume and file index (GetFileInformationByHandle). The version the lock
@@ -69,7 +69,7 @@ webkit6 = "0.6"
 # macOS crate, a development listener gated on GPUI_AGENT=1 (there is no in-process server feature on this crate).
 # Every platform dep must name the same rev or the plug's shared crates (nsh-gpui-agent, nsh-agent-actions)
 # resolve twice.
-nsh-gpui-agent-linux = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", optional = true }
+nsh-gpui-agent-linux = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "b559e40dc593bd8e8cd78060ddb5a3507a237767", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_UI_Shell"] }
@@ -82,7 +82,7 @@ windows = { version = "0.62", features = ["Foundation", "Security_Credentials_UI
 windows-future = "0.3"
 # The window's own control plane on Windows is the plug's, in nsh-gpui-agent-windows; same rev as the other
 # platform crates.
-nsh-gpui-agent-windows = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", optional = true }
+nsh-gpui-agent-windows = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "b559e40dc593bd8e8cd78060ddb5a3507a237767", optional = true }
 
 # Touch ID / the account password and Windows Hello (admin recovery, `mac_login`): the old host's crate and version
 # (the retired shell's Cargo.toml). Used by src/auth.rs.
@@ -107,7 +107,7 @@ objc2-local-authentication = { version = "0.3.2", default-features = false, feat
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "objc2", "CFCGTypes"] }
 # The window's own control plane on iOS is the plug's `nsh-gpui-agent` crate's ios feature (the driver lives in
 # the shared crate; same rev as the other platform crates).
-nsh-gpui-agent = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", features = ["ios"], optional = true }
+nsh-gpui-agent = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "b559e40dc593bd8e8cd78060ddb5a3507a237767", features = ["ios"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # The window's own control plane (semantic tree, press, type, paste, scroll, screenshot) is the plug's, in
@@ -116,7 +116,7 @@ nsh-gpui-agent = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6b
 # `scroll`, and each `type` or `key` presses the box again, which moved the caret in a filled money box. Only under
 # `agent`; see nsh/AGENTS.md "Agent remote control". The plug's NSH pin is redirected to this app's checkout by the
 # [patch] below.
-nsh-gpui-agent-macos = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", optional = true }
+nsh-gpui-agent-macos = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "b559e40dc593bd8e8cd78060ddb5a3507a237767", optional = true }
 
 [features]
 default = []

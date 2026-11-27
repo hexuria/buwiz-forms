@@ -79,11 +79,10 @@
    }
   },
   {
-   "name": "queue",
-   "file": "queue.wants",
-   "windows": "queue-windows.wants",
-   "send": true,
-   "precondition": "Queue validates first. The recipe records the profile's business start date and income-tax election through the form's own banners, and the money-box recipe leaves Items 15 and 16 at zero, so the return validates; a return that does not stops at its to-do list instead of the confirm dialog"
+   "name": "sheet-press",
+   "desktop": "sheet-press.json",
+   "windows": "sheet-press.json",
+   "needs_cli": "0.4.1"
   },
   {
    "name": "delete-row",
@@ -96,9 +95,15 @@
    },
    "known_gap": {
     "phone": "gap 1: the row drawer is a sheet on a phone",
-    "linux": "gap 1: in the narrow layout of the Linux window, presses inside a sheet are refused as offscreen too (linux-final birth-date s14)",
-    "windows": "gpui-agent on Windows cannot press inside the row drawer: the host reports every node in the Sheet visible=false with zero-height geometry though it is painted and clickable, so each press is refused offscreen"
+    "linux": "gap 1: in the narrow layout of the Linux window, presses inside a sheet are refused as offscreen too (linux-final birth-date s14)"
    }
+  },
+  {
+   "name": "queue",
+   "file": "queue.wants",
+   "windows": "queue-windows.wants",
+   "send": true,
+   "precondition": "Queue validates first. The recipe records the profile's business start date and income-tax election through the form's own banners, and the money-box recipe leaves Items 15 and 16 at zero, so the return validates; a return that does not stops at its to-do list instead of the confirm dialog"
   },
   {
    "name": "birth-date",
