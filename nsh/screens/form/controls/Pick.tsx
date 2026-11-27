@@ -7,7 +7,7 @@
 //   Enter picks it, Escape closes and restores, Tab leaves; the chevron opens the whole list. Text that is not a choice is not taken
 //   on leaving: the box goes back to the last pick and a line under it says so (resolveTyped in model.ts).
 import type { Accessor, InputRef, ListRef, ViewRef } from "nsh";
-import { announce, batch, cleanup, effect, keymap, List, Overlay, platform, signal, untracked, View, windowSize } from "nsh";
+import { announce, batch, cleanup, effect, keymap, lifecycle, List, Overlay, platform, signal, untracked, View, windowSize } from "nsh";
 import {
   ChoiceRow, Icon, IconButton, Line, phoneLayout, Popover, Sheet, sheetBodyRoom, sheetPanelMaxHeight, T_MIN_H, T_PX, Text, TextField, TOUCH,
 } from "../../../ui";
@@ -297,6 +297,17 @@ function SheetPick(props: { p: SearchPickProps }) {
  */
 const PRESS_HOLDS_MS = 30_000;
 
+/**
+ * How long a leaving with the list open waits for the press that may have caused it. On Windows the box's blur, and a timer of
+ * 0 ms after it, come BEFORE the press-down on the row or the chevron the pointer went down on (real clicks: a next-turn settle
+ * closed the list under the click, so no row could be picked), so the press is given this long to arrive. A leaving with no press
+ * (the form's focus(), Queue's jump) settles this much later: not seen.
+ */
+const LEAVE_GRACE_MS = 250;
+
+/** A press-outside this soon after the refusal line appeared is the press that made it (Windows delivers it to the new overlay too). */
+const NOTE_PRESS_GRACE_MS = 400;
+
 /** A wide row is 32 points; the list shows eight before it scrolls. */
 const ROW = 32;
 const ROWS_SHOWN = 8;
@@ -398,6 +409,8 @@ function FieldPick(props: { p: SearchPickProps }) {
    */
   let pressing = false;
   let pressAt = 0;
+  /** When the refusal line last appeared (NOTE_PRESS_GRACE_MS). */
+  let noteAt = 0;
   /** The box went away (its page, the overlay, the lock): nothing deferred may pick or settle after that. */
   let gone = false;
   let settleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -457,6 +470,7 @@ function FieldPick(props: { p: SearchPickProps }) {
       close();
       restore();
       note.set(r.kind === "revert" ? r.note : "");
+      noteAt = Date.now();
     });
     if (r.kind === "pick") p.onPick(r.value);
     else if (r.kind === "clear") p.onPick("");
@@ -489,7 +503,7 @@ function FieldPick(props: { p: SearchPickProps }) {
   // as it goes down and settles the box itself (choose, or the chevron's commit). Any other leaving comes with no press the list
   // hears (the form's focus() into another box, Queue's jump to a note, the lock, a window switch): the typed text is settled on
   // the next turn, as Tab settles it, so the box never shows typed words over a value they are not.
-  const settleLeaving = (delay = 0) => {
+  const settleLeaving = (delay = LEAVE_GRACE_MS) => {
     if (gone) return;
     clearTimeout(settleTimer);
     settleTimer = setTimeout(() => {
@@ -509,7 +523,7 @@ function FieldPick(props: { p: SearchPickProps }) {
   const pressUp = () =>
     setTimeout(() => {
       pressing = false;
-      if (leaving) settleLeaving();
+      if (leaving) settleLeaving(0);
     }, 0);
 
   // The keys a combobox takes while its box has the focus; Escape only while there is something to close or restore, so a dialog
@@ -525,6 +539,12 @@ function FieldPick(props: { p: SearchPickProps }) {
     return () => {
       for (const off of offs) off();
     };
+  });
+
+  // The window stops being the active one (a switch to another window or app, Alt+Tab, Cmd+Tab): as a native combobox's popup, the
+  // list closes and typed text is settled as on leaving, so the window comes back showing what the box holds. The keys stay put.
+  effect(() => {
+    if (lifecycle() !== "active" && untracked(open)) untracked(commit);
   });
 
   return (
@@ -639,7 +659,9 @@ function FieldPick(props: { p: SearchPickProps }) {
         </Overlay>
       </If>
       <If when={note() && !open() && anchor()}>
-        <Overlay anchor={anchor()} placement="bottom" align="start" offset={4} margin={8} onPressOutside={() => note.set("")}>
+        <Overlay anchor={anchor()} placement="bottom" align="start" offset={4} margin={8} onPressOutside={() => {
+            if (Date.now() - noteAt > NOTE_PRESS_GRACE_MS) note.set("");
+          }}>
           <View
             testID={`${p.testID}-note`}
             class="rounded-(--radius-ctl) border border-border bg-raised px-2 py-1 shadow-md"

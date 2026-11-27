@@ -295,6 +295,20 @@ test("desktop: an emptied box clears the choice on leaving; a required one goes 
   expect(line(required, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
 });
 
+test("desktop: the window going inactive (Alt+Tab) closes the list and settles the typed text, as a native popup", async () => {
+  const app = await probe({ rdo: "050" }, DESKTOP);
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  await app.setLifecycle("inactive");
+  await app.waitFor("id:pp-rdo-list", { state: "gone" });
+  expect(app.value("id:pp-rdo-search")).toBe("050 — South Makati");
+  expect(line(app, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
+  await app.setLifecycle("active");
+  // Back in the window the box shows what it holds, and says why the words went.
+  await app.waitFor("text:“makati” fits 2 choices. Pick one from the list. The box kept 050 — South Makati.");
+});
+
 test("desktop: the focus moved away with no press (the form's focus()) closes the list and puts the last pick back with a sentence", async () => {
   const app = await probe({ rdo: "050" }, DESKTOP);
   await app.clear("id:pp-rdo-search");
