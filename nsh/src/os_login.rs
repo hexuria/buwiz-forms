@@ -17,6 +17,12 @@
 #[cfg(any(windows, test))]
 mod windows;
 
+/// The app's main window title: nsh/nsh.json `window.title`, the value the kit gives the window, set by the build
+/// script (build.rs), which stops the build unless it is a non-empty, one-line string. Never a second copy of the
+/// string (PLAN W4). A3a-2 passes it to `prove_owner`, so the sheet belongs to the main window and never to a print
+/// preview (titled with the taxpayer).
+pub const APP_WINDOW_TITLE: &str = env!("APP_WINDOW_TITLE");
+
 /// What this device can do to prove its owner, checked without prompting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -58,10 +64,13 @@ pub fn owner_check() -> OwnerCheck {
 }
 
 /// Asks the OS to prove the device's owner is present, once, with `reason` as the sheet's text. Blocks until the
-/// person answers. Windows: `RequestVerificationForWindowAsync`, owned by the app's window (`windows.rs`).
-pub fn prove_owner(reason: &str) -> OwnerCheckResult {
+/// person answers.
+///
+/// `window_title` is the exact title of the window that owns the sheet: the app's main window, [`APP_WINDOW_TITLE`]. Windows: `RequestVerificationForWindowAsync`, owned by our NSH window with that title, never the print
+/// preview (`windows.rs`); no such window, no prompt. Other targets ignore it.
+pub fn prove_owner(reason: &str, window_title: &str) -> OwnerCheckResult {
     let answer = prove_owner_with(crate::door::test_environment(), || {
-        platform_prove_owner(reason)
+        platform_prove_owner(reason, window_title)
     });
     tracing::info!(?answer, "os_login prove_owner");
     answer
@@ -93,8 +102,8 @@ fn platform_owner_check() -> OwnerCheck {
 }
 
 #[cfg(windows)]
-fn platform_prove_owner(reason: &str) -> OwnerCheckResult {
-    self::windows::prove_owner(reason)
+fn platform_prove_owner(reason: &str, window_title: &str) -> OwnerCheckResult {
+    self::windows::prove_owner(reason, window_title)
 }
 
 // Every other target, until its half lands (Apple: ios-submission's `apple.rs`).
@@ -104,7 +113,7 @@ fn platform_owner_check() -> OwnerCheck {
 }
 
 #[cfg(not(windows))]
-fn platform_prove_owner(_reason: &str) -> OwnerCheckResult {
+fn platform_prove_owner(_reason: &str, _window_title: &str) -> OwnerCheckResult {
     OwnerCheckResult::Unavailable
 }
 
@@ -172,6 +181,19 @@ mod tests {
             word(serde_json::json!(OwnerCheckResult::Unavailable)),
             "unavailable"
         );
+    }
+
+    #[test]
+    fn the_main_window_title_comes_from_nsh_json() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../nsh.json")).expect("nsh.json is JSON");
+        assert_eq!(
+            config
+                .pointer("/window/title")
+                .and_then(serde_json::Value::as_str),
+            Some(APP_WINDOW_TITLE)
+        );
+        assert!(!APP_WINDOW_TITLE.is_empty());
     }
 
     #[test]

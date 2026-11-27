@@ -48,11 +48,11 @@ for (const look of LOOKS) {
     await shoot(app, `settings-${look.name}-transfer`);
 
     if (narrow) await toList(app);
-    await section(app, "jobs", "id:jobs-tab");
+    await section(app, "jobs", "id:jobs-section");
     await shoot(app, `settings-${look.name}-jobs`);
-    await app.press("id:jobs-tabs >> text:Logs");
-    await app.waitFor("id:logs-tab");
-    await app.wait(300);
+
+    if (narrow) await toList(app);
+    await section(app, "logs", "id:logs-section");
     await shoot(app, `settings-${look.name}-logs`);
 
     if (narrow) await toList(app);
@@ -79,7 +79,7 @@ for (const look of LOOKS) {
       await app.scroll("id:settings-scroll", 900).catch(() => {});
       await app.wait(300);
       await shoot(app, `settings-mid-${look.colorScheme}-account-2`);
-      await section(app, "jobs", "id:jobs-tab");
+      await section(app, "jobs", "id:jobs-section");
       await shoot(app, `settings-mid-${look.colorScheme}-jobs`);
       expect(app.shows("id:settings")).toBe(true);
     }, 120_000);

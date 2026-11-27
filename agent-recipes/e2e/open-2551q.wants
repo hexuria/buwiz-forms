@@ -1,0 +1,6 @@
+# Smoke 5, desktop: New return > 2551Q, the default period, opened.
+click sb-new
+wait_until new-return-2551Q --timeout-ms 5000
+click new-return-2551Q
+click new-return-open
+wait_until form-page --timeout-ms 20000 --screenshot

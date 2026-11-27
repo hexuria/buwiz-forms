@@ -53,6 +53,7 @@ REF = 2048  # the width the logo is measured at
 WHITE = (255, 255, 255, 255)
 SCALES = (100, 125, 150, 200, 400)
 TARGETSIZES = (16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256)
+LOGO_HEIGHT = 180  # points: the logo on the pages before the app at its largest (nsh/screens/auth/brand.tsx)
 
 # Files an earlier icon set left that nothing should ship any more. --check fails while one is there.
 GONE = (
@@ -196,6 +197,16 @@ def transparent(logo: Logo, w: int, h: int, fill: float) -> Image.Image:
     return im
 
 
+def whole(logo: Logo, w: int, h: int) -> Image.Image:
+    """The whole drawing (never cut to its painted box) as large as fits a transparent `w` by `h` canvas, centred in it."""
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    render = logo.render(min(w, math.floor(h / logo.aspect)))
+    if render.width > w or render.height > h:
+        raise SystemExit(f"the logo rendered {render.width}x{render.height} is over its {w}x{h} canvas")
+    im.alpha_composite(render, ((w - render.width) // 2, (h - render.height) // 2))
+    return im
+
+
 def plated(logo: Logo, w: int, h: int, fill: float = PLATED) -> Image.Image:
     """White, opaque, the logo boxed. A wide tile fits the logo by its height."""
     im = Image.new("RGBA", (w, h), WHITE)
@@ -275,6 +286,14 @@ def outputs(logo: Logo) -> dict[str, object]:
     # Windows menu row's mark (16 points, 48 px for @3x). Both the whole logo, in colour.
     out["nsh/shell/desktop/tray.png"] = transparent(logo, 72, 72, 1.0)
     out["nsh/shell/app-mark.png"] = transparent(logo, 48, 48, 1.0)
+
+    # The pages before the app (nsh/screens/auth/brand.tsx): the whole drawing, transparent, 180 points high (tablets and
+    # desktops; phones show it at 150, scaled down), at 1x, 2x and 3x; NSH loads the one for the screen's density. The 2x and
+    # 3x files are exactly twice and three times the 1x one, as NSH wants its variants.
+    width = math.ceil(LOGO_HEIGHT / logo.aspect)
+    for scale in (1, 2, 3):
+        suffix = "" if scale == 1 else f"@{scale}x"
+        out[f"nsh/assets/brand/buwiz-forms-logo{suffix}.png"] = whole(logo, width * scale, LOGO_HEIGHT * scale)
     return out
 
 

@@ -1,0 +1,1723 @@
+{
+  "form_id": "2200t-v2020",
+  "html_slug": "2200t-2020",
+  "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (frozen page text layer) names the item. Booleans take xbox_joins (box immediately left of the printed option; _1/_2/_3 follow printed order). Schedule 1 rows map by the block letter, the printed effective-year caption and the Export/Taxable/Due column headers. Part III and Part IV amounts pair the 11-slot peso comb with the 2-slot centavo comb directly right (money_joins). Part III date combs (tax agent issue/expiry) stay blank. Rows printed for 2024 onwards and the novel tobacco rows have no layout key and stay blank. Since #113: the 2022 sheet's item 6 vapor rows (XT170/XT180, 2022-2023) take the model's 7A/7B keys by ATC, date and rate; the Others rows map by the page 3 column headers; Items 7, 10, 11 and the page 2/3 TIN print from derived: keys of Form2200TDraft::to_print_field_map (place names, not PSGC codes). The 2020-2021 and XT165 keys have no printed row and are listed in not_joined. date_joins split each payment-row date (MM/DD/YYYY) across the MM, DD and YYYY combs of the row whose Agency/Number/Amount joins share its suffix.",
+  "joins": [
+    {
+      "writer_key": "frm2200Tv2020:txtDateMonth",
+      "html_id": "p1c4",
+      "printed": "1 Date (MM/DD/YYYY), month",
+      "reason": "first of three combs under item 1 caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtDateDay",
+      "html_id": "p1c6",
+      "printed": "1 Date (MM/DD/YYYY), day",
+      "reason": "middle comb under item 1 caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtDateYear",
+      "html_id": "p1c8",
+      "printed": "1 Date (MM/DD/YYYY), year",
+      "reason": "last comb under item 1 caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSheets",
+      "html_id": "p1c11",
+      "printed": "3 Number of Sheet/s Attached",
+      "reason": "caption left of the 2-slot comb"
+    },
+    {
+      "writer_key": "frm2200Tv2020:tinA",
+      "html_id": "p1c16",
+      "printed": "4 TIN part 1",
+      "reason": "first 3-slot TIN comb under item 4 caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:tinB",
+      "html_id": "p1c18",
+      "printed": "4 TIN part 2",
+      "reason": "3-slot comb after the first dash"
+    },
+    {
+      "writer_key": "frm2200Tv2020:tinC",
+      "html_id": "p1c20",
+      "printed": "4 TIN part 3",
+      "reason": "3-slot comb after the second dash"
+    },
+    {
+      "writer_key": "frm2200Tv2020:branchCode",
+      "html_id": "p1c22",
+      "printed": "4 TIN branch",
+      "reason": "5-slot branch comb after the third dash"
+    },
+    {
+      "writer_key": "frm2200Tv2020:rdoCode",
+      "html_id": "p1c24",
+      "printed": "5 RDO Code",
+      "reason": "caption left of the 3-slot comb"
+    },
+    {
+      "writer_key": "frm2200Tv2020:registeredName",
+      "html_id": "p1c26",
+      "printed": "6 Taxpayer Name",
+      "reason": "full-width comb under item 6 caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:zipCode",
+      "html_id": "p1c31",
+      "printed": "7A ZIP Code",
+      "reason": "caption left of the 4-slot comb"
+    },
+    {
+      "writer_key": "derived:address_line1",
+      "html_id": "p1c28",
+      "printed": "7 Registered Address, line 1",
+      "reason": "full-width 40-slot comb under the item 7 caption; the print map breaks the address at the last space that fits"
+    },
+    {
+      "writer_key": "derived:line:address_line2",
+      "html_id": "p1c29",
+      "printed": "7 Registered Address, line 2",
+      "reason": "31-slot comb left of 7A ZIP Code: the rest of the address; a longer line prints whole in smaller type"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1A_2020_Export",
+      "html_id": "p2c25",
+      "printed": "Schedule 1 1A 2020 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1A_2020_Taxable",
+      "html_id": "p2c26",
+      "printed": "Schedule 1 1A 2020 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1A_2020_Due",
+      "html_id": "p2c27",
+      "printed": "Schedule 1 1A 2020 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1A_2021_Export",
+      "html_id": "p2c30",
+      "printed": "Schedule 1 1A 2021 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1A_2021_Taxable",
+      "html_id": "p2c31",
+      "printed": "Schedule 1 1A 2021 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1A_2021_Due",
+      "html_id": "p2c32",
+      "printed": "Schedule 1 1A 2021 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1A_2022_Export",
+      "html_id": "p2c35",
+      "printed": "Schedule 1 1A 2022 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1A_2022_Taxable",
+      "html_id": "p2c36",
+      "printed": "Schedule 1 1A 2022 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1A_2022_Due",
+      "html_id": "p2c37",
+      "printed": "Schedule 1 1A 2022 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1A_2023_Export",
+      "html_id": "p2c40",
+      "printed": "Schedule 1 1A 2023 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1A_2023_Taxable",
+      "html_id": "p2c41",
+      "printed": "Schedule 1 1A 2023 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1A_2023_Due",
+      "html_id": "p2c42",
+      "printed": "Schedule 1 1A 2023 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1B_2020_Export",
+      "html_id": "p2c51",
+      "printed": "Schedule 1 1B 2020 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1B_2020_Taxable",
+      "html_id": "p2c52",
+      "printed": "Schedule 1 1B 2020 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1B_2020_Due",
+      "html_id": "p2c53",
+      "printed": "Schedule 1 1B 2020 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1B_2021_Export",
+      "html_id": "p2c56",
+      "printed": "Schedule 1 1B 2021 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1B_2021_Taxable",
+      "html_id": "p2c57",
+      "printed": "Schedule 1 1B 2021 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1B_2021_Due",
+      "html_id": "p2c58",
+      "printed": "Schedule 1 1B 2021 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1B_2022_Export",
+      "html_id": "p2c61",
+      "printed": "Schedule 1 1B 2022 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1B_2022_Taxable",
+      "html_id": "p2c62",
+      "printed": "Schedule 1 1B 2022 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1B_2022_Due",
+      "html_id": "p2c63",
+      "printed": "Schedule 1 1B 2022 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1B_2023_Export",
+      "html_id": "p2c66",
+      "printed": "Schedule 1 1B 2023 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1B_2023_Taxable",
+      "html_id": "p2c67",
+      "printed": "Schedule 1 1B 2023 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1B_2023_Due",
+      "html_id": "p2c68",
+      "printed": "Schedule 1 1B 2023 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1C_2020_Export",
+      "html_id": "p2c77",
+      "printed": "Schedule 1 1C 2020 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1C_2020_Taxable",
+      "html_id": "p2c78",
+      "printed": "Schedule 1 1C 2020 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1C_2020_Due",
+      "html_id": "p2c79",
+      "printed": "Schedule 1 1C 2020 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1C_2021_Export",
+      "html_id": "p2c82",
+      "printed": "Schedule 1 1C 2021 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1C_2021_Taxable",
+      "html_id": "p2c83",
+      "printed": "Schedule 1 1C 2021 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1C_2021_Due",
+      "html_id": "p2c84",
+      "printed": "Schedule 1 1C 2021 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1C_2022_Export",
+      "html_id": "p2c87",
+      "printed": "Schedule 1 1C 2022 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1C_2022_Taxable",
+      "html_id": "p2c88",
+      "printed": "Schedule 1 1C 2022 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1C_2022_Due",
+      "html_id": "p2c89",
+      "printed": "Schedule 1 1C 2022 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1C_2023_Export",
+      "html_id": "p2c92",
+      "printed": "Schedule 1 1C 2023 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1C_2023_Taxable",
+      "html_id": "p2c93",
+      "printed": "Schedule 1 1C 2023 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_1C_2023_Due",
+      "html_id": "p2c94",
+      "printed": "Schedule 1 1C 2023 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_2_2020_Export",
+      "html_id": "p2c104",
+      "printed": "Schedule 1 2 2020 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_2_2020_Taxable",
+      "html_id": "p2c105",
+      "printed": "Schedule 1 2 2020 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_2_2020_Due",
+      "html_id": "p2c106",
+      "printed": "Schedule 1 2 2020 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_2_2021_Export",
+      "html_id": "p2c109",
+      "printed": "Schedule 1 2 2021 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_2_2021_Taxable",
+      "html_id": "p2c110",
+      "printed": "Schedule 1 2 2021 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_2_2021_Due",
+      "html_id": "p2c111",
+      "printed": "Schedule 1 2 2021 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_2_2022_Export",
+      "html_id": "p2c114",
+      "printed": "Schedule 1 2 2022 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_2_2022_Taxable",
+      "html_id": "p2c115",
+      "printed": "Schedule 1 2 2022 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_2_2022_Due",
+      "html_id": "p2c116",
+      "printed": "Schedule 1 2 2022 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_2_2023_Export",
+      "html_id": "p2c119",
+      "printed": "Schedule 1 2 2023 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_2_2023_Taxable",
+      "html_id": "p2c120",
+      "printed": "Schedule 1 2 2023 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_2_2023_Due",
+      "html_id": "p2c121",
+      "printed": "Schedule 1 2 2023 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3A_2020_Export",
+      "html_id": "p2c131",
+      "printed": "Schedule 1 3A 2020 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3A_2020_Taxable",
+      "html_id": "p2c132",
+      "printed": "Schedule 1 3A 2020 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3A_2020_Due",
+      "html_id": "p2c133",
+      "printed": "Schedule 1 3A 2020 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3A_2021_Export",
+      "html_id": "p2c136",
+      "printed": "Schedule 1 3A 2021 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3A_2021_Taxable",
+      "html_id": "p2c137",
+      "printed": "Schedule 1 3A 2021 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3A_2021_Due",
+      "html_id": "p2c138",
+      "printed": "Schedule 1 3A 2021 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3A_2022_Export",
+      "html_id": "p2c141",
+      "printed": "Schedule 1 3A 2022 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3A_2022_Taxable",
+      "html_id": "p2c142",
+      "printed": "Schedule 1 3A 2022 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3A_2022_Due",
+      "html_id": "p2c143",
+      "printed": "Schedule 1 3A 2022 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3A_2023_Export",
+      "html_id": "p2c146",
+      "printed": "Schedule 1 3A 2023 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3A_2023_Taxable",
+      "html_id": "p2c147",
+      "printed": "Schedule 1 3A 2023 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3A_2023_Due",
+      "html_id": "p2c148",
+      "printed": "Schedule 1 3A 2023 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3B_2020_Export",
+      "html_id": "p2c158",
+      "printed": "Schedule 1 3B 2020 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3B_2020_Taxable",
+      "html_id": "p2c159",
+      "printed": "Schedule 1 3B 2020 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3B_2020_Due",
+      "html_id": "p2c160",
+      "printed": "Schedule 1 3B 2020 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3B_2021_Export",
+      "html_id": "p2c163",
+      "printed": "Schedule 1 3B 2021 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3B_2021_Taxable",
+      "html_id": "p2c164",
+      "printed": "Schedule 1 3B 2021 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3B_2021_Due",
+      "html_id": "p2c165",
+      "printed": "Schedule 1 3B 2021 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3B_2022_Export",
+      "html_id": "p2c168",
+      "printed": "Schedule 1 3B 2022 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3B_2022_Taxable",
+      "html_id": "p2c169",
+      "printed": "Schedule 1 3B 2022 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3B_2022_Due",
+      "html_id": "p2c170",
+      "printed": "Schedule 1 3B 2022 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3B_2023_Export",
+      "html_id": "p2c173",
+      "printed": "Schedule 1 3B 2023 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3B_2023_Taxable",
+      "html_id": "p2c174",
+      "printed": "Schedule 1 3B 2023 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_3B_2023_Due",
+      "html_id": "p2c175",
+      "printed": "Schedule 1 3B 2023 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4A_2020_Export",
+      "html_id": "p2c185",
+      "printed": "Schedule 1 4A 2020 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4A_2020_Taxable",
+      "html_id": "p2c186",
+      "printed": "Schedule 1 4A 2020 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4A_2020_Due",
+      "html_id": "p2c187",
+      "printed": "Schedule 1 4A 2020 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4A_2021_Export",
+      "html_id": "p2c190",
+      "printed": "Schedule 1 4A 2021 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4A_2021_Taxable",
+      "html_id": "p2c191",
+      "printed": "Schedule 1 4A 2021 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4A_2021_Due",
+      "html_id": "p2c192",
+      "printed": "Schedule 1 4A 2021 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4A_2022_Export",
+      "html_id": "p2c195",
+      "printed": "Schedule 1 4A 2022 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4A_2022_Taxable",
+      "html_id": "p2c196",
+      "printed": "Schedule 1 4A 2022 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4A_2022_Due",
+      "html_id": "p2c197",
+      "printed": "Schedule 1 4A 2022 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4A_2023_Export",
+      "html_id": "p2c200",
+      "printed": "Schedule 1 4A 2023 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4A_2023_Taxable",
+      "html_id": "p2c201",
+      "printed": "Schedule 1 4A 2023 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4A_2023_Due",
+      "html_id": "p2c202",
+      "printed": "Schedule 1 4A 2023 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4B_2020_Export",
+      "html_id": "p2c212",
+      "printed": "Schedule 1 4B 2020 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4B_2020_Taxable",
+      "html_id": "p2c213",
+      "printed": "Schedule 1 4B 2020 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4B_2020_Due",
+      "html_id": "p2c214",
+      "printed": "Schedule 1 4B 2020 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4B_2021_Export",
+      "html_id": "p2c217",
+      "printed": "Schedule 1 4B 2021 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4B_2021_Taxable",
+      "html_id": "p2c218",
+      "printed": "Schedule 1 4B 2021 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4B_2021_Due",
+      "html_id": "p2c219",
+      "printed": "Schedule 1 4B 2021 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4B_2022_Export",
+      "html_id": "p2c222",
+      "printed": "Schedule 1 4B 2022 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4B_2022_Taxable",
+      "html_id": "p2c223",
+      "printed": "Schedule 1 4B 2022 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4B_2022_Due",
+      "html_id": "p2c224",
+      "printed": "Schedule 1 4B 2022 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4B_2023_Export",
+      "html_id": "p2c227",
+      "printed": "Schedule 1 4B 2023 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4B_2023_Taxable",
+      "html_id": "p2c228",
+      "printed": "Schedule 1 4B 2023 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_4B_2023_Due",
+      "html_id": "p2c229",
+      "printed": "Schedule 1 4B 2023 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_2020_Export",
+      "html_id": "p2c239",
+      "printed": "Schedule 1 5 2020 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_2020_Taxable",
+      "html_id": "p2c240",
+      "printed": "Schedule 1 5 2020 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_2020_Due",
+      "html_id": "p2c241",
+      "printed": "Schedule 1 5 2020 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_1.23.2020_Export",
+      "html_id": "p2c244",
+      "printed": "Schedule 1 5 1.23.2020 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_1.23.2020_Taxable",
+      "html_id": "p2c245",
+      "printed": "Schedule 1 5 1.23.2020 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_1.23.2020_Due",
+      "html_id": "p2c246",
+      "printed": "Schedule 1 5 1.23.2020 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_2021_Export",
+      "html_id": "p2c249",
+      "printed": "Schedule 1 5 2021 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_2021_Taxable",
+      "html_id": "p2c250",
+      "printed": "Schedule 1 5 2021 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_2021_Due",
+      "html_id": "p2c251",
+      "printed": "Schedule 1 5 2021 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_2022_Export",
+      "html_id": "p2c254",
+      "printed": "Schedule 1 5 2022 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_2022_Taxable",
+      "html_id": "p2c255",
+      "printed": "Schedule 1 5 2022 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_2022_Due",
+      "html_id": "p2c256",
+      "printed": "Schedule 1 5 2022 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_2023_Export",
+      "html_id": "p2c259",
+      "printed": "Schedule 1 5 2023 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_2023_Taxable",
+      "html_id": "p2c260",
+      "printed": "Schedule 1 5 2023 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_5_2023_Due",
+      "html_id": "p2c261",
+      "printed": "Schedule 1 5 2023 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_10ml_Export",
+      "html_id": "p2c271",
+      "printed": "Schedule 1 6 10ml Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_10ml_Taxable",
+      "html_id": "p2c272",
+      "printed": "Schedule 1 6 10ml Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_10ml_Due",
+      "html_id": "p2c273",
+      "printed": "Schedule 1 6 10ml Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_20ml_Export",
+      "html_id": "p2c276",
+      "printed": "Schedule 1 6 20ml Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_20ml_Taxable",
+      "html_id": "p2c277",
+      "printed": "Schedule 1 6 20ml Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_20ml_Due",
+      "html_id": "p2c278",
+      "printed": "Schedule 1 6 20ml Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_30ml_Export",
+      "html_id": "p2c281",
+      "printed": "Schedule 1 6 30ml Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_30ml_Taxable",
+      "html_id": "p2c282",
+      "printed": "Schedule 1 6 30ml Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_30ml_Due",
+      "html_id": "p2c283",
+      "printed": "Schedule 1 6 30ml Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_40ml_Export",
+      "html_id": "p2c286",
+      "printed": "Schedule 1 6 40ml Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_40ml_Taxable",
+      "html_id": "p2c287",
+      "printed": "Schedule 1 6 40ml Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_40ml_Due",
+      "html_id": "p2c288",
+      "printed": "Schedule 1 6 40ml Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_50ml_Export",
+      "html_id": "p2c291",
+      "printed": "Schedule 1 6 50ml Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_50ml_Taxable",
+      "html_id": "p2c292",
+      "printed": "Schedule 1 6 50ml Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_50ml_Due",
+      "html_id": "p2c293",
+      "printed": "Schedule 1 6 50ml Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_above_50ml_Export",
+      "html_id": "p2c296",
+      "printed": "Schedule 1 6 above 50ml Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_above_50ml_Taxable",
+      "html_id": "p2c297",
+      "printed": "Schedule 1 6 above 50ml Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_6_above_50ml_Due",
+      "html_id": "p2c298",
+      "printed": "Schedule 1 6 above 50ml Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7A_2020_Export",
+      "html_id": "p3c24",
+      "printed": "Schedule 1 7A 2020 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7A_2020_Taxable",
+      "html_id": "p3c25",
+      "printed": "Schedule 1 7A 2020 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7A_2020_Due",
+      "html_id": "p3c26",
+      "printed": "Schedule 1 7A 2020 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7A_2021_Export",
+      "html_id": "p3c29",
+      "printed": "Schedule 1 7A 2021 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7A_2021_Taxable",
+      "html_id": "p3c30",
+      "printed": "Schedule 1 7A 2021 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7A_2021_Due",
+      "html_id": "p3c31",
+      "printed": "Schedule 1 7A 2021 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7A_2022_Export",
+      "html_id": "p3c34",
+      "printed": "Schedule 1 7A 2022 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7A_2022_Taxable",
+      "html_id": "p3c35",
+      "printed": "Schedule 1 7A 2022 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7A_2022_Due",
+      "html_id": "p3c36",
+      "printed": "Schedule 1 7A 2022 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7A_2023_Export",
+      "html_id": "p3c39",
+      "printed": "Schedule 1 7A 2023 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7A_2023_Taxable",
+      "html_id": "p3c40",
+      "printed": "Schedule 1 7A 2023 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7A_2023_Due",
+      "html_id": "p3c41",
+      "printed": "Schedule 1 7A 2023 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7B_2020_Export",
+      "html_id": "p3c51",
+      "printed": "Schedule 1 7B 2020 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7B_2020_Taxable",
+      "html_id": "p3c52",
+      "printed": "Schedule 1 7B 2020 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7B_2020_Due",
+      "html_id": "p3c53",
+      "printed": "Schedule 1 7B 2020 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7B_2021_Export",
+      "html_id": "p3c56",
+      "printed": "Schedule 1 7B 2021 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7B_2021_Taxable",
+      "html_id": "p3c57",
+      "printed": "Schedule 1 7B 2021 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7B_2021_Due",
+      "html_id": "p3c58",
+      "printed": "Schedule 1 7B 2021 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7B_2022_Export",
+      "html_id": "p3c61",
+      "printed": "Schedule 1 7B 2022 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7B_2022_Taxable",
+      "html_id": "p3c62",
+      "printed": "Schedule 1 7B 2022 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7B_2022_Due",
+      "html_id": "p3c63",
+      "printed": "Schedule 1 7B 2022 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7B_2023_Export",
+      "html_id": "p3c66",
+      "printed": "Schedule 1 7B 2023 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7B_2023_Taxable",
+      "html_id": "p3c67",
+      "printed": "Schedule 1 7B 2023 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_7B_2023_Due",
+      "html_id": "p3c68",
+      "printed": "Schedule 1 7B 2023 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt080_Export",
+      "html_id": "p3c74",
+      "printed": "Tobacco inspection fee xt080 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt080_Taxable",
+      "html_id": "p3c75",
+      "printed": "Tobacco inspection fee xt080 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt080_Due",
+      "html_id": "p3c76",
+      "printed": "Tobacco inspection fee xt080 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt090_Export",
+      "html_id": "p3c81",
+      "printed": "Tobacco inspection fee xt090 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt090_Taxable",
+      "html_id": "p3c82",
+      "printed": "Tobacco inspection fee xt090 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt090_Due",
+      "html_id": "p3c83",
+      "printed": "Tobacco inspection fee xt090 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt100_Export",
+      "html_id": "p3c88",
+      "printed": "Tobacco inspection fee xt100 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt100_Taxable",
+      "html_id": "p3c89",
+      "printed": "Tobacco inspection fee xt100 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt100_Due",
+      "html_id": "p3c90",
+      "printed": "Tobacco inspection fee xt100 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt110_Export",
+      "html_id": "p3c95",
+      "printed": "Tobacco inspection fee xt110 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt110_Taxable",
+      "html_id": "p3c96",
+      "printed": "Tobacco inspection fee xt110 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt110_Due",
+      "html_id": "p3c97",
+      "printed": "Tobacco inspection fee xt110 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt120_leaf_Export",
+      "html_id": "p3c108",
+      "printed": "Tobacco inspection fee xt120_leaf Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt120_leaf_Taxable",
+      "html_id": "p3c109",
+      "printed": "Tobacco inspection fee xt120_leaf Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt120_leaf_Due",
+      "html_id": "p3c110",
+      "printed": "Tobacco inspection fee xt120_leaf Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt120_scraps_Export",
+      "html_id": "p3c114",
+      "printed": "Tobacco inspection fee xt120_scraps Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt120_scraps_Taxable",
+      "html_id": "p3c115",
+      "printed": "Tobacco inspection fee xt120_scraps Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt120_scraps_Due",
+      "html_id": "p3c116",
+      "printed": "Tobacco inspection fee xt120_scraps Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt190_Export",
+      "html_id": "p3c121",
+      "printed": "Tobacco inspection fee xt190 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt190_Taxable",
+      "html_id": "p3c122",
+      "printed": "Tobacco inspection fee xt190 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt190_Due",
+      "html_id": "p3c123",
+      "printed": "Tobacco inspection fee xt190 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt200_Export",
+      "html_id": "p3c128",
+      "printed": "Tobacco inspection fee xt200 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt200_Taxable",
+      "html_id": "p3c129",
+      "printed": "Tobacco inspection fee xt200 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt200_Due",
+      "html_id": "p3c130",
+      "printed": "Tobacco inspection fee xt200 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others1_Atc",
+      "html_id": "p3c132",
+      "printed": "Others row 1 Atc",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others1_Desc",
+      "html_id": "p3c133",
+      "printed": "Others row 1 Desc",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others1_Bracket",
+      "html_id": "p3c134",
+      "printed": "Others row 1 Bracket",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others1_Rate",
+      "html_id": "p3c135",
+      "printed": "Others row 1 Rate",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others1_Export",
+      "html_id": "p3c136",
+      "printed": "Others row 1 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others1_Taxable",
+      "html_id": "p3c137",
+      "printed": "Others row 1 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others1_Due",
+      "html_id": "p3c138",
+      "printed": "Others row 1 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others2_Atc",
+      "html_id": "p3c139",
+      "printed": "Others row 2 Atc",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others2_Desc",
+      "html_id": "p3c140",
+      "printed": "Others row 2 Desc",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others2_Bracket",
+      "html_id": "p3c141",
+      "printed": "Others row 2 Bracket",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others2_Rate",
+      "html_id": "p3c142",
+      "printed": "Others row 2 Rate",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others2_Export",
+      "html_id": "p3c143",
+      "printed": "Others row 2 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others2_Taxable",
+      "html_id": "p3c144",
+      "printed": "Others row 2 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others2_Due",
+      "html_id": "p3c145",
+      "printed": "Others row 2 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others3_Atc",
+      "html_id": "p3c146",
+      "printed": "Others row 3 Atc",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others3_Desc",
+      "html_id": "p3c147",
+      "printed": "Others row 3 Desc",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others3_Bracket",
+      "html_id": "p3c148",
+      "printed": "Others row 3 Bracket",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others3_Rate",
+      "html_id": "p3c149",
+      "printed": "Others row 3 Rate",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others3_Export",
+      "html_id": "p3c150",
+      "printed": "Others row 3 Export",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others3_Taxable",
+      "html_id": "p3c151",
+      "printed": "Others row 3 Taxable",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_xt_others3_Due",
+      "html_id": "p3c152",
+      "printed": "Others row 3 Due",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtSched1_TotalDue",
+      "html_id": "p3c154",
+      "printed": "Schedule 1  TotalDue",
+      "reason": "January 2020 sheet row/column position"
+    },
+    {
+      "writer_key": "frm2200Tv2020:phoneNumber",
+      "html_id": "p1c1021",
+      "printed": "8 Contact Number (Landline/Cellphone No.)",
+      "reason": "12-slot comb under item 8 caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtEmail",
+      "html_id": "p1c1022",
+      "printed": "9 Email Address",
+      "reason": "direct correction of the January 2020 lattice using the drawn box positions"
+    },
+    {
+      "writer_key": "derived:line:item10_region",
+      "html_id": "p1c1023",
+      "printed": "10 Place of Production - Region",
+      "reason": "the 6-slot comb under the Region caption of item 10; the name of the PSGC code (a longer name prints whole in smaller type)"
+    },
+    {
+      "writer_key": "derived:line:item10_province",
+      "html_id": "p1c1024",
+      "printed": "10 Place of Production - Province",
+      "reason": "the 19-slot comb under the Province caption of item 10; the name of the PSGC code (a longer name prints whole in smaller type)"
+    },
+    {
+      "writer_key": "derived:line:item10_city",
+      "html_id": "p1c1025",
+      "printed": "10 Place of Production - City",
+      "reason": "the 15-slot comb under the City caption of item 10; the name of the PSGC code (a longer name prints whole in smaller type)"
+    },
+    {
+      "writer_key": "derived:line:item11_region",
+      "html_id": "p1c1026",
+      "printed": "11 Place of Removal - Region",
+      "reason": "the 6-slot comb under the Region caption of item 11; the name of the PSGC code (a longer name prints whole in smaller type)"
+    },
+    {
+      "writer_key": "derived:line:item11_province",
+      "html_id": "p1c1027",
+      "printed": "11 Place of Removal - Province",
+      "reason": "the 19-slot comb under the Province caption of item 11; the name of the PSGC code (a longer name prints whole in smaller type)"
+    },
+    {
+      "writer_key": "derived:line:item11_city",
+      "html_id": "p1c1028",
+      "printed": "11 Place of Removal - City",
+      "reason": "the 15-slot comb under the City caption of item 11; the name of the PSGC code (a longer name prints whole in smaller type)"
+    },
+    {
+      "writer_key": "frm2200Tv2020:paymentOther",
+      "html_id": "p1c1029",
+      "printed": "15 Other Similar Schemes (specify)",
+      "reason": "direct correction of the January 2020 lattice using the drawn box positions"
+    },
+    {
+      "writer_key": "frm2200Tv2020:registeredName_2",
+      "html_id": "p2c951",
+      "printed": "Page 2 Taxpayer Name",
+      "reason": "direct correction of the January 2020 lattice using the drawn box positions"
+    },
+    {
+      "writer_key": "frm2200Tv2020:registeredName_3",
+      "html_id": "p3c951",
+      "printed": "Page 3 Taxpayer Name",
+      "reason": "direct correction of the January 2020 lattice using the drawn box positions"
+    },
+    {
+      "writer_key": "derived:tin_digits",
+      "html_id": "p2c950",
+      "printed": "Page 2 and page 3 TIN",
+      "reason": "direct correction of the January 2020 lattice using the drawn box positions",
+      "html_ids": [
+        "p3c950"
+      ]
+    },
+    {
+      "writer_key": "frm2200Tv2020:cashBank",
+      "html_id": "p1c980",
+      "printed": "25 Cash/Bank Debit Memo: Drawee Bank/Agency",
+      "reason": "column header Drawee Bank/Agency, row 25"
+    },
+    {
+      "writer_key": "frm2200Tv2020:cashNum",
+      "html_id": "p1c981",
+      "printed": "25 Cash/Bank Debit Memo: Number",
+      "reason": "column header Number, row 25"
+    },
+    {
+      "writer_key": "frm2200Tv2020:checkBank",
+      "html_id": "p1c990",
+      "printed": "26 Check: Drawee Bank/Agency",
+      "reason": "column header Drawee Bank/Agency, row 26"
+    },
+    {
+      "writer_key": "frm2200Tv2020:checkNum",
+      "html_id": "p1c991",
+      "printed": "26 Check: Number",
+      "reason": "column header Number, row 26"
+    },
+    {
+      "writer_key": "frm2200Tv2020:taxNum",
+      "html_id": "p1c1001",
+      "printed": "27 Tax Debit Memo: Number",
+      "reason": "6-slot comb at the Number column x-position, row 27"
+    },
+    {
+      "writer_key": "frm2200Tv2020:othersBank",
+      "html_id": "p1c1010",
+      "printed": "28 Others: Drawee Bank/Agency",
+      "reason": "column header Drawee Bank/Agency, row 28"
+    },
+    {
+      "writer_key": "frm2200Tv2020:othersNum",
+      "html_id": "p1c1011",
+      "printed": "28 Others: Number",
+      "reason": "column header Number, row 28"
+    },
+    {
+      "writer_key": "frm2200Tv2020:othersDetails",
+      "html_id": "p1c1020",
+      "printed": "28 Others (specify)",
+      "reason": "comb directly under the 28 Others (specify) caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:treatyY",
+      "html_id": "p1c1037",
+      "printed": "12A If yes, specify",
+      "reason": "23-slot comb under the item 12A specify caption"
+    }
+  ],
+  "money_joins": [
+    {
+      "writer_key": "frm2200Tv2020:txtExciseDue",
+      "peso_html_id": "p1c900",
+      "cent_html_id": "p1c901",
+      "printed": "16 Excise Tax Due (from Part V - Schedule 1)",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtLess_Balance",
+      "peso_html_id": "p1c950",
+      "cent_html_id": "p1c951",
+      "printed": "17A Balance Carried Over from Previous Return",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtLess_Excise",
+      "peso_html_id": "p1c952",
+      "cent_html_id": "p1c953",
+      "printed": "17B Creditable Excise Tax",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right in the drawn amount box"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtLess_Tot",
+      "peso_html_id": "p1c954",
+      "cent_html_id": "p1c955",
+      "printed": "17C Total (Sum of Items 17A and 17B)",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtNetTaxDue",
+      "peso_html_id": "p1c956",
+      "cent_html_id": "p1c957",
+      "printed": "18 Net Tax Due (Item 16 less Item 17C)",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtPrevReturn",
+      "peso_html_id": "p1c958",
+      "cent_html_id": "p1c959",
+      "printed": "19 Less: Payment on Returns Previously Filed",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtStillDue",
+      "peso_html_id": "p1c960",
+      "cent_html_id": "p1c961",
+      "printed": "20 Tax Still Due/(Overpayment)",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtPen_Surcharge",
+      "peso_html_id": "p1c962",
+      "cent_html_id": "p1c963",
+      "printed": "21A Surcharge",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right in the drawn amount box"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtPen_Interest",
+      "peso_html_id": "p1c964",
+      "cent_html_id": "p1c965",
+      "printed": "21B Interest",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right in the drawn amount box"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtPen_Compromise",
+      "peso_html_id": "p1c966",
+      "cent_html_id": "p1c967",
+      "printed": "21C Compromise",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right in the drawn amount box"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtPen_Tot",
+      "peso_html_id": "p1c968",
+      "cent_html_id": "p1c969",
+      "printed": "21D Total Penalties",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right in the drawn amount box"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtAmtPayable",
+      "peso_html_id": "p1c970",
+      "cent_html_id": "p1c971",
+      "printed": "22 Amount Payable/(Overpayment)",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtPay_TaxPayment",
+      "peso_html_id": "p1c972",
+      "cent_html_id": "p1c973",
+      "printed": "23A Tax Payment/Deposit",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right in the drawn amount box"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtPay_Penalties",
+      "peso_html_id": "p1c974",
+      "cent_html_id": "p1c975",
+      "printed": "23B Penalties",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right in the drawn amount box"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtPay_Tot",
+      "peso_html_id": "p1c976",
+      "cent_html_id": "p1c977",
+      "printed": "23C Total Payment Made Today",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right in the drawn amount box"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtBalance",
+      "peso_html_id": "p1c978",
+      "cent_html_id": "p1c979",
+      "printed": "24 Balance to be Carried Over to Next Return",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right"
+    },
+    {
+      "writer_key": "frm2200Tv2020:cashAmt",
+      "peso_html_id": "p1c985",
+      "cent_html_id": "p1c986",
+      "printed": "25 Cash/Bank Debit Memo: Amount",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right"
+    },
+    {
+      "writer_key": "frm2200Tv2020:checkAmt",
+      "peso_html_id": "p1c995",
+      "cent_html_id": "p1c996",
+      "printed": "26 Check: Amount",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right"
+    },
+    {
+      "writer_key": "frm2200Tv2020:taxAmt",
+      "peso_html_id": "p1c1005",
+      "cent_html_id": "p1c1006",
+      "printed": "27 Tax Debit Memo: Amount",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right"
+    },
+    {
+      "writer_key": "frm2200Tv2020:othersAmt",
+      "peso_html_id": "p1c1015",
+      "cent_html_id": "p1c1016",
+      "printed": "28 Others: Amount",
+      "reason": "11-slot peso comb with 2-slot centavo comb directly right"
+    }
+  ],
+  "xbox_joins": [
+    {
+      "writer_key": "frm2200Tv2020:amendedRtn_1",
+      "html_id": "p1c1030",
+      "printed": "2 Amended Return? Yes",
+      "reason": "single box immediately left of the printed caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:amendedRtn_2",
+      "html_id": "p1c1031",
+      "printed": "2 Amended Return? No",
+      "reason": "single box immediately left of the printed caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:optTreaty_1",
+      "html_id": "p1c1032",
+      "printed": "12 International Tax Treaty? Yes",
+      "reason": "single box immediately left of the printed caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:optTreaty_2",
+      "html_id": "p1c1033",
+      "printed": "12 International Tax Treaty? No",
+      "reason": "single box immediately left of the printed caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:optPayment_1",
+      "html_id": "p1c1034",
+      "printed": "13 Payment on Actual Removal",
+      "reason": "single box immediately left of the printed caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:optPayment_2",
+      "html_id": "p1c1035",
+      "printed": "14 Prepayment/Advance Deposit",
+      "reason": "single box immediately left of the printed caption"
+    },
+    {
+      "writer_key": "frm2200Tv2020:optPayment_3",
+      "html_id": "p1c1036",
+      "printed": "15 Other Similar Schemes",
+      "reason": "single box immediately left of the printed caption"
+    }
+  ],
+  "date_joins": [
+    {
+      "writer_key": "frm2200Tv2020:cashDate",
+      "mm_html_id": "p1c982",
+      "dd_html_id": "p1c983",
+      "yyyy_html_id": "p1c984",
+      "printed": "25 Cash/Bank Debit Memo: Date (MM/DD/YYYY)",
+      "reason": "the MM, DD and YYYY combs under the Date column on the item 25 row, between its Number and Amount cells (the row cashAmt fills); one writer date split across the three"
+    },
+    {
+      "writer_key": "frm2200Tv2020:checkDate",
+      "mm_html_id": "p1c992",
+      "dd_html_id": "p1c993",
+      "yyyy_html_id": "p1c994",
+      "printed": "26 Check: Date (MM/DD/YYYY)",
+      "reason": "the MM, DD and YYYY combs under the Date column on the item 26 row, between its Number and Amount cells (the row checkAmt fills); one writer date split across the three"
+    },
+    {
+      "writer_key": "frm2200Tv2020:taxDate",
+      "mm_html_id": "p1c1002",
+      "dd_html_id": "p1c1003",
+      "yyyy_html_id": "p1c1004",
+      "printed": "27 Tax Debit Memo: Date (MM/DD/YYYY)",
+      "reason": "the MM, DD and YYYY combs under the Date column on the item 27 row, between its Number and Amount cells (the row taxAmt fills); one writer date split across the three"
+    },
+    {
+      "writer_key": "frm2200Tv2020:othersDate",
+      "mm_html_id": "p1c1012",
+      "dd_html_id": "p1c1013",
+      "yyyy_html_id": "p1c1014",
+      "printed": "28 Others: Date (MM/DD/YYYY)",
+      "reason": "the MM, DD and YYYY combs under the Date column on the item 28 row, between its Number and Amount cells (the row othersAmt fills); one writer date split across the three"
+    }
+  ],
+  "not_joined": [
+    {
+      "writer_key": "driveSelectTPExport",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "ebirOnlineConfirmUsername",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "ebirOnlineSecret",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "ebirOnlineUsername",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:branchCode_2",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:branchCode_3",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:prodCity",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:prodProvince",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:prodRegion",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:registeredAddress",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:remCity",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:remProvince",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:remRegion",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:tinA_2",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:tinA_3",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:tinB_2",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:tinB_3",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:tinC_2",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:tinC_3",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtCurrentPage",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "frm2200Tv2020:txtMaxPage",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "txtEnroll",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    },
+    {
+      "writer_key": "txtFinalFlag",
+      "reason": "hidden control, submission metadata, source value represented by a derived print line, or no separate cell drawn"
+    }
+  ],
+  "not_joined_cells": []
+}

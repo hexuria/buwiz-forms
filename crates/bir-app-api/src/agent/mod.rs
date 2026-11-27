@@ -29,7 +29,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use gpui_agent::discovery::{self, PublishedHost};
+use gpui_agent::discovery;
 use gpui_agent::mailbox::{AgentMailbox, MailboxRequest};
 use gpui_agent::protocol::PlatformKind;
 use gpui_agent::security::{AgentConfig, SecurityError, authorize_bind, from_env};
@@ -57,10 +57,31 @@ pub fn pop_command() -> Option<Value> {
 pub struct Started {
     pub mailbox: AgentMailbox,
     pub shutdown: Arc<AtomicBool>,
-    pub discovery: Option<PublishedHost>,
     pub commands: session::UiQueue,
     /// The address the listener bound (an ephemeral port is the real one).
     pub addr: std::net::SocketAddr,
+}
+
+/// Wait for the record the serve thread of the library publishes for this
+/// listener: `spawn_mailbox_named`'s serve loop writes exactly one discovery
+/// record when it starts — naming the running binary — into the same
+/// `hosts/<pid>-<port>.json` path the app's record uses, at a time it
+/// chooses. The app's correct record must be written only after that write
+/// has landed, or a late serve-thread write overwrites it and names the
+/// binary instead of the app's executable. The serve thread writes once, so
+/// the record written after it is the last write. Returns as soon as the
+/// record exists, or after two seconds (a record the thread never wrote —
+/// a read-only runtime dir — cannot overwrite the app's either).
+pub fn wait_for_serve_record(addr: &std::net::SocketAddr) {
+    let serve_record = discovery::runtime_root().join("hosts").join(format!(
+        "{}-{}.json",
+        std::process::id(),
+        addr.port()
+    ));
+    let until = std::time::Instant::now() + Duration::from_secs(2);
+    while !serve_record.exists() && std::time::Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
 
 /// Start the listener when `GPUI_AGENT=1`, on the address the environment
@@ -159,33 +180,16 @@ pub fn try_start_config(
             say(&format!(
                 "gpui-agent listening on {addr} (platform=desktop, app={APP})"
             ));
-            // The serve thread publishes its own record for this same
-            // `hosts/<pid>-<port>.json` path (naming the binary it runs in)
-            // at a time it chooses; a record published here before it lands
-            // is overwritten by it. Wait for that record first — the host's
-            // record must be the last write, or a late serve-thread write
-            // names the executable of the binary instead of the app's.
-            let serve_record = discovery::runtime_root().join("hosts").join(format!(
-                "{}-{}.json",
-                std::process::id(),
-                addr.port()
-            ));
-            let until = std::time::Instant::now() + Duration::from_secs(2);
-            while !serve_record.exists() && std::time::Instant::now() < until {
-                std::thread::sleep(Duration::from_millis(5));
-            }
-            let discovery = match discovery::publish_current(addr, APP) {
-                Ok(published) => Some(published),
-                Err(error) => {
-                    tracing::warn!(%error, "gpui-agent discovery record not written");
-                    None
-                }
-            };
+            // The serve thread writes the only record the library ever
+            // writes; the app's correct record must come after it. Nothing
+            // is published here: a record written now would name this
+            // binary, and the executable the record must carry is the
+            // host's (`bir`, `bir-headless`), which only the caller knows.
+            wait_for_serve_record(&addr);
             install_queue(commands.clone());
             Ok(Some(Started {
                 mailbox,
                 shutdown,
-                discovery,
                 commands,
                 addr,
             }))

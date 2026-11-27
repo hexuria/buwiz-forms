@@ -92,9 +92,8 @@ test("phone: a log out and another taxpayer: the Filings filters and the Form li
   await app.waitFor("id:library-search");
   await app.type("id:library-search", "juana");
   await app.press("id:nb-avatar");
-  await app.press("id:nb-menu-profile");
-  await app.waitFor("id:sheet-logout");
-  await app.press("id:sheet-logout");
+  await app.waitFor("id:nb-menu-logout");
+  await app.press("id:nb-menu-logout");
   await signIn(app, B.tin, B.pin);
   await app.waitFor("text:session: taxpayer " + B.tin);
   await app.press("id:tab-library");

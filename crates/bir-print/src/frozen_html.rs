@@ -1035,8 +1035,7 @@ const PLAIN_TWO_LINE_CSS_HEIGHT: &str = "1.04";
 
 /// The width and height (pt) of plain (`data-field-kind="text"`) box `cell` of `html`.
 fn plain_cell_dimensions(html: &str, cell: &str) -> Option<(f64, f64)> {
-    let open = html.find(&format!("<div id=\"{cell}\""))?;
-    let tag = &html[open..open + html[open..].find('>')?];
+    let (_, tag) = cell_tag(html, cell)?;
     if attr(tag, "data-field-kind") != Some("text") {
         return None;
     }
@@ -1857,8 +1856,7 @@ fn caption_line(caption: &str) -> (String, usize) {
 
 /// A comb cell's boxes and width (pt), read from its `<div id>`.
 fn comb_cell(html: &str, cell: &str) -> Option<(usize, f64)> {
-    let open = html.find(&format!("<div id=\"{cell}\""))?;
-    let tag = &html[open..open + html[open..].find('>')?];
+    let (_, tag) = cell_tag(html, cell)?;
     if attr(tag, "data-field-kind") != Some("comb") {
         return None;
     }
@@ -2276,7 +2274,7 @@ fn has_preprinted_percent_beside(html: &str, cell: &str) -> bool {
     let Some((left, top, width, height)) = cell_box_pt(html, cell) else {
         return false;
     };
-    let Some(open) = html.find(&format!("<div id=\"{cell}\"")) else {
+    let Some((open, _)) = cell_tag(html, cell) else {
         return false;
     };
     let page_start = html[..open].rfind("<div class=\"page ").unwrap_or(0);
@@ -2345,9 +2343,7 @@ fn parse_style_pt(tag: &str, prop: &str) -> Option<f64> {
 }
 
 fn cell_box_pt(html: &str, cell: &str) -> Option<(f64, f64, f64, f64)> {
-    let open = html.find(&format!("<div id=\"{cell}\""))?;
-    let end = html[open..].find('>')?;
-    let tag = &html[open..open + end];
+    let (_, tag) = cell_tag(html, cell)?;
     let w = parse_style_pt(tag, "width")?;
     let h = parse_style_pt(tag, "height").unwrap_or(14.0);
     let l = parse_style_pt(tag, "left").unwrap_or(0.0);
@@ -2402,7 +2398,7 @@ fn preprinted_decimal_mark(html: &str, cell: &str) -> Option<(f64, f64)> {
     if width < 30.0 {
         return None;
     }
-    let open = html.find(&format!("<div id=\"{cell}\""))?;
+    let (open, _) = cell_tag(html, cell)?;
     let page_start = html[..open].rfind("<div class=\"page ").unwrap_or(0);
     let page_end = html[open..]
         .find("<div class=\"page ")
@@ -3436,8 +3432,8 @@ pub(crate) fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "2200s-2018" => Some(include_str!(
             "../../../html-frozen/2200s-2018/writer-cells.json"
         )),
-        "2200t-2022" => Some(include_str!(
-            "../../../html-frozen/2200t-2022/writer-cells.json"
+        "2200t-2020" => Some(include_str!(
+            "../../../html-frozen/2200t-2020/writer-cells.json"
         )),
         "2550m-2007" => Some(include_str!(
             "../../../html-frozen/2550m-2007/writer-cells.json"
@@ -4039,6 +4035,35 @@ pub fn merged_writer_cells_json(slug: &str) -> Option<serde_json::Value> {
     Some(cells)
 }
 
+/// Every cell of sheet `slug` a writer key prints into: the cells of its
+/// writer-cells joins (text, money, peso, check box and date), with the
+/// engine's own joins ([`SHEET_JOINS`], the donor and estate joins) merged
+/// in. Cells filled by an input's stamped name are not listed here.
+pub fn joined_cell_ids(slug: &str) -> BTreeSet<String> {
+    let Ok(cells) = writer_cells(slug) else {
+        return BTreeSet::new();
+    };
+    let mut ids: BTreeSet<String> = cells.joins.values().flatten().cloned().collect();
+    for join in &cells.money_joins {
+        for pair in &join.cells {
+            ids.insert(pair.peso_html_id.clone());
+            ids.extend(pair.cent_html_id.clone());
+        }
+    }
+    for join in &cells.xbox_joins {
+        ids.extend(join.html_ids.iter().cloned());
+    }
+    for join in &cells.peso_joins {
+        ids.extend(join.html_ids.iter().cloned());
+    }
+    for join in &cells.date_joins {
+        ids.insert(join.mm_html_id.clone());
+        ids.extend(join.dd_html_id.clone());
+        ids.insert(join.yyyy_html_id.clone());
+    }
+    ids
+}
+
 /// `slug`'s [`SHEET_JOINS`] that print in a comb: `(writer key, comb
 /// slots, printed caption)`, read from the bundled sheet, for the screen's
 /// character boxes.
@@ -4063,8 +4088,7 @@ pub fn sheet_join_combs(slug: &str) -> Vec<(String, usize, String)> {
                 })
         })
         .filter_map(|(key, cell, printed)| {
-            let open = loaded.html.find(&format!("<div id=\"{cell}\""))?;
-            let tag = &loaded.html[open..open + loaded.html[open..].find('>')?];
+            let (_, tag) = cell_tag(loaded.html, cell)?;
             let slots = attr(tag, "data-comb-slots")?.parse().ok()?;
             Some((key.to_string(), slots, printed.to_string()))
         })
@@ -6151,6 +6175,31 @@ fn html_escape(value: &str) -> String {
     out
 }
 
+/// Replace one `<link rel="stylesheet" href="{href}">` tag with an inline
+/// `<style>`, whatever the attribute order or self-closing: sheets are
+/// maintained by hand after freezing, and a correction round-trip once
+/// alphabetised one sheet's attributes (`<link href=... rel="stylesheet"/>`),
+/// which the exact-byte match before this helper silently left external.
+fn inline_stylesheet_link(document: &str, href: &str, css: &str) -> Option<String> {
+    let mut scan = 0;
+    while let Some(at) = document[scan..].find("<link").map(|i| scan + i) {
+        let tag_end = document[at..].find('>').map(|i| at + i + 1)?;
+        let tag = &document[at..tag_end];
+        let is_stylesheet = tag.contains("rel=\"stylesheet\"") || tag.contains("rel='stylesheet'");
+        let has_href =
+            tag.contains(&format!("href=\"{href}\"")) || tag.contains(&format!("href='{href}'"));
+        if is_stylesheet && has_href {
+            return Some(format!(
+                "{}<style>{css}</style>{}",
+                &document[..at],
+                &document[tag_end..]
+            ));
+        }
+        scan = tag_end;
+    }
+    None
+}
+
 fn inline_local_assets(html: &str, loaded: &FrozenBundle) -> String {
     let mut document = html.to_string();
     let base = BASE_CSS.replace(
@@ -6171,14 +6220,11 @@ fn inline_local_assets(html: &str, loaded: &FrozenBundle) -> String {
             "url(\"../fonts/tinos-latin-700-normal.woff2\")",
             &format!("url(\"{}\")", data_uri("font/woff2", FONT_TINOS_BOLD)),
         );
-    document = document.replace(
-        "<link rel=\"stylesheet\" href=\"../base.css\">",
-        &format!("<style>{base}</style>"),
-    );
-    document = document.replace(
-        "<link rel=\"stylesheet\" href=\"form.css\">",
-        &format!("<style>{form}</style>"),
-    );
+    for (href, css) in [("../base.css", &base), ("form.css", &form)] {
+        if let Some(inlined) = inline_stylesheet_link(&document, href, css) {
+            document = inlined;
+        }
+    }
     document = strip_relative_font_preloads(&document);
     for (name, bytes) in loaded.assets {
         let uri = data_uri("image/png", bytes);
@@ -6497,8 +6543,8 @@ fn comb_overflow_amount_union(
     // keeps 1 pt of right padding: the amount sets in what is left, with
     // 1 pt to spare.
     let size = sheet.fit(sheet.letter, (union_w - 4.0).max(1.0), text, PLAIN_MAX_PT);
-    let open = html.find(&format!("<div id=\"{peso_cell}\""))?;
-    let close = open + html[open..].find('>')?;
+    let (open, tag) = cell_tag(html, peso_cell)?;
+    let close = open + tag.len();
     let width_css = if cent_cell.is_some() {
         format!(
             "inset:0.75pt auto 0.75pt 1pt;width:{:.2}pt;",
@@ -6579,6 +6625,45 @@ pub fn overflow_warnings(document: &str) -> Vec<OverflowWarning> {
 /// One read-only input laid over a whole comb cell (`<div id="{cell}">`),
 /// holding `text` left-aligned in a font small enough to fit. Returns the
 /// insert position just inside the cell and the input tag.
+///
+/// Only the drawn cell counts: the `<div>` whose own `id` attribute is
+/// `cell` (not `data-cell-id` or another name ending in `id`), outside any
+/// `<template>` (the band rows a sheet keeps for cloning are never drawn, so
+/// a line put there would print nowhere).
+fn cell_tag<'a>(html: &'a str, cell: &str) -> Option<(usize, &'a str)> {
+    let needle = format!("id=\"{cell}\"");
+    let mut from = 0;
+    while let Some(rel) = html[from..].find(&needle) {
+        let id = from + rel;
+        from = id + needle.len();
+        // The attribute name must be `id` itself.
+        if !html[..id].ends_with([' ', '\t', '\n', '\r']) {
+            continue;
+        }
+        let Some(open) = html[..id].rfind("<div") else {
+            continue;
+        };
+        if html[open..id].contains('>') {
+            continue;
+        }
+        if inside_template(html, open) {
+            continue;
+        }
+        let end = open + html[open..].find('>')?;
+        return Some((open, &html[open..end]));
+    }
+    None
+}
+
+/// Whether byte `at` of `html` lies between a `<template` and its
+/// `</template>`.
+fn inside_template(html: &str, at: usize) -> bool {
+    match html[..at].rfind("<template") {
+        Some(open) => !html[open..at].contains("</template>"),
+        None => false,
+    }
+}
+
 fn comb_overflow_line(
     html: &str,
     cell: &str,
@@ -6607,8 +6692,8 @@ fn comb_overflow_line_whole(
     let size = sheet.fit(letter, (width - 4.0).max(1.0), text, PLAIN_MAX_PT);
     let (l, t, _, height) = cell_box_pt(html, cell)?;
     let (r, b) = (l + width, t + height);
-    let open = html.find(&format!("<div id=\"{cell}\""))?;
-    let close = open + html[open..].find('>')?;
+    let (open, tag) = cell_tag(html, cell)?;
+    let close = open + tag.len();
     Some((
         close + 1,
         format!(
@@ -6654,8 +6739,8 @@ fn overflow_input_with_fit(
     let (l, t, width, height) = cell_box_pt(html, cell)?;
     let r = l + width;
     let b = t + height;
-    let open = html.find(&format!("<div id=\"{cell}\""))?;
-    let close = open + html[open..].find('>')?;
+    let (open, tag) = cell_tag(html, cell)?;
+    let close = open + tag.len();
     if text.is_empty() {
         return Some((
             close + 1,
@@ -10110,7 +10195,7 @@ mod tests {
         let Some(width) = plain_cell_width(html, cell) else {
             return Vec::new();
         };
-        let open = html.find(&format!("<div id=\"{cell}\"")).unwrap();
+        let (open, _) = cell_tag(html, cell).unwrap();
         let inner = &html[open..open + html[open..].find("</div>").unwrap()];
         let mut out = Vec::new();
         let mut from = 0;
@@ -10739,7 +10824,7 @@ mod tests {
         "2200m-2018",
         "2200p-2020",
         "2200s-2018",
-        "2200t-2022",
+        "2200t-2020",
         "2550m-2007",
         "2550q-2024",
         "2551q-2018",
@@ -10793,6 +10878,84 @@ mod tests {
         }
     }
 
+    /// Every overflow line a fill writes (`data-overflow-of="X"`) lies inside
+    /// the drawn cell `<div id="X">` itself, never inside a `<template>` (the
+    /// band rows a sheet keeps for cloning, which are never drawn) nor in
+    /// another element. Otherwise a long value prints nowhere while
+    /// `printed_cells`, which reads the text, still counts it, and a golden
+    /// would record the vanished value.
+    #[test]
+    fn every_overflow_line_lies_in_its_drawn_cell() {
+        let mut misplaced = Vec::new();
+        for slug in sheet_slugs() {
+            let cells = writer_cells(&slug).unwrap();
+            for len in [200, 90, 12] {
+                let fields: BTreeMap<String, String> = cells
+                    .joins
+                    .keys()
+                    .map(|key| (key.clone(), words_of(len)))
+                    .collect();
+                let doc = filled_document(&slug, &fields).unwrap();
+                for (cell, place) in overflow_line_places(&doc) {
+                    if place.as_deref() != Some(cell.as_str()) {
+                        misplaced.push(format!("{slug} ({len}): {cell} in {place:?}"));
+                    }
+                }
+            }
+        }
+        misplaced.dedup();
+        assert!(
+            misplaced.is_empty(),
+            "overflow lines outside their drawn cell ({}):\n{}",
+            misplaced.len(),
+            misplaced.join("\n")
+        );
+    }
+
+    /// For every overflow input of `doc`: the cell it names and the real
+    /// `id` of the `<div>` it lies in (`None` inside a `<template>` or
+    /// outside any `<div>`).
+    fn overflow_line_places(doc: &str) -> Vec<(String, Option<String>)> {
+        let mut out = Vec::new();
+        let mut divs: Vec<Option<String>> = Vec::new();
+        let mut templates = 0usize;
+        let mut from = 0;
+        while let Some(rel) = doc[from..].find('<') {
+            let at = from + rel;
+            let Some(end_rel) = doc[at..].find('>') else {
+                break;
+            };
+            let tag = &doc[at..=at + end_rel];
+            from = at + end_rel + 1;
+            if tag.starts_with("<template") {
+                templates += 1;
+            } else if tag.starts_with("</template") {
+                templates = templates.saturating_sub(1);
+            } else if tag.starts_with("<div") {
+                // The `id` attribute itself, not `data-cell-id` or any
+                // other name ending in `id`.
+                let id = tag
+                    .find(" id=\"")
+                    .map(|at| &tag[at + 5..])
+                    .and_then(|rest| rest.split('"').next())
+                    .map(str::to_string);
+                divs.push(id);
+            } else if tag.starts_with("</div") {
+                divs.pop();
+            } else if tag.starts_with("<input") {
+                if let Some(cell) = attr(tag, "data-overflow-of") {
+                    let place = if templates > 0 {
+                        None
+                    } else {
+                        divs.last().cloned().flatten()
+                    };
+                    out.push((cell.to_string(), place));
+                }
+            }
+        }
+        out
+    }
+
     /// Goldens: every sheet's long-text print pinned exactly
     /// (`fixtures/overflow-goldens.json`, `BIR_PRINT_BLESS_OVERFLOW=1`), and
     /// the sheets whose print measuring changed against the estimate's
@@ -10838,7 +11001,7 @@ mod tests {
     /// with the size); no `.fi` sets a letter-spacing, the size classes do.
     #[test]
     fn each_sheet_measures_in_its_own_face_and_spacing() {
-        const TINOS: [&str; 11] = [
+        const TINOS: [&str; 10] = [
             "0605-1999",
             "1601c-2018",
             "1602q-2019",
@@ -10847,7 +11010,6 @@ mod tests {
             "1604f-2018",
             "2200c-2018",
             "2200p-2020",
-            "2200t-2022",
             "2550m-2007",
             "2553-1999",
         ];
@@ -10864,7 +11026,7 @@ mod tests {
         }
         for (slug, pt) in [
             ("1604f-2018", 0.3238),
-            ("2200t-2022", 0.4092),
+            ("2200t-2020", 0.0),
             ("1600-pt-2018", 0.2778),
             ("1604e-2018", 0.1518),
             ("1600wp-2010", 0.0546),
@@ -11552,7 +11714,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1472, "band boxes");
+        assert_eq!(total, 1433, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 
@@ -11709,7 +11871,7 @@ mod tests {
 
     /// The `<div id="{cell}" ...>...</div>` of `cell` in `document`.
     fn cell_html<'a>(document: &'a str, cell: &str) -> &'a str {
-        let open = document.find(&format!("<div id=\"{cell}\"")).unwrap();
+        let (open, _) = super::cell_tag(document, cell).unwrap();
         let close = open + document[open..].find("</div>").unwrap() + "</div>".len();
         &document[open..close]
     }
@@ -11981,11 +12143,11 @@ mod donor_estate_print_tests {
             ),
             (
                 "1801-2018",
-                "7b44a624c6589e3a0438bc82f857067f84591f10acff80aaddab197108952c1a",
+                "afa7e865fe386c53fc53b6b8636932de8e1edd3aeabdf7972644399f5046f02a",
             ),
             (
                 "1800-2018",
-                "670451d9d0b74b7814c936613151f9837d93c08b64b5963a241230346680463e",
+                "437c7fdb7235f990a065b286f60ac9e9a5681b3b0e76e4a3b080dd66236c102b",
             ),
         ] {
             let html = filled_document(slug, &every_join_filled(slug)).unwrap();

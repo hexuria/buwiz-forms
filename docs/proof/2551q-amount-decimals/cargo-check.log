@@ -1,0 +1,4 @@
+    Checking bir-app-api v0.2.1 (/home/ubuntu/urgent2551/decimal/buwiz-forms/crates/bir-app-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.56s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`

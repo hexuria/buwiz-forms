@@ -29,9 +29,13 @@ struct WindowRecord {
     visible: bool,
     /// It has an owner window (a dialog, a panel). The app's own main window has none.
     owned: bool,
+    /// Its title, read only for our own NSH windows (empty for every other window).
+    title: String,
 }
 
-/// Which window owns the prompt (§E.3 point 2). A candidate is ours, an NSH window, visible and unowned:
+/// Which window owns the prompt (§E.3 point 2). A candidate is ours, an NSH window, visible, unowned, and titled
+/// exactly `expected_title` (the main window's; the print preview is also an unowned NshWindow, titled with the
+/// taxpayer, and must never own the sheet):
 /// - the foreground window, when it is a candidate;
 /// - otherwise our one candidate, only when exactly one matches;
 /// - otherwise none, and the caller does not prompt.
@@ -39,9 +43,14 @@ fn pick_window(
     foreground: Option<&WindowRecord>,
     all: &[WindowRecord],
     our_pid: u32,
+    expected_title: &str,
 ) -> Option<isize> {
     let candidate = |window: &WindowRecord| {
-        window.pid == our_pid && window.class == NSH_WINDOW_CLASS && window.visible && !window.owned
+        window.pid == our_pid
+            && window.class == NSH_WINDOW_CLASS
+            && window.visible
+            && !window.owned
+            && window.title == expected_title
     };
     if let Some(front) = foreground.filter(|front| candidate(front)) {
         return Some(front.hwnd);
@@ -96,13 +105,15 @@ pub(super) fn owner_check() -> OwnerCheck {
 }
 
 #[cfg(windows)]
-pub(super) fn prove_owner(reason: &str) -> OwnerCheckResult {
+pub(super) fn prove_owner(reason: &str, window_title: &str) -> OwnerCheckResult {
     let Some(_apartment) = os::Apartment::enter() else {
         return OwnerCheckResult::Unavailable;
     };
-    decide(os::hello_available, os::lock_window, |hwnd| {
-        os::request(hwnd, reason)
-    })
+    decide(
+        os::hello_available,
+        || os::lock_window(window_title),
+        |hwnd| os::request(hwnd, reason),
+    )
 }
 
 #[cfg(windows)]
@@ -117,12 +128,14 @@ mod os {
     };
     use ::windows::Win32::UI::WindowsAndMessaging::{
         EnumWindows, GW_OWNER, GetClassNameW, GetForegroundWindow, GetWindow,
-        GetWindowThreadProcessId, IsWindowVisible,
+        GetWindowThreadProcessId, InternalGetWindowText, IsWindowVisible,
     };
     use ::windows::core::{BOOL, HSTRING, factory};
     use windows_future::IAsyncOperation;
 
-    use super::{AVAILABLE, OwnerCheckResult, WindowRecord, map_result, pick_window};
+    use super::{
+        AVAILABLE, NSH_WINDOW_CLASS, OwnerCheckResult, WindowRecord, map_result, pick_window,
+    };
 
     /// This thread in the multithreaded apartment for the life of the value. `None` when the thread is already
     /// single-threaded (`RPC_E_CHANGED_MODE`) or WinRT cannot start: the caller then answers without WinRT.
@@ -178,31 +191,34 @@ mod os {
         }
     }
 
-    /// The app's window for the prompt: the foreground window if it is ours, else the one match of `EnumWindows`.
-    pub(super) fn lock_window() -> Option<isize> {
+    /// The app's window for the prompt, titled `expected_title`: the foreground window if it qualifies, else the one
+    /// match of `EnumWindows`.
+    pub(super) fn lock_window(expected_title: &str) -> Option<isize> {
         // SAFETY: plain queries.
         let our_pid = unsafe { GetCurrentProcessId() };
         let foreground = unsafe { GetForegroundWindow() };
-        let foreground = (!foreground.is_invalid()).then(|| record(foreground));
-        let mut all: Vec<WindowRecord> = Vec::new();
+        let foreground = (!foreground.is_invalid()).then(|| record(foreground, our_pid));
+        let mut all = (our_pid, Vec::<WindowRecord>::new());
         // SAFETY: the callback only reads each window and pushes into `all`, which outlives the call.
         let _ = unsafe {
             EnumWindows(
                 Some(collect),
-                LPARAM(&mut all as *mut Vec<WindowRecord> as isize),
+                LPARAM(&mut all as *mut (u32, Vec<WindowRecord>) as isize),
             )
         };
-        pick_window(foreground.as_ref(), &all, our_pid)
+        pick_window(foreground.as_ref(), &all.1, our_pid, expected_title)
     }
 
     unsafe extern "system" fn collect(hwnd: HWND, all: LPARAM) -> BOOL {
-        // SAFETY: `all` is the `&mut Vec` passed by `lock_window` for the duration of EnumWindows.
-        let all = unsafe { &mut *(all.0 as *mut Vec<WindowRecord>) };
-        all.push(record(hwnd));
+        // SAFETY: `all` is the `&mut (pid, Vec)` passed by `lock_window` for the duration of EnumWindows.
+        let (our_pid, all) = unsafe { &mut *(all.0 as *mut (u32, Vec<WindowRecord>)) };
+        all.push(record(hwnd, *our_pid));
         BOOL(1)
     }
 
-    fn record(hwnd: HWND) -> WindowRecord {
+    /// One window's record. Its title is read only when it is one of our NSH windows: another process's window is
+    /// never asked for its text.
+    fn record(hwnd: HWND, our_pid: u32) -> WindowRecord {
         let mut pid = 0u32;
         let mut class = [0u16; 64];
         // SAFETY: plain queries on a window handle; GetClassNameW writes at most `class.len()` units.
@@ -214,12 +230,24 @@ mod os {
                 GetWindow(hwnd, GW_OWNER),
             )
         };
+        let class = String::from_utf16_lossy(&class[..usize::try_from(length).unwrap_or(0)]);
+        let title = if pid == our_pid && class == NSH_WINDOW_CLASS {
+            let mut text = [0u16; 256];
+            // InternalGetWindowText reads the stored title without a WM_GETTEXT round trip to the UI thread, so a busy
+            // UI thread never holds this up.
+            // SAFETY: it writes at most `text.len()` units into the buffer.
+            let length = unsafe { InternalGetWindowText(hwnd, &mut text) };
+            String::from_utf16_lossy(&text[..usize::try_from(length).unwrap_or(0)])
+        } else {
+            String::new()
+        };
         WindowRecord {
             hwnd: hwnd.0 as isize,
             pid,
-            class: String::from_utf16_lossy(&class[..usize::try_from(length).unwrap_or(0)]),
+            class,
             visible,
             owned: owner.is_ok_and(|owner| !owner.is_invalid()),
+            title,
         }
     }
 }
@@ -229,76 +257,106 @@ mod tests {
     use super::*;
 
     const OURS: u32 = 4242;
+    const PREVIEW_TITLE: &str = "BIR Form 2551Q · Q4 2026 — Juana Santos";
 
-    fn window(hwnd: isize, pid: u32, class: &str, visible: bool, owned: bool) -> WindowRecord {
+    /// The main window's title, from the build (nsh.json `window.title`), never a copy of the string.
+    fn main_title() -> &'static str {
+        super::super::APP_WINDOW_TITLE
+    }
+
+    fn window(
+        hwnd: isize,
+        pid: u32,
+        class: &str,
+        visible: bool,
+        owned: bool,
+        title: &str,
+    ) -> WindowRecord {
         WindowRecord {
             hwnd,
             pid,
             class: class.to_owned(),
             visible,
             owned,
+            title: title.to_owned(),
         }
+    }
+
+    fn pick(foreground: Option<&WindowRecord>, all: &[WindowRecord]) -> Option<isize> {
+        pick_window(foreground, all, OURS, main_title())
     }
 
     #[test]
     fn windows_handle_is_ours_or_none() {
-        let main = window(10, OURS, NSH_WINDOW_CLASS, true, false);
-        let other_app = window(20, 7, "Chrome_WidgetWin_1", true, false);
-        let other_nsh = window(30, 7, NSH_WINDOW_CLASS, true, false);
+        let main = window(10, OURS, NSH_WINDOW_CLASS, true, false, main_title());
+        let other_app = window(20, 7, "Chrome_WidgetWin_1", true, false, "");
+        let other_nsh = window(30, 7, NSH_WINDOW_CLASS, true, false, main_title());
 
         // The foreground window is ours: taken.
         assert_eq!(
-            pick_window(Some(&main), &[main.clone(), other_app.clone()], OURS),
+            pick(Some(&main), &[main.clone(), other_app.clone()]),
             Some(10)
         );
-        // The foreground window is another process's (even another NSH app): our one window from the list.
+        // The foreground window is another process's (even another eBIRForms): our one window from the list.
         assert_eq!(
-            pick_window(Some(&other_app), &[other_app.clone(), main.clone()], OURS),
-            Some(10)
-        );
-        assert_eq!(
-            pick_window(Some(&other_nsh), &[other_nsh.clone(), main.clone()], OURS),
-            Some(10)
-        );
-        // Two of ours, visible and unowned (the main window and the print preview, which is an NshWindow of its
-        // own: class NshWindow, owner 0 in #398's window list, try/pin-save-panel-398 enumwin-pass-a.json): none.
-        let preview = window(11, OURS, NSH_WINDOW_CLASS, true, false);
-        assert_eq!(
-            pick_window(Some(&other_app), &[main.clone(), preview], OURS),
-            None
-        );
-        // An owned window (a dialog of ours) and a hidden one are skipped.
-        let dialog = window(12, OURS, NSH_WINDOW_CLASS, true, true);
-        let hidden = window(13, OURS, NSH_WINDOW_CLASS, false, false);
-        // ...in front too: an owned or hidden foreground window of ours falls to the list.
-        assert_eq!(
-            pick_window(Some(&dialog), &[dialog.clone(), main.clone()], OURS),
+            pick(Some(&other_app), &[other_app.clone(), main.clone()]),
             Some(10)
         );
         assert_eq!(
-            pick_window(Some(&hidden), &[hidden.clone(), main.clone()], OURS),
+            pick(Some(&other_nsh), &[other_nsh.clone(), main.clone()]),
+            Some(10)
+        );
+        // Two of ours that both qualify, neither in front: none.
+        let second_main = window(11, OURS, NSH_WINDOW_CLASS, true, false, main_title());
+        assert_eq!(pick(Some(&other_app), &[main.clone(), second_main]), None);
+        // An owned window (a dialog of ours) and a hidden one are skipped, in front too.
+        let dialog = window(12, OURS, NSH_WINDOW_CLASS, true, true, main_title());
+        let hidden = window(13, OURS, NSH_WINDOW_CLASS, false, false, main_title());
+        assert_eq!(
+            pick(Some(&dialog), &[dialog.clone(), main.clone()]),
             Some(10)
         );
         assert_eq!(
-            pick_window(None, &[dialog, hidden, main.clone()], OURS),
+            pick(Some(&hidden), &[hidden.clone(), main.clone()]),
             Some(10)
         );
+        assert_eq!(pick(None, &[dialog, hidden, main.clone()]), Some(10));
         // Our process but not an NSH window: not taken.
-        let ours_other_class = window(14, OURS, "#32770", true, false);
+        let ours_other_class = window(14, OURS, "#32770", true, false, main_title());
         assert_eq!(
-            pick_window(
+            pick(
                 Some(&ours_other_class),
-                std::slice::from_ref(&ours_other_class),
-                OURS
+                std::slice::from_ref(&ours_other_class)
             ),
             None
         );
         // Nothing: none.
-        assert_eq!(pick_window(None, &[], OURS), None);
+        assert_eq!(pick(None, &[]), None);
         assert_eq!(
-            pick_window(Some(&other_app), std::slice::from_ref(&other_app), OURS),
+            pick(Some(&other_app), std::slice::from_ref(&other_app)),
             None
         );
+    }
+
+    /// The print preview is its own visible, unowned NshWindow, titled with the taxpayer (#398's window list,
+    /// try/pin-save-panel-398 enumwin-pass-a.json). It never owns the sheet, in front or in the list.
+    #[test]
+    fn a_preview_in_front_never_owns_the_sheet() {
+        let main = window(10, OURS, NSH_WINDOW_CLASS, true, false, main_title());
+        let preview = window(11, OURS, NSH_WINDOW_CLASS, true, false, PREVIEW_TITLE);
+        // In front: the list decides, and the main window matches by title.
+        assert_eq!(
+            pick(Some(&preview), &[preview.clone(), main.clone()]),
+            Some(10)
+        );
+        // In the list beside the main window: it does not count, so the main window is the one match.
+        assert_eq!(pick(None, &[main.clone(), preview.clone()]), Some(10));
+        // Only the preview: no window has the title, so none and no prompt.
+        assert_eq!(pick(Some(&preview), std::slice::from_ref(&preview)), None);
+        // A title that only starts with the main title is not it.
+        let near_title = format!("{} - Juana Santos", main_title());
+        let near = window(15, OURS, NSH_WINDOW_CLASS, true, false, &near_title);
+        assert_eq!(pick(Some(&near), std::slice::from_ref(&near)), None);
     }
 
     #[test]
@@ -373,8 +431,9 @@ mod tests {
         );
     }
 
-    /// `lock_window` on real windows: one visible, unowned `NshWindow` of this process is found; a second one makes
-    /// the answer none. The windows sit off screen and are destroyed at the end.
+    /// `lock_window` on real windows: one visible, unowned `NshWindow` of this process with the expected title is
+    /// found; one with another title (as the print preview has) never is; a second one with the title makes the
+    /// answer none unless it is in front. The windows sit off screen and are destroyed at the end.
     #[cfg(windows)]
     #[test]
     fn lock_window_finds_our_one_nsh_window_and_refuses_two() {
@@ -397,7 +456,9 @@ mod tests {
         }
 
         let class = HSTRING::from(NSH_WINDOW_CLASS);
-        // SAFETY: a class and two windows of this test process, destroyed before it returns.
+        let title = HSTRING::from("os_login test window");
+        let other_title = HSTRING::from("os_login test preview");
+        // SAFETY: a class and three windows of this test process, destroyed before it returns.
         unsafe {
             let instance = GetModuleHandleW(PCWSTR::null())
                 .expect("module handle")
@@ -413,11 +474,11 @@ mod tests {
                 0,
                 "the test registers an NshWindow class"
             );
-            let make = || {
+            let make = |title: &HSTRING| {
                 CreateWindowExW(
                     WINDOW_EX_STYLE(0),
                     PCWSTR(class.as_ptr()),
-                    PCWSTR::null(),
+                    PCWSTR(title.as_ptr()),
                     WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                     -32000,
                     -32000,
@@ -430,10 +491,16 @@ mod tests {
                 )
                 .expect("a test window")
             };
-            let first = make();
-            assert_eq!(os::lock_window(), Some(first.0 as isize));
-            let second = make();
-            let both = os::lock_window();
+            let first = make(&title);
+            // Our NshWindow with another title (as the print preview is) never qualifies, in front or not.
+            let preview = make(&other_title);
+            assert_eq!(
+                os::lock_window("os_login test window"),
+                Some(first.0 as isize)
+            );
+            assert_eq!(os::lock_window("no window has this title"), None);
+            let second = make(&title);
+            let both = os::lock_window("os_login test window");
             // Creating a window may bring it to the front; then the front one is the answer, by rule.
             let front = ::windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow();
             let expected = [first, second]
@@ -441,6 +508,7 @@ mod tests {
                 .find(|window| *window == front)
                 .map(|window| window.0 as isize);
             let _ = DestroyWindow(second);
+            let _ = DestroyWindow(preview);
             let _ = DestroyWindow(first);
             assert_eq!(
                 both, expected,
@@ -459,8 +527,8 @@ mod tests {
         let started = std::time::Instant::now();
         let check = owner_check();
         let checked_in = started.elapsed();
-        let window = os::lock_window();
-        let proved = prove_owner("move your tax profiles to your Buwiz account");
+        let window = os::lock_window(main_title());
+        let proved = prove_owner("move your tax profiles to your Buwiz account", main_title());
         println!(
             "owner_check={check:?} ({checked_in:?}) lock_window={window:?} prove_owner={proved:?} total {:?}",
             started.elapsed()
@@ -489,7 +557,7 @@ mod tests {
                     .expect("STA")
             };
             let check = owner_check();
-            let proved = prove_owner("move your tax profiles to your Buwiz account");
+            let proved = prove_owner("move your tax profiles to your Buwiz account", main_title());
             unsafe { CoUninitialize() };
             assert_eq!(check, OwnerCheck::None);
             assert_eq!(proved, OwnerCheckResult::Unavailable);

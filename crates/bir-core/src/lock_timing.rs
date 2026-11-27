@@ -93,26 +93,7 @@ mod tests {
 
     /// Every warning emitted on this thread while `body` runs, as text.
     fn captured(body: impl FnOnce()) -> String {
-        #[derive(Clone, Default)]
-        struct Buffer(Arc<Mutex<Vec<u8>>>);
-        impl std::io::Write for Buffer {
-            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                self.0.lock().unwrap().extend_from_slice(bytes);
-                Ok(bytes.len())
-            }
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
-        let buffer = Buffer::default();
-        let writer = buffer.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::WARN)
-            .with_ansi(false)
-            .with_writer(move || writer.clone())
-            .finish();
-        tracing::subscriber::with_default(subscriber, body);
-        String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap()
+        crate::test_logs::capture_logs(tracing::Level::WARN, body)
     }
 
     #[test]
