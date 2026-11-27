@@ -294,10 +294,17 @@ pub fn drain_gated(
         }
     }
     if session.borrow().needs_db() {
-        match crate::bir_module::database_handle() {
-            Ok(handle) => session
-                .borrow_mut()
-                .set_db(handle, crate::open_room::generation()),
+        // X4: the handle and the generation come from one read of the slot — a switch between
+        // two reads would pair one room's Arc with the other's generation, and every later
+        // batch would read the old room as "not stale". Single-room mode has no slot (no room
+        // switches there): the separate reads are safe.
+        let pair = match crate::open_room::current() {
+            Some((handle, generation)) => Ok((handle, Some(generation))),
+            None => crate::bir_module::database_handle()
+                .map(|handle| (handle, crate::open_room::generation())),
+        };
+        match pair {
+            Ok((handle, generation)) => session.borrow_mut().set_db(handle, generation),
             Err(error) => {
                 let message = error.to_string();
                 for posted in batch {

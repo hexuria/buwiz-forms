@@ -1365,6 +1365,20 @@ fn disconnect_inbox_oauth(arguments: &HostArguments) -> HostResult {
     })
 }
 
+/// F4: a room thread's write runs only while the open room is still the one it started in.
+/// The captured Arc outlives the room it came from, so without this check B's consent would
+/// write into A's room after a switch.
+fn refuse_if_room_changed(generation: Option<u64>) -> Result<(), HostError> {
+    if let Some(captured) = generation
+        && crate::open_room::current_generation() != Some(captured)
+    {
+        return Err(HostError::new(
+            "the room changed while this ran; its result was dropped",
+        ));
+    }
+    Ok(())
+}
+
 /// Persist a grant returned by `start_oauth_flow` — split out so tests drive
 /// it with canned tokens (the browser leg cannot run headlessly).
 fn persist_oauth_grant(
@@ -1374,7 +1388,20 @@ fn persist_oauth_grant(
     access_token: &str,
     refresh_token: &str,
 ) -> HostResult {
+    persist_oauth_grant_for(db, tin, email, access_token, refresh_token, None)
+}
+
+fn persist_oauth_grant_for(
+    db: &std::sync::Arc<std::sync::Mutex<Database>>,
+    tin: &str,
+    email: &str,
+    access_token: &str,
+    refresh_token: &str,
+    generation: Option<u64>,
+) -> HostResult {
+    refuse_if_room_changed(generation)?;
     let guard = lock_db(db)?;
+    refuse_if_room_changed(generation)?;
     guard
         .persist_google_oauth_for_inbox(email, access_token, refresh_token, Some(tin))
         .map_err(|error| HostError::new(error.to_string()))?;
@@ -1384,6 +1411,7 @@ fn persist_oauth_grant(
 fn connect_inbox_oauth_run(
     tin: &str,
     db: &std::sync::Arc<std::sync::Mutex<Database>>,
+    generation: Option<u64>,
 ) -> HostResult {
     // Blocking: browser consent + a loopback listener. Same error surface the
     // legacy Profile Manager shows ("OAuth failed: ...").
@@ -1394,7 +1422,7 @@ fn connect_inbox_oauth_run(
             "Google did not return a refresh token. Re-authorize with consent so a new refresh token is issued.",
         ));
     }
-    persist_oauth_grant(db, tin, &email, &access_token, &refresh_token)
+    persist_oauth_grant_for(db, tin, &email, &access_token, &refresh_token, generation)
 }
 
 /// The browser sign-in leg: bir-core's `start_oauth_flow`, answering
@@ -1422,8 +1450,11 @@ fn apply_connection_result(
     db: &std::sync::Arc<std::sync::Mutex<Database>>,
     tin: &str,
     result: Result<Option<String>, anyhow::Error>,
+    generation: Option<u64>,
 ) -> HostResult {
+    refuse_if_room_changed(generation)?;
     let guard = lock_db(db)?;
+    refuse_if_room_changed(generation)?;
     match result {
         Ok(new_access_token) => {
             if let Some(token) = new_access_token {
@@ -1463,6 +1494,7 @@ fn apply_connection_result(
 fn test_inbox_connection_run(
     tin: &str,
     db: &std::sync::Arc<std::sync::Mutex<Database>>,
+    generation: Option<u64>,
 ) -> HostResult {
     let profile = {
         let guard = lock_db(db)?;
@@ -1470,7 +1502,7 @@ fn test_inbox_connection_run(
     };
     // The IMAP probe runs with the lock released — it can take many seconds.
     let result = run_connection_test(&profile)?;
-    apply_connection_result(db, tin, result)
+    apply_connection_result(db, tin, result, generation)
 }
 
 /// The IMAP login probe leg: bir-core's `test_connection`. Tests run only a
@@ -1808,13 +1840,17 @@ fn connect_inbox_oauth(
     arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     let tin = arguments.string(0)?.to_owned();
-    let db = database_handle()?;
-    let generation = crate::open_room::current_generation();
+    // X4/F4: the handle and the generation are one read of the slot; a switch between two reads
+    // would write this thread's result into the wrong room as "not stale".
+    let (db, generation) = match crate::open_room::current() {
+        Some((handle, generation)) => (handle, Some(generation)),
+        None => (database_handle()?, crate::open_room::current_generation()),
+    };
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     std::thread::Builder::new()
         .name("inbox-oauth".into())
         .spawn(move || {
-            let _ = sender.send(connect_inbox_oauth_run(&tin, &db));
+            let _ = sender.send(connect_inbox_oauth_run(&tin, &db, generation));
         })
         .map_err(|error| HostError::new(error.to_string()))?;
     Ok(async move { finish_room_thread(generation, receiver, "OAuth thread failed").await })
@@ -1824,13 +1860,17 @@ fn test_inbox_connection(
     arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     let tin = arguments.string(0)?.to_owned();
-    let db = database_handle()?;
-    let generation = crate::open_room::current_generation();
+    // X4/F4: the handle and the generation are one read of the slot; a switch between two reads
+    // would write this thread's result into the wrong room as "not stale".
+    let (db, generation) = match crate::open_room::current() {
+        Some((handle, generation)) => (handle, Some(generation)),
+        None => (database_handle()?, crate::open_room::current_generation()),
+    };
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     std::thread::Builder::new()
         .name("inbox-verify".into())
         .spawn(move || {
-            let _ = sender.send(test_inbox_connection_run(&tin, &db));
+            let _ = sender.send(test_inbox_connection_run(&tin, &db, generation));
         })
         .map_err(|error| HostError::new(error.to_string()))?;
     Ok(async move { finish_room_thread(generation, receiver, "verify thread failed").await })
@@ -1840,8 +1880,12 @@ fn check_inbox_now(
     arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     let tin = arguments.string(0)?.to_owned();
-    let db = database_handle()?;
-    let generation = crate::open_room::current_generation();
+    // X4/F4: the handle and the generation are one read of the slot; a switch between two reads
+    // would write this thread's result into the wrong room as "not stale".
+    let (db, generation) = match crate::open_room::current() {
+        Some((handle, generation)) => (handle, Some(generation)),
+        None => (database_handle()?, crate::open_room::current_generation()),
+    };
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     std::thread::Builder::new()
         .name("inbox-check".into())
@@ -2694,12 +2738,12 @@ mod tests {
     fn apply_connection_result_enables_tracking_on_success_and_clears_on_failure() {
         setup();
         let db = database_handle().unwrap();
-        let success = to_json(&apply_connection_result(&db, HEAD, Ok(None)).unwrap());
+        let success = to_json(&apply_connection_result(&db, HEAD, Ok(None), None).unwrap());
         assert_eq!(success["ok"], true);
         assert_eq!(success["state"]["tracking_enabled"], true);
 
         let failure = to_json(
-            &apply_connection_result(&db, HEAD, Err(anyhow::anyhow!("IMAP login refused")))
+            &apply_connection_result(&db, HEAD, Err(anyhow::anyhow!("IMAP login refused")), None)
                 .unwrap(),
         );
         assert_eq!(failure["ok"], false);
@@ -2886,7 +2930,7 @@ mod tests {
         );
         let db = database_handle().unwrap();
         assert_eq!(
-            test_inbox_connection_run(HEAD, &db).unwrap_err().message(),
+            test_inbox_connection_run(HEAD, &db, None).unwrap_err().message(),
             refused
         );
         assert_eq!(ok(inbox_state, vec![json!(HEAD)])["tracking_enabled"], true);
@@ -2897,7 +2941,7 @@ mod tests {
                 Err(anyhow::anyhow!("IMAP login refused"))
             }));
         });
-        let verdict = to_json(&test_inbox_connection_run(HEAD, &db).unwrap());
+        let verdict = to_json(&test_inbox_connection_run(HEAD, &db, None).unwrap());
         assert_eq!(verdict["ok"], false);
         assert_eq!(verdict["state"]["tracking_enabled"], false);
     }
@@ -2915,7 +2959,7 @@ mod tests {
         );
         let db = database_handle().unwrap();
         assert_eq!(
-            connect_inbox_oauth_run(HEAD, &db).unwrap_err().message(),
+            connect_inbox_oauth_run(HEAD, &db, None).unwrap_err().message(),
             refused
         );
         assert_eq!(ok(inbox_state, vec![json!(HEAD)])["oauth_connected"], false);
@@ -2929,7 +2973,7 @@ mod tests {
                 ))
             }));
         });
-        let state = to_json(&connect_inbox_oauth_run(HEAD, &db).unwrap());
+        let state = to_json(&connect_inbox_oauth_run(HEAD, &db, None).unwrap());
         assert_eq!(state["oauth_connected"], true);
         assert_eq!(state["oauth_inbox_email"], "receipts@example.com");
     }
@@ -3904,6 +3948,37 @@ mod tests {
             call_verb("account_tins", vec![json!(0)]),
             Err("The Buwiz account is not available in tests.".into())
         );
+    }
+
+    /// F4: the write itself is refused after the room changed — B's completed consent never lands
+    /// in A's room, even though the thread still holds A's Arc.
+    #[test]
+    fn oauth_grant_is_not_written_after_the_room_changed() {
+        let _turn = crate::open_room::room_test_turn();
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
+        std::fs::create_dir_all(layout.device_dir()).unwrap();
+        let (handle, first) =
+            crate::open_room::open_legacy_in_place(&layout, "user-a".into(), "https://api.buwiz.test".into()).unwrap();
+        // The room changes (a sign-out and a sign-in) while the consent is still open in the browser.
+        crate::open_room::close_room();
+        let (_other, _second) =
+            crate::open_room::open_legacy_in_place(&layout, "user-b".into(), "https://api.buwiz.test".into()).unwrap();
+        let written = persist_oauth_grant_for(&handle, HEAD, "receipts@example.com", "access-x", "refresh-x", Some(first));
+        assert!(
+            matches!(&written, Err(error) if error.message().contains("the room changed")),
+            "the grant write was not refused after the room changed"
+        );
+        {
+            let guard = bir_core::lock_timing::lock(&handle).unwrap();
+            assert!(
+                guard.inbox_oauth_tokens("receipts@example.com").unwrap().is_none(),
+                "B's grant was written into A's room after the switch"
+            );
+        }
+        crate::open_room::close_room();
+        bir_core::platform::set_device_dir_override(None);
     }
 
     /// §A.8: an OAuth (or verify, or check) thread's result is dropped after the room changed — never
