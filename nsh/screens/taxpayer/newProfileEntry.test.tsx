@@ -28,12 +28,25 @@ test("desktop: the owner with profiles sees the same label in the panel, the men
   expect(app.texts()).toContain("New tax profile");
   await app.press("text:Cancel");
   await app.waitFor("id:home");
-  // The desktop palette deliberately has no creation row: it would outrank the exact "Tax profile" page, and the
-  // wide layout already carries the entry in the panel and the menu.
+});
+
+test("desktop: the palette carries the add row, ranked below the exact page and profile matches", async () => {
+  const app = await open(SHELL, { ...WIDE, ...asking({ second: true }) });
+  await app.waitFor("id:sidebar");
   await app.keyboard.press("mod+k");
   await app.waitFor("id:palette-input");
-  expect(app.texts()).not.toContain("New tax profile");
-  await app.back();
+  // No query: the row is there for the owner.
+  expect(app.texts()).toContain("New tax profile");
+  // A query matching the exact "Tax profile" page: the page row stays above it; the add row never displaces what was typed.
+  await app.type("id:palette-input", "tax profile");
+  await app.waitFor("id:palette-item-0");
+  const texts = app.texts();
+  const page = texts.indexOf("Tax profile");
+  const add = texts.indexOf("New tax profile");
+  expect(page).toBeGreaterThanOrEqual(0);
+  expect(add).toBeGreaterThanOrEqual(0);
+  expect(add).toBeGreaterThan(page);
+  await app.keyboard.press("escape");
   await app.waitFor("id:palette-input", { state: "gone" });
 });
 
