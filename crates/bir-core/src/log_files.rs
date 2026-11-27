@@ -54,13 +54,13 @@ pub fn log_dir() -> PathBuf {
 }
 
 /// The log folder when none is named: for a test run
-/// `<temp>/ebirforms-logs-<pid>/logs` (the NSH app's test-run folder), else
+/// `<temp>/ebirforms-logs-<pid>/logs` (the NSH app's test-run folder; emptied
+/// on its first use in the process, so a reused pid never sees old logs), else
 /// `<data_dir>/logs`.
 fn unnamed_log_dir(test_run: bool) -> PathBuf {
     if test_run {
-        return crate::platform::temp_dir()
-            .join(format!("ebirforms-logs-{}", std::process::id()))
-            .join("logs");
+        static EMPTIED: OnceLock<PathBuf> = OnceLock::new();
+        return crate::platform::fresh_scratch_dir(&EMPTIED, "ebirforms-logs").join("logs");
     }
     crate::platform::data_dir().join("logs")
 }
@@ -332,7 +332,10 @@ mod tests {
                 [("BIR_LOG_DIR", None::<&str>), ("EBIR_TEST_ENV", test_env)],
                 || {
                     let dir = log_dir();
-                    for real in [crate::platform::os_data_dir(), crate::platform::data_dir()] {
+                    for real in [
+                        crate::platform::os_data_dir_path(),
+                        crate::platform::data_dir(),
+                    ] {
                         assert_ne!(dir, real.join("logs"));
                         assert!(
                             !dir.starts_with(&real),

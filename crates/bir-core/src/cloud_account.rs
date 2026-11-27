@@ -1885,8 +1885,8 @@ mod tests {
 
     #[test]
     fn the_private_file_round_trips_when_the_keychain_has_no_account() {
-        let previous = keyring_load();
-        keyring_delete();
+        // A test build has the keychain off: it holds no account, and nothing here reaches the real one.
+        assert_eq!(keyring_load(), None);
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(ACCOUNT_FILE_NAME);
         temp_env::with_var(ENV_ACCOUNT_FILE, Some(path.to_str().unwrap()), || {
@@ -1905,9 +1905,6 @@ mod tests {
             assert!(load_stored_account().unwrap().is_none());
             assert!(!path.exists());
         });
-        if let Some(raw) = previous {
-            let _ = keyring_save(&raw);
-        }
     }
 
     #[test]

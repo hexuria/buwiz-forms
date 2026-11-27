@@ -10,37 +10,34 @@ use std::path::PathBuf;
 /// Uses the App Group container so the database can be shared between the main
 /// app and background tasks, even under App Sandbox.
 #[cfg(feature = "sqlcipher")]
-pub fn data_dir() -> PathBuf {
-    if let Some(home) = std::env::var_os("HOME") {
-        let group_container = PathBuf::from(home)
+pub(super) fn data_dir_path() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME")?;
+    Some(
+        PathBuf::from(home)
             .join("Library")
             .join("Group Containers")
-            .join("group.dev.goldcoders.bir");
-
-        let _ = std::fs::create_dir_all(&group_container);
-        return group_container;
-    }
-
-    // Fallback (should never happen on macOS)
-    PathBuf::from(".taxman-ebir")
+            .join("group.dev.goldcoders.bir"),
+    )
 }
 
 /// Returns the macOS application data directory of the plain-SQLite (NSH)
 /// build: `~/Library/Application Support/dev.goldcoders.bir`. Never the
 /// group container of the old app.
 #[cfg(not(feature = "sqlcipher"))]
-pub fn data_dir() -> PathBuf {
-    if let Some(home) = std::env::var_os("HOME") {
-        let dir = PathBuf::from(home)
+pub(super) fn data_dir_path() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME")?;
+    Some(
+        PathBuf::from(home)
             .join("Library")
             .join("Application Support")
-            .join(super::NSH_APP_ID);
-        let _ = std::fs::create_dir_all(&dir);
-        return dir;
-    }
+            .join(super::NSH_APP_ID),
+    )
+}
 
-    // Fallback (should never happen on macOS)
-    PathBuf::from(".taxman-ebir")
+/// [`data_dir_path`], created if missing. Without `HOME` (should never happen
+/// on macOS): `.taxman-ebir`, not created.
+pub fn data_dir() -> PathBuf {
+    super::create_data_dir(data_dir_path())
 }
 
 /// Returns the temporary directory.
@@ -72,7 +69,7 @@ mod tests {
     fn test_data_dir_resolution() {
         // Use temp_env to safely set HOME without unsafe — also auto-restores on panic.
         temp_env::with_var("HOME", Some("/Users/testuser"), || {
-            let path = data_dir();
+            let path = data_dir_path().unwrap();
             assert!(path.to_string_lossy().contains("group.dev.goldcoders.bir"));
             assert!(
                 path.to_string_lossy()
