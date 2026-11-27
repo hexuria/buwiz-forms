@@ -1736,9 +1736,16 @@ pub mod schedule1_1601fq {
         }
     }
 
-    pub(crate) fn typed_row(row: &Value) -> bool {
-        row["treaty_code"] != "NA"
-            || row["atc_code"] != "NA"
+    fn typed_code(row: &Value, field: &str) -> bool {
+        row[field].as_str().is_some_and(|code| {
+            let code = code.trim();
+            !code.is_empty() && code != "NA" && code != "-"
+        })
+    }
+
+    pub fn typed_row(row: &Value) -> bool {
+        typed_code(row, "treaty_code")
+            || typed_code(row, "atc_code")
             || row["income_payment"].as_f64().unwrap_or(0.0).abs() >= 0.005
             || row["tax_rate"].as_f64().unwrap_or(0.0).abs() >= 0.005
     }
@@ -1781,14 +1788,15 @@ pub mod schedule1_1601fq {
     pub struct RowClearance {
         pub id: String,
         pub gate: String,
-        pub position: usize,
         pub text: String,
     }
 
     /// Every typed Schedule 1 row a closing Item 13 gate cleared, keyed by
     /// the row's stable id rather than its transient vector index.
     pub fn row_clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<RowClearance> {
-        if kind.form_code() != "1601FQ" || lock_reason(after).is_none() {
+        if kind.form_code() != "1601FQ"
+            || (lock_reason(after).is_none() && after["any_tax_withheld"] != json!(false))
+        {
             return Vec::new();
         }
         let empty_after = |id: &str| {
@@ -1816,12 +1824,7 @@ pub mod schedule1_1601fq {
                 let text = format!(
                     "Schedule 1 row {position} was cleared: it applies only when item 13 is Yes."
                 );
-                Some(RowClearance {
-                    id,
-                    gate,
-                    position,
-                    text,
-                })
+                Some(RowClearance { id, gate, text })
             })
             .collect()
     }
@@ -2491,6 +2494,45 @@ mod tests {
             "Schedule 1 row 1 was cleared: it applies only when item 13 is Yes."
         );
         assert!(!clearances[0].text.contains("row-00000000000000000002"));
+    }
+
+    #[test]
+    fn a_1601fq_schedule_placeholder_is_not_a_typed_row() {
+        let row = json!({
+            "treaty_code": "-",
+            "atc_code": "-",
+            "income_payment": 0.0,
+            "tax_rate": 0.0,
+        });
+        assert!(!super::schedule1_1601fq::typed_row(&row));
+    }
+
+    #[test]
+    fn item_4_no_clearing_1601fq_schedule_rows_is_noticed() {
+        use super::schedule1_1601fq as gate;
+        let row = json!({
+            "instance_id": "row-00000000000000000001",
+            "treaty_code": "NA",
+            "atc_code": "NA",
+            "income_payment": 42.0,
+            "tax_rate": 10.0,
+        });
+        let before = json!({
+            "any_tax_withheld": true,
+            "tax_relief": "special_rate",
+            "schedule1": [row],
+        });
+        let after = json!({
+            "any_tax_withheld": false,
+            "tax_relief": "special_rate",
+            "schedule1": [],
+        });
+        let clearances = gate::clearances(kind("1601FQ"), &before, &after);
+        assert_eq!(clearances.len(), 1, "{clearances:?}");
+        assert_eq!(
+            clearances[0].1,
+            "Schedule 1 row 1 was cleared: it applies only when item 13 is Yes."
+        );
     }
 
     #[test]
