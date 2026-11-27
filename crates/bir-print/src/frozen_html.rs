@@ -5258,6 +5258,7 @@ fn apply_rule6_specify_bands(
         };
         let mut page_html = out[pg_start..pg_end].to_string();
         let mut insertions: Vec<Rule6Insertion> = Vec::new();
+        let value_cells = page_value_cells(&page_html);
 
         for r6 in &page.rule6_fields {
             let Some(full_val) = fields
@@ -5279,7 +5280,64 @@ fn apply_rule6_specify_bands(
             }
             let input_classes = "fi".to_string();
             let letter = sheet.letter;
-            let rect_w = (r6.x1 - r6.x0 - 4.0).max(20.0);
+
+            let base_cut_y = page
+                .bands
+                .iter()
+                .find(|b| b.id == r6.band_id)
+                .map(|b| {
+                    if b.y1 > r6.insert_after_y && (b.y1 - r6.insert_after_y) <= 6.0 {
+                        b.y1
+                    } else {
+                        r6.insert_after_y
+                    }
+                })
+                .unwrap_or(r6.insert_after_y);
+
+            // The owner's placement rule: the band runs from its cell's left
+            // to just before the first other value cell its strip crosses
+            // (a 2 pt gap), so an amount on the row is never covered; if it
+            // would still cross a value cell it moves down below that cell.
+            // Only cells starting above the cut matter: anything below it
+            // shifts down with the rest of the page, out of the inserted strip.
+            let mut x1 = r6.x1;
+            let mut cut_y = base_cut_y;
+            for _ in 0..8 {
+                let mut narrow: Option<f64> = None;
+                let mut move_below: Option<f64> = None;
+                for (id, left, top, _width, height) in &value_cells {
+                    if *id == r6.cell_id {
+                        continue;
+                    }
+                    let bottom = top + height;
+                    // Cells starting at or below the cut shift down with the
+                    // page. The band's top edge lies 0.5 pt under the cut, so
+                    // a cell ending above that never meets it; an overlap of
+                    // 0.05 pt or less is below the assertion's measure.
+                    if *top >= cut_y - 0.05 || bottom - (cut_y + 0.5) <= 0.05 {
+                        continue;
+                    }
+                    if *left > r6.x0 + 1.0 {
+                        let limit = *left - 2.0;
+                        narrow = Some(narrow.map_or(limit, |n: f64| n.min(limit)));
+                    } else {
+                        move_below = Some(move_below.map_or(bottom, |m: f64| m.max(bottom)));
+                    }
+                }
+                if let Some(bottom) = move_below {
+                    cut_y = bottom + 0.5;
+                    continue;
+                }
+                if let Some(limit) = narrow {
+                    if limit < x1 - 0.05 {
+                        x1 = limit;
+                        continue;
+                    }
+                }
+                break;
+            }
+
+            let rect_w = (x1 - r6.x0 - 4.0).max(20.0);
             let room = shrunk_room((rect_w - 6.0).max(20.0));
             let single_size = sheet.fit(letter, room, full_val, 8.5);
             let (dh, display, font_size_pt, two_lines, truncated) =
@@ -5304,19 +5362,6 @@ fn apply_rule6_specify_bands(
                     )
                 };
 
-            let cut_y = page
-                .bands
-                .iter()
-                .find(|b| b.id == r6.band_id)
-                .map(|b| {
-                    if b.y1 > r6.insert_after_y && (b.y1 - r6.insert_after_y) <= 6.0 {
-                        b.y1
-                    } else {
-                        r6.insert_after_y
-                    }
-                })
-                .unwrap_or(r6.insert_after_y);
-
             let cleared = clear_rule6_inline_input(&inp_tag);
             page_html.replace_range(inp_start..inp_end, &cleared);
 
@@ -5325,7 +5370,7 @@ fn apply_rule6_specify_bands(
                 cut_y,
                 dh,
                 x0: r6.x0,
-                x1: r6.x1,
+                x1,
                 display,
                 full_text: full_val.to_string(),
                 font_size_pt,
@@ -5371,6 +5416,31 @@ fn apply_rule6_specify_bands(
         out.replace_range(pg_start..pg_end, &transformed);
     }
     out
+}
+
+/// `(id, left, top, width, height)` of every `data-cell-kind` `field`/`mixed`
+/// div of a page, in document order, for the Rule 6 placement rule.
+fn page_value_cells(page_html: &str) -> Vec<(String, f64, f64, f64, f64)> {
+    let mut cells = Vec::new();
+    let mut cursor = 0;
+    while let Some(rel) = page_html[cursor..].find("<div ") {
+        let start = cursor + rel;
+        let Some(end_rel) = page_html[start..].find('>') else {
+            break;
+        };
+        let end = start + end_rel + 1;
+        let tag = &page_html[start..end];
+        if matches!(attr(tag, "data-cell-kind"), Some("field" | "mixed")) {
+            let geometry = ["left", "top", "width", "height"].map(|p| style_pt_prop(tag, p));
+            if let (Some(id), [Some(left), Some(top), Some(width), Some(height)]) =
+                (attr(tag, "id"), geometry)
+            {
+                cells.push((id.to_string(), left, top, width, height));
+            }
+        }
+        cursor = end;
+    }
+    cells
 }
 
 fn find_page_div_span(html: &str, page_num: usize) -> Option<(usize, usize)> {
@@ -11142,17 +11212,14 @@ mod tests {
         let mut wrong = Vec::new();
         for band in divs.iter().filter(|d| d.band_of.is_some()) {
             let of = band.band_of.as_deref().unwrap();
-            for cell in divs
-                .iter()
-                .filter(|d| d.value_cell && d.page == band.page)
-            {
+            for cell in divs.iter().filter(|d| d.value_cell && d.page == band.page) {
                 if cell.id.as_deref() == Some(of) {
                     continue;
                 }
-                let x = (band.left + band.width).min(cell.left + cell.width)
-                    - band.left.max(cell.left);
-                let y = (band.top + band.height).min(cell.top + cell.height)
-                    - band.top.max(cell.top);
+                let x =
+                    (band.left + band.width).min(cell.left + cell.width) - band.left.max(cell.left);
+                let y =
+                    (band.top + band.height).min(cell.top + cell.height) - band.top.max(cell.top);
                 if x > 0.05 && y > 0.05 {
                     wrong.push(format!(
                         "{of}: band covers value cell {} by {x:.2} pt sideways, {y:.2} pt down",
@@ -11251,25 +11318,16 @@ mod tests {
         let neighbour = divs
             .iter()
             .filter(|d| d.page == band.page && d.value_cell && d.id != cell.id)
-            .filter(|d| {
-                d.top.max(cell.top) + 1.0 < (d.top + d.height).min(cell.top + cell.height)
-            })
+            .filter(|d| d.top.max(cell.top) + 1.0 < (d.top + d.height).min(cell.top + cell.height))
             .map(|d| d.left)
-            .min_by(|a, b| {
-                (a - cell.left)
-                    .abs()
-                    .total_cmp(&(b - cell.left).abs())
-            });
+            .min_by(|a, b| (a - cell.left).abs().total_cmp(&(b - cell.left).abs()));
         let moved_left = neighbour.unwrap_or(cell.left + 30.0);
         let marker = "data-rule6-of=\"p2c153\" style=\"";
         let at = doc.find(marker).unwrap() + marker.len();
         let old_left = format!("left:{:.2}pt", band.left);
         assert!(doc[at..].starts_with(&old_left));
         let mut moved = doc.clone();
-        moved.replace_range(
-            at..at + old_left.len(),
-            &format!("left:{moved_left:.2}pt"),
-        );
+        moved.replace_range(at..at + old_left.len(), &format!("left:{moved_left:.2}pt"));
 
         let wrong = bands_sideways_off_their_cell(&moved);
         assert_eq!(wrong.len(), 1, "{wrong:?}");
@@ -11289,10 +11347,7 @@ mod tests {
             .map(|key| (key.clone(), words_of(200)))
             .collect();
         let doc = filled_document(slug, &fields).unwrap();
-        assert_eq!(
-            bands_covering_other_value_cells(&doc),
-            Vec::<String>::new()
-        );
+        assert_eq!(bands_covering_other_value_cells(&doc), Vec::<String>::new());
 
         let divs = drawn_divs(&doc);
         let band = divs
@@ -11328,7 +11383,9 @@ mod tests {
         let wrong = bands_covering_other_value_cells(&moved);
         let next_id = next.id.clone().unwrap();
         assert!(
-            wrong.iter().any(|w| w.starts_with("p2c153: band covers value cell ") && w.contains(&next_id)),
+            wrong
+                .iter()
+                .any(|w| w.starts_with("p2c153: band covers value cell ") && w.contains(&next_id)),
             "{wrong:?}"
         );
     }
@@ -13511,9 +13568,13 @@ mod donor_estate_print_tests {
                 long_html.contains(&marker),
                 "{slug} {cell_id}: overflowing specify must insert Rule 6 full-width band"
             );
+            // A band narrowed clear of the row's amount cells wraps the value
+            // to a second line instead of holding it on one; the line break
+            // takes the space it wraps at, so normalizing it back must show
+            // the value whole.
             assert!(
-                long_html.contains(long_specify),
-                "{slug} {cell_id}: full 90-char specify text must appear in full-width band"
+                long_html.replace("&#10;", " ").contains(long_specify),
+                "{slug} {cell_id}: full 90-char specify text must appear whole in the band"
             );
 
             let extreme =
