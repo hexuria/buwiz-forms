@@ -370,7 +370,11 @@ impl Form1701Draft {
                 None => false,
             };
             if !name_allowed {
+                row.owner = None;
                 row.employer_name.clear();
+                row.employer_tin.clear();
+                row.compensation_income = None;
+                row.tax_withheld = None;
             }
         }
 
@@ -2302,6 +2306,19 @@ pub(crate) mod tests {
         let back = serde_json::to_value(&d).unwrap();
         assert_eq!(back["status"], "Draft");
         assert!(back.get("lifecycle").is_none());
+    }
+
+    #[test]
+    fn a_closed_employer_row_clears_the_whole_row() {
+        let mut d = sample();
+        d.atc = Some(Form1701Atc::Ii012);
+        d.recompute();
+        let row = &d.employers[0];
+        assert_eq!(row.owner, None);
+        assert!(row.employer_name.is_empty());
+        assert!(row.employer_tin.is_empty());
+        assert_eq!(row.compensation_income, None);
+        assert_eq!(row.tax_withheld, None);
     }
 
     #[test]
