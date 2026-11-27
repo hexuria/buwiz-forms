@@ -1,0 +1,14 @@
+{
+ "v": 1,
+ "name": "diag-hold-ours-p1",
+ "steps": [
+  {
+   "id": "h1",
+   "op": "long_press",
+   "x": 64.38,
+   "y": 371.05,
+   "duration_ms": 1100,
+   "screenshot": true
+  }
+ ]
+}

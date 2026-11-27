@@ -666,6 +666,26 @@ def run_entry(index, entry, suite, context, agent, log, out):
     code, stdout, stderr = agent.run(*args, timeout=entry.get("timeout_s", 900))
     if recorder:
         result["video"] = recorder.stop()
+    if entry.get("post_wait_ms"):
+        time.sleep(entry["post_wait_ms"] / 1000)
+        shot = folder / "post-wait.png"
+        for extra in (["--inline"], []):
+            shot_code, _, shot_err = agent.run("screenshot", "--out", shot, *extra, timeout=60)
+            if shot_code == 0 and shot.exists():
+                result["post_wait_screenshot"] = str(shot)
+                break
+        try:
+            (folder / "post-wait-tree.json").write_text(log.redact(json.dumps(agent.snapshot(), indent=1)),
+                                                         encoding="utf-8")
+            result["post_wait_tree"] = str(folder / "post-wait-tree.json")
+        except SuiteError:
+            pass
+    if not (folder / "post-wait-tree.json").exists():
+        try:
+            (folder / "post-tree.json").write_text(log.redact(json.dumps(agent.snapshot(), indent=1)), encoding="utf-8")
+            result["post_tree"] = str(folder / "post-tree.json")
+        except SuiteError:
+            pass
     redact_file(folder / "receipt.json", log)
     receipt = first_json(stdout)
     result["ms"] = round((time.monotonic() - started) * 1000)

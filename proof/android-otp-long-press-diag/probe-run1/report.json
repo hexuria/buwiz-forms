@@ -1,0 +1,51 @@
+{
+ "suite": "otp-diag",
+ "target": "android",
+ "started": "20261127-220116",
+ "out": "/home/ubuntu/j57/diag-evidence/probe-run1",
+ "cli_version": "0.4.1",
+ "app_commit": "7d155e6d",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "prep",
+   "status": "pass",
+   "ms": 3520,
+   "note": null,
+   "file": "agent-recipes/e2e/diag-prep.json",
+   "video": "/home/ubuntu/j57/diag-evidence/probe-run1/01-prep/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/diag-evidence/probe-run1/01-prep/post-tree.json"
+  },
+  {
+   "name": "type",
+   "status": "pass",
+   "ms": 10407,
+   "note": null,
+   "file": "agent-recipes/e2e/diag-type.json",
+   "video": "/home/ubuntu/j57/diag-evidence/probe-run1/02-type/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/diag-evidence/probe-run1/02-type/post-tree.json"
+  }
+ ]
+}

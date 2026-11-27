@@ -1,0 +1,292 @@
+diff --git a/crates/nsh-platform-android/java/com/longbridge/nsh/DevActivity.java b/crates/nsh-platform-android/java/com/longbridge/nsh/DevActivity.java
+index 7a7255296..cd704524c 100644
+--- a/crates/nsh-platform-android/java/com/longbridge/nsh/DevActivity.java
++++ b/crates/nsh-platform-android/java/com/longbridge/nsh/DevActivity.java
+@@ -46,7 +46,16 @@ public final class DevActivity extends Activity {
+         // An app on its own, not a module embedded in another app: no limits.
+         view.useStandaloneLimits();
+         view.ownSystemBars();
+-        setContentView(view);
++        android.widget.FrameLayout content = new android.widget.FrameLayout(this);
++        content.addView(view, new android.widget.FrameLayout.LayoutParams(
++                android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT));
++        StockEditText stock = new StockEditText(this);
++        android.widget.FrameLayout.LayoutParams stockAt = new android.widget.FrameLayout.LayoutParams(
++                798, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
++        stockAt.leftMargin = 141;
++        stockAt.topMargin = 84;
++        content.addView(stock, stockAt);
++        setContentView(content);
+         view.handleNotificationIntent(getIntent());
+         // A recreated activity's intent was handed in already.
+         if (state == null) view.handleUrlSchemeIntent(getIntent());
+@@ -68,6 +77,38 @@ public final class DevActivity extends Activity {
+         view.connectDevServer(url != null ? url : "ws://127.0.0.1:8790/ws");
+     }
+ 
++    /** Job 57 diagnostic stock field: Android's own EditText, logging only. */
++    private static final class StockEditText extends android.widget.EditText {
++        StockEditText(android.content.Context context) {
++            super(context);
++            setText("123456788");
++            setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
++            setSingleLine(true);
++            J57Diag.install(this, "J57STOCK");
++        }
++
++        @Override
++        public boolean dispatchTouchEvent(android.view.MotionEvent event) {
++            android.util.Log.i("J57STOCK", "touch edit=" + J57Diag.id(this) + " action=" + event.getActionMasked()
++                    + " x=" + event.getX() + " y=" + event.getY());
++            return super.dispatchTouchEvent(event);
++        }
++
++        @Override
++        protected void onSelectionChanged(int start, int end) {
++            super.onSelectionChanged(start, end);
++            android.util.Log.i("J57STOCK", "sel " + start + "-" + end);
++            J57Diag.layout(this, "J57STOCK", "selection");
++        }
++
++        @Override
++        protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
++            super.onLayout(changed, left, top, right, bottom);
++            J57Diag.layout(this, "J57STOCK", "layout");
++            J57Diag.propsOnce(this, "J57STOCK");
++        }
++    }
++
+     /** Sets each {@code nsh.env.<name>} string extra as the variable {@code <name>}. */
+     static void applyEnv(Bundle extras) {
+         if (extras == null) return;
+diff --git a/crates/nsh-platform-android/java/com/longbridge/nsh/InputBox.java b/crates/nsh-platform-android/java/com/longbridge/nsh/InputBox.java
+index ae3fd8163..930c984da 100644
+--- a/crates/nsh-platform-android/java/com/longbridge/nsh/InputBox.java
++++ b/crates/nsh-platform-android/java/com/longbridge/nsh/InputBox.java
+@@ -91,6 +91,13 @@ final class InputBox extends FrameLayout implements Node {
+         this.id = id;
+         setBackground(decor);
+         edit = new EditText(context) {
++            @Override
++            public boolean dispatchTouchEvent(android.view.MotionEvent event) {
++                android.util.Log.i("J57OURS", "touch edit=" + J57Diag.id(this) + " action=" + event.getActionMasked()
++                        + " x=" + event.getX() + " y=" + event.getY());
++                return super.dispatchTouchEvent(event);
++            }
++
+             @Override
+             protected void onAttachedToWindow() {
+                 super.onAttachedToWindow();
+@@ -131,6 +138,8 @@ final class InputBox extends FrameLayout implements Node {
+             @Override
+             protected void onSelectionChanged(int start, int end) {
+                 super.onSelectionChanged(start, end);
++                android.util.Log.i("J57OURS", "sel " + start + "-" + end);
++                J57Diag.layout(this, "J57OURS", "selection");
+                 if (mounter != null && mounter.wants(InputBox.this.id, Native.SELECTION_CHANGE)) {
+                     mounter.eventMap(InputBox.this.id, Native.SELECTION_CHANGE, new String[] {"start", "end"},
+                             new Object[] {(double) start, (double) end});
+@@ -173,6 +182,8 @@ final class InputBox extends FrameLayout implements Node {
+             @Override
+             protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+                 super.onLayout(changed, left, top, right, bottom);
++                J57Diag.layout(this, "J57OURS", "layout");
++                J57Diag.propsOnce(this, "J57OURS");
+                 if (replaced) reportScroll();
+             }
+ 
+@@ -183,6 +194,7 @@ final class InputBox extends FrameLayout implements Node {
+                 if (replaced) post(InputBox.this::reportScroll);
+             }
+         };
++        J57Diag.install(edit, "J57OURS");
+         edit.setBackground(new ColorDrawable(0));
+         edit.setPadding(0, 0, 0, 0);
+         edit.setIncludeFontPadding(false);
+diff --git a/crates/nsh-platform-android/java/com/longbridge/nsh/J57Diag.java b/crates/nsh-platform-android/java/com/longbridge/nsh/J57Diag.java
+new file mode 100644
+index 000000000..75af52722
+--- /dev/null
++++ b/crates/nsh-platform-android/java/com/longbridge/nsh/J57Diag.java
+@@ -0,0 +1,181 @@
++package com.longbridge.nsh;
++
++import android.os.Build;
++import android.text.Layout;
++import android.util.Log;
++import android.view.ActionMode;
++import android.view.Menu;
++import android.view.MenuItem;
++import android.view.MotionEvent;
++import android.view.View;
++import android.view.ViewGroup;
++import android.view.ViewParent;
++import android.widget.EditText;
++import java.lang.reflect.Field;
++import java.lang.reflect.Method;
++import java.util.HashSet;
++
++/** Job 57 diagnostic logging only: stock/NSH EditText selection and action-mode facts. */
++final class J57Diag {
++    private static final HashSet<String> PROPS_LOGGED = new HashSet<>();
++
++    private J57Diag() {}
++
++    static String id(EditText edit) {
++        return Integer.toHexString(System.identityHashCode(edit));
++    }
++
++    static void install(EditText edit, String tag) {
++        ActionMode.Callback selection = edit.getCustomSelectionActionModeCallback();
++        if (!(selection instanceof LogCallback)) {
++            edit.setCustomSelectionActionModeCallback(new LogCallback(tag, "selection", selection));
++        }
++        if (Build.VERSION.SDK_INT >= 23) {
++            ActionMode.Callback insertion = edit.getCustomInsertionActionModeCallback();
++            if (!(insertion instanceof LogCallback)) {
++                edit.setCustomInsertionActionModeCallback(new LogCallback(tag, "insertion", insertion));
++            }
++        }
++    }
++
++    static void propsOnce(EditText edit, String tag) {
++        String key = tag + ":" + System.identityHashCode(edit);
++        synchronized (PROPS_LOGGED) {
++            if (!PROPS_LOGGED.add(key)) return;
++        }
++        Object movement = edit.getMovementMethod();
++        Log.i(tag, "props longClickable=" + edit.isLongClickable()
++                + " textSelectable=" + edit.isTextSelectable()
++                + " focusable=" + edit.isFocusable()
++                + " focusableInTouchMode=" + edit.isFocusableInTouchMode()
++                + " movement=" + (movement == null ? "null" : movement.getClass().getName())
++                + " edit." + listeners(edit));
++        StringBuilder chain = new StringBuilder("parents edit");
++        ViewParent parent = edit.getParent();
++        int depth = 0;
++        while (parent instanceof View && depth < 40) {
++            View view = (View) parent;
++            chain.append(" > ").append(view.getClass().getName())
++                    .append('[').append(interceptor(view.getClass())).append(',')
++                    .append(listeners(view)).append(']');
++            parent = view.getParent();
++            depth++;
++        }
++        chain.append(" > ").append(parent == null ? "null" : parent.getClass().getName());
++        Log.i(tag, chain.toString());
++    }
++
++    static void layout(EditText edit, String tag, String why) {
++        int[] at = new int[2];
++        edit.getLocationOnScreen(at);
++        Layout layout = edit.getLayout();
++        String x0 = "?", x4 = "?", x9 = "?";
++        if (layout != null) {
++            x0 = horizontal(layout, 0);
++            x4 = horizontal(layout, 4);
++            x9 = horizontal(layout, 9);
++        }
++        Log.i(tag, "layout " + why
++                + " rect=" + at[0] + "," + at[1] + "," + (at[0] + edit.getWidth()) + "," + (at[1] + edit.getHeight())
++                + " padding=" + edit.getPaddingLeft() + "," + edit.getPaddingTop() + ","
++                + edit.getPaddingRight() + "," + edit.getPaddingBottom()
++                + " compoundPadding=" + edit.getCompoundPaddingLeft() + "," + edit.getCompoundPaddingTop() + ","
++                + edit.getCompoundPaddingRight() + "," + edit.getCompoundPaddingBottom()
++                + " scroll=" + edit.getScrollX() + "," + edit.getScrollY()
++                + " glyph0=" + x0 + " glyph4=" + x4 + " glyph9=" + x9
++                + " textLength=" + edit.length());
++    }
++
++    private static String horizontal(Layout layout, int offset) {
++        try {
++            return Float.toString(layout.getPrimaryHorizontal(offset));
++        } catch (RuntimeException e) {
++            return "err:" + e.getClass().getSimpleName();
++        }
++    }
++
++    private static String interceptor(Class<?> cls) {
++        Class<?> c = cls;
++        while (c != null && c != ViewGroup.class) {
++            try {
++                c.getDeclaredMethod("onInterceptTouchEvent", MotionEvent.class);
++                return "intercept=" + c.getName();
++            } catch (NoSuchMethodException ignored) {
++            }
++            c = c.getSuperclass();
++        }
++        return "intercept=android.view.ViewGroup";
++    }
++
++    private static String listeners(View view) {
++        try {
++            Method get = View.class.getDeclaredMethod("getListenerInfo");
++            get.setAccessible(true);
++            Object info = get.invoke(view);
++            if (info == null) return "longClickListener=false touchListener=false";
++            Class<?> cls = info.getClass();
++            Field longClick = cls.getDeclaredField("mOnLongClickListener");
++            Field touch = cls.getDeclaredField("mOnTouchListener");
++            longClick.setAccessible(true);
++            touch.setAccessible(true);
++            return "longClickListener=" + (longClick.get(info) != null)
++                    + " touchListener=" + (touch.get(info) != null);
++        } catch (Throwable t) {
++            return "longClickListener=? touchListener=? (" + t.getClass().getSimpleName() + ")";
++        }
++    }
++
++    private static String items(Menu menu) {
++        if (menu == null) return "null";
++        StringBuilder out = new StringBuilder("[");
++        for (int i = 0; i < menu.size(); i++) {
++            MenuItem item = menu.getItem(i);
++            if (i != 0) out.append(',');
++            if (item == null) {
++                out.append("null");
++                continue;
++            }
++            out.append(item.getItemId()).append(':').append(item.getTitle())
++                    .append(item.isEnabled() ? ":enabled" : ":disabled")
++                    .append(item.isVisible() ? ":visible" : ":hidden");
++        }
++        return out.append(']').toString();
++    }
++
++    private static final class LogCallback implements ActionMode.Callback {
++        private final String tag;
++        private final String kind;
++        private final ActionMode.Callback inner;
++
++        LogCallback(String tag, String kind, ActionMode.Callback inner) {
++            this.tag = tag;
++            this.kind = kind;
++            this.inner = inner;
++        }
++
++        @Override
++        public boolean onCreateActionMode(ActionMode mode, Menu menu) {
++            boolean keep = inner == null || inner.onCreateActionMode(mode, menu);
++            Log.i(tag, "am create kind=" + kind + " keep=" + keep + " items=" + items(menu));
++            return keep;
++        }
++
++        @Override
++        public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
++            boolean keep = inner == null || inner.onPrepareActionMode(mode, menu);
++            Log.i(tag, "am prepare kind=" + kind + " keep=" + keep + " items=" + items(menu));
++            return keep;
++        }
++
++        @Override
++        public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
++            return inner != null && inner.onActionItemClicked(mode, item);
++        }
++
++        @Override
++        public void onDestroyActionMode(ActionMode mode) {
++            Log.i(tag, "am destroy kind=" + kind + " items=" + items(mode == null ? null : mode.getMenu()));
++            if (inner != null) inner.onDestroyActionMode(mode);
++        }
++    }
++}

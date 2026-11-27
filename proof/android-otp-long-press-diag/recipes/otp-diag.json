@@ -1,0 +1,46 @@
+{
+ "v": 1,
+ "description": "Job 57 stock/NSH EditText injected-hold diagnostic. Each cold run uses prep, type, then exactly one x/y long_press recipe.",
+ "recipes": [
+  {
+   "name": "prep",
+   "file": "diag-prep.json",
+   "required": true
+  },
+  {
+   "name": "type",
+   "file": "diag-type.json",
+   "required": true,
+   "needs_cli": "0.4.1",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "hold-stock-p1",
+   "file": "diag-hold-stock-p1.json",
+   "post_wait_ms": 1000
+  },
+  {
+   "name": "hold-stock-p2",
+   "file": "diag-hold-stock-p2.json",
+   "post_wait_ms": 1000
+  },
+  {
+   "name": "hold-ours-p1",
+   "file": "diag-hold-ours-p1.json",
+   "post_wait_ms": 1000
+  },
+  {
+   "name": "hold-ours-p2",
+   "file": "diag-hold-ours-p2.json",
+   "post_wait_ms": 1000
+  }
+ ]
+}

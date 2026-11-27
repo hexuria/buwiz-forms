@@ -1,0 +1,22 @@
+{
+ "v": 1,
+ "name": "diag-type",
+ "steps": [
+  {
+   "id": "s4",
+   "op": "type",
+   "target": "$tin_field",
+   "text": "123456788",
+   "key_delay_ms": 80
+  },
+  {
+   "id": "s5",
+   "op": "click",
+   "target": "new-tp-name",
+   "screenshot": true
+  }
+ ],
+ "params": [
+  "tin_field"
+ ]
+}

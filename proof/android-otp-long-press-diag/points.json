@@ -1,0 +1,113 @@
+{
+ "density": 2.625,
+ "tin_bounds_points": {
+  "x": 33.142857,
+  "y": 346.66666,
+  "w": 304.0,
+  "h": 44.190475
+ },
+ "fields": {
+  "stock": {
+   "metrics": {
+    "rect": [
+     141.0,
+     84.0,
+     939.0,
+     202.0
+    ],
+    "padding": [
+     10.0,
+     26.0,
+     10.0,
+     29.0
+    ],
+    "compoundPadding": [
+     10.0,
+     26.0,
+     10.0,
+     29.0
+    ],
+    "scroll": [
+     0.0,
+     0.0
+    ],
+    "glyph0": 0.0,
+    "glyph4": 104.0,
+    "glyph9": 234.0,
+    "line": "11-27 22:01:40.727 17028 17028 I J57STOCK: layout layout rect=141,84,939,202 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=0.0 glyph4=104.0 glyph9=234.0 textLength=9"
+   },
+   "p1_px": {
+    "x": 255.0,
+    "y": 143.0
+   },
+   "p2_px": {
+    "x": 430.0,
+    "y": 143.0
+   },
+   "p1_points": {
+    "x": 97.14,
+    "y": 54.48
+   },
+   "p2_points": {
+    "x": 163.81,
+    "y": 54.48
+   },
+   "p2_right_of_glyph9_px": 45.0
+  },
+  "ours": {
+   "metrics": {
+    "rect": [
+     87.0,
+     916.0,
+     885.0,
+     1032.0
+    ],
+    "padding": [
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "compoundPadding": [
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "scroll": [
+     0.0,
+     0.0
+    ],
+    "glyph0": 0.0,
+    "glyph4": 82.0,
+    "glyph9": 188.49219,
+    "line": "11-27 22:01:54.442 17028 17028 I J57OURS : layout selection rect=87,916,885,1032 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=82.0 glyph9=188.49219 textLength=9"
+   },
+   "p1_px": {
+    "x": 169.0,
+    "y": 974.0
+   },
+   "p2_px": {
+    "x": 320.49219,
+    "y": 974.0
+   },
+   "p1_points": {
+    "x": 64.38,
+    "y": 371.05
+   },
+   "p2_points": {
+    "x": 122.09,
+    "y": 371.05
+   },
+   "p2_right_of_glyph9_px": 45.0,
+   "p2_relative_to_part2_centre_points": {
+    "dx": -63.01,
+    "dy": 2.25
+   }
+  }
+ },
+ "part2_target_centre_points": {
+  "x": 185.1,
+  "y": 368.8
+ }
+}

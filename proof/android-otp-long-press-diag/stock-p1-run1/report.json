@@ -1,0 +1,67 @@
+{
+ "suite": "otp-diag",
+ "target": "android",
+ "started": "20261127-220230",
+ "out": "/home/ubuntu/j57/diag-evidence/stock-p1-run1",
+ "cli_version": "0.4.1",
+ "app_commit": "7d155e6d",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": false,
+ "database": null,
+ "recipes": [
+  {
+   "name": "prep",
+   "status": "pass",
+   "ms": 3082,
+   "note": null,
+   "file": "agent-recipes/e2e/diag-prep.json",
+   "video": "/home/ubuntu/j57/diag-evidence/stock-p1-run1/01-prep/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/diag-evidence/stock-p1-run1/01-prep/post-tree.json"
+  },
+  {
+   "name": "type",
+   "status": "pass",
+   "ms": 10844,
+   "note": null,
+   "file": "agent-recipes/e2e/diag-type.json",
+   "video": "/home/ubuntu/j57/diag-evidence/stock-p1-run1/02-type/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/diag-evidence/stock-p1-run1/02-type/post-tree.json"
+  },
+  {
+   "name": "hold-stock-p1",
+   "status": "fail",
+   "ms": 3544,
+   "note": null,
+   "file": "agent-recipes/e2e/diag-hold-stock-p1.json",
+   "video": "/home/ubuntu/j57/diag-evidence/stock-p1-run1/03-hold-stock-p1/recording.mp4",
+   "post_wait_screenshot": "/home/ubuntu/j57/diag-evidence/stock-p1-run1/03-hold-stock-p1/post-wait.png",
+   "post_wait_tree": "/home/ubuntu/j57/diag-evidence/stock-p1-run1/03-hold-stock-p1/post-wait-tree.json",
+   "step": "h1",
+   "error": "target_gone: coordinate has no semantic target",
+   "error_code": "target_gone",
+   "line": null,
+   "screenshot": "/home/ubuntu/j57/diag-evidence/stock-p1-run1/03-hold-stock-p1/failure.png",
+   "tree": "/home/ubuntu/j57/diag-evidence/stock-p1-run1/03-hold-stock-p1/failure-tree.json"
+  }
+ ]
+}
