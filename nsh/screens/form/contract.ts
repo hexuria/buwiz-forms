@@ -190,6 +190,8 @@ export interface FieldControlProps {
   blurRef?(blur: (() => void) | null): void;
   /** Register how an amount box leaves at once, in this turn, without writing to its native box (quit and the page going leave it first); null when the box goes away. */
   leaveRef?(leave: (() => void) | null): void;
+  /** Whether a zero amount in this box is stored content (a schedule row that exists), rather than a host zero shown for a row nothing stores yet. */
+  amountStored?(): boolean;
   /** An amount box was left with text that is not an amount (`typed`) and shows `kept`, the return's amount, again. The session says so under it. */
   onLeftUnreadable?(typed: string, kept: string): void;
   /** An amount box was left with one comma read as its decimal point (`typed` "1500,50", `shown` "1,500.50"). The session says so under it. */

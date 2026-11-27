@@ -289,6 +289,7 @@ function TypedBox(props: { p: FieldInput }) {
         onChange={(plain) => p.onEdit(plain)}
         onFocus={() => p.onFocus()}
         onBlur={() => p.onBlur()}
+        amountStored={p.amountStored}
         onLeftUnreadable={(typed, kept) => p.onLeftUnreadable?.(typed, kept)}
         onCommaRead={(typed, shown) => p.onCommaRead?.(typed, shown)}
         hint={p.box.note?.() || undefined}
