@@ -15,6 +15,17 @@
    "screenshot": true
   },
   {
+   "id": "s1a",
+   "op": "click",
+   "target": "fp-part-2-toggle"
+  },
+  {
+   "id": "s1b",
+   "op": "wait_until",
+   "target": "fp-frm2551Qv2018:txt16",
+   "timeout_ms": 5000
+  },
+  {
    "id": "s2",
    "op": "type",
    "target": "fp-frm2551Qv2018:txt16",
@@ -39,7 +50,7 @@
    "id": "s5",
    "op": "assert",
    "target": "fp-frm2551Qv2018:txt15",
-   "value": "$amount",
+   "value": "$amount_shown",
    "screenshot": true
   },
   {
@@ -71,6 +82,16 @@
    "op": "click",
    "target": "fp-frm2551Qv2018:amendedRtn_2",
    "screenshot": true
+  },
+  {
+   "id": "s11",
+   "op": "click",
+   "target": "fp-part-4-toggle"
+  },
+  {
+   "id": "s12",
+   "op": "click",
+   "target": "fp-part-2-toggle"
   }
  ]
 }
