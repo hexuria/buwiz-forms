@@ -23,6 +23,7 @@
 //! runs compute, validation and the field map off the main thread without
 //! touching the database (it is thread-local and not `Send`).
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, OnceLock, PoisonError};
 
@@ -3381,35 +3382,45 @@ fn put_sample_mark(draft: &mut Value, mark: Option<&SampleMark>) {
     }
 }
 
-/// The gate keys whose clearing notes this draft's page applied inline. The
-/// mark rides inside the draft only between a fill and its save; it is never
-/// stored as form data.
-const INLINE_CLEARANCES_MARK: &str = "screen_form_inline_clearances";
-
-fn take_inline_clearances_mark(draft: &mut Value) -> BTreeSet<String> {
-    let Value::Object(object) = draft else {
-        return BTreeSet::new();
-    };
-    object
-        .remove(INLINE_CLEARANCES_MARK)
-        .as_ref()
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|gate| gate.as_str().map(str::to_string))
-        .collect()
+/// The gate keys whose clearing notes a page fill applied inline, kept on
+/// the host by draft id rather than in the draft. Validation rewrites the
+/// draft through its typed model, so a report inside the draft can be lost
+/// before the autosave. Host calls for one page run on its engine's thread;
+/// keeping the map thread-local also keeps independent editing sessions and
+/// test databases apart. A fresh open replaces the page's editing session
+/// and clears any report its closed predecessor never saved.
+thread_local! {
+    static INLINE_CLEARANCE_REPORTS: RefCell<BTreeMap<i64, BTreeSet<String>>> =
+        RefCell::new(BTreeMap::new());
 }
 
-fn put_inline_clearances_mark(draft: &mut Value, gates: &BTreeSet<String>) {
+fn remember_inline_clearances(draft: &Value, gates: &BTreeSet<String>) {
     if gates.is_empty() {
         return;
     }
-    if let Value::Object(object) = draft {
-        object.insert(
-            INLINE_CLEARANCES_MARK.into(),
-            json!(gates.iter().collect::<Vec<_>>()),
-        );
-    }
+    let Some(id) = draft["id"].as_i64() else {
+        return;
+    };
+    INLINE_CLEARANCE_REPORTS.with(|reports| {
+        reports
+            .borrow_mut()
+            .entry(id)
+            .or_default()
+            .extend(gates.iter().cloned());
+    });
+}
+
+fn reported_inline_clearances(draft: &Value) -> BTreeSet<String> {
+    let Some(id) = draft["id"].as_i64() else {
+        return BTreeSet::new();
+    };
+    INLINE_CLEARANCE_REPORTS
+        .with(|reports| reports.borrow().get(&id).cloned())
+        .unwrap_or_default()
+}
+
+fn clear_inline_clearances(draft_id: i64) {
+    INLINE_CLEARANCE_REPORTS.with(|reports| reports.borrow_mut().remove(&draft_id));
 }
 
 /// Queue and print take a return, never a Form library sample: the page
@@ -3475,6 +3486,9 @@ fn open_screen_form(
                 .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
             let mut draft =
                 load_draft(db, kind, &profile, year, period, sample, exact).map_err(host_error)?;
+            if let Some(id) = draft["id"].as_i64() {
+                clear_inline_clearances(id);
+            }
             // The stored bytes decide whether opening must migrate a dormant
             // gated value. Compute a copy rather than trusting the loaded
             // draft: profile refresh or model migration may already have
@@ -5025,7 +5039,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let mut draft = draft_argument(arguments, 1)?;
     let sample = take_sample_mark(&mut draft);
     let amendment = take_amendment_mark(&mut draft);
-    let mut inline_clearances = take_inline_clearances_mark(&mut draft);
+    let mut inline_clearances = BTreeSet::new();
     let edits = arguments
         .value(2)?
         .as_object()
@@ -5164,7 +5178,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             }
         }
     }
-    put_inline_clearances_mark(&mut draft, &inline_clearances);
+    remember_inline_clearances(&draft, &inline_clearances);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -6576,7 +6590,7 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
         Some(_) => return Err(host_error("expected must be a draft or null")),
     };
     let amendment = take_amendment_mark(&mut draft);
-    let inline_clearances = take_inline_clearances_mark(&mut draft);
+    let inline_clearances = reported_inline_clearances(&draft);
     let id = with_database(|db| {
         if amendment.is_none()
             && let Some(expected) = expected.as_ref()
@@ -6614,6 +6628,7 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
                 let saved = save_amendment(db, kind, &mut draft, mark).map_err(host_error);
                 if let Ok(id) = saved {
                     mark_inline_clearances_seen(db, id, before_notices, &inline_clearances);
+                    clear_inline_clearances(id);
                 }
                 saved
             }
@@ -6625,6 +6640,7 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
                 let saved = agent::save_draft(kind, db, &mut draft).map_err(host_error);
                 if let Ok(id) = saved {
                     mark_inline_clearances_seen(db, id, before_notices, &inline_clearances);
+                    clear_inline_clearances(id);
                 }
                 saved
             }
@@ -7732,7 +7748,14 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
         settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
         reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
         refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
-        agent::save_draft(kind, db, &mut draft).map_err(host_error)?;
+        let before_notices = pending_notices_before_save(db, &draft);
+        let inline_clearances = reported_inline_clearances(&draft);
+        let saved = agent::save_draft(kind, db, &mut draft).map_err(host_error);
+        if let Ok(id) = saved {
+            mark_inline_clearances_seen(db, id, before_notices, &inline_clearances);
+            clear_inline_clearances(id);
+        }
+        saved?;
         Ok(notes)
     })?;
     agent::compute(kind, &mut draft).map_err(host_error)?;
