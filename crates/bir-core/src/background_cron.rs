@@ -551,6 +551,19 @@ fn queued_retry_is_due(
     Ok(now >= next_retry.with_timezone(&Utc))
 }
 
+/// A retry more than five minutes older than its stored time was missed while the worker was away (the device
+/// slept, the app was closed): five minutes is the shortest ordinary back-off, so that much lateness is not tick
+/// jitter. Do not fire it the moment the worker notices: move it one minute ahead first (the worker's next sweep),
+/// so the stored next try is always one a person can still wait for.
+fn missed_retry_rescheduled_at(
+    next_retry_at: Option<&str>,
+    now: chrono::DateTime<Utc>,
+) -> Option<chrono::DateTime<Utc>> {
+    let next_retry = chrono::DateTime::parse_from_rfc3339(next_retry_at?).ok()?;
+    let missed_by = now.signed_duration_since(next_retry.with_timezone(&Utc));
+    (missed_by > chrono::Duration::minutes(5)).then(|| now + chrono::Duration::minutes(1))
+}
+
 trait SubmissionTransport {
     type Session: Send;
 
@@ -885,6 +898,22 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
             crate::ipc::post_db_changed();
             return;
         }
+    }
+
+    if let Some(next_try) = missed_retry_rescheduled_at(draft.next_retry_at.as_deref(), Utc::now())
+    {
+        draft.next_retry_at = Some(next_try.to_rfc3339());
+        draft.updated_at = Utc::now().to_rfc3339();
+        if let Ok(db_guard) = lock_timing::lock(&db) {
+            let _ = db_guard.replace_unclaimed_queued_1601c_submission(
+                &draft,
+                &queue_revision.fingerprint,
+                &queue_revision.next_retry_at,
+                queue_revision.submission_attempts,
+            );
+        }
+        crate::ipc::post_db_changed();
+        return;
     }
 
     info!(
@@ -1259,6 +1288,17 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
             crate::ipc::post_db_changed();
             return;
         }
+    }
+
+    if let Some(next_try) =
+        missed_retry_rescheduled_at(draft.lifecycle().next_retry_at.as_deref(), Utc::now())
+    {
+        let lifecycle = draft.lifecycle_mut();
+        lifecycle.next_retry_at = Some(next_try.to_rfc3339());
+        lifecycle.updated_at = Utc::now().to_rfc3339();
+        replace_queueable(&db, &draft, &generation);
+        crate::ipc::post_db_changed();
+        return;
     }
 
     info!(
@@ -1758,6 +1798,22 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
             crate::ipc::post_db_changed();
             return;
         }
+    }
+
+    if let Some(next_try) = missed_retry_rescheduled_at(draft.next_retry_at.as_deref(), Utc::now())
+    {
+        draft.next_retry_at = Some(next_try.to_rfc3339());
+        draft.updated_at = Utc::now().to_rfc3339();
+        if let Ok(db_guard) = lock_timing::lock(&db_clone) {
+            let _ = db_guard.replace_unclaimed_queued_2551q_submission(
+                &draft,
+                &queue_revision.fingerprint,
+                &queue_revision.next_retry_at,
+                queue_revision.submission_attempts,
+            );
+        }
+        crate::ipc::post_db_changed();
+        return;
     }
 
     info!(
@@ -4741,6 +4797,45 @@ mod tests {
         serde_json::Value::String((Utc::now() - chrono::Duration::minutes(1)).to_rfc3339())
     }
 
+    /// A retry missed while the worker was away is not fired the moment the worker wakes: it is moved to the
+    /// next real try first, so no screen has to describe a time already past.
+    #[tokio::test]
+    async fn process_queued_1601c_missed_retry_is_rescheduled_before_sending() {
+        let profile = test_profile();
+        let (db, queued, summary) = stored_queued_1601c(&profile);
+        let mut value: serde_json::Value =
+            serde_json::from_str(&stored_json(&db, "1601C", &queued.tin)).unwrap();
+        value["next_retry_at"] =
+            serde_json::Value::String((Utc::now() - chrono::Duration::minutes(6)).to_rfc3339());
+        db.lock()
+            .unwrap()
+            .conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1 WHERE form_code = '1601C' AND tin = ?2",
+                rusqlite::params![value.to_string(), queued.tin],
+            )
+            .unwrap();
+        let transport = RecordingSubmissionTransport::relay(TestTransportOutcome::Success);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &transport).await;
+        assert!(
+            transport.calls().is_empty(),
+            "a missed retry is rescheduled before it is tried"
+        );
+        let waiting = db
+            .lock()
+            .unwrap()
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(waiting.status, FilingStatus::Queued);
+        let next = chrono::DateTime::parse_from_rfc3339(waiting.next_retry_at.as_deref().unwrap())
+            .unwrap();
+        assert!(
+            next.with_timezone(&Utc) > Utc::now(),
+            "the next try is never stored in the past"
+        );
+    }
+
     fn stored_queued_1601c(
         profile: &TaxpayerProfile,
     ) -> (Arc<Mutex<Database>>, Form1601CDraft, FormDraftSummary) {
@@ -5768,7 +5863,7 @@ mod tests {
 
         let expected_retry_at = failed.next_retry_at.clone();
         let mut retryable = failed.clone();
-        retryable.next_retry_at = Some("1999-01-01T00:00:00Z".to_string());
+        retryable.next_retry_at = Some((Utc::now() - chrono::Duration::minutes(1)).to_rfc3339());
         assert!(
             db.lock()
                 .expect("the cron database should not be poisoned")

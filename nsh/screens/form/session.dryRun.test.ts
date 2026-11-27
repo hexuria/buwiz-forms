@@ -85,6 +85,9 @@ test("the send's words: a held or waiting send says when it goes again, in local
   expect(sendWords(send("waiting", "Not sent yet: x. It tries again by itself.", at(new Date(2026, 10, 25, 9, 5))), now)).toBe(
     "Not sent yet: x. It tries again by itself. Next try on Nov 25 at 9:05 AM.",
   );
+  expect(sendWords(send("waiting", "Not sent yet: x. It tries again by itself.", at(new Date(2026, 10, 24, 9, 59))), now)).toBe(
+    "Not sent yet: x. It tries again by itself. Trying again now.",
+  );
   // No time, or a stage that has none: the line alone.
   expect(sendWords(send("held", "Held.", null), now)).toBe("Held.");
   expect(sendWords(send("held", "Held.", "later"), now)).toBe("Held.");

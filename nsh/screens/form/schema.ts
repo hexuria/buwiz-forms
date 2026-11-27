@@ -248,6 +248,7 @@ const stopped = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.tri
 export function sendWords(send: SendState, now: Date): string {
   const at = send.next_try_at ? rfc3339(send.next_try_at) : null;
   if (!at || (send.stage !== "held" && send.stage !== "waiting")) return send.line;
+  if (at <= now) return `${stopped(send.line)} Trying again now.`;
   return `${stopped(send.line)} ${send.stage === "held" ? "It goes again" : "Next try"} ${tryTime(at, now)}.`;
 }
 
