@@ -1,0 +1,75 @@
+{
+ "v": 1,
+ "name": "e2e-birth-date-phone",
+ "app": "bir-shell",
+ "params": [
+  "birth"
+ ],
+ "steps": [
+  {
+   "id": "s1",
+   "op": "click",
+   "target": "tp-tabs-profile"
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "tp-sec-taxpayer-edit",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s3",
+   "op": "click",
+   "target": "tp-sec-taxpayer-edit"
+  },
+  {
+   "id": "s4",
+   "op": "wait_until",
+   "target": "tp-taxpayer-birth_date",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s5",
+   "op": "click",
+   "target": "tp-taxpayer-birth_date"
+  },
+  {
+   "id": "s6",
+   "op": "wait_until",
+   "target": "tp-taxpayer-birth_date-sheet-input",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s7",
+   "op": "set_value",
+   "target": "tp-taxpayer-birth_date-sheet-input",
+   "value": "$birth"
+  },
+  {
+   "id": "s8",
+   "op": "click",
+   "target": "tp-taxpayer-birth_date-sheet-done"
+  },
+  {
+   "id": "s9",
+   "op": "wait_until",
+   "target": "tp-taxpayer-birth_date-sheet-input",
+   "timeout_ms": 5000,
+   "exists": false
+  },
+  {
+   "id": "s10",
+   "op": "click",
+   "target": "tp-taxpayer-save"
+  },
+  {
+   "id": "s11",
+   "op": "wait_until",
+   "target": "tp-taxpayer-save",
+   "timeout_ms": 5000,
+   "screenshot": true,
+   "exists": false
+  }
+ ]
+}
