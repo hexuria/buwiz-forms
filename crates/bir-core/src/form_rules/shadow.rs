@@ -234,8 +234,8 @@ mod tests {
     use super::{ShadowDifference, ShadowDifferenceKind, ShadowDifferenceReport};
     use bir_rules::{BehaviorProfile, ValidationPhase};
     use bir_rules::{
-        ContextValueSnapshot, FormCode, FormRevision, FormRevisionKey, InputRevision,
-        OfficialPackageVersion, RuleSetId, Sha256Digest, ValidationContext,
+        ContextFingerprint, ContextValueSnapshot, FormCode, FormRevision, FormRevisionKey,
+        InputRevision, OfficialPackageVersion, RuleSetId, Sha256Digest, ValidationContext,
     };
 
     fn stamp() -> super::EvaluationStamp {
