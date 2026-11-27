@@ -1,0 +1,41 @@
+{
+ "suite": "probe-mac-b",
+ "target": "macos",
+ "started": "20261126-231142",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-231142",
+ "cli_version": "0.4.1",
+ "app_commit": "8aa31f3c",
+ "platform": "desktop",
+ "os": "macos",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 690,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "probe-b",
+   "status": "pass",
+   "ms": 2567,
+   "note": null,
+   "file": "agent-recipes/e2e/probe-b.json"
+  }
+ ]
+}

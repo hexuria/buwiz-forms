@@ -1,0 +1,137 @@
+{
+ "suite": "smoke",
+ "target": "ios",
+ "started": "20261126-233030",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030",
+ "cli_version": "0.4.1",
+ "app_commit": "8aa31f3c",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 2653,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 22216,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-phone.json",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/recording.mp4"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 7909,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year.wants",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/03-tax-year/recording.mp4"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 3669,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/recording.mp4"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 3689,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/05-open-2551q/recording.mp4"
+  },
+  {
+   "name": "money-boxes",
+   "status": "known gap",
+   "ms": 9600,
+   "note": "fallback: needs an app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the software keyboard in the tree)",
+   "file": "agent-recipes/e2e/money-boxes-phone.json",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/06-money-boxes/recording.mp4",
+   "step": "s7",
+   "error": "node `fp-frm2551Qv2018:txt16` value: expected \"500.25\", got Some(\"520.01\")",
+   "error_code": "assert_failed",
+   "line": null,
+   "known_gap": "gap 3: injected text cannot type into an auto-formatting money box (digits land scrambled at any pacing); a person's keyed input needs the software keyboard host feature (nsh-gpui-agent#11), which this build does not have",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/06-money-boxes/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/06-money-boxes/failure-tree.json"
+  },
+  {
+   "name": "queue",
+   "status": "fail",
+   "ms": 15939,
+   "note": "precondition: Queue validates first: a 2551Q holding only Items 15 and 16 may stop at its to-do list instead of the confirm dialog",
+   "file": "agent-recipes/e2e/queue.wants",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/07-queue/recording.mp4",
+   "step": "s2",
+   "error": "wait_until timed out: node `queue-continue` not found",
+   "error_code": "timeout",
+   "line": "wait_until queue-continue --timeout-ms 10000 --screenshot",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/07-queue/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/07-queue/failure-tree.json"
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 45,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "birth-date",
+   "status": "known gap",
+   "ms": 1182,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.json",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/09-birth-date/recording.mp4",
+   "step": "s1",
+   "error": "target_gone: tp-tabs-profile",
+   "error_code": "target_gone",
+   "line": null,
+   "known_gap": "gap 1: the date is set in a date sheet",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/09-birth-date/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/09-birth-date/failure-tree.json"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 6814,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/10-sign-out/recording.mp4",
+   "step": "s2",
+   "error": "wait_until timed out: node `nb-menu-profile` not found",
+   "error_code": "timeout",
+   "line": "wait_until nb-menu-profile --timeout-ms 5000",
+   "known_gap": "gap 1: Log out is inside the tax profile sheet on a phone",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/10-sign-out/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/10-sign-out/failure-tree.json"
+  }
+ ]
+}

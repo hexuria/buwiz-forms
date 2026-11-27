@@ -1269,10 +1269,7 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
         BIR_RELAY_URL BUWIZ_RELAY_SEND
     # An account server that is not on this machine neither: a debug build then talks to the local mock.
     for name in BUWIZ_SERVER_URL BUWIZ_ACCOUNT_URL; do
-        case "${!name:-}" in
-            ""|http://localhost|http://localhost[:/]*|http://127.0.0.1|http://127.0.0.1[:/]*|http://\[::1\]*) ;;
-            *) unset "$name" ;;
-        esac
+        if [ -n "${!name:-}" ] && [[ ! "${!name}" =~ ^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(/|$) ]]; then unset "$name"; fi
     done
     # The guard read a relative path from here, and the app starts in nsh/: hand it the same file, as an absolute path.
     db={{quote(db)}}

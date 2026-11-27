@@ -1,0 +1,105 @@
+{
+ "suite": "smoke",
+ "target": "windows",
+ "started": "20261127-070842",
+ "out": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842",
+ "cli_version": "0.4.1",
+ "app_commit": "172e09d8",
+ "platform": "desktop",
+ "os": "windows",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 702,
+   "note": null,
+   "file": "agent-recipes\\e2e\\setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 6202,
+   "note": null,
+   "file": "agent-recipes\\e2e\\sign-up.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 9554,
+   "note": null,
+   "file": "agent-recipes\\ui\\ui-navigate-app.wants"
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 3364,
+   "note": null,
+   "file": "agent-recipes\\e2e\\birth-date.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 13608,
+   "note": null,
+   "file": "agent-recipes\\e2e\\open-2551q.wants"
+  },
+  {
+   "name": "money-boxes",
+   "status": "pass",
+   "ms": 18411,
+   "note": null,
+   "file": "agent-recipes\\e2e\\money-boxes-paced.json"
+  },
+  {
+   "name": "queue",
+   "status": "fail",
+   "ms": 28937,
+   "note": "precondition: Queue validates first: a 2551Q holding only Items 15 and 16 may stop at its to-do list instead of the confirm dialog",
+   "file": "agent-recipes\\e2e\\queue.wants",
+   "step": "s9",
+   "error": "wait_until timed out: node `fp-cancel-queue` not found",
+   "error_code": "timeout",
+   "line": "wait_until fp-cancel-queue --timeout-ms 20000 --screenshot",
+   "screenshot": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\failure.png",
+   "tree": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\failure-tree.json"
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 92,
+   "note": null,
+   "file": "agent-recipes\\e2e\\delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 11161,
+   "note": null,
+   "file": "agent-recipes\\e2e\\sign-out.wants",
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "known_gap": "Log out is refused on a fresh database: endSession requires an admin PIN (or TOTP) for an admin session, and the suite safety rules forbid typing into a PIN box, so no run of this suite can sign out",
+   "screenshot": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\09-sign-out\\failure.png",
+   "tree": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\09-sign-out\\failure-tree.json"
+  }
+ ]
+}
