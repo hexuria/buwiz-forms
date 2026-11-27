@@ -251,6 +251,8 @@ pub enum TransientCause {
     FileChanged,
     /// A file is already where the move would put the legacy file, and it is not an empty room.
     RoomFileTaken,
+    /// Another claim of this device folder is running in this process (C4).
+    ClaimInProgress,
 }
 
 /// Why a file can never be claimed by this build (PLAN §A.3.4).
@@ -589,6 +591,14 @@ impl LegacyClaim {
     }
 
     fn start_inner(&self, who: &Claimant) -> Result<Start, Failure> {
+        // One claim of this device folder at a time in this process (C4), from here to the token's end.
+        let run = ClaimRun::begin(&self.layout).ok_or_else(|| {
+            Failure::Transient(Transient {
+                cause: TransientCause::ClaimInProgress,
+                copy_saved: false,
+                detail: "another claim of this device folder is running in this process".into(),
+            })
+        })?;
         let legacy = self.layout.legacy_database();
         let record = self.record().map_err(store_failure)?;
         let legacy_present = files::exists(&legacy).map_err(io_failure)?;
@@ -708,7 +718,12 @@ impl LegacyClaim {
             }
             Err(failure) => return Err(failure),
         };
-        let gate = Gate { lock, probe, room };
+        let gate = Gate {
+            lock,
+            probe,
+            room,
+            _run: run,
+        };
         Ok(if offer {
             Start::Offer(if gate.probe.locked() {
                 OfferStart::Locked(LockedOffer { gate })
@@ -1098,7 +1113,10 @@ impl LegacyClaim {
     /// At every launch (A3a's call): sweep the scratch folder (a probe cut short leaves no copy) and stray `.partial`
     /// zips.
     pub fn sweep(&self) {
-        files::sweep_scratch(&self.layout);
+        // Never under a running claim's feet (C4): its scratch copy and `.partial` zip are live.
+        if let Some(_run) = ClaimRun::begin(&self.layout) {
+            files::sweep_scratch(&self.layout);
+        }
     }
 
     /// Count `today` (the local calendar day) as a launch day, once the claim is done (PLAN §A.3.8).
@@ -1222,6 +1240,46 @@ struct Gate {
     lock: OwnerLock,
     probe: probe::Probe,
     room: ClaimRoom,
+    /// This process's claim of the device folder (C4), released with the token.
+    _run: ClaimRun,
+}
+
+/// The device folders with a claim running in this process (C4). The legacy owner lock is re-entrant within a
+/// process ([`crate::db::hold_owner_lock`]), so it keeps out only other processes; this keeps two runs of one process
+/// (the launch resume and the sign-in call) from overlapping: their `.partial` zips, scratch copies and record writes
+/// would otherwise race. A3a closes its own connection to the legacy file before it starts a claim.
+static RUNNING: std::sync::Mutex<std::collections::BTreeSet<PathBuf>> =
+    std::sync::Mutex::new(std::collections::BTreeSet::new());
+
+/// One running claim of a device folder; the folder is free again when it is dropped (also through an unwind).
+struct ClaimRun(PathBuf);
+
+impl ClaimRun {
+    /// `None` while another claim of the same device folder runs in this process.
+    fn begin(layout: &Layout) -> Option<Self> {
+        let key = layout
+            .device_dir()
+            .canonicalize()
+            .unwrap_or_else(|_| layout.device_dir().to_path_buf());
+        let mut running = RUNNING
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // Never build the guard on a refusal: dropping it would lock `RUNNING` again while it is held here.
+        if running.insert(key.clone()) {
+            Some(Self(key))
+        } else {
+            None
+        }
+    }
+}
+
+impl Drop for ClaimRun {
+    fn drop(&mut self) {
+        RUNNING
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&self.0);
+    }
 }
 
 impl std::fmt::Debug for Gate {
@@ -1365,7 +1423,12 @@ impl ReadyClaim {
             unlocked_by,
             owner_pin_phc,
         } = self;
-        let Gate { lock, probe, room } = gate;
+        let Gate {
+            lock,
+            probe,
+            room,
+            _run: run,
+        } = gate;
         let legacy = claim.layout.legacy_database();
 
         // The file is the one probed (the lock was held since).
@@ -1458,7 +1521,9 @@ impl ReadyClaim {
         // The owner lock goes with the move (PLAN §A.3.2 step 4); the whole-run hold, if any, keeps its own.
         drop(lock);
 
-        claim.finish_after_move(&room, record)
+        let outcome = claim.finish_after_move(&room, record);
+        drop(run);
+        outcome
     }
 }
 

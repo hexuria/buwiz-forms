@@ -1481,3 +1481,35 @@ fn a_full_disk_at_each_step_is_transient() {
         assert!(!install.legacy().exists(), "{point:?}");
     }
 }
+
+/// C4 (review of A2): the owner lock is re-entrant within a process, so it keeps out only other processes. Two claims
+/// in one process (the launch resume and the sign-in call) never overlap: the second waits (transient), and the launch
+/// sweep leaves a running claim's files alone.
+#[test]
+fn two_claims_in_one_process_never_overlap() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let who = account("a");
+    let first = install.claim();
+    let Start::Ready(ready) = first.start(&who) else {
+        panic!("not ready")
+    };
+    let second = install.claim();
+    match second.start(&who) {
+        Start::Failed(Failure::Transient(transient)) => {
+            assert_eq!(transient.cause, TransientCause::ClaimInProgress)
+        }
+        other => panic!("the second claim ran beside the first: {other:?}"),
+    }
+    let scratch = install
+        .dir()
+        .join(SCRATCH_DIR)
+        .join("probe-of-the-running-claim");
+    std::fs::create_dir_all(&scratch).unwrap();
+    second.sweep();
+    assert!(scratch.exists(), "the sweep waits for the running claim");
+    done_room(&ready.claim(&first));
+    assert!(matches!(second.start(&who), Start::Nothing));
+    second.sweep();
+    assert!(!scratch.exists());
+}
