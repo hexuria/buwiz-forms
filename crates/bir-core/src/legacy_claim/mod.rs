@@ -872,14 +872,19 @@ impl LegacyClaim {
                 );
             }
         };
-        if record.step < Step::Fixed {
+        // Run again whenever the open check is not recorded yet (C6): the room file is at synchronous = NORMAL, so a
+        // power cut can lose fix-ups the record (at FULL) already calls done. Every fix-up is idempotent.
+        if record.step < Step::OpenChecked {
             match self.fixups(&room_file, room, &record) {
                 Ok(()) => {}
-                Err((reason, detail)) => {
+                Err(StepFailure::Passing(cause, detail)) => {
+                    return self.transient_after_move(&mut record, cause, detail);
+                }
+                Err(StepFailure::Moved(reason, detail)) => {
                     return self.moved_not_opened(&mut record, room, reason, detail);
                 }
             }
-            record.step = Step::Fixed;
+            record.step = record.step.max(Step::Fixed);
             if let Err(error) = self.write_record(&record) {
                 return self.transient_after_move(
                     &mut record,
@@ -891,7 +896,10 @@ impl LegacyClaim {
         cut(Cut::AfterFixups);
         match open_check(&room_file) {
             Ok(()) => {}
-            Err((reason, detail)) => {
+            Err(StepFailure::Passing(cause, detail)) => {
+                return self.transient_after_move(&mut record, cause, detail);
+            }
+            Err(StepFailure::Moved(reason, detail)) => {
                 return self.moved_not_opened(&mut record, room, reason, detail);
             }
         }
@@ -957,10 +965,20 @@ impl LegacyClaim {
         room_file: &Path,
         room: &ClaimRoom,
         record: &Record,
-    ) -> Result<(), (MovedNotOpenedReason, String)> {
+    ) -> Result<(), StepFailure> {
+        if let Some(error) = injected(Inject::Open) {
+            return Err(db_failure(
+                MovedNotOpenedReason::Open,
+                crate::db::DbError::Io(error),
+            ));
+        }
         let db = Database::open(room_file)
-            .map_err(|error| (MovedNotOpenedReason::Open, error.to_string()))?;
+            .map_err(|error| db_failure(MovedNotOpenedReason::Open, error))?;
         let fixed = (|| -> Result<Vec<(String, String)>, crate::db::DbError> {
+            #[cfg(test)]
+            if injected(Inject::Fixups).is_some() {
+                return Err(sqlite_full());
+            }
             let transaction = db.conn.unchecked_transaction()?;
             transaction.execute(
                 "DELETE FROM settings WHERE key = ?1",
@@ -998,10 +1016,13 @@ impl LegacyClaim {
             transaction.commit()?;
             Ok(device_values)
         })()
-        .map_err(|error| (MovedNotOpenedReason::Fixups, error.to_string()))?;
+        .map_err(|error| db_failure(MovedNotOpenedReason::Fixups, error))?;
         drop(db);
 
         let device = (|| -> Result<(), DeviceStoreError> {
+            if let Some(error) = injected(Inject::DeviceRows) {
+                return Err(DeviceStoreError::Io(error));
+            }
             let conn = self.store.conn();
             for (key, value) in &fixed {
                 conn.execute(
@@ -1020,7 +1041,17 @@ impl LegacyClaim {
             )?;
             Ok(())
         })();
-        device.map_err(|error| (MovedNotOpenedReason::Fixups, error.to_string()))
+        // The device store's rows are not the room file's: any failure there is passing.
+        device.map_err(|error| {
+            let cause = match &error {
+                DeviceStoreError::Io(io) => io_cause(io),
+                DeviceStoreError::Sqlite(sqlite) => {
+                    sqlite_cause(sqlite).unwrap_or(TransientCause::Io)
+                }
+                _ => TransientCause::Io,
+            };
+            StepFailure::Passing(cause, format!("device store: {error}"))
+        })
     }
 
     fn moved_not_opened(
@@ -1568,17 +1599,61 @@ fn store_transient(error: DeviceStoreError, copy_saved: bool) -> Transient {
 }
 
 /// Step 7's second half: the room opens with this build and `quick_check` answers ok.
-fn open_check(room_file: &Path) -> Result<(), (MovedNotOpenedReason, String)> {
-    let db = Database::open(room_file)
-        .map_err(|error| (MovedNotOpenedReason::Open, error.to_string()))?;
+fn open_check(room_file: &Path) -> Result<(), StepFailure> {
+    if let Some(error) = injected(Inject::OpenCheck) {
+        return Err(db_failure(
+            MovedNotOpenedReason::Open,
+            crate::db::DbError::Io(error),
+        ));
+    }
+    let db =
+        Database::open(room_file).map_err(|error| db_failure(MovedNotOpenedReason::Open, error))?;
     let answer: String = db
         .conn
         .query_row("PRAGMA quick_check", [], |row| row.get(0))
-        .map_err(|error| (MovedNotOpenedReason::QuickCheck, error.to_string()))?;
+        .map_err(|error| db_failure(MovedNotOpenedReason::QuickCheck, error.into()))?;
     if answer == "ok" {
         Ok(())
     } else {
-        Err((MovedNotOpenedReason::QuickCheck, answer))
+        Err(StepFailure::Moved(MovedNotOpenedReason::QuickCheck, answer))
+    }
+}
+
+/// How a step after the move failed (C3): a passing state of the device (a full disk, an I/O error, the file busy)
+/// is transient and tried again; only what the file itself shows is "moved, not opened".
+enum StepFailure {
+    Passing(TransientCause, String),
+    Moved(MovedNotOpenedReason, String),
+}
+
+/// A SQLite error that is a passing state of the device, not of the file: its transient cause.
+fn sqlite_cause(error: &rusqlite::Error) -> Option<TransientCause> {
+    match error {
+        rusqlite::Error::SqliteFailure(failure, _) => match failure.code {
+            rusqlite::ErrorCode::DiskFull => Some(TransientCause::DiskFull),
+            rusqlite::ErrorCode::SystemIoFailure | rusqlite::ErrorCode::CannotOpen => {
+                Some(TransientCause::Io)
+            }
+            rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked => {
+                Some(TransientCause::WalReturned)
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// [`StepFailure`] of a database error at a step after the move (the split `probe::open_failure` makes before it).
+fn db_failure(reason: MovedNotOpenedReason, error: crate::db::DbError) -> StepFailure {
+    let cause = match &error {
+        crate::db::DbError::Io(io) => Some(io_cause(io)),
+        crate::db::DbError::Sqlite(sqlite) => sqlite_cause(sqlite),
+        crate::db::DbError::InUseElsewhere(_) => Some(TransientCause::WalReturned),
+        _ => None,
+    };
+    match cause {
+        Some(cause) => StepFailure::Passing(cause, error.to_string()),
+        None => StepFailure::Moved(reason, error.to_string()),
     }
 }
 
@@ -1601,6 +1676,50 @@ pub(crate) enum Cut {
     AfterHashChecked,
     AfterFixups,
     AfterOpenChecked,
+}
+
+/// Where a test makes the disk full (C3): each step's own write, once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Inject {
+    /// Step 3: the zip.
+    Zip,
+    /// Step 4: the link.
+    Link,
+    /// Step 6: this build's open of the room.
+    Open,
+    /// Step 6: the room file's transaction.
+    Fixups,
+    /// Step 6: the device store's rows.
+    DeviceRows,
+    /// Step 7: the open check.
+    OpenCheck,
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static INJECT_AT: std::cell::Cell<Option<Inject>> = const { std::cell::Cell::new(None) };
+}
+
+/// A test's full disk at `point`, once; nothing outside tests.
+#[inline]
+pub(crate) fn injected(point: Inject) -> Option<std::io::Error> {
+    #[cfg(test)]
+    if INJECT_AT.with(|at| at.get()) == Some(point) {
+        INJECT_AT.with(|at| at.set(None));
+        return Some(std::io::Error::from(std::io::ErrorKind::StorageFull));
+    }
+    #[cfg(not(test))]
+    let _ = point;
+    None
+}
+
+/// A full disk as SQLite reports it (`SQLITE_FULL`), for [`Inject::Fixups`].
+#[cfg(test)]
+fn sqlite_full() -> crate::db::DbError {
+    crate::db::DbError::Sqlite(rusqlite::Error::SqliteFailure(
+        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_FULL),
+        None,
+    ))
 }
 
 /// A test's observation, run once when the claim reaches its point.

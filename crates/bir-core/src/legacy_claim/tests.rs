@@ -1438,3 +1438,46 @@ fn the_link_window_resume_waits_for_another_opener() {
     }
     assert!(!install.legacy().exists());
 }
+
+/// C3 (review of A2): a full disk at any step is transient (Try again), never "moved, not opened" for this build; the
+/// next launch finishes the claim with every row.
+#[test]
+fn a_full_disk_at_each_step_is_transient() {
+    for point in [
+        Inject::Zip,
+        Inject::Link,
+        Inject::Open,
+        Inject::Fixups,
+        Inject::DeviceRows,
+        Inject::OpenCheck,
+    ] {
+        let install = Install::new();
+        close(unlocked(&install));
+        let before = counts(&install.legacy());
+        let who = account("a");
+        let claim = install.claim();
+        let Start::Ready(ready) = claim.start(&who) else {
+            panic!("{point:?}: not ready")
+        };
+        INJECT_AT.with(|at| at.set(Some(point)));
+        let outcome = ready.claim(&claim);
+        INJECT_AT.with(|at| at.set(None));
+        match outcome {
+            Outcome::Transient(transient) => {
+                assert_eq!(transient.cause, TransientCause::DiskFull, "{point:?}")
+            }
+            other => panic!("{point:?}: {other:?}"),
+        }
+        let room = match claim.start(&who) {
+            Start::Ready(ready) => done_room(&ready.claim(&claim)),
+            Start::Finished(outcome) => done_room(&outcome),
+            other => panic!("{point:?}: the next launch: {other:?}"),
+        };
+        assert_eq!(
+            counts(&install.room_file(&room))[..3],
+            before[..3],
+            "{point:?}"
+        );
+        assert!(!install.legacy().exists(), "{point:?}");
+    }
+}

@@ -260,6 +260,9 @@ pub(super) fn raw_safety_copy(layout: &Layout, legacy: &Path) -> Result<SafetyCo
     let zip_name = format!("{ZIP_PREFIX}{stamp}-{short}.zip");
     let final_path = backups.join(&zip_name);
     let partial = with_suffix(&final_path, ".partial");
+    if let Some(error) = super::injected(super::Inject::Zip) {
+        return Err(CopyError::Transient(io_transient("zip", &error, false)));
+    }
     let entry_sha256 = write_zip(legacy, &partial).map_err(|error| {
         let _ = std::fs::remove_file(&partial);
         CopyError::Transient(io_transient("zip", &error, false))
@@ -486,6 +489,9 @@ pub(super) fn move_into_room(
     let placed = if linked_already {
         Placed::Linked
     } else {
+        if let Some(error) = super::injected(super::Inject::Link) {
+            return Err(io_transient("link", &error, true));
+        }
         match crate::safe_fs::link_no_replace(legacy, &room_file) {
             Ok(placed) => placed,
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
