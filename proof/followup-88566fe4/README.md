@@ -27,3 +27,34 @@ Tab into recomputed 13B (120.00, fully selected — fu-right-before.png), press 
 
 - fu-part2b.png: Part II layout, boxes 13A/13B.
 - Harness: per-run timing by keybd_event bursts; db read ~0.9 s after leaving.
+
+## case-2 three-way re-run (same build, same rig, 2026-11-27 ~17:15 local)
+
+Ten runs each, per-run reset as before. Mid-type screenshots taken while the box still had focus; saved values read from form_drafts after Tab out.
+
+### (a) Right pressed ~100 ms after the Tab, then 9
+
+| run | 13B saved | box mid-type |
+|---|---|---|
+| a0 | 9.0 | `9` |
+| a1 | 9.0 | — |
+| a2 | 9.0 | — |
+| a3 | 9.0 | — |
+| a4 | **120.01** | `120.009` selected (fu2-a-mid-appended.png) |
+| a5 | 9.0 | — |
+| a6 | 9.0 | — |
+| a7 | **120.01** | — |
+| a8 | 9.0 | — |
+| a9 | 9.0 | — |
+
+**8/10 replaced (9.0), 2/10 appended (120.01)** — mixed. The 100 ms arrow lands inside a race: when the reselect beats the arrow the digit replaces; when the arrow's collapse is taken as the platform collapse first (or the reselect does not fire), the digit appends. fu2-a-mid-9.png shows the replaced case (box `9`); fu2-a-mid-appended.png shows the appended case (`120.009` with the text selected — a late reselect after the key).
+
+### (b) Right pressed ~300 ms after the Tab, then 9
+
+**10/10 appended**: box shows `120.009` mid-type (fu2-b-mid.png), saved **120.01** every run. Exactly as expected — past the 150 ms window the reselect never fires, the arrow's collapse stands, the digit appends.
+
+### (c) printable key first: Tab, then 9 then 9 within ~100 ms
+
+**10/10 appended**: box shows `120.0099` mid-type (fu2-c-mid.png — note the first characters `120.00` shown selected under the appended digits in some shots), saved **120.01** every run (120.0099 rounds half-up to 120.01). The expected 99 (first 9 replaces, second appends) did NOT occur in any run: the first printable key at ~80 ms after the Tab did not replace the recomputed amount. Consistent with the platform collapse landing before ~80 ms while the reselect write had not yet been applied — the keys fell in the dead window between the platform's collapse and the guard's re-selection, so both digits appended at the caret. (In the earlier T1 runs at 120 ms the first key DID replace 10/10 — at 120 ms the reselect has landed; at ~80 ms it has not.)
+
+Screenshots: fu2-a-mid-9.png, fu2-a-mid-appended.png, fu2-b-mid.png, fu2-c-mid.png. Harness: 370fu-run3.py (same keybd_event/mouse_event method as before, timings 100/300/80 ms).
