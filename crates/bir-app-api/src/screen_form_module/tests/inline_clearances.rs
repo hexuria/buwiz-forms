@@ -62,10 +62,14 @@ fn inline_save_acknowledges_1601fq_schedule1_row_clearing() {
     let row_id = typed["draft"]["schedule1"][0]["instance_id"]
         .as_str()
         .expect("stable row id");
+    let note = closed["relock_notes"]["txtAmtIncomePay0"]
+        .as_str()
+        .expect("inline clearing note");
     assert_eq!(
-        closed["relock_notes"]["txtAmtIncomePay0"],
-        format!("Schedule 1 row {row_id} was cleared: it applies only when item 13 is Yes.")
+        note,
+        "Schedule 1 row 1 was cleared: it applies only when item 13 is Yes."
     );
+    assert!(!note.contains(row_id));
     save_and_reopen_has_no_notice("1601FQ", 1, &closed["draft"]);
 }
 
