@@ -49,19 +49,15 @@ for (const look of LOOKS) {
       await shoot(app, `shell-${look.name}-library`);
     } else {
       await app.press("id:nb-avatar");
-      await app.press("id:nb-menu-profile");
-      await app.waitFor("id:sheet-extras");
+      await app.waitFor("id:nb-menu-logout");
       await app.wait(500);
-      await shoot(app, `shell-${look.name}-account-sheet`);
-      await app.back();
-      await app.press("id:nb-avatar");
+      await shoot(app, `shell-${look.name}-account-menu`);
       await app.press("id:nb-menu-notifications");
       await app.waitFor("id:notifications-list");
       await app.wait(500);
       await shoot(app, `shell-${look.name}-notifications`);
       await app.back();
-      await app.press("id:nb-avatar");
-      await app.press("id:nb-menu-search");
+      await app.press("id:nb-search");
       await app.waitFor("id:palette-input");
       await app.wait(300);
       await shoot(app, `shell-${look.name}-palette`);

@@ -25,7 +25,7 @@ for (const { name, size } of TABLETS) {
     expect(app.shows("id:nb-taxpayer")).toBe(true);
     expect(app.texts()).toContain("Juana Santos");
     expect(app.texts().some((t) => t.startsWith("000-123-453"))).toBe(true);
-    // The name opens the tax profile as a sheet, as the badge's menu does.
+    // The name opens the tax profile as a sheet.
     await app.press("id:nb-taxpayer");
     await app.waitFor("id:sheet-extras");
     await app.back();
