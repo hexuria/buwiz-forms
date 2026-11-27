@@ -565,7 +565,7 @@ mod tests {
                 .contains("Try again in")
         }));
         assert_eq!(owner_failures(&room), 6);
-        assert_eq!(state()["wait_secs"].as_f64().unwrap() > 50.0, true);
+        assert!(state()["wait_secs"].as_f64().unwrap() > 50.0);
     }
 
     /// N7 and F2: a lock that comes in after a set or a check was queued wins. The set stores no PIN and says the

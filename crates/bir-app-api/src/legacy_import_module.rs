@@ -239,8 +239,7 @@ pub(crate) fn scan_folder(path: &Path) -> HostResult {
     let taxpayers = taxpayer_count(&scan);
     let has_something = !scan.profiles.is_empty() || !scan.returns.is_empty();
     let id = if has_something {
-        let id = NEXT_SCAN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        id
+        NEXT_SCAN.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     } else {
         0
     };

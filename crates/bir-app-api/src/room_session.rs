@@ -720,7 +720,7 @@ mod a3a_tests {
         let scratch = scratch();
         std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
         // The legacy file exists, and a connection to it outlives the close (a send's held Arc).
-        Database::open(&scratch.layout.legacy_database())
+        Database::open(scratch.layout.legacy_database())
             .unwrap()
             .close()
             .unwrap();

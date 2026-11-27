@@ -28,14 +28,10 @@ static SLOT: Mutex<Option<OpenRoom>> = Mutex::new(None);
 /// when the last strong handle of it is gone (the registry sweep in `open_path` and `close_room`).
 /// While it lives, an older build finds the file locked and refuses, exactly the one-copy rule it
 /// knows (#423's review, item 1).
-static REGISTRY: std::sync::LazyLock<
-    Mutex<
-        std::collections::HashMap<
-            std::path::PathBuf,
-            (Weak<Mutex<Database>>, bir_core::db::OwnerLock),
-        >,
-    >,
-> = std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
+type RegistryEntry = (Weak<Mutex<Database>>, bir_core::db::OwnerLock);
+type RegistryMap = std::collections::HashMap<std::path::PathBuf, RegistryEntry>;
+static REGISTRY: std::sync::LazyLock<Mutex<RegistryMap>> =
+    std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
 
 /// The device-wide one-copy guard this process holds, keyed by the device folder (#423's review,
 /// item 1): the guard moved off the legacy database file — the databases are many in the rooms
@@ -70,7 +66,9 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 /// The open room's handle and generation, if one is open — the worker's tick source (§A.4).
 /// The whole slot in one read (X2's note): the handle, the generation, the room and the user,
 /// never four reads a sign-out could interleave.
-pub fn snapshot() -> Option<(Arc<Mutex<Database>>, u64, Option<RoomId>, String)> {
+pub type SlotSnapshot = (Arc<Mutex<Database>>, u64, Option<RoomId>, String);
+
+pub fn snapshot() -> Option<SlotSnapshot> {
     lock(&SLOT).as_ref().map(|room| {
         (
             room.handle.clone(),
