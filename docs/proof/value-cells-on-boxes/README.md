@@ -13,10 +13,20 @@ sheets do:
   4 to 15 pt away. What prints, and what the filer sees, is the box the cell
   draws, with the digits inside it. The test now counts those boxes and
   ticks as drawing.
-- A field cell with no `<input>` cannot print a value, so it is no value
-  cell. The test skips it.
+- A value cell is a cell something prints into, whatever its
+  `data-cell-kind` (`field`, `mixed` caption-and-boxes, even `label`): a cell
+  a writer key is joined to (`bir_print::frozen_html::joined_cell_ids`, which
+  includes the engine's own joins), or one holding an input stamped with a
+  filing key, which the print fills by name. A cell with no input, or whose
+  inputs nothing fills, prints nothing and is skipped. So the cells below
+  marked "no input" or "nothing fills it" drop out by rule, not by a list.
+  The rule checks 6,828 cells on the 43 sheets.
 
-The four that remain listed (`KNOWN`) have inputs, but nothing fills them.
+Under that rule one cell is a little off and stays listed (`KNOWN`): 1707
+`p1c217`, 8A If yes, please specify (`frm1707:txtPg1I8TaxReliefSpec`). Its
+top is 2.6 pt below the line under the caption, inside the white box. A
+25-character value and a 58-character one both print fully inside the box
+(`1707-item8a-specify.png`, the cell outlined in red).
 
 Offsets are how far each edge is from the nearest drawn SVG edge beyond the
 test's 2 pt tolerance, in points (blank: on it). "Own box" means the cell
@@ -34,12 +44,12 @@ draws its own box and slot ticks.
 | 1600WP | p1c16 | TIN branch | | | 6.0 | | no | own box |
 | 1600WP | p1c70 | withholding agent TIN 4-6 (derived:att_tin2) | | | 1.9 | 4.5 | no | own box (`1600wp-attachment-tin-row.png`) |
 | 1600WP | p1c72 | withholding agent TIN 7-9 | | | 4.5 | 6.4 | no | own box |
-| 1604F | p1c160 | text strip 6.44 pt tall | 4.5 | 0.5 | | | no | nothing fills it (no join, no name stamp); still listed |
+| 1604F | p1c160 | text strip 6.44 pt tall | 4.5 | 0.5 | | | no | nothing fills it (no join, no name stamp); skipped by rule |
 | 1701A | p1c227 | strip 6.89 pt tall | 3.6 | 0.5 | | | no | no input; prints nothing |
 | 1701A | p2c208 | strip 7.43 pt tall | 3.6 | 1.0 | | | no | no input; prints nothing |
-| 1701MS | p1c51 | sliver 1.27 × 10.05 pt | 1.8 | 11.8 | | | no | nothing fills it; still listed |
-| 1701MS | p1c286 | text cell 19.54 pt tall | 9.3 | | | | no | nothing fills it; still listed |
-| 1706 | p2c183 | Schedule 3 Taxable Base line | 6.6 | 0.6 | | | no | not_joined_cells (no layout key); still listed |
+| 1701MS | p1c51 | sliver 1.27 × 10.05 pt | 1.8 | 11.8 | | | no | nothing fills it; skipped by rule |
+| 1701MS | p1c286 | text cell 19.54 pt tall | 9.3 | | | | no | nothing fills it; skipped by rule |
+| 1706 | p2c183 | Schedule 3 Taxable Base line | 6.6 | 0.6 | | | no | not_joined_cells (no layout key); skipped by rule |
 | 1800 | p1c187 | strip 7.16 pt tall | 6.4 | | | | no | no input; prints nothing |
 | 2550M | p1c127 | TIN 1-3 (frm2550m:txtTIN1, Rust-side join) | | 0.4 | | 5.0 | no | own box (`2550m-tin-row.png`) |
 | 2550M | p1c9 | TIN 4-6 | | | 0.2 | 9.6 | no | own box |

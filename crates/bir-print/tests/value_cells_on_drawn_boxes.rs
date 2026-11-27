@@ -7,8 +7,9 @@
 //! corrections draw some boxes in the cells themselves: a cell with a fill
 //! and an inset border (the TIN rows of 0605, 1600WP, 2550M and 2553), and a
 //! slot with a gradient tick at its right; those count as drawing too. A
-//! value cell (`data-cell-kind="field"` with an input, a drawn `<div>` with
-//! its own `id`, outside any `<template>`) passes when
+//! value cell (any cell something prints into: joined to a writer key, or
+//! holding an input stamped with a filing key; a drawn `<div>` with its own
+//! `id`, outside any `<template>`) passes when
 //!
 //! - each of its four edges lies within [`TOL`] of a drawn edge running along
 //!   at least half of that side, and
@@ -16,8 +17,9 @@
 //!   on a drawn vertical edge (a tick or a fill's side) beside the cell.
 //!
 //! A hand-placed cell a few points off its box fails both. [`KNOWN`] lists
-//! the cells off their boxes that print nothing; the test fails on any other
-//! cell, and on a listed cell that now passes, so the list stays exact.
+//! the cells a little off whose values were seen to print inside their box;
+//! the test fails on any other cell, and on a listed cell that now passes, so
+//! the list stays exact.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -25,19 +27,14 @@ use std::path::PathBuf;
 const TOL: f64 = 2.0;
 const TICKS: f64 = 0.6;
 
-/// Value cells off their drawn boxes that print nothing today, so no filer
-/// sees them: no writer-cells join, no name stamp and no Rust-side join fills
-/// them. Each with how far its edges are from the drawing (pt).
+/// Value cells a little off their drawn boxes whose values still print fully
+/// inside the box (rendered and looked at), each with its measurement (pt).
 const KNOWN: &[(&str, &str)] = &[
-    // Text strip 6.44 pt tall: top 4.5 pt below the rule above, bottom 0.5.
-    ("1604f-2018", "p1c160"),
-    // Sliver 1.27 pt wide, 10.05 tall: top 1.8 pt, bottom 11.8 pt off.
-    ("1701ms-2024", "p1c51"),
-    // Text cell 19.54 pt tall: top 9.3 pt below the rule above.
-    ("1701ms-2024", "p1c286"),
-    // Schedule 3 Taxable Base line (not_joined_cells: no layout key): top
-    // 6.6 pt below the rule above, bottom 0.6.
-    ("1706-2018", "p2c183"),
+    // 8A If yes, please specify (frm1707:txtPg1I8TaxReliefSpec): top 2.6 pt
+    // below the line under the caption, inside the white box; a 25-character
+    // value and a 58-character one both print inside it
+    // (docs/proof/value-cells-on-boxes/1707-item8a-specify.png).
+    ("1707-2021", "p1c217"),
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -119,15 +116,18 @@ fn drawn(html: &str) -> String {
 }
 
 /// Each page's drawn edges and value cells.
-fn pages(html: &str) -> Vec<(Vec<Edge>, Vec<Edge>, Vec<Cell>)> {
+fn pages(html: &str, joined: &BTreeSet<String>) -> Vec<(Vec<Edge>, Vec<Edge>, Vec<Cell>)> {
     let html = drawn(html);
     let marker = "<div class=\"page page-";
     let mut starts: Vec<usize> = html.match_indices(marker).map(|(at, _)| at).collect();
     starts.push(html.len());
-    starts.windows(2).map(|w| page(&html[w[0]..w[1]])).collect()
+    starts
+        .windows(2)
+        .map(|w| page(&html[w[0]..w[1]], joined))
+        .collect()
 }
 
-fn page(body: &str) -> (Vec<Edge>, Vec<Edge>, Vec<Cell>) {
+fn page(body: &str, joined: &BTreeSet<String>) -> (Vec<Edge>, Vec<Edge>, Vec<Cell>) {
     let mut across = Vec::new(); // horizontal edges: at = y
     let mut down = Vec::new(); // vertical edges: at = x
     if let (Some(open), Some(close)) = (body.find("<svg"), body.find("</svg>")) {
@@ -253,16 +253,31 @@ fn page(body: &str) -> (Vec<Edge>, Vec<Edge>, Vec<Cell>) {
                 });
             }
         }
-        if attr(tag, "data-cell-kind") != Some("field") {
+        // A value cell is a cell something prints into, whatever its kind
+        // (`field`, `mixed` caption-and-boxes, even `label`): a cell a writer
+        // key is joined to (`joined_cell_ids`, the engine's own joins
+        // included), or one holding an input stamped with a filing key (its
+        // name is not the cell's id), which the print fills by name. A cell
+        // with no input, or whose inputs nothing fills (named after the cell
+        // and joined to nothing), prints nothing and is skipped.
+        if attr(tag, "data-cell-kind").is_none() {
             continue;
         }
         let Some(id) = attr(tag, "id") else {
             continue;
         };
-        // A field cell with no input prints nothing: it is no value cell.
         let rest = &body[from..];
-        let own = rest.find("data-cell-kind=").unwrap_or(rest.len());
-        if !rest[..own].contains("<input") {
+        let own = &rest[..rest.find("data-cell-kind=").unwrap_or(rest.len())];
+        let mut inputs = own.match_indices("<input").map(|(at, _)| {
+            let tag = &own[at..own[at..].find('>').map_or(own.len(), |end| at + end)];
+            attr(tag, "name").unwrap_or(id).to_string()
+        });
+        let printed = if joined.contains(id) {
+            own.contains("<input")
+        } else {
+            inputs.any(|name| name != id)
+        };
+        if !printed {
             continue;
         }
         let is_comb = attr(tag, "data-field-kind") == Some("comb");
@@ -334,7 +349,8 @@ fn misplacement(cell: &Cell, across: &[Edge], down: &[Edge]) -> Option<String> {
 fn misplaced(slug: &str) -> Vec<(String, String)> {
     let html = std::fs::read_to_string(frozen_root().join(slug).join("index.html")).unwrap();
     let mut out = Vec::new();
-    for (across, down, cells) in pages(&html) {
+    let joined = bir_print::frozen_html::joined_cell_ids(slug);
+    for (across, down, cells) in pages(&html, &joined) {
         for cell in &cells {
             if let Some(why) = misplacement(cell, &across, &down) {
                 out.push((cell.id.clone(), why));
@@ -394,7 +410,8 @@ fn every_value_cell_lies_on_its_drawn_box() {
 #[test]
 fn a_cell_a_few_points_off_its_box_fails() {
     let html = std::fs::read_to_string(frozen_root().join("2200t-2020/index.html")).unwrap();
-    let (across, down, cells) = pages(&html).into_iter().next().unwrap();
+    let joined = bir_print::frozen_html::joined_cell_ids("2200t-2020");
+    let (across, down, cells) = pages(&html, &joined).into_iter().next().unwrap();
     let mut yes = cells.into_iter().find(|c| c.id == "p1c1030").unwrap();
     assert_eq!(misplacement(&yes, &across, &down), None);
     yes.rect.x += 3.12;

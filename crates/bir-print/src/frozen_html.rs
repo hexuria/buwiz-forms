@@ -2178,6 +2178,35 @@ pub fn merged_writer_cells_json(slug: &str) -> Option<serde_json::Value> {
     Some(cells)
 }
 
+/// Every cell of sheet `slug` a writer key prints into: the cells of its
+/// writer-cells joins (text, money, peso, check box and date), with the
+/// engine's own joins ([`SHEET_JOINS`], the donor and estate joins) merged
+/// in. Cells filled by an input's stamped name are not listed here.
+pub fn joined_cell_ids(slug: &str) -> BTreeSet<String> {
+    let Ok(cells) = writer_cells(slug) else {
+        return BTreeSet::new();
+    };
+    let mut ids: BTreeSet<String> = cells.joins.values().flatten().cloned().collect();
+    for join in &cells.money_joins {
+        for pair in &join.cells {
+            ids.insert(pair.peso_html_id.clone());
+            ids.extend(pair.cent_html_id.clone());
+        }
+    }
+    for join in &cells.xbox_joins {
+        ids.extend(join.html_ids.iter().cloned());
+    }
+    for join in &cells.peso_joins {
+        ids.extend(join.html_ids.iter().cloned());
+    }
+    for join in &cells.date_joins {
+        ids.insert(join.mm_html_id.clone());
+        ids.extend(join.dd_html_id.clone());
+        ids.insert(join.yyyy_html_id.clone());
+    }
+    ids
+}
+
 /// `slug`'s [`SHEET_JOINS`] that print in a comb: `(writer key, comb
 /// slots, printed caption)`, read from the bundled sheet, for the screen's
 /// character boxes.
