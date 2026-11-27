@@ -17,7 +17,10 @@ use serde::de::DeserializeOwned;
 
 use super::amendment_snapshots::{NewAmendmentSnapshot, insert_amendment_snapshot};
 use super::drafts::filing_status_to_db;
-use super::{AmendmentBase, Database, DbError, RevertedForAmendment, SnapshotPayloadSource};
+use super::{
+    AmendmentBase, Database, DbError, RevertedForAmendment, SettingsWriter, SnapshotPayloadSource,
+    write_settings_in_transaction,
+};
 use crate::forms::dry_run::is_dry_run;
 use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_1601c_xml::FORM_1601C_FORM_ID;
@@ -178,7 +181,7 @@ impl Database {
         taxable_year: u16,
         month: u8,
     ) -> Result<RevertedForAmendment<Form1601CDraft>, DbError> {
-        self.revert_legacy_for_amendment(tin, taxable_year, i64::from(month), None, None)
+        self.revert_legacy_for_amendment(tin, taxable_year, i64::from(month), None, None, None)
     }
 
     /// An amendment's first save for 1601C in one transaction (see
@@ -188,6 +191,17 @@ impl Database {
         amended: &Form1601CDraft,
         base: &AmendmentBase,
     ) -> Result<i64, DbError> {
+        self.save_1601c_amendment_with_settings(amended, base, None)
+    }
+
+    /// An amendment's first save plus transactional settings rows.
+    #[doc(hidden)]
+    pub fn save_1601c_amendment_with_settings(
+        &self,
+        amended: &Form1601CDraft,
+        base: &AmendmentBase,
+        settings_writer: SettingsWriter<'_>,
+    ) -> Result<i64, DbError> {
         let period = i64::from(amended.month);
         self.revert_legacy_for_amendment(
             amended.tin(),
@@ -195,6 +209,7 @@ impl Database {
             period,
             Some(base),
             Some(amended),
+            settings_writer,
         )?
         .draft
         .id
@@ -207,6 +222,17 @@ impl Database {
         amended: &Form2551QDraft,
         base: &AmendmentBase,
     ) -> Result<i64, DbError> {
+        self.save_2551q_amendment_with_settings(amended, base, None)
+    }
+
+    /// An amendment's first save plus transactional settings rows.
+    #[doc(hidden)]
+    pub fn save_2551q_amendment_with_settings(
+        &self,
+        amended: &Form2551QDraft,
+        base: &AmendmentBase,
+        settings_writer: SettingsWriter<'_>,
+    ) -> Result<i64, DbError> {
         let period = i64::from(amended.quarter);
         self.revert_legacy_for_amendment(
             amended.tin(),
@@ -214,6 +240,7 @@ impl Database {
             period,
             Some(base),
             Some(amended),
+            settings_writer,
         )?
         .draft
         .id
@@ -227,7 +254,7 @@ impl Database {
         taxable_year: u16,
         quarter: u8,
     ) -> Result<RevertedForAmendment<Form2551QDraft>, DbError> {
-        self.revert_legacy_for_amendment(tin, taxable_year, i64::from(quarter), None, None)
+        self.revert_legacy_for_amendment(tin, taxable_year, i64::from(quarter), None, None, None)
     }
 
     fn revert_legacy_for_amendment<F: LegacyAmendable>(
@@ -237,6 +264,7 @@ impl Database {
         period: i64,
         base: Option<&AmendmentBase>,
         replacement: Option<&F>,
+        settings_writer: SettingsWriter<'_>,
     ) -> Result<RevertedForAmendment<F>, DbError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
         let Some((id, raw_json, db_status)) = tx
@@ -364,6 +392,10 @@ impl Database {
                 params![serde_json::to_string(&amended)?, id],
             )?;
             draft = amended;
+        }
+        if let Some(write_settings) = settings_writer {
+            let writes = write_settings(id, Some(raw_json.as_str())).map_err(DbError::Other)?;
+            write_settings_in_transaction(&tx, writes)?;
         }
         tx.commit()?;
         let _ = self.request_google_calendar_sync();

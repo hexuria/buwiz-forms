@@ -1921,6 +1921,128 @@ fn v2018_2551q_an_assistant_clearing_is_pending_for_the_page_open() {
 }
 
 #[test]
+fn v2018_2551q_a_failed_pending_write_rolls_back_the_clear() {
+    setup();
+    let yes = fill(
+        "2551Q",
+        &open("2551Q", 1)["draft"],
+        json!({"frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    let typed = fill(
+        "2551Q",
+        &yes["draft"],
+        json!({bir_core::forms::agent::draft_locks::item16_2551q::KEY: "42"}),
+    );
+    let saved = save("2551Q", &typed["draft"]);
+    let id = stored_id(&saved);
+    let mut legacy: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    legacy["is_amended"] = json!(false);
+    legacy["tax_paid_previous"] = json!(42.0);
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
+    );
+    raw_exec(
+        "CREATE TRIGGER fail_pending_notice_insert BEFORE INSERT ON settings
+         WHEN NEW.key LIKE 'notice_pending:%'
+         BEGIN SELECT RAISE(ABORT, 'pending write failed'); END;",
+        &[],
+    );
+
+    let error = with_database(|db| {
+        let mut draft = legacy.clone();
+        agent::save_draft(AgentFormKind::Form2551Q, db, &mut draft).map_err(host_error)
+    })
+    .unwrap_err();
+    assert!(
+        error.message().contains("pending write failed"),
+        "{error:?}"
+    );
+
+    let stored: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    assert_eq!(stored["tax_paid_previous"], 42.0);
+    assert_eq!(stored["is_amended"], false);
+    assert_eq!(
+        raw_count("SELECT count(*) FROM settings WHERE key LIKE 'notice_pending:%'"),
+        0
+    );
+}
+
+#[test]
+fn v2018_2551q_the_pages_own_clearing_is_marked_seen_when_saved() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let yes = fill(
+        "2551Q",
+        &open("2551Q", 1)["draft"],
+        json!({"frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    let typed = fill("2551Q", &yes["draft"], json!({item16::KEY: "42"}));
+    let saved = save("2551Q", &typed["draft"]);
+    let id = stored_id(&saved);
+
+    // This page fill already says the clearing inline. Its save records the
+    // same event seen instead of leaving a pending notice for a later open.
+    let no = fill(
+        "2551Q",
+        &saved["draft"],
+        json!({"frm2551Qv2018:amendedRtn_2": "true"}),
+    );
+    assert_eq!(
+        no["relock_notes"][item16::KEY],
+        item16::CLEARED_AMENDED_NOTE
+    );
+    save("2551Q", &no["draft"]);
+    assert_eq!(
+        raw_count("SELECT count(*) FROM settings WHERE key LIKE 'notice_pending:%'"),
+        0
+    );
+    assert_eq!(
+        raw_count(&format!(
+            "SELECT count(*) FROM settings WHERE key LIKE 'notice_seen:2551q_item16:{id}:%'"
+        )),
+        1
+    );
+}
+
+#[test]
+fn a_stale_seen_key_does_not_delete_a_newer_pending_notice() {
+    setup();
+    let pending = "notice_pending:test_gate:7";
+    with_database(|db| {
+        db.set_setting(pending, r#"{"text":"newer","event":"E2"}"#)
+            .map_err(|error| host_error(error.to_string()))
+    })
+    .unwrap();
+    let recorded = call(
+        "screen_form_notes_seen",
+        vec![json(json!(["notice_seen:test_gate:7:E1"]))],
+    )
+    .unwrap();
+    assert_eq!(recorded, json!(["notice_seen:test_gate:7:E1"]));
+    with_database(|db| {
+        assert_eq!(
+            db.get_setting(pending).unwrap().as_deref(),
+            Some(r#"{"text":"newer","event":"E2"}"#)
+        );
+        db.set_setting(pending, r#"{"text":"same","event":"E1"}"#)
+            .unwrap();
+        Ok::<(), HostError>(())
+    })
+    .unwrap();
+    call(
+        "screen_form_notes_seen",
+        vec![json(json!(["notice_seen:test_gate:7:E1"]))],
+    )
+    .unwrap();
+    with_database(|db| {
+        assert_eq!(db.get_setting(pending).unwrap(), None);
+        Ok::<(), HostError>(())
+    })
+    .unwrap();
+}
+
+#[test]
 fn v2018_2551q_item16_batch_answers_are_judged_before_the_box_and_zero_is_a_noop() {
     setup();
     use bir_core::forms::agent::draft_locks::item16_2551q as item16;
@@ -1939,7 +2061,7 @@ fn v2018_2551q_item16_batch_answers_are_judged_before_the_box_and_zero_is_a_noop
 
     // With the gate shut, a write of zero is already what the box holds: a
     // no-op, not a refusal; a nonzero write is still refused.
-    let zero = fill("2551Q", &opened["draft"], json!({item16::KEY: "0"}));
+    let zero = fill("2551Q", &opened["draft"], json!({item16::KEY: "0.000"}));
     assert_eq!(zero["rejected"], json!({}));
     assert_eq!(zero["draft"]["tax_paid_previous"], 0.0);
     let nonzero = fill("2551Q", &opened["draft"], json!({item16::KEY: "0.01"}));
@@ -2193,4 +2315,56 @@ fn v2018_2551q_an_amendment_of_an_eight_percent_original_keeps_item16_shut() {
     let refused = fill("2551Q", &amended["draft"], json!({item16::KEY: "42"}));
     assert_eq!(refused["rejected"][item16::KEY], item16::EIGHT_PERCENT_LOCK);
     assert_eq!(refused["draft"]["tax_paid_previous"], 0.0);
+}
+
+#[test]
+fn v2018_2551q_an_amendment_save_uses_the_filed_row_as_before_and_marks_the_pages_clearing_seen() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let yes = fill(
+        "2551Q",
+        &open("2551Q", 1)["draft"],
+        json!({"frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    let typed = fill("2551Q", &yes["draft"], json!({item16::KEY: "42"}));
+    let saved = save("2551Q", &typed["draft"]);
+    let id = stored_id(&saved);
+    let mut filed: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    filed["status"] = json!("Submitted");
+    raw_exec(
+        "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&filed).unwrap(), &id.to_string()],
+    );
+
+    let amended = call_async(
+        "screen_form_amend",
+        vec![TIN.into(), "2551Q".into(), YEAR.into(), 1.into()],
+    )
+    .unwrap_or_else(|error| panic!("2551Q amendment opens: {error}"));
+    assert_eq!(amended["draft"]["tax_paid_previous"], 42.0);
+    let eight = fill(
+        "2551Q",
+        &amended["draft"],
+        json!({"frm2551Qv2018:taxRate2": "true"}),
+    );
+    assert_eq!(eight["draft"]["tax_paid_previous"], 0.0);
+    assert_eq!(
+        eight["relock_notes"][item16::KEY],
+        item16::CLEARED_EIGHT_PERCENT_NOTE
+    );
+
+    save("2551Q", &eight["draft"]);
+    let stored: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    assert_eq!(stored["tax_paid_previous"], 0.0);
+    assert_eq!(stored["item_13_election"], "eight_percent");
+    assert_eq!(
+        raw_count("SELECT count(*) FROM settings WHERE key LIKE 'notice_pending:%'"),
+        0
+    );
+    assert_eq!(
+        raw_count(&format!(
+            "SELECT count(*) FROM settings WHERE key LIKE 'notice_seen:2551q_item16:{id}:%'"
+        )),
+        1
+    );
 }

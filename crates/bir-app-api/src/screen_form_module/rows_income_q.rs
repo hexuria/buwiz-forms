@@ -564,10 +564,10 @@ pub(super) fn once_notes(
     let item16_pending = pending.iter().any(|notice| notice.gate == "2551q_item16");
     // A 2551Q draft saved before Item 16's gate may still hold a nonzero
     // amount although the gate is closed. The pending notice is the normal
-    // path; the pre-pending fallback is only for a clearing already made by a
-    // build that did not record it. `item16_precleared_on_open` is decided
-    // from the stored bytes before a profile follow and quiet save can clear
-    // it.
+    // path. This fallback can only cover a still-nonzero pre-pending row;
+    // it cannot recover a value an older build already zeroed silently.
+    // `item16_precleared_on_open` is decided from the stored bytes before a
+    // profile follow and quiet save can clear it.
     if kind == AgentFormKind::Form2551Q
         && !item16_pending
         && (item16_precleared_on_open

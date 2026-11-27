@@ -531,6 +531,28 @@ pub enum DbError {
 // Core Database struct and lifecycle
 // =========================================================================
 
+/// Transactional settings writes supplied by a draft save. The closure runs
+/// inside the draft row's transaction after the row id and stored bytes are
+/// known, so a clearance notice commits or rolls back with that draft.
+#[doc(hidden)]
+pub type SettingsWriter<'a> =
+    Option<Box<dyn FnOnce(i64, Option<&str>) -> Result<Vec<(String, String)>, String> + 'a>>;
+
+/// Write key/value rows inside an existing transaction.
+pub(crate) fn write_settings_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+    writes: Vec<(String, String)>,
+) -> Result<(), DbError> {
+    for (key, value) in writes {
+        tx.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = ?2",
+            params![key, value],
+        )?;
+    }
+    Ok(())
+}
+
 pub struct Database {
     pub(crate) conn: Connection,
     /// Sidecar exclusive lock for painted `bir` / `bir-headless serve`.

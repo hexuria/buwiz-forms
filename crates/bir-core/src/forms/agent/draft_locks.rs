@@ -1295,7 +1295,7 @@ pub mod item16_2551q {
         value.as_f64() == Some(0.0)
             || value
                 .as_str()
-                .is_some_and(|text| matches!(text.trim(), "0" | "0.0" | "0.00"))
+                .is_some_and(|text| crate::forms::agent::parse_amount(text) == Some(0.0))
     }
 
     /// The clearing note for a transition into the closed state, by cause.
@@ -1970,9 +1970,10 @@ pub mod pending_notices {
     //! the same save operation that recomputes the draft, whoever initiated
     //! that save. The key is `notice_pending:<gate>:<draft id>` and the value
     //! carries the note text plus a unique clearing event. The page offers it
-    //! until `screen_form_notes_seen` records that event seen; recording also
-    //! removes the pending key, so a later import or edit that newly clears
-    //! the same gate creates a fresh event and is said again.
+    //! until that event is recorded seen (after an offered open, or when the
+    //! page's own inline clearing is saved); recording also removes the
+    //! pending key, so a later import or edit that newly clears the same gate
+    //! creates a fresh event and is said again.
 
     use serde_json::{Value, json};
 
@@ -1982,67 +1983,92 @@ pub mod pending_notices {
     pub const PENDING_PREFIX: &str = "notice_pending:";
     pub const SEEN_PREFIX: &str = "notice_seen:";
 
-    pub fn pending_key(gate: &str, draft_id: i64) -> String {
+    fn pending_key(gate: &str, draft_id: i64) -> String {
         format!("{PENDING_PREFIX}{gate}:{draft_id}")
     }
 
-    pub fn seen_key(gate: &str, draft_id: i64, event: &str) -> String {
+    fn seen_key(gate: &str, draft_id: i64, event: &str) -> String {
         format!("{SEEN_PREFIX}{gate}:{draft_id}:{event}")
     }
 
-    /// Record one gate-clearing notice. This is the generic entry point a
-    /// gate uses: pass its stable gate name, the draft row and the exact
-    /// sentence the page should offer. Gate names and events must not carry
-    /// `:`; the event separates repeat clearings of the same draft.
-    pub fn record_pending(
-        db: &Database,
-        gate: &str,
-        draft_id: i64,
-        text: &str,
-    ) -> Result<(), String> {
-        let now = chrono::Utc::now();
-        let event = now
-            .timestamp_nanos_opt()
-            .unwrap_or_else(|| now.timestamp_millis())
-            .to_string();
-        let value = json!({"text": text, "event": event}).to_string();
-        db.set_setting(&pending_key(gate, draft_id), &value)
-            .map_err(|error| error.to_string())
+    /// Parse a pending key into its gate and draft id.
+    pub fn parse_pending_key(key: &str) -> Option<(String, i64)> {
+        let rest = key.strip_prefix(PENDING_PREFIX)?;
+        let (gate, id) = rest.rsplit_once(':')?;
+        Some((gate.to_string(), id.parse().ok()?))
     }
 
-    /// The clearing `save_draft` just made, if a registered gate turned a
-    /// dormant value into its closed zero/blank state. Add later gates here;
-    /// save then records them through [`record_pending`] without each caller
-    /// knowing which path opened or imported the return.
-    pub fn clearance(
+    /// The key that records one clearing event seen.
+    pub fn seen_key_for(gate: &str, draft_id: i64, event: &str) -> String {
+        seen_key(gate, draft_id, event)
+    }
+
+    /// The clearings `save_draft` just made: every registered gate that
+    /// turned a dormant value into its closed zero/blank state. Add later
+    /// gates here; save then records them without each caller knowing which
+    /// path opened or imported the return. Gate and text are owned strings so
+    /// a row-keyed gate (1601FQ Schedule 1, for example) can name its row.
+    pub fn clearance(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<(String, String)> {
+        collect_clearances(kind, before, after, &[item16_2551q_clearance])
+    }
+
+    type ClearanceCheck = fn(AgentFormKind, &Value, &Value) -> Vec<(String, String)>;
+
+    fn collect_clearances(
         kind: AgentFormKind,
         before: &Value,
         after: &Value,
-    ) -> Option<(&'static str, &'static str)> {
+        checks: &[ClearanceCheck],
+    ) -> Vec<(String, String)> {
+        checks
+            .iter()
+            .flat_map(|check| check(kind, before, after))
+            .collect()
+    }
+
+    fn item16_2551q_clearance(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+    ) -> Vec<(String, String)> {
         if kind == AgentFormKind::Form2551Q
             && before["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005
             && after["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() < 0.005
+            && let Some(text) = super::item16_2551q::cleared_note(after)
         {
-            return super::item16_2551q::cleared_note(after).map(|text| ("2551q_item16", text));
+            return vec![("2551q_item16".to_string(), text.to_string())];
         }
-        None
+        Vec::new()
     }
 
-    /// Record the clearing made by one `save_draft`, after the row id is
-    /// known. The draft row and this small setting are written by the same
-    /// save operation rather than inside the draft itself, so immutable
-    /// return bytes never change and a repeat import can produce a new event.
-    pub fn record_if_cleared(
-        db: &Database,
+    fn event_name() -> String {
+        let now = chrono::Utc::now();
+        now.timestamp_nanos_opt()
+            .unwrap_or_else(|| now.timestamp_millis())
+            .to_string()
+    }
+
+    /// The settings rows one save writes for its clearings. One event names
+    /// this save across every gate it cleared; a later clearing gets a later
+    /// event, so an old seen key cannot acknowledge it.
+    pub(crate) fn settings_writes(
         kind: AgentFormKind,
         before: &Value,
         after: &Value,
         draft_id: i64,
-    ) -> Result<(), String> {
-        if let Some((gate, text)) = clearance(kind, before, after) {
-            record_pending(db, gate, draft_id, text)?;
+    ) -> Vec<(String, String)> {
+        let clearances = clearance(kind, before, after);
+        if clearances.is_empty() {
+            return Vec::new();
         }
-        Ok(())
+        let event = event_name();
+        clearances
+            .into_iter()
+            .map(|(gate, text)| {
+                let value = json!({"text": text, "event": event}).to_string();
+                (pending_key(&gate, draft_id), value)
+            })
+            .collect()
     }
 
     #[derive(Debug, Clone)]
@@ -2089,16 +2115,62 @@ pub mod pending_notices {
             .collect()
     }
 
-    /// The pending key a seen key acknowledges, for `screen_form_notes_seen`.
-    pub fn pending_key_for_seen(seen: &str) -> Option<String> {
+    /// The pending key and event a seen key acknowledges, for
+    /// `screen_form_notes_seen`.
+    pub fn pending_event_for_seen(seen: &str) -> Option<(String, String)> {
         let rest = seen.strip_prefix(SEEN_PREFIX)?;
         let mut parts = rest.rsplitn(3, ':');
-        let _event = parts.next()?;
+        let event = parts.next()?;
         let id = parts.next()?.parse::<i64>().ok()?;
         let gate = parts.next()?;
         if parts.next().is_some() {
             return None;
         }
-        Some(pending_key(gate, id))
+        Some((pending_key(gate, id), event.to_string()))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use serde_json::{Value, json};
+
+        use super::{clearance, collect_clearances};
+        use crate::forms::agent::AgentFormKind;
+
+        #[test]
+        fn clearance_collects_every_gate_as_owned_row_keyed_strings() {
+            fn first(_: AgentFormKind, _: &Value, _: &Value) -> Vec<(String, String)> {
+                vec![("first".to_string(), "first cleared".to_string())]
+            }
+            fn second(_: AgentFormKind, _: &Value, _: &Value) -> Vec<(String, String)> {
+                vec![("schedule1:row:7".to_string(), "second cleared".to_string())]
+            }
+            let draft = json!({});
+            let both =
+                collect_clearances(AgentFormKind::Form2551Q, &draft, &draft, &[first, second]);
+            assert_eq!(
+                both,
+                vec![
+                    ("first".to_string(), "first cleared".to_string()),
+                    ("schedule1:row:7".to_string(), "second cleared".to_string()),
+                ]
+            );
+
+            let before = json!({"tax_paid_previous": 42.0});
+            let after = json!({
+                "tax_paid_previous": 0.0,
+                "is_amended": false,
+                "item_13_election": "graduated",
+            });
+            let clearances: Vec<(String, String)> =
+                clearance(AgentFormKind::Form2551Q, &before, &after);
+            assert_eq!(clearances.len(), 1);
+            assert_eq!(clearances[0].0, "2551q_item16");
+
+            let seen = super::seen_key("schedule1:row:7", 9, "E1");
+            assert_eq!(
+                super::pending_event_for_seen(&seen),
+                Some((super::pending_key("schedule1:row:7", 9), "E1".to_string()))
+            );
+        }
     }
 }

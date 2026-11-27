@@ -371,11 +371,27 @@ fn screen_form_notes_seen(arguments: &HostArguments) -> HostResult {
             {
                 recorded.push(key.clone());
             }
-            if let Some(pending) =
-                bir_core::forms::agent::draft_locks::pending_notices::pending_key_for_seen(&key)
-                && let Err(error) = db.delete_setting(&pending)
+            if let Some((pending, event)) =
+                bir_core::forms::agent::draft_locks::pending_notices::pending_event_for_seen(&key)
             {
-                tracing::warn!("removing pending gate notice {pending} failed: {error}");
+                let current_event = match db.get_setting(&pending) {
+                    Ok(Some(stored)) => serde_json::from_str::<Value>(&stored)
+                        .ok()
+                        .and_then(|stored| stored["event"].as_str().map(str::to_string)),
+                    Ok(None) => None,
+                    Err(error) => {
+                        tracing::warn!("reading pending gate notice {pending} failed: {error}");
+                        None
+                    }
+                };
+                // A seen key names one clearing event. If an import has already
+                // replaced the pending row with a newer event, the old seen key
+                // must not delete that newer notice.
+                if current_event.as_deref() == Some(event.as_str())
+                    && let Err(error) = db.delete_setting(&pending)
+                {
+                    tracing::warn!("removing pending gate notice {pending} failed: {error}");
+                }
             }
         }
         Ok(recorded)
@@ -2498,6 +2514,21 @@ fn mark_trigger_date(kind: AgentFormKind, draft: &mut Value, key: &str) {
     write_typed_state(kind, draft, &counted);
 }
 
+/// The one save an open performs when stored bytes still hold a dormant
+/// gated value. It is deliberately the ordinary guarded save path: a stored
+/// filed/queued return is refused, and trigger-date forms keep their typed
+/// date state through `settle_trigger_flag` before `save_draft` recomputes
+/// and records the clearing atomically.
+fn save_open_gate_migration(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &mut Value,
+) -> Result<(), String> {
+    refuse_replacing_a_stored_return(db, kind, draft)
+        .and_then(|()| settle_trigger_flag(db, kind, draft))
+        .and_then(|()| agent::save_draft(kind, db, draft).map(|_| ()))
+}
+
 /// Before any write of a client's draft (save, queue, cancel, a followed
 /// save): `trigger_date_model`, `trigger_parts_typed` and
 /// `trigger_date_entered` are what the host knows, never what the client
@@ -3406,43 +3437,58 @@ fn open_screen_form(
                 .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
             let mut draft =
                 load_draft(db, kind, &profile, year, period, sample, exact).map_err(host_error)?;
-            // The stored bytes decide whether opening cleared a pre-fix dormant
-            // 2551Q Item 16; the opened draft may already have followed the
-            // profile and been recomputed before the once-notes are read.
-            let item16_precleared_on_open = if kind == AgentFormKind::Form2551Q && !sample {
-                let stored = match draft["id"]
+            // The stored bytes decide whether opening must migrate a dormant
+            // gated value. Compute a copy rather than trusting the loaded
+            // draft: profile refresh or model migration may already have
+            // changed the in-memory copy before this check.
+            let stored_on_open = if sample {
+                None
+            } else {
+                match draft["id"]
                     .as_i64()
                     .map(|id| db.draft_summary_and_json(id))
                     .transpose()
                 {
-                    Ok(stored) => stored.flatten(),
+                    Ok(stored) => stored
+                        .flatten()
+                        .and_then(|(_, data_json)| serde_json::from_str::<Value>(&data_json).ok()),
                     Err(error) => {
                         tracing::warn!(
-                            "2551Q: reading the stored draft for Item 16 failed: {error}"
+                            "{code}: reading the stored draft for gate migration failed: {error}"
                         );
                         None
                     }
-                };
-                stored
-                    .and_then(|(_, data_json)| serde_json::from_str::<Value>(&data_json).ok())
-                    .is_some_and(|stored| {
-                        stored["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005
-                            && bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(
-                                &stored,
-                            )
-                            .is_some()
-                    })
-            } else {
-                false
+                }
             };
-            // The migration itself is a normal draft save, before any profile
+            let clearance_on_open = stored_on_open.as_ref().is_some_and(|stored| {
+                let mut computed = stored.clone();
+                agent::compute(kind, &mut computed).is_ok()
+                    && !bir_core::forms::agent::draft_locks::pending_notices::clearance(
+                        kind, stored, &computed,
+                    )
+                    .is_empty()
+            });
+            // The migration is a normal guarded draft save before any profile
             // follow can hide the transition: recompute clears the dormant
-            // amount and `save_draft` records its pending notice in the same
-            // save operation. A failed save never stops the return opening.
-            if item16_precleared_on_open && let Err(error) = agent::save_draft(kind, db, &mut draft)
-            {
-                tracing::warn!("2551Q: clearing a dormant Item 16 failed: {error}");
+            // value and `save_draft` records its pending notice atomically.
+            // A failed save never stops the return opening.
+            if clearance_on_open {
+                let mut migration = draft.clone();
+                match save_open_gate_migration(db, kind, &mut migration) {
+                    Ok(_) => draft = migration,
+                    Err(error) => {
+                        tracing::warn!("{code}: clearing a dormant gated value failed: {error}")
+                    }
+                }
             }
+            // Compatibility for 2551Q once-notes while any pre-pending row is
+            // still nonzero; the pending notice is the normal path.
+            let item16_precleared_on_open = kind == AgentFormKind::Form2551Q
+                && stored_on_open.as_ref().is_some_and(|stored| {
+                    stored["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005
+                        && bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(stored)
+                            .is_some()
+                });
             let mut from_profile = if sample {
                 draft.clone()
             } else {
@@ -6215,6 +6261,84 @@ fn screen_form_validate(
     })
 }
 
+fn pending_notice_values(
+    db: &Database,
+    draft_id: i64,
+) -> Result<BTreeMap<String, String>, bir_core::db::DbError> {
+    Ok(db
+        .settings_with_prefix("notice_pending:")?
+        .into_iter()
+        .filter(|(key, _)| {
+            bir_core::forms::agent::draft_locks::pending_notices::parse_pending_key(key)
+                .is_some_and(|(_, id)| id == draft_id)
+        })
+        .collect())
+}
+
+fn pending_notices_before_save(db: &Database, draft: &Value) -> Option<BTreeMap<String, String>> {
+    let Some(id) = draft["id"].as_i64() else {
+        return Some(BTreeMap::new());
+    };
+    match pending_notice_values(db, id) {
+        Ok(values) => Some(values),
+        Err(error) => {
+            tracing::warn!("reading gate notices before the page save failed: {error}");
+            None
+        }
+    }
+}
+
+/// The page already showed a clearing inline in the fill whose save created
+/// it. Record exactly those new clearing events seen; a pending notice left
+/// by the assistant or by another page remains pending. Deleting the pending
+/// row after the seen write is cleanup: if cleanup fails the seen key still
+/// keeps it off later openings.
+fn mark_inline_clearances_seen(
+    db: &Database,
+    draft_id: i64,
+    before: Option<BTreeMap<String, String>>,
+) {
+    let Some(before) = before else {
+        return;
+    };
+    let after = match pending_notice_values(db, draft_id) {
+        Ok(after) => after,
+        Err(error) => {
+            tracing::warn!("reading gate notices after the page save failed: {error}");
+            return;
+        }
+    };
+    for (key, value) in after {
+        if before.get(&key) == Some(&value) {
+            continue;
+        }
+        let Some((gate, id)) =
+            bir_core::forms::agent::draft_locks::pending_notices::parse_pending_key(&key)
+        else {
+            continue;
+        };
+        let event = serde_json::from_str::<Value>(&value)
+            .ok()
+            .and_then(|value| value["event"].as_str().map(str::to_string));
+        let Some(event) = event else {
+            tracing::warn!("{key}: pending gate notice has no event");
+            continue;
+        };
+        let seen =
+            bir_core::forms::agent::draft_locks::pending_notices::seen_key_for(&gate, id, &event);
+        match db.insert_setting_if_absent(&seen, "1") {
+            Ok(_) => {
+                if let Err(error) = db.delete_setting(&key) {
+                    tracing::warn!(
+                        "removing the page-shown pending gate notice {key} failed: {error}"
+                    );
+                }
+            }
+            Err(error) => tracing::warn!("marking inline gate notice {key} seen failed: {error}"),
+        }
+    }
+}
+
 fn screen_form_save(arguments: &HostArguments) -> HostResult {
     let kind = kind_of(arguments.string(0)?)?;
     let mut draft = draft_argument(arguments, 1)?;
@@ -6260,13 +6384,23 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
             Some(mark) => {
                 settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
                 reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
-                save_amendment(db, kind, &mut draft, mark).map_err(host_error)
+                let before_notices = pending_notices_before_save(db, &draft);
+                let saved = save_amendment(db, kind, &mut draft, mark).map_err(host_error);
+                if let Ok(id) = saved {
+                    mark_inline_clearances_seen(db, id, before_notices);
+                }
+                saved
             }
             None => {
                 settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
                 reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
                 refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
-                agent::save_draft(kind, db, &mut draft).map_err(host_error)
+                let before_notices = pending_notices_before_save(db, &draft);
+                let saved = agent::save_draft(kind, db, &mut draft).map_err(host_error);
+                if let Ok(id) = saved {
+                    mark_inline_clearances_seen(db, id, before_notices);
+                }
+                saved
             }
         }
     })?;
@@ -6604,28 +6738,35 @@ fn save_amendment(
             .ok_or("this amendment does not say which filed return it amends; amend it again")?,
         updated_at: mark["updated_at"].as_str().unwrap_or("").to_string(),
     };
+    let incoming = draft.clone();
     agent::compute(kind, draft)?;
+    let after = draft.clone();
+    let writer = move || {
+        bir_core::forms::agent::pending_settings_writer(kind, incoming.clone(), after.clone())
+    };
     let error = |error: bir_core::db::DbError| error.to_string();
     let draft_ref = &*draft;
     let id = match kind {
         AgentFormKind::Form1601C => out_of_line(|| {
-            db.save_1601c_amendment(
+            db.save_1601c_amendment_with_settings(
                 &serde_json::from_value(draft_ref.clone()).map_err(|e| e.to_string())?,
                 &base,
+                writer(),
             )
             .map_err(error)
         })?,
         AgentFormKind::Form2551Q => out_of_line(|| {
-            db.save_2551q_amendment(
+            db.save_2551q_amendment_with_settings(
                 &serde_json::from_value(draft_ref.clone()).map_err(|e| e.to_string())?,
                 &base,
+                writer(),
             )
             .map_err(error)
         })?,
         AgentFormKind::Queueable(queueable) => {
             bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
             let typed: F = serde_json::from_value(draft_ref.clone()).map_err(|e| e.to_string())?;
-            db.save_queueable_amendment(&typed, &base).map_err(error)
+            db.save_queueable_amendment_with_settings(&typed, &base, writer()).map_err(error)
         })?)
         }
     };
@@ -7634,6 +7775,40 @@ mod tests {
             ymd(2026, 9, 18),
             "all three, one session later"
         );
+    }
+
+    /// D4's generic open migration uses the same guarded save as the page:
+    /// on a trigger-date form the host's typed-date state is settled before
+    /// the recompute saves the cleared row.
+    #[test]
+    fn an_open_gate_migration_settles_a_trigger_date_before_saving() {
+        setup_taxpayer_filing(&["1606"]);
+        let draft = type_parts("1606", &open("1606", 1)["draft"], &SALE);
+        let mut migration = draft.clone();
+        migration
+            .as_object_mut()
+            .unwrap()
+            .remove("trigger_parts_typed");
+        migration
+            .as_object_mut()
+            .unwrap()
+            .remove("trigger_date_entered");
+        with_database(|db| {
+            save_open_gate_migration(
+                db,
+                AgentFormKind::Queueable(QueueableKind::Form1606),
+                &mut migration,
+            )
+            .map_err(host_error)
+        })
+        .unwrap();
+        assert_eq!(
+            migration["trigger_parts_typed"],
+            json!(["transaction_day", "transaction_month", "transaction_year"])
+        );
+        assert_eq!(migration["trigger_date_entered"], true);
+        let id = migration["id"].as_i64().unwrap();
+        assert_eq!(stored_trigger(id), ymd(2026, 9, 18));
     }
 
     /// Round 5: a client-sent `trigger_parts_typed` is ignored: the host
