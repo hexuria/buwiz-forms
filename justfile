@@ -1412,10 +1412,17 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
                     [Console]::Error.WriteLine($message)
                 }
             }
-        } else {
-            [Console]::Error.WriteLine("nsh-run-agent: the $name job did not stop within 10 seconds and was removed")
         }
-        Remove-Job $job -Force -ErrorAction SilentlyContinue
+        $removeErrors = @()
+        Remove-Job $job -Force -ErrorVariable removeErrors -ErrorAction SilentlyContinue
+        if (-not $stopped) {
+            if ($removeErrors.Count -eq 0) {
+                [Console]::Error.WriteLine("nsh-run-agent: the $name job did not stop within 10 seconds and was removed")
+            } else {
+                $message = ([string]$removeErrors[0]) -replace [regex]::Escape($env:GPUI_AGENT_TOKEN), '<GPUI_AGENT_TOKEN>'
+                [Console]::Error.WriteLine("nsh-run-agent: the $name job did not stop within 10 seconds and could not be removed: $message")
+            }
+        }
     }
     # The parameter arrives as an environment variable (PowerShell cannot read just's quoting of an apostrophe); a relative
     # path is the one the guard checked, from here, not from nsh/.
