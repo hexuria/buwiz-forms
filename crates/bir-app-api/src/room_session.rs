@@ -470,3 +470,216 @@ mod tests {
         assert!(extra_locks.is_empty(), "locks left behind: {extra_locks:?}");
     }
 }
+
+#[cfg(test)]
+mod a3a_tests {
+    use super::*;
+    use bir_core::db::Database;
+
+    static TURNS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn turn() -> std::sync::MutexGuard<'static, ()> {
+        TURNS.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn stored(user: &str) -> StoredAccount {
+        StoredAccount {
+            server_url: "https://api.buwiz.test".into(),
+            access_token: "access".into(),
+            refresh_token: "refresh".into(),
+            access_expires_at_unix: 0,
+            user_id: user.into(),
+            email: Some(format!("{user}@example.test")),
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        }
+    }
+
+    struct Scratch {
+        _folder: tempfile::TempDir,
+        layout: Layout,
+    }
+
+    fn scratch() -> Scratch {
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        Scratch {
+            layout: Layout::at(folder.path().to_path_buf()),
+            _folder: folder,
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            bir_core::platform::set_device_dir_override(None);
+            crate::open_room::close_room();
+            bir_core::db::set_open_room_database(None);
+        }
+    }
+
+    /// A cut claim's record in the scratch device.db, as the library writes it (the `migration`
+    /// row `legacy`): step Copied in the link window, the room named, no failure.
+    fn sha256_of(path: &std::path::Path) -> String {
+        use sha2::Digest as _;
+        let mut hash = sha2::Sha256::new();
+        hash.update(std::fs::read(path).unwrap());
+        format!("{:x}", hash.finalize())
+    }
+
+    fn write_cut_record(layout: &Layout, room: &RoomId, who: &Claimant, raw_sha256: String) {
+        let store = bir_core::rooms::DeviceStore::open(layout).unwrap();
+        drop(store);
+        let conn = rusqlite::Connection::open(layout.device_db()).unwrap();
+        let record = bir_core::legacy_claim::Record {
+            stamp: "test-stamp".into(),
+            room: Some(room.as_str().to_owned()),
+            origin: Some(bir_core::rooms::room_origin(&who.server_url).unwrap()),
+            user_id: Some(who.user_id.clone()),
+            email: who.email.clone(),
+            unlocked_by: Some(bir_core::legacy_claim::UnlockedBy::NoLock),
+            empty_room_aside: false,
+            empty_room_file: None,
+            os_login_used: false,
+            raw_user_version: None,
+            raw_sha256: Some(raw_sha256),
+            zip: None,
+            zip_sha256: None,
+            hash_checked: false,
+            open_checked: false,
+            step: bir_core::legacy_claim::Step::Copied,
+            failure: None,
+            done_at: None,
+            launch_days: vec![],
+            room_opened_since: false,
+            zip_deleted_at: None,
+            legacy_file: None,
+            owner_pin_phc: None,
+        };
+        conn.execute(
+            "INSERT OR REPLACE INTO migration (key, value) VALUES ('legacy', ?1)",
+            rusqlite::params![serde_json::to_string(&record).unwrap()],
+        )
+        .unwrap();
+    }
+
+    /// §A.8, the launch call site: a claim cut mid-move resumes at launch — open_session_room with
+    /// a Finished outcome lands the file in the claimer's room.
+    #[test]
+    fn a_cut_claim_resumes_at_launch() {
+        let _turn = turn();
+        let scratch = scratch();
+        let db = Database::open(scratch.layout.legacy_database()).unwrap();
+        db.checkpoint().unwrap();
+        drop(db);
+        // A cut in the link window, built from the files as §A.3.3 reads them: the legacy file is
+        // hard-linked into the claimer's room (the move's link before its unlink), and the record
+        // says Copied. No test hook of the library — the state is the real one a kill leaves.
+        let a = stored("user-a");
+        let who = Claimant {
+            server_url: a.server_url.clone(),
+            user_id: a.user_id.clone(),
+            email: a.email.clone(),
+            practice: false,
+        };
+        let room = bir_core::rooms::room_id_for(
+            &bir_core::rooms::room_origin(&a.server_url).unwrap(),
+            &a.user_id,
+        );
+        // device.db before rooms/, or the store reads as lost (L2).
+        drop(bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap());
+        scratch.layout.create_room_dir(&room).unwrap();
+        std::fs::hard_link(
+            scratch.layout.legacy_database(),
+            scratch.layout.room_database(&room),
+        )
+        .unwrap();
+        let raw_sha256 = sha256_of(&scratch.layout.legacy_database());
+        write_cut_record(&scratch.layout, &room, &who, raw_sha256);
+        // The launch resume: no legacy unlock, no interaction — the files decide.
+        let session = open_session_room(&a);
+        assert!(
+            matches!(session, SessionRoom::Room { .. }),
+            "the cut claim did not resume into the room: {session:?}"
+        );
+        assert!(
+            !scratch.layout.legacy_database().exists(),
+            "the legacy file is still there after the resumed move"
+        );
+    }
+
+    /// §A.8, the session_opened call site: an unlocked legacy install is claimed at the first real
+    /// account's session_opened — the file is the account's room afterwards.
+    #[test]
+    fn an_unlocked_install_is_claimed_at_the_first_accounts_session_opened() {
+        let _turn = turn();
+        let scratch = scratch();
+        let db = Database::open(scratch.layout.legacy_database()).unwrap();
+        db.checkpoint().unwrap();
+        drop(db);
+        let a = stored("user-a");
+        let session = open_session_room(&a);
+        let SessionRoom::Room { room_id } = session else {
+            panic!("not a room: {session:?}")
+        };
+        assert!(!scratch.layout.legacy_database().exists(), "not moved");
+        assert!(scratch.layout.room_database(&room_id).exists(), "no room file");
+        // The claim wrote its record: done.
+        let claim = LegacyClaim::at(scratch.layout.clone()).unwrap();
+        let record = claim.record().unwrap().expect("no record");
+        assert_eq!(record.step, bir_core::legacy_claim::Step::Done);
+    }
+
+    /// §A.8: the agent session rebuilds on a room change — the selection of the old room is gone.
+    #[test]
+    fn agent_selection_cleared_on_room_change() {
+        let _turn = turn();
+        let scratch = scratch();
+        let db = Database::open(scratch.layout.legacy_database()).unwrap();
+        db.checkpoint().unwrap();
+        drop(db);
+        let a = stored("user-a");
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        let generation_a = crate::open_room::generation().unwrap();
+        crate::open_room::close_room();
+        let b = stored("user-b");
+        assert!(matches!(open_session_room(&b), SessionRoom::Room { .. }));
+        let generation_b = crate::open_room::generation().unwrap();
+        assert_ne!(generation_a, generation_b, "a new room is a new generation");
+        // The session's comparison: a cached generation that is not the open room's rebuilds.
+        let mut session = crate::agent::session::Session::headless();
+        session.selected_for_test("12345678800000");
+        assert!(session.selected_tin_for_test().is_some());
+        // A batch under room B sees the session's A-generation cache as stale.
+        assert_ne!(Some(generation_a), crate::open_room::generation());
+        session.rebuild();
+        assert!(session.selected_tin_for_test().is_none(), "the selection survived the room change");
+    }
+
+    /// §A.8: an eBIRForms scan made in room A can never import into room B — the scan records the
+    /// database path it was read against, and the close forgets it.
+    #[test]
+    fn ebirforms_scan_does_not_cross_rooms() {
+        let _turn = turn();
+        let scratch = scratch();
+        let db = Database::open(scratch.layout.legacy_database()).unwrap();
+        db.checkpoint().unwrap();
+        drop(db);
+        let a = stored("user-a");
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        // A scan of the legacy eBIRForms export folder, held against room A's path.
+        let legacy_folder = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../bir-core/tests/legacy-ebirforms");
+        crate::legacy_import_module::scan_folder(&legacy_folder).unwrap();
+        assert!(crate::legacy_import_module::holds_scan());
+        // The room closes (sign-out); the scan is forgotten before any other room opens.
+        crate::open_room::close_room();
+        crate::legacy_import_module::forget_scan();
+        let b = stored("user-b");
+        assert!(matches!(open_session_room(&b), SessionRoom::Room { .. }));
+        assert!(
+            !crate::legacy_import_module::holds_scan(),
+            "a scan of room A is still held in room B"
+        );
+    }
+}

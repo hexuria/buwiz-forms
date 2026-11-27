@@ -131,6 +131,16 @@ impl Session {
         self.db_generation
     }
 
+    #[cfg(test)]
+    pub(crate) fn selected_for_test(&mut self, tin: &str) {
+        self.selected_tin = Some(tin.to_owned());
+    }
+
+    #[cfg(test)]
+    pub(crate) fn selected_tin_for_test(&self) -> Option<&str> {
+        self.selected_tin.as_deref()
+    }
+
     /// The room changed under this session (A3a §A.5): a new db is cached on the next batch, and
     /// nothing of the old room survives — not the selection, not the open form.
     pub fn rebuild(&mut self) {
