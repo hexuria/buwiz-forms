@@ -67,8 +67,8 @@ test("penalty mark lifts on the typed component", async () => {
   expect(app.count("id:fp-mark-info-frm1701:txtPg1I28A")).toBe(0);
   expect(app.count("id:fp-mark-info-frm1701:txtPg1I27A")).toBe(1);
   expect(app.count("id:fp-mark-info-frm1701:txtPg1I29A")).toBe(1);
-  // The typed box keeps its wrapper (the mark lifting never remounts the box mid-edit).
-  expect(app.count("id:fp-penrow-frm1701:txtPg1I28A")).toBe(1);
+  // The mark sits in the box's own trailing slot, so its lifting is only the slot emptying:
+  // the box itself is the same mounted input throughout — there is no wrapper to remount.
 });
 
 // On a joint 1701 the money rows print in two columns: A. Taxpayer/Filer, then B. Spouse. The
@@ -90,7 +90,10 @@ test("joint 1701: the penalty rows' boxes keep the columns of the rows above", a
     },
   });
   await app.waitFor("text:BIR Form 1701");
-  const xs = () => JSON.parse((app.texts().find((t) => t.startsWith("boxx ")) ?? "boxx {}").slice("boxx ".length)) as Record<string, number>;
+  const xs = () => {
+    const raw = JSON.parse((app.texts().find((t) => t.startsWith("boxx ")) ?? "boxx {}").slice("boxx ".length)) as Record<string, { x: number; width: number }>;
+    return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k.replace(/^box:/, ""), v.x]));
+  };
   const keysOf = (at: Record<string, number>) =>
     Object.keys(at).filter((k) => /frm1701:txtPg1I2[2-9][AB]/.test(k) || /frm1701:txtPg1I30[AB]/.test(k));
   for (let i = 0; i < 40 && !app.shows("id:fp-frm1701:txtPg1I28A"); i++) await app.scroll("id:form-scroll", 800);
@@ -116,4 +119,60 @@ test("joint 1701: the penalty rows' boxes keep the columns of the rows above", a
     const above = opened[`frm1701:txtPg1I25${col}`];
     expect(Math.abs((penalty ?? 0) - (above ?? 0))).toBeLessThan(0.5);
   }
+});
+
+// P1: the mark of an untyped computed penalty box sits inside the box's trailing slot, so it can never
+// cover a digit of the computed amount it explains: with a nonzero computed interest on the row, the
+// input reads the whole amount and the mark's frame starts at or after the input frame's end (the box's
+// flex row gives the mark its own room, as the shut box's lock has).
+test("the penalty mark never covers the computed amount", async () => {
+  const app = await open("./FormPageAny.tsx", {
+    width: 1440, height: 900, platform: "macos", clock: {},
+    host: {
+      params: {
+        formCode: "1701", year: 2025, period: 0, openParts: "all",
+        setup: [
+          { pick: "frm1701:rdoPg1I16CivilStatusM" },
+          { pick: "frm1701:rdoPg1I17SpouseIncomeYes" },
+          { pick: "frm1701:rdoPg1I18FilingStatusJ" },
+          { pick: "frm1701:rdoPg1I6TaxpayerTypeS" },
+          { pick: "frm1701:rdoPg1I7ATC_II012" },
+          { pick: "frm1701:rdoPg1I21AMethodDeductionO" },
+          { edits: { "frm1701:txtPg2IShed3_8A": "1250000.50" } },
+        ],
+      },
+    },
+  });
+  await app.waitFor("text:BIR Form 1701");
+  const frames = () =>
+    JSON.parse((app.texts().find((t) => t.startsWith("boxx ")) ?? "boxx {}").slice("boxx ".length)) as Record<string, { x: number; width: number }>;
+  for (let i = 0; i < 40 && !app.shows("id:fp-frm1701:txtPg1I28A"); i++) await app.scroll("id:form-scroll", 800);
+  expect(app.count("id:fp-frm1701:txtPg1I28A")).toBe(1);
+  await app.press("id:fp-penalty-2:6");
+  for (let i = 0; i < 40 && app.count("id:fp-mark-info-frm1701:txtPg1I28A") !== 1; i++) await app.wait(250);
+  expect(app.count("id:fp-mark-info-frm1701:txtPg1I28A")).toBe(1);
+  // The computed interest is nonzero (the return is months late on a nonzero tax due) and reads whole.
+  let value = "";
+  for (let i = 0; i < 40; i++) {
+    value = app.value("id:fp-frm1701:txtPg1I27A") ?? "";
+    if (value && value !== "0.00" && value !== "0") break;
+    await app.wait(250);
+  }
+  expect(value).not.toBe("");
+  expect(value).not.toBe("0.00");
+  // The frames: the mark inside the box's room, never overlapping the input's frame.
+  let at = frames();
+  for (let i = 0; i < 40 && (!at["input:fp-frm1701:txtPg1I27A"] || !at["mark:frm1701:txtPg1I27A"]); i++) {
+    await app.wait(250);
+    at = frames();
+  }
+  const input = at["input:fp-frm1701:txtPg1I27A"];
+  const mark = at["mark:frm1701:txtPg1I27A"];
+  expect(input).not.toBeUndefined();
+  expect(mark).not.toBeUndefined();
+  expect(input.x + input.width).toBeLessThanOrEqual(mark.x + 0.5);
+  // The same holds of Item 28's box.
+  const input28 = at["input:fp-frm1701:txtPg1I28A"];
+  const mark28 = at["mark:frm1701:txtPg1I28A"];
+  if (input28 && mark28) expect(input28.x + input28.width).toBeLessThanOrEqual(mark28.x + 0.5);
 });

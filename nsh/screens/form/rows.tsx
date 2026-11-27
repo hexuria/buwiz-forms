@@ -3,7 +3,7 @@
 // signal and its boxes' signals only, so an edit re-runs the rows it changed and nothing else.
 import type { Accessor, JSX, Signal, ViewRef } from "nsh";
 import { effect, signal, untracked, View } from "nsh";
-import { reportBoxX } from "./layoutProbe";
+import { probing, registerMeasure, reportBoxFrame } from "./layoutProbe";
 import { AppButton, CalendarButton, Chip, Code, DateField, DateTouchField, Dropdown, Icon, type IconName, ListRow, Segmented, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
@@ -397,7 +397,7 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
         const sub = multi && f.l && f.l !== it.l && !/^\d+[A-Z]?$/.test(f.l);
         return (
           <If when={!hid().includes(f.k)}>
-            <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }} onLayout={(e) => reportBoxX(f.k, e.bounds.origin.x)}>
+            <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }} onLayout={probing() ? (e) => reportBoxFrame(`box:${f.k}`, e.bounds.origin.x, e.bounds.size.width) : undefined}>
               {sub && f.t !== "chk" ? <Text variant="meta" tone="fg2">{f.l}</Text> : null}
               {/* A penalty box of an open group keeps the mark's wrapper whether or not its
                   component was typed, so the mark lifting never remounts the box mid-edit; every
@@ -405,24 +405,27 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
                   only while the box is open and untyped — a shut box's own lock and reason already
                   say the amounts are computed, and the screen reader hears that once — an info
                   sign, never a lock beside a box the filer can type in. */}
-              <If
-                when={s.inPenaltyGroup(f.k) && !s.box(f.k).locked()}
-                else={<FieldControl {...fieldProps(s, f, props.narrow, f.t === "chk" ? f.l || it.l : f.l)} />}
-              >
-                {/* The box draws exactly as it does bare, so a penalty row's columns sit at the same
-                    x as every other row's whether or not a mark shows; the mark overlays the box's
-                    right end, out of the layout, where the shut box's own lock sits — never beside
-                    the box, so it never widens the row. It can never cover a typed digit: it shows
-                    only while the box is untyped (the placeholder is short), and typing lifts it. */}
-                <View testID={`fp-penrow-${f.k}`}>
-                  <FieldControl {...fieldProps(s, f, props.narrow, f.t === "chk" ? f.l || it.l : f.l)} />
-                  {s.penaltyComputed(f.k) ? (
-                    <View class="absolute inset-y-0 right-2.5 justify-center" style={{ pointerEvents: "none" }}>
-                      <Mark icon="info" id={f.k} tip="Computed from other items" />
-                    </View>
-                  ) : null}
-                </View>
-              </If>
+              <FieldControl
+                {...fieldProps(s, f, props.narrow, f.t === "chk" ? f.l || it.l : f.l)}
+                trailing={
+                  /* The mark of an untyped computed penalty box sits INSIDE the box's trailing slot,
+                     where the shut box's own lock sits: the input's flex row gives it room, so it can
+                     never cover a digit of the very amount it explains, the box itself never moves
+                     (a penalty row's columns sit at the same x as every other row's whether or not a
+                     mark shows), and the tooltip stays reachable — hover reads "Computed from other
+                     items", as the accessibility label does once. It lifts when the filer types. */
+                  s.inPenaltyGroup(f.k) ? (
+                    <If when={s.penaltyComputed(f.k)}>
+                      <View
+                        testID={`fp-penrow-${f.k}`}
+                        ref={probing() ? (r: ViewRef | null) => { if (r) registerMeasure(`mark:${f.k}`, () => r.measure()); } : undefined}
+                      >
+                        <Mark icon="info" id={f.k} tip="Computed from other items" />
+                      </View>
+                    </If>
+                  ) : undefined
+                }
+              />
             </View>
           </If>
         );
