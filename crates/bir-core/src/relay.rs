@@ -152,6 +152,15 @@ pub fn install_device_key_gate() {
 }
 
 /// The client for the configured Buwiz server, made once per server.
+/// Drop the cached submitter — the tests' reset, since the slot is process-wide and a test
+/// proving no construction needs a clean start.
+#[cfg(any(test, feature = "test-support"))]
+pub fn reset_submitter_for_test() {
+    if let Ok(mut slot) = SUBMITTER.lock() {
+        *slot = None;
+    }
+}
+
 /// The already-constructed submitter for the configured server, if one exists — a PEEK that
 /// never constructs (N3): under SESSION a construction would read the install id, the platform
 /// store and the DEVICE_KEY gate, so the owner-ending close invalidates only what exists.

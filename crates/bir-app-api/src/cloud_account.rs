@@ -1397,6 +1397,7 @@ mod tests {
         fn n3_a_sign_out_with_no_submitter_built_constructs_none() {
             let _turn = crate::open_room::room_test_turn();
             signed_in(|_file| {
+                bir_core::relay::reset_submitter_for_test();
                 assert!(
                     bir_core::relay::peek_submitter().is_none(),
                     "a submitter exists before the sign-out — the test is vacuous"
