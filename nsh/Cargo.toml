@@ -28,7 +28,7 @@ tracing = "0.1"
 bir-print = { path = "../crates/bir-print", default-features = false }
 lopdf = "0.34"
 # Agent remote control (feature `agent`, off by default): the gpui-agent protocol at the one version bir-app-api and bir-mcp use.
-gpui-agent = { version = "=0.4.0", optional = true }
+gpui-agent = { version = "=0.4.1", optional = true }
 
 # The build script reads nsh.json window.title into APP_WINDOW_TITLE (src/os_login.rs, PLAN W4).
 [build-dependencies]

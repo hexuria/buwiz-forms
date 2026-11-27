@@ -189,8 +189,9 @@ On a fresh database:
   each `type` or `key`, which moved the caret in a filled box (`try/money-box-agent-input`). This branch moves macOS to
   the strict adapter every other platform uses (`nsh/Cargo.toml`). Until a Mac run proves it, macOS money-box
   failures are labelled `known gap`.
-- **A person's pace** needs gpui-agent-cli 0.4.1 (`key_delay_ms`, hexuria/gpui-agent#118). On 0.4.0 the money boxes
-  run their unpaced fallback, and the report says so.
+- **A person's pace** needs gpui-agent-cli 0.4.1 (`key_delay_ms`, hexuria/gpui-agent#118), which is the version this
+  repository pins and the setup scripts install. A machine still on 0.4.0 runs the money boxes' unpaced fallback, and
+  the report says so.
 - **The software keyboard** needs the app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the rev in
   `nsh/Cargo.toml` moves once it is merged). Until then, phones run the money-box fallback, and a press under the
   keyboard is not refused.

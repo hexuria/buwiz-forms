@@ -213,7 +213,7 @@ install_gpui_agent() {
     fi
     local installed_version=""
     if command -v gpui-agent >/dev/null 2>&1; then
-        # A crates.io install lists as `gpui-agent-cli v0.4.0:`; one from git
+        # A crates.io install lists as `gpui-agent-cli v0.4.1:`; one from git
         # carries its source after the version and never matches.
         installed_version="$(cargo install --list 2>/dev/null | sed -n 's/^gpui-agent-cli v\([0-9][0-9.]*\):$/\1/p' | head -1)"
         if [ "$installed_version" = "$version" ]; then
