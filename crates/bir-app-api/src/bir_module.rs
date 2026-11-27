@@ -5061,10 +5061,7 @@ mod tests {
                 let temp = std::env::temp_dir().canonicalize().unwrap();
                 let logs = bir_core::log_files::log_dir();
                 std::fs::create_dir_all(&logs).unwrap();
-                for dir in [
-                    logs,
-                    bir_core::platform::data_dir(),
-                ] {
+                for dir in [logs, bir_core::platform::data_dir()] {
                     assert!(
                         dir.canonicalize().unwrap().starts_with(&temp),
                         "{} is outside the temp folder",
