@@ -42,14 +42,6 @@
    "required": true
   },
   {
-   "name": "birth-date",
-   "desktop": "birth-date.wants",
-   "phone": "birth-date-phone.json",
-   "known_gap": {
-    "phone": "gap 1: the date is set in a date sheet"
-   }
-  },
-  {
    "name": "navigate",
    "desktop": "../ui/ui-navigate-app.wants",
    "phone": "navigate-phone.wants"
@@ -75,6 +67,12 @@
    }
   },
   {
+   "name": "queue",
+   "file": "queue.wants",
+   "send": true,
+   "precondition": "Queue validates first: a 2551Q holding only Items 15 and 16 may stop at its to-do list instead of the confirm dialog"
+  },
+  {
    "name": "delete-row",
    "file": "delete-row.wants",
    "resolve": {
@@ -88,10 +86,12 @@
    }
   },
   {
-   "name": "queue",
-   "file": "queue.wants",
-   "send": true,
-   "precondition": "Queue validates first: a 2551Q holding only Items 15 and 16 may stop at its to-do list instead of the confirm dialog"
+   "name": "birth-date",
+   "desktop": "birth-date.wants",
+   "phone": "birth-date-phone.json",
+   "known_gap": {
+    "phone": "gap 1: the date is set in a date sheet"
+   }
   },
   {
    "name": "sign-out",
