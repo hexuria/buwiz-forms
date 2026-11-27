@@ -246,6 +246,11 @@ pub(crate) fn reset_for_tests() {
     set_migration(None);
 }
 
+/// One at a time across both test modules: the device-dir override, the slot and the guards are
+/// process-wide, so no two room tests may run in parallel in this process.
+#[cfg(test)]
+static TURNS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -255,8 +260,6 @@ mod tests {
 
     /// The §A.8 host tests share one process-wide slot (the design's one room at a time), so they
     /// take turns.
-    static TURNS: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     fn stored(user: &str) -> StoredAccount {
         StoredAccount {
             server_url: "https://api.buwiz.test".into(),
@@ -475,8 +478,6 @@ mod tests {
 mod a3a_tests {
     use super::*;
     use bir_core::db::Database;
-
-    static TURNS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn turn() -> std::sync::MutexGuard<'static, ()> {
         TURNS.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -781,5 +782,35 @@ mod a3a_tests {
             guard.get_setting("a3a.marker").unwrap()
         };
         assert_eq!(seen.as_deref(), None, "B's screen reads room A's rows");
+    }
+
+    /// #423's review, A3a item 1: the one-copy guard is device-wide now, and an older build — which
+    /// only knows the database file's owner lock — still finds the new one, because the new build
+    /// holds the open file's owner lock for as long as its connection lives.
+    #[test]
+    fn older_version_refused_while_the_new_one_runs() {
+        let _turn = turn();
+        let scratch = scratch();
+        let db = Database::open(scratch.layout.legacy_database()).unwrap();
+        db.checkpoint().unwrap();
+        drop(db);
+        let a = stored("user-a");
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        let room = bir_core::rooms::room_id_for(
+            &bir_core::rooms::room_origin(&a.server_url).unwrap(),
+            &a.user_id,
+        );
+        let room_file = scratch.layout.room_database(&room);
+        // The older build's check: the database file's owner lock. Refused while the new one runs.
+        assert!(
+            bir_core::db::raw_take_owner_lock_for_test(&room_file).is_err(),
+            "an older build opened the room file while the new one runs"
+        );
+        // A second new copy's check: the device-wide guard. Refused while this one runs.
+        assert!(
+            bir_core::db::take_device_instance_lock(scratch.layout.device_dir()).is_err(),
+            "a second copy took the device guard while this one runs"
+        );
+        crate::open_room::close_room();
     }
 }

@@ -22,9 +22,42 @@ pub struct OpenRoom {
 static SLOT: Mutex<Option<OpenRoom>> = Mutex::new(None);
 /// Weak handles per room file, so a room whose in-flight sends still hold it reopens on the same
 /// connection. Keyed by the room file's path (the legacy file's path in legacy mode).
+/// The owner lock rides with the connection: the tuple is dropped — and the file's lock released —
+/// when the last strong handle of it is gone (the registry sweep in `open_path` and `close_room`).
+/// While it lives, an older build finds the file locked and refuses, exactly the one-copy rule it
+/// knows (#423's review, item 1).
 static REGISTRY: std::sync::LazyLock<
-    Mutex<std::collections::HashMap<std::path::PathBuf, Weak<Mutex<Database>>>>,
+    Mutex<
+        std::collections::HashMap<
+            std::path::PathBuf,
+            (Weak<Mutex<Database>>, bir_core::db::OwnerLock),
+        >,
+    >,
 > = std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
+
+/// The device-wide one-copy guard this process holds, keyed by the device folder (#423's review,
+/// item 1): the guard moved off the legacy database file — the databases are many in the rooms
+/// world, the app instance is one. Held for the whole run once taken.
+static DEVICE_GUARDS: std::sync::LazyLock<
+    Mutex<std::collections::HashMap<std::path::PathBuf, bir_core::db::OwnerLock>>,
+> = std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
+
+/// Take the device-wide one-copy guard for `device_dir`, or re-answer the one this process already
+/// holds. `Err` while another copy — a new one or an older one running — holds it.
+fn hold_device_guard(device_dir: &std::path::Path) -> Result<(), String> {
+    let key = device_dir
+        .canonicalize()
+        .unwrap_or_else(|_| device_dir.to_path_buf());
+    let mut guards = lock(&DEVICE_GUARDS);
+    if guards.contains_key(&key) {
+        return Ok(());
+    }
+    let guard = bir_core::db::take_device_instance_lock(device_dir).map_err(|error| {
+        format!("another copy of the app has this device's data open: {error}")
+    })?;
+    guards.insert(key, guard);
+    Ok(())
+}
 static NEXT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -69,15 +102,24 @@ fn open_path(
     room_id: Option<RoomId>,
     user_id: String,
 ) -> Result<(Arc<Mutex<Database>>, u64), String> {
+    // The one-copy guard (item 1): device-wide for the run, and the file's owner lock for as long
+    // as its connection lives. The device folder is the room file's great-grandparent — or the
+    // legacy file's parent in legacy mode.
+    let device_dir = bir_core::db::room_device_dir(path)
+        .or_else(|| path.parent().map(std::path::Path::to_path_buf))
+        .ok_or_else(|| format!("no device folder for {}", path.display()))?;
+    hold_device_guard(&device_dir)?;
     let handle = {
         let mut registry = lock(&REGISTRY);
-        registry.retain(|_, weak| weak.strong_count() > 0);
-        match registry.get(path).and_then(Weak::upgrade) {
+        registry.retain(|_, (weak, _)| weak.strong_count() > 0);
+        match registry.get(path).and_then(|(weak, _)| Weak::upgrade(weak)) {
             Some(live) => live,
             None => {
+                let owner_lock =
+                    bir_core::db::hold_owner_lock(path).map_err(|error| error.to_string())?;
                 let database = Database::open(path).map_err(|error| error.to_string())?;
                 let handle = Arc::new(Mutex::new(database));
-                registry.insert(path.to_path_buf(), Arc::downgrade(&handle));
+                registry.insert(path.to_path_buf(), (Arc::downgrade(&handle), owner_lock));
                 handle
             }
         }
@@ -134,6 +176,9 @@ pub fn current_generation() -> Option<u64> {
 /// before they finish. The room's file and its PIN stay.
 pub fn close_room() {
     lock(&SLOT).take();
+    // A dead connection's entry goes now, not at the next open: its file's owner lock releases when
+    // the last strong handle is gone, so a sign-out frees the file for whatever comes next.
+    lock(&REGISTRY).retain(|_, (weak, _)| weak.strong_count() > 0);
 }
 
 #[cfg(test)]

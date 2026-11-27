@@ -721,7 +721,7 @@ pub fn open_room_id() -> Option<crate::rooms::RoomId> {
 
 /// The device folder `path` is a room of — `<device>/rooms/<id>/bir_data.db` — or `None` for the
 /// legacy file, a single-room file, and everything else. The R1 guards key on this.
-pub(crate) fn room_device_dir(path: &Path) -> Option<PathBuf> {
+pub fn room_device_dir(path: &Path) -> Option<PathBuf> {
     if path.file_name()? != "bir_data.db" {
         return None;
     }
@@ -855,6 +855,28 @@ pub fn hold_owner_lock(db_path: &Path) -> Result<OwnerLock, DbError> {
     Ok(OwnerLock { _file: file })
 }
 
+/// The device-wide one-copy guard (#423's review, A3a item 1): one lock file for the whole device
+/// folder, `<device>/device.instance.lock`, taken with the same non-blocking exclusive lock as the
+/// per-database owner locks. The one-copy rule is device-wide in the rooms world — the databases are
+/// many, the app instance is one — so the guard moved off the legacy database file. An older build
+/// still finds the new one because the new build also holds the legacy file's owner lock for the whole
+/// run ([`hold_owner_lock`] in legacy mode); the new build finds an older one through that same lock.
+pub fn device_instance_lock_path(device_dir: &Path) -> PathBuf {
+    device_dir.join("device.instance.lock")
+}
+
+/// Take the device-wide one-copy guard; `Err(DbError::LiveDatabaseInUse)` while another copy holds it.
+/// The returned lock keeps the guard for as long as it is alive — for the whole run, once taken.
+pub fn take_device_instance_lock(device_dir: &Path) -> Result<OwnerLock, DbError> {
+    let lock_path = device_instance_lock_path(device_dir);
+    if let Some(parent) = lock_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    Ok(OwnerLock {
+        _file: std::sync::Arc::new(take_owner_lock_file(&lock_path, device_dir)?),
+    })
+}
+
 /// Exclusive non-blocking lock so painted `bir` and `bir-headless` cannot
 /// both own the live file. There is no protocol `Op::Yield`.
 ///
@@ -874,6 +896,19 @@ pub fn try_acquire_live_owner_lock(db_path: &Path) -> Result<OwnerLock, DbError>
         if let Some(lock) = held_owner_lock(&held, &held_key(&lock_path)) {
             return Ok(lock);
         }
+    }
+    Ok(OwnerLock {
+        _file: std::sync::Arc::new(take_owner_lock_file(&lock_path, db_path)?),
+    })
+}
+
+/// A take of the owner lock that skips this process's held registry, as another process's take
+/// would: tests of one process play both the running copy and the copy that finds it.
+#[cfg(any(test, feature = "test-support"))]
+pub fn raw_take_owner_lock_for_test(db_path: &Path) -> Result<OwnerLock, DbError> {
+    let lock_path = live_owner_lock_path(db_path);
+    if let Some(parent) = lock_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
     }
     Ok(OwnerLock {
         _file: std::sync::Arc::new(take_owner_lock_file(&lock_path, db_path)?),
