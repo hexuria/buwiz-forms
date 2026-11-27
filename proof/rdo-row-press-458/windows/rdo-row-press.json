@@ -1,0 +1,51 @@
+{
+ "v": 1,
+ "description": "Desktop: SearchPick under a person's clicks, through gpui-agent's press (on Windows the real pointer path: agent.rs click -> synth::pointer -> input::pointer -> focus_pointer). New taxpayer form: five row presses after typing \"makati\" (the #425 Windows fault: 0/5 at c4262697), three chevron rounds, three presses away. Then the profile's RDO and ZIP: the same rounds and an error-line round (text that fits nothing, then Save below, on the first click). Run with `just e2e windows rdo-row-press` (or macos, linux); see docs/proof/E2E.md.",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E SMOKE TAXPAYER",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "rdo-row-press",
+   "desktop": "rdo-row-press.wants",
+   "needs_cli": "0.4.1",
+   "fallback": "rdo-row-press-unpaced.wants",
+   "known_gap": {
+    "phone": "desktop only: on a phone the list is a sheet (gap 1, hexuria/nsh-gpui-agent#13)"
+   }
+  },
+  {
+   "name": "sign-up",
+   "desktop": "sign-up.wants",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "required": true
+  },
+  {
+   "name": "profile-pick-press",
+   "desktop": "profile-pick-press.wants",
+   "needs_cli": "0.4.1",
+   "fallback": "profile-pick-press-unpaced.wants",
+   "known_gap": {
+    "phone": "desktop only: on a phone the profile's pickers are sheets (gap 1, hexuria/nsh-gpui-agent#13)"
+   }
+  }
+ ]
+}

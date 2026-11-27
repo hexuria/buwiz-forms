@@ -1,0 +1,9 @@
+2026-11-27T13:15:21.786Z	wait	window plane	ready	2032ms
+2026-11-27T13:15:21.836Z	wait	data plane	ready	49ms
+2026-11-27T13:15:21.873Z	app.info	database	test	36ms
+2026-11-27T13:15:22.573Z	recipe	setup-start	pass	699ms
+2026-11-27T13:15:26.754Z	recipe	rdo-row-press	fail at s7: node `new-tp-rdo_code-search` value: expected "047 — East Makati", got Some("")	3963ms
+2026-11-27T13:15:26.792Z	resolve	$tin_field	n11	38ms
+2026-11-27T13:15:33.262Z	recipe	sign-up	pass	6508ms
+2026-11-27T13:15:39.728Z	recipe	profile-pick-press	fail at s13: node `tp-branch-rdo_code-search` value: expected "047 — East Makati", got Some("040 — Cubao")	6184ms
+e2e rdo-row-press on windows: 2 fail, 2 pass. Report: C:\Users\Administrator\repos\rdo-row-press-458\evidence\before-2\report.md

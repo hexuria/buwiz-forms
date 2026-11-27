@@ -1,0 +1,9 @@
+2026-11-27T13:16:29.730Z	wait	window plane	ready	20ms
+2026-11-27T13:16:29.763Z	wait	data plane	ready	33ms
+2026-11-27T13:16:29.812Z	app.info	database	test	48ms
+2026-11-27T13:16:30.492Z	recipe	setup-start	pass	680ms
+2026-11-27T13:17:07.409Z	recipe	rdo-row-press	pass	36917ms
+2026-11-27T13:17:07.471Z	resolve	$tin_field	n11	61ms
+2026-11-27T13:17:15.916Z	recipe	sign-up	pass	8507ms
+2026-11-27T13:18:05.063Z	recipe	profile-pick-press	fail at s89: wait_until timed out: node `tp-branch-rdo_code-list` not found	48873ms
+e2e rdo-row-press on windows: 1 fail, 3 pass. Report: C:\Users\Administrator\repos\rdo-row-press-458\evidence\after-1\report.md

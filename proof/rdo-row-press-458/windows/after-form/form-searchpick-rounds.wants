@@ -1,0 +1,6 @@
+# known_gap: not a runnable recipe.
+# open-2551q-windows failed at s2 (`wait_until new-return-2551Q --timeout-ms 5000`):
+# node `new-return-2551Q` not found, so the 2551Q form page was never reached.
+# The analyzer count is 1, but the only id is `tp-branch-rdo_code`, which is in the taxpayer profile page
+# (`tp-page-profile`), not a form SearchPick. No form SearchPick row ids/values could be observed.
+# Per instructions, no OS input was used to force navigation or infer the missing form control.

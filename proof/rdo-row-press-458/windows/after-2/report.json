@@ -1,0 +1,61 @@
+{
+ "suite": "rdo-row-press",
+ "target": "windows",
+ "started": "20261127-132247",
+ "out": "C:\\Users\\Administrator\\repos\\rdo-row-press-458\\evidence\\after-2",
+ "cli_version": "0.4.1",
+ "app_commit": "4fa8ac8b",
+ "platform": "desktop",
+ "os": "windows",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 722,
+   "note": null,
+   "file": "agent-recipes\\e2e\\setup-start.wants"
+  },
+  {
+   "name": "rdo-row-press",
+   "status": "pass",
+   "ms": 37018,
+   "note": null,
+   "file": "agent-recipes\\e2e\\rdo-row-press.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 8723,
+   "note": null,
+   "file": "agent-recipes\\e2e\\sign-up.wants"
+  },
+  {
+   "name": "profile-pick-press",
+   "status": "fail",
+   "ms": 49229,
+   "note": null,
+   "file": "agent-recipes\\e2e\\profile-pick-press.wants",
+   "step": "s89",
+   "error": "wait_until timed out: node `tp-branch-rdo_code-list` not found",
+   "error_code": "timeout",
+   "line": "wait_until tp-branch-rdo_code-list --timeout-ms 3000",
+   "screenshot": "C:\\Users\\Administrator\\repos\\rdo-row-press-458\\evidence\\after-2\\04-profile-pick-press\\failure.png",
+   "tree": "C:\\Users\\Administrator\\repos\\rdo-row-press-458\\evidence\\after-2\\04-profile-pick-press\\failure-tree.json"
+  }
+ ]
+}

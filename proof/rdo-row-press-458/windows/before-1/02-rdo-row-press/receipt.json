@@ -1,0 +1,61 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "rdo-row-press",
+  "fingerprint": "fnv1a64:4809f7b3d13ef3a3",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 424
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 504
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2379
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 31
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 528,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458\\evidence\\before-1\\02-rdo-row-press\\005-s5.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 25
+    },
+    {
+      "id": "s7",
+      "ok": false,
+      "error": "node `new-tp-rdo_code-search` value: expected \"047 — East Makati\", got Some(\"\")",
+      "error_code": "assert_failed",
+      "elapsed_ms": 21
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458\\evidence\\before-1\\02-rdo-row-press\\005-s5.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 3915
+}
