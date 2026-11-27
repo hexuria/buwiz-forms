@@ -141,6 +141,67 @@ test("Delete row drops a refused entry and moves later row state up: 1601EQ", as
   s.dispose();
 });
 
+test("Delete row rekeys overlapping row state in two passes", async () => {
+  const income = (n: number) => "txtIncomePayment3" + n;
+  const total = (n: number) => "txtTotalTaxWithHeld3" + n;
+  let s: FormSession | undefined;
+  try {
+    s = await opened(at("2550Q", 2024, 4));
+    const prepare = (n: number, agent: string) => {
+      s!.edit("txtDateCovered3" + n, "01/01/2024");
+      s!.edit("txtDateCovered3To" + n, "03/31/2024");
+      s!.edit("txtNameWithHoldingAgent3" + n, agent);
+    };
+    prepare(0, "Agent Zero");
+    prepare(1, "Agent One");
+    prepare(2, "Agent Two");
+    await s.idle();
+
+    // Row 2 is refused first, then row 1. That insertion order is the collision:
+    // row 2 moves into row 1's keys before row 1 moves into row 0's.
+    s.edit(income(2), "bad-two");
+    s.edit(total(2), "bad-total-two");
+    s.flush();
+    await s.idle();
+    s.edit(income(1), "bad-one");
+    s.edit(total(1), "bad-total-one");
+    s.flush();
+    await s.idle();
+    const inner = s as unknown as {
+      st: { rejected: Record<string, string>; unfixable: Set<string> };
+      amountEdited: Set<string>;
+    };
+    const incomeTwo = inner.st.rejected[income(2)];
+    const incomeOne = inner.st.rejected[income(1)];
+    expect(incomeTwo).toBeTruthy();
+    expect(incomeOne).toBeTruthy();
+    // Same ordering in the unfixable set: these stand for shut/locked refusals,
+    // row 2 first and row 1 second. The rekeying under test is the set's own.
+    inner.st.unfixable.add(total(2));
+    inner.st.unfixable.add(total(1));
+
+    s.deleteRow(sched3(0));
+
+    expect(inner.st.rejected[income(1)]).toBe(incomeTwo);
+    expect(inner.st.rejected[income(0)]).toBe(incomeOne);
+    expect(inner.st.rejected[income(2)]).toBeUndefined();
+    expect(s.boxMessageOf(income(1))).toBeTruthy();
+    expect(s.boxMessageOf(income(0))).toBeTruthy();
+    expect(inner.st.unfixable.has(total(1))).toBe(true);
+    expect(inner.st.unfixable.has(total(0))).toBe(true);
+    expect(inner.st.unfixable.has(total(2))).toBe(false);
+    expect(inner.amountEdited.has(income(1))).toBe(true);
+    expect(inner.amountEdited.has(income(0))).toBe(true);
+    expect(inner.amountEdited.has(income(2))).toBe(false);
+    expect(inner.amountEdited.has(total(1))).toBe(true);
+    expect(inner.amountEdited.has(total(0))).toBe(true);
+    expect(inner.amountEdited.has(total(2))).toBe(false);
+    await s.idle();
+  } finally {
+    s?.dispose();
+  }
+});
+
 test("F3-2: a removal's Undo is never outlived by a save: autosave waits out the Undo, then saves and retires it; later saves go through", async () => {
   const h = hooks();
   const s = await opened(at("1601EQ", 2025, 2), h);

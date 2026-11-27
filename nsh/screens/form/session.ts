@@ -2200,10 +2200,8 @@ export class FormSession {
         if (next === false) delete record[key];
         else if (typeof next === "string") moves.push([key, next, value]);
       }
-      for (const [from, to, value] of moves) {
-        delete record[from];
-        record[to] = value;
-      }
+      for (const [from] of moves) delete record[from];
+      for (const [, to, value] of moves) record[to] = value;
     };
     const shiftSet = (set: Set<string>) => {
       const moves: [string, string][] = [];
@@ -2212,10 +2210,8 @@ export class FormSession {
         if (next === false) set.delete(key);
         else if (typeof next === "string") moves.push([key, next]);
       }
-      for (const [from, to] of moves) {
-        set.delete(from);
-        set.add(to);
-      }
+      for (const [from] of moves) set.delete(from);
+      for (const [, to] of moves) set.add(to);
     };
     const s = this.st;
     shiftRecord(s.rejected);
@@ -2232,7 +2228,7 @@ export class FormSession {
     // A focused amount is stored on the row it was typed for before the rows move. Typing still
     // pending is committed first for the same reason; a refusal or side-effect removal question
     // stops the explicit delete rather than letting it write over a shifted row.
-    if (!this.reopening && this.settleFocused(() => this.deleteRow(rowKeys))) return;
+    if (!this.reopening && this.settleFocused(() => this.deleteRow(rowKeys), "deleteRow")) return;
     if (Object.keys(s.pending).length && !this.reopening) {
       this.flush();
       if (s.removal || Object.keys(s.pending).length) return;
