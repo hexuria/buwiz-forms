@@ -160,7 +160,7 @@ RANLIB="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib"
 # The Android app reads test settings baked in at build time, not from the
 # environment it runs in (nsh/src/dev_env.rs).
 android=(); case " $* " in *android*) android=(-e CARGO_PROFILE_DEV_DEBUG=0
-  -e "BUWIZ_ANDROID_DEV_ENV=EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1");; esac
+  -e "BUWIZ_ANDROID_DEV_ENV=${BUWIZ_ANDROID_DEV_ENV:-EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1}");; esac
 uid="$(id -u)"
 # A host git config that rewrites GitHub URLs or names a credential helper (a Devin machine's git proxy) does not
 # authenticate inside the container, and Cargo's first git fetch fails there. Then the container fetches with the git
@@ -186,6 +186,8 @@ exec docker run --rm -i "${tty[@]}" "${android[@]}" "${git_env[@]}" --network ho
   -e DISPLAY="$display" -e XDG_RUNTIME_DIR="/run/user/$uid" \
   -e DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
   -e BUWIZ_NO_KEYCHAIN=1 -e EBIR_TEST_ENV=1 -e BIR_AUTH_BYPASS=1 -e BIR_SFTP_DRY_RUN=1 \
+  -e GPUI_AGENT -e GPUI_AGENT_ADDR -e GPUI_AGENT_TOKEN -e BIR_DATABASE_PATH -e BUWIZ_ANDROID_DEV \
+  -e BUWIZ_SERVER_URL -e BUWIZ_ACCOUNT_URL -e BUWIZ_TRUST_KEYS \
   "${mounts[@]}" \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v "/run/user/$uid:/run/user/$uid" \
