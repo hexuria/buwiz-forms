@@ -97,6 +97,7 @@ fn try_fill_by_name_set(
     captions: &BTreeMap<String, String>,
     plan: &BTreeMap<String, CellFill>,
     sheet: &SheetType,
+    forced: &BTreeSet<String>,
 ) -> Result<String, String> {
     let tags = input_tags(html);
     if tags.is_empty() {
@@ -130,7 +131,7 @@ fn try_fill_by_name_set(
                 caption: captions.get(input_name).map(String::as_str),
                 sheet,
             };
-            fill_text_input(html, &tags, indices, &target, &mut replacements);
+            fill_text_input(html, &tags, indices, &target, &mut replacements, forced);
         }
     }
     // An overflowing stacked item: re-split over its boxes, or, past them,
@@ -150,7 +151,7 @@ fn try_fill_by_name_set(
                     caption: captions.get(cell).map(String::as_str),
                     sheet,
                 };
-                fill_text_input(html, &tags, indices, &target, &mut replacements);
+                fill_text_input(html, &tags, indices, &target, &mut replacements, forced);
             }
             CellFill::Plain(text, size) => {
                 for &index in indices {
@@ -181,7 +182,7 @@ fn fill_by_name_set(
     plan: &BTreeMap<String, CellFill>,
     sheet: &SheetType,
 ) -> String {
-    try_fill_by_name_set(html, fields, cells, captions, plan, sheet)
+    try_fill_by_name_set(html, fields, cells, captions, plan, sheet, &BTreeSet::new())
         .expect("test/internal print replacements overlap")
 }
 
@@ -2851,6 +2852,7 @@ fn fill_text_input(
     indices: &[usize],
     target: &TextTarget<'_>,
     replacements: &mut Vec<(usize, usize, String)>,
+    forced: &BTreeSet<String>,
 ) {
     let TextTarget {
         name,
@@ -2868,6 +2870,24 @@ fn fill_text_input(
     let comb = indices.iter().any(|&index| tags[index].slot.is_some());
     if comb {
         let ordered = ordered_comb_indices(tags, indices);
+        // Uniform sections (#477): a comb of a group another amount of
+        // overflowed prints as a line even when its own amount fits, so the
+        // column stays uniform.
+        if forced.contains(input_name) && is_amount_comb_value(print) && !print.is_empty() {
+            let formatted = format_comb_amount_for_rect(print, sheet.negative);
+            let writer = via_cell.then_some(print);
+            amount_rect(
+                html,
+                tags,
+                &ordered,
+                (input_name, None),
+                &formatted,
+                writer,
+                sheet,
+                replacements,
+            );
+            return;
+        }
         // Attachment counts occupy the sheet's existing digit boxes.
         // Pad the displayed count only; the upload value stays as written.
         if is_attachment_count_key(name)
@@ -4599,7 +4619,13 @@ fn fill_money_joins(
     fields: &BTreeMap<String, String>,
     money_joins: &[MoneyJoin],
 ) -> String {
-    fill_money_joins_with_sheet(html, fields, money_joins, &SheetType::plain())
+    fill_money_joins_with_sheet(
+        html,
+        fields,
+        money_joins,
+        &SheetType::plain(),
+        &BTreeSet::new(),
+    )
 }
 
 fn fill_money_joins_with_sheet(
@@ -4607,6 +4633,7 @@ fn fill_money_joins_with_sheet(
     fields: &BTreeMap<String, String>,
     money_joins: &[MoneyJoin],
     sheet: &SheetType,
+    forced: &BTreeSet<String>,
 ) -> String {
     if money_joins.is_empty() {
         return html.to_string();
@@ -4683,7 +4710,8 @@ fn fill_money_joins_with_sheet(
             if let (Some((peso, cents)), Some(cent_ordered)) = (&boxes, &cent_ordered) {
                 let peso_values = (cent_ordered.len() == 2)
                     .then(|| right_aligned_slot_values(peso_ordered.len(), peso))
-                    .flatten();
+                    .flatten()
+                    .filter(|_| !forced.contains(&cells.peso_html_id));
                 if let Some(peso_values) = peso_values {
                     for (offset, &index) in peso_ordered.iter().enumerate() {
                         let writer = (offset == 0).then_some(value.as_str());
@@ -4764,7 +4792,13 @@ fn fill_peso_joins(
     fields: &BTreeMap<String, String>,
     peso_joins: &[PesoJoin],
 ) -> String {
-    fill_peso_joins_with_sheet(html, fields, peso_joins, &SheetType::plain())
+    fill_peso_joins_with_sheet(
+        html,
+        fields,
+        peso_joins,
+        &SheetType::plain(),
+        &BTreeSet::new(),
+    )
 }
 
 fn fill_peso_joins_with_sheet(
@@ -4772,6 +4806,7 @@ fn fill_peso_joins_with_sheet(
     fields: &BTreeMap<String, String>,
     peso_joins: &[PesoJoin],
     sheet: &SheetType,
+    forced: &BTreeSet<String>,
 ) -> String {
     if peso_joins.is_empty() {
         return html.to_string();
@@ -4794,7 +4829,9 @@ fn fill_peso_joins_with_sheet(
             let ordered = ordered_comb_indices(&tags, indices);
             let text = match &print {
                 PesoPrint::Boxes(pesos) => {
-                    if let Some(values) = right_aligned_slot_values(ordered.len(), pesos) {
+                    let fit = right_aligned_slot_values(ordered.len(), pesos)
+                        .filter(|_| !forced.contains(html_id.as_str()));
+                    if let Some(values) = fit {
                         for (offset, index) in ordered.into_iter().enumerate() {
                             let writer = (offset == 0).then_some(value.as_str());
                             replacements.push((
@@ -5335,22 +5372,37 @@ pub(crate) fn fill_continuation_fragment(
     let sheet = bundle(slug).map_or_else(SheetType::plain, |loaded| {
         SheetType::of_sheet(slug, loaded.css)
     });
-    let plan = line_group_plan(&filled, fields, &cells, &sheet);
-    let filled = try_fill_by_name_set(
-        &filled,
-        fields,
-        &cells.joins,
-        &cells.captions,
-        &plan,
-        &sheet,
-    )?;
-    let filled = fill_money_joins_with_sheet(&filled, fields, &cells.money_joins, &sheet);
-    let filled = fill_peso_joins_with_sheet(&filled, fields, &cells.peso_joins, &sheet);
-    let filled = fill_date_joins(&filled, fields, &cells.date_joins);
-    let filled =
-        split_single_character_cells(slug, &fill_xbox_joins(&filled, fields, &cells.xbox_joins));
-    let filled = fill_preprinted_branch_combs(&filled, fields, &cells.joins);
-    Ok(strip_converted_rect_separators(&filled))
+    let base = filled;
+    let plan = line_group_plan(&base, fields, &cells, &sheet);
+    // Uniform amount sections (#477): fill once, then widen any per-cell
+    // conversion to its whole (section, column) group and fill again.
+    let fill_pass = |forced: &BTreeSet<String>| -> Result<String, String> {
+        let filled = try_fill_by_name_set(
+            &base,
+            fields,
+            &cells.joins,
+            &cells.captions,
+            &plan,
+            &sheet,
+            forced,
+        )?;
+        let filled =
+            fill_money_joins_with_sheet(&filled, fields, &cells.money_joins, &sheet, forced);
+        let filled = fill_peso_joins_with_sheet(&filled, fields, &cells.peso_joins, &sheet, forced);
+        let filled = fill_date_joins(&filled, fields, &cells.date_joins);
+        let filled = split_single_character_cells(
+            slug,
+            &fill_xbox_joins(&filled, fields, &cells.xbox_joins),
+        );
+        let filled = fill_preprinted_branch_combs(&filled, fields, &cells.joins);
+        Ok(strip_converted_rect_separators(&filled))
+    };
+    let first = fill_pass(&BTreeSet::new())?;
+    let forced = uniform_amount_forced_cells(html, &converted_amount_cells(&first));
+    if forced.is_empty() {
+        return Ok(first);
+    }
+    fill_pass(&forced)
 }
 
 /// Promote any empty `<div id="{html_id}" ...></div>` cell explicitly joined in
@@ -5407,27 +5459,41 @@ fn fill_bundle(
     let donor_fields = with_donor_estate_values(slug, fields);
     let resolved_fields = resolve_overlapping_input_writes(slug, html, &donor_fields, &cells)?;
     let fields = &resolved_fields;
-    let filled = fill_donor_estate_dates(html, fields, slug);
+    let base = fill_donor_estate_dates(html, fields, slug);
     let sheet = bundle(slug).map_or_else(SheetType::plain, |loaded| {
         SheetType::of_sheet(slug, loaded.css)
     });
-    let plan = line_group_plan(&filled, fields, &cells, &sheet);
-    let filled = try_fill_by_name_set(
-        &filled,
-        fields,
-        &cells.joins,
-        &cells.captions,
-        &plan,
-        &sheet,
-    )?;
-    let filled = fill_money_joins_with_sheet(&filled, fields, &cells.money_joins, &sheet);
-    let filled = fill_peso_joins_with_sheet(&filled, fields, &cells.peso_joins, &sheet);
-    let filled = fill_date_joins(&filled, fields, &cells.date_joins);
-    let filled =
-        split_single_character_cells(slug, &fill_xbox_joins(&filled, fields, &cells.xbox_joins));
-    let filled = fill_preprinted_branch_combs(&filled, fields, &cells.joins);
-    let filled = strip_converted_rect_separators(&filled);
-    Ok(apply_rule6_specify_bands(&filled, fields, &sheet))
+    let plan = line_group_plan(&base, fields, &cells, &sheet);
+    // Uniform amount sections (#477): fill once, then widen any per-cell
+    // conversion to its whole (section, column) group and fill again.
+    let fill_pass = |forced: &BTreeSet<String>| -> Result<String, String> {
+        let filled = try_fill_by_name_set(
+            &base,
+            fields,
+            &cells.joins,
+            &cells.captions,
+            &plan,
+            &sheet,
+            forced,
+        )?;
+        let filled =
+            fill_money_joins_with_sheet(&filled, fields, &cells.money_joins, &sheet, forced);
+        let filled = fill_peso_joins_with_sheet(&filled, fields, &cells.peso_joins, &sheet, forced);
+        let filled = fill_date_joins(&filled, fields, &cells.date_joins);
+        let filled = split_single_character_cells(
+            slug,
+            &fill_xbox_joins(&filled, fields, &cells.xbox_joins),
+        );
+        let filled = fill_preprinted_branch_combs(&filled, fields, &cells.joins);
+        let filled = strip_converted_rect_separators(&filled);
+        Ok(apply_rule6_specify_bands(&filled, fields, &sheet))
+    };
+    let first = fill_pass(&BTreeSet::new())?;
+    let forced = uniform_amount_forced_cells(html, &converted_amount_cells(&first));
+    if forced.is_empty() {
+        return Ok(first);
+    }
+    fill_pass(&forced)
 }
 
 #[derive(serde::Deserialize)]
@@ -6985,7 +7051,177 @@ pub fn overflow_warnings(document: &str) -> Vec<OverflowWarning> {
     out
 }
 
-/// One read-only input laid over a whole comb cell (`<div id="{cell}">`),
+// ---- Uniform amount sections (issue #477) -------------------------------
+//
+// When one amount in a section's column overflows its comb, every amount of
+// that column prints as a plain right-aligned line, so the column stays
+// uniform. Groups are derived geometrically: comb cells sharing a column
+// (same x within 2 pt), the same capacity and contiguous rows (uniform pitch;
+// a taller gap breaks the group). Spouse columns sit at a different x, so
+// they group independently.
+
+/// One comb cell's geometry, parsed from the frozen sheet.
+#[derive(Clone, Debug)]
+struct CombGeom {
+    id: String,
+    page: String,
+    capacity: u32,
+    x: f64,
+    y: f64,
+}
+
+/// The sheet page a cell id belongs to: `p4c66` is on page `p4`. Ids of
+/// another shape key on their leading letters, so cells of different pages
+/// never share a column.
+fn cell_page_key(id: &str) -> String {
+    let rest = id.strip_prefix('p').unwrap_or(id);
+    let digits: usize = rest.chars().take_while(|ch| ch.is_ascii_digit()).count();
+    if digits > 0 && id.starts_with('p') {
+        return id[..1 + digits].to_string();
+    }
+    id.chars()
+        .take_while(|ch| ch.is_ascii_alphabetic())
+        .collect()
+}
+
+/// Every comb cell of `html` with at least five boxes (amount-sized; cent
+/// combs and short identifiers stay out).
+fn comb_geometries(html: &str) -> Vec<CombGeom> {
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(rel) = html[from..].find("<div") {
+        let open = from + rel;
+        let Some(end) = html[open..].find('>').map(|e| open + e) else {
+            break;
+        };
+        let tag = &html[open..end];
+        from = end + 1;
+        let Some(cap) = attr(tag, "data-comb-capacity").and_then(|v| v.parse::<u32>().ok()) else {
+            continue;
+        };
+        if cap < 5 {
+            continue;
+        }
+        let Some(id) = attr(tag, "id") else {
+            continue;
+        };
+        let Some(x) = parse_style_pt(tag, "left") else {
+            continue;
+        };
+        let Some(y) = parse_style_pt(tag, "top") else {
+            continue;
+        };
+        out.push(CombGeom {
+            id: id.to_string(),
+            page: cell_page_key(id),
+            capacity: cap,
+            x,
+            y,
+        });
+    }
+    out
+}
+
+/// Group amount-sized comb cells into (column, section) runs. Rows belong to
+/// one group when they share a column x (within 2 pt) and capacity, and each
+/// row's pitch from the previous never exceeds 1.7 times the column's
+/// smallest pitch: a taller gap marks a new section.
+pub fn amount_column_groups(html: &str) -> Vec<Vec<String>> {
+    let geoms = comb_geometries(html);
+    let mut columns: Vec<Vec<&CombGeom>> = Vec::new();
+    'cells: for geom in &geoms {
+        for column in &mut columns {
+            let first = column[0];
+            if (first.x - geom.x).abs() <= 2.0
+                && first.capacity == geom.capacity
+                && first.page == geom.page
+            {
+                column.push(geom);
+                continue 'cells;
+            }
+        }
+        columns.push(vec![geom]);
+    }
+    let mut groups = Vec::new();
+    for mut column in columns {
+        column.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal));
+        column.dedup_by(|a, b| a.id == b.id);
+        if column.len() < 2 {
+            if !column.is_empty() {
+                groups.push(column.iter().map(|g| g.id.clone()).collect());
+            }
+            continue;
+        }
+        let mut min_pitch = f64::MAX;
+        for pair in column.windows(2) {
+            let pitch = pair[1].y - pair[0].y;
+            if pitch > 1.0 && pitch < min_pitch {
+                min_pitch = pitch;
+            }
+        }
+        if !min_pitch.is_finite() {
+            min_pitch = 14.0;
+        }
+        let mut current: Vec<String> = vec![column[0].id.clone()];
+        for pair in column.windows(2) {
+            let pitch = pair[1].y - pair[0].y;
+            if pitch > min_pitch * 1.7 {
+                groups.push(std::mem::take(&mut current));
+            }
+            current.push(pair[1].id.clone());
+        }
+        if !current.is_empty() {
+            groups.push(current);
+        }
+    }
+    groups
+}
+
+/// Cells converted to a line by the ordinary per-cell rules: the union rects
+/// carry `data-overflow-of` naming the converted comb.
+fn converted_amount_cells(html: &str) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    let needle = "data-overflow-of=\"";
+    let mut from = 0;
+    while let Some(rel) = html[from..].find(needle) {
+        let start = from + rel + needle.len();
+        let Some(end) = html[start..].find('\"').map(|e| start + e) else {
+            break;
+        };
+        // Only amount conversions widen to the section, not identifier or
+        // date overflow lines.
+        let tag_start = html[..from + rel].rfind("<input").unwrap_or(0);
+        let tag = &html[tag_start..end.min(start + 400).min(html.len())];
+        if tag.contains("amount-comb") || tag.contains("amount-small") {
+            out.insert(html[start..end].to_string());
+        }
+        from = end + 1;
+    }
+    out
+}
+
+/// Widen the per-cell conversions to whole (section, column) groups: the
+/// group mates of every converted cell, minus the cells already converted.
+fn uniform_amount_forced_cells(
+    html: &str,
+    converted: &std::collections::BTreeSet<String>,
+) -> std::collections::BTreeSet<String> {
+    let mut forced = std::collections::BTreeSet::new();
+    if converted.is_empty() {
+        return forced;
+    }
+    for group in amount_column_groups(html) {
+        if group.iter().any(|id| converted.contains(id)) {
+            for id in group {
+                if !converted.contains(&id) {
+                    forced.insert(id);
+                }
+            }
+        }
+    }
+    forced
+}
+
 /// holding `text` left-aligned in a font small enough to fit. Returns the
 /// insert position just inside the cell and the input tag.
 ///
@@ -6993,6 +7229,7 @@ pub fn overflow_warnings(document: &str) -> Vec<OverflowWarning> {
 /// `cell` (not `data-cell-id` or another name ending in `id`), outside any
 /// `<template>` (the band rows a sheet keeps for cloning are never drawn, so
 /// a line put there would print nowhere).
+/// One read-only input laid over a whole comb cell (`<div id="{cell}">`),
 fn cell_tag<'a>(html: &'a str, cell: &str) -> Option<(usize, &'a str)> {
     let needle = format!("id=\"{cell}\"");
     let mut from = 0;
@@ -7322,6 +7559,120 @@ fn is_email_key(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    /// Writes the (section, column) amount groups of every sheet as a
+    /// Markdown table for review: `cargo test -p bir-print uniform_amount_group_table -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "writes the group table report"]
+    fn uniform_amount_group_table() {
+        let slugs = [
+            "0605-1999",
+            "0619e-2018",
+            "0619f-2018",
+            "1600-pt-2018",
+            "1600-vt-2018",
+            "1600wp-2010",
+            "1601-fq-2020",
+            "1601c-2018",
+            "1601eq-2019",
+            "1602q-2019",
+            "1603q-2018",
+            "1604c-2018",
+            "1604e-2018",
+            "1604f-2018",
+            "1606-2018",
+            "1700-2018",
+            "1701-2018",
+            "1701a-2018",
+            "1701ms-2024",
+            "1701q-2018",
+            "1702ex-2018",
+            "1702mx-2018c",
+            "1702q-2018",
+            "1702rt-2018c",
+            "1706-2018",
+            "1707-2021",
+            "1707a-2021",
+            "1800-2018",
+            "1801-2018",
+            "2000-dst-2018",
+            "2000-ot-2018",
+            "2200a-2020",
+            "2200an-2018",
+            "2200c-2018",
+            "2200m-2018",
+            "2200p-2020",
+            "2200s-2018",
+            "2200t-2020",
+            "2550m-2007",
+            "2550q-2024",
+            "2551q-2018",
+            "2552-2018",
+            "2553-1999",
+        ];
+        let mut out = String::new();
+        for slug in slugs {
+            let Some(loaded) = bundle(slug) else {
+                out.push_str(&format!(
+                    "## {slug}
+
+no bundle
+
+"
+                ));
+                continue;
+            };
+            let cells = writer_cells(slug).expect("writer cells");
+            let mut joined: BTreeMap<&str, &str> = BTreeMap::new();
+            for join in &cells.peso_joins {
+                for id in &join.html_ids {
+                    joined.insert(id.as_str(), join.writer_key.as_str());
+                }
+            }
+            for join in &cells.money_joins {
+                for c in &join.cells {
+                    joined.insert(c.peso_html_id.as_str(), join.writer_key.as_str());
+                }
+            }
+            let groups = amount_column_groups(loaded.html);
+            let n_amount = groups
+                .iter()
+                .filter(|g| g.iter().any(|c| joined.contains_key(c.as_str())))
+                .count();
+            out.push_str(&format!(
+                "## {slug}: {} groups, {} with amount joins
+
+",
+                groups.len(),
+                n_amount
+            ));
+            out.push_str(
+                "| rows | cells | amount writer keys |
+|---|---|---|
+",
+            );
+            for group in &groups {
+                let keys: Vec<&str> = group
+                    .iter()
+                    .filter_map(|c| joined.get(c.as_str()).copied())
+                    .collect();
+                let first = keys.first().copied().unwrap_or("");
+                out.push_str(&format!(
+                    "| {} | {}..{} | {} |
+",
+                    group.len(),
+                    group.first().unwrap(),
+                    group.last().unwrap(),
+                    first
+                ));
+            }
+            out.push('\n');
+        }
+        let path =
+            std::env::var("GROUP_TABLE_OUT").unwrap_or_else(|_| "../../group-table.md".to_string());
+        std::fs::write(&path, &out).expect("write group table");
+        eprintln!("wrote {path} ({} bytes)", out.len());
+    }
+
     #[test]
     fn attachment_counts_fill_both_digits_for_one_through_ninety_nine() {
         let html = r#"<input name="frm1601c:txtSheets" data-slot-index="0" value=""><input name="frm1601c:txtSheets" data-slot-index="1" value="">"#;
@@ -10285,10 +10636,16 @@ mod tests {
         // the comb (before, 1,234,567.89 rounded to 1234568).
         assert_eq!(comb_text(&html, "p2c13"), "");
         assert_eq!(printed_cell(&html, "p2c13").0, "1,234,567.89");
-        assert_eq!(comb_text(&html, "p2c48"), "   94448");
-        assert_eq!(comb_text(&html, "p1c74"), "   94448");
-        assert_eq!(comb_text(&html, "p1c89"), "    1000");
-        assert!(!comb_text(&html, "p1c74").contains('.'));
+        // Uniform sections (#477): the centavo-bearing amounts convert their
+        // whole (section, column) groups, so the whole-peso amounts of those
+        // columns print as lines too, comma-formatted like the rest.
+        assert_eq!(comb_text(&html, "p2c48"), "");
+        assert_eq!(printed_cell(&html, "p2c48").0, "94,448");
+        assert_eq!(comb_text(&html, "p1c74"), "");
+        assert_eq!(printed_cell(&html, "p1c74").0, "94,448");
+        assert_eq!(comb_text(&html, "p1c89"), "");
+        assert_eq!(printed_cell(&html, "p1c89").0, "1,000");
+        assert!(!printed_cell(&html, "p1c74").0.contains('.'));
         // Zero and column B (not joint) stay blank.
         assert_eq!(comb_text(&html, "p2c52").trim(), "");
         assert_eq!(comb_text(&html, "p1c75").trim(), "");
@@ -13495,8 +13852,17 @@ mod donor_estate_print_tests {
                 .filter_map(|t| super::attr(t.tag, "value"))
                 .collect()
         };
-        assert_eq!(values_of("p1c57"), "      875000");
-        assert_eq!(values_of("p1c79"), "      739265");
+        // Uniform sections (#477): item 15 overflows the column Part II
+        // shares, so items 14 and 25 print as lines too, comma-formatted.
+        assert_eq!(values_of("p1c57"), "");
+        assert_eq!(values_of("p1c79"), "");
+        assert_eq!(printed_cell(&html, "p1c57").0, "875,000");
+        assert_eq!(printed_cell(&html, "p1c79").0, "739,265");
+        assert!(
+            html.contains("data-overflow-of=\"p1c57\"")
+                && html.contains("data-overflow-of=\"p1c79\""),
+            "1702Q Part II items 14 and 25 must convert with item 15 (#477)"
+        );
         assert!(
             html.contains("data-overflow-of=\"p1c59\"")
                 && html.contains("value=\"1,234,567,890,123\"")
