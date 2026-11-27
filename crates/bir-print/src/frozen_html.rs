@@ -90,17 +90,17 @@ fn fill_by_name_with_cells(
 
 /// [`fill_by_name_with_cells`] with a value longer than its boxes measured
 /// in `sheet`'s type.
-fn fill_by_name_set(
+fn try_fill_by_name_set(
     html: &str,
     fields: &BTreeMap<String, String>,
     cells: &BTreeMap<String, Vec<String>>,
     captions: &BTreeMap<String, String>,
     plan: &BTreeMap<String, CellFill>,
     sheet: &SheetType,
-) -> String {
+) -> Result<String, String> {
     let tags = input_tags(html);
     if tags.is_empty() {
-        return html.to_string();
+        return Ok(html.to_string());
     }
 
     let mut replacements: Vec<(usize, usize, String)> = Vec::new();
@@ -167,7 +167,22 @@ fn fill_by_name_set(
         }
     }
 
-    apply_replacements(html, replacements)
+    apply_replacements_checked(html, replacements)
+}
+
+/// [`fill_by_name_with_cells`] with a value longer than its boxes measured
+/// in `sheet`'s type, for tests and internal callers outside the fallible
+/// document fill. Production document filling calls `try_fill_by_name_set`.
+fn fill_by_name_set(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    cells: &BTreeMap<String, Vec<String>>,
+    captions: &BTreeMap<String, String>,
+    plan: &BTreeMap<String, CellFill>,
+    sheet: &SheetType,
+) -> String {
+    try_fill_by_name_set(html, fields, cells, captions, plan, sheet)
+        .expect("test/internal print replacements overlap")
 }
 
 /// How one stacked-line cell prints when its item's text overflows the
@@ -3306,17 +3321,29 @@ fn amount_rect(
     }
 }
 
-fn apply_replacements(html: &str, mut replacements: Vec<(usize, usize, String)>) -> String {
+fn apply_replacements_checked(
+    html: &str,
+    mut replacements: Vec<(usize, usize, String)>,
+) -> Result<String, String> {
     replacements.sort_by_key(|(start, _, _)| *start);
     let mut out = String::with_capacity(html.len() + replacements.len() * 8);
     let mut last = 0;
     for (start, end, tag) in replacements {
+        if start < last || end < start {
+            return Err(format!(
+                "overlapping print writes: byte range {start}..{end} begins before the previous write ends at {last}"
+            ));
+        }
         out.push_str(&html[last..start]);
         out.push_str(&tag);
         last = end;
     }
     out.push_str(&html[last..]);
-    out
+    Ok(out)
+}
+
+fn apply_replacements(html: &str, replacements: Vec<(usize, usize, String)>) -> String {
+    apply_replacements_checked(html, replacements).expect("print replacements overlap")
 }
 
 pub(crate) fn writer_cells_json(slug: &str) -> Option<&'static str> {
@@ -4934,6 +4961,158 @@ fn with_class(tag: &str, class: &str) -> String {
     format!("{}{}{}", &tag[..start], joined, &tag[start + len..])
 }
 
+/// A raw sheet cell id used as a field key (`p4c213`), as opposed to a
+/// writer key from the form's print map. Writer-cell xbox pseudo ids
+/// (`cell-i2`) are raw cell addressing too.
+fn raw_cell_id_key(key: &str) -> bool {
+    let bytes = key.as_bytes();
+    if bytes.len() < 4 || bytes[0] != b'p' {
+        return false;
+    }
+    let mut at = 1;
+    let digits = |at: &mut usize| {
+        let start = *at;
+        while *at < bytes.len() && bytes[*at].is_ascii_digit() {
+            *at += 1;
+        }
+        *at > start
+    };
+    if !digits(&mut at) || at >= bytes.len() || bytes[at] != b'c' {
+        return false;
+    }
+    at += 1;
+    if !digits(&mut at) {
+        return false;
+    }
+    if at == bytes.len() {
+        return true;
+    }
+    if at + 2 > bytes.len() || bytes[at] != b'-' || bytes[at + 1] != b'i' {
+        return false;
+    }
+    at += 2;
+    digits(&mut at) && at == bytes.len()
+}
+
+fn claim_input_group<'a>(
+    grouped: &BTreeMap<&str, Vec<usize>>,
+    claims: &mut BTreeMap<usize, Vec<(&'a str, bool)>>,
+    key: &'a str,
+    writer: bool,
+    group: &str,
+) {
+    if let Some(indices) = grouped.get(group) {
+        for &index in indices {
+            claims.entry(index).or_default().push((key, writer));
+        }
+    }
+}
+
+/// Resolve field keys whose writes target the same input before any byte
+/// replacement is made. A writer key wins over raw cell-id addressing of
+/// the same input; two writer keys for one input are refused. This is the
+/// print input's conflict boundary: raw ids are diagnostic/ad hoc input,
+/// while writer keys are the form's own print map.
+fn resolve_overlapping_input_writes(
+    slug: &str,
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    cells: &WriterCells,
+) -> Result<BTreeMap<String, String>, String> {
+    let tags = input_tags(html);
+    let grouped = grouped_input_indices(&tags);
+    let mut claims: BTreeMap<usize, Vec<(&str, bool)>> = BTreeMap::new();
+
+    for key in fields.keys() {
+        let key = key.as_str();
+        if raw_cell_id_key(key) {
+            claim_input_group(&grouped, &mut claims, key, false, key);
+            continue;
+        }
+
+        // A writer key that is itself a stamped input name takes the direct
+        // write path, not a writer-cell join path.
+        claim_input_group(&grouped, &mut claims, key, true, key);
+        for (writer, ids) in &cells.joins {
+            if writer == key {
+                for id in ids {
+                    claim_input_group(&grouped, &mut claims, key, true, id);
+                }
+            }
+        }
+        for join in &cells.money_joins {
+            if join.writer_key == key {
+                for pair in &join.cells {
+                    claim_input_group(&grouped, &mut claims, key, true, &pair.peso_html_id);
+                    if let Some(cent) = &pair.cent_html_id {
+                        claim_input_group(&grouped, &mut claims, key, true, cent);
+                    }
+                }
+            }
+        }
+        for join in &cells.peso_joins {
+            if join.writer_key == key {
+                for id in &join.html_ids {
+                    claim_input_group(&grouped, &mut claims, key, true, id);
+                }
+            }
+        }
+        for join in &cells.date_joins {
+            if join.writer_key == key {
+                claim_input_group(&grouped, &mut claims, key, true, &join.mm_html_id);
+                if let Some(dd) = &join.dd_html_id {
+                    claim_input_group(&grouped, &mut claims, key, true, dd);
+                }
+                claim_input_group(&grouped, &mut claims, key, true, &join.yyyy_html_id);
+            }
+        }
+        for join in &cells.xbox_joins {
+            // A radio's Yes and No keys may share one cell without writing
+            // together: only a checked xbox key makes its mark.
+            if join.writer_key != key
+                || !fields
+                    .get(key)
+                    .is_some_and(|value| writer_is_checked(value))
+            {
+                continue;
+            }
+            for id in &join.html_ids {
+                if let Some(index) = xbox_input(&tags, &grouped, id) {
+                    claims.entry(index).or_default().push((key, true));
+                }
+            }
+        }
+    }
+    let mut resolved = fields.clone();
+    for (index, claims) in claims {
+        let writers: BTreeSet<&str> = claims
+            .iter()
+            .filter(|(_, writer)| *writer)
+            .map(|(key, _)| *key)
+            .collect();
+        let raws: BTreeSet<&str> = claims
+            .iter()
+            .filter(|(_, writer)| !*writer)
+            .map(|(key, _)| *key)
+            .collect();
+        if writers.len() > 1 {
+            let mut keys = writers.iter();
+            let first = keys.next().unwrap();
+            let second = keys.next().unwrap();
+            return Err(format!(
+                "{slug}: writer keys {first} and {second} both write input {}",
+                tags[index].name
+            ));
+        }
+        if writers.len() == 1 {
+            for raw in raws {
+                resolved.remove(raw);
+            }
+        }
+    }
+    Ok(resolved)
+}
+
 fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<(), String> {
     if !cells.has_fill_join() && cells.not_joined.is_empty() && cells.not_joined_cells.is_empty() {
         return Ok(());
@@ -5076,20 +5255,22 @@ pub(crate) fn fill_continuation_fragment(
             negative_style,
         });
     }
-    let fields = &with_donor_estate_values(slug, fields);
+    let donor_fields = with_donor_estate_values(slug, fields);
+    let resolved_fields = resolve_overlapping_input_writes(slug, html, &donor_fields, &cells)?;
+    let fields = &resolved_fields;
     let filled = fill_donor_estate_dates(html, fields, slug);
     let sheet = bundle(slug).map_or_else(SheetType::plain, |loaded| {
         SheetType::of_sheet(slug, loaded.css)
     });
     let plan = line_group_plan(&filled, fields, &cells, &sheet);
-    let filled = fill_by_name_set(
+    let filled = try_fill_by_name_set(
         &filled,
         fields,
         &cells.joins,
         &cells.captions,
         &plan,
         &sheet,
-    );
+    )?;
     let filled = fill_money_joins_with_sheet(&filled, fields, &cells.money_joins, &sheet);
     let filled = fill_peso_joins_with_sheet(&filled, fields, &cells.peso_joins, &sheet);
     let filled = fill_date_joins(&filled, fields, &cells.date_joins);
@@ -5150,20 +5331,22 @@ fn fill_bundle(
     let promoted = promote_empty_joined_cells(html, &cells);
     let html = promoted.as_str();
     validate_writer_cells(html, slug, &cells)?;
-    let fields = &with_donor_estate_values(slug, fields);
+    let donor_fields = with_donor_estate_values(slug, fields);
+    let resolved_fields = resolve_overlapping_input_writes(slug, html, &donor_fields, &cells)?;
+    let fields = &resolved_fields;
     let filled = fill_donor_estate_dates(html, fields, slug);
     let sheet = bundle(slug).map_or_else(SheetType::plain, |loaded| {
         SheetType::of_sheet(slug, loaded.css)
     });
     let plan = line_group_plan(&filled, fields, &cells, &sheet);
-    let filled = fill_by_name_set(
+    let filled = try_fill_by_name_set(
         &filled,
         fields,
         &cells.joins,
         &cells.captions,
         &plan,
         &sheet,
-    );
+    )?;
     let filled = fill_money_joins_with_sheet(&filled, fields, &cells.money_joins, &sheet);
     let filled = fill_peso_joins_with_sheet(&filled, fields, &cells.peso_joins, &sheet);
     let filled = fill_date_joins(&filled, fields, &cells.date_joins);
@@ -13131,6 +13314,53 @@ mod donor_estate_print_tests {
                 && html.contains("text-align:right;justify-content:flex-end"),
             "13-digit 1702Q Part II amount must print as right-aligned comma-formatted whole-peso plain rectangle"
         );
+    }
+
+    #[test]
+    fn overlapping_raw_cell_write_loses_to_the_writer_key() {
+        let mut fields = every_join_filled("1701-2018");
+        fields.insert(
+            "frm1701:txtPg4IPart7_9Specify".to_string(),
+            "writer value".to_string(),
+        );
+        fields.insert("p4c213".to_string(), "raw value".to_string());
+        let html = filled_document("1701-2018", &fields).expect("overlapping raw write");
+        assert_eq!(printed_text(&html, "p4c213"), "WRITER VALUE");
+    }
+
+    #[test]
+    fn overlapping_byte_ranges_are_an_error_not_a_panic() {
+        let err = apply_replacements_checked(
+            "abcdef",
+            vec![(1, 4, "one".to_string()), (2, 3, "two".to_string())],
+        )
+        .expect_err("overlapping byte ranges");
+        assert!(err.contains("overlapping print writes"), "{err}");
+        assert!(err.contains("2..3"), "{err}");
+    }
+
+    #[test]
+    fn two_writer_keys_for_one_input_are_refused_naming_keys_and_cell() {
+        let html = r#"<input type="text" id="p1c1-i" name="p1c1">"#;
+        let mut extra_joins = BTreeMap::new();
+        extra_joins.insert("writer.one".to_string(), vec!["p1c1".to_string()]);
+        extra_joins.insert("writer.two".to_string(), vec!["p1c1".to_string()]);
+        let mut fields = BTreeMap::new();
+        fields.insert("writer.one".to_string(), "one".to_string());
+        fields.insert("writer.two".to_string(), "two".to_string());
+        let err = fill_continuation_fragment(
+            html,
+            &fields,
+            "1701-2018",
+            &extra_joins,
+            &[],
+            &[],
+            &BTreeMap::new(),
+        )
+        .expect_err("two writer keys on one input");
+        assert!(err.contains("writer.one"), "{err}");
+        assert!(err.contains("writer.two"), "{err}");
+        assert!(err.contains("p1c1"), "{err}");
     }
 
     #[test]
