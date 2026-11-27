@@ -5,8 +5,8 @@
 //
 // Reads: the two cached lists Home also makes, bir.list_returns("filed") and ("saved"), through the store. Writes: bir.cancel_queued.
 // Under them, "Filed in BIR eBIRForms" (LegacyGroup): what the import brought in from the old program, for the taxpayer in view.
-// A Home tile arrives with params { statuses, updatedMonth } (the old FilingsPreset's names), and "Filed this month" with filedOnly
-// (a dry run is not filed, so its list leaves them out as its count does): they replace every filter, once.
+// A Home tile arrives with params { statuses } (the old FilingsPreset's name). A navigation preset can also carry
+// updatedMonth and filedOnly (a dry run is not filed): they replace every filter, once.
 import type { JSX } from "nsh";
 import { computed, signal, untracked, View } from "nsh";
 import type { ReturnRow } from "../../bir";
@@ -23,7 +23,7 @@ import { NarrowList } from "./NarrowList";
 /** Page width (the main surface less its padding) from which the board shows; under it, the list with tabs. */
 export const BOARD_MIN = 720;
 
-/** "Changed in Nov 2026", the month a Home tile asked for: a press removes it. */
+/** "Changed in Nov 2026", the month a navigation preset asked for: a press removes it. */
 function MonthChip() {
   return (
     <AppButton
@@ -37,7 +37,7 @@ function MonthChip() {
   );
 }
 
-/** "Filed only", from Home's "Filed this month": only returns that count as filed (a dry run is left out). A press removes it. */
+/** "Filed only", from a navigation preset: only returns that count as filed (a dry run is left out). A press removes it. */
 function FiledOnlyChip() {
   return (
     <AppButton
@@ -152,7 +152,7 @@ function NarrowBar(props: { onFilters: () => void }) {
 
 /** The returns of the saved and filed lists, the filters and the two actions of a card. */
 export function Filings(): JSX.Element {
-  // A Home tile's preset, once per navigation: Back to this page hands over the same params object and applies nothing.
+  // A navigation preset, once per navigation: Back to this page hands over the same params object and applies nothing.
   const params = untracked(() => app.params());
   const preset = presetOf(params);
   if (preset) filters.applyPreset(preset, params);

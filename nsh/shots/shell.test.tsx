@@ -116,14 +116,7 @@ for (const look of LOOKS) {
     const app = await open(ENTRY, { width: look.width, height: look.height, platform: look.platform, colorScheme: look.colorScheme, ...asking() });
     await app.waitFor("id:main-surface");
     if (look.width > 600) await app.press("id:sb-new");
-    else {
-      await app.press("id:nb-avatar");
-      await app.press("id:nb-menu-search");
-      await app.waitFor("id:palette-input");
-      await app.type("id:palette-input", "1601");
-      await app.waitFor("text:1601C · Monthly Remittance Return of Income Taxes Withheld on Compensation");
-      await app.submit("id:palette-input");
-    }
+    else await app.press("id:nb-new");
     await app.waitFor("id:new-return");
     await app.press("id:new-return-1601C");
     await app.press("id:new-return-open");

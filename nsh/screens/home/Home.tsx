@@ -1,7 +1,7 @@
-// Home (the old shell's home.js and dashboard.js): the greeting, five status tiles, the next 30 days, the deadlines they pick,
+// Home (the old shell's home.js and dashboard.js): the greeting, four status tiles, the next 30 days, the deadlines they pick,
 // each taxpayer at a glance, the as-needed forms, recently filed; on a fresh install, the welcome with three numbered steps.
 // The numbers come from lib/dashboard.ts over the store's cached reads. Tiles: Overdue and Due in 7 days narrow the list under
-// the strip, Drafts, Waiting to send and Filed this month open Filings with a preset (preset.ts).
+// the strip, Drafts and Waiting to send open Filings with a preset (preset.ts).
 import { cleanup, computed, signal, View, windowSize } from "nsh";
 import type { AsNeededForm, AsNeededReturn, DeadlineRow, ReturnRow } from "../../bir";
 import { loadDashboard, pickedDeadlines, tileSpecs, type HomeView, type TileSpec } from "../../lib/dashboard";
@@ -13,7 +13,7 @@ import { recentOpenOptions } from "../../lib/recent";
 import { AppButton, deviceCopy, EmptyRow, Icon, type IconName, ListGroup, ListRow, NameCell, PageHeader, SectionTitle, StepCircle, Text, TOUCH } from "../../ui";
 import { AsNeededHead, AsNeededUndated, DeadlineStrip, DueRow, FiledRow, StatTile, TaxpayerRow } from "./parts";
 import { homePick } from "./pick";
-import { FILED_STATUSES, openFilings } from "./preset";
+import { openFilings } from "./preset";
 import { deadlineKey } from "./rows";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -33,9 +33,9 @@ function firstWidth(): number {
   return contentColumn("page", app.layout.mainWidth());
 }
 
-/** Tiles per row: five from 640 wide, three from 420, two under it. */
+/** Tiles per row: four from 640 wide, two under it. */
 function tileColumns(width: number): number {
-  return width >= 640 ? 5 : width >= 420 ? 3 : 2;
+  return width >= 640 ? 4 : 2;
 }
 
 const TILE_GAP = 8;
@@ -96,12 +96,10 @@ function asNeededEntries(forms: AsNeededForm[]): AsNeededEntry[] {
 }
 
 /** The tile's press: Overdue and Due in 7 days narrow the list below; the others open Filings with their preset. */
-function pressTile(spec: TileSpec, today: string): void {
+function pressTile(spec: TileSpec): void {
   if (spec.key === "overdue" || spec.key === "week") homePick.toggleTile(spec.key);
   else if (spec.key === "drafts") openFilings({ statuses: ["Draft"] });
   else if (spec.key === "waiting") openFilings({ statuses: ["Queued"] });
-  // The tile counts what counts as filed (no dry run), and the list it opens keeps exactly those.
-  else openFilings({ statuses: [...FILED_STATUSES], updatedMonth: today.slice(0, 7), filedOnly: true });
 }
 
 function Dashboard(props: { width: () => number }) {
@@ -132,7 +130,7 @@ function Dashboard(props: { width: () => number }) {
               spec={s()}
               width={tileWidth()}
               picked={homePick.pick() === s().key}
-              onPress={() => pressTile(s(), data().today)}
+              onPress={() => pressTile(s())}
             />
           )}
         </Each>

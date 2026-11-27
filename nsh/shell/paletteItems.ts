@@ -1,5 +1,6 @@
 // What the command palette lists (old main.js paletteItems): Taxpayers, Branches, Go to, Forms, Actions. Typing narrows
-// them; digits match a TIN (nine digits name a taxpayer, ten or more a branch). Pure over the app state: Palette.tsx draws it.
+// them; digits match a TIN (nine digits name a taxpayer, ten or more a branch). The narrow layout's search is the tax-profile
+// picker only: its tabs, sheets and menus already carry the pages and actions. Pure over the app state: Palette.tsx draws it.
 import { computed, keymap, signal, untracked } from "nsh";
 import { doorStatus } from "../bir";
 import { formUi } from "../screens/form/formUi";
@@ -35,10 +36,11 @@ interface FormRow {
 }
 
 /**
- * The palette's index of forms. Building it is a host call that makes the whole form library (about a second in a debug build),
- * so it is made when the palette opens (Palette.tsx calls indexPalette as it mounts) and not by the first typed letter, which
- * used to hold the list unfiltered for that second. The library never changes while the app runs, so what was built stays
- * (store.bump() drops the store's copy at every save; this one is kept, as the store keeps the RDO and ZIP lists).
+ * The desktop palette's index of forms. Building it is a host call that makes the whole form library (about a second in a debug
+ * build), so it is made when the palette opens (Palette.tsx calls indexPalette as it mounts) and not by the first typed letter,
+ * which used to hold the list unfiltered for that second. The narrow layout's search does not list forms and never builds this.
+ * The library never changes while the app runs, so what was built stays (store.bump() drops the store's copy at every save; this
+ * one is kept, as the store keeps the RDO and ZIP lists).
  */
 const formRows = signal<FormRow[] | null>(null);
 
@@ -62,6 +64,7 @@ export const paletteItems = computed<PaletteItem[]>(() => {
   const digits = q.replace(/[\s-]/g, "");
   const byTin = /^\d+$/.test(digits);
   const current = app.taxpayer();
+  const profilesOnly = app.layout.narrow();
   for (const t of app.taxpayers()) {
     if (byTin && digits.length > 9) {
       for (const b of t.branches) {
@@ -86,47 +89,48 @@ export const paletteItems = computed<PaletteItem[]>(() => {
       run: () => app.openTaxpayer(t.tin_root),
     });
   }
-  // The open taxpayer's branches are one step away.
-  if (current && current.branches.length > 1 && !byTin) {
-    for (const b of current.branches) {
-      items.push({ group: "Branches", label: b.name, hint: b.tin_display, icon: "git-branch", run: () => app.openBranch(current.tin_root, b.code) });
+  if (!profilesOnly) {
+    // The open taxpayer's branches are one step away.
+    if (current && current.branches.length > 1 && !byTin) {
+      for (const b of current.branches) {
+        items.push({ group: "Branches", label: b.name, hint: b.tin_display, icon: "git-branch", run: () => app.openBranch(current.tin_root, b.code) });
+      }
     }
-  }
-  const dev = doorStatus().testEnvironment;
-  const pages = [...PAGES, ...(Object.keys(ROUTES) as ViewName[]).filter((v) => ROUTES[v].dev && dev)];
-  for (const view of pages) {
-    const meta: { label: string; icon: IconName; needsTaxpayer: boolean } = ROUTES[view];
-    if (fresh && meta.needsTaxpayer) continue;
-    items.push({ group: "Go to", label: meta.label, icon: meta.icon, run: () => app.go(view) });
-  }
-  if (q) {
-    // The index built at open; a palette read without opening (a test, a hook) builds it here, once.
-    for (const f of formRows() ?? buildFormRows()) {
-      items.push({ group: "Forms", label: f.label, icon: "file-text", run: () => app.startNewReturn(f.code) });
+    const dev = doorStatus().testEnvironment;
+    const pages = [...PAGES, ...(Object.keys(ROUTES) as ViewName[]).filter((v) => ROUTES[v].dev && dev)];
+    for (const view of pages) {
+      const meta: { label: string; icon: IconName; needsTaxpayer: boolean } = ROUTES[view];
+      if (fresh && meta.needsTaxpayer) continue;
+      items.push({ group: "Go to", label: meta.label, icon: meta.icon, run: () => app.go(view) });
     }
+    if (q) {
+      // The index built at open; a palette read without opening (a test, a hook) builds it here, once.
+      for (const f of formRows() ?? buildFormRows()) {
+        items.push({ group: "Forms", label: f.label, icon: "file-text", run: () => app.startNewReturn(f.code) });
+      }
+    }
+    // The open form's pill steps (old main.js: only while a form is open and shows its pill).
+    if (app.view() === "form" && !fresh && formUi.canStep()) {
+      items.push({ group: "Actions", label: "Next to do", icon: "chevron-right", hint: keymap.label("mod+right"), run: () => formUi.step(1) });
+      items.push({ group: "Actions", label: "Previous to do", icon: "chevron-left", hint: keymap.label("mod+left"), run: () => formUi.step(-1) });
+    }
+    items.push({ group: "Actions", label: "Toggle sidebar", icon: "panel-left", hint: keymap.label("mod+b"), run: app.toggleSidebar });
+    items.push({
+      group: "Actions",
+      label: app.panel() === "profile" ? "Hide tax profile" : "Show tax profile",
+      icon: "panel-right",
+      hint: keymap.label("mod+shift+b"),
+      run: () => app.togglePanel("profile"),
+    });
+    items.push({
+      group: "Actions",
+      label: app.panel() === "notifs" ? "Hide notifications" : "Show notifications",
+      icon: "bell",
+      hint: keymap.label("mod+shift+n"),
+      run: () => app.togglePanel("notifs"),
+    });
+    items.push({ group: "Actions", label: "Change theme", icon: "moon", hint: keymap.label("mod+t"), run: app.cycleTheme });
   }
-  // The open form's pill steps (old main.js: only while a form is open and shows its pill).
-  if (app.view() === "form" && !fresh && formUi.canStep()) {
-    items.push({ group: "Actions", label: "Next to do", icon: "chevron-right", hint: keymap.label("mod+right"), run: () => formUi.step(1) });
-    items.push({ group: "Actions", label: "Previous to do", icon: "chevron-left", hint: keymap.label("mod+left"), run: () => formUi.step(-1) });
-  }
-  // The narrow layout (every phone and tablet) has no sidebar.
-  if (!app.layout.narrow()) items.push({ group: "Actions", label: "Toggle sidebar", icon: "panel-left", hint: keymap.label("mod+b"), run: app.toggleSidebar });
-  items.push({
-    group: "Actions",
-    label: app.panel() === "profile" ? "Hide tax profile" : "Show tax profile",
-    icon: "panel-right",
-    hint: keymap.label("mod+shift+b"),
-    run: () => app.togglePanel("profile"),
-  });
-  items.push({
-    group: "Actions",
-    label: app.panel() === "notifs" ? "Hide notifications" : "Show notifications",
-    icon: "bell",
-    hint: keymap.label("mod+shift+n"),
-    run: () => app.togglePanel("notifs"),
-  });
-  items.push({ group: "Actions", label: "Change theme", icon: "moon", hint: keymap.label("mod+t"), run: app.cycleTheme });
   if (!q) return items;
   return items.filter((x) => x.match || `${x.label} ${x.hint ?? ""}`.toLowerCase().includes(q));
 });
