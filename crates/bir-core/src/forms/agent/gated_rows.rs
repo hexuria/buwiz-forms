@@ -649,6 +649,37 @@ fn row_cleared_text(gate: Gate, line: &str) -> String {
     }
 }
 
+fn employer_row_index(key: &str) -> Option<usize> {
+    if key.contains("Shed1a_1") || key.contains("Shed1c_1") {
+        Some(0)
+    } else if key.contains("Shed2a_2") || key.contains("Shed1c_2") {
+        Some(1)
+    } else {
+        None
+    }
+}
+
+fn employer_row_content(row: &Value) -> bool {
+    row.get("owner").is_some_and(|owner| !owner.is_null())
+        || row
+            .get("employer_name")
+            .and_then(Value::as_str)
+            .is_some_and(|text| !text.trim().is_empty())
+        || row
+            .get("employer_tin")
+            .and_then(Value::as_str)
+            .is_some_and(|text| !text.trim().is_empty())
+        || ["compensation_income", "tax_withheld"].iter().any(|field| {
+            row.get(field)
+                .and_then(Value::as_f64)
+                .is_some_and(|amount| amount.abs() >= 0.005)
+        })
+}
+
+fn employer_row(draft: &Value, index: usize) -> Option<&Value> {
+    draft.get("employers")?.as_array()?.get(index)
+}
+
 /// Registered clearings whose target paths went from held content to blank
 /// or zero while their gate is shut after the write. A schedule row is a
 /// clearance unit of its own, keyed by its stable printed-line id; scalar
@@ -677,6 +708,13 @@ pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<Cle
             .iter()
             .copied()
             .filter(|key| {
+                if gate.gate == G1701_SPOUSE_NAME.gate
+                    && let Some(index) = employer_row_index(key)
+                {
+                    let held = employer_row(before, index).is_some_and(employer_row_content);
+                    let gone = employer_row(after, index).is_none_or(|row| !employer_row_content(row));
+                    return held && gone && lock_reason(kind, after, key).is_some();
+                }
                 let Some(bound) = kind.definition().bindings.get(*key) else {
                     return false;
                 };

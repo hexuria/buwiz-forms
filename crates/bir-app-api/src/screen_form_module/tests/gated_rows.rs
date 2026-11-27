@@ -389,6 +389,35 @@ fn form_1701_employer_amounts_typed_before_the_owner_tick_survive() {
 }
 
 #[test]
+fn form_1701_employer_row_notice_covers_content_without_a_name_and_names_the_owner() {
+    setup();
+    let opened = open("1701", 0);
+    let taxpayer_name = "frm1701:txtPg2IShed1a_1TPName";
+    let compensation = fill(
+        "1701",
+        &opened["draft"],
+        json!({
+            "frm1701:rdoPg1I7ATC_II013": "true",
+            "frm1701:chkPg2IShed1a_1Taxpayer": "true",
+            "frm1701:txtPg2IShed1c_1CI": "1000",
+            "frm1701:txtPg2IShed1c_1TW": "100",
+        }),
+    );
+    assert_eq!(compensation["draft"]["employers"][0]["employer_name"], "");
+    let closed = fill(
+        "1701",
+        &compensation["draft"],
+        json!({"frm1701:rdoPg1I7ATC_II012": "true"}),
+    );
+    assert_eq!(closed["draft"]["employers"][0]["compensation_income"], serde_json::Value::Null);
+    assert_eq!(
+        closed["relock_notes"][taxpayer_name],
+        json!("Employer row 1 was cleared: Schedule 1 applies only to compensation income of the taxpayer."),
+        "a row with no name but typed amounts is still reported, in the taxpayer's words"
+    );
+}
+
+#[test]
 fn form_1701_spouse_item27_foreign_and_schedule5_are_gated() {
     setup();
     let opened = open("1701", 0);
