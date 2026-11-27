@@ -20,4 +20,7 @@ wait_until fp-queue --timeout-ms 8000 --screenshot
 click fp-queue
 wait_until queue-continue --timeout-ms 10000 --screenshot
 click queue-continue
-wait_until fp-cancel-queue --timeout-ms 20000 --screenshot
+# fp-cancel-queue is not awaited: the dry-run worker sends a queued return within seconds, so the queued state
+# races the wait (seen on Windows, where the same wait timed out until it was changed; on macOS this wait timed out
+# too after queue-continue was pressed). fp-send-line exists only once the return is sent.
+wait_until fp-send-line --timeout-ms 20000 --screenshot
