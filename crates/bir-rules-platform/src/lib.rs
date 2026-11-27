@@ -189,11 +189,15 @@ pub fn rename_directory_no_replace(_source: &Path, _target: &Path) -> io::Result
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
     use std::fs;
+    #[cfg(windows)]
     use std::sync::atomic::{AtomicU64, Ordering};
 
+    #[allow(unused_imports)]
     use super::*;
 
+    #[cfg(windows)]
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     #[cfg(windows)]

@@ -388,12 +388,14 @@ fn finish_close(outcome: &CloseOutcome, mode: ForgetMode) {
     match mode {
         ForgetMode::Now => forget(),
         ForgetMode::Backgrounded => {
-            // The device-folder override is thread-local: the forget thread runs under the
-            // closer's install, as the claim thread does. In production there is no override.
+            // The device-folder and database overrides are thread-local: the forget thread
+            // runs under the closer's install, as spawn_account's threads do — a test's forget
+            // must never fall back to the REAL data folder. In production there is no override.
             let device = bir_core::platform::capture_device_dir_override();
+            let database = bir_core::db::capture_database_path_override();
             let spawned = std::thread::Builder::new()
                 .name("buwiz-device-forget".into())
-                .spawn(move || device.run(forget));
+                .spawn(move || database.run(move || device.run(forget)));
             #[cfg(any(test, feature = "test-support"))]
             if let Ok(thread) = spawned {
                 FORGET_THREADS
@@ -589,9 +591,26 @@ pub(crate) fn sign_out_inner(
 /// server it is not signed in to. The shape is the sign-out's without the logout: the disk
 /// outside SESSION, then the cache None and the close in the one SESSION section, then the
 /// real path's close after it.
-pub fn end_changed_server() {
+pub fn end_changed_server(server_url: &str, refresh_token: &str) {
+    if locked().phase.kind() == PhaseKind::Quitting {
+        tracing::info!("end_changed_server after quit ignored: the session is terminal");
+        return;
+    }
     {
         let _account = bir_core::account_session::lock();
+        // B2: re-check INSIDE the lock what the caller decided outside it — a signed_in that won
+        // the mutex in the gap is never deleted behind its back.
+        let still = bir_core::cloud_account::load_stored_account()
+            .ok()
+            .flatten()
+            .map(|stored| stored.server_url == server_url && stored.refresh_token == refresh_token)
+            .unwrap_or(false);
+        if !still {
+            tracing::info!(
+                "end_changed_server: the stored sign-in changed since the decision — nothing is cleared"
+            );
+            return;
+        }
         if let Err(error) = bir_core::account_session::forget_stored() {
             tracing::warn!(
                 "the changed-server ending left the saved sign-in on this device: {error}"
@@ -619,6 +638,10 @@ pub fn end_changed_server() {
 /// behind this close. The interim shape is server_ended's: the cache None inside SESSION, then
 /// the old slot's close and the menu after it.
 pub fn close_signed_in_elsewhere(disk_owner: &bir_core::account_session::OwnerKey) -> bool {
+    if locked().phase.kind() == PhaseKind::Quitting {
+        tracing::info!("close_signed_in_elsewhere after quit ignored: the session is terminal");
+        return false;
+    }
     let outcome = {
         let mut session = locked();
         let cache_key = bir_core::account_session::stored_owner();
@@ -650,9 +673,14 @@ pub fn close_signed_in_elsewhere(disk_owner: &bir_core::account_session::OwnerKe
 ///  3. the device-key forget after SESSION, epoch-checked (a background thread — see sign_out).
 pub fn server_ended(
     owner: bir_core::account_session::OwnerKey,
-    epoch: u64,
+    _epoch: u64,
     failed_refresh_token: String,
-) {
+) -> bool {
+    if locked().phase.kind() == PhaseKind::Quitting {
+        // B3: Quitting is terminal — nothing closes after it.
+        tracing::info!("server_ended after quit ignored: the session is terminal");
+        return false;
+    }
     // Step 1: the disk's delete-if-credential, outside SESSION.
     let cleared = {
         let _account = bir_core::account_session::lock();
@@ -677,22 +705,17 @@ pub fn server_ended(
         tracing::info!(
             "server_ended ignored: the stored credential is not the failed one — a newer sign-in is untouched"
         );
-        return;
+        return false;
     }
     // Step 2: the one SESSION section — cache and close together. F5: WHATEVER the epoch — the
     // disk held the exact failed credential, so this ending IS about the current sign-in, from
-    // whenever it was sent: a stale-epoch guard would strand a session the server has ended,
-    // never Open again with no sign-in. Only the cache's ownership still gates the close: if the
-    // cache moved to another owner the session answered already.
+    // whenever it was sent. (c): WHATEVER the cache held, too — the disk match is the evidence,
+    // and a cache naming someone else is the "signed in elsewhere" case of [R6f], which closes
+    // anyway. Before this, an unfilled cache meant the gate stayed unlocked and the room open
+    // on the real runtime path.
     let outcome = {
         let mut session = locked();
         let cache_key = bir_core::account_session::stored_owner();
-        if cache_key.as_ref() != Some(&owner) {
-            tracing::info!(
-                "server_ended for epoch {epoch}: the disk is cleared, the session moved on already"
-            );
-            return;
-        }
         bir_core::account_session::cache_owner(None);
         close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
     };
@@ -703,6 +726,7 @@ pub fn server_ended(
     finish_close(&outcome, ForgetMode::Backgrounded);
     drop(outcome.dropped);
     report_invariants();
+    true
 }
 
 /// signed_in (§4, F8'): a sign-in's write — the persist under the account lock OUTSIDE SESSION,
@@ -2156,7 +2180,9 @@ mod tests {
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
         // The hook registration is once per process; every test that needs it registers the
         // same machine door, so sharing it is exact.
-        bir_core::account_session::on_session_ended(server_ended);
+        bir_core::account_session::on_session_ended(|owner, epoch, credential| {
+            server_ended(owner, epoch, credential);
+        });
         // The send's task, spawned with A's owner and epoch. Its token fetch — the real
         // AccountTokens::access_token — records the credential of A's record in the context.
         let key_a = bir_core::account_session::OwnerKey {
@@ -2338,7 +2364,9 @@ mod tests {
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch_a = snapshot().epoch;
         open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
-        bir_core::account_session::on_session_ended(server_ended);
+        bir_core::account_session::on_session_ended(|owner, epoch, credential| {
+            server_ended(owner, epoch, credential);
+        });
         // The device key, registered as A's — the revocation must forget it.
         bir_core::relay::lazy_first_key_for_test();
         assert!(!device_key_files(&scratch).is_empty());
@@ -2412,20 +2440,32 @@ mod tests {
         );
     }
 
-    /// bir-mcp's condition: bir-mcp's door signs in B — the raw disk write, no cache update,
-    /// exactly what a process without the machine does — while the app is Open(A). At the next
-    /// I/O point (the refresh verb) the disk owner is not the cache owner, and the app closes A
-    /// as signed in elsewhere. B's stored sign-in is never touched: it is the legitimate one.
+    /// bir-mcp's condition (row 3): bir-mcp's door signs in B — the raw disk write, no cache
+    /// update, exactly what a process without the machine does — while the app has A open
+    /// through TODAY's real path (the slot, open_session_room). At the next I/O point the app
+    /// closes A as signed in elsewhere. B's stored sign-in is never touched.
     #[test]
     fn bir_mcps_sign_in_of_another_owner_closes_the_apps_session() {
         let _turn = test_turn();
         let scratch = scratch();
+        crate::open_room::reset_for_tests();
+        crate::room_session::reset_for_tests();
+        bir_core::db::set_open_room_database(None);
         let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch_a = snapshot().epoch;
-        open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
-        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        // bir-mcp's door: the RAW writer, bypassing the machine — the cache still names A.
+        // The room through TODAY's real path — the slot — so the interim close_session of the
+        // ending is what the test proves, not the machine's phase.
+        let stored_a = bir_core::cloud_account::load_stored_account()
+            .unwrap()
+            .expect("the seeded sign-in reads back");
+        let _opened = crate::room_session::open_session_room(&stored_a);
+        assert!(
+            crate::open_room::current().is_some(),
+            "the real path opened no room"
+        );
+        let _ = &scratch;
+        let _ = &owner_a;
+        // bir-mcp's door: the RAW writer at the very path the app reads — the environment's
+        // account-file override when set, the device folder otherwise — with no cache update.
         let stored_b = bir_core::cloud_account::StoredAccount {
             server_url: owner_a.origin.clone(),
             access_token: "access-user-b".into(),
@@ -2437,12 +2477,10 @@ mod tests {
             last_refresh_unix: 0,
             practice: false,
         };
-        // The raw write itself, as bir-mcp's process performs it — no cache update of ours.
-        std::fs::write(
-            bir_core::platform::device_dir().join("buwiz-cloud-account.json"),
-            stored_b.encode().unwrap(),
-        )
-        .unwrap();
+        let account_path = std::env::var_os("BUWIZ_CLOUD_ACCOUNT_FILE")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| bir_core::platform::device_dir().join("buwiz-cloud-account.json"));
+        std::fs::write(account_path, stored_b.encode().unwrap()).unwrap();
         assert_eq!(
             bir_core::account_session::stored_owner().map(|key| key.user_id),
             Some("user-a".to_string()),
@@ -2456,13 +2494,8 @@ mod tests {
                 let verb =
                     crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
                         .expect("the refresh verb spawns");
-                futures::executor::block_on(verb);
+                let _ = futures::executor::block_on(verb);
             },
-        );
-        assert_eq!(
-            snapshot().phase_kind,
-            PhaseKind::SignedOut,
-            "the app did not close A at the I/O point after bir-mcp signed in B"
         );
         assert!(
             crate::open_room::current().is_none(),
@@ -2476,6 +2509,64 @@ mod tests {
             bir_core::account_session::stored_owner(),
             None,
             "the stale cache was never cleared — it would re-close B on every refresh"
+        );
+    }
+
+    /// B2: a signed_in landing in the changed-server ending's gap is never cleared — the
+    /// ending re-checks the decided (server, credential) under the account lock.
+    #[test]
+    fn a_signed_in_in_the_changed_server_gap_survives() {
+        let _turn = test_turn();
+        let _scratch = scratch();
+        let _owner_a = seed_stored("user-a", false);
+        // The decision was taken on A's record; before the lock, B's sign-in landed.
+        let stored_b = bir_core::cloud_account::StoredAccount {
+            server_url: "https://buwiz.example.test".into(),
+            access_token: "access-user-b".into(),
+            refresh_token: "refresh-user-b".into(),
+            access_expires_at_unix: bir_core::cloud_account::unix_now() + 3600,
+            user_id: "user-b".into(),
+            email: None,
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        };
+        bir_core::account_session::save_stored(&stored_b).unwrap();
+        // The ending, still carrying A's decided values: it must clear NOTHING.
+        end_changed_server("https://buwiz.example.test", "refresh-user-a");
+        let disk = bir_core::cloud_account::load_stored_account().unwrap();
+        assert!(
+            disk.as_ref().map(|stored| stored.user_id.as_str()) == Some("user-b"),
+            "the signed_in that landed in the gap was deleted: {disk:?}"
+        );
+    }
+
+    /// The leak check: the backgrounded forget thread resolves the TEST's device folder, never
+    /// the real one — the override rides the thread as spawn_account carries it.
+    #[test]
+    fn the_forget_thread_resolves_the_tests_device_folder() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        // A key owned by A in the TEST's device folder only.
+        bir_core::relay::lazy_first_key_for_test();
+        assert!(
+            !device_key_files(&scratch).is_empty(),
+            "the seeded key is not in the test's folder — vacuous"
+        );
+        let real_dir_key = std::path::Path::new("/home/ubuntu/.local/share/buwiz-forms");
+        let before_in_real = real_dir_key.join("buwiz_submit_device_key.txt").exists();
+        let _ = &owner_a;
+        sign_out();
+        join_device_forget_threads();
+        assert!(
+            device_key_files(&scratch).is_empty(),
+            "the forget never reached the test's folder — the override did not ride the thread"
+        );
+        assert_eq!(
+            real_dir_key.join("buwiz_submit_device_key.txt").exists(),
+            before_in_real,
+            "the real data folder was touched by the test's forget"
         );
     }
 
@@ -2508,7 +2599,6 @@ mod tests {
             let mut skipping_cfg_test_item = false;
             let mut pending_test_attr = false;
             let mut item_saw_brace = false;
-            let mut attr_lines_pending = 0usize;
             for (index, line) in text.lines().enumerate() {
                 let trimmed = line.trim_start();
                 if skipping_cfg_test_item {
@@ -2531,7 +2621,6 @@ mod tests {
                 }
                 if trimmed.starts_with("#[cfg(test") {
                     pending_test_attr = true;
-                    attr_lines_pending += 1;
                     continue;
                 }
                 if pending_test_attr {
@@ -2544,7 +2633,6 @@ mod tests {
                     skipping_cfg_test_item = true;
                     item_saw_brace = false;
                     pending_test_attr = false;
-                    attr_lines_pending = 0;
                     if line.contains('{') {
                         item_saw_brace = true;
                     }
@@ -3193,7 +3281,9 @@ mod tests {
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch_a = snapshot().epoch;
         open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
-        bir_core::account_session::on_session_ended(server_ended);
+        bir_core::account_session::on_session_ended(|owner, epoch, credential| {
+            server_ended(owner, epoch, credential);
+        });
         // The send's fetch records A's ORIGINAL credential.
         let key_a = bir_core::account_session::OwnerKey {
             origin: owner_a.origin.clone(),
@@ -3250,6 +3340,48 @@ mod tests {
 
     /// A stale owner or epoch changes nothing (§4): server_ended for another owner, or at an
     /// epoch the session has passed, is a no-op end to end.
+    /// (c): a credential-matched ending closes WHATEVER the cache held — including the empty
+    /// cache of the real runtime before any machine fill. Before the fix the disk was cleared
+    /// and nothing closed: the gate stayed unlocked and the room open, less safe than main.
+    #[test]
+    fn a_credential_matched_ending_with_an_empty_cache_still_closes() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        // The production cache state at commit 2: never filled.
+        bir_core::account_session::cache_owner(None);
+        let failed = bir_core::cloud_account::load_stored_account()
+            .unwrap()
+            .expect("a sign-in")
+            .refresh_token;
+        let cleared = server_ended(
+            bir_core::account_session::OwnerKey {
+                origin: owner_a.origin.clone(),
+                user_id: owner_a.user_id.clone(),
+            },
+            epoch,
+            failed,
+        );
+        assert!(cleared, "the credential matched and nothing cleared");
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::SignedOut,
+            "the close never ran with an empty cache — the gate stayed unlocked and the room open"
+        );
+        assert!(
+            bir_core::cloud_account::load_stored_account()
+                .unwrap()
+                .is_none(),
+            "the disk should be cleared"
+        );
+        assert_invariants();
+    }
+
+    #[test]
     #[test]
     fn server_ended_for_a_stale_owner_or_epoch_changes_nothing() {
         let _turn = test_turn();

@@ -152,15 +152,6 @@ pub fn install_device_key_gate() {
 }
 
 /// The client for the configured Buwiz server, made once per server.
-/// Drop the cached submitter — the tests' reset, since the slot is process-wide and a test
-/// proving no construction needs a clean start.
-#[cfg(any(test, feature = "test-support"))]
-pub fn reset_submitter_for_test() {
-    if let Ok(mut slot) = SUBMITTER.lock() {
-        *slot = None;
-    }
-}
-
 /// The already-constructed submitter for the configured server, if one exists — a PEEK that
 /// never constructs (N3): under SESSION a construction would read the install id, the platform
 /// store and the DEVICE_KEY gate, so the owner-ending close invalidates only what exists.
@@ -204,14 +195,36 @@ pub fn submitter() -> Result<Arc<Submitter>, TransportError> {
     Ok(submitter)
 }
 
+/// Drop the cached submitter — the tests' reset, since the slot is process-wide and a test
+/// proving no construction needs a clean start.
+#[cfg(any(test, feature = "test-support"))]
+pub fn reset_submitter_for_test() {
+    if let Ok(mut slot) = SUBMITTER.lock() {
+        *slot = None;
+    }
+}
+
 /// Forget this device's key on the Buwiz server's side of things: a new
 /// sign-in registers a new key. The account layer calls it on sign-in and
 /// sign-out. Nothing to forget when the client cannot be made.
 pub fn forget_device() {
-    if let Ok(submitter) = submitter()
-        && let Err(error) = submitter.forget_device()
-    {
-        tracing::warn!("could not forget the relay device key: {error}");
+    // N3: never CONSTRUCT a client to forget with — a construction reads the install id, the
+    // platform store and the device-key gate, and the close paths run this on the sign-out's
+    // own thread. An existing client clears its TIN cache too; with none, the store deletion
+    // stands alone (no cache exists to clear).
+    if let Some(submitter) = peek_submitter() {
+        if let Err(error) = submitter.forget_device() {
+            tracing::warn!("could not forget the relay device key: {error}");
+        }
+        return;
+    }
+    let store =
+        bir_submit::secrets::platform_store(secrets_dir(), !crate::platform::keychain_disabled());
+    if let Err(error) = store.delete(bir_submit::DEVICE_KEY) {
+        tracing::warn!("could not forget the device key: {error}");
+    }
+    if let Err(error) = store.delete(bir_submit::DEVICE_ID) {
+        tracing::warn!("could not forget the device id: {error}");
     }
 }
 

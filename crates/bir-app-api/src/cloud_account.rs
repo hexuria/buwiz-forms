@@ -60,7 +60,12 @@ pub fn register(module: HostModule) -> HostModule {
 /// Pause filing, then open the UI only when a saved session still qualifies.
 /// Call this before the menu bar is built and before the database worker starts.
 pub fn prepare_launch() {
-    bir_core::account_session::on_session_ended(crate::session::server_ended);
+    bir_core::account_session::on_session_ended(|owner, epoch, credential| {
+        crate::session::server_ended(owner, epoch, credential);
+    });
+    // (c): the owner cache's production fill — before the restore, so every I/O point's disk
+    // owner check and every close's owner evidence read a filled cache.
+    bir_core::account_session::fill_owner_cache();
     bir_core::background_cron::set_submission_paused(true);
     forget_saved_server_url();
     drop_old_welcomed_list();
@@ -159,9 +164,11 @@ fn register_device_soon() {
 /// whose answer blocks on a harness gate; production never sets it, and the blocking default is
 /// the real client.
 #[cfg(test)]
-static TEST_REFRESH_HTTP: std::sync::Mutex<
-    Option<Box<dyn Fn() -> Box<dyn cloud_account::Http + Send> + Send>>,
-> = std::sync::Mutex::new(None);
+type TestRefreshHttpFactory = Box<dyn Fn() -> Box<dyn cloud_account::Http + Send> + Send>;
+
+#[cfg(test)]
+static TEST_REFRESH_HTTP: std::sync::Mutex<Option<TestRefreshHttpFactory>> =
+    std::sync::Mutex::new(None);
 
 #[cfg(test)]
 pub(crate) fn set_test_refresh_http(
@@ -205,6 +212,59 @@ enum VerbRefresh {
 /// sign-in for. The PROFILE merge writes only the profile fields, and only while the disk's
 /// sign-in is still this owner on the exact refresh token the verb loaded — a spent token never
 /// lands back over a rotated record.
+/// (a): the profile merge with its CAS-miss recovery. A miss means the stored record rotated
+/// under the merge — the flight or another path landed a newer token — never that the sign-in
+/// is gone. Re-load once: the same owner with a newer token is Online, the merge retried onto
+/// the fresh record; Gone is ONLY for an owner change or an empty store.
+fn merge_profile_or_reload(
+    owner: &bir_core::account_session::OwnerKey,
+    refresh_token: &str,
+    user_id: &str,
+    email: Option<String>,
+    practice: bool,
+    offline: bool,
+) -> Result<Option<bool>, HostError> {
+    let saved = {
+        let _one = bir_core::account_session::lock();
+        bir_core::account_session::merge_profile_if(
+            owner,
+            refresh_token,
+            user_id,
+            email.clone(),
+            practice,
+            offline,
+        )
+        .map_err(host_error)?
+    };
+    if saved {
+        return Ok(Some(practice));
+    }
+    let fresh = {
+        let _one = bir_core::account_session::lock();
+        load_stored()?
+    };
+    let Some(fresh) = fresh else {
+        return Ok(None);
+    };
+    if bir_core::account_session::OwnerKey::of(&fresh).as_ref() != Some(owner) {
+        return Ok(None);
+    }
+    // The same owner with a newer token: merge onto the fresh record. A second miss only means
+    // the rotation keeps moving — the sign-in is valid either way, so Online regardless.
+    let _ = {
+        let _one = bir_core::account_session::lock();
+        bir_core::account_session::merge_profile_if(
+            owner,
+            &fresh.refresh_token,
+            user_id,
+            email,
+            practice,
+            offline,
+        )
+    };
+    Ok(Some(practice))
+}
+
 fn verb_refresh(
     http: &mut dyn cloud_account::Http,
     stored: &StoredAccount,
@@ -216,23 +276,19 @@ fn verb_refresh(
     if stored.access_expires_at_unix > now.saturating_add(30) {
         match cloud_account::load_profile(http, &stored.server_url, &stored.access_token) {
             Ok((user_id, email, practice)) => {
-                let saved = {
-                    let _one = bir_core::account_session::lock();
-                    bir_core::account_session::merge_profile_if(
+                return Ok(
+                    match merge_profile_or_reload(
                         owner,
                         &stored.refresh_token,
                         &user_id,
                         email,
                         practice,
                         false,
-                    )
-                    .map_err(host_error)?
-                };
-                return Ok(if saved {
-                    VerbRefresh::Online { practice }
-                } else {
-                    VerbRefresh::Gone
-                });
+                    )? {
+                        Some(practice) => VerbRefresh::Online { practice },
+                        None => VerbRefresh::Gone,
+                    },
+                );
             }
             Err(CloudError::Network(_)) => {
                 let _saved = {
@@ -260,7 +316,14 @@ fn verb_refresh(
     // the rotation is FORCED. (With an expired token the force changes nothing: the fast path
     // could never have answered it.)
     let force = stored.access_expires_at_unix > now.saturating_add(30);
-    match bir_core::account_session::access_token_with_credential(http, now, force, owner) {
+    // B1: the rejected access token goes in — the fast paths never answer it back.
+    match bir_core::account_session::access_token_rejecting(
+        http,
+        now,
+        force,
+        owner,
+        Some(&stored.access_token),
+    ) {
         Ok((access, credential)) => {
             let fresh = {
                 let _one = bir_core::account_session::lock();
@@ -275,25 +338,19 @@ fn verb_refresh(
                 }
             };
             match cloud_account::load_profile(http, &fresh.server_url, &access) {
-                Ok((user_id, email, practice)) => {
-                    let saved = {
-                        let _one = bir_core::account_session::lock();
-                        bir_core::account_session::merge_profile_if(
-                            owner,
-                            &fresh.refresh_token,
-                            &user_id,
-                            email,
-                            practice,
-                            false,
-                        )
-                        .map_err(host_error)?
-                    };
-                    Ok(if saved {
-                        VerbRefresh::Online { practice }
-                    } else {
-                        VerbRefresh::Gone
-                    })
-                }
+                Ok((user_id, email, practice)) => Ok(
+                    match merge_profile_or_reload(
+                        owner,
+                        &fresh.refresh_token,
+                        &user_id,
+                        email,
+                        practice,
+                        false,
+                    )? {
+                        Some(practice) => VerbRefresh::Online { practice },
+                        None => VerbRefresh::Gone,
+                    },
+                ),
                 Err(CloudError::Network(_)) => Ok(VerbRefresh::Offline),
                 Err(CloudError::InvalidGrant) => {
                     // The just-refreshed access token rejected at once: the sign-in is ended.
@@ -309,9 +366,33 @@ fn verb_refresh(
         Err(bir_core::account_session::TokenError::SignedOut) => {
             // The flight's InvalidGrant already ran the ending hook exactly once for the
             // credential; this call is the no-op confirmation when it did, and the ending
-            // itself when the verb is the only witness.
-            crate::session::server_ended(owner.clone(), epoch, stored.refresh_token.clone());
-            Ok(VerbRefresh::Ended)
+            // itself when the verb is the only witness. (b): Ended only when the ending really
+            // cleared — a credential mismatch (a rotation landed meanwhile) means a valid
+            // sign-in is stored, and the verb re-loads and answers as the merge arm does.
+            let ended =
+                crate::session::server_ended(owner.clone(), epoch, stored.refresh_token.clone());
+            if ended {
+                return Ok(VerbRefresh::Ended);
+            }
+            let fresh = {
+                let _one = bir_core::account_session::lock();
+                load_stored()?
+            };
+            match fresh {
+                Some(fresh)
+                    if bir_core::account_session::OwnerKey::of(&fresh).as_ref() == Some(owner) =>
+                {
+                    Ok(VerbRefresh::Online {
+                        practice: fresh.practice,
+                    })
+                }
+                // The disk is empty: the ending did happen — the flight's hook cleared it on
+                // this same credential before the verb's confirmatory call, so the second call
+                // matched nothing. The sign-in the server rejected IS ended.
+                None => Ok(VerbRefresh::Ended),
+                // A different owner holds the disk: this sign-in is simply gone.
+                Some(_) => Ok(VerbRefresh::Gone),
+            }
         }
         Err(bir_core::account_session::TokenError::Offline(_)) => Ok(VerbRefresh::Offline),
         Err(bir_core::account_session::TokenError::Other(message)) => Err(HostError::new(message)),
@@ -369,7 +450,7 @@ pub(crate) fn refresh_account(
             // The stored sign-in belongs to another server deployment: it ends here, through the
             // machine — the disk outside SESSION, the cache and the close inside it. The lock is
             // released: sign_out's own steps take it.
-            crate::session::end_changed_server();
+            crate::session::end_changed_server(&stored.server_url, &stored.refresh_token);
             return status_now();
         };
         if close_if_disk_owner_changed(&stored) {
@@ -1009,19 +1090,6 @@ mod tests {
 
         struct ScriptHttp(std::sync::Arc<ScriptServer>);
 
-        impl ScriptServer {
-            /// (required bearer or "*" for any, status). 401 answers any other bearer too when
-            /// the required one is not met — the row's rejection is the point.
-            fn me(&self, answers: &[(&str, u16)]) -> std::sync::Arc<ScriptServer> {
-                let server = std::sync::Arc::new(ScriptServer::default());
-                *server.mes.lock().unwrap() = answers
-                    .iter()
-                    .map(|(bearer, status)| (bearer.to_string(), *status))
-                    .collect();
-                server
-            }
-        }
-
         impl cloud_account::Http for ScriptHttp {
             fn exchange(&mut self, request: &HttpRequest) -> Result<HttpResponse, CloudError> {
                 let server = &self.0;
@@ -1124,6 +1192,122 @@ mod tests {
             });
         }
 
+        /// (a): a merge CAS miss because the flight rotated the token meanwhile is NOT Gone —
+        /// the same owner with a newer token re-loads to Online. Gone is only an owner change
+        /// or an empty disk.
+        #[test]
+        fn a_cas_miss_with_a_newer_same_owner_token_is_not_gone() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let current = stored("access-r2", "refresh-r2");
+                save_stored(&current).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&current).unwrap();
+                // The merge carries the SPENT credential, as the flight's joiner does.
+                let outcome = merge_profile_or_reload(
+                    &owner,
+                    "refresh-r1",
+                    "u1",
+                    Some("new@example.test".into()),
+                    true,
+                    false,
+                )
+                .expect("the merge errored");
+                assert_eq!(
+                    outcome,
+                    Some(true),
+                    "a CAS miss on the spent credential answered Gone with a valid same-owner sign-in stored"
+                );
+                let on_disk = bir_core::cloud_account::load_stored_account()
+                    .unwrap()
+                    .expect("the sign-in was cleared");
+                assert_eq!(
+                    on_disk.refresh_token, "refresh-r2",
+                    "the rotation was overwritten"
+                );
+                assert_eq!(
+                    on_disk.email.as_deref(),
+                    Some("new@example.test"),
+                    "the profile never merged onto the fresh record"
+                );
+            });
+        }
+
+        /// (b): the flight's InvalidGrant where the disk has moved to ANOTHER owner clears
+        /// nothing — the verb must not answer Ended (the restore would lock the gate on a valid
+        /// sign-in). It re-loads and answers Gone.
+        #[test]
+        fn b_an_invalid_grant_after_another_owner_signed_in_is_gone_not_ended() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let mut expired = stored("access-r1", "refresh-r1");
+                expired.access_expires_at_unix = 1_000;
+                let owner = bir_core::account_session::OwnerKey::of(&expired).unwrap();
+                let epoch = bir_core::session_epoch::current();
+                let now = cloud_account::unix_now();
+                // The disk moved on to another owner entirely.
+                let mut other = stored("access-other", "refresh-other");
+                other.user_id = "u2".into();
+                save_stored(&other).unwrap();
+                let (server, mut http) = scripted();
+                server
+                    .tokens
+                    .lock()
+                    .unwrap()
+                    .push_back((400, r#"{"error":"invalid_grant"}"#.into()));
+                let outcome = verb_refresh(&mut http, &expired, &owner, epoch, now)
+                    .expect("the verb errored");
+                assert!(
+                    matches!(outcome, VerbRefresh::Gone),
+                    "the verb answered Ended for a sign-in the ending never cleared: {outcome:?}"
+                );
+                let on_disk = bir_core::cloud_account::load_stored_account()
+                    .unwrap()
+                    .expect("the other owner's sign-in was cleared");
+                assert_eq!(on_disk.refresh_token, "refresh-other");
+            });
+        }
+
+        /// B1 (row 4, recency variant): the same rejection 1 SECOND after the rotation — the
+        /// forced path's 10-second recency twin would hand the REJECTED token right back. With
+        /// the rejection carried in, both fast paths are skipped for the rejected token and the
+        /// rotation still happens.
+        #[test]
+        fn row4_a_rejected_access_token_rotates_inside_the_recency_window() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let mut current = stored("access-r1", "refresh-r1");
+                current.last_refresh_unix = cloud_account::unix_now() - 1;
+                save_stored(&current).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&current).unwrap();
+                let epoch = bir_core::session_epoch::current();
+                let now = cloud_account::unix_now();
+                let (server, mut http) = scripted();
+                *server.mes.lock().unwrap() = [
+                    ("access-r2".to_string(), 200u16),
+                    ("access-r2".to_string(), 200u16),
+                    ("access-r2".to_string(), 200u16),
+                ]
+                .into_iter()
+                .collect();
+                server.tokens.lock().unwrap().push_back((
+                    200,
+                    r#"{"access_token":"access-r2","refresh_token":"refresh-r2","expires_in":3600}"#
+                        .into(),
+                ));
+                let outcome = verb_refresh(&mut http, &current, &owner, epoch, now)
+                    .expect("the verb errored");
+                assert!(
+                    matches!(outcome, VerbRefresh::Online { .. }),
+                    "the rejected token short-circuited the forced path inside the recency window: {outcome:?}"
+                );
+                let bearers = server.me_bearers.lock().unwrap();
+                assert!(
+                    bearers.iter().any(|bearer| bearer == "access-r2"),
+                    "no /me ever carried the rotated token inside the recency window: {bearers:?}"
+                );
+            });
+        }
+
         /// N5 (row 6): after the forced rotation /me rejects the NEW token too — the ending is
         /// matched on the ROTATED credential, so the stored sign-in really is cleared.
         #[test]
@@ -1132,6 +1316,11 @@ mod tests {
             signed_in(|_file| {
                 let current = stored("access-r1", "refresh-r1");
                 save_stored(&current).unwrap();
+                // The row's own cache state — never what another test left: the close's owner
+                // evidence is the cache, so the row seeds it as the machine's sign-in does.
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &current,
+                ));
                 let owner = bir_core::account_session::OwnerKey::of(&current).unwrap();
                 let epoch = bir_core::session_epoch::current();
                 let now = cloud_account::unix_now();
@@ -1149,7 +1338,9 @@ mod tests {
                     r#"{"access_token":"access-r2","refresh_token":"refresh-r2","expires_in":3600}"#
                         .into(),
                 ));
-                bir_core::account_session::on_session_ended(crate::session::server_ended);
+                bir_core::account_session::on_session_ended(|owner, epoch, credential| {
+                    crate::session::server_ended(owner, epoch, credential);
+                });
                 let outcome = verb_refresh(&mut http, &current, &owner, epoch, now)
                     .expect("the verb errored");
                 assert!(matches!(outcome, VerbRefresh::Ended), "{outcome:?}");
@@ -1180,7 +1371,9 @@ mod tests {
                     .lock()
                     .unwrap()
                     .push_back((400, r#"{"error":"invalid_grant"}"#.into()));
-                bir_core::account_session::on_session_ended(crate::session::server_ended);
+                bir_core::account_session::on_session_ended(|owner, epoch, credential| {
+                    crate::session::server_ended(owner, epoch, credential);
+                });
                 let outcome = verb_refresh(&mut http, &expired, &owner, epoch, now)
                     .expect("the verb errored");
                 assert!(matches!(outcome, VerbRefresh::Ended), "{outcome:?}");
@@ -1206,7 +1399,9 @@ mod tests {
                 let owner = bir_core::account_session::OwnerKey::of(&expired).unwrap();
                 let epoch = bir_core::session_epoch::current();
                 let now = cloud_account::unix_now();
-                bir_core::account_session::on_session_ended(crate::session::server_ended);
+                bir_core::account_session::on_session_ended(|owner, epoch, credential| {
+                    crate::session::server_ended(owner, epoch, credential);
+                });
                 // The cache names the owner, as the machine's sign-in sets it.
                 bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
                     &expired,
@@ -1221,6 +1416,11 @@ mod tests {
                     .lock()
                     .unwrap()
                     .push_back((400, r#"{"error":"invalid_grant"}"#.into()));
+                // The re-read rotation's /me answers 200: the verb must reach a REAL Online.
+                *server.mes.lock().unwrap() =
+                    [("*".to_string(), 200u16), ("*".to_string(), 200u16)]
+                        .into_iter()
+                        .collect();
                 // The verb leads the R1 flight, parked inside the token call.
                 let verb_server = std::sync::Arc::clone(&server);
                 let verb_stored = expired.clone();
@@ -1240,7 +1440,11 @@ mod tests {
                     save_stored(&rotated).unwrap();
                 }
                 let _ = gate_tx.send(());
-                verb.join().expect("the verb thread panicked");
+                let outcome = verb.join().expect("the verb thread panicked");
+                assert!(
+                    matches!(outcome, Some(VerbRefresh::Online { .. })),
+                    "the verb holding the spent token did not reach the real Online: {outcome:?}"
+                );
                 let on_disk = bir_core::cloud_account::load_stored_account().unwrap();
                 assert!(
                     on_disk.as_ref().map(|stored| stored.refresh_token.as_str())
@@ -1269,7 +1473,7 @@ mod tests {
                 let verb =
                     crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
                         .expect("the verb spawns");
-                futures::executor::block_on(verb);
+                let _ = futures::executor::block_on(verb);
                 assert!(
                     bir_core::cloud_account::load_stored_account()
                         .unwrap()
@@ -1359,7 +1563,9 @@ mod tests {
                 ));
                 let owner = bir_core::account_session::OwnerKey::of(&expired).unwrap();
                 let now = cloud_account::unix_now();
-                bir_core::account_session::on_session_ended(crate::session::server_ended);
+                bir_core::account_session::on_session_ended(|owner, epoch, credential| {
+                    crate::session::server_ended(owner, epoch, credential);
+                });
                 let (server, _) = scripted();
                 server
                     .tokens
@@ -1397,6 +1603,13 @@ mod tests {
         fn n3_a_sign_out_with_no_submitter_built_constructs_none() {
             let _turn = crate::open_room::room_test_turn();
             signed_in(|_file| {
+                // The cache names an owner — the owner-ending branch really runs — and the
+                // submitter slot is empty, so any construction is the sign-out's own.
+                let stored = stored("access-a", "refresh-a");
+                save_stored(&stored).unwrap();
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &stored,
+                ));
                 bir_core::relay::reset_submitter_for_test();
                 assert!(
                     bir_core::relay::peek_submitter().is_none(),
@@ -1456,7 +1669,9 @@ mod tests {
                 bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
                     &current,
                 ));
-                bir_core::account_session::on_session_ended(crate::session::server_ended);
+                bir_core::account_session::on_session_ended(|owner, epoch, credential| {
+                    crate::session::server_ended(owner, epoch, credential);
+                });
                 // The non-send caller's session_ended: no send context anywhere.
                 bir_core::bir_submit::TokenSource::session_ended(
                     &bir_core::account_session::AccountTokens,
@@ -1852,7 +2067,7 @@ mod tests {
                 crate::legacy_import_module::scan_folder(&legacy_folder).unwrap();
                 assert!(crate::legacy_import_module::holds_scan());
                 let (fake, _heard) = logout(&file, answered);
-                sign_out_on_a_thread(fake)
+                let _ = sign_out_on_a_thread(fake)
                     .recv_timeout(WAIT)
                     .expect("sign-out returned");
                 assert!(

@@ -304,6 +304,18 @@ pub fn access_token_with_credential(
     force: bool,
     for_owner: &OwnerKey,
 ) -> Result<(String, String), TokenError> {
+    access_token_rejecting(http, now_unix, force, for_owner, None)
+}
+
+/// [`access_token_with_credential`] naming the access token whose rejection drove this ask
+/// (B1): the fast paths never answer it — the rotation must really happen.
+pub fn access_token_rejecting(
+    http: &mut dyn Http,
+    now_unix: i64,
+    force: bool,
+    for_owner: &OwnerKey,
+    rejected_access: Option<&str>,
+) -> Result<(String, String), TokenError> {
     #[cfg(any(test, feature = "test-support"))]
     note_token_fetch(for_owner);
     let epoch = crate::session_epoch::current();
@@ -315,6 +327,7 @@ pub fn access_token_with_credential(
         for_owner,
         epoch,
         &end_session_for,
+        rejected_access,
     )
 }
 
@@ -561,6 +574,7 @@ impl AccountStore for SavedAccount {
 /// leader ran the session-ended hook exactly once for everyone), a network error is every
 /// waiter's answer and signs nobody out. A refresh for a different — older or newer — credential
 /// is its own flight and never joins nor blocks this one's.
+#[allow(clippy::too_many_arguments)]
 fn access_token_in(
     store: &dyn AccountStore,
     http: &mut dyn Http,
@@ -569,6 +583,7 @@ fn access_token_in(
     for_owner: &OwnerKey,
     epoch: u64,
     ended: &dyn Fn(OwnerKey, u64, String),
+    rejected_access: Option<&str>,
 ) -> Result<(String, String), TokenError> {
     let mut retried = false;
     // F6: every re-read of this loop is bounded — a flight that keeps rotating under the ask
@@ -595,12 +610,24 @@ fn access_token_in(
         if owner != *for_owner {
             return Err(TokenError::SignedOut);
         }
-        if !force && stored.access_expires_at_unix > now_unix.saturating_add(EXPIRY_MARGIN_SECONDS)
+        // B1: a fast path never answers the REJECTED access token — a force driven by its
+        // rejection would loop the same 401 into a sign-out. The recency twin is skipped just
+        // the same: within ten seconds of a rotation the server can already have revoked the
+        // access token it made, and the rejection is fresher evidence than the clock.
+        let is_rejected = |stored: &StoredAccount| {
+            rejected_access.is_some_and(|rejected| stored.access_token == rejected)
+        };
+        if !force
+            && stored.access_expires_at_unix > now_unix.saturating_add(EXPIRY_MARGIN_SECONDS)
+            && !is_rejected(&stored)
         {
             let credential = stored.refresh_token.clone();
             return Ok((stored.access_token, credential));
         }
-        if force && now_unix.saturating_sub(stored.last_refresh_unix) < RECENT_REFRESH_SECONDS {
+        if force
+            && now_unix.saturating_sub(stored.last_refresh_unix) < RECENT_REFRESH_SECONDS
+            && !is_rejected(&stored)
+        {
             let credential = stored.refresh_token.clone();
             return Ok((stored.access_token, credential));
         }
@@ -696,13 +723,18 @@ fn access_token_in(
             }
             continue;
         }
-        if !force && stored.access_expires_at_unix > now_unix.saturating_add(EXPIRY_MARGIN_SECONDS)
+        if !force
+            && stored.access_expires_at_unix > now_unix.saturating_add(EXPIRY_MARGIN_SECONDS)
+            && !is_rejected(&stored)
         {
             leader.outcome = Some(FlightOutcome::ReRead);
             let credential = stored.refresh_token.clone();
             return Ok((stored.access_token, credential));
         }
-        if force && now_unix.saturating_sub(stored.last_refresh_unix) < RECENT_REFRESH_SECONDS {
+        if force
+            && now_unix.saturating_sub(stored.last_refresh_unix) < RECENT_REFRESH_SECONDS
+            && !is_rejected(&stored)
+        {
             leader.outcome = Some(FlightOutcome::ReRead);
             let credential = stored.refresh_token.clone();
             return Ok((stored.access_token, credential));
@@ -963,9 +995,18 @@ mod tests {
         force: bool,
         hook_runs: &AtomicUsize,
     ) -> Result<String, TokenError> {
-        access_token_in(store, http, now, force, &test_owner(), 1, &|_, _, _| {
-            hook_runs.fetch_add(1, Ordering::SeqCst);
-        })
+        access_token_in(
+            store,
+            http,
+            now,
+            force,
+            &test_owner(),
+            1,
+            &|_, _, _| {
+                hook_runs.fetch_add(1, Ordering::SeqCst);
+            },
+            None,
+        )
         .map(|(token, _credential)| token)
     }
 
@@ -1203,6 +1244,7 @@ mod tests {
                     &move |_, _, _| {
                         hook2.fetch_add(1, Ordering::SeqCst);
                     },
+                    None,
                 )
                 .map(|(token, _credential)| token)
             }));
@@ -1329,6 +1371,7 @@ mod tests {
                             hook_count.fetch_add(1, Ordering::SeqCst);
                             hook_store.clear();
                         },
+                        None,
                     )
                     .map(|(token, _credential)| token)
                 })
@@ -1467,6 +1510,7 @@ mod tests {
             &|_, _, _| {
                 hook.fetch_add(1, Ordering::SeqCst);
             },
+            None,
         );
         assert_eq!(answer, Err(TokenError::SignedOut));
         assert_eq!(server.requests(), 0);
