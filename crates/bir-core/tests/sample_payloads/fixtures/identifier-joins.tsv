@@ -1,7 +1,7 @@
 # TIN and ATC cells: the text joins (sheet, writer key) that print as identifiers,
 # never shortened on the page (frozen_html.rs is_identifier_cell): every
-# writer-cells.json join (266 on 41 sheets) plus the print's own SHEET_JOINS
-# (2550M's four TIN parts), 270 in all. The rendered parity test reads these
+# writer-cells.json join (268 on 41 sheets) plus the print's own SHEET_JOINS
+# (2550M's four TIN parts), 272 in all. The rendered parity test reads these
 # whole from the page; bir-print's identifier_classing_matches_the_pinned_list
 # fails if the print classes any other set.
 0605-1999	txtATCCode
@@ -184,6 +184,7 @@
 1800-2018	frm1800v2018:txtTIN1
 1800-2018	frm1800v2018:txtTIN2
 1800-2018	frm1800v2018:txtTIN3
+1800-2018	frm1800v2018:txtBranchCode
 1800-2018	frm1800v2018:txtDoneeTINA
 1800-2018	frm1800v2018:txtDoneeTINB
 1800-2018	frm1800v2018:txtDoneeTINC
@@ -194,6 +195,7 @@
 1801-2018	frm1801v2018:tinA_1
 1801-2018	frm1801v2018:tinB_1
 1801-2018	frm1801v2018:tinC_1
+1801-2018	frm1801v2018:branchCode_1
 2000-dst-2018	frm2000:txtTIN1
 2000-dst-2018	frm2000:txtTIN2
 2000-dst-2018	frm2000:txtTIN3
@@ -241,14 +243,14 @@
 2200s-2018	derived:tin_digits
 2200s-2018	frm2200S:txtsched1Atc0
 2200s-2018	frm2200S:txtsched1Atc1
-2200t-2022	frm2200Tv2020:tinA
-2200t-2022	frm2200Tv2020:tinB
-2200t-2022	frm2200Tv2020:tinC
-2200t-2022	frm2200Tv2020:branchCode
-2200t-2022	derived:tin_digits
-2200t-2022	frm2200Tv2020:txtSched1_xt_others1_Atc
-2200t-2022	frm2200Tv2020:txtSched1_xt_others2_Atc
-2200t-2022	frm2200Tv2020:txtSched1_xt_others3_Atc
+2200t-2020	frm2200Tv2020:tinA
+2200t-2020	frm2200Tv2020:tinB
+2200t-2020	frm2200Tv2020:tinC
+2200t-2020	frm2200Tv2020:branchCode
+2200t-2020	derived:tin_digits
+2200t-2020	frm2200Tv2020:txtSched1_xt_others1_Atc
+2200t-2020	frm2200Tv2020:txtSched1_xt_others2_Atc
+2200t-2020	frm2200Tv2020:txtSched1_xt_others3_Atc
 2550m-2007	frm2550m:txtAtcCde1
 2550m-2007	frm2550m:txtAtcCde2
 2550m-2007	frm2550m:txtAtcCde3

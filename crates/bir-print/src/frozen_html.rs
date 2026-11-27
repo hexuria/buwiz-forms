@@ -7540,7 +7540,7 @@ mod tests {
 
     /// The print classes exactly the TIN and ATC joins the rendered parity
     /// test pins (`crates/bir-core/tests/sample_payloads/fixtures/identifier-joins.tsv`:
-    /// 266 writer-cells.json joins on 41 sheets and the 4 SHEET_JOINS TIN
+    /// 268 writer-cells.json joins on 41 sheets and the 4 SHEET_JOINS TIN
     /// parts of 2550M): a change to the classing is a diff of that list.
     #[test]
     fn identifier_classing_matches_the_pinned_list() {
@@ -7566,7 +7566,7 @@ mod tests {
             }
         }
         assert_eq!(classed, pinned);
-        assert_eq!(pinned.len(), 270);
+        assert_eq!(pinned.len(), 272);
     }
 
     /// The capitals rule wants `TIN` or `ATC` as a word of its own, and no
@@ -10879,7 +10879,8 @@ mod tests {
     }
 
     /// Every overflow line a fill writes (`data-overflow-of="X"`) lies inside
-    /// the drawn cell `<div id="X">` itself, never inside a `<template>` (the
+    /// the drawn cell `<div id="X">` itself (or the Rule 6 band drawn over it,
+    /// `data-rule6-of="X"`), never inside a `<template>` (the
     /// band rows a sheet keeps for cloning, which are never drawn) nor in
     /// another element. Otherwise a long value prints nowhere while
     /// `printed_cells`, which reads the text, still counts it, and a golden
@@ -10933,11 +10934,14 @@ mod tests {
                 templates = templates.saturating_sub(1);
             } else if tag.starts_with("<div") {
                 // The `id` attribute itself, not `data-cell-id` or any
-                // other name ending in `id`.
+                // other name ending in `id`; or the cell a drawn Rule 6
+                // band lies over (`data-rule6-of`, the band that prints a
+                // long value at its cell's place).
                 let id = tag
                     .find(" id=\"")
                     .map(|at| &tag[at + 5..])
                     .and_then(|rest| rest.split('"').next())
+                    .or_else(|| attr(tag, "data-rule6-of"))
                     .map(str::to_string);
                 divs.push(id);
             } else if tag.starts_with("</div") {
