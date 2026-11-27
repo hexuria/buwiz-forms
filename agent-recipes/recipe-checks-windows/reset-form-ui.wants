@@ -1,0 +1,5 @@
+# Close the open form through the window's Back control. This helper performs no Send or Queue action.
+wait_until tb-back --timeout-ms 5000
+click tb-back
+wait_until tp-new-return --timeout-ms 10000
+snapshot

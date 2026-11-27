@@ -1,0 +1,24 @@
+error: `node 2786` is disabled
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "reset-form-ui",
+  "fingerprint": "fnv1a64:83c1509c0d3a41a8",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 65
+    },
+    {
+      "id": "s2",
+      "ok": false,
+      "error": "`node 2786` is disabled",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 214
+    }
+  ],
+  "elapsed_ms": 280
+}

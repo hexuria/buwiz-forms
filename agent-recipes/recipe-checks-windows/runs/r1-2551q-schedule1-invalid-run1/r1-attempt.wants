@@ -1,0 +1,29 @@
+wait_until panel-open-forms --timeout-ms 5000
+click panel-open-forms
+wait_until tp-years-2021 --timeout-ms 5000
+click tp-years-2021
+wait_until tp-new-return --timeout-ms 5000
+click tp-new-return
+wait_until new-return-2551Q --timeout-ms 5000
+click new-return-2551Q
+click new-return-period-trigger
+wait_until new-return-period-opt-1 --timeout-ms 5000
+click new-return-period-opt-1
+wait_until new-return-period-trigger value="Q1 2021" --timeout-ms 5000
+click new-return-open
+wait_until fp-pill-next --timeout-ms 20000
+click fp-pill-open
+wait_until fp-section-4 --timeout-ms 5000
+click fp-section-4
+wait_until fp-table-drpATC1 --timeout-ms 5000
+click fp-table-drpATC1-add
+wait_until fp-table-drpATC1-drawer --timeout-ms 5000
+click fp-drpATC2-trigger
+wait_until fp-drpATC2-opt-4 --timeout-ms 5000
+click fp-drpATC2-opt-4
+wait_until fp-txtATCAmt2 --timeout-ms 5000
+type fp-txtATCAmt2 abc --key-delay-ms 120
+key fp-txtATCAmt2 Tab
+wait_until fp-table-drpATC1-unfinished --timeout-ms 5000
+assert fp-table-drpATC1-unfinished
+snapshot

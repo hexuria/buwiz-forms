@@ -1,0 +1,7 @@
+wait_until fp-pill-next --timeout-ms 10000
+click fp-pill-open
+wait_until fp-section-2 --timeout-ms 5000
+click fp-section-2
+wait_until fp-frm2551Qv2018:txt20 --timeout-ms 5000
+click fp-penalty-2:6
+wait_until fp-frm2551Qv2018:txt20 --timeout-ms 5000

@@ -1,0 +1,64 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "r2-data-setup",
+  "fingerprint": "fnv1a64:69ed4e2d7e52eb90",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 42,
+      "result": {
+        "dry_run": null,
+        "form": "2551Q",
+        "period": 2,
+        "send": null,
+        "status": "Draft",
+        "tin": "00012345300000",
+        "year": 2021
+      }
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 50,
+      "result": {
+        "applied": [
+          "drpATC1",
+          "txtATCAmt1"
+        ],
+        "filled": [
+          "drpATC1",
+          "txtATCAmt1"
+        ],
+        "form": "2551Q",
+        "kept_user_boxes": [],
+        "not_shown": [
+          "drpATC1"
+        ],
+        "source": "document"
+      }
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 34,
+      "result": {
+        "applied": [
+          "txtATCAmt1"
+        ],
+        "filled": [
+          "txtATCAmt1"
+        ],
+        "form": "2551Q",
+        "kept_user_boxes": [],
+        "source": "document"
+      }
+    }
+  ],
+  "elapsed_ms": 127
+}

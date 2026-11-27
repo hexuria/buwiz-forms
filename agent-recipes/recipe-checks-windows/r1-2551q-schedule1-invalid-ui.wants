@@ -1,0 +1,34 @@
+# R1 UI-only: open 2551Q for $year Q$period, add a new Schedule 1 row, choose ATC PT060,
+# type abc into its untouched taxable amount at a paced 120 ms delay, and leave the box. No Send or Queue action.
+wait_until tp-years-$year --timeout-ms 5000
+click tp-years-$year
+wait_until tp-new-return --timeout-ms 5000
+click tp-new-return
+wait_until new-return-2551Q --timeout-ms 5000
+click new-return-2551Q
+click new-return-period-trigger
+wait_until new-return-period-opt-$period --timeout-ms 5000
+click new-return-period-opt-$period
+wait_until new-return-period-trigger value="Q$period $year" --timeout-ms 5000
+click new-return-open
+wait_until fp-pill-next --timeout-ms 20000
+click fp-pill-open
+wait_until fp-section-1 --timeout-ms 5000
+click fp-section-1
+wait_until fp-frm2551Qv2018:taxRate1 --timeout-ms 5000
+click fp-frm2551Qv2018:taxRate1
+click fp-pill-open
+wait_until fp-section-4 --timeout-ms 5000
+click fp-section-4
+wait_until fp-table-drpATC1-add --timeout-ms 5000
+click fp-table-drpATC1-add
+wait_until fp-drpATC1-trigger --timeout-ms 5000
+click fp-drpATC1-trigger
+wait_until fp-drpATC1-opt-4 --timeout-ms 5000
+click fp-drpATC1-opt-4
+wait_until fp-txtATCAmt1 --timeout-ms 5000
+type fp-txtATCAmt1 abc --key-delay-ms 120
+key fp-txtATCAmt1 Tab
+wait_until fp-table-drpATC1-unfinished --timeout-ms 5000
+assert fp-table-drpATC1-unfinished
+snapshot

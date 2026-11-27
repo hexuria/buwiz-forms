@@ -1,0 +1,14 @@
+# From the taxpayer Forms tab, select $year and open 2551Q for quarter $period through the real window.
+wait_until tp-years-$year --timeout-ms 5000
+click tp-years-$year
+wait_until tp-new-return --timeout-ms 5000
+click tp-new-return
+wait_until new-return-2551Q --timeout-ms 5000
+click new-return-2551Q
+click new-return-period-trigger
+wait_until new-return-period-opt-$period --timeout-ms 5000
+click new-return-period-opt-$period
+wait_until new-return-period-trigger value="Q$period $year" --timeout-ms 5000
+click new-return-open
+wait_until fp-pill-next --timeout-ms 20000
+snapshot

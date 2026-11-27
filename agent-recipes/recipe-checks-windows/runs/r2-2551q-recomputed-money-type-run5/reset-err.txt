@@ -1,0 +1,29 @@
+error: wait_until timed out: node `tp-new-return` not found
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "reset-form-ui",
+  "fingerprint": "fnv1a64:83c1509c0d3a41a8",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 102
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 488
+    },
+    {
+      "id": "s3",
+      "ok": false,
+      "error": "wait_until timed out: node `tp-new-return` not found",
+      "error_code": "timeout",
+      "elapsed_ms": 10006
+    }
+  ],
+  "elapsed_ms": 10597
+}

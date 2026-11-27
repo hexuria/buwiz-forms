@@ -1,0 +1,27 @@
+# One-time first-run setup through the real window: choose solo, create Juana Santos with the Non-VAT professional setup.
+# The generated TIN textbox id is the one in the current scratch-window tree; no product code or database write is used.
+wait_until setup-solo --timeout-ms 10000
+click setup-solo
+wait_until new-tp-name --timeout-ms 5000
+click new-tp-start-trigger
+wait_until new-tp-start-opt-setup:non_vat_professional --timeout-ms 5000
+click new-tp-start-opt-setup:non_vat_professional
+type n11 000123453
+type new-tp-name "Juana Santos"
+type new-tp-registered_address "1 Example Street, Quezon City"
+click new-tp-zip_code-trigger
+wait_until new-tp-zip_code-search --timeout-ms 5000
+type new-tp-zip_code-search 1100
+wait_until new-tp-zip_code-opt-1100 --timeout-ms 5000
+click new-tp-zip_code-opt-1100
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-search --timeout-ms 5000
+type new-tp-rdo_code-search 039
+wait_until new-tp-rdo_code-opt-039 --timeout-ms 5000
+click new-tp-rdo_code-opt-039
+type new-tp-phone 09170000000
+type new-tp-email juana@example.com
+click new-tp-save
+wait_until nav-home --timeout-ms 10000
+assert context-pill name="Tax profile: Juana Santos"
+snapshot

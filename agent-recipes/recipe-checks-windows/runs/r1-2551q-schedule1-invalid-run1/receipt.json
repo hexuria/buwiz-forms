@@ -1,0 +1,128 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "r1-attempt",
+  "fingerprint": "fnv1a64:72cf1cc932dc1a9b",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 71
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 477
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 53
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 425
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 54
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 610
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 54
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 405
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 410
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 69
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 399
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 68
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 626
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 72
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 427
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 92
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1064
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 79
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 463
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "elapsed_ms": 76
+    },
+    {
+      "id": "s21",
+      "ok": false,
+      "error": "`node 31078` is offscreen",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 212
+    }
+  ],
+  "elapsed_ms": 6216
+}

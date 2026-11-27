@@ -1,0 +1,61 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "r2-data-setup",
+  "fingerprint": "fnv1a64:2adc42ef9d3ad07f",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 39,
+      "result": {
+        "dry_run": null,
+        "form": "2551Q",
+        "period": 2,
+        "send": null,
+        "status": "Draft",
+        "tin": "00012345300000",
+        "year": 2024
+      }
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 37,
+      "result": {
+        "applied": [
+          "drpATC1",
+          "txtATCAmt1"
+        ],
+        "filled": [
+          "drpATC1",
+          "txtATCAmt1"
+        ],
+        "form": "2551Q",
+        "kept_user_boxes": [],
+        "source": "document"
+      }
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 65,
+      "result": {
+        "applied": [
+          "txtATCAmt1"
+        ],
+        "filled": [
+          "txtATCAmt1"
+        ],
+        "form": "2551Q",
+        "kept_user_boxes": [],
+        "source": "document"
+      }
+    }
+  ],
+  "elapsed_ms": 143
+}

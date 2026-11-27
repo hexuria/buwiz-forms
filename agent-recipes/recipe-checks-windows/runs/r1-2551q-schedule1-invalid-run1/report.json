@@ -1,0 +1,21 @@
+{
+  "case": "r1-2551q-schedule1-invalid",
+  "run": 1,
+  "year": 2021,
+  "quarter": 1,
+  "verdict": "known_gap",
+  "known_gap": "hexuria/nsh-gpui-agent#13 sheet press",
+  "failure": "error: `node 31078` is offscreen",
+  "exact_sentence": null,
+  "row_exists_in_draft": false,
+  "draft_row2": null,
+  "draft_id": null,
+  "draft_status": null,
+  "draft_updated_at": null,
+  "steps": [
+    "opened 2551Q 2021 Q1 through UI recipe steps s1-s20",
+    "added a new Schedule 1 row (row 2)",
+    "stopped at s21 click fp-drpATC2-trigger: node offscreen",
+    "no fallback used; exact sentence and typed value untested"
+  ]
+}

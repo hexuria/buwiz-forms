@@ -1,0 +1,5 @@
+click fp-frm2551Qv2018:txt20
+type fp-frm2551Qv2018:txt20 9 --key-delay-ms 120
+key fp-frm2551Qv2018:txt20 Tab
+assert fp-frm2551Qv2018:txt20
+snapshot

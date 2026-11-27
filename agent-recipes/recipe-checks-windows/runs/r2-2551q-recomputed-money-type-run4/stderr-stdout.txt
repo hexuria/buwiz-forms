@@ -1,0 +1,38 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "r2-type",
+  "fingerprint": "fnv1a64:bbe9d0a6156a5437",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 405
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 366
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 591
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 96
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 97
+    }
+  ],
+  "elapsed_ms": 1556
+}

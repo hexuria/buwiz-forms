@@ -1,0 +1,19 @@
+error: no form is open to dismiss
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "data-dismiss",
+  "fingerprint": "fnv1a64:282dc9ffe47dd928",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": false,
+      "error": "no form is open to dismiss",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 24
+    }
+  ],
+  "elapsed_ms": 24
+}

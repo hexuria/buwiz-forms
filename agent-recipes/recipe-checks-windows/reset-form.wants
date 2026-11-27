@@ -1,0 +1,2 @@
+# Close any open form after a case. This helper performs no Send or Queue action.
+invoke form.dismiss discard=true

@@ -1,0 +1,25 @@
+# R1: in a fresh 2551Q draft, add Schedule 1 row 1, choose ATC PT060, type abc into its untouched taxable amount,
+# and leave the box. The final snapshot carries the exact refusal sentence and the row state. No Send or Queue action.
+invoke profile.save tin=00012345300000 name="Juana Santos" taxpayer_type=Individual birth_date=1990-01-02 rdo_code=039 registered_address="1 Example Street, Quezon City" zip_code='"1100"' phone=09170000000 email=juana@example.com
+invoke form.open code=2551Q year=$year period=$period tin=00012345300000
+wait_until fp-pill-next --timeout-ms 10000
+click fp-pill-open
+wait_until fp-section-1 --timeout-ms 5000
+click fp-section-1
+wait_until fp-frm2551Qv2018:taxRate1 --timeout-ms 5000
+click fp-frm2551Qv2018:taxRate1
+click fp-pill-open
+wait_until fp-section-4 --timeout-ms 5000
+click fp-section-4
+wait_until fp-table-drpATC1-add --timeout-ms 5000
+click fp-table-drpATC1-add
+wait_until fp-drpATC1-trigger --timeout-ms 5000
+click fp-drpATC1-trigger
+wait_until fp-drpATC1-opt-4 --timeout-ms 5000
+click fp-drpATC1-opt-4
+wait_until fp-txtATCAmt1 --timeout-ms 5000
+type fp-txtATCAmt1 abc --key-delay-ms 120
+key fp-txtATCAmt1 Tab
+wait_until fp-table-drpATC1-unfinished --timeout-ms 5000
+assert fp-table-drpATC1-unfinished
+snapshot

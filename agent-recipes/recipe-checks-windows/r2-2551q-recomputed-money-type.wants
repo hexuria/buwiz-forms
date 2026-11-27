@@ -1,0 +1,25 @@
+# R2: in a fresh 2551Q draft, make Schedule 1 row 1 produce tax due, then focus the recomputed Item 20 surcharge
+# money box and type 9 at a 120 ms key pace. The final snapshot carries the resulting box text. No Send or Queue action.
+invoke profile.save tin=00012345300000 name="Juana Santos" taxpayer_type=Individual birth_date=1990-01-02 rdo_code=039 registered_address="1 Example Street, Quezon City" zip_code='"1100"' phone=09170000000 email=juana@example.com
+invoke form.open code=2551Q year=$year period=$period tin=00012345300000
+wait_until fp-pill-next --timeout-ms 10000
+click fp-pill-open
+wait_until fp-section-1 --timeout-ms 5000
+click fp-section-1
+wait_until fp-frm2551Qv2018:taxRate1 --timeout-ms 5000
+click fp-frm2551Qv2018:taxRate1
+invoke form.fill fields='{"drpATC1":"1","txtATCAmt1":"1000"}' source=user
+click fp-pill-open
+wait_until fp-section-2 --timeout-ms 5000
+click fp-section-2
+wait_until fp-frm2551Qv2018:txt20 --timeout-ms 5000
+click fp-penalty-2:6
+wait_until fp-frm2551Qv2018:txt20 --timeout-ms 5000
+invoke form.fill fields='{"txtATCAmt1":"2000"}' source=user
+wait_until fp-frm2551Qv2018:txt19 --timeout-ms 5000
+click fp-frm2551Qv2018:txt19
+key fp-frm2551Qv2018:txt19 Tab
+type fp-frm2551Qv2018:txt20 9 --key-delay-ms 120
+key fp-frm2551Qv2018:txt20 Tab
+assert fp-frm2551Qv2018:txt20
+snapshot

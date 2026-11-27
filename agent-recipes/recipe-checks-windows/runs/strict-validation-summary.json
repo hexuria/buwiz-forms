@@ -1,0 +1,195 @@
+{
+  "r1": {
+    "case": "r1-2551q-schedule1-invalid",
+    "run": 1,
+    "year": 2021,
+    "quarter": 1,
+    "verdict": "known_gap",
+    "known_gap": "hexuria/nsh-gpui-agent#13 sheet press",
+    "failure": "error: `node 31078` is offscreen",
+    "exact_sentence": null,
+    "row_exists_in_draft": false,
+    "draft_row2": null,
+    "draft_id": null,
+    "draft_status": null,
+    "draft_updated_at": null,
+    "steps": [
+      "opened 2551Q 2021 Q1 through UI recipe steps s1-s20",
+      "added a new Schedule 1 row (row 2)",
+      "stopped at s21 click fp-drpATC2-trigger: node offscreen",
+      "no fallback used; exact sentence and typed value untested"
+    ]
+  },
+  "r2": [
+    {
+      "case": "r2-2551q-recomputed-money-type",
+      "run": 1,
+      "year": 2021,
+      "quarter": 2,
+      "verdict": "passed",
+      "known_gap": null,
+      "box_text": "9.00",
+      "saved_value": 9.0,
+      "replace_vs_append": "replaces_selection",
+      "data_setup_rc": 0,
+      "surface_rc": 0,
+      "draft": {
+        "id": 3,
+        "status": "Draft",
+        "updated_at": "2026-11-27 11:36:00"
+      },
+      "computed": {
+        "total_tax_due": 20.0,
+        "tax_payable": 20.0,
+        "interest": 12.83,
+        "compromise": 1000.0,
+        "total_penalties": 1021.83,
+        "total_amount_payable": 1041.83
+      },
+      "failure": "{\n  \"v\": 1,\n  \"ok\": true,\n  \"recipe\": \"r2-open-penalties\",\n  \"fingerprint\": \"fnv1a64:884763e782b43f37\",\n  \"session_reused\": true,\n  \"steps\": [\n    {\n      \"id\": \"s1\",\n      \"ok\": true,\n      \"elapsed_ms\": 283\n    },\n    {\n      \"id\": \"s2\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 425\n    },\n    {\n      \"id\": \"s3\",\n      \"ok\": true,\n      \"elapsed_ms\": 81\n    },\n    {\n      \"id\": \"s4\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 1920\n    },\n    {\n      \"id\": \"s5\",\n      \"ok\": true,\n      \"elapsed_ms\": 90\n    },\n    {\n      \"id\": \"s6\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 460\n    },\n    {\n      \"id\": \"s7\",\n      \"ok\": true,\n      \"elapsed_ms\": 93\n    }\n  ],\n  \"elapsed_ms\": 3353\n}",
+      "steps": [
+        "data setup rc=0",
+        "open penalties rc=0",
+        "type rc=0",
+        "eopt_micro_answered=False"
+      ],
+      "box_text_before_type": "5.00"
+    },
+    {
+      "case": "r2-2551q-recomputed-money-type",
+      "run": 2,
+      "year": 2022,
+      "quarter": 2,
+      "verdict": "passed",
+      "known_gap": null,
+      "box_text": "9.00",
+      "saved_value": 9.0,
+      "replace_vs_append": "replaces_selection",
+      "data_setup_rc": 0,
+      "surface_rc": 0,
+      "draft": {
+        "id": 4,
+        "status": "Draft",
+        "updated_at": "2026-11-27 11:36:16"
+      },
+      "computed": {
+        "total_tax_due": 20.0,
+        "tax_payable": 20.0,
+        "interest": 10.43,
+        "compromise": 1000.0,
+        "total_penalties": 1019.43,
+        "total_amount_payable": 1039.43
+      },
+      "failure": "{\n  \"v\": 1,\n  \"ok\": true,\n  \"recipe\": \"r2-open-penalties\",\n  \"fingerprint\": \"fnv1a64:884763e782b43f37\",\n  \"session_reused\": true,\n  \"steps\": [\n    {\n      \"id\": \"s1\",\n      \"ok\": true,\n      \"elapsed_ms\": 295\n    },\n    {\n      \"id\": \"s2\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 426\n    },\n    {\n      \"id\": \"s3\",\n      \"ok\": true,\n      \"elapsed_ms\": 85\n    },\n    {\n      \"id\": \"s4\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 1911\n    },\n    {\n      \"id\": \"s5\",\n      \"ok\": true,\n      \"elapsed_ms\": 99\n    },\n    {\n      \"id\": \"s6\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 440\n    },\n    {\n      \"id\": \"s7\",\n      \"ok\": true,\n      \"elapsed_ms\": 99\n    }\n  ],\n  \"elapsed_ms\": 3358\n}",
+      "steps": [
+        "data setup rc=0",
+        "open penalties rc=0",
+        "type rc=0",
+        "eopt_micro_answered=False"
+      ],
+      "box_text_before_type": "5.00"
+    },
+    {
+      "case": "r2-2551q-recomputed-money-type",
+      "run": 3,
+      "year": 2023,
+      "quarter": 2,
+      "verdict": "passed",
+      "known_gap": null,
+      "box_text": "9.00",
+      "saved_value": 9.0,
+      "replace_vs_append": "replaces_selection",
+      "data_setup_rc": 0,
+      "surface_rc": 0,
+      "draft": {
+        "id": 5,
+        "status": "Draft",
+        "updated_at": "2026-11-27 11:36:33"
+      },
+      "computed": {
+        "total_tax_due": 20.0,
+        "tax_payable": 20.0,
+        "interest": 8.03,
+        "compromise": 1000.0,
+        "total_penalties": 1017.03,
+        "total_amount_payable": 1037.03
+      },
+      "failure": "{\n  \"v\": 1,\n  \"ok\": true,\n  \"recipe\": \"r2-open-penalties\",\n  \"fingerprint\": \"fnv1a64:884763e782b43f37\",\n  \"session_reused\": true,\n  \"steps\": [\n    {\n      \"id\": \"s1\",\n      \"ok\": true,\n      \"elapsed_ms\": 249\n    },\n    {\n      \"id\": \"s2\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 441\n    },\n    {\n      \"id\": \"s3\",\n      \"ok\": true,\n      \"elapsed_ms\": 104\n    },\n    {\n      \"id\": \"s4\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 2028\n    },\n    {\n      \"id\": \"s5\",\n      \"ok\": true,\n      \"elapsed_ms\": 97\n    },\n    {\n      \"id\": \"s6\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 443\n    },\n    {\n      \"id\": \"s7\",\n      \"ok\": true,\n      \"elapsed_ms\": 96\n    }\n  ],\n  \"elapsed_ms\": 3461\n}",
+      "steps": [
+        "data setup rc=0",
+        "open penalties rc=0",
+        "type rc=0",
+        "eopt_micro_answered=False"
+      ],
+      "box_text_before_type": "5.00"
+    },
+    {
+      "case": "r2-2551q-recomputed-money-type",
+      "run": 4,
+      "year": 2024,
+      "quarter": 2,
+      "verdict": "passed",
+      "known_gap": null,
+      "box_text": "9.00",
+      "saved_value": 9.0,
+      "replace_vs_append": "replaces_selection",
+      "data_setup_rc": 0,
+      "surface_rc": 0,
+      "draft": {
+        "id": 6,
+        "status": "Draft",
+        "updated_at": "2026-11-27 11:36:50"
+      },
+      "computed": {
+        "total_tax_due": 60.0,
+        "tax_payable": 60.0,
+        "interest": 8.43,
+        "compromise": 500.0,
+        "total_penalties": 517.43,
+        "total_amount_payable": 577.43
+      },
+      "failure": "{\n  \"v\": 1,\n  \"ok\": true,\n  \"recipe\": \"r2-open-penalties\",\n  \"fingerprint\": \"fnv1a64:884763e782b43f37\",\n  \"session_reused\": true,\n  \"steps\": [\n    {\n      \"id\": \"s1\",\n      \"ok\": true,\n      \"elapsed_ms\": 270\n    },\n    {\n      \"id\": \"s2\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 408\n    },\n    {\n      \"id\": \"s3\",\n      \"ok\": true,\n      \"elapsed_ms\": 84\n    },\n    {\n      \"id\": \"s4\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 1958\n    },\n    {\n      \"id\": \"s5\",\n      \"ok\": true,\n      \"elapsed_ms\": 110\n    },\n    {\n      \"id\": \"s6\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 446\n    },\n    {\n      \"id\": \"s7\",\n      \"ok\": true,\n      \"elapsed_ms\": 121\n    }\n  ],\n  \"elapsed_ms\": 3400\n}",
+      "steps": [
+        "data setup rc=0",
+        "open penalties rc=0",
+        "type rc=0",
+        "eopt_micro_answered=False"
+      ],
+      "box_text_before_type": "6.00"
+    },
+    {
+      "case": "r2-2551q-recomputed-money-type",
+      "run": 5,
+      "year": 2025,
+      "quarter": 2,
+      "verdict": "passed",
+      "known_gap": null,
+      "box_text": "9.00",
+      "saved_value": 9.0,
+      "replace_vs_append": "replaces_selection",
+      "data_setup_rc": 0,
+      "surface_rc": 0,
+      "draft": {
+        "id": 7,
+        "status": "Draft",
+        "updated_at": "2026-11-27 11:37:06"
+      },
+      "computed": {
+        "total_tax_due": 60.0,
+        "tax_payable": 60.0,
+        "interest": 4.83,
+        "compromise": 500.0,
+        "total_penalties": 513.83,
+        "total_amount_payable": 573.83
+      },
+      "failure": "{\n  \"v\": 1,\n  \"ok\": true,\n  \"recipe\": \"r2-open-penalties\",\n  \"fingerprint\": \"fnv1a64:884763e782b43f37\",\n  \"session_reused\": true,\n  \"steps\": [\n    {\n      \"id\": \"s1\",\n      \"ok\": true,\n      \"elapsed_ms\": 246\n    },\n    {\n      \"id\": \"s2\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 426\n    },\n    {\n      \"id\": \"s3\",\n      \"ok\": true,\n      \"elapsed_ms\": 85\n    },\n    {\n      \"id\": \"s4\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 1938\n    },\n    {\n      \"id\": \"s5\",\n      \"ok\": true,\n      \"elapsed_ms\": 104\n    },\n    {\n      \"id\": \"s6\",\n      \"ok\": true,\n      \"delivery_status\": \"delivered_unverified\",\n      \"elapsed_ms\": 426\n    },\n    {\n      \"id\": \"s7\",\n      \"ok\": true,\n      \"elapsed_ms\": 104\n    }\n  ],\n  \"elapsed_ms\": 3332\n}",
+      "steps": [
+        "data setup rc=0",
+        "open penalties rc=0",
+        "type rc=0",
+        "eopt_micro_answered=False"
+      ],
+      "box_text_before_type": "6.00"
+    }
+  ]
+}
