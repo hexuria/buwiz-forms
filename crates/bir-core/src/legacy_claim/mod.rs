@@ -32,6 +32,8 @@ mod files;
 pub(crate) mod fixtures;
 mod probe;
 #[cfg(test)]
+mod rehearsal;
+#[cfg(test)]
 mod tests;
 
 use std::path::{Path, PathBuf};
