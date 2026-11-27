@@ -687,27 +687,28 @@ pub fn single_room_database() -> Option<PathBuf> {
     None
 }
 
-thread_local! {
-    /// The open room's database file on this thread, once a room is open
-    /// (PLAN §A.4). Nothing in A1 opens a room, so outside tests it stays
-    /// `None` and [`app_database_path`] answers the legacy file as before.
-    static OPEN_ROOM_DATABASE: std::cell::RefCell<Option<PathBuf>> =
-        const { std::cell::RefCell::new(None) };
-}
+/// The open room's database file, once a room is open (PLAN §A.4): process-wide, never per-thread.
+/// The slot is one room for the whole process, so every engine thread — the print preview's included —
+/// reads the same room, and a sign-out written on any thread (the account thread's) clears it for all.
+static OPEN_ROOM_DATABASE: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
 
-/// Name the open room's database file for this thread (`None`: no room is
-/// open). [`app_database_path`] answers it unless single-room mode names a
-/// file. The device-wide files never follow it: they live in
+/// Name the open room's database file (`None`: no room is open). [`app_database_path`] answers it
+/// unless single-room mode names a file. The device-wide files never follow it: they live in
 /// [`crate::platform::device_dir`].
 pub fn set_open_room_database(path: Option<PathBuf>) {
-    OPEN_ROOM_DATABASE.with(|slot| *slot.borrow_mut() = path);
+    *OPEN_ROOM_DATABASE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = path;
 }
 
 fn open_room_database() -> Option<PathBuf> {
-    OPEN_ROOM_DATABASE.with(|slot| slot.borrow().clone())
+    OPEN_ROOM_DATABASE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
 }
 
-/// The id of the room open on this thread ([`set_open_room_database`]): its folder's name under `rooms/`.
+/// The id of the open room ([`set_open_room_database`], process-wide): its folder's name under `rooms/`.
 /// `None` while no room is open (the legacy file, single-room mode, or before A3a opens one).
 pub fn open_room_id() -> Option<crate::rooms::RoomId> {
     let file = open_room_database()?;

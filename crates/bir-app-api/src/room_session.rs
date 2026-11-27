@@ -88,6 +88,17 @@ fn open_own_room(layout: &Layout, room_id: RoomId, user_id: &str) -> Result<Sess
 /// (R1): it is the first thing here.
 pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
     let layout = Layout::here();
+    // X1: once per process. A second engine's boot runs the launch resume again (prepare_launch →
+    // here); while the slot already holds this user id, nothing reruns — not the claim, not the
+    // open, not the generation.
+    if crate::open_room::user_id().as_deref() == Some(stored.user_id.as_str()) {
+        if let Some(room_id) = crate::open_room::room_id() {
+            return SessionRoom::Room { room_id };
+        }
+        if crate::open_room::legacy_mode() {
+            return SessionRoom::LegacyInPlace;
+        }
+    }
     let who = claimant(stored);
     let claim = match LegacyClaim::at(layout.clone()) {
         Ok(claim) => claim,
@@ -793,6 +804,74 @@ mod a3a_tests {
             answered.expect("the room answers once the record is hash-checked"),
             scratch.layout.room_database(&room)
         );
+    }
+
+    /// X1: the session room opens once per process — a second engine's launch resume does not rerun
+    /// the claim, reopen the room or bump the generation while the slot already holds this user id.
+    #[test]
+    fn the_session_room_opens_once_per_process() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let a = stored("user-a");
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        let first = crate::open_room::generation().expect("a generation");
+        // A second engine's boot runs the launch resume again: nothing changes.
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        assert_eq!(
+            crate::open_room::generation(),
+            Some(first),
+            "a second engine's resume reopened the room (a new generation)"
+        );
+        crate::open_room::close_room();
+    }
+
+    /// X1: the room path is process-wide, never per-thread. A second engine thread (the print
+    /// preview's) reads the open room's id and path; after B signs in it reads B's, never A's.
+    #[test]
+    fn a_second_engine_reads_the_open_room_not_a_stale_one() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let a = stored("user-a");
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        let room_a = bir_core::rooms::room_id_for(
+            &bir_core::rooms::room_origin(&a.server_url).unwrap(),
+            &a.user_id,
+        );
+        // A fresh thread — a second engine booting the host — reads the same room.
+        let on_another_engine = std::thread::spawn(|| {
+            (
+                bir_core::db::open_room_id(),
+                bir_core::db::app_database_path(),
+            )
+        })
+        .join()
+        .unwrap();
+        assert_eq!(
+            on_another_engine.0,
+            Some(room_a.clone()),
+            "a second engine reads no room (the path is per-thread)"
+        );
+        assert_eq!(
+            on_another_engine.1,
+            scratch.layout.room_database(&room_a),
+            "a second engine's database path is not the room's file"
+        );
+        // B signs in: the second engine reads B's room, never A's.
+        let b = stored("user-b");
+        assert!(matches!(open_session_room(&b), SessionRoom::Room { .. }));
+        let room_b = bir_core::rooms::room_id_for(
+            &bir_core::rooms::room_origin(&b.server_url).unwrap(),
+            &b.user_id,
+        );
+        let after_switch = std::thread::spawn(bir_core::db::open_room_id).join().unwrap();
+        assert_eq!(
+            after_switch,
+            Some(room_b),
+            "a second engine still reads A's room after B signed in"
+        );
+        crate::open_room::close_room();
     }
 
     /// §A.8: after B signs in, no screen and no agent reads room A — the slot serves only the open
