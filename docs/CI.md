@@ -36,9 +36,14 @@ The quick checks are:
   (`bir-rules-codegen -- status --boundaries-only`).
 - `NSH app type check (Linux)`: `just nsh-check -v`, which checks the app's crate and then its TSX types, plus the
   check that the app does not enable `direct-bir`.
+- `NSH app agent compile check (Linux)`: on a pull request that moves `nsh/Cargo.toml`, `nsh/Cargo.lock` or an
+  agent-only app file, compiles the app and Linux plug with `--features agent --no-run`; skipped otherwise.
 - `legacy-guard`.
 - The validation-rules audits on Linux, only when their paths change (see the table below).
 - `changes` decides all of this. `ci-ok` sums it up.
+
+Every Linux `apt-get update` goes through `scripts/ci/apt_update.sh`: it sets aside the third-party source lists
+the runner image ships and we do not use, then retries Ubuntu's own sources, so their outage cannot fail the job.
 
 `ci-ok` is the one required status. It fails if any job it asked for did not pass. A cancelled run (a newer push
 replaced it, or the pull request closed) reports no `ci-ok`. A `test/**` push, a manual run
