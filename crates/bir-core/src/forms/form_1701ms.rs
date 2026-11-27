@@ -394,9 +394,11 @@ fn print_whole_amount(value: f64) -> String {
     }
 }
 
-/// An Item 31 amount (centavos kept), without thousands separators.
+/// An Item 31 amount (centavos kept), without thousands separators, its
+/// sign kept: the upload (`official_amount`) carries a minus, so the print
+/// does too.
 fn print_cents_amount(value: f64) -> String {
-    print_right_aligned(official_amount(value.abs()).replace(',', ""))
+    print_right_aligned(official_amount(value).replace(',', ""))
 }
 
 /// Item 16 as the sheet prints it: whole percent in the 2-slot comb, the
@@ -2587,7 +2589,9 @@ mod tests {
         assert_eq!(print_whole_amount(0.0), "        0");
         assert_eq!(print_whole_amount(123_456_789.0), "123456789");
         assert_eq!(print_whole_amount(-4_500.0), "    -4500");
-        assert_eq!(print_cents_amount(-1_234.5), "  1234.50");
+        assert_eq!(print_cents_amount(1_234.5), "  1234.50");
+        // The sign is never lost: the upload holds -1,234.50.
+        assert_eq!(print_cents_amount(-1_234.5), " -1234.50");
         assert_eq!(print_rate(5.0), ("5".to_string(), "0".to_string()));
         assert_eq!(print_rate(7.5), ("7".to_string(), "5".to_string()));
     }

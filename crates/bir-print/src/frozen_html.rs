@@ -1176,6 +1176,9 @@ fn wrap_and_truncate_two_lines(
 ///   ends with `"..."` and marks `truncated`.
 /// - Otherwise shrinks on one line down to 7.5 pt; if still too long, ends with
 ///   `"..."` and marks `truncated`.
+/// - An `amount` is never wrapped or cut: it shrinks on one line until it
+///   fits, below 7.5 pt if it must: a figure cut short, or broken over two
+///   lines, would print a different number.
 fn fit_plain_text(
     sheet: &SheetType,
     width: f64,
@@ -1183,6 +1186,7 @@ fn fit_plain_text(
     tag: &str,
     text: &str,
     allow_wrap: bool,
+    amount: bool,
 ) -> Option<PlainTextFit> {
     let classes = attr(tag, "class")?;
     let default_size = sheet.size_for(classes)?;
@@ -1192,6 +1196,15 @@ fn fit_plain_text(
         return None;
     }
     let shrunk = shrunk_room(room);
+    if amount {
+        return Some(PlainTextFit {
+            text: text.to_string(),
+            font_size_pt: sheet.fit(letter, shrunk, text, default_size),
+            two_lines: false,
+            truncated: false,
+            tight_inset_v: None,
+        });
+    }
     let min_pt = sheet
         .a4_min_text_pt()
         .min(default_size.max(PLAIN_TEXT_MIN_PT));
@@ -1393,7 +1406,9 @@ fn is_whole_peso_writer_key(key: &str) -> bool {
 }
 
 /// Format a plain-cell amount on a whole-peso ("DO NOT enter Centavos") form:
-/// - strips `.00` (rounding half-up to whole pesos when centavos are present)
+/// - strips `.00`, and keeps any other centavos the upload carries (the
+///   official page shows them: `"-1,000.51"` stays `"-1,000.51"`, never
+///   `"-1,001"`)
 /// - groups thousands with commas (`"300,000.00"` -> `"300,000"`,
 ///   `"150000"` -> `"150,000"`, `"-50000"` -> `"-50,000"`, `"0.00"` -> `"0"`).
 ///
@@ -1426,13 +1441,16 @@ fn format_plain_whole_peso_with_commas(text: &str, style: NegativeStyle) -> Opti
         if clean_whole.is_empty() || !clean_whole.bytes().all(|b| b.is_ascii_digit()) {
             return None;
         }
-        let mut peso: u128 = clean_whole.parse().ok()?;
-        let cents: u8 = cents_part.parse().ok()?;
-        if cents >= 50 {
-            peso = peso.saturating_add(1);
+        let grouped = group_thousands(&clean_whole);
+        let zero = clean_whole
+            .bytes()
+            .chain(cents_part.bytes())
+            .all(|b| b == b'0');
+        let (prefix, suffix) = if zero { ("", "") } else { (prefix, suffix) };
+        if cents_part == "00" {
+            return Some(format!("{prefix}{grouped}{suffix}"));
         }
-        let grouped = group_thousands(&peso.to_string());
-        return Some(format!("{prefix}{grouped}{suffix}"));
+        return Some(format!("{prefix}{grouped}.{cents_part}{suffix}"));
     }
     if trimmed.contains(',') {
         return None;
@@ -2714,16 +2732,36 @@ fn fill_text_input(
         // digits after it. Spreading the text left-to-right put `0.00` as
         // `0 . 0 0` from the first box (#print-audit decimal mapping).
         if !name.starts_with("derived:") {
-            if let Some(writes) = money_comb_values(tags, &ordered, print) {
-                for (offset, (index, ch)) in writes.into_iter().enumerate() {
-                    let writer = (via_cell && offset == 0).then_some(print);
-                    replacements.push((
-                        tags[index].start,
-                        tags[index].end,
-                        set_value(tags[index].tag, &ch, writer),
-                    ));
+            match money_comb_values(tags, &ordered, print, sheet.negative) {
+                MoneyComb::Boxes(writes) => {
+                    for (offset, (index, ch)) in writes.into_iter().enumerate() {
+                        let writer = (via_cell && offset == 0).then_some(print);
+                        replacements.push((
+                            tags[index].start,
+                            tags[index].end,
+                            set_value(tags[index].tag, &ch, writer),
+                        ));
+                    }
+                    return;
                 }
-                return;
+                // Too many digits for the boxes before the point, or a
+                // bracketed negative: one rectangle, never the digits spread
+                // over the centavo boxes.
+                MoneyComb::Rect(text) => {
+                    let writer = via_cell.then_some(print);
+                    amount_rect(
+                        html,
+                        tags,
+                        &ordered,
+                        (input_name, None),
+                        &text,
+                        writer,
+                        sheet,
+                        replacements,
+                    );
+                    return;
+                }
+                MoneyComb::NotMoney => {}
             }
         }
         let chars: Vec<char> = print.chars().collect();
@@ -2753,16 +2791,31 @@ fn fill_text_input(
         // the comb, shrunk to fit, instead of losing the characters past
         // the last box.
         let whole_line = via_cell || is_email_key(name) || name.starts_with("derived:line:");
-        let amount_comb = is_amount_comb_key(name) && is_amount_comb_value(print);
+        let amount_comb = is_amount_comb_value(print)
+            && (is_amount_comb_key(name) || is_formatted_money_amount(print));
+        // An amount longer than its boxes, or with centavos in an amount comb
+        // that has no point column (a whole-peso comb), prints whole as one
+        // rectangle: never a character dropped past the last box, never the
+        // centavos spread over digit boxes. (A comb built for a point, such
+        // as 1701-MS Item 31's, keeps its point in its box.)
+        let centavos_in_peso_comb = is_amount_comb_key(name) && print.contains('.');
+        if amount_comb && (chars.len() > ordered.len() || centavos_in_peso_comb) {
+            let formatted = format_comb_amount_for_rect(print, sheet.negative);
+            let writer = via_cell.then_some(print);
+            amount_rect(
+                html,
+                tags,
+                &ordered,
+                (input_name, None),
+                &formatted,
+                writer,
+                sheet,
+                replacements,
+            );
+            return;
+        }
         let overflow = (whole_line && chars.len() > ordered.len())
-            .then(|| {
-                if amount_comb {
-                    let formatted = format_comb_amount_for_rect(print, sheet.negative);
-                    comb_overflow_amount_line(html, input_name, &formatted, sheet)
-                } else {
-                    comb_overflow_line(html, input_name, print, sheet)
-                }
-            })
+            .then(|| comb_overflow_line(html, input_name, print, sheet))
             .flatten();
         let spread = overflow.is_none();
         if let Some((at, line)) = overflow {
@@ -2837,7 +2890,7 @@ fn fill_text_input(
                 let orig_tag = tags[index].tag;
                 let base_class = attr(orig_tag, "class").unwrap_or("fi");
                 let peso_size =
-                    fit_plain_text(sheet, peso_width, 12.0, orig_tag, &peso_text, false)
+                    fit_plain_text(sheet, peso_width, 12.0, orig_tag, &peso_text, false, true)
                         .map(|f| f.font_size_pt);
                 let size_css = peso_size
                     .map(|sz| format!("font-size:{sz:.2}pt;"))
@@ -2886,6 +2939,10 @@ fn fill_text_input(
             && ((is_amount_typed_cell(name, caption)
                 && (is_formatted_money_amount(print) || is_formatted_whole_peso_amount(print)))
                 || (is_quantity_typed_key(name) && is_formatted_numeric_quantity(print)));
+        // A figure (an amount box, or any value written as an amount) is
+        // never wrapped or cut: it shrinks until it fits.
+        let figure = right_align_numeric
+            || (!is_rate_cell && via_cell && !split && is_formatted_money_amount(print));
         for &index in indices {
             let writer = via_cell.then_some(print);
             let fit = dims.filter(|_| !split).and_then(|(width, height)| {
@@ -2896,6 +2953,7 @@ fn fill_text_input(
                     tags[index].tag,
                     display,
                     !right_align_numeric,
+                    figure,
                 )
             });
             let tag = match &fit {
@@ -2976,25 +3034,43 @@ fn is_attachment_count_key(key: &str) -> bool {
     )
 }
 
-/// `(slot tag index, char)` for an amount printed into a point-column comb,
-/// or `None` when the comb has no point column or the value is not an amount.
+/// How an amount prints in a comb drawn with a decimal-point column.
+#[derive(Debug, PartialEq)]
+enum MoneyComb {
+    /// `(slot tag index, char)`: the peso digits right-aligned before the
+    /// point, the two centavo digits after it.
+    Boxes(Vec<(usize, String)>),
+    /// One plain rectangle across the comb holding this text: more peso
+    /// digits than boxes, more than two decimals, or a negative the form
+    /// brackets (its brackets do not go in digit boxes).
+    Rect(String),
+    /// The comb has no point column, or the value is not an amount.
+    NotMoney,
+}
+
+/// How `value` prints into the point-column comb `ordered`, a negative in
+/// the sheet's `style`.
 fn money_comb_values(
     tags: &[InputTag<'_>],
     ordered: &[usize],
     value: &str,
-) -> Option<Vec<(usize, String)>> {
-    let slots: Vec<usize> = ordered
+    style: NegativeStyle,
+) -> MoneyComb {
+    let Some(slots) = ordered
         .iter()
         .map(|&i| tags[i].slot)
-        .collect::<Option<_>>()?;
+        .collect::<Option<Vec<usize>>>()
+    else {
+        return MoneyComb::NotMoney;
+    };
     let gaps: Vec<usize> = (1..slots.len())
         .filter(|&k| slots[k] != slots[k - 1] + 1)
         .collect();
     let [gap] = gaps.as_slice() else {
-        return None;
+        return MoneyComb::NotMoney;
     };
     if slots.len() - gap != 2 || *gap < 1 {
-        return None;
+        return MoneyComb::NotMoney;
     }
     let trimmed = value.trim();
     if trimmed.is_empty()
@@ -3003,11 +3079,24 @@ fn money_comb_values(
             .all(|c| c.is_ascii_digit() || matches!(c, ',' | '.' | '-' | '(' | ')' | ' '))
         || !trimmed.chars().any(|c| c.is_ascii_digit())
     {
-        return None;
+        return MoneyComb::NotMoney;
     }
-    let (negative, peso, cents) = split_writer_money(trimmed)?;
-    let peso = signed_digits(negative, &peso, &cents, NegativeStyle::Minus);
-    let peso_values = right_aligned_slot_values(*gap, &peso)?;
+    let Some((negative, peso, cents)) = split_writer_money(trimmed) else {
+        return if is_amount_comb_value(trimmed) {
+            MoneyComb::Rect(format_comb_amount_for_rect(trimmed, style))
+        } else {
+            MoneyComb::NotMoney
+        };
+    };
+    let zero = peso.chars().chain(cents.chars()).all(|c| c == '0');
+    let rect = || MoneyComb::Rect(format_rect_amount(negative, &peso, Some(&cents), style));
+    if negative && !zero && style == NegativeStyle::Parentheses {
+        return rect();
+    }
+    let signed = signed_digits(negative, &peso, &cents, style);
+    let Some(peso_values) = right_aligned_slot_values(*gap, &signed) else {
+        return rect();
+    };
     let mut out: Vec<(usize, String)> = ordered[..*gap].iter().copied().zip(peso_values).collect();
     out.extend(
         ordered[*gap..]
@@ -3015,7 +3104,50 @@ fn money_comb_values(
             .copied()
             .zip(cents.chars().map(|c| c.to_string())),
     );
-    Some(out)
+    MoneyComb::Boxes(out)
+}
+
+/// An amount that does not go in its boxes: every slot of `slots` left
+/// empty and one right-aligned plain rectangle laid over `cells` (a peso
+/// comb, with its centavo comb if separate) holding `text` whole, its type
+/// shrunk until it fits ([`comb_overflow_amount_union`]). Where the sheet
+/// gives the cell no geometry to lay a rectangle on, the first slot is
+/// marked `text-truncated` with the amount, which the additional sheet
+/// then prints in full ([`crate::continuation::collect_truncated_entries`]):
+/// the amount is never dropped silently.
+#[allow(clippy::too_many_arguments)]
+fn amount_rect(
+    html: &str,
+    tags: &[InputTag<'_>],
+    slots: &[usize],
+    cells: (&str, Option<&str>),
+    text: &str,
+    writer: Option<&str>,
+    sheet: &SheetType,
+    replacements: &mut Vec<(usize, usize, String)>,
+) {
+    let (peso_cell, cent_cell) = cells;
+    let line = comb_overflow_amount_union(html, peso_cell, cent_cell, text, sheet);
+    let placed = line.is_some();
+    if let Some((start, end, line)) = line {
+        replacements.push((start, end, line));
+    }
+    for (offset, &index) in slots.iter().enumerate() {
+        let first = offset == 0;
+        let mut tag = set_value(tags[index].tag, "", writer.filter(|_| first && placed));
+        if first && !placed {
+            tag = without_writer_value(&tag);
+            let insert_at = tag.rfind('>').unwrap_or(tag.len());
+            tag.insert_str(
+                insert_at,
+                &format!(
+                    " data-overflow-warning=\"text-truncated\" data-writer-value=\"{}\"",
+                    html_escape(text)
+                ),
+            );
+        }
+        replacements.push((tags[index].start, tags[index].end, tag));
+    }
 }
 
 fn apply_replacements(html: &str, mut replacements: Vec<(usize, usize, String)>) -> String {
@@ -3227,10 +3359,13 @@ pub(crate) enum NegativeStyle {
     Parentheses,
 }
 
+/// The sheets whose forms bracket a negative ([`NegativeStyle::Parentheses`]).
+const BRACKET_SHEETS: [&str; 3] = ["1702mx-2018c", "1702rt-2018c", "1707a-2021"];
+
 impl NegativeStyle {
     /// The official negative form of the form printed on sheet `slug`.
     pub(crate) fn of_sheet(slug: &str) -> Self {
-        if matches!(slug, "1702mx-2018c" | "1702rt-2018c" | "1707a-2021") {
+        if BRACKET_SHEETS.contains(&slug) {
             Self::Parentheses
         } else {
             Self::Minus
@@ -4234,25 +4369,40 @@ fn fill_money_joins_with_sheet(
         let Some(value) = fields.get(&join.writer_key) else {
             continue;
         };
-        if value.is_empty() {
+        if value.trim().is_empty() {
             continue;
         }
-        let Some((negative, raw_peso, cents)) = split_writer_money(value) else {
-            continue;
+        // `None`: not peso digits and at most two decimals (`1,000.505`,
+        // or no amount at all). It still prints, whole, in the rectangle.
+        let parsed = split_writer_money(value);
+        let rect_text = match &parsed {
+            Some((negative, raw_peso, cents)) => {
+                format_rect_amount(*negative, raw_peso, Some(cents), join.negative_style)
+            }
+            None => format_comb_amount_for_rect(value, join.negative_style),
         };
-        let zero = raw_peso.chars().chain(cents.chars()).all(|ch| ch == '0');
-        let parenthesized = negative && !zero && join.negative_style == NegativeStyle::Parentheses;
-        let peso = signed_digits(negative, &raw_peso, &cents, join.negative_style);
+        let boxes = parsed.as_ref().and_then(|(negative, raw_peso, cents)| {
+            let zero = raw_peso.chars().chain(cents.chars()).all(|ch| ch == '0');
+            let parenthesized =
+                *negative && !zero && join.negative_style == NegativeStyle::Parentheses;
+            (!parenthesized).then(|| {
+                (
+                    signed_digits(*negative, raw_peso, cents, join.negative_style),
+                    cents.clone(),
+                )
+            })
+        });
         for cells in &join.cells {
             let Some(peso_indices) = grouped.get(cells.peso_html_id.as_str()) else {
                 continue;
             };
             let mut peso_ordered = ordered_comb_indices(&tags, peso_indices);
+            let mut cent_cell = None;
             let cent_ordered = match &cells.cent_html_id {
-                Some(cent) => match grouped.get(cent.as_str()) {
-                    Some(cent_indices) => ordered_comb_indices(&tags, cent_indices),
-                    None => continue,
-                },
+                Some(cent) => grouped.get(cent.as_str()).map(|cent_indices| {
+                    cent_cell = Some(cent.as_str());
+                    ordered_comb_indices(&tags, cent_indices)
+                }),
                 // The comb's own last two slots; a point slot before them is
                 // left blank (the sheet prints the point there).
                 None if peso_ordered.len() >= 5 => {
@@ -4277,16 +4427,16 @@ fn fill_money_joins_with_sheet(
                             set_value(tags[point].tag, "", None),
                         ));
                     }
-                    cents
+                    Some(cents)
                 }
-                None => continue,
+                None => None,
             };
-            if cent_ordered.len() != 2 {
-                continue;
-            }
-            if !parenthesized {
-                if let Some(peso_values) = right_aligned_slot_values(peso_ordered.len(), &peso) {
-                    for (offset, index) in peso_ordered.into_iter().enumerate() {
+            if let (Some((peso, cents)), Some(cent_ordered)) = (&boxes, &cent_ordered) {
+                let peso_values = (cent_ordered.len() == 2)
+                    .then(|| right_aligned_slot_values(peso_ordered.len(), peso))
+                    .flatten();
+                if let Some(peso_values) = peso_values {
+                    for (offset, &index) in peso_ordered.iter().enumerate() {
                         let writer = (offset == 0).then_some(value.as_str());
                         replacements.push((
                             tags[index].start,
@@ -4294,7 +4444,7 @@ fn fill_money_joins_with_sheet(
                             set_value(tags[index].tag, &peso_values[offset], writer),
                         ));
                     }
-                    for (offset, index) in cent_ordered.into_iter().enumerate() {
+                    for (offset, &index) in cent_ordered.iter().enumerate() {
                         let ch = cents
                             .chars()
                             .nth(offset)
@@ -4310,74 +4460,53 @@ fn fill_money_joins_with_sheet(
                 }
             }
             // Rule 2: an amount that does not fit its digit boxes (too many
-            // digits, or a negative that needs brackets) becomes a plain
-            // rectangle across the full peso+centavo union, right-aligned with
-            // thousands commas and two decimals.
-            let formatted =
-                format_rect_amount(negative, &raw_peso, Some(&cents), join.negative_style);
-            if let Some((start, end, line)) = comb_overflow_amount_union(
+            // digits, a negative that needs brackets, more than two decimals,
+            // or no two centavo boxes to put them in) becomes one plain
+            // rectangle across the full peso+centavo union, right-aligned
+            // with thousands commas: never blank, never cut.
+            let mut slots = peso_ordered;
+            slots.extend(cent_ordered.unwrap_or_default());
+            amount_rect(
                 html,
-                &cells.peso_html_id,
-                cells.cent_html_id.as_deref(),
-                &formatted,
+                &tags,
+                &slots,
+                (&cells.peso_html_id, cent_cell),
+                &rect_text,
+                Some(value.as_str()),
                 sheet,
-            ) {
-                replacements.push((start, end, line));
-                for (offset, index) in peso_ordered.into_iter().enumerate() {
-                    let writer = (offset == 0).then_some(value.as_str());
-                    replacements.push((
-                        tags[index].start,
-                        tags[index].end,
-                        set_value(tags[index].tag, "", writer),
-                    ));
-                }
-                for index in cent_ordered {
-                    replacements.push((
-                        tags[index].start,
-                        tags[index].end,
-                        set_value(tags[index].tag, "", None),
-                    ));
-                }
-            }
+                &mut replacements,
+            );
         }
     }
     apply_replacements(html, replacements)
 }
 
-/// `1234.49` -> `1234`, `1234.50` -> `1235`: the sheets' "49 centavos or
-/// less drop down; 50 or more round up". Negatives round the absolute value
-/// and keep the sign (`-1234.50` -> `-1235`); `-0` prints as `0`.
-#[cfg(test)]
-fn whole_pesos(value: &str) -> Option<String> {
-    whole_pesos_with_style(value, NegativeStyle::Minus)
+/// How a whole-peso comb (no centavo boxes) prints an amount.
+#[derive(Debug, PartialEq)]
+enum PesoPrint {
+    /// Whole pesos, right-aligned in the boxes: `1,234.00` prints `1234`.
+    Boxes(String),
+    /// One plain rectangle over the comb: the upload carries centavos the
+    /// boxes cannot hold (`-1,000.51` prints `-1,000.51`, never `-1001`; the
+    /// official page shows the centavos the filer typed), or the value is
+    /// not a plain amount.
+    Rect(String),
 }
 
-fn whole_pesos_with_style(value: &str, style: NegativeStyle) -> Option<String> {
-    let (negative, peso, cents) = split_writer_money(value)?;
-    let peso = peso.trim_start_matches('0');
-    let mut digits: Vec<u8> = if peso.is_empty() {
-        b"0".to_vec()
-    } else {
-        peso.bytes().collect()
-    };
-    if cents.as_str() >= "50" {
-        let mut index = digits.len();
-        loop {
-            if index == 0 {
-                digits.insert(0, b'1');
-                break;
-            }
-            index -= 1;
-            if digits[index] == b'9' {
-                digits[index] = b'0';
-            } else {
-                digits[index] += 1;
-                break;
-            }
+/// What the whole-peso comb of a `style` sheet prints for `value`: the
+/// upload's own figure, sign, digits and centavos, never rounded.
+fn peso_print(value: &str, style: NegativeStyle) -> PesoPrint {
+    match split_writer_money(value) {
+        Some((negative, peso, cents)) if cents == "00" => {
+            let peso = peso.trim_start_matches('0');
+            let digits = if peso.is_empty() { "0" } else { peso };
+            PesoPrint::Boxes(signed_digits(negative, digits, "", style))
         }
+        Some((negative, peso, cents)) => {
+            PesoPrint::Rect(format_rect_amount(negative, &peso, Some(&cents), style))
+        }
+        None => PesoPrint::Rect(format_comb_amount_for_rect(value, style)),
     }
-    let digits = String::from_utf8(digits).ok()?;
-    Some(signed_digits(negative, &digits, "", style))
 }
 
 #[allow(dead_code)]
@@ -4405,39 +4534,42 @@ fn fill_peso_joins_with_sheet(
         let Some(value) = fields.get(&join.writer_key) else {
             continue;
         };
-        let Some(pesos) = whole_pesos_with_style(value, join.negative_style) else {
+        if value.trim().is_empty() {
             continue;
-        };
+        }
+        let print = peso_print(value, join.negative_style);
         for html_id in &join.html_ids {
             let Some(indices) = grouped.get(html_id.as_str()) else {
                 continue;
             };
             let ordered = ordered_comb_indices(&tags, indices);
-            if let Some(values) = right_aligned_slot_values(ordered.len(), &pesos) {
-                for (offset, index) in ordered.into_iter().enumerate() {
-                    let writer = (offset == 0).then_some(value.as_str());
-                    replacements.push((
-                        tags[index].start,
-                        tags[index].end,
-                        set_value(tags[index].tag, &values[offset], writer),
-                    ));
-                }
-            } else {
-                let formatted = format_comb_amount_for_rect(&pesos, join.negative_style);
-                if let Some((at, line)) =
-                    comb_overflow_amount_line(html, html_id, &formatted, sheet)
-                {
-                    replacements.push((at, at, line));
-                    for (offset, index) in ordered.into_iter().enumerate() {
-                        let writer = (offset == 0).then_some(value.as_str());
-                        replacements.push((
-                            tags[index].start,
-                            tags[index].end,
-                            set_value(tags[index].tag, "", writer),
-                        ));
+            let text = match &print {
+                PesoPrint::Boxes(pesos) => {
+                    if let Some(values) = right_aligned_slot_values(ordered.len(), pesos) {
+                        for (offset, index) in ordered.into_iter().enumerate() {
+                            let writer = (offset == 0).then_some(value.as_str());
+                            replacements.push((
+                                tags[index].start,
+                                tags[index].end,
+                                set_value(tags[index].tag, &values[offset], writer),
+                            ));
+                        }
+                        continue;
                     }
+                    format_comb_amount_for_rect(pesos, join.negative_style)
                 }
-            }
+                PesoPrint::Rect(text) => text.clone(),
+            };
+            amount_rect(
+                html,
+                &tags,
+                &ordered,
+                (html_id, None),
+                &text,
+                Some(value.as_str()),
+                sheet,
+                &mut replacements,
+            );
         }
     }
     apply_replacements(html, replacements)
@@ -6171,22 +6303,17 @@ fn is_amount_comb_value(text: &str) -> bool {
     digits > 0 && dots <= 1
 }
 
-/// One read-only input laid over a whole comb cell (`<div id="{cell}">`),
-/// holding an over-wide amount right-aligned in a fitted font (floored at
-/// [`AMOUNT_OVERFLOW_MIN_PT`]) with `data-overflow-of` (white knockout band)
-/// and `data-overflow-warning="amount-comb"` for continuation/warning reporting.
-fn comb_overflow_amount_line(
-    html: &str,
-    cell: &str,
-    text: &str,
-    sheet: &SheetType,
-) -> Option<(usize, String)> {
-    comb_overflow_amount_union(html, cell, None, text, sheet).map(|(at, _, line)| (at, line))
-}
-
 /// Rule 2: one right-aligned plain-rectangle amount spanning `peso_cell`
 /// (and `cent_cell` if separate), with `data-rect-box` marking the union
-/// rectangle for SVG/text separator removal.
+/// rectangle for SVG/text separator removal, `data-overflow-of` (white
+/// knockout band) and `data-overflow-warning="amount-comb"` for the
+/// preview's warnings.
+///
+/// The type is measured to set the whole amount within the rectangle
+/// ([`SheetType::fit`]), with no floor: an amount is shrunk below the 7.5 pt
+/// floor long text keeps rather than clipped past the rectangle or cut with
+/// "..." (a figure cut short is a different figure, and BIR reads the
+/// amount where its line is, not on an additional sheet).
 fn comb_overflow_amount_union(
     html: &str,
     peso_cell: &str,
@@ -6206,7 +6333,10 @@ fn comb_overflow_amount_union(
         (pl, pt, pl + pw, pt + ph)
     };
     let union_w = r - l;
-    let size = fit_line(sheet, union_w, text).max(PLAIN_TEXT_MIN_PT);
+    // The rectangle's input sits 1 pt in from each side of the cell and
+    // keeps 1 pt of right padding: the amount sets in what is left, with
+    // 1 pt to spare.
+    let size = sheet.fit(sheet.letter, (union_w - 4.0).max(1.0), text, PLAIN_MAX_PT);
     let open = html.find(&format!("<div id=\"{peso_cell}\""))?;
     let close = open + html[open..].find('>')?;
     let width_css = if cent_cell.is_some() {
@@ -6610,12 +6740,18 @@ mod tests {
             .collect()
     }
 
-    fn money_writes(value: &str) -> Option<Vec<String>> {
+    fn money_comb(value: &str, style: super::NegativeStyle) -> super::MoneyComb {
         let html = point_column_comb();
         let tags = super::input_tags(&html);
         let ordered: Vec<usize> = (0..tags.len()).collect();
-        super::money_comb_values(&tags, &ordered, value)
-            .map(|w| w.into_iter().map(|(_, ch)| ch).collect())
+        super::money_comb_values(&tags, &ordered, value, style)
+    }
+
+    fn money_writes(value: &str) -> Option<Vec<String>> {
+        match money_comb(value, super::NegativeStyle::Minus) {
+            super::MoneyComb::Boxes(writes) => Some(writes.into_iter().map(|(_, ch)| ch).collect()),
+            _ => None,
+        }
     }
 
     #[test]
@@ -6645,7 +6781,79 @@ mod tests {
             .collect();
         let tags = super::input_tags(&html);
         let ordered: Vec<usize> = (0..tags.len()).collect();
-        assert!(super::money_comb_values(&tags, &ordered, "0.00").is_none());
+        assert_eq!(
+            super::money_comb_values(&tags, &ordered, "0.00", super::NegativeStyle::Minus),
+            super::MoneyComb::NotMoney
+        );
+    }
+
+    /// F3 (a): an amount with more peso digits than the boxes before the
+    /// point never spreads into the centavo boxes. Before, `12345678901` in
+    /// a 9 + 2 comb printed `123456789` before the point and `01` after it,
+    /// reading 123,456,789.01; it now prints whole as one rectangle.
+    #[test]
+    fn a_too_long_amount_never_spreads_into_the_centavo_boxes() {
+        let html: String = (0..9)
+            .chain(10..12)
+            .map(|i| format!("<input name=\"p1c9\" data-slot-index=\"{i}\" value=\"\">"))
+            .collect();
+        let html = format!(
+            "<div id=\"p1c9\" style=\"left:10pt;top:10pt;width:150pt;height:14pt\">{html}</div>"
+        );
+        let fields = BTreeMap::from([("frm1601C:txtTax".to_string(), "12345678901".to_string())]);
+        let cells = BTreeMap::from([("frm1601C:txtTax".to_string(), vec!["p1c9".to_string()])]);
+        let doc = super::fill_by_name_with_cells(&html, &fields, &cells, &BTreeMap::new());
+        assert_eq!(comb_values(&doc, "p1c9"), vec![""; 11]);
+        assert_eq!(super::printed_cell(&doc, "p1c9").0, "12,345,678,901.00");
+        // The same with centavos, and with more than two decimals.
+        assert_eq!(
+            money_comb("1234567.89", super::NegativeStyle::Minus),
+            super::MoneyComb::Rect("1,234,567.89".into())
+        );
+        assert_eq!(
+            money_comb("1,000.505", super::NegativeStyle::Minus),
+            super::MoneyComb::Rect("1,000.505".into())
+        );
+    }
+
+    /// F4: a point-column comb on a sheet whose form brackets its negatives
+    /// (1702MX, 1702RT, 1707A) prints the brackets; before, the minus was
+    /// hard-coded (`-1234` in the peso boxes, `56` after the point).
+    #[test]
+    fn a_point_column_comb_prints_the_bracket_forms_negative_in_brackets() {
+        assert_eq!(
+            money_comb("-1,234.56", super::NegativeStyle::Parentheses),
+            super::MoneyComb::Rect("(1,234.56)".into())
+        );
+        assert_eq!(
+            money_writes("-1,234.56").unwrap(),
+            ["-", "1", "2", "3", "4", "5", "6"]
+        );
+        // A zero is never signed.
+        assert!(matches!(
+            money_comb("-0.00", super::NegativeStyle::Parentheses),
+            super::MoneyComb::Boxes(_)
+        ));
+        // Through the fill, on the 1707A sheet's own type.
+        let loaded = super::bundle("1707a-2021").expect("1707a bundle");
+        let sheet = super::SheetType::of_sheet("1707a-2021", loaded.css);
+        assert_eq!(sheet.negative, super::NegativeStyle::Parentheses);
+        let html = format!(
+            "<div id=\"amt\" style=\"left:10pt;top:10pt;width:120pt;height:14pt\">{}</div>",
+            point_column_comb()
+        );
+        let fields = BTreeMap::from([("frm1707A:txtAmount".to_string(), "-1,234.56".to_string())]);
+        let cells = BTreeMap::from([("frm1707A:txtAmount".to_string(), vec!["amt".to_string()])]);
+        let doc = super::fill_by_name_set(
+            &html,
+            &fields,
+            &cells,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &sheet,
+        );
+        assert_eq!(super::printed_cell(&doc, "amt").0, "(1,234.56)");
+        assert!(comb_values(&doc, "amt").iter().all(String::is_empty));
     }
 
     #[test]
@@ -6697,16 +6905,181 @@ mod tests {
         assert!(checked >= 30, "only {checked} print maps found");
     }
 
+    /// F1: a whole-peso comb prints the upload's own figure. Before, the
+    /// centavos were rounded half up (`-1,000.51` printed `-1001`, the
+    /// official page shows `-1,000.51`); an amount with centavos now prints
+    /// whole in a rectangle, one without them in the boxes.
     #[test]
-    fn peso_only_combs_round_to_whole_pesos() {
-        assert_eq!(super::whole_pesos("1,234.49").as_deref(), Some("1234"));
-        assert_eq!(super::whole_pesos("1234.50").as_deref(), Some("1235"));
-        assert_eq!(super::whole_pesos("999.5").as_deref(), Some("1000"));
-        assert_eq!(super::whole_pesos("0.49").as_deref(), Some("0"));
-        assert_eq!(super::whole_pesos("12").as_deref(), Some("12"));
-        assert_eq!(super::whole_pesos("-5.00").as_deref(), Some("-5"));
-        assert_eq!(super::whole_pesos("-1,234.50").as_deref(), Some("-1235"));
-        assert_eq!(super::whole_pesos("-0.49").as_deref(), Some("0"));
+    fn peso_only_combs_print_the_uploads_centavos() {
+        use super::{peso_print, NegativeStyle::*, PesoPrint::*};
+        assert_eq!(peso_print("-1,000.51", Minus), Rect("-1,000.51".into()));
+        assert_eq!(peso_print("1234.50", Minus), Rect("1,234.50".into()));
+        assert_eq!(peso_print("0.49", Minus), Rect("0.49".into()));
+        assert_eq!(
+            peso_print("-1,234.50", Parentheses),
+            Rect("(1,234.50)".into())
+        );
+        assert_eq!(peso_print("1,234.00", Minus), Boxes("1234".into()));
+        assert_eq!(peso_print("12", Minus), Boxes("12".into()));
+        assert_eq!(peso_print("-5.00", Minus), Boxes("-5".into()));
+        assert_eq!(peso_print("-0.00", Minus), Boxes("0".into()));
+        // F3 (c): more than two decimals still prints, whole.
+        assert_eq!(peso_print("1,000.505", Minus), Rect("1,000.505".into()));
+    }
+
+    /// F1: a plain amount box on a whole-peso form keeps the upload's
+    /// centavos; before, `-1,000.51` printed `-1,001`.
+    #[test]
+    fn whole_peso_plain_boxes_print_the_uploads_centavos() {
+        use super::{format_plain_whole_peso_with_commas as plain, NegativeStyle::*};
+        assert_eq!(plain("-1,000.51", Minus).as_deref(), Some("-1,000.51"));
+        assert_eq!(plain("1000.49", Minus).as_deref(), Some("1,000.49"));
+        assert_eq!(
+            plain("-1000.51", Parentheses).as_deref(),
+            Some("(1,000.51)")
+        );
+        assert_eq!(plain("300,000.00", Minus).as_deref(), Some("300,000"));
+        assert_eq!(plain("-0.00", Minus).as_deref(), Some("0"));
+    }
+
+    /// F3 (b), (c): no amount prints blank or loses a character. A cell the
+    /// sheet gives no geometry cannot take a rectangle: its first box is
+    /// marked for the additional sheet with the whole amount. A money join
+    /// whose value has more than two decimals prints whole (before it was
+    /// skipped and the boxes stayed blank).
+    #[test]
+    fn an_amount_never_prints_blank_or_short() {
+        // (b) A stamped (not writer-cell) amount longer than its comb, and a
+        // comb with no geometry: before, the characters past the last box
+        // were dropped.
+        let html = comb("frm1601C:txtTax", 4);
+        let fields = BTreeMap::from([("frm1601C:txtTax".to_string(), "123,456.78".to_string())]);
+        let doc = super::fill_by_name(&html, &fields);
+        assert!(comb_values(&doc, "frm1601C:txtTax")
+            .iter()
+            .all(String::is_empty));
+        let warnings = super::overflow_warnings(&doc);
+        assert_eq!(warnings.len(), 1, "{doc}");
+        assert_eq!(warnings[0].kind, "text-truncated");
+        assert_eq!(warnings[0].value, "123,456.78");
+
+        // (c) Three decimals into a peso + centavo money join.
+        let html = format!(
+            "<div id=\"p1c56\" style=\"left:10pt;top:10pt;width:90pt;height:14pt\">{}</div>\
+             <div id=\"p1c57\" style=\"left:100pt;top:10pt;width:24pt;height:14pt\">{}</div>",
+            comb("p1c56", 8),
+            comb("p1c57", 2)
+        );
+        let fields = BTreeMap::from([("k".to_string(), "1,000.505".to_string())]);
+        let joins = [super::MoneyJoin {
+            writer_key: "k".into(),
+            cells: vec![super::MoneyCells {
+                peso_html_id: "p1c56".into(),
+                cent_html_id: Some("p1c57".into()),
+                point_slot: false,
+            }],
+            negative_style: super::NegativeStyle::Minus,
+        }];
+        let doc = super::fill_money_joins(&html, &fields, &joins);
+        assert_eq!(super::printed_cell(&doc, "p1c56").0, "1,000.505");
+
+        // (c) A money join whose comb has no two centavo boxes.
+        let html = format!(
+            "<div id=\"p1c58\" style=\"left:10pt;top:10pt;width:60pt;height:14pt\">{}</div>",
+            comb("p1c58", 3)
+        );
+        let fields = BTreeMap::from([("k".to_string(), "12.50".to_string())]);
+        let joins = [super::MoneyJoin {
+            writer_key: "k".into(),
+            cells: vec![super::MoneyCells {
+                peso_html_id: "p1c58".into(),
+                cent_html_id: None,
+                point_slot: false,
+            }],
+            negative_style: super::NegativeStyle::Minus,
+        }];
+        let doc = super::fill_money_joins(&html, &fields, &joins);
+        assert_eq!(super::printed_cell(&doc, "p1c58").0, "12.50");
+
+        // A whole-peso comb with no geometry and too many digits: before,
+        // no rectangle could be built and the boxes stayed blank.
+        let html = comb("p", 3);
+        let fields = BTreeMap::from([("k".to_string(), "1,234,567.00".to_string())]);
+        let joins = [super::PesoJoin {
+            writer_key: "k".into(),
+            html_ids: vec!["p".into()],
+            negative_style: super::NegativeStyle::Minus,
+        }];
+        let doc = super::fill_peso_joins(&html, &fields, &joins);
+        let warnings = super::overflow_warnings(&doc);
+        assert_eq!(warnings.len(), 1, "{doc}");
+        assert_eq!(warnings[0].kind, "text-truncated");
+        assert_eq!(warnings[0].value, "1,234,567");
+    }
+
+    /// F2: an amount in a rectangle too narrow for it at 7.5 pt is shrunk
+    /// until it fits, never clipped. Before, the size was floored at 7.5 pt
+    /// and `-1,234,567,890,123.45` set 103 pt wide in a 60 pt rectangle.
+    #[test]
+    fn a_long_amount_in_a_narrow_rectangle_prints_whole() {
+        let loaded = super::bundle("1601c-2018").expect("1601c bundle");
+        let sheet = super::SheetType::of_sheet("1601c-2018", loaded.css);
+        let html = format!(
+            "<div id=\"p1c90\" style=\"left:10pt;top:10pt;width:60pt;height:14pt\">{}</div>",
+            comb("p1c90", 4)
+        );
+        let fields = BTreeMap::from([(
+            "frm1601C:txtTax".to_string(),
+            "-1,234,567,890,123.45".to_string(),
+        )]);
+        let cells = BTreeMap::from([("frm1601C:txtTax".to_string(), vec!["p1c90".to_string()])]);
+        let doc = super::fill_by_name_set(
+            &html,
+            &fields,
+            &cells,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &sheet,
+        );
+        let (text, size) = super::printed_cell(&doc, "p1c90");
+        assert_eq!(text, "-1,234,567,890,123.45");
+        let size = size.expect("a fitted size");
+        assert!(size < super::PLAIN_TEXT_MIN_PT, "{size}");
+        // It sets within the rectangle's room: 60 pt less the input's 1 pt
+        // insets and 1 pt right padding.
+        let width = sheet.width(sheet.letter, &text, size);
+        assert!(width <= 60.0 - 3.0, "{width} pt at {size} pt");
+        assert!(!doc.contains("text-truncated"));
+
+        // A plain amount box: shrunk on one line, never wrapped or cut.
+        let tag = r#"<input class="fi fh5" style="inset:0.96pt 1.92pt 0.96pt 2pt">"#;
+        let fit = super::fit_plain_text(&sheet, 30.0, 30.0, tag, "1,234,567.89", true, true)
+            .expect("too wide at its class size");
+        assert_eq!(fit.text, "1,234,567.89");
+        assert!(!fit.two_lines && !fit.truncated);
+        assert!(fit.font_size_pt < super::PLAIN_TEXT_MIN_PT);
+    }
+
+    /// F6: every sheet the negative-style table names a bracket form is a
+    /// real bundle with writer cells: a slug that names no sheet would leave
+    /// its form printing a minus.
+    #[test]
+    fn every_bracket_sheet_is_a_real_bundle() {
+        for slug in super::BRACKET_SHEETS {
+            assert!(super::bundle(slug).is_some(), "{slug}: no frozen bundle");
+            assert!(
+                super::writer_cells_json(slug).is_some(),
+                "{slug}: no writer-cells.json"
+            );
+            assert_eq!(
+                super::NegativeStyle::of_sheet(slug),
+                super::NegativeStyle::Parentheses
+            );
+        }
+        assert_eq!(
+            super::NegativeStyle::of_sheet("1702ex-2018"),
+            super::NegativeStyle::Minus
+        );
     }
 
     fn comb(name: &str, slots: usize) -> String {
@@ -6935,7 +7308,7 @@ mod tests {
         use std::collections::BTreeMap;
         let html = comb("p", 5);
         let mut fields = BTreeMap::new();
-        fields.insert("k".to_string(), "-122.50".to_string());
+        fields.insert("k".to_string(), "-123.00".to_string());
         let joins = [super::PesoJoin {
             writer_key: "k".into(),
             html_ids: vec!["p".into()],
@@ -6943,6 +7316,15 @@ mod tests {
         }];
         let doc = super::fill_peso_joins(&html, &fields, &joins);
         assert_eq!(comb_values(&doc, "p"), ["", "-", "1", "2", "3"]);
+        // Centavos the boxes cannot hold print whole in a rectangle, sign
+        // kept (before, -122.50 rounded to -123).
+        let html = format!(
+            "<div id=\"p\" style=\"left:10pt;top:10pt;width:70pt;height:14pt\">{html}</div>"
+        );
+        fields.insert("k".to_string(), "-122.50".to_string());
+        let doc = super::fill_peso_joins(&html, &fields, &joins);
+        assert_eq!(comb_values(&doc, "p"), ["", "", "", "", ""]);
+        assert_eq!(super::printed_cell(&doc, "p").0, "-122.50");
     }
 
     #[test]
@@ -7001,7 +7383,7 @@ mod tests {
 
         let html = comb("p", 8);
         let mut fields = BTreeMap::new();
-        fields.insert("k".to_string(), "-122.50".to_string());
+        fields.insert("k".to_string(), "-123".to_string());
         let paren = [super::PesoJoin {
             writer_key: "k".into(),
             html_ids: vec!["p".into()],
@@ -8934,7 +9316,10 @@ mod tests {
         assert_eq!(comb_text(&html, "p2c6"), "DUMMY");
         assert!(html.contains("INTEREST INCOME"));
         // Whole pesos, right-aligned in the 8-slot comb; no decimal glyph.
-        assert_eq!(comb_text(&html, "p2c13"), " 1234568");
+        // An amount with centavos prints them, whole, in one rectangle over
+        // the comb (before, 1,234,567.89 rounded to 1234568).
+        assert_eq!(comb_text(&html, "p2c13"), "");
+        assert_eq!(printed_cell(&html, "p2c13").0, "1,234,567.89");
         assert_eq!(comb_text(&html, "p2c48"), "   94448");
         assert_eq!(comb_text(&html, "p1c74"), "   94448");
         assert_eq!(comb_text(&html, "p1c89"), "    1000");
@@ -9104,8 +9489,10 @@ mod tests {
         assert_eq!(named_values(&html, "p1c19"), vec!["1".to_string()]);
         assert_eq!(named_values(&html, "p1c20"), vec!["2".to_string()]);
         assert_eq!(named_values(&html, "p1c22"), vec!["5".to_string()]);
-        // Whole pesos, right-aligned in the 12-slot comb.
-        assert_eq!(comb_text(&html, "p2c9"), "     1234568");
+        // Whole pesos, right-aligned in the 12-slot comb; centavos the
+        // upload carries print, whole, in one rectangle (before, rounded).
+        assert_eq!(comb_text(&html, "p2c9"), "");
+        assert_eq!(printed_cell(&html, "p2c9").0, "1,234,567.50");
         assert_eq!(comb_text(&html, "p3c12"), "       10000");
         assert_eq!(comb_text(&html, "p3c52"), "SAMPLE EXPENSE");
         assert_eq!(comb_text(&html, "p3c54"), "        5000");

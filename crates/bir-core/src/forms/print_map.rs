@@ -92,6 +92,61 @@ pub fn blank_unset_date_parts(fields: &mut BTreeMap<String, String>, keys: &[&st
     }
 }
 
+/// What a whole-peso amount comb prints for the upload amount `text` (as
+/// `formatCurrency` writes it: `600,000.50`, `-1,000.00`, `(26,000)`): the
+/// same figure without separators, its sign kept, and its centavos kept
+/// whenever they are not `.00` (`600000.50`, `-1000`, `-26000`). The sheets
+/// say "DO NOT enter Centavos", but the official page shows the centavos a
+/// filer typed and the upload carries them, so the print never rounds them
+/// away. `(negative, figure)`: `figure` is unsigned, `"0"` for zero (which
+/// is never negative). `None` for text that is not an amount.
+pub fn whole_peso_comb_figure(text: &str) -> Option<(bool, String)> {
+    let trimmed = text.trim();
+    let (negative, body) = match trimmed.strip_prefix('(').and_then(|v| v.strip_suffix(')')) {
+        Some(inner) => (true, inner.trim()),
+        None => match trimmed.strip_prefix('-') {
+            Some(rest) => (true, rest.trim()),
+            None => (false, trimmed),
+        },
+    };
+    let bare: String = body.chars().filter(|ch| *ch != ',').collect();
+    let (whole, cents) = bare.split_once('.').unwrap_or((bare.as_str(), ""));
+    if (whole.is_empty() && cents.is_empty())
+        || !whole.bytes().all(|b| b.is_ascii_digit())
+        || !cents.bytes().all(|b| b.is_ascii_digit())
+    {
+        return None;
+    }
+    let whole = whole.trim_start_matches('0');
+    let whole = if whole.is_empty() { "0" } else { whole };
+    let figure = if cents.bytes().all(|b| b == b'0') {
+        whole.to_string()
+    } else {
+        format!("{whole}.{cents}")
+    };
+    let zero = figure.bytes().all(|b| matches!(b, b'0' | b'.'));
+    Some((negative && !zero, figure))
+}
+
+/// [`whole_peso_comb_figure`] as one comb's print value: signed with a
+/// minus (the official page's `formatCurrency` form), right-aligned in
+/// `slots` boxes when it has no centavos and fits them; otherwise left
+/// unpadded, and the print engine lays it over the comb as one plain
+/// rectangle (a point never goes in a digit box).
+pub fn whole_peso_comb_text(text: &str, slots: usize) -> Option<String> {
+    let (negative, figure) = whole_peso_comb_figure(text)?;
+    let printed = if negative {
+        format!("-{figure}")
+    } else {
+        figure
+    };
+    Some(if printed.len() <= slots && !printed.contains('.') {
+        format!("{printed:>slots$}")
+    } else {
+        printed
+    })
+}
+
 fn group_thousands_int(digits: &str) -> String {
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
     for (idx, ch) in digits.chars().enumerate() {
@@ -174,6 +229,38 @@ pub fn match_upload_case(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A whole-peso comb prints the upload's own figure: centavos kept
+    /// (`600,000.50` printed `600001` before), sign kept, `.00` dropped.
+    #[test]
+    fn whole_peso_combs_print_the_uploads_figure() {
+        assert_eq!(
+            whole_peso_comb_text("600,000.50", 8).as_deref(),
+            Some("600000.50")
+        );
+        assert_eq!(
+            whole_peso_comb_text("-1,000.51", 8).as_deref(),
+            Some("-1000.51")
+        );
+        assert_eq!(
+            whole_peso_comb_text("10,000.00", 8).as_deref(),
+            Some("   10000")
+        );
+        assert_eq!(
+            whole_peso_comb_text("(26,000)", 8).as_deref(),
+            Some("  -26000")
+        );
+        assert_eq!(
+            whole_peso_comb_text("123,456,789.00", 8).as_deref(),
+            Some("123456789")
+        );
+        assert_eq!(whole_peso_comb_text("-0.00", 3).as_deref(), Some("  0"));
+        assert_eq!(whole_peso_comb_text("abc", 8), None);
+        assert_eq!(
+            whole_peso_comb_figure("0.40"),
+            Some((false, "0.40".to_string()))
+        );
+    }
 
     #[test]
     fn splits_at_the_last_space_that_fits() {

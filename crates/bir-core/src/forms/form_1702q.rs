@@ -562,44 +562,22 @@ fn print_lines(text: &str, width: usize) -> (String, String) {
     (first.trim_end().to_string(), second)
 }
 
-/// An official whole-peso amount right-aligned in a `slots`-wide comb.
-/// Form 1702Q prints whole pesos without centavos (49 centavos or less drop
-/// down; 50 or more round up) and draws preprinted commas between digit
-/// groups, so in-comb values emit bare rounded digits right-aligned to
-/// `slots`. Values wider than `slots` are returned unpadded so the shared
-/// print engine renders them as a plain right-aligned comma-formatted
-/// rectangle under RULES 2.
+/// An official amount in a `slots`-wide whole-peso comb
+/// ([`super::print_map::whole_peso_comb_text`]): Form 1702Q's combs take
+/// whole pesos and draw preprinted commas between digit groups, so an amount
+/// without centavos emits bare digits right-aligned to `slots`. An amount
+/// wider than `slots`, or with centavos the upload carries (the official
+/// page shows them; the print never rounds them away), is returned
+/// unpadded, and the shared print engine renders it as one plain
+/// right-aligned comma-formatted rectangle under RULES 2. A negative keeps
+/// its minus, as the official page shows it (formatCurrency,
+/// js/string-util.js l. 354; no bracketing formatter on its amount boxes).
 fn print_amount(text: &str, slots: usize) -> Option<String> {
     let text = text.trim();
     if text.is_empty() {
         return None;
     }
-    let (negative, unsigned) =
-        if let Some(inner) = text.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
-            (true, inner.trim())
-        } else if let Some(rest) = text.strip_prefix('-') {
-            (true, rest.trim())
-        } else {
-            (false, text)
-        };
-    let bare: String = unsigned.chars().filter(|ch| *ch != ',').collect();
-    let parsed: f64 = bare.parse().ok()?;
-    if !parsed.is_finite() {
-        return None;
-    }
-    let rounded = (parsed.abs() + 0.5 + 1e-9).floor() as u64;
-    // The official page shows a negative with a minus (formatCurrency,
-    // js/string-util.js l. 354; no bracketing formatter on its amount boxes).
-    let whole = if negative && rounded > 0 {
-        format!("-{rounded}")
-    } else {
-        rounded.to_string()
-    };
-    if whole.chars().count() <= slots {
-        Some(format!("{whole:>slots$}"))
-    } else {
-        Some(whole)
-    }
+    super::print_map::whole_peso_comb_text(text, slots)
 }
 
 /// A whole-number rate right-aligned in a 2-slot box; `None` when the rate
@@ -1978,27 +1956,20 @@ mod tests {
     }
 
     #[test]
-    fn print_amounts_fit_the_comb_or_overflow_as_whole_pesos() {
+    fn print_amounts_fit_the_comb_or_overflow_with_their_centavos() {
         assert_eq!(
             print_amount("1,234.00", 12).as_deref(),
             Some("        1234")
         );
-        assert_eq!(
-            print_amount("875,000.49", 12).as_deref(),
-            Some("      875000")
-        );
-        assert_eq!(
-            print_amount("875,000.50", 12).as_deref(),
-            Some("      875001")
-        );
-        assert_eq!(
-            print_amount("-50,000.50", 12).as_deref(),
-            Some("      -50001")
-        );
+        // Centavos the upload carries print as they are, never rounded.
+        assert_eq!(print_amount("875,000.49", 12).as_deref(), Some("875000.49"));
+        assert_eq!(print_amount("875,000.50", 12).as_deref(), Some("875000.50"));
+        assert_eq!(print_amount("-50,000.50", 12).as_deref(), Some("-50000.50"));
         assert_eq!(
             print_amount("12,345,678.90", 12).as_deref(),
-            Some("    12345679")
+            Some("12345678.90")
         );
+        assert_eq!(print_amount("-0.00", 12).as_deref(), Some("           0"));
         assert_eq!(
             print_amount("1,234,567,890,123.00", 12).as_deref(),
             Some("1234567890123")
