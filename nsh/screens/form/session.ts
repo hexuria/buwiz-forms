@@ -157,6 +157,8 @@ export interface RowInfo {
   message: string;
   /** The box-home sentences of this row's split date parts and TIN boxes, in box order (B3/B4). */
   boxMessages: { key: string; sentence: string }[];
+  /** The notes of the boxes whose sentences the row prints (nothing to fix: drawn as notes, fg3), in box order. */
+  boxNotes?: { key: string; sentence: string }[];
   /** G1: every drawn box of the row is one another answer keeps shut — the whole row (number and title too) is not drawn. */
   hidden: boolean;
   /** G1: the row's drawn box keys that are gated away; the rest draw (a schedule's cells are never listed: its grid stays). */
@@ -385,7 +387,9 @@ interface St {
   rejected: Record<string, string>;
   /**
    * Notes under amount boxes: the box shows what the return holds, and this says what the filer typed instead: "<kind>|<held>|<typed>"
-   * with kind "amount typed" (the host stored another number), "amount unreadable" (the box's text was not an amount) or "amount
+   * with kind "amount typed" (the host stored another number), "amount unreadable" (the box's text was not an amount), "amount comma"
+   * (one comma was read as the decimal point; Queue does not stop on it), "amount outside" (an outside value won over typing that came
+   * back to the shown amount) or "amount
    * refused" (the host refused the amount; its reason follows, "|<reason>"). `held` is what the box shows. A note holds no save; it
    * goes when its box is edited, its box is shut, or the amount under it moves (its row moved or was removed); focus keeps it.
    */
@@ -398,6 +402,8 @@ interface St {
   dirtyBatch: boolean | null;
   /** The plain sentence under each refused box, keyed by draft key (B3/B4's box home). */
   boxMessages: Record<string, string>;
+  /** Notes under boxes that say what a box did with its text and are nothing to fix (a comma read as the decimal point): drawn as notes. */
+  boxNotes: Record<string, string>;
   formErrors: string[];
   checkable: Record<string, { token: string; label: string }[]>;
   electionAt: string | null;
@@ -443,13 +449,20 @@ function freshState(target: FormTarget): St {
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
     profileSave: {}, profileEdited: new Set(), profileAsked: new Set(), profileAskUnknown: false, guessed: new Set(), profileAskSeen: {}, profileAskMsg: {},
     askDone: new Set(), askDoneRaw: new Map(), profileChanged: [], errors: [], messages: {},
-    messageKeys: {}, messageCounts: {}, rejected: {}, amountNotes: {}, notesShown: {}, unfixable: new Set(), dirtyBatch: null, boxMessages: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
+    messageKeys: {}, messageCounts: {}, rejected: {}, amountNotes: {}, notesShown: {}, unfixable: new Set(), dirtyBatch: null, boxMessages: {}, boxNotes: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
     profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, rangeHeld: {}, forget: [], chosenFrom: {}, dirty: false,
     editSeq: 0, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
     touched: new Set(), showAll: false, previewOpen: false, overlay: null, saveState: { state: "idle" },
     electionReady: undefined, moreOpen: new Set(),
   };
 }
+
+/** The requests kept while a focused amount box settles (S1), run once it has let go; any other is dropped with WAIT_FOR_AMOUNT. */
+const KEPT_WHILE_SETTLING = new Set(["save", "print", "queue", "confirmQueue"]);
+const WAIT_FOR_AMOUNT = "Wait for the amount to finish, then try again.";
+
+/** What a removal's Undo says when typing came after the removal (an edit retires Undo). */
+const UNDO_TYPED_SINCE = "Undo is no longer available: you typed since.";
 
 /** The longest Queue waits for a focused amount box to let go; then it stops and asks the filer to finish the amount. */
 const QUEUE_SETTLE_MS = 500;
@@ -547,6 +560,7 @@ export class FormSession {
   private sOptions = new SignalMap<ChoiceOption[]>([], sameJson);
   private sInvalid = new SignalMap<boolean>(false);
   private sBoxMsg = new SignalMap<string>("");
+  private sBoxNote = new SignalMap<string>("");
   private sRefusal = new SignalMap<string>("");
   private sGuessed = signal(0);
   private sRow = new SignalMap<RowInfo>(null as unknown as RowInfo, sameJson);
@@ -673,6 +687,7 @@ export class FormSession {
       const options = this.sOptions.get(k);
       const invalid = this.sInvalid.get(k);
       const boxMsg = this.sBoxMsg.get(k);
+      const boxNote = this.sBoxNote.get(k);
       const refusal = this.sRefusal.get(k);
       b = {
         value: () => value(),
@@ -682,6 +697,7 @@ export class FormSession {
         options: () => options(),
         invalid: () => invalid(),
         message: () => boxMsg(),
+        note: () => boxNote(),
         refusal: () => refusal(),
         zeroWhenBlank: this.kindOf.get(k) === "money" && this.computedKeys.has(k),
       };
@@ -748,6 +764,10 @@ export class FormSession {
   boxMessageOf(k: string): string {
     return this.st.boxMessages[k] || "";
   }
+  /** Box k's note (nothing to fix), or "". */
+  boxNoteOf(k: string): string {
+    return this.st.boxNotes[k] || "";
+  }
   /** Every box's sentence now (tests and the page's grouped lines). */
   boxMessages(): Readonly<Record<string, string>> {
     return this.st.boxMessages;
@@ -812,19 +832,53 @@ export class FormSession {
     else this.blurers.delete(k);
   }
   private blurers = new Map<string, () => void>();
+
+  /** How amount box k leaves at once, in this turn, without writing to its native box (F1: flushNow and dispose leave it first). */
+  registerLeave(k: string, leave: (() => void) | null) {
+    if (leave) this.leavers.set(k, leave);
+    else this.leavers.delete(k);
+  }
+  private leavers = new Map<string, () => void>();
+
+  /**
+   * F1: the focused amount box leaves now. flushNow (before quit or navigation) and dispose save in the same turn, where a blur would
+   * come too late: a decimal-comma text ("1500,50") reads only on leaving, so the save would store the older amount the box last reported.
+   */
+  private leaveFocusedNow(blur = false) {
+    const held = this.st.focusKey;
+    const kind = held ? this.kindOf.get(held) : undefined;
+    if (!held || (kind !== "money" && kind !== "num")) return;
+    this.leavers.get(held)?.();
+    // F1-1: a page that stays after the flush (a refused save, a navigation the frame did not take) must not leave the keys in a box
+    // the session and the box both count as left: the box is blurred too. Its blur is the same leave, already run: it adds nothing.
+    if (blur) this.blurers.get(held)?.();
+  }
   /** Queue, a Delete row, Print or Save is waiting for a focused amount box to let go. */
   private settling = false;
+  /** What the settle runs once the box let go (its request), and the latest other request made meanwhile (S1), run after it. */
+  private settlingId = "";
+  private settleNext: { id: string; run: () => void } | null = null;
 
   /**
    * An amount box that still has the keys is left before `then` (Queue, a Delete row, Print, Save), so what it holds is the
    * return's before anything is judged, moved, printed or saved. True when `then` was put off (or stopped); false when no amount
    * box has the keys and the caller goes on now. The box's blur may come on a later turn: `then` waits until the session has seen
-   * the box let go (blur() clears focusKey) and runs one turn after that. Q1: a second press while a box settles does nothing.
-   * Q2: a box that has not let go after QUEUE_SETTLE_MS stops it: the session does not know what the box holds, so nothing is done
-   * and the box is left exactly as it is.
+   * the box let go (blur() clears focusKey) and runs one turn after that. `id` names the request (the same press again is the same id).
+   * Q1/S1: a press while a box settles is never run beside it: the same request again does nothing; the latest other Save, Print,
+   * Queue or Continue (Delete row then Queue) is kept and runs once the settled one has run, unless that one opened a question; a
+   * Delete row or an Undo is dropped and the filer is asked to wait (S1-2). Q2: a box that has not let go after QUEUE_SETTLE_MS stops it and
+   * what was kept: the session does not know what the box holds, so nothing is done and the box is left exactly as it is.
    */
-  private settleFocused(then: () => void): boolean {
-    if (this.settling) return true;
+  private settleFocused(then: () => void, id: string): boolean {
+    if (this.settling) {
+      // The settling request pressed again is that same request: it keeps whatever other one was kept.
+      if (id === this.settlingId) return true;
+      // S1-2: only requests that read the page as it is when they run are kept. A Delete row or an Undo was decided on the rows as
+      // they were when pressed (its row's keys, the draft to bring back), which the box's leave can move: it is not kept.
+      if (KEPT_WHILE_SETTLING.has(id)) this.settleNext = { id, run: then };
+      else this.toast(WAIT_FOR_AMOUNT, "triangle-alert");
+      return true;
+    }
     const held = this.st.focusKey;
     const heldKind = held ? this.kindOf.get(held) : undefined;
     if (!held || (heldKind !== "money" && heldKind !== "num")) return false;
@@ -835,20 +889,32 @@ export class FormSession {
       return false;
     }
     this.settling = true;
+    this.settlingId = id;
+    this.settleNext = null;
     blurHeld();
     const token = this.token;
     const started = Date.now();
+    const end = () => {
+      this.settling = false;
+      const next = this.settleNext;
+      this.settleNext = null;
+      return next;
+    };
     const go = () => {
-      if (token !== this.token) return void (this.settling = false);
+      if (token !== this.token) return void end();
       if (this.st.focusKey === held && Date.now() - started < QUEUE_SETTLE_MS) return void this.later(25, go);
       if (this.st.focusKey === held) {
-        this.settling = false;
+        end();
         const ctx = this.refusalCtx(held, "");
         return void this.toast(`Finish the amount in ${ctx.item ? `Item ${ctx.item}` : ctx.label} first.`, "triangle-alert");
       }
       this.later(0, () => {
-        this.settling = false;
-        if (token === this.token) then();
+        const next = end();
+        if (token !== this.token) return;
+        then();
+        // S1: the latest other request pressed during the settle, after the settled one, never beside it; not over a question the
+        // settled one opened (a Delete row that removes rows asks first): that question is answered first.
+        if (next && token === this.token && !this.st.overlay) next.run();
       });
     };
     this.later(0, go);
@@ -866,6 +932,37 @@ export class FormSession {
     this.publish();
   }
 
+  /**
+   * Amount box k was left with one comma read as its decimal point ("1500,50" shown as 1,500.50): a note under it says so. It stops
+   * nothing (Queue does not stop on it); like every note it goes when the box is edited, shut, or its amount moves.
+   */
+  commaRead(k: string, typed: string, shown: string) {
+    const s = this.st;
+    if (!s.draft || !s.editable || this.isShut(k)) return;
+    s.amountNotes[k] = `amount comma|${shown}|${typed}`;
+    const id = this.keyIndex.get(k);
+    if (id) s.touched.add(id);
+    this.setErrors(s.errors);
+    this.publish();
+  }
+
+  /**
+   * B3: the filer typed in amount box k but came back to the amount it showed, and a value set from outside while it had the keys
+   * won on leaving (the box shows `shown`): the number changed under the filer's keys, so a note says what the return holds now.
+   * It stops Queue once, as the other notes that say the box holds what was not typed.
+   */
+  outsideKept(k: string, typed: string, shown: string) {
+    const s = this.st;
+    if (!s.draft || !s.editable || this.isShut(k)) return;
+    // What was typed, in its money form, as "you typed ...; the return holds ..." names it.
+    const whole = this.kindOf.get(k) === "money" && this.wholeKeys.has(k);
+    s.amountNotes[k] = `amount outside|${shown}|${exactMoney(typed.trim(), whole)}`;
+    const id = this.keyIndex.get(k);
+    if (id) s.touched.add(id);
+    this.setErrors(s.errors);
+    this.publish();
+  }
+
   /** The schedule opened the drawer of the row that holds k, as Queue asked: its note has been shown. */
   drawerOpened(k: string) {
     const s = this.st;
@@ -873,12 +970,15 @@ export class FormSession {
     if (s.amountNotes[k] !== undefined) s.notesShown[k] = s.amountNotes[k];
   }
 
-  /** The notes Queue stops on: every note it has not brought into view yet, in page order (a folded part's too: Queue opens it). */
+  /**
+   * The notes Queue stops on: every note it has not brought into view yet, in page order (a folded part's too: Queue opens it). A comma
+   * read as the decimal point is no such note: the return holds what the box shows, read as the filer meant it.
+   */
   private queueNotes(): string[] {
     const s = this.st;
     const at = (k: string) => this.rowIds.indexOf(this.keyIndex.get(k) ?? "");
     return Object.keys(s.amountNotes)
-      .filter((k) => s.notesShown[k] !== s.amountNotes[k] && at(k) >= 0)
+      .filter((k) => !s.amountNotes[k].startsWith("amount comma|") && s.notesShown[k] !== s.amountNotes[k] && at(k) >= 0)
       .sort((a, b) => at(a) - at(b));
   }
 
@@ -1478,6 +1578,7 @@ export class FormSession {
       delete s.kept[k];
       delete s.rejected[k];
       delete s.amountNotes[k];
+      delete s.boxNotes[k];
       s.unfixable.delete(k);
       delete s.boxMessages[k];
     }
@@ -1511,7 +1612,7 @@ export class FormSession {
     // amount of the row that moved into its keys and put its own typed amount back over it (or bring back a deleted last row). Left
     // first, its amount is stored on its own row; then the row is cleared and the rows below move up with the box no longer focused.
     // The drawer's Delete row closes the drawer right after: the box going away runs the same leave, before this clear goes on.
-    if (clearsRow && !this.reopening && this.settleFocused(() => this.choose(edits, clear))) return;
+    if (clearsRow && !this.reopening && this.settleFocused(() => this.choose(edits, clear), `choose:${JSON.stringify(edits)}|${clear.join(",")}`)) return;
     if (clearsRow && Object.keys(s.pending).length && !this.reopening) {
       this.flush();
       if (s.removal || Object.keys(s.pending).length) return;
@@ -1566,6 +1667,7 @@ export class FormSession {
       delete s.kept[k];
       delete s.rejected[k];
       delete s.amountNotes[k];
+      delete s.boxNotes[k];
       s.unfixable.delete(k);
     }
     s.chosenFrom = Object.fromEntries(Object.keys(edits).map((k) => [k, s.values[k] ?? ""]));
@@ -1941,6 +2043,7 @@ export class FormSession {
       // A box whose own edit is still pending (an unreadable box's put-back) is judged once that edit is in.
       if (k in s.pending || (!this.isShut(k) && sameNumber(named === "no amount" ? "" : named, String(s.values[k] ?? "")))) continue;
       delete s.amountNotes[k];
+      delete s.boxNotes[k];
       dropped = true;
     }
     return dropped;
@@ -2047,12 +2150,20 @@ export class FormSession {
   private undoRemoval(draft: object, state: St, undo: () => void) {
     const s = this.st;
     if (s !== state || this.removalUndo !== undo || !s.editable) return;
+    // U1: an amount box that still has the keys is left first: what it holds is stored on its own row before Undo brings back the
+    // earlier draft, which would otherwise take that amount on leaving, onto whatever row then holds its keys. A leave that stored an
+    // edit retired Undo (as any edit does), and the filer is told so, as for typing still pending.
+    if (this.settleFocused(() => {
+      if (this.st !== state) return;
+      if (this.removalUndo === undo) return this.undoRemoval(draft, state, undo);
+      this.toast(UNDO_TYPED_SINCE, "triangle-alert");
+    }, "undo")) return;
     // V8: typing still pending is stored first, on its own keys. An edit retires Undo (Undo brings back a whole earlier draft, which
     // would drop what was typed or put it on another row), so the filer is told and the rows stay as they are.
     if (Object.keys(s.pending).length) {
       this.flush();
       this.retireRemovalUndo();
-      return void this.toast("Undo is no longer available: you typed since.", "triangle-alert");
+      return void this.toast(UNDO_TYPED_SINCE, "triangle-alert");
     }
     this.removalUndo = null;
     this.undoToast = null;
@@ -2156,12 +2267,18 @@ export class FormSession {
     s.messageKeys = {};
     s.messageCounts = {};
     s.boxMessages = {};
+    s.boxNotes = {};
     s.checkable = {};
     s.electionAt = null;
     const items = this.rowIds.map((id) => ({ id, it: this.items.get(id)! }));
     // A refused edit's sentence sits on its box; it counts toward the row it belongs to.
     for (const [k, msg] of [...Object.entries(s.rejected), ...Object.entries(s.amountNotes)]) {
       const sentence = this.refusalText(k, msg);
+      // A comma read as the decimal point is a note, not a message: no red, no count.
+      if (msg.startsWith("amount comma|")) {
+        s.boxNotes[k] = sentence;
+        continue;
+      }
       s.boxMessages[k] = s.boxMessages[k] ? `${s.boxMessages[k]} ${sentence}` : sentence;
       const id = this.keyIndex.get(k);
       if (id) (s.messageKeys[id] ||= []).push(k);
@@ -3257,6 +3374,15 @@ export class FormSession {
     return s.showAll || !id || s.touched.has(id) ? sentence : "";
   }
 
+  /** A box's note as it shows, by the same rule as its sentence. */
+  private shownBoxNote(k: string): string {
+    const s = this.st;
+    const note = s.boxNotes[k];
+    if (!note) return "";
+    const id = this.keyIndex.get(k);
+    return s.showAll || !id || s.touched.has(id) ? note : "";
+  }
+
   /** How many box-home sentences row id carries (each box's message counts once). */
   private boxCountFor(id: string): number {
     const it = this.items.get(id);
@@ -3385,7 +3511,7 @@ export class FormSession {
     if (!s.draft || !s.editable) return;
     // B2: an amount box that still has the keys is left first: a decimal-comma text ("1500,50") reads only on leaving, so the save
     // would store the older amount the box last reported.
-    if (this.settleFocused(() => this.saveNow())) return;
+    if (this.settleFocused(() => this.saveNow(), "save")) return;
     this.cancelAutosave();
     if (s.sample) return this.saveSample(null);
     this.saveReturn(true);
@@ -3534,12 +3660,14 @@ export class FormSession {
    * Queue: saved first; tax facts not set that change what is filed stop it; then it looks, as Check does, and a return the host will refuse
    * says so (the toast, every message on its row, the pill) and nothing is asked; the others are confirmed once (the tier warning) or queued.
    */
-  queue() {
+  queue(accepted: string[] | null = null) {
     const s = this.st;
+    // `accepted`: the warnings the filer just accepted with Continue, when Queue runs again after a settle (B8-2): the same warnings
+    // again are not asked a second time.
     // Queue cannot be taken back: an amount box that still has the keys is left first, so the amount it puts back and the note it
     // raises exist before anything is judged (Q1, Q2: settleFocused).
-    if (this.settleFocused(() => this.queue())) return;
-    if (s.sample) return this.saveSample(() => this.queue());
+    if (this.settleFocused(() => this.queue(accepted), "queue")) return;
+    if (s.sample) return this.saveSample(() => this.queue(accepted));
     // A note Queue has not shown yet stops it once, wherever it is: its part opens (the others fold, as the navigator does), its row
     // is brought into view, and the toast says the note itself, which names the item. Shown, it stops Queue no more.
     const unshown = this.queueNotes();
@@ -3578,7 +3706,7 @@ export class FormSession {
       return this.refuse(check.blocks[0].message, this.refusalAction(check.blocks));
     }
     const warns = check?.warns ?? [];
-    if (!this.looksFirst()) return this.askQueue(warns);
+    if (!this.looksFirst()) return this.askQueue(warns, accepted);
     if (this.lookingAt === this.token) return;
     this.lookingAt = this.token;
     this.looked((n) => {
@@ -3592,7 +3720,7 @@ export class FormSession {
         return void this.refuse(attentionText(n), this.refusalAction(s.errors));
       }
       this.toldRefusal = "";
-      this.askQueue(warns);
+      this.askQueue(warns, accepted);
     });
   }
 
@@ -3643,10 +3771,13 @@ export class FormSession {
   }
 
   /** Nothing left to fix: the tier warning is asked once, else the return is queued. */
-  private askQueue(warns: string[]) {
+  private askQueue(warns: string[], accepted: string[] | null = null) {
     const s = this.st;
     this.retireRefusal();
-    if (warns.length) {
+    // B8-2: the filer accepted exactly these warnings with Continue before the box's leave made Queue run again: not asked twice.
+    // The warnings are compared by their text, which today never holds an amount; if a fact's label ever includes one, key the
+    // accepted warnings by the fact's id instead, or a warning whose amount changed during the settle would pass unasked.
+    if (warns.length && !(accepted && sameJson(warns, accepted))) {
       s.queueWarn = { warns };
       s.overlay = { kind: "queue-confirm", warns };
       return this.publish();
@@ -3657,6 +3788,19 @@ export class FormSession {
   confirmQueue() {
     const s = this.st;
     if (!s.queueWarn) return;
+    // B8: Continue queues, which cannot be taken back: an amount box that has the keys again under the question is left first, as
+    // Queue leaves it. Its leave may have changed the return under the question (its blur already flushed what it read, so nothing is
+    // pending by then, but nothing is saved either, and 1601C's and 2551Q's Queue reads the stored row) or raised a note: after any
+    // settle the question closes and Queue runs again from the start (saved first, its notes stop it, the checks, the question).
+    if (this.settleFocused(() => {
+      if (this.st !== s || !s.queueWarn) return;
+      const accepted = s.queueWarn.warns;
+      s.queueWarn = null;
+      s.overlay = null;
+      this.publish();
+      // B8-2: the warnings just accepted go with it: the same ones again are not asked twice; others are asked, notes still stop it.
+      this.queue(accepted);
+    }, "confirmQueue")) return;
     s.queueWarn = null;
     s.overlay = null;
     this.publish();
@@ -3844,7 +3988,7 @@ export class FormSession {
     if (!s.draft) return;
     if (!hasSecondWindow && !hasNativePreview && !Print.previewsNatively()) return void this.toast(NO_PREVIEW, "printer");
     // B2: an amount box that still has the keys is left first, so the paper shows the amount the box holds, not an older one.
-    if (this.settleFocused(() => this.print())) return;
+    if (this.settleFocused(() => this.print(), "print")) return;
     if (s.sample) {
       try {
         bir.screen_form_print_sample(s.target.formCode, s.draft, s.pending, this.unlockedFor(s.pending));
@@ -4175,6 +4319,7 @@ export class FormSession {
       this.sInvalid.get(k).set(shownMsgKeys.has(k) || Boolean(boxMsg));
       // A box whose sentence the row prints draws none of its own.
       this.sBoxMsg.get(k).set(this.rowPrints(k) ? "" : boxMsg);
+      this.sBoxNote.get(k).set(this.rowPrints(k) ? "" : this.shownBoxNote(k));
       // A refusal is the host having refused the edit (it was never stored), not any sentence the
       // box shows: a validation message (an over-long value that saved, reported by Check) must not
       // hold the row drawer shut. An unfixable one put the stored value back, so nothing stands.
@@ -4299,6 +4444,7 @@ export class FormSession {
     return {
       message: oneDateShown.length || periodShown.length ? "" : shown[id] || "",
       boxMessages: shownKeys.map((k) => ({ key: k, sentence: s.boxMessages[k] })),
+      boxNotes: keys.filter((k) => this.rowPrints(k) && this.shownBoxNote(k)).map((k) => ({ key: k, sentence: s.boxNotes[k] })),
       hidden: this.rowHidden(id, it, todoHere, Boolean(shown[id])),
       hiddenBoxes,
       notes: this.lockNotesFor(it),
@@ -4464,6 +4610,7 @@ export class FormSession {
     if (this.disposed) return true;
     if (this.reopening || this.st.loading) await this.ready();
     if (this.reopening) await this.idle();
+    this.leaveFocusedNow(true);
     const failed = this.finish();
     this.publish();
     if (failed) this.toast(failed, "triangle-alert");
@@ -4475,6 +4622,7 @@ export class FormSession {
   dispose() {
     if (this.disposed) return;
     this.retireRemovalUndo();
+    this.leaveFocusedNow();
     const failed = this.finish();
     // The frame's flushNow just said the same on the way out: once is enough.
     if (failed && failed !== this.leaveSaid) this.toast(failed, "triangle-alert");
