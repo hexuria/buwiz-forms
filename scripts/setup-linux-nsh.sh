@@ -228,6 +228,7 @@ exec docker run --rm -i "${tty[@]}" "${android[@]}" "${git_env[@]}" --network ho
   -e CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}" \
   -e NSH_RUNTIME \
   -e CARGO_INCREMENTAL=0 \
+  -e CARGO_PROFILE_RELEASE_LTO -e CARGO_PROFILE_RELEASE_CODEGEN_UNITS -e CARGO_PROFILE_RELEASE_OPT_LEVEL \
   -e ANDROID_HOME="$android_home" -e ANDROID_NDK_HOME="$ndk" \
   -e RANLIB_x86_64_linux_android="$RANLIB" -e RANLIB_aarch64_linux_android="$RANLIB" -e RANLIB_armv7_linux_androideabi="$RANLIB" \
   -e DISPLAY="$display" -e XDG_RUNTIME_DIR="/run/user/$uid" \
