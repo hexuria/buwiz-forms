@@ -2,10 +2,13 @@
 # record the run with the machine's own recorder.
 $ErrorActionPreference = 'Stop'
 Set-Location (Resolve-Path "$PSScriptRoot\..\..\..")
+. (Join-Path $PSScriptRoot '..\..\lib\Prebuilt.ps1')
 foreach ($tool in 'just', 'gpui-agent', 'python') {
     if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "e2e: $tool is not installed: run scripts/setup-windows.ps1" }
 }
-"app $(git rev-parse --short=8 HEAD), $((cargo install --list) -match '^gpui-agent-cli')"
+$gpuiAgentVersion = Get-PrebuiltInstalledVersion 'gpui-agent-cli' 'gpui-agent'
+if (-not $gpuiAgentVersion) { $gpuiAgentVersion = 'unknown' }
+"app $(git rev-parse --short=8 HEAD), gpui-agent-cli $gpuiAgentVersion"
 just e2e check smoke
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 # A dry-run test build only: the runner refuses the Queue recipe without these and --allow-send.
