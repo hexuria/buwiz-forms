@@ -362,8 +362,12 @@ impl Form1701Draft {
         let taxpayer_name_allowed = self.employer_row_allowed(Form1701Party::Taxpayer);
         let spouse_name_allowed = self.employer_row_allowed(Form1701Party::Spouse);
         for row in &mut self.employers {
-            row.compensation_income = Some(cents(amt(row.compensation_income)));
-            row.tax_withheld = Some(cents(amt(row.tax_withheld)));
+            if row.compensation_income.is_some() {
+                row.compensation_income = Some(cents(amt(row.compensation_income)));
+            }
+            if row.tax_withheld.is_some() {
+                row.tax_withheld = Some(cents(amt(row.tax_withheld)));
+            }
             let name_allowed = match row.owner {
                 Some(Form1701Party::Taxpayer) => taxpayer_name_allowed,
                 Some(Form1701Party::Spouse) => spouse_name_allowed,
