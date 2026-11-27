@@ -5639,12 +5639,36 @@ fn shift_page_and_insert_rule6(
         }
         out.push_str(&svg_part[cursor..]);
 
+        let sheet_width = svg_part
+            .find("viewBox=\"")
+            .and_then(|at| {
+                let rest = &svg_part[at + 9..];
+                rest.split_whitespace()
+                    .nth(2)
+                    .and_then(|n| n.parse::<f64>().ok())
+            })
+            .unwrap_or(612.0);
         let mut prior_dh = 0.0;
         out.push_str("<g class=\"layer-rule6\">");
         for ins in insertions {
             let y = ins.cut_y + prior_dh;
             let w = (ins.x1 - ins.x0).max(10.0);
             let h = ins.dh;
+            // The strip the insertion opens is spacing, not entry room: the
+            // sheet's own label grey fills it from the band's right edge to
+            // the mirrored right margin, so no one reads it as a tall white
+            // amount box. A full-width band leaves nothing to grey.
+            let grey_x = ins.x1;
+            let grey_w = (sheet_width - ins.x0 - ins.x1).max(0.0);
+            if grey_w > 1.0 {
+                out.push_str(&format!(
+                    "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#d9d9d9\"/>",
+                    grey_x,
+                    y + 0.25,
+                    grey_w,
+                    (h - 0.5).max(1.0)
+                ));
+            }
             out.push_str(&format!(
                 "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#ffffff\"/>",
                 ins.x0 + 1.0,
@@ -11397,6 +11421,67 @@ mod tests {
                 "no frame line at x~{divider_x} bridges the strip (band {band_top}..{band_bottom})"
             );
         }
+    }
+
+    /// The strip a narrowed Rule 6 band opens is spacing, not entry room:
+    /// the sheet's own label grey fills it from the band's right edge to
+    /// the mirrored right margin, so the added rows never read as a tall
+    /// white amount box.
+    #[test]
+    fn a_rule6_strip_greys_out_the_room_right_of_the_band() {
+        let slug = "1701ms-2024";
+        let cells = writer_cells(slug).unwrap();
+        let mut fields: BTreeMap<String, String> = BTreeMap::new();
+        for key in cells.joins.keys() {
+            if key.contains("description") || key.contains("specify") {
+                fields.insert(key.clone(), words_of(200));
+            } else {
+                fields.insert(key.clone(), "1000".to_string());
+            }
+        }
+        let doc = filled_document(slug, &fields).unwrap();
+
+        let band_marker = "data-rule6-of=\"p2c179\" style=\"";
+        let at = doc.find(band_marker).unwrap() + band_marker.len();
+        let style = &doc[at..at + 120];
+        let pt = |name: &str| -> f64 {
+            let key = format!("{name}:");
+            let from = style.find(&key).unwrap() + key.len();
+            style[from..].split("pt").next().unwrap().parse().unwrap()
+        };
+        let band_left = pt("left");
+        let band_right = band_left + pt("width");
+        let band_top = pt("top");
+        let band_bottom = band_top + pt("height");
+
+        let mut greys = Vec::new();
+        let mut cursor = 0;
+        while let Some(rel) = doc[cursor..].find("<rect ") {
+            let start = cursor + rel;
+            let Some(end_rel) = doc[start..].find('>') else {
+                break;
+            };
+            let tag = &doc[start..start + end_rel + 1];
+            if tag.contains("#d9d9d9") {
+                let num = |a: &str| attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+                if let (Some(x), Some(y), Some(w), Some(h)) =
+                    (num("x"), num("y"), num("width"), num("height"))
+                {
+                    greys.push((x, y, w, h));
+                }
+            }
+            cursor = start + end_rel + 1;
+        }
+        let strip_grey = greys.iter().find(|&&(x, y, w, h)| {
+            (x - band_right).abs() < 3.0
+                && w > 100.0
+                && y >= band_top - 1.0
+                && y + h <= band_bottom + 2.0
+        });
+        assert!(
+            strip_grey.is_some(),
+            "no grey strip right of the band at x~{band_right:.1} y~{band_top:.1}: {greys:?}"
+        );
     }
 
     /// D1's negative: 1700's band for p2c153 moved sideways under the
