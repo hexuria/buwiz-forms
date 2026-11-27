@@ -66,6 +66,7 @@ pub mod receipt;
 pub mod reference;
 pub mod relay;
 pub mod rooms;
+pub mod safe_fs;
 pub mod schema;
 pub mod send_in_flight;
 pub mod tax_profile;

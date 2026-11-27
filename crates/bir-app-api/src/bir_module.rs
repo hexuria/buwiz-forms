@@ -568,10 +568,20 @@ pub fn device_setting(key: &str) -> Option<String> {
 
 /// Write a device-wide setting: to `device_settings` from A1 on. Refused
 /// while the account gate is locked, as the database write it replaces was.
+/// A device store that cannot be used (lost, unreadable, newer) never makes
+/// the write fail (A2, #423's review item 5): it then goes to the same key in
+/// the open database, which every reader falls back to (O1).
 fn set_device_setting(key: &str, value: &str) -> Result<(), HostError> {
     crate::account_gate::ensure_unlocked()?;
-    bir_core::rooms::set_device_setting(key, value)
-        .map_err(|error| HostError::new(error.to_string()))
+    match bir_core::rooms::set_device_setting(key, value) {
+        Ok(()) => Ok(()),
+        Err(error) if error.is_unusable() => with_database(|db| {
+            bir_core::rooms::set_device_setting_or(key, value, Some(db))
+                .map(|_| ())
+                .map_err(|error| HostError::new(error.to_string()))
+        }),
+        Err(error) => Err(HostError::new(error.to_string())),
+    }
 }
 
 /// Whether no database handle of this process is open any more: true once
@@ -5520,6 +5530,51 @@ mod tests {
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), s("[\"demo\"]"));
         delete_setting(&args(vec![key()])).unwrap();
         assert_eq!(bir_core::rooms::device_setting("welcomed_accounts"), None);
+    }
+
+    /// A2 (#423's review, item 5): with `rooms/` on disk and `device.db`
+    /// unreadable, the page's theme and the other device-setting writes still
+    /// succeed (into the open database), and read back; the store is left as it
+    /// was.
+    #[test]
+    fn setting_writes_go_through_when_the_device_store_is_unusable() {
+        setup();
+        bir_core::rooms::forget_ephemeral_device_store();
+        let folder = tempfile::tempdir().unwrap();
+        db::set_database_path_override(Some(folder.path().join("bir_data.db")));
+        std::fs::create_dir_all(folder.path().join("rooms").join("x")).unwrap();
+        let garbage = b"not a device store, and long enough to be read".to_vec();
+        std::fs::write(folder.path().join("device.db"), &garbage).unwrap();
+
+        set_setting(&args(vec![s("theme_preference"), s("Dark")])).unwrap();
+        set_global_hotkey(&args(vec![s("control+alt+E")])).unwrap();
+        // (Log retention's verb also prunes the log folder, which is not this test's: its write is the same call.)
+        set_auto_update_download(&args(vec![HostValue::Bool(false)])).unwrap();
+        assert_eq!(
+            get_setting(&args(vec![s("theme_preference")])).unwrap(),
+            s("Dark")
+        );
+        assert_eq!(stored_setting("theme_preference").as_deref(), Some("Dark"));
+        assert_eq!(
+            stored_setting("global_hotkey_key").as_deref(),
+            Some("control+alt+E")
+        );
+        assert_eq!(
+            device_setting(crate::hooks::AUTO_DOWNLOAD_SETTING).as_deref(),
+            Some("0")
+        );
+        delete_setting(&args(vec![s("theme_preference")])).unwrap();
+        assert_eq!(
+            get_setting(&args(vec![s("theme_preference")])).unwrap(),
+            HostValue::Null
+        );
+        assert_eq!(
+            std::fs::read(folder.path().join("device.db")).unwrap(),
+            garbage
+        );
+
+        db::set_database_path_override(None);
+        bir_core::rooms::use_ephemeral_device_store();
     }
 
     /// (b) The help desk admin's authenticator secret stays host-side: the

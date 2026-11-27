@@ -331,6 +331,17 @@ impl std::fmt::Display for DeviceStoreError {
 
 impl std::error::Error for DeviceStoreError {}
 
+impl DeviceStoreError {
+    /// The store cannot be used as it is (lost, unreadable, newer), as against a busy or failing moment: a
+    /// device-setting write then goes elsewhere rather than fail ([`set_device_setting_or`]).
+    pub fn is_unusable(&self) -> bool {
+        matches!(
+            self,
+            Self::Lost(_) | Self::Unreadable { .. } | Self::Newer { .. }
+        )
+    }
+}
+
 impl From<rusqlite::Error> for DeviceStoreError {
     fn from(error: rusqlite::Error) -> Self {
         Self::Sqlite(error)
@@ -824,16 +835,166 @@ pub fn device_setting_or(key: &str, open: Option<&Database>) -> Option<String> {
     device_setting(key).or_else(|| open.and_then(|db| db.get_setting(key).ok().flatten()))
 }
 
-/// Write a device-wide setting to `device_settings` (made on a new install; refused when it was lost while
-/// rooms are on disk, or cannot be read).
+/// Write a device-wide setting to `device_settings`, made on a new install.
+///
+/// A store that cannot be used (#423's review, item 5) never stays in the way where nothing depends on it: with no
+/// `rooms/` on disk, an unreadable `device.db` that a `quick_check` shows is not a store is renamed aside
+/// ([`set_aside_unusable`]) and a fresh store takes the write. Otherwise the error is returned; it says
+/// [`DeviceStoreError::is_unusable`] when the store is lost, unreadable or newer, and [`set_device_setting_or`] then
+/// writes the open database instead. A lost store with rooms on disk is never made again here (L2, the N6 path).
 pub fn set_device_setting(key: &str, value: &str) -> Result<(), DeviceStoreError> {
-    with_store_here(true, |store| store.set_setting(key, value)).map(|_| ())
+    let write = |store: &DeviceStore| store.set_setting(key, value);
+    let here = device_store_here();
+    match here.with(true, write) {
+        Ok(_) => Ok(()),
+        Err(error @ DeviceStoreError::Unreadable { .. }) => {
+            let DeviceStoreRef::File(layout) = &here else {
+                return Err(error);
+            };
+            if layout.has_rooms() {
+                return Err(error);
+            }
+            match set_aside_unusable(layout) {
+                Ok(Some(aside)) => {
+                    tracing::warn!(
+                        aside = %aside.display(),
+                        "device store could not be read ({error}); kept under a new name, and a new one was made"
+                    );
+                    here.with(true, write).map(|_| ())
+                }
+                Ok(None) => Err(error),
+                Err(set_aside) => {
+                    tracing::warn!("device store not set aside: {set_aside}");
+                    Err(error)
+                }
+            }
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// Where [`set_device_setting_or`] wrote a device-wide setting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingWritten {
+    /// To `device_settings`.
+    DeviceStore,
+    /// To the same key in the database the app has open: the device store could not be used.
+    OpenDatabase,
+}
+
+/// Write a device-wide setting, never blocked by a device store that cannot be used (PLAN §A.7, A2's first commit):
+/// [`set_device_setting`], and where that answers an unusable store (lost, unreadable, newer), the same key in the
+/// database the app has open (`open`: the legacy file before A3a, the room after), which the readers fall back to
+/// (O1). With no open database there is nowhere else, and the store's own error is returned.
+pub fn set_device_setting_or(
+    key: &str,
+    value: &str,
+    open: Option<&Database>,
+) -> Result<SettingWritten, DeviceStoreError> {
+    match set_device_setting(key, value) {
+        Ok(()) => Ok(SettingWritten::DeviceStore),
+        Err(error) if error.is_unusable() => {
+            let Some(db) = open else {
+                return Err(error);
+            };
+            tracing::warn!(key, "device setting written to the open database: {error}");
+            db.set_setting(key, value)
+                .map_err(|db_error| match db_error {
+                    crate::db::DbError::Sqlite(sqlite) => DeviceStoreError::Sqlite(sqlite),
+                    other => DeviceStoreError::Io(std::io::Error::other(other.to_string())),
+                })?;
+            Ok(SettingWritten::OpenDatabase)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 /// Delete a device-wide setting from `device_settings`. A device with no `device.db` has nothing to delete,
-/// and none is made for it.
+/// and none is made for it; nor has a store that cannot be used (its value is read by nobody): the caller deletes
+/// the open database's key too.
 pub fn delete_device_setting(key: &str) -> Result<(), DeviceStoreError> {
-    with_store_here(false, |store| store.delete_setting(key)).map(|_| ())
+    match with_store_here(false, |store| store.delete_setting(key)) {
+        Ok(_) => Ok(()),
+        Err(error) if error.is_unusable() => {
+            tracing::warn!(
+                key,
+                "device setting not deleted from an unusable store: {error}"
+            );
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// Whether the file at `path` is shown not to be a device store this build reads: it is not SQLite, `quick_check`
+/// finds damage, or its shape is not a device store (tables with no version, a table missing, an unknown version).
+/// `None` when that cannot be shown (it opens fine, it is a newer store, or it cannot be opened at all, which may be
+/// a passing state such as file protection): then it is never set aside.
+fn unusable_reason(path: &Path) -> Option<String> {
+    let conn = match Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+        Ok(conn) => conn,
+        Err(error) => {
+            return matches!(&error, rusqlite::Error::SqliteFailure(failure, _) if failure.code == ErrorCode::NotADatabase)
+                .then(|| format!("not a database ({error})"));
+        }
+    };
+    let check: Result<String, _> = conn.query_row("PRAGMA quick_check", [], |row| row.get(0));
+    drop(conn);
+    match check {
+        Ok(answer) if answer == "ok" => {}
+        Ok(answer) => return Some(format!("quick_check: {answer}")),
+        Err(rusqlite::Error::SqliteFailure(failure, message))
+            if matches!(
+                failure.code,
+                ErrorCode::NotADatabase | ErrorCode::DatabaseCorrupt
+            ) =>
+        {
+            return Some(format!(
+                "quick_check: {failure} {}",
+                message.unwrap_or_default()
+            ));
+        }
+        Err(_) => return None,
+    }
+    match DeviceStore::open_file(path) {
+        Err(DeviceStoreError::Unreadable { reason, .. }) => Some(reason),
+        _ => None,
+    }
+}
+
+/// Rename an unusable `device.db` (and its `-wal` and `-shm`) aside as `device.db.unusable-<stamp>`, never replacing,
+/// and make the rename durable; answers the new name, or `None` when [`unusable_reason`] cannot show the file is
+/// unusable (nothing is renamed). It is never deleted. The held connection to it is dropped first: on Windows an open
+/// connection would refuse the rename (H1).
+pub fn set_aside_unusable(layout: &Layout) -> Result<Option<PathBuf>, DeviceStoreError> {
+    let path = layout.device_db();
+    let mut held = HELD_STORES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    held.remove(&path);
+    let Some(reason) = unusable_reason(&path) else {
+        return Ok(None);
+    };
+    let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%S%9fZ");
+    let aside = layout
+        .device_dir()
+        .join(format!("{DEVICE_DB_FILE}.unusable-{stamp}"));
+    crate::safe_fs::rename_no_replace(&path, &aside)?;
+    // A log left at the old name would be read into the fresh store as if it were its own.
+    for suffix in ["-wal", "-shm"] {
+        let mut side = path.as_os_str().to_os_string();
+        side.push(suffix);
+        let mut side_aside = aside.as_os_str().to_os_string();
+        side_aside.push(suffix);
+        match crate::safe_fs::rename_no_replace(Path::new(&side), Path::new(&side_aside)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    crate::safe_fs::sync_dir(layout.device_dir())?;
+    tracing::warn!(aside = %aside.display(), "device store set aside: {reason}");
+    Ok(Some(aside))
 }
 
 #[cfg(test)]
@@ -1338,6 +1499,132 @@ mod tests {
                 Some("Dark")
             );
         }
+        crate::db::set_database_path_override(None);
+    }
+
+    /// The `device.db.unusable-*` files in `folder`, and their bytes.
+    fn set_aside(folder: &Path) -> Vec<(String, Vec<u8>)> {
+        let mut out: Vec<(String, Vec<u8>)> = std::fs::read_dir(folder)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| {
+                        name.starts_with("device.db.unusable-")
+                            && !name.ends_with("-wal")
+                            && !name.ends_with("-shm")
+                    })
+            })
+            .map(|path| {
+                (
+                    path.file_name().unwrap().to_string_lossy().into_owned(),
+                    std::fs::read(&path).unwrap(),
+                )
+            })
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// PLAN §A.7, A2's first commit (#423's review, item 5): a `device.db` that cannot be used (unreadable, newer,
+    /// lost) never makes a device-setting write fail.
+    /// - With no `rooms/`, an unreadable file is renamed aside (`device.db.unusable-<stamp>`, never replacing, its
+    ///   bytes kept) once a `quick_check` shows it is not a store, and a fresh store takes the write.
+    /// - With `rooms/` on disk, the write goes to the same key in the open database, and the store is left exactly as
+    ///   it is (its loss is the N6 path's, never recreated silently).
+    /// - A newer store is never renamed: its own version may still need it. The write goes to the open database.
+    #[test]
+    fn an_unusable_device_db_never_blocks_a_setting_write() {
+        let folder = tempfile::tempdir().unwrap();
+        let legacy_path = folder.path().join("bir_data.db");
+        crate::db::set_database_path_override(Some(legacy_path.clone()));
+        forget_ephemeral_device_store();
+        let layout = Layout::here();
+        assert_eq!(layout.device_dir(), folder.path());
+        let open = Database::open(&legacy_path).unwrap();
+        let garbage = b"this is not a SQLite file, and it is long enough to be read".to_vec();
+
+        // 1. No rooms/: the unreadable file goes aside, kept byte for byte, and a fresh store takes the write.
+        std::fs::write(layout.device_db(), &garbage).unwrap();
+        assert_eq!(
+            set_device_setting_or("theme_preference", "Dark", Some(&open)).unwrap(),
+            SettingWritten::DeviceStore
+        );
+        let aside = set_aside(folder.path());
+        assert_eq!(aside.len(), 1, "{aside:?}");
+        assert_eq!(aside[0].1, garbage, "the unusable file is kept as it was");
+        assert_eq!(
+            DeviceStore::open(&layout)
+                .unwrap()
+                .setting("theme_preference")
+                .unwrap()
+                .as_deref(),
+            Some("Dark")
+        );
+        assert_eq!(open.get_setting("theme_preference").unwrap(), None);
+
+        // 2. rooms/ on disk and the store unreadable: the open database takes the write; nothing is renamed or made.
+        let room = room_id_for("https://api.buwiz.com", "user-1");
+        layout.create_room_dir(&room).unwrap();
+        HELD_STORES.lock().unwrap().clear();
+        for suffix in ["-wal", "-shm"] {
+            let _ = std::fs::remove_file(folder.path().join(format!("device.db{suffix}")));
+        }
+        std::fs::write(layout.device_db(), &garbage).unwrap();
+        assert_eq!(
+            set_device_setting_or("theme_preference", "Light", Some(&open)).unwrap(),
+            SettingWritten::OpenDatabase
+        );
+        assert_eq!(
+            open.get_setting("theme_preference").unwrap().as_deref(),
+            Some("Light")
+        );
+        assert_eq!(std::fs::read(layout.device_db()).unwrap(), garbage);
+        assert_eq!(set_aside(folder.path()).len(), 1, "nothing more set aside");
+        assert_eq!(
+            device_setting_or("theme_preference", Some(&open)).as_deref(),
+            Some("Light"),
+            "the read follows the write"
+        );
+
+        // 3. rooms/ on disk and device.db gone (lost): the open database takes the write; no device.db is made.
+        std::fs::remove_file(layout.device_db()).unwrap();
+        assert_eq!(
+            set_device_setting_or("global_hotkey_key", "control+alt+E", Some(&open)).unwrap(),
+            SettingWritten::OpenDatabase
+        );
+        assert!(!layout.device_db().exists(), "never recreated silently");
+        assert_eq!(
+            open.get_setting("global_hotkey_key").unwrap().as_deref(),
+            Some("control+alt+E")
+        );
+
+        // 4. No rooms/ and a store of a newer version: never renamed; the open database takes the write.
+        std::fs::remove_dir_all(layout.rooms_dir()).unwrap();
+        drop(DeviceStore::open(&layout).unwrap());
+        {
+            let conn = Connection::open(layout.device_db()).unwrap();
+            conn.pragma_update(None, "user_version", DEVICE_SCHEMA_VERSION + 1)
+                .unwrap();
+        }
+        HELD_STORES.lock().unwrap().clear();
+        let newer = std::fs::read(layout.device_db()).unwrap();
+        assert_eq!(
+            set_device_setting_or("log_retention_days", "14", Some(&open)).unwrap(),
+            SettingWritten::OpenDatabase
+        );
+        assert_eq!(std::fs::read(layout.device_db()).unwrap(), newer);
+        assert_eq!(set_aside(folder.path()).len(), 1);
+        assert_eq!(
+            open.get_setting("log_retention_days").unwrap().as_deref(),
+            Some("14")
+        );
+
+        // With no open database there is nowhere else to write: the store's own error.
+        assert!(set_device_setting_or("log_retention_days", "7", None).is_err());
+
+        HELD_STORES.lock().unwrap().clear();
         crate::db::set_database_path_override(None);
     }
 
