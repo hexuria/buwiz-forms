@@ -42,29 +42,34 @@
   },
   {
    "id": "s7",
+   "op": "wait",
+   "timeout_ms": 800
+  },
+  {
+   "id": "s8",
    "op": "set_value",
    "target": "tp-taxpayer-birth_date-sheet-input",
    "value": "$birth"
   },
   {
-   "id": "s8",
+   "id": "s9",
    "op": "click",
    "target": "tp-taxpayer-birth_date-sheet-done"
   },
   {
-   "id": "s9",
+   "id": "s10",
    "op": "wait_until",
    "target": "tp-taxpayer-birth_date-sheet-input",
    "timeout_ms": 5000,
    "exists": false
   },
   {
-   "id": "s10",
+   "id": "s11",
    "op": "click",
    "target": "tp-taxpayer-save"
   },
   {
-   "id": "s11",
+   "id": "s12",
    "op": "wait_until",
    "target": "tp-taxpayer-save",
    "timeout_ms": 5000,
