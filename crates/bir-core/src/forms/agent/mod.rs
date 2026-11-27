@@ -402,7 +402,17 @@ pub fn validate(kind: AgentFormKind, draft: &mut Value) -> Result<Vec<(String, S
 
 /// Official control id -> value for `draft` as it stands.
 pub fn field_map(kind: AgentFormKind, draft: &Value) -> Result<BTreeMap<String, String>, String> {
-    with_agent_kind!(kind, F => field_map_as::<F>(kind, draft))
+    let mut fields = with_agent_kind!(kind, F => field_map_as::<F>(kind, draft))?;
+    // A previous-payment amount belongs only to an amended return. While the
+    // gate is closed the map omits the box even if a corrupt draft reaches
+    // this map without a recompute; an XML writer that emits the layout's
+    // box anyway writes its empty zero rather than the dormant amount.
+    if let Some(spec) = draft_locks::previous_payment::spec(kind)
+        && draft_locks::previous_payment::lock_reason(spec, draft).is_some()
+    {
+        fields.remove(spec.key);
+    }
+    Ok(fields)
 }
 
 /// TIN, year, period and filing status of `draft`.
@@ -1509,6 +1519,14 @@ fn fill_box(
         && key == draft_locks::item16_2551q::KEY
         && draft_locks::item16_2551q::lock_reason(draft).is_some()
         && draft_locks::item16_2551q::zero_noop(value)
+    {
+        return Ok(());
+    }
+    if !as_host
+        && let Some(spec) = draft_locks::previous_payment::spec(kind)
+        && key == spec.key
+        && draft_locks::previous_payment::lock_reason(spec, draft).is_some()
+        && draft_locks::previous_payment::zero_write(value)
     {
         return Ok(());
     }

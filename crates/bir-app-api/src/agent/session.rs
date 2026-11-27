@@ -4027,6 +4027,96 @@ mod tests {
         assert!(pending[0].1.contains("Item 16 was cleared"), "{pending:?}");
     }
 
+    fn open_1600pt(session: &mut Session) {
+        save_scratch(session);
+        call(
+            session,
+            "form.open",
+            json!({"code": "1600PT", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn form_fill_holds_the_previous_payment_gate_and_accepts_zero_spellings() {
+        let mut session = session();
+        open_1600pt(&mut session);
+        let kind = AgentFormKind::Queueable(bir_core::forms::queueable::QueueableKind::Form1600PT);
+        let spec = bir_core::forms::agent::draft_locks::previous_payment::spec(kind).unwrap();
+
+        let refused = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {spec.key: "42"}}),
+        )
+        .unwrap();
+        assert_eq!(refused["refused"][spec.key], spec.lock, "{refused}");
+        for value in [json!("0"), json!("₱0.00"), json!("(0.00)"), json!(0)] {
+            let zero = call(
+                &mut session,
+                "form.fill",
+                json!({"fields": {spec.key: value}}),
+            )
+            .unwrap();
+            assert!(
+                zero.get("refused").is_none(),
+                "zero spelling {value}: {zero}"
+            );
+            assert_eq!(
+                session.open.as_ref().unwrap().draft[spec.path]
+                    .as_f64()
+                    .unwrap_or(0.0),
+                0.0
+            );
+        }
+    }
+
+    #[test]
+    fn form_fill_previous_payment_yes_to_no_records_the_pending_notice() {
+        let mut session = session();
+        open_1600pt(&mut session);
+        let kind = AgentFormKind::Queueable(bir_core::forms::queueable::QueueableKind::Form1600PT);
+        let spec = bir_core::forms::agent::draft_locks::previous_payment::spec(kind).unwrap();
+
+        let opened = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {spec.yes_key: "true", spec.key: "42"}}),
+        )
+        .unwrap();
+        assert!(opened.get("refused").is_none(), "{opened}");
+        assert_eq!(
+            session.open.as_ref().unwrap().draft[spec.path]
+                .as_f64()
+                .unwrap_or(0.0),
+            42.0
+        );
+        let closed = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {spec.no_key: "true"}}),
+        )
+        .unwrap();
+        assert!(closed.get("refused").is_none(), "{closed}");
+        assert_eq!(
+            session.open.as_ref().unwrap().draft[spec.path]
+                .as_f64()
+                .unwrap_or(0.0),
+            0.0
+        );
+        let db = session.lock_db().unwrap();
+        let gate = format!(
+            "{}_item{}",
+            spec.form_code.to_lowercase(),
+            spec.item.to_lowercase()
+        );
+        let pending = db
+            .settings_with_prefix(&format!("notice_pending:{gate}:"))
+            .unwrap();
+        assert_eq!(pending.len(), 1, "{pending:?}");
+        assert!(pending[0].1.contains(spec.cleared), "{pending:?}");
+    }
+
     #[test]
     fn form_fields_and_send_hold_2551q_item16_to_its_gate() {
         let mut session = session_with_a_valid_2551q();

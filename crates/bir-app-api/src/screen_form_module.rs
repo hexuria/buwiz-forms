@@ -3036,6 +3036,13 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
 /// page shows (`txtEmail#occurrence-1`) with its official key's value.
 fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     let mut map = agent::field_map(kind, draft)?;
+    // The upload omits a shut previous-payment box; the page still draws it
+    // at its cleared zero with the gate's sentence.
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+        && bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft).is_some()
+    {
+        map.insert(spec.key.to_string(), "0.00".to_string());
+    }
     // PR 9's forms: what the draft keeps where the field map cuts it.
     rows_as_needed::values(kind, draft, &mut map);
     // A row family's row the upload leaves out still shows what the draft
@@ -3370,6 +3377,37 @@ fn put_sample_mark(draft: &mut Value, mark: Option<&SampleMark>) {
         object.insert(
             SAMPLE_MARK.into(),
             json!({ "blank": mark.blank, "set": mark.set }),
+        );
+    }
+}
+
+/// The gate keys whose clearing notes this draft's page applied inline. The
+/// mark rides inside the draft only between a fill and its save; it is never
+/// stored as form data.
+const INLINE_CLEARANCES_MARK: &str = "screen_form_inline_clearances";
+
+fn take_inline_clearances_mark(draft: &mut Value) -> BTreeSet<String> {
+    let Value::Object(object) = draft else {
+        return BTreeSet::new();
+    };
+    object
+        .remove(INLINE_CLEARANCES_MARK)
+        .as_ref()
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|gate| gate.as_str().map(str::to_string))
+        .collect()
+}
+
+fn put_inline_clearances_mark(draft: &mut Value, gates: &BTreeSet<String>) {
+    if gates.is_empty() {
+        return;
+    }
+    if let Value::Object(object) = draft {
+        object.insert(
+            INLINE_CLEARANCES_MARK.into(),
+            json!(gates.iter().collect::<Vec<_>>()),
         );
     }
 }
@@ -3826,6 +3864,12 @@ fn lock_note(reason: &str) -> &'static str {
     if reason == bir_core::forms::agent::draft_locks::item16_2551q::EIGHT_PERCENT_LOCK {
         return bir_core::forms::agent::draft_locks::item16_2551q::EIGHT_PERCENT_LOCK;
     }
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::SPECS
+        .iter()
+        .find(|spec| spec.lock == reason)
+    {
+        return spec.lock;
+    }
     if reason.starts_with("computed") {
         NOTE_COMPUTED
     } else if reason == Lock::Profile.reason() || reason.contains("from the tax profile") {
@@ -3872,6 +3916,11 @@ fn notes_always(kind: AgentFormKind, draft: &Value) -> Vec<String> {
         && bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft).is_some()
     {
         keys.push(bir_core::forms::agent::draft_locks::item16_2551q::KEY.to_string());
+    }
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+        && bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft).is_some()
+    {
+        keys.push(spec.key.to_string());
     }
     keys
 }
@@ -4968,6 +5017,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let mut draft = draft_argument(arguments, 1)?;
     let sample = take_sample_mark(&mut draft);
     let amendment = take_amendment_mark(&mut draft);
+    let mut inline_clearances = take_inline_clearances_mark(&mut draft);
     let edits = arguments
         .value(2)?
         .as_object()
@@ -5056,6 +5106,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
                 bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(&draft)
         {
             relock_notes.insert(item16.to_string(), json!(note));
+            inline_clearances.insert("2551q_item16".to_string());
         }
     }
     // When 1606's installment gate closes with installment-only values
@@ -5080,6 +5131,20 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             }
         }
     }
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind) {
+        let was = before[spec.path].as_f64().unwrap_or(0.0);
+        let now = draft[spec.path].as_f64().unwrap_or(0.0);
+        if was.abs() >= 0.005
+            && now.abs() < 0.005
+            && bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, &draft)
+                .is_some()
+        {
+            relock_notes.insert(spec.key.to_string(), json!(spec.cleared));
+            inline_clearances
+                .insert(bir_core::forms::agent::draft_locks::previous_payment::gate_key(spec));
+        }
+    }
+    put_inline_clearances_mark(&mut draft, &inline_clearances);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -5156,6 +5221,14 @@ pub(crate) fn page_gate_refusal(
         && bir_core::forms::agent::draft_locks::installment_1606::KEYS.contains(&key)
         && let Some(reason) =
             bir_core::forms::agent::draft_locks::installment_1606::lock_reason(draft)
+    {
+        return Some(reason.to_string());
+    }
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+        && key == spec.key
+        && !bir_core::forms::agent::draft_locks::previous_payment::zero_write(value)
+        && let Some(reason) =
+            bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft)
     {
         return Some(reason.to_string());
     }
@@ -5537,6 +5610,22 @@ fn apply_screen_edits_here(
                 .is_none_or(|amount| amount.abs() >= 0.005)
             && let Some(reason) =
                 bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft)
+        {
+            rejected.insert(key.clone(), json!(reason));
+            continue;
+        }
+        // A previous-payment box is shut unless Amended Return is Yes; zero
+        // is its already-empty state and passes as a no-op.
+        if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+            && key == spec.key
+            && let Some(value) = sent.get(&key)
+            && !value.is_null()
+            && value
+                .as_str()
+                .is_none_or(|text| !agent::carry::is_blank_value(text))
+            && !bir_core::forms::agent::draft_locks::previous_payment::zero_write(value)
+            && let Some(reason) =
+                bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft)
         {
             rejected.insert(key.clone(), json!(reason));
             continue;
@@ -6409,6 +6498,7 @@ fn mark_inline_clearances_seen(
     db: &Database,
     draft_id: i64,
     before: Option<BTreeMap<String, String>>,
+    reported: &BTreeSet<String>,
 ) {
     let Some(before) = before else {
         return;
@@ -6429,6 +6519,9 @@ fn mark_inline_clearances_seen(
         else {
             continue;
         };
+        if !reported.contains(&gate) {
+            continue;
+        }
         let event = serde_json::from_str::<Value>(&value)
             .ok()
             .and_then(|value| value["event"].as_str().map(str::to_string));
@@ -6463,6 +6556,7 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
         Some(_) => return Err(host_error("expected must be a draft or null")),
     };
     let amendment = take_amendment_mark(&mut draft);
+    let inline_clearances = take_inline_clearances_mark(&mut draft);
     let id = with_database(|db| {
         if amendment.is_none()
             && let Some(expected) = expected.as_ref()
@@ -6499,7 +6593,7 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
                 let before_notices = pending_notices_before_save(db, &draft);
                 let saved = save_amendment(db, kind, &mut draft, mark).map_err(host_error);
                 if let Ok(id) = saved {
-                    mark_inline_clearances_seen(db, id, before_notices);
+                    mark_inline_clearances_seen(db, id, before_notices, &inline_clearances);
                 }
                 saved
             }
@@ -6510,7 +6604,7 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
                 let before_notices = pending_notices_before_save(db, &draft);
                 let saved = agent::save_draft(kind, db, &mut draft).map_err(host_error);
                 if let Ok(id) = saved {
-                    mark_inline_clearances_seen(db, id, before_notices);
+                    mark_inline_clearances_seen(db, id, before_notices, &inline_clearances);
                 }
                 saved
             }
@@ -6934,6 +7028,14 @@ fn screen_form_amend(
             .unwrap_or("")
             .to_string();
         let mut amended = agent::amended_copy(kind, &filed).map_err(host_error)?;
+        // A dormant amount on the filed original stays shut there; it does
+        // not revive when the amendment answers Amended Yes. The amendment's
+        // save announces this clearing through the pending gate notice.
+        bir_core::forms::agent::draft_locks::previous_payment::clear_dormant_amendment_copy(
+            kind,
+            &filed,
+            &mut amended,
+        );
         // An amendment corrects its filed return: it is no carry.
         carry_forward::forget(&mut amended);
         // The amendment carries its filed return's typed parts, as opening
@@ -7738,6 +7840,8 @@ mod tests {
     // sweep and its recorder, then the rule's own tests.
     mod radio_untick;
     mod radio_untick_rule;
+    // The amended-return previous-payment gates.
+    mod previous_payment;
     // PR 15: the shared effective-lock table pinned core-side (P4-19).
     mod agent_locks;
     // The carry rule's page-side inputs, pinned core-side.
